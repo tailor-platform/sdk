@@ -193,10 +193,22 @@ describe("tailordb migration resolve", () => {
   test("refuses when no migration is in progress", async () => {
     remoteLabels({ "sdk-migration": "m0002" });
 
-    const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+    const result = await runCommand(resolveCommand, [
+      "--rollback",
+      "--yes",
+      "--config",
+      "custom.config.ts",
+      "--profile",
+      "staging",
+    ]);
 
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/No migration is in progress/);
+    expect(result.error).toMatchObject({
+      suggestion: expect.stringContaining(
+        "`tailor tailordb migration status --namespace tailordb --config=custom.config.ts --workspace-id=12345678-1234-4abc-8def-123456789012 --profile=staging`",
+      ),
+    });
     expectNothingWritten();
   });
 
@@ -577,13 +589,22 @@ describe("tailordb migration resolve", () => {
       },
     );
 
-    test("warns that the outcome could not be confirmed", async () => {
+    test("warns that the outcome could not be confirmed, naming how to check it on the workspace and profile this run used", async () => {
       state.readMigrationRunStatus.mockResolvedValue("unknown");
 
-      const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+      const result = await runCommand(resolveCommand, [
+        "--rollback",
+        "--yes",
+        "--profile",
+        "staging",
+      ]);
 
       expect(result.success).toBe(true);
-      expect(state.stderr.join("")).toMatch(/could not be confirmed/);
+      const output = state.stderr.join("");
+      expect(output).toMatch(/could not be confirmed/);
+      expect(output).toMatch(
+        /`tailor workflow executions --workflow-name \S+ --workspace-id=12345678-1234-4abc-8def-123456789012 --profile=staging`/,
+      );
     });
 
     test("refuses before asking for confirmation while the run is still running", async () => {

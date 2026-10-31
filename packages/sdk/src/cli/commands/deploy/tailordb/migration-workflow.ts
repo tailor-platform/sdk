@@ -23,7 +23,11 @@ import {
   WorkflowJobExecution_Status,
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import {
-  migrationResolveArgs,
+  formatNamespaceMigrationHint,
+  type MigrationCommandContext,
+} from "#/cli/commands/tailordb/migrate/hints";
+import {
+  formatMigrationResolveHint,
   type MigrationResolution,
 } from "#/cli/commands/tailordb/migrate/remote-state";
 import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/snapshot";
@@ -96,6 +100,11 @@ export interface LongRunningMigrationOptions {
   onRunEvent?: (event: MigrationRunEvent) => void;
 }
 
+export interface MainMigrationWorkflowOptions extends LongRunningMigrationOptions {
+  /** Config and workspace selection of the deploy, kept in the commands its errors suggest. */
+  commandContext: MigrationCommandContext;
+}
+
 export interface LongRunningMigrationResult {
   success: boolean;
   logs: string;
@@ -112,6 +121,30 @@ export interface LongRunningMigrationResult {
  */
 export function migrationWorkflowResourceName(namespace: string, migrationNumber: number): string {
   return `tailordb-migration--${namespace}--${formatMigrationNumber(migrationNumber)}`;
+}
+
+/**
+ * Render the command that lists the runs of a migration, for an error suggestion.
+ * @param namespace - TailorDB namespace
+ * @param migrationNumber - Migration number
+ * @param context - Workspace selection of the current run
+ * @returns The command, as rendered by `formatCommandHint`
+ */
+export function formatMigrationExecutionsHint(
+  namespace: string,
+  migrationNumber: number,
+  context: MigrationCommandContext,
+): string {
+  return formatCommandHint({
+    command: "tailor",
+    args: [
+      "workflow",
+      "executions",
+      "--workflow-name",
+      migrationWorkflowResourceName(namespace, migrationNumber),
+      ...(context.contextArgs ?? []),
+    ],
+  });
 }
 
 /**
@@ -346,11 +379,11 @@ async function createMigrationWorkflow(
  * Unlike synchronous script execution, only the start call is bound by the
  * request deadline; the migration itself runs as a workflow job. The temporary
  * resources of a run that started are left for the caller to remove.
- * @param {LongRunningMigrationOptions} options - Execution options
+ * @param {MainMigrationWorkflowOptions} options - Execution options
  * @returns {Promise<LongRunningMigrationResult>} Execution result
  */
 export async function executeMigrationAsWorkflow(
-  options: LongRunningMigrationOptions,
+  options: MainMigrationWorkflowOptions,
 ): Promise<LongRunningMigrationResult> {
   const { client, workspaceId, code, namespace, migrationNumber, invoker, appName, appId } =
     options;
@@ -498,30 +531,21 @@ interface OutcomeUnknownDetails {
  * @returns Error asking the user to settle the migration by hand
  */
 function outcomeUnknownError(
-  options: LongRunningMigrationOptions,
+  options: MainMigrationWorkflowOptions,
   message: string,
   details: OutcomeUnknownDetails,
 ): Error {
-  const { namespace, migrationNumber } = options;
+  const { namespace, migrationNumber, commandContext } = options;
   const name = migrationWorkflowResourceName(namespace, migrationNumber);
-  const executionsHint = formatCommandHint({
-    command: "tailor",
-    args: ["workflow", "executions", "--workflow-name", name],
-  });
+  const executionsHint = formatMigrationExecutionsHint(namespace, migrationNumber, commandContext);
   const syncHint = (checkpoint: number) =>
-    formatCommandHint({
-      command: "tailor",
-      args: [
-        "tailordb",
-        "migration",
-        "sync",
-        formatMigrationNumber(checkpoint),
-        "--namespace",
-        namespace,
-      ],
+    formatNamespaceMigrationHint({
+      ...commandContext,
+      subcommand: ["sync", formatMigrationNumber(checkpoint)],
+      namespace,
     });
   const resolveHint = (resolution: MigrationResolution) =>
-    formatCommandHint({ command: "tailor", args: migrationResolveArgs(resolution, namespace) });
+    formatMigrationResolveHint(resolution, namespace, commandContext);
   const settle = details.recorded
     ? `If the execution succeeded, run ${resolveHint("complete")}; otherwise run ${resolveHint("rollback")}. ` +
       "Deploys stop before changing anything until then."

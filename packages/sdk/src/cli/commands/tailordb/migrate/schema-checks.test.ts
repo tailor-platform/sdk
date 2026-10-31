@@ -68,27 +68,41 @@ describe("logRemoteDriftGuidance", () => {
     vi.restoreAllMocks();
   });
 
+  test("keeps the config, workspace, and profile of this run in the status command it suggests", () => {
+    const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
+    logRemoteDriftGuidance(
+      { configPath: "custom.config.ts", contextArgs: ["--workspace-id=ws-1", "--profile=staging"] },
+      [{ hasDrift: true, drifts: [scriptsDifferDrift] }],
+    );
+    expect(infoSpy).toHaveBeenCalledWith(
+      "  - Run `tailor tailordb migration status --config=custom.config.ts --workspace-id=ws-1 --profile=staging` to compare local vs remote.",
+      { mode: "plain" },
+    );
+  });
+
   test("adds the missing-hash hint when every drift is a missing script hash", () => {
     const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
-    logRemoteDriftGuidance([{ hasDrift: true, drifts: [missingHashDrift] }]);
+    logRemoteDriftGuidance({}, [{ hasDrift: true, drifts: [missingHashDrift] }]);
     expect(hintWasLogged(infoSpy)).toBe(true);
   });
 
   test("omits the hint when a drift is not a missing script hash", () => {
     const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
-    logRemoteDriftGuidance([{ hasDrift: true, drifts: [missingHashDrift, scriptsDifferDrift] }]);
+    logRemoteDriftGuidance({}, [
+      { hasDrift: true, drifts: [missingHashDrift, scriptsDifferDrift] },
+    ]);
     expect(hintWasLogged(infoSpy)).toBe(false);
   });
 
   test("omits the hint when no drift results are passed", () => {
     const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
-    logRemoteDriftGuidance();
+    logRemoteDriftGuidance({});
     expect(hintWasLogged(infoSpy)).toBe(false);
   });
 
   test("omits the hint when only one of several namespaces has a non-missing-hash drift", () => {
     const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
-    logRemoteDriftGuidance([
+    logRemoteDriftGuidance({}, [
       { hasDrift: true, drifts: [missingHashDrift] },
       { hasDrift: true, drifts: [scriptsDifferDrift] },
     ]);
@@ -97,7 +111,7 @@ describe("logRemoteDriftGuidance", () => {
 
   test("shows the hint when namespaces without drift are ignored", () => {
     const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
-    logRemoteDriftGuidance([
+    logRemoteDriftGuidance({}, [
       { hasDrift: true, drifts: [missingHashDrift] },
       { hasDrift: false, drifts: [] },
     ]);
@@ -106,13 +120,13 @@ describe("logRemoteDriftGuidance", () => {
 
   test("omits the hint for a conflicting-hash drift, which is not the missing-hash pattern", () => {
     const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
-    logRemoteDriftGuidance([{ hasDrift: true, drifts: [conflictingHashDrift] }]);
+    logRemoteDriftGuidance({}, [{ hasDrift: true, drifts: [conflictingHashDrift] }]);
     expect(hintWasLogged(infoSpy)).toBe(false);
   });
 
   test("omits the generic steps when every drifted namespace has no checkpoint yet", () => {
     const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
-    logRemoteDriftGuidance([
+    logRemoteDriftGuidance({}, [
       { hasDrift: true, drifts: [scriptsDifferDrift], checkpointUnset: true },
       { hasDrift: false, drifts: [] },
     ]);
@@ -121,7 +135,7 @@ describe("logRemoteDriftGuidance", () => {
 
   test("keeps the generic steps when a namespace with a checkpoint also drifted", () => {
     const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
-    logRemoteDriftGuidance([
+    logRemoteDriftGuidance({}, [
       { hasDrift: true, drifts: [scriptsDifferDrift], checkpointUnset: true },
       { hasDrift: true, drifts: [scriptsDifferDrift] },
     ]);
@@ -133,7 +147,7 @@ describe("logRemoteDriftGuidance", () => {
 
   test("omits the hint for a script-not-on-remote drift, which is not the missing-hash pattern", () => {
     const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
-    logRemoteDriftGuidance([{ hasDrift: true, drifts: [scriptNotOnRemoteDrift] }]);
+    logRemoteDriftGuidance({}, [{ hasDrift: true, drifts: [scriptNotOnRemoteDrift] }]);
     expect(hintWasLogged(infoSpy)).toBe(false);
   });
 });

@@ -243,7 +243,7 @@ describe("tailordb migration validate", () => {
       nextPageToken: "",
     });
 
-    const result = await runCommand(validateCommand, []);
+    const result = await runCommand(validateCommand, ["--profile", "staging"]);
 
     expect(result.success).toBe(false);
     const [report] = JSON.parse(stdout.output);
@@ -255,7 +255,9 @@ describe("tailordb migration validate", () => {
       drifts: [expect.objectContaining({ tableName: "User", fieldName: "legacyCode" })],
     });
     const { suggestion } = result.error as CLIError;
-    expect(suggestion).toContain("`tailor tailordb migration sync 0000 --namespace tailordb`");
+    expect(suggestion).toContain(
+      "`tailor tailordb migration sync 0000 --namespace tailordb --workspace-id=12345678-1234-4abc-8def-123456789012 --profile=staging`",
+    );
     expect(suggestion).toContain(
       "`tailor tailordb migration generate --init --namespace tailordb`",
     );
@@ -417,7 +419,12 @@ describe("tailordb migration validate", () => {
         },
       });
 
-      const result = await runCommand(validateCommand, ["--config", "custom.config.ts"]);
+      const result = await runCommand(validateCommand, [
+        "--config",
+        "custom.config.ts",
+        "--profile",
+        "staging",
+      ]);
 
       expect(result.success).toBe(false);
       expect(stderr.output).not.toContain("fell behind");
@@ -425,7 +432,7 @@ describe("tailordb migration validate", () => {
       const { suggestion } = result.error as CLIError;
       expect(suggestion).toContain("Pull the latest migration files");
       expect(suggestion).toContain(
-        "sync 0000 --force --namespace tailordb --config=custom.config.ts",
+        "sync 0000 --force --namespace tailordb --config=custom.config.ts --workspace-id=12345678-1234-4abc-8def-123456789012 --profile=staging",
       );
       expect(suggestion).toContain("set 0000 --force --namespace tailordb");
       expect(suggestion).toContain("rewrites the tables");

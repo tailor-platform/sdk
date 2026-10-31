@@ -1,5 +1,6 @@
 import { getOrNull, type OperatorClient } from "#/cli/shared/client";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, formatCommandHint } from "#/cli/shared/errors";
+import { namespaceMigrationArgs, type MigrationCommandContext } from "./hints";
 import { formatMigrationNumber } from "./migration-number";
 import {
   MAINTENANCE_MODE_LABEL_KEY,
@@ -224,34 +225,52 @@ export type MigrationResolution = "rollback" | "complete";
  * Arguments of the `tailor` command that settles a namespace's migration left in progress.
  * @param resolution - How to settle it
  * @param namespace - TailorDB namespace
+ * @param context - Config and workspace selection of the current run
  * @returns Command arguments
  */
-export function migrationResolveArgs(resolution: MigrationResolution, namespace: string): string[] {
-  return ["tailordb", "migration", "resolve", `--${resolution}`, "--namespace", namespace];
+export function migrationResolveArgs(
+  resolution: MigrationResolution,
+  namespace: string,
+  context: MigrationCommandContext,
+): string[] {
+  return namespaceMigrationArgs({
+    ...context,
+    subcommand: ["resolve", `--${resolution}`],
+    namespace,
+  });
 }
 
 /**
- * Quote the command that settles a namespace's migration left in progress, for an error suggestion.
+ * Render the command that settles a namespace's migration left in progress, for an error suggestion.
  * @param resolution - How to settle it
  * @param namespace - TailorDB namespace
- * @returns The quoted command
+ * @param context - Config and workspace selection of the current run
+ * @returns The command, as rendered by `formatCommandHint`
  */
 export function formatMigrationResolveHint(
   resolution: MigrationResolution,
   namespace: string,
+  context: MigrationCommandContext,
 ): string {
-  return `'tailor ${migrationResolveArgs(resolution, namespace).join(" ")}'`;
+  return formatCommandHint({
+    command: "tailor",
+    args: migrationResolveArgs(resolution, namespace, context),
+  });
 }
 
 /**
  * Describe how to settle a `main` run whose outcome an earlier deploy did not settle.
  * @param namespace - TailorDB namespace
+ * @param context - Config and workspace selection of the current run
  * @returns Both commands, each with the outcome it applies to
  */
-export function describeMainRunSettlement(namespace: string): string {
+export function describeMainRunSettlement(
+  namespace: string,
+  context: MigrationCommandContext,
+): string {
   return (
-    `Settle it with ${formatMigrationResolveHint("complete", namespace)} if its run succeeded, ` +
-    `or with ${formatMigrationResolveHint("rollback", namespace)} otherwise; ` +
+    `Settle it with ${formatMigrationResolveHint("complete", namespace, context)} if its run succeeded, ` +
+    `or with ${formatMigrationResolveHint("rollback", namespace, context)} otherwise; ` +
     "the command shows the outcome of the run before it changes anything."
   );
 }
@@ -263,8 +282,13 @@ export function describeMainRunSettlement(namespace: string): string {
  * can settle consistently.
  * @param state - Remote migration state of the namespace
  * @param namespace - TailorDB namespace
+ * @param context - Config and workspace selection of the current run
  */
-export function assertNoMigrationInProgress(state: RemoteMigrationState, namespace: string): void {
+export function assertNoMigrationInProgress(
+  state: RemoteMigrationState,
+  namespace: string,
+  context: MigrationCommandContext,
+): void {
   if (!state.inProgress && !state.inProgressInvalid) return;
   const migrationLabel = state.inProgress
     ? `${namespace}/${formatMigrationNumber(state.inProgress.number)}`
@@ -278,7 +302,7 @@ export function assertNoMigrationInProgress(state: RemoteMigrationState, namespa
         : `Migration ${migrationLabel} is partially applied by an earlier deploy.`,
     suggestion:
       state.inProgress?.kind === "main"
-        ? describeMainRunSettlement(namespace)
+        ? describeMainRunSettlement(namespace, context)
         : "Finish the migration with a deploy first; steps that already completed do not run again.",
   });
 }

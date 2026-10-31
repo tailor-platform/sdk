@@ -23,7 +23,7 @@ import {
 import { parseAge } from "#/cli/commands/workspace/age";
 import { createValidatedWorkspaceWithClient } from "#/cli/commands/workspace/create";
 import { writeWorkspaceExpiry } from "#/cli/commands/workspace/expiry";
-import { recoveryContextArgs, type RecoveryContext } from "#/cli/shared/args";
+import { type RecoveryContext } from "#/cli/shared/args";
 import { getOrNull, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadPlatformClientConfig, loadWorkspaceId } from "#/cli/shared/context";
 import { effectiveDateDefault } from "#/cli/shared/date-default";
@@ -39,7 +39,7 @@ import { assertDefined } from "#/utils/assert";
 import { collectForeignKeyTargets } from "#/utils/foreign-key-targets";
 import { bundleMigrationScript } from "./bundler";
 import { getNamespacesWithMigrations, migrationConfigNotFoundError } from "./config";
-import { formatNamespaceMigrationHint } from "./hints";
+import { formatNamespaceMigrationHint, migrationCommandContext } from "./hints";
 import { assertNoMigrationInProgress, fetchRemoteMigrationState } from "./remote-state";
 import {
   assertValidMigrationFiles,
@@ -554,11 +554,7 @@ export function assertSourceMatchesCheckpoints(
     });
   }
   if (invalidRemote) {
-    const hintOptions = {
-      namespace: invalidRemote.namespace,
-      configPath: source.configPath,
-      contextArgs: recoveryContextArgs(source),
-    };
+    const hintOptions = { ...migrationCommandContext(source), namespace: invalidRemote.namespace };
     const statusHint = formatNamespaceMigrationHint({ ...hintOptions, subcommand: ["status"] });
     const validateHint = formatNamespaceMigrationHint({ ...hintOptions, subcommand: ["validate"] });
     throw CLIError({
@@ -623,6 +619,11 @@ export async function assertSourceBaselineFresh(
   sourceWorkspaceId: string,
 ): Promise<void> {
   const loaded = state.loaded;
+  const commandContext = migrationCommandContext({
+    workspaceId: sourceWorkspaceId,
+    profile: state.options.profile,
+    configPath: loaded.config.path,
+  });
   const namespaces = getNamespacesWithMigrations(loaded.config, path.dirname(loaded.config.path));
   const inputs = loaded.application.tailorDBServices.map(toTailorDBDeployInput);
   const remoteChecks = await verifyRemoteSchema(
@@ -649,7 +650,7 @@ export async function assertSourceBaselineFresh(
       state.client,
       resourceTrn(sourceWorkspaceId, "tailordb", namespace.namespace),
     );
-    assertNoMigrationInProgress(remoteState, namespace.namespace);
+    assertNoMigrationInProgress(remoteState, namespace.namespace, commandContext);
     const migrationNumber = resolveSourceMigrationNumber(
       findSourceCheck(remoteChecks, namespace.namespace),
     );
@@ -810,11 +811,12 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
     loaded.config,
     inputs,
   );
-  assertSourceMatchesCheckpoints(remoteChecks, {
+  const source: MigrationTestSource = {
     workspaceId: sourceWorkspaceId,
     profile: options.profile,
     configPath: loaded.config.path,
-  });
+  };
+  assertSourceMatchesCheckpoints(remoteChecks, source);
 
   const baselines = new Map<
     string,
@@ -827,7 +829,7 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
       client,
       resourceTrn(sourceWorkspaceId, "tailordb", namespace.namespace),
     );
-    assertNoMigrationInProgress(remoteState, namespace.namespace);
+    assertNoMigrationInProgress(remoteState, namespace.namespace, migrationCommandContext(source));
     const migrationNumber = resolveSourceMigrationNumber(
       findSourceCheck(remoteChecks, namespace.namespace),
     );
