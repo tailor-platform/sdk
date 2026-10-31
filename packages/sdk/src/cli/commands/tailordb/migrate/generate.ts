@@ -261,6 +261,8 @@ function generatedMigration(namespace: string, files: WrittenMigrationFiles): Ge
  * Generate migration files for TailorDB schema changes
  *
  * **Beta:** This API may change in future releases.
+ * Declining a breaking-change confirmation skips that namespace and resolves successfully.
+ * Declining the `--init` confirmation rejects with `MIGRATION_GENERATE_CANCELLED`.
  * @param {GenerateOptions} options - Generation options
  * @returns {Promise<GenerateResult>} The migrations written, the directories cleared, and the namespaces skipped
  */

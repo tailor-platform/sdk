@@ -71,6 +71,8 @@ If an earlier deploy stopped after creating only some of the tables, the next de
 
 `tailor tailordb migration generate --init` deletes the existing `migrations/` directory of every namespace with migrations configured and creates `0000` from the current local tables. Add `--namespace <name>` to reset only that namespace and leave the others untouched. Use it only before the project is deployed. For a deployed migration history, use [`migration rebaseline`](#re-baselining-a-deployed-migration-history), which verifies the history and connected workspace before replacing any files.
 
+Declining the `--init` confirmation leaves existing migrations in place and fails with `MIGRATION_GENERATE_CANCELLED`.
+
 ## Migration Workflow
 
 A typical change cycle:
@@ -126,6 +128,10 @@ A typical change cycle:
    tailor deploy
    ```
    The pre-migration phase relaxes the new field to optional, the script runs and populates values, then the post-migration phase enforces `required: true`.
+
+When you decline a namespace's breaking-change confirmation, `migration generate` skips that namespace, continues generating migrations for the others, and exits successfully with a `Skipped: <namespaces>` summary. Declining every namespace also succeeds without writing migrations. Check the summary before deploying if you intended to generate every namespace.
+
+JSON output includes `skippedNamespaces` alongside `migrations`. It is always an empty array in actual `--json` runs because JSON mode does not prompt. Programmatic callers of `migrateGenerate()` receive a `MigrateGenerateResult` and can inspect `skippedNamespaces` before continuing.
 
 ### Warnings and optional migration scripts
 
