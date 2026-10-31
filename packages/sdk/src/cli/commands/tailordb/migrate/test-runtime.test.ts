@@ -743,6 +743,12 @@ describe("migration test runtime", () => {
     details: "Table 'AuditLog' exists in snapshot but not in remote",
   } as const;
 
+  const sourceContext = {
+    workspaceId: "source-workspace",
+    profile: "staging",
+    configPath: path.join(process.cwd(), "tailor.config.ts"),
+  };
+
   function sourceCheck(
     overrides: Partial<RemoteSchemaVerificationResult> = {},
   ): RemoteSchemaVerificationResult {
@@ -796,9 +802,10 @@ describe("migration test runtime", () => {
 
   test("rejects an unlabeled source whose schema differs from the 0000 snapshot", () => {
     expect(() =>
-      assertSourceMatchesCheckpoints([
-        sourceCheck({ checkpointUnset: true, hasDrift: true, drifts: [auditLogDrift] }),
-      ]),
+      assertSourceMatchesCheckpoints(
+        [sourceCheck({ checkpointUnset: true, hasDrift: true, drifts: [auditLogDrift] })],
+        sourceContext,
+      ),
     ).toThrow(
       expect.objectContaining({
         code: "MIGRATION_TEST_SOURCE_INVALID",
@@ -810,9 +817,10 @@ describe("migration test runtime", () => {
 
   test("rejects a labeled source whose schema differs from its checkpoint", () => {
     expect(() =>
-      assertSourceMatchesCheckpoints([
-        sourceCheck({ remoteMigrationNumber: 2, hasDrift: true, drifts: [auditLogDrift] }),
-      ]),
+      assertSourceMatchesCheckpoints(
+        [sourceCheck({ remoteMigrationNumber: 2, hasDrift: true, drifts: [auditLogDrift] })],
+        sourceContext,
+      ),
     ).toThrow(
       expect.objectContaining({
         code: "MIGRATION_TEST_SOURCE_INVALID",
@@ -823,34 +831,42 @@ describe("migration test runtime", () => {
 
   test("rejects a source whose checkpoint is not in the local migration history", () => {
     expect(() =>
-      assertSourceMatchesCheckpoints([
-        sourceCheck({ remoteMigrationNumber: 7, checkpointMissingLocal: true }),
-      ]),
+      assertSourceMatchesCheckpoints(
+        [sourceCheck({ remoteMigrationNumber: 7, checkpointMissingLocal: true })],
+        sourceContext,
+      ),
     ).toThrow(
       expect.objectContaining({
         code: "MIGRATION_TEST_SOURCE_INVALID",
         message: expect.stringContaining("does not match its migration checkpoint"),
+        suggestion: `Pull the latest migration files if this checkout is behind. Otherwise run \`tailor tailordb migration status --namespace main --workspace-id=${sourceContext.workspaceId} --profile=${sourceContext.profile}\` to compare the source workspace's checkpoint and migration history with the local ones.`,
       }),
     );
   });
 
   test("rejects a source with a pending checkpoint repair", () => {
     expect(() =>
-      assertSourceMatchesCheckpoints([
-        sourceCheck({
-          remoteMigrationNumber: 5,
-          checkpointRepair: { from: 5, to: 0, fromHistoryId: null, toHistoryId: "hcurrent" },
-        }),
-      ]),
+      assertSourceMatchesCheckpoints(
+        [
+          sourceCheck({
+            remoteMigrationNumber: 5,
+            checkpointRepair: { from: 5, to: 0, fromHistoryId: null, toHistoryId: "hcurrent" },
+          }),
+        ],
+        sourceContext,
+      ),
     ).toThrow(expect.objectContaining({ code: "MIGRATION_TEST_SOURCE_REPAIR_PENDING" }));
   });
 
   test("accepts sources that match their checkpoints", () => {
     expect(() =>
-      assertSourceMatchesCheckpoints([
-        sourceCheck({ checkpointUnset: true }),
-        sourceCheck({ namespace: "other", remoteMigrationNumber: 3 }),
-      ]),
+      assertSourceMatchesCheckpoints(
+        [
+          sourceCheck({ checkpointUnset: true }),
+          sourceCheck({ namespace: "other", remoteMigrationNumber: 3 }),
+        ],
+        sourceContext,
+      ),
     ).not.toThrow();
   });
 

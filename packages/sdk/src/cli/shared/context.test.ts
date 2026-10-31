@@ -6,10 +6,12 @@ import { describe, expect, test, vi, beforeEach, afterEach, afterAll, beforeAll 
 import { findAccessTokenSource } from "./client";
 import {
   fetchLatestToken,
+  loadAuthStatus,
   loadConsoleBaseUrl,
   loadAccessToken,
   loadConfigPath,
   loadMachineUserName,
+  loadPlatformClientConfig,
   loadWorkspaceId,
   platformConfigFromProfile,
   readPlatformConfig,
@@ -76,6 +78,12 @@ function writeFuturePlatformConfig() {
     "version: 999\nmin_sdk_version: 999.0.0\nusers: {}\nprofiles: {}\ncurrent_user: null\n",
   );
 }
+
+const unknownProfileError = {
+  code: "PROFILE_NOT_FOUND",
+  message: 'Profile "nonexistent" not found',
+  suggestion: expect.stringContaining("tailor profile list"),
+};
 
 beforeEach(() => {
   clientMocks.fetchUserInfo.mockReset();
@@ -291,8 +299,8 @@ describe("loadWorkspaceId", () => {
         profiles: {},
         current_user: null,
       });
-      await expect(loadWorkspaceId({ profile: "nonexistent" })).rejects.toThrow(
-        'Profile "nonexistent" not found',
+      await expect(loadWorkspaceId({ profile: "nonexistent" })).rejects.toMatchObject(
+        unknownProfileError,
       );
     });
 
@@ -428,8 +436,8 @@ describe("loadMachineUserName", () => {
   });
 
   test("throws when profile does not exist", async () => {
-    await expect(loadMachineUserName({ profile: "nonexistent" })).rejects.toThrow(
-      'Profile "nonexistent" not found',
+    await expect(loadMachineUserName({ profile: "nonexistent" })).rejects.toMatchObject(
+      unknownProfileError,
     );
   });
 
@@ -735,8 +743,8 @@ describe("loadAccessToken", () => {
         profiles: {},
         current_user: null,
       });
-      await expect(loadAccessToken({ profile: "nonexistent" })).rejects.toThrow(
-        'Profile "nonexistent" not found',
+      await expect(loadAccessToken({ profile: "nonexistent" })).rejects.toMatchObject(
+        unknownProfileError,
       );
     });
 
@@ -1813,6 +1821,28 @@ describe("loadAccessToken", () => {
         next: { command: "tailor", args: ["login"] },
       });
     });
+  });
+});
+
+describe("unknown profile", () => {
+  beforeEach(() => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {},
+      current_user: null,
+    });
+  });
+
+  test.each([
+    { name: "loadAuthStatus", load: () => loadAuthStatus({ profile: "nonexistent" }) },
+    {
+      name: "loadPlatformClientConfig",
+      load: () => loadPlatformClientConfig({ profile: "nonexistent" }),
+    },
+  ])("$name reports PROFILE_NOT_FOUND", async ({ load }) => {
+    await expect(load()).rejects.toMatchObject(unknownProfileError);
   });
 });
 

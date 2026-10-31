@@ -8,6 +8,7 @@ import {
   initOAuth2Client,
 } from "#/cli/shared/client";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
+import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { isCLIError } from "#/cli/shared/errors";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
@@ -479,6 +480,23 @@ describe("login --profile", () => {
       user: "machine-client",
       email: null,
     });
+  });
+
+  test("names the client secret sources when it cannot prompt for the secret", async () => {
+    using _json = jsonMode();
+
+    const result = await runCommand(loginCommand, [
+      "--machine-user",
+      "--client-id",
+      "machine-client",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.error?.name).toBe("CIPromptError");
+    const suggestion = getErrorDiagnostics(result.error as Error).suggestion;
+    expect(suggestion).toContain("TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET");
+    expect(suggestion).toContain("--client-secret");
+    expect(fetchPlatformMachineUserToken).not.toHaveBeenCalled();
   });
 
   test("prints the browser user under JSON output", async () => {

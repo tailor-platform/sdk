@@ -365,17 +365,36 @@ describe("resolveDeployWorkspace", () => {
     expect(mocks.saveWorkspaceContext).not.toHaveBeenCalled();
   });
 
-  test("normalizes an explicit workspace NotFound response", async () => {
-    const id = "19191919-1919-4919-8919-191919191919";
-    mocks.tryLoadWorkspaceId.mockResolvedValue(id);
-    client.getWorkspace.mockRejectedValue(new ConnectError("not found", Code.NotFound));
+  test.each([
+    {
+      response: "a NotFound error",
+      mock: () => client.getWorkspace.mockRejectedValue(new ConnectError("", Code.NotFound)),
+    },
+    { response: "no workspace", mock: () => client.getWorkspace.mockResolvedValue({}) },
+  ])(
+    "points an explicit workspace ID answered with $response at the workspace list",
+    async ({ mock }) => {
+      const id = "19191919-1919-4919-8919-191919191919";
+      mocks.tryLoadWorkspaceId.mockResolvedValue(id);
+      mock();
 
-    await expect(resolveDeployWorkspace({ workspaceId: id })).rejects.toMatchObject({
-      name: "CLIError",
-      code: "WORKSPACE_NOT_FOUND",
-    });
-    expect(mocks.saveWorkspaceContext).not.toHaveBeenCalled();
-  });
+      await expect(
+        resolveDeployWorkspace({
+          workspaceId: id,
+          workspaceCommandArgs: ["--env-file", "/apps/example/.env.staging"],
+        }),
+      ).rejects.toMatchObject({
+        name: "CLIError",
+        code: "WORKSPACE_NOT_FOUND",
+        suggestion: expect.stringContaining("tailor workspace list"),
+        next: {
+          command: "tailor",
+          args: ["workspace", "list", "--env-file", "/apps/example/.env.staging", "--json"],
+        },
+      });
+      expect(mocks.saveWorkspaceContext).not.toHaveBeenCalled();
+    },
+  );
 
   test("reuses project workspace context before account discovery", async () => {
     const id = "12121212-1212-4212-8212-121212121212";

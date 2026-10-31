@@ -8,9 +8,10 @@ import {
   resolveSelectedUserEntry,
   writePlatformConfig,
 } from "#/cli/shared/context";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, profileNotFoundError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
+import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
 
 const defaultIdSchema = z.union([z.uuid(), z.literal("")]);
@@ -61,7 +62,7 @@ export const updateCommand = defineAppCommand({
     const selected = resolveSelectedUserEntry(config, { profile: args.profile });
     if (!selected) {
       const profileName = args.profile || process.env.TAILOR_PLATFORM_PROFILE;
-      throw CLIError({ code: "PROFILE_NOT_FOUND", message: `Profile "${profileName}" not found` });
+      throw profileNotFoundError(assertDefined(profileName, "Only a named profile can be missing"));
     }
     const { profile: profileName, user, userEntry: entry } = selected;
     const login = {

@@ -126,7 +126,7 @@ See [Automatic Migration Execution](../services/tailordb/migration.md#automatic-
 
 **Concurrent Deploys:**
 
-Deploys that target the same workspace and application from the same project directory are serialized while secrets and auth connections are updated: one deploy proceeds and the other waits for it to finish. A deploy that cannot proceed within 5 minutes fails with an error, which normally means another deploy is still running. If a previous deploy was interrupted, the next deploy recovers automatically within about a minute. Deploys to different workspaces or applications are not affected.
+Deploys that target the same workspace and application from the same project directory are serialized while secrets and auth connections are updated: one deploy proceeds and the other waits for it to finish. A deploy that cannot proceed within 5 minutes fails with an error, which normally means another deploy is still running. If a previous deploy was interrupted, the next deploy recovers automatically within about a minute. If the error persists, stop any `tailor deploy` still running from the project directory, then delete the lock directory that the error names and retry. Deploys to different workspaces or applications are not affected.
 
 **Schema Check:**
 

@@ -6,7 +6,7 @@ import {
   platformConfigFromProfile,
   readPlatformConfig,
 } from "#/cli/shared/context";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, profileNotFoundError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 
 export const currentCommand = defineAppCommand({
@@ -18,7 +18,7 @@ export const currentCommand = defineAppCommand({
     const profile = args.profile || process.env.TAILOR_PLATFORM_PROFILE;
     const profileEntry = profile ? config.profiles[profile] : undefined;
     if (profile && !profileEntry) {
-      throw CLIError({ code: "PROFILE_NOT_FOUND", message: `Profile "${profile}" not found` });
+      throw profileNotFoundError(profile);
     }
     const platformConfig = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
     const currentUser = profile ? (profileEntry?.user ?? null) : config.current_user;

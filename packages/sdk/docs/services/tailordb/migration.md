@@ -866,6 +866,8 @@ tailor tailordb migration rebaseline --namespace tailordb
 
 The command validates the migration files, verifies that replaying the latest migration exactly reproduces the local table definitions, and checks that the connected workspace is at that latest migration with no schema drift. After confirmation, it replaces the local history with the reconstructed baseline, records a new migration history ID in both `0000/schema.json` and remote metadata, and resets the connected workspace's `sdk-migration` label to `0000`. Use `--yes` only after arranging the same operational preconditions in non-interactive automation.
 
+When the connected workspace records another migration history ID, or one that cannot be read, the command refuses to run. Run it from a checkout of the migration history deployed to that workspace. To replace the workspace's history with the local one on purpose, first run `tailor tailordb migration set <N> --force` with the latest local migration as `<N>` (see [`migration set` Semantics](#migration-set-semantics)). When the workspace's tables differ from the latest migration, the command also refuses to run; see [Remote schema drift detected](#remote-schema-drift-detected), where `tailor tailordb migration sync <N>` rewrites the tables to the latest migration.
+
 Commit the resulting `migrations/` change before generating any new migrations. For another environment still carrying the exact checkpoint and history ID that the new baseline replaced, the next `tailor deploy` checks whether its remote schema exactly matches the new `0000`. If it does, deploy offers to reset the checkpoint to `0000` and move the environment to the new history ID before applying any later local migrations. A markerless history is eligible only for the first rebaseline, at the exact migration recorded as replaced. Any other checkpoint or history ID is rejected without changing remote metadata, even if its schema happens to match the baseline.
 
 Partial squashing is not supported: re-baselining always replaces the full history for one namespace.
@@ -971,7 +973,7 @@ Before a migration's script starts, `tailor deploy` checks that the namespace's 
 
 The checkpoint is advanced only after the reversible post-migration schema updates succeed. If the checkpoint write reports an error, the SDK reads it back: a matching value is treated as committed. Any other observed value leaves the post-migration schema unchanged rather than risk rolling back a concurrent deployment; a value beyond the current migration confirms a concurrent deploy, while an older or missing value means the checkpoint must be repaired before retrying. If read-back also fails, the SDK likewise leaves the post-migration schema unchanged; verify the remote checkpoint before retrying.
 
-Removed tables are deleted only after the checkpoint is committed. If that cleanup fails, the checkpoint remains at the new migration and the SDK fails closed: the leftover table is reported as remote schema drift on the next deploy. Remove the leftover GQL permission and table manually, verify the remote schema, and then retry. The SDK does not automatically ignore or delete a same-named remote table because it cannot distinguish failed cleanup from a table recreated after cleanup completed.
+Removed tables are deleted only after the checkpoint is committed. If that cleanup fails, the checkpoint remains at the new migration and the SDK fails closed: the leftover table is reported as remote schema drift on the next deploy. Run `tailor tailordb migration sync <N>` with the committed migration as `<N>` (the warning names the command) to delete the leftover table and its GQL permission, or remove them manually, and then deploy again. The SDK does not automatically ignore or delete a same-named remote table because it cannot distinguish failed cleanup from a table recreated after cleanup completed.
 
 ## Rollback Strategy
 
@@ -1216,6 +1218,12 @@ One specific cause is a `migration rebaseline` run on a different environment wh
 3. Switch back to the current (rebaselined) migration files and deploy again. The remote schema now matches the new baseline, so this deploy offers the automatic checkpoint reset to `0000` under the new history ID.
 
 **Resolution (any other cause):** Run `tailor tailordb migration status` to compare local and remote, and pull the latest migration files if your checkout is stale. To move the checkpoint back to the local migration history on purpose, run `tailor tailordb migration sync <N>`, which also rewrites the tables to snapshot `<N>`, or `tailor tailordb migration set <N>`, which moves only the checkpoint, with the latest local migration as `<N>` (the error suggests both commands). When the namespace records another migration history ID, or one that cannot be read, both commands also need `--force`, which replaces that history ID with the local one, or removes it when the local history has none (see [`migration set` Semantics](#migration-set-semantics)). Pass `--force` only when the local migration history should replace the deployed one; otherwise work from a checkout of the migration history deployed to the workspace. Then deploy again.
+
+### `MIGRATION_FILES_INVALID` error
+
+**Cause:** The `migrations/` directory of a namespace does not form a valid history: a migration number is missing, `0000` has no `schema.json` or has a `diff.json`, or a later migration has a `schema.json` or no `diff.json`. A deleted directory or a merge that kept only part of a migration is a common cause. `tailor deploy` and the `tailor tailordb migration` commands that read the history report this error, listing every problem.
+
+**Resolution:** Follow the suggestion for each problem in the error. Otherwise restore the migration files from version control. If no workspace has been deployed with these migrations, you can instead recreate `0000` from the local tables with `tailor tailordb migration generate --init --namespace <name>`, which deletes every migration of the namespace.
 
 ### "Invalid schema snapshot" or "Invalid migration diff" error
 

@@ -288,6 +288,7 @@ type PlanDeploymentTargetParams = {
   workspaceId: string;
   noSchemaCheck: boolean | undefined;
   migrationSkipSteps?: ReadonlyMap<string, readonly string[]>;
+  migrationRecoveryArgs?: readonly string[];
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
   migrationMachineUserOverride?: string;
@@ -319,6 +320,7 @@ type PlanDeploymentTargetsParams = {
   workspaceId: string;
   noSchemaCheck: boolean | undefined;
   migrationSkipSteps?: ReadonlyMap<string, readonly string[]>;
+  migrationRecoveryArgs?: readonly string[];
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
   migrationMachineUserOverride?: string;
@@ -452,6 +454,7 @@ async function planDeploymentTarget(
     workspaceId,
     noSchemaCheck,
     migrationSkipSteps,
+    migrationRecoveryArgs,
     migrationTestBaselines,
     migrationTestSnapshots,
     migrationMachineUserOverride,
@@ -505,6 +508,7 @@ async function planDeploymentTarget(
       config,
       noSchemaCheck,
       migrationSkipSteps,
+      migrationRecoveryArgs,
       migrationTestBaselines,
       migrationTestSnapshots,
       migrationMachineUserOverride,
@@ -967,6 +971,7 @@ async function deployInternal(
         workspaceId,
         noSchemaCheck: options?.noSchemaCheck,
         migrationSkipSteps: options?.migrationSkipSteps,
+        migrationRecoveryArgs: recoveryEnvironmentArgs(options, cliContext),
         migrationTestBaselines: internalContext?.migrationTestBaselines,
         migrationTestSnapshots: internalContext?.migrationTestSnapshots,
         migrationMachineUserOverride: internalContext?.migrationMachineUserOverride,

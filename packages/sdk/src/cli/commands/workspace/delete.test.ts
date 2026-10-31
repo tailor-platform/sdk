@@ -1,6 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { runCommand } from "@politty/zod";
 import { describe, expect, test, vi } from "vitest";
+import { SKIP_CONFIRMATION_SUGGESTION } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
@@ -72,6 +73,7 @@ describe("workspace delete command", () => {
 
     expect(prompt.text).toHaveBeenCalledWith({
       message: "Enter the workspace name to confirm deletion (dev/sample-space):",
+      suggestion: SKIP_CONFIRMATION_SUGGESTION,
     });
     expect(client.deleteWorkspace).toHaveBeenCalledWith({ workspaceId });
     expect(logger.success).toHaveBeenCalledWith(

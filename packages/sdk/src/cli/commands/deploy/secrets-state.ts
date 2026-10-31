@@ -217,12 +217,15 @@ async function acquireFileLock(lockPath: string): Promise<string> {
       continue;
     }
     if (Date.now() >= deadline) {
+      const resolvedLockPath = path.resolve(lockPath);
       throw CLIError({
         code: "DEPLOY_LOCK_TIMEOUT",
         message:
           "Timed out waiting for another deploy to the same workspace and application to finish.",
         suggestion:
-          "Wait for it to complete and retry; an interrupted deploy recovers automatically within a minute.",
+          "Wait for it to complete and retry; an interrupted deploy recovers automatically within a minute. " +
+          `If the error persists, stop any \`tailor deploy\` still running from this project directory, then delete the lock directory ${resolvedLockPath} and retry.`,
+        context: { lockPath: resolvedLockPath },
       });
     }
     await new Promise((resolve) => setTimeout(resolve, LOCK_POLL_INTERVAL_MS));

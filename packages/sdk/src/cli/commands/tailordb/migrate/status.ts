@@ -126,7 +126,7 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
 
   for (const { namespace, migrationsDir } of targetNamespaces) {
     try {
-      assertValidMigrationFiles(migrationsDir, namespace);
+      assertValidMigrationFiles(migrationsDir, namespace, config.path);
       const migrationFiles = getMigrationFiles(migrationsDir);
       const descriptions = new Map<number, string>();
       let rebaseline: RebaselineMarker | undefined;

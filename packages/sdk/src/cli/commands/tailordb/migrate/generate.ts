@@ -404,7 +404,7 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
 
     // Validate existing migration files before generating new ones; --init
     // discards them, so a broken history must not block it
-    if (!options.init) assertValidMigrationFiles(migrationsDir, namespace);
+    if (!options.init) assertValidMigrationFiles(migrationsDir, namespace, config.path);
 
     // Find the TailorDB service for this namespace
     const tailordbService = application.tailorDBServices.find((s) => s.namespace === namespace);

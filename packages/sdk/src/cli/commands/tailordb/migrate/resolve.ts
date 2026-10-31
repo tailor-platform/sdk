@@ -162,7 +162,7 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
   );
   const { namespace } = target;
 
-  assertValidMigrationFiles(target.migrationsDir, namespace);
+  assertValidMigrationFiles(target.migrationsDir, namespace, loaded.config.path);
 
   const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options.profile,

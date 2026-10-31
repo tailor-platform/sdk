@@ -857,6 +857,8 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       ]),
     ]);
     vi.mocked(client.deleteTailorDBType).mockRejectedValueOnce(new Error("cleanup failed"));
+    planResult.context.migrationRecoveryArgs = ["--profile=staging"];
+    using stderr = captureStderr();
 
     await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
       /cleanup failed/,
@@ -865,6 +867,8 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     expect(publishFlagWrites(client).filter(([name]) => name === "Retired")).toEqual([
       ["Retired", false],
     ]);
+    expect(stderr.output).toContain("tailor tailordb migration sync 0001 --namespace test-ns");
+    expect(stderr.output).toContain("--workspace-id=test-workspace --profile=staging");
   });
 
   test("restores tables already restricted when applying another restriction fails", async () => {

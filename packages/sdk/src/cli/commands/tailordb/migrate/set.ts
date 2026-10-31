@@ -68,7 +68,7 @@ async function set(options: SetOptions): Promise<CheckpointUpdate> {
   const targetNamespace = target.namespace;
 
   // 4. Validate the local migration history and the requested number
-  assertValidMigrationFiles(target.migrationsDir, targetNamespace);
+  assertValidMigrationFiles(target.migrationsDir, targetNamespace, config.path);
   assertMigrationNumberExists(target.migrationsDir, migrationNumber);
   const historyId = reconstructSnapshotFromMigrations(target.migrationsDir, 0)?.rebaseline
     ?.historyId;
