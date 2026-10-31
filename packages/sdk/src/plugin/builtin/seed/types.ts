@@ -12,6 +12,7 @@ export interface SeedTypeInfo {
   name: string;
   namespace: string;
   dependencies: string[];
+  /** Self-referencing field names; a field inside a nested field is named by its dotted path (`links.parentID`). */
   selfRefFields: string[];
   /** The field each self-referencing field is keyed to (defaults to "id"). */
   selfRefKeys: Record<string, string>;

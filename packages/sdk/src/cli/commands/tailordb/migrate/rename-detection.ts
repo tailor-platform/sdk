@@ -10,6 +10,7 @@
  */
 
 import { CLIError } from "#/cli/shared/errors";
+import { collectForeignKeyReferences } from "#/utils/foreign-key-targets";
 import { collectNestedMemberChanges, getNestedMember } from "./nested-members";
 import {
   SNAPSHOT_FIELD_BOOLEAN_PROPS,
@@ -736,6 +737,40 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(value);
 }
 
+function hasRequiredReferenceTo(field: SnapshotFieldConfig, tableName: string): boolean {
+  if (field.foreignKeyType === tableName && field.required) return true;
+  return Object.values(field.fields ?? {}).some((member) =>
+    hasRequiredReferenceTo(member, tableName),
+  );
+}
+
+// The copy restores references one row at a time in id order, so a reference
+// keyed to a column that is itself cleared during the copy can be restored
+// before the row it points at has its key back.
+function hasSelfReferenceKeyedToSelfReference(table: TailorDBSnapshotType): boolean {
+  return collectForeignKeyReferences(table.fields).some(
+    (reference) =>
+      reference.table === table.name &&
+      reference.field !== undefined &&
+      table.fields[reference.field]?.foreignKeyType === table.name,
+  );
+}
+
+// Clearing the references inside a nested value makes distinct values equal
+// (`{ parentID: A }` and `{ parentID: B }` both become `{ parentID: null }`),
+// so a unique constraint over that value fails the copy before the restore.
+function hasUniqueNestedSelfReference(table: TailorDBSnapshotType): boolean {
+  const uniqueFields = new Set(
+    Object.values(table.indexes ?? {}).flatMap((index) => (index.unique ? index.fields : [])),
+  );
+  return Object.entries(table.fields).some(
+    ([name, field]) =>
+      field.fields !== undefined &&
+      (field.unique || uniqueFields.has(name)) &&
+      collectForeignKeyReferences(field.fields).some((reference) => reference.table === table.name),
+  );
+}
+
 function isTypeRenameFieldCompatible(
   before: SnapshotFieldConfig,
   after: SnapshotFieldConfig,
@@ -777,6 +812,10 @@ export function isTypeRenameCompatible(
     return false;
   }
 
+  if (hasSelfReferenceKeyedToSelfReference(before) || hasUniqueNestedSelfReference(before)) {
+    return false;
+  }
+
   const beforeFieldNames = Object.keys(before.fields);
   const afterFieldNames = Object.keys(after.fields);
   if (beforeFieldNames.length !== afterFieldNames.length) return false;
@@ -787,7 +826,7 @@ export function isTypeRenameCompatible(
     // A required self-referential foreign key cannot survive the copy: the
     // batched insert cannot order rows parent-first and the two-phase
     // backfill needs the column to accept null first.
-    if (beforeField.foreignKeyType === before.name && beforeField.required) return false;
+    if (hasRequiredReferenceTo(beforeField, before.name)) return false;
     const retargeted = retargetSelfReferences(beforeField, before.name, after.name);
     if (!isTypeRenameFieldCompatible(retargeted, afterField)) return false;
   }
