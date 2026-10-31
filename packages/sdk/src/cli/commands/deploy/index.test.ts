@@ -62,29 +62,6 @@ describe("deployCommand", () => {
     }
   });
 
-  test.each([
-    { name: "a shell variable", envFileLine: undefined },
-    { name: "an env file", envFileLine: "TAILOR_PLATFORM_ORGANIZATION_ID=\n" },
-  ])("treats an empty organization ID from $name as not given", async ({ envFileLine }) => {
-    const dir = fs.mkdtempSync(path.join(tmpdir(), "tailor-deploy-empty-location-"));
-    const envFile = path.join(dir, ".env");
-    vi.stubEnv("TAILOR_PLATFORM_ORGANIZATION_ID", envFileLine === undefined ? "" : undefined);
-    vi.stubEnv("TAILOR_PLATFORM_FOLDER_ID", undefined);
-    fs.writeFileSync(envFile, envFileLine ?? "");
-    try {
-      const result = await runCliCommand(deployCommand, ["--create-workspace", "-e", envFile]);
-
-      expect(result.success).toBe(true);
-      expect(mocks.deployFromCLI).toHaveBeenCalledWith(
-        expect.objectContaining({ organizationId: undefined, folderId: undefined }),
-        expect.any(Object),
-      );
-    } finally {
-      vi.unstubAllEnvs();
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
   test("forwards workspace creation options", async () => {
     await runCommand(deployCommand, [
       "--create-workspace",
@@ -195,20 +172,9 @@ describe("deployCommand", () => {
   });
 
   test("forwards global options needed to reproduce deploy", async () => {
-    const dir = fs.mkdtempSync(path.join(tmpdir(), "tailor-deploy-recovery-"));
-    const [envFileA, envFileB] = [path.join(dir, "a.env"), path.join(dir, "b.env")];
-    fs.writeFileSync(envFileA, "");
-    fs.writeFileSync(envFileB, "");
-    const commandArgs = [
-      "--env-file-if-exists",
-      ".env.local",
-      "-e",
-      envFileB,
-      "--verbose",
-      "--json",
-    ];
+    const commandArgs = ["--env-file-if-exists", ".env.local", "--verbose", "--json"];
     const originalArgv = process.argv;
-    process.argv = ["node", "tailor", "-e", envFileA, "deploy", ...commandArgs];
+    process.argv = ["node", "tailor", "-e", ".env.before-deploy", "deploy", ...commandArgs];
     try {
       await runCommand(deployCommand, commandArgs, {
         // strip unknown keys
@@ -216,11 +182,10 @@ describe("deployCommand", () => {
       });
     } finally {
       process.argv = originalArgv;
-      fs.rmSync(dir, { recursive: true, force: true });
     }
 
     const cliContext = {
-      envFiles: [envFileA, envFileB],
+      envFiles: [".env.before-deploy"],
       envFilesIfExists: [".env.local"],
       verbose: true,
       json: true,

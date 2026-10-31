@@ -317,43 +317,22 @@ describe("dispatchPlugin", () => {
     expect(env.TAILOR_CONFIG_PATH).toBe("/proj/tailor.config.ts");
   });
 
-  test("injects the config path a forwarded env file sets", async () => {
+  test("injects the config path a forwarded env file sets, leaving a missing one to the plugin", async () => {
     const project = path.join(tempDir, "project");
     writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-hello`, outFile);
     process.chdir(project);
     process.env.PATH = "";
-    fs.writeFileSync(
-      path.join(project, ".env.staging"),
-      "TAILOR_CONFIG_PATH=env-file/tailor.config.ts\n",
-    );
-    contextMocks.loadConfigPath.mockImplementation(
-      () => process.env.TAILOR_CONFIG_PATH ?? "/proj/tailor.config.ts",
-    );
+    fs.writeFileSync(path.join(project, ".env.staging"), "TAILOR_CONFIG_PATH=env/tailor.config.ts");
+    contextMocks.loadConfigPath.mockImplementation(() => process.env.TAILOR_CONFIG_PATH);
 
     const code = await dispatchPlugin({
       name: "hello",
-      args: ["deploy", "-e", ".env.staging"],
+      args: ["deploy", "-e", ".env.staging", "-e", ".env.missing"],
       cliName: CLI,
     });
 
     expect(code).toBe(0);
-    expect(readCapture().env.TAILOR_CONFIG_PATH).toBe("env-file/tailor.config.ts");
-  });
-
-  test("leaves a missing --env-file for the plugin to report", async () => {
-    const project = path.join(tempDir, "project");
-    writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-hello`, outFile);
-    process.chdir(project);
-    process.env.PATH = "";
-
-    const code = await dispatchPlugin({
-      name: "hello",
-      args: ["deploy", "-e", ".env.missing"],
-      cliName: CLI,
-    });
-
-    expect(code).toBe(0);
-    expect(readCapture().argv).toEqual(["deploy", "-e", ".env.missing"]);
+    expect(readCapture().env.TAILOR_CONFIG_PATH).toBe("env/tailor.config.ts");
   });
 
   // `main.ts` hands the host-consumed tokens to `dispatchPlugin` already

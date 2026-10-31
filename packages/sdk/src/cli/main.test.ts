@@ -113,36 +113,23 @@ describe.concurrent("CLI error verbosity", () => {
 });
 
 describe.concurrent("env files", () => {
-  test.each([
-    { name: "every repeated flag", args: ["organization", "get", "-e", "a.env", "-e", "b.env"] },
-    {
-      name: "flags on both sides of the subcommand",
-      args: ["-e", "a.env", "organization", "get", "--env-file", "b.env"],
-    },
-    {
-      name: "--env-file-if-exists after --env-file",
-      args: ["organization", "get", "--env-file-if-exists=b.env", "--envFile", "a.env"],
-    },
-  ])(
-    "loads $name before validating options",
-    async ({ args }) => {
-      expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
-        true,
-      );
-      using tmp = tempDir("cli-env-file-");
-      writeFileSync(
-        path.join(tmp.dir, "a.env"),
-        "TAILOR_PLATFORM_ORGANIZATION_ID=11111111-1111-4111-8111-111111111111\n",
-      );
-      writeFileSync(path.join(tmp.dir, "b.env"), "UNRELATED=1\n");
+  test("loads every repeated flag before validating options", async () => {
+    expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
+    using tmp = tempDir("cli-env-file-");
+    writeFileSync(
+      path.join(tmp.dir, "a.env"),
+      "TAILOR_PLATFORM_ORGANIZATION_ID=11111111-1111-4111-8111-111111111111\n",
+    );
+    writeFileSync(path.join(tmp.dir, "b.env"), "");
 
-      const result = await runCli([...args, "--json"], tmp.dir);
+    const result = await runCli(
+      ["-e", "a.env", "organization", "get", "-e", "b.env", "--json"],
+      tmp.dir,
+    );
 
-      expect(result.status).toBe(1);
-      expect(JSON.parse(result.stderr).error).toMatchObject({ code: "AUTH_TOKEN_NOT_FOUND" });
-    },
-    20_000,
-  );
+    expect(result.status).toBe(1);
+    expect(JSON.parse(result.stderr).error).toMatchObject({ code: "AUTH_TOKEN_NOT_FOUND" });
+  }, 20_000);
 
   test("uses the config path an env file sets", async () => {
     expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);

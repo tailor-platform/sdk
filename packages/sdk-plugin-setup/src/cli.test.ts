@@ -1,6 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import * as path from "pathe";
 import { describe, expect, test } from "vitest";
@@ -55,20 +54,12 @@ describe("setup CLI JSON errors", () => {
   test(
     "turns on JSON output from an --env-file",
     () => {
-      const dir = mkdtempSync(path.join(tmpdir(), "setup-env-file-"));
-      try {
-        const envFile = path.join(dir, ".env");
-        writeFileSync(envFile, "TAILOR_JSON_OUTPUT=true\n");
+      const result = runCli([...conflictingEnvArgs, "-e", "src/__fixtures__/json-output.env"]);
 
-        const result = runCli([...conflictingEnvArgs, "-e", envFile]);
-
-        expect(result.status).toBe(1);
-        expect(parseErrorEnvelope(result.stderr)).toEqual({
-          error: { code: "UNEXPECTED_ERROR", message: conflictingEnvMessage },
-        });
-      } finally {
-        rmSync(dir, { recursive: true, force: true });
-      }
+      expect(result.status).toBe(1);
+      expect(parseErrorEnvelope(result.stderr)).toEqual({
+        error: { code: "UNEXPECTED_ERROR", message: conflictingEnvMessage },
+      });
     },
     CLI_TEST_TIMEOUT_MS,
   );

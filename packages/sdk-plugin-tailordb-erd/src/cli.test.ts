@@ -1,6 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import * as path from "pathe";
 import { describe, expect, test } from "vitest";
@@ -53,23 +52,15 @@ describe("tailordb-erd CLI JSON errors", () => {
   test(
     "reads the config path from an --env-file",
     () => {
-      const dir = mkdtempSync(path.join(tmpdir(), "erd-env-file-"));
-      try {
-        const envFile = path.join(dir, ".env");
-        writeFileSync(envFile, `TAILOR_CONFIG_PATH=${missingConfigPath}\n`);
+      const result = runCli(["export", "--json", "-e", "src/__fixtures__/missing-config.env"]);
 
-        const result = runCli(["export", "--json", "-e", envFile]);
-
-        expect(result.status).toBe(1);
-        expect(parseErrorEnvelope(result.stderr)).toEqual({
-          error: {
-            code: "UNEXPECTED_ERROR",
-            message: `Configuration file not found: ${path.resolve(missingConfigPath)}`,
-          },
-        });
-      } finally {
-        rmSync(dir, { recursive: true, force: true });
-      }
+      expect(result.status).toBe(1);
+      expect(parseErrorEnvelope(result.stderr)).toEqual({
+        error: {
+          code: "UNEXPECTED_ERROR",
+          message: "Configuration file not found: src/__fixtures__/missing.config.ts",
+        },
+      });
     },
     CLI_TEST_TIMEOUT_MS,
   );

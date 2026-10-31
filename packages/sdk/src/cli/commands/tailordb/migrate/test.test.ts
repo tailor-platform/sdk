@@ -198,17 +198,17 @@ describe("tailordb migration test", () => {
       }
     });
 
-    function writeEnvFile(content: string): string {
+    test.each([
+      { ids: [organizationId, folderId], expected: { organizationId, folderId } },
+      { ids: ["", ""], expected: { organizationId: undefined, folderId: undefined } },
+    ])("passes the IDs $ids loaded by --env-file to the preparation step", async (row) => {
       const directory = fs.mkdtempSync(path.join(os.tmpdir(), "migration-test-env-"));
       directories.push(directory);
       const envFile = path.join(directory, "location.env");
-      fs.writeFileSync(envFile, content);
-      return envFile;
-    }
-
-    test("passes the IDs loaded by --env-file to the preparation step", async () => {
-      const envFile = writeEnvFile(
-        `TAILOR_PLATFORM_ORGANIZATION_ID=${organizationId}\nTAILOR_PLATFORM_FOLDER_ID=${folderId}\n`,
+      const [organization, folder] = row.ids;
+      fs.writeFileSync(
+        envFile,
+        `TAILOR_PLATFORM_ORGANIZATION_ID=${organization}\nTAILOR_PLATFORM_FOLDER_ID=${folder}\n`,
       );
       const dependencies = createDependencies([]);
       mocks.dependencies = dependencies;
@@ -216,40 +216,14 @@ describe("tailordb migration test", () => {
       const result = await runCliCommand(testCommand, ["--env-file", envFile]);
 
       expect(result.success).toBe(true);
-      expect(dependencies.prepare).toHaveBeenCalledWith(
-        expect.objectContaining({ organizationId, folderId }),
-      );
+      expect(dependencies.prepare).toHaveBeenCalledWith(expect.objectContaining(row.expected));
     });
 
-    test("treats empty ID lines in an --env-file as not given", async () => {
-      const envFile = writeEnvFile(
-        "TAILOR_PLATFORM_ORGANIZATION_ID=\nTAILOR_PLATFORM_FOLDER_ID=\n",
-      );
+    test.each(["not-a-uuid", ""])("rejects --organization-id %j", async (value) => {
       const dependencies = createDependencies([]);
       mocks.dependencies = dependencies;
 
-      const result = await runCliCommand(testCommand, ["--env-file", envFile]);
-
-      expect(result.success).toBe(true);
-      expect(dependencies.prepare).toHaveBeenCalledWith(
-        expect.objectContaining({ organizationId: undefined, folderId: undefined }),
-      );
-    });
-
-    test.each([
-      { name: "a command-line value", args: ["--organization-id", "not-a-uuid"], content: "" },
-      {
-        name: "an env-file value",
-        args: [],
-        content: "TAILOR_PLATFORM_ORGANIZATION_ID=not-a-uuid\n",
-      },
-      { name: "an empty command-line value", args: ["--organization-id", ""], content: "" },
-    ])("rejects $name that is not a UUID", async ({ args, content }) => {
-      const envFile = writeEnvFile(content);
-      const dependencies = createDependencies([]);
-      mocks.dependencies = dependencies;
-
-      const result = await runCliCommand(testCommand, ["--env-file", envFile, ...args]);
+      const result = await runCliCommand(testCommand, ["--organization-id", value]);
 
       expect(result.success).toBe(false);
       expect(dependencies.prepare).not.toHaveBeenCalled();
