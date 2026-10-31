@@ -156,7 +156,7 @@ describe("tailordb migration set", () => {
   });
 
   test("shows the migration history ID change before updating metadata", async () => {
-    writeRebaselineMarker(state.migrationsDir, "hcurrent", "hprevious");
+    writeRebaselineMarker(state.migrationsDir, "hcurrent", { replacedHistoryId: "hprevious" });
     state.getMetadata.mockResolvedValue({
       metadata: {
         labels: {

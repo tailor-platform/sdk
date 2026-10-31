@@ -2,7 +2,12 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { SCHEMA_SNAPSHOT_VERSION, type MigrationDiff } from "../diff-calculator";
 import type { TailorDBType } from "#/parser/service/tailordb/types";
-import type { SchemaSnapshot, SnapshotFieldConfig, TailorDBSnapshotType } from "../snapshot";
+import type {
+  RebaselineMarker,
+  SchemaSnapshot,
+  SnapshotFieldConfig,
+  TailorDBSnapshotType,
+} from "../snapshot";
 
 /**
  * Parsed-table shape consumed by createSnapshotFromLocalTypes / createSnapshotType;
@@ -78,22 +83,22 @@ export function writeInitialSchema(
  * Record a re-baseline marker on the 0000 baseline schema snapshot of a migrations directory
  * @param {string} migrationsDir - Migrations directory path
  * @param {string} historyId - Migration history ID of the baseline
- * @param {string | null} replacedHistoryId - Migration history ID the baseline replaced
+ * @param {Partial<Omit<RebaselineMarker, "historyId">>} overrides - Marker fields to override
  */
 export function writeRebaselineMarker(
   migrationsDir: string,
   historyId: string,
-  replacedHistoryId: string | null = null,
+  overrides: Partial<Omit<RebaselineMarker, "historyId">> = {},
 ): void {
   const schemaPath = path.join(migrationsDir, "0000", "schema.json");
   const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as SchemaSnapshot;
-  fs.writeFileSync(
-    schemaPath,
-    JSON.stringify({
-      ...schema,
-      rebaseline: { historyId, replacedHistoryId, replacedLatestMigration: 0 },
-    }),
-  );
+  const rebaseline: RebaselineMarker = {
+    historyId,
+    replacedHistoryId: null,
+    replacedLatestMigration: 0,
+    ...overrides,
+  };
+  fs.writeFileSync(schemaPath, JSON.stringify({ ...schema, rebaseline }));
 }
 
 /**

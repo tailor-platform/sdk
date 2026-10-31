@@ -412,7 +412,7 @@ describe("tailordb migration status --json", () => {
   });
 
   test("does not offer to move a checkpoint the next deploy resets to the new baseline", async () => {
-    writeRebaselineMarker(state.migrationsDir, "hlocal", "hprevious");
+    writeRebaselineMarker(state.migrationsDir, "hlocal", { replacedHistoryId: "hprevious" });
     state.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0000", "sdk-migration-history": "hprevious" } },
     });
