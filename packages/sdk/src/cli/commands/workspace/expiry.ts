@@ -1,5 +1,6 @@
 import { createApplyLimiter } from "#/cli/shared/apply-concurrency";
 import { toError } from "#/cli/shared/errors";
+import { assertDefined } from "#/utils/assert";
 import { writeMetadataLabelsDirect, type MetadataLabelClient } from "../deploy/label";
 
 /** Label key recording when a workspace becomes eligible for pruning. */
@@ -47,6 +48,18 @@ export function decodeExpiresAt(value: string | undefined): Date | undefined {
   if (!Number.isSafeInteger(seconds)) return undefined;
   const expiresAt = new Date(seconds * 1000);
   return Number.isNaN(expiresAt.getTime()) ? undefined : expiresAt;
+}
+
+/**
+ * The instant a workspace records for an expiry, at the label's one-second resolution.
+ * @param expiresAt - Instant the workspace becomes prunable
+ * @returns The instant reading the recorded expiry back reports
+ */
+export function recordedExpiresAt(expiresAt: Date): Date {
+  return assertDefined(
+    decodeExpiresAt(encodeExpiresAt(expiresAt)),
+    "encoded workspace expiry must decode",
+  );
 }
 
 /** What a workspace's own labels say about when it may be pruned. */

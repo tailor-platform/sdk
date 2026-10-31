@@ -10,6 +10,7 @@ import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { isCLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { createCommand, createWorkspace } from "./create";
@@ -58,11 +59,14 @@ function seedConfig() {
 /** A platform creation time far from the local clock, so an expiry anchored to it is unmistakable. */
 const platformCreateTime = { seconds: 1_700_000_000n, nanos: 0 };
 const platformCreatedAtMs = 1_700_000_000_000;
+/** The same creation time half a second later, which a recorded expiry drops. */
+const subSecondCreateTime = { seconds: 1_700_000_000n, nanos: 500_000_000 };
 
 function stubClient(
   overrides: Partial<{
     getMetadata: ReturnType<typeof vi.fn>;
     setMetadata: ReturnType<typeof vi.fn>;
+    createTime: typeof platformCreateTime;
   }> = {},
 ) {
   const client = {
@@ -74,7 +78,7 @@ function stubClient(
         region: "us-west",
         organizationId: "organization-1",
         folderId: "folder-1",
-        createTime: platformCreateTime,
+        createTime: overrides.createTime ?? platformCreateTime,
       },
     }),
     getOrganizationFolder: vi.fn().mockResolvedValue({ folder: { name: "dev" } }),
@@ -352,6 +356,173 @@ describe("workspace create --ttl", () => {
     vi.unstubAllEnvs();
     const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
     if (fs.existsSync(configPath)) fs.rmSync(configPath);
+  });
+
+  async function runCreateJson(...extraArgs: string[]) {
+    using _json = jsonMode();
+    using _logger = silenceLogger("success", "warn", "info", "error");
+    using outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+    const result = await runCommand(
+      createCommand,
+      ["--name", "test-ws", "--region", "us-west", ...extraArgs, "--json"],
+      {
+        // strip unknown keys
+        globalArgs: z.object(commonArgs),
+      },
+    );
+    return { result, output: outSpy.mock.calls[0]?.[0] };
+  }
+
+  test.each(["9999999999999d", "50000000d", "4320000000001s", `${"9".repeat(400)}d`])(
+    "rejects an excessive TTL %s before creating a workspace",
+    async (ttl) => {
+      const client = stubClient();
+      const { result } = await runCreateJson("--ttl", ttl);
+      expect(result.success).toBe(false);
+      expect(String(result.error)).toContain("TTL must be less than 50,000,000 days");
+      expect(client.createWorkspace).not.toHaveBeenCalled();
+      expect(initOperatorClient).not.toHaveBeenCalled();
+    },
+  );
+
+  test("validates programmatic TTL before creating a workspace", async () => {
+    const client = stubClient();
+    await expect(
+      createWorkspace({
+        name: "test-ws",
+        region: "us-west",
+        organizationId: validUUID,
+        ttl: "9999999999999d",
+      }),
+    ).rejects.toThrow("TTL must be less than 50,000,000 days");
+    expect(client.createWorkspace).not.toHaveBeenCalled();
+    expect(initOperatorClient).not.toHaveBeenCalled();
+  });
+
+  test.each(["0s", "4319999999999s"])("accepts a representable TTL %s", async (ttl) => {
+    const client = stubClient();
+    const { result, output } = await runCreateJson("--ttl", ttl);
+    expect(result.success).toBe(true);
+    expect(client.setMetadata).toHaveBeenCalledOnce();
+    expect(output).toMatchObject({ ttl: { state: "written" } });
+  });
+
+  test("reports the recorded expiry in --json output", async () => {
+    stubClient({ createTime: subSecondCreateTime });
+
+    const { result, output } = await runCreateJson("--ttl", "24h");
+
+    expect(result.success).toBe(true);
+    expect(output).toMatchObject({
+      id: validUUID,
+      ttl: { state: "written", expiresAt: "2023-11-15T22:13:20.000Z" },
+    });
+  });
+
+  test("reports an unconfirmed expiry in --json output before failing", async () => {
+    stubClient({
+      createTime: subSecondCreateTime,
+      setMetadata: vi.fn().mockRejectedValue(new Error("permission denied")),
+    });
+
+    const { result, output } = await runCreateJson("--ttl", "24h");
+
+    expect(output).toMatchObject({
+      id: validUUID,
+      ttl: { state: "unconfirmed", requestedExpiresAt: "2023-11-15T22:13:20.000Z" },
+    });
+    const error = result.success ? undefined : result.error;
+    expect(isCLIError(error) && error.code).toBe("WORKSPACE_TTL_WRITE_FAILED");
+    expect(isCLIError(error) && error.context).toMatchObject({
+      requestedExpiresAt: "2023-11-15T22:13:20.000Z",
+    });
+  });
+
+  test("returns the recorded expiry from programmatic createWorkspace()", async () => {
+    stubClient({ createTime: subSecondCreateTime });
+
+    const workspace = await createWorkspace({
+      name: "test-ws",
+      region: "us-west",
+      organizationId: validUUID,
+      ttl: "24h",
+    });
+
+    expect(workspace.ttl).toEqual({
+      state: "written",
+      expiresAt: new Date("2023-11-15T22:13:20.000Z"),
+    });
+  });
+
+  test("confirms the expiry when writing it a second time succeeds", async () => {
+    const client = stubClient({
+      setMetadata: vi
+        .fn()
+        .mockRejectedValueOnce(new Error("connection reset"))
+        .mockResolvedValue({}),
+    });
+
+    const { result, output } = await runCreateJson("--ttl", "24h");
+
+    expect(result.success).toBe(true);
+    expect(output).toMatchObject({ ttl: { state: "written" } });
+    expect(client.setMetadata).toHaveBeenCalledTimes(2);
+  });
+
+  test("confirms an expiry whose failed write landed without writing it again", async () => {
+    const client = stubClient({
+      getMetadata: vi
+        .fn()
+        .mockResolvedValueOnce({ metadata: { labels: {} } })
+        .mockResolvedValue({ metadata: { labels: { [expiresAtLabelKey]: "s-1700086400" } } }),
+      setMetadata: vi.fn().mockRejectedValue(new Error("deadline exceeded")),
+    });
+
+    const { result, output } = await runCreateJson("--ttl", "24h");
+
+    expect(result.success).toBe(true);
+    expect(output).toMatchObject({ ttl: { state: "written" } });
+    expect(client.setMetadata).toHaveBeenCalledTimes(1);
+  });
+
+  test("reports the expiry alongside the created profile in --json output", async () => {
+    stubClient();
+
+    const { output } = await runCreateJson(
+      "--ttl",
+      "24h",
+      "--profile-name",
+      "bootstrap",
+      "--profile-user",
+      "u@example.com",
+    );
+
+    expect(output).toMatchObject({
+      ttl: { state: "written", expiresAt: "2023-11-15T22:13:20.000Z" },
+      profile: { name: "bootstrap", workspaceId: validUUID },
+    });
+  });
+
+  test("omits ttl from --json output when --ttl is absent", async () => {
+    stubClient();
+
+    const { output } = await runCreateJson();
+
+    expect(output).toMatchObject({ id: validUUID });
+    expect(output).not.toHaveProperty("ttl");
+  });
+
+  test("reports the recorded expiry in a message, keeping ttl out of the human-readable workspace output", async () => {
+    stubClient({ createTime: subSecondCreateTime });
+    using _logger = silenceLogger("success", "warn");
+    using infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
+    using outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+
+    await runCommand(createCommand, ["--name", "test-ws", "--region", "us-west", "--ttl", "24h"]);
+
+    expect(infoSpy).toHaveBeenCalledWith("Workspace becomes prunable at 2023-11-15T22:13:20.000Z.");
+    expect(outSpy.mock.calls[0]?.[0]).toMatchObject({ id: validUUID });
+    expect(outSpy.mock.calls[0]?.[0]).not.toHaveProperty("ttl");
   });
 
   test("records an expiry anchored to the platform's creation time, not the local clock", async () => {

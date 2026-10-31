@@ -86,17 +86,25 @@ jobs:
           # Fresh checkout deploys a throwaway app; per-run id injection is intended here.
           TAILOR_CI_ALLOW_ID_INJECTION: "true"
           RUN_ID: ${{ github.run_id }}
+          TTL: 24h
         run: |
           failed=()
 
           check_target() {
             local target="$1" dir="$2" config="$3"
-            local workspace_id summary
+            local workspace_json workspace_id summary
+            local create_status=0
 
-            workspace_id=$(set -o pipefail; cd "$dir" && pnpm exec tailor workspace create -n "e2e-ws-${RUN_ID}-drift-${target}" -r us-west --ttl 24h --json | tail -1 | jq -r '.id') || workspace_id=""
-            if [[ -z "$workspace_id" || "$workspace_id" == "null" ]]; then
+            workspace_json=$(set -o pipefail; cd "$dir" && pnpm exec tailor workspace create -n "e2e-ws-${RUN_ID}-drift-${target}" -r us-west --ttl "$TTL" --json | tail -1) || create_status=$?
+            workspace_id=$(jq -r '.id // empty' <<<"$workspace_json" 2>/dev/null) || workspace_id=""
+            if [[ -z "$workspace_id" ]] || { (( create_status != 0 )) && ! jq -e '.ttl.state == "unconfirmed"' <<<"$workspace_json" > /dev/null 2>&1; }; then
               echo "::error::${target}: failed to create workspace"
               return 1
+            fi
+            if (( create_status != 0 )); then
+              echo "::warning::${target}: workspace create could not confirm the expiry of ${workspace_id}; recording it again"
+              (cd "$dir" && pnpm exec tailor workspace ttl set -w "$workspace_id" --ttl "$TTL") \
+                || echo "::warning::${target}: could not record the expiry of ${workspace_id} (the cleanup step sweeps it)"
             fi
 
             local result=0

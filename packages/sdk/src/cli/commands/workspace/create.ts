@@ -33,8 +33,8 @@ import { assertWritable } from "#/cli/shared/readonly-guard";
 import { workspaceNameSchema } from "#/cli/shared/workspace-name";
 import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
-import { ageArg, parseAge } from "./age";
-import { writeWorkspaceExpiry } from "./expiry";
+import { parseAge, ttlArg, ttlLimit } from "./age";
+import { recordedExpiresAt, writeWorkspaceExpiry } from "./expiry";
 import { KNOWN_WORKSPACE_REGIONS } from "./regions";
 import {
   workspaceDisplayName,
@@ -57,7 +57,7 @@ const createWorkspaceOptionsSchema = z.object({
   deleteProtection: z.boolean().optional(),
   organizationId: z.uuid().optional(),
   folderId: z.uuid().optional(),
-  ttl: ageArg.optional(),
+  ttl: ttlArg.optional(),
   profile: profileNameSchema.optional(),
 });
 
@@ -191,6 +191,9 @@ export type TtlWriteResult =
  * later change to `createTime` cannot reinterpret it. When the platform
  * reports no `createTime`, the local clock stands in.
  *
+ * A failed write is tried once more. That attempt reads the labels first, so
+ * it also confirms a first write that landed despite reporting an error.
+ *
  * The workspace already exists by the time this runs, so a failure is
  * returned rather than thrown: the caller still has a workspace to report and
  * a profile to create, and its recovery step is `workspace ttl set`, not
@@ -208,9 +211,10 @@ async function recordTtl(
   createTime: Timestamp | undefined,
 ): Promise<TtlWriteResult> {
   const createdAt = createTime ? timestampDate(createTime) : new Date();
-  const expiresAt = new Date(createdAt.getTime() + parseAge(ttl));
+  const expiresAt = recordedExpiresAt(new Date(createdAt.getTime() + parseAge(ttl)));
+  const write = () => writeWorkspaceExpiry(client, workspaceId, expiresAt);
   try {
-    await writeWorkspaceExpiry(client, workspaceId, expiresAt);
+    await write().catch(() => write());
     return { state: "written", expiresAt };
   } catch (error) {
     // The write may still have landed on the platform, so this reports an
@@ -222,6 +226,18 @@ async function recordTtl(
       message: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+/**
+ * Describe how recording the expiry went, for `--json` output.
+ * @param ttl - Outcome of recording the expiry
+ * @returns The output's `ttl` field
+ */
+function ttlOutput(ttl: TtlWriteResult) {
+  const expiresAt = ttl.expiresAt.toISOString();
+  return ttl.state === "written"
+    ? { state: ttl.state, expiresAt }
+    : { state: ttl.state, requestedExpiresAt: expiresAt };
 }
 
 function parseCreateWorkspaceOptions(
@@ -327,6 +343,8 @@ export const createCommand = defineAppCommand({
     Every workspace belongs to an organization. Without --organization-id and --folder-id, on the command line or through TAILOR_PLATFORM_ORGANIZATION_ID / TAILOR_PLATFORM_FOLDER_ID, the workspace is created in the default organization and folder that the logged-in user set with \`user update\`, unless TAILOR_PLATFORM_TOKEN is set. When none of these gives an organization, the command fails. Giving either option replaces both defaults, and --folder-id requires --organization-id.
 
     TAILOR_PLATFORM_ORGANIZATION_ID and TAILOR_PLATFORM_FOLDER_ID are also read from --env-file. Command-line options take precedence over the corresponding environment variables. Empty values in the env file are treated as not given.
+
+    When --ttl is given but the expiry cannot be confirmed, the command still prints the created workspace, then fails with WORKSPACE_TTL_WRITE_FAILED. With --json, the printed \`ttl.state\` is then \`unconfirmed\` instead of \`written\`, so a script can read the workspace ID and record the expiry again with \`workspace ttl set\`.
   `,
   args: z.strictObject({
     // createWorkspace() re-applies this schema for programmatic callers; here it
@@ -353,9 +371,8 @@ export const createCommand = defineAppCommand({
       description: "Folder ID to workspace associate with",
       env: "TAILOR_PLATFORM_FOLDER_ID",
     }),
-    ttl: arg(ageArg.optional(), {
-      description:
-        "Record on the workspace itself when it becomes prunable, such as 30m, 24h, or 7d. `workspace prune --expired` deletes it once that has passed",
+    ttl: arg(ttlArg.optional(), {
+      description: `Record on the workspace itself when it becomes prunable, such as 30m, 24h, or 7d (${ttlLimit}). \`workspace prune --expired\` deletes it once that has passed`,
     }),
     "profile-name": arg(z.string().optional(), {
       alias: "p",
@@ -480,8 +497,12 @@ export const createCommand = defineAppCommand({
       }
     }
 
-    if (args.json && profileInfo) {
-      logger.out({ ...workspaceOutput, profile: profileInfo });
+    if (args.json) {
+      logger.out({
+        ...workspaceOutput,
+        ...(ttl ? { ttl: ttlOutput(ttl) } : {}),
+        ...(profileInfo ? { profile: profileInfo } : {}),
+      });
     } else {
       logger.out(workspaceOutput, {
         display: { name: workspaceNameTransformer, folderName: null },
