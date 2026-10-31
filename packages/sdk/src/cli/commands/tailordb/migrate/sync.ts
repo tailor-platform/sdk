@@ -21,6 +21,7 @@ import {
   type NamespaceWithMigrations,
 } from "./config";
 import { formatMigrationDiff, hasChanges } from "./diff-calculator";
+import { migrationCommandContext } from "./hints";
 import { parseMigrationNumberArg } from "./migration-number";
 import {
   assertLocalMigrationHistory,
@@ -221,7 +222,15 @@ async function sync(options: SyncOptions): Promise<SyncResult> {
 
   const trn = resourceTrn(workspaceId, "tailordb", target.namespace);
   const currentState = await fetchRemoteMigrationState(client, trn);
-  assertNoMigrationInProgress(currentState, target.namespace);
+  assertNoMigrationInProgress(
+    currentState,
+    target.namespace,
+    migrationCommandContext({
+      configPath: options.configPath,
+      workspaceId,
+      profile: options.profile,
+    }),
+  );
   const historyId = snapshot.rebaseline?.historyId;
   const historyOverwrite = assertLocalMigrationHistory({
     state: currentState,

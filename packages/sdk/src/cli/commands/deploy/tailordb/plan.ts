@@ -147,6 +147,7 @@ export async function planTailorDB(context: PlanContext) {
           config,
           noSchemaCheck ?? false,
           tailordbs,
+          migrationRecoveryArgs,
         );
   if (detected) {
     await assertMigrationSkipSteps({

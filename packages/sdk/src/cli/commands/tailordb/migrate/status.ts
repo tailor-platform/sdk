@@ -10,6 +10,7 @@ import { CLIError, errorSummary, isCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { getNamespacesWithMigrations, migrationConfigNotFoundError } from "./config";
+import { migrationCommandContext, type MigrationCommandContext } from "./hints";
 import {
   fetchRemoteMigrationState,
   isStaleMigrationInProgress,
@@ -75,7 +76,7 @@ function isStatusFailure(row: MigrationStatusRow): row is MigrationStatusFailure
 function formatCheckpointRecovery(
   location: RemoteCheckpointLocation,
   namespace: string,
-  configPath: string | undefined,
+  commandContext: MigrationCommandContext,
 ): string {
   if (location.kind !== "outside") return "";
   const hints = missingCheckpointRecoveryHints(
@@ -88,7 +89,7 @@ function formatCheckpointRecovery(
         ...(location.rebaselinePending ? { rebaselinePending: location.rebaselinePending } : {}),
       },
     ],
-    configPath,
+    commandContext,
   );
   return hints.map((hint) => `\n${hint}`).join("");
 }
@@ -164,6 +165,11 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
     profile: options.profile,
     workspaceId: options.workspaceId,
   });
+  const commandContext = migrationCommandContext({
+    configPath: options.configPath,
+    workspaceId,
+    profile: options.profile,
+  });
 
   const rows: MigrationStatusRow[] = [];
 
@@ -204,7 +210,7 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
     const checkpointRecovery = formatCheckpointRecovery(
       locateRemoteCheckpoint(remoteState, migrationsDir, rebaseline),
       namespace,
-      options.configPath,
+      commandContext,
     );
 
     if (remoteState.historyIdInvalid) {

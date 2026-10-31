@@ -6,7 +6,7 @@ import { z } from "zod";
 import { resourceTrn } from "#/cli/commands/deploy/label";
 import { updateMigrationLabel } from "#/cli/commands/deploy/tailordb/migration";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
-import { confirmationArgs, deploymentArgs, recoveryContextArgs } from "#/cli/shared/args";
+import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
@@ -20,7 +20,7 @@ import { PluginManager } from "#/plugin/manager";
 import { getNamespacesWithMigrations, selectTargetNamespace } from "./config";
 import { formatMigrationDiff, hasChanges } from "./diff-calculator";
 import { captureFileState, captureMigrationFileState } from "./file-state";
-import { formatNamespaceMigrationHint } from "./hints";
+import { formatNamespaceMigrationHint, migrationCommandContext } from "./hints";
 import {
   assertNoMigrationInProgress,
   fetchRemoteMigrationState,
@@ -208,18 +208,14 @@ async function rebaseline(options: RebaselineOptions): Promise<RebaselineResult>
     profile: options.profile,
     workspaceId: options.workspaceId,
   });
-  const remoteContextArgs = [
-    "--config",
-    config.path,
-    ...recoveryContextArgs({ workspaceId, profile: options.profile }),
-  ];
+  const commandContext = migrationCommandContext({
+    configPath: config.path,
+    workspaceId,
+    profile: options.profile,
+  });
+  const remoteContextArgs = ["--config", config.path, ...(commandContext.contextArgs ?? [])];
   const migrationHint = (subcommand: readonly string[]): string =>
-    formatNamespaceMigrationHint({
-      subcommand,
-      namespace: target.namespace,
-      configPath: config.path,
-      contextArgs: recoveryContextArgs({ workspaceId, profile: options.profile }),
-    });
+    formatNamespaceMigrationHint({ ...commandContext, subcommand, namespace: target.namespace });
   const setBaselineSuggestion = `Run ${migrationHint(["set", "0", "--force"])}`;
   const latestLabel = formatMigrationNumber(latestMigration);
   const adoptLocalHistory = `run ${migrationHint(["set", latestLabel, "--force"])}, then run this command again.`;
@@ -236,7 +232,7 @@ async function rebaseline(options: RebaselineOptions): Promise<RebaselineResult>
       client,
       resourceTrn(workspaceId, "tailordb", target.namespace),
     );
-    assertNoMigrationInProgress(remoteState, target.namespace);
+    assertNoMigrationInProgress(remoteState, target.namespace, commandContext);
     const remoteMigration = remoteState.number;
     if (remoteMigration !== latestMigration) {
       const actual = remoteMigration === null ? "<unset>" : formatMigrationNumber(remoteMigration);

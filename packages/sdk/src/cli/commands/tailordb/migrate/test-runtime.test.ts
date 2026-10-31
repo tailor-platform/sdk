@@ -433,6 +433,7 @@ describe("migration test runtime", () => {
         config: { path: "/project/tailor.config.ts" },
         application: { tailorDBServices: services, authService: { config: { name: "auth-ns" } } },
       },
+      options: {},
     } as unknown as Parameters<typeof assertSourceBaselineFresh>[0];
   }
 

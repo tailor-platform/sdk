@@ -10,6 +10,7 @@
 import * as fs from "node:fs";
 import { resourceTrn } from "#/cli/commands/deploy/label";
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
+import { formatCommandHint } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import {
   hasChanges,
@@ -17,7 +18,12 @@ import {
   formatDiffSummary,
   type MigrationDiff,
 } from "./diff-calculator";
-import { formatCheckpointMoveHints, formatNamespaceMigrationHint } from "./hints";
+import {
+  formatCheckpointMoveHints,
+  formatNamespaceMigrationHint,
+  migrationCommandArgs,
+  type MigrationCommandContext,
+} from "./hints";
 import { collectNestedMemberChanges, getNestedMember } from "./nested-members";
 import { buildPreMigrationSnapshot } from "./pre-migration-schema";
 import {
@@ -608,21 +614,27 @@ function isLikelyPreV2ScriptHashDrift(driftResults: readonly DriftGuidanceInput[
 /**
  * Log common causes of remote schema drift and how to resolve them, unless only namespaces
  * without a checkpoint drifted, whose recovery {@link unsetCheckpointDriftHints} describes
+ * @param {MigrationCommandContext} context - Config and workspace selection to preserve in the suggested command
  * @param {readonly DriftGuidanceInput[]} [driftResults] - Per-namespace verification results, used to add a targeted hint for the v1-origin missing-hash pattern
  * @returns {void}
  */
-export function logRemoteDriftGuidance(driftResults?: readonly DriftGuidanceInput[]): void {
+export function logRemoteDriftGuidance(
+  context: MigrationCommandContext,
+  driftResults?: readonly DriftGuidanceInput[],
+): void {
   const drifted = driftResults?.filter((result) => result.hasDrift) ?? [];
   if (drifted.length > 0 && drifted.every((result) => result.checkpointUnset)) return;
+  const statusCommand = formatCommandHint({
+    command: "tailor",
+    args: migrationCommandArgs(["status"], context),
+  });
   logger.info("This may indicate:");
   logger.info("  - Another developer applied different migrations", { mode: "plain" });
   logger.info("  - Manual schema changes were made directly", { mode: "plain" });
   logger.info("  - Migration history is out of sync", { mode: "plain" });
   logger.newline();
   logger.info("To resolve:");
-  logger.info("  - Run 'tailor tailordb migration status' to compare local vs remote.", {
-    mode: "plain",
-  });
+  logger.info(`  - Run ${statusCommand} to compare local vs remote.`, { mode: "plain" });
   logger.info("  - If remote is correct, update local tables and run 'migration generate'.", {
     mode: "plain",
   });
@@ -653,19 +665,27 @@ interface UnsetCheckpointDriftInput {
 /**
  * Format how to recover each namespace whose tables differ from 0000 while it has no migration checkpoint.
  * @param results - Per-namespace verification results
- * @param configPath - Config file path to preserve in recovery commands
+ * @param context - Config and workspace selection to preserve in recovery commands
  * @returns Recovery instructions for human and JSON errors
  */
 export function unsetCheckpointDriftHints(
   results: readonly UnsetCheckpointDriftInput[],
-  configPath?: string,
+  context: MigrationCommandContext,
 ): string[] {
   return results
     .filter((result) => result.checkpointUnset && result.hasDrift)
     .map(({ namespace }) => {
-      const command = (subcommand: string[]) =>
-        formatNamespaceMigrationHint({ subcommand, namespace, configPath });
-      return `Namespace "${namespace}" has no migration checkpoint yet, so its tables must match migration 0000. Run ${command(["sync", formatMigrationNumber(0)])} to rewrite them to 0000, which deletes the tables and fields that 0000 does not have together with their data. To keep the tables instead, update the local tables to match them and recreate 0000 with ${command(["generate", "--init"])}, which deletes every migration of the namespace, so only while no workspace has been deployed with them.`;
+      const syncCommand = formatNamespaceMigrationHint({
+        ...context,
+        subcommand: ["sync", formatMigrationNumber(0)],
+        namespace,
+      });
+      const generateCommand = formatNamespaceMigrationHint({
+        subcommand: ["generate", "--init"],
+        namespace,
+        configPath: context.configPath,
+      });
+      return `Namespace "${namespace}" has no migration checkpoint yet, so its tables must match migration 0000. Run ${syncCommand} to rewrite them to 0000, which deletes the tables and fields that 0000 does not have together with their data. To keep the tables instead, update the local tables to match them and recreate 0000 with ${generateCommand}, which deletes every migration of the namespace, so only while no workspace has been deployed with them.`;
     });
 }
 
@@ -703,12 +723,12 @@ export const PULL_LATEST_MIGRATIONS_SUGGESTION =
 /**
  * Format recovery options for checkpoints outside the local history, excluding rebaseline recovery.
  * @param results - Namespaces with a missing checkpoint
- * @param configPath - Config file path to preserve in recovery commands
+ * @param context - Config and workspace selection to preserve in recovery commands
  * @returns Recovery instructions for human and JSON errors
  */
 export function missingCheckpointRecoveryHints(
   results: readonly CheckpointRecoveryInput[],
-  configPath?: string,
+  context: MigrationCommandContext,
 ): string[] {
   const missing = results.filter((result) => !result.rebaselinePending);
   if (missing.length === 0) return [];
@@ -716,9 +736,9 @@ export function missingCheckpointRecoveryHints(
     localLatestMigration === null
       ? []
       : formatCheckpointMoveHints({
+          ...context,
           namespace,
           migrationNumber: localLatestMigration,
-          configPath,
           replaceHistoryId: historyIdMismatch,
         }).map((hint) => `  ${hint}`),
   );

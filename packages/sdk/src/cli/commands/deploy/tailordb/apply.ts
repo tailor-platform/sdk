@@ -4,7 +4,11 @@ import {
   type NamespaceWithMigrations,
 } from "#/cli/commands/tailordb/migrate/config";
 import { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-state";
-import { formatNamespaceMigrationHint } from "#/cli/commands/tailordb/migrate/hints";
+import {
+  formatNamespaceMigrationHint,
+  migrationCommandContext,
+  type MigrationCommandContext,
+} from "#/cli/commands/tailordb/migrate/hints";
 import {
   describeMigrationCheckpoint,
   fetchRemoteMigrationState,
@@ -22,7 +26,6 @@ import {
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { handleOptionalToRequiredError } from "#/cli/commands/tailordb/migrate/types";
-import { recoveryContextArgs } from "#/cli/shared/args";
 import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError, toError } from "#/cli/shared/errors";
@@ -91,6 +94,14 @@ import type { MigrationRunKind, PendingMigration } from "#/cli/commands/tailordb
 import type { ApplyPhase } from "../types";
 import type { planTailorDB, TailorDBChangeSet, TailorDBPlanResult } from "./plan";
 
+function deployCommandContext(context: TailorDBPlanResult["context"]): MigrationCommandContext {
+  return migrationCommandContext({
+    workspaceId: context.workspaceId,
+    configPath: context.config.path,
+    extraArgs: context.migrationRecoveryArgs,
+  });
+}
+
 /**
  * Reconcile each namespace's migration checkpoint and history ID to
  * the working tree after a create-update apply.
@@ -103,14 +114,14 @@ import type { planTailorDB, TailorDBChangeSet, TailorDBPlanResult } from "./plan
  * @param workspaceId - Workspace ID
  * @param namespacesWithMigrations - Namespaces that have migration directories configured
  * @param migrationHistoryIds - Migration history ID captured during preflight for each namespace
- * @param configPath - Config file path, kept in the suggested commands
+ * @param commandContext - Config and workspace selection of the deploy, kept in the suggested commands
  */
 async function reconcileMigrationLabels(
   client: OperatorClient,
   workspaceId: string,
   namespacesWithMigrations: NamespaceWithMigrations[],
   migrationHistoryIds: Readonly<Record<string, string | null>>,
-  configPath: string,
+  commandContext: MigrationCommandContext,
 ): Promise<void> {
   for (const { namespace, migrationsDir } of namespacesWithMigrations) {
     if (getMigrationFiles(migrationsDir).length === 0) {
@@ -136,7 +147,7 @@ async function reconcileMigrationLabels(
     ) {
       logger.warn(
         `Migration checkpoint of namespace ${namespace} is ${describeMigrationCheckpoint(currentVersion)}, which is not in the local migration history, so it was left unchanged. ` +
-          `Run ${formatNamespaceMigrationHint({ subcommand: ["status"], namespace, configPath })} to compare.`,
+          `Run ${formatNamespaceMigrationHint({ ...commandContext, subcommand: ["status"], namespace })} to compare.`,
       );
       continue;
     }
@@ -190,7 +201,10 @@ async function buildMigrationContextForScripts(
     authNamespace: machineUsers.authNamespace,
     machineUserByNamespace: machineUsers.byNamespace,
     env,
-    configDir: path.dirname(migrationContext.config.path),
+    configPath: migrationContext.config.path,
+    ...(migrationContext.migrationRecoveryArgs
+      ? { migrationRecoveryArgs: migrationContext.migrationRecoveryArgs }
+      : {}),
     appName: migrationContext.application.name,
     appId: migrationContext.application.id,
     maintenanceMode,
@@ -245,6 +259,7 @@ async function validateTailorDBMigrationState(
     context.config,
     context.noSchemaCheck,
     context.tailorDBInputs,
+    context.migrationRecoveryArgs,
   );
   const approvedRepairs = context.checkpointRepairs;
   const repairPlanChanged =
@@ -694,7 +709,7 @@ async function applyCreateUpdate(
       migrationContext.workspaceId,
       namespacesWithMigrations,
       migrationHistoryIds,
-      migrationContext.config.path,
+      deployCommandContext(migrationContext),
     );
   }
 
@@ -1258,10 +1273,13 @@ async function rollbackMigration(
     : "cleared";
   if (record !== "cleared") {
     runLog.partial.set(migration.namespace, migration);
-    return rollbackSkippedError(migration, error, phaseSettings.restricted, {
-      confirmed: record === "in-progress",
-      kind,
-    });
+    return rollbackSkippedError(
+      migration,
+      error,
+      phaseSettings.restricted,
+      { confirmed: record === "in-progress", kind },
+      deployCommandContext(migrationContext),
+    );
   }
   const attemptedTables = new Set(attempt.attemptedTables);
   const resumedRollback = rollsBackOnFailure && inProgress;
@@ -1440,13 +1458,9 @@ async function commitMigration(
     await executeSingleMigrationPostPhaseDeletions(client, changeSet, migration);
   } catch (error) {
     const syncHint = formatNamespaceMigrationHint({
+      ...deployCommandContext(migrationContext),
       subcommand: ["sync", formatMigrationNumber(migration.number)],
       namespace: migration.namespace,
-      configPath: migrationContext.config.path,
-      contextArgs: [
-        ...recoveryContextArgs({ workspaceId: migrationContext.workspaceId }),
-        ...(migrationContext.migrationRecoveryArgs ?? []),
-      ],
     });
     logger.warn(
       `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} was committed, but post-checkpoint cleanup failed. ` +
@@ -1586,6 +1600,11 @@ async function checkRestorationCheckpoint(
   expectedCheckpoint: ExpectedMigrationCheckpoint,
 ): Promise<CLIError | undefined> {
   const { restricted } = flow.phaseSettings;
+  const statusHint = formatNamespaceMigrationHint({
+    ...deployCommandContext(flow.migrationContext),
+    subcommand: ["status"],
+    namespace: namespaceName,
+  });
   let remoteState: Awaited<ReturnType<typeof fetchRemoteMigrationState>>;
   try {
     remoteState = await fetchRemoteMigrationState(
@@ -1604,7 +1623,7 @@ async function checkRestorationCheckpoint(
         (restricted
           ? `The tables of namespace '${namespaceName}' keep the restrictions this deploy set (${RESTRICTION_EFFECT}). `
           : `The table settings of namespace '${namespaceName}' are left unchanged. `) +
-        `${describeSkippedTables(tables)}Run \`tailor tailordb migration status --namespace ${namespaceName}\` to check the checkpoint, restore connectivity if it fails, then deploy again.`,
+        `${describeSkippedTables(tables)}Run ${statusHint} to check the checkpoint, restore connectivity if it fails, then deploy again.`,
       context: {
         namespace: namespaceName,
         expectedCheckpoint: expectedCheckpoint.number,
@@ -1624,7 +1643,7 @@ async function checkRestorationCheckpoint(
       (restricted
         ? `Another deploy changed the checkpoint, so the tables of namespace '${namespaceName}' keep the restrictions this deploy set (${RESTRICTION_EFFECT}). `
         : `Another deploy changed the checkpoint, so the table settings of namespace '${namespaceName}' are left unchanged. `) +
-      `${describeSkippedTables(tables)}Wait for the other deploy to finish, run \`tailor tailordb migration status --namespace ${namespaceName}\` to see the checkpoint and any migration in progress, then check the tables before deploying again.`,
+      `${describeSkippedTables(tables)}Wait for the other deploy to finish, run ${statusHint} to see the checkpoint and any migration in progress, then check the tables before deploying again.`,
     context: {
       namespace: namespaceName,
       expectedCheckpoint: expectedCheckpoint.number,
