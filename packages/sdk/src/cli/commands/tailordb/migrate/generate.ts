@@ -229,6 +229,8 @@ type GenerateResult = {
   changed: boolean;
   /** Namespaces whose migration directory --init deleted */
   clearedNamespaces: string[];
+  /** Namespaces whose breaking changes the user declined to generate */
+  skippedNamespaces: string[];
   migrations: GeneratedMigration[];
 };
 
@@ -268,7 +270,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
 /**
  * Generate migration files for TailorDB schema changes
  * @param {GenerateOptions} options - Generation options
- * @returns {Promise<GenerateResult>} The migrations written and the directories cleared
+ * @returns {Promise<GenerateResult>} The migrations written, the directories cleared, and the namespaces skipped
  */
 async function generateMigrations(options: GenerateOptions): Promise<GenerateResult> {
   logBetaWarning("tailordb migration");
@@ -290,7 +292,7 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
     logger.info(
       'Add "migration: { directory: \\"./migrations\\" }" to your db config to enable migrations.',
     );
-    return { changed: false, clearedNamespaces: [], migrations: [] };
+    return { changed: false, clearedNamespaces: [], skippedNamespaces: [], migrations: [] };
   }
 
   // The dots before any ":" pick the target: none for a table, one for a
@@ -438,7 +440,12 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
       temporal,
       dateDefault,
     );
-    return { changed: true, clearedNamespaces: [], migrations: [migration] };
+    return {
+      changed: true,
+      clearedNamespaces: [],
+      skippedNamespaces: [],
+      migrations: [migration],
+    };
   }
 
   // A flag applies to a namespace only when that namespace actually removed
@@ -594,7 +601,7 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
     ? await handleInitOption(namespacesToLoad, options.yes)
     : [];
 
-  const declinedNamespaces: string[] = [];
+  const skippedNamespaces: string[] = [];
   const migrations: GeneratedMigration[] = [];
   for (const {
     namespace,
@@ -618,20 +625,17 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
         temporal,
         dateDefault,
       );
-      if (generated.declined) declinedNamespaces.push(namespace);
+      if (generated.declined) skippedNamespaces.push(namespace);
       migrations.push(...generated.migrations.map((files) => generatedMigration(namespace, files)));
     }
   }
-  if (declinedNamespaces.length > 0) {
-    throw CLIError({
-      code: "MIGRATION_GENERATE_CANCELLED",
-      message: `Migration generation cancelled for ${declinedNamespaces.join(", ")}.`,
-      context: { namespaces: declinedNamespaces },
-    });
+  if (skippedNamespaces.length > 0) {
+    logger.info(`Skipped: ${skippedNamespaces.join(", ")}`);
   }
   return {
     changed: clearedNamespaces.length > 0 || migrations.length > 0,
     clearedNamespaces,
+    skippedNamespaces,
     migrations,
   };
 }
