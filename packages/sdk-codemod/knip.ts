@@ -6,4 +6,5 @@ export default {
   entry: ["scripts/*.ts"],
   ignore: ["codemods/**/tests/**"],
   ignoreBinaries: ["knip", "publint"],
+  treatConfigHintsAsErrors: true,
 } satisfies KnipConfig;

@@ -4,4 +4,5 @@ export default {
   // Scaffold sources shipped to user projects; they have their own entry points.
   ignore: ["templates/**"],
   ignoreBinaries: ["knip", "publint"],
+  treatConfigHintsAsErrors: true,
 } satisfies KnipConfig;
