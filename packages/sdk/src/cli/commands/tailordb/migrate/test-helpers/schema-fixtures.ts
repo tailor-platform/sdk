@@ -8,6 +8,7 @@ import type {
   SnapshotFieldConfig,
   TailorDBSnapshotType,
 } from "../snapshot";
+import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 /**
  * Parsed-table shape consumed by createSnapshotFromLocalTypes / createSnapshotType;
@@ -57,6 +58,34 @@ export function snapshotType(name: string): TailorDBSnapshotType {
       name: { type: "string", required: true },
     },
   };
+}
+
+/**
+ * Deployed counterpart of {@link snapshotType} with the given required fields: `id` is a uuid, the others strings
+ * @param {string} name - Table name
+ * @param {string[]} fieldNames - Field names
+ * @returns {ProtoTailorDBType} Deployed table as the platform returns it
+ */
+export function remoteType(name: string, fieldNames: string[]): ProtoTailorDBType {
+  const fields: Record<string, unknown> = {};
+  for (const fieldName of fieldNames) {
+    fields[fieldName] = {
+      type: fieldName === "id" ? "uuid" : "string",
+      required: true,
+      array: false,
+      index: false,
+      unique: false,
+      foreignKey: false,
+      description: "",
+      allowedValues: [],
+      validate: [],
+      fields: {},
+    };
+  }
+  return {
+    name,
+    schema: { fields },
+  } as unknown as ProtoTailorDBType;
 }
 
 /**

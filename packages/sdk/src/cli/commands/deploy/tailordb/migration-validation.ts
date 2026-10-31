@@ -20,6 +20,7 @@ import {
   logRebaselinePendingGuidance,
   logRemoteDriftGuidance,
   missingCheckpointRecoveryHints,
+  unsetCheckpointDriftHints,
   verifyRemoteSchema,
   type CheckpointRecoveryInput,
   type TailorDBDeployInput,
@@ -384,6 +385,9 @@ export async function validateAndDetectMigrations(
         throw CLIError({
           code: "MIGRATION_REMOTE_DRIFT",
           message: "Remote schema verification failed",
+          suggestion:
+            unsetCheckpointDriftHints(remoteVerificationResults, config.path).join("\n") ||
+            undefined,
         });
       }
       for (const repair of checkpointRepairs) {

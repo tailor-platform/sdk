@@ -17,10 +17,11 @@ import {
   formatDiffSummary,
   type MigrationDiff,
 } from "./diff-calculator";
-import { formatCheckpointMoveHints } from "./hints";
+import { formatCheckpointMoveHints, formatNamespaceMigrationHint } from "./hints";
 import { collectNestedMemberChanges, getNestedMember } from "./nested-members";
 import { buildPreMigrationSnapshot } from "./pre-migration-schema";
 import {
+  describeMigrationCheckpoint,
   fetchRemoteMigrationState,
   matchesLocalMigrationHistory,
   type RemoteMigrationState,
@@ -135,6 +136,23 @@ async function fetchRemoteGqlPermissions(
   });
 }
 
+interface RemoteSchema {
+  types: ProtoTailorDBType[];
+  gqlPermissions: RemoteGqlPermission[];
+}
+
+async function fetchRemoteSchema(
+  client: OperatorClient,
+  workspaceId: string,
+  namespace: string,
+): Promise<RemoteSchema> {
+  const [types, gqlPermissions] = await Promise.all([
+    fetchRemoteTypes(client, workspaceId, namespace),
+    fetchRemoteGqlPermissions(client, workspaceId, namespace),
+  ]);
+  return { types, gqlPermissions };
+}
+
 /**
  * Fetch a namespace's deployed schema as a normalized snapshot.
  * @param client - Operator client instance
@@ -147,11 +165,8 @@ export async function fetchRemoteSchemaSnapshot(
   workspaceId: string,
   namespace: string,
 ): Promise<NormalizedSchemaSnapshot> {
-  const [remoteTypes, remoteGqlPermissions] = await Promise.all([
-    fetchRemoteTypes(client, workspaceId, namespace),
-    fetchRemoteGqlPermissions(client, workspaceId, namespace),
-  ]);
-  return createSnapshotFromRemoteTypes(remoteTypes, namespace, remoteGqlPermissions);
+  const { types, gqlPermissions } = await fetchRemoteSchema(client, workspaceId, namespace);
+  return createSnapshotFromRemoteTypes(types, namespace, gqlPermissions);
 }
 
 type RemoteTailorDBSettings = NonNullable<NonNullable<ProtoTailorDBType["schema"]>["settings"]>;
@@ -303,8 +318,7 @@ function reconstructPreMigrationSnapshot(
 
 /**
  * Compare a namespace's deployed schema with a snapshot the way a deploy would leave it
- * @param client - Operator client instance
- * @param workspaceId - Workspace ID
+ * @param remote - Deployed tables and GraphQL permissions of the namespace
  * @param namespace - TailorDB namespace whose remote schema is compared
  * @param snapshot - Snapshot the remote is expected to match
  * @param config - Loaded application config
@@ -313,33 +327,28 @@ function reconstructPreMigrationSnapshot(
  * @param ignoredSettingsTables - Whether `ignoredSettings` applies to every table or only to tables in maintenance mode
  * @returns Drifts between the remote and the snapshot
  */
-export async function compareRemoteSchemaWithSnapshot(
-  client: OperatorClient,
-  workspaceId: string,
+function compareRemoteSchemaWithSnapshot(
+  remote: RemoteSchema,
   namespace: string,
   snapshot: SchemaSnapshot,
   config: LoadedConfig,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   ignoredSettings: readonly (keyof SnapshotSettings)[] = [],
   ignoredSettingsTables: "all" | "maintenance-mode" = "all",
-): Promise<SchemaDrift[]> {
-  const [remoteTypes, remoteGqlPermissions] = await Promise.all([
-    fetchRemoteTypes(client, workspaceId, namespace),
-    fetchRemoteGqlPermissions(client, workspaceId, namespace),
-  ]);
+): SchemaDrift[] {
   const expectedDeploySnapshot = deployComparableSnapshot(
     snapshot,
-    remoteTypes,
+    remote.types,
     namespaceGqlOperations(config, tailorDBInputs, namespace),
   );
   return compareRemoteWithSnapshot(
-    remoteTypes,
+    remote.types,
     expectedDeploySnapshot,
-    remoteGqlPermissions,
+    remote.gqlPermissions,
     ignoredSettings,
     ignoredSettingsTables === "maintenance-mode"
       ? new Set(
-          remoteTypes
+          remote.types
             .filter((type) => isMigrationRestricted(type.schema?.settings))
             .map((type) => type.name),
         )
@@ -440,8 +449,19 @@ export function locateRemoteCheckpoint(
   };
 }
 
+function notDeployedResult(namespace: string): RemoteSchemaVerificationResult {
+  return {
+    namespace,
+    remoteMigrationNumber: 0,
+    drifts: [],
+    hasDrift: false,
+    skipped: "not_deployed",
+  };
+}
+
 /**
- * Verify remote schema matches the expected snapshot state
+ * Verify remote schema matches the expected snapshot state. A namespace that has tables but no
+ * migration checkpoint is verified as checkpoint 0, the way `deploy` applies migrations to it.
  * @param {OperatorClient} client - Operator client instance
  * @param {string} workspaceId - Workspace ID
  * @param {NamespaceWithMigrations[]} namespacesWithMigrations - Namespaces with migration config
@@ -484,20 +504,14 @@ export async function verifyRemoteSchema(
       continue;
     }
 
-    // If no migration label exists, this is likely a first apply - skip verification
-    // Remote verification only makes sense when there's an established migration history
-    if (location.kind === "unset") {
-      results.push({
-        namespace,
-        remoteMigrationNumber: 0,
-        drifts: [],
-        hasDrift: false,
-        skipped: remoteState.metadataExists ? "no_migration_label" : "not_deployed",
-      });
+    const checkpointUnset = location.kind === "unset";
+    if (checkpointUnset && !remoteState.metadataExists) {
+      results.push(notDeployedResult(namespace));
       continue;
     }
 
-    const { number: remoteMigrationNumber, checkpointRepair } = location;
+    const remoteMigrationNumber = location.kind === "inside" ? location.number : 0;
+    const checkpointRepair = location.kind === "inside" ? location.checkpointRepair : undefined;
     const expectedMigrationNumber = checkpointRepair?.to ?? remoteMigrationNumber;
     const inProgressNumber =
       !checkpointRepair && remoteState.inProgress?.number === remoteMigrationNumber + 1
@@ -522,12 +536,17 @@ export async function verifyRemoteSchema(
       continue;
     }
 
+    const remote = await fetchRemoteSchema(client, workspaceId, namespace);
+    if (checkpointUnset && remote.types.length === 0) {
+      results.push(notDeployedResult(namespace));
+      continue;
+    }
+
     const leftInMaintenanceMode =
       inProgressNumber === undefined &&
       remoteState.maintenanceModeCheckpoint === remoteMigrationNumber;
-    const drifts = await compareRemoteSchemaWithSnapshot(
-      client,
-      workspaceId,
+    const drifts = compareRemoteSchemaWithSnapshot(
+      remote,
       namespace,
       expectedSnapshot,
       config,
@@ -541,6 +560,7 @@ export async function verifyRemoteSchema(
       remoteMigrationNumber,
       drifts,
       hasDrift: drifts.length > 0,
+      ...(checkpointUnset ? { checkpointUnset } : {}),
       ...(checkpointRepair && drifts.length === 0 ? { checkpointRepair } : {}),
       ...(remoteState.inProgress ? { migrationInProgress: remoteState.inProgress } : {}),
       ...(remoteState.inProgressInvalid ? { migrationInProgressInvalid: true } : {}),
@@ -552,12 +572,14 @@ export async function verifyRemoteSchema(
 
 /**
  * Minimal per-namespace drift shape needed to detect the v1-origin
- * missing-script-hash pattern, shared by callers that hold either a full
- * {@link RemoteSchemaVerificationResult} or a validation report's subset of it.
+ * missing-script-hash pattern and namespaces without a checkpoint, shared by
+ * callers that hold either a full {@link RemoteSchemaVerificationResult} or a
+ * validation report's subset of it.
  */
 interface DriftGuidanceInput {
   hasDrift: boolean;
   drifts: readonly SchemaDrift[];
+  checkpointUnset?: true;
 }
 
 function isMissingRemoteScriptHashDrift(drift: SchemaDrift): boolean {
@@ -584,11 +606,14 @@ function isLikelyPreV2ScriptHashDrift(driftResults: readonly DriftGuidanceInput[
 }
 
 /**
- * Log common causes of remote schema drift and how to resolve them
+ * Log common causes of remote schema drift and how to resolve them, unless only namespaces
+ * without a checkpoint drifted, whose recovery {@link unsetCheckpointDriftHints} describes
  * @param {readonly DriftGuidanceInput[]} [driftResults] - Per-namespace verification results, used to add a targeted hint for the v1-origin missing-hash pattern
  * @returns {void}
  */
 export function logRemoteDriftGuidance(driftResults?: readonly DriftGuidanceInput[]): void {
+  const drifted = driftResults?.filter((result) => result.hasDrift) ?? [];
+  if (drifted.length > 0 && drifted.every((result) => result.checkpointUnset)) return;
   logger.info("This may indicate:");
   logger.info("  - Another developer applied different migrations", { mode: "plain" });
   logger.info("  - Manual schema changes were made directly", { mode: "plain" });
@@ -612,6 +637,36 @@ export function logRemoteDriftGuidance(driftResults?: readonly DriftGuidanceInpu
       `Every listed drift is '${MISSING_REMOTE_SCRIPT_HASH_SUFFIX}'. Run 'migration sync <N>' above to add the missing hashes.`,
     );
   }
+}
+
+/**
+ * Minimal per-namespace shape needed to explain a drift in a namespace without a migration
+ * checkpoint, shared by callers that hold either a full {@link RemoteSchemaVerificationResult} or a
+ * validation report's subset of it.
+ */
+interface UnsetCheckpointDriftInput {
+  namespace: string;
+  hasDrift: boolean;
+  checkpointUnset?: true;
+}
+
+/**
+ * Format how to recover each namespace whose tables differ from 0000 while it has no migration checkpoint.
+ * @param results - Per-namespace verification results
+ * @param configPath - Config file path to preserve in recovery commands
+ * @returns Recovery instructions for human and JSON errors
+ */
+export function unsetCheckpointDriftHints(
+  results: readonly UnsetCheckpointDriftInput[],
+  configPath?: string,
+): string[] {
+  return results
+    .filter((result) => result.checkpointUnset && result.hasDrift)
+    .map(({ namespace }) => {
+      const command = (subcommand: string[]) =>
+        formatNamespaceMigrationHint({ subcommand, namespace, configPath });
+      return `Namespace "${namespace}" has no migration checkpoint yet, so its tables must match migration 0000. Run ${command(["sync", formatMigrationNumber(0)])} to rewrite them to 0000, which deletes the tables and fields that 0000 does not have together with their data. To keep the tables instead, update the local tables to match them and recreate 0000 with ${command(["generate", "--init"])}, which deletes every migration of the namespace, so only while no workspace has been deployed with them.`;
+    });
 }
 
 /**
@@ -719,7 +774,9 @@ export function formatRemoteVerificationResults(results: RemoteSchemaVerificatio
     if (!result.hasDrift) continue;
 
     lines.push(`Namespace: ${result.namespace}`);
-    lines.push(`  Remote migration: ${formatMigrationNumber(result.remoteMigrationNumber)}`);
+    lines.push(
+      `  Remote migration: ${describeMigrationCheckpoint(result.checkpointUnset ? null : result.remoteMigrationNumber)}`,
+    );
     lines.push(`  Differences:`);
     lines.push(formatSchemaDrifts(result.drifts));
     lines.push("");

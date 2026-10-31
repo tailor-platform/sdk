@@ -14,7 +14,6 @@ import {
 } from "#/cli/commands/deploy/tailordb/migration";
 import { bundleSeedScript } from "#/cli/commands/generate/seed/bundler";
 import {
-  compareRemoteSchemaWithSnapshot,
   fetchRemoteSchemaSnapshot,
   toTailorDBDeployInput,
   type TailorDBDeployInput,
@@ -37,11 +36,7 @@ import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { assertDefined } from "#/utils/assert";
 import { collectForeignKeyTargets } from "#/utils/foreign-key-targets";
 import { bundleMigrationScript } from "./bundler";
-import {
-  getNamespacesWithMigrations,
-  migrationConfigNotFoundError,
-  type NamespaceWithMigrations,
-} from "./config";
+import { getNamespacesWithMigrations, migrationConfigNotFoundError } from "./config";
 import { assertNoMigrationInProgress, fetchRemoteMigrationState } from "./remote-state";
 import {
   assertValidMigrationFiles,
@@ -53,15 +48,14 @@ import {
   type SnapshotFieldConfig,
 } from "./snapshot";
 import { formatSchemaDrifts } from "./snapshot-remote";
-import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { LoadedApplicationNamespaces } from "#/cli/shared/tailordb-namespaces";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
-import type { RemoteMigrationState } from "./remote-state";
 import type {
   MigrationTestDependencies,
   MigrationTestOptions,
   PreparedMigrationTest,
 } from "./test-types";
+import type { RemoteSchemaVerificationResult } from "./types";
 import type { JsonObject, JsonValue } from "type-fest";
 
 const CLONE_POLL_INTERVAL = 3_000;
@@ -532,59 +526,64 @@ export function assertTargetMatchesLocation(
 }
 
 /**
- * Resolve the migration number a source namespace is at, the way `deploy` does.
- *
- * A deployed namespace without a migration label is at 0 (`deploy` applies
- * 0001 onward to it), but only when its schema matches the 0000 snapshot;
- * otherwise running the migrations would not verify what a deploy does.
- * @param client - Operator client
- * @param workspaceId - Source workspace ID
- * @param namespace - Namespace and its migrations directory
- * @param remoteState - Migration state read from the source namespace
- * @param config - Loaded application config
- * @param inputs - TailorDB deploy inputs for namespace defaults
- * @returns The labeled number, or 0 for an unlabeled namespace that matches 0000
+ * Require every source namespace to match its migration checkpoint and to have
+ * no checkpoint repair pending.
+ * @param checks - Remote schema verification results of the source namespaces
  */
-export async function resolveSourceMigrationNumber(
-  client: OperatorClient,
-  workspaceId: string,
-  namespace: NamespaceWithMigrations,
-  remoteState: RemoteMigrationState,
-  config: LoadedConfig,
-  inputs: ReadonlyArray<TailorDBDeployInput>,
-): Promise<number> {
-  if (remoteState.number !== null) return remoteState.number;
-  if (!remoteState.metadataExists) {
-    throw CLIError({
-      code: "MIGRATION_TEST_SOURCE_CHECKPOINT_MISSING",
-      message: `Source namespace "${namespace.namespace}" has not been deployed.`,
-      suggestion: "Deploy to the source workspace before testing.",
-    });
-  }
-  const initial = reconstructSnapshotFromMigrations(namespace.migrationsDir, 0);
-  if (!initial) {
-    throw CLIError({
-      code: "MIGRATION_BASELINE_NOT_FOUND",
-      message: `No migration baseline snapshot found for namespace "${namespace.namespace}".`,
-    });
-  }
-  const drifts = await compareRemoteSchemaWithSnapshot(
-    client,
-    workspaceId,
-    namespace.namespace,
-    initial,
-    config,
-    inputs,
-  );
-  if (drifts.length > 0) {
+export function assertSourceMatchesCheckpoints(
+  checks: readonly RemoteSchemaVerificationResult[],
+): void {
+  const invalidRemote = checks.find((check) => check.hasDrift || check.checkpointMissingLocal);
+  if (invalidRemote?.checkpointUnset) {
     throw CLIError({
       code: "MIGRATION_TEST_SOURCE_INVALID",
-      message: `Source namespace "${namespace.namespace}" has no migration label and its schema differs from the initial migration snapshot (0000).`,
-      details: formatSchemaDrifts(drifts),
+      message: `Source namespace "${invalidRemote.namespace}" has no migration label and its schema differs from the initial migration snapshot (0000).`,
+      details: formatSchemaDrifts(invalidRemote.drifts),
       suggestion: "Bring the source schema in line with 0000 or set its migration label.",
     });
   }
-  return 0;
+  if (invalidRemote) {
+    throw CLIError({
+      code: "MIGRATION_TEST_SOURCE_INVALID",
+      message: `Source namespace "${invalidRemote.namespace}" does not match its migration checkpoint.`,
+      suggestion: "Validate the migration history first.",
+    });
+  }
+  const pendingRepair = checks.find((check) => check.checkpointRepair);
+  if (pendingRepair) {
+    throw CLIError({
+      code: "MIGRATION_TEST_SOURCE_REPAIR_PENDING",
+      message: `Source namespace "${pendingRepair.namespace}" has a pending migration checkpoint repair.`,
+      suggestion: "Deploy to the source workspace first.",
+    });
+  }
+}
+
+/**
+ * Resolve the migration number a source namespace is at, the way `deploy` does:
+ * a namespace that has tables but no migration label is at 0.
+ * @param check - Remote schema verification result of the source namespace
+ * @returns The labeled number, or 0 for an unlabeled namespace
+ */
+export function resolveSourceMigrationNumber(check: RemoteSchemaVerificationResult): number {
+  if (check.skipped === "not_deployed") {
+    throw CLIError({
+      code: "MIGRATION_TEST_SOURCE_CHECKPOINT_MISSING",
+      message: `Source namespace "${check.namespace}" has not been deployed.`,
+      suggestion: "Deploy to the source workspace before testing.",
+    });
+  }
+  return check.remoteMigrationNumber;
+}
+
+function findSourceCheck(
+  checks: readonly RemoteSchemaVerificationResult[],
+  namespace: string,
+): RemoteSchemaVerificationResult {
+  return assertDefined(
+    checks.find((check) => check.namespace === namespace),
+    `remote schema check result missing for namespace "${namespace}"`,
+  );
 }
 
 /**
@@ -630,13 +629,8 @@ export async function assertSourceBaselineFresh(
       resourceTrn(sourceWorkspaceId, "tailordb", namespace.namespace),
     );
     assertNoMigrationInProgress(remoteState, namespace.namespace);
-    const migrationNumber = await resolveSourceMigrationNumber(
-      state.client,
-      sourceWorkspaceId,
-      namespace,
-      remoteState,
-      loaded.config,
-      inputs,
+    const migrationNumber = resolveSourceMigrationNumber(
+      findSourceCheck(remoteChecks, namespace.namespace),
     );
     if (migrationNumber !== baseline.migrationNumber) {
       throw CLIError({
@@ -795,24 +789,7 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
     loaded.config,
     inputs,
   );
-  const invalidRemote = remoteChecks.find(
-    (check) => check.hasDrift || check.checkpointMissingLocal,
-  );
-  if (invalidRemote) {
-    throw CLIError({
-      code: "MIGRATION_TEST_SOURCE_INVALID",
-      message: `Source namespace "${invalidRemote.namespace}" does not match its migration checkpoint.`,
-      suggestion: "Validate the migration history first.",
-    });
-  }
-  const pendingRepair = remoteChecks.find((check) => check.checkpointRepair);
-  if (pendingRepair) {
-    throw CLIError({
-      code: "MIGRATION_TEST_SOURCE_REPAIR_PENDING",
-      message: `Source namespace "${pendingRepair.namespace}" has a pending migration checkpoint repair.`,
-      suggestion: "Deploy to the source workspace first.",
-    });
-  }
+  assertSourceMatchesCheckpoints(remoteChecks);
 
   const baselines = new Map<
     string,
@@ -826,13 +803,8 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
       resourceTrn(sourceWorkspaceId, "tailordb", namespace.namespace),
     );
     assertNoMigrationInProgress(remoteState, namespace.namespace);
-    const migrationNumber = await resolveSourceMigrationNumber(
-      client,
-      sourceWorkspaceId,
-      namespace,
-      remoteState,
-      loaded.config,
-      inputs,
+    const migrationNumber = resolveSourceMigrationNumber(
+      findSourceCheck(remoteChecks, namespace.namespace),
     );
     const latest = getLatestMigrationNumber(namespace.migrationsDir);
     if (migrationNumber > latest) {
