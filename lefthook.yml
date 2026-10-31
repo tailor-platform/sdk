@@ -56,11 +56,11 @@ pre-commit:
         piped: true
         jobs:
           - name: lint-packages
-            run: pnpm --filter='{packages/**}[HEAD]' --filter='!@tailor-platform/sdk' run --if-present lint
+            run: node scripts/pnpm-staged-packages.js --filter='!@tailor-platform/sdk' run --if-present lint
           - name: typecheck-packages
-            run: pnpm --filter='{packages/**}[HEAD]' --filter='!@tailor-platform/sdk' run --if-present typecheck
+            run: node scripts/pnpm-staged-packages.js --filter='!@tailor-platform/sdk' run --if-present typecheck
           - name: knip-packages
-            run: pnpm --filter='{packages/**}[HEAD]' --filter='!@tailor-platform/sdk' run --if-present knip
+            run: node scripts/pnpm-staged-packages.js --filter='!@tailor-platform/sdk' run --if-present knip
 
 post-commit:
   commands:
