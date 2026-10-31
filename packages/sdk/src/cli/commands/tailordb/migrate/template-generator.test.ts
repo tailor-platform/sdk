@@ -1578,6 +1578,175 @@ describe("template-generator", () => {
       expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
     }, 15_000);
 
+    test("should restore self-references on the copied rows and skip rows that have none to restore", async () => {
+      const selfRefFields = (foreignKeyType: string) =>
+        ({
+          parentId: {
+            type: "uuid",
+            required: false,
+            foreignKey: true,
+            foreignKeyType,
+            foreignKeyField: "id",
+          },
+        }) as const;
+      const renamePreviousSnapshot = createTestSnapshot({
+        Category: { name: "Category", pluralForm: "Categories", fields: selfRefFields("Category") },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "table_renamed",
+            tableName: "Section",
+            previousTableName: "Category",
+            before: {
+              name: "Category",
+              pluralForm: "Categories",
+              fields: selfRefFields("Category"),
+            },
+            after: { name: "Section", pluralForm: "Sections", fields: selfRefFields("Section") },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          { tableName: "Section", reason: "Table renamed from Category to Section" },
+        ],
+        requiresMigrationScript: true,
+      });
+      const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
+      const source = await fs.readFile(result.migrateFilePath!, "utf8");
+      const { steps } = await import(
+        `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString("base64")}`
+      );
+      const { pgliteSchema } = await import(
+        `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(await fs.readFile(result.pgliteSchemaFilePath!, "utf8"))).toString("base64")}`
+      );
+
+      const ids = {
+        root: "00000000-0000-0000-0000-000000000001",
+        otherRoot: "00000000-0000-0000-0000-000000000002",
+        child: "00000000-0000-0000-0000-000000000003",
+        grandchild: "00000000-0000-0000-0000-000000000004",
+      };
+      type Row = { id: string; parentId: string | null };
+      const pglite = new PGlite();
+      const db = createKyselyPGlite<{ Category: Row; Section: Row }>(pglite);
+      try {
+        await pglite.exec(pgliteSchema.tailordb);
+        await pglite.exec(`
+          CREATE TABLE update_log (table_name text);
+          CREATE FUNCTION log_update() RETURNS trigger AS $$ BEGIN INSERT INTO update_log VALUES (TG_TABLE_NAME); RETURN NEW; END $$ LANGUAGE plpgsql;
+          CREATE TRIGGER section_update AFTER UPDATE ON "Section" FOR EACH ROW EXECUTE FUNCTION log_update();
+        `);
+        await db
+          .insertInto("Category")
+          .values([
+            { id: ids.root, parentId: null },
+            { id: ids.otherRoot, parentId: null },
+            { id: ids.child, parentId: ids.root },
+            { id: ids.grandchild, parentId: ids.child },
+          ])
+          .execute();
+
+        await runMigrationSteps(steps, { transaction: (run) => db.transaction().execute(run) });
+
+        expect(await db.selectFrom("Section").selectAll().orderBy("id").execute()).toEqual([
+          { id: ids.root, parentId: null },
+          { id: ids.otherRoot, parentId: null },
+          { id: ids.child, parentId: ids.root },
+          { id: ids.grandchild, parentId: ids.child },
+        ]);
+        const updates = await pglite.query<{ count: string }>(
+          "SELECT count(*) AS count FROM update_log WHERE table_name = 'Section'",
+        );
+        expect(Number(updates.rows[0]!.count)).toBe(2);
+      } finally {
+        await db.destroy();
+      }
+    }, 30_000);
+
+    test("should restore nested self-references on the copied rows and skip rows with a null nested value", async () => {
+      const nestedFields = (foreignKeyType: string) =>
+        ({
+          info: {
+            type: "nested",
+            required: false,
+            fields: {
+              parentID: {
+                type: "uuid",
+                required: false,
+                foreignKey: true,
+                foreignKeyType,
+                foreignKeyField: "id",
+              },
+            },
+          },
+        }) as const;
+      const renamePreviousSnapshot = createTestSnapshot({
+        Node: { name: "Node", pluralForm: "Nodes", fields: nestedFields("Node") },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "table_renamed",
+            tableName: "Vertex",
+            previousTableName: "Node",
+            before: { name: "Node", pluralForm: "Nodes", fields: nestedFields("Node") },
+            after: { name: "Vertex", pluralForm: "Vertices", fields: nestedFields("Vertex") },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [{ tableName: "Vertex", reason: "Table renamed from Node to Vertex" }],
+        requiresMigrationScript: true,
+      });
+      const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
+      const source = await fs.readFile(result.migrateFilePath!, "utf8");
+      const { steps } = await import(
+        `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString("base64")}`
+      );
+      const { pgliteSchema } = await import(
+        `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(await fs.readFile(result.pgliteSchemaFilePath!, "utf8"))).toString("base64")}`
+      );
+
+      const ids = {
+        root: "00000000-0000-0000-0000-000000000011",
+        otherRoot: "00000000-0000-0000-0000-000000000012",
+        child: "00000000-0000-0000-0000-000000000013",
+      };
+      type Row = { id: string; info: { parentID: string | null } | null };
+      const pglite = new PGlite();
+      const db = createKyselyPGlite<{ Node: Row; Vertex: Row }>(pglite);
+      try {
+        await pglite.exec(pgliteSchema.tailordb);
+        await pglite.exec(`
+          CREATE TABLE update_log (table_name text);
+          CREATE FUNCTION log_update() RETURNS trigger AS $$ BEGIN INSERT INTO update_log VALUES (TG_TABLE_NAME); RETURN NEW; END $$ LANGUAGE plpgsql;
+          CREATE TRIGGER vertex_update AFTER UPDATE ON "Vertex" FOR EACH ROW EXECUTE FUNCTION log_update();
+        `);
+        await db
+          .insertInto("Node")
+          .values([
+            { id: ids.root, info: null },
+            { id: ids.otherRoot, info: null },
+            { id: ids.child, info: { parentID: ids.root } },
+          ])
+          .execute();
+
+        await runMigrationSteps(steps, { transaction: (run) => db.transaction().execute(run) });
+
+        expect(await db.selectFrom("Vertex").selectAll().orderBy("id").execute()).toEqual([
+          { id: ids.root, info: null },
+          { id: ids.otherRoot, info: null },
+          { id: ids.child, info: { parentID: ids.root } },
+        ]);
+        const updates = await pglite.query<{ count: string }>(
+          "SELECT count(*) AS count FROM update_log WHERE table_name = 'Vertex'",
+        );
+        expect(Number(updates.rows[0]!.count)).toBe(1);
+      } finally {
+        await db.destroy();
+      }
+    }, 30_000);
+
     test("should insert self-referential foreign keys inside a nested field as null and backfill the nested column", async () => {
       const nestedFields = (foreignKeyType: string, array: boolean) =>
         ({
