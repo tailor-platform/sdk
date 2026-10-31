@@ -1,4 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
+import { reconstructSnapshotFromMigrations } from "#/cli/commands/tailordb/migrate/snapshot";
 import * as migrationModule from "./migration";
 import {
   createPlanResult,
@@ -87,5 +88,25 @@ describe("applyTailorDB: machine user that runs migration scripts", () => {
 
     const [context] = vi.mocked(migrationModule.executeMigrations).mock.calls[0]!;
     expect(context.machineUserByNamespace).toEqual(new Map([["test-ns", "admin"]]));
+  });
+
+  test("passes each namespace's local migration history ID to the script runs", async () => {
+    const snapshot = vi.mocked(reconstructSnapshotFromMigrations);
+    const withoutRebaseline = snapshot.getMockImplementation()!;
+    snapshot.mockImplementation((...args) => ({
+      ...withoutRebaseline(...args)!,
+      rebaseline: { historyId: "hlocal", replacedHistoryId: null, replacedLatestMigration: 0 },
+    }));
+    checkpoint.state.historyId = "hlocal";
+    const client = checkpoint.createMockClient();
+
+    try {
+      await applyTailorDB(client, buildPlanResult({ migrator: {} }), "create-update");
+    } finally {
+      snapshot.mockImplementation(withoutRebaseline);
+    }
+
+    const [context] = vi.mocked(migrationModule.executeMigrations).mock.calls[0]!;
+    expect(context.migrationHistoryIds).toEqual({ "test-ns": "hlocal" });
   });
 });

@@ -164,6 +164,7 @@ async function reconcileMigrationLabels(
  * @param migrationContext - Planned TailorDB context
  * @param machineUsers - Machine user that runs the scripts of each namespace
  * @param maintenanceMode - Whether the migrating namespaces are in maintenance mode
+ * @param migrationHistoryIds - Migration history ID captured during preflight for each namespace
  * @returns Migration context for script execution
  */
 async function buildMigrationContextForScripts(
@@ -171,6 +172,7 @@ async function buildMigrationContextForScripts(
   migrationContext: Awaited<ReturnType<typeof planTailorDB>>["context"],
   machineUsers: MigrationMachineUsers,
   maintenanceMode: boolean,
+  migrationHistoryIds: Readonly<Record<string, string | null>>,
 ): Promise<MigrationContext> {
   // TailorDB apply always runs after staticWebsite apply in the same pass, so a
   // site this deploy just created already exists here even though `env` was
@@ -192,6 +194,7 @@ async function buildMigrationContextForScripts(
     appId: migrationContext.application.id,
     maintenanceMode,
     skipSteps: migrationContext.migrationSkipSteps,
+    migrationHistoryIds,
   };
 }
 
@@ -637,6 +640,7 @@ async function applyCreateUpdate(
         migrationContext,
         migrationMachineUsers,
         phaseSettings.restricted,
+        migrationHistoryIds,
       )
     : undefined;
 
