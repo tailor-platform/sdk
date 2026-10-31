@@ -204,10 +204,10 @@ onNamespaceLoaded(context) {
 
 **Returns** (`GeneratorResult`):
 
-| Field    | Type                                                   | Description              |
-| -------- | ------------------------------------------------------ | ------------------------ |
-| `files`  | `Array<{ path, content, skipIfExists?, executable? }>` | Files to write to disk   |
-| `errors` | `string[]?`                                            | Error messages to report |
+| Field    | Type                                      | Description              |
+| -------- | ----------------------------------------- | ------------------------ |
+| `files`  | `Array<{ path, content, skipIfExists? }>` | Files to write to disk   |
+| `errors` | `string[]?`                               | Error messages to report |
 
 **Use cases**:
 
