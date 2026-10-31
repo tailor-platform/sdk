@@ -194,13 +194,17 @@ describe("workspace ttl", () => {
       }
     });
 
-    test("rejects a duration it cannot parse before calling the platform", async () => {
+    test.each([
+      ["24", "Invalid duration format"],
+      ["50000000d", "TTL must be less than 50,000,000 days"],
+    ])("rejects --ttl %s before calling the platform", async (ttl, message) => {
       const client = stubClient();
       using _logger = silenceLogger("success", "error");
 
-      const result = await runCommand(setCommand, ["--workspace-id", workspaceId, "--ttl", "24"]);
+      const result = await runCommand(setCommand, ["--workspace-id", workspaceId, "--ttl", ttl]);
 
       expect(result.success).toBe(false);
+      expect(String(result.error)).toContain(message);
       expect(client.setMetadata).not.toHaveBeenCalled();
     });
   });

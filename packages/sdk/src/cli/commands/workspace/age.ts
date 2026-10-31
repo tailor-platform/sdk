@@ -14,6 +14,15 @@ export const ageArg = z.string().regex(agePattern, {
   message: "Invalid duration format. Expected a number with a unit: '30m', '24h', '7d'",
 });
 
+// Half the largest Date offset from the epoch leaves room for the creation time.
+const maxTtlDays = 50_000_000;
+export const ttlLimit = `less than ${maxTtlDays.toLocaleString("en-US")} days`;
+export const ttlArg = ageArg.pipe(
+  z.string().refine((ttl) => parseAge(ttl) < maxTtlDays * ageUnitToMs.d, {
+    message: `TTL must be ${ttlLimit}`,
+  }),
+);
+
 /**
  * Parse a validated age string into milliseconds.
  * @param age - Age string such as `30m`, `24h`, or `7d`

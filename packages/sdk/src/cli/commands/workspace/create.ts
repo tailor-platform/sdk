@@ -33,7 +33,7 @@ import { assertWritable } from "#/cli/shared/readonly-guard";
 import { workspaceNameSchema } from "#/cli/shared/workspace-name";
 import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
-import { ageArg, parseAge } from "./age";
+import { parseAge, ttlArg, ttlLimit } from "./age";
 import { recordedExpiresAt, writeWorkspaceExpiry } from "./expiry";
 import { KNOWN_WORKSPACE_REGIONS } from "./regions";
 import {
@@ -57,7 +57,7 @@ const createWorkspaceOptionsSchema = z.object({
   deleteProtection: z.boolean().optional(),
   organizationId: z.uuid().optional(),
   folderId: z.uuid().optional(),
-  ttl: ageArg.optional(),
+  ttl: ttlArg.optional(),
   profile: profileNameSchema.optional(),
 });
 
@@ -371,9 +371,8 @@ export const createCommand = defineAppCommand({
       description: "Folder ID to workspace associate with",
       env: "TAILOR_PLATFORM_FOLDER_ID",
     }),
-    ttl: arg(ageArg.optional(), {
-      description:
-        "Record on the workspace itself when it becomes prunable, such as 30m, 24h, or 7d. `workspace prune --expired` deletes it once that has passed",
+    ttl: arg(ttlArg.optional(), {
+      description: `Record on the workspace itself when it becomes prunable, such as 30m, 24h, or 7d (${ttlLimit}). \`workspace prune --expired\` deletes it once that has passed`,
     }),
     "profile-name": arg(z.string().optional(), {
       alias: "p",

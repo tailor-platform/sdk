@@ -104,18 +104,18 @@ tailor workspace create [options]
 
 **Options**
 
-| Option                                | Alias | Description                                                                                                                                   | Required | Default   | Env                               |
-| ------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------- | --------------------------------- |
-| `--name <NAME>`                       | `-n`  | Workspace name                                                                                                                                | Yes      | -         | -                                 |
-| `--region <REGION>`                   | `-r`  | Workspace region (asia-northeast, us-west, europe-west)                                                                                       | Yes      | -         | -                                 |
-| `--delete-protection`                 | `-d`  | Enable delete protection                                                                                                                      | No       | `false`   | -                                 |
-| `--organization-id <ORGANIZATION_ID>` | `-o`  | Organization ID to workspace associate with                                                                                                   | No       | -         | `TAILOR_PLATFORM_ORGANIZATION_ID` |
-| `--folder-id <FOLDER_ID>`             | `-f`  | Folder ID to workspace associate with                                                                                                         | No       | -         | `TAILOR_PLATFORM_FOLDER_ID`       |
-| `--ttl <TTL>`                         | -     | Record on the workspace itself when it becomes prunable, such as 30m, 24h, or 7d. `workspace prune --expired` deletes it once that has passed | No       | -         | -                                 |
-| `--profile-name <PROFILE_NAME>`       | `-p`  | Profile name to create                                                                                                                        | No       | -         | -                                 |
-| `--profile <PROFILE>`                 | -     | Workspace profile used for authentication and Platform selection                                                                              | No       | -         | `TAILOR_PLATFORM_PROFILE`         |
-| `--profile-user <PROFILE_USER>`       | -     | User email address or machine user client ID for the profile (defaults to current user)                                                       | No       | -         | -                                 |
-| `--permission <PERMISSION>`           | -     | Profile permission (requires --profile-name). 'read' blocks all write commands while the profile is active.                                   | No       | `"write"` | -                                 |
+| Option                                | Alias | Description                                                                                                                                                               | Required | Default   | Env                               |
+| ------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------- | --------------------------------- |
+| `--name <NAME>`                       | `-n`  | Workspace name                                                                                                                                                            | Yes      | -         | -                                 |
+| `--region <REGION>`                   | `-r`  | Workspace region (asia-northeast, us-west, europe-west)                                                                                                                   | Yes      | -         | -                                 |
+| `--delete-protection`                 | `-d`  | Enable delete protection                                                                                                                                                  | No       | `false`   | -                                 |
+| `--organization-id <ORGANIZATION_ID>` | `-o`  | Organization ID to workspace associate with                                                                                                                               | No       | -         | `TAILOR_PLATFORM_ORGANIZATION_ID` |
+| `--folder-id <FOLDER_ID>`             | `-f`  | Folder ID to workspace associate with                                                                                                                                     | No       | -         | `TAILOR_PLATFORM_FOLDER_ID`       |
+| `--ttl <TTL>`                         | -     | Record on the workspace itself when it becomes prunable, such as 30m, 24h, or 7d (less than 50,000,000 days). `workspace prune --expired` deletes it once that has passed | No       | -         | -                                 |
+| `--profile-name <PROFILE_NAME>`       | `-p`  | Profile name to create                                                                                                                                                    | No       | -         | -                                 |
+| `--profile <PROFILE>`                 | -     | Workspace profile used for authentication and Platform selection                                                                                                          | No       | -         | `TAILOR_PLATFORM_PROFILE`         |
+| `--profile-user <PROFILE_USER>`       | -     | User email address or machine user client ID for the profile (defaults to current user)                                                                                   | No       | -         | -                                 |
+| `--permission <PERMISSION>`           | -     | Profile permission (requires --profile-name). 'read' blocks all write commands while the profile is active.                                                               | No       | `"write"` | -                                 |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -302,11 +302,11 @@ tailor workspace ttl set [options]
 
 **Options**
 
-| Option                          | Alias | Description                                                                 | Required | Default | Env                            |
-| ------------------------------- | ----- | --------------------------------------------------------------------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                           | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-| `--ttl <TTL>`                   | -     | Time from now until the workspace becomes prunable, such as 30m, 24h, or 7d | Yes      | -       | -                              |
+| Option                          | Alias | Description                                                                                             | Required | Default | Env                            |
+| ------------------------------- | ----- | ------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                            | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                       | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--ttl <TTL>`                   | -     | Time from now until the workspace becomes prunable, such as 30m, 24h, or 7d (less than 50,000,000 days) | Yes      | -       | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

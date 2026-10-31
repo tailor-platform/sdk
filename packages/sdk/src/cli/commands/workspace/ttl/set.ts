@@ -7,14 +7,14 @@ import { printMutationResult } from "#/cli/shared/mutation-result";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { parseOptions } from "#/cli/shared/parse-options";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { ageArg, parseAge } from "../age";
+import { parseAge, ttlArg, ttlLimit } from "../age";
 import { recordedExpiresAt, writeWorkspaceExpiry } from "../expiry";
 
 // strip unknown keys
 const setTtlOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
   profile: z.string().optional(),
-  ttl: ageArg,
+  ttl: ttlArg,
 });
 
 type SetTtlOptions = z.input<typeof setTtlOptionsSchema>;
@@ -55,8 +55,8 @@ export const setCommand = defineAppCommand({
   `,
   args: z.strictObject({
     ...workspaceArgs,
-    ttl: arg(ageArg, {
-      description: "Time from now until the workspace becomes prunable, such as 30m, 24h, or 7d",
+    ttl: arg(ttlArg, {
+      description: `Time from now until the workspace becomes prunable, such as 30m, 24h, or 7d (${ttlLimit})`,
     }),
   }),
   run: async (args) => {

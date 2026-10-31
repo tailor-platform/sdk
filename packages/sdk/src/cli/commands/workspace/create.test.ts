@@ -373,6 +373,40 @@ describe("workspace create --ttl", () => {
     return { result, output: outSpy.mock.calls[0]?.[0] };
   }
 
+  test.each(["9999999999999d", "50000000d", "4320000000001s", `${"9".repeat(400)}d`])(
+    "rejects an excessive TTL %s before creating a workspace",
+    async (ttl) => {
+      const client = stubClient();
+      const { result } = await runCreateJson("--ttl", ttl);
+      expect(result.success).toBe(false);
+      expect(String(result.error)).toContain("TTL must be less than 50,000,000 days");
+      expect(client.createWorkspace).not.toHaveBeenCalled();
+      expect(initOperatorClient).not.toHaveBeenCalled();
+    },
+  );
+
+  test("validates programmatic TTL before creating a workspace", async () => {
+    const client = stubClient();
+    await expect(
+      createWorkspace({
+        name: "test-ws",
+        region: "us-west",
+        organizationId: validUUID,
+        ttl: "9999999999999d",
+      }),
+    ).rejects.toThrow("TTL must be less than 50,000,000 days");
+    expect(client.createWorkspace).not.toHaveBeenCalled();
+    expect(initOperatorClient).not.toHaveBeenCalled();
+  });
+
+  test.each(["0s", "4319999999999s"])("accepts a representable TTL %s", async (ttl) => {
+    const client = stubClient();
+    const { result, output } = await runCreateJson("--ttl", ttl);
+    expect(result.success).toBe(true);
+    expect(client.setMetadata).toHaveBeenCalledOnce();
+    expect(output).toMatchObject({ ttl: { state: "written" } });
+  });
+
   test("reports the recorded expiry in --json output", async () => {
     stubClient({ createTime: subSecondCreateTime });
 

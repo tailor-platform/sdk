@@ -1,6 +1,6 @@
 import { arg } from "@politty/zod";
 import { z } from "zod";
-import { ageArg } from "#/cli/commands/workspace/age";
+import { ttlArg, ttlLimit } from "#/cli/commands/workspace/age";
 import {
   deploymentArgs,
   durationArg,
@@ -254,9 +254,8 @@ export const testCommand = defineAppCommand({
     "assert-namespace": arg(z.string().optional(), {
       description: "TailorDB namespace exposed to the assertion script",
     }),
-    "keep-ttl": arg(ageArg.optional(), {
-      description:
-        "Record an expiry on the kept workspace, e.g. 24h or 7d, so workspace prune --expired can delete it (requires --keep)",
+    "keep-ttl": arg(ttlArg.optional(), {
+      description: `Record an expiry on the kept workspace, e.g. 24h or 7d (${ttlLimit}), so workspace prune --expired can delete it (requires --keep)`,
       completion: { type: "none" },
     }),
     "clone-timeout": arg(durationArg.optional(), {
