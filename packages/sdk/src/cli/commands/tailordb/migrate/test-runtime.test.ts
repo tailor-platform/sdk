@@ -816,15 +816,17 @@ describe("migration test runtime", () => {
   });
 
   test("rejects a labeled source whose schema differs from its checkpoint", () => {
+    const source = { ...sourceContext, configPath: path.join(process.cwd(), "source.config.ts") };
     expect(() =>
       assertSourceMatchesCheckpoints(
         [sourceCheck({ remoteMigrationNumber: 2, hasDrift: true, drifts: [auditLogDrift] })],
-        sourceContext,
+        source,
       ),
     ).toThrow(
       expect.objectContaining({
         code: "MIGRATION_TEST_SOURCE_INVALID",
         message: expect.stringContaining("does not match its migration checkpoint"),
+        suggestion: `Run \`tailor tailordb migration validate --namespace main --config=source.config.ts --workspace-id=${source.workspaceId} --profile=${source.profile}\` to check the migration history and source schema, or \`tailor tailordb migration status --namespace main --config=source.config.ts --workspace-id=${source.workspaceId} --profile=${source.profile}\` to inspect the source workspace's checkpoint.`,
       }),
     );
   });

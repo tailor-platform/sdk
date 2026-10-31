@@ -554,18 +554,19 @@ export function assertSourceMatchesCheckpoints(
     });
   }
   if (invalidRemote) {
-    const statusHint = formatNamespaceMigrationHint({
-      subcommand: ["status"],
+    const hintOptions = {
       namespace: invalidRemote.namespace,
       configPath: source.configPath,
       contextArgs: recoveryContextArgs(source),
-    });
+    };
+    const statusHint = formatNamespaceMigrationHint({ ...hintOptions, subcommand: ["status"] });
+    const validateHint = formatNamespaceMigrationHint({ ...hintOptions, subcommand: ["validate"] });
     throw CLIError({
       code: "MIGRATION_TEST_SOURCE_INVALID",
       message: `Source namespace "${invalidRemote.namespace}" does not match its migration checkpoint.`,
       suggestion: invalidRemote.checkpointMissingLocal
         ? `${PULL_LATEST_MIGRATIONS_SUGGESTION} Otherwise run ${statusHint} to compare the source workspace's checkpoint and migration history with the local ones.`
-        : "Validate the migration history first.",
+        : `Run ${validateHint} to check the migration history and source schema, or ${statusHint} to inspect the source workspace's checkpoint.`,
     });
   }
   const pendingRepair = checks.find((check) => check.checkpointRepair);
