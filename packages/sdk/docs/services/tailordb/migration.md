@@ -58,9 +58,14 @@ If you already have a deployed workspace whose schema matches your local table d
 
 1. Add the `migration` block to `tailor.config.ts`.
 2. Run `tailor tailordb migration generate` to create `0000/schema.json` from current local tables.
-3. Run `tailor deploy`. Because remote schema already matches, no script runs; only the migration label is set.
+3. Run `tailor deploy`. It first checks that the deployed tables match `0000`. Because they do, no script runs; only the migration label is set.
 
-If your local tables and remote schema have **diverged**, reconcile them before introducing migrations — either update local tables to match remote, or accept that the first non-`0000` migration will reflect that gap.
+Until a deploy sets the migration label, `tailor deploy` and `tailor tailordb migration validate` compare the deployed tables with `0000`. When they differ, `tailor deploy` stops with [remote schema drift](#remote-schema-drift-detected) and `migration validate` fails, for example when a table was edited in the console, or when a local change had not been deployed before you generated `0000`. Run `tailor tailordb migration validate` before the first deploy to check, and reconcile the difference before deploying:
+
+- To keep the deployed tables, update your local tables to match them, then recreate `0000` with `tailor tailordb migration generate --init`. `--init` deletes every migration of the namespace, so do this only while no workspace has been deployed with these migrations.
+- To replace the deployed tables with `0000`, run `tailor tailordb migration sync 0000`. Tables and fields that `0000` does not have are deleted together with their data.
+
+If an earlier deploy stopped after creating only some of the tables, the next deploy reports the missing tables as drift; `tailor tailordb migration sync 0000` creates them.
 
 ### Resetting
 
@@ -645,7 +650,7 @@ Some changes are still rejected and need a temporary field you add yourself — 
 
 The command performs the following sequence:
 
-1. Reads each migration-enabled namespace's `sdk-migration` checkpoint from the source workspace and reconstructs that exact snapshot from local migration history. A deployed namespace that has no checkpoint is treated as migration 0, as `tailor deploy` does, but only when its schema matches the `0000` snapshot; otherwise the command fails and lists the differences. A namespace that was never deployed also fails.
+1. Reads each migration-enabled namespace's `sdk-migration` checkpoint from the source workspace and reconstructs that exact snapshot from local migration history. A deployed namespace that has no checkpoint is treated as migration 0 when its schema matches the `0000` snapshot, as `tailor deploy` does; otherwise the command fails and lists the differences. A namespace that was never deployed, or has no tables yet, also fails.
 2. Creates a temporary workspace in the same region as the source, unless `--target-workspace-id` names an existing throwaway workspace. By default it is created in the source's organization and folder. `--organization-id` places it at the root of that organization, and `--folder-id` places it in that folder (together with `--organization-id` when the folder is in another organization or the source is not in an organization). With `--target-workspace-id`, the given values must match where that workspace already is.
 3. Deploys the checkpoint snapshots and writes their checkpoint labels.
 4. Loads fixture data or clones source records.
@@ -796,7 +801,7 @@ Deploy checks the run every few seconds, so a boundary between `waiting to start
 Before running migrations, `apply` performs two checks:
 
 1. **Local schema check** — your current table definitions must match the latest snapshot in `migrations/`. If they don't, you forgot to run `migration generate`.
-2. **Remote schema check** — the deployed schema is reconstructed from migration history; the actual remote schema must match. Drift here means someone applied a different set of migrations or edited the schema out-of-band.
+2. **Remote schema check** — the deployed schema is reconstructed from migration history; the actual remote schema must match. Drift here means someone applied a different set of migrations or edited the schema out-of-band. A namespace that has tables but no migration label yet must match `0000` (see [Adding migrations to an existing project](#adding-migrations-to-an-existing-project)).
 
 On drift you'll see something like:
 
@@ -1188,7 +1193,7 @@ For genuinely different schemas across environments, prefer separate workspaces 
 
 ### Remote schema drift detected
 
-**Cause:** Remote schema doesn't match what the migration history says it should be.
+**Cause:** Remote schema doesn't match what the migration history says it should be. When `tailor deploy` shows `Remote migration: <unset>`, or `migration validate` shows `no checkpoint yet`, the namespace has no migration label yet and its tables differ from `0000`; see [Adding migrations to an existing project](#adding-migrations-to-an-existing-project) instead of the steps below.
 
 **Resolution:**
 

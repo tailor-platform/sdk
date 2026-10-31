@@ -11,6 +11,7 @@ import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import {
   parsedType,
+  remoteType,
   snapshotType,
   writeDiff,
   writeInitialSchema,
@@ -18,7 +19,6 @@ import {
 } from "./test-helpers/schema-fixtures";
 import { validateCommand } from "./validate";
 import type { CLIError } from "#/cli/shared/errors";
-import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 const LEGACY_REVIEW_MARKER = "TODO(tailor-migration-review)";
 
@@ -62,28 +62,6 @@ vi.mock("#/cli/services/application", () => ({
     ],
   })),
 }));
-
-function remoteType(name: string, fieldNames: string[]): ProtoTailorDBType {
-  const fields: Record<string, unknown> = {};
-  for (const fieldName of fieldNames) {
-    fields[fieldName] = {
-      type: fieldName === "id" ? "uuid" : "string",
-      required: true,
-      array: false,
-      index: false,
-      unique: false,
-      foreignKey: false,
-      description: "",
-      allowedValues: [],
-      validate: [],
-      fields: {},
-    };
-  }
-  return {
-    name,
-    schema: { fields },
-  } as unknown as ProtoTailorDBType;
-}
 
 function mockConfig(namespaces: string[] = ["tailordb"]): void {
   const db: Record<string, unknown> = {};
@@ -228,7 +206,7 @@ describe("tailordb migration validate", () => {
     expect(state.listTailorDBTypes).not.toHaveBeenCalled();
   });
 
-  test("skips remote verification when the namespace has no migration label", async () => {
+  test("verifies a namespace without a migration label against 0000", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
     state.getMetadata.mockResolvedValue({ metadata: { labels: {} } });
@@ -242,9 +220,62 @@ describe("tailordb migration validate", () => {
       remoteMigrationNumber: 0,
       hasDrift: false,
       drifts: [],
-      skipped: "no_migration_label",
+      checkpointUnset: true,
     });
-    expect(state.listTailorDBTypes).not.toHaveBeenCalled();
+  });
+
+  test("reports that the tables of a namespace without a migration label match 0000", async () => {
+    using stderr = captureStderr();
+    state.getMetadata.mockResolvedValue({ metadata: { labels: {} } });
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(true);
+    expect(stderr.output).toContain("Remote schema: OK (no checkpoint yet; tables match 0000)");
+  });
+
+  test("fails when the tables of a namespace without a migration label differ from 0000", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    state.getMetadata.mockResolvedValue({ metadata: { labels: {} } });
+    state.listTailorDBTypes.mockResolvedValue({
+      tailordbTypes: [remoteType("User", ["id", "name", "legacyCode"])],
+      nextPageToken: "",
+    });
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(false);
+    const [report] = JSON.parse(stdout.output);
+    expect(report.valid).toBe(false);
+    expect(report.remoteSchema).toMatchObject({
+      remoteMigrationNumber: 0,
+      hasDrift: true,
+      checkpointUnset: true,
+      drifts: [expect.objectContaining({ tableName: "User", fieldName: "legacyCode" })],
+    });
+    const { suggestion } = result.error as CLIError;
+    expect(suggestion).toContain("`tailor tailordb migration sync 0000 --namespace tailordb`");
+    expect(suggestion).toContain(
+      "`tailor tailordb migration generate --init --namespace tailordb`",
+    );
+  });
+
+  test("explains that a namespace without a migration label must match 0000", async () => {
+    using stderr = captureStderr();
+    state.getMetadata.mockResolvedValue({ metadata: { labels: {} } });
+    state.listTailorDBTypes.mockResolvedValue({
+      tailordbTypes: [remoteType("User", ["id", "name", "legacyCode"])],
+      nextPageToken: "",
+    });
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(stderr.output).toContain(
+      "Remote schema: drift detected (no checkpoint yet; compared with 0000)",
+    );
+    expect(stderr.output).not.toContain("migration set <N>");
   });
 
   test("treats out-of-range migration labels as unset", async () => {
@@ -262,9 +293,8 @@ describe("tailordb migration validate", () => {
       remoteMigrationNumber: 0,
       hasDrift: false,
       drifts: [],
-      skipped: "no_migration_label",
+      checkpointUnset: true,
     });
-    expect(state.listTailorDBTypes).not.toHaveBeenCalled();
   });
 
   test("reports a repairable remote migration checkpoint as valid", async () => {

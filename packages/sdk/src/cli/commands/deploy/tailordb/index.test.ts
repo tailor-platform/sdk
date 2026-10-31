@@ -2397,7 +2397,7 @@ describe("applyTailorDB migration label reconciliation", () => {
 
   function createMigrationClient(
     remoteLabels: Record<string, string>,
-    { includeListTailorDBTypes = false }: { includeListTailorDBTypes?: boolean } = {},
+    { includeRemoteSchema = false }: { includeRemoteSchema?: boolean } = {},
   ) {
     const getMetadata = vi.fn().mockResolvedValue({ metadata: { labels: remoteLabels } });
     const setMetadata = vi.fn().mockResolvedValue({});
@@ -2411,8 +2411,13 @@ describe("applyTailorDB migration label reconciliation", () => {
       updateTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
       deleteTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
       deleteTailorDBType: vi.fn().mockResolvedValue({}),
-      ...(includeListTailorDBTypes
-        ? { listTailorDBTypes: vi.fn().mockResolvedValue({ tailordbTypes: [], nextPageToken: "" }) }
+      ...(includeRemoteSchema
+        ? {
+            listTailorDBTypes: vi.fn().mockResolvedValue({ tailordbTypes: [], nextPageToken: "" }),
+            listTailorDBGQLPermissions: vi
+              .fn()
+              .mockResolvedValue({ permissions: [], nextPageToken: "" }),
+          }
         : {}),
     } as unknown as OperatorClient;
     return { client, getMetadata, setMetadata };
@@ -3077,7 +3082,7 @@ describe("applyTailorDB migration label reconciliation", () => {
 
     test("refuses in a namespace that has no checkpoint yet", async () => {
       writeMainMigration();
-      const { client } = createMigrationClient(unsettledRecord);
+      const { client } = createMigrationClient(unsettledRecord, { includeRemoteSchema: true });
 
       await expect(
         runValidation(withRun(client, WorkflowExecution_Status.SUCCESS), makePlanResult()),
@@ -3758,7 +3763,7 @@ describe("applyTailorDB migration label reconciliation", () => {
     // namespace has no `sdk-migration` label yet. A single `apply` should
     // establish the baseline by setting the label to 0000 — without requiring
     // the redundant apply/generate/apply dance.
-    const { client, setMetadata } = createMigrationClient({}, { includeListTailorDBTypes: true });
+    const { client, setMetadata } = createMigrationClient({}, { includeRemoteSchema: true });
 
     await applyTailorDB(client, makePlanResult(false), "create-update");
 
@@ -3767,6 +3772,42 @@ describe("applyTailorDB migration label reconciliation", () => {
         labels: expect.objectContaining({ "sdk-migration": "m0000" }),
       }),
     );
+  });
+
+  test("sets the migration label to 0000 on the first apply when the existing tables match 0000", async () => {
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    vi.mocked(client.getMetadata).mockResolvedValue({ metadata: { labels: {} } } as never);
+
+    await applyTailorDB(client, planWithDeployDerivedSettings(userType), "create-update");
+
+    expect(client.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: expect.objectContaining({ "sdk-migration": "m0000" }),
+      }),
+    );
+  });
+
+  test("refuses the first apply when the existing tables differ from 0000", async () => {
+    using _stderr = captureStderr();
+    const userType: TailorDBSnapshotType = {
+      ...userSnapshotType(),
+      fields: { ...userSnapshotType().fields, name: { type: "string", required: true } },
+    };
+    writeUserSchemaSnapshot(userType);
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    vi.mocked(client.getMetadata).mockResolvedValue({ metadata: { labels: {} } } as never);
+
+    await expect(
+      runValidation(client, planWithDeployDerivedSettings(userType)),
+    ).rejects.toMatchObject({
+      code: "MIGRATION_REMOTE_DRIFT",
+      suggestion: expect.stringContaining(
+        "`tailor tailordb migration sync 0000 --namespace test-tailordb --config=",
+      ),
+    });
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("accepts deploy-derived remote settings during schema verification", async () => {
