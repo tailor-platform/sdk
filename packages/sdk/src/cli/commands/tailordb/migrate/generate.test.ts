@@ -2,15 +2,16 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import { runCommand } from "@politty/zod";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
-import { generateCommand } from "./generate";
+import { generate, generateCommand } from "./generate";
 import { analyzeMigrationScriptSource, countUnresolvedTodos } from "./script-form";
 import { getNextMigrationNumber, loadDiff, reconstructSnapshotFromMigrations } from "./snapshot";
 import { parsedType, snapshotType, writeInitialSchema } from "./test-helpers/schema-fixtures";
+import type { MigrateGenerateResult } from "#/cli/lib";
 import type * as SnapshotModule from "./snapshot";
 
 interface TestNamespace {
@@ -144,6 +145,7 @@ describe("tailordb migration generate with warning-tier changes", () => {
     expect(loadDiff(generatedDiffPath()).scriptSkipped).toBeUndefined();
     expect(prompt.text).not.toHaveBeenCalled();
     expect(stderr.output).toContain("--no-script --reason '<reason>'");
+    expect(stderr.output).not.toContain("Skipped:");
   });
 
   test("includes the active --config in the follow-up commands", async () => {
@@ -1543,47 +1545,81 @@ describe("tailordb migration generate declined confirmations", () => {
     expect(fs.existsSync(path.join(ns.migrationsDir, "0000", "schema.json"))).toBe(true);
   });
 
-  test("fails without writing a migration when a breaking change is declined", async () => {
-    const withRequiredEmail = parsedType("User");
-    withRequiredEmail.fields.email = {
-      name: "email",
-      config: { type: "string", required: true },
-    };
-    const ns = addNamespace(tmpDir, "tailordb", "User", withRequiredEmail);
+  function withRequiredEmail(tableName: string): ReturnType<typeof parsedType> {
+    const type = parsedType(tableName);
+    type.fields.email = { name: "email", config: { type: "string", required: true } };
+    return type;
+  }
+
+  test("succeeds without writing a migration when a breaking change is declined", async () => {
+    const ns = addNamespace(tmpDir, "tailordb", "User", withRequiredEmail("User"));
+    using stderr = captureStderr();
 
     const result = await runCommand(generateCommand, []);
 
     expect(prompt.confirm).toHaveBeenCalledWith(
       expect.objectContaining({ message: "Continue generating migration?" }),
     );
-    expect(result.success).toBe(false);
-    expect(result.error).toMatchObject({ code: "MIGRATION_GENERATE_CANCELLED" });
+    expect(result.success).toBe(true);
+    expect(stderr.output).toContain("Skipped: tailordb");
     expect(fs.existsSync(path.join(ns.migrationsDir, "0001"))).toBe(false);
   });
 
-  test("still writes the other namespaces when one breaking change is declined", async () => {
-    const withRequiredEmail = parsedType("User");
-    withRequiredEmail.fields.email = {
-      name: "email",
-      config: { type: "string", required: true },
-    };
-    const declined = addNamespace(tmpDir, "tailordb", "User", withRequiredEmail);
+  test("returns skipped namespaces to programmatic callers", async () => {
+    addNamespace(tmpDir, "tailordb", "User", withRequiredEmail("User"));
+
+    const result = await generate({});
+
+    expect(result.skippedNamespaces).toEqual(["tailordb"]);
+    expectTypeOf(result).toEqualTypeOf<MigrateGenerateResult>();
+  });
+
+  test("writes the other namespaces and reports the declined one as skipped", async () => {
+    const declined = addNamespace(tmpDir, "tailordb", "User", withRequiredEmail("User"));
     const withNickname = parsedType("Event");
     withNickname.fields.nickname = {
       name: "nickname",
       config: { type: "string", required: false },
     };
     const accepted = addNamespace(tmpDir, "analyticsdb", "Event", withNickname);
+    using _json = jsonMode();
+    using stdout = captureStdout();
+    using stderr = captureStderr();
 
     const result = await runCommand(generateCommand, []);
 
-    expect(result.success).toBe(false);
-    expect(result.error).toMatchObject({
-      code: "MIGRATION_GENERATE_CANCELLED",
-      context: { namespaces: ["tailordb"] },
+    expect(result.success).toBe(true);
+    expect(stderr.output).toMatch(/Skipped: tailordb$/m);
+    const acceptedDiffPath = path.join(accepted.migrationsDir, "0001", "diff.json");
+    expect(JSON.parse(stdout.output)).toMatchObject({
+      changed: true,
+      skippedNamespaces: ["tailordb"],
+      migrations: [{ namespace: "analyticsdb", diffPath: acceptedDiffPath }],
     });
     expect(fs.existsSync(path.join(declined.migrationsDir, "0001"))).toBe(false);
-    expect(fs.existsSync(path.join(accepted.migrationsDir, "0001", "diff.json"))).toBe(true);
+    expect(fs.existsSync(acceptedDiffPath)).toBe(true);
+  });
+
+  test("succeeds without writing anything when every namespace's breaking change is declined", async () => {
+    const first = addNamespace(tmpDir, "tailordb", "User", withRequiredEmail("User"));
+    const second = addNamespace(tmpDir, "analyticsdb", "Event", withRequiredEmail("Event"));
+    using _json = jsonMode();
+    using stdout = captureStdout();
+    using stderr = captureStderr();
+
+    const result = await runCommand(generateCommand, []);
+
+    expect(result.success).toBe(true);
+    expect(prompt.confirm).toHaveBeenCalledTimes(2);
+    expect(stderr.output).toMatch(/Skipped: tailordb, analyticsdb$/m);
+    expect(JSON.parse(stdout.output)).toEqual({
+      changed: false,
+      clearedNamespaces: [],
+      skippedNamespaces: ["tailordb", "analyticsdb"],
+      migrations: [],
+    });
+    expect(fs.readdirSync(first.migrationsDir)).toEqual(["0000"]);
+    expect(fs.readdirSync(second.migrationsDir)).toEqual(["0000"]);
   });
 });
 
@@ -1724,6 +1760,7 @@ describe("tailordb migration generate JSON output", () => {
     expect(JSON.parse(stdout.output)).toEqual({
       changed: true,
       clearedNamespaces: [],
+      skippedNamespaces: [],
       migrations: [
         {
           namespace: "tailordb",
@@ -1750,6 +1787,7 @@ describe("tailordb migration generate JSON output", () => {
     expect(JSON.parse(stdout.output)).toEqual({
       changed: false,
       clearedNamespaces: [],
+      skippedNamespaces: [],
       migrations: [],
     });
   });
@@ -1764,6 +1802,7 @@ describe("tailordb migration generate JSON output", () => {
     expect(JSON.parse(stdout.output)).toEqual({
       changed: false,
       clearedNamespaces: [],
+      skippedNamespaces: [],
       migrations: [],
     });
   });
@@ -1779,6 +1818,7 @@ describe("tailordb migration generate JSON output", () => {
     expect(JSON.parse(stdout.output)).toEqual({
       changed: true,
       clearedNamespaces: ["tailordb"],
+      skippedNamespaces: [],
       migrations: [
         {
           namespace: "tailordb",
@@ -1808,6 +1848,7 @@ describe("tailordb migration generate JSON output", () => {
     expect(JSON.parse(stdout.output)).toEqual({
       changed: true,
       clearedNamespaces: [],
+      skippedNamespaces: [],
       migrations: ["0001", "0002"].map((number) => ({
         namespace: "tailordb",
         migrationNumber: Number(number),
@@ -1833,6 +1874,7 @@ describe("tailordb migration generate JSON output", () => {
     expect(JSON.parse(stdout.output)).toEqual({
       changed: true,
       clearedNamespaces: [],
+      skippedNamespaces: [],
       migrations: [
         {
           namespace: "tailordb",
