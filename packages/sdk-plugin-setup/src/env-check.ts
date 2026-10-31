@@ -1,6 +1,8 @@
 import { logger } from "@tailor-platform/sdk/cli";
 import {
+  describeGroup,
   type EnvRequirement,
+  type EnvironmentRequirements,
   loadEnvironmentRequirements,
   renderGhCommands,
   SECRET_FALLBACK_VARIABLES,
@@ -28,10 +30,7 @@ type RequirementCheck = EnvRequirement & {
   otherTypeIn: Scope | null;
 };
 
-type EnvironmentCheck = {
-  environment: string;
-  /** Lock targets using this environment, as `<kind> <workspaceName>`. */
-  targets: string[];
+type EnvironmentCheck = Omit<EnvironmentRequirements, "requirements"> & {
   exists: boolean;
   requirements: RequirementCheck[];
 };
@@ -169,6 +168,16 @@ export function checkEnv(options: {
   }
 
   const checks = environments.map(({ environment, targets, requirements }): EnvironmentCheck => {
+    if (environment === null) {
+      return {
+        environment,
+        targets,
+        exists: true,
+        requirements: requirements.map((requirement) =>
+          checkRequirement(requirement, repositoryScopes),
+        ),
+      };
+    }
     const base = `repos/${path}/environments/${encodeURIComponent(environment)}`;
     const result = ghApi([base]);
     if (result.status !== 0 && httpStatus(result) !== 404) {
@@ -240,8 +249,9 @@ function report(checks: EnvironmentCheck[], fullName: string, repository: Reposi
 
 function printReport(checks: EnvironmentCheck[], fullName: string, repository: Repository): void {
   logger.info(`Checking the GitHub Environment secrets and variables of ${fullName}`);
-  for (const { environment, targets, exists, requirements } of checks) {
-    const heading = `Environment "${environment}" (${targets.join(", ")})`;
+  for (const group of checks) {
+    const { exists, requirements } = group;
+    const heading = describeGroup(group);
     logger.info(exists ? heading : `${heading} does not exist in ${fullName}`);
     for (const check of requirements) {
       logger.log(`  ${statusLine(check)}`);

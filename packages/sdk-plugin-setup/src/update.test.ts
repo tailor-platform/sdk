@@ -2,10 +2,11 @@ import * as fs from "node:fs";
 import { logger } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { setupAutofix } from "./autofix";
 import { checkGitHub } from "./check";
 import { setupTarget, type SetupTargetOptions } from "./generate";
 import { LOCK_VERSION, readLock, writeLock, type LockInputs, type LockTarget } from "./lock";
-import { TEMPLATE_VERSION } from "./templates";
+import { AUTOFIX_WORKFLOW_FILE, TEMPLATE_VERSION } from "./templates";
 import { tempDir } from "./test-helpers/temp-dir";
 import { planUpdate, setupUpdate } from "./update";
 
@@ -508,7 +509,7 @@ describe("setupUpdate", () => {
     );
 
     await expect(setupUpdate({ force: false, outputDir: testDir, ...loaders })).rejects.toThrow(
-      /1 target\(s\) could not be updated[\s\S]*\[branch front\][\s\S]*--force/,
+      /1 workflow\(s\) could not be updated[\s\S]*\[branch front\][\s\S]*--force/,
     );
 
     const versions = Object.fromEntries(
@@ -591,12 +592,57 @@ describe("setupUpdate", () => {
     await setupUpdate({ force: false, outputDir: testDir, ...loaders });
 
     expect(infoSpy).not.toHaveBeenCalledWith("Next steps:");
-    expect(successSpy).toHaveBeenLastCalledWith(expect.stringMatching(/^Updated 4 target\(s\)/));
+    expect(successSpy).toHaveBeenLastCalledWith(expect.stringMatching(/^Updated 4 workflow\(s\)/));
   });
 
   test("errors when there is nothing to update", async () => {
     await expect(setupUpdate({ force: false, outputDir: testDir, ...loaders })).rejects.toThrow(
       /No managed workflows found/,
+    );
+  });
+
+  test("regenerates the autofix workflow, even when the lock records no target", async () => {
+    writeAppConfig("apps/api");
+    await setupAutofix({
+      provider: "github-app",
+      dir: "apps/api",
+      packageManager: "yarn",
+      force: false,
+      outputDir: testDir,
+    });
+    const lock = readLock(testDir);
+    if (!lock?.autofix) throw new Error("Expected an autofix entry.");
+    writeLock(testDir, {
+      ...lock,
+      autofix: { ...lock.autofix, templateVersion: TEMPLATE_VERSION - 1 },
+    });
+    fs.rmSync(path.join(testDir, AUTOFIX_WORKFLOW_FILE));
+    using successSpy = vi.spyOn(logger, "success").mockImplementation(() => {});
+
+    await setupUpdate({ force: false, outputDir: testDir, ...loaders });
+
+    expect(readLock(testDir)?.autofix).toMatchObject({
+      templateVersion: TEMPLATE_VERSION,
+      inputs: { provider: "github-app", dirs: ["apps/api"], packageManager: "yarn" },
+    });
+    expect(fs.readFileSync(path.join(testDir, AUTOFIX_WORKFLOW_FILE), "utf-8")).toContain(
+      "working-directory: apps/api",
+    );
+    expect(successSpy).toHaveBeenLastCalledWith(expect.stringMatching(/^Updated 1 workflow\(s\)/));
+  });
+
+  test("lists the autofix workflow when it cannot be updated", async () => {
+    await generateMonorepo();
+    await setupAutofix({
+      provider: "github-token",
+      dir: "apps/api",
+      force: false,
+      outputDir: testDir,
+    });
+    fs.rmSync(path.join(testDir, "apps/api/tailor.config.ts"));
+
+    await expect(setupUpdate({ force: false, outputDir: testDir, ...loaders })).rejects.toThrow(
+      /2 workflow\(s\) could not be updated \(3 of 5 updated\)[\s\S]*\[autofix\] tailor\.config\.ts not found/,
     );
   });
 });

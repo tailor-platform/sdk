@@ -2,15 +2,19 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
+import { setupAutofix } from "./autofix";
 import {
+  type AutofixState,
   type checkGitHub as CheckGitHub,
+  findAutofixDrift,
   findTargetDrift,
   resolveWithinRoot,
   type TargetState,
 } from "./check";
 import { setupTarget, type BranchSetupOptions } from "./generate";
-import { LOCK_VERSION, type LockTarget, hashContent, writeLock } from "./lock";
-import { TEMPLATE_VERSION } from "./templates";
+import { LOCK_VERSION, type LockAutofix, type LockTarget, hashContent, writeLock } from "./lock";
+import { AUTOFIX_WORKFLOW_FILE, TEMPLATE_VERSION } from "./templates";
+import { autofixLockEntry } from "./test-helpers/autofix";
 import type { logger as Logger } from "@tailor-platform/sdk/cli";
 
 const baseTarget = (overrides: Partial<LockTarget> = {}): LockTarget => ({
@@ -310,6 +314,49 @@ describe("findTargetDrift", () => {
       expect(findings.map((f) => f.rule)).toEqual(["erd-namespaces"]);
       expect(findings[0]?.message).toMatch(/"apps\/users\/backend"/);
     });
+  });
+});
+
+describe("findAutofixDrift", () => {
+  const autofix = (overrides: Partial<LockAutofix> = {}): LockAutofix => ({
+    ...autofixLockEntry("github-token", { dirs: ["apps/erp", "apps/users"] }),
+    ...overrides,
+  });
+  const state = (overrides: Partial<AutofixState> = {}): AutofixState => ({
+    fileExists: true,
+    currentHash: autofix().contentHash,
+    reservedIds: [],
+    templateVersion: TEMPLATE_VERSION,
+    dirsWithoutConfig: [],
+    ...overrides,
+  });
+
+  test.each<[string, Partial<LockAutofix>, Partial<AutofixState>, string[]]>([
+    ["no findings when in sync", {}, {}, []],
+    ["reports a missing file", {}, { fileExists: false, currentHash: null }, ["missing-file"]],
+    ["reports a hand edit", {}, { currentHash: "managed-v1:sha256:edited" }, ["hand-edit"]],
+    ["reports a reserved id", {}, { reservedIds: ["tailor-autofix/tailor-mine"] }, ["reserved-id"]],
+    [
+      "reports an outdated template version",
+      { templateVersion: TEMPLATE_VERSION - 1 },
+      {},
+      ["template-version"],
+    ],
+    [
+      "reports each app directory that lost its config",
+      {},
+      { dirsWithoutConfig: ["apps/erp", "apps/users"] },
+      ["config-dir", "config-dir"],
+    ],
+  ])("%s", (_name, entry, current, rules) => {
+    const findings = findAutofixDrift(autofix(entry), state(current));
+    expect(findings.map((finding) => finding.rule)).toEqual(rules);
+    expect(findings.every((finding) => finding.target === "autofix")).toBe(true);
+  });
+
+  test("names the app directory that lost its config", () => {
+    const [finding] = findAutofixDrift(autofix(), state({ dirsWithoutConfig: ["apps/erp"] }));
+    expect(finding?.message).toMatch(/tailor\.config\.ts not found under "apps\/erp"/);
   });
 });
 
@@ -847,6 +894,46 @@ describe("checkGitHub (integration)", () => {
 
     test("errors when no lock exists", async () => {
       await expect(checkGitHub({ outputDir: testDir })).rejects.toThrow(/No managed workflows/);
+    });
+
+    test("keeps a managed autofix workflow out of legacy lock removal suggestions", async () => {
+      await setupAutofix({ provider: "github-token", dir: ".", force: false, outputDir: testDir });
+      writeLegacyLock(JSON.stringify({ version: 1, targets: [{ file: AUTOFIX_WORKFLOW_FILE }] }));
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+      await expect(
+        checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" }),
+      ).rejects.toThrow(/1 drift finding/);
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        "[.github/tailor-sdk.lock] Left by an older setup. " +
+          "Remove it with `git rm .github/tailor-sdk.lock`. (ignore key: legacy-lock)",
+      );
+    });
+
+    test("audits the autofix workflow, even when the lock records no target", async () => {
+      await setupAutofix({ provider: "github-token", dir: ".", force: false, outputDir: testDir });
+      using successSpy = vi.spyOn(logger, "success").mockImplementation(() => {});
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+      await checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" });
+      expect(successSpy).toHaveBeenCalledWith("No drift detected across 1 workflow(s).");
+
+      const file = path.join(testDir, AUTOFIX_WORKFLOW_FILE);
+      fs.writeFileSync(
+        file,
+        fs
+          .readFileSync(file, "utf-8")
+          .replace("cancel-in-progress: true", "cancel-in-progress: false"),
+      );
+      fs.rmSync(path.join(testDir, "tailor.config.ts"));
+      await expect(
+        checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" }),
+      ).rejects.toThrow(/Detected 2 drift finding\(s\) across 1 workflow\(s\)/);
+      expect(warnSpy.mock.calls.map(([message]) => message)).toEqual([
+        expect.stringMatching(/^\[autofix\] .*tailor-autofix\.yml.*\(ignore key: hand-edit\)$/),
+        expect.stringMatching(/^\[autofix\] tailor\.config\.ts not found under "\."/),
+      ]);
     });
 
     test("does not emit the drift count marker outside CI", async () => {

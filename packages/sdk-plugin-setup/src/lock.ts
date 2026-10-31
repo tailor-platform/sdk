@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import { type AppIds, parseAppIds, TAILOR_LOCK_FILENAME } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
+import type { AutofixProvider } from "./templates";
 
 /**
  * Highest lock schema version this plugin understands. Pinned here rather than
@@ -91,13 +92,11 @@ export type LockInputs = {
   seed?: { datasets: string[] };
 };
 
-export type LockTarget = {
-  kind: TargetKind;
-  workspaceName: string;
+/** A generated workflow file, as the lock records it. */
+export type ManagedWorkflow = {
   /** outputDir-relative, posix-separated path to the generated workflow file. */
   file: string;
   templateVersion: number;
-  inputs: LockInputs;
   /** Managed job/step ids: jobs as `<job>`, steps as `<job>/<step>`. */
   generatedIds: string[];
   /** Per-part hashes of the SDK-managed parts, used to name what a hand edit changed. */
@@ -109,12 +108,45 @@ export type LockTarget = {
   contentHash: string;
 };
 
+export type LockTarget = ManagedWorkflow & {
+  kind: TargetKind;
+  workspaceName: string;
+  inputs: LockInputs;
+};
+
+export type LockAutofix = ManagedWorkflow & {
+  inputs: {
+    provider: AutofixProvider;
+    /** App directories `tailor generate` runs in. */
+    dirs: string[];
+    packageManager: string;
+    /** False when `packageManager` was set with `--package-manager`. */
+    packageManagerAutoDetected: boolean;
+    /** For the `securefix` provider: the repository that runs the securefix server workflow. */
+    securefixServerRepository?: string;
+  };
+};
+
+/** How reports and `setup ci env` name the autofix workflow. */
+export const AUTOFIX_LABEL = "autofix";
+
 export type LockFile = {
   version: number;
   targets: LockTarget[];
+  /** The `setup ci autofix` workflow, kept out of `targets`, whose kinds older plugins switch on. */
+  autofix?: LockAutofix;
   /** App ids keyed by repository-relative config path. Absent in version 1 locks. */
   appIds?: AppIds;
 };
+
+/**
+ * List every workflow the lock records: the targets, then the autofix workflow.
+ * @param lock - Lock file
+ * @returns The recorded workflows
+ */
+export function managedWorkflows(lock: LockFile): ManagedWorkflow[] {
+  return lock.autofix ? [...lock.targets, lock.autofix] : lock.targets;
+}
 
 /**
  * Compute the lock content hash for a rendered workflow file.
@@ -189,6 +221,22 @@ export function readLock(outputDir: string): LockFile | null {
   }
   if (parsed.appIds !== undefined) parseAppIds(parsed.appIds);
   return parsed;
+}
+
+/**
+ * Read the lock, refusing one that records no generated workflow.
+ * @param outputDir - Repository root where `.github` lives
+ * @returns Parsed lock file with at least one workflow
+ */
+export function readManagedLock(outputDir: string): LockFile {
+  const lock = readLock(outputDir);
+  if (!lock || managedWorkflows(lock).length === 0) {
+    throw new Error(
+      "No managed workflows found (.github/tailor.lock is missing or empty). " +
+        "Run `tailor setup ci branch` (or another setup subcommand) first.",
+    );
+  }
+  return lock;
 }
 
 /**

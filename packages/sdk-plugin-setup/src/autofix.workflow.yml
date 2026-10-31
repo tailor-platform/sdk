@@ -1,0 +1,185 @@
+# __HEADER__
+name: __WORKFLOW_NAME__
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tailor-autofix:
+    # __AUTOFIX_IF__
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    concurrency:
+      group: tailor-autofix-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    # __PATCH_OUTPUTS_START__
+    outputs:
+      changed: ${{ steps.tailor-autofix-diff.outputs.changed }}
+    # __PATCH_OUTPUTS_END__
+    steps:
+      - id: tailor-checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - id: tailor-setup
+        uses: tailor-platform/actions/setup@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
+        with:
+          package-manager: __PACKAGE_MANAGER__
+      - id: tailor-install
+        uses: tailor-platform/actions/install@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
+        with:
+          package-manager: __PACKAGE_MANAGER__
+      # Files the steps above leave, such as an .npmrc, are kept out of the fix commit.
+      - id: tailor-autofix-baseline
+        run: |
+          git add -A
+          echo "tree=$(git write-tree)" >> "$GITHUB_OUTPUT"
+          git reset -q
+      # __GENERATE_START__
+      - id: tailor-generate
+        run: __TAILOR_CLI__ generate
+        # __WORKING_DIRECTORY__
+      # __GENERATE_END__
+      # __PER_APP_GENERATE__
+      - id: tailor-autofix-diff
+        env:
+          BASELINE_TREE: ${{ steps.tailor-autofix-baseline.outputs.tree }}
+          COMMIT_MESSAGE: "__COMMIT_MESSAGE__"
+        run: |
+          git add -A
+          tree="$(git write-tree)"
+          git reset -q
+          if [ "$tree" = "$BASELINE_TREE" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git --no-pager diff --stat "$BASELINE_TREE" "$tree"
+          if [ "$(git log -1 --format=%s)" = "$COMMIT_MESSAGE" ]; then
+            echo "::error::tailor generate changed files again right after its own fix commit. Run it twice locally and check that the second run changes nothing."
+            exit 1
+          fi
+          git diff --binary "$BASELINE_TREE" "$tree" > "$RUNNER_TEMP/tailor-autofix.patch"
+          # __RESTORE_PATCH_START__
+          git checkout -q -- .
+          git clean -fdq
+          git apply "$RUNNER_TEMP/tailor-autofix.patch"
+          # __RESTORE_PATCH_END__
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+      # __UPLOAD_PATCH_START__
+      - id: tailor-upload-patch
+        if: steps.tailor-autofix-diff.outputs.changed == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tailor-autofix-patch
+          path: ${{ runner.temp }}/tailor-autofix.patch
+          retention-days: 1
+          if-no-files-found: error
+          overwrite: true
+      # __UPLOAD_PATCH_END__
+      # __AUTOFIX_CI_START__
+      # autofix.ci fetches the pull request head itself, which a private repository authenticates.
+      - id: tailor-autofix-ci-auth
+        if: steps.tailor-autofix-diff.outputs.changed == 'true'
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          basic="$(printf 'x-access-token:%s' "$TOKEN" | base64 | tr -d '\n')"
+          echo "::add-mask::$basic"
+          git config --local "http.$GITHUB_SERVER_URL/.extraheader" "AUTHORIZATION: basic $basic"
+      - id: tailor-autofix-ci
+        if: steps.tailor-autofix-diff.outputs.changed == 'true'
+        uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
+        with:
+          commit-message: "__COMMIT_MESSAGE__"
+      # __AUTOFIX_CI_END__
+      # __SECUREFIX_START__
+      - id: tailor-securefix
+        if: steps.tailor-autofix-diff.outputs.changed == 'true'
+        uses: csm-actions/securefix-action@ada5710dddfb54a0a55109e320830a757472ce04 # v0.6.4
+        with:
+          action: client
+          client_id: ${{ vars.TAILOR_AUTOFIX_APP_CLIENT_ID }}
+          app_private_key: ${{ secrets.TAILOR_AUTOFIX_APP_PRIVATE_KEY }}
+          server_repository: __SECUREFIX_SERVER_REPOSITORY__
+          commit_message: "__COMMIT_MESSAGE__"
+      # __SECUREFIX_END__
+  # __PUSH_JOB_START__
+  tailor-autofix-push:
+    needs: tailor-autofix
+    if: needs.tailor-autofix.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: __PUSH_CONTENTS_PERMISSION__
+    steps:
+      # __APP_TOKEN_START__
+      - id: tailor-app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.TAILOR_AUTOFIX_APP_CLIENT_ID }}
+          private-key: ${{ secrets.TAILOR_AUTOFIX_APP_PRIVATE_KEY }}
+          permission-contents: write
+      # __APP_TOKEN_END__
+      - id: tailor-checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - id: tailor-download-patch
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: tailor-autofix-patch
+          path: ${{ runner.temp }}
+      - id: tailor-commit
+        env:
+          GH_TOKEN: __PUSH_TOKEN__
+          GH_ENTERPRISE_TOKEN: __PUSH_TOKEN__
+          REPOSITORY: ${{ github.repository }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          COMMIT_MESSAGE: "__COMMIT_MESSAGE__"
+        run: |
+          export GH_HOST="${GITHUB_SERVER_URL#*://}"
+          git apply --index "$RUNNER_TEMP/tailor-autofix.patch"
+          changes="$RUNNER_TEMP/tailor-autofix-changes.jsonl"
+          : > "$changes"
+          while IFS= read -r -d '' meta && IFS= read -r -d '' file; do
+            read -r _ mode _ blob status <<< "$meta"
+            if [ "$status" = D ]; then
+              jq -cn --arg path "$file" '{deletion: {path: $path}}' >> "$changes"
+            elif [ "$mode" = 100644 ] || [ "$mode" = 100755 ]; then
+              git cat-file blob "$blob" | base64 | tr -d '\n' > "$RUNNER_TEMP/tailor-autofix-contents"
+              jq -cn --arg path "$file" --rawfile contents "$RUNNER_TEMP/tailor-autofix-contents" \
+                '{addition: {path: $path, contents: $contents}}' >> "$changes"
+            else
+              echo "::error::tailor generate left $file with mode $mode; only regular files can be committed."
+              exit 1
+            fi
+          done < <(git diff --cached --raw -z --no-renames --no-abbrev)
+          jq -s --arg repository "$REPOSITORY" --arg branch "$HEAD_REF" --arg head "$HEAD_SHA" \
+            --arg message "$COMMIT_MESSAGE" '{
+              query: "mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }",
+              variables: {input: {
+                branch: {repositoryNameWithOwner: $repository, branchName: $branch},
+                expectedHeadOid: $head,
+                message: {headline: $message},
+                fileChanges: {additions: [.[].addition // empty], deletions: [.[].deletion // empty]}
+              }}
+            }' "$changes" > "$RUNNER_TEMP/tailor-autofix-request.json"
+          if gh api graphql --input "$RUNNER_TEMP/tailor-autofix-request.json" --jq '.data.createCommitOnBranch.commit.oid'; then
+            exit 0
+          fi
+          current="$(gh api graphql -f query='query($owner: String!, $name: String!, $ref: String!) { repository(owner: $owner, name: $name) { ref(qualifiedName: $ref) { target { oid } } } }' \
+            -f owner="${REPOSITORY%%/*}" -f name="${REPOSITORY#*/}" -f ref="refs/heads/$HEAD_REF" --jq '.data.repository.ref.target.oid')"
+          if [ -n "$current" ] && [ "$current" != "$HEAD_SHA" ]; then
+            echo "::notice::$HEAD_REF moved on after this run started; the run for its new head regenerates the files."
+            exit 0
+          fi
+          exit 1
+  # __PUSH_JOB_END__

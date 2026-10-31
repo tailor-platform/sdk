@@ -1,5 +1,6 @@
 import { defineCommand, logger, runCommand } from "@tailor-platform/sdk/cli";
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { printAutofixNextSteps, setupAutofix } from "./autofix";
 import { checkGitHub } from "./check";
 import { setupSubCommands } from "./commands";
 import { setupEnv } from "./env";
@@ -13,6 +14,7 @@ vi.mock("./generate", async (importOriginal) => ({
   printTargetNextSteps: vi.fn(),
 }));
 
+vi.mock("./autofix", () => ({ setupAutofix: vi.fn(), printAutofixNextSteps: vi.fn() }));
 vi.mock("./check", () => ({ checkGitHub: vi.fn() }));
 vi.mock("./env", () => ({ setupEnv: vi.fn() }));
 vi.mock("./env-check", () => ({ checkEnv: vi.fn() }));
@@ -403,6 +405,64 @@ describe("setup update command", () => {
   });
 });
 
+describe("setup ci autofix", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test("commits with the workflow token by default, in the current directory's app", async () => {
+    const generated = { provider: "github-token" } as const;
+    vi.mocked(setupAutofix).mockResolvedValue(generated);
+    const result = await runCommand(setupCommand, ["ci", "autofix"]);
+
+    expect(result.success).toBe(true);
+    expect(setupAutofix).toHaveBeenCalledWith({
+      provider: "github-token",
+      securefixServerRepository: undefined,
+      dir: ["."],
+      packageManager: undefined,
+      force: false,
+      outputDir: process.cwd(),
+    });
+    expect(printAutofixNextSteps).toHaveBeenCalledWith(generated);
+  });
+
+  test("passes the provider, app directories, and package manager through", async () => {
+    const result = await runCommand(setupCommand, [
+      "ci",
+      "autofix",
+      "--provider",
+      "securefix",
+      "--securefix-server-repository",
+      "securefix-server",
+      "--dir",
+      "apps/erp",
+      "-d",
+      "apps/users",
+      "--package-manager",
+      "yarn",
+      "--force",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(setupAutofix).toHaveBeenCalledWith({
+      provider: "securefix",
+      securefixServerRepository: "securefix-server",
+      dir: ["apps/erp", "apps/users"],
+      packageManager: "yarn",
+      force: true,
+      outputDir: process.cwd(),
+    });
+  });
+
+  test("rejects an unknown provider", async () => {
+    const result = await runCommand(setupCommand, ["ci", "autofix", "--provider", "bot"]);
+
+    expect(result.success).toBe(false);
+    expect(setupAutofix).not.toHaveBeenCalled();
+  });
+});
+
 describe("beta warning", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -413,6 +473,7 @@ describe("beta warning", () => {
     [["ci", "tag"]],
     [["ci", "preview", "--region", "us-west"]],
     [["ci", "env"]],
+    [["ci", "autofix"]],
     [["deps"]],
     [["check"]],
     [["update"]],

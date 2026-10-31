@@ -2,6 +2,7 @@ import { logger } from "@tailor-platform/sdk/cli";
 import { describe, expect, test, vi } from "vitest";
 import { checkEnv } from "./env-check";
 import { LOCK_VERSION, type LockTarget, writeLock } from "./lock";
+import { autofixLockEntry } from "./test-helpers/autofix";
 import { envTarget as target } from "./test-helpers/env-target";
 import { tempDir } from "./test-helpers/temp-dir";
 import type { GhOutput, GhRunner } from "./gh";
@@ -120,6 +121,46 @@ function setup(...targets: LockTarget[]) {
   });
   return tmp;
 }
+
+describe("checkEnv for the autofix workflow", () => {
+  const APP_CLIENT_ID = "TAILOR_AUTOFIX_APP_CLIENT_ID";
+  const APP_PRIVATE_KEY = "TAILOR_AUTOFIX_APP_PRIVATE_KEY";
+
+  function setupAutofixLock() {
+    const tmp = tempDir("setup-env-check-");
+    writeLock(tmp.dir, {
+      version: LOCK_VERSION,
+      targets: [],
+      autofix: autofixLockEntry("github-app"),
+    });
+    return tmp;
+  }
+
+  test("fails when the GitHub App settings are missing from the repository", () => {
+    using tmp = setupAutofixLock();
+    using output = captureOutput();
+    const gh = fakeGh({ variables: [APP_CLIENT_ID] });
+
+    expect(() => checkEnv({ outputDir: tmp.dir, gitRunner: origin, ghRunner: gh })).toThrow(
+      /1 required secret or variable is missing/,
+    );
+    expect(output.stderr()).toContain("Repository secrets and variables (autofix)");
+    expect(output.stderr()).toContain(`✔ ${APP_CLIENT_ID} (variable, set on the repository)`);
+    expect(output.stderr()).toContain(`✖ ${APP_PRIVATE_KEY} (secret): missing`);
+    expect(output.stdout()).toContain(`gh secret set ${APP_PRIVATE_KEY} --repo=acme/app`);
+    expect(gh.calls.some((args) => args.some((arg) => arg.includes("/environments/")))).toBe(false);
+  });
+
+  test("counts settings on the organization as registered", () => {
+    using tmp = setupAutofixLock();
+    using output = captureOutput();
+    const gh = fakeGh({ organization: { secrets: [APP_PRIVATE_KEY], variables: [APP_CLIENT_ID] } });
+
+    checkEnv({ outputDir: tmp.dir, gitRunner: origin, ghRunner: gh });
+
+    expect(output.stderr()).toContain(`✔ ${APP_PRIVATE_KEY} (secret, set on the organization)`);
+  });
+});
 
 describe("checkEnv", () => {
   test("fails when an environment lacks a required secret, naming it", () => {
