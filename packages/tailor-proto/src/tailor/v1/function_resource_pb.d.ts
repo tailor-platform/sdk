@@ -57,6 +57,11 @@ export declare type FunctionLogEntry = Message<"tailor.v1.FunctionLogEntry"> & {
    * @generated from field: google.protobuf.Timestamp timestamp = 3;
    */
   timestamp?: Timestamp;
+
+  /**
+   * @generated from field: tailor.v1.FunctionLogSource source = 4;
+   */
+  source: FunctionLogSource;
 };
 
 /**
@@ -130,6 +135,15 @@ export declare type FunctionExecution = Message<"tailor.v1.FunctionExecution"> &
    * @generated from field: repeated tailor.v1.FunctionLogEntry log_entries = 13;
    */
   logEntries: FunctionLogEntry[];
+
+  /**
+   * Whether this execution has any log entry with source FUNCTION_LOG_SOURCE_PLATFORM.
+   * Unlike log_entries it is populated in ListFunctionExecutions too, so a client can
+   * flag executions carrying platform notices without loading the full log stream.
+   *
+   * @generated from field: bool has_platform_logs = 14;
+   */
+  hasPlatformLogs: boolean;
 };
 
 /**
@@ -214,6 +228,82 @@ export enum FunctionExecution_Type {
 export declare const FunctionExecution_TypeSchema: GenEnum<FunctionExecution_Type>;
 
 /**
+ * FunctionExecutionSummary is the lightweight projection of FunctionExecution
+ * returned by ListFunctionExecutions. Field tags are intentionally aligned with
+ * FunctionExecution so clients generated against either message can decode the
+ * other on the wire. The unbounded `result` (tag 9) and `log_entries` (tag 13)
+ * fields are omitted; callers that need them must use GetFunctionExecution.
+ *
+ * @generated from message tailor.v1.FunctionExecutionSummary
+ */
+export declare type FunctionExecutionSummary = Message<"tailor.v1.FunctionExecutionSummary"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string workspace_id = 2;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string script_name = 3;
+   */
+  scriptName: string;
+
+  /**
+   * @generated from field: tailor.v1.FunctionExecution.Status status = 4;
+   */
+  status: FunctionExecution_Status;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp started_at = 6;
+   */
+  startedAt?: Timestamp;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp finished_at = 7;
+   */
+  finishedAt?: Timestamp;
+
+  /**
+   * @generated from field: tailor.v1.FunctionExecution.Type type = 8;
+   */
+  type: FunctionExecution_Type;
+
+  /**
+   * stack_trace is never populated.
+   *
+   * @generated from field: tailor.v1.FunctionErrorInfo error = 10;
+   */
+  error?: FunctionErrorInfo;
+
+  /**
+   * @generated from field: tailor.v1.FunctionErrorKind error_kind = 11;
+   */
+  errorKind: FunctionErrorKind;
+
+  /**
+   * @generated from field: string content_hash = 12;
+   */
+  contentHash: string;
+
+  /**
+   * Whether this execution has any log entry with source FUNCTION_LOG_SOURCE_PLATFORM.
+   *
+   * @generated from field: bool has_platform_logs = 14;
+   */
+  hasPlatformLogs: boolean;
+};
+
+/**
+ * Describes the message tailor.v1.FunctionExecutionSummary.
+ * Use `create(FunctionExecutionSummarySchema)` to create a new message.
+ */
+export declare const FunctionExecutionSummarySchema: GenMessage<FunctionExecutionSummary>;
+
+/**
  * @generated from enum tailor.v1.FunctionErrorKind
  */
 export enum FunctionErrorKind {
@@ -287,4 +377,33 @@ export enum FunctionLogSeverity {
  * Describes the enum tailor.v1.FunctionLogSeverity.
  */
 export declare const FunctionLogSeveritySchema: GenEnum<FunctionLogSeverity>;
+
+/**
+ * FunctionLogSource is the origin of a log entry. User console and logger
+ * output collapse to USER; PLATFORM marks entries the function platform emits
+ * itself, which clients surface apart from user output.
+ *
+ * @generated from enum tailor.v1.FunctionLogSource
+ */
+export enum FunctionLogSource {
+  /**
+   * @generated from enum value: FUNCTION_LOG_SOURCE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: FUNCTION_LOG_SOURCE_USER = 1;
+   */
+  USER = 1,
+
+  /**
+   * @generated from enum value: FUNCTION_LOG_SOURCE_PLATFORM = 2;
+   */
+  PLATFORM = 2,
+}
+
+/**
+ * Describes the enum tailor.v1.FunctionLogSource.
+ */
+export declare const FunctionLogSourceSchema: GenEnum<FunctionLogSource>;
 
