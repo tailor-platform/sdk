@@ -2562,9 +2562,17 @@ describe("applyTailorDB migration label reconciliation", () => {
           code: "MIGRATION_CHECKPOINT_UNKNOWN",
           context: { namespaces: [{ namespace: "test-tailordb", historyIdMismatch }] },
         });
-        const commands = (error as { suggestion: string }).suggestion
-          .split("\n")
-          .filter((line) => line.startsWith("  "));
+        const lines = (error as { suggestion: string }).suggestion.split("\n");
+        expect(lines.filter((line) => !line.startsWith("  "))).toEqual([
+          "Pull the latest migration files if this checkout is behind.",
+          ...(historyIdMismatch
+            ? [
+                "For a namespace that records another migration history, work from a checkout of that history instead; run its --force commands below only if the local migration history should replace it.",
+              ]
+            : []),
+          "To move the checkpoint back to the local history on purpose, run one of these for each namespace, then deploy:",
+        ]);
+        const commands = lines.filter((line) => line.startsWith("  "));
         expect(commands).toHaveLength(2);
         for (const command of commands) {
           expect(command.includes(" 0000 --force --namespace test-tailordb")).toBe(

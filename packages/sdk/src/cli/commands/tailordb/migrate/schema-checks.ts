@@ -720,6 +720,11 @@ export function missingCheckpointRecoveryHints(
   );
   return [
     "Pull the latest migration files if this checkout is behind.",
+    ...(missing.some((result) => result.historyIdMismatch && result.localLatestMigration !== null)
+      ? [
+          "For a namespace that records another migration history, work from a checkout of that history instead; run its --force commands below only if the local migration history should replace it.",
+        ]
+      : []),
     ...(moveCommands.length > 0
       ? [
           "To move the checkpoint back to the local history on purpose, run one of these for each namespace, then deploy:",

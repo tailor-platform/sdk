@@ -893,6 +893,7 @@ describe("migration", () => {
         appName: "test-app",
         appId: "test-app-id",
         maintenanceMode: true,
+        migrationHistoryIds: {},
         ...overrides,
       };
     }
@@ -1369,7 +1370,7 @@ describe("migration", () => {
           changedTo: "0002 with a migration history label that cannot be read",
         },
       ])(
-        "refuses to start when the checkpoint keeps its number but $name",
+        "refuses to start when the checkpoint keeps its number but $name, and suggests --force to replace that history",
         async ({ historyLabel, changedTo }) => {
           const store = createMetadataStore(
             {},
@@ -1378,7 +1379,11 @@ describe("migration", () => {
           executeMigrationAsWorkflowMock.mockImplementationOnce(startRun);
 
           const error = await executeMigrations(
-            { ...createMockContext(), client: store.client },
+            {
+              ...createMockContext(),
+              client: store.client,
+              migrationHistoryIds: { tailordb: "hlocal" },
+            },
             [createMockMigration({ number: 3 })],
             new Map([["tailordb", { number: 2, historyId: "hlocal" }]]),
           ).catch((rejection: unknown) => rejection);
@@ -1386,6 +1391,14 @@ describe("migration", () => {
           expect(error).toMatchObject({
             code: "MIGRATION_CHECKPOINT_CONFLICT",
             message: `Migration checkpoint tailordb/0002 changed to ${changedTo} before migration tailordb/0003 started.`,
+            suggestion:
+              "Another deploy or 'tailor tailordb migration set' changed it while this deploy ran. " +
+              "Run 'tailor tailordb migration status --namespace tailordb' to see it. " +
+              "If another deploy is running, wait for it to finish. " +
+              "To keep the migration history deployed to the workspace, deploy from a checkout of that history instead; " +
+              "to replace it with the local migration history on purpose, run " +
+              "'tailor tailordb migration sync 0002 --force --namespace tailordb', then deploy again.",
+            context: { localHistoryId: "hlocal", historyIdMismatch: true },
           });
           expect(store.labels()).not.toHaveProperty(MIGRATION_IN_PROGRESS_LABEL_KEY);
           expect(runStarted).not.toHaveBeenCalled();
@@ -1427,17 +1440,26 @@ describe("migration", () => {
         expect(runStarted).not.toHaveBeenCalled();
       });
 
-      test("says who may have changed the checkpoint and how to return the namespace to it", async () => {
-        const store = createMetadataStore({}, { [MIGRATION_LABEL_KEY]: "m0000" });
+      test("says who may have changed the checkpoint and how to return the namespace to it in the same migration history", async () => {
+        const store = createMetadataStore(
+          {},
+          { [MIGRATION_LABEL_KEY]: "m0000", [MIGRATION_HISTORY_LABEL_KEY]: "hlocal" },
+        );
         executeMigrationAsWorkflowMock.mockImplementationOnce(startRun);
 
         const error = await executeMigrations(
-          { ...createMockContext(), client: store.client },
+          {
+            ...createMockContext(),
+            client: store.client,
+            migrationHistoryIds: { tailordb: "hlocal" },
+          },
           [createMockMigration({ number: 3 })],
           new Map([["tailordb", { number: 2, historyId: "hlocal" }]]),
         ).catch((rejection: unknown) => rejection);
 
         expect(error).toMatchObject({
+          message:
+            "Migration checkpoint tailordb/0002 changed to 0000 before migration tailordb/0003 started.",
           suggestion:
             "Another deploy or 'tailor tailordb migration set' changed it while this deploy ran. " +
             "Run 'tailor tailordb migration status --namespace tailordb' to see it. " +
@@ -1449,10 +1471,70 @@ describe("migration", () => {
             expectedCheckpoint: 2,
             remoteCheckpoint: 0,
             expectedHistoryId: "hlocal",
-            remoteHistoryId: null,
+            remoteHistoryId: "hlocal",
+            remoteHistoryIdInvalid: false,
+            localHistoryId: "hlocal",
+            historyIdMismatch: false,
           },
         });
       });
+
+      test.each<{
+        name: string;
+        expected: { number: number | null; historyId: string | null };
+        labels: Record<string, string>;
+        changed: string;
+        syncCommand: string;
+        historyIdMismatch: boolean;
+      }>([
+        {
+          name: "a namespace without a checkpoint now records the local migration history",
+          expected: { number: null, historyId: null },
+          labels: { [MIGRATION_LABEL_KEY]: "m0001", [MIGRATION_HISTORY_LABEL_KEY]: "hlocal" },
+          changed: "<unset> changed to 0001",
+          syncCommand: "'tailor tailordb migration sync 0000 --namespace tailordb'",
+          historyIdMismatch: false,
+        },
+        {
+          name: "a namespace without a checkpoint now records one without the local migration history ID",
+          expected: { number: null, historyId: null },
+          labels: { [MIGRATION_LABEL_KEY]: "m0001" },
+          changed: "<unset> changed to 0001 in a different migration history",
+          syncCommand: "'tailor tailordb migration sync 0000 --force --namespace tailordb'",
+          historyIdMismatch: true,
+        },
+        {
+          name: "a namespace lost both its checkpoint and its migration history ID",
+          expected: { number: 2, historyId: "hlocal" },
+          labels: {},
+          changed: "0002 changed to <unset>",
+          syncCommand: "'tailor tailordb migration sync 0002 --namespace tailordb'",
+          historyIdMismatch: false,
+        },
+      ])(
+        "compares the changed checkpoint with the local migration history when $name",
+        async ({ expected, labels, changed, syncCommand, historyIdMismatch }) => {
+          const store = createMetadataStore({}, labels);
+          executeMigrationAsWorkflowMock.mockImplementationOnce(startRun);
+
+          const error = await executeMigrations(
+            {
+              ...createMockContext(),
+              client: store.client,
+              migrationHistoryIds: { tailordb: "hlocal" },
+            },
+            [createMockMigration({ number: 3 })],
+            new Map([["tailordb", expected]]),
+          ).catch((rejection: unknown) => rejection);
+
+          expect(error).toMatchObject({
+            code: "MIGRATION_CHECKPOINT_CONFLICT",
+            message: `Migration checkpoint tailordb/${changed} before migration tailordb/0003 started.`,
+            suggestion: expect.stringContaining(syncCommand),
+            context: { historyIdMismatch },
+          });
+        },
+      );
     });
 
     test("records a run of steps without the `main` suffix", async () => {

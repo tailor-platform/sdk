@@ -31,6 +31,7 @@ import {
   fetchRemoteMigrationState,
   formatMigrationResolveHint,
   isCheckpointStillOwned,
+  matchesLocalMigrationHistory,
   type ExpectedMigrationCheckpoint,
   type RemoteMigrationState,
 } from "#/cli/commands/tailordb/migrate/remote-state";
@@ -101,6 +102,8 @@ interface MigrationExecutionOptions {
   skipSteps?: ReadonlyMap<string, readonly string[]>;
   /** Checkpoint each namespace must still have when one of its migrations starts running. */
   checkpoints: ReadonlyMap<string, ExpectedMigrationCheckpoint>;
+  /** Migration history ID of the namespace's local migrations, if they have one. */
+  localHistoryId: string | null;
 }
 
 /**
@@ -122,6 +125,8 @@ export interface MigrationContext {
   maintenanceMode: boolean;
   /** Steps of an in-progress multi-step migration to skip, keyed by namespace. */
   skipSteps?: ReadonlyMap<string, readonly string[]>;
+  /** Migration history ID of each namespace's local migrations, or null when they have none. */
+  migrationHistoryIds: Readonly<Record<string, string | null>>;
 }
 
 interface ExecutionResult {
@@ -651,19 +656,25 @@ async function assertCheckpointUnchanged(
     });
   }
   if (isCheckpointStillOwned(remoteState, expected)) return;
+  const historyIdMismatch = !matchesLocalMigrationHistory(remoteState, options.localHistoryId);
   const history = remoteState.historyIdInvalid
     ? " with a migration history label that cannot be read"
-    : remoteState.historyId === expected.historyId
-      ? ""
-      : " in a different migration history";
+    : historyIdMismatch
+      ? " in a different migration history"
+      : "";
+  const syncCommand = `'tailor tailordb migration sync ${formatMigrationNumber(expected.number ?? 0)}${historyIdMismatch ? " --force" : ""} --namespace ${namespace}'`;
   throw CLIError({
     code: "MIGRATION_CHECKPOINT_CONFLICT",
     message: `Migration checkpoint ${namespace}/${describeMigrationCheckpoint(expected.number)} changed to ${describeMigrationCheckpoint(remoteState.number)}${history} before migration ${namespace}/${formatMigrationNumber(migration.number)} started.`,
     suggestion:
       "Another deploy or 'tailor tailordb migration set' changed it while this deploy ran. " +
       `Run 'tailor tailordb migration status --namespace ${namespace}' to see it. ` +
-      "If another deploy is running, wait for it to finish; otherwise return the namespace to the checkpoint with " +
-      `'tailor tailordb migration sync ${formatMigrationNumber(expected.number ?? 0)} --namespace ${namespace}'. Then deploy again.`,
+      (historyIdMismatch
+        ? "If another deploy is running, wait for it to finish. " +
+          "To keep the migration history deployed to the workspace, deploy from a checkout of that history instead; " +
+          `to replace it with the local migration history on purpose, run ${syncCommand}, then deploy again.`
+        : "If another deploy is running, wait for it to finish; otherwise return the namespace to the checkpoint with " +
+          `${syncCommand}. Then deploy again.`),
     context: {
       namespace,
       migrationNumber: migration.number,
@@ -671,6 +682,9 @@ async function assertCheckpointUnchanged(
       remoteCheckpoint: remoteState.number,
       expectedHistoryId: expected.historyId,
       remoteHistoryId: remoteState.historyId,
+      remoteHistoryIdInvalid: remoteState.historyIdInvalid,
+      localHistoryId: options.localHistoryId,
+      historyIdMismatch,
     },
   });
 }
@@ -1205,6 +1219,7 @@ export async function executeMigrations(
       maintenanceMode: context.maintenanceMode,
       skipSteps: context.skipSteps,
       checkpoints,
+      localHistoryId: context.migrationHistoryIds[namespace] ?? null,
     };
 
     logger.info(`Using machine user: ${styles.bold(machineUserName)} for namespace '${namespace}'`);
