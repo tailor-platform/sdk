@@ -277,63 +277,27 @@ describe("tailordb migration set", () => {
     },
   );
 
-  test("refuses to move the checkpoint elsewhere while a migration is in progress", async () => {
-    state.getMetadata.mockResolvedValue({
-      metadata: { labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002" } },
-    });
-
-    const result = await runCommand(setCommand, ["1", "--yes"]);
-
-    expect(result.success).toBe(false);
-    expect(String(result.error)).toMatch(/partially applied/);
-    expect(state.setMetadata).not.toHaveBeenCalled();
-  });
-
-  test("marks the in-progress migration as completed and clears its record", async () => {
+  test.each([
+    { name: "a checkpoint before it", number: "1", inProgress: "m0002" },
+    { name: "the in-progress migration's own number", number: "2", inProgress: "m0002" },
+    { name: "the number of a `main` run not settled", number: "2", inProgress: "m0002-main" },
+  ])("refuses $name while a migration is in progress", async (row) => {
     state.getMetadata.mockResolvedValue({
       metadata: {
         labels: {
           "sdk-migration": "m0001",
-          "sdk-migration-in-progress": "m0002",
+          "sdk-migration-in-progress": row.inProgress,
           "sdk-migration-execution": "e0190f3a27c1e7d4b9a6f1b2c3d4e5f60",
           "sdk-name": "my-app",
         },
       },
     });
 
-    const result = await runCommand(setCommand, ["2", "--yes"]);
+    const result = await runCommand(setCommand, [row.number, "--yes"]);
 
-    expect(result.success).toBe(true);
-    expect(state.setMetadata).toHaveBeenCalledWith(
-      expect.objectContaining({
-        labels: { "sdk-migration": "m0002", "sdk-name": "my-app" },
-      }),
-    );
-  });
-
-  test("asks to complete a `main` run only once it succeeded, pointing to migration resolve", async () => {
-    state.getMetadata.mockResolvedValue({
-      metadata: {
-        labels: {
-          "sdk-migration": "m0001",
-          "sdk-migration-in-progress": "m0002-main",
-          "sdk-name": "my-app",
-        },
-      },
-    });
-    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-
-    const result = await runCommand(setCommand, ["2", "--yes"]);
-
-    const output = stderr.mock.calls.map((call) => String(call[0])).join("");
-    expect(result.success).toBe(true);
-    expect(output).toMatch(/its run succeeded/);
-    expect(output).toMatch(/tailor tailordb migration resolve/);
-    expect(state.setMetadata).toHaveBeenCalledWith(
-      expect.objectContaining({
-        labels: { "sdk-migration": "m0002", "sdk-name": "my-app" },
-      }),
-    );
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: "MIGRATION_IN_PROGRESS" });
+    expect(state.setMetadata).not.toHaveBeenCalled();
   });
 
   test("rejects migration numbers above 9999", async () => {

@@ -1,5 +1,6 @@
+import { formatConfigArg } from "#/cli/shared/args";
 import { getOrNull, type OperatorClient } from "#/cli/shared/client";
-import { CLIError, formatCommandHint } from "#/cli/shared/errors";
+import { CLIError, type CLIErrorNextAction, formatCommandHint } from "#/cli/shared/errors";
 import { namespaceMigrationArgs, type MigrationCommandContext } from "./hints";
 import { formatMigrationNumber } from "./migration-number";
 import {
@@ -275,6 +276,89 @@ export function describeMainRunSettlement(
   );
 }
 
+/** A command that continues or settles a migration left in progress, and what it does. */
+export type InProgressMigrationAction = CLIErrorNextAction & {
+  action: "resume" | MigrationResolution;
+  description: string;
+};
+
+type InProgressMigrationActionsParams = MigrationCommandContext & {
+  state: Pick<RemoteMigrationState, "number" | "inProgress">;
+  namespace: string;
+};
+
+/**
+ * List the commands that continue or settle the migration a namespace records as in progress:
+ * a deploy resumes one whose steps partly committed, and `migration resolve` rolls it back or
+ * completes it.
+ * @param params - Migration state, namespace, and the invocation context to keep in each command
+ * @returns The commands, or none when no migration is in progress or the record does not follow
+ *   the checkpoint, which both commands refuse
+ */
+export function inProgressMigrationActions(
+  params: InProgressMigrationActionsParams,
+): InProgressMigrationAction[] {
+  const { state, namespace, ...context } = params;
+  const record = state.inProgress;
+  if (!record || record.number !== (state.number ?? 0) + 1) return [];
+  const configArg = formatConfigArg(context.configPath);
+  const invocationArgs = [
+    ...(configArg === undefined ? [] : [configArg]),
+    ...(context.contextArgs ?? []),
+  ];
+  const label = formatMigrationNumber(record.number);
+  const previousLabel = formatMigrationNumber(record.number - 1);
+  const settleAction = (resolution: MigrationResolution, description: string) => ({
+    action: resolution,
+    description,
+    command: "tailor",
+    args: migrationResolveArgs(resolution, namespace, context),
+  });
+  if (record.kind === "main") {
+    return [
+      settleAction(
+        "complete",
+        `applies the schema of migration ${label} without running its script again; use it when the run succeeded`,
+      ),
+      settleAction(
+        "rollback",
+        `returns to the schema of migration ${previousLabel}, and the next deploy runs its script again; use it when the run did not succeed`,
+      ),
+    ];
+  }
+  return [
+    {
+      action: "resume",
+      description: "steps that already completed do not run again",
+      command: "tailor",
+      args: ["deploy", ...invocationArgs],
+    },
+    settleAction(
+      "rollback",
+      `returns to the schema of migration ${previousLabel}, and the next deploy runs every step again`,
+    ),
+    settleAction(
+      "complete",
+      `applies the schema of migration ${label} without running its script again`,
+    ),
+  ];
+}
+
+const IN_PROGRESS_ACTION_LABELS: Record<InProgressMigrationAction["action"], string> = {
+  resume: "Resume",
+  rollback: "Roll back",
+  complete: "Complete",
+};
+
+/**
+ * Format a command that continues or settles a migration left in progress as one line.
+ * @param action - The command and what it does
+ * @returns The line
+ */
+export function formatInProgressMigrationAction(action: InProgressMigrationAction): string {
+  return `${IN_PROGRESS_ACTION_LABELS[action.action]}: ${formatCommandHint(action)} (${action.description})`;
+}
+
 /**
  * Refuse a command that rewrites migration state while a migration is
  * partially applied, which only a deploy or `migration resolve` can finish
@@ -293,6 +377,7 @@ export function assertNoMigrationInProgress(
   const migrationLabel = state.inProgress
     ? `${namespace}/${formatMigrationNumber(state.inProgress.number)}`
     : undefined;
+  const actions = inProgressMigrationActions({ ...context, state, namespace });
   throw CLIError({
     code: "MIGRATION_IN_PROGRESS",
     message: !state.inProgress
@@ -301,8 +386,13 @@ export function assertNoMigrationInProgress(
         ? `The outcome of the run of migration ${migrationLabel} that an earlier deploy started is not settled.`
         : `Migration ${migrationLabel} is partially applied by an earlier deploy.`,
     suggestion:
-      state.inProgress?.kind === "main"
-        ? describeMainRunSettlement(namespace, context)
-        : "Finish the migration with a deploy first; steps that already completed do not run again.",
+      actions.length > 0
+        ? [
+            "Continue or settle the migration first with one of these commands:",
+            ...actions.map((action) => `- ${formatInProgressMigrationAction(action)}`),
+          ].join("\n")
+        : state.inProgress?.kind === "main"
+          ? describeMainRunSettlement(namespace, context)
+          : "Finish the migration with a deploy first; steps that already completed do not run again.",
   });
 }

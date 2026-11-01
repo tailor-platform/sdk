@@ -13,6 +13,9 @@ import { getNamespacesWithMigrations, migrationConfigNotFoundError } from "./con
 import { migrationCommandContext, type MigrationCommandContext } from "./hints";
 import {
   fetchRemoteMigrationState,
+  formatInProgressMigrationAction,
+  inProgressMigrationActions,
+  type InProgressMigrationAction,
   isStaleMigrationInProgress,
   matchesLocalMigrationHistory,
 } from "./remote-state";
@@ -59,6 +62,8 @@ interface MigrationStatusInfo {
    * a `main` run whose outcome `migration resolve` settles before the next deploy.
    */
   inProgressMigrationRun?: "steps" | "main";
+  /** Commands that continue or settle the in-progress migration. */
+  inProgressMigrationActions?: InProgressMigrationAction[];
 }
 
 interface MigrationStatusFailure {
@@ -278,6 +283,11 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
             inProgressMigration: inProgress.number,
             inProgressMigrationLabel: formatMigrationNumber(inProgress.number),
             inProgressMigrationRun: inProgress.kind,
+            inProgressMigrationActions: inProgressMigrationActions({
+              ...commandContext,
+              state: remoteState,
+              namespace,
+            }),
           }
         : {}),
     });
@@ -298,9 +308,12 @@ function printMigrationStatuses(rows: MigrationStatusRow[]): void {
     if (row.inProgressMigrationLabel) {
       logger.log(
         row.inProgressMigrationRun === "main"
-          ? `  In progress: ${styles.bold(row.inProgressMigrationLabel)} (the outcome of its run is not settled; settle it with 'tailor tailordb migration resolve')`
-          : `  In progress: ${styles.bold(row.inProgressMigrationLabel)} (partially applied; the next deploy resumes it)`,
+          ? `  In progress: ${styles.bold(row.inProgressMigrationLabel)} (the outcome of its run is not settled)`
+          : `  In progress: ${styles.bold(row.inProgressMigrationLabel)} (partially applied)`,
       );
+      for (const action of row.inProgressMigrationActions ?? []) {
+        logger.log(`    ${formatInProgressMigrationAction(action)}`);
+      }
     }
 
     if (row.pendingMigrations.length > 0) {

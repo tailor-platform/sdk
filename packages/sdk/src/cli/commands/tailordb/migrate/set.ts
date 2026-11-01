@@ -83,18 +83,15 @@ async function set(options: SetOptions): Promise<CheckpointUpdate> {
   // 6. Get current migration state
   const trn = resourceTrn(workspaceId, "tailordb", targetNamespace);
   const currentState = await fetchRemoteMigrationState(client, trn);
-  const completesInProgress = currentState.inProgress?.number === migrationNumber;
-  if (!completesInProgress) {
-    assertNoMigrationInProgress(
-      currentState,
-      targetNamespace,
-      migrationCommandContext({
-        configPath: options.configPath,
-        workspaceId,
-        profile: options.profile,
-      }),
-    );
-  }
+  assertNoMigrationInProgress(
+    currentState,
+    targetNamespace,
+    migrationCommandContext({
+      configPath: options.configPath,
+      workspaceId,
+      profile: options.profile,
+    }),
+  );
   const historyOverwrite = assertLocalMigrationHistory({
     state: currentState,
     localHistoryId: historyId ?? null,
@@ -121,16 +118,6 @@ async function set(options: SetOptions): Promise<CheckpointUpdate> {
 
   if (historyOverwrite) {
     logger.warn(historyOverwrite);
-    logger.newline();
-  }
-
-  if (completesInProgress) {
-    logger.warn(
-      `Migration ${formatMigrationNumber(migrationNumber)} is in progress. Setting the checkpoint to it marks it as completed and clears its in-progress record; do this only when its schema changes are already applied` +
-        (currentState.inProgress?.kind === "main"
-          ? ` and its run succeeded. 'tailor tailordb migration resolve' checks how the run ended before it settles the migration.`
-          : "."),
-    );
     logger.newline();
   }
 
