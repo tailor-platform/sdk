@@ -1,14 +1,31 @@
+import { create } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
+import { runCommand } from "@politty/zod";
 import {
   ExecutorJobStatus,
   ExecutorTargetType,
 } from "@tailor-platform/tailor-proto/executor_resource_pb";
-import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
-import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import {
+  FunctionExecution_Status,
+  FunctionExecutionSchema,
+  FunctionLogSeverity,
+  FunctionLogSource,
+} from "@tailor-platform/tailor-proto/function_resource_pb";
+import {
+  WorkflowExecution_Status,
+  WorkflowJobExecution_Status,
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
-import { getExecutorWaitFailure, getExecutorWaitFailureMessage, watchExecutorJob } from "./jobs";
+import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { stripAnsi } from "#/cli/shared/test-helpers/strip-ansi";
+import {
+  getExecutorWaitFailure,
+  getExecutorWaitFailureMessage,
+  jobsCommand,
+  watchExecutorJob,
+} from "./jobs";
 import type { ExecutorJob } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
@@ -261,5 +278,118 @@ describe("watchExecutorJob", () => {
       message: "Function execution 'function-execution-1' was canceled.",
       context: { jobId: "job-1", functionExecutionId: "function-execution-1" },
     });
+  });
+});
+
+describe("downstream logs", () => {
+  const functionExecution = create(FunctionExecutionSchema, {
+    id: "function-execution-1",
+    status: FunctionExecution_Status.SUCCESS,
+    logEntries: [
+      {
+        message: "step 1\nstep 2",
+        severity: FunctionLogSeverity.INFO,
+        source: FunctionLogSource.USER,
+      },
+      {
+        message: "runs close to the limit\nmove long work elsewhere",
+        severity: FunctionLogSeverity.WARNING,
+        source: FunctionLogSource.PLATFORM,
+      },
+    ],
+  });
+
+  function attemptsReferencing(operationReference: string) {
+    return vi.fn().mockResolvedValue({
+      attempts: [
+        { id: "attempt-1", jobId: "job-1", status: ExecutorJobStatus.SUCCESS, operationReference },
+      ],
+      nextPageToken: "",
+    });
+  }
+
+  aroundEach(async (runTest) => {
+    vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
+    vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
+    await runTest();
+  });
+
+  test("marks function log lines the Platform wrote", async () => {
+    using _stdout = captureStdout();
+    using stderr = captureStderr();
+    mockOperatorClient({
+      targetType: ExecutorTargetType.FUNCTION,
+      listExecutorJobAttempts: attemptsReferencing("function-execution-1"),
+      getFunctionExecution: vi.fn().mockResolvedValue({ execution: functionExecution }),
+    });
+
+    await runCommand(jobsCommand, ["my-executor", "job-1", "-W", "-l", "-i", "1ms"]);
+
+    expect(stripAnsi(stderr.output)).toContain(
+      "  Logs:\n    step 1\n    step 2\n    [PLATFORM] runs close to the limit\n    move long work elsewhere\n",
+    );
+  });
+
+  test("reports the source of each function log entry", async () => {
+    mockOperatorClient({
+      targetType: ExecutorTargetType.FUNCTION,
+      listExecutorJobAttempts: attemptsReferencing("function-execution-1"),
+      getFunctionExecution: vi.fn().mockResolvedValue({ execution: functionExecution }),
+    });
+
+    const result = await watchExecutorJob({
+      executor: { name: "my-executor" },
+      jobId: "job-1",
+      interval: 1,
+      logs: true,
+      showProgress: false,
+    });
+
+    expect(result.functionLogEntries).toMatchObject([
+      { message: "step 1\nstep 2", source: "USER" },
+      { message: "runs close to the limit\nmove long work elsewhere", source: "PLATFORM" },
+    ]);
+  });
+
+  test("marks workflow job log lines the Platform wrote and reports their source", async () => {
+    using _stdout = captureStdout();
+    using stderr = captureStderr();
+    mockOperatorClient({
+      targetType: ExecutorTargetType.WORKFLOW,
+      listExecutorJobAttempts: attemptsReferencing("workflow-execution-1"),
+      getWorkflowExecution: vi.fn().mockResolvedValue({
+        execution: {
+          id: "workflow-execution-1",
+          workflowName: "daily-workflow",
+          status: WorkflowExecution_Status.SUCCESS,
+          jobExecutions: [
+            {
+              id: "job-execution-1",
+              stackedJobName: "main",
+              status: WorkflowJobExecution_Status.SUCCESS,
+              executionId: "function-execution-1",
+            },
+          ],
+        } as unknown as WorkflowExecution,
+      }),
+      getFunctionExecution: vi.fn().mockResolvedValue({ execution: functionExecution }),
+    });
+
+    const result = await watchExecutorJob({
+      executor: { name: "my-executor" },
+      jobId: "job-1",
+      interval: 1,
+      logs: true,
+      showProgress: false,
+    });
+    await runCommand(jobsCommand, ["my-executor", "job-1", "-W", "-l", "-i", "1ms"]);
+
+    expect(result.workflowJobLogs?.[0]?.logEntries).toMatchObject([
+      { source: "USER" },
+      { source: "PLATFORM" },
+    ]);
+    expect(stripAnsi(stderr.output)).toContain(
+      "    Logs:\n      step 1\n      step 2\n      [PLATFORM] runs close to the limit\n      move long work elsewhere\n",
+    );
   });
 });

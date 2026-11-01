@@ -20,10 +20,9 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { CLIError } from "#/cli/shared/errors";
 import { formatKeyValueTable } from "#/cli/shared/format";
 import {
+  collectFunctionExecutionLogs,
   formatFunctionLogLines,
   type FunctionLogEntryInfo,
-  toFunctionLogEntryInfo,
-  joinFunctionLogMessages,
 } from "#/cli/shared/function-execution";
 import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { styles, logger } from "#/cli/shared/logger";
@@ -220,11 +219,7 @@ export async function getWorkflowExecution(
             if (functionExecution) {
               return {
                 ...jobInfo,
-                logs: joinFunctionLogMessages(functionExecution.logEntries) || undefined,
-                logEntries:
-                  functionExecution.logEntries.length > 0
-                    ? functionExecution.logEntries.map(toFunctionLogEntryInfo)
-                    : undefined,
+                ...collectFunctionExecutionLogs(functionExecution.logEntries),
                 result: functionExecution.result || undefined,
               };
             }
