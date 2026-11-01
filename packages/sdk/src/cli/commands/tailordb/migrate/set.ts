@@ -14,6 +14,7 @@ import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { getNamespacesWithMigrations, selectTargetNamespace } from "./config";
+import { migrationCommandContext } from "./hints";
 import { parseMigrationNumberArg } from "./migration-number";
 import {
   assertLocalMigrationHistory,
@@ -83,7 +84,17 @@ async function set(options: SetOptions): Promise<CheckpointUpdate> {
   const trn = resourceTrn(workspaceId, "tailordb", targetNamespace);
   const currentState = await fetchRemoteMigrationState(client, trn);
   const completesInProgress = currentState.inProgress?.number === migrationNumber;
-  if (!completesInProgress) assertNoMigrationInProgress(currentState, targetNamespace);
+  if (!completesInProgress) {
+    assertNoMigrationInProgress(
+      currentState,
+      targetNamespace,
+      migrationCommandContext({
+        configPath: options.configPath,
+        workspaceId,
+        profile: options.profile,
+      }),
+    );
+  }
   const historyOverwrite = assertLocalMigrationHistory({
     state: currentState,
     localHistoryId: historyId ?? null,

@@ -1458,12 +1458,18 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
       vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
 
-      await expect(
-        applyTailorDB(client, withRestorableGoodsReceipt(), "create-update"),
-      ).rejects.toMatchObject({
+      const planResult = withRestorableGoodsReceipt();
+      planResult.context.migrationRecoveryArgs = ["--profile=staging"];
+
+      await expect(applyTailorDB(client, planResult, "create-update")).rejects.toMatchObject({
         code: "MIGRATION_CHECKPOINT_UNVERIFIED",
-        suggestion: expect.stringContaining("tailor tailordb migration status --namespace test-ns"),
+        suggestion: expect.stringMatching(
+          /`tailor tailordb migration status --namespace test-ns --config=\S+ --workspace-id=test-workspace --profile=staging`/,
+        ),
         context: { namespace: "test-ns", tables: expect.arrayContaining(["GoodsReceipt"]) },
+      });
+      expect(vi.mocked(migrationModule.executeMigrations).mock.calls[0]![0]).toMatchObject({
+        migrationRecoveryArgs: ["--profile=staging"],
       });
     });
 
@@ -1546,11 +1552,14 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
       vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
 
-      await expect(
-        applyTailorDB(client, withRestorableGoodsReceipt(), "create-update"),
-      ).rejects.toMatchObject({
+      const planResult = withRestorableGoodsReceipt();
+      planResult.context.migrationRecoveryArgs = ["--profile=staging"];
+
+      await expect(applyTailorDB(client, planResult, "create-update")).rejects.toMatchObject({
         code: "MIGRATION_CHECKPOINT_CONFLICT",
-        suggestion: expect.stringContaining("tailor tailordb migration status --namespace test-ns"),
+        suggestion: expect.stringMatching(
+          /`tailor tailordb migration status --namespace test-ns --config=\S+ --workspace-id=test-workspace --profile=staging`/,
+        ),
         context: {
           namespace: "test-ns",
           expectedCheckpoint: 1,
@@ -2070,18 +2079,18 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       } as never);
       const goodsReceiptWrites = failPostPhase(client);
       const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const planResult = withInputs(createUpdatePlanResult());
+      planResult.context.migrationRecoveryArgs = ["--profile=staging"];
 
-      const error = await applyTailorDB(
-        client,
-        withInputs(createUpdatePlanResult()),
-        "create-update",
-      ).catch((caught: unknown) => caught);
+      const error = await applyTailorDB(client, planResult, "create-update").catch(
+        (caught: unknown) => caught,
+      );
 
       expect(error).toMatchObject({
         code: "MIGRATION_PARTIALLY_APPLIED",
         message: expect.stringContaining("post-phase constraint violation"),
-        suggestion: expect.stringContaining(
-          "'tailor tailordb migration resolve --complete --namespace test-ns'",
+        suggestion: expect.stringMatching(
+          /`tailor tailordb migration resolve --complete --namespace test-ns --config=\S+ --workspace-id=test-workspace --profile=staging`/,
         ),
       });
       const warnings = warn.mock.calls.map(([line]) => line).join("\n");

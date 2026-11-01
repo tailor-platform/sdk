@@ -23,7 +23,11 @@ import {
   type MigrationDiff,
   type WarningChangeInfo,
 } from "./diff-calculator";
-import { formatMigrationScriptHint } from "./hints";
+import {
+  formatMigrationScriptHint,
+  migrationCommandContext,
+  type MigrationCommandContext,
+} from "./hints";
 import {
   checkMigrationDiffs,
   logRebaselinePendingGuidance,
@@ -139,6 +143,8 @@ interface BuildValidationReportsOptions {
 interface CollectedValidationReports {
   reports: NamespaceValidationReport[];
   remoteError?: unknown;
+  /** Workspace whose remote schema was checked, when the remote checks ran */
+  workspaceId?: string;
 }
 
 /**
@@ -395,13 +401,15 @@ async function collectValidationReports(
   }
 
   let remoteResults: RemoteSchemaVerificationResult[];
+  let workspaceId: string;
   try {
-    const { client, workspaceId } = await loadOperatorWorkspaceContext({
+    const context = await loadOperatorWorkspaceContext({
       profile: options.profile,
       workspaceId: options.workspaceId,
     });
+    workspaceId = context.workspaceId;
     remoteResults = await verifyRemoteSchema(
-      client,
+      context.client,
       workspaceId,
       checkableNamespaces,
       config,
@@ -416,6 +424,7 @@ async function collectValidationReports(
 
   return {
     reports: buildValidationReports({ ...localReportOptions, remoteResults }),
+    workspaceId,
   };
 }
 
@@ -523,7 +532,10 @@ function remoteDrifts(reports: NamespaceValidationReport[]) {
   }));
 }
 
-function printResolutionHints(reports: NamespaceValidationReport[], configPath?: string): void {
+function printResolutionHints(
+  reports: NamespaceValidationReport[],
+  commandContext: MigrationCommandContext,
+): void {
   if (reports.some((r) => r.localSchema?.hasDiff && !r.localSchema.diff)) {
     logger.info("Run 'tailor tailordb migration generate' to create the initial snapshot.");
   }
@@ -540,7 +552,7 @@ function printResolutionHints(reports: NamespaceValidationReport[], configPath?:
     })),
   );
   if (reports.some((r) => r.remoteSchema?.hasDrift)) {
-    logRemoteDriftGuidance(remoteDrifts(reports));
+    logRemoteDriftGuidance(commandContext, remoteDrifts(reports));
   }
   const missingAcknowledgments = reports.filter(
     (r) => r.warningAcknowledgments && !r.warningAcknowledgments.valid,
@@ -555,7 +567,7 @@ function printResolutionHints(reports: NamespaceValidationReport[], configPath?:
           `  ${formatMigrationScriptHint({
             migrationNumber: migration.migrationNumber,
             namespace: report.namespace,
-            configPath,
+            configPath: commandContext.configPath,
             noScript: true,
           })}`,
           { mode: "plain" },
@@ -575,6 +587,11 @@ async function validate(options: ValidateOptions): Promise<void> {
   const collected = await collectValidationReports(options);
   const { reports } = collected;
   const invalidCount = reports.filter((r) => !r.valid).length;
+  const commandContext = migrationCommandContext({
+    configPath: options.configPath,
+    workspaceId: collected.workspaceId,
+    profile: options.profile,
+  });
 
   if (options.json) {
     logger.out(reports);
@@ -583,7 +600,7 @@ async function validate(options: ValidateOptions): Promise<void> {
     if (invalidCount === 0 && !("remoteError" in collected)) {
       logger.success("All migration validation checks passed.");
     } else {
-      printResolutionHints(reports, options.configPath);
+      printResolutionHints(reports, commandContext);
     }
   }
 
@@ -603,9 +620,9 @@ async function validate(options: ValidateOptions): Promise<void> {
               localLatestMigration: report.remoteSchema.localLatestMigration ?? null,
               historyIdMismatch: report.remoteSchema.historyIdMismatch ?? false,
             })),
-            options.configPath,
+            commandContext,
           ),
-          ...unsetCheckpointDriftHints(remoteDrifts(reports), options.configPath),
+          ...unsetCheckpointDriftHints(remoteDrifts(reports), commandContext),
         ].join("\n") || undefined,
     });
   }

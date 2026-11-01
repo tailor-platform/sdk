@@ -17,6 +17,7 @@ import {
   WorkflowJobExecution_Status,
   type WorkflowExecution,
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import * as path from "pathe";
 import {
   bundleMigrationScript,
   bundleMigrationSteps,
@@ -25,7 +26,12 @@ import {
   type MigrationBundleResult,
 } from "#/cli/commands/tailordb/migrate/bundler";
 import { type NamespaceWithMigrations } from "#/cli/commands/tailordb/migrate/config";
-import { formatMigrationScriptHint } from "#/cli/commands/tailordb/migrate/hints";
+import {
+  formatMigrationScriptHint,
+  formatNamespaceMigrationHint,
+  migrationCommandContext,
+  type MigrationCommandContext,
+} from "#/cli/commands/tailordb/migrate/hints";
 import {
   describeMigrationCheckpoint,
   fetchRemoteMigrationState,
@@ -33,6 +39,7 @@ import {
   isCheckpointStillOwned,
   matchesLocalMigrationHistory,
   type ExpectedMigrationCheckpoint,
+  type MigrationResolution,
   type RemoteMigrationState,
 } from "#/cli/commands/tailordb/migrate/remote-state";
 import {
@@ -104,6 +111,8 @@ interface MigrationExecutionOptions {
   checkpoints: ReadonlyMap<string, ExpectedMigrationCheckpoint>;
   /** Migration history ID of the namespace's local migrations, if they have one. */
   localHistoryId: string | null;
+  /** Config and workspace selection of the deploy, kept in the commands its errors suggest. */
+  commandContext: MigrationCommandContext;
 }
 
 /**
@@ -116,7 +125,10 @@ export interface MigrationContext {
   /** Machine user that runs the scripts of each namespace. */
   machineUserByNamespace: ReadonlyMap<string, string>;
   env: Record<string, string | number | boolean>;
-  configDir: string;
+  /** Config file the deploy loaded. */
+  configPath: string;
+  /** Profile and env-file arguments of the deploy, kept in the migration commands it suggests. */
+  migrationRecoveryArgs?: readonly string[];
   /** Application name, used to label a migration's temporary resources. */
   appName: string;
   /** Application id, used to label a migration's temporary resources. */
@@ -503,6 +515,7 @@ async function executeSingleMigration(
       appName,
       appId,
       maintenanceMode: options.maintenanceMode,
+      commandContext: options.commandContext,
       onBeforeStart: async () => {
         await assertCheckpointUnchanged(options, migration);
         recording.mayBeRecorded = true;
@@ -662,13 +675,19 @@ async function assertCheckpointUnchanged(
     : historyIdMismatch
       ? " in a different migration history"
       : "";
-  const syncCommand = `'tailor tailordb migration sync ${formatMigrationNumber(expected.number ?? 0)}${historyIdMismatch ? " --force" : ""} --namespace ${namespace}'`;
+  const command = (subcommand: readonly string[]) =>
+    formatNamespaceMigrationHint({ ...options.commandContext, subcommand, namespace });
+  const syncCommand = command([
+    "sync",
+    formatMigrationNumber(expected.number ?? 0),
+    ...(historyIdMismatch ? ["--force"] : []),
+  ]);
   throw CLIError({
     code: "MIGRATION_CHECKPOINT_CONFLICT",
     message: `Migration checkpoint ${namespace}/${describeMigrationCheckpoint(expected.number)} changed to ${describeMigrationCheckpoint(remoteState.number)}${history} before migration ${namespace}/${formatMigrationNumber(migration.number)} started.`,
     suggestion:
       "Another deploy or 'tailor tailordb migration set' changed it while this deploy ran. " +
-      `Run 'tailor tailordb migration status --namespace ${namespace}' to see it. ` +
+      `Run ${command(["status"])} to see it. ` +
       (historyIdMismatch
         ? "If another deploy is running, wait for it to finish. " +
           "To keep the migration history deployed to the workspace, deploy from a checkout of that history instead; " +
@@ -890,6 +909,7 @@ export interface RemainingRecord {
  * @param cause - The failure that triggered the rollback
  * @param maintenanceMode - Whether the namespace's tables stay in maintenance mode
  * @param record - The record that remains; a `main` one is of a run that succeeded
+ * @param commandContext - Config and workspace selection of the deploy, kept in the suggested commands
  * @returns The error to raise in place of the original failure
  */
 export function rollbackSkippedError(
@@ -897,15 +917,18 @@ export function rollbackSkippedError(
   cause: unknown,
   maintenanceMode: boolean,
   record: RemainingRecord,
+  commandContext: MigrationCommandContext,
 ): Error {
   const { namespace } = migration;
+  const resolveHint = (resolution: MigrationResolution) =>
+    formatMigrationResolveHint(resolution, namespace, commandContext);
   const next =
     record.kind === "main"
       ? "Its in-progress record could not be cleared, so its schema was not rolled back, and deploys stop before changing anything until the migration is settled. " +
-        `Once the data meets the migration's schema, run ${formatMigrationResolveHint("complete", namespace)} to keep what its script wrote; ` +
-        `or run ${formatMigrationResolveHint("rollback", namespace)} to return to migration ${formatMigrationNumber(migration.number - 1)}.`
+        `Once the data meets the migration's schema, run ${resolveHint("complete")} to keep what its script wrote; ` +
+        `or run ${resolveHint("rollback")} to return to migration ${formatMigrationNumber(migration.number - 1)}.`
       : "Its in-progress record could not be cleared, so its schema was not rolled back and the migration stays in progress. " +
-        `Deploy again to resume it, or run ${formatMigrationResolveHint("rollback", namespace)} to roll it back without deploying.`;
+        `Deploy again to resume it, or run ${resolveHint("rollback")} to roll it back without deploying.`;
   return CLIError({
     code: "MIGRATION_PARTIALLY_APPLIED",
     message: cause instanceof Error ? cause.message : String(cause),
@@ -940,18 +963,21 @@ function unreleasedRecordError(
   cause: unknown,
   record: RemainingRecord,
   maintenanceMode: boolean,
+  commandContext: MigrationCommandContext,
 ): Error {
   const { namespace } = migration;
   const number = formatMigrationNumber(migration.number);
   const checkpoint = formatMigrationNumber(migration.number - 1);
-  const resolveRollback = formatMigrationResolveHint("rollback", namespace);
+  const command = (subcommand: readonly string[]) =>
+    formatNamespaceMigrationHint({ ...commandContext, subcommand, namespace });
+  const resolveRollback = formatMigrationResolveHint("rollback", namespace, commandContext);
   const next = !record.confirmed
     ? `Whether it is still recorded as in progress could not be confirmed, so its pre-migration schema stays in place. ` +
-      `Run 'tailor tailordb migration status --namespace ${namespace}': if it reports migration ${number} in progress, ` +
+      `Run ${command(["status"])}: if it reports migration ${number} in progress, ` +
       (record.kind === "main"
         ? `run ${resolveRollback} to clear the record, then fix the failure and deploy again; `
         : `fix the failure and deploy again, or run ${resolveRollback} to clear the record without deploying; `) +
-      `otherwise run 'tailor tailordb migration sync ${checkpoint} --namespace ${namespace}' to return the schema to migration ${checkpoint}, then deploy again.`
+      `otherwise run ${command(["sync", checkpoint])} to return the schema to migration ${checkpoint}, then deploy again.`
     : record.kind === "main"
       ? "Its in-progress record could not be cleared, so its pre-migration schema stays in place, and deploys stop before changing anything until the record is cleared. " +
         `Run ${resolveRollback} to clear it, then fix the failure and deploy again.`
@@ -1028,6 +1054,7 @@ async function releaseMigrationInProgress(
         cause,
         { confirmed: false, kind },
         options.maintenanceMode,
+        options.commandContext,
       );
     }
     if (!state.inProgressInvalid && state.inProgress?.number !== migration.number) {
@@ -1043,6 +1070,7 @@ async function releaseMigrationInProgress(
       cause,
       { confirmed: true, kind },
       options.maintenanceMode,
+      options.commandContext,
     );
   }
 }
@@ -1213,13 +1241,18 @@ export async function executeMigrations(
       workspaceId: context.workspaceId,
       invoker,
       env: context.env,
-      configDir: context.configDir,
+      configDir: path.dirname(context.configPath),
       appName: context.appName,
       appId: context.appId,
       maintenanceMode: context.maintenanceMode,
       skipSteps: context.skipSteps,
       checkpoints,
       localHistoryId: context.migrationHistoryIds[namespace] ?? null,
+      commandContext: migrationCommandContext({
+        workspaceId: context.workspaceId,
+        configPath: context.configPath,
+        extraArgs: context.migrationRecoveryArgs,
+      }),
     };
 
     logger.info(`Using machine user: ${styles.bold(machineUserName)} for namespace '${namespace}'`);

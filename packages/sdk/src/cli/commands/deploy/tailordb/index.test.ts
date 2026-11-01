@@ -2405,6 +2405,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       planResult.context.config,
       planResult.context.noSchemaCheck,
       planResult.context.tailorDBInputs,
+      planResult.context.migrationRecoveryArgs,
     );
   }
 
@@ -2459,6 +2460,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       config,
       true,
       [],
+      undefined,
     );
 
     expect(Object.hasOwn(result.migrationFileState, "__proto__")).toBe(true);
@@ -2510,10 +2512,10 @@ describe("applyTailorDB migration label reconciliation", () => {
     async ({ noSchemaCheck }) => {
       const { client } = createMigrationClient({ "sdk-migration": "m0002" });
       using _stderr = captureStderr();
+      const planResult = makePlanResult(noSchemaCheck);
+      planResult.context.migrationRecoveryArgs = ["--profile=staging"];
 
-      const error = await runValidation(client, makePlanResult(noSchemaCheck)).catch(
-        (failure: unknown) => failure,
-      );
+      const error = await runValidation(client, planResult).catch((failure: unknown) => failure);
 
       expect(error).toMatchObject({
         code: "MIGRATION_CHECKPOINT_UNKNOWN",
@@ -2530,14 +2532,37 @@ describe("applyTailorDB migration label reconciliation", () => {
       ]);
       expect(lines.slice(2)).toEqual([
         expect.stringMatching(
-          /^ {2}`tailor tailordb migration sync 0000 --namespace test-tailordb --config=\S+tailor\.config\.ts` \(rewrites the tables to that snapshot\)$/,
+          /^ {2}`tailor tailordb migration sync 0000 --namespace test-tailordb --config=\S+tailor\.config\.ts --workspace-id=test-workspace --profile=staging` \(rewrites the tables to that snapshot\)$/,
         ),
         expect.stringMatching(
-          /^ {2}`tailor tailordb migration set 0000 --namespace test-tailordb --config=\S+tailor\.config\.ts` \(moves only the checkpoint\)$/,
+          /^ {2}`tailor tailordb migration set 0000 --namespace test-tailordb --config=\S+tailor\.config\.ts --workspace-id=test-workspace --profile=staging` \(moves only the checkpoint\)$/,
         ),
       ]);
     },
   );
+
+  test("keeps the deploy's workspace and profile in the checkpoint recovery commands while planning", async () => {
+    const { client } = createMigrationClient({ "sdk-migration": "m0002" });
+    using _stderr = captureStderr();
+    const { application, config } = makePlanResult().context;
+
+    const error = await planTailorDB({
+      client,
+      workspaceId: "test-workspace",
+      application,
+      forRemoval: false,
+      config,
+      noSchemaCheck: true,
+      migrationRecoveryArgs: ["--profile=staging"],
+    }).catch((failure: unknown) => failure);
+
+    expect(error).toMatchObject({
+      code: "MIGRATION_CHECKPOINT_UNKNOWN",
+      suggestion: expect.stringMatching(
+        /`tailor tailordb migration sync 0000 --namespace test-tailordb --config=\S+tailor\.config\.ts --workspace-id=test-workspace --profile=staging`/,
+      ),
+    });
+  });
 
   test.each<{ checkpoint: string; labels: Record<string, string>; historyIdMismatch: boolean }>([
     {
@@ -2637,6 +2662,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       config,
       true,
       [],
+      undefined,
     ).catch((failure: unknown) => failure);
 
     expect(error).toMatchObject({
@@ -2652,12 +2678,12 @@ describe("applyTailorDB migration label reconciliation", () => {
     const commands = (error as { suggestion: string }).suggestion
       .split("\n")
       .slice(2)
-      .map((line) => line.replace(/ --config=\S+`/, "`"));
+      .map((line) => line.replace(/ --config=\S+ /, " "));
     expect(commands).toEqual([
-      "  `tailor tailordb migration sync 0000 --namespace inventory` (rewrites the tables to that snapshot)",
-      "  `tailor tailordb migration set 0000 --namespace inventory` (moves only the checkpoint)",
-      "  `tailor tailordb migration sync 0001 --namespace sales` (rewrites the tables to that snapshot)",
-      "  `tailor tailordb migration set 0001 --namespace sales` (moves only the checkpoint)",
+      "  `tailor tailordb migration sync 0000 --namespace inventory --workspace-id=test-workspace` (rewrites the tables to that snapshot)",
+      "  `tailor tailordb migration set 0000 --namespace inventory --workspace-id=test-workspace` (moves only the checkpoint)",
+      "  `tailor tailordb migration sync 0001 --namespace sales --workspace-id=test-workspace` (rewrites the tables to that snapshot)",
+      "  `tailor tailordb migration set 0001 --namespace sales --workspace-id=test-workspace` (moves only the checkpoint)",
     ]);
   });
 
@@ -2715,6 +2741,7 @@ describe("applyTailorDB migration label reconciliation", () => {
 
   test("leaves a checkpoint that moves ahead of the local migration history during the deploy", async () => {
     const planResult = makePlanResult(true);
+    planResult.context.migrationRecoveryArgs = ["--profile=staging"];
     addSentinelTypeCreate(planResult);
     const remoteLabels = { "sdk-migration": "m0000" };
     const { client, setMetadata } = createMigrationClient(remoteLabels);
@@ -2730,6 +2757,9 @@ describe("applyTailorDB migration label reconciliation", () => {
     expect(setMetadata).not.toHaveBeenCalled();
     expect(stderr.output).toContain(
       "Migration checkpoint of namespace test-tailordb is 0002, which is not in the local migration history, so it was left unchanged.",
+    );
+    expect(stderr.output).toMatch(
+      /Run `tailor tailordb migration status --namespace test-tailordb --config=\S+tailor\.config\.ts --workspace-id=test-workspace --profile=staging` to compare\./,
     );
   });
 
@@ -3005,7 +3035,17 @@ describe("applyTailorDB migration label reconciliation", () => {
     function resolveCommand(direction: string): unknown {
       return {
         command: "tailor",
-        args: ["tailordb", "migration", "resolve", direction, "--namespace", "test-tailordb"],
+        args: [
+          "tailordb",
+          "migration",
+          "resolve",
+          direction,
+          "--namespace",
+          "test-tailordb",
+          expect.stringMatching(/^--config=\S+tailor\.config\.ts$/),
+          "--workspace-id=test-workspace",
+          "--profile=staging",
+        ],
       };
     }
 
@@ -3031,6 +3071,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       async ({ status, runStatus, next }) => {
         writeMainMigration();
         const planResult = makePlanResult(true);
+        planResult.context.migrationRecoveryArgs = ["--profile=staging"];
         addSentinelTypeCreate(planResult);
         planResult.context.migrationFileState = captureMigrationFileState(
           planResult.context.namespacesWithMigrations,
@@ -3064,16 +3105,16 @@ describe("applyTailorDB migration label reconciliation", () => {
       Object.assign(client, {
         getWorkflowExecution: vi.fn().mockRejectedValue(new ConnectError("gone", Code.NotFound)),
       });
+      const planResult = makePlanResult(true);
+      planResult.context.migrationRecoveryArgs = ["--profile=staging"];
 
-      const error = await runValidation(client, makePlanResult(true)).catch(
-        (caught: unknown) => caught,
-      );
+      const error = await runValidation(client, planResult).catch((caught: unknown) => caught);
 
       expect(error).toMatchObject({
         code: "MIGRATION_OUTCOME_UNSETTLED",
         context: { runStatus: "unknown" },
         suggestion: expect.stringMatching(
-          /tailor workflow executions --workflow-name tailordb-migration--test-tailordb--0001.*resolve --complete.*resolve --rollback/s,
+          /`tailor workflow executions --workflow-name tailordb-migration--test-tailordb--0001 --workspace-id=test-workspace --profile=staging`.*`tailor tailordb migration resolve --complete --namespace test-tailordb --config=\S+ --workspace-id=test-workspace --profile=staging`.*`tailor tailordb migration resolve --rollback --namespace test-tailordb --config=\S+ --workspace-id=test-workspace --profile=staging`/s,
         ),
       });
       expect((error as { next?: unknown }).next).toBeUndefined();
@@ -3089,10 +3130,10 @@ describe("applyTailorDB migration label reconciliation", () => {
         listWorkflowExecutions: vi.fn().mockResolvedValue({ executions: [], nextPageToken: "" }),
         getWorkflowByName: vi.fn().mockResolvedValue({ workflow: { id: "wf-1" } }),
       });
+      const planResult = makePlanResult(true);
+      planResult.context.migrationRecoveryArgs = ["--profile=staging"];
 
-      const error = await runValidation(client, makePlanResult(true)).catch(
-        (caught: unknown) => caught,
-      );
+      const error = await runValidation(client, planResult).catch((caught: unknown) => caught);
 
       expect(error).toMatchObject({
         code: "MIGRATION_OUTCOME_UNSETTLED",
@@ -3820,14 +3861,20 @@ describe("applyTailorDB migration label reconciliation", () => {
     const client = schemaVerificationClient(unchangedRemoteSettings());
     vi.mocked(client.getMetadata).mockResolvedValue({ metadata: { labels: {} } } as never);
 
-    await expect(
-      runValidation(client, planWithDeployDerivedSettings(userType)),
-    ).rejects.toMatchObject({
+    const planResult = planWithDeployDerivedSettings(userType);
+    planResult.context.migrationRecoveryArgs = ["--profile=staging"];
+
+    const error = await runValidation(client, planResult).catch((failure: unknown) => failure);
+
+    expect(error).toMatchObject({
       code: "MIGRATION_REMOTE_DRIFT",
-      suggestion: expect.stringContaining(
-        "`tailor tailordb migration sync 0000 --namespace test-tailordb --config=",
+      suggestion: expect.stringMatching(
+        /`tailor tailordb migration sync 0000 --namespace test-tailordb --config=\S+tailor\.config\.ts --workspace-id=test-workspace --profile=staging`/,
       ),
     });
+    expect((error as { suggestion: string }).suggestion).toMatch(
+      /`tailor tailordb migration generate --init --namespace test-tailordb --config=\S+tailor\.config\.ts`,/,
+    );
     expect(client.setMetadata).not.toHaveBeenCalled();
   });
 

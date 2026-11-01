@@ -889,7 +889,7 @@ describe("migration", () => {
         authNamespace: "auth",
         machineUserByNamespace: new Map([["tailordb", "test-machine-user"]]),
         env: {},
-        configDir: "/project",
+        configPath: path.join(process.cwd(), "tailor.config.ts"),
         appName: "test-app",
         appId: "test-app-id",
         maintenanceMode: true,
@@ -1212,7 +1212,12 @@ describe("migration", () => {
 
       await expect(
         executeMigrations(
-          { ...createMockContext(), client: store.client },
+          {
+            ...createMockContext(),
+            client: store.client,
+            configPath: path.join(process.cwd(), "custom", "tailor.config.ts"),
+            migrationRecoveryArgs: ["--profile=staging"],
+          },
           [migration],
           checkpoints,
         ),
@@ -1221,7 +1226,7 @@ describe("migration", () => {
         message:
           "Migration tailordb/0003 failed before any step completed: [unavailable] unavailable",
         suggestion: expect.stringMatching(
-          /tailor tailordb migration status --namespace tailordb.*tailor tailordb migration resolve --rollback --namespace tailordb.*tailor tailordb migration sync 0002 --namespace tailordb.* Until then, the tables of namespace 'tailordb' stay in maintenance mode/s,
+          /`tailor tailordb migration status --namespace tailordb --config=\S+ --workspace-id=test-workspace --profile=staging`.*`tailor tailordb migration resolve --rollback --namespace tailordb --config=\S+ --workspace-id=test-workspace --profile=staging`.*`tailor tailordb migration sync 0002 --namespace tailordb --config=\S+ --workspace-id=test-workspace --profile=staging`.* Until then, the tables of namespace 'tailordb' stay in maintenance mode/s,
         ),
       });
     });
@@ -1393,11 +1398,11 @@ describe("migration", () => {
             message: `Migration checkpoint tailordb/0002 changed to ${changedTo} before migration tailordb/0003 started.`,
             suggestion:
               "Another deploy or 'tailor tailordb migration set' changed it while this deploy ran. " +
-              "Run 'tailor tailordb migration status --namespace tailordb' to see it. " +
+              "Run `tailor tailordb migration status --namespace tailordb --workspace-id=test-workspace` to see it. " +
               "If another deploy is running, wait for it to finish. " +
               "To keep the migration history deployed to the workspace, deploy from a checkout of that history instead; " +
               "to replace it with the local migration history on purpose, run " +
-              "'tailor tailordb migration sync 0002 --force --namespace tailordb', then deploy again.",
+              "`tailor tailordb migration sync 0002 --force --namespace tailordb --workspace-id=test-workspace`, then deploy again.",
             context: { localHistoryId: "hlocal", historyIdMismatch: true },
           });
           expect(store.labels()).not.toHaveProperty(MIGRATION_IN_PROGRESS_LABEL_KEY);
@@ -1462,9 +1467,9 @@ describe("migration", () => {
             "Migration checkpoint tailordb/0002 changed to 0000 before migration tailordb/0003 started.",
           suggestion:
             "Another deploy or 'tailor tailordb migration set' changed it while this deploy ran. " +
-            "Run 'tailor tailordb migration status --namespace tailordb' to see it. " +
+            "Run `tailor tailordb migration status --namespace tailordb --workspace-id=test-workspace` to see it. " +
             "If another deploy is running, wait for it to finish; otherwise return the namespace to the checkpoint with " +
-            "'tailor tailordb migration sync 0002 --namespace tailordb'. Then deploy again.",
+            "`tailor tailordb migration sync 0002 --namespace tailordb --workspace-id=test-workspace`. Then deploy again.",
           context: {
             namespace: "tailordb",
             migrationNumber: 3,
@@ -1492,7 +1497,8 @@ describe("migration", () => {
           expected: { number: null, historyId: null },
           labels: { [MIGRATION_LABEL_KEY]: "m0001", [MIGRATION_HISTORY_LABEL_KEY]: "hlocal" },
           changed: "<unset> changed to 0001",
-          syncCommand: "'tailor tailordb migration sync 0000 --namespace tailordb'",
+          syncCommand:
+            "`tailor tailordb migration sync 0000 --namespace tailordb --workspace-id=test-workspace`",
           historyIdMismatch: false,
         },
         {
@@ -1500,7 +1506,8 @@ describe("migration", () => {
           expected: { number: null, historyId: null },
           labels: { [MIGRATION_LABEL_KEY]: "m0001" },
           changed: "<unset> changed to 0001 in a different migration history",
-          syncCommand: "'tailor tailordb migration sync 0000 --force --namespace tailordb'",
+          syncCommand:
+            "`tailor tailordb migration sync 0000 --force --namespace tailordb --workspace-id=test-workspace`",
           historyIdMismatch: true,
         },
         {
@@ -1508,7 +1515,8 @@ describe("migration", () => {
           expected: { number: 2, historyId: "hlocal" },
           labels: {},
           changed: "0002 changed to <unset>",
-          syncCommand: "'tailor tailordb migration sync 0002 --namespace tailordb'",
+          syncCommand:
+            "`tailor tailordb migration sync 0002 --namespace tailordb --workspace-id=test-workspace`",
           historyIdMismatch: false,
         },
       ])(
@@ -1713,7 +1721,7 @@ describe("migration", () => {
           code: "MIGRATION_PARTIALLY_APPLIED",
           message: "Migration tailordb/0003 failed: boom",
           suggestion: expect.stringContaining(
-            "'tailor tailordb migration resolve --rollback --namespace tailordb'",
+            "`tailor tailordb migration resolve --rollback --namespace tailordb --workspace-id=test-workspace`",
           ),
         });
         expect(store.labels()).toHaveProperty(MIGRATION_IN_PROGRESS_LABEL_KEY, "m0003-main");
@@ -1733,6 +1741,7 @@ describe("migration", () => {
         code: "// bundled",
         appName: "test-app",
         appId: "test-app-id",
+        commandContext: { contextArgs: ["--workspace-id=test-workspace"] },
       });
     });
 

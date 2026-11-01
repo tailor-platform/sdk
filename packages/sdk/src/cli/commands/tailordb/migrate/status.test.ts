@@ -371,7 +371,12 @@ describe("tailordb migration status --json", () => {
     using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     using _json = jsonMode();
 
-    const result = await runCommand(statusCommand, []);
+    const result = await runCommand(statusCommand, [
+      "--config",
+      "custom.config.ts",
+      "--profile",
+      "staging",
+    ]);
 
     expect(result.success).toBe(false);
     expect(JSON.parse(stdout.output)).toMatchObject([
@@ -382,8 +387,10 @@ describe("tailordb migration status --json", () => {
       },
     ]);
     const [{ error }] = JSON.parse(stdout.output);
-    expect(error).toContain("sync 0002 --namespace tailordb");
-    expect(error).toContain("set 0002 --namespace tailordb");
+    const context =
+      "--config=custom.config.ts --workspace-id=12345678-1234-4abc-8def-123456789012 --profile=staging";
+    expect(error).toContain(`sync 0002 --namespace tailordb ${context}`);
+    expect(error).toContain(`set 0002 --namespace tailordb ${context}`);
     expect(error).toContain("rewrites the tables");
     expect(error).toContain("moves only the checkpoint");
     expect(error).not.toContain("--force");

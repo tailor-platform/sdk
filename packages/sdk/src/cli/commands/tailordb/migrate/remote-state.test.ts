@@ -117,7 +117,7 @@ describe("assertNoMigrationInProgress", () => {
 
   test("asks to finish a migration whose steps partly committed with a deploy", () => {
     expect(() =>
-      assertNoMigrationInProgress(state({ number: 3, kind: "steps" }), "tailordb"),
+      assertNoMigrationInProgress(state({ number: 3, kind: "steps" }), "tailordb", {}),
     ).toThrow(
       expect.objectContaining({
         code: "MIGRATION_IN_PROGRESS",
@@ -126,15 +126,18 @@ describe("assertNoMigrationInProgress", () => {
     );
   });
 
-  test("asks to settle a `main` run whose outcome is not settled with migration resolve", () => {
+  test("asks to settle a `main` run whose outcome is not settled with migration resolve, keeping the run's config, workspace, and profile", () => {
     expect(() =>
-      assertNoMigrationInProgress(state({ number: 3, kind: "main" }), "tailordb"),
+      assertNoMigrationInProgress(state({ number: 3, kind: "main" }), "tailordb", {
+        configPath: "custom.config.ts",
+        contextArgs: ["--workspace-id=ws-1", "--profile=staging"],
+      }),
     ).toThrow(
       expect.objectContaining({
         code: "MIGRATION_IN_PROGRESS",
         message: expect.stringContaining("tailordb/0003"),
         suggestion: expect.stringContaining(
-          "'tailor tailordb migration resolve --complete --namespace tailordb'",
+          "`tailor tailordb migration resolve --complete --namespace tailordb --config=custom.config.ts --workspace-id=ws-1 --profile=staging`",
         ),
       }),
     );

@@ -9,7 +9,7 @@ import {
 } from "#/cli/commands/deploy/tailordb/migration";
 import {
   assertNoActiveMigrationExecution,
-  migrationWorkflowResourceName,
+  formatMigrationExecutionsHint,
   readMigrationRunStatus,
   retryCommandActiveError,
   settlingResolution,
@@ -27,6 +27,11 @@ import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { getNamespacesWithMigrations, selectTargetNamespace } from "./config";
+import {
+  formatNamespaceMigrationHint,
+  migrationCommandContext,
+  type MigrationCommandContext,
+} from "./hints";
 import {
   fetchRemoteMigrationState,
   isStaleMigrationInProgress,
@@ -100,6 +105,8 @@ type MainRunResolution = {
   migrationNumber: number;
   resolution: MigrationResolution;
   runStatus: MigrationRunStatus;
+  /** Config and workspace selection of this run, kept in the command it suggests */
+  commandContext: MigrationCommandContext;
 };
 
 /**
@@ -108,7 +115,7 @@ type MainRunResolution = {
  * @param params - The run and how it is settled
  */
 function warnMainRunResolution(params: MainRunResolution): void {
-  const { namespace, migrationNumber, resolution, runStatus } = params;
+  const { namespace, migrationNumber, resolution, runStatus, commandContext } = params;
   const label = formatMigrationNumber(migrationNumber);
   const fitting = settlingResolution(runStatus);
   if (resolution === "rollback") {
@@ -135,7 +142,7 @@ function warnMainRunResolution(params: MainRunResolution): void {
   if (runStatus === "unknown") {
     logger.warn(
       `Whether the run of migration ${label} succeeded could not be confirmed. ` +
-        `Check it with 'tailor workflow executions --workflow-name ${migrationWorkflowResourceName(namespace, migrationNumber)}' before you continue.`,
+        `Check it with ${formatMigrationExecutionsHint(namespace, migrationNumber, commandContext)} before you continue.`,
     );
   }
 }
@@ -168,6 +175,16 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
     profile: options.profile,
     workspaceId: options.workspaceId,
   });
+  const commandContext = migrationCommandContext({
+    configPath: options.configPath,
+    workspaceId,
+    profile: options.profile,
+  });
+  const statusHint = formatNamespaceMigrationHint({
+    ...commandContext,
+    subcommand: ["status"],
+    namespace,
+  });
 
   const state = await fetchRemoteMigrationState(
     client,
@@ -177,14 +194,14 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
     throw CLIError({
       code: "MIGRATION_RESOLVE_RECORD_UNREADABLE",
       message: `Namespace "${namespace}" records a partially applied migration that cannot be read.`,
-      suggestion: `Run 'tailor tailordb migration status --namespace ${namespace}' to inspect the migration state.`,
+      suggestion: `Run ${statusHint} to inspect the migration state.`,
     });
   }
   if (!state.inProgress || isStaleMigrationInProgress(state)) {
     throw CLIError({
       code: "MIGRATION_RESOLVE_NO_IN_PROGRESS",
       message: `No migration is in progress for namespace "${namespace}".`,
-      suggestion: `Run 'tailor tailordb migration status --namespace ${namespace}' to check the migration state.`,
+      suggestion: `Run ${statusHint} to check the migration state.`,
     });
   }
 
@@ -196,7 +213,7 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
       message: `Namespace "${namespace}" records migration ${formatMigrationNumber(state.inProgress.number)} as in progress, but its checkpoint is ${formatMigrationNumber(currentCheckpoint)}; the next migration to run would be ${formatMigrationNumber(nextMigrationNumber)}.`,
       details:
         "The checkpoint or the in-progress record changed after the deploy that started the migration wrote it.",
-      suggestion: `Run 'tailor tailordb migration status --namespace ${namespace}' to compare the checkpoint with the in-progress migration, and restore the changed label before resolving.`,
+      suggestion: `Run ${statusHint} to compare the checkpoint with the in-progress migration, and restore the changed label before resolving.`,
     });
   }
 
@@ -260,6 +277,7 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
       migrationNumber,
       resolution: options.resolution,
       runStatus,
+      commandContext,
     });
   } else if (options.resolution === "rollback") {
     logger.warn(

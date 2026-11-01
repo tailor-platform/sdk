@@ -16,6 +16,7 @@ import {
   settlingResolution,
   type LongRunningMigrationOptions,
 } from "./migration-workflow";
+import type { MigrationCommandContext } from "#/cli/commands/tailordb/migrate/hints";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
@@ -169,7 +170,12 @@ const recordsNothing: Recording = {
   onExecutionStarted: async () => {},
 };
 
-function run(client: OperatorClient, maintenanceMode = true, recording: Partial<Recording> = {}) {
+function run(
+  client: OperatorClient,
+  maintenanceMode = true,
+  recording: Partial<Recording> = {},
+  commandContext: MigrationCommandContext = {},
+) {
   return executeMigrationAsWorkflow({
     client,
     workspaceId: "ws-1",
@@ -181,10 +187,16 @@ function run(client: OperatorClient, maintenanceMode = true, recording: Partial<
     appId: "app-1",
     maintenanceMode,
     pollIntervalMs: 0,
+    commandContext,
     ...recordsNothing,
     ...recording,
   });
 }
+
+const deployContext: MigrationCommandContext = {
+  configPath: "custom.config.ts",
+  contextArgs: ["--workspace-id=ws-1", "--profile=staging"],
+};
 
 describe("migrationWorkflowResourceName", () => {
   test("pads the migration number so the name is stable per migration", () => {
@@ -536,9 +548,9 @@ describe("executeMigrationAsWorkflow", () => {
       startFailure: { error: new ConnectError("lost", Code.Unavailable), afterCreating: false },
     });
 
-    await expect(run(client)).rejects.toMatchObject({
+    await expect(run(client, true, {}, deployContext)).rejects.toMatchObject({
       suggestion: expect.stringMatching(
-        /succeeded, run `tailor tailordb migration resolve --complete --namespace tailordb`; otherwise run `tailor tailordb migration resolve --rollback --namespace tailordb`\. Deploys stop before changing anything until then\./,
+        /^Run `tailor workflow executions --workflow-name tailordb-migration--tailordb--0003 --workspace-id=ws-1 --profile=staging` until .*succeeded, run `tailor tailordb migration resolve --complete --namespace tailordb --config=custom\.config\.ts --workspace-id=ws-1 --profile=staging`; otherwise run `tailor tailordb migration resolve --rollback --namespace tailordb --config=custom\.config\.ts --workspace-id=ws-1 --profile=staging`\. Deploys stop before changing anything until then\./,
       ),
     });
   });
@@ -549,9 +561,9 @@ describe("executeMigrationAsWorkflow", () => {
       leftoverExecutions: [{ id: "exec-0", status: WorkflowExecution_Status.RUNNING }],
     });
 
-    await expect(run(client)).rejects.toMatchObject({
+    await expect(run(client, true, {}, deployContext)).rejects.toMatchObject({
       suggestion: expect.stringMatching(
-        /succeeded, run `tailor tailordb migration sync 0003 --namespace tailordb`; otherwise run `tailor tailordb migration sync 0002 --namespace tailordb`\./,
+        /succeeded, run `tailor tailordb migration sync 0003 --namespace tailordb --config=custom\.config\.ts --workspace-id=ws-1 --profile=staging`; otherwise run `tailor tailordb migration sync 0002 --namespace tailordb --config=custom\.config\.ts --workspace-id=ws-1 --profile=staging`\./,
       ),
     });
   });
@@ -766,6 +778,7 @@ describe("observing when the migration script runs", () => {
       appId: "app-1",
       maintenanceMode: true,
       pollIntervalMs: 0,
+      commandContext: {},
       ...recordsNothing,
       onRunEvent: (event) => {
         if (event.type === "finished") events.push(`finished:${event.scriptStarted}`);
@@ -791,6 +804,7 @@ describe("observing when the migration script runs", () => {
       appId: "app-1",
       maintenanceMode: true,
       pollIntervalMs: 0,
+      commandContext: {},
       ...recordsNothing,
     });
     const [stream] = raw.createFunctionRegistry.mock.calls[0] as unknown as [
