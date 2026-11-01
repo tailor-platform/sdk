@@ -112,6 +112,11 @@ export type LockTarget = ManagedWorkflow & {
   kind: TargetKind;
   workspaceName: string;
   inputs: LockInputs;
+  /**
+   * For `preview` kind: the workflow that deletes a pull request's workspace when the pull
+   * request closes. Absent in entries written before it was split out of the preview workflow.
+   */
+  cleanup?: ManagedWorkflow;
 };
 
 export type LockAutofix = ManagedWorkflow & {
@@ -140,12 +145,22 @@ export type LockFile = {
 };
 
 /**
- * List every workflow the lock records: the targets, then the autofix workflow.
+ * List the workflows of one target: its own, then its cleanup workflow when it records one.
+ * @param target - Lock target
+ * @returns The target's workflows
+ */
+export function targetWorkflows(target: LockTarget): ManagedWorkflow[] {
+  return target.cleanup ? [target, target.cleanup] : [target];
+}
+
+/**
+ * List every workflow the lock records: each target's workflows, then the autofix workflow.
  * @param lock - Lock file
  * @returns The recorded workflows
  */
 export function managedWorkflows(lock: LockFile): ManagedWorkflow[] {
-  return lock.autofix ? [...lock.targets, lock.autofix] : lock.targets;
+  const targets = lock.targets.flatMap(targetWorkflows);
+  return lock.autofix ? [...targets, lock.autofix] : targets;
 }
 
 /**

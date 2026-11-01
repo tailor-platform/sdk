@@ -317,6 +317,35 @@ describe("findTargetDrift", () => {
   });
 });
 
+describe("findTargetDrift of a preview target with a cleanup workflow", () => {
+  const cleanup = {
+    file: ".github/workflows/tailor-my-app-preview-cleanup.yml",
+    templateVersion: TEMPLATE_VERSION - 1,
+    generatedIds: [],
+    contentHash: "sha256:def",
+  };
+  const target = baseTarget({
+    kind: "preview",
+    file: ".github/workflows/tailor-my-app-preview.yml",
+    templateVersion: TEMPLATE_VERSION - 1,
+    cleanup,
+  });
+  const state = cleanState({
+    cleanup: {
+      fileExists: true,
+      currentHash: "sha256:def",
+      reservedIds: [],
+      templateVersion: TEMPLATE_VERSION,
+    },
+  });
+
+  test("asks once to update both workflows to a newer template", () => {
+    expect(findTargetDrift(target, state).map((finding) => finding.rule)).toEqual([
+      "template-version",
+    ]);
+  });
+});
+
 describe("findAutofixDrift", () => {
   const autofix = (overrides: Partial<LockAutofix> = {}): LockAutofix => ({
     ...autofixLockEntry("github-token", { dirs: ["apps/erp", "apps/users"] }),
@@ -962,6 +991,56 @@ describe("checkGitHub (integration)", () => {
           message.startsWith("TAILOR_SETUP_CHECK_DRIFT_COUNT="),
         ),
       ).toBe(false);
+    });
+
+    describe("the cleanup workflow of a preview target", () => {
+      const cleanupPath = () =>
+        path.join(testDir, ".github/workflows/tailor-my-app-preview-cleanup.yml");
+      const generatePreview = () =>
+        setupTarget({
+          kind: "preview",
+          workspaceName: "my-app",
+          region: "us-west",
+          dir: ".",
+          force: false,
+          outputDir: testDir,
+          gitRunner: () => "origin/main",
+          loadConfigName: async () => "my-app",
+          loadConfigId: async () => undefined,
+        });
+
+      test("reports a hand edit to it under the preview target", async () => {
+        await generatePreview();
+        const content = fs.readFileSync(cleanupPath(), "utf-8");
+        fs.writeFileSync(
+          cleanupPath(),
+          content.replace("types: [closed]", "types: [closed, opened]"),
+        );
+        using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+        await expect(
+          checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" }),
+        ).rejects.toThrow(/Detected 1 drift finding\(s\) across 2 workflow\(s\)/);
+        expect(warnSpy.mock.calls.map(([message]) => message)).toEqual([
+          expect.stringMatching(
+            /^\[preview my-app\] .*tailor-my-app-preview-cleanup\.yml.*\(ignore key: hand-edit\)$/,
+          ),
+        ]);
+      });
+
+      test("reports it missing", async () => {
+        await generatePreview();
+        fs.rmSync(cleanupPath());
+        using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+        await expect(
+          checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" }),
+        ).rejects.toThrow(/Detected 1 drift finding/);
+        expect(warnSpy).toHaveBeenCalledWith(
+          "[preview my-app] .github/workflows/tailor-my-app-preview-cleanup.yml is missing or " +
+            "unreadable. Re-run setup to restore it. (ignore key: missing-file)",
+        );
+      });
     });
 
     test("does not require TAILOR_PLATFORM_WORKSPACE_ID in the local shell", async () => {

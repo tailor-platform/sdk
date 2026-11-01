@@ -1,5 +1,6 @@
 import autofixTemplate from "./autofix.workflow.yml";
 import branchTemplate from "./branch.workflow.yml";
+import previewCleanupTemplate from "./preview-cleanup.workflow.yml";
 import previewTemplate from "./preview.workflow.yml";
 import tagTemplate from "./tag.workflow.yml";
 
@@ -201,18 +202,19 @@ export function appSlug(dir: string): string {
 
 const ALL_ZERO_SHA = "0000000000000000000000000000000000000000";
 
-export type WorkflowKind = "branch" | "tag" | "preview";
+export type WorkflowKind = "branch" | "tag" | "preview" | "preview-cleanup";
 
 const WORKFLOW_FILE_SUFFIX: Record<WorkflowKind, string> = {
   branch: "",
   tag: "-tag",
   preview: "-preview",
+  "preview-cleanup": "-preview-cleanup",
 };
 
 /**
- * Path of the workflow a target generates. The kind is part of the name so a branch, tag, and
+ * Path of a workflow a target generates. The kind is part of the name so a branch, tag, and
  * preview workflow can share a workspace name.
- * @param kind - Target kind
+ * @param kind - Workflow kind: a target kind, or `preview-cleanup` for a preview target's cleanup
  * @param workspaceName - Workspace name the workflow is generated for
  * @returns Workflow file path relative to the repository root
  */
@@ -686,11 +688,9 @@ export function renderTagWorkflow(params: RenderTagParams): RenderResult {
 }
 
 /**
- * Render the preview workflow (PR open/sync/close triggers).
- *
- * The deploy job runs on opened/synchronize/reopened events, plus ready_for_review
- * when `ready` is required; the cleanup job runs on the closed event.  Both jobs
- * run in the same workflow so PR number context is always available.
+ * Render the preview workflow (PR open/sync triggers). The deploy job runs on
+ * opened/synchronize/reopened events, plus ready_for_review when `ready` is required;
+ * {@link renderPreviewCleanupWorkflow} deletes the workspace when the PR closes.
  * @param params - Workspace and rendering configuration
  * @returns Rendered YAML and the list of managed job/step ids
  */
@@ -709,7 +709,6 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
     "synchronize",
     "reopened",
     ...(requireReady ? ["ready_for_review"] : []),
-    "closed",
   ];
   out = line(out, "PR_TYPES", `types: [${types.join(", ")}]`);
 
@@ -718,7 +717,6 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
     ...(requireLabel
       ? ["contains(github.event.pull_request.labels.*.name, 'tailor:preview')"]
       : []),
-    "github.event.action != 'closed'",
     ...(requireReady ? ["!github.event.pull_request.draft"] : []),
     "!github.event.pull_request.head.repo.fork",
   ];
@@ -730,15 +728,6 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
   out = line(out, "CHANGES_JOB", patterns ? changesJob(patterns) : undefined);
   out = line(out, "DEPLOY_IF", gateOnChanges(deployIf, patterns));
   out = line(out, "CHANGES_GUARD", changesGuard(patterns));
-
-  // Cleanup always runs on closed regardless of current labels: the label may have been
-  // removed after a preview deploy, and the cleanup action is a no-op when no workspace exists.
-  // Fork PRs also need guarding since cleanup requires secrets/vars.
-  out = line(
-    out,
-    "CLEANUP_IF",
-    `if: |-\n  github.event.action == 'closed' &&\n  !github.event.pull_request.head.repo.fork`,
-  );
 
   out = applyCommon(out, params)
     .replaceAll("__BRANCH__", () => branch)
@@ -756,14 +745,38 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
     "tailor-preview-deploy/tailor-preview-deploy",
     ...seedIds("tailor-preview-deploy", seed),
     "tailor-preview-deploy/tailor-preview-comment",
-    "tailor-preview-cleanup",
-    "tailor-preview-cleanup/tailor-checkout",
-    "tailor-preview-cleanup/tailor-setup",
-    "tailor-preview-cleanup/tailor-install",
-    "tailor-preview-cleanup/tailor-preview-cleanup",
   ];
 
   return appendResultJob({ content: out, generatedIds }, "tailor-preview-result");
+}
+
+export type RenderPreviewCleanupParams = Pick<
+  RenderPreviewParams,
+  "workspaceName" | "branch" | "workingDirectory" | "apps" | "environment" | "packageManager"
+>;
+
+/**
+ * Render the workflow that deletes a pull request's preview workspace when the pull request
+ * closes. It starts on `pull_request_target`, which closing a pull request with merge
+ * conflicts still triggers, unlike the preview workflow's `pull_request`.
+ * @param params - Workspace and rendering configuration
+ * @returns Rendered YAML and the list of managed job/step ids
+ */
+export function renderPreviewCleanupWorkflow(params: RenderPreviewCleanupParams): RenderResult {
+  const content = applyCommon(previewCleanupTemplate, params).replaceAll(
+    "__BRANCH__",
+    () => params.branch,
+  );
+  return {
+    content,
+    generatedIds: [
+      "tailor-preview-cleanup",
+      "tailor-preview-cleanup/tailor-checkout",
+      "tailor-preview-cleanup/tailor-setup",
+      "tailor-preview-cleanup/tailor-install",
+      "tailor-preview-cleanup/tailor-preview-cleanup",
+    ],
+  };
 }
 
 export const AUTOFIX_PROVIDERS = ["github-token", "autofix-ci", "securefix", "github-app"] as const;

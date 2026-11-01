@@ -592,7 +592,32 @@ describe("setupUpdate", () => {
     await setupUpdate({ force: false, outputDir: testDir, ...loaders });
 
     expect(infoSpy).not.toHaveBeenCalledWith("Next steps:");
-    expect(successSpy).toHaveBeenLastCalledWith(expect.stringMatching(/^Updated 4 workflow\(s\)/));
+    expect(successSpy).toHaveBeenLastCalledWith(expect.stringMatching(/^Updated 5 workflow\(s\)/));
+  });
+
+  test("counts the cleanup workflow it adds to a preview target recorded without one", async () => {
+    await generateMonorepo();
+    const lock = readLock(testDir);
+    if (!lock) throw new Error("Expected a lock.");
+    writeLock(testDir, {
+      ...lock,
+      targets: lock.targets.map(({ cleanup: _cleanup, ...target }) => target),
+    });
+    fs.rmSync(path.join(testDir, ".github/workflows/tailor-front-preview-cleanup.yml"));
+    using successSpy = vi.spyOn(logger, "success").mockImplementation(() => {});
+
+    await setupUpdate({ force: false, outputDir: testDir, ...loaders });
+
+    expect(successSpy).toHaveBeenLastCalledWith(expect.stringMatching(/^Updated 5 workflow\(s\)/));
+  });
+
+  test("counts both workflows of a preview target that cannot be updated", async () => {
+    await generateMonorepo();
+    fs.rmSync(path.join(testDir, "apps/front/tailor.config.ts"));
+
+    await expect(setupUpdate({ force: false, outputDir: testDir, ...loaders })).rejects.toThrow(
+      /^3 workflow\(s\) could not be updated \(2 of 5 updated\)/,
+    );
   });
 
   test("errors when there is nothing to update", async () => {
@@ -642,7 +667,7 @@ describe("setupUpdate", () => {
     fs.rmSync(path.join(testDir, "apps/api/tailor.config.ts"));
 
     await expect(setupUpdate({ force: false, outputDir: testDir, ...loaders })).rejects.toThrow(
-      /2 workflow\(s\) could not be updated \(3 of 5 updated\)[\s\S]*\[autofix\] tailor\.config\.ts not found/,
+      /2 workflow\(s\) could not be updated \(4 of 6 updated\)[\s\S]*\[autofix\] tailor\.config\.ts not found/,
     );
   });
 });

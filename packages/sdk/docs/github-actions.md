@@ -259,6 +259,34 @@ that workspace when the pull request is closed:
 tailor setup ci preview --name my-app --region asia-northeast
 ```
 
+It writes two workflows. `tailor-my-app-preview.yml` deploys the pull request
+when it is opened or pushed to, and `tailor-my-app-preview-cleanup.yml` deletes
+the workspace when the pull request is closed. The cleanup workflow starts on
+`pull_request_target`, which GitHub also triggers for a pull request with merge
+conflicts, where workflows on `pull_request` do not start. A
+`pull_request_target` workflow can read the repository's secrets whoever opened
+the pull request, so GitHub runs it from the default branch: the workflow file
+and the code it checks out are the default branch's, never the pull request's.
+Therefore:
+
+- The cleanup workflow runs only once it is on the default branch, and it
+  installs dependencies and runs `tailor` from the default branch's checkout.
+  If the preview target deploys pull requests into another branch
+  (`--branch`), commit the cleanup workflow, the lockfile, and the app's
+  `tailor.config.ts` to the default branch too.
+- If the target's GitHub Environment restricts which branches can deploy,
+  allow the default branch: GitHub checks the cleanup job against it, and the
+  deploy job against the pull request's merge ref.
+
+When `tailor setup update` regenerates a preview workflow generated before the
+cleanup workflow existed, it moves the `tailor-preview-cleanup` job into the
+cleanup workflow, together with the steps and settings you added to it, and
+copies the top-level `env` and `defaults` of the preview workflow into the
+cleanup workflow. Your steps then run from the default branch as described
+above. A job of yours in the preview workflow that runs when the pull request
+is closed no longer runs, because that workflow no longer starts then; move it
+into the cleanup workflow.
+
 Fork pull requests are skipped. Every other pull request gets a preview, draft
 pull requests included. `--require` narrows that to one of:
 
@@ -437,9 +465,9 @@ Everything else is yours, and re-running `setup` keeps it:
   (such as `playwright install`) _after_ it. A job of your own can depend on a
   managed job with `needs: tailor-deploy`.
 - **Your own top-level keys**, such as a workflow-level `env:` or `defaults:`.
-- **The top-level `concurrency:` of a preview workflow.** The SDK writes a
-  default, and re-running `setup` keeps your edits to it. If you delete it,
-  re-running `setup` adds the default back.
+- **The top-level `concurrency:` of the preview and cleanup workflows.** The
+  SDK writes a default, and re-running `setup` keeps your edits to it. If you
+  delete it, re-running `setup` adds the default back.
 - **Runtime settings of managed jobs:** `runs-on`, `timeout-minutes`,
   `container`, and `env`. If every managed job that re-running `setup` keeps
   uses the same `runs-on` you set, such as self-hosted runners, a managed job
@@ -481,9 +509,9 @@ A job that runs `tailor` against the workspace needs the machine-user
 (the `--environment` value, or the workspace name when omitted) as above. A job
 that only uses `app-url`, such as end-to-end tests, does not.
 
-The job is skipped whenever `tailor-preview-deploy` is skipped: when a pull
-request is closed, for fork pull requests, for draft pull requests with
-`--require ready`, and for unlabeled ones with `--require label`.
+The job is skipped whenever `tailor-preview-deploy` is skipped: for fork pull
+requests, for draft pull requests with `--require ready`, and for unlabeled
+ones with `--require label`.
 
 A preview workspace expires 7 days (`ttl: 7d` on `tailor-preview-deploy`) after
 the last push to its pull request. When a pull request is closed,
@@ -496,13 +524,29 @@ open; the next push creates a fresh one. Change `ttl` to keep previews longer or
 shorter. Workflows generated before this was added get these settings the next
 time you run `tailor setup update`.
 
-Each new preview workflow run for a pull request, such as after a push or when
-the pull request is closed, cancels the run still in progress for it, including
-your jobs, so they do not keep running against a workspace that the new run
-may redeploy or delete. Events on a pull request that stays closed, such as a
-label added after merging, do not cancel anything. A job with `if: always()`
-still runs when its run is cancelled, and the new run waits for it to finish;
-use `if: ${{ !cancelled() }}` instead so it stops with the run.
+A preview workspace created before then records no expiry, so this sweep never
+deletes it. To find such leftovers, list the preview workspaces created more than
+7 days ago:
+
+```bash
+tailor workspace prune --name 'my-app-pr-[0-9]+' --older-than 7d \
+  --folder-id <folder id> --limit 0 --dry-run
+```
+
+Pass `--organization-root <organization id>` instead of `--folder-id` when
+`TAILOR_PLATFORM_FOLDER_ID` is unset. The list can include the previews of pull
+requests that are still open: keep each of them with
+`--exclude my-app-pr-<number>`, then run the command again without `--dry-run`.
+
+Each new preview workflow run for a pull request, such as after a push, cancels
+the run still in progress for it, including your jobs, so they do not keep
+running against a workspace that the new run may redeploy. Closing the pull
+request cancels it too, because the cleanup workflow runs in the same
+concurrency group; if you change the group in one of the two workflows, change
+it in the other. Events on a pull request that stays closed, such as a label
+added after merging, do not cancel anything. A job with `if: always()` still
+runs when its run is cancelled, and the new run waits for it to finish; use
+`if: ${{ !cancelled() }}` instead so it stops with the run.
 
 Likewise, the `tailor-deploy` job of a branch or tag workflow exposes the
 deployed workspace as the outputs `workspace-id` and `app-url` to a job with
@@ -528,7 +572,9 @@ job back. To start over from a clean template, delete the file and re-run
 When a template update removes a managed job that contains steps of yours, or
 a job of yours `needs` a removed job, `setup` stops and names them. Move those
 steps into a job of your own (or update the `needs`) and re-run. `--force` drops
-steps left inside a removed job.
+steps left inside a removed job. The `tailor-preview-cleanup` job, which moved
+into its own workflow, keeps your steps instead (see
+[Preview target](#preview-target-per-pull-request-workspace)).
 
 `setup check` reports a job or step of yours whose `id` starts with `tailor-`,
 and re-running `setup` stops on it, naming the id. Rename it; `--force` does
@@ -562,7 +608,6 @@ tailor-preview-result:
   name: tailor-preview-result (my-app)
   needs:
     - tailor-preview-deploy
-    - tailor-preview-cleanup
     - seed
     - e2e
 ```

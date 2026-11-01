@@ -87,6 +87,8 @@ export type TargetState = FileState & {
   seedProblem?: string;
   /** Current state of each app of a multi-directory target, in the order the lock records them. */
   apps?: AppState[];
+  /** Current state of the cleanup workflow, for a preview target that records one. */
+  cleanup?: FileState;
 };
 
 /** Current repository state for the autofix workflow, gathered by the caller. */
@@ -222,6 +224,14 @@ function findFileDrift(id: string, workflow: ManagedWorkflow, state: FileState):
 export function findTargetDrift(target: LockTarget, state: TargetState): DriftFinding[] {
   const id = `${target.kind} ${target.workspaceName}`;
   const findings = findFileDrift(id, target, state);
+  if (target.cleanup && state.cleanup) {
+    // Setup writes both workflows together, so one template-version finding covers them.
+    findings.push(
+      ...findFileDrift(id, target.cleanup, state.cleanup).filter(
+        (finding) => finding.rule !== "template-version",
+      ),
+    );
+  }
 
   if (state.apps) {
     findings.push(...findAppDrift(id, target, state.apps));
@@ -559,6 +569,7 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
         hasSeeds,
         seedProblem,
         apps,
+        cleanup: target.cleanup ? fileStateOf(outputDir, target.cleanup) : undefined,
       }),
     );
   }

@@ -18,6 +18,7 @@ import {
   findTarget,
   LOCK_VERSION,
   readLock,
+  targetWorkflows,
   writeLock,
   type LockFile,
   type LockInputs,
@@ -36,6 +37,7 @@ import {
   isManagedHash,
   ManagedMergeError,
   mergeUserContent,
+  moveJob,
 } from "./managed";
 import {
   defaultLoadSeedSettings,
@@ -47,6 +49,7 @@ import {
   appSlug,
   isPackageManager,
   renderBranchWorkflow,
+  renderPreviewCleanupWorkflow,
   renderPreviewWorkflow,
   renderTagWorkflow,
   TEMPLATE_VERSION,
@@ -413,6 +416,8 @@ type Resolved = {
   render: RenderResult;
   inputs: LockInputs;
   file: string;
+  /** For `preview` kind: the workflow that deletes the workspace of a closed pull request. */
+  cleanup?: { file: string; render: RenderResult };
   configPaths: string[];
 };
 
@@ -659,6 +664,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
   let branch: string | null = null;
   let branchAutoDetected = false;
   let render: RenderResult;
+  let cleanup: Resolved["cleanup"];
   let erdNamespaces: string[] = [];
   let hasMigrations = false;
   let hasSeeds = false;
@@ -781,6 +787,17 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       require: options.require,
       seed: options.seed,
     });
+    cleanup = {
+      file: workflowFilePath("preview-cleanup", workspaceName),
+      render: renderPreviewCleanupWorkflow({
+        workspaceName,
+        branch,
+        workingDirectory,
+        apps,
+        environment,
+        packageManager,
+      }),
+    };
   }
 
   const file = workflowFilePath(kind, workspaceName);
@@ -823,6 +840,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     render,
     inputs,
     file,
+    cleanup,
     configPaths,
   };
 }
@@ -913,24 +931,31 @@ export function reconcileContent(obj: {
   if (decision.action !== "regenerate" || !existing || currentContent === null) {
     return { content: render.content, contentHash, managedHashes };
   }
-  try {
-    const merged = mergeUserContent({
+  const merged = mergeInFile(file, () =>
+    mergeUserContent({
       current: currentContent,
       rendered: render.content,
       previousIds: existing.generatedIds,
       renderedIds: render.generatedIds,
       force: decision.force,
-    });
-    if (merged.dropped.length > 0) {
-      logger.warn(
-        `${file}: dropped your steps ${merged.dropped.join(", ")} because the SDK no longer ` +
-          "generates the job that contained them.",
-      );
-    }
-    return { content: merged.content, contentHash, managedHashes };
+    }),
+  );
+  if (merged.dropped.length > 0) {
+    logger.warn(
+      `${file}: dropped your steps ${merged.dropped.join(", ")} because the SDK no longer ` +
+        "generates the job that contained them.",
+    );
+  }
+  return { content: merged.content, contentHash, managedHashes };
+}
+
+function mergeInFile<T>(file: string, merge: () => T): T {
+  try {
+    return merge();
   } catch (error) {
-    if (error instanceof ManagedMergeError)
+    if (error instanceof ManagedMergeError) {
       throw new Error(`${file}: ${error.message}`, { cause: error });
+    }
     throw error;
   }
 }
@@ -941,27 +966,31 @@ export function reconcileContent(obj: {
  * @param obj.lock - Existing lock file, or null
  * @param obj.kind - Target kind being generated
  * @param obj.workspaceName - Workspace name being generated
- * @param obj.file - Target file path
+ * @param obj.files - File paths the target generates
  */
 function assertNoKindCollision(obj: {
   lock: LockFile | null;
   kind: TargetKind;
   workspaceName: string;
-  file: string;
+  files: readonly string[];
 }): void {
-  const { lock, kind, workspaceName, file } = obj;
-  const collision = lock?.targets.find(
-    (t) => t.file === file && !(t.kind === kind && t.workspaceName === workspaceName),
-  );
-  if (collision) {
-    throw new Error(
-      `A ${collision.kind} target already owns ${file}, which conflicts with this ${kind} target. ` +
-        "Pass a different name with --name to generate a separate workflow.",
-    );
+  const { lock, kind, workspaceName, files } = obj;
+  for (const target of lock?.targets ?? []) {
+    if (target.kind === kind && target.workspaceName === workspaceName) continue;
+    const file = targetWorkflows(target)
+      .map((workflow) => workflow.file)
+      .find((owned) => files.includes(owned));
+    if (file !== undefined) {
+      throw new Error(
+        `A ${target.kind} target already owns ${file}, which conflicts with this ${kind} target. ` +
+          "Pass a different name with --name to generate a separate workflow.",
+      );
+    }
   }
-  if (lock?.autofix?.file === file) {
+  const autofixFile = lock?.autofix?.file;
+  if (autofixFile !== undefined && files.includes(autofixFile)) {
     throw new Error(
-      `The autofix workflow already owns ${file}, which conflicts with this ${kind} target. ` +
+      `The autofix workflow already owns ${autofixFile}, which conflicts with this ${kind} target. ` +
         "Pass a different name with --name to generate a separate workflow.",
     );
   }
@@ -1030,6 +1059,93 @@ export function printTargetNextSteps(result: SetupTargetResult): void {
   }
 }
 
+type PlannedFile = {
+  file: string;
+  existing: ManagedWorkflow | undefined;
+  currentContent: string | null;
+  decision: Decision;
+  render: RenderResult;
+  /** The workflow a job of this file moved out of, when it did. */
+  movedFrom?: string;
+};
+
+const PREVIEW_CLEANUP_JOB = "tailor-preview-cleanup";
+
+/**
+ * Plan a preview target whose preview workflow still holds the cleanup job, as generated before
+ * that job moved into its own workflow: the job moves into the cleanup workflow, so the steps
+ * and settings of yours in it go along instead of being dropped.
+ * @param obj - Plans to adjust
+ * @param obj.existing - The preview target's lock entry, if any
+ * @param obj.main - Plan of the preview workflow
+ * @param obj.cleanup - Plan of the cleanup workflow
+ * @param obj.force - Whether --force was passed
+ * @returns The plans to reconcile
+ */
+function withMovedCleanupJob(obj: {
+  existing: LockTarget | undefined;
+  main: PlannedFile;
+  cleanup: PlannedFile;
+  force: boolean;
+}): { main: PlannedFile; cleanup: PlannedFile } {
+  const { existing, main, cleanup, force } = obj;
+  if (
+    !existing ||
+    existing.cleanup ||
+    !existing.generatedIds.includes(PREVIEW_CLEANUP_JOB) ||
+    main.decision.action !== "regenerate" ||
+    main.currentContent === null
+  ) {
+    return { main, cleanup };
+  }
+  const from = main.currentContent;
+  const moved = mergeInFile(main.file, () =>
+    moveJob({
+      from,
+      into: cleanup.render.content,
+      jobId: PREVIEW_CLEANUP_JOB,
+      topLevelKeys: ["env", "defaults"],
+    }),
+  );
+  if (!moved) return { main, cleanup };
+  const movedIds = existing.generatedIds.filter(
+    (id) => id === PREVIEW_CLEANUP_JOB || id.startsWith(`${PREVIEW_CLEANUP_JOB}/`),
+  );
+  return {
+    main: { ...main, currentContent: moved.from },
+    cleanup: {
+      ...cleanup,
+      existing: {
+        file: cleanup.file,
+        templateVersion: existing.templateVersion,
+        generatedIds: movedIds,
+        contentHash: computeManagedHash(moved.into, movedIds),
+      },
+      currentContent: moved.into,
+      decision: { action: "regenerate", force },
+      movedFrom: main.file,
+    },
+  };
+}
+
+function planFile(obj: {
+  outputDir: string;
+  file: string;
+  existing: ManagedWorkflow | undefined;
+  render: RenderResult;
+  force: boolean;
+}): PlannedFile {
+  const { file, existing, render, force } = obj;
+  const absFile = path.join(obj.outputDir, file);
+  const fileExists = fs.existsSync(absFile);
+  const currentContent = fileExists ? fs.readFileSync(absFile, "utf-8") : null;
+  const decision = decideAction({ existing, fileExists, currentContent, force });
+  if (decision.action === "conflict") {
+    throw new Error(`${file}: ${decision.reason}`);
+  }
+  return { file, existing, currentContent, decision, render };
+}
+
 /**
  * Generate a deploy target workflow and reconcile it with the lock file.
  * @param options - Setup options
@@ -1039,13 +1155,12 @@ export async function setupTarget(options: SetupTargetOptions): Promise<SetupTar
   const resolved = await resolve(options);
 
   const lock = readLock(options.outputDir);
-  const absFile = path.join(options.outputDir, resolved.file);
 
   assertNoKindCollision({
     lock,
     kind: resolved.kind,
     workspaceName: resolved.workspaceName,
-    file: resolved.file,
+    files: resolved.cleanup ? [resolved.file, resolved.cleanup.file] : [resolved.file],
   });
 
   const existing = findTarget(lock, resolved.kind, resolved.workspaceName);
@@ -1056,13 +1171,24 @@ export async function setupTarget(options: SetupTargetOptions): Promise<SetupTar
       existing: existing !== undefined,
     });
   }
-  const fileExists = fs.existsSync(absFile);
-  const currentContent = fileExists ? fs.readFileSync(absFile, "utf-8") : null;
-
-  const decision = decideAction({ existing, fileExists, currentContent, force: options.force });
-
-  if (decision.action === "conflict") {
-    throw new Error(`${resolved.file}: ${decision.reason}`);
+  const { outputDir, force } = options;
+  let mainPlan = planFile({
+    outputDir,
+    file: resolved.file,
+    existing,
+    render: resolved.render,
+    force,
+  });
+  let cleanupPlan =
+    resolved.cleanup &&
+    planFile({ outputDir, ...resolved.cleanup, existing: existing?.cleanup, force });
+  if (cleanupPlan) {
+    ({ main: mainPlan, cleanup: cleanupPlan } = withMovedCleanupJob({
+      existing,
+      main: mainPlan,
+      cleanup: cleanupPlan,
+      force,
+    }));
   }
 
   // deploy resolves the app id against the nearest lock above the config, so
@@ -1096,16 +1222,14 @@ export async function setupTarget(options: SetupTargetOptions): Promise<SetupTar
     mode: "write",
   });
 
-  const { content, contentHash, managedHashes } = reconcileContent({
-    file: resolved.file,
-    decision,
-    existing,
-    currentContent,
-    render: resolved.render,
-  });
-
-  fs.mkdirSync(path.dirname(absFile), { recursive: true });
-  fs.writeFileSync(absFile, content, "utf-8");
+  const main = { ...mainPlan, ...reconcileContent(mainPlan) };
+  const cleanup = cleanupPlan && { ...cleanupPlan, ...reconcileContent(cleanupPlan) };
+  const written = cleanup ? [main, cleanup] : [main];
+  for (const { file, content } of written) {
+    const absFile = path.join(outputDir, file);
+    fs.mkdirSync(path.dirname(absFile), { recursive: true });
+    fs.writeFileSync(absFile, content, "utf-8");
+  }
 
   const newTarget: LockTarget = {
     kind: resolved.kind,
@@ -1113,9 +1237,18 @@ export async function setupTarget(options: SetupTargetOptions): Promise<SetupTar
     file: resolved.file,
     templateVersion: TEMPLATE_VERSION,
     inputs: resolved.inputs,
-    generatedIds: resolved.render.generatedIds,
-    contentHash,
-    managedHashes,
+    generatedIds: main.render.generatedIds,
+    contentHash: main.contentHash,
+    managedHashes: main.managedHashes,
+    ...(cleanup && {
+      cleanup: {
+        file: cleanup.file,
+        templateVersion: TEMPLATE_VERSION,
+        generatedIds: cleanup.render.generatedIds,
+        contentHash: cleanup.contentHash,
+        managedHashes: cleanup.managedHashes,
+      },
+    }),
   };
 
   // Replace in place to keep the lock diff minimal when re-running setup for
@@ -1137,7 +1270,15 @@ export async function setupTarget(options: SetupTargetOptions): Promise<SetupTar
   });
   const { configEdited } = await removeAdoptedConfigIds(appIdPlan);
 
-  logWritten(decision, resolved.file);
+  for (const { decision, file, movedFrom } of written) {
+    if (movedFrom === undefined) {
+      logWritten(decision, file);
+    } else {
+      logger.success(
+        `Generated ${styles.path(file)} with the ${PREVIEW_CLEANUP_JOB} job moved from ${styles.path(movedFrom)}`,
+      );
+    }
+  }
 
   return {
     kind: resolved.kind,

@@ -61,6 +61,37 @@ describe("setupDelete", () => {
     expect(readLock(testDir)?.targets).toHaveLength(0);
   });
 
+  test.each([
+    ".github/workflows/tailor-my-app-preview.yml",
+    ".github/workflows/tailor-my-app-preview-cleanup.yml",
+  ])("deletes both workflows of a preview target given %s", async (file) => {
+    await setupTarget({
+      kind: "preview",
+      workspaceName: "my-app",
+      region: "us-west",
+      dir: ".",
+      force: false,
+      outputDir: testDir,
+      gitRunner: () => "origin/main",
+      loadConfigName: async () => "my-app",
+      loadConfigId: async () => undefined,
+    });
+    const files = [
+      ".github/workflows/tailor-my-app-preview.yml",
+      ".github/workflows/tailor-my-app-preview-cleanup.yml",
+    ];
+    expect(files.map((f) => fs.existsSync(path.join(testDir, f)))).toEqual([true, true]);
+    vi.mocked(prompt.confirm).mockResolvedValue(true);
+
+    await setupDelete({ files: [file], yes: false, outputDir: testDir });
+
+    expect(vi.mocked(prompt.confirm).mock.calls[0]?.[0].message).toContain(
+      `\n  ${files.join("\n  ")}\n`,
+    );
+    expect(files.map((f) => fs.existsSync(path.join(testDir, f)))).toEqual([false, false]);
+    expect(readLock(testDir)?.targets).toHaveLength(0);
+  });
+
   test("keeps the appIds section when a target is deleted", async () => {
     await setupTarget(branchOpts("my-app"));
     const appIds = readLock(testDir)?.appIds;

@@ -665,6 +665,61 @@ export function mergeUserContent(params: {
 }
 
 /**
+ * Move a job from one workflow into another: it leaves `from` and replaces the job of the same
+ * id in `into`, which also takes the given top-level keys of `from` that the job ran under.
+ * Aliases are resolved, since their anchors stay in `from`.
+ * @param params - Move inputs
+ * @param params.from - Content of the workflow the job leaves
+ * @param params.into - Content of the workflow the job moves into
+ * @param params.jobId - Id of the job
+ * @param params.topLevelKeys - Top-level keys of `from` that `into` takes too
+ * @returns Both contents after the move, or undefined when `from` has no such job
+ */
+export function moveJob(params: {
+  from: string;
+  into: string;
+  jobId: string;
+  topLevelKeys: readonly string[];
+}): { from: string; into: string } | undefined {
+  const { jobId } = params;
+  const fromDoc = parse(params.from, "The file");
+  const intoDoc = parse(params.into, "The rendered template");
+  const fromRoot = fromDoc.contents;
+  const intoRoot = intoDoc.contents;
+  if (!isMap(fromRoot) || !isMap(intoRoot)) {
+    throw new ManagedMergeError("The file is not a YAML mapping.");
+  }
+  const fromJobs = mapAt(fromRoot, "jobs");
+  if (!fromJobs?.has(jobId)) return undefined;
+  const fromPlain = toPlain(fromDoc, "The file");
+  const job = plainJob(fromPlain, jobId);
+  if (!job) {
+    throw new ManagedMergeError(`The job "${jobId}" is not a mapping, so it cannot be moved.`);
+  }
+  const intoJobs = mapAt(intoRoot, "jobs");
+  if (!intoJobs?.has(jobId)) {
+    throw new Error(`The rendered template has no job "${jobId}" to move into.`);
+  }
+  const createOptions = { aliasDuplicateObjects: false };
+  intoJobs.set(jobId, intoDoc.createNode(job, createOptions));
+  const carried = params.topLevelKeys.flatMap((key) =>
+    isPlainObject(fromPlain) && Object.hasOwn(fromPlain, key)
+      ? [intoDoc.createPair(key, fromPlain[key], createOptions)]
+      : [],
+  );
+  intoRoot.items.splice(
+    intoRoot.items.findIndex((pair) => keyOf(pair) === "jobs"),
+    0,
+    ...carried,
+  );
+  fromJobs.delete(jobId);
+  return {
+    from: fromDoc.toString(STRINGIFY_OPTIONS),
+    into: intoDoc.toString(STRINGIFY_OPTIONS),
+  };
+}
+
+/**
  * Hash on-disk content in the same scheme as the target's recorded hash.
  * @param target - Lock target
  * @param content - File content on disk

@@ -15,6 +15,7 @@ import {
 } from "./managed";
 import {
   renderBranchWorkflow,
+  renderPreviewCleanupWorkflow,
   renderPreviewWorkflow,
   renderTagWorkflow,
   type RenderBranchParams,
@@ -73,6 +74,15 @@ const variants: Array<[string, RenderResult]> = [
       packageManager: "pnpm",
       region: "us-west",
       require: "label",
+    }),
+  ],
+  [
+    "preview cleanup",
+    renderPreviewCleanupWorkflow({
+      workspaceName: "my-app",
+      branch: "main",
+      environment: "my-app",
+      packageManager: "pnpm",
     }),
   ],
 ];
@@ -530,12 +540,12 @@ describe("mergeUserContent", () => {
       return { hashed: keys.filter(isHashed), unhashed: keys.filter((key) => !isHashed(key)) };
     };
 
-    test("is only the preview workflow's concurrency", () => {
+    test("is only the concurrency of the preview workflows", () => {
       const unhashed = variants.flatMap(([name, render]) =>
         topLevelKeys(render).unhashed.map((key) => `${name}: ${key}`),
       );
 
-      expect(unhashed).toEqual(["preview: concurrency"]);
+      expect(unhashed).toEqual(["preview: concurrency", "preview cleanup: concurrency"]);
     });
 
     test.each(variants)("leaves the %s header naming exactly the hashed ones", (_name, render) => {
@@ -915,7 +925,7 @@ describe("needs of the result job", () => {
     });
     const edited = withUserJob(
       preview.content,
-      "needs:\n      - tailor-preview-deploy\n      - tailor-preview-cleanup\n      - e2e\n",
+      "needs:\n      - tailor-preview-deploy\n      - e2e\n",
       "tailor-preview-result",
     );
     expect(computeManagedHash(edited, preview.generatedIds)).toBe(
@@ -1066,7 +1076,7 @@ describe("runs-on of a managed job the merge adds", () => {
         ["tailor-preview-deploy"],
         "runs-on: &runner [self-hosted, linux]",
       ),
-      ["tailor-preview-cleanup", "tailor-preview-result"],
+      ["tailor-preview-result"],
       "runs-on: *runner",
     );
     const content = merge(edited, preview, previewWithDir);

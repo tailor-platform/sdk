@@ -4,6 +4,7 @@ import {
   PACKAGE_MANAGERS,
   renderAutofixWorkflow,
   renderBranchWorkflow,
+  renderPreviewCleanupWorkflow,
   renderPreviewWorkflow,
   renderTagWorkflow,
 } from "./templates";
@@ -36,6 +37,10 @@ function renderAll(): RenderedTemplate[] {
     add(
       `preview/${packageManager}`,
       renderPreviewWorkflow({ ...base, branch: "main", region: "us-west" }),
+    );
+    add(
+      `preview-cleanup/${packageManager}`,
+      renderPreviewCleanupWorkflow({ ...base, branch: "main" }),
     );
   }
 
@@ -124,6 +129,7 @@ function renderAll(): RenderedTemplate[] {
     "preview/require-ready",
     renderPreviewWorkflow({ ...full, branch: "main", region: "us-west", require: "ready" }),
   );
+  add("preview-cleanup/full", renderPreviewCleanupWorkflow({ ...full, branch: "main" }));
   const apps = [
     { dir: "apps/erp/backend", seedValidate: true, migrationDriftCheck: true },
     { dir: "apps/users/backend" },
@@ -165,6 +171,10 @@ function renderAll(): RenderedTemplate[] {
       apps,
       extraPaths,
     }),
+  );
+  add(
+    "preview-cleanup/multi-dir",
+    renderPreviewCleanupWorkflow({ ...COMMON, packageManager: "pnpm", branch: "main", apps }),
   );
   const autofixBase = { dirs: ["."], packageManager: "pnpm" } as const;
   for (const provider of AUTOFIX_PROVIDERS) {

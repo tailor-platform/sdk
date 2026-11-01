@@ -5,6 +5,7 @@ import {
   AUTOFIX_LABEL,
   managedWorkflows,
   readManagedLock,
+  targetWorkflows,
   type LockAutofix,
   type LockInputs,
   type LockTarget,
@@ -150,34 +151,38 @@ export async function setupUpdate(options: UpdateOptions): Promise<void> {
   const { force, outputDir, ...loaders } = options;
   const lock = readManagedLock(outputDir);
 
-  const failures: string[] = [];
+  const failures: { message: string; workflows: number }[] = [];
   for (const target of lock.targets) {
     const label = `[${target.kind} ${target.workspaceName}]`;
     try {
       await setupTarget({ ...planUpdate(target, { force, outputDir }), ...loaders });
     } catch (error) {
-      failures.push(`${label} ${failureSummary(error)}`);
+      failures.push({
+        message: `${label} ${failureSummary(error)}`,
+        workflows: targetWorkflows(target).length,
+      });
     }
   }
   if (lock.autofix) {
     try {
       await setupAutofix(planAutofixUpdate(lock.autofix, { force, outputDir }));
     } catch (error) {
-      failures.push(`[${AUTOFIX_LABEL}] ${failureSummary(error)}`);
+      failures.push({ message: `[${AUTOFIX_LABEL}] ${failureSummary(error)}`, workflows: 1 });
     }
   }
 
-  const total = managedWorkflows(lock).length;
-  const updated = total - failures.length;
+  const total = managedWorkflows(readManagedLock(outputDir)).length;
+  const failed = failures.reduce((sum, failure) => sum + failure.workflows, 0);
+  const updated = total - failed;
   if (failures.length === 0) {
     logger.newline();
     logger.success(`Updated ${String(updated)} workflow(s). Review and commit the changes.`);
     return;
   }
   throw new Error(
-    `${String(failures.length)} workflow(s) could not be updated ` +
+    `${String(failed)} workflow(s) could not be updated ` +
       `(${String(updated)} of ${String(total)} updated):\n` +
-      failures.map((failure) => `  ${failure.replaceAll("\n", "\n    ")}`).join("\n") +
+      failures.map(({ message }) => `  ${message.replaceAll("\n", "\n    ")}`).join("\n") +
       "\nAddress each one above, then re-run `tailor setup update`.",
   );
 }
