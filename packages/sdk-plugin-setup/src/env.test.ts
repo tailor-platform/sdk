@@ -1,5 +1,6 @@
 import { logger } from "@tailor-platform/sdk/cli";
 import { describe, expect, test, vi } from "vitest";
+import { isMap, parseDocument } from "yaml";
 import {
   autofixRequirements,
   collectEnvironmentRequirements,
@@ -11,13 +12,11 @@ import {
 } from "./env";
 import { LOCK_VERSION, type LockFile, type LockTarget, type TargetKind, writeLock } from "./lock";
 import {
-  AUTOFIX_PROVIDERS,
-  renderBranchWorkflow,
-  renderPreviewCleanupWorkflow,
-  renderPreviewWorkflow,
-  renderTagWorkflow,
-  type AutofixProvider,
-} from "./templates";
+  RENDERED_ENVIRONMENT,
+  renderedTemplates,
+  type WorkflowTemplate,
+} from "./template-fingerprint";
+import { AUTOFIX_PROVIDERS, renderBranchWorkflow, type AutofixProvider } from "./templates";
 import { autofixLockEntry, renderAutofixFor } from "./test-helpers/autofix";
 import { envTarget as target } from "./test-helpers/env-target";
 import { tempDir } from "./test-helpers/temp-dir";
@@ -53,58 +52,48 @@ function fallbackSecretNames(content: string): string[] {
 }
 
 describe("targetRequirements matches the secrets/vars the rendered templates reference", () => {
-  const common = {
-    workspaceName: "my-app",
-    environment: "my-app",
-    packageManager: "pnpm" as const,
+  const kinds: Record<WorkflowTemplate, TargetKind | null> = {
+    branch: "branch",
+    tag: "tag",
+    preview: "preview",
+    "preview-cleanup": "preview",
+    autofix: null,
   };
-  const renders = [
-    [
-      "branch",
-      renderBranchWorkflow({ ...common, branch: "main", erdPreview: null, seed: { datasets: [] } }),
-    ],
-    [
-      "branch",
-      renderBranchWorkflow({
-        ...common,
-        branch: "main",
-        erdPreview: { namespaces: ["tailordb"] },
-        seedValidate: true,
-        migrationDriftCheck: true,
-        seed: { datasets: [] },
-      }),
-    ],
-    ["tag", renderTagWorkflow({ ...common, tagPattern: "v*", seed: { datasets: [] } })],
-    [
-      "tag",
-      renderTagWorkflow({ ...common, tagPattern: "v*", branch: "main", seed: { datasets: [] } }),
-    ],
-    [
-      "preview",
-      {
-        content: [
-          renderPreviewWorkflow({
-            ...common,
-            branch: "main",
-            region: "us-west",
-            seed: { datasets: [] },
-          }).content,
-          renderPreviewCleanupWorkflow({ ...common, branch: "main" }).content,
-        ].join("\n"),
-      },
-    ],
-  ] as const;
-
-  test.each(renders)("%s", (kind, render) => {
-    expect(referencedNames(render.content)).toEqual(namesOf(kind));
+  const renders = renderedTemplates().flatMap((rendered) => {
+    const kind = kinds[rendered.template];
+    return kind === null ? [] : [{ ...rendered, kind }];
   });
 
+  // A job in another environment, such as a dedicated migration test's, reads that environment's.
+  function namesInTargetEnvironment(content: string): string[] {
+    const doc = parseDocument(content);
+    const jobs = doc.get("jobs");
+    if (!isMap(jobs)) throw new Error("expected a jobs mapping");
+    jobs.items = jobs.items.filter((pair) => {
+      const environment = isMap(pair.value) ? pair.value.get("environment") : undefined;
+      return environment === undefined || environment === RENDERED_ENVIRONMENT;
+    });
+    return referencedNames(doc.toString({ lineWidth: 0 }));
+  }
+
+  test.each(renders)("$name reads only what its target kind lists", ({ kind, content }) => {
+    expect(namesOf(kind)).toEqual(expect.arrayContaining(namesInTargetEnvironment(content)));
+  });
+
+  test.each(["branch", "tag", "preview"] as const)(
+    "the %s workflows together read everything its target kind lists",
+    (kind) => {
+      const read = renders
+        .filter((rendered) => rendered.kind === kind)
+        .flatMap(({ content }) => namesInTargetEnvironment(content));
+      expect([...new Set(read)].toSorted()).toEqual(namesOf(kind));
+    },
+  );
+
   test.each(renders)(
-    "%s falls back to a same-name secret only for the listed variables",
-    (_, render) => {
-      expect(fallbackSecretNames(render.content)).toEqual(
-        [...SECRET_FALLBACK_VARIABLES].toSorted(),
-      );
+    "$name falls back to a same-name secret only for the listed variables",
+    ({ content }) => {
+      expect(fallbackSecretNames(content)).toEqual([...SECRET_FALLBACK_VARIABLES].toSorted());
     },
   );
 });
