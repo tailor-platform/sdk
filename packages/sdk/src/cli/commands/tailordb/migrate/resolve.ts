@@ -361,7 +361,7 @@ export const resolveCommand = defineAppCommand({
   name: "resolve",
   description:
     "Settle a migration that a failed deploy left partially applied, or whose run a deploy could not confirm.",
-  notes: `Use this after a deploy failed partway through a migration whose \`migrate.ts\` exports \`steps\`, or after a deploy could not confirm whether the script of a migration ran (\`MIGRATION_OUTCOME_UNKNOWN\`). The migration stays in progress: when \`maintenanceMode\` is on in your config, the tables of its namespace stay in maintenance mode, and \`set\`, \`sync\`, and \`rebaseline\` are refused. A deploy stops before changing anything while a run it could not confirm is not settled.
+  notes: `Use this after a deploy failed partway through a migration whose \`migrate.ts\` exports \`steps\`, or after a deploy could not confirm whether the script of a migration ran (\`MIGRATION_OUTCOME_UNKNOWN\`). The migration stays in progress: when \`maintenanceMode\` is on in your config, the tables of its namespace stay in maintenance mode, and the other migration commands that move the checkpoint are refused. A deploy stops before changing anything while a run it could not confirm is not settled.
 
 - \`--rollback\` sends the schema of the migration before the failed one. The next deploy runs the failed migration again, from its first step for a script that exports \`steps\`. Data changes the script already made are not undone.
 - \`--complete\` sends the schema of the failed migration itself and records it as completed, without running its \`migrate.ts\` again. Fix the data first (for example with \`tailor query\`), and make sure no record lacks a value for a field that becomes required.
