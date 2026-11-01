@@ -58,7 +58,7 @@ pnpm test:e2e        # Run E2E tests (requires deployed workspace)
 [Lefthook](https://lefthook.dev/) runs on every commit (see [`lefthook.yml`](../lefthook.yml)):
 
 1. **Format** — Check staged files with oxfmt
-2. **Build & Generate** — Rebuild the SDK and run code generation
+2. **Build & Generate** — Rebuild the packages that `example/` and the create-sdk templates depend on, then run code generation
 3. **Lint** — Run standard and Vitest-specific oxlint passes, plus create-sdk template lint
 4. **Typecheck** — Run tsrs
 5. **Knip** — Detect unused dependencies and exports
