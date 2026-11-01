@@ -1126,7 +1126,7 @@ describe("retryInterceptor", () => {
             idempotency === MethodOptions_IdempotencyLevel.NO_SIDE_EFFECTS ||
             idempotency === MethodOptions_IdempotencyLevel.IDEMPOTENT,
         )
-        .filter(({ name }) => !/^(Download|Get|List)/.test(name))
+        .filter(({ name }) => !/^(Count|Download|Get|List)/.test(name))
         .map(({ name }) => name);
 
     const methods = Object.values(OperatorService.method);
