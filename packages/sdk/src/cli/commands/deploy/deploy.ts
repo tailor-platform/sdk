@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { type Application } from "#/cli/services/application";
 import { assertUniqueTailorDBTypeNamesWithExternal } from "#/cli/services/tailordb/type-name-validation";
-import { recoveryContextArgs } from "#/cli/shared/args";
+import { recoveryContextArgs, type EnvFileArgs } from "#/cli/shared/args";
 import {
   getOrNull,
   hasStaticWebsiteUrlPlaceholder,
@@ -135,9 +135,7 @@ export interface DeployOptions {
   buildOnly?: boolean;
 }
 
-interface DeployCLIContext {
-  envFile?: string;
-  envFileIfExists?: string;
+interface DeployCLIContext extends Partial<EnvFileArgs> {
   verbose?: boolean;
   json?: boolean;
 }
@@ -336,10 +334,14 @@ function recoveryEnvironmentArgs(
   cliContext?: DeployCLIContext,
 ): readonly string[] {
   return [
-    ...(cliContext?.envFile ? ["--env-file", path.resolve(process.cwd(), cliContext.envFile)] : []),
-    ...(cliContext?.envFileIfExists
-      ? ["--env-file-if-exists", path.resolve(process.cwd(), cliContext.envFileIfExists)]
-      : []),
+    ...(cliContext?.envFiles ?? []).flatMap((file) => [
+      "--env-file",
+      path.resolve(process.cwd(), file),
+    ]),
+    ...(cliContext?.envFilesIfExists ?? []).flatMap((file) => [
+      "--env-file-if-exists",
+      path.resolve(process.cwd(), file),
+    ]),
     ...recoveryContextArgs({ profile: options?.profile }),
   ];
 }

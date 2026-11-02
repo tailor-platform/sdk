@@ -7,6 +7,7 @@ import { z } from "zod";
 import { deployCommand } from "#/cli/commands/deploy/index";
 import { commonArgs } from "#/cli/shared/args";
 import { logger } from "#/cli/shared/logger";
+import { runCliCommand } from "#/cli/shared/test-helpers/run-cli-command";
 
 const mocks = vi.hoisted(() => ({
   assertWritable: vi.fn(),
@@ -40,14 +41,12 @@ describe("deployCommand", () => {
       "TAILOR_PLATFORM_ORGANIZATION_ID=11111111-1111-4111-8111-111111111111\nTAILOR_PLATFORM_FOLDER_ID=22222222-2222-4222-8222-222222222222\n",
     );
     try {
-      const result = await runCommand(
-        deployCommand,
-        ["--create-workspace", "--env-file", envFile, ...args],
-        {
-          // strip unknown keys
-          globalArgs: z.object(commonArgs),
-        },
-      );
+      const result = await runCliCommand(deployCommand, [
+        "--create-workspace",
+        "--env-file",
+        envFile,
+        ...args,
+      ]);
 
       expect(result.success).toBe(true);
       expect(mocks.deployFromCLI).toHaveBeenCalledWith(
@@ -150,10 +149,7 @@ describe("deployCommand", () => {
     vi.stubEnv("TAILOR_PLATFORM_SDK_CONFIG_PATH", undefined);
     fs.writeFileSync(envFile, `${variable}=env-file/tailor.config.ts\n`);
     try {
-      await runCommand(deployCommand, ["--env-file", envFile], {
-        // strip unknown keys
-        globalArgs: z.object(commonArgs),
-      });
+      await runCliCommand(deployCommand, ["--env-file", envFile]);
 
       expect(mocks.deployFromCLI).toHaveBeenCalledWith(
         expect.objectContaining({ configPath: "env-file/tailor.config.ts" }),
@@ -176,24 +172,27 @@ describe("deployCommand", () => {
   });
 
   test("forwards global options needed to reproduce deploy", async () => {
-    await runCommand(deployCommand, ["--env-file-if-exists", ".env.local", "--verbose", "--json"], {
-      // strip unknown keys
-      globalArgs: z.object(commonArgs),
-    });
+    const commandArgs = ["--env-file-if-exists", ".env.local", "--verbose", "--json"];
+    const originalArgv = process.argv;
+    process.argv = ["node", "tailor", "-e", ".env.before-deploy", "deploy", ...commandArgs];
+    try {
+      await runCommand(deployCommand, commandArgs, {
+        // strip unknown keys
+        globalArgs: z.object(commonArgs),
+      });
+    } finally {
+      process.argv = originalArgv;
+    }
 
+    const cliContext = {
+      envFiles: [".env.before-deploy"],
+      envFilesIfExists: [".env.local"],
+      verbose: true,
+      json: true,
+    };
     expect(mocks.deployFromCLI).toHaveBeenCalledWith(
-      expect.not.objectContaining({
-        envFile: undefined,
-        envFileIfExists: ".env.local",
-        verbose: true,
-        json: true,
-      }),
-      {
-        envFile: undefined,
-        envFileIfExists: ".env.local",
-        verbose: true,
-        json: true,
-      },
+      expect.not.objectContaining(cliContext),
+      cliContext,
     );
   });
 });

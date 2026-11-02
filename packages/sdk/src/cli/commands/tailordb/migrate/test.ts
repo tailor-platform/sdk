@@ -1,16 +1,12 @@
 import { arg } from "@politty/zod";
 import { z } from "zod";
 import { ttlArg, ttlLimit } from "#/cli/commands/workspace/age";
-import {
-  deploymentArgs,
-  durationArg,
-  locationIdsWithEnvFile,
-  parseDuration,
-} from "#/cli/shared/args";
+import { deploymentArgs, durationArg, locationIds, parseDuration } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { CLIError, formatCommandHint } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import { parseOptions } from "#/cli/shared/parse-options";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
 import {
@@ -216,12 +212,17 @@ async function migrationTest(options: MigrationTestOptions): Promise<void> {
   );
 }
 
+const locationIdsSchema = z.strictObject({
+  organizationId: z.uuid({ message: "organization-id must be a valid UUID" }).optional(),
+  folderId: z.uuid({ message: "folder-id must be a valid UUID" }).optional(),
+});
+
 export const testCommand = defineAppCommand({
   name: "test",
   description:
     "Test pending migrations with seed fixtures or cloned data in a temporary workspace.",
   notes:
-    "The source workspace is read-only. Without --target-workspace-id, the command creates a workspace in the source workspace's region and deletes it after success or failure; pass --keep to retain it for inspection. Right after creating the workspace it records a 24h expiry (unless --keep is given without --keep-ttl), so if the run is interrupted before the command can delete the workspace, workspace prune --expired removes it later. A designated target is retained and requires --yes. Clone mode copies TailorDB records only; it does not copy IdP users or file blobs. With --keep-ttl, the kept workspace records an expiry; it is not deleted automatically, but workspace prune --expired removes it once the expiry has passed. Organization and folder IDs loaded by --env-file are used the same way as the options; command-line options take precedence, and empty env-file values are ignored.",
+    "The source workspace is read-only. Without --target-workspace-id, the command creates a workspace in the source workspace's region and deletes it after success or failure; pass --keep to retain it for inspection. Right after creating the workspace it records a 24h expiry (unless --keep is given without --keep-ttl), so if the run is interrupted before the command can delete the workspace, workspace prune --expired removes it later. A designated target is retained and requires --yes. Clone mode copies TailorDB records only; it does not copy IdP users or file blobs. With --keep-ttl, the kept workspace records an expiry; it is not deleted automatically, but workspace prune --expired removes it once the expiry has passed. Command-line options take precedence over TAILOR_PLATFORM_ORGANIZATION_ID and TAILOR_PLATFORM_FOLDER_ID, including values loaded by --env-file, and an empty value of either variable is ignored.",
   args: z.strictObject({
     ...deploymentArgs,
     yes: arg(z.boolean().default(false), {
@@ -237,12 +238,12 @@ export const testCommand = defineAppCommand({
     keep: arg(z.boolean().default(false), {
       description: "Keep the automatically created workspace after the test",
     }),
-    "organization-id": arg(z.uuid().optional(), {
+    "organization-id": arg(z.string().optional(), {
       description:
         "Organization to create the temporary workspace in, at its root unless --folder-id is given (default: the source workspace's organization and folder). With --target-workspace-id, must match the target's organization",
       env: "TAILOR_PLATFORM_ORGANIZATION_ID",
     }),
-    "folder-id": arg(z.uuid().optional(), {
+    "folder-id": arg(z.string().optional(), {
       description:
         "Folder to create the temporary workspace in (default: the source workspace's folder). Requires --organization-id when the source workspace is not in an organization. With --target-workspace-id, must match the target's folder",
       env: "TAILOR_PLATFORM_FOLDER_ID",
@@ -277,7 +278,7 @@ export const testCommand = defineAppCommand({
       targetWorkspaceId: args["target-workspace-id"],
       keep: args.keep,
       keepTtl: args["keep-ttl"],
-      ...locationIdsWithEnvFile(args),
+      ...parseOptions(locationIdsSchema, locationIds(args)),
       assertionPath: args.assert,
       assertionNamespace: args["assert-namespace"],
       machineUser: args["machine-user"],

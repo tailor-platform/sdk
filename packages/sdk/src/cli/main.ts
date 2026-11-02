@@ -35,7 +35,12 @@ import { workflowCommand } from "./commands/workflow";
 import { workspaceCommand } from "./commands/workspace";
 import { initCrashReporting } from "./crashreport";
 import { queryCommand } from "./query";
-import { commonArgs, globalArgsApplied, resolveEarlyFailure } from "./shared/args";
+import {
+  commonArgs,
+  globalArgsApplied,
+  loadEnvFilesFromArgv,
+  resolveEarlyFailure,
+} from "./shared/args";
 import { getErrorDiagnostics } from "./shared/error-diagnostics";
 import { serializeError } from "./shared/error-json";
 import { isCLIError, typeOnlyImportHint } from "./shared/errors";
@@ -47,10 +52,7 @@ import { registerTsHook } from "./shared/register-ts-hook";
 
 await registerTsHook(new URL("./ts-hook.mjs", import.meta.url));
 
-// Runs before globalArgs effects load --env-file, so env file overrides for
-// TAILOR_CRASH_REPORTS_* are not available for early startup failures.
-// This is intentional: we want crash reporting active before argument parsing,
-// and env files require parsing to be complete. Shell-level env vars still work.
+// Runs before `setup` loads --env-file, so env-file TAILOR_CRASH_REPORTS_* values miss startup failures.
 initCrashReporting();
 
 const packageJson = await readPackageJson();
@@ -144,6 +146,7 @@ void runMain(mainCommand, {
   agentHelp,
   setup: ({ agent }) => {
     setJsonDefaultAgent(agent?.id);
+    loadEnvFilesFromArgv(process.argv.slice(2));
   },
   // CLI plugin dispatch: an unknown subcommand at any level execs the external
   // `tailor-<path...>-<name>` binary, forwarding args and injecting context.

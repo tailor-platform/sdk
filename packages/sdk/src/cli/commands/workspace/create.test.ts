@@ -3,14 +3,13 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { runCommand } from "@politty/zod";
 import * as path from "pathe";
 import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
-import { z } from "zod";
-import { commonArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { isCLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { runCliCommand } from "#/cli/shared/test-helpers/run-cli-command";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { createCommand, createWorkspace } from "./create";
@@ -362,14 +361,14 @@ describe("workspace create --ttl", () => {
     using _json = jsonMode();
     using _logger = silenceLogger("success", "warn", "info", "error");
     using outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
-    const result = await runCommand(
-      createCommand,
-      ["--name", "test-ws", "--region", "us-west", ...extraArgs, "--json"],
-      {
-        // strip unknown keys
-        globalArgs: z.object(commonArgs),
-      },
-    );
+    const result = await runCliCommand(createCommand, [
+      "--name",
+      "test-ws",
+      "--region",
+      "us-west",
+      ...extraArgs,
+      "--json",
+    ]);
     return { result, output: outSpy.mock.calls[0]?.[0] };
   }
 
@@ -697,14 +696,13 @@ describe("workspace create with user defaults", () => {
 
   async function runCreateWithDefaults(...extraArgs: string[]) {
     using _logger = silenceLogger("out", "success", "warn", "info", "error");
-    return await runCommand(
-      createCommand,
-      ["--name", "test-ws", "--region", "us-west", ...extraArgs],
-      {
-        // strip unknown keys
-        globalArgs: z.object(commonArgs),
-      },
-    );
+    return await runCliCommand(createCommand, [
+      "--name",
+      "test-ws",
+      "--region",
+      "us-west",
+      ...extraArgs,
+    ]);
   }
 
   test("creates the workspace in the user's default organization and folder", async () => {

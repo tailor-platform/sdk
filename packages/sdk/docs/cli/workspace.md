@@ -123,7 +123,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 Every workspace belongs to an organization. Without --organization-id and --folder-id, on the command line or through TAILOR_PLATFORM_ORGANIZATION_ID / TAILOR_PLATFORM_FOLDER_ID, the workspace is created in the default organization and folder that the logged-in user set with `user update`, unless TAILOR_PLATFORM_TOKEN is set. When none of these gives an organization, the command fails. Giving either option replaces both defaults, and --folder-id requires --organization-id.
 
-TAILOR_PLATFORM_ORGANIZATION_ID and TAILOR_PLATFORM_FOLDER_ID are also read from --env-file. Command-line options take precedence over the corresponding environment variables. Empty values in the env file are treated as not given.
+Command-line options take precedence over TAILOR_PLATFORM_ORGANIZATION_ID and TAILOR_PLATFORM_FOLDER_ID, including values loaded by --env-file. An empty value of either variable is treated as not given.
 
 When --ttl is given but the expiry cannot be confirmed, the command still prints the created workspace, then fails with WORKSPACE_TTL_WRITE_FAILED. With --json, the printed `ttl.state` is then `unconfirmed` instead of `written`, so a script can read the workspace ID and record the expiry again with `workspace ttl set`.
 

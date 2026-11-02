@@ -22,6 +22,7 @@ export {
   confirmationArgs,
   deploymentArgs,
   loadEnvFiles,
+  loadEnvFilesFromArgv,
   type CommonArgsType,
 } from "./shared/args";
 export { deploy, deploy as apply } from "./commands/deploy/deploy";
