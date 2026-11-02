@@ -524,9 +524,9 @@ open; the next push creates a fresh one. Change `ttl` to keep previews longer or
 shorter. Workflows generated before this was added get these settings the next
 time you run `tailor setup update`.
 
-A preview workspace created before then records no expiry, so this sweep never
-deletes it. To find such leftovers, list the preview workspaces created more than
-7 days ago:
+A preview workspace last deployed before `ttl` was added to its workflow records
+no expiry, so this sweep never deletes it. To find such leftovers, list the
+preview workspaces created more than 7 days ago:
 
 ```bash
 tailor workspace prune --name 'my-app-pr-[0-9]+' --older-than 7d \
