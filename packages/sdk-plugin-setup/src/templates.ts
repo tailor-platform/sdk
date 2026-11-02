@@ -4,9 +4,9 @@ import previewCleanupTemplate from "./preview-cleanup.workflow.yml";
 import previewTemplate from "./preview.workflow.yml";
 import tagTemplate from "./tag.workflow.yml";
 
-// Only the release PR changes RELEASED_TEMPLATE_VERSION and the fingerprint below; a PR that
+// The release PR updates RELEASED_TEMPLATE_VERSION and the fingerprint below. A PR that
 // changes the generated templates sets TEMPLATE_CHANGED_SINCE_RELEASE to true instead. A PR that
-// only adds renders to renderedTemplates() re-records the fingerprint below while the flag is false.
+// only adds renders to renderedTemplates() re-records the fingerprint while the flag stays false.
 // Released template fingerprint: c64cf3888d990eba0d5067e0009cb59b61c088a4a5995e62674b43f7f7ca8a0b
 const RELEASED_TEMPLATE_VERSION = 23;
 const TEMPLATE_CHANGED_SINCE_RELEASE = true;
