@@ -111,15 +111,18 @@ function colorizeLogSeverity(severity: string): string {
 }
 
 function markedMessage(entry: FunctionLogEntryInfo): string {
-  return entry.source === "PLATFORM"
-    ? `${styles.info("[PLATFORM]")} ${entry.message}`
-    : entry.message;
+  if (entry.source !== "PLATFORM") return entry.message;
+  const mark = styles.info("[PLATFORM]");
+  return entry.message
+    .split("\n")
+    .map((line) => `${mark} ${line}`)
+    .join("\n");
 }
 
 /**
- * Format a log entry as a single human-readable line.
+ * Format a log entry for human-readable output.
  * @param entry - Log entry info
- * @returns `<timestamp> [<severity>] <message>`, with `[PLATFORM]` before the message of a line the Platform wrote
+ * @returns `<timestamp> [<severity>] <message>`, with `[PLATFORM]` before each line of a message the Platform wrote
  */
 export function formatFunctionLogEntry(entry: FunctionLogEntryInfo): string {
   const timestamp = entry.timestamp ? entry.timestamp.toISOString() : "N/A";
@@ -138,7 +141,7 @@ export function formatFunctionLogLines(logEntries: FunctionLogEntryInfo[] | unde
 /**
  * Join the messages of structured log entries for display, marking the entries the Platform wrote.
  * @param logEntries - Structured log entries, if any
- * @returns Messages joined with newlines, each Platform entry's message preceded by `[PLATFORM]`
+ * @returns Messages joined with newlines, each line of a Platform entry's message preceded by `[PLATFORM]`
  */
 export function formatFunctionLogMessages(logEntries: FunctionLogEntryInfo[] | undefined): string {
   return logEntries ? logEntries.map(markedMessage).join("\n") : "";

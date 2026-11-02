@@ -326,7 +326,7 @@ describe("downstream logs", () => {
     await runCommand(jobsCommand, ["my-executor", "job-1", "-W", "-l", "-i", "1ms"]);
 
     expect(stripAnsi(stderr.output)).toContain(
-      "  Logs:\n    step 1\n    step 2\n    [PLATFORM] runs close to the limit\n    move long work elsewhere\n",
+      "  Logs:\n    step 1\n    step 2\n    [PLATFORM] runs close to the limit\n    [PLATFORM] move long work elsewhere\n",
     );
   });
 
@@ -389,7 +389,7 @@ describe("downstream logs", () => {
       { source: "PLATFORM" },
     ]);
     expect(stripAnsi(stderr.output)).toContain(
-      "    Logs:\n      step 1\n      step 2\n      [PLATFORM] runs close to the limit\n      move long work elsewhere\n",
+      "    Logs:\n      step 1\n      step 2\n      [PLATFORM] runs close to the limit\n      [PLATFORM] move long work elsewhere\n",
     );
   });
 });

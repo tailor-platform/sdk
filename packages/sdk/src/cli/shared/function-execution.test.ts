@@ -149,4 +149,17 @@ describe("formatFunctionLogEntry", () => {
 
     expect(stripAnsi(line)).toBe("N/A [LOG] boom");
   });
+
+  test("marks every line of a multi-line message the Platform wrote", () => {
+    const line = formatFunctionLogEntry({
+      message: "runs close to the limit\nmove long work elsewhere",
+      severity: "WARNING",
+      timestamp: null,
+      source: "PLATFORM",
+    });
+
+    expect(stripAnsi(line)).toBe(
+      "N/A [WARNING] [PLATFORM] runs close to the limit\n[PLATFORM] move long work elsewhere",
+    );
+  });
 });
