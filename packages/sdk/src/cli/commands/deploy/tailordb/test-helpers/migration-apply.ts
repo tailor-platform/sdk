@@ -181,6 +181,14 @@ function changeGroup(entries: ChangeEntries<TailorDBChangeSet[keyof TailorDBChan
   };
 }
 
+/**
+ * Build a plan result for tests that mock the pending migrations. It skips the schema checks, so a
+ * test that needs the remote schema verification before the apply belongs with the
+ * "applyTailorDB migration label reconciliation" tests in `index.test.ts`, which read real
+ * migration files.
+ * @param options - Planned changes and context overrides
+ * @returns Plan result for `applyTailorDB`
+ */
 export function createPlanResult(options: PlanResultOptions = {}): TailorDBPlanResult {
   const namespacesWithMigrations: NamespaceWithMigrations[] = options.context
     ?.namespacesWithMigrations ?? [{ namespace: NAMESPACE, migrationsDir: MIGRATIONS_DIR }];
