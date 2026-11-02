@@ -1131,6 +1131,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     vi.mocked(migrationModule.updateMigrationLabel).mockRejectedValueOnce(
       new Error("checkpoint update failed"),
     );
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
 
     await withOverriddenSnapshot(
       (_migrationsDir, maxVersion) => snapshots(maxVersion ?? 0),
@@ -1142,6 +1143,10 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     );
 
     expect(fieldTypeUpdates(client, "GoodsReceipt").at(-1)).toBe("float");
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringMatching(/remote remains at 0000\. .* Repair the checkpoint before retrying\.$/),
+    );
+    warn.mockRestore();
   });
 
   test("keeps the target schema when checkpoint read-back confirms a lost response", async () => {
@@ -3294,6 +3299,33 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       expect(lastSettings("StockReservation").disableGqlOperations).not.toEqual(
         restrictedOperations,
       );
+    });
+
+    test("points to a deploy that resumes it when its checkpoint write cannot be confirmed", async () => {
+      const client = createMockClient();
+      setPendingMigrations([mkStepsMigration()]);
+      vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
+      vi.mocked(migrationModule.updateMigrationLabel).mockRejectedValueOnce(
+        new Error("checkpoint update failed"),
+      );
+      vi.mocked(client.getMetadata).mockResolvedValue({
+        metadata: {
+          labels: { "sdk-migration": "m0000", "sdk-migration-in-progress": "m0001" },
+        },
+      } as never);
+      const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      vi.spyOn(logger, "log").mockImplementation(() => {});
+
+      await expect(
+        applyTailorDB(client, withInputs(createMockPlanResult()), "create-update"),
+      ).rejects.toThrow("checkpoint update failed");
+
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /test-ns\/0001 could not be confirmed after its update failed; .* Deploy again to resume the migration; steps that already completed do not run again\.$/,
+        ),
+      );
+      warn.mockRestore();
     });
 
     test("leaves an in-progress migration's schema alone when the deploy fails before reaching it", async () => {

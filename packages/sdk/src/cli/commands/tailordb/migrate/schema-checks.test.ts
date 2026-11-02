@@ -26,12 +26,14 @@ import {
   remoteType,
   snapshotField,
   snapshotType,
+  writeDiff,
   writeInitialSchema,
 } from "./test-helpers/schema-fixtures";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { MigrationDiff } from "./diff-calculator";
 import type { SchemaDrift } from "./types";
+import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 const missingHashDrift: SchemaDrift = {
   tableName: "Foo",
@@ -350,6 +352,114 @@ describe("verifyRemoteSchema", () => {
     const [result] = await verify(client, dir);
 
     expect(result).toMatchObject({ hasDrift: false, checkpointUnset: true });
+  });
+
+  describe("a migration left in progress", () => {
+    const addStatus = (tableName: string) => ({
+      kind: "field_added",
+      tableName,
+      fieldName: "status",
+      after: snapshotField("string", { required: true }),
+    });
+
+    function migrationsDirAddingStatus(): string {
+      const dir = migrationsDirWithUser();
+      writeDiff(dir, 1, [addStatus("User")]);
+      return dir;
+    }
+
+    function inProgress(record: string) {
+      return { labels: { "sdk-migration": "m0000", "sdk-migration-in-progress": record } };
+    }
+
+    function withStatus(type: ProtoTailorDBType, required: boolean): ProtoTailorDBType {
+      const status = remoteType(type.name, ["status"]).schema!.fields.status!;
+      type.schema!.fields.status = { ...status, required };
+      return type;
+    }
+
+    function inMaintenanceMode(type: ProtoTailorDBType): ProtoTailorDBType {
+      type.schema!.settings = {
+        bulkUpsert: false,
+        publishRecordEvents: false,
+        disableGqlOperations: { create: true, update: true, delete: true, read: false },
+      } as never;
+      return type;
+    }
+
+    test("accepts the schema a steps run leaves after its Post-phase", async () => {
+      const user = inMaintenanceMode(withStatus(remoteType("User", ["id", "name"]), true));
+      const client = remoteClient(inProgress("m0001"), [user]);
+
+      const [result] = await verify(client, migrationsDirAddingStatus());
+
+      expect(result).toMatchObject({ hasDrift: false, drifts: [] });
+    });
+
+    test("reports a table the migration removes once it is gone, which happens only after the checkpoint", async () => {
+      const dir = migrationsDirWith({ User: snapshotType("User"), Legacy: snapshotType("Legacy") });
+      writeDiff(dir, 1, [
+        addStatus("User"),
+        { kind: "table_removed", tableName: "Legacy", before: snapshotType("Legacy") },
+      ]);
+      const user = withStatus(remoteType("User", ["id", "name"]), true);
+      const client = remoteClient(inProgress("m0001"), [user]);
+
+      const [result] = await verify(client, dir);
+
+      expect(result?.drifts).toEqual([expect.objectContaining({ tableName: "Legacy" })]);
+    });
+
+    test("accepts the schema a steps run leaves after its Pre-phase", async () => {
+      const user = withStatus(remoteType("User", ["id", "name"]), false);
+      const client = remoteClient(inProgress("m0001"), [user]);
+
+      const [result] = await verify(client, migrationsDirAddingStatus());
+
+      expect(result).toMatchObject({ hasDrift: false, drifts: [] });
+    });
+
+    test("accepts tables that a stopped Post-phase left in either schema", async () => {
+      const dir = migrationsDirWith({ User: snapshotType("User"), Item: snapshotType("Item") });
+      writeDiff(dir, 1, [addStatus("User"), addStatus("Item")]);
+      const client = remoteClient(inProgress("m0001"), [
+        withStatus(remoteType("User", ["id", "name"]), true),
+        withStatus(remoteType("Item", ["id", "name"]), false),
+      ]);
+
+      const [result] = await verify(client, dir);
+
+      expect(result).toMatchObject({ hasDrift: false, drifts: [] });
+    });
+
+    test("reports a table matching neither schema against its Pre-phase schema", async () => {
+      const user = withStatus(remoteType("User", ["id", "name", "nickname"]), true);
+      const client = remoteClient(inProgress("m0001"), [user]);
+
+      const [result] = await verify(client, migrationsDirAddingStatus());
+
+      expect(result?.drifts).toEqual([
+        expect.objectContaining({ fieldName: "nickname" }),
+        expect.objectContaining({
+          fieldName: "status",
+          details: "required: remote=true, expected=false",
+        }),
+      ]);
+    });
+
+    test("expects only the Pre-phase schema while a `main` run is in progress", async () => {
+      const user = withStatus(remoteType("User", ["id", "name"]), true);
+      const client = remoteClient(inProgress("m0001-main"), [user]);
+
+      const [result] = await verify(client, migrationsDirAddingStatus());
+
+      expect(result?.drifts).toEqual([
+        expect.objectContaining({
+          fieldName: "status",
+          details: "required: remote=true, expected=false",
+        }),
+      ]);
+    });
   });
 });
 

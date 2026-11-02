@@ -6,6 +6,7 @@ import {
   buildPreMigrationChangesMap,
   buildPreMigrationIndexChangesMap,
   createPreMigrationSnapshotType,
+  getTablesDeletedAfterCheckpoint,
 } from "#/cli/commands/tailordb/migrate/pre-migration-schema";
 import {
   reconstructSnapshotFromMigrations,
@@ -122,25 +123,6 @@ function getAffectedTableNames(migration: PendingMigration): Set<string> {
 export function getPreMigrationTargetTableNames(migration: PendingMigration): Set<string> {
   const snapshotTables = migrationSnapshotCache.load(migration).tables;
   return new Set([...getAffectedTableNames(migration)].filter((name) => name in snapshotTables));
-}
-
-/**
- * Get the set of table names to be deleted by a migration. A renamed table's
- * old name is included: the old table survives the Pre-phase and the script
- * (which copies its rows into the new table), then is dropped here.
- * @param {PendingMigration} migration - Pending migration
- * @returns {Set<string>} Set of table names to delete
- */
-export function getDeletedTableNames(migration: PendingMigration): Set<string> {
-  const tableNames = new Set<string>();
-  for (const change of migration.diff.changes) {
-    if (change.kind === "table_removed") {
-      tableNames.add(change.tableName);
-    } else if (change.kind === "table_renamed") {
-      tableNames.add(change.previousTableName);
-    }
-  }
-  return tableNames;
 }
 
 /**
@@ -1012,7 +994,7 @@ export async function executeSingleMigrationPostPhaseDeletions(
   changeSet: TailorDBChangeSet,
   migration: PendingMigration,
 ): Promise<void> {
-  const deletedTableNames = getDeletedTableNames(migration);
+  const deletedTableNames = getTablesDeletedAfterCheckpoint(migration.diff);
   if (deletedTableNames.size > 0) {
     const tableKey = (tableName: string) => namespacedTableKey(migration.namespace, tableName);
     const gqlPermissionsToDelete = entriesOfNamespace(
