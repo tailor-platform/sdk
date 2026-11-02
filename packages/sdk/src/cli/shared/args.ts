@@ -410,10 +410,47 @@ const envFileArgKeyByToken: ReadonlyMap<string, keyof EnvFileArgs> = new Map(
   }),
 );
 
+const globalBooleanAliases: ReadonlySet<string> = new Set(
+  [...GLOBAL_FLAG_PARSER_OPTIONS.aliasMap]
+    .filter(([, name]) => GLOBAL_FLAG_PARSER_OPTIONS.booleanFlags.has(name))
+    .map(([alias]) => alias),
+);
+
+interface OptionToken {
+  flag: string;
+  value: string | undefined;
+}
+
+/**
+ * Split an option token into its flag and the value it carries. A short-option
+ * bundle such as `-je .env` yields its first option that is not a global
+ * boolean, with the rest of the bundle as the value.
+ * @param token - Command-line token
+ * @returns The flag, and its value when the token carries one
+ */
+function splitOptionToken(token: string): OptionToken {
+  if (
+    token.startsWith("-") &&
+    !token.startsWith("--") &&
+    token.length > 2 &&
+    !token.includes("=")
+  ) {
+    const chars = Array.from(token.slice(1));
+    const index = chars.findIndex((char) => !globalBooleanAliases.has(char));
+    if (index === -1) return { flag: token, value: undefined };
+    const value = chars.slice(index + 1).join("");
+    return { flag: `-${chars[index]}`, value: value === "" ? undefined : value };
+  }
+  const separator = token.indexOf("=");
+  return separator === -1
+    ? { flag: token, value: undefined }
+    : { flag: token.slice(0, separator), value: token.slice(separator + 1) };
+}
+
 /**
  * Read the env file paths given on the command line. A short-option bundle
- * such as `-je .env` is skipped, because how it splits depends on the
- * command's own options.
+ * counts only when every option before `-e` in it is a global boolean, as in
+ * `-je .env`.
  * @param argv - Command-line arguments after the executable and script path
  * @returns Every `--env-file` and `--env-file-if-exists` value before `--`
  */
@@ -421,12 +458,11 @@ export function readEnvFileArgs(argv: readonly string[]): EnvFileArgs {
   const result: EnvFileArgs = { envFiles: [], envFilesIfExists: [] };
   const tokens = optionTokens(argv);
   for (let index = 0; index < tokens.length; index++) {
-    const token = tokens[index] ?? "";
-    const separator = token.indexOf("=");
-    const key = envFileArgKeyByToken.get(separator === -1 ? token : token.slice(0, separator));
+    const { flag, value: inlineValue } = splitOptionToken(tokens[index] ?? "");
+    const key = envFileArgKeyByToken.get(flag);
     if (key === undefined) continue;
-    if (separator !== -1) {
-      result[key].push(token.slice(separator + 1));
+    if (inlineValue !== undefined) {
+      result[key].push(inlineValue);
       continue;
     }
     const value = tokens[index + 1];

@@ -186,7 +186,11 @@ describe("readEnvFileArgs", () => {
     [["-e", "a", "deploy", "--env-file=b", "--", "-e", "c"], ["a", "b"], []],
     [["--envFile", "a", "-e=b", "--envFileIfExists=c"], ["a", "b"], ["c"]],
     [["--env-file-if-exists", "a", "--env-file-if-exists=b"], [], ["a", "b"]],
-    [["-je", "a", "-e.env", "-e", "--json"], [], []],
+    [
+      ["-je", "a", "-jjeb", "-e.env", "-ye", "c", "-jye", "d", "-e", "--json"],
+      ["a", "b", ".env"],
+      [],
+    ],
   ])("reads %j", (argv, envFiles, envFilesIfExists) => {
     expect(readEnvFileArgs(argv)).toEqual({ envFiles, envFilesIfExists });
   });
