@@ -3,6 +3,7 @@ import { parse } from "yaml";
 import {
   AUTOFIX_PROVIDERS,
   renderBranchWorkflow,
+  renderPreviewCleanupWorkflow,
   renderPreviewWorkflow,
   renderTagWorkflow,
 } from "./templates";
@@ -24,6 +25,7 @@ const workflows: [string, string][] = [
     renderTagWorkflow({ ...COMMON, tagPattern: "v*", branch: "main" }).content,
   ],
   ["preview", renderPreviewWorkflow({ ...COMMON, branch: "main", region: "us-west" }).content],
+  ["preview cleanup", renderPreviewCleanupWorkflow({ ...COMMON, branch: "main" }).content],
   ...AUTOFIX_PROVIDERS.map((provider): [string, string] => [
     `${provider} autofix`,
     renderAutofixFor(provider).content,

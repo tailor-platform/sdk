@@ -208,7 +208,8 @@ const tagCommand = defineAppCommand({
 
 const previewCommand = defineAppCommand({
   name: "preview",
-  description: "Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).",
+  description:
+    "Generate preview workflows: PR open/sync deploys to a per-PR workspace, and closing the PR deletes it.",
   args: z.strictObject({
     name: arg(z.string().min(1).optional(), {
       alias: "n",
@@ -342,7 +343,8 @@ const depsCommand = defineAppCommand({
 
 const deleteCommand = defineAppCommand({
   name: "delete",
-  description: "Delete managed workflow file(s) and their .github/tailor.lock entries.",
+  description:
+    "Delete managed workflow file(s) and their .github/tailor.lock entries. Either workflow of a preview target deletes both.",
   args: z.strictObject({
     ...confirmationArgs,
     files: arg(z.string().array().min(1), {

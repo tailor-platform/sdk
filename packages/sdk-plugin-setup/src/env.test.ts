@@ -13,6 +13,7 @@ import { LOCK_VERSION, type LockFile, type LockTarget, type TargetKind, writeLoc
 import {
   AUTOFIX_PROVIDERS,
   renderBranchWorkflow,
+  renderPreviewCleanupWorkflow,
   renderPreviewWorkflow,
   renderTagWorkflow,
   type AutofixProvider,
@@ -80,12 +81,17 @@ describe("targetRequirements matches the secrets/vars the rendered templates ref
     ],
     [
       "preview",
-      renderPreviewWorkflow({
-        ...common,
-        branch: "main",
-        region: "us-west",
-        seed: { datasets: [] },
-      }),
+      {
+        content: [
+          renderPreviewWorkflow({
+            ...common,
+            branch: "main",
+            region: "us-west",
+            seed: { datasets: [] },
+          }).content,
+          renderPreviewCleanupWorkflow({ ...common, branch: "main" }).content,
+        ].join("\n"),
+      },
     ],
   ] as const;
 

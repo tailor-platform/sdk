@@ -1,0 +1,54 @@
+# __HEADER__
+name: Tailor Preview Cleanup (__WORKSPACE_NAME__)
+
+on:
+  # Runs with secrets for every pull request, so its jobs must never check out the pull request's code.
+  pull_request_target:
+    # zizmor: ignore[dangerous-triggers]
+    branches: ["__BRANCH__"]
+    types: [closed]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+# The preview workflow of an open pull request runs in this group too, so closing
+# the pull request cancels its preview run in progress.
+concurrency:
+  group: tailor-preview-__WORKSPACE_NAME__-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  tailor-preview-cleanup:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: __ENVIRONMENT__
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - id: tailor-checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: tailor-setup
+        uses: tailor-platform/actions/setup@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
+        with:
+          package-manager: __PACKAGE_MANAGER__
+      - id: tailor-install
+        uses: tailor-platform/actions/install@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
+        with:
+          package-manager: __PACKAGE_MANAGER__
+      - id: tailor-preview-cleanup
+        uses: tailor-platform/actions/preview-cleanup@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
+        with:
+          workspace-name-prefix: __WORKSPACE_NAME__
+          prune-expired: "true"
+          organization-id: ${{ vars.TAILOR_PLATFORM_ORGANIZATION_ID }}
+          folder-id: ${{ vars.TAILOR_PLATFORM_FOLDER_ID }}
+          package-manager: __PACKAGE_MANAGER__
+          # __WORKING_DIRECTORY__
+          platform-client-id: ${{ vars.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID || secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
+          platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}

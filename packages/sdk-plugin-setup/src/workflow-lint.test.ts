@@ -13,6 +13,7 @@ import { aroundAll, describe, expect, test } from "vitest";
 import {
   AUTOFIX_PROVIDERS,
   renderBranchWorkflow,
+  renderPreviewCleanupWorkflow,
   renderPreviewWorkflow,
   renderTagWorkflow,
   type PackageManager,
@@ -358,6 +359,26 @@ describe.skipIf(!zizmorAvailable)("zizmor audit of renderPreviewWorkflow", () =>
   ])("$name has no zizmor findings", ({ fileName, params }) => {
     const { content } = renderPreviewWorkflow({
       ...PREVIEW_COMMON,
+      ...params,
+    });
+    const { ok, output } = writeAndAudit(fileName, content);
+    expect(ok, `zizmor findings:\n${output}`).toBe(true);
+  });
+});
+
+describe.skipIf(!zizmorAvailable)("zizmor audit of renderPreviewCleanupWorkflow", () => {
+  test.each([
+    { name: "preview cleanup / pnpm", fileName: "preview-cleanup-pnpm", params: {} },
+    {
+      name: "preview cleanup / npm / with workingDirectory",
+      fileName: "preview-cleanup-npm-dir",
+      params: { packageManager: "npm" as PackageManager, workingDirectory: "apps/backend" },
+    },
+  ])("$name has no zizmor findings", ({ fileName, params }) => {
+    const { content } = renderPreviewCleanupWorkflow({
+      ...COMMON,
+      branch: "main",
+      packageManager: "pnpm",
       ...params,
     });
     const { ok, output } = writeAndAudit(fileName, content);
