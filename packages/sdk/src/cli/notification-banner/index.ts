@@ -16,9 +16,10 @@ import {
  *
  * After an ordinary command, the caller's unread WARNING and CRITICAL platform notifications
  * are listed briefly on stderr. The lookup starts in politty's global `setup` hook and the
- * banner is printed from the global `cleanup` hook only if the lookup has already answered;
- * a pending request is abandoned, so the command's duration and exit code never change, and
- * every failure is swallowed. It is interactive-terminal only and never in JSON mode. It is
+ * banner is printed from the global `cleanup` hook once the lookup has answered. A lookup
+ * still in flight when the command ends gets up to `END_WAIT_MS` more, then is abandoned, so a
+ * command takes at most that much longer, its exit code never changes, and every failure is
+ * swallowed. It is interactive-terminal only and never in JSON mode. It is
  * shown after every eligible command until the notifications are read or dismissed (it marks
  * nothing read itself); only a failed lookup pauses it, for `FAILURE_BACKOFF_MS` (throttle.ts).
  *
@@ -30,6 +31,11 @@ import {
 const PAGE_SIZE = 3;
 /** A lookup unanswered after this long while the command runs is aborted and counted as failed. */
 const LOOKUP_TIMEOUT_MS = 3_000;
+/**
+ * How long the command's end waits for a lookup still in flight. On prod the lookup answers
+ * about 160-270 ms after the command starts, so a quick command often ends just before it.
+ */
+const END_WAIT_MS = 150;
 
 interface LookupResult {
   /** The profile the command line named, repeated in the hint. */
@@ -43,6 +49,8 @@ interface PendingLookup {
   promise: Promise<void>;
   /** The request has been sent to the platform; only then can a failure cost load. */
   dispatched: boolean;
+  /** The lookup has finished, with a result, a skip, or an error. */
+  finished: boolean;
   /** The command ended first; the abort that follows is not a platform failure. */
   abandoned: boolean;
   settled?: LookupResult | undefined;
@@ -76,6 +84,7 @@ export function startNotificationLookup(argv: readonly string[], options: StartO
       controller,
       promise: Promise.resolve(),
       dispatched: false,
+      finished: false,
       abandoned: false,
       stateFile,
     };
@@ -86,9 +95,11 @@ export function startNotificationLookup(argv: readonly string[], options: StartO
     })
       .then(
         (result) => {
+          lookup.finished = true;
           lookup.settled = result;
         },
         () => {
+          lookup.finished = true;
           lookup.settled = undefined;
           // An error or the timeout while the command runs: persist right away, so other
           // terminals back off too. A request the command's end abandons is not a failure: the
@@ -175,9 +186,16 @@ function recordFailure(stateFile: string | undefined): void {
   }
 }
 
+async function waitAtMost(promise: Promise<void>, ms: number): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  await Promise.race([promise, new Promise((resolve) => (timer = setTimeout(resolve, ms)))]);
+  clearTimeout(timer);
+}
+
 /**
- * Print the banner if the lookup started by {@link startNotificationLookup} has answered, and
- * abandon it otherwise. Never throws, never waits.
+ * Print the banner once the lookup started by {@link startNotificationLookup} has answered,
+ * waiting at most `END_WAIT_MS` for one still in flight and abandoning it after that. Never
+ * throws, and never waits when the banner would not be printed anyway.
  * @param context - The command's outcome
  * @param context.error - The error the command ended with, if any
  */
@@ -186,12 +204,13 @@ export async function printNotificationBanner(context: { error?: unknown }): Pro
   pending = undefined;
   if (!lookup) return;
   try {
+    const printable =
+      !suppressedByError(context.error) && !logger.jsonMode && interactiveTerminal();
+    if (printable && !lookup.finished) await waitAtMost(lookup.promise, END_WAIT_MS);
     lookup.abandoned = true;
     lookup.controller.abort();
     const result = lookup.settled;
-    if (!result) return;
-    if (suppressedByError(context.error)) return;
-    if (logger.jsonMode || !interactiveTerminal()) return;
+    if (!printable || !result) return;
 
     if (result.notifications.length === 0) return;
     const banner = formatNotificationBanner(result.notifications, result.totalCount, {

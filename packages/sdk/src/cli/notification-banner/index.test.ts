@@ -369,7 +369,7 @@ describe("notification banner", () => {
     expect(stderr.text()).toBe("");
   });
 
-  test("prints nothing, aborts, and does not back off when the sent request is still pending", async () => {
+  test("waits up to 150 ms for a request still in flight, then aborts it without backing off", async () => {
     let signal: AbortSignal | undefined;
     mockLookup(
       vi.fn().mockImplementation((_req, options: { signal: AbortSignal }) => {
@@ -381,15 +381,68 @@ describe("notification banner", () => {
     startNotificationLookup(["workspace", "list"], { configDir: tmp.dir });
     await vi.waitFor(() => expect(signal).toBeDefined());
 
-    let printed = false;
-    const printing = printNotificationBanner({}).then(() => (printed = true));
-    await new Promise((resolve) => setImmediate(resolve));
-    expect(printed).toBe(true);
-    await printing;
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      let printed = false;
+      const printing = printNotificationBanner({}).then(() => (printed = true));
+      await vi.advanceTimersByTimeAsync(149);
+      expect(printed).toBe(false);
+      expect(signal?.aborted).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await printing;
+      expect(printed).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
 
     expect(stderr.text()).toBe("");
     expect(signal?.aborted).toBe(true);
     expect(fs.existsSync(stateFile())).toBe(false);
+  });
+
+  test("prints a lookup that answers during the wait", async () => {
+    let answer: ((value: unknown) => void) | undefined;
+    mockLookup(
+      vi.fn().mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            answer = resolve;
+          }),
+      ),
+    );
+    using stderr = captureStderr();
+    startNotificationLookup(["workspace", "list"], { configDir: tmp.dir });
+    await vi.waitFor(() => expect(answer).toBeDefined());
+
+    const printing = printNotificationBanner({});
+    answer?.({
+      notifications: [warning("a", "Region degraded")],
+      nextPageToken: "",
+      totalCount: 1,
+    });
+    await printing;
+
+    expect(stderr.text()).toContain("Region degraded");
+  });
+
+  test("does not wait when the banner would not be printed anyway", async () => {
+    let signal: AbortSignal | undefined;
+    mockLookup(
+      vi.fn().mockImplementation((_req, options: { signal: AbortSignal }) => {
+        signal = options.signal;
+        return new Promise(() => {});
+      }),
+    );
+    startNotificationLookup(["workspace", "list"], { configDir: tmp.dir });
+    await vi.waitFor(() => expect(signal).toBeDefined());
+
+    let printed = false;
+    const printing = printNotificationBanner({
+      error: CLIError({ code: "AUTH_TOKEN_NOT_FOUND", message: "log in" }),
+    }).then(() => (printed = true));
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(printed).toBe(true);
+    await printing;
   });
 
   test("does not back off when the command's end aborts a request that is still in flight", async () => {
