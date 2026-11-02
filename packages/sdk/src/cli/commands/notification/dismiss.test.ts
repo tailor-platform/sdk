@@ -3,8 +3,12 @@ import { runCommand } from "@politty/zod";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken } from "#/cli/shared/context";
+import { CLIError } from "#/cli/shared/errors";
+import { assertWritable } from "#/cli/shared/readonly-guard";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { dismissCommand } from "./dismiss";
+
+vi.mock("#/cli/shared/readonly-guard", () => ({ assertWritable: vi.fn() }));
 
 vi.mock("#/cli/shared/client", async (importOriginal) => ({
   ...(await importOriginal()),
@@ -29,8 +33,22 @@ describe("notification dismiss", () => {
   aroundEach(async (runTest) => {
     vi.clearAllMocks();
     vi.mocked(loadAccessToken).mockResolvedValue("scoped-token");
+    vi.mocked(assertWritable).mockResolvedValue(undefined);
     await runTest();
     vi.unstubAllEnvs();
+  });
+
+  test("refuses on a read-only profile before calling the platform", async () => {
+    const dismiss = mockClient();
+    vi.mocked(assertWritable).mockRejectedValue(
+      CLIError({ code: "PROFILE_READONLY", message: "read-only" }),
+    );
+
+    const result = await runCommand(dismissCommand, [ID, "--profile", "ro"]);
+
+    expect(result.success).toBe(false);
+    expect(assertWritable).toHaveBeenCalledWith({ profile: "ro" });
+    expect(dismiss).not.toHaveBeenCalled();
   });
 
   test("dismisses the notification and reports success", async () => {

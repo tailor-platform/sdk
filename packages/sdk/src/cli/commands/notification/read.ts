@@ -1,3 +1,4 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "@politty/zod";
 import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
@@ -6,7 +7,7 @@ import { loadConsoleBaseUrl } from "#/cli/shared/context";
 import { humanizeRelativeTime } from "#/cli/shared/format";
 import { logger, styles } from "#/cli/shared/logger";
 import { createNotificationClient } from "./client";
-import { notificationNotFound, rethrowNotificationError } from "./errors";
+import { isNotificationNotFound, notificationNotFound } from "./errors";
 import { transformNotificationDetail, type NotificationDetailInfo } from "./transform";
 
 /** MarkMyNotificationsRead accepts at most this many ids per call. */
@@ -85,16 +86,20 @@ export const readCommand = defineAppCommand({
   run: async (args) => {
     const client = await createNotificationClient(args.profile);
 
+    // Show and mark what the platform returns; the ids it does not are reported at the end.
     const details: NotificationDetailInfo[] = [];
-    for (const id of args.id) {
+    const missing: string[] = [];
+    for (const id of new Set(args.id)) {
+      let notification;
       try {
-        const { notification } = await client.getMyNotification({ notificationId: id });
-        if (!notification) notificationNotFound(id);
-        details.push(transformNotificationDetail(notification));
+        ({ notification } = await client.getMyNotification({ notificationId: id }));
       } catch (error) {
-        rethrowNotificationError(id, error);
+        if (!isNotificationNotFound(error)) throw error;
       }
+      if (notification) details.push(transformNotificationDetail(notification));
+      else missing.push(id);
     }
+    if (details.length === 0) notificationNotFound(missing);
 
     const shown = await resolveActionUrls(details, args.profile);
 
@@ -117,10 +122,17 @@ export const readCommand = defineAppCommand({
           for (const id of batch) marked.add(id);
         }
       } catch (error) {
-        print();
-        throw error;
+        // A read-only login may show notifications but not mark them.
+        if (!(error instanceof ConnectError && error.code === Code.PermissionDenied)) {
+          print();
+          throw error;
+        }
+        logger.warn(
+          "Not marked as read: this login is read-only. Pass --no-mark-read to only show notifications.",
+        );
       }
     }
     print();
+    if (missing.length > 0) notificationNotFound(missing);
   },
 });
