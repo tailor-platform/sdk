@@ -235,25 +235,13 @@ describe("tailordb migration status --json", () => {
     using stdout = captureStdout();
     using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     using _json = jsonMode();
-    const workspaceId = "12345678-1234-4abc-8def-123456789012";
 
-    await runCommand(statusCommand, [
-      "--config",
-      "apps/tailor.config.ts",
-      "--workspace-id",
-      workspaceId,
-      "--profile",
-      "staging",
-    ]);
+    await runCommand(statusCommand, ["--config", "apps/tailor.config.ts", "--profile", "staging"]);
 
     const [row] = JSON.parse(stdout.output) as {
       inProgressMigrationActions: { args: string[] }[];
     }[];
-    const context = [
-      "--config=apps/tailor.config.ts",
-      `--workspace-id=${workspaceId}`,
-      "--profile=staging",
-    ];
+    const context = ["--config=apps/tailor.config.ts", workspaceArg, "--profile=staging"];
     expect(row?.inProgressMigrationActions.map(({ args }) => args)).toEqual([
       ["deploy", ...context],
       ["tailordb", "migration", "resolve", "--rollback", "--namespace", "tailordb", ...context],
@@ -520,8 +508,7 @@ describe("tailordb migration status --json", () => {
       },
     ]);
     const [{ error }] = JSON.parse(stdout.output);
-    const context =
-      "--config=custom.config.ts --workspace-id=12345678-1234-4abc-8def-123456789012 --profile=staging";
+    const context = `--config=custom.config.ts ${workspaceArg} --profile=staging`;
     expect(error).toContain(`sync 0002 --namespace tailordb ${context}`);
     expect(error).toContain(`set 0002 --namespace tailordb ${context}`);
     expect(error).toContain("rewrites the tables");
