@@ -119,7 +119,7 @@ function parseTailorDBType(
         );
       }
 
-      const relationMetadata = processRelationMetadata(rawRelation, context, fieldConfig.array);
+      const relationMetadata = processRelationMetadata(rawRelation, context, fieldConfig);
       fieldConfig = applyRelationMetadataToFieldConfig(fieldConfig, relationMetadata);
     }
 

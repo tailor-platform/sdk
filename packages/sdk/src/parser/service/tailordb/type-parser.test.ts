@@ -816,13 +816,29 @@ describe("parseTypes", () => {
       ).toThrow('Field "userEmail" on table "Post" references "User.email", which must be unique.');
     });
 
-    test("rejects a relation key whose explicit uniqueness is overridden by keyOnly", () => {
+    test.each([
+      [
+        "a 1-1 relation",
+        (account: ReturnType<typeof db.table>) =>
+          db.uuid().relation({ type: "1-1", toward: { table: account } }),
+      ],
+      [
+        "a oneToOne relation",
+        (account: ReturnType<typeof db.table>) =>
+          db.uuid().relation({ type: "oneToOne", toward: { table: account } }),
+      ],
+      [
+        ".unique() on a keyOnly relation field",
+        (account: ReturnType<typeof db.table>) =>
+          db
+            .uuid()
+            .unique()
+            .relation({ type: "keyOnly", toward: { table: account } }),
+      ],
+    ] as const)("accepts a relation to a key made unique by %s", (_label, buildAccountID) => {
       const account = db.table("Account", { name: db.string() });
       const user = db.table("User", {
-        accountID: db
-          .uuid()
-          .unique()
-          .relation({ type: "keyOnly", toward: { table: account } }),
+        accountID: buildAccountID(account),
       });
       const post = db.table("Post", {
         accountID: db.uuid().relation({
@@ -833,33 +849,8 @@ describe("parseTypes", () => {
 
       expect(() =>
         parseTypes(toSchemaOutputs({ Account: account, User: user, Post: post }), "test-namespace"),
-      ).toThrow(
-        'Field "accountID" on table "Post" references "User.accountID", which must be unique.',
-      );
+      ).not.toThrow();
     });
-
-    test.each(["1-1", "oneToOne"] as const)(
-      "accepts a relation to a key made unique by a %s relation",
-      (type) => {
-        const account = db.table("Account", { name: db.string() });
-        const user = db.table("User", {
-          accountID: db.uuid().relation({ type, toward: { table: account } }),
-        });
-        const post = db.table("Post", {
-          accountID: db.uuid().relation({
-            type: "keyOnly",
-            toward: { table: user, key: "accountID" },
-          }),
-        });
-
-        expect(() =>
-          parseTypes(
-            toSchemaOutputs({ Account: account, User: user, Post: post }),
-            "test-namespace",
-          ),
-        ).not.toThrow();
-      },
-    );
 
     test("rejects a relation to an array key with a 1-1 relation", () => {
       const account = db.table("Account", { name: db.string() });
@@ -996,6 +987,32 @@ describe("parseTypes", () => {
           db
             .uuid()
             .unique()
+            .relation({ type: "keyOnly", toward: { table: user } }),
+      ],
+      [
+        "unique after relation",
+        (user: ReturnType<typeof db.table>) =>
+          db
+            .uuid()
+            .relation({ type: "keyOnly", toward: { table: user } })
+            .unique(),
+      ],
+    ] as const)("should keep unique=true for keyOnly relations (%s)", (_label, buildUserId) => {
+      const user = db.table("User", { name: db.string() });
+      const post = db.table("Post", { userId: buildUserId(user) });
+
+      const result = parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace");
+
+      expect(result.Post!.fields.userId!.config.unique).toBe(true);
+    });
+
+    test.each([
+      [
+        "unique before relation",
+        (user: ReturnType<typeof db.table>) =>
+          db
+            .uuid()
+            .unique()
             .relation({
               type: "n-1",
               toward: { table: user },
@@ -1063,6 +1080,7 @@ describe("parseTypes", () => {
 
       const result = parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace");
 
+      expect(result.Post!.fields.userId!.config.unique).toBe(false);
       // keyOnly should not create relation info
       expect(result.Post!.fields.userId!.relation).toBeUndefined();
       expect(result.Post!.forwardRelationships).toEqual({});
@@ -1133,6 +1151,31 @@ describe("parseTypes", () => {
       expect(result.Profile!.fields.info!.relation).toBeUndefined();
       expect(result.Profile!.forwardRelationships).toEqual({});
       expect(result.User!.backwardRelationships).toEqual({});
+    });
+
+    test("keeps .unique() and .index() set on the inner field", () => {
+      const profile = db.table("Profile", {
+        info: db.object({
+          ownerID: db
+            .uuid()
+            .unique()
+            .relation({ type: "keyOnly", toward: { table: user } }),
+          reviewerID: db
+            .uuid()
+            .index()
+            .relation({ type: "keyOnly", toward: { table: user } }),
+        }),
+      });
+
+      const result = parseTypes(
+        toSchemaOutputs({ User: user, Profile: profile }),
+        "test-namespace",
+      );
+
+      const inner = result.Profile!.fields.info!.config.fields!;
+      expect(inner.ownerID).toMatchObject({ unique: true, index: true });
+      expect(inner.reviewerID!.index).toBe(true);
+      expect(inner.reviewerID!.unique).toBeFalsy();
     });
 
     test("rejects a relation to a table that does not exist, naming the nested field", () => {
