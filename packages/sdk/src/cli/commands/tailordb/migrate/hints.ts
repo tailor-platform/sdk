@@ -84,6 +84,16 @@ export interface NamespaceMigrationCommandOptions extends MigrationCommandContex
 }
 
 /**
+ * Arguments that make a suggested command target what the current run targeted.
+ * @param {MigrationCommandContext} context - Invocation context of the current run
+ * @returns {string[]} The config argument, followed by the context arguments
+ */
+export function migrationContextArgs(context: MigrationCommandContext): string[] {
+  const configArg = formatConfigArg(context.configPath);
+  return [...(configArg === undefined ? [] : [configArg]), ...(context.contextArgs ?? [])];
+}
+
+/**
  * Arguments of a `tailor tailordb migration` command, reproducing the current
  * run's invocation context.
  * @param {readonly string[]} subcommand - Subcommand, followed by its arguments
@@ -94,13 +104,7 @@ export function migrationCommandArgs(
   subcommand: readonly string[],
   context: MigrationCommandContext,
 ): string[] {
-  const args = ["tailordb", "migration", ...subcommand];
-  const configArg = formatConfigArg(context.configPath);
-  if (configArg !== undefined) {
-    args.push(configArg);
-  }
-  args.push(...(context.contextArgs ?? []));
-  return args;
+  return ["tailordb", "migration", ...subcommand, ...migrationContextArgs(context)];
 }
 
 /**

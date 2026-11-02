@@ -1,7 +1,10 @@
-import { formatConfigArg } from "#/cli/shared/args";
 import { getOrNull, type OperatorClient } from "#/cli/shared/client";
 import { CLIError, type CLIErrorNextAction, formatCommandHint } from "#/cli/shared/errors";
-import { namespaceMigrationArgs, type MigrationCommandContext } from "./hints";
+import {
+  migrationContextArgs,
+  namespaceMigrationArgs,
+  type MigrationCommandContext,
+} from "./hints";
 import { formatMigrationNumber } from "./migration-number";
 import {
   MAINTENANCE_MODE_LABEL_KEY,
@@ -301,11 +304,6 @@ export function inProgressMigrationActions(
   const { state, namespace, ...context } = params;
   const record = state.inProgress;
   if (!record || record.number !== (state.number ?? 0) + 1) return [];
-  const configArg = formatConfigArg(context.configPath);
-  const invocationArgs = [
-    ...(configArg === undefined ? [] : [configArg]),
-    ...(context.contextArgs ?? []),
-  ];
   const label = formatMigrationNumber(record.number);
   const previousLabel = formatMigrationNumber(record.number - 1);
   const settleAction = (resolution: MigrationResolution, description: string) => ({
@@ -331,7 +329,7 @@ export function inProgressMigrationActions(
       action: "resume",
       description: "steps that already completed do not run again",
       command: "tailor",
-      args: ["deploy", ...invocationArgs],
+      args: ["deploy", ...migrationContextArgs(context)],
     },
     settleAction(
       "rollback",
