@@ -510,9 +510,9 @@ describe("tailordb migration status --json", () => {
     const [{ error }] = JSON.parse(stdout.output);
     const context = `--config=custom.config.ts ${workspaceArg} --profile=staging`;
     expect(error).toContain(`sync 0002 --namespace tailordb ${context}`);
-    expect(error).toContain(`set 0002 --namespace tailordb ${context}`);
-    expect(error).toContain("rewrites the tables");
-    expect(error).toContain("moves only the checkpoint");
+    expect(error).toContain(
+      "Each command rewrites the tables to that migration, removing the fields it does not have and deleting the tables it does not have together with their data",
+    );
     expect(error).not.toContain("--force");
   });
 
@@ -534,7 +534,6 @@ describe("tailordb migration status --json", () => {
     const [{ error }] = JSON.parse(stdout.output);
     expect(error).toContain("Pull the latest migration files");
     expect(error).toContain("sync 0002 --force --namespace tailordb");
-    expect(error).toContain("set 0002 --force --namespace tailordb");
     expect(error).toContain("replaces the migration history ID");
   });
 
@@ -551,7 +550,6 @@ describe("tailordb migration status --json", () => {
 
     const [{ error }] = JSON.parse(stdout.output);
     expect(error).not.toContain("migration sync");
-    expect(error).not.toContain("migration set");
   });
 
   test("does not suggest checkpoint moves without a local snapshot", async () => {
@@ -567,7 +565,6 @@ describe("tailordb migration status --json", () => {
     const [{ error }] = JSON.parse(stdout.output);
     expect(error).toContain("Pull the latest migration files");
     expect(error).not.toContain("migration sync");
-    expect(error).not.toContain("migration set");
   });
 
   test("identifies a migration history mismatch in human-readable output", async () => {

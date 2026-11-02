@@ -67,7 +67,6 @@ Note: Migration scripts are automatically executed during `tailor deploy`. See [
 {{politty:command:tailordb migration rebaseline}}
 {{politty:command:tailordb migration resolve}}
 {{politty:command:tailordb migration script}}
-{{politty:command:tailordb migration set}}
 {{politty:command:tailordb migration status}}
 {{politty:command:tailordb migration sync}}
 {{politty:command:tailordb migration test}}

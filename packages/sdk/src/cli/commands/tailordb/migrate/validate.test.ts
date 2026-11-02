@@ -277,7 +277,7 @@ describe("tailordb migration validate", () => {
     expect(stderr.output).toContain(
       "Remote schema: drift detected (no checkpoint yet; compared with 0000)",
     );
-    expect(stderr.output).not.toContain("migration set <N>");
+    expect(stderr.output).not.toContain("migration sync <N>");
   });
 
   test("treats out-of-range migration labels as unset", async () => {
@@ -434,9 +434,7 @@ describe("tailordb migration validate", () => {
       expect(suggestion).toContain(
         "sync 0000 --force --namespace tailordb --config=custom.config.ts --workspace-id=12345678-1234-4abc-8def-123456789012 --profile=staging",
       );
-      expect(suggestion).toContain("set 0000 --force --namespace tailordb");
       expect(suggestion).toContain("rewrites the tables");
-      expect(suggestion).toContain("moves only the checkpoint");
       expect(suggestion).toContain("replaces the migration history ID");
     },
   );
@@ -454,7 +452,6 @@ describe("tailordb migration validate", () => {
     const { suggestion } = result.error as CLIError;
     expect(suggestion).toContain("Pull the latest migration files");
     expect(suggestion).not.toContain("migration sync");
-    expect(suggestion).not.toContain("migration set");
   });
 
   test("explains the rebaseline-pending recovery procedure for a checkpoint that fell behind", async () => {
@@ -475,7 +472,6 @@ describe("tailordb migration validate", () => {
     expect(stderr.output).toContain("fell behind before 'migration rebaseline' ran");
     expect(stderr.output).toContain("must reach 0005");
     expect(stderr.output).not.toContain("migration sync");
-    expect(stderr.output).not.toContain("migration set");
     expect(stderr.output).toContain(
       "Restore the pre-rebaseline migrations/ directory from git history",
     );

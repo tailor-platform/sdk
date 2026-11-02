@@ -104,7 +104,6 @@ tailor tailordb migration <command>
 | [`tailordb migration rebaseline`](#tailordb-migration-rebaseline) | Collapse the full migration history into a new 0000 baseline.                                                                                                                                                                                                                                                             |
 | [`tailordb migration resolve`](#tailordb-migration-resolve)       | Settle a migration that a failed deploy left partially applied, or whose run a deploy could not confirm.                                                                                                                                                                                                                  |
 | [`tailordb migration script`](#tailordb-migration-script)         | Add a migration script (migrate.ts) template to an existing migration directory, or record with --no-script that a migration intentionally has none.                                                                                                                                                                      |
-| [`tailordb migration set`](#tailordb-migration-set)               | Set migration checkpoint to a specific number.                                                                                                                                                                                                                                                                            |
 | [`tailordb migration status`](#tailordb-migration-status)         | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                                                                                                                                                                                                                      |
 | [`tailordb migration sync`](#tailordb-migration-sync)             | Sync remote TailorDB schema and checkpoint to a local migration snapshot to recover from schema drift or a checkpoint outside the local history.                                                                                                                                                                          |
 | [`tailordb migration test`](#tailordb-migration-test)             | Test pending migrations with seed fixtures or cloned data in a temporary workspace.                                                                                                                                                                                                                                       |
@@ -230,43 +229,6 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 **Notes**
 
 When `migrate.ts` already exists, running the command clears a previously recorded `--no-script` acknowledgment, and `--with-test` adds only the tests that do not exist yet (writing `db.pglite.ts` if it is missing). `migrate.pglite.test.ts` is scaffolded only when `@electric-sql/pglite` is installed in the project.
-
-#### tailordb migration set
-
-Set migration checkpoint to a specific number.
-
-**Usage**
-
-```
-tailor tailordb migration set [options] <number>
-```
-
-**Arguments**
-
-| Argument | Description                               | Required |
-| -------- | ----------------------------------------- | -------- |
-| `number` | Migration number to set (e.g., 0001 or 1) | Yes      |
-
-**Options**
-
-| Option                          | Alias | Description                                                                             | Required | Default              | Env                            |
-| ------------------------------- | ----- | --------------------------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                            | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                       | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
-| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                                              | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
-| `--yes`                         | `-y`  | Skip confirmation prompts                                                               | No       | `false`              | -                              |
-| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (required if multiple namespaces exist)                       | No       | -                    | -                              |
-| `--force`                       | -     | Proceed even when the namespace records a migration history ID other than the local one | No       | `false`              | -                              |
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-**Notes**
-
-The migration number must be a 4-digit value (e.g. `0001`) or a bare integer (e.g. `1`) within 0–9999, and must exist in the local migration history; `0` is always accepted as the baseline, provided the local history passes validation. A gapped history is rejected.
-
-The command refuses to run when the namespace records a migration history ID other than the local one, or one that cannot be read, unless the namespace has neither a checkpoint nor a history ID yet. `--force` replaces that history ID with the local one, or removes it when the local history has none, and still asks for confirmation unless `--yes` is given.
-
-Metadata lookup failures (authentication, permission, or network errors) are reported as errors; only a not-yet-deployed namespace is treated as having no checkpoint.
 
 #### tailordb migration status
 

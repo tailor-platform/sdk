@@ -387,7 +387,7 @@ describe("tailordb migration rebaseline", () => {
     expect(String(result.error)).toMatch(/invalid migration history marker/i);
     expect(result.error).toMatchObject({ code: "REBASELINE_REMOTE_HISTORY_INVALID" });
     expect((result.error as CLIError).suggestion).toContain(
-      `tailor tailordb migration set 0001 --force --namespace tailordb ${formatConfigArg(configPath())} --workspace-id=${workspaceId}`,
+      `tailor tailordb migration sync 0001 --force --namespace tailordb ${formatConfigArg(configPath())} --workspace-id=${workspaceId}\`, which removes the fields that migration does not have and deletes the tables it does not have together with their data`,
     );
     expect(migrationDirectories()).toEqual(["0000", "0001"]);
     expect(state.setMetadata).not.toHaveBeenCalled();
@@ -410,7 +410,7 @@ describe("tailordb migration rebaseline", () => {
       context: { remoteHistoryId: "hother", localHistoryId: "hcurrent" },
     });
     expect((result.error as CLIError).suggestion).toContain(
-      `tailor tailordb migration set 0001 --force --namespace tailordb ${formatConfigArg(configPath())} --workspace-id=${workspaceId}`,
+      `tailor tailordb migration sync 0001 --force --namespace tailordb ${formatConfigArg(configPath())} --workspace-id=${workspaceId}\`, which removes the fields that migration does not have and deletes the tables it does not have together with their data`,
     );
     expect(migrationDirectories()).toEqual(["0000", "0001"]);
     expect(state.setMetadata).not.toHaveBeenCalled();
@@ -611,7 +611,7 @@ describe("tailordb migration rebaseline", () => {
     expect(String(result.error)).toMatch(/local migration history was re-baselined/i);
     expect(result.error).toMatchObject({ code: "REBASELINE_CHECKPOINT_UPDATE_FAILED" });
     const { suggestion } = result.error as CLIError;
-    expect(suggestion).toContain("tailor tailordb migration set 0 --force");
+    expect(suggestion).toContain("tailor tailordb migration sync 0000 --force");
     expect(suggestion).toContain("--namespace tailordb");
     expect(suggestion).toContain("--config");
     expect(suggestion).toContain("--workspace-id=87654321-4321-4cba-8fed-210987654321");

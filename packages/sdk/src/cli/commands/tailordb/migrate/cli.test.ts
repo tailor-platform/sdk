@@ -4,7 +4,6 @@ import {
   migrationCommand,
   rebaselineCommand,
   scriptCommand,
-  setCommand,
   statusCommand,
   syncCommand,
   testCommand,
@@ -18,12 +17,18 @@ describe("migration CLI commands", () => {
       expect(migrationCommand.description).toContain("migration");
     });
 
-    test.each(["generate", "rebaseline", "script", "set", "status", "sync", "test", "validate"])(
-      "should have %s subcommand",
-      (subCommand) => {
-        expect(migrationCommand.subCommands).toHaveProperty(subCommand);
-      },
-    );
+    test("should have exactly the supported subcommands", () => {
+      expect(Object.keys(migrationCommand.subCommands ?? {}).toSorted()).toEqual([
+        "generate",
+        "rebaseline",
+        "resolve",
+        "script",
+        "status",
+        "sync",
+        "test",
+        "validate",
+      ]);
+    });
   });
 
   describe("rebaselineCommand", () => {
@@ -47,20 +52,6 @@ describe("migration CLI commands", () => {
     test("should have required args schema", () => {
       const shape = generateCommand.args.shape;
       expect(shape).toHaveProperty("name");
-      expect(shape).toHaveProperty("yes");
-    });
-  });
-
-  describe("setCommand", () => {
-    test("should have correct meta information", () => {
-      expect(setCommand.name).toBe("set");
-      expect(setCommand.description).toContain("migration");
-    });
-
-    test("should have required args schema", () => {
-      const shape = setCommand.args.shape;
-      expect(shape).toHaveProperty("number");
-      expect(shape).toHaveProperty("namespace");
       expect(shape).toHaveProperty("yes");
     });
   });

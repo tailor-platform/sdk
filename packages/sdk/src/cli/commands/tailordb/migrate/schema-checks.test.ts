@@ -80,6 +80,18 @@ describe("logRemoteDriftGuidance", () => {
     );
   });
 
+  test("lists the ways to resolve the drift", () => {
+    const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
+    logRemoteDriftGuidance({}, [{ hasDrift: true, drifts: [scriptsDifferDrift] }]);
+    const messages = (infoSpy.mock.calls as unknown[][]).map(([message]) => message);
+    expect(messages.slice(messages.indexOf("To resolve:") + 1)).toEqual([
+      "  - Run `tailor tailordb migration status` to compare local vs remote.",
+      "  - If remote is correct, update local tables and run 'migration generate'.",
+      "  - If local migration history is correct, run 'migration sync <N>' to overwrite remote.",
+      "  - If remote already matches another migration, run 'migration sync <N>' with that migration to move only the checkpoint.",
+    ]);
+  });
+
   test("adds the missing-hash hint when every drift is a missing script hash", () => {
     const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
     logRemoteDriftGuidance({}, [{ hasDrift: true, drifts: [missingHashDrift] }]);
