@@ -318,9 +318,10 @@ describe("tailordb migration rebaseline", () => {
     );
     expect(result.error).toMatchObject({
       code: "MIGRATION_HISTORY_MISMATCH",
-      suggestion: expect.stringContaining("tailor tailordb migration generate --config"),
+      suggestion: expect.stringContaining(
+        `\`tailor tailordb migration generate ${formatConfigArg(configPath())}\``,
+      ),
     });
-    expect((result.error as CLIError).suggestion).toContain(path.dirname(state.migrationsDir));
     expect(migrationDirectories()).toEqual(["0000", "0001"]);
     expect(state.getMetadata).not.toHaveBeenCalled();
     expect(state.setMetadata).not.toHaveBeenCalled();
@@ -616,6 +617,9 @@ describe("tailordb migration rebaseline", () => {
     expect(suggestion).toContain("--config");
     expect(suggestion).toContain("--workspace-id=87654321-4321-4cba-8fed-210987654321");
     expect(suggestion).toContain("--profile=staging");
+    expect(suggestion).toContain(
+      `\`tailor deploy ${formatConfigArg(configPath())} --workspace-id=87654321-4321-4cba-8fed-210987654321 --profile=staging\``,
+    );
     expect(migrationDirectories()).toEqual(["0000"]);
   });
 });

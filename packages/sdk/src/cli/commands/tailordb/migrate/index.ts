@@ -14,6 +14,7 @@
 
 import { defineCommand } from "@politty/zod";
 import { generateCommand } from "./generate";
+import { type MigrationSubcommand } from "./hints";
 import { rebaselineCommand } from "./rebaseline";
 import { resolveCommand } from "./resolve";
 import { scriptCommand } from "./script";
@@ -34,7 +35,7 @@ export const migrationCommand = defineCommand({
     sync: syncCommand,
     test: testCommand,
     validate: validateCommand,
-  },
+  } satisfies Record<MigrationSubcommand, unknown>,
 });
 
 export { generateCommand } from "./generate";

@@ -20,7 +20,13 @@ import { PluginManager } from "#/plugin/manager";
 import { getNamespacesWithMigrations, selectTargetNamespace } from "./config";
 import { formatMigrationDiff, hasChanges } from "./diff-calculator";
 import { captureFileState, captureMigrationFileState } from "./file-state";
-import { formatNamespaceMigrationHint, migrationCommandContext } from "./hints";
+import {
+  formatNamespaceMigrationHint,
+  migrationCommandArgs,
+  migrationCommandContext,
+  migrationContextArgs,
+  type MigrationSubcommandArgs,
+} from "./hints";
 import {
   assertNoMigrationInProgress,
   fetchRemoteMigrationState,
@@ -143,7 +149,7 @@ async function rebaseline(options: RebaselineOptions): Promise<RebaselineResult>
   );
   const generateFirstSuggestion = `First run ${formatCommandHint({
     command: "tailor",
-    args: ["tailordb", "migration", "generate", "--config", config.path],
+    args: migrationCommandArgs(["generate"], { configPath: config.path }),
   })}.`;
 
   assertValidMigrationFiles(target.migrationsDir, target.namespace, config.path);
@@ -213,15 +219,14 @@ async function rebaseline(options: RebaselineOptions): Promise<RebaselineResult>
     workspaceId,
     profile: options.profile,
   });
-  const remoteContextArgs = ["--config", config.path, ...(commandContext.contextArgs ?? [])];
-  const migrationHint = (subcommand: readonly string[]): string =>
+  const migrationHint = (subcommand: MigrationSubcommandArgs): string =>
     formatNamespaceMigrationHint({ ...commandContext, subcommand, namespace: target.namespace });
   const syncBaselineSuggestion = `Run ${migrationHint(["sync", formatMigrationNumber(0), "--force"])}`;
   const latestLabel = formatMigrationNumber(latestMigration);
   const adoptLocalHistory = `run ${migrationHint(["sync", latestLabel, "--force"])}, which removes the fields that migration does not have and deletes the tables it does not have together with their data, then run this command again.`;
   const rerunSuggestion = "Run the command again.";
   const deploySuggestion = `after resolving the connection error, deploy with schema checks enabled by running ${formatCommandHint(
-    { command: "tailor", args: ["deploy", ...remoteContextArgs] },
+    { command: "tailor", args: ["deploy", ...migrationContextArgs(commandContext)] },
   )}.`;
 
   const assertConnectedWorkspaceReady = async (

@@ -31,6 +31,7 @@ import {
   formatNamespaceMigrationHint,
   migrationCommandContext,
   type MigrationCommandContext,
+  type MigrationSubcommandArgs,
 } from "#/cli/commands/tailordb/migrate/hints";
 import {
   describeMigrationCheckpoint,
@@ -675,7 +676,7 @@ async function assertCheckpointUnchanged(
     : historyIdMismatch
       ? " in a different migration history"
       : "";
-  const command = (subcommand: readonly string[]) =>
+  const command = (subcommand: MigrationSubcommandArgs) =>
     formatNamespaceMigrationHint({ ...options.commandContext, subcommand, namespace });
   const syncCommand = command([
     "sync",
@@ -968,7 +969,7 @@ function unreleasedRecordError(
   const { namespace } = migration;
   const number = formatMigrationNumber(migration.number);
   const checkpoint = formatMigrationNumber(migration.number - 1);
-  const command = (subcommand: readonly string[]) =>
+  const command = (subcommand: MigrationSubcommandArgs) =>
     formatNamespaceMigrationHint({ ...commandContext, subcommand, namespace });
   const resolveRollback = formatMigrationResolveHint("rollback", namespace, commandContext);
   const next = !record.confirmed
