@@ -37,6 +37,8 @@ vi.mock("#/cli/shared/client", async (importOriginal) => ({
   initOperatorClient: vi.fn(),
 }));
 
+const workspaceArg = "--workspace-id=12345678-1234-4abc-8def-123456789012";
+
 describe("tailordb migration status --json", () => {
   aroundEach(async (runTest) => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-status-json-test-"));
@@ -120,6 +122,35 @@ describe("tailordb migration status --json", () => {
         inProgressMigration: 2,
         inProgressMigrationLabel: "0002",
         inProgressMigrationRun: "steps",
+        inProgressMigrationActions: [
+          { action: "resume", command: "tailor", args: ["deploy", workspaceArg] },
+          {
+            action: "rollback",
+            command: "tailor",
+            args: [
+              "tailordb",
+              "migration",
+              "resolve",
+              "--rollback",
+              "--namespace",
+              "tailordb",
+              workspaceArg,
+            ],
+          },
+          {
+            action: "complete",
+            command: "tailor",
+            args: [
+              "tailordb",
+              "migration",
+              "resolve",
+              "--complete",
+              "--namespace",
+              "tailordb",
+              workspaceArg,
+            ],
+          },
+        ],
       },
     ]);
   });
@@ -136,8 +167,85 @@ describe("tailordb migration status --json", () => {
 
     await runCommand(statusCommand, []);
 
-    expect(JSON.parse(stdout.output)).toMatchObject([
-      { status: "ok", inProgressMigration: 2, inProgressMigrationRun: "main" },
+    const [row] = JSON.parse(stdout.output) as Record<string, unknown>[];
+    expect(row).toMatchObject({
+      status: "ok",
+      inProgressMigration: 2,
+      inProgressMigrationRun: "main",
+    });
+    expect(row?.inProgressMigrationActions).toEqual([
+      expect.objectContaining({
+        action: "complete",
+        args: [
+          "tailordb",
+          "migration",
+          "resolve",
+          "--complete",
+          "--namespace",
+          "tailordb",
+          workspaceArg,
+        ],
+      }),
+      expect.objectContaining({
+        action: "rollback",
+        args: [
+          "tailordb",
+          "migration",
+          "resolve",
+          "--rollback",
+          "--namespace",
+          "tailordb",
+          workspaceArg,
+        ],
+      }),
+    ]);
+  });
+
+  test.each([
+    {
+      name: "a namespace without a checkpoint",
+      labels: { "sdk-migration-in-progress": "m0001" },
+      actions: ["resume", "rollback", "complete"],
+    },
+    {
+      name: "a record ahead of the migration after the checkpoint",
+      labels: { "sdk-migration": "m0000", "sdk-migration-in-progress": "m0002" },
+      actions: [],
+    },
+  ])("lists the in-progress commands that accept $name", async (row) => {
+    state.getMetadata.mockResolvedValue({ metadata: { labels: row.labels } });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    await runCommand(statusCommand, []);
+
+    const [status] = JSON.parse(stdout.output) as {
+      inProgressMigrationActions: { action: string }[];
+    }[];
+    expect(status?.inProgressMigrationActions.map(({ action }) => action)).toEqual(row.actions);
+  });
+
+  test("keeps the config, workspace, and profile of the run in the in-progress commands", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002" },
+      },
+    });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    await runCommand(statusCommand, ["--config", "apps/tailor.config.ts", "--profile", "staging"]);
+
+    const [row] = JSON.parse(stdout.output) as {
+      inProgressMigrationActions: { args: string[] }[];
+    }[];
+    const context = ["--config=apps/tailor.config.ts", workspaceArg, "--profile=staging"];
+    expect(row?.inProgressMigrationActions.map(({ args }) => args)).toEqual([
+      ["deploy", ...context],
+      ["tailordb", "migration", "resolve", "--rollback", "--namespace", "tailordb", ...context],
+      ["tailordb", "migration", "resolve", "--complete", "--namespace", "tailordb", ...context],
     ]);
   });
 
@@ -152,8 +260,13 @@ describe("tailordb migration status --json", () => {
     await runCommand(statusCommand, []);
 
     expect(stderr.output).toContain("In progress: 0002");
-    expect(stderr.output).toContain("tailor tailordb migration resolve");
-    expect(stderr.output).not.toContain("the next deploy resumes it");
+    expect(stderr.output).toContain(
+      `Complete: \`tailor tailordb migration resolve --complete --namespace tailordb ${workspaceArg}\``,
+    );
+    expect(stderr.output).toContain(
+      `Roll back: \`tailor tailordb migration resolve --rollback --namespace tailordb ${workspaceArg}\``,
+    );
+    expect(stderr.output).not.toContain("tailor deploy");
   });
 
   test("does not report an in-progress record the checkpoint already passed", async () => {
@@ -171,9 +284,10 @@ describe("tailordb migration status --json", () => {
     const [row] = JSON.parse(stdout.output) as Record<string, unknown>[];
     expect(row).toMatchObject({ status: "ok", currentMigration: 2 });
     expect(row).not.toHaveProperty("inProgressMigration");
+    expect(row).not.toHaveProperty("inProgressMigrationActions");
   });
 
-  test("tells the user how an in-progress migration continues", async () => {
+  test("tells the user how to resume, roll back, or complete an in-progress migration", async () => {
     state.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002" },
@@ -184,6 +298,13 @@ describe("tailordb migration status --json", () => {
     await runCommand(statusCommand, []);
 
     expect(stderr.output).toContain("In progress: 0002");
+    expect(stderr.output).toContain(`Resume: \`tailor deploy ${workspaceArg}\``);
+    expect(stderr.output).toContain(
+      `Roll back: \`tailor tailordb migration resolve --rollback --namespace tailordb ${workspaceArg}\``,
+    );
+    expect(stderr.output).toContain(
+      `Complete: \`tailor tailordb migration resolve --complete --namespace tailordb ${workspaceArg}\``,
+    );
   });
 
   test("reports unreadable in-progress labels as an error", async () => {
@@ -387,8 +508,7 @@ describe("tailordb migration status --json", () => {
       },
     ]);
     const [{ error }] = JSON.parse(stdout.output);
-    const context =
-      "--config=custom.config.ts --workspace-id=12345678-1234-4abc-8def-123456789012 --profile=staging";
+    const context = `--config=custom.config.ts ${workspaceArg} --profile=staging`;
     expect(error).toContain(`sync 0002 --namespace tailordb ${context}`);
     expect(error).toContain(`set 0002 --namespace tailordb ${context}`);
     expect(error).toContain("rewrites the tables");
