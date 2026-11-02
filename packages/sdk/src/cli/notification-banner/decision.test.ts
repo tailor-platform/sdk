@@ -43,6 +43,10 @@ describe("lookupSkipReason", () => {
     expect(lookupSkipReason(["deploy"], { TAILOR_NOTIFICATION_BANNER: "weird" })).toBeUndefined();
   });
 
+  test("skips --help-all like the other help flags", () => {
+    expect(lookupSkipReason(["workspace", "--help-all"], {})).toBe("help");
+  });
+
   test("skips help, version and a bare invocation", () => {
     expect(lookupSkipReason(["deploy", "--help"], {})).toBe("help");
     expect(lookupSkipReason(["-h"], {})).toBe("help");

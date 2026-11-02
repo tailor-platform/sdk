@@ -147,8 +147,8 @@ void runMain(mainCommand, {
   agentHelp,
   setup: ({ agent }) => {
     setJsonDefaultAgent(agent?.id);
-    // Best-effort unread-notification lookup for the post-command banner; it
-    // never blocks (the banner prints in cleanup only if this has answered).
+    // Best-effort unread-notification lookup for the post-command banner. It runs
+    // alongside the command; cleanup prints it, waiting at most 150 ms for an answer.
     startNotificationLookup(process.argv.slice(2));
   },
   // CLI plugin dispatch: an unknown subcommand at any level execs the external

@@ -199,8 +199,8 @@ You can use environment variables to configure workspace and authentication:
 | `VISUAL` / `EDITOR`                          | Preferred editor for commands that open files (e.g., `vim`, `code`, `nano`)                                      |
 | `TAILOR_GITHUB_ACTIONS_ANNOTATIONS`          | GitHub Actions failure annotations: `on` (default) or `off`                                                      |
 | `TAILOR_CRASH_REPORTS_LOCAL`                 | Local crash log writing: `on` (default) or `off`                                                                 |
-| `TAILOR_NOTIFICATION_BANNER`                 | Unread WARNING/CRITICAL notifications listed after a command in an interactive terminal: `on` (default) or `off` |
 | `TAILOR_CRASH_REPORTS_REMOTE`                | Automatic crash report submission: `off` (default) or `on`                                                       |
+| `TAILOR_NOTIFICATION_BANNER`                 | Unread WARNING/CRITICAL notifications listed after a command in an interactive terminal: `on` (default) or `off` |
 
 ### Authentication Token Priority
 

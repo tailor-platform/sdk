@@ -47,7 +47,7 @@ const VALUE_FLAGS = new Set([
   "--env-file-if-exists",
 ]);
 
-const HELP_FLAGS = new Set(["--help", "-h", "--help-json", "--version", "-v"]);
+const HELP_FLAGS = new Set(["--help", "-h", "--help-all", "--help-json", "--version", "-v"]);
 
 /**
  * Why the unread-notification lookup is not started for this invocation.

@@ -462,7 +462,7 @@ describe.concurrent("plugin dispatch argument forwarding", () => {
 describe("notification banner wiring", () => {
   // Spawned children have no TTY, so this covers the non-interactive gate end to end: the
   // banner must not read or touch its state, create a config, or change the command's outcome.
-  // The interactive paths (lookup failure, pending lookup, throttling) are unit-tested in
+  // The interactive paths (lookup failure, pending lookup, failure backoff) are unit-tested in
   // notification-banner/index.test.ts.
   test("a non-interactive run leaves the banner state and the config alone", async () => {
     expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);

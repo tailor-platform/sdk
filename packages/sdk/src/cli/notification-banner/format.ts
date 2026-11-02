@@ -15,7 +15,11 @@ export interface NotificationBanner {
   lines: string[];
 }
 
+/** How many notifications the banner names; the rest are counted. */
+const SHOWN_ROWS = 3;
 const ROW_PREFIX_WIDTH = "  X CRITICAL  ".length;
+// formatCommandHint would shell-quote a literal `<id>`, so a bare word stands in for it.
+const ID_PLACEHOLDER = "NOTIFICATION_ID";
 const MIN_TITLE_WIDTH = 20;
 const DEFAULT_COLUMNS = 80;
 
@@ -60,8 +64,10 @@ interface FormatOptions {
 }
 
 /**
- * Lay out the post-command banner for the unread WARNING and CRITICAL notifications.
- * @param notifications - The page of notifications the lookup returned (at most a few)
+ * Lay out the post-command banner for the unread WARNING and CRITICAL notifications: the
+ * {@link SHOWN_ROWS} most severe of the page (newest first within a severity), then a count of
+ * the rest.
+ * @param notifications - The page of notifications the lookup returned, newest first
  * @param totalCount - How many unread notifications at that severity there are in all
  * @param options - Width and profile
  * @returns Header and detail lines, already styled
@@ -79,22 +85,35 @@ export function formatNotificationBanner(
 
   const columns = options.columns ?? (process.stderr.columns || DEFAULT_COLUMNS);
   const titleWidth = Math.max(columns - ROW_PREFIX_WIDTH, MIN_TITLE_WIDTH);
-  const rows = notifications
-    .toSorted((a, b) => severityRank(a.severity) - severityRank(b.severity))
-    .map(
-      (n) =>
-        `  ${severityCell(n.severity)}  ${truncate(sanitizeTerminalText(n.title), titleWidth)}`,
-    );
+  const sorted = notifications.toSorted(
+    (a, b) => severityRank(a.severity) - severityRank(b.severity),
+  );
+  const shown = sorted.slice(0, SHOWN_ROWS);
+  const lines = shown.map(
+    (n) => `  ${severityCell(n.severity)}  ${truncate(sanitizeTerminalText(n.title), titleWidth)}`,
+  );
 
-  const lines = [...rows];
-  const more = count - notifications.length;
-  if (more > 0) lines.push(styles.dim(`  …and ${more} more.`));
-  const listArgs = [
-    "notification",
-    "list",
-    ...(options.profile ? ["--profile", options.profile] : []),
-  ];
-  const hint = formatCommandHint({ command: "tailor", args: listArgs });
-  lines.push(styles.dim(`  Run ${hint} for details.`));
+  const more = count - shown.length;
+  if (more > 0) {
+    // The CRITICAL count is exact only when the page holds every unread notification.
+    const hiddenCritical =
+      notifications.length >= count
+        ? sorted.slice(SHOWN_ROWS).filter((n) => n.severity === NotificationSeverity.CRITICAL)
+            .length
+        : 0;
+    const detail = hiddenCritical > 0 ? ` (${hiddenCritical} CRITICAL)` : "";
+    lines.push(styles.dim(`  …and ${more} more${detail}.`));
+  }
+  const profileArgs = options.profile ? ["--profile", options.profile] : [];
+  const listHint = formatCommandHint({
+    command: "tailor",
+    args: ["notification", "list", ...profileArgs],
+  });
+  const readHint = formatCommandHint({
+    command: "tailor",
+    args: ["notification", "read", ID_PLACEHOLDER, ...profileArgs],
+  }).replaceAll(` read ${ID_PLACEHOLDER}`, " read <id>");
+  lines.push(styles.dim(`  Run ${listHint} for details.`));
+  lines.push(styles.dim(`  Run ${readHint} to clear a notification.`));
   return { header, lines };
 }

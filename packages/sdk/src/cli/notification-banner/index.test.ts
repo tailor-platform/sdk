@@ -14,7 +14,7 @@ import {
 import { CLIError } from "#/cli/shared/errors";
 import { CIPromptError, logger, setJsonDefaultAgent } from "#/cli/shared/logger";
 import { tempDir } from "#/cli/shared/test-helpers/temp-dir";
-import { readBannerState, writeBannerState } from "./throttle";
+import { readBannerState, writeBannerState } from "./backoff";
 import {
   lookupSettledForTests,
   printNotificationBanner,
@@ -134,7 +134,7 @@ describe("notification banner", () => {
     await run(["workspace", "list"]);
 
     expect(list).toHaveBeenCalledExactlyOnceWith(
-      { pageSize: 3, minSeverity: NotificationSeverity.WARNING, unreadOnly: true },
+      { pageSize: 20, minSeverity: NotificationSeverity.WARNING, unreadOnly: true },
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     const text = stderr.text();
@@ -472,6 +472,48 @@ describe("notification banner", () => {
 
     expect(stderr.text()).toBe("");
     expect(fs.existsSync(stateFile())).toBe(false);
+  });
+
+  test("drops the banner when the env file turned it off or changed the login", async () => {
+    resolved([warning("a", "x")]);
+    using stderr = captureStderr();
+    for (const [name, value] of [
+      ["TAILOR_NOTIFICATION_BANNER", "off"],
+      ["TAILOR_PLATFORM_PROFILE", "other"],
+      ["TAILOR_PLATFORM_TOKEN", "other-token"],
+      ["TAILOR_PLATFORM_URL", "https://api.other.example"],
+      ["TAILOR_CONFIG_PATH", "/elsewhere/config.yaml"],
+    ] as const) {
+      resetNotificationLookupForTests();
+      startNotificationLookup(["workspace", "list"], { configDir: tmp.dir });
+      await lookupSettledForTests();
+      // --env-file is loaded after setup, so the change shows up only by cleanup.
+      vi.stubEnv(name, value);
+      await printNotificationBanner({});
+      vi.unstubAllEnvs();
+    }
+
+    expect(stderr.text()).toBe("");
+  });
+
+  test("does not wait for a lookup the env file made stale", async () => {
+    let signal: AbortSignal | undefined;
+    mockLookup(
+      vi.fn().mockImplementation((_req, options: { signal: AbortSignal }) => {
+        signal = options.signal;
+        return new Promise(() => {});
+      }),
+    );
+    startNotificationLookup(["workspace", "list"], { configDir: tmp.dir });
+    await vi.waitFor(() => expect(signal).toBeDefined());
+    vi.stubEnv("TAILOR_NOTIFICATION_BANNER", "off");
+
+    let printed = false;
+    const printing = printNotificationBanner({}).then(() => (printed = true));
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(printed).toBe(true);
+    await printing;
+    expect(signal?.aborted).toBe(true);
   });
 
   test("prints nothing when JSON mode was turned on by the command's global args", async () => {

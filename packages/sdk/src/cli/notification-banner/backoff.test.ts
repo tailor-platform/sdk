@@ -8,7 +8,7 @@ import {
   inFailureBackoff,
   readBannerState,
   writeBannerState,
-} from "./throttle";
+} from "./backoff";
 
 const NOW = Date.parse("2026-10-29T10:00:00Z");
 

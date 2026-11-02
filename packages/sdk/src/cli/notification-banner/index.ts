@@ -4,14 +4,9 @@ import { requestedJsonModeSource } from "#/cli/shared/args";
 import { isCLIError } from "#/cli/shared/errors";
 import { CIPromptError, interactiveTerminal, logger } from "#/cli/shared/logger";
 import { explicitProfileFromArgs } from "#/cli/shared/plugin";
+import { getBannerStatePath, inFailureBackoff, readBannerState, writeBannerState } from "./backoff";
 import { lookupSkipReason } from "./decision";
 import { formatNotificationBanner, type BannerNotification } from "./format";
-import {
-  getBannerStatePath,
-  inFailureBackoff,
-  readBannerState,
-  writeBannerState,
-} from "./throttle";
 /**
  * Post-command notification banner.
  *
@@ -22,14 +17,36 @@ import {
  * command takes at most that much longer, its exit code never changes, and every failure is
  * swallowed. It is interactive-terminal only and never in JSON mode. It is
  * shown after every eligible command until the notifications are read or dismissed (it marks
- * nothing read itself); only a failed lookup pauses it, for `FAILURE_BACKOFF_MS` (throttle.ts).
+ * nothing read itself); only a failed lookup pauses it, for `FAILURE_BACKOFF_MS` (backoff.ts).
  *
  * The lookup never renews a stored login (no refresh request, no config write, no lock): a
  * token due for renewal skips the banner, and the client is created with `renewToken: false`.
  */
 
-/** How many notifications the banner can list. */
-const PAGE_SIZE = 3;
+/**
+ * How many notifications one lookup fetches. The banner names the most severe few, so a page
+ * larger than that lets an older CRITICAL outrank newer WARNINGs, and lets the banner count the
+ * CRITICALs it does not name, without a second request.
+ */
+const PAGE_SIZE = 20;
+/**
+ * Environment the lookup depends on. `--env-file` is loaded after `setup`, so a value that
+ * changed by `cleanup` means the lookup used another login or platform, or the banner was turned
+ * off, and its result is dropped.
+ */
+const LOOKUP_ENV = [
+  "TAILOR_NOTIFICATION_BANNER",
+  "TAILOR_PLATFORM_PROFILE",
+  "TAILOR_PLATFORM_TOKEN",
+  "TAILOR_TOKEN",
+  "TAILOR_PLATFORM_URL",
+  "PLATFORM_URL",
+  "TAILOR_CONFIG_PATH",
+] as const;
+
+function lookupEnv(): string {
+  return JSON.stringify(LOOKUP_ENV.map((name) => process.env[name] ?? null));
+}
 /** A lookup unanswered after this long while the command runs is aborted and counted as failed. */
 const LOOKUP_TIMEOUT_MS = 3_000;
 /**
@@ -56,6 +73,8 @@ interface PendingLookup {
   abandoned: boolean;
   settled?: LookupResult | undefined;
   stateFile: string | undefined;
+  /** {@link lookupEnv} when the lookup started. */
+  env: string;
 }
 
 let pending: PendingLookup | undefined;
@@ -67,7 +86,7 @@ interface StartOptions {
 
 /**
  * Start the unread-notification lookup for this invocation, if it applies. Never throws and
- * never blocks: the request runs in the background until {@link printNotificationBanner}.
+ * does not block the command: the request runs alongside it until {@link printNotificationBanner}.
  * @param argv - Command-line arguments after the executable and script path
  * @param options - Test hooks
  */
@@ -88,6 +107,7 @@ export function startNotificationLookup(argv: readonly string[], options: StartO
       finished: false,
       abandoned: false,
       stateFile,
+      env: lookupEnv(),
     };
     const timeout = setTimeout(() => controller.abort(), LOOKUP_TIMEOUT_MS);
     timeout.unref();
@@ -208,7 +228,10 @@ export async function printNotificationBanner(context: { error?: unknown }): Pro
   if (!lookup) return;
   try {
     const printable =
-      !suppressedByError(context.error) && !logger.jsonMode && interactiveTerminal();
+      lookupEnv() === lookup.env &&
+      !suppressedByError(context.error) &&
+      !logger.jsonMode &&
+      interactiveTerminal();
     if (printable && !lookup.finished) await waitAtMost(lookup.promise, END_WAIT_MS);
     lookup.abandoned = true;
     lookup.controller.abort();

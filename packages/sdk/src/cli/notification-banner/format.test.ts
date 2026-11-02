@@ -27,6 +27,7 @@ describe("formatNotificationBanner", () => {
       "  ✖ CRITICAL  Region degraded",
       "  ⚠ WARNING   Executor retries exceeded",
       "  Run `tailor notification list` for details.",
+      "  Run `tailor notification read <id>` to clear a notification.",
     ]);
   });
 
@@ -39,7 +40,30 @@ describe("formatNotificationBanner", () => {
     const banner = plain(formatNotificationBanner([critical("a"), critical("b"), warning("c")], 7));
     expect(banner.header).toBe("7 unread notifications need your attention");
     expect(banner.lines).toContain("  …and 4 more.");
-    expect(banner.lines.at(-1)).toBe("  Run `tailor notification list` for details.");
+    expect(banner.lines.at(-2)).toBe("  Run `tailor notification list` for details.");
+  });
+
+  test("shows the three most severe of the page, so an older CRITICAL is named", () => {
+    const banner = plain(
+      formatNotificationBanner(
+        [warning("w1"), warning("w2"), warning("w3"), critical("Region degraded")],
+        4,
+      ),
+    );
+    expect(banner.lines.slice(0, 4)).toEqual([
+      "  ✖ CRITICAL  Region degraded",
+      "  ⚠ WARNING   w1",
+      "  ⚠ WARNING   w2",
+      "  …and 1 more.",
+    ]);
+  });
+
+  test("counts the CRITICALs not shown when the page holds every unread notification", () => {
+    const page = [critical("c1"), critical("c2"), critical("c3"), critical("c4"), warning("w")];
+    expect(plain(formatNotificationBanner(page, 5)).lines).toContain("  …and 2 more (1 CRITICAL).");
+    expect(plain(formatNotificationBanner(page, 9)).lines).toContain("  …and 6 more.");
+    const warnings = [critical("c"), warning("w1"), warning("w2"), warning("w3")];
+    expect(plain(formatNotificationBanner(warnings, 4)).lines).toContain("  …and 1 more.");
   });
 
   test("sanitizes and truncates titles to the terminal width", () => {
@@ -87,10 +111,13 @@ describe("formatNotificationBanner", () => {
 
   test("names the profile in the hint, shell-quoted", () => {
     expect(
-      plain(formatNotificationBanner([warning("x")], 1, { profile: "staging" })).lines.at(-1),
-    ).toBe("  Run `tailor notification list --profile staging` for details.");
-    expect(
-      plain(formatNotificationBanner([warning("x")], 1, { profile: "my profile" })).lines.at(-1),
-    ).toContain("--profile 'my profile'");
+      plain(formatNotificationBanner([warning("x")], 1, { profile: "staging" })).lines.slice(-2),
+    ).toEqual([
+      "  Run `tailor notification list --profile staging` for details.",
+      "  Run `tailor notification read <id> --profile staging` to clear a notification.",
+    ]);
+    const quoted = plain(formatNotificationBanner([warning("x")], 1, { profile: "my profile" }));
+    expect(quoted.lines.at(-2)).toContain("--profile 'my profile'");
+    expect(quoted.lines.at(-1)).toContain("read <id> --profile 'my profile'");
   });
 });
