@@ -311,7 +311,7 @@ function jsonArgSource(source: ArgSource | undefined): JsonModeSource {
     : "flag";
 }
 
-interface CommonArgsOptions {
+export interface CommonArgsOptions {
   /** Extra short alias for `--verbose` (e.g. `"v"`), for plugins that need one */
   verboseAlias?: string;
 }

@@ -335,6 +335,28 @@ describe("dispatchPlugin", () => {
     expect(readCapture().env.TAILOR_CONFIG_PATH).toBe("env/tailor.config.ts");
   });
 
+  test("reads an env file bundled after the seed plugin's -v alias", async () => {
+    const project = path.join(tempDir, "project");
+    writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-seed`, outFile);
+    process.chdir(project);
+    process.env.PATH = "";
+    fs.writeFileSync(path.join(project, ".env.staging"), "TAILOR_CONFIG_PATH=env/tailor.config.ts");
+    contextMocks.loadConfigPath.mockImplementation(
+      () => process.env.TAILOR_CONFIG_PATH ?? "/proj/tailor.config.ts",
+    );
+
+    const code = await dispatchPlugin({
+      name: "seed",
+      args: ["validate", "-ve", ".env.staging"],
+      cliName: CLI,
+    });
+
+    expect(code).toBe(0);
+    const { env } = readCapture();
+    expect(env.TAILOR_CONFIG_PATH).toBe("env/tailor.config.ts");
+    expect(env.TAILOR_PLATFORM_TOKEN).toBeUndefined();
+  });
+
   // `main.ts` hands the host-consumed tokens to `dispatchPlugin` already
   // concatenated ahead of the post-name args, so the flags reaching the three
   // consumers here are whatever position the user typed them in. The end-to-end
@@ -566,6 +588,6 @@ describe("hasEnvFileFlag", () => {
     [["deploy"], false],
     [["deploy", "--", "--env-file", ".env"], false],
   ])("detects env-file flag in %j", (args, expected) => {
-    expect(hasEnvFileFlag(args)).toBe(expected);
+    expect(hasEnvFileFlag(args, {})).toBe(expected);
   });
 });

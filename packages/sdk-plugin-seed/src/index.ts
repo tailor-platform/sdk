@@ -43,6 +43,7 @@ const mainCommand = defineCommand({
 });
 
 // -v matches the generated seed runner this plugin replaces
+// Mirrored in KNOWN_PLUGIN_COMMON_ARGS_OPTIONS (packages/sdk/src/cli/shared/plugin.ts)
 const commonArgsOptions = { verboseAlias: "v" };
 
 void runMain(mainCommand, {
