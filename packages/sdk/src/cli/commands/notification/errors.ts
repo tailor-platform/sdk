@@ -2,18 +2,32 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { CLIError } from "#/cli/shared/errors";
 
 /**
- * Throw the CLI's not-found error for a notification the platform refused to return.
- * @param id - Notification id the user asked for
+ * Throw the CLI's not-found error for notifications the platform refused to return.
+ * @param ids - Notification ids the user asked for and the platform did not return
  * @param cause - Error from the platform
  * @returns Never; always throws
  */
-export function notificationNotFound(id: string, cause?: unknown): never {
+export function notificationNotFound(ids: readonly string[], cause?: unknown): never {
+  const quoted = ids.map((id) => `"${id}"`).join(", ");
   throw CLIError({
     code: "NOTIFICATION_NOT_FOUND",
-    message: `Notification "${id}" not found.`,
-    details: "It is not addressed to you, or it has expired, been revoked, or been dismissed.",
+    message:
+      ids.length === 1 ? `Notification ${quoted} not found.` : `Notifications ${quoted} not found.`,
+    details:
+      ids.length === 1
+        ? "It is not addressed to you, or it has expired, been revoked, or been dismissed."
+        : "They are not addressed to you, or they have expired, been revoked, or been dismissed.",
     cause,
   });
+}
+
+/**
+ * Whether the platform answered that a notification does not exist for the caller.
+ * @param error - Error from the platform
+ * @returns true for a NotFound answer
+ */
+export function isNotificationNotFound(error: unknown): boolean {
+  return error instanceof ConnectError && error.code === Code.NotFound;
 }
 
 /**
@@ -23,8 +37,6 @@ export function notificationNotFound(id: string, cause?: unknown): never {
  * @returns Never; always throws
  */
 export function rethrowNotificationError(id: string, error: unknown): never {
-  if (error instanceof ConnectError && error.code === Code.NotFound) {
-    notificationNotFound(id, error);
-  }
+  if (isNotificationNotFound(error)) notificationNotFound([id], error);
   throw error;
 }

@@ -8,6 +8,7 @@ import {
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadConsoleBaseUrl } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { readCommand } from "./read";
 
@@ -214,6 +215,61 @@ describe("notification read", () => {
     expect(result.success).toBe(false);
     expect(result.error).toMatchObject({ code: "NOTIFICATION_NOT_FOUND" });
     expect(String((result.error as Error).message)).toContain(ID_A);
+  });
+
+  test("prints and marks the notifications it found, then reports the missing ones", async () => {
+    const client = mockClient({
+      getMyNotification: vi.fn(async ({ notificationId }: { notificationId: string }) => {
+        if (notificationId === ID_B) throw new ConnectError("gone", Code.NotFound);
+        return { notification: notification(notificationId, "Found one") };
+      }),
+    });
+    using stdout = captureStdout();
+
+    const result = await runCommand(readCommand, [ID_B, ID_A]);
+
+    expect(stdout.text()).toContain("Found one");
+    expect(client.markMyNotificationsRead).toHaveBeenCalledExactlyOnceWith({
+      notificationIds: [ID_A],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: "NOTIFICATION_NOT_FOUND" });
+    expect(String((result.error as Error).message)).toContain(ID_B);
+    expect(String((result.error as Error).message)).not.toContain(ID_A);
+  });
+
+  test("fetches, prints and marks a repeated id once", async () => {
+    const client = mockClient();
+    using _json = jsonMode();
+    using logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const result = await runCommand(readCommand, [ID_A, ID_A]);
+
+    expect(result.success).toBe(true);
+    expect(client.getMyNotification).toHaveBeenCalledOnce();
+    expect(client.markMyNotificationsRead).toHaveBeenCalledExactlyOnceWith({
+      notificationIds: [ID_A],
+    });
+    expect(JSON.parse(logSpy.mock.calls[0]?.[0] as string)).toHaveLength(1);
+  });
+
+  test("warns and still succeeds when the login may not mark notifications read", async () => {
+    mockClient({
+      markMyNotificationsRead: vi
+        .fn()
+        .mockRejectedValue(new ConnectError("insufficient scope", Code.PermissionDenied)),
+    });
+    using _json = jsonMode();
+    using logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    const result = await runCommand(readCommand, [ID_A]);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(logSpy.mock.calls[0]?.[0] as string)).toMatchObject([
+      { id: ID_A, markedRead: false },
+    ]);
+    expect(warnSpy).toHaveBeenCalledExactlyOnceWith(expect.stringContaining("--no-mark-read"));
   });
 
   test("rejects an id that is not a UUID", async () => {

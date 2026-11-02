@@ -33,7 +33,6 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "notification/index.ts",
   "notification/list.ts",
   "notification/read.ts",
-  "notification/dismiss.ts",
   // Top-level local-only operations
   "init.ts",
   "login.ts",

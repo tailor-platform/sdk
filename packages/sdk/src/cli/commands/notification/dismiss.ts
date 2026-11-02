@@ -4,6 +4,7 @@ import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { logger } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
+import { assertWritable } from "#/cli/shared/readonly-guard";
 import { createNotificationClient } from "./client";
 import { rethrowNotificationError } from "./errors";
 
@@ -18,6 +19,8 @@ export const dismissCommand = defineAppCommand({
     profile: workspaceArgs.profile,
   }),
   run: async (args) => {
+    // Dismissing cannot be undone, so a read-only profile refuses it here.
+    await assertWritable({ profile: args.profile });
     const client = await createNotificationClient(args.profile);
 
     try {
