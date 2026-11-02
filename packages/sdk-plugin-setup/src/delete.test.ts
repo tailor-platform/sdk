@@ -33,6 +33,18 @@ describe("setupDelete", () => {
     loadConfigId: async () => undefined,
   });
 
+  const previewOpts = (name: string): Parameters<typeof setupTarget>[0] => ({
+    kind: "preview",
+    workspaceName: name,
+    region: "us-west",
+    dir: ".",
+    force: false,
+    outputDir: testDir,
+    gitRunner: () => "origin/main",
+    loadConfigName: async () => name,
+    loadConfigId: async () => undefined,
+  });
+
   aroundEach(async (runTest) => {
     fs.mkdirSync(testDir, { recursive: true });
     fs.writeFileSync(path.join(testDir, "pnpm-lock.yaml"), "");
@@ -65,17 +77,7 @@ describe("setupDelete", () => {
     ".github/workflows/tailor-my-app-preview.yml",
     ".github/workflows/tailor-my-app-preview-cleanup.yml",
   ])("deletes both workflows of a preview target given %s", async (file) => {
-    await setupTarget({
-      kind: "preview",
-      workspaceName: "my-app",
-      region: "us-west",
-      dir: ".",
-      force: false,
-      outputDir: testDir,
-      gitRunner: () => "origin/main",
-      loadConfigName: async () => "my-app",
-      loadConfigId: async () => undefined,
-    });
+    await setupTarget(previewOpts("my-app"));
     const files = [
       ".github/workflows/tailor-my-app-preview.yml",
       ".github/workflows/tailor-my-app-preview-cleanup.yml",
@@ -90,6 +92,29 @@ describe("setupDelete", () => {
     );
     expect(files.map((f) => fs.existsSync(path.join(testDir, f)))).toEqual([false, false]);
     expect(readLock(testDir)?.targets).toHaveLength(0);
+  });
+
+  test("keeps a preview target in the lock when its cleanup workflow fails to delete", async () => {
+    await setupTarget(branchOpts("app-a"));
+    await setupTarget(previewOpts("my-app"));
+    const preview = ".github/workflows/tailor-my-app-preview.yml";
+    const cleanup = ".github/workflows/tailor-my-app-preview-cleanup.yml";
+    fs.rmSync(path.join(testDir, cleanup));
+    fs.mkdirSync(path.join(testDir, cleanup));
+
+    await expect(
+      setupDelete({
+        files: [".github/workflows/tailor-app-a.yml", preview],
+        yes: true,
+        outputDir: testDir,
+      }),
+    ).rejects.toThrow(/EISDIR/);
+
+    expect(fs.existsSync(path.join(testDir, preview))).toBe(false);
+    expect(fs.existsSync(path.join(testDir, cleanup))).toBe(true);
+    expect(readLock(testDir)?.targets).toMatchObject([
+      { file: preview, cleanup: { file: cleanup } },
+    ]);
   });
 
   test("keeps the appIds section when a target is deleted", async () => {

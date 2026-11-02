@@ -111,7 +111,9 @@ export async function setupDelete(options: DeleteOptions): Promise<void> {
       writeLock(outputDir, {
         ...rest,
         version: LOCK_VERSION,
-        targets: lock.targets.filter((target) => !deleted.has(target.file)),
+        targets: lock.targets.filter(
+          (target) => !targetWorkflows(target).every((workflow) => deleted.has(workflow.file)),
+        ),
         ...(autofix && !deleted.has(autofix.file) ? { autofix } : {}),
       });
     }
