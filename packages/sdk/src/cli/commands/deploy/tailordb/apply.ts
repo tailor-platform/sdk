@@ -1520,7 +1520,7 @@ async function confirmCheckpointAfterUpdateFailure(
       `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} could not be confirmed after its update failed; remote remains at ${describeMigrationCheckpoint(remoteMigrationNumber)}. ` +
         "Leaving the post-migration schema unchanged to avoid rolling back a concurrent deployment. " +
         (resumable
-          ? "Deploy again to resume the migration; steps that already completed do not run again."
+          ? "Deploy again to resume the migration; unless you add, remove, rename, or reorder steps, steps that already completed do not run again."
           : "Repair the checkpoint before retrying."),
     );
     throw updateError;
