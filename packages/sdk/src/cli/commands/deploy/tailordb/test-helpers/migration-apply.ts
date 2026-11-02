@@ -71,6 +71,7 @@ export function mockPendingMigrations(
           inProgress: null,
           inProgressInvalid: false,
           maintenanceModeCheckpoint: null,
+          cleanupCheckpoint: null,
         });
       }
       return migrations;
@@ -86,6 +87,13 @@ export function createRemoteCheckpoint(initialNumber: number | null) {
     historyId: null as string | null,
     maintenanceMode: null as string | null,
     maintenanceModeChanges: [] as Array<string | null>,
+    cleanup: null as string | null,
+    cleanupChanges: [] as Array<string | null>,
+  };
+  const setCleanup = (cleanup: string | null) => {
+    if (cleanup === state.cleanup) return;
+    state.cleanup = cleanup;
+    state.cleanupChanges.push(cleanup);
   };
   const record: typeof updateMigrationLabel = async (
     _client,
@@ -94,6 +102,7 @@ export function createRemoteCheckpoint(initialNumber: number | null) {
     number,
     historyId,
     recordMaintenanceMode,
+    recordCleanup,
   ) => {
     state.number = number;
     state.historyId = historyId ?? null;
@@ -101,6 +110,7 @@ export function createRemoteCheckpoint(initialNumber: number | null) {
       state.maintenanceMode = sanitizeMigrationLabel(number);
       state.maintenanceModeChanges.push(state.maintenanceMode);
     }
+    setCleanup(recordCleanup ? sanitizeMigrationLabel(number) : null);
     return true;
   };
   return {
@@ -126,6 +136,7 @@ export function createRemoteCheckpoint(initialNumber: number | null) {
               }),
               ...(state.historyId && { "sdk-migration-history": state.historyId }),
               ...(state.maintenanceMode && { "sdk-maintenance-mode": state.maintenanceMode }),
+              ...(state.cleanup && { "sdk-migration-cleanup": state.cleanup }),
             },
           },
         })),
@@ -137,6 +148,9 @@ export function createRemoteCheckpoint(initialNumber: number | null) {
           ) {
             state.maintenanceMode = maintenanceMode;
             state.maintenanceModeChanges.push(maintenanceMode);
+          }
+          if (request.trn === namespaceTrn(NAMESPACE)) {
+            setCleanup(request.labels["sdk-migration-cleanup"] ?? null);
           }
           return {};
         }),

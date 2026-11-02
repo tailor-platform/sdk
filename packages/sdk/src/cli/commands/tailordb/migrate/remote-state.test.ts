@@ -93,6 +93,17 @@ describe("fetchRemoteMigrationState", () => {
     expect(state.maintenanceModeCheckpoint).toBe(checkpoint);
   });
 
+  test.each([
+    ["m0002", 2],
+    ["two", null],
+  ])("reads the checkpoint of unfinished table deletions %s", async (label, checkpoint) => {
+    const state = await fetchRemoteMigrationState(
+      clientWithLabels({ "sdk-migration": "m0002", "sdk-migration-cleanup": label }),
+      "trn",
+    );
+    expect(state.cleanupCheckpoint).toBe(checkpoint);
+  });
+
   test("reports nothing in progress for a namespace that was never deployed", async () => {
     const state = await fetchRemoteMigrationState(clientWithLabels(undefined), "trn");
     expect(state).toMatchObject({
@@ -100,6 +111,7 @@ describe("fetchRemoteMigrationState", () => {
       inProgress: null,
       inProgressInvalid: false,
       maintenanceModeCheckpoint: null,
+      cleanupCheckpoint: null,
     });
   });
 });
@@ -113,6 +125,7 @@ describe("assertNoMigrationInProgress", () => {
     inProgress,
     inProgressInvalid: false,
     maintenanceModeCheckpoint: null,
+    cleanupCheckpoint: null,
   });
 
   test("names a deploy and both ways to settle a migration whose steps partly committed", () => {
@@ -180,6 +193,7 @@ describe("isStaleMigrationInProgress", () => {
     inProgress: inProgress === null ? null : { number: inProgress, kind: "steps" },
     inProgressInvalid: false,
     maintenanceModeCheckpoint: null,
+    cleanupCheckpoint: null,
   });
 
   test.each([
@@ -206,6 +220,7 @@ describe("matchesLocalMigrationHistory", () => {
     inProgress: null,
     inProgressInvalid: false,
     maintenanceModeCheckpoint: null,
+    cleanupCheckpoint: null,
   });
 
   test.each([

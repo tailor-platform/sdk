@@ -8,6 +8,7 @@ import {
 import { formatMigrationNumber } from "./migration-number";
 import {
   MAINTENANCE_MODE_LABEL_KEY,
+  MIGRATION_CLEANUP_LABEL_KEY,
   MIGRATION_EXECUTION_LABEL_KEY,
   MIGRATION_HISTORY_LABEL_KEY,
   MIGRATION_IN_PROGRESS_LABEL_KEY,
@@ -29,6 +30,8 @@ export interface RemoteMigrationState {
   inProgressInvalid: boolean;
   /** Checkpoint whose tables a deploy left in maintenance mode after committing it. */
   maintenanceModeCheckpoint: number | null;
+  /** Checkpoint whose migration's table deletions a deploy did not finish. */
+  cleanupCheckpoint: number | null;
 }
 
 function parseInProgress(labels: Record<string, string>): {
@@ -80,11 +83,13 @@ export async function fetchRemoteMigrationState(
       inProgress: null,
       inProgressInvalid: false,
       maintenanceModeCheckpoint: null,
+      cleanupCheckpoint: null,
     };
   }
 
   const migrationLabel = metadata.labels[MIGRATION_LABEL_KEY];
   const maintenanceModeLabel = metadata.labels[MAINTENANCE_MODE_LABEL_KEY];
+  const cleanupLabel = metadata.labels[MIGRATION_CLEANUP_LABEL_KEY];
   const historyLabel = metadata.labels[MIGRATION_HISTORY_LABEL_KEY];
   const historyId = historyLabel ? parseMigrationHistoryId(historyLabel) : null;
   return {
@@ -96,6 +101,7 @@ export async function fetchRemoteMigrationState(
     maintenanceModeCheckpoint: maintenanceModeLabel
       ? parseMigrationLabelNumber(maintenanceModeLabel)
       : null,
+    cleanupCheckpoint: cleanupLabel ? parseMigrationLabelNumber(cleanupLabel) : null,
   };
 }
 

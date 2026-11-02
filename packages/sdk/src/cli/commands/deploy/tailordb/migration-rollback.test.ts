@@ -2132,6 +2132,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
             inProgress: null,
             inProgressInvalid: false,
             maintenanceModeCheckpoint: null,
+            cleanupCheckpoint: null,
             ...state,
           });
           return state.number === 1 ? [] : [mkStepsMigration()];
@@ -2556,6 +2557,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
               inProgress: { number: 1, executionId: "exec-1", kind: "steps" },
               inProgressInvalid: false,
               maintenanceModeCheckpoint: null,
+              cleanupCheckpoint: null,
             });
             return [migration, ...following];
           },
@@ -3095,6 +3097,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
           1,
           undefined,
           true,
+          false,
         );
         expect(removeMigrationWorkflowResources).toHaveBeenCalledWith(
           client,
@@ -3144,6 +3147,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         1,
         undefined,
         true,
+        false,
       );
       expect(removeMigrationWorkflowResources).toHaveBeenCalledWith(
         client,

@@ -862,12 +862,28 @@ describe("migration test runtime", () => {
     ).toThrow(expect.objectContaining({ code: "MIGRATION_TEST_SOURCE_REPAIR_PENDING" }));
   });
 
+  test("rejects a source with tables its checkpoint's migration removed that a deploy has not deleted", () => {
+    expect(() =>
+      assertSourceMatchesCheckpoints(
+        [sourceCheck({ remoteMigrationNumber: 2, unfinishedRemovals: ["Legacy"] })],
+        sourceContext,
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: "MIGRATION_TEST_SOURCE_CLEANUP_PENDING",
+        message: expect.stringContaining("Legacy"),
+        suggestion: "Deploy to the source workspace first.",
+      }),
+    );
+  });
+
   test("accepts sources that match their checkpoints", () => {
     expect(() =>
       assertSourceMatchesCheckpoints(
         [
           sourceCheck({ checkpointUnset: true }),
           sourceCheck({ namespace: "other", remoteMigrationNumber: 3 }),
+          sourceCheck({ namespace: "cleaned", remoteMigrationNumber: 2, unfinishedRemovals: [] }),
         ],
         sourceContext,
       ),
