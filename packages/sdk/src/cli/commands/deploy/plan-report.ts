@@ -35,7 +35,7 @@ interface PendingDeployedHook {
   pluginId: string;
 }
 
-type PrintDeploymentPlansOptions = PrintPlanOptions & {
+export type PrintDeploymentPlansOptions = PrintPlanOptions & {
   pendingDeployedHooks?: readonly PendingDeployedHook[];
   /** Applications recorded as dependencies but absent from this deploy. */
   missingDependentApps?: readonly MissingDependentApp[];
@@ -98,6 +98,7 @@ function buildPlanReport(results: PlanResults): PlanReport {
   const workflowResourceEntries = formatWorkflowChangeEntries(
     results.workflow.changeSet,
     results.functionRegistry.workflowJobChanges,
+    results.workflow.jobFunctionDeletes,
   );
   const workflowExecutionPolicyEntries = formatChangeSetEntries(
     results.workflowExecutionPolicy.changeSet,

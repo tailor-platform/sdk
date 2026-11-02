@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AuthConnectionConfigSchema } from "#/parser/service/auth-connection/index";
+import { resourceNameSchema } from "#/parser/service/common";
 import { TailorFieldSchema } from "#/parser/service/field/schema";
 import { stripTailorDBTypeBuilderHelpers } from "#/parser/service/tailordb/builder-helpers";
 import { TailorDBTypeSchema } from "#/parser/service/tailordb/index";
@@ -69,7 +70,7 @@ export const BuiltinIdPSchema = z.strictObject({
   name: z.string().describe("Identity provider name"),
   kind: z.literal("BuiltInIdP"),
   namespace: z.string().describe("IdP namespace"),
-  clientName: z.string().describe("OAuth2 client name in the IdP"),
+  clientName: resourceNameSchema.describe("OAuth2 client name in the IdP"),
 });
 
 export const IdProviderSchema = z.discriminatedUnion("kind", [
@@ -250,7 +251,7 @@ const AuthConfigBaseSchema = z.strictObject({
     .optional()
     .describe("Machine user definitions"),
   oauth2Clients: z
-    .record(z.string(), OAuth2ClientSchema)
+    .record(resourceNameSchema, OAuth2ClientSchema)
     .optional()
     .describe("OAuth2 client definitions"),
   idProvider: IdProviderSchema.optional().describe("Identity provider configuration"),

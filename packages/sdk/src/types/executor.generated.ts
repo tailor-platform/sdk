@@ -6,8 +6,8 @@ export type TailorDBTrigger = {
   /** TailorDB event types to trigger on */
   events: (
     | "tailordb.type_record.created"
-    | "tailordb.type_record.updated"
     | "tailordb.type_record.deleted"
+    | "tailordb.type_record.updated"
   )[];
   /** TailorDB table name to watch for events */
   tableName: string;
@@ -60,7 +60,7 @@ export type IdpUserTrigger = {
   /** IdP user event trigger */
   kind: "idpUser";
   /** IdP user event types to trigger on */
-  events: ("idp.user.created" | "idp.user.updated" | "idp.user.deleted")[];
+  events: ("idp.user.created" | "idp.user.deleted" | "idp.user.updated")[];
   /** IdP namespace name to subscribe to. If omitted, the project's only IdP is used; throws when multiple IdPs exist. */
   idp?: string | undefined;
 };
@@ -83,12 +83,12 @@ export type WorkflowExecutionTrigger = {
   kind: "workflowExecution";
   /** Workflow execution event types to trigger on */
   events: (
-    | "workflow.workflow_execution.started"
     | "workflow.workflow_execution.completed"
-    | "workflow.workflow_execution.retried"
     | "workflow.workflow_execution.resumed"
-    | "workflow.workflow_execution.wait_started"
+    | "workflow.workflow_execution.retried"
+    | "workflow.workflow_execution.started"
     | "workflow.workflow_execution.wait_resolved"
+    | "workflow.workflow_execution.wait_started"
   )[];
   /** Workflow name to subscribe to. */
   workflowName: string;
@@ -102,10 +102,10 @@ export type WorkflowJobExecutionTrigger = {
   kind: "workflowJobExecution";
   /** Workflow job execution event types to trigger on */
   events: (
-    | "workflow.workflow_execution.job_execution.started"
     | "workflow.workflow_execution.job_execution.completed"
-    | "workflow.workflow_execution.job_execution.wait_started"
+    | "workflow.workflow_execution.job_execution.started"
     | "workflow.workflow_execution.job_execution.wait_resolved"
+    | "workflow.workflow_execution.job_execution.wait_started"
   )[];
   /** Workflow name to subscribe to. */
   workflowName: string;
@@ -153,9 +153,9 @@ export type FunctionOperationInput = FunctionOperation;
 
 export type GqlOperationInput = {
   kind: "graphql";
-  query: unknown;
   /** Target application name for the GraphQL query */
   appName?: string | undefined;
+  query: unknown;
   /** Function to compute GraphQL variables */
   variables?: Function | undefined;
   /** Invoker for the GraphQL execution */
@@ -172,9 +172,9 @@ export type GqlOperationInput = {
 
 export type GqlOperation = {
   kind: "graphql";
-  query: string;
   /** Target application name for the GraphQL query */
   appName?: string | undefined;
+  query: string;
   /** Function to compute GraphQL variables */
   variables?: Function | undefined;
   /** Invoker for the GraphQL execution */
@@ -234,31 +234,28 @@ export type WorkflowOperationArgsInput = WorkflowOperationArgs;
 
 export type WorkflowOperationInput =
   | {
+      kind: "workflow";
+      /** Arguments to pass to the workflow */
+      args?: WorkflowOperationArgs;
+      /** Invoker for the workflow execution */
+      invoker?:
+        | string
+        | {
+            /** Auth namespace */
+            namespace: string;
+            /** Machine user name for authentication */
+            machineUserName: string;
+          }
+        | undefined;
       workflow: {
         [x: string]: unknown;
         name: string;
       };
-      kind: "workflow";
       /** Name of the workflow to execute */
       workflowName?: string | undefined;
-      /** Arguments to pass to the workflow */
-      args?: WorkflowOperationArgs;
-      /** Invoker for the workflow execution */
-      invoker?:
-        | string
-        | {
-            /** Auth namespace */
-            namespace: string;
-            /** Machine user name for authentication */
-            machineUserName: string;
-          }
-        | undefined;
     }
   | {
-      /** Name of the workflow to execute */
-      workflowName: string;
       kind: "workflow";
-      workflow?: undefined;
       /** Arguments to pass to the workflow */
       args?: WorkflowOperationArgs;
       /** Invoker for the workflow execution */
@@ -271,12 +268,13 @@ export type WorkflowOperationInput =
             machineUserName: string;
           }
         | undefined;
+      /** Name of the workflow to execute */
+      workflowName: string;
+      workflow?: undefined;
     };
 
 export type WorkflowOperation =
   | {
-      /** Name of the workflow to execute */
-      workflowName: string;
       kind: "workflow";
       /** Arguments to pass to the workflow */
       args?: WorkflowOperationArgs;
@@ -290,12 +288,11 @@ export type WorkflowOperation =
             machineUserName: string;
           }
         | undefined;
+      /** Name of the workflow to execute */
+      workflowName: string;
     }
   | {
-      /** Name of the workflow to execute */
-      workflowName: string;
       kind: "workflow";
-      workflow?: undefined;
       /** Arguments to pass to the workflow */
       args?: WorkflowOperationArgs;
       /** Invoker for the workflow execution */
@@ -308,6 +305,9 @@ export type WorkflowOperation =
             machineUserName: string;
           }
         | undefined;
+      /** Name of the workflow to execute */
+      workflowName: string;
+      workflow?: undefined;
     };
 
 export type OperationInput =
@@ -321,25 +321,25 @@ export type Operation = FunctionOperation | GqlOperation | WebhookOperation | Wo
 export type ExecutorInput = {
   /** Executor name */
   name: string;
-  /** Event trigger configuration */
-  trigger: TriggerInput;
-  /** Operation to execute when triggered */
-  operation: OperationInput;
   /** Executor description */
   description?: string | undefined;
   /** Whether the executor is disabled */
   disabled?: boolean | undefined;
+  /** Event trigger configuration */
+  trigger: TriggerInput;
+  /** Operation to execute when triggered */
+  operation: OperationInput;
 };
 
 export type Executor = {
   /** Executor name */
   name: string;
+  /** Executor description */
+  description?: string | undefined;
   /** Whether the executor is disabled */
   disabled: boolean;
   /** Event trigger configuration */
   trigger: Trigger;
   /** Operation to execute when triggered */
   operation: Operation;
-  /** Executor description */
-  description?: string | undefined;
 };

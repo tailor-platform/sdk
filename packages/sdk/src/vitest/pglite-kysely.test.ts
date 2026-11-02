@@ -1,4 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
+import { sql } from "kysely";
 import { describe, expect, test } from "vitest";
 import { Temporal } from "#/runtime/temporal";
 import {
@@ -125,6 +126,33 @@ describe("createKyselyPGlite", () => {
     await db.destroy();
 
     expect(isClosed()).toBe(true);
+  });
+
+  describe("on PGlite", { timeout: 30_000 }, () => {
+    test("runs a query issued while a transaction is open after the transaction commits", async () => {
+      const db = createKyselyPGlite<Database>(new PGlite());
+      try {
+        await sql`CREATE TABLE "User" (id text PRIMARY KEY, email text)`.execute(db);
+        await db.insertInto("User").values({ id: "1", email: null }).execute();
+
+        let outside: Promise<unknown> | undefined;
+        await db.transaction().execute(async (trx) => {
+          await trx.insertInto("User").values({ id: "2", email: null }).execute();
+          outside = db
+            .insertInto("User")
+            .values({ id: "1", email: null })
+            .execute()
+            .catch((error: unknown) => error);
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        });
+
+        expect(await outside).toMatchObject({ message: expect.stringMatching(/duplicate key/) });
+        const rows = await db.selectFrom("User").select("id").orderBy("id").execute();
+        expect(rows).toEqual([{ id: "1" }, { id: "2" }]);
+      } finally {
+        await db.destroy();
+      }
+    });
   });
 });
 

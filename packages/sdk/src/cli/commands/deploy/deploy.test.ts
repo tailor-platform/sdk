@@ -7,11 +7,9 @@ import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-pr
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { collectHttpAdapterScripts, mergeBundledScripts } from "./bundled-scripts";
-import { createChangeSet } from "./change-set";
 import {
   adjustApplicationForMigrationTest,
   assertEnvResolvedAfterRebuild,
-  carryConfirmedAppDeletes,
   confirmDeploymentPlans,
   collectExpectedLocalStaticWebsiteNamesFromConfigs,
   collectExternalAuthIdpConfigNames,
@@ -24,8 +22,10 @@ import {
   assertUniqueGlobalResourceNames,
   computeRenamedAppDeletions,
   dropCrossDeploymentManagedDeletes,
+  scheduleRenamedAppDeletes,
 } from "./managed-resources";
 import { printDeploymentPlans, printPlanResults, summarizePlanResults } from "./plan-report";
+import { emptyPlanResults, plannedDeleteLists, PLANNED_DELETE } from "./test-helpers/plan-results";
 import {
   collectVisibleIdpNames,
   collectVisibleResolverNamespaces,
@@ -36,130 +36,6 @@ import type { GroupedDisplayEntry, NamespaceAction } from "./grouped-display";
 import type { ManagedResourceType } from "./managed-resource-type";
 
 type PlanResults = Parameters<typeof summarizePlanResults>[0];
-
-function emptyFunctionChanges() {
-  return { creates: [], updates: [], deletes: [], replaces: [], unchanged: [] };
-}
-
-function emptyOwnership() {
-  return { conflicts: [], unmanaged: [], resourceOwners: new Set<string>() };
-}
-
-function emptyResults(): PlanResults {
-  return {
-    functionRegistry: {
-      changeSet: createChangeSet("Function registry"),
-      workflowJobChanges: emptyFunctionChanges(),
-      resolverFunctionChanges: emptyFunctionChanges(),
-      executorFunctionChanges: emptyFunctionChanges(),
-      authHookFunctionChanges: emptyFunctionChanges(),
-      ...emptyOwnership(),
-      existingMap: {},
-    },
-    tailorDB: {
-      changeSet: {
-        service: createChangeSet("TailorDB services"),
-        type: createChangeSet("TailorDB tables"),
-        gqlPermission: createChangeSet("TailorDB gqlPermissions"),
-      },
-      ...emptyOwnership(),
-      context: {
-        workspaceId: "ws",
-        application: {} as PlanResults["tailorDB"]["context"]["application"],
-        tailorDBInputs: [],
-        executorUsedTables: new Set<string>(),
-        config: {} as PlanResults["tailorDB"]["context"]["config"],
-        noSchemaCheck: false,
-        namespacesWithMigrations: [],
-        migrationFileState: {},
-        checkpointRepairs: [],
-      },
-    },
-    staticWebsite: {
-      changeSet: createChangeSet("StaticWebsites"),
-      customDomainChangeSet: createChangeSet("CustomDomains"),
-      customDomainTransferChangeSet: createChangeSet("CustomDomainTransfers"),
-      customDomainNotes: [],
-      customDomainLiveOffers: new Map(),
-      ...emptyOwnership(),
-    },
-    aiGateway: {
-      changeSet: createChangeSet("AIGateways"),
-      ...emptyOwnership(),
-    },
-    idp: {
-      changeSet: {
-        service: createChangeSet("IdP services"),
-        client: createChangeSet("IdP clients"),
-      },
-      ...emptyOwnership(),
-    },
-    auth: {
-      connectionStateScope: {
-        workspaceId: "workspace-id",
-        applicationId: "application-id",
-        applicationName: "my-app",
-      },
-      changeSet: {
-        service: createChangeSet("Auth services"),
-        idpConfig: createChangeSet("Auth idpConfigs"),
-        userProfileConfig: createChangeSet("Auth userProfileConfigs"),
-        tenantConfig: createChangeSet("Auth tenantConfigs"),
-        machineUser: createChangeSet("Auth machineUsers"),
-        oauth2Client: createChangeSet("Auth oauth2Clients"),
-        authHook: createChangeSet("Auth hooks"),
-        scim: createChangeSet("Auth scim"),
-        scimResource: createChangeSet("Auth scimResources"),
-        connection: createChangeSet("Auth connections"),
-      },
-      ...emptyOwnership(),
-    },
-    pipeline: {
-      changeSet: {
-        service: createChangeSet("Pipeline services"),
-        resolver: createChangeSet("Pipeline resolvers"),
-      },
-      ...emptyOwnership(),
-      existingServices: {},
-      existingResolvers: new Map(),
-    },
-    app: Object.assign(
-      createChangeSet("Applications"),
-      emptyOwnership(),
-    ) as unknown as PlanResults["app"],
-    executor: {
-      changeSet: createChangeSet("Executors"),
-      ...emptyOwnership(),
-      existingExecutors: {},
-    },
-    workflow: {
-      changeSet: createChangeSet("Workflows"),
-      unchangedWorkflowJobNames: new Set<string>(),
-      jobFunctionDeletes: [],
-      jobFunctionPublishEvents: new Map<string, boolean>(),
-      ...emptyOwnership(),
-      appName: "my-app",
-      appId: undefined,
-      existingJobFunctions: new Map(),
-      existingWorkflows: {},
-    },
-    workflowExecutionPolicy: {
-      changeSet: createChangeSet("Workflow execution policies"),
-      ...emptyOwnership(),
-    },
-    secretManager: {
-      stateScope: {
-        workspaceId: "workspace-id",
-        applicationId: "application-id",
-        applicationName: "my-app",
-      },
-      vaultChangeSet: createChangeSet("Vaults"),
-      secretChangeSet: createChangeSet("Secrets"),
-      skippedSecrets: [],
-      ...emptyOwnership(),
-    },
-  } satisfies PlanResults;
-}
 
 function entry(action: GroupedDisplayEntry["action"], name: string): GroupedDisplayEntry {
   return { action, symbol: "+", name, labels: [] };
@@ -265,7 +141,7 @@ describe("summarizePlanResults", () => {
       { name: "my-resolver", action: "update" },
     ];
 
-    const summary = summarizePlanResults(emptyResults(), displayEntries, serviceActions);
+    const summary = summarizePlanResults(emptyPlanResults(), displayEntries, serviceActions);
 
     expect(summary).toEqual({
       create: 1,
@@ -277,7 +153,7 @@ describe("summarizePlanResults", () => {
   });
 
   test("includes non-grouped changesets in counts", () => {
-    const results = emptyResults();
+    const results = emptyPlanResults();
     results.staticWebsite.changeSet.creates.push({ name: "my-site" } as never);
     results.app.updates.push({ name: "my-app" } as never);
 
@@ -293,7 +169,7 @@ describe("summarizePlanResults", () => {
   });
 
   test("counts other function registry changes not split into resource groups", () => {
-    const results = emptyResults();
+    const results = emptyPlanResults();
     results.functionRegistry.changeSet.creates.push({ name: "custom-function" } as never);
 
     const summary = summarizePlanResults(results, [], []);
@@ -308,7 +184,7 @@ describe("summarizePlanResults", () => {
   });
 
   test("does not double-count function registry entries that are split into resource groups", () => {
-    const results = emptyResults();
+    const results = emptyPlanResults();
     // These are split by splitFunctionRegistryChanges into resource-specific groups
     results.functionRegistry.changeSet.updates.push({ name: "resolver--ns--add" } as never);
     results.functionRegistry.changeSet.updates.push({ name: "executor--user-created" } as never);
@@ -332,7 +208,7 @@ describe("summarizePlanResults", () => {
   });
 
   test("counts updates forced by the SDK version across entries, services, and change sets", () => {
-    const results = emptyResults();
+    const results = emptyPlanResults();
     results.staticWebsite.changeSet.updates.push({
       name: "my-site",
       forcedBySdkVersion: true,
@@ -413,16 +289,41 @@ describe("computeRenamedAppDeletions", () => {
 
 describe("parseDeployConfigPaths", () => {
   test("preserves default config lookup when no path is provided", () => {
-    const previous = process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH;
-    delete process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH;
+    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_SDK_CONFIG_PATH", undefined);
     try {
       expect(parseDeployConfigPaths()).toEqual([undefined]);
     } finally {
-      if (previous === undefined) {
-        delete process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH;
-      } else {
-        process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH = previous;
-      }
+      vi.unstubAllEnvs();
+    }
+  });
+
+  test.each([
+    {
+      name: "reads TAILOR_CONFIG_PATH when no path is provided",
+      env: { TAILOR_CONFIG_PATH: "buyer/tailor.config.ts,supplier/tailor.config.ts" },
+      configPath: undefined,
+      expected: ["buyer/tailor.config.ts", "supplier/tailor.config.ts"],
+      warnings: [],
+    },
+    {
+      name: "prefers a provided path over both config path variables",
+      env: {
+        TAILOR_CONFIG_PATH: "new/tailor.config.ts",
+        TAILOR_PLATFORM_SDK_CONFIG_PATH: "old/tailor.config.ts",
+      },
+      configPath: "given/tailor.config.ts",
+      expected: ["given/tailor.config.ts"],
+      warnings: [],
+    },
+  ])("$name", ({ env, configPath, expected, warnings }) => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
+    try {
+      expect(parseDeployConfigPaths(configPath)).toEqual(expected);
+      expect(warnSpy.mock.calls).toEqual(warnings);
+    } finally {
+      vi.unstubAllEnvs();
     }
   });
 
@@ -517,7 +418,7 @@ describe("visible same-run namespaces", () => {
 describe("dropCrossDeploymentManagedDeletes", () => {
   test("drops stale deletes for resources claimed by another deployment", () => {
     const debugSpy = vi.spyOn(logger, "debug").mockImplementation(() => {});
-    const previousOwner = emptyResults();
+    const previousOwner = emptyPlanResults();
     previousOwner.tailorDB.changeSet.service.deletes.push({ name: "shared" } as never);
     previousOwner.tailorDB.changeSet.type.deletes.push({
       name: "User",
@@ -528,7 +429,7 @@ describe("dropCrossDeploymentManagedDeletes", () => {
       request: { namespaceName: "shared" },
     });
 
-    const nextOwner = emptyResults();
+    const nextOwner = emptyPlanResults();
     nextOwner.tailorDB.changeSet.service.updates.push({ name: "shared" } as never);
     nextOwner.tailorDB.changeSet.type.updates.push({
       name: "User",
@@ -554,13 +455,13 @@ describe("dropCrossDeploymentManagedDeletes", () => {
   });
 
   test("keeps deletes that are not claimed by another deployment", () => {
-    const previousOwner = emptyResults();
+    const previousOwner = emptyPlanResults();
     previousOwner.tailorDB.changeSet.type.deletes.push({
       name: "User",
       request: { namespaceName: "old" },
     });
 
-    const nextOwner = emptyResults();
+    const nextOwner = emptyPlanResults();
     nextOwner.tailorDB.changeSet.type.updates.push({
       name: "User",
       request: { namespaceName: "new" },
@@ -575,14 +476,14 @@ describe("dropCrossDeploymentManagedDeletes", () => {
   });
 
   test("drops nested deletes when another deployment claims the owning namespace", () => {
-    const previousOwner = emptyResults();
+    const previousOwner = emptyPlanResults();
     previousOwner.tailorDB.changeSet.service.deletes.push({ name: "shared" } as never);
     previousOwner.tailorDB.changeSet.type.deletes.push({
       name: "User",
       request: { namespaceName: "shared" },
     });
 
-    const nextOwner = emptyResults();
+    const nextOwner = emptyPlanResults();
     nextOwner.tailorDB.changeSet.service.unchanged.push({ name: "shared" });
     nextOwner.tailorDB.changeSet.type.unchanged.push({ name: "User" });
 
@@ -596,11 +497,11 @@ describe("dropCrossDeploymentManagedDeletes", () => {
   });
 
   test("mutates filtered delete arrays in place", () => {
-    const previousOwner = emptyResults();
+    const previousOwner = emptyPlanResults();
     previousOwner.staticWebsite.changeSet.deletes.push({ name: "shared-site" } as never);
     const deletes = previousOwner.staticWebsite.changeSet.deletes;
 
-    const nextOwner = emptyResults();
+    const nextOwner = emptyPlanResults();
     nextOwner.staticWebsite.changeSet.unchanged.push({ name: "shared-site" });
 
     dropCrossDeploymentManagedDeletes([
@@ -614,14 +515,14 @@ describe("dropCrossDeploymentManagedDeletes", () => {
   });
 
   test("drops workflow job function deletes claimed by another deployment", () => {
-    const previousOwner = emptyResults();
+    const previousOwner = emptyPlanResults();
     previousOwner.workflow.jobFunctionDeletes.push({
       workspaceId: "ws",
       jobFunctionName: "shared-job",
     });
     const jobFunctionDeletes = previousOwner.workflow.jobFunctionDeletes;
 
-    const nextOwner = emptyResults();
+    const nextOwner = emptyPlanResults();
     nextOwner.workflow.changeSet.creates.push({
       name: "next-workflow",
       usedJobNames: ["shared-job"],
@@ -637,7 +538,7 @@ describe("dropCrossDeploymentManagedDeletes", () => {
   });
 
   test("drops workflow job function deletes claimed by another unchanged deployment", () => {
-    const previousOwner = emptyResults();
+    const previousOwner = emptyPlanResults();
     previousOwner.workflow.jobFunctionDeletes.push(
       {
         workspaceId: "ws",
@@ -649,7 +550,7 @@ describe("dropCrossDeploymentManagedDeletes", () => {
       },
     );
 
-    const nextOwner = emptyResults();
+    const nextOwner = emptyPlanResults();
     nextOwner.workflow.unchangedWorkflowJobNames.add("shared-job");
 
     dropCrossDeploymentManagedDeletes([
@@ -666,11 +567,11 @@ describe("dropCrossDeploymentManagedDeletes", () => {
   });
 
   test("drops workflow execution policy deletes claimed by another deployment", () => {
-    const previousOwner = emptyResults();
+    const previousOwner = emptyPlanResults();
     previousOwner.workflowExecutionPolicy.changeSet.deletes.push({ name: "premium" } as never);
     const deletes = previousOwner.workflowExecutionPolicy.changeSet.deletes;
 
-    const nextOwner = emptyResults();
+    const nextOwner = emptyPlanResults();
     nextOwner.workflowExecutionPolicy.changeSet.unchanged.push({ name: "premium" });
 
     dropCrossDeploymentManagedDeletes([
@@ -683,14 +584,14 @@ describe("dropCrossDeploymentManagedDeletes", () => {
   });
 
   test("drops an app delete claimed by another deployment that creates that app", () => {
-    const previousOwner = emptyResults();
+    const previousOwner = emptyPlanResults();
     previousOwner.app.deletes.push({
       name: "shared-app",
       request: { workspaceId: "ws", applicationName: "shared-app" },
     });
     const appDeletes = previousOwner.app.deletes;
 
-    const nextOwner = emptyResults();
+    const nextOwner = emptyPlanResults();
     nextOwner.app.creates.push({ name: "shared-app" } as never);
 
     dropCrossDeploymentManagedDeletes([
@@ -703,13 +604,13 @@ describe("dropCrossDeploymentManagedDeletes", () => {
   });
 
   test("drops an app delete claimed by another deployment that leaves that app unchanged", () => {
-    const previousOwner = emptyResults();
+    const previousOwner = emptyPlanResults();
     previousOwner.app.deletes.push({
       name: "shared-app",
       request: { workspaceId: "ws", applicationName: "shared-app" },
     });
 
-    const nextOwner = emptyResults();
+    const nextOwner = emptyPlanResults();
     nextOwner.app.unchanged.push({ name: "shared-app" } as never);
 
     dropCrossDeploymentManagedDeletes([
@@ -721,13 +622,13 @@ describe("dropCrossDeploymentManagedDeletes", () => {
   });
 
   test("keeps an app delete not claimed by another deployment", () => {
-    const previousOwner = emptyResults();
+    const previousOwner = emptyPlanResults();
     previousOwner.app.deletes.push({
       name: "old-app",
       request: { workspaceId: "ws", applicationName: "old-app" },
     });
 
-    const nextOwner = emptyResults();
+    const nextOwner = emptyPlanResults();
     nextOwner.app.creates.push({ name: "different-app" } as never);
 
     dropCrossDeploymentManagedDeletes([
@@ -739,10 +640,9 @@ describe("dropCrossDeploymentManagedDeletes", () => {
   });
 });
 
-describe("confirmDeploymentPlans", () => {
-  test("uses resource owners from all deployments before deleting renamed apps", async () => {
-    using _logger = silenceLogger("warn", "log", "success", "newline");
-    const renamedTarget = emptyResults();
+describe("scheduleRenamedAppDeletes", () => {
+  test("uses resource owners from all deployments before deleting renamed apps", () => {
+    const renamedTarget = emptyPlanResults();
     renamedTarget.tailorDB.conflicts.push({
       resourceType: "tailordb.service",
       resourceLabel: "TailorDB service",
@@ -750,30 +650,26 @@ describe("confirmDeploymentPlans", () => {
       currentOwner: "old-app",
     });
 
-    const peer = emptyResults();
+    const peer = emptyPlanResults();
     peer.staticWebsite.resourceOwners.add("old-app");
 
-    await confirmDeploymentPlans({
-      deployments: [
-        plannedDeployment("new-app", renamedTarget),
-        plannedDeployment("peer-app", peer),
-      ],
-      yes: true,
-    });
+    scheduleRenamedAppDeletes([
+      plannedDeployment("new-app", renamedTarget),
+      plannedDeployment("peer-app", peer),
+    ]);
 
     expect(renamedTarget.app.deletes).toEqual([]);
   });
 
-  test("deduplicates renamed app deletions across deployments", async () => {
-    using _logger = silenceLogger("warn", "log", "success", "newline");
-    const first = emptyResults();
+  test("deduplicates renamed app deletions across deployments", () => {
+    const first = emptyPlanResults();
     first.tailorDB.conflicts.push({
       resourceType: "tailordb.service",
       resourceLabel: "TailorDB service",
       resourceName: "shared",
       currentOwner: "old-app",
     });
-    const second = emptyResults();
+    const second = emptyPlanResults();
     second.pipeline.conflicts.push({
       resourceType: "pipeline.service",
       resourceLabel: "Pipeline service",
@@ -781,20 +677,38 @@ describe("confirmDeploymentPlans", () => {
       currentOwner: "old-app",
     });
 
-    await confirmDeploymentPlans({
-      deployments: [plannedDeployment("new-app-a", first), plannedDeployment("new-app-b", second)],
-      yes: true,
-    });
+    scheduleRenamedAppDeletes([
+      plannedDeployment("new-app-a", first),
+      plannedDeployment("new-app-b", second),
+    ]);
 
     expect([...first.app.deletes, ...second.app.deletes].map((item) => item.name)).toEqual([
       "old-app",
     ]);
   });
 
+  test("does not add a delete the application plan already carries under the same name", () => {
+    const results = emptyPlanResults();
+    results.tailorDB.conflicts.push({
+      resourceType: "tailordb.service",
+      resourceLabel: "TailorDB service",
+      resourceName: "shared",
+      currentOwner: "old-app",
+    });
+    const planned = { name: "old-app", request: { workspaceId: "ws", applicationName: "old-app" } };
+    results.app.deletes.push(planned);
+
+    scheduleRenamedAppDeletes([plannedDeployment("new-app", results)]);
+
+    expect(results.app.deletes).toEqual([planned]);
+  });
+});
+
+describe("confirmDeploymentPlans", () => {
   test("names a deleted TailorDB table a table", async () => {
     using _logger = silenceLogger("warn", "success", "newline");
     const logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
-    const results = emptyResults();
+    const results = emptyPlanResults();
     results.tailorDB.changeSet.type.deletes.push({
       name: "Order",
       request: {},
@@ -813,7 +727,7 @@ describe("confirmDeploymentPlans", () => {
     logSpy.mockRestore();
   });
 
-  const dryRunWarnings: Array<{
+  const confirmationWarnings: Array<{
     warning: string;
     plan: () => Pick<
       Parameters<typeof confirmDeploymentPlans>[0],
@@ -824,7 +738,7 @@ describe("confirmDeploymentPlans", () => {
       warning:
         "TailorDB migration checkpoints and history IDs need to be updated before this deployment:",
       plan: () => {
-        const results = emptyResults();
+        const results = emptyPlanResults();
         results.tailorDB.context.checkpointRepairs = [
           {
             namespace: "tailordb",
@@ -840,7 +754,7 @@ describe("confirmDeploymentPlans", () => {
     {
       warning: "Applications recorded as depending on this deploy are missing:",
       plan: () => ({
-        deployments: [plannedDeployment("my-app", emptyResults())],
+        deployments: [plannedDeployment("my-app", emptyPlanResults())],
         missingDependentApps: [
           {
             resource: 'TailorDB table "Order"',
@@ -857,7 +771,7 @@ describe("confirmDeploymentPlans", () => {
     {
       warning: "Application name mismatch detected:",
       plan: () => {
-        const results = emptyResults();
+        const results = emptyPlanResults();
         results.tailorDB.conflicts.push({
           resourceType: "tailordb.service",
           resourceLabel: "TailorDB service",
@@ -870,7 +784,7 @@ describe("confirmDeploymentPlans", () => {
     {
       warning: "Existing resources not tracked by tailor were found:",
       plan: () => {
-        const results = emptyResults();
+        const results = emptyPlanResults();
         results.tailorDB.unmanaged.push({
           resourceType: "tailordb.service",
           resourceLabel: "TailorDB service",
@@ -882,7 +796,7 @@ describe("confirmDeploymentPlans", () => {
     {
       warning: "The following resources will be deleted:",
       plan: () => {
-        const results = emptyResults();
+        const results = emptyPlanResults();
         results.tailorDB.changeSet.type.deletes.push({ name: "Order", request: {} });
         return { deployments: [plannedDeployment("my-app", results)] };
       },
@@ -890,7 +804,7 @@ describe("confirmDeploymentPlans", () => {
   ];
 
   test.for(
-    dryRunWarnings.flatMap((testCase) => [false, true].map((yes) => ({ ...testCase, yes }))),
+    confirmationWarnings.flatMap((testCase) => [false, true].map((yes) => ({ ...testCase, yes }))),
   )(
     "dry-run warns '$warning' without confirming it (yes: $yes)",
     async ({ warning, plan, yes }) => {
@@ -908,6 +822,46 @@ describe("confirmDeploymentPlans", () => {
       ).not.toContain("--yes flag specified");
     },
   );
+
+  test.for(confirmationWarnings.filter(({ plan }) => !plan().missingDependentApps))(
+    "does not repeat '$warning' for what the application already confirmed",
+    async ({ warning, plan }) => {
+      using _logger = silenceLogger("warn", "log", "success", "newline");
+      using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(false);
+
+      await confirmDeploymentPlans({
+        deployments: plan().deployments,
+        yes: false,
+        confirmedDeployments: plan().deployments,
+      });
+
+      expect(confirm).not.toHaveBeenCalled();
+      expect(logger.warn).not.toHaveBeenCalledWith(warning);
+    },
+  );
+
+  test("asks about a conflict that only another application confirmed", async () => {
+    using _logger = silenceLogger("warn", "log", "success", "newline");
+    using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(true);
+    const withConflict = () => {
+      const results = emptyPlanResults();
+      results.tailorDB.conflicts.push({
+        resourceType: "tailordb.service",
+        resourceLabel: "TailorDB service",
+        resourceName: "shared",
+        currentOwner: "old-app",
+      });
+      return results;
+    };
+
+    await confirmDeploymentPlans({
+      deployments: [plannedDeployment("app-b", withConflict())],
+      yes: false,
+      confirmedDeployments: [plannedDeployment("app-a", withConflict())],
+    });
+
+    expect(confirm).toHaveBeenCalledOnce();
+  });
 });
 
 describe("printPlanResults", () => {
@@ -923,14 +877,14 @@ describe("printPlanResults", () => {
   });
 
   test("routes dry-run output to stdout via logger.out", () => {
-    printPlanResults(emptyResults(), { dryRun: true });
+    printPlanResults(emptyPlanResults(), { dryRun: true });
 
     expect(outSpy).toHaveBeenCalledOnce();
     expect(logSpy).not.toHaveBeenCalled();
   });
 
   test("routes apply output to stderr via logger.log", () => {
-    printPlanResults(emptyResults(), { dryRun: false });
+    printPlanResults(emptyPlanResults(), { dryRun: false });
 
     expect(logSpy).toHaveBeenCalledOnce();
     expect(outSpy).not.toHaveBeenCalled();
@@ -939,7 +893,7 @@ describe("printPlanResults", () => {
   test("emits JSON with summary, changes, warnings, and conflicts for dry-run --json", () => {
     using _json = jsonMode();
 
-    const summary = printPlanResults(emptyResults(), { dryRun: true });
+    const summary = printPlanResults(emptyPlanResults(), { dryRun: true });
 
     expect(outSpy).toHaveBeenCalledOnce();
     const payload = outSpy.mock.calls[0]?.[0] as {
@@ -961,7 +915,7 @@ describe("printPlanResults", () => {
   test("includes unmanaged resources and skipped secrets in warnings", () => {
     using _json = jsonMode();
 
-    const results = emptyResults();
+    const results = emptyPlanResults();
     results.tailorDB.unmanaged = [
       {
         resourceType: "tailordb.service",
@@ -985,7 +939,7 @@ describe("printPlanResults", () => {
   test("includes owner conflicts in conflicts", () => {
     using _json = jsonMode();
 
-    const results = emptyResults();
+    const results = emptyPlanResults();
     results.tailorDB.conflicts = [
       {
         resourceType: "tailordb.service",
@@ -1007,7 +961,7 @@ describe("printPlanResults", () => {
 
   test("includes migration checkpoint repairs in JSON dry-run changes and summary", () => {
     using _json = jsonMode();
-    const results = emptyResults();
+    const results = emptyPlanResults();
     results.tailorDB.context.checkpointRepairs = [
       {
         namespace: "tailordb",
@@ -1040,7 +994,7 @@ describe("printPlanResults", () => {
   });
 
   test("includes migration checkpoint repairs in human dry-run output", () => {
-    const results = emptyResults();
+    const results = emptyPlanResults();
     results.tailorDB.context.checkpointRepairs = [
       {
         namespace: "tailordb",
@@ -1057,7 +1011,7 @@ describe("printPlanResults", () => {
   });
 
   test("lists workflow execution policy changes in the Workflow section of human output", () => {
-    const results = emptyResults();
+    const results = emptyPlanResults();
     results.workflowExecutionPolicy.changeSet.updates.push({ name: "premium" } as never);
     results.workflowExecutionPolicy.changeSet.replaces.push({ name: "tenant-api" } as never);
 
@@ -1070,8 +1024,45 @@ describe("printPlanResults", () => {
     expect(summary).toMatchObject({ create: 0, update: 1, delete: 0, replace: 1 });
   });
 
+  test("lists workflow job function deletes in the Workflow section of human output", () => {
+    const results = emptyPlanResults();
+    results.workflow.jobFunctionDeletes.push({
+      workspaceId: "ws",
+      jobFunctionName: "orphaned-job",
+    });
+
+    printPlanResults(results, { dryRun: true });
+
+    const lines = String(outSpy.mock.calls[0]?.[0]).split("\n");
+    const workflowSection = lines.slice(lines.findIndex((line) => line.includes("Workflow:")));
+    expect(workflowSection).toContain(`  ${symbols.delete} orphaned-job (jobFunction)`);
+  });
+
+  test.each([...plannedDeleteLists(emptyPlanResults()).keys()])(
+    "reports a planned delete from %s in the text plan, the summary, and JSON changes",
+    (path) => {
+      const results = emptyPlanResults();
+      plannedDeleteLists(results).get(path)!.push(PLANNED_DELETE);
+
+      const summary = printPlanResults(results, { dryRun: true });
+      {
+        using _json = jsonMode();
+        printPlanResults(results, { dryRun: true });
+      }
+
+      expect(String(outSpy.mock.calls[0]?.[0])).toContain(` ${PLANNED_DELETE.name}`);
+      expect(summary).toMatchObject({ create: 0, update: 0, delete: 1, replace: 0 });
+      const payload = outSpy.mock.calls[1]?.[0] as {
+        changes: Array<{ action: string; name: string }>;
+      };
+      expect(payload.changes).toContainEqual(
+        expect.objectContaining({ action: "delete", name: PLANNED_DELETE.name }),
+      );
+    },
+  );
+
   test("reports unmanaged resources and owner conflicts of every plan kind", () => {
-    const results = emptyResults();
+    const results = emptyPlanResults();
     const kinds = Object.keys(results) as Array<keyof PlanResults>;
     const resourceTypes: Record<keyof PlanResults, ManagedResourceType> = {
       aiGateway: "aigateway",
@@ -1138,7 +1129,7 @@ describe("printPlanResults", () => {
   });
 
   test("marks updates forced by the SDK version in human output and summary", () => {
-    const results = emptyResults();
+    const results = emptyPlanResults();
     results.tailorDB.changeSet.service.updates.push({
       name: "tailordb",
       forcedBySdkVersion: true,
@@ -1172,7 +1163,7 @@ describe("printPlanResults", () => {
 
   test("marks updates forced by the SDK version in JSON dry-run changes and summary", () => {
     using _json = jsonMode();
-    const results = emptyResults();
+    const results = emptyPlanResults();
     results.tailorDB.changeSet.service.updates.push({
       name: "tailordb",
       forcedBySdkVersion: true,
@@ -1213,7 +1204,7 @@ describe("printPlanResults", () => {
     },
   ])("$name", ({ typeForced, permissionForced, expected }) => {
     using _json = jsonMode();
-    const results = emptyResults();
+    const results = emptyPlanResults();
     results.tailorDB.changeSet.type.updates.push({
       name: "Customer",
       request: { namespaceName: "tailordb" },
@@ -1238,7 +1229,7 @@ describe("printPlanResults", () => {
 
   test("keeps a gqlPermission-only update's forced marker", () => {
     using _json = jsonMode();
-    const results = emptyResults();
+    const results = emptyPlanResults();
     results.tailorDB.changeSet.gqlPermission.updates.push({
       name: "Customer",
       request: { namespaceName: "tailordb" },
@@ -1256,7 +1247,7 @@ describe("printPlanResults", () => {
   });
 
   test("marks a forced service update that has no child entries", () => {
-    const results = emptyResults();
+    const results = emptyPlanResults();
     results.pipeline.changeSet.service.updates.push({
       name: "my-pipeline",
       forcedBySdkVersion: true,
@@ -1270,7 +1261,7 @@ describe("printPlanResults", () => {
 
   test("keeps the forced marker on plain change-set entries in JSON dry-run changes", () => {
     using _json = jsonMode();
-    const results = emptyResults();
+    const results = emptyPlanResults();
     results.staticWebsite.changeSet.updates.push({
       name: "my-site",
       forcedBySdkVersion: true,
@@ -1299,7 +1290,7 @@ describe("printPlanResults", () => {
   test("does not emit JSON for apply --json; still prints plan to stderr", () => {
     using _json = jsonMode();
 
-    printPlanResults(emptyResults(), { dryRun: false });
+    printPlanResults(emptyPlanResults(), { dryRun: false });
 
     expect(outSpy).not.toHaveBeenCalled();
     expect(logSpy).toHaveBeenCalledOnce();
@@ -1311,9 +1302,9 @@ describe("printDeploymentPlans", () => {
     using _json = jsonMode();
     const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
 
-    const first = emptyResults();
+    const first = emptyPlanResults();
     first.staticWebsite.changeSet.creates.push({ name: "buyer-site" } as never);
-    const second = emptyResults();
+    const second = emptyPlanResults();
     second.aiGateway.changeSet.creates.push({ name: "supplier-gateway" } as never);
 
     const summary = printDeploymentPlans(
@@ -1346,12 +1337,12 @@ describe("printDeploymentPlans", () => {
     using _json = jsonMode();
     const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
 
-    const first = emptyResults();
+    const first = emptyPlanResults();
     first.staticWebsite.changeSet.updates.push({
       name: "buyer-site",
       forcedBySdkVersion: true,
     } as never);
-    const second = emptyResults();
+    const second = emptyPlanResults();
     second.aiGateway.changeSet.updates.push({
       name: "supplier-gateway",
       forcedBySdkVersion: true,
@@ -1376,7 +1367,7 @@ describe("printDeploymentPlans", () => {
     const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
     const appId = "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81";
 
-    printDeploymentPlans([plannedDeployment("supplier", emptyResults())], {
+    printDeploymentPlans([plannedDeployment("supplier", emptyPlanResults())], {
       dryRun: true,
       missingDependentApps: [
         {
@@ -1575,7 +1566,7 @@ describe("multi-config deployment orchestration", () => {
         await new Promise<void>((resolve) => {
           releases.push(resolve);
         });
-        return plannedDeployment(params.target.application.name, emptyResults());
+        return plannedDeployment(params.target.application.name, emptyPlanResults());
       },
     });
 
@@ -1588,8 +1579,8 @@ describe("multi-config deployment orchestration", () => {
   test("forwards skip and matches previous deployments by application name", async () => {
     const targets = [fakeTarget({ appName: "buyer" }), fakeTarget({ appName: "supplier" })];
     const skip = new Set(["staticWebsite"] as const);
-    const previousBuyer = plannedDeployment("buyer", emptyResults());
-    const previousSupplier = plannedDeployment("supplier", emptyResults());
+    const previousBuyer = plannedDeployment("buyer", emptyPlanResults());
+    const previousSupplier = plannedDeployment("supplier", emptyPlanResults());
     const received: Array<{ appName: string; skip: unknown; previous: unknown }> = [];
 
     await planDeploymentTargets({
@@ -1606,7 +1597,7 @@ describe("multi-config deployment orchestration", () => {
           skip: params.skip,
           previous: params.previous,
         });
-        return plannedDeployment(params.target.application.name, emptyResults());
+        return plannedDeployment(params.target.application.name, emptyPlanResults());
       },
     });
 
@@ -1614,60 +1605,6 @@ describe("multi-config deployment orchestration", () => {
       { appName: "buyer", skip, previous: previousBuyer },
       { appName: "supplier", skip, previous: previousSupplier },
     ]);
-  });
-});
-
-describe("carryConfirmedAppDeletes", () => {
-  function appDelete(name: string): PlannedDeployment["app"]["deletes"][number] {
-    return { name, request: { workspaceId: "ws", applicationName: name } };
-  }
-
-  function withAppDeletes(
-    name: string,
-    deletes: ReadonlyArray<PlannedDeployment["app"]["deletes"][number]>,
-  ): PlannedDeployment {
-    const deployment = plannedDeployment(name, emptyResults());
-    deployment.app.deletes.push(...deletes);
-    return deployment;
-  }
-
-  test("carries a confirm-added delete over onto the matching rebuilt deployment", () => {
-    const original = [
-      withAppDeletes("buyer", [appDelete("renamed-buyer")]),
-      withAppDeletes("supplier", []),
-    ];
-    const preConfirmAppDeleteCounts = new Map([
-      ["buyer", 0],
-      ["supplier", 0],
-    ]);
-    const rebuilt = [withAppDeletes("buyer", []), withAppDeletes("supplier", [])];
-
-    carryConfirmedAppDeletes(original, rebuilt, preConfirmAppDeleteCounts);
-
-    expect(rebuilt[0]!.app.deletes).toEqual([appDelete("renamed-buyer")]);
-    expect(rebuilt[1]!.app.deletes).toEqual([]);
-  });
-
-  test("leaves a fresh delete already present in the rebuild untouched", () => {
-    const original = [
-      withAppDeletes("buyer", [appDelete("own-delete"), appDelete("renamed-buyer")]),
-    ];
-    const preConfirmAppDeleteCounts = new Map([["buyer", 1]]);
-    const rebuilt = [withAppDeletes("buyer", [appDelete("own-delete")])];
-
-    carryConfirmedAppDeletes(original, rebuilt, preConfirmAppDeleteCounts);
-
-    expect(rebuilt[0]!.app.deletes).toEqual([appDelete("own-delete"), appDelete("renamed-buyer")]);
-  });
-
-  test("does not duplicate a delete the rebuild already carries under the same name", () => {
-    const original = [withAppDeletes("buyer", [appDelete("renamed-buyer")])];
-    const preConfirmAppDeleteCounts = new Map([["buyer", 0]]);
-    const rebuilt = [withAppDeletes("buyer", [appDelete("renamed-buyer")])];
-
-    carryConfirmedAppDeletes(original, rebuilt, preConfirmAppDeleteCounts);
-
-    expect(rebuilt[0]!.app.deletes).toEqual([appDelete("renamed-buyer")]);
   });
 });
 
@@ -2256,7 +2193,7 @@ describe("collectExpectedLocalStaticWebsiteNamesFromConfigs", () => {
 
 describe("custom domain notes", () => {
   function resultsWithNote(): PlanResults {
-    const results = emptyResults();
+    const results = emptyPlanResults();
     results.staticWebsite.customDomainNotes.push({
       kind: "transfer-pending",
       staticWebsiteName: "site-a",
@@ -2306,7 +2243,7 @@ describe("custom domain notes", () => {
     using _json = jsonMode();
     const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
 
-    printDeploymentPlans([plannedDeployment("buyer", emptyResults())], { dryRun: true });
+    printDeploymentPlans([plannedDeployment("buyer", emptyPlanResults())], { dryRun: true });
 
     const payload = outSpy.mock.calls[0]?.[0] as { notes: unknown[] };
     expect(payload.notes).toEqual([]);

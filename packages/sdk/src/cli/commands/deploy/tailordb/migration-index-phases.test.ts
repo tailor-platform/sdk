@@ -98,7 +98,7 @@ describe("migration flow: breaking index changes across Pre/Post phases", () => 
     const client = checkpoint.createMockClient();
     const planResult = createMockPlanResult();
 
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    checkpoint.mockPending([
       mkIndexMigration(1, {
         kind: "index_added",
         tableName: "User",
@@ -123,7 +123,7 @@ describe("migration flow: breaking index changes across Pre/Post phases", () => 
     const client = checkpoint.createMockClient();
     const planResult = createMockPlanResult();
 
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    checkpoint.mockPending([
       mkIndexMigration(2, {
         kind: "index_modified",
         tableName: "User",

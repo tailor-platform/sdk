@@ -1,7 +1,7 @@
-import { highlightGraphqlLines as renderGraphqlLines } from "@enlumine/graphql/editor";
-import graphqlStyles from "@enlumine/graphql/themes/ansi";
-import { highlightSqlLines as renderSqlLines } from "@enlumine/sql/editor";
-import sqlStyles from "@enlumine/sql/themes/ansi";
+import { tokenizeLines as tokenizeGraphqlLines } from "@enlumine/graphql/lexical";
+import { tokenizeLines as tokenizeSqlLines } from "@enlumine/sql/postgresql";
+import { highlightLines } from "@enlumine/terminal";
+import { graphql as graphqlStyles, sql as sqlStyles } from "@enlumine/terminal/themes/ansi";
 import { assertDefined } from "#/utils/assert";
 import type { TransformEvent, TransformState } from "@toiroakr/read-multiline";
 
@@ -11,7 +11,7 @@ import type { TransformEvent, TransformState } from "@toiroakr/read-multiline";
  * @returns ANSI-decorated lines, one per input line
  */
 export function highlightSqlLines(lines: readonly string[]): string[] {
-  return renderSqlLines(lines, sqlStyles);
+  return highlightLines(lines, { tokenizeLines: tokenizeSqlLines, styles: sqlStyles });
 }
 
 /**
@@ -20,7 +20,7 @@ export function highlightSqlLines(lines: readonly string[]): string[] {
  * @returns ANSI-decorated lines, one per input line
  */
 export function highlightGraphqlLines(lines: readonly string[]): string[] {
-  return renderGraphqlLines(lines, graphqlStyles);
+  return highlightLines(lines, { tokenizeLines: tokenizeGraphqlLines, styles: graphqlStyles });
 }
 
 const BRACKET_PAIRS: Record<string, string> = { "(": ")", "[": "]", "{": "}" };

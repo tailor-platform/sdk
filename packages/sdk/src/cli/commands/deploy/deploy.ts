@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { type Application } from "#/cli/services/application";
 import { assertUniqueTailorDBTypeNamesWithExternal } from "#/cli/services/tailordb/type-name-validation";
-import { recoveryContextArgs } from "#/cli/shared/args";
+import { recoveryContextArgs, type EnvFileArgs } from "#/cli/shared/args";
 import {
   getOrNull,
   hasStaticWebsiteUrlPlaceholder,
@@ -16,7 +16,6 @@ import { readPackageJson } from "#/cli/shared/package-json";
 import { parseBoolean } from "#/cli/shared/parse-boolean";
 import { beginUserModuleRun } from "#/cli/shared/user-modules";
 import { withSpan } from "#/cli/telemetry/index";
-import { assertDefined } from "#/utils/assert";
 import { beginWaitPointScope } from "#/utils/wait-point-registry";
 import { planAIGateway } from "./aigateway";
 import { planApplication } from "./application";
@@ -39,7 +38,6 @@ import {
   confirmOwnerConflict,
   confirmUnmanagedResources,
   type ConfirmMode,
-  type ImportantResourceDeletion,
   type MissingDependentApp,
 } from "./confirm";
 import { assertNoSingleRunTransferHandoff } from "./custom-domain-transfer-guard";
@@ -79,15 +77,14 @@ import { planIdP } from "./idp";
 import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn, sdkNameLabelKey } from "./label";
 import {
   assertUniqueGlobalResourceNames,
-  collectDeploymentResourceOwners,
   collectImportantResourceDeletions,
   collectOwnerConflicts,
   collectUnmanagedResources,
-  computeRenamedAppDeletions,
   dropCrossDeploymentManagedDeletes,
+  scheduleRenamedAppDeletes,
 } from "./managed-resources";
 import { createMetadataLookupClient } from "./metadata-lookup";
-import { printDeploymentPlans } from "./plan-report";
+import { printDeploymentPlans, type PrintDeploymentPlansOptions } from "./plan-report";
 import { planPipeline } from "./resolver";
 import { planSecretManager } from "./secret-manager";
 import { planStaticWebsite } from "./staticwebsite";
@@ -117,8 +114,13 @@ export interface DeployOptions {
   configPath?: string;
   dryRun?: boolean;
   yes?: boolean;
+  /** **Beta:** This API may change in future releases. */
   noSchemaCheck?: boolean;
-  /** Steps of an in-progress multi-step migration to skip, keyed by namespace. */
+  /**
+   * Steps of an in-progress multi-step migration to skip, keyed by namespace.
+   *
+   * **Beta:** This API may change in future releases.
+   */
   migrationSkipSteps?: ReadonlyMap<string, readonly string[]>;
   noValidate?: boolean;
   noCache?: boolean;
@@ -133,9 +135,7 @@ export interface DeployOptions {
   buildOnly?: boolean;
 }
 
-interface DeployCLIContext {
-  envFile?: string;
-  envFileIfExists?: string;
+interface DeployCLIContext extends Partial<EnvFileArgs> {
   verbose?: boolean;
   json?: boolean;
 }
@@ -143,6 +143,7 @@ interface DeployCLIContext {
 interface DeployInternalContext {
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
+  migrationMachineUserOverride?: string;
   suppressResultOutput?: boolean;
   skipDeployedHooks?: boolean;
 }
@@ -285,8 +286,10 @@ type PlanDeploymentTargetParams = {
   workspaceId: string;
   noSchemaCheck: boolean | undefined;
   migrationSkipSteps?: ReadonlyMap<string, readonly string[]>;
+  migrationRecoveryArgs?: readonly string[];
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
+  migrationMachineUserOverride?: string;
   /** Resource kinds to reuse from `previous` instead of re-planning. */
   skip?: ReadonlySet<ReusablePlanKind>;
   /** This target's own plan result from before the rebuild, source for `skip` reuse. */
@@ -294,12 +297,19 @@ type PlanDeploymentTargetParams = {
 };
 
 type ConfirmDeploymentPlansParams = {
-  deployments: PlannedDeployment[];
+  deployments: ReadonlyArray<PlannedDeployment>;
   yes: boolean;
   dryRun?: boolean;
   /** Applications recorded as dependencies but absent from this deploy. */
   missingDependentApps?: MissingDependentApp[];
+  /** Deployments already confirmed in this run; what they ask about is not asked again. */
+  confirmedDeployments?: ReadonlyArray<PlannedDeployment>;
 };
+
+type ReviewDeploymentPlansParams = ConfirmDeploymentPlansParams &
+  Pick<PrintDeploymentPlansOptions, "pendingDeployedHooks"> & {
+    noValidate?: boolean;
+  };
 
 type PlanDeploymentTargetsParams = {
   targets: ReadonlyArray<BuiltDeploymentTarget>;
@@ -308,8 +318,10 @@ type PlanDeploymentTargetsParams = {
   workspaceId: string;
   noSchemaCheck: boolean | undefined;
   migrationSkipSteps?: ReadonlyMap<string, readonly string[]>;
+  migrationRecoveryArgs?: readonly string[];
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
+  migrationMachineUserOverride?: string;
   planTarget?: (params: PlanDeploymentTargetParams) => Promise<PlannedDeployment>;
   /** Resource kinds to reuse from `previousDeployments` instead of re-planning. */
   skip?: ReadonlySet<ReusablePlanKind>;
@@ -322,10 +334,14 @@ function recoveryEnvironmentArgs(
   cliContext?: DeployCLIContext,
 ): readonly string[] {
   return [
-    ...(cliContext?.envFile ? ["--env-file", path.resolve(process.cwd(), cliContext.envFile)] : []),
-    ...(cliContext?.envFileIfExists
-      ? ["--env-file-if-exists", path.resolve(process.cwd(), cliContext.envFileIfExists)]
-      : []),
+    ...(cliContext?.envFiles ?? []).flatMap((file) => [
+      "--env-file",
+      path.resolve(process.cwd(), file),
+    ]),
+    ...(cliContext?.envFilesIfExists ?? []).flatMap((file) => [
+      "--env-file-if-exists",
+      path.resolve(process.cwd(), file),
+    ]),
     ...recoveryContextArgs({ profile: options?.profile }),
   ];
 }
@@ -440,8 +456,10 @@ async function planDeploymentTarget(
     workspaceId,
     noSchemaCheck,
     migrationSkipSteps,
+    migrationRecoveryArgs,
     migrationTestBaselines,
     migrationTestSnapshots,
+    migrationMachineUserOverride,
     skip,
     previous,
   } = params;
@@ -492,8 +510,10 @@ async function planDeploymentTarget(
       config,
       noSchemaCheck,
       migrationSkipSteps,
+      migrationRecoveryArgs,
       migrationTestBaselines,
       migrationTestSnapshots,
+      migrationMachineUserOverride,
       forceApplyAll,
       ...runInputs,
       idpUserTriggerTargets: subscribedIdps(owned),
@@ -635,55 +655,63 @@ export async function planDeploymentTargets(
   );
 }
 
+function confirmationKey(deployment: PlannedDeployment, item: object): string {
+  return JSON.stringify([deployment.application.name, item]);
+}
+
+function collectConfirmations(
+  deployment: PlannedDeployment,
+  confirmed: ReadonlySet<string> = new Set(),
+) {
+  const results = deploymentPlanResults(deployment);
+  const isNew = (item: object) => !confirmed.has(confirmationKey(deployment, item));
+  return {
+    checkpointRepairs: deployment.tailorDB.context.checkpointRepairs.filter(isNew),
+    conflicts: collectOwnerConflicts(results).filter(isNew),
+    unmanaged: collectUnmanagedResources(results).filter(isNew),
+    importantDeletions: collectImportantResourceDeletions(results).filter(isNew),
+  };
+}
+
 export async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParams): Promise<void> {
-  const { deployments, yes, dryRun = false, missingDependentApps = [] } = params;
+  const {
+    deployments,
+    yes,
+    dryRun = false,
+    missingDependentApps = [],
+    confirmedDeployments = [],
+  } = params;
   const mode: ConfirmMode = dryRun ? "dry-run" : yes ? "yes" : "prompt";
+  const confirmed = new Set(
+    confirmedDeployments.flatMap((deployment) =>
+      Object.values(collectConfirmations(deployment))
+        .flat()
+        .map((item) => confirmationKey(deployment, item)),
+    ),
+  );
+  const pending = deployments.map((deployment) => ({
+    deployment,
+    ...collectConfirmations(deployment, confirmed),
+  }));
+
   await confirmMigrationCheckpointRepairs(
-    deployments.flatMap((deployment) => deployment.tailorDB.context.checkpointRepairs),
+    pending.flatMap((confirmations) => confirmations.checkpointRepairs),
     mode,
   );
   await confirmMissingDependentApps(missingDependentApps, mode);
-  const targetAppNames = new Set(deployments.map((deployment) => deployment.application.name));
-  const resourceOwners = collectDeploymentResourceOwners(deployments);
-  const scheduledRenamedAppDeletes = new Set<string>();
-  const importantDeletions: ImportantResourceDeletion[] = [];
-
-  for (const deployment of deployments) {
-    const results = deploymentPlanResults(deployment);
-    const conflicts = collectOwnerConflicts(results);
+  for (const { deployment, conflicts, unmanaged } of pending) {
     await confirmOwnerConflict(
       conflicts,
       deployment.application.name,
       mode,
       deployment.application.id,
     );
-
-    const unmanaged = collectUnmanagedResources(results);
     await confirmUnmanagedResources(unmanaged, deployment.application.name, mode);
-
-    importantDeletions.push(...collectImportantResourceDeletions(results));
-
-    const emptyApps = computeRenamedAppDeletions({
-      conflicts,
-      resourceOwners,
-      protectedAppNames: targetAppNames,
-    });
-    for (const emptyApp of emptyApps) {
-      if (scheduledRenamedAppDeletes.has(emptyApp)) {
-        continue;
-      }
-      scheduledRenamedAppDeletes.add(emptyApp);
-      deployment.app.deletes.push({
-        name: emptyApp,
-        request: {
-          workspaceId: deployment.tailorDB.context.workspaceId,
-          applicationName: emptyApp,
-        },
-      });
-    }
   }
-
-  await confirmImportantResourceDeletion(importantDeletions, mode);
+  await confirmImportantResourceDeletion(
+    pending.flatMap((confirmations) => confirmations.importantDeletions),
+    mode,
+  );
 }
 
 async function validateDeploymentPlans(
@@ -695,37 +723,27 @@ async function validateDeploymentPlans(
 }
 
 /**
- * Carry the renamed-app cleanup deletes `confirmDeploymentPlans` appended
- * onto `original`'s `app.deletes` over onto the matching `rebuilt` entry.
- * `app` is always re-planned on a rebuild (its `cors` is resolved live at
- * plan time, since the site it references may have just been created --
- * HTTP adapter bundles themselves are reused as-is and don't embed `env`),
- * so a fresh `planApplication` result never carries them.
- * @param original - Deployments as confirmed, before the rebuild
- * @param rebuilt - Freshly planned deployments the rebuild will apply instead
- * @param preConfirmAppDeleteCounts - Each application's `app.deletes.length` before confirm ran
+ * Add renamed-app cleanup deletes to the plan, validate and print it, then
+ * ask for the confirmations it needs, so each one is answered with the whole
+ * plan in view.
+ * @param params - Deployments to review, and how to confirm them
+ * @returns Summary of the printed plan
  */
-export function carryConfirmedAppDeletes(
-  original: ReadonlyArray<PlannedDeployment>,
-  rebuilt: ReadonlyArray<PlannedDeployment>,
-  preConfirmAppDeleteCounts: ReadonlyMap<string, number>,
-): void {
-  const originalByAppName = new Map(
-    original.map((deployment) => [deployment.application.name, deployment]),
-  );
-  for (const deployment of rebuilt) {
-    const originalDeployment = originalByAppName.get(deployment.application.name);
-    const startIndex = preConfirmAppDeleteCounts.get(deployment.application.name);
-    if (!originalDeployment || startIndex === undefined) {
-      continue;
-    }
-    const confirmedDeletes = originalDeployment.app.deletes.slice(startIndex);
-    for (const confirmedDelete of confirmedDeletes) {
-      if (!deployment.app.deletes.some((del) => del.name === confirmedDelete.name)) {
-        deployment.app.deletes.push(confirmedDelete);
-      }
-    }
+async function reviewDeploymentPlans(params: ReviewDeploymentPlansParams): Promise<PlanSummary> {
+  const { deployments, dryRun, noValidate, pendingDeployedHooks, missingDependentApps } = params;
+  scheduleRenamedAppDeletes(deployments);
+  if (noValidate) {
+    logger.warn("Client-side validation skipped (--no-validate).");
+  } else {
+    await validateDeploymentPlans(deployments);
   }
+  const summary = printDeploymentPlans(deployments, {
+    dryRun,
+    pendingDeployedHooks,
+    missingDependentApps,
+  });
+  await withSpan("confirm", () => confirmDeploymentPlans(params));
+  return summary;
 }
 
 /**
@@ -955,8 +973,10 @@ async function deployInternal(
         workspaceId,
         noSchemaCheck: options?.noSchemaCheck,
         migrationSkipSteps: options?.migrationSkipSteps,
+        migrationRecoveryArgs: recoveryEnvironmentArgs(options, cliContext),
         migrationTestBaselines: internalContext?.migrationTestBaselines,
         migrationTestSnapshots: internalContext?.migrationTestSnapshots,
+        migrationMachineUserOverride: internalContext?.migrationMachineUserOverride,
         skip: reuse?.skip,
         previousDeployments: reuse?.previousDeployments,
       });
@@ -975,7 +995,6 @@ async function deployInternal(
       ),
     );
 
-    // Phase 1b: Confirm
     const missingDependentApps = (
       await Promise.all(
         planTargets.map((target) =>
@@ -991,30 +1010,6 @@ async function deployInternal(
       )
     ).flat();
 
-    // `confirmDeploymentPlans` appends renamed-app cleanup deletes onto each
-    // deployment's `app.deletes` in place. Recorded here so a later rebuild
-    // (which replaces `deployments` with a freshly planned `app` for every
-    // application) can carry those additions over instead of losing them --
-    // confirm itself never runs a second time, so nothing else re-adds them.
-    const preConfirmAppDeleteCounts = new Map(
-      deployments.map((deployment) => [deployment.application.name, deployment.app.deletes.length]),
-    );
-
-    await withSpan("confirm", async () => {
-      await confirmDeploymentPlans({
-        deployments,
-        yes: options?.yes ?? false,
-        dryRun,
-        missingDependentApps,
-      });
-    });
-
-    const validate = (deployments: ReadonlyArray<PlannedDeployment>) =>
-      options?.noValidate
-        ? logger.warn("Client-side validation skipped (--no-validate).")
-        : validateDeploymentPlans(deployments);
-    await validate(deployments);
-
     // `env`'s static website placeholders are resolved once, at build time,
     // before this deploy has applied anything. When one references a site the
     // prerequisite apply below just creates, the placeholder is still
@@ -1027,10 +1022,6 @@ async function deployInternal(
     // `env` themselves right before executing.
     const needsUrlResolution = needsEnvRebuild(deployments, expectedLocalStaticWebsiteNames);
 
-    // On the rebuild path below, the plan actually applied is the rebuilt
-    // one, so printing this first-pass plan would only show output that's
-    // about to be superseded. Dry run never rebuilds (it returns right
-    // below), so it always shows this first pass instead.
     const pendingDeployedHooks = internalContext?.skipDeployedHooks
       ? []
       : targets.flatMap((target) =>
@@ -1038,14 +1029,14 @@ async function deployInternal(
             .filter((plugin) => plugin.onDeployed)
             .map((plugin) => ({ application: target.application.name, pluginId: plugin.id })),
         );
-    let planSummary: PlanSummary | undefined =
-      dryRun || !needsUrlResolution
-        ? printDeploymentPlans(deployments, {
-            dryRun: options?.dryRun,
-            pendingDeployedHooks,
-            missingDependentApps,
-          })
-        : undefined;
+    const reviewOptions = { yes: options?.yes ?? false, noValidate: options?.noValidate };
+    let planSummary = await reviewDeploymentPlans({
+      ...reviewOptions,
+      deployments,
+      dryRun,
+      missingDependentApps,
+      pendingDeployedHooks,
+    });
 
     if (dryRun) {
       for (const { application, pluginId } of pendingDeployedHooks) {
@@ -1086,9 +1077,11 @@ async function deployInternal(
         previousDeployments: deployments,
       });
       assertEnvResolvedAfterRebuild(rebuilt.deployments, expectedLocalStaticWebsiteNames);
-      carryConfirmedAppDeletes(deployments, rebuilt.deployments, preConfirmAppDeleteCounts);
-      await validate(rebuilt.deployments);
-      planSummary = printDeploymentPlans(rebuilt.deployments, { dryRun: options?.dryRun });
+      planSummary = await reviewDeploymentPlans({
+        ...reviewOptions,
+        deployments: rebuilt.deployments,
+        confirmedDeployments: deployments,
+      });
       tailordbMaintenance = await applyRemainingResources(client, workspaceId, rebuilt.deployments);
     } else {
       tailordbMaintenance = await applyRemainingResources(client, workspaceId, deployments);
@@ -1124,7 +1117,7 @@ async function deployInternal(
     if (!internalContext?.suppressResultOutput) {
       if (logger.jsonMode) {
         logger.out({
-          summary: assertDefined(planSummary, "planSummary was never printed before this point"),
+          summary: planSummary,
           status: "applied",
           workspaceId,
           applications,
@@ -1173,14 +1166,17 @@ export function deployMigrationTestBaseline(
  * Deploy pending migrations without emitting deploy's standalone result payload.
  * @param options - Deploy execution options
  * @param snapshots - Final committed snapshots keyed by TailorDB namespace
+ * @param machineUser - Machine user that runs the migration scripts in place of the configured one
  * @returns Deploy result
  */
 export function deployMigrationTestTarget(
   options: DeployOptions,
   snapshots: TailorDBMigrationTestSnapshots,
+  machineUser?: string,
 ) {
   return deployInternal(options, undefined, {
     migrationTestSnapshots: snapshots,
+    migrationMachineUserOverride: machineUser,
     suppressResultOutput: true,
     skipDeployedHooks: true,
   });

@@ -67,7 +67,7 @@ describe("assertMigrationSkipSteps", () => {
       workspaceId: "ws-1",
       requested: new Map([["main", ["a"]]]),
       pendingMigrations: [stepsMigration("main", 3)],
-      inProgressByNamespace: { main: { number: 3, executionId: "exec-1" } },
+      inProgressByNamespace: { main: { number: 3, executionId: "exec-1", kind: "steps" } },
     });
 
     expect(assertSkippableSteps).toHaveBeenCalledWith({
@@ -76,7 +76,7 @@ describe("assertMigrationSkipSteps", () => {
       namespace: "main",
       migrationNumber: 3,
       order: ["a", "b"],
-      inProgress: { number: 3, executionId: "exec-1" },
+      inProgress: { number: 3, executionId: "exec-1", kind: "steps" },
       requested: ["a"],
     });
   });
@@ -88,7 +88,7 @@ describe("assertMigrationSkipSteps", () => {
         workspaceId: "ws-1",
         requested: new Map([["audit", ["a"]]]),
         pendingMigrations: [stepsMigration("main", 3)],
-        inProgressByNamespace: { main: { number: 3 } },
+        inProgressByNamespace: { main: { number: 3, kind: "steps" } },
       }),
     ).rejects.toMatchObject({
       code: "MIGRATION_SKIP_STEPS_INVALID",

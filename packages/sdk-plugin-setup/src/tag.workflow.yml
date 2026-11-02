@@ -30,7 +30,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - id: tailor-tag-guard
-        uses: tailor-platform/actions/tag-guard@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
+        uses: tailor-platform/actions/tag-guard@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
         with:
           target-branch: "__BRANCH__"
           github-token: ${{ github.token }}
@@ -49,16 +49,16 @@ jobs:
         with:
           persist-credentials: false
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
+        uses: tailor-platform/actions/setup@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
+        uses: tailor-platform/actions/install@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
         with:
           package-manager: __PACKAGE_MANAGER__
       # __GENERATE_CHECK_START__
       - id: tailor-generate-check
-        uses: tailor-platform/actions/generate-check@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
+        uses: tailor-platform/actions/generate-check@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
@@ -73,20 +73,20 @@ jobs:
       # __SEED_VALIDATE_END__
       # __PER_APP_SEED_VALIDATE__
       - id: tailor-drift-check
-        uses: tailor-platform/actions/drift-check@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
+        uses: tailor-platform/actions/drift-check@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
         with:
           package-manager: __PACKAGE_MANAGER__
           fail-on-drift: ${{ vars.TAILOR_PLATFORM_FAIL_ON_DRIFT == 'true' }}
       # __MIGRATION_DRIFT_CHECK_START__
       - id: tailor-migration-drift-check
-        uses: tailor-platform/actions/migration-drift-check@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
+        uses: tailor-platform/actions/migration-drift-check@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
       # __MIGRATION_DRIFT_CHECK_END__
       # __PER_APP_MIGRATION_DRIFT_CHECK__
       - id: tailor-plan
-        uses: tailor-platform/actions/plan@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
+        uses: tailor-platform/actions/plan@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
         # __CONFIG_ENV__
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
@@ -116,15 +116,15 @@ jobs:
         with:
           persist-credentials: false
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
+        uses: tailor-platform/actions/setup@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
+        uses: tailor-platform/actions/install@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-apply
-        uses: tailor-platform/actions/deploy@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
+        uses: tailor-platform/actions/deploy@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
         # __CONFIG_ENV__
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
@@ -154,7 +154,7 @@ jobs:
           fi
       - id: tailor-notify
         if: always() && steps.tailor-slack-prereq.outputs.ready == 'true'
-        uses: tailor-platform/actions/notify@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
+        uses: tailor-platform/actions/notify@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
         with:
           provider: slack
           status: ${{ job.status }}

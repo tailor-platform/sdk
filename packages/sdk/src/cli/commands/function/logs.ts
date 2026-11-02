@@ -6,6 +6,7 @@ import {
   type FunctionExecution,
   type FunctionExecution_Status,
   FunctionExecution_Type,
+  type FunctionExecutionSummary,
 } from "@tailor-platform/tailor-proto/function_resource_pb";
 import * as path from "pathe";
 import { z } from "zod";
@@ -51,6 +52,7 @@ interface FunctionExecutionListInfo {
   errorKind: string;
   errorName: string | null;
   errorMessage: string | null;
+  hasPlatformLogs: boolean;
 }
 
 interface FunctionExecutionErrorDisplay {
@@ -85,11 +87,13 @@ function functionErrorKindToString(kind: FunctionErrorKind): string {
 }
 
 /**
- * Transform FunctionExecution to FunctionExecutionListInfo for list display.
- * @param execution - FunctionExecution from proto
+ * Transform a listed or fetched function execution to FunctionExecutionListInfo for list display.
+ * @param execution - FunctionExecutionSummary or FunctionExecution from proto
  * @returns Function execution list info
  */
-function toFunctionExecutionListInfo(execution: FunctionExecution): FunctionExecutionListInfo {
+function toFunctionExecutionListInfo(
+  execution: FunctionExecutionSummary | FunctionExecution,
+): FunctionExecutionListInfo {
   return {
     id: execution.id,
     scriptName: execution.scriptName,
@@ -100,6 +104,7 @@ function toFunctionExecutionListInfo(execution: FunctionExecution): FunctionExec
     errorKind: functionErrorKindToString(execution.errorKind),
     errorName: execution.error?.name || null,
     errorMessage: execution.error?.message || null,
+    hasPlatformLogs: execution.hasPlatformLogs,
   };
 }
 
@@ -471,7 +476,9 @@ export const logsCommand = defineAppCommand({
   description: "List or get function execution logs.",
   notes: `Each execution includes \`errorKind\`, which tells you where a failure came from: \`USER_RUNTIME\` (your code threw while running, or exceeded its time, memory, or CPU limit), \`USER_NON_RUNTIME\` (your script failed while loading, before your function was called, such as when its top-level code threw), \`PLATFORM\` (a failure on the Platform side, or the Platform aborting the run because of its own deadline or cancellation), \`NONE\` (no error), or \`UNSPECIFIED\` (not recorded, or a kind this CLI version does not recognize). A workflow job waiting on another job also reports \`USER_NON_RUNTIME\` when that job fails or is canceled. \`errorName\` and \`errorMessage\` hold the error's name and message, or \`null\` when none was recorded. The list table omits \`errorMessage\`; use \`--json\` or the execution details to read it.
 
-Execution details include \`logEntries\`, the structured log lines (message, severity, timestamp) recorded while the function ran. They are available while the execution is still running. The \`logs\` string joins their messages with newlines.
+Each execution also includes \`hasPlatformLogs\`, which is \`true\` when the Platform added log lines of its own to the execution. The flag is best-effort: \`false\` does not guarantee there are none, so read the \`logEntries\` of the execution details to be sure. The list table shows a \`hasPlatformLogs\` column, marking flagged executions with \`yes\`, only when at least one listed execution is flagged.
+
+Execution details include \`logEntries\`, the structured log lines (message, severity, timestamp, source) recorded while the function ran. They are available while the execution is still running. \`source\` is \`USER\` for your function's own output, \`PLATFORM\` for a line the Platform added, or \`UNSPECIFIED\` (not recorded, or a source this CLI version does not recognize); the human-readable output marks Platform lines with \`[PLATFORM]\`. The \`logs\` string joins their messages with newlines.
 
 Use \`--follow\` to keep polling a running execution and print new log entries as they arrive until it completes. Polling continues while the execution is suspended at a wait point, and indefinitely unless \`--timeout\` is set. With \`--json\`, \`--follow\` waits for completion and then emits the final execution details once.
 
@@ -601,7 +608,13 @@ Stack traces are mapped only when the execution includes a content hash for the 
         logger.info("No function execution logs found.");
         return;
       }
-      logger.out(logs, { display: { errorMessage: null } });
+      // The flag is best-effort, so an unflagged row stays blank rather than claiming there are none.
+      const hasPlatformLogsTransformer = logs.some((log) => log.hasPlatformLogs)
+        ? (value: unknown) => (value ? "yes" : "")
+        : null;
+      logger.out(logs, {
+        display: { errorMessage: null, hasPlatformLogs: hasPlatformLogsTransformer },
+      });
       await reportTruncation(listed, args.limit);
     }
   },

@@ -27,10 +27,14 @@ Each page under `packages/sdk/docs/**` starts with a YAML frontmatter `descripti
 - CLI pages: put `description` as a top-level key in the `.template.md`, next to the `politty` block. The generator keeps it and strips only `politty`.
 - Migration guides: the description lives in `renderMigrationDoc` (`packages/sdk-codemod/src/migration-doc.ts`); do not edit `migration/v<major>.md` by hand.
 
+## Beta marks
+
+A heading or list item in `packages/sdk/docs/**` dedicated to one beta API or behavior carries `(Beta)`; one on an enclosing heading or on the sentence introducing the list also counts, and generated CLI docs show it through the `(beta)` in the command description. A heading or list item for an API that is not beta does not carry `(Beta)` itself. [Breaking changes to beta features](../../docs/changeset.md#breaking-changes-to-beta-features) defines what is beta. When you mark or unmark an API, update its headings and list items in the same change.
+
 ## CLI docs are generated
 
 `packages/sdk/docs/cli-reference.md` and `packages/sdk/docs/cli/*.md` are generated. Change them through their templates or command definitions as the "CLI Documentation" section of `AGENTS.md` describes.
 
 ## Keep this rule and the CI check in sync
 
-The same principles are enforced in CI by `.github/workflows/docs-consistency-check.yml` (the "Reader-Perspective Review" section of its prompt). When you change the guidance here, update that workflow to match — and vice versa — so the rule humans read and the check CI runs do not drift apart.
+The same principles are enforced in CI by `.github/workflows/docs-consistency-check.yml` (the "Reader-Perspective Review" and "Beta Marks" sections of its prompt). When you change the guidance here, update that workflow to match — and vice versa — so the rule humans read and the check CI runs do not drift apart.

@@ -2,7 +2,13 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { SCHEMA_SNAPSHOT_VERSION, type MigrationDiff } from "../diff-calculator";
 import type { TailorDBType } from "#/parser/service/tailordb/types";
-import type { SchemaSnapshot, SnapshotFieldConfig, TailorDBSnapshotType } from "../snapshot";
+import type {
+  RebaselineMarker,
+  SchemaSnapshot,
+  SnapshotFieldConfig,
+  TailorDBSnapshotType,
+} from "../snapshot";
+import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 /**
  * Parsed-table shape consumed by createSnapshotFromLocalTypes / createSnapshotType;
@@ -55,6 +61,34 @@ export function snapshotType(name: string): TailorDBSnapshotType {
 }
 
 /**
+ * Deployed counterpart of {@link snapshotType} with the given required fields: `id` is a uuid, the others strings
+ * @param {string} name - Table name
+ * @param {string[]} fieldNames - Field names
+ * @returns {ProtoTailorDBType} Deployed table as the platform returns it
+ */
+export function remoteType(name: string, fieldNames: string[]): ProtoTailorDBType {
+  const fields: Record<string, unknown> = {};
+  for (const fieldName of fieldNames) {
+    fields[fieldName] = {
+      type: fieldName === "id" ? "uuid" : "string",
+      required: true,
+      array: false,
+      index: false,
+      unique: false,
+      foreignKey: false,
+      description: "",
+      allowedValues: [],
+      validate: [],
+      fields: {},
+    };
+  }
+  return {
+    name,
+    schema: { fields },
+  } as unknown as ProtoTailorDBType;
+}
+
+/**
  * Write a 0000 baseline schema snapshot into a migrations directory
  * @param {string} migrationsDir - Migrations directory path
  * @param {Record<string, TailorDBSnapshotType>} tables - Snapshot tables
@@ -72,6 +106,28 @@ export function writeInitialSchema(
   const dir = path.join(migrationsDir, "0000");
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, "schema.json"), JSON.stringify(snapshot));
+}
+
+/**
+ * Record a re-baseline marker on the 0000 baseline schema snapshot of a migrations directory
+ * @param {string} migrationsDir - Migrations directory path
+ * @param {string} historyId - Migration history ID of the baseline
+ * @param {Partial<Omit<RebaselineMarker, "historyId">>} overrides - Marker fields to override
+ */
+export function writeRebaselineMarker(
+  migrationsDir: string,
+  historyId: string,
+  overrides: Partial<Omit<RebaselineMarker, "historyId">> = {},
+): void {
+  const schemaPath = path.join(migrationsDir, "0000", "schema.json");
+  const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as SchemaSnapshot;
+  const rebaseline: RebaselineMarker = {
+    historyId,
+    replacedHistoryId: null,
+    replacedLatestMigration: 0,
+    ...overrides,
+  };
+  fs.writeFileSync(schemaPath, JSON.stringify({ ...schema, rebaseline }));
 }
 
 /**

@@ -3,7 +3,11 @@ import { deserializeTemporalRows, serializeTemporalParams } from "../pglite-temp
 import { tailordbRoot, withDispose } from "./shared";
 import type { PGliteClient, PGliteQueryResult } from "../pglite-kysely";
 
-/** A query executed through the PGlite-backed TailorDB client. */
+/**
+ * A query executed through the PGlite-backed TailorDB client.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export interface ExecutedPGliteQuery {
   /** Namespace of the `getDB` call that issued the query. */
   namespace: string;
@@ -13,7 +17,11 @@ export interface ExecutedPGliteQuery {
   params: unknown[];
 }
 
-/** Options for {@link mockTailordbWithPGlite}. */
+/**
+ * Options for {@link mockTailordbWithPGlite}.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export interface MockTailordbPGliteOptions {
   /**
    * PGlite instance per `getDB` namespace. A `getDB` call for a namespace
@@ -74,6 +82,8 @@ function toQueryObjectResult(result: PGliteQueryResult, temporal: boolean) {
  * execute as real SQL on an in-memory Postgres. Restored on dispose; the
  * PGlite instances are borrowed, never closed — close them yourself (e.g. in
  * `afterAll`).
+ *
+ * **Beta:** This API may change in future releases.
  *
  * Create the tables a test needs up front: run the script `kyselyTypePlugin`
  * writes when `pgliteSchemaPath` is set, or your own `CREATE TABLE`

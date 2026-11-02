@@ -22,7 +22,7 @@ import {
   saveUserTokens,
   writePlatformConfig,
 } from "#/cli/shared/context";
-import { CLIError, toError } from "#/cli/shared/errors";
+import { CLIError, profileNotFoundError, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
 import { prompt } from "#/cli/shared/prompt";
@@ -234,10 +234,17 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
   });
 };
 
+const MACHINE_USER_CLIENT_SECRET_ENV = "TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET";
+
 async function loginAsMachineUser(
   args: { clientId: string; clientSecret?: string } & ProfileLoginOptions,
 ): Promise<LoggedInUser> {
-  const clientSecret = args.clientSecret ?? (await prompt.password({ message: "Client secret" }));
+  const clientSecret =
+    args.clientSecret ??
+    (await prompt.password({
+      message: "Client secret",
+      suggestion: `Set ${MACHINE_USER_CLIENT_SECRET_ENV} or pass --client-secret.`,
+    }));
   const tokens = await fetchPlatformMachineUserToken(
     args.clientId,
     clientSecret,
@@ -290,7 +297,7 @@ export const loginCommand = defineAppCommand({
         }),
         "client-secret": arg(z.string().optional(), {
           description: "Client secret",
-          env: "TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET",
+          env: MACHINE_USER_CLIENT_SECRET_ENV,
         }),
         profile: arg(z.string().optional(), {
           alias: "p",
@@ -308,10 +315,7 @@ export const loginCommand = defineAppCommand({
         const pfConfig = await readPlatformConfig();
         const profileEntry = pfConfig.profiles[args.profile];
         if (!profileEntry) {
-          throw CLIError({
-            code: "PROFILE_NOT_FOUND",
-            message: `Profile "${args.profile}" not found`,
-          });
+          throw profileNotFoundError(args.profile);
         }
         platformConfig = platformConfigFromProfile(profileEntry);
         profileUser = profileEntry.user;

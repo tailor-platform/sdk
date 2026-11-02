@@ -21,6 +21,6 @@ export default {
     // zinfer reads every exported *Schema from its include files.
     ...Object.fromEntries((zinferConfig.include ?? []).map((glob) => [glob, ["exports"]])),
   },
-  ignoreDependencies: ["tsrs"],
   ignoreBinaries: ["knip", "publint"],
+  treatConfigHintsAsErrors: true,
 } satisfies KnipConfig;

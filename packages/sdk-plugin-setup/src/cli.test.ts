@@ -52,6 +52,19 @@ describe("setup CLI JSON errors", () => {
   );
 
   test(
+    "turns on JSON output from an --env-file",
+    () => {
+      const result = runCli([...conflictingEnvArgs, "-e", "src/__fixtures__/json-output.env"]);
+
+      expect(result.status).toBe(1);
+      expect(parseErrorEnvelope(result.stderr)).toEqual({
+        error: { code: "UNEXPECTED_ERROR", message: conflictingEnvMessage },
+      });
+    },
+    CLI_TEST_TIMEOUT_MS,
+  );
+
+  test(
     "keeps the human stack trace under --verbose without --json",
     () => {
       const result = runCli([...conflictingEnvArgs, "--verbose"]);

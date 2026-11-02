@@ -62,6 +62,7 @@ async function buildEntry(
   return result.output[0].code;
 }
 
+/** **Beta:** This API may change in future releases. */
 export interface MigrationBundleResult {
   namespace: string;
   migrationNumber: number;
@@ -70,6 +71,8 @@ export interface MigrationBundleResult {
 
 /**
  * Bundle a single migration script
+ *
+ * **Beta:** This API may change in future releases.
  *
  * Creates an entry that:
  * 1. Imports the migration script's main function

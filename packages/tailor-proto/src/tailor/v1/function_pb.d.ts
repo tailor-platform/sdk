@@ -5,7 +5,7 @@
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 import type { AuthInvoker } from "./auth_resource_pb";
-import type { FunctionExecution, FunctionExecution_Status } from "./function_resource_pb";
+import type { FunctionExecution, FunctionExecution_Status, FunctionExecutionSummary } from "./function_resource_pb";
 import type { Filter, PageDirection } from "./resource_pb";
 
 /**
@@ -304,9 +304,9 @@ export declare const ListFunctionExecutionsRequestSchema: GenMessage<ListFunctio
  */
 export declare type ListFunctionExecutionsResponse = Message<"tailor.v1.ListFunctionExecutionsResponse"> & {
   /**
-   * @generated from field: repeated tailor.v1.FunctionExecution executions = 1;
+   * @generated from field: repeated tailor.v1.FunctionExecutionSummary executions = 1;
    */
-  executions: FunctionExecution[];
+  executions: FunctionExecutionSummary[];
 
   /**
    * @generated from field: string next_page_token = 2;

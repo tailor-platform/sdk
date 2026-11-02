@@ -7,9 +7,11 @@ import {
   processRelationMetadata,
   buildRelationInfo,
   applyRelationMetadataToFieldConfig,
+  applyNestedRelationMetadata,
 } from "./relation";
 import type { TailorDBField } from "#/configure/services/tailordb/types";
 import type {
+  OperatorFieldConfig,
   TypeSourceInfo,
   ParsedField,
   ParsedRelationship,
@@ -17,6 +19,31 @@ import type {
 } from "#/parser/service/tailordb/types";
 import type { EffectiveDateDefault } from "#/runtime/types";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
+
+function assertNoUnsupportedUniqueOrIndex(
+  fieldConfig: OperatorFieldConfig,
+  path: readonly string[],
+  tableName: string,
+  insideArray = false,
+): void {
+  for (const modifier of ["unique", "index"] as const) {
+    if (!fieldConfig[modifier]) continue;
+    const reason = fieldConfig.array
+      ? `${modifier} cannot be set on array fields`
+      : fieldConfig.type === "nested"
+        ? `${modifier} cannot be set on nested type fields`
+        : insideArray
+          ? `${modifier} cannot be set on a field inside an array of objects`
+          : undefined;
+    if (reason) {
+      throw new Error(`Field "${path.join(".")}" on table "${tableName}": ${reason}`);
+    }
+  }
+  const underArray = insideArray || fieldConfig.array === true;
+  for (const [memberName, member] of Object.entries(fieldConfig.fields ?? {})) {
+    assertNoUnsupportedUniqueOrIndex(member, [...path, memberName], tableName, underArray);
+  }
+}
 
 /**
  * Parse multiple TailorDB tables, build relationships, and validate uniqueness.
@@ -34,16 +61,9 @@ export function parseTypes(
   dateDefault: EffectiveDateDefault = "legacy",
 ): Record<string, TailorDBType> {
   const types = createRecord<TailorDBType>();
-  const allTableNames = new Set(Object.keys(rawTypes));
 
   for (const [tableName, type] of Object.entries(rawTypes)) {
-    types[tableName] = parseTailorDBType(
-      type,
-      allTableNames,
-      rawTypes,
-      typeSourceInfo,
-      dateDefault,
-    );
+    types[tableName] = parseTailorDBType(type, rawTypes, typeSourceInfo, dateDefault);
   }
 
   buildBackwardRelationships(types, namespace, typeSourceInfo);
@@ -55,7 +75,6 @@ export function parseTypes(
 /**
  * Parse a TailorDBTypeSchemaOutput into a TailorDBType.
  * @param type - TailorDB table to parse
- * @param allTableNames - Set of all TailorDB table names
  * @param rawTypes - All raw TailorDB tables keyed by name
  * @param typeSourceInfo - Optional table source information
  * @param dateDefault - Representation of `t` date fields the precompiled hook expressions were compiled under
@@ -63,7 +82,6 @@ export function parseTypes(
  */
 function parseTailorDBType(
   type: TailorDBTypeSchemaOutput,
-  allTableNames: Set<string>,
   rawTypes: Record<string, TailorDBTypeSchemaOutput>,
   typeSourceInfo: TypeSourceInfo | undefined,
   dateDefault: EffectiveDateDefault,
@@ -80,7 +98,7 @@ function parseTailorDBType(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TailorDBField requires generic type parameters
     TailorDBField<any, any>,
   ][]) {
-    const context = { tableName: type.name, fieldName, allTableNames };
+    const context = { tableName: type.name, fieldName, rawTypes };
     let fieldConfig = parseFieldConfig(fieldDef, {
       tableName: type.name,
       fieldPath: [fieldName],
@@ -90,7 +108,7 @@ function parseTailorDBType(
 
     // Process relation if rawRelation is present
     if (rawRelation) {
-      validateRelationConfig(rawRelation, context);
+      validateRelationConfig(rawRelation, fieldConfig.type, context);
 
       // Validate that n-1/manyToOne relations cannot have explicit unique
       const isNToOne = ["n-1", "manyToOne", "N-1"].includes(rawRelation.type);
@@ -105,17 +123,9 @@ function parseTailorDBType(
       fieldConfig = applyRelationMetadataToFieldConfig(fieldConfig, relationMetadata);
     }
 
-    // Validate that index/unique are not set on array fields
-    if (fieldConfig.array && fieldConfig.index) {
-      throw new Error(
-        `Field "${fieldName}" on table "${type.name}": index cannot be set on array fields`,
-      );
-    }
-    if (fieldConfig.array && fieldConfig.unique) {
-      throw new Error(
-        `Field "${fieldName}" on table "${type.name}": unique cannot be set on array fields`,
-      );
-    }
+    fieldConfig = applyNestedRelationMetadata(fieldConfig, context);
+
+    assertNoUnsupportedUniqueOrIndex(fieldConfig, [fieldName], type.name);
 
     const parsedField: ParsedField = { name: fieldName, config: fieldConfig };
 

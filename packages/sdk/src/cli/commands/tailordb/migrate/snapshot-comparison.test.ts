@@ -24,6 +24,36 @@ describe("snapshot", () => {
       tables: {},
     });
 
+    test("reports a foreign key newly set on a nested member as a non-breaking modification", () => {
+      const withOwner = (owner: SnapshotFieldConfig): SchemaSnapshot => ({
+        ...createEmptySnapshot(),
+        tables: {
+          Order: {
+            name: "Order",
+            pluralForm: "Orders",
+            fields: {
+              id: { type: "uuid", required: true },
+              info: { type: "nested", required: true, fields: { ownerID: owner } },
+            },
+          },
+        },
+      });
+
+      const diff = compareRawSnapshots(
+        withOwner({ type: "uuid", required: true }),
+        withOwner({
+          type: "uuid",
+          required: true,
+          foreignKey: true,
+          foreignKeyType: "User",
+          foreignKeyField: "id",
+        }),
+      );
+
+      expect(diff.changes.map((c) => [c.kind, c.tableName])).toEqual([["field_modified", "Order"]]);
+      expect(diff.hasBreakingChanges).toBe(false);
+    });
+
     test("detects table addition", () => {
       const previous = createEmptySnapshot();
       const current: SchemaSnapshot = {
@@ -382,6 +412,49 @@ describe("snapshot", () => {
 
       expect(diff.hasBreakingChanges).toBe(true);
       expect(diff.breakingChanges[0]!.reason).toContain("Unique constraint");
+    });
+
+    describe("foreign key added", () => {
+      const ownerReference = {
+        foreignKey: true,
+        foreignKeyType: "User",
+        foreignKeyField: "id",
+      } as const;
+      const withOrderFields = (fields: Record<string, SnapshotFieldConfig>): SchemaSnapshot => ({
+        ...createEmptySnapshot(),
+        tables: {
+          Order: {
+            name: "Order",
+            pluralForm: "Orders",
+            fields: { id: { type: "uuid", required: true }, ...fields },
+          },
+        },
+      });
+
+      test("requires a migration script when an existing field gains a relation", () => {
+        const diff = compareRawSnapshots(
+          withOrderFields({ ownerId: { type: "uuid", required: false } }),
+          withOrderFields({ ownerId: { type: "uuid", required: false, ...ownerReference } }),
+        );
+
+        expect(diff.breakingChanges).toEqual([
+          {
+            tableName: "Order",
+            fieldName: "ownerId",
+            reason: "Foreign key to User added to field",
+          },
+        ]);
+        expect(diff.requiresMigrationScript).toBe(true);
+      });
+
+      test("keeps a field added together with its relation non-breaking", () => {
+        const diff = compareRawSnapshots(
+          withOrderFields({}),
+          withOrderFields({ ownerId: { type: "uuid", required: false, ...ownerReference } }),
+        );
+
+        expect(diff.hasBreakingChanges).toBe(false);
+      });
     });
 
     describe("nested member changes", () => {

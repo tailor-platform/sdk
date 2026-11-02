@@ -10,10 +10,10 @@
     "lint:fix": "oxlint --type-aware . --fix"
   },
   "devDependencies": {
-    "@types/node": "24.19.2",
-    "eslint-plugin-zod": "5.2.0",
-    "oxlint": "1.88.0",
-    "oxlint-tsgolint": "7.0.2004",
+    "@types/node": "26.6.5",
+    "eslint-plugin-zod": "5.2.2",
+    "oxlint": "1.90.0",
+    "oxlint-tsgolint": "7.0.2005",
     "tsx": "4.23.15",
     "typescript": "6.0.3",
     "vitest": "5.0.5"

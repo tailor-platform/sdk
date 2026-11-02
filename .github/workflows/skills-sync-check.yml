@@ -5,10 +5,12 @@ on:
     paths:
       - "packages/sdk/agent-skills/**"
       - ".github/workflows/skills-sync-check.yml"
+      - ".github/scripts/sync-skills.sh"
   push:
     branches: [main]
     paths:
       - "packages/sdk/agent-skills/**"
+      - ".github/scripts/sync-skills.sh"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -31,19 +33,20 @@ jobs:
           persist-credentials: false
 
       - name: Sync skills to root
-        run: |
-          # Copy public skills from packages/sdk/agent-skills/ to skills/.
-          # The bundled copy lives under a non-`skills/` directory so that
-          # `gh skill`'s recursive `**/skills/*/SKILL.md` match resolves to a
-          # single entry (the repo-root mirror). Root `skills/` is what both
-          # `gh skill install` and `npx skills add <repo>` actually pick up.
+        run: bash .github/scripts/sync-skills.sh
 
-          for skill_dir in packages/sdk/agent-skills/*/; do
-            skill_name=$(basename "$skill_dir")
-            mkdir -p "skills/$skill_name"
-            cp -r "$skill_dir"* "skills/$skill_name/"
-            echo "✓ Synced $skill_name"
-          done
+      # On a pull request from this repository, the securefix workflow pushes
+      # the synced files and CI runs again on the new head. This run is the
+      # superseded one; pushes to main and pull requests from forks cannot be
+      # fixed that way.
+      - name: Check for uncommitted changes
+        run: |
+          if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
+            echo "::error::skills/ is out of sync with packages/sdk/agent-skills/. Run 'bash .github/scripts/sync-skills.sh' and commit the result."
+            git status --porcelain --untracked-files=all
+            git diff
+            exit 1
+          fi
 
       - name: Upgrade gh CLI
         env:
@@ -61,13 +64,3 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh skill publish --dry-run
-
-      # Omitting `files` lets commit-action list the files itself with
-      # `git ls-files --modified --others --exclude-standard`, which also
-      # covers untracked output. It no-ops when nothing changed.
-      - name: Commit changes
-        uses: suzuki-shunsuke/commit-action@5eaa5ecce3ffe93d09a85b946dc5136e3713b1b7 # v1.1.0
-        with:
-          app_id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
-          app_private_key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}
-          commit_message: "chore: sync skills"

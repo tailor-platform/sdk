@@ -6,13 +6,13 @@
  * started asynchronously, so only the polling loop spans the migration's real
  * duration.
  *
- * The temporary function, job function, and workflow are removed once the
- * deploy sees the execution reach a terminal state; a multi-step run keeps them
- * until its checkpoint is committed so a later deploy can resume it. Every
- * resource is labeled with the app's ownership immediately, so a run
- * interrupted before teardown stays attributable, and the next run of the same
- * migration reclaims the leftovers before recreating them unless an execution
- * of them is still running.
+ * The temporary function, job function, and workflow outlive a run that may
+ * have written data: the deploy removes them once the migration's checkpoint
+ * is committed or its in-progress record is cleared, so a record left behind
+ * still names an execution that can be read. Every resource is labeled with
+ * the app's ownership immediately, so a run interrupted before teardown stays
+ * attributable, and the next run of the same migration reclaims the leftovers
+ * before recreating them unless an execution of them is still running.
  */
 
 import * as crypto from "node:crypto";
@@ -22,7 +22,16 @@ import {
   WorkflowExecution_Status,
   WorkflowJobExecution_Status,
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import {
+  formatNamespaceMigrationHint,
+  type MigrationCommandContext,
+} from "#/cli/commands/tailordb/migrate/hints";
+import {
+  formatMigrationResolveHint,
+  type MigrationResolution,
+} from "#/cli/commands/tailordb/migrate/remote-state";
 import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/snapshot";
+import { type MigrationInProgress } from "#/cli/commands/tailordb/migrate/types";
 import { isWorkflowExecutionFailureStatus } from "#/cli/commands/workflow/status";
 import { getOrNull, isNotFoundError } from "#/cli/shared/client";
 import { CLIError, formatCommandHint, internalError } from "#/cli/shared/errors";
@@ -78,6 +87,10 @@ export interface LongRunningMigrationOptions {
   appId: string | undefined;
   /** Whether the migrating namespace is in maintenance mode. */
   maintenanceMode: boolean;
+  /** Called once no other execution of the migration is active, before a new one is created. */
+  onBeforeStart: () => Promise<void>;
+  /** Called as soon as a new execution exists, before waiting on it. */
+  onExecutionStarted: (executionId: string) => Promise<void>;
   pollIntervalMs?: number;
   /**
    * Called when no job is running the script (`waiting`, also when waiting starts), when a job is
@@ -85,6 +98,11 @@ export interface LongRunningMigrationOptions {
    * when the run finished, with whether any job was seen running the script.
    */
   onRunEvent?: (event: MigrationRunEvent) => void;
+}
+
+export interface MainMigrationWorkflowOptions extends LongRunningMigrationOptions {
+  /** Config and workspace selection of the deploy, kept in the commands its errors suggest. */
+  commandContext: MigrationCommandContext;
 }
 
 export interface LongRunningMigrationResult {
@@ -103,6 +121,30 @@ export interface LongRunningMigrationResult {
  */
 export function migrationWorkflowResourceName(namespace: string, migrationNumber: number): string {
   return `tailordb-migration--${namespace}--${formatMigrationNumber(migrationNumber)}`;
+}
+
+/**
+ * Render the command that lists the runs of a migration, for an error suggestion.
+ * @param namespace - TailorDB namespace
+ * @param migrationNumber - Migration number
+ * @param context - Workspace selection of the current run
+ * @returns The command, as rendered by `formatCommandHint`
+ */
+export function formatMigrationExecutionsHint(
+  namespace: string,
+  migrationNumber: number,
+  context: MigrationCommandContext,
+): string {
+  return formatCommandHint({
+    command: "tailor",
+    args: [
+      "workflow",
+      "executions",
+      "--workflow-name",
+      migrationWorkflowResourceName(namespace, migrationNumber),
+      ...(context.contextArgs ?? []),
+    ],
+  });
 }
 
 /**
@@ -335,12 +377,13 @@ async function createMigrationWorkflow(
  * Execute a migration script as a temporary workflow and wait for completion.
  *
  * Unlike synchronous script execution, only the start call is bound by the
- * request deadline; the migration itself runs as a workflow job.
- * @param {LongRunningMigrationOptions} options - Execution options
+ * request deadline; the migration itself runs as a workflow job. The temporary
+ * resources of a run that started are left for the caller to remove.
+ * @param {MainMigrationWorkflowOptions} options - Execution options
  * @returns {Promise<LongRunningMigrationResult>} Execution result
  */
 export async function executeMigrationAsWorkflow(
-  options: LongRunningMigrationOptions,
+  options: MainMigrationWorkflowOptions,
 ): Promise<LongRunningMigrationResult> {
   const { client, workspaceId, code, namespace, migrationNumber, invoker, appName, appId } =
     options;
@@ -349,15 +392,17 @@ export async function executeMigrationAsWorkflow(
   const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
 
   await assertNoActiveExecution(client, workspaceId, name, migrationLabel, {
-    active: (message, executionId) => outcomeUnknownError(options, message, { executionId }),
+    active: (message, executionId) =>
+      outcomeUnknownError(options, message, { executionId, recorded: false }),
     lookupFailed: (error) =>
       outcomeUnknownError(
         options,
         `Could not check for an earlier run of migration ${migrationLabel}: ${formatWaitError(error)}`,
-        { cause: error },
+        { cause: error, recorded: false },
       ),
   });
   await reclaimLeftovers(client, workspaceId, name);
+  await options.onBeforeStart();
 
   const created: CreatedMigrationWorkflow = {};
   let workflowId: string;
@@ -405,7 +450,7 @@ export async function executeMigrationAsWorkflow(
       throw outcomeUnknownError(
         options,
         `Could not confirm whether migration ${migrationLabel} started: ${formatWaitError(error)}${lookupFailure}`,
-        { cause: error },
+        { cause: error, recorded: true },
       );
     }
     logger.debug(
@@ -415,18 +460,25 @@ export async function executeMigrationAsWorkflow(
     executionId = started.id;
   }
 
-  let result: LongRunningMigrationResult;
   try {
-    result = await waitForMigrationWorkflow(options, executionId);
+    await options.onExecutionStarted(executionId);
+  } catch (error) {
+    throw outcomeUnknownError(
+      options,
+      `Could not record the run of migration ${migrationLabel}: ${formatWaitError(error)}`,
+      { cause: error, executionId, recorded: true },
+    );
+  }
+
+  try {
+    return await waitForMigrationWorkflow(options, executionId);
   } catch (error) {
     throw outcomeUnknownError(
       options,
       `Lost track of migration ${migrationLabel} while it ran: ${formatWaitError(error)}`,
-      { cause: error, executionId },
+      { cause: error, executionId, recorded: true },
     );
   }
-  await teardown(client, workspaceId, name, workflowId);
-  return result;
 }
 
 const START_LOOKUP_ATTEMPTS = 5;
@@ -467,6 +519,8 @@ interface OutcomeUnknownDetails {
   cause?: unknown;
   /** The execution whose outcome is unknown, when it is known. */
   executionId?: string;
+  /** Whether the namespace records the run as in progress, which `migration resolve` settles. */
+  recorded: boolean;
 }
 
 /**
@@ -477,36 +531,32 @@ interface OutcomeUnknownDetails {
  * @returns Error asking the user to settle the migration by hand
  */
 function outcomeUnknownError(
-  options: LongRunningMigrationOptions,
+  options: MainMigrationWorkflowOptions,
   message: string,
   details: OutcomeUnknownDetails,
 ): Error {
-  const { namespace, migrationNumber } = options;
+  const { namespace, migrationNumber, commandContext } = options;
   const name = migrationWorkflowResourceName(namespace, migrationNumber);
-  const executionsHint = formatCommandHint({
-    command: "tailor",
-    args: ["workflow", "executions", "--workflow-name", name],
-  });
+  const executionsHint = formatMigrationExecutionsHint(namespace, migrationNumber, commandContext);
   const syncHint = (checkpoint: number) =>
-    formatCommandHint({
-      command: "tailor",
-      args: [
-        "tailordb",
-        "migration",
-        "sync",
-        formatMigrationNumber(checkpoint),
-        "--namespace",
-        namespace,
-      ],
+    formatNamespaceMigrationHint({
+      ...commandContext,
+      subcommand: ["sync", formatMigrationNumber(checkpoint)],
+      namespace,
     });
+  const resolveHint = (resolution: MigrationResolution) =>
+    formatMigrationResolveHint(resolution, namespace, commandContext);
+  const settle = details.recorded
+    ? `If the execution succeeded, run ${resolveHint("complete")}; otherwise run ${resolveHint("rollback")}. ` +
+      "Deploys stop before changing anything until then."
+    : `If the execution succeeded, run ${syncHint(migrationNumber)}; otherwise run ${syncHint(migrationNumber - 1)}. ` +
+      "Then deploy again. Do not deploy before running sync, even with `--no-schema-check` to skip the drift check: " +
+      "the deploy may run the `main` script again even if the execution succeeded.";
   return CLIError({
     code: "MIGRATION_OUTCOME_UNKNOWN",
     message,
     suggestion:
-      `Run ${executionsHint} until its execution has finished or none is listed. ` +
-      `If the execution succeeded, run ${syncHint(migrationNumber)}; otherwise run ${syncHint(migrationNumber - 1)}. ` +
-      "Then deploy again. Do not deploy before running sync, even with `--no-schema-check` to skip the drift check: " +
-      "the deploy may run the `main` script again even if the execution succeeded." +
+      `Run ${executionsHint} until its execution has finished or none is listed. ${settle}` +
       (options.maintenanceMode
         ? ` Until then, the tables of namespace '${namespace}' stay in maintenance mode.`
         : ""),
@@ -840,10 +890,6 @@ export interface MigrationStepsWorkflowOptions extends LongRunningMigrationOptio
    * the execution it recorded, when it got that far.
    */
   inProgress?: { executionId?: string };
-  /** Called once no other execution of the migration is active, before a new one is created. */
-  onBeforeStart: () => Promise<void>;
-  /** Called as soon as a new execution exists, before waiting on it. */
-  onExecutionStarted: (executionId: string) => Promise<void>;
   /**
    * Steps of the earlier run that are reported as done instead of run again.
    * Each must have succeeded in that run; see {@link assertSkippableSteps}.
@@ -1135,15 +1181,22 @@ async function assertNoActiveExecution(
   }
 }
 
-const RETRY_COMMAND_ACTIVE_ERRORS: ActiveExecutionErrors = {
-  active: (message, executionId) =>
-    CLIError({
-      code: "MIGRATION_EXECUTION_ACTIVE",
-      message,
-      suggestion: "Wait for it to finish, then run the command again.",
-      context: { executionId },
-    }),
-};
+/**
+ * Refuse a command while a run of the migration it would settle or rewrite is still executing.
+ * @param message - Which run is still executing
+ * @param executionId - The execution, when it is known
+ * @returns Error asking to run the command again once the run finished
+ */
+export function retryCommandActiveError(message: string, executionId?: string): Error {
+  return CLIError({
+    code: "MIGRATION_EXECUTION_ACTIVE",
+    message,
+    suggestion: "Wait for it to finish, then run the command again.",
+    ...(executionId ? { context: { executionId } } : {}),
+  });
+}
+
+const RETRY_COMMAND_ACTIVE_ERRORS: ActiveExecutionErrors = { active: retryCommandActiveError };
 
 /**
  * Refuse to go on while a run of a multi-step migration is still executing, so a
@@ -1179,6 +1232,58 @@ async function findRecordedExecution(
   }
   const response = await getOrNull(() => client.getWorkflowExecution({ workspaceId, executionId }));
   return response?.execution;
+}
+
+/** How the run an in-progress record names stands, as far as the platform reports it. */
+export type MigrationRunStatus =
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "canceled"
+  | "not_started"
+  | "unknown";
+
+/**
+ * Read how the run an in-progress record names stands. A run that cannot be read is reported as
+ * unknown rather than failing the caller.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param namespace - TailorDB namespace
+ * @param record - The in-progress record
+ * @returns Status of the run
+ */
+export async function readMigrationRunStatus(
+  client: OperatorClient,
+  workspaceId: string,
+  namespace: string,
+  record: MigrationInProgress,
+): Promise<MigrationRunStatus> {
+  const name = migrationWorkflowResourceName(namespace, record.number);
+  try {
+    const execution = await findRecordedExecution(client, workspaceId, name, record.executionId);
+    if (execution) {
+      if (isExecutionActive(execution)) return "running";
+      if (execution.status === WorkflowExecution_Status.SUCCESS) return "succeeded";
+      return execution.status === WorkflowExecution_Status.CANCELED ? "canceled" : "failed";
+    }
+    return record.executionId === undefined ? "not_started" : "unknown";
+  } catch (error) {
+    logger.debug(
+      `Could not read the run of migration ${namespace}/${formatMigrationNumber(record.number)}: ${formatWaitError(error)}`,
+    );
+    return "unknown";
+  }
+}
+
+/**
+ * The way to settle a recorded `main` run that fits how it stands.
+ * @param status - Status of the run
+ * @returns The resolution, or undefined while the run is running or its outcome cannot be read
+ */
+export function settlingResolution(status: MigrationRunStatus): MigrationResolution | undefined {
+  if (status === "succeeded") return "complete";
+  if (status === "running" || status === "unknown") return undefined;
+  return "rollback";
 }
 
 async function readWorkflowPlan(

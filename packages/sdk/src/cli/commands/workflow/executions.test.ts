@@ -5,6 +5,7 @@ import {
   FunctionExecution_Status,
   FunctionExecutionSchema,
   FunctionLogSeverity,
+  FunctionLogSource,
 } from "@tailor-platform/tailor-proto/function_resource_pb";
 import {
   WorkflowExecution_Status,
@@ -89,6 +90,13 @@ describe("getWorkflowExecution", () => {
             message: "step 1",
             severity: FunctionLogSeverity.INFO,
             timestamp: timestampFromDate(new Date("2026-09-05T00:00:00.000Z")),
+            source: FunctionLogSource.USER,
+          },
+          {
+            message: "runs close to the limit",
+            severity: FunctionLogSeverity.WARNING,
+            timestamp: timestampFromDate(new Date("2026-09-05T00:00:01.000Z")),
+            source: FunctionLogSource.PLATFORM,
           },
         ],
       }),
@@ -112,13 +120,20 @@ describe("getWorkflowExecution", () => {
     expect(detail.jobDetails).toEqual([
       expect.objectContaining({
         stackedJobName: "main",
-        logs: "step 1",
+        logs: "step 1\nruns close to the limit",
         result: undefined,
         logEntries: [
           {
             message: "step 1",
             severity: "INFO",
             timestamp: new Date("2026-09-05T00:00:00.000Z"),
+            source: "USER",
+          },
+          {
+            message: "runs close to the limit",
+            severity: "WARNING",
+            timestamp: new Date("2026-09-05T00:00:01.000Z"),
+            source: "PLATFORM",
           },
         ],
       }),
@@ -219,7 +234,12 @@ describe("printExecutionWithLogs", () => {
           ...job,
           logs: "step 1",
           logEntries: [
-            { message: "step 1", severity: "INFO", timestamp: new Date("2026-09-05T00:00:00Z") },
+            {
+              message: "step 1",
+              severity: "INFO",
+              timestamp: new Date("2026-09-05T00:00:00Z"),
+              source: "USER",
+            },
           ],
         },
       ],
@@ -228,5 +248,39 @@ describe("printExecutionWithLogs", () => {
     const plain = stripAnsi(stderr.output);
     expect(plain).toContain("2026-09-05T00:00:00.000Z [INFO] step 1");
     expect(plain.match(/step 1/g)).toHaveLength(1);
+  });
+
+  test("marks entries the Platform wrote apart from the job's own output", () => {
+    using stderr = captureStderr();
+
+    printExecutionWithLogs({
+      ...base,
+      jobDetails: [
+        {
+          ...job,
+          logs: "step 1\nruns close to the limit",
+          logEntries: [
+            {
+              message: "step 1",
+              severity: "INFO",
+              timestamp: new Date("2026-09-05T00:00:00Z"),
+              source: "USER",
+            },
+            {
+              message: "runs close to the limit",
+              severity: "WARNING",
+              timestamp: new Date("2026-09-05T00:00:01Z"),
+              source: "PLATFORM",
+            },
+          ],
+        },
+      ],
+    });
+
+    const plain = stripAnsi(stderr.output);
+    expect(plain).toContain("2026-09-05T00:00:00.000Z [INFO] step 1\n");
+    expect(plain).toContain(
+      "2026-09-05T00:00:01.000Z [WARNING] [PLATFORM] runs close to the limit",
+    );
   });
 });

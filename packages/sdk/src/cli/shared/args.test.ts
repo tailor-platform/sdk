@@ -6,11 +6,14 @@ import { describe, expect, aroundEach, test, vi } from "vitest";
 import { z } from "zod";
 import {
   createCommonArgs,
+  readEnvFileArgs,
   globalArgsApplied,
   loadEnvFiles,
+  loadEnvFilesFromArgv,
   durationArg,
   parseDuration,
   positiveIntArg,
+  readDeployConfigPathEnv,
   recoveryContextArgs,
   requestedJsonModeSource,
   resolveEarlyFailure,
@@ -143,6 +146,105 @@ describe("loadEnvFiles", () => {
     test("handles empty arrays", () => {
       expect(() => loadEnvFiles([], [])).not.toThrow();
     });
+  });
+
+  describe("from the command line", () => {
+    test("loads every file, --env-file-if-exists files after --env-file files", () => {
+      fs.writeFileSync(path.join(tempDir, "a"), "ONLY_IN_A=a\nSHARED=a\n");
+      fs.writeFileSync(path.join(tempDir, "b"), "SHARED=b\n");
+      fs.writeFileSync(path.join(tempDir, "c"), "SHARED=c\n");
+
+      loadEnvFilesFromArgv(["--env-file-if-exists", "c", "-e", "a", "deploy", "-e", "b"]);
+
+      expect(process.env.ONLY_IN_A).toBe("a");
+      expect(process.env.SHARED).toBe("c");
+    });
+
+    test("loads every file after parsing when the caller did not load them first", async () => {
+      fs.writeFileSync(path.join(tempDir, "a"), "ONLY_IN_A=a\n");
+      fs.writeFileSync(path.join(tempDir, "b"), "ONLY_IN_B=b\n");
+      let loaded: (string | undefined)[] = [];
+      const command = defineAppCommand({
+        name: "probe",
+        args: z.strictObject({}),
+        run: () => {
+          loaded = [process.env.ONLY_IN_A, process.env.ONLY_IN_B];
+        },
+      });
+
+      await runCommand(command, ["-e", "a", "-e", "b"], {
+        globalArgs: z.strictObject(createCommonArgs()),
+      });
+
+      expect(loaded).toEqual(["a", "b"]);
+    });
+  });
+});
+
+describe("readEnvFileArgs", () => {
+  test.each([
+    [["-e", "a", "deploy", "--env-file=b", "--", "-e", "c"], ["a", "b"], []],
+    [["--envFile", "a", "-e=b", "--envFileIfExists=c"], ["a", "b"], ["c"]],
+    [["--env-file-if-exists", "a", "--env-file-if-exists=b"], [], ["a", "b"]],
+    [["-je", "a", "-jjeb", "-e.env"], ["a", "b", ".env"], []],
+    [["-jj", "x", "-ye", "c", "-jye", "d", "-ve", "v", "-e", "--json"], [], []],
+  ])("reads %j", (argv, envFiles, envFilesIfExists) => {
+    expect(readEnvFileArgs(argv)).toEqual({ envFiles, envFilesIfExists });
+  });
+
+  test("reads -e bundled after the caller's verbose alias", () => {
+    expect(readEnvFileArgs(["-jve", "a"], { verboseAlias: "v" }).envFiles).toEqual(["a"]);
+  });
+});
+
+describe("readDeployConfigPathEnv", () => {
+  test.each([
+    {
+      name: "reads TAILOR_CONFIG_PATH",
+      env: { TAILOR_CONFIG_PATH: "a/tailor.config.ts,b/tailor.config.ts" },
+      expected: "a/tailor.config.ts,b/tailor.config.ts",
+      warnings: [],
+    },
+    {
+      name: "falls back to TAILOR_PLATFORM_SDK_CONFIG_PATH with a warning",
+      env: { TAILOR_PLATFORM_SDK_CONFIG_PATH: "old/tailor.config.ts" },
+      expected: "old/tailor.config.ts",
+      warnings: [
+        ["TAILOR_PLATFORM_SDK_CONFIG_PATH is deprecated. Please use TAILOR_CONFIG_PATH instead."],
+      ],
+    },
+    {
+      name: "prefers TAILOR_CONFIG_PATH over TAILOR_PLATFORM_SDK_CONFIG_PATH",
+      env: {
+        TAILOR_CONFIG_PATH: "new/tailor.config.ts",
+        TAILOR_PLATFORM_SDK_CONFIG_PATH: "old/tailor.config.ts",
+      },
+      expected: "new/tailor.config.ts",
+      warnings: [],
+    },
+    {
+      name: "treats empty values as unset",
+      env: { TAILOR_CONFIG_PATH: "", TAILOR_PLATFORM_SDK_CONFIG_PATH: "" },
+      expected: undefined,
+      warnings: [],
+    },
+    {
+      name: "returns undefined when neither is set",
+      env: {},
+      expected: undefined,
+      warnings: [],
+    },
+  ])("$name", ({ env, expected, warnings }) => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_SDK_CONFIG_PATH", undefined);
+    for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
+    try {
+      expect(readDeployConfigPathEnv()).toBe(expected);
+      expect(warnSpy.mock.calls).toEqual(warnings);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
 
