@@ -2,6 +2,7 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import {
   FunctionExecution_Status,
   FunctionLogSeverity,
+  FunctionLogSource,
 } from "@tailor-platform/tailor-proto/function_resource_pb";
 import { styles } from "./logger";
 import { protoEnumLookup, protoEnumName } from "./proto-enum";
@@ -17,6 +18,8 @@ export interface FunctionLogEntryInfo {
   severity: string;
   /** When the line was logged, or null when unknown */
   timestamp: Date | null;
+  /** Who wrote the line: `USER` for your code, `PLATFORM` for the Platform, or `UNSPECIFIED` when not recorded or not recognized by this CLI version */
+  source: string;
 }
 
 /**
@@ -75,16 +78,21 @@ export function functionLogSeverityToString(severity: FunctionLogSeverity): stri
   return protoEnumName(FunctionLogSeverity, severity) ?? "UNSPECIFIED";
 }
 
+function functionLogSourceToString(source: FunctionLogSource): string {
+  return protoEnumName(FunctionLogSource, source) ?? "UNSPECIFIED";
+}
+
 /**
  * Transform a FunctionLogEntry proto into CLI-friendly log entry info.
  * @param entry - Function log entry from proto
- * @returns Log entry info with string severity and Date timestamp
+ * @returns Log entry info with string severity and source, and Date timestamp
  */
 export function toFunctionLogEntryInfo(entry: FunctionLogEntry): FunctionLogEntryInfo {
   return {
     message: entry.message,
     severity: functionLogSeverityToString(entry.severity),
     timestamp: entry.timestamp ? timestampDate(entry.timestamp) : null,
+    source: functionLogSourceToString(entry.source),
   };
 }
 
@@ -102,14 +110,23 @@ function colorizeLogSeverity(severity: string): string {
   }
 }
 
+function markedMessage(entry: FunctionLogEntryInfo): string {
+  if (entry.source !== "PLATFORM") return entry.message;
+  const mark = styles.info("[PLATFORM]");
+  return entry.message
+    .split("\n")
+    .map((line) => `${mark} ${line}`)
+    .join("\n");
+}
+
 /**
- * Format a log entry as a single human-readable line.
+ * Format a log entry for human-readable output.
  * @param entry - Log entry info
- * @returns `<timestamp> [<severity>] <message>`
+ * @returns `<timestamp> [<severity>] <message>`, with `[PLATFORM]` before each line of a message the Platform wrote
  */
 export function formatFunctionLogEntry(entry: FunctionLogEntryInfo): string {
   const timestamp = entry.timestamp ? entry.timestamp.toISOString() : "N/A";
-  return `${styles.dim(timestamp)} ${colorizeLogSeverity(entry.severity)} ${entry.message}`;
+  return `${styles.dim(timestamp)} ${colorizeLogSeverity(entry.severity)} ${markedMessage(entry)}`;
 }
 
 /**
@@ -122,10 +139,43 @@ export function formatFunctionLogLines(logEntries: FunctionLogEntryInfo[] | unde
 }
 
 /**
+ * Join the messages of structured log entries for display, marking the entries the Platform wrote.
+ * @param logEntries - Structured log entries, if any
+ * @returns Messages joined with newlines, each line of a Platform entry's message preceded by `[PLATFORM]`
+ */
+export function formatFunctionLogMessages(logEntries: FunctionLogEntryInfo[] | undefined): string {
+  return logEntries ? logEntries.map(markedMessage).join("\n") : "";
+}
+
+/**
  * Join the messages of structured log entries into newline-delimited text.
  * @param logEntries - Log entries from a function execution
  * @returns Messages joined with newlines, empty when there are no entries
  */
 export function joinFunctionLogMessages(logEntries: readonly FunctionLogEntry[]): string {
   return logEntries.map((entry) => entry.message).join("\n");
+}
+
+/**
+ * Logs of a function execution as a log view reports them.
+ */
+export interface FunctionExecutionLogs {
+  /** Messages joined with newlines, or undefined when they are all empty */
+  logs: string | undefined;
+  /** Structured entries, or undefined when there are none */
+  logEntries: FunctionLogEntryInfo[] | undefined;
+}
+
+/**
+ * Collect the logs of a function execution for a log view.
+ * @param logEntries - Log entries from a function execution
+ * @returns Joined messages and structured entries
+ */
+export function collectFunctionExecutionLogs(
+  logEntries: readonly FunctionLogEntry[],
+): FunctionExecutionLogs {
+  return {
+    logs: joinFunctionLogMessages(logEntries) || undefined,
+    logEntries: logEntries.length > 0 ? logEntries.map(toFunctionLogEntryInfo) : undefined,
+  };
 }
