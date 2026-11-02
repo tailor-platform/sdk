@@ -745,7 +745,7 @@ export async function verifyRemoteSchema(
       noMigrationInProgress &&
       !checkpointRepair
         ? findInterruptedMigration({
-            remote,
+            remote: verifiedRemote,
             namespace,
             migrationsDir,
             checkpoint: remoteMigrationNumber,
