@@ -8,7 +8,7 @@ import tagTemplate from "./tag.workflow.yml";
 // changes the generated templates sets TEMPLATE_CHANGED_SINCE_RELEASE to true instead.
 // Released template fingerprint: c64cf3888d990eba0d5067e0009cb59b61c088a4a5995e62674b43f7f7ca8a0b
 const RELEASED_TEMPLATE_VERSION = 23;
-const TEMPLATE_CHANGED_SINCE_RELEASE = false;
+const TEMPLATE_CHANGED_SINCE_RELEASE = true;
 export const ACTIONS_SHA = "77effc033b3cb5fa7660b38571fbeb8361d121e8";
 export const ACTIONS_VERSION = "v2.8.0";
 
