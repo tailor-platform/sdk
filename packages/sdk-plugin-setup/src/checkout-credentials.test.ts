@@ -1,36 +1,9 @@
 import { describe, expect, test } from "vitest";
 import { parse } from "yaml";
-import {
-  AUTOFIX_PROVIDERS,
-  renderBranchWorkflow,
-  renderPreviewCleanupWorkflow,
-  renderPreviewWorkflow,
-  renderTagWorkflow,
-} from "./templates";
-import { renderAutofixFor } from "./test-helpers/autofix";
+import { renderedTemplates } from "./template-fingerprint";
 
 type Step = { id?: string; uses?: string; with?: Record<string, unknown> };
 type Workflow = { jobs: Record<string, { steps?: Step[] }> };
-
-const COMMON = { workspaceName: "my-app", environment: "my-app", packageManager: "pnpm" as const };
-const workflows: [string, string][] = [
-  ["branch", renderBranchWorkflow({ ...COMMON, branch: "main", erdPreview: null }).content],
-  [
-    "branch with ERD preview",
-    renderBranchWorkflow({ ...COMMON, branch: "main", erdPreview: { namespaces: ["tailordb"] } })
-      .content,
-  ],
-  [
-    "tag with branch guard",
-    renderTagWorkflow({ ...COMMON, tagPattern: "v*", branch: "main" }).content,
-  ],
-  ["preview", renderPreviewWorkflow({ ...COMMON, branch: "main", region: "us-west" }).content],
-  ["preview cleanup", renderPreviewCleanupWorkflow({ ...COMMON, branch: "main" }).content],
-  ...AUTOFIX_PROVIDERS.map((provider): [string, string] => [
-    `${provider} autofix`,
-    renderAutofixFor(provider).content,
-  ]),
-];
 
 function steps(content: string, uses: string): { job: string; step: Step }[] {
   const workflow = parse(content) as Workflow;
@@ -39,10 +12,14 @@ function steps(content: string, uses: string): { job: string; step: Step }[] {
   );
 }
 
+const TAG_GUARD = "tailor-platform/actions/tag-guard@";
+const templates = renderedTemplates();
+const guarded = templates.filter(({ content }) => steps(content, TAG_GUARD).length > 0);
+
 describe("generated workflows keep the GitHub token out of .git/config", () => {
-  test.each(workflows)(
-    "every checkout in the %s workflow sets persist-credentials: false",
-    (_, content) => {
+  test.each(templates)(
+    "every checkout in the $name workflow sets persist-credentials: false",
+    ({ content }) => {
       const checkouts = steps(content, "actions/checkout@");
       expect(checkouts.length).toBeGreaterThan(0);
       for (const { job, step } of checkouts) {
@@ -51,12 +28,14 @@ describe("generated workflows keep the GitHub token out of .git/config", () => {
     },
   );
 
-  test.each(workflows.filter(([name]) => name.includes("tag")))(
-    "the tag guard in the %s workflow fetches the target branch with the job token",
-    (_, content) => {
-      const guards = steps(content, "tailor-platform/actions/tag-guard@");
-      expect(guards.length).toBeGreaterThan(0);
-      for (const { step } of guards) {
+  test("some rendered workflow has a tag guard", () => {
+    expect(guarded.length).toBeGreaterThan(0);
+  });
+
+  test.each(guarded)(
+    "the tag guard in the $name workflow fetches the target branch with the job token",
+    ({ content }) => {
+      for (const { step } of steps(content, TAG_GUARD)) {
         expect(step.with?.["github-token"]).toBe("${{ github.token }}");
       }
     },

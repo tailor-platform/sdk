@@ -48,11 +48,6 @@ const stepOf = (workflow: Workflow, job: string, id: string): Step => {
 const SERVICE_PROVIDERS = ["autofix-ci", "securefix"] as const;
 
 describe("renderAutofixWorkflow", () => {
-  test.each(AUTOFIX_PROVIDERS)("%s: leaves no template markers", (provider) => {
-    const { content } = render(provider, { dirs: ["apps/a", "apps/b"] });
-    expect(content).not.toMatch(/__[A-Z_]+__/);
-  });
-
   test.each(AUTOFIX_PROVIDERS)(
     "%s: lists exactly the jobs and steps it generates as managed",
     (provider) => {
