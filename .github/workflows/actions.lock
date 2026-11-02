@@ -101,7 +101,7 @@ workflows:
         - 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333'
         - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
         - 'aquaproj/aqua-installer@611554c6f0137ba41c8dd15aca8bee82504ea461'
-        - 'csm-actions/securefix-action@ada5710dddfb54a0a55109e320830a757472ce04'
+        - 'csm-actions/securefix-action@6da661e4377faf2d71294c1c09b1c03c161ce7c1'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
         - 'pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e'
     '.github/workflows/skills-sync-check.yml':
@@ -171,9 +171,9 @@ dependencies:
         commit: 'sha1-ae32849d5ba541f9ae29e40e22a623bc13562f51'
         owner_id: 51163350
         repo_id: 202093906
-    'csm-actions/securefix-action@ada5710dddfb54a0a55109e320830a757472ce04':
-        ref: 'v0.6.4'
-        commit: 'sha1-ada5710dddfb54a0a55109e320830a757472ce04'
+    'csm-actions/securefix-action@6da661e4377faf2d71294c1c09b1c03c161ce7c1':
+        ref: 'v0.6.8'
+        commit: 'sha1-6da661e4377faf2d71294c1c09b1c03c161ce7c1'
         owner_id: 210189905
         repo_id: 947590271
     'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d':
