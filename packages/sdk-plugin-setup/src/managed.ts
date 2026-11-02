@@ -59,6 +59,8 @@ const RETIRED_IDS: Record<string, string> = {
 
 const STRINGIFY_OPTIONS = { lineWidth: 0, flowCollectionPadding: false } as const;
 
+const CLOSED_ACTION_CHECK = /==\s*'closed'|'closed'\s*==/;
+
 /** Raised when a file cannot be parsed or merged without losing user content. */
 export class ManagedMergeError extends Error {
   override name = "ManagedMergeError";
@@ -717,6 +719,25 @@ export function moveJob(params: {
     from: fromDoc.toString(STRINGIFY_OPTIONS),
     into: intoDoc.toString(STRINGIFY_OPTIONS),
   };
+}
+
+/**
+ * Ids of the jobs of yours whose `if` checks for a closed pull request.
+ * @param content - Workflow content
+ * @returns Job ids in file order
+ */
+export function userJobsCheckingClosed(content: string): string[] {
+  const jobs = readMapping(content)["jobs"];
+  if (!isPlainObject(jobs)) return [];
+  return Object.entries(jobs)
+    .filter(
+      ([jobId, job]) =>
+        !jobId.startsWith(RESERVED_PREFIX) &&
+        isPlainObject(job) &&
+        typeof job["if"] === "string" &&
+        CLOSED_ACTION_CHECK.test(job["if"]),
+    )
+    .map(([jobId]) => jobId);
 }
 
 /**

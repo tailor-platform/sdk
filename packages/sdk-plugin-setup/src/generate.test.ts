@@ -3105,6 +3105,44 @@ export default defineConfig({
         );
       });
 
+      test("warns about a job of yours that checks for a closed pull request", async () => {
+        await writeLegacy({
+          userJob:
+            "  notify-closed:\n" +
+            "    if: github.event.action == 'closed' && github.event.pull_request.merged\n" +
+            "    runs-on: ubuntu-latest\n" +
+            "    steps:\n" +
+            "      - run: echo merged\n\n" +
+            "  archive:\n" +
+            "    if: ${{ 'closed' == github.event.action }}\n" +
+            "    runs-on: ubuntu-latest\n" +
+            "    steps:\n" +
+            "      - run: echo archived\n\n" +
+            "  e2e:\n" +
+            "    if: github.event.action != 'closed'\n" +
+            "    runs-on: ubuntu-latest\n" +
+            "    steps:\n" +
+            "      - run: echo e2e\n\n",
+        });
+        using warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+        await setupTarget(opts);
+
+        expect(warn.mock.calls).toEqual(
+          ["notify-closed", "archive"].map((jobId) => [
+            `${previewFile}: your job "${jobId}" checks for a closed pull request, which ` +
+              `no longer starts this workflow. Move it into ${cleanupFile}.`,
+          ]),
+        );
+        expect(parseYAML(read(previewFile))).toMatchObject({
+          jobs: {
+            "notify-closed": expect.anything(),
+            archive: expect.anything(),
+            e2e: expect.anything(),
+          },
+        });
+      });
+
       test("stops without writing when a job of yours needs the cleanup job", async () => {
         const { legacy } = await writeLegacy({
           userJob:

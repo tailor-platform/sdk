@@ -38,6 +38,7 @@ import {
   ManagedMergeError,
   mergeUserContent,
   moveJob,
+  userJobsCheckingClosed,
 } from "./managed";
 import {
   defaultLoadSeedSettings,
@@ -1276,6 +1277,14 @@ export async function setupTarget(options: SetupTargetOptions): Promise<SetupTar
     } else {
       logger.success(
         `Generated ${styles.path(file)} with the ${PREVIEW_CLEANUP_JOB} job moved from ${styles.path(movedFrom)}`,
+      );
+    }
+  }
+  if (cleanup) {
+    for (const jobId of userJobsCheckingClosed(main.content)) {
+      logger.warn(
+        `${main.file}: your job "${jobId}" checks for a closed pull request, which no longer ` +
+          `starts this workflow. Move it into ${cleanup.file}.`,
       );
     }
   }

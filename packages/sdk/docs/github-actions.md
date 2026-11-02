@@ -285,7 +285,8 @@ copies the top-level `env` and `defaults` of the preview workflow into the
 cleanup workflow. Your steps then run from the default branch as described
 above. A job of yours in the preview workflow that runs when the pull request
 is closed no longer runs, because that workflow no longer starts then; move it
-into the cleanup workflow.
+into the cleanup workflow. `setup` warns about each job of yours in the preview
+workflow whose `if` contains an `== 'closed'` comparison.
 
 Fork pull requests are skipped. Every other pull request gets a preview, draft
 pull requests included. `--require` narrows that to one of:
