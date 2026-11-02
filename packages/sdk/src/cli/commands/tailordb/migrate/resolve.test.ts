@@ -767,6 +767,87 @@ describe("tailordb migration resolve", () => {
     });
   });
 
+  describe("a maintenance mode a deploy recorded at the checkpoint", () => {
+    test("--rollback lifts it when every table has the checkpoint's schema", async () => {
+      using _json = jsonMode();
+      using stdout = captureStdout();
+      remoteLabels({ "sdk-migration": "m0001", "sdk-maintenance-mode": "m0001" });
+      state.listTailorDBTypes.mockResolvedValue({
+        tailordbTypes: [
+          restrictedRemoteType("User", ["id", "name"]),
+          restrictedRemoteType("Post", ["id", "name"]),
+        ],
+        nextPageToken: "",
+      });
+
+      const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(JSON.parse(stdout.output)).toMatchObject({
+        migrationNumber: 2,
+        checkpoint: 1,
+        interrupted: true,
+        tables: { created: [], updated: ["User", "Post"], deleted: [] },
+      });
+      expect(state.setMetadata).toHaveBeenCalledWith(
+        expect.objectContaining({ labels: { "sdk-migration": "m0001", "sdk-name": "my-app" } }),
+      );
+    });
+
+    test("--rollback refuses when a table has neither the checkpoint's nor the pre-migration schema", async () => {
+      remoteLabels({ "sdk-migration": "m0001", "sdk-maintenance-mode": "m0001" });
+      state.listTailorDBTypes.mockResolvedValue({
+        tailordbTypes: [
+          restrictedRemoteType("User", ["id", "name", "email"]),
+          restrictedRemoteType("Post", ["id", "name"]),
+        ],
+        nextPageToken: "",
+      });
+
+      const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_NO_IN_PROGRESS" });
+      expectNothingWritten();
+    });
+
+    test("--rollback refuses when the namespace records a history ID but no checkpoint", async () => {
+      writeRebaselineMarker(state.migrationsDir, LOCAL_HISTORY_ID);
+      remoteLabels({ "sdk-migration-history": LOCAL_HISTORY_ID, "sdk-maintenance-mode": "m0000" });
+      state.listTailorDBTypes.mockResolvedValue({
+        tailordbTypes: [
+          restrictedRemoteType("User", ["id", "name"]),
+          restrictedRemoteType("Post", ["id", "name"]),
+        ],
+        nextPageToken: "",
+      });
+
+      const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_NO_IN_PROGRESS" });
+      expectNothingWritten();
+    });
+
+    test("--rollback refuses when no local migration follows the checkpoint", async () => {
+      remoteLabels({ "sdk-migration": "m0002", "sdk-maintenance-mode": "m0002" });
+      state.listTailorDBTypes.mockResolvedValue({
+        tailordbTypes: [
+          restrictedRemoteType("User", ["id", "name"]),
+          restrictedRemoteType("Post", ["id", "name"]),
+          restrictedRemoteType("Comment", ["id", "name"]),
+        ],
+        nextPageToken: "",
+      });
+
+      const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_NO_IN_PROGRESS" });
+      expectNothingWritten();
+    });
+  });
+
   test("--rollback refuses when the tables match the checkpoint and no migration is in progress", async () => {
     remoteLabels({ "sdk-migration": "m0001" });
     state.listTailorDBTypes.mockResolvedValue({

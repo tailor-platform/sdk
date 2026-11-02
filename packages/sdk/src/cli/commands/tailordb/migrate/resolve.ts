@@ -45,6 +45,7 @@ import {
   assertMigrationNumberExists,
   assertValidMigrationFiles,
   formatMigrationNumber,
+  getLatestMigrationNumber,
   reconstructSnapshotFromMigrations,
 } from "./snapshot";
 import { applySnapshotPlan, planSnapshotApply } from "./snapshot-apply";
@@ -204,14 +205,20 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
   const nextMigrationNumber = currentCheckpoint + 1;
   const staleRecord = isStaleMigrationInProgress(state) ? state.inProgress : null;
   const record = staleRecord ? null : state.inProgress;
+  const verification =
+    !record && options.resolution === "rollback"
+      ? (
+          await verifyRemoteSchema(client, workspaceId, [target], loaded.config, [], {
+            acceptInterruptedMigration: true,
+          })
+        )[0]
+      : undefined;
   const interrupted =
-    !record &&
-    options.resolution === "rollback" &&
-    (
-      await verifyRemoteSchema(client, workspaceId, [target], loaded.config, [], {
-        acceptInterruptedMigration: true,
-      })
-    )[0]?.interruptedMigration === nextMigrationNumber;
+    verification !== undefined &&
+    (verification.interruptedMigration === nextMigrationNumber ||
+      (verification.leftInMaintenanceMode &&
+        !verification.hasDrift &&
+        getLatestMigrationNumber(target.migrationsDir) >= nextMigrationNumber));
   if (!record && !interrupted) {
     throw CLIError({
       code: "MIGRATION_RESOLVE_NO_IN_PROGRESS",

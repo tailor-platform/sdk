@@ -330,6 +330,8 @@ export interface RemoteSchemaVerificationResult {
    * recording it as in progress; set only when the verification was asked to accept that
    */
   interruptedMigration?: number;
+  /** Set when the namespace records its maintenance mode at the checkpoint, so tables in maintenance mode were compared without the settings it overrides */
+  leftInMaintenanceMode?: true;
   /** Set when verification could not run (namespace not deployed, or no snapshot at the remote migration number) */
   skipped?: RemoteSchemaVerificationSkipReason;
 }

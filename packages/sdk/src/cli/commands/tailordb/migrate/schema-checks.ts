@@ -761,6 +761,7 @@ export async function verifyRemoteSchema(
       ...(interruptedMigration === undefined
         ? { drifts, hasDrift: drifts.length > 0 }
         : { drifts: [], hasDrift: false, interruptedMigration }),
+      ...(leftInMaintenanceMode ? { leftInMaintenanceMode } : {}),
       ...(checkpointUnset ? { checkpointUnset } : {}),
       ...(checkpointRepair && drifts.length === 0 ? { checkpointRepair } : {}),
       ...(remoteState.inProgress ? { migrationInProgress: remoteState.inProgress } : {}),
