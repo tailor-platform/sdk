@@ -186,13 +186,14 @@ describe("readEnvFileArgs", () => {
     [["-e", "a", "deploy", "--env-file=b", "--", "-e", "c"], ["a", "b"], []],
     [["--envFile", "a", "-e=b", "--envFileIfExists=c"], ["a", "b"], ["c"]],
     [["--env-file-if-exists", "a", "--env-file-if-exists=b"], [], ["a", "b"]],
-    [
-      ["-je", "a", "-jjeb", "-e.env", "-ye", "c", "-jye", "d", "-e", "--json"],
-      ["a", "b", ".env"],
-      [],
-    ],
+    [["-je", "a", "-jjeb", "-e.env"], ["a", "b", ".env"], []],
+    [["-jj", "x", "-ye", "c", "-jye", "d", "-ve", "v", "-e", "--json"], [], []],
   ])("reads %j", (argv, envFiles, envFilesIfExists) => {
     expect(readEnvFileArgs(argv)).toEqual({ envFiles, envFilesIfExists });
+  });
+
+  test("reads -e bundled after the caller's verbose alias", () => {
+    expect(readEnvFileArgs(["-jve", "a"], { verboseAlias: "v" }).envFiles).toEqual(["a"]);
   });
 });
 

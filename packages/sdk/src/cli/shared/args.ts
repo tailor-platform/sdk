@@ -410,11 +410,22 @@ const envFileArgKeyByToken: ReadonlyMap<string, keyof EnvFileArgs> = new Map(
   }),
 );
 
-const globalBooleanAliases: ReadonlySet<string> = new Set(
-  [...GLOBAL_FLAG_PARSER_OPTIONS.aliasMap]
-    .filter(([, name]) => GLOBAL_FLAG_PARSER_OPTIONS.booleanFlags.has(name))
-    .map(([alias]) => alias),
-);
+const hostGlobalBooleanAliases = [...GLOBAL_FLAG_PARSER_OPTIONS.aliasMap]
+  .filter(([, name]) => GLOBAL_FLAG_PARSER_OPTIONS.booleanFlags.has(name))
+  .map(([alias]) => alias);
+
+/**
+ * List the short aliases of the global boolean flags.
+ * @param options - Per-plugin adjustments the common arguments were built with
+ * @returns `-j`'s alias, and the extra `--verbose` alias when there is one
+ */
+function globalBooleanAliases(options: CommonArgsOptions): ReadonlySet<string> {
+  return new Set(
+    options.verboseAlias === undefined
+      ? hostGlobalBooleanAliases
+      : [...hostGlobalBooleanAliases, options.verboseAlias],
+  );
+}
 
 interface OptionToken {
   flag: string;
@@ -423,12 +434,13 @@ interface OptionToken {
 
 /**
  * Split an option token into its flag and the value it carries. A short-option
- * bundle such as `-je .env` yields its first option that is not a global
+ * bundle such as `-je.env` yields its first option that is not a global
  * boolean, with the rest of the bundle as the value.
  * @param token - Command-line token
+ * @param booleanAliases - Short aliases of the global boolean flags
  * @returns The flag, and its value when the token carries one
  */
-function splitOptionToken(token: string): OptionToken {
+function splitOptionToken(token: string, booleanAliases: ReadonlySet<string>): OptionToken {
   if (
     token.startsWith("-") &&
     !token.startsWith("--") &&
@@ -436,7 +448,7 @@ function splitOptionToken(token: string): OptionToken {
     !token.includes("=")
   ) {
     const chars = Array.from(token.slice(1));
-    const index = chars.findIndex((char) => !globalBooleanAliases.has(char));
+    const index = chars.findIndex((char) => !booleanAliases.has(char));
     if (index === -1) return { flag: token, value: undefined };
     const value = chars.slice(index + 1).join("");
     return { flag: `-${chars[index]}`, value: value === "" ? undefined : value };
@@ -452,13 +464,18 @@ function splitOptionToken(token: string): OptionToken {
  * counts only when every option before `-e` in it is a global boolean, as in
  * `-je .env`.
  * @param argv - Command-line arguments after the executable and script path
+ * @param options - Options passed to {@link createCommonArgs} for the global arguments
  * @returns Every `--env-file` and `--env-file-if-exists` value before `--`
  */
-export function readEnvFileArgs(argv: readonly string[]): EnvFileArgs {
+export function readEnvFileArgs(
+  argv: readonly string[],
+  options: CommonArgsOptions = {},
+): EnvFileArgs {
   const result: EnvFileArgs = { envFiles: [], envFilesIfExists: [] };
+  const booleanAliases = globalBooleanAliases(options);
   const tokens = optionTokens(argv);
   for (let index = 0; index < tokens.length; index++) {
-    const { flag, value: inlineValue } = splitOptionToken(tokens[index] ?? "");
+    const { flag, value: inlineValue } = splitOptionToken(tokens[index] ?? "", booleanAliases);
     const key = envFileArgKeyByToken.get(flag);
     if (key === undefined) continue;
     if (inlineValue !== undefined) {
@@ -479,9 +496,13 @@ export function readEnvFileArgs(argv: readonly string[]): EnvFileArgs {
  * environment variable read the values these files set. Call it before the
  * CLI parses its arguments, such as from the `setup` hook of `runMain`.
  * @param argv - Command-line arguments after the executable and script path
+ * @param options - Options passed to {@link createCommonArgs} for the global arguments
  */
-export function loadEnvFilesFromArgv(argv: readonly string[]): void {
-  const { envFiles, envFilesIfExists } = readEnvFileArgs(argv);
+export function loadEnvFilesFromArgv(
+  argv: readonly string[],
+  options: CommonArgsOptions = {},
+): void {
+  const { envFiles, envFilesIfExists } = readEnvFileArgs(argv, options);
   loadEnvFiles(envFiles, envFilesIfExists);
 }
 
