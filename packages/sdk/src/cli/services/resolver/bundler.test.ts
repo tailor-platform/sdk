@@ -5,6 +5,7 @@ import { resolveTSConfig } from "pkg-types";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { createBundleCache } from "#/cli/cache/bundle-cache";
 import { createCacheStore } from "#/cli/cache/store";
+import { type ProjectSourcesFilter } from "#/cli/shared/sourcemap-sources";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import { assertDefined } from "#/utils/assert";
@@ -396,6 +397,41 @@ describe("bundleResolvers", () => {
     expect(traceMap.sourcesContent?.some((text) => text?.includes("INSTALLED_LIB_SOURCE"))).toBe(
       true,
     );
+  });
+
+  test("leaves out the source text of project files matching an exclude glob in inline sourcemaps", async () => {
+    using tmp = tempCwd("sdk-bundler-sourcemap-project-exclude-");
+    writeSdkDependency(tmp.dir);
+    fs.writeFileSync(
+      path.join(tmp.dir, "own.ts"),
+      `export default {\n` +
+        `  operation: "query",\n` +
+        `  name: "own",\n` +
+        `  body: async () => "OWN_SOURCE",\n` +
+        `  output: { type: "string", metadata: {}, fields: {} },\n` +
+        `};\n`,
+    );
+
+    const sourceTexts = async (inlineSourcemapProjectSources?: ProjectSourcesFilter) => {
+      const bundles = await bundleResolvers({
+        namespace: "sourcemap",
+        files: fs.globSync(path.resolve(tmp.dir, "./own.ts")),
+        baseDir: tmp.dir,
+        inlineSourcemap: true,
+        inlineSourcemapProjectSources,
+      });
+      const traceMap = assertDefined(
+        extractInlineSourcemap(assertDefined(bundles.get("own"), "own bundle missing")),
+        "inline sourcemap missing",
+      );
+      return (traceMap.sourcesContent ?? []).filter((text): text is string => text != null);
+    };
+
+    const kept = await sourceTexts();
+    const excluded = await sourceTexts({ root: tmp.dir, exclude: ["own.ts"] });
+
+    expect(kept.some((text) => text.includes("OWN_SOURCE"))).toBe(true);
+    expect(excluded.some((text) => text.includes("OWN_SOURCE"))).toBe(false);
   });
 
   describe("concurrency", () => {

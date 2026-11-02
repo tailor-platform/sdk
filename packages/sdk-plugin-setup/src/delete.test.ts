@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import { prompt } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { setupAutofix } from "./autofix";
 import { setupDelete } from "./delete";
 import { setupTarget } from "./generate";
 import { readLock } from "./lock";
@@ -24,6 +25,18 @@ describe("setupDelete", () => {
     workspaceName: name,
     branch: "main",
     erdPreview: false,
+    dir: ".",
+    force: false,
+    outputDir: testDir,
+    gitRunner: () => "origin/main",
+    loadConfigName: async () => name,
+    loadConfigId: async () => undefined,
+  });
+
+  const previewOpts = (name: string): Parameters<typeof setupTarget>[0] => ({
+    kind: "preview",
+    workspaceName: name,
+    region: "us-west",
     dir: ".",
     force: false,
     outputDir: testDir,
@@ -58,6 +71,50 @@ describe("setupDelete", () => {
     expect(fs.existsSync(wf)).toBe(false);
     expect(prompt.confirm).not.toHaveBeenCalled();
     expect(readLock(testDir)?.targets).toHaveLength(0);
+  });
+
+  test.each([
+    ".github/workflows/tailor-my-app-preview.yml",
+    ".github/workflows/tailor-my-app-preview-cleanup.yml",
+  ])("deletes both workflows of a preview target given %s", async (file) => {
+    await setupTarget(previewOpts("my-app"));
+    const files = [
+      ".github/workflows/tailor-my-app-preview.yml",
+      ".github/workflows/tailor-my-app-preview-cleanup.yml",
+    ];
+    expect(files.map((f) => fs.existsSync(path.join(testDir, f)))).toEqual([true, true]);
+    vi.mocked(prompt.confirm).mockResolvedValue(true);
+
+    await setupDelete({ files: [file], yes: false, outputDir: testDir });
+
+    expect(vi.mocked(prompt.confirm).mock.calls[0]?.[0].message).toContain(
+      `\n  ${files.join("\n  ")}\n`,
+    );
+    expect(files.map((f) => fs.existsSync(path.join(testDir, f)))).toEqual([false, false]);
+    expect(readLock(testDir)?.targets).toHaveLength(0);
+  });
+
+  test("keeps a preview target in the lock when its cleanup workflow fails to delete", async () => {
+    await setupTarget(branchOpts("app-a"));
+    await setupTarget(previewOpts("my-app"));
+    const preview = ".github/workflows/tailor-my-app-preview.yml";
+    const cleanup = ".github/workflows/tailor-my-app-preview-cleanup.yml";
+    fs.rmSync(path.join(testDir, cleanup));
+    fs.mkdirSync(path.join(testDir, cleanup));
+
+    await expect(
+      setupDelete({
+        files: [".github/workflows/tailor-app-a.yml", preview],
+        yes: true,
+        outputDir: testDir,
+      }),
+    ).rejects.toThrow(/EISDIR/);
+
+    expect(fs.existsSync(path.join(testDir, preview))).toBe(false);
+    expect(fs.existsSync(path.join(testDir, cleanup))).toBe(true);
+    expect(readLock(testDir)?.targets).toMatchObject([
+      { file: preview, cleanup: { file: cleanup } },
+    ]);
   });
 
   test("keeps the appIds section when a target is deleted", async () => {
@@ -119,6 +176,34 @@ describe("setupDelete", () => {
     expect(fs.existsSync(path.join(testDir, ".github/workflows/tailor-app-a.yml"))).toBe(false);
     expect(fs.existsSync(path.join(testDir, ".github/workflows/tailor-app-b-tag.yml"))).toBe(false);
     expect(readLock(testDir)?.targets).toHaveLength(0);
+  });
+
+  test("deletes the autofix workflow and its lock entry, keeping the targets", async () => {
+    await setupTarget(branchOpts("my-app"));
+    await setupAutofix({ provider: "github-token", dir: ".", force: false, outputDir: testDir });
+
+    await setupDelete({
+      files: [".github/workflows/tailor-autofix.yml"],
+      yes: true,
+      outputDir: testDir,
+    });
+
+    expect(fs.existsSync(path.join(testDir, ".github/workflows/tailor-autofix.yml"))).toBe(false);
+    const lock = readLock(testDir);
+    expect(lock?.autofix).toBeUndefined();
+    expect(lock?.targets.map((target) => target.workspaceName)).toEqual(["my-app"]);
+  });
+
+  test("deletes the autofix workflow of a lock that records no target", async () => {
+    await setupAutofix({ provider: "github-token", dir: ".", force: false, outputDir: testDir });
+
+    await setupDelete({
+      files: [".github/workflows/tailor-autofix.yml"],
+      yes: true,
+      outputDir: testDir,
+    });
+
+    expect(readLock(testDir)).toEqual({ version: expect.any(Number), targets: [] });
   });
 
   test("errors when the lock is missing", async () => {

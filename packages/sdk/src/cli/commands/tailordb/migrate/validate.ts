@@ -23,12 +23,18 @@ import {
   type MigrationDiff,
   type WarningChangeInfo,
 } from "./diff-calculator";
-import { formatMigrationScriptHint } from "./hints";
+import {
+  formatMigrationScriptHint,
+  migrationCommandContext,
+  type MigrationCommandContext,
+} from "./hints";
 import {
   checkMigrationDiffs,
-  logMissingCheckpointGuidance,
+  logRebaselinePendingGuidance,
+  missingCheckpointRecoveryHints,
   logRemoteDriftGuidance,
   toTailorDBDeployInput,
+  unsetCheckpointDriftHints,
   verifyRemoteSchema,
   type MigrationCheckResult,
 } from "./schema-checks";
@@ -78,8 +84,10 @@ interface CompletedRemoteSchemaReport {
   remoteMigrationNumber: number;
   hasDrift: boolean;
   drifts: SchemaDrift[];
-  /** Set when the remote check could not run (no remote migration label, or no snapshot at the remote migration number) */
+  /** Set when the remote check could not run (namespace not deployed, or no snapshot at the remote migration number) */
   skipped?: RemoteSchemaVerificationSkipReason;
+  /** Set when the namespace has tables but no migration checkpoint, so it was checked as checkpoint 0 */
+  checkpointUnset?: true;
   /** Set when the remote migration checkpoint does not exist in the local migration history */
   checkpointMissingLocal?: boolean;
   /**
@@ -87,18 +95,18 @@ interface CompletedRemoteSchemaReport {
    * before `migration rebaseline` ran, rather than a generic history mismatch.
    */
   rebaselinePending?: RebaselinePendingInfo;
+  /** Set alongside `checkpointMissingLocal`: the latest local migration, or `null` when the local history has none */
+  localLatestMigration?: number | null;
+  /** Set alongside `checkpointMissingLocal`: whether the namespace records another migration history ID, or one that cannot be read */
+  historyIdMismatch?: boolean;
   checkpointRepair?: { from: number; to: 0 };
+  /** Tables the checkpoint's migration removed that the next deploy deletes */
+  unfinishedRemovals?: string[];
 }
 
-interface FailedRemoteSchemaReport {
-  skipped: "check_failed";
-  remoteMigrationNumber?: never;
-  hasDrift?: never;
-  drifts?: never;
-  checkpointMissingLocal?: never;
-  rebaselinePending?: never;
-  checkpointRepair?: never;
-}
+type FailedRemoteSchemaReport = { skipped: "check_failed" } & {
+  [K in Exclude<keyof CompletedRemoteSchemaReport, "skipped">]?: never;
+};
 
 type RemoteSchemaReport = CompletedRemoteSchemaReport | FailedRemoteSchemaReport;
 
@@ -137,6 +145,8 @@ interface BuildValidationReportsOptions {
 interface CollectedValidationReports {
   reports: NamespaceValidationReport[];
   remoteError?: unknown;
+  /** Workspace whose remote schema was checked, when the remote checks ran */
+  workspaceId?: string;
 }
 
 /**
@@ -270,9 +280,19 @@ function buildValidationReports(
       hasDrift: remote.hasDrift,
       drifts: remote.drifts,
       ...(remote.skipped ? { skipped: remote.skipped } : {}),
+      ...(remote.checkpointUnset ? { checkpointUnset: true } : {}),
       ...(checkpointMissingLocal ? { checkpointMissingLocal: true } : {}),
       ...(remote.rebaselinePending ? { rebaselinePending: remote.rebaselinePending } : {}),
+      ...(remote.localLatestMigration !== undefined
+        ? { localLatestMigration: remote.localLatestMigration }
+        : {}),
+      ...(remote.historyIdMismatch !== undefined
+        ? { historyIdMismatch: remote.historyIdMismatch }
+        : {}),
       ...(remote.checkpointRepair ? { checkpointRepair: remote.checkpointRepair } : {}),
+      ...(remote.unfinishedRemovals?.length
+        ? { unfinishedRemovals: remote.unfinishedRemovals }
+        : {}),
     };
 
     // Only migrations not yet applied to the remote need an acknowledgment;
@@ -355,7 +375,7 @@ async function collectValidationReports(
     : undefined;
   for (const target of targetNamespaces) {
     try {
-      assertValidMigrationFiles(target.migrationsDir, target.namespace);
+      assertValidMigrationFiles(target.migrationsDir, target.namespace, config.path);
       // Parse the whole history here so malformed snapshot/diff contents are
       // reported per namespace instead of aborting the run for every namespace.
       reconstructSnapshotFromMigrations(target.migrationsDir);
@@ -386,17 +406,20 @@ async function collectValidationReports(
   }
 
   let remoteResults: RemoteSchemaVerificationResult[];
+  let workspaceId: string;
   try {
-    const { client, workspaceId } = await loadOperatorWorkspaceContext({
+    const context = await loadOperatorWorkspaceContext({
       profile: options.profile,
       workspaceId: options.workspaceId,
     });
+    workspaceId = context.workspaceId;
     remoteResults = await verifyRemoteSchema(
-      client,
+      context.client,
       workspaceId,
       checkableNamespaces,
       config,
       tailorDBInputs,
+      { acceptUnfinishedRemovals: true },
     );
   } catch (remoteError) {
     return {
@@ -407,6 +430,7 @@ async function collectValidationReports(
 
   return {
     reports: buildValidationReports({ ...localReportOptions, remoteResults }),
+    workspaceId,
   };
 }
 
@@ -455,22 +479,29 @@ function printValidationReports(reports: NamespaceValidationReport[]): void {
       }
     } else if (remote?.hasDrift) {
       logger.log(
-        `  Remote schema: ${styles.error("drift detected")} (remote migration: ${formatMigrationNumber(remote.remoteMigrationNumber)})`,
+        `  Remote schema: ${styles.error("drift detected")} (${
+          remote.checkpointUnset
+            ? "no checkpoint yet; compared with 0000"
+            : `remote migration: ${formatMigrationNumber(remote.remoteMigrationNumber)}`
+        })`,
       );
       logger.log(formatSchemaDrifts(remote.drifts));
     } else if (remote?.skipped === "not_deployed") {
       logger.log(`  Remote schema: ${styles.dim("skipped (namespace not deployed)")}`);
-    } else if (remote?.skipped === "no_migration_label") {
-      logger.log(
-        `  Remote schema: ${styles.dim("skipped (deployed namespace has no migration state)")}`,
-      );
     } else if (remote?.skipped === "no_snapshot") {
       logger.log(
         `  Remote schema: ${styles.dim(`skipped (no local snapshot for remote migration ${formatMigrationNumber(remote.remoteMigrationNumber)})`)}`,
       );
+    } else if (remote?.checkpointUnset) {
+      logger.log(`  Remote schema: ${styles.success("OK")} (no checkpoint yet; tables match 0000)`);
     } else if (remote) {
       logger.log(
         `  Remote schema: ${styles.success("OK")} (remote migration: ${formatMigrationNumber(remote.remoteMigrationNumber)})`,
+      );
+    }
+    if (remote?.unfinishedRemovals) {
+      logger.log(
+        `    The next deploy deletes ${remote.unfinishedRemovals.join(", ")}, which migration ${formatMigrationNumber(remote.remoteMigrationNumber)} removed.`,
       );
     }
 
@@ -503,32 +534,36 @@ function hasMissingCheckpoint(
   return report.remoteSchema?.checkpointMissingLocal === true;
 }
 
-function printResolutionHints(reports: NamespaceValidationReport[], configPath?: string): void {
+function remoteDrifts(reports: NamespaceValidationReport[]) {
+  return reports.map((report) => ({
+    namespace: report.namespace,
+    hasDrift: report.remoteSchema?.hasDrift ?? false,
+    drifts: report.remoteSchema?.drifts ?? [],
+    ...(report.remoteSchema?.checkpointUnset ? { checkpointUnset: true as const } : {}),
+  }));
+}
+
+function printResolutionHints(
+  reports: NamespaceValidationReport[],
+  commandContext: MigrationCommandContext,
+): void {
   if (reports.some((r) => r.localSchema?.hasDiff && !r.localSchema.diff)) {
     logger.info("Run 'tailor tailordb migration generate' to create the initial snapshot.");
   }
   if (reports.some((r) => r.localSchema?.diff)) {
     logger.info("Run 'tailor tailordb migration generate' to create migration files.");
   }
-  const missingCheckpointReports = reports.filter(hasMissingCheckpoint);
-  if (missingCheckpointReports.length > 0) {
-    logMissingCheckpointGuidance(
-      missingCheckpointReports.map((r) => ({
-        namespace: r.namespace,
-        remoteMigrationNumber: r.remoteSchema.remoteMigrationNumber,
-        ...(r.remoteSchema.rebaselinePending
-          ? { rebaselinePending: r.remoteSchema.rebaselinePending }
-          : {}),
-      })),
-    );
-  }
+  logRebaselinePendingGuidance(
+    reports.filter(hasMissingCheckpoint).map((r) => ({
+      namespace: r.namespace,
+      remoteMigrationNumber: r.remoteSchema.remoteMigrationNumber,
+      ...(r.remoteSchema.rebaselinePending
+        ? { rebaselinePending: r.remoteSchema.rebaselinePending }
+        : {}),
+    })),
+  );
   if (reports.some((r) => r.remoteSchema?.hasDrift)) {
-    logRemoteDriftGuidance(
-      reports.map((r) => ({
-        hasDrift: r.remoteSchema?.hasDrift ?? false,
-        drifts: r.remoteSchema?.drifts ?? [],
-      })),
-    );
+    logRemoteDriftGuidance(commandContext, remoteDrifts(reports));
   }
   const missingAcknowledgments = reports.filter(
     (r) => r.warningAcknowledgments && !r.warningAcknowledgments.valid,
@@ -543,7 +578,7 @@ function printResolutionHints(reports: NamespaceValidationReport[], configPath?:
           `  ${formatMigrationScriptHint({
             migrationNumber: migration.migrationNumber,
             namespace: report.namespace,
-            configPath,
+            configPath: commandContext.configPath,
             noScript: true,
           })}`,
           { mode: "plain" },
@@ -563,6 +598,11 @@ async function validate(options: ValidateOptions): Promise<void> {
   const collected = await collectValidationReports(options);
   const { reports } = collected;
   const invalidCount = reports.filter((r) => !r.valid).length;
+  const commandContext = migrationCommandContext({
+    configPath: options.configPath,
+    workspaceId: collected.workspaceId,
+    profile: options.profile,
+  });
 
   if (options.json) {
     logger.out(reports);
@@ -571,7 +611,7 @@ async function validate(options: ValidateOptions): Promise<void> {
     if (invalidCount === 0 && !("remoteError" in collected)) {
       logger.success("All migration validation checks passed.");
     } else {
-      printResolutionHints(reports, options.configPath);
+      printResolutionHints(reports, commandContext);
     }
   }
 
@@ -582,6 +622,19 @@ async function validate(options: ValidateOptions): Promise<void> {
     throw CLIError({
       code: "MIGRATION_VALIDATION_FAILED",
       message: `Migration validation failed for ${invalidCount} namespace(s)`,
+      suggestion:
+        [
+          ...missingCheckpointRecoveryHints(
+            reports.filter(hasMissingCheckpoint).map((report) => ({
+              namespace: report.namespace,
+              ...report.remoteSchema,
+              localLatestMigration: report.remoteSchema.localLatestMigration ?? null,
+              historyIdMismatch: report.remoteSchema.historyIdMismatch ?? false,
+            })),
+            commandContext,
+          ),
+          ...unsetCheckpointDriftHints(remoteDrifts(reports), commandContext),
+        ].join("\n") || undefined,
     });
   }
 }

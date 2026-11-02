@@ -70,6 +70,6 @@ tailor data operation get --from <source-workspace-id> --to <target-workspace-id
 
 With `--json`, `data clone` reports `status: "completed"` once the clone has finished, or `status: "started"` with `--no-wait`.
 
-## Rehearsing migrations with cloned data
+## Rehearsing migrations with cloned data (Beta)
 
 To test pending TailorDB migrations against a copy of real records, use `tailor tailordb migration test --data clone` instead of cloning by hand. It creates a temporary workspace, deploys the pre-migration schema, clones the records, and runs the pending migrations. That command copies TailorDB records only; see [Clone mode](./services/tailordb/migration.md#clone-mode).

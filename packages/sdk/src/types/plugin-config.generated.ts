@@ -18,20 +18,20 @@ export type PluginConfigInput = {
 export type PluginConfig = {
   readonly id: string;
   readonly description: string;
-  readonly importPath?: string | undefined;
+  readonly importPath?: string;
   readonly tableConfigRequired?: import("#/plugin/types").TableConfigRequired<unknown> | undefined;
   readonly pluginConfig?: unknown;
   onTableLoaded?:
     | ((
         context: import("#/plugin/types").PluginTableProcessContext<unknown, unknown>,
       ) =>
-        | import("#/plugin/types").TablePluginOutput<
-            Record<string, import("#/configure/services/tailordb/types").TailorAnyDBField>
-          >
         | Promise<
             import("#/plugin/types").TablePluginOutput<
               Record<string, import("#/configure/services/tailordb/types").TailorAnyDBField>
             >
+          >
+        | import("#/plugin/types").TablePluginOutput<
+            Record<string, import("#/configure/services/tailordb/types").TailorAnyDBField>
           >)
     | undefined;
   onNamespaceLoaded?:

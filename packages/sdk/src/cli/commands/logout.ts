@@ -12,7 +12,7 @@ import {
   withPlatformConfigLock,
   writePlatformConfig,
 } from "#/cli/shared/context";
-import { CLIError } from "#/cli/shared/errors";
+import { profileNotFoundError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
 
@@ -35,7 +35,7 @@ async function logout(profile: string | undefined) {
   const pfConfig = await readPlatformConfig();
   const profileEntry = profile ? pfConfig.profiles[profile] : undefined;
   if (profile && !profileEntry) {
-    throw CLIError({ code: "PROFILE_NOT_FOUND", message: `Profile "${profile}" not found` });
+    throw profileNotFoundError(profile);
   }
   const platformConfig = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
   const currentUser = profileEntry ? profileEntry.user : pfConfig.current_user;

@@ -217,6 +217,20 @@ describe("AppConfigSchema", () => {
       ).toEqual(["buildOptions", "inlineSourcemapDependencySources"]);
     });
 
+    test("accepts include and exclude globs for inlineSourcemapProjectSources", () => {
+      expect(
+        parseBuildOptions({
+          inlineSourcemapProjectSources: { include: ["src/**"], exclude: ["src/generated/**"] },
+        }).success,
+      ).toBe(true);
+    });
+
+    test("rejects an unknown key in inlineSourcemapProjectSources", () => {
+      expect(
+        parseBuildOptions({ inlineSourcemapProjectSources: { ignore: ["src/**"] } }).success,
+      ).toBe(false);
+    });
+
     test("rejects unknown fields", () => {
       expect(parseBuildOptions({ minify: false }).success).toBe(false);
     });

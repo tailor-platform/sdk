@@ -5,7 +5,7 @@ import type { TailorField } from "./field.generated";
 /**
  * GraphQL operation type
  */
-export type QueryType = "query" | "mutation";
+export type QueryType = "mutation" | "query";
 export type QueryTypeInput = QueryType;
 
 /**
@@ -15,16 +15,16 @@ export type ResolverPermission =
   | "allowAnonymous"
   | readonly {
       conditions:
-        | readonly [
-            string | boolean | { user: string },
-            "=" | "!=",
-            string | boolean | { user: string },
-          ]
         | readonly (readonly [
             string | boolean | { user: string },
-            "=" | "!=",
+            "!=" | "=",
             string | boolean | { user: string },
-          ])[];
+          ])[]
+        | readonly [
+            string | boolean | { user: string },
+            "!=" | "=",
+            string | boolean | { user: string },
+          ];
       permit: boolean;
       description?: string | undefined;
     }[];
@@ -35,16 +35,16 @@ export type Resolver = {
   operation: QueryType;
   /** Resolver name */
   name: string;
-  /** Resolver implementation function */
-  body: Function;
-  /** Output field definition */
-  output: TailorField;
   /** Resolver description */
   description?: string | undefined;
   /** Input field definitions */
   input?: {
     [x: string]: TailorField;
   };
+  /** Resolver implementation function */
+  body: Function;
+  /** Output field definition */
+  output: TailorField;
   /** Enable publishing events from this resolver */
   publishEvents?: boolean | undefined;
   /** Machine user to execute this resolver as */
@@ -62,23 +62,6 @@ export type Resolver = {
     | "allowAnonymous"
     | readonly {
         conditions:
-          | readonly [
-              (
-                | string
-                | boolean
-                | {
-                    user: string;
-                  }
-              ),
-              "=" | "!=",
-              (
-                | string
-                | boolean
-                | {
-                    user: string;
-                  }
-              ),
-            ]
           | readonly (readonly [
               (
                 | string
@@ -87,7 +70,7 @@ export type Resolver = {
                     user: string;
                   }
               ),
-              "=" | "!=",
+              "!=" | "=",
               (
                 | string
                 | boolean
@@ -95,7 +78,24 @@ export type Resolver = {
                     user: string;
                   }
               ),
-            ])[];
+            ])[]
+          | readonly [
+              (
+                | string
+                | boolean
+                | {
+                    user: string;
+                  }
+              ),
+              "!=" | "=",
+              (
+                | string
+                | boolean
+                | {
+                    user: string;
+                  }
+              ),
+            ];
         permit: boolean;
         /** Reason recorded for this policy, used in the access-denied error message */
         description?: string | undefined;

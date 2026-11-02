@@ -8,9 +8,10 @@ import {
   resolveSelectedUserEntry,
   writePlatformConfig,
 } from "#/cli/shared/context";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, profileNotFoundError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
+import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
 
 const defaultIdSchema = z.union([z.uuid(), z.literal("")]);
@@ -19,7 +20,7 @@ export const updateCommand = defineAppCommand({
   name: "update",
   description: "Set the current user's default organization and folder for new workspaces.",
   notes: ml`
-    \`workspace create\`, workspace creation during \`deploy\`, and the programmatic \`createWorkspace()\` use the default folder, or directly use the default organization when no folder is set. Giving either an organization or a folder replaces both defaults for that run. For the CLI, use --organization-id or --folder-id, or TAILOR_PLATFORM_ORGANIZATION_ID / TAILOR_PLATFORM_FOLDER_ID. The defaults are not used while TAILOR_PLATFORM_TOKEN is set, because that token does not belong to a user logged in here.
+    \`workspace create\`, workspace creation during \`deploy\`, and the programmatic \`createWorkspace()\` use the default folder, or directly use the default organization when no folder is set. Every workspace belongs to an organization, so creation fails when neither the command nor these defaults give one. Giving either an organization or a folder replaces both defaults for that run. For the CLI, use --organization-id or --folder-id, or TAILOR_PLATFORM_ORGANIZATION_ID / TAILOR_PLATFORM_FOLDER_ID. The defaults are not used while TAILOR_PLATFORM_TOKEN is set, because that token does not belong to a user logged in here.
 
     Each run replaces both defaults: --default-organization-id alone clears the default folder, --default-folder-id is accepted only together with --default-organization-id, and --default-organization-id "" clears both. The IDs are not checked against the Platform here; \`workspace create\` and \`deploy\` point back to them when the Platform cannot find them or denies access to them.
 
@@ -61,7 +62,7 @@ export const updateCommand = defineAppCommand({
     const selected = resolveSelectedUserEntry(config, { profile: args.profile });
     if (!selected) {
       const profileName = args.profile || process.env.TAILOR_PLATFORM_PROFILE;
-      throw CLIError({ code: "PROFILE_NOT_FOUND", message: `Profile "${profileName}" not found` });
+      throw profileNotFoundError(assertDefined(profileName, "Only a named profile can be missing"));
     }
     const { profile: profileName, user, userEntry: entry } = selected;
     const login = {

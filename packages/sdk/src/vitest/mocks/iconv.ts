@@ -27,7 +27,11 @@ type TypedOperationMock<
   MockProcedure extends (...args: never[]) => unknown,
 > = RuntimeProcedure & MockInstance<MockProcedure>;
 
-/** Controls how unconfigured Iconv operations are handled. */
+/**
+ * Controls how unconfigured Iconv operations are handled.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export interface MockIconvOptions {
   /** Return an empty type-compatible value or throw when no behavior is configured. */
   onUnhandled?: "fallback" | "error";
@@ -57,6 +61,8 @@ function defaultIconvResult(method: IconvMethod, args: unknown[]): unknown {
 
 /**
  * Acquire a disposable mock for `tailor.iconv`. Restored on dispose.
+ *
+ * **Beta:** This API may change in future releases.
  * @param options - Fallback behavior for unconfigured operations
  * @returns Disposable Iconv mock control object
  * @example

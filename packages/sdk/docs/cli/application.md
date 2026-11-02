@@ -60,29 +60,29 @@ tailor deploy [options]
 
 **Options**
 
-| Option                                          | Alias | Description                                                                                                            | Required | Default              | Env                               |
-| ----------------------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>`                 | `-w`  | Workspace ID                                                                                                           | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`                           | `-p`  | Workspace profile                                                                                                      | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`                             | `-c`  | Path to SDK config file. Use comma-separated paths to deploy multiple apps together.                                   | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--yes`                                         | `-y`  | Skip confirmation prompts                                                                                              | No       | `false`              | -                                 |
-| `--create-workspace`                            | -     | Create a workspace when the account has none                                                                           | No       | -                    | -                                 |
-| `--workspace-name <WORKSPACE_NAME>`             | -     | Name for a workspace created during deploy                                                                             | No       | -                    | -                                 |
-| `--workspace-region <WORKSPACE_REGION>`         | -     | Region for a workspace created during deploy                                                                           | No       | -                    | -                                 |
-| `--organization-id <ORGANIZATION_ID>`           | -     | Organization ID for a workspace created during deploy                                                                  | No       | -                    | `TAILOR_PLATFORM_ORGANIZATION_ID` |
-| `--folder-id <FOLDER_ID>`                       | -     | Folder ID for a workspace created during deploy                                                                        | No       | -                    | `TAILOR_PLATFORM_FOLDER_ID`       |
-| `--dry-run`                                     | `-d`  | Run the command without making any changes                                                                             | No       | -                    | -                                 |
-| `--no-schema-check`                             | -     | Skip schema diff check against migration snapshots                                                                     | No       | -                    | -                                 |
-| `--migration-skip-steps <MIGRATION_SKIP_STEPS>` | -     | Skip steps of a partially applied multi-step migration that already succeeded (comma-separated namespace/step entries) | No       | -                    | -                                 |
-| `--no-validate`                                 | -     | Skip client-side validation against platform resource constraints                                                      | No       | -                    | -                                 |
-| `--no-cache`                                    | -     | Disable bundle caching for this run                                                                                    | No       | -                    | -                                 |
-| `--clean-cache`                                 | -     | Clean the bundle cache before building                                                                                 | No       | -                    | -                                 |
+| Option                                          | Alias | Description                                                                                                                     | Required | Default              | Env                               |
+| ----------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>`                 | `-w`  | Workspace ID                                                                                                                    | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`                           | `-p`  | Workspace profile                                                                                                               | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`                             | `-c`  | Path to SDK config file. Use comma-separated paths to deploy multiple apps together.                                            | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`              |
+| `--yes`                                         | `-y`  | Skip confirmation prompts                                                                                                       | No       | `false`              | -                                 |
+| `--create-workspace`                            | -     | Create a workspace when the account has none                                                                                    | No       | -                    | -                                 |
+| `--workspace-name <WORKSPACE_NAME>`             | -     | Name for a workspace created during deploy                                                                                      | No       | -                    | -                                 |
+| `--workspace-region <WORKSPACE_REGION>`         | -     | Region for a workspace created during deploy                                                                                    | No       | -                    | -                                 |
+| `--organization-id <ORGANIZATION_ID>`           | -     | Organization ID for a workspace created during deploy                                                                           | No       | -                    | `TAILOR_PLATFORM_ORGANIZATION_ID` |
+| `--folder-id <FOLDER_ID>`                       | -     | Folder ID for a workspace created during deploy                                                                                 | No       | -                    | `TAILOR_PLATFORM_FOLDER_ID`       |
+| `--dry-run`                                     | `-d`  | Run the command without making any changes                                                                                      | No       | -                    | -                                 |
+| `--no-schema-check`                             | -     | Skip schema diff check against migration snapshots (beta)                                                                       | No       | -                    | -                                 |
+| `--migration-skip-steps <MIGRATION_SKIP_STEPS>` | -     | Skip steps of a partially applied multi-step migration that already succeeded, as comma-separated namespace/step entries (beta) | No       | -                    | -                                 |
+| `--no-validate`                                 | -     | Skip client-side validation against platform resource constraints                                                               | No       | -                    | -                                 |
+| `--no-cache`                                    | -     | Disable bundle caching for this run                                                                                             | No       | -                    | -                                 |
+| `--clean-cache`                                 | -     | Clean the bundle cache before building                                                                                          | No       | -                    | -                                 |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 **Notes**
 
-Workspace creation uses the selected user's default organization and folder set by `user update` when neither location is given and TAILOR_PLATFORM_TOKEN is not set. Giving --organization-id or --folder-id replaces both defaults. Organization and folder IDs loaded by --env-file also replace the defaults; command-line options take precedence, and empty env-file values are ignored. With --create-workspace, an existing workspace must match the resolved name, region, organization, and folder to be reused.
+Every workspace belongs to an organization; when none is given or set as a default, interactive runs ask for one and non-interactive runs fail. Workspace creation uses the selected user's default organization and folder set by `user update` when neither location is given and TAILOR_PLATFORM_TOKEN is not set. Giving --organization-id or --folder-id replaces both defaults. TAILOR_PLATFORM_ORGANIZATION_ID and TAILOR_PLATFORM_FOLDER_ID, including values loaded by --env-file, also replace the defaults; command-line options take precedence, and an empty value of either variable is ignored. With --create-workspace, an existing workspace must match the resolved name, region, organization, and folder to be reused.
 
 **JSON result:**
 
@@ -154,7 +154,8 @@ tailor deploy \
 `--create-workspace` only creates when the account has no workspace. If the existing workspace
 matches the requested name, region, organization, and folder, `deploy` reuses it so the same command
 is safe to rerun. If multiple workspaces exist, the flag never creates another one or guesses which
-workspace to use. `--yes` skips deployment confirmation but does not authorize workspace creation.
+workspace to use. `--yes` accepts the deployment confirmations described under Confirmation below
+but does not authorize workspace creation.
 
 If a saved workspace has been deleted or is no longer accessible, interactive terminals return to
 workspace selection. Non-interactive environments stop with `WORKSPACE_CONTEXT_STALE` instead of
@@ -195,7 +196,7 @@ See [Automatic Migration Execution](../services/tailordb/migration.md#automatic-
 
 **Concurrent Deploys:**
 
-Deploys that target the same workspace and application from the same project directory are serialized while secrets and auth connections are updated: one deploy proceeds and the other waits for it to finish. A deploy that cannot proceed within 5 minutes fails with an error, which normally means another deploy is still running. If a previous deploy was interrupted, the next deploy recovers automatically within about a minute. Deploys to different workspaces or applications are not affected.
+Deploys that target the same workspace and application from the same project directory are serialized while secrets and auth connections are updated: one deploy proceeds and the other waits for it to finish. A deploy that cannot proceed within 5 minutes fails with an error, which normally means another deploy is still running. If a previous deploy was interrupted, the next deploy recovers automatically within about a minute. If the error persists, stop any `tailor deploy` still running from the project directory, then delete the lock directory that the error names and retry. Deploys to different workspaces or applications are not affected.
 
 **Schema Check:**
 
@@ -206,7 +207,7 @@ By default, `deploy` performs two verification steps:
 
 If remote schema drift is detected, the deploy will fail with an error showing the differences. This helps prevent applying migrations to an inconsistent state.
 
-Use `--no-schema-check` to skip both verifications (not recommended for production).
+Use `--no-schema-check` to skip both verifications (not recommended for production). It does not skip the check that the remote migration checkpoint is in the local migration history: when the deployed checkpoint is ahead of the local migration files or belongs to another migration history, the deploy stops before changing anything. Pull the latest migration files, or move the checkpoint on purpose with `tailor tailordb migration sync`, adding `--force` when the checkpoint belongs to another migration history or has a history label that cannot be read, then deploy again.
 
 **Plan Output:**
 
@@ -238,6 +239,22 @@ tailor deploy --dry-run > plan.txt
 ```
 
 In apply mode, the plan is printed to stderr so it does not interfere with piped output.
+
+**Confirmation:**
+
+After printing the plan, `deploy` asks for confirmation before applying when the plan includes any of the following:
+
+- TailorDB migration checkpoints that must be reset before deploying (Beta)
+- Applications recorded as depending on this deploy that are missing from it
+- Resources owned by another application, or tagged with a different application id
+- Existing resources that `tailor` does not manage yet
+- Deletion of TailorDB tables, static websites, AI gateways, OAuth2 clients (including a client type change), Auth connections, Secret Manager vaults, or Secret Manager secrets
+
+Declining cancels the deploy. When the plan includes none of these, `deploy` applies it without asking.
+
+`--yes` accepts these confirmations without asking. In a non-interactive environment or with `--json`, a deploy that needs one of them fails unless `--yes` is passed. `--dry-run` lists them as warnings without asking.
+
+When [`env`](../configuration.md#environment-variables) references the URL of a static website that the same deploy creates, `deploy` first applies static websites and the other resources that cannot reference that URL, then plans the rest again with the real URL and prints that plan as well. It asks again only about what the new plan adds; declining at that point leaves the resources applied first in place.
 
 **JSON Output:**
 
@@ -280,9 +297,22 @@ Pass the global `--json` / `-j` flag to get machine-readable output.
 ```json
 {
   "summary": { "create": 1, "update": 2, "delete": 0, "replace": 0, "forcedBySdkVersion": 0 },
-  "status": "applied"
+  "status": "applied",
+  "workspaceId": "ws_abc123",
+  "applications": [
+    {
+      "name": "my-app",
+      "configPath": "/path/to/my-app/tailor.config.ts",
+      "url": "https://my-app.example.com",
+      "domain": "my-app.example.com",
+      "aiGateways": [],
+      "staticWebsites": {}
+    }
+  ]
 }
 ```
+
+Some deploys also add `tailordbMaintenance` or `deployedHooks`, as described under **JSON result** above.
 
 ## remove
 

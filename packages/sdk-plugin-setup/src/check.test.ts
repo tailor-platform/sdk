@@ -2,15 +2,19 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
+import { setupAutofix } from "./autofix";
 import {
+  type AutofixState,
   type checkGitHub as CheckGitHub,
+  findAutofixDrift,
   findTargetDrift,
   resolveWithinRoot,
   type TargetState,
 } from "./check";
 import { setupTarget, type BranchSetupOptions } from "./generate";
-import { LOCK_VERSION, type LockTarget, hashContent, writeLock } from "./lock";
-import { TEMPLATE_VERSION } from "./templates";
+import { LOCK_VERSION, type LockAutofix, type LockTarget, hashContent, writeLock } from "./lock";
+import { AUTOFIX_WORKFLOW_FILE, TEMPLATE_VERSION } from "./templates";
+import { autofixLockEntry } from "./test-helpers/autofix";
 import type { logger as Logger } from "@tailor-platform/sdk/cli";
 
 const baseTarget = (overrides: Partial<LockTarget> = {}): LockTarget => ({
@@ -313,6 +317,78 @@ describe("findTargetDrift", () => {
   });
 });
 
+describe("findTargetDrift of a preview target with a cleanup workflow", () => {
+  const cleanup = {
+    file: ".github/workflows/tailor-my-app-preview-cleanup.yml",
+    templateVersion: TEMPLATE_VERSION - 1,
+    generatedIds: [],
+    contentHash: "sha256:def",
+  };
+  const target = baseTarget({
+    kind: "preview",
+    file: ".github/workflows/tailor-my-app-preview.yml",
+    templateVersion: TEMPLATE_VERSION - 1,
+    cleanup,
+  });
+  const state = cleanState({
+    cleanup: {
+      fileExists: true,
+      currentHash: "sha256:def",
+      reservedIds: [],
+      templateVersion: TEMPLATE_VERSION,
+    },
+  });
+
+  test("asks once to update both workflows to a newer template", () => {
+    expect(findTargetDrift(target, state).map((finding) => finding.rule)).toEqual([
+      "template-version",
+    ]);
+  });
+});
+
+describe("findAutofixDrift", () => {
+  const autofix = (overrides: Partial<LockAutofix> = {}): LockAutofix => ({
+    ...autofixLockEntry("github-token", { dirs: ["apps/erp", "apps/users"] }),
+    ...overrides,
+  });
+  const state = (overrides: Partial<AutofixState> = {}): AutofixState => ({
+    fileExists: true,
+    currentHash: autofix().contentHash,
+    reservedIds: [],
+    templateVersion: TEMPLATE_VERSION,
+    dirsWithoutConfig: [],
+    ...overrides,
+  });
+
+  test.each<[string, Partial<LockAutofix>, Partial<AutofixState>, string[]]>([
+    ["no findings when in sync", {}, {}, []],
+    ["reports a missing file", {}, { fileExists: false, currentHash: null }, ["missing-file"]],
+    ["reports a hand edit", {}, { currentHash: "managed-v1:sha256:edited" }, ["hand-edit"]],
+    ["reports a reserved id", {}, { reservedIds: ["tailor-autofix/tailor-mine"] }, ["reserved-id"]],
+    [
+      "reports an outdated template version",
+      { templateVersion: TEMPLATE_VERSION - 1 },
+      {},
+      ["template-version"],
+    ],
+    [
+      "reports each app directory that lost its config",
+      {},
+      { dirsWithoutConfig: ["apps/erp", "apps/users"] },
+      ["config-dir", "config-dir"],
+    ],
+  ])("%s", (_name, entry, current, rules) => {
+    const findings = findAutofixDrift(autofix(entry), state(current));
+    expect(findings.map((finding) => finding.rule)).toEqual(rules);
+    expect(findings.every((finding) => finding.target === "autofix")).toBe(true);
+  });
+
+  test("names the app directory that lost its config", () => {
+    const [finding] = findAutofixDrift(autofix(), state({ dirsWithoutConfig: ["apps/erp"] }));
+    expect(finding?.message).toMatch(/tailor\.config\.ts not found under "apps\/erp"/);
+  });
+});
+
 describe("resolveWithinRoot", () => {
   const dir = path.join(os.tmpdir(), `rwr-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
@@ -408,6 +484,17 @@ describe("checkGitHub (integration)", () => {
     generatedIds: [],
     contentHash: "sha256:abc",
   });
+
+  const writeFiles = (...files: string[]): void => {
+    for (const file of files) {
+      fs.mkdirSync(path.dirname(path.join(testDir, file)), { recursive: true });
+      fs.writeFileSync(path.join(testDir, file), "name: legacy\n");
+    }
+  };
+  const writeLegacyLock = (content: string): void => {
+    fs.mkdirSync(path.join(testDir, ".github"), { recursive: true });
+    fs.writeFileSync(path.join(testDir, ".github/tailor-sdk.lock"), content);
+  };
 
   describe("in CI (isCI: true)", () => {
     let checkGitHub: typeof CheckGitHub;
@@ -745,6 +832,79 @@ describe("checkGitHub (integration)", () => {
       fs.mkdirSync(path.join(testDir, file), { recursive: true });
       await expect(check()).rejects.toThrow(/drift/);
     });
+
+    test("reports the files only a leftover .github/tailor-sdk.lock records", async () => {
+      await setupTarget(setupOptions({ workspaceName: "my-app" }));
+      const preview = ".github/workflows/tailor-my-app-preview.yml";
+      const action = ".github/actions/tailor-my-app/action.yml";
+      writeFiles(preview, action);
+      writeLegacyLock(
+        JSON.stringify({
+          version: 1,
+          targets: [
+            { kind: "branch", file: ".github/workflows/tailor-my-app.yml" },
+            { kind: "preview", file: preview },
+            { kind: "branch", file: ".github/workflows/tailor-gone.yml" },
+            { kind: "branch", file: path.join(testDir, "tailor.config.ts") },
+            null,
+            { kind: "action", file: action },
+            { kind: "preview", file: preview },
+          ],
+        }),
+      );
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+      await expect(check()).rejects.toThrow(/1 drift finding/);
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        "[.github/tailor-sdk.lock] Left by an older setup, with files it generated that " +
+          `.github/tailor.lock does not track: ${preview}, ${action}. ` +
+          `Remove them with \`git rm .github/tailor-sdk.lock ${preview} ${action}\`. ` +
+          "(ignore key: legacy-lock)",
+      );
+    });
+
+    test("reports a leftover .github/tailor-sdk.lock alone when .github/tailor.lock tracks its files", async () => {
+      await setupTarget(setupOptions({ workspaceName: "my-app" }));
+      writeLegacyLock(
+        JSON.stringify({
+          version: 1,
+          targets: [{ kind: "branch", file: ".github/workflows/tailor-my-app.yml" }],
+        }),
+      );
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+      await expect(check()).rejects.toThrow(/1 drift finding/);
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        "[.github/tailor-sdk.lock] Left by an older setup. " +
+          "Remove it with `git rm .github/tailor-sdk.lock`. (ignore key: legacy-lock)",
+      );
+    });
+
+    test.each<[string, () => void]>([
+      ["is not valid JSON", () => writeLegacyLock("{")],
+      ["has no targets array", () => writeLegacyLock('{"version":1}')],
+      [
+        "is a directory",
+        () => fs.mkdirSync(path.join(testDir, ".github/tailor-sdk.lock"), { recursive: true }),
+      ],
+    ])(
+      "reports a leftover .github/tailor-sdk.lock that %s without listing its files",
+      async (_, writeLock) => {
+        await setupTarget(setupOptions({ workspaceName: "my-app" }));
+        writeLock();
+        using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+        await expect(check()).rejects.toThrow(/1 drift finding/);
+
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringMatching(
+            /^\[\.github\/tailor-sdk\.lock\] .*cannot be read.*`git rm \.github\/tailor-sdk\.lock`.*\(ignore key: legacy-lock\)$/,
+          ),
+        );
+      },
+    );
   });
 
   describe("outside CI (isCI: false)", () => {
@@ -763,6 +923,46 @@ describe("checkGitHub (integration)", () => {
 
     test("errors when no lock exists", async () => {
       await expect(checkGitHub({ outputDir: testDir })).rejects.toThrow(/No managed workflows/);
+    });
+
+    test("keeps a managed autofix workflow out of legacy lock removal suggestions", async () => {
+      await setupAutofix({ provider: "github-token", dir: ".", force: false, outputDir: testDir });
+      writeLegacyLock(JSON.stringify({ version: 1, targets: [{ file: AUTOFIX_WORKFLOW_FILE }] }));
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+      await expect(
+        checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" }),
+      ).rejects.toThrow(/1 drift finding/);
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        "[.github/tailor-sdk.lock] Left by an older setup. " +
+          "Remove it with `git rm .github/tailor-sdk.lock`. (ignore key: legacy-lock)",
+      );
+    });
+
+    test("audits the autofix workflow, even when the lock records no target", async () => {
+      await setupAutofix({ provider: "github-token", dir: ".", force: false, outputDir: testDir });
+      using successSpy = vi.spyOn(logger, "success").mockImplementation(() => {});
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+      await checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" });
+      expect(successSpy).toHaveBeenCalledWith("No drift detected across 1 workflow(s).");
+
+      const file = path.join(testDir, AUTOFIX_WORKFLOW_FILE);
+      fs.writeFileSync(
+        file,
+        fs
+          .readFileSync(file, "utf-8")
+          .replace("cancel-in-progress: true", "cancel-in-progress: false"),
+      );
+      fs.rmSync(path.join(testDir, "tailor.config.ts"));
+      await expect(
+        checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" }),
+      ).rejects.toThrow(/Detected 2 drift finding\(s\) across 1 workflow\(s\)/);
+      expect(warnSpy.mock.calls.map(([message]) => message)).toEqual([
+        expect.stringMatching(/^\[autofix\] .*tailor-autofix\.yml.*\(ignore key: hand-edit\)$/),
+        expect.stringMatching(/^\[autofix\] tailor\.config\.ts not found under "\."/),
+      ]);
     });
 
     test("does not emit the drift count marker outside CI", async () => {
@@ -791,6 +991,56 @@ describe("checkGitHub (integration)", () => {
           message.startsWith("TAILOR_SETUP_CHECK_DRIFT_COUNT="),
         ),
       ).toBe(false);
+    });
+
+    describe("the cleanup workflow of a preview target", () => {
+      const cleanupPath = () =>
+        path.join(testDir, ".github/workflows/tailor-my-app-preview-cleanup.yml");
+      const generatePreview = () =>
+        setupTarget({
+          kind: "preview",
+          workspaceName: "my-app",
+          region: "us-west",
+          dir: ".",
+          force: false,
+          outputDir: testDir,
+          gitRunner: () => "origin/main",
+          loadConfigName: async () => "my-app",
+          loadConfigId: async () => undefined,
+        });
+
+      test("reports a hand edit to it under the preview target", async () => {
+        await generatePreview();
+        const content = fs.readFileSync(cleanupPath(), "utf-8");
+        fs.writeFileSync(
+          cleanupPath(),
+          content.replace("types: [closed]", "types: [closed, opened]"),
+        );
+        using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+        await expect(
+          checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" }),
+        ).rejects.toThrow(/Detected 1 drift finding\(s\) across 2 workflow\(s\)/);
+        expect(warnSpy.mock.calls.map(([message]) => message)).toEqual([
+          expect.stringMatching(
+            /^\[preview my-app\] .*tailor-my-app-preview-cleanup\.yml.*\(ignore key: hand-edit\)$/,
+          ),
+        ]);
+      });
+
+      test("reports it missing", async () => {
+        await generatePreview();
+        fs.rmSync(cleanupPath());
+        using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+        await expect(
+          checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" }),
+        ).rejects.toThrow(/Detected 1 drift finding/);
+        expect(warnSpy).toHaveBeenCalledWith(
+          "[preview my-app] .github/workflows/tailor-my-app-preview-cleanup.yml is missing or " +
+            "unreadable. Re-run setup to restore it. (ignore key: missing-file)",
+        );
+      });
     });
 
     test("does not require TAILOR_PLATFORM_WORKSPACE_ID in the local shell", async () => {

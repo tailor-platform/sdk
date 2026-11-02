@@ -119,6 +119,47 @@ export function definitionExportError(params: DefinitionErrorParams): CLIError {
   );
 }
 
+/** Plain object the TypeScript transform throws for source it cannot parse. */
+interface SyntaxDiagnostic {
+  code: "InvalidSyntax";
+  message: string;
+  filename: string;
+  startLine?: number;
+}
+
+function isSyntaxDiagnostic(value: unknown): value is SyntaxDiagnostic {
+  if (typeof value !== "object" || value === null || value instanceof Error) return false;
+  const { code, message, filename, startLine } = value as Record<string, unknown>;
+  return (
+    code === "InvalidSyntax" &&
+    typeof message === "string" &&
+    typeof filename === "string" &&
+    (startLine === undefined || typeof startLine === "number")
+  );
+}
+
+/**
+ * Create the error for a user module whose source does not parse.
+ * @param thrown - Value thrown while importing the module
+ * @returns CLIError coded `SYNTAX_INVALID`, located at the file and line the
+ * source failed to parse on, or undefined when `thrown` is another failure
+ */
+export function syntaxInvalidError(thrown: unknown): CLIError | undefined {
+  if (!isSyntaxDiagnostic(thrown)) return undefined;
+  const { message, filename: file, startLine: line } = thrown;
+  const location = line === undefined ? { file } : { file, line };
+  const lineSuffix = line === undefined ? "" : `:${line}`;
+  return withErrorDiagnostics(
+    CLIError({
+      code: "SYNTAX_INVALID",
+      message: `Invalid syntax in ${relativeFile(file)}${lineSuffix}: ${message}`,
+      context: location,
+      cause: thrown,
+    }),
+    { location },
+  );
+}
+
 /**
  * Create the error for SDK- or Platform-produced data that failed validation,
  * which no user action can fix.

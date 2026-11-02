@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { accessSync, constants, readdirSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
+import { type CommonArgsOptions, loadEnvFilesFromArgv, readEnvFileArgs } from "./args";
 import { getOAuth2ClientId, getPlatformBaseUrl, type PlatformClientConfig } from "./client";
 import {
   loadAccessToken,
@@ -23,6 +24,15 @@ const KNOWN_PLUGIN_PACKAGES: Record<string, string> = {
   setup: "@tailor-platform/sdk-plugin-setup",
   "tailordb-erd": "@tailor-platform/sdk-plugin-tailordb-erd",
 };
+
+/**
+ * Options that known plugins pass to `createCommonArgs()`, keyed by plugin
+ * slug, so the env files read from forwarded args match the ones the plugin
+ * reads.
+ */
+const KNOWN_PLUGIN_COMMON_ARGS_OPTIONS: ReadonlyMap<string, CommonArgsOptions> = new Map([
+  ["seed", { verboseAlias: "v" }],
+]);
 
 /**
  * A plugin discovered on the filesystem. `tailor <name>` dispatches to the
@@ -366,28 +376,16 @@ function buildSpawnTarget(
 }
 
 /**
- * Check whether args forwarded to a plugin carry an explicit env-file flag.
- * Scanning stops at a `--` terminator. The check is presence-only:
- * `--env-file-if-exists` counts even when the named file does not exist, so
- * no platform context is injected in that case either.
+ * Check whether args forwarded to a plugin name an env file. Scanning stops at
+ * a `--` terminator. `--env-file-if-exists` counts even when the named file
+ * does not exist, so no platform context is injected in that case either.
  * @param args - Args forwarded to the plugin
- * @returns Whether an `--env-file`/`-e`/`--env-file-if-exists` flag is present
+ * @param options - Options the plugin passes to `createCommonArgs()`
+ * @returns Whether an `--env-file`/`-e`/`--env-file-if-exists` flag names a file
  */
-export function hasEnvFileFlag(args: readonly string[]): boolean {
-  for (const token of args) {
-    if (token === "--") return false;
-    if (token === "--env-file" || token === "-e" || token === "--env-file-if-exists") {
-      return true;
-    }
-    if (
-      token.startsWith("--env-file=") ||
-      token.startsWith("-e=") ||
-      token.startsWith("--env-file-if-exists=")
-    ) {
-      return true;
-    }
-  }
-  return false;
+export function hasEnvFileFlag(args: readonly string[], options: CommonArgsOptions): boolean {
+  const { envFiles, envFilesIfExists } = readEnvFileArgs(args, options);
+  return envFiles.length > 0 || envFilesIfExists.length > 0;
 }
 
 /**
@@ -459,9 +457,18 @@ export async function dispatchPlugin(params: DispatchPluginParams): Promise<numb
   }
 
   const profile = explicitProfileFromArgs(params.args) ?? params.profile;
+  const commonArgsOptions = KNOWN_PLUGIN_COMMON_ARGS_OPTIONS.get(slug) ?? {};
+  const skipPlatformContext = hasEnvFileFlag(params.args, commonArgsOptions);
+  if (skipPlatformContext) {
+    try {
+      loadEnvFilesFromArgv(params.args, commonArgsOptions);
+    } catch {
+      // The plugin loads the same files and reports a missing one itself.
+    }
+  }
   const env = {
     ...process.env,
-    ...(await buildPluginEnv({ profile, skipPlatformContext: hasEnvFileFlag(params.args) })),
+    ...(await buildPluginEnv({ profile, skipPlatformContext })),
   };
   const { command, args, shell } = buildSpawnTarget(plugin.path, params.args);
 

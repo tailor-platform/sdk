@@ -83,8 +83,8 @@ describe("deploy workspace resolution", () => {
       deployFromCLI(
         { configPath, profile: "staging" },
         {
-          envFile: ".env.workspace",
-          envFileIfExists: ".env.local",
+          envFiles: [".env.base", ".env.workspace"],
+          envFilesIfExists: [".env.local"],
           verbose: true,
           json: true,
         },
@@ -97,6 +97,8 @@ describe("deploy workspace resolution", () => {
           "--config",
           expect.stringContaining("tailor.config.ts"),
           "--env-file",
+          expect.stringMatching(/\/\.env\.base$/),
+          "--env-file",
           expect.stringMatching(/\/\.env\.workspace$/),
           "--env-file-if-exists",
           expect.stringMatching(/\/\.env\.local$/),
@@ -105,6 +107,8 @@ describe("deploy workspace resolution", () => {
           "--json",
         ],
         workspaceCommandArgs: [
+          "--env-file",
+          expect.stringMatching(/\/\.env\.base$/),
           "--env-file",
           expect.stringMatching(/\/\.env\.workspace$/),
           "--env-file-if-exists",

@@ -45,7 +45,8 @@ flag always wins, so `--json=false` forces table output even when the variable i
 `true`, `True`, `TRUE`, `t`, `T`, and `1` enable JSON; `false`, `False`, `FALSE`, `f`, `F`, and `0`
 keep table output. Other values are rejected. JSON mode also disables interactive prompts, so set the
 variable per invocation or per job rather than exporting it from a shell profile; a command that
-needed a prompt names what selected JSON when it refuses.
+needed a prompt names what selected JSON when it refuses. In JSON mode, pass `--yes` to commands that
+ask for confirmation, and pass the options that a command would otherwise prompt for.
 
 When an AI coding agent such as Claude Code, Codex, Cursor, or Gemini CLI runs the CLI, every
 command defaults to JSON as if `TAILOR_JSON_OUTPUT=true` were set, and `--help` starts with a short
@@ -53,9 +54,9 @@ guide for the agent. The CLI recognizes an agent by the environment variables it
 commands it runs; a non-blank `AI_AGENT` also counts as one. An explicit `--json` or
 `TAILOR_JSON_OUTPUT` still wins, so `--json=false` or `TAILOR_JSON_OUTPUT=false` keeps table output
 under an agent, and setting `POLITTY_NO_AGENT` to any non-empty value, such as `1`, turns agent
-detection off. Set these variables in the environment itself: values loaded with `--env-file` do not
-change the default. CLI plugins keep table output under an agent unless they receive `--json` or
-`TAILOR_JSON_OUTPUT`, and their `--help` does not include the guide.
+detection off. Set `AI_AGENT` and `POLITTY_NO_AGENT` in the environment itself: values loaded with
+`--env-file` do not change agent detection. CLI plugins keep table output under an agent unless they
+receive `--json` or `TAILOR_JSON_OUTPUT`, and their `--help` does not include the guide.
 
 Errors, warnings, progress, and diagnostic messages are written to stderr. A command failure under
 `--json` or `TAILOR_JSON_OUTPUT` emits a JSON error envelope to stderr, including a failure while
@@ -135,9 +136,11 @@ those messages describe the workflow's own checks, which can fail even when the 
 
 When the failure has a known source, the annotation carries it: `seed validate` reports the
 offending JSONL file and line, including a line that is not valid JSON, and a rejected config
-reports its file — or, when the config or a file it imports cannot be parsed, that file and the line
-it failed on. Locations are written relative to `GITHUB_WORKSPACE`; a file outside it is annotated
-without a location rather than with a path the runner cannot resolve.
+reports its file. A `.ts` or `.mts` file that cannot be parsed — the config, a TailorDB type,
+resolver, executor, workflow, or HTTP adapter file, the file passed to `function run`, or a file one
+of them imports — reports that file and the line it failed on. Locations are written relative to
+`GITHUB_WORKSPACE`; a file outside it is annotated without a location rather than with a path the
+runner cannot resolve.
 
 For a JSONL file containing a blank line, the annotation's line and the line printed in the report
 text differ: the annotation counts every line in the file, while the printed line counts only the
@@ -164,6 +167,7 @@ Both `--env-file` and `--env-file-if-exists` can be specified multiple times and
 - Variables already set in the environment are **not** overwritten
 - Later files override earlier files
 - `--env-file` files are loaded first, then `--env-file-if-exists` files
+- Loaded values fill options backed by an environment variable, such as `--config` from `TAILOR_CONFIG_PATH`
 
 ```bash
 # Load .env (required) and .env.local (optional, if exists)
@@ -217,7 +221,7 @@ Workspace ID resolution follows this priority order:
 2. `TAILOR_PLATFORM_WORKSPACE_ID` environment variable
 3. Profile specified via `--profile` option or `TAILOR_PLATFORM_PROFILE`
 
-## CLI Plugins
+## CLI Plugins (Beta)
 
 > [!WARNING]
 > CLI plugins are a **beta** feature. The dispatch behavior and the set of injected environment
@@ -261,9 +265,10 @@ Resolution rules:
 - **Global flags reach the plugin from either side.** `tailor --json tailordb erd export` and
   `tailor tailordb erd export --json` both forward `--json`, and likewise `--verbose` and the
   `--env-file` options. A flag typed before the plugin name is consumed by the host CLI first and
-  then forwarded, so when the same flag appears on both sides the later one wins. A flag the host
-  does not define — including one only some commands declare, such as `--profile` — still has to be
-  typed after the plugin's own subcommand. `--help` and `--version` are answered by the host CLI and
+  then forwarded, so when the same flag appears on both sides the later one wins; every
+  `--env-file` and `--env-file-if-exists` still loads. A flag the host does not define — including
+  one only some commands declare, such as `--profile` — still has to be typed after the plugin's own
+  subcommand. `--help` and `--version` are answered by the host CLI and
   never dispatch a plugin. Setting `TAILOR_JSON_OUTPUT=true` also works, which plugins inherit from
   the environment.
 

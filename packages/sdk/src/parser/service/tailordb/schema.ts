@@ -278,7 +278,9 @@ const TailorDBMigrationConfigSchema = z.strictObject({
 export const TailorDBServiceConfigSchema = z.strictObject({
   files: z.array(z.string()).describe("Glob patterns for TailorDB table definition files"),
   ignores: z.array(z.string()).optional().describe("Glob patterns to exclude from table discovery"),
-  migration: TailorDBMigrationConfigSchema.optional().describe("Migration configuration"),
+  migration: TailorDBMigrationConfigSchema.optional().describe(
+    "Migration configuration\n\n**Beta:** This API may change in future releases.",
+  ),
   gqlOperations: GqlOperationsSchema.optional().describe(
     "Default GraphQL operations for all tables in this service",
   ),

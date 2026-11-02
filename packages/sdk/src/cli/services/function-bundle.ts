@@ -11,12 +11,17 @@ import {
 import {
   composeFunctionTreeshakeOptions,
   createUserTreeshakeOptions,
+  FUNCTION_BUNDLE_COMMENT_OPTIONS,
 } from "#/cli/shared/function-treeshake";
 import {
   createPlatformBundleDefinePlugin,
   type BundledDateRepresentations,
 } from "#/cli/shared/platform-bundle-plugin";
-import { chunkCodeWithSourcemap } from "#/cli/shared/sourcemap-sources";
+import {
+  createSdkBuilderPurePlugin,
+  type SdkBuilderAnnotationCache,
+} from "#/cli/shared/sdk-builder-pure-plugin";
+import { chunkCodeWithSourcemap, type ProjectSourcesFilter } from "#/cli/shared/sourcemap-sources";
 import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
 import {
   createTsconfigPathsPlugin,
@@ -38,12 +43,16 @@ export interface FunctionBundleSettings {
   inlineSourcemap?: boolean;
   /** Whether inline sourcemaps embed the source text of installed packages */
   inlineSourcemapDependencySources?: boolean | string[];
+  /** Which of the project's own sources keep their text in inline sourcemaps */
+  inlineSourcemapProjectSources?: ProjectSourcesFilter;
   /** Controls which console calls are kept in bundled code */
   bundleLogLevel?: LogLevel;
   /** Overrides how unused code is removed from bundled code */
   bundleTreeshake?: TreeshakeOptions;
   /** Optional tsconfig lookup cache shared across bundles in this CLI run */
   tsconfigCache?: TsconfigLookupCache;
+  /** Optional SDK builder annotation results shared across bundles in this CLI run */
+  sdkBuilderAnnotationCache?: SdkBuilderAnnotationCache;
   /** Representation applied to `t` date fields that omit `as` */
   dateDefault?: EffectiveDateDefault;
 }
@@ -103,9 +112,11 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
     cache,
     inlineSourcemap,
     inlineSourcemapDependencySources,
+    inlineSourcemapProjectSources,
     bundleLogLevel = "DEBUG",
     bundleTreeshake,
     tsconfigCache,
+    sdkBuilderAnnotationCache,
     dateDefault = "legacy",
   } = options;
 
@@ -121,6 +132,7 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
     tsconfig,
     inlineSourcemap,
     inlineSourcemapDependencySources,
+    inlineSourcemapProjectSources,
     bundleLogLevel,
     bundleTreeshake,
   });
@@ -149,6 +161,7 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
       plugins.push(
         createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
         createPlatformBundleDefinePlugin(dateRepresentations, dateDefault),
+        createSdkBuilderPurePlugin(sdkBuilderAnnotationCache),
         ...cachePlugins,
       );
 
@@ -166,6 +179,7 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
                 },
               }
             : true,
+          comments: FUNCTION_BUNDLE_COMMENT_OPTIONS,
           codeSplitting: false,
         },
         tsconfig,
@@ -185,6 +199,7 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
           chunk,
           inlineSourcemap: inlineSourcemap ?? false,
           dependencySources: inlineSourcemapDependencySources ?? false,
+          projectSources: inlineSourcemapProjectSources,
         }),
         packageRuntimeGlobals: runtimeGlobals
           ? checkForbiddenRuntimeGlobals(chunk, runtimeGlobals.label)

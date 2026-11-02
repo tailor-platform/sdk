@@ -1,5 +1,6 @@
 import { runCommand } from "@politty/zod";
 import { describe, expect, test, vi } from "vitest";
+import { SKIP_CONFIRMATION_SUGGESTION } from "#/cli/shared/args";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
@@ -33,6 +34,7 @@ describe("authconnection delete command", () => {
 
     expect(prompt.text).toHaveBeenCalledWith({
       message: 'Enter the connection name to confirm deletion ("google"):',
+      suggestion: SKIP_CONFIRMATION_SUGGESTION,
     });
     expect(result.success).toBe(false);
     expect(result.error).toMatchObject({ code: "AUTH_CONNECTION_DELETION_CANCELLED" });

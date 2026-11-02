@@ -1,6 +1,10 @@
 import type { Temporal as TemporalTypes } from "temporal-spec";
 
-/** Name and Postgres type OID of a column PGlite returned. */
+/**
+ * Name and Postgres type OID of a column PGlite returned.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export interface PGliteField {
   /** Column name */
   name: string;

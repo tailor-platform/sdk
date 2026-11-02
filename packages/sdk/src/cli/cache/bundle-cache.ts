@@ -3,6 +3,7 @@ import { logger, styles } from "#/cli/shared/logger";
 import { createDepCollectorPlugin } from "./dep-collector-plugin";
 import { hashContent, hashFile, hashFiles } from "./hasher";
 import type { PackageRuntimeGlobals } from "#/cli/shared/forbidden-runtime-globals";
+import type { ProjectSourcesFilter } from "#/cli/shared/sourcemap-sources";
 import type { TreeshakeOptions } from "#/configure/config/types";
 import type { CacheStore } from "./store";
 import type { Plugin } from "rolldown";
@@ -68,6 +69,7 @@ type ComputeBundlerContextHashParams = {
   tsconfig?: string;
   inlineSourcemap?: boolean;
   inlineSourcemapDependencySources?: boolean | string[];
+  inlineSourcemapProjectSources?: ProjectSourcesFilter;
   bundleLogLevel?: string;
   bundleTreeshake?: TreeshakeOptions;
   prefix?: string;
@@ -91,6 +93,7 @@ function computeBundlerContextHash(params: ComputeBundlerContextHashParams): str
     tsconfig,
     inlineSourcemap,
     inlineSourcemapDependencySources,
+    inlineSourcemapProjectSources,
     bundleLogLevel,
     bundleTreeshake,
     prefix,
@@ -105,6 +108,7 @@ function computeBundlerContextHash(params: ComputeBundlerContextHashParams): str
       (tsconfig ? hashFile(tsconfig) : "") +
       String(inlineSourcemap ?? false) +
       dependencySourcesKey(inlineSourcemapDependencySources) +
+      projectSourcesKey(inlineSourcemapProjectSources) +
       (bundleLogLevel ?? "") +
       (treeshakeEntries.length > 0 ? JSON.stringify(treeshakeEntries) : ""),
   );
@@ -115,6 +119,11 @@ function dependencySourcesKey(value: boolean | string[] | undefined): string {
     return value.length === 0 ? "false" : JSON.stringify([...new Set(value)].toSorted());
   }
   return String(value ?? false);
+}
+
+function projectSourcesKey(value: ProjectSourcesFilter | undefined): string {
+  if (!value?.include && !value?.exclude) return "";
+  return JSON.stringify([value.root ?? null, value.include ?? null, value.exclude ?? null]);
 }
 
 type WithCacheParams = {

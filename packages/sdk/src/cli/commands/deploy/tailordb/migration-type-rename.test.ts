@@ -133,7 +133,7 @@ describe("applyTailorDB: type rename migration flow", () => {
   }
 
   function setPendingMigrations(migrations: PendingMigration[]): void {
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue(migrations);
+    checkpoint.mockPending(migrations);
   }
 
   let checkpoint: RemoteCheckpoint;

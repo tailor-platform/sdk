@@ -1,4 +1,5 @@
 import { pathToFileURL } from "node:url";
+import { syntaxInvalidError } from "./validation-errors";
 
 export const IMPORT_NONCE_PARAM = "tailorImportNonce";
 
@@ -25,15 +26,20 @@ export function currentImportNonce(): string | undefined {
 /**
  * Import a user module (config, workflow, resolver, executor, ...) with the
  * current run's cache-busting nonce applied. Outside a run this is a plain
- * import.
+ * import. A `.ts` or `.mts` file that does not parse rejects with a
+ * `SYNTAX_INVALID` error.
  * @param filePath - Absolute path of the user module
  * @returns The imported module namespace
  */
-export function importUserModule(filePath: string): Promise<Record<string, unknown>> {
+export async function importUserModule(filePath: string): Promise<Record<string, unknown>> {
   const url = pathToFileURL(filePath);
   const nonce = currentImportNonce();
   if (nonce) {
     url.searchParams.set(IMPORT_NONCE_PARAM, nonce);
   }
-  return import(url.href);
+  try {
+    return await import(url.href);
+  } catch (error) {
+    throw syntaxInvalidError(error) ?? error;
+  }
 }

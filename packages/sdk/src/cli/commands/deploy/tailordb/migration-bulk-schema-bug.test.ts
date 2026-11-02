@@ -89,7 +89,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
   }
 
   function setPendingMigrations(migrations: PendingMigration[]): void {
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue(migrations);
+    checkpoint.mockPending(migrations);
   }
 
   function mkFieldMigration(

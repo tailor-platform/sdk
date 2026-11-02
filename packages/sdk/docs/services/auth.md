@@ -334,6 +334,8 @@ oauth2Clients: {
 },
 ```
 
+Client names must be 3 to 63 lowercase letters, digits, or hyphens, starting and ending with a letter or digit.
+
 **redirectURIs**: Allowed redirect URIs after authentication.
 
 **description**: Optional description of the client.

@@ -6,6 +6,8 @@ description: "List and inspect workflows, start and wait for workflow runs, and 
 
 Commands for managing workflows and workflow executions.
 
+In the human-readable output of `--logs` on `workflow start`, `workflow wait`, `workflow executions`, and `workflow resume`, `[PLATFORM]` marks log lines the Platform added. See [`function logs`](./function.md#function-logs) for the `source` that `--json` reports for each log entry.
+
 ## workflow
 
 Manage workflows and workflow executions.

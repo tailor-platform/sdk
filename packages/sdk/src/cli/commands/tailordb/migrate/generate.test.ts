@@ -2,20 +2,23 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import { runCommand } from "@politty/zod";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
-import { generateCommand } from "./generate";
+import { generate, generateCommand } from "./generate";
 import { analyzeMigrationScriptSource, countUnresolvedTodos } from "./script-form";
-import { loadDiff, reconstructSnapshotFromMigrations } from "./snapshot";
+import { getNextMigrationNumber, loadDiff, reconstructSnapshotFromMigrations } from "./snapshot";
 import { parsedType, snapshotType, writeInitialSchema } from "./test-helpers/schema-fixtures";
+import type { MigrateGenerateResult } from "#/cli/lib";
+import type * as SnapshotModule from "./snapshot";
 
 interface TestNamespace {
   namespace: string;
   migrationsDir: string;
   localTypes: Record<string, unknown>;
+  loadError?: Error;
 }
 
 const state = vi.hoisted(() => ({
@@ -31,13 +34,21 @@ vi.mock("#/cli/shared/prompt", () => ({
   prompt: { confirm: vi.fn(), select: vi.fn(), text: vi.fn() },
 }));
 
+// A real history reaching 9999 takes too long to write in a unit test.
+vi.mock("./snapshot", async (importOriginal) => {
+  const actual = await importOriginal<typeof SnapshotModule>();
+  return { ...actual, getNextMigrationNumber: vi.fn(actual.getNextMigrationNumber) };
+});
+
 vi.mock("#/cli/services/application", () => ({
   defineApplication: vi.fn(() => ({
     tailorDBServices: state.namespaces.map((entry) => ({
       namespace: entry.namespace,
       config: {},
       typeSourceInfo: {},
-      loadTypes: vi.fn().mockResolvedValue(undefined),
+      loadTypes: entry.loadError
+        ? vi.fn().mockRejectedValue(entry.loadError)
+        : vi.fn().mockResolvedValue(undefined),
       processNamespacePlugins: vi.fn().mockResolvedValue(undefined),
       get types() {
         return entry.localTypes;
@@ -134,6 +145,7 @@ describe("tailordb migration generate with warning-tier changes", () => {
     expect(loadDiff(generatedDiffPath()).scriptSkipped).toBeUndefined();
     expect(prompt.text).not.toHaveBeenCalled();
     expect(stderr.output).toContain("--no-script --reason '<reason>'");
+    expect(stderr.output).not.toContain("Skipped:");
   });
 
   test("includes the active --config in the follow-up commands", async () => {
@@ -220,6 +232,25 @@ describe("tailordb migration generate field rename preflight", () => {
     expect(result.success).toBe(false);
     expect(String(result.error)).toContain("cannot be used together with --init");
     expect(fs.existsSync(baselinePath)).toBe(true);
+  });
+
+  test("fails before writing when two namespaces share one migration directory", async () => {
+    const entry = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    state.namespaces.push({
+      namespace: "analyticsdb",
+      migrationsDir: entry.migrationsDir,
+      localTypes: { Account: parsedType("Account") },
+    });
+
+    const schemaPath = path.join(entry.migrationsDir, "0000", "schema.json");
+    const before = fs.readFileSync(schemaPath, "utf8");
+
+    const result = await runCommand(generateCommand, ["--yes", "--init"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: "MIGRATION_DIRECTORY_CONFLICT" });
+    expect(fs.readFileSync(schemaPath, "utf8")).toBe(before);
+    expect(fs.readdirSync(entry.migrationsDir)).toEqual(["0000"]);
   });
 
   test("resolves a rename and a drop across namespaces in one run", async () => {
@@ -1299,15 +1330,185 @@ describe("tailordb migration generate --data-only", () => {
     expect(fs.existsSync(path.join(unrelated.migrationsDir, "0001"))).toBe(false);
   });
 
-  test("rejects --namespace without --data-only", async () => {
+  test("resets only the target namespace with --init --namespace", async () => {
+    const kept = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    const reset = addNamespace(tmpDir, "analyticsdb", "Account", parsedType("Account"));
+    fs.writeFileSync(path.join(reset.migrationsDir, "0000", "stale.txt"), "");
+    const keptSchema = fs.readFileSync(
+      path.join(kept.migrationsDir, "0000", "schema.json"),
+      "utf8",
+    );
+    using _json = jsonMode();
+    using stdout = captureStdout();
+
+    const result = await runCommand(generateCommand, [
+      "--init",
+      "--yes",
+      "--namespace",
+      "analyticsdb",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(fs.existsSync(path.join(reset.migrationsDir, "0000", "stale.txt"))).toBe(false);
+    expect(fs.existsSync(path.join(reset.migrationsDir, "0000", "schema.json"))).toBe(true);
+    expect(fs.readFileSync(path.join(kept.migrationsDir, "0000", "schema.json"), "utf8")).toBe(
+      keptSchema,
+    );
+    expect(JSON.parse(stdout.output)).toMatchObject({
+      clearedNamespaces: ["analyticsdb"],
+      migrations: [expect.objectContaining({ namespace: "analyticsdb" })],
+    });
+  });
+
+  test("rejects --init --namespace for an unknown namespace without deleting anything", async () => {
+    const kept = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+
+    const result = await runCommand(generateCommand, ["--init", "--yes", "--namespace", "missing"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: "TAILORDB_NAMESPACE_NOT_FOUND" });
+    expect(fs.existsSync(path.join(kept.migrationsDir, "0000", "schema.json"))).toBe(true);
+  });
+
+  test("rejects --init --namespace when another namespace's migrations are nested inside the target's", async () => {
+    const parent = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    const nested = addNamespace(tmpDir, "analyticsdb", "Account", parsedType("Account"));
+    const nestedDir = path.join(parent.migrationsDir, "analyticsdb");
+    fs.renameSync(nested.migrationsDir, nestedDir);
+    nested.migrationsDir = nestedDir;
+
+    const result = await runCommand(generateCommand, [
+      "--init",
+      "--yes",
+      "--namespace",
+      "tailordb",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: "MIGRATION_GENERATE_OPTIONS_CONFLICT" });
+    expect(fs.existsSync(path.join(nestedDir, "0000", "schema.json"))).toBe(true);
+  });
+
+  test("rejects --init --namespace when another namespace reaches the target's directory through a symlink", async () => {
+    const parent = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    const nested = addNamespace(tmpDir, "analyticsdb", "Account", parsedType("Account"));
+    const nestedDir = path.join(parent.migrationsDir, "analyticsdb");
+    fs.renameSync(nested.migrationsDir, nestedDir);
+    const link = path.join(tmpDir, "analytics-link");
+    fs.symlinkSync(nestedDir, link);
+    nested.migrationsDir = link;
+
+    const result = await runCommand(generateCommand, [
+      "--init",
+      "--yes",
+      "--namespace",
+      "tailordb",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: "MIGRATION_GENERATE_OPTIONS_CONFLICT" });
+    expect(fs.existsSync(path.join(nestedDir, "0000", "schema.json"))).toBe(true);
+  });
+
+  test("rejects --init --namespace when another namespace's configured path inside the target is a symlink to elsewhere", async () => {
+    const parent = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    const outside = addNamespace(tmpDir, "analyticsdb", "Account", parsedType("Account"));
+    const link = path.join(parent.migrationsDir, "analyticsdb");
+    fs.symlinkSync(outside.migrationsDir, link);
+    outside.migrationsDir = link;
+
+    const result = await runCommand(generateCommand, [
+      "--init",
+      "--yes",
+      "--namespace",
+      "tailordb",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: "MIGRATION_GENERATE_OPTIONS_CONFLICT" });
+    expect(fs.lstatSync(link).isSymbolicLink()).toBe(true);
+  });
+
+  test("rejects --init --namespace combined with --data-only", async () => {
+    addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+
+    const result = await runCommand(generateCommand, [
+      "--init",
+      "--data-only",
+      "--yes",
+      "--namespace",
+      "tailordb",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: "MIGRATION_GENERATE_OPTIONS_CONFLICT" });
+  });
+
+  test("rejects --namespace without --data-only or --init", async () => {
     addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
 
     const result = await runCommand(generateCommand, ["--yes", "--namespace", "tailordb"]);
 
     expect(result.success).toBe(false);
     expect(String(result.error)).toContain(
-      "--namespace can only be used together with --data-only",
+      "--namespace can only be used together with --data-only or --init",
     );
+  });
+});
+
+describe("tailordb migration generate --init", () => {
+  test("keeps every namespace's migrations when a namespace's tables fail to load", async () => {
+    const loaded = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    const failing = addNamespace(tmpDir, "analyticsdb", "Account", parsedType("Account"));
+    failing.loadError = new Error("Unexpected token in account.ts");
+
+    const result = await runCommand(generateCommand, ["--init", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("Unexpected token in account.ts");
+    expect(fs.existsSync(path.join(loaded.migrationsDir, "0000", "schema.json"))).toBe(true);
+    expect(fs.existsSync(path.join(failing.migrationsDir, "0000", "schema.json"))).toBe(true);
+  });
+
+  test("keeps the target's migrations when its tables fail to load with --namespace", async () => {
+    addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    const failing = addNamespace(tmpDir, "analyticsdb", "Account", parsedType("Account"));
+    failing.loadError = new Error("Unexpected token in account.ts");
+
+    const result = await runCommand(generateCommand, [
+      "--init",
+      "--yes",
+      "--namespace",
+      "analyticsdb",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("Unexpected token in account.ts");
+    expect(fs.existsSync(path.join(failing.migrationsDir, "0000", "schema.json"))).toBe(true);
+  });
+
+  test("fails before asking for the deletion confirmation when the tables fail to load", async () => {
+    const failing = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    failing.loadError = new Error("Unexpected token in user.ts");
+    vi.mocked(canPrompt).mockReturnValue(true);
+    vi.mocked(prompt.confirm).mockResolvedValue(true);
+
+    const result = await runCommand(generateCommand, ["--init"]);
+
+    expect(result.success).toBe(false);
+    expect(prompt.confirm).not.toHaveBeenCalled();
+    expect(fs.existsSync(path.join(failing.migrationsDir, "0000", "schema.json"))).toBe(true);
+  });
+
+  test("rebuilds the baseline when the existing migration files are invalid", async () => {
+    const entry = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    fs.writeFileSync(path.join(entry.migrationsDir, "0000", "schema.json"), "{");
+
+    const result = await runCommand(generateCommand, ["--init", "--yes"]);
+
+    expect(result.success).toBe(true);
+    const replayed = reconstructSnapshotFromMigrations(entry.migrationsDir);
+    expect(replayed?.tables.User?.fields.name?.type).toBe("string");
   });
 });
 
@@ -1315,6 +1516,18 @@ describe("tailordb migration generate declined confirmations", () => {
   beforeEach(() => {
     vi.mocked(canPrompt).mockReturnValue(true);
     vi.mocked(prompt.confirm).mockResolvedValue(false);
+  });
+
+  test("lists only the target namespace in the --init confirmation", async () => {
+    const kept = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    const reset = addNamespace(tmpDir, "analyticsdb", "Account", parsedType("Account"));
+    using stderr = captureStderr();
+
+    const result = await runCommand(generateCommand, ["--init", "--namespace", "analyticsdb"]);
+
+    expect(result.error).toMatchObject({ code: "MIGRATION_GENERATE_CANCELLED" });
+    expect(stderr.output).toContain(reset.migrationsDir);
+    expect(stderr.output).not.toContain(kept.migrationsDir);
   });
 
   test("fails without deleting migrations when --init is declined", async () => {
@@ -1332,47 +1545,200 @@ describe("tailordb migration generate declined confirmations", () => {
     expect(fs.existsSync(path.join(ns.migrationsDir, "0000", "schema.json"))).toBe(true);
   });
 
-  test("fails without writing a migration when a breaking change is declined", async () => {
-    const withRequiredEmail = parsedType("User");
-    withRequiredEmail.fields.email = {
-      name: "email",
-      config: { type: "string", required: true },
-    };
-    const ns = addNamespace(tmpDir, "tailordb", "User", withRequiredEmail);
+  function withRequiredEmail(tableName: string): ReturnType<typeof parsedType> {
+    const type = parsedType(tableName);
+    type.fields.email = { name: "email", config: { type: "string", required: true } };
+    return type;
+  }
+
+  test("succeeds without writing a migration when a breaking change is declined", async () => {
+    const ns = addNamespace(tmpDir, "tailordb", "User", withRequiredEmail("User"));
+    using stderr = captureStderr();
 
     const result = await runCommand(generateCommand, []);
 
     expect(prompt.confirm).toHaveBeenCalledWith(
       expect.objectContaining({ message: "Continue generating migration?" }),
     );
-    expect(result.success).toBe(false);
-    expect(result.error).toMatchObject({ code: "MIGRATION_GENERATE_CANCELLED" });
+    expect(result.success).toBe(true);
+    expect(stderr.output).toContain("Skipped: tailordb");
     expect(fs.existsSync(path.join(ns.migrationsDir, "0001"))).toBe(false);
   });
 
-  test("still writes the other namespaces when one breaking change is declined", async () => {
-    const withRequiredEmail = parsedType("User");
-    withRequiredEmail.fields.email = {
-      name: "email",
-      config: { type: "string", required: true },
-    };
-    const declined = addNamespace(tmpDir, "tailordb", "User", withRequiredEmail);
+  test("returns skipped namespaces to programmatic callers", async () => {
+    addNamespace(tmpDir, "tailordb", "User", withRequiredEmail("User"));
+
+    const result = await generate({});
+
+    expect(result.skippedNamespaces).toEqual(["tailordb"]);
+    expectTypeOf(result).toEqualTypeOf<MigrateGenerateResult>();
+  });
+
+  test("writes the other namespaces and reports the declined one as skipped", async () => {
+    const declined = addNamespace(tmpDir, "tailordb", "User", withRequiredEmail("User"));
     const withNickname = parsedType("Event");
     withNickname.fields.nickname = {
       name: "nickname",
       config: { type: "string", required: false },
     };
     const accepted = addNamespace(tmpDir, "analyticsdb", "Event", withNickname);
+    using _json = jsonMode();
+    using stdout = captureStdout();
+    using stderr = captureStderr();
 
     const result = await runCommand(generateCommand, []);
 
-    expect(result.success).toBe(false);
-    expect(result.error).toMatchObject({
-      code: "MIGRATION_GENERATE_CANCELLED",
-      context: { namespaces: ["tailordb"] },
+    expect(result.success).toBe(true);
+    expect(stderr.output).toMatch(/Skipped: tailordb$/m);
+    const acceptedDiffPath = path.join(accepted.migrationsDir, "0001", "diff.json");
+    expect(JSON.parse(stdout.output)).toMatchObject({
+      changed: true,
+      skippedNamespaces: ["tailordb"],
+      migrations: [{ namespace: "analyticsdb", diffPath: acceptedDiffPath }],
     });
     expect(fs.existsSync(path.join(declined.migrationsDir, "0001"))).toBe(false);
-    expect(fs.existsSync(path.join(accepted.migrationsDir, "0001", "diff.json"))).toBe(true);
+    expect(fs.existsSync(acceptedDiffPath)).toBe(true);
+  });
+
+  test("succeeds without writing anything when every namespace's breaking change is declined", async () => {
+    const first = addNamespace(tmpDir, "tailordb", "User", withRequiredEmail("User"));
+    const second = addNamespace(tmpDir, "analyticsdb", "Event", withRequiredEmail("Event"));
+    using _json = jsonMode();
+    using stdout = captureStdout();
+    using stderr = captureStderr();
+
+    const result = await runCommand(generateCommand, []);
+
+    expect(result.success).toBe(true);
+    expect(prompt.confirm).toHaveBeenCalledTimes(2);
+    expect(stderr.output).toMatch(/Skipped: tailordb, analyticsdb$/m);
+    expect(JSON.parse(stdout.output)).toEqual({
+      changed: false,
+      clearedNamespaces: [],
+      skippedNamespaces: ["tailordb", "analyticsdb"],
+      migrations: [],
+    });
+    expect(fs.readdirSync(first.migrationsDir)).toEqual(["0000"]);
+    expect(fs.readdirSync(second.migrationsDir)).toEqual(["0000"]);
+  });
+});
+
+describe("tailordb migration generate at the last migration number", () => {
+  function userWithoutName(): ReturnType<typeof parsedType> {
+    const type = parsedType("User");
+    delete type.fields.name;
+    return type;
+  }
+
+  afterEach(() => {
+    vi.mocked(getNextMigrationNumber).mockReset();
+  });
+
+  test("writes migration 9999", async () => {
+    const entry = addNamespace(tmpDir, "tailordb", "User", userWithoutName());
+    vi.mocked(getNextMigrationNumber).mockReturnValue(9999);
+
+    const result = await runCommand(generateCommand, ["--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(fs.existsSync(path.join(entry.migrationsDir, "9999", "diff.json"))).toBe(true);
+  });
+
+  test("fails without writing a migration after 9999", async () => {
+    const entry = addNamespace(tmpDir, "tailordb", "User", userWithoutName());
+    vi.mocked(getNextMigrationNumber).mockReturnValue(10000);
+
+    const result = await runCommand(generateCommand, ["--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_NUMBER_EXHAUSTED",
+      message: 'Namespace "tailordb" has reached migration 9999, the last number available.',
+      suggestion: expect.stringContaining(
+        "`tailor tailordb migration rebaseline --namespace tailordb`",
+      ),
+    });
+    expect(fs.readdirSync(entry.migrationsDir)).toEqual(["0000"]);
+  });
+
+  test("includes the active --config in the re-baseline command", async () => {
+    addNamespace(tmpDir, "tailordb", "User", userWithoutName());
+    vi.mocked(getNextMigrationNumber).mockReturnValue(10000);
+
+    const result = await runCommand(generateCommand, ["--yes", "--config", "custom.config.ts"]);
+
+    expect(result.error).toMatchObject({
+      suggestion: expect.stringContaining(
+        "`tailor tailordb migration rebaseline --namespace tailordb --config=custom.config.ts`",
+      ),
+    });
+  });
+
+  test("writes no namespace when a later one has no number left", async () => {
+    const first = addNamespace(tmpDir, "tailordb", "User", userWithoutName());
+    const accountWithoutName = parsedType("Account");
+    delete accountWithoutName.fields.name;
+    const exhausted = addNamespace(tmpDir, "analyticsdb", "Account", accountWithoutName);
+    vi.mocked(getNextMigrationNumber).mockImplementation((migrationsDir) =>
+      migrationsDir === exhausted.migrationsDir ? 10000 : 1,
+    );
+
+    const result = await runCommand(generateCommand, ["--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_NUMBER_EXHAUSTED",
+      suggestion: expect.not.stringContaining("--namespace tailordb"),
+      context: { namespaces: ["analyticsdb"] },
+    });
+    expect(fs.readdirSync(first.migrationsDir)).toEqual(["0000"]);
+    expect(fs.readdirSync(exhausted.migrationsDir)).toEqual(["0000"]);
+  });
+
+  test("fails without writing a data-only migration after 9999", async () => {
+    const entry = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    vi.mocked(getNextMigrationNumber).mockReturnValue(10000);
+
+    const result = await runCommand(generateCommand, ["--data-only", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_NUMBER_EXHAUSTED",
+      suggestion: expect.stringContaining(
+        "`tailor tailordb migration rebaseline --namespace tailordb`",
+      ),
+    });
+    expect(fs.readdirSync(entry.migrationsDir)).toEqual(["0000"]);
+  });
+
+  test("writes no namespace when a field conversion would need 9999 and 10000", async () => {
+    const first = addNamespace(tmpDir, "tailordb", "User", userWithoutName());
+    const retyped = parsedType("Account");
+    const field = retyped.fields.name!;
+    retyped.fields.name = { ...field, config: { ...field.config, type: "integer" } };
+    const converting = addNamespace(tmpDir, "analyticsdb", "Account", retyped);
+    vi.mocked(getNextMigrationNumber).mockImplementation((migrationsDir) =>
+      migrationsDir === converting.migrationsDir ? 9999 : 1,
+    );
+
+    const result = await runCommand(generateCommand, [
+      "--yes",
+      "--expand-contract",
+      "Account.name",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_NUMBER_EXHAUSTED",
+      message:
+        'Namespace "analyticsdb" needs two migration numbers to convert a field type, and 9999 is the last one available.',
+      suggestion: expect.stringContaining(
+        "`tailor tailordb migration rebaseline --namespace analyticsdb`",
+      ),
+      context: { namespaces: ["analyticsdb"] },
+    });
+    expect(fs.readdirSync(first.migrationsDir)).toEqual(["0000"]);
+    expect(fs.readdirSync(converting.migrationsDir)).toEqual(["0000"]);
   });
 });
 
@@ -1394,6 +1760,7 @@ describe("tailordb migration generate JSON output", () => {
     expect(JSON.parse(stdout.output)).toEqual({
       changed: true,
       clearedNamespaces: [],
+      skippedNamespaces: [],
       migrations: [
         {
           namespace: "tailordb",
@@ -1420,6 +1787,7 @@ describe("tailordb migration generate JSON output", () => {
     expect(JSON.parse(stdout.output)).toEqual({
       changed: false,
       clearedNamespaces: [],
+      skippedNamespaces: [],
       migrations: [],
     });
   });
@@ -1434,6 +1802,7 @@ describe("tailordb migration generate JSON output", () => {
     expect(JSON.parse(stdout.output)).toEqual({
       changed: false,
       clearedNamespaces: [],
+      skippedNamespaces: [],
       migrations: [],
     });
   });
@@ -1449,6 +1818,7 @@ describe("tailordb migration generate JSON output", () => {
     expect(JSON.parse(stdout.output)).toEqual({
       changed: true,
       clearedNamespaces: ["tailordb"],
+      skippedNamespaces: [],
       migrations: [
         {
           namespace: "tailordb",
@@ -1478,6 +1848,7 @@ describe("tailordb migration generate JSON output", () => {
     expect(JSON.parse(stdout.output)).toEqual({
       changed: true,
       clearedNamespaces: [],
+      skippedNamespaces: [],
       migrations: ["0001", "0002"].map((number) => ({
         namespace: "tailordb",
         migrationNumber: Number(number),
@@ -1503,6 +1874,7 @@ describe("tailordb migration generate JSON output", () => {
     expect(JSON.parse(stdout.output)).toEqual({
       changed: true,
       clearedNamespaces: [],
+      skippedNamespaces: [],
       migrations: [
         {
           namespace: "tailordb",

@@ -30,6 +30,8 @@ export function applyDateDefault(dateDefault: EffectiveDateDefault): () => void 
  * migration tests call it with the representation recorded in the migration's
  * `diff.json`, so a later change to `tailor.config.ts` does not alter what the
  * test exercises.
+ *
+ * **Beta:** This API may change in future releases.
  * @param representation - The representation to apply, as `as` names it
  * @returns A function that restores the previous representation
  */

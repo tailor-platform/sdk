@@ -23,7 +23,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 | Command                                     | Description                                         |
 | ------------------------------------------- | --------------------------------------------------- |
 | [`tailordb truncate`](#tailordb-truncate)   | Truncate (delete all records from) TailorDB tables. |
-| [`tailordb migration`](#tailordb-migration) | Manage TailorDB schema migrations.                  |
+| [`tailordb migration`](#tailordb-migration) | Manage TailorDB schema migrations (beta).           |
 
 ### tailordb truncate
 
@@ -86,7 +86,7 @@ tailor tailordb truncate User Post --yes
 
 ### tailordb migration
 
-Manage TailorDB schema migrations.
+Manage TailorDB schema migrations (beta).
 
 Note: Migration scripts are automatically executed during `tailor deploy`. See [Automatic Migration Execution](../services/tailordb/migration.md#automatic-migration-execution) for details.
 
@@ -102,11 +102,10 @@ tailor tailordb migration <command>
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`tailordb migration generate`](#tailordb-migration-generate)     | Generate migration files by detecting schema differences between current local tables and the previous migration snapshot.                                                                                                                                                                                                |
 | [`tailordb migration rebaseline`](#tailordb-migration-rebaseline) | Collapse the full migration history into a new 0000 baseline.                                                                                                                                                                                                                                                             |
-| [`tailordb migration resolve`](#tailordb-migration-resolve)       | Settle a migration that a failed deploy left partially applied.                                                                                                                                                                                                                                                           |
+| [`tailordb migration resolve`](#tailordb-migration-resolve)       | Settle a migration that a failed deploy left partially applied, or whose run a deploy could not confirm.                                                                                                                                                                                                                  |
 | [`tailordb migration script`](#tailordb-migration-script)         | Add a migration script (migrate.ts) template to an existing migration directory, or record with --no-script that a migration intentionally has none.                                                                                                                                                                      |
-| [`tailordb migration set`](#tailordb-migration-set)               | Set migration checkpoint to a specific number.                                                                                                                                                                                                                                                                            |
 | [`tailordb migration status`](#tailordb-migration-status)         | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                                                                                                                                                                                                                      |
-| [`tailordb migration sync`](#tailordb-migration-sync)             | Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).                                                                                                                                                                                                                     |
+| [`tailordb migration sync`](#tailordb-migration-sync)             | Sync remote TailorDB schema and checkpoint to a local migration snapshot to recover from schema drift or a checkpoint outside the local history.                                                                                                                                                                          |
 | [`tailordb migration test`](#tailordb-migration-test)             | Test pending migrations with seed fixtures or cloned data in a temporary workspace.                                                                                                                                                                                                                                       |
 | [`tailordb migration validate`](#tailordb-migration-validate)     | Validate the full migration history, unreviewed generated migration scripts, and schema drift (local tables vs. migration snapshot, remote schema vs. migration checkpoint) without deploying. This includes the migration and schema-drift checks used by 'deploy' and exits with a non-zero code when issues are found. |
 
@@ -129,9 +128,9 @@ tailor tailordb migration generate [options]
 | `--yes`                               | `-y`  | Skip confirmation prompts                                                                                                                                                                                                                   | No       | `false`              | -                    |
 | `--config <CONFIG>`                   | `-c`  | Path to Tailor config file                                                                                                                                                                                                                  | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH` |
 | `--name <NAME>`                       | `-n`  | Optional description for the migration                                                                                                                                                                                                      | No       | -                    | -                    |
-| `--init`                              | -     | Delete existing migrations and start fresh                                                                                                                                                                                                  | No       | `false`              | -                    |
+| `--init`                              | -     | Delete existing migrations and start fresh (all namespaces with migrations configured, or only the one given by --namespace)                                                                                                                | No       | `false`              | -                    |
 | `--data-only`                         | -     | Create a migration with no schema changes whose migration script runs a standalone data transformation                                                                                                                                      | No       | `false`              | -                    |
-| `--namespace <NAMESPACE>`             | -     | Target TailorDB namespace for --data-only (required if multiple namespaces exist)                                                                                                                                                           | No       | -                    | -                    |
+| `--namespace <NAMESPACE>`             | -     | Target TailorDB namespace for --data-only (required if multiple namespaces exist), or the only namespace --init resets                                                                                                                      | No       | -                    | -                    |
 | `--rename <RENAME>`                   | -     | Record a field, table, or nested member rename instead of remove + add (format: "Table.oldField:newField", "OldTable:NewTable", or "Table.field.oldMember:newMember"; repeatable). Renames require a migration script that copies the data. | No       | -                    | -                    |
 | `--drop <DROP>`                       | -     | Confirm that a removed field, table, or nested member is a genuine removal, not a rename (format: "Table.field", "Table", or "Table.field.member"; repeatable). Required in non-interactive runs for a removal with rename candidates.      | No       | -                    | -                    |
 | `--expand-contract <EXPAND_CONTRACT>` | -     | Convert a field type, or a single value into an array, through a temporary field (format: "Table.field"; repeatable). Generates two migrations.                                                                                             | No       | -                    | -                    |
@@ -166,7 +165,7 @@ Re-baselining removes migrations after 0000 from the working tree, records a new
 
 #### tailordb migration resolve
 
-Settle a migration that a failed deploy left partially applied.
+Settle a migration that a failed deploy left partially applied, or whose run a deploy could not confirm.
 
 **Usage**
 
@@ -190,10 +189,12 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Notes**
 
-Use this after a deploy failed partway through a migration whose `migrate.ts` exports `steps`. The failed migration stays in progress: when `maintenanceMode` is on in your config, the tables of its namespace stay in maintenance mode, and `sync` and `rebaseline` are refused, while `set` accepts only the number of the in-progress migration.
+Use this after a deploy failed partway through a migration whose `migrate.ts` exports `steps`, or after a deploy could not confirm whether the script of a migration ran (`MIGRATION_OUTCOME_UNKNOWN`). The migration stays in progress: when `maintenanceMode` is on in your config, the tables of its namespace stay in maintenance mode, and the other migration commands that move the checkpoint are refused. A deploy stops before changing anything while a run it could not confirm is not settled.
 
-- `--rollback` sends the schema of the migration before the failed one. The next deploy runs the failed migration again from its first step. Data changes made by steps that already completed are not undone.
+- `--rollback` sends the schema of the migration before the failed one. The next deploy runs the failed migration again, from its first step for a script that exports `steps`. Data changes the script already made are not undone.
 - `--complete` sends the schema of the failed migration itself and records it as completed, without running its `migrate.ts` again. Fix the data first (for example with `tailor query`), and make sure no record lacks a value for a field that becomes required.
+
+For a run that a deploy could not confirm, the command reads how the run ended and shows it before asking for confirmation: use `--complete` when it succeeded, and `--rollback` when it failed, was canceled, or did not start. It refuses while the run is still running, and warns when the option you chose does not fit how the run ended.
 
 Both options remove the in-progress record, take the tables out of maintenance mode, and remove the temporary resources of the failed run, so `deploy` and the other migration commands work again. As with `tailordb migration sync`, the local migration history must reproduce the current table definitions. If sending the schema stops partway, run the command again.
 
@@ -229,40 +230,6 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 When `migrate.ts` already exists, running the command clears a previously recorded `--no-script` acknowledgment, and `--with-test` adds only the tests that do not exist yet (writing `db.pglite.ts` if it is missing). `migrate.pglite.test.ts` is scaffolded only when `@electric-sql/pglite` is installed in the project.
 
-#### tailordb migration set
-
-Set migration checkpoint to a specific number.
-
-**Usage**
-
-```
-tailor tailordb migration set [options] <number>
-```
-
-**Arguments**
-
-| Argument | Description                               | Required |
-| -------- | ----------------------------------------- | -------- |
-| `number` | Migration number to set (e.g., 0001 or 1) | Yes      |
-
-**Options**
-
-| Option                          | Alias | Description                                                       | Required | Default              | Env                            |
-| ------------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                      | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                 | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
-| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                        | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
-| `--yes`                         | `-y`  | Skip confirmation prompts                                         | No       | `false`              | -                              |
-| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (required if multiple namespaces exist) | No       | -                    | -                              |
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-**Notes**
-
-The migration number must be a 4-digit value (e.g. `0001`) or a bare integer (e.g. `1`) within 0–9999, and must exist in the local migration history; `0` is always accepted as the baseline, provided the local history passes validation. A gapped history is rejected.
-
-Metadata lookup failures (authentication, permission, or network errors) are reported as errors; only a not-yet-deployed namespace is treated as having no checkpoint.
-
 #### tailordb migration status
 
 Show the current migration status for TailorDB namespaces, including applied and pending migrations.
@@ -286,11 +253,11 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Notes**
 
-Local migration files are checked for a valid layout (numbering and required files in each migration directory) and a compatible format version, and deployed migration history IDs must match the local baseline. Invalid or incompatible files, history mismatches, and metadata lookup failures are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.
+Local migration files are checked for a valid layout (numbering and required files in each migration directory) and a compatible format version, and deployed migration history IDs must match the local baseline. Invalid or incompatible files, history mismatches, a remote checkpoint ahead of the latest local migration, and metadata lookup failures are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.
 
 #### tailordb migration sync
 
-Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).
+Sync remote TailorDB schema and checkpoint to a local migration snapshot to recover from schema drift or a checkpoint outside the local history.
 
 **Usage**
 
@@ -306,15 +273,20 @@ tailor tailordb migration sync [options] <number>
 
 **Options**
 
-| Option                          | Alias | Description                                                       | Required | Default              | Env                            |
-| ------------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                      | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                 | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
-| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                        | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
-| `--yes`                         | `-y`  | Skip confirmation prompts                                         | No       | `false`              | -                              |
-| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (required if multiple namespaces exist) | No       | -                    | -                              |
+| Option                          | Alias | Description                                                                             | Required | Default              | Env                            |
+| ------------------------------- | ----- | --------------------------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                            | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                       | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                                              | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
+| `--yes`                         | `-y`  | Skip confirmation prompts                                                               | No       | `false`              | -                              |
+| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (required if multiple namespaces exist)                       | No       | -                    | -                              |
+| `--force`                       | -     | Proceed even when the namespace records a migration history ID other than the local one | No       | `false`              | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Notes**
+
+The command refuses to run when the namespace records a migration history ID other than the local one, or one that cannot be read, unless the namespace has neither a checkpoint nor a history ID yet. `--force` overwrites the tables and that history ID with those of the local history, and still asks for confirmation unless `--yes` is given.
 
 #### tailordb migration test
 
@@ -341,15 +313,15 @@ tailor tailordb migration test [options]
 | `--folder-id <FOLDER_ID>`                     | -     | Folder to create the temporary workspace in (default: the source workspace's folder). Requires --organization-id when the source workspace is not in an organization. With --target-workspace-id, must match the target's folder | No       | -                    | `TAILOR_PLATFORM_FOLDER_ID`       |
 | `--assert <ASSERT>`                           | -     | Path to a TypeScript assertion script to run after migrations                                                                                                                                                                    | No       | -                    | -                                 |
 | `--assert-namespace <ASSERT_NAMESPACE>`       | -     | TailorDB namespace exposed to the assertion script                                                                                                                                                                               | No       | -                    | -                                 |
-| `--keep-ttl <KEEP_TTL>`                       | -     | Record an expiry on the kept workspace, e.g. 24h or 7d, so workspace prune --expired can delete it (requires --keep)                                                                                                             | No       | -                    | -                                 |
+| `--keep-ttl <KEEP_TTL>`                       | -     | Record an expiry on the kept workspace, e.g. 24h or 7d (less than 50,000,000 days), so workspace prune --expired can delete it (requires --keep)                                                                                 | No       | -                    | -                                 |
 | `--clone-timeout <CLONE_TIMEOUT>`             | -     | How long to wait for the clone to finish with --data clone, e.g. 30s or 10m (default: 30m)                                                                                                                                       | No       | -                    | -                                 |
-| `--machine-user <MACHINE_USER>`               | -     | Machine user for seed and assertion script execution                                                                                                                                                                             | No       | -                    | -                                 |
+| `--machine-user <MACHINE_USER>`               | -     | Machine user for seed, migration, and assertion script execution                                                                                                                                                                 | No       | -                    | -                                 |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 **Notes**
 
-The source workspace is read-only. Without --target-workspace-id, the command creates a workspace in the source workspace's region and deletes it after success or failure; pass --keep to retain it for inspection. Right after creating the workspace it records a 24h expiry (unless --keep is given without --keep-ttl), so if the run is interrupted before the command can delete the workspace, workspace prune --expired removes it later. A designated target is retained and requires --yes. Clone mode copies TailorDB records only; it does not copy IdP users or file blobs. With --keep-ttl, the kept workspace records an expiry; it is not deleted automatically, but workspace prune --expired removes it once the expiry has passed. Organization and folder IDs loaded by --env-file are used the same way as the options; command-line options take precedence, and empty env-file values are ignored.
+The source workspace is read-only. Without --target-workspace-id, the command creates a workspace in the source workspace's region and deletes it after success or failure; pass --keep to retain it for inspection. Right after creating the workspace it records a 24h expiry (unless --keep is given without --keep-ttl), so if the run is interrupted before the command can delete the workspace, workspace prune --expired removes it later. A designated target is retained and requires --yes. Clone mode copies TailorDB records only; it does not copy IdP users or file blobs. With --keep-ttl, the kept workspace records an expiry; it is not deleted automatically, but workspace prune --expired removes it once the expiry has passed. Command-line options take precedence over TAILOR_PLATFORM_ORGANIZATION_ID and TAILOR_PLATFORM_FOLDER_ID, including values loaded by --env-file, and an empty value of either variable is ignored.
 
 #### tailordb migration validate
 
@@ -375,7 +347,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **See also:** For migration concepts, configuration, workflow, and troubleshooting, see the [TailorDB Migrations guide](../services/tailordb/migration.md).
 
-### tailordb erd
+### tailordb erd (Beta)
 
 The `tailordb erd` commands (export, diff, serve, deploy) are provided by the `@tailor-platform/sdk-plugin-tailordb-erd` CLI plugin. Install it next to the SDK and keep running `tailor tailordb erd <command>` as before:
 

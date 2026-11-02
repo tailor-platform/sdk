@@ -1,5 +1,27 @@
 # @tailor-platform/sdk-codemod
 
+## 0.10.6
+
+### Patch Changes
+
+- [#2846](https://github.com/tailor-platform/sdk/pull/2846) [`535ba8d`](https://github.com/tailor-platform/sdk/commit/535ba8d1c259d6f75726a4da47ff02a8b80a5446) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency node to v26
+
+- [#2875](https://github.com/tailor-platform/sdk/pull/2875) [`1883f3b`](https://github.com/tailor-platform/sdk/commit/1883f3b20ba368481838b521de04ffc8334d03d4) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @​inquirer
+
+## 0.10.5
+
+### Patch Changes
+
+- [#2822](https://github.com/tailor-platform/sdk/pull/2822) [`b433a27`](https://github.com/tailor-platform/sdk/commit/b433a27e06c7aa1e2bc998b8f703aab6c9d8a7ff) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​politty/zod to v0.6.3
+
+## 0.10.4
+
+### Patch Changes
+
+- [#2669](https://github.com/tailor-platform/sdk/pull/2669) [`704cfa1`](https://github.com/tailor-platform/sdk/commit/704cfa16b3a287ccb6e46657fa075d9bce86eed7) Thanks [@dqn](https://github.com/dqn)! - Update `@politty/zod` to 0.6.0. The codemod CLI now reports a mistyped subcommand, with a suggestion, before an unknown option given after it.
+
+- [#2765](https://github.com/tailor-platform/sdk/pull/2765) [`eb01ec6`](https://github.com/tailor-platform/sdk/commit/eb01ec6b2286e71c04a1b009f859846f91c603d0) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​politty/zod to v0.6.0
+
 ## 0.10.3
 
 ### Patch Changes

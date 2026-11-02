@@ -28,10 +28,12 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { CLIError } from "#/cli/shared/errors";
 import { formatKeyValueTable } from "#/cli/shared/format";
 import {
+  collectFunctionExecutionLogs,
   colorizeFunctionExecutionStatus,
+  formatFunctionLogMessages,
   functionExecutionStatusToString,
+  type FunctionLogEntryInfo,
   isFunctionExecutionTerminalStatus,
-  joinFunctionLogMessages,
 } from "#/cli/shared/function-execution";
 import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger, styles } from "#/cli/shared/logger";
@@ -95,6 +97,7 @@ export interface ExecutorJobDetailInfo extends ExecutorJobInfo {
 interface WorkflowJobLog {
   jobName: string;
   logs?: string;
+  logEntries?: FunctionLogEntryInfo[];
   result?: string;
 }
 
@@ -111,6 +114,7 @@ export interface WatchExecutorJobResult {
   functionExecutionId?: string;
   functionStatus?: string;
   functionLogs?: string;
+  functionLogEntries?: FunctionLogEntryInfo[];
 }
 
 function formatTime(date: Date): string {
@@ -465,6 +469,7 @@ export async function watchExecutorJob<E extends ExecutorLike>(
                     .map((job) => ({
                       jobName: job.stackedJobName || job.id,
                       logs: job.logs,
+                      logEntries: job.logEntries,
                       result: job.result,
                     }));
                 }
@@ -548,15 +553,17 @@ export async function watchExecutorJob<E extends ExecutorLike>(
                     } else {
                       sp?.fail(`Function execution completed: ${coloredFnStatus}`);
                     }
+                    const functionLogs = options.logs
+                      ? collectFunctionExecutionLogs(execution.logEntries)
+                      : undefined;
                     return withWaitMetadata(
                       {
                         job: jobDetail,
                         targetType: targetTypeStr,
                         functionExecutionId: operationReference,
                         functionStatus,
-                        functionLogs: options.logs
-                          ? joinFunctionLogMessages(execution.logEntries) || undefined
-                          : undefined,
+                        functionLogs: functionLogs?.logs,
+                        functionLogEntries: functionLogs?.logEntries,
                       },
                       false,
                     );
@@ -719,6 +726,58 @@ function printJobWithAttempts(job: ExecutorJobDetailInfo): void {
   }
 }
 
+/**
+ * Print the workflow or function execution an executor job started, with its logs when fetched.
+ * @param result - Executor job wait result
+ */
+export function printDownstreamExecution(result: WatchExecutorJobResult): void {
+  if (result.workflowExecutionId) {
+    logger.log(styles.bold("\nWorkflow Execution:"));
+    logger.log(`  ID: ${result.workflowExecutionId}`);
+    if (result.workflowStatus) {
+      logger.log(`  Status: ${result.workflowStatus}`);
+    }
+    if (result.workflowJobLogs && result.workflowJobLogs.length > 0) {
+      for (const jobLog of result.workflowJobLogs) {
+        logger.log(styles.bold(`\n  Job: ${jobLog.jobName}`));
+        const logs = formatFunctionLogMessages(jobLog.logEntries);
+        if (logs) {
+          logger.log(styles.dim("    Logs:"));
+          for (const line of logs.split("\n")) {
+            logger.log(`      ${line}`);
+          }
+        }
+        if (jobLog.result) {
+          logger.log(styles.dim("    Result:"));
+          try {
+            const parsed = JSON.parse(jobLog.result);
+            const formatted = JSON.stringify(parsed, null, 2);
+            for (const line of formatted.split("\n")) {
+              logger.log(`      ${line}`);
+            }
+          } catch {
+            logger.log(`      ${jobLog.result}`);
+          }
+        }
+      }
+    }
+  }
+  if (result.functionExecutionId) {
+    logger.log(styles.bold("\nFunction Execution:"));
+    logger.log(`  ID: ${result.functionExecutionId}`);
+    if (result.functionStatus) {
+      logger.log(`  Status: ${result.functionStatus}`);
+    }
+    const logs = formatFunctionLogMessages(result.functionLogEntries);
+    if (logs) {
+      logger.log(styles.dim("  Logs:"));
+      for (const line of logs.split("\n")) {
+        logger.log(`    ${line}`);
+      }
+    }
+  }
+}
+
 export const jobsCommand = defineAppCommand({
   name: "jobs",
   description: "List or get executor jobs.",
@@ -798,49 +857,7 @@ export const jobsCommand = defineAppCommand({
         if (!jsonOutput) {
           logger.log(styles.bold(`Target Type: ${result.targetType}\n`));
           printJobWithAttempts(result.job);
-          if (result.workflowExecutionId) {
-            logger.log(styles.bold("\nWorkflow Execution:"));
-            logger.log(`  ID: ${result.workflowExecutionId}`);
-            if (result.workflowStatus) {
-              logger.log(`  Status: ${result.workflowStatus}`);
-            }
-            if (result.workflowJobLogs && result.workflowJobLogs.length > 0) {
-              for (const jobLog of result.workflowJobLogs) {
-                logger.log(styles.bold(`\n  Job: ${jobLog.jobName}`));
-                if (jobLog.logs) {
-                  logger.log(styles.dim("    Logs:"));
-                  for (const line of jobLog.logs.split("\n")) {
-                    logger.log(`      ${line}`);
-                  }
-                }
-                if (jobLog.result) {
-                  logger.log(styles.dim("    Result:"));
-                  try {
-                    const parsed = JSON.parse(jobLog.result);
-                    const formatted = JSON.stringify(parsed, null, 2);
-                    for (const line of formatted.split("\n")) {
-                      logger.log(`      ${line}`);
-                    }
-                  } catch {
-                    logger.log(`      ${jobLog.result}`);
-                  }
-                }
-              }
-            }
-          }
-          if (result.functionExecutionId) {
-            logger.log(styles.bold("\nFunction Execution:"));
-            logger.log(`  ID: ${result.functionExecutionId}`);
-            if (result.functionStatus) {
-              logger.log(`  Status: ${result.functionStatus}`);
-            }
-            if (result.functionLogs) {
-              logger.log(styles.dim("  Logs:"));
-              for (const line of result.functionLogs.split("\n")) {
-                logger.log(`    ${line}`);
-              }
-            }
-          }
+          printDownstreamExecution(result);
         } else {
           logger.out(result);
         }

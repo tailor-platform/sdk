@@ -5,10 +5,10 @@
  * by dynamically importing the module and checking against known schemas.
  */
 
-import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { stripExecutorTriggerArgs } from "#/cli/services/executor/loader";
 import { CLIError } from "#/cli/shared/errors";
+import { importUserModule } from "#/cli/shared/user-modules";
 import { ExecutorSchema } from "#/parser/service/executor/index";
 import { ResolverSchema } from "#/parser/service/resolver/index";
 import { WorkflowJobSchema } from "#/parser/service/workflow/index";
@@ -68,21 +68,20 @@ export async function detectFunctionType(
 ): Promise<DetectedFunction> {
   const { filePath, jobName } = options;
 
-  const module = await import(pathToFileURL(filePath).href);
+  const module = await importUserModule(filePath);
 
   // Priority: resolver → executor → workflow job → plain function
 
   // 1. Check resolver
   const resolverResult = ResolverSchema.safeParse(module.default);
   if (resolverResult.success) {
-    const rawInput = module.default.input;
+    // Fields built by the user's dynamically imported module match
+    // FieldRuntime structurally; the cast stays at this import boundary.
+    const rawInput = (module.default as { input?: Record<string, FieldRuntime> }).input;
     let inputSchema: DetectedFunction["inputSchema"];
     if (rawInput) {
-      // Fields built by the user's dynamically imported module match
-      // FieldRuntime structurally; the cast stays at this import boundary.
-      const fields = rawInput as Record<string, FieldRuntime>;
       inputSchema = {
-        parse: (args) => parseInputFields({ ...args, fields }),
+        parse: (args) => parseInputFields({ ...args, fields: rawInput }),
       };
     }
     return {
