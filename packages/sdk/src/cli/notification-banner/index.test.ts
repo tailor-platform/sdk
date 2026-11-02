@@ -482,7 +482,6 @@ describe("notification banner", () => {
       ["TAILOR_PLATFORM_PROFILE", "other"],
       ["TAILOR_PLATFORM_TOKEN", "other-token"],
       ["TAILOR_PLATFORM_URL", "https://api.other.example"],
-      ["TAILOR_CONFIG_PATH", "/elsewhere/config.yaml"],
     ] as const) {
       resetNotificationLookupForTests();
       startNotificationLookup(["workspace", "list"], { configDir: tmp.dir });
@@ -494,6 +493,20 @@ describe("notification banner", () => {
     }
 
     expect(stderr.text()).toBe("");
+  });
+
+  test("still prints when the env file changed only settings the login does not depend on", async () => {
+    resolved([warning("a", "Region degraded")]);
+    using stderr = captureStderr();
+    startNotificationLookup(["workspace", "list"], { configDir: tmp.dir });
+    await lookupSettledForTests();
+    // The project config path, not the stored login, which always lives under xdgConfig.
+    vi.stubEnv("TAILOR_CONFIG_PATH", "./tailor.config.ts");
+    vi.stubEnv("TAILOR_PLATFORM_WORKSPACE_ID", "254ebca4-f29f-4744-bb1a-ac294c8e34c6");
+
+    await printNotificationBanner({});
+
+    expect(stderr.text()).toContain("Region degraded");
   });
 
   test("does not wait for a lookup the env file made stale", async () => {

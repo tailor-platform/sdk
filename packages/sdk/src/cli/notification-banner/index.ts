@@ -32,7 +32,8 @@ const PAGE_SIZE = 20;
 /**
  * Environment the lookup depends on. `--env-file` is loaded after `setup`, so a value that
  * changed by `cleanup` means the lookup used another login or platform, or the banner was turned
- * off, and its result is dropped.
+ * off, and its result is dropped. The stored logins always live under `xdgConfig`, so the
+ * project config path (`TAILOR_CONFIG_PATH`) is not part of this.
  */
 const LOOKUP_ENV = [
   "TAILOR_NOTIFICATION_BANNER",
@@ -41,7 +42,6 @@ const LOOKUP_ENV = [
   "TAILOR_TOKEN",
   "TAILOR_PLATFORM_URL",
   "PLATFORM_URL",
-  "TAILOR_CONFIG_PATH",
 ] as const;
 
 function lookupEnv(): string {
