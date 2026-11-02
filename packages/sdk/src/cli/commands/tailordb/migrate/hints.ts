@@ -77,9 +77,22 @@ export function migrationCommandContext(run: MigrationRunContext): MigrationComm
   };
 }
 
+/** Subcommands of `tailor tailordb migration`; its command definition must have exactly these. */
+export type MigrationSubcommand =
+  | "generate"
+  | "rebaseline"
+  | "resolve"
+  | "script"
+  | "status"
+  | "sync"
+  | "test"
+  | "validate";
+
+/** A `tailor tailordb migration` subcommand, followed by its arguments. */
+export type MigrationSubcommandArgs = readonly [MigrationSubcommand, ...string[]];
+
 export interface NamespaceMigrationCommandOptions extends MigrationCommandContext {
-  /** `tailor tailordb migration` subcommand, followed by its arguments */
-  subcommand: readonly string[];
+  subcommand: MigrationSubcommandArgs;
   namespace: string;
 }
 
@@ -96,12 +109,12 @@ export function migrationContextArgs(context: MigrationCommandContext): string[]
 /**
  * Arguments of a `tailor tailordb migration` command, reproducing the current
  * run's invocation context.
- * @param {readonly string[]} subcommand - Subcommand, followed by its arguments
+ * @param {MigrationSubcommandArgs} subcommand - Subcommand, followed by its arguments
  * @param {MigrationCommandContext} context - Invocation context of the current run
  * @returns {string[]} Arguments following the `tailor` executable
  */
 export function migrationCommandArgs(
-  subcommand: readonly string[],
+  subcommand: MigrationSubcommandArgs,
   context: MigrationCommandContext,
 ): string[] {
   return ["tailordb", "migration", ...subcommand, ...migrationContextArgs(context)];
