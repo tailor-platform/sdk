@@ -410,20 +410,16 @@ const envFileArgKeyByToken: ReadonlyMap<string, keyof EnvFileArgs> = new Map(
   }),
 );
 
-const hostGlobalBooleanAliases = [...GLOBAL_FLAG_PARSER_OPTIONS.aliasMap]
-  .filter(([, name]) => GLOBAL_FLAG_PARSER_OPTIONS.booleanFlags.has(name))
-  .map(([alias]) => alias);
-
 /**
  * List the short aliases of the global boolean flags.
  * @param options - Per-plugin adjustments the common arguments were built with
- * @returns `-j`'s alias, and the extra `--verbose` alias when there is one
+ * @returns Every alias of a boolean flag in the common arguments
  */
 function globalBooleanAliases(options: CommonArgsOptions): ReadonlySet<string> {
   return new Set(
-    options.verboseAlias === undefined
-      ? hostGlobalBooleanAliases
-      : [...hostGlobalBooleanAliases, options.verboseAlias],
+    extractFields(z.strictObject(createCommonArgs(options)))
+      .fields.filter((field) => field.type === "boolean")
+      .flatMap((field) => field.alias ?? []),
   );
 }
 
