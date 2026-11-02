@@ -641,11 +641,14 @@ importers:
         specifier: 2.2.0
         version: 2.2.0(@bufbuild/protobuf@2.16.0)(@connectrpc/connect@2.2.0(@bufbuild/protobuf@2.16.0))
       '@enlumine/graphql':
-        specifier: 0.1.0
-        version: 0.1.0
+        specifier: 0.2.0
+        version: 0.2.0
       '@enlumine/sql':
-        specifier: 0.1.0
-        version: 0.1.0
+        specifier: 0.2.0
+        version: 0.2.0
+      '@enlumine/terminal':
+        specifier: 0.2.0
+        version: 0.2.0
       '@inquirer/core':
         specifier: 12.0.5
         version: 12.0.5(@types/node@24.19.2)
@@ -1357,16 +1360,20 @@ packages:
   '@emnapi/wasi-threads@1.2.2':
     resolution: {integrity: sha512-c95qOXkHdydNKhscBTebqEC1CVAZpyqOfVfBzQ1qgzyl3gfeldUjIggDbIZgDKsHLgnsM+igH7TJ/eAasaVuMA==}
 
-  '@enlumine/core@0.1.0':
-    resolution: {integrity: sha512-ksKGACac5641ogsf3uKEiyUFlFp1kNkpvKBsK0KS9WPP0N6Zvy/47e1yeiYy1v07fjjrYv8JF7HJ85CclJkGNw==}
+  '@enlumine/core@0.2.0':
+    resolution: {integrity: sha512-ZDcyAWXtTCoQe7DLObMpqjIWoVJ2czAChJ3AboYGghG7nyZ2ckSrS85WRPfzWzt/4DEdxsgbPJOGgJxNoeu49A==}
     engines: {node: '>=22'}
 
-  '@enlumine/graphql@0.1.0':
-    resolution: {integrity: sha512-WmISonwkfdUiHNzm9xvgsLFIkDbViDv3nd2IA+pVhMlMDh4FXgdIzFKixHyiPL0uvEcWIrF7SljFZ6ZhhOPN6A==}
+  '@enlumine/graphql@0.2.0':
+    resolution: {integrity: sha512-jc6qQwIrfydhxUQhflBi3XEHpSLMRXuuUiG5I345uEBk1rSiOCtdX0tQzWtO0WuSaPm4b02elRt5g5u5KsrfvQ==}
     engines: {node: '>=22'}
 
-  '@enlumine/sql@0.1.0':
-    resolution: {integrity: sha512-b1LpFeu9LTXn6rapY71Jd59GTbvfA73ylLx5iTwQIqkkRPFy1roM82/Aw5z8jdF7xZfoQQgD4E422QVYU1o2Ng==}
+  '@enlumine/sql@0.2.0':
+    resolution: {integrity: sha512-b20V94Ilys0gWeL+OqtvLdnMGX6EA7zhD4c4MzLTZf6TOQcLLnb0Hcw4EiFicJjTNTLocb72Gig1puM/zThE3A==}
+    engines: {node: '>=22'}
+
+  '@enlumine/terminal@0.2.0':
+    resolution: {integrity: sha512-UePUhtcFpX/RNmJOGOOC+VqlcQuF8iDfVSn4c3VukcW//yBx4LLK5ozsrGzTvfh+jZIBUS04Dimu1Wmv+u8RmA==}
     engines: {node: '>=22'}
 
   '@esbuild/aix-ppc64@0.28.2':
@@ -4767,15 +4774,19 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
-  '@enlumine/core@0.1.0': {}
+  '@enlumine/core@0.2.0': {}
 
-  '@enlumine/graphql@0.1.0':
+  '@enlumine/graphql@0.2.0':
     dependencies:
-      '@enlumine/core': 0.1.0
+      '@enlumine/core': 0.2.0
 
-  '@enlumine/sql@0.1.0':
+  '@enlumine/sql@0.2.0':
     dependencies:
-      '@enlumine/core': 0.1.0
+      '@enlumine/core': 0.2.0
+
+  '@enlumine/terminal@0.2.0':
+    dependencies:
+      '@enlumine/core': 0.2.0
 
   '@esbuild/aix-ppc64@0.28.2':
     optional: true

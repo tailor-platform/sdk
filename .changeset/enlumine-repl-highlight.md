@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-Make the `query` REPL start faster and update its SQL and GraphQL syntax highlighting.
+Improve SQL and GraphQL syntax highlighting in the `query` REPL and make the REPL start faster.

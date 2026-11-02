@@ -10,6 +10,16 @@ describe("highlightSqlLines", () => {
     expect(out).not.toEqual(lines);
     expect(out.map(stripAnsi)).toEqual(lines);
   });
+
+  test("treats a backslash in a string literal as an ordinary character", () => {
+    const out = highlightSqlLines(["SELECT replace(path, '\\', '/') AS p", "FROM t"]);
+    expect(out[1]).toEqual(highlightSqlLines(["FROM t"])[0]);
+  });
+
+  test("treats a square bracket as an array subscript, not a quoted identifier", () => {
+    const [out] = highlightSqlLines(["SELECT ARRAY['a', 'b'] AS xs"]);
+    expect(out).toContain(highlightSqlLines(["'a'"])[0]);
+  });
 });
 
 describe("highlightGraphqlLines", () => {
