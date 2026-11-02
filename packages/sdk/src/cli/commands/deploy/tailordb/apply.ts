@@ -1499,7 +1499,7 @@ async function clearCleanupRecord(
     await clearMigrationCleanupRecord(client, workspaceId, namespaceName);
   } catch (error) {
     logger.warn(
-      `The tables namespace '${namespaceName}' had to delete are deleted, but the record of their deletion could not be removed: ${toError(error).message}. A later deploy removes it.`,
+      `The tables of namespace '${namespaceName}' that were pending deletion have been deleted, but the record of the pending deletion could not be removed: ${toError(error).message}. A later deploy removes it.`,
     );
   }
 }

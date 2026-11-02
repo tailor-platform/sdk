@@ -3541,7 +3541,7 @@ describe("applyTailorDB migration label reconciliation", () => {
     },
   );
 
-  test("deletes the tables the checkpoint's migration left behind, then clears the record of their deletion", async () => {
+  test("deletes the tables the checkpoint's migration left behind, then clears the record of the pending deletion", async () => {
     using _stderr = captureStderr();
     const userType = userSnapshotType();
     writeUserSchemaSnapshot(userType);
