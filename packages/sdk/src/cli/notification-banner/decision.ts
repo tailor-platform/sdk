@@ -27,6 +27,14 @@ const EXCLUDED_COMMANDS: ReadonlySet<string> = new Set([
   "open",
 ]);
 
+/**
+ * Commands whose subcommands are local-only except for the ones listed: `user` reads and edits
+ * the stored logins, and only `user pat` talks to the platform. A bare `user` runs `user list`.
+ */
+const LOCAL_ONLY_EXCEPT: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ["user", new Set(["pat"])],
+]);
+
 // Global flags (shared/args.ts createCommonArgs and workspaceArgs) that take a value in the
 // next token when written without `=`.
 const VALUE_FLAGS = new Set([
@@ -51,26 +59,28 @@ const HELP_FLAGS = new Set(["--help", "-h", "--help-json", "--version", "-v"]);
 export type LookupSkipReason = "disabled" | "help" | "no-command" | "excluded-command";
 
 /**
- * The top-level command a command line invokes: its first positional token, after any global
- * flags politty accepts before the subcommand.
+ * The command and subcommand a command line invokes: its first two positional tokens, skipping
+ * global flags politty accepts anywhere before them.
  * @param argv - Command-line arguments after the executable and script path
- * @returns Command name, or undefined when there is none before a `--` separator
+ * @returns Up to two names, stopping at a `--` separator
  */
-export function commandNameFromArgv(argv: readonly string[]): string | undefined {
+export function commandPathFromArgv(argv: readonly string[]): string[] {
+  const path: string[] = [];
   let skipNext = false;
   for (const token of argv) {
     if (skipNext) {
       skipNext = false;
       continue;
     }
-    if (token === "--") return undefined;
+    if (token === "--") break;
     if (token.startsWith("-")) {
       skipNext = !token.includes("=") && VALUE_FLAGS.has(token);
       continue;
     }
-    return token;
+    path.push(token);
+    if (path.length === 2) break;
   }
-  return undefined;
+  return path;
 }
 
 function tokensBeforeSeparator(argv: readonly string[]): readonly string[] {
@@ -92,8 +102,10 @@ export function lookupSkipReason(
 ): LookupSkipReason | undefined {
   if (parseBoolean(env[BANNER_ENV_VAR]) === false) return "disabled";
   if (tokensBeforeSeparator(argv).some((token) => HELP_FLAGS.has(token))) return "help";
-  const command = commandNameFromArgv(argv);
+  const [command, subcommand] = commandPathFromArgv(argv);
   if (command === undefined) return "no-command";
   if (command.startsWith("__") || EXCLUDED_COMMANDS.has(command)) return "excluded-command";
+  const remote = LOCAL_ONLY_EXCEPT.get(command);
+  if (remote && (subcommand === undefined || !remote.has(subcommand))) return "excluded-command";
   return undefined;
 }

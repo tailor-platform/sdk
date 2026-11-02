@@ -1,26 +1,32 @@
 import { describe, expect, test } from "vitest";
-import { commandNameFromArgv, lookupSkipReason } from "./decision";
+import { commandPathFromArgv, lookupSkipReason } from "./decision";
 
-describe("commandNameFromArgv", () => {
-  test("returns the first positional token", () => {
-    expect(commandNameFromArgv(["deploy", "--dry-run"])).toBe("deploy");
+describe("commandPathFromArgv", () => {
+  test("returns the command and its subcommand", () => {
+    expect(commandPathFromArgv(["deploy", "--dry-run"])).toEqual(["deploy"]);
+    expect(commandPathFromArgv(["user", "pat", "list"])).toEqual(["user", "pat"]);
   });
 
-  test("skips leading flags, including value-taking globals and --flag=value", () => {
-    expect(commandNameFromArgv(["--profile", "x", "auth", "status"])).toBe("auth");
-    expect(commandNameFromArgv(["-p", "x", "-w", "ws", "workspace", "list"])).toBe("workspace");
-    expect(commandNameFromArgv(["--profile=x", "--verbose", "deploy"])).toBe("deploy");
-    expect(commandNameFromArgv(["-e", ".env", "login"])).toBe("login");
-    expect(commandNameFromArgv(["--env-file-if-exists", ".env", "login"])).toBe("login");
+  test("skips flags, including value-taking globals and --flag=value", () => {
+    expect(commandPathFromArgv(["--profile", "x", "auth", "status"])).toEqual(["auth", "status"]);
+    expect(commandPathFromArgv(["-p", "x", "-w", "ws", "workspace", "list"])).toEqual([
+      "workspace",
+      "list",
+    ]);
+    expect(commandPathFromArgv(["--profile=x", "--verbose", "deploy"])).toEqual(["deploy"]);
+    expect(commandPathFromArgv(["-e", ".env", "login"])).toEqual(["login"]);
+    expect(commandPathFromArgv(["--env-file-if-exists", ".env", "login"])).toEqual(["login"]);
+    expect(commandPathFromArgv(["user", "--profile", "x", "pat"])).toEqual(["user", "pat"]);
   });
 
   test("stops at the -- separator", () => {
-    expect(commandNameFromArgv(["--", "deploy"])).toBeUndefined();
+    expect(commandPathFromArgv(["--", "deploy"])).toEqual([]);
+    expect(commandPathFromArgv(["user", "--", "pat"])).toEqual(["user"]);
   });
 
-  test("is undefined with no positional", () => {
-    expect(commandNameFromArgv([])).toBeUndefined();
-    expect(commandNameFromArgv(["--json"])).toBeUndefined();
+  test("is empty with no positional", () => {
+    expect(commandPathFromArgv([])).toEqual([]);
+    expect(commandPathFromArgv(["--json"])).toEqual([]);
   });
 });
 
@@ -73,5 +79,19 @@ describe("lookupSkipReason", () => {
     ]) {
       expect(lookupSkipReason(argv, {})).toBe("excluded-command");
     }
+  });
+
+  test("skips the local-only user commands but not user pat", () => {
+    for (const argv of [
+      ["user"],
+      ["user", "list"],
+      ["user", "current"],
+      ["user", "switch", "someone@example.com"],
+      ["user", "update", "--profile", "x"],
+    ]) {
+      expect(lookupSkipReason(argv, {})).toBe("excluded-command");
+    }
+    expect(lookupSkipReason(["user", "pat", "list"], {})).toBeUndefined();
+    expect(lookupSkipReason(["user", "--profile", "x", "pat"], {})).toBeUndefined();
   });
 });

@@ -438,7 +438,7 @@ describe("notification banner", () => {
 
     let printed = false;
     const printing = printNotificationBanner({
-      error: CLIError({ code: "AUTH_TOKEN_NOT_FOUND", message: "log in" }),
+      error: new ConnectError("token rejected", Code.Unauthenticated),
     }).then(() => (printed = true));
     await new Promise((resolve) => setImmediate(resolve));
     expect(printed).toBe(true);
@@ -495,8 +495,21 @@ describe("notification banner", () => {
     });
     resetNotificationLookupForTests();
     await run(["workspace", "list"], { error: new CIPromptError("prompt") });
+    resetNotificationLookupForTests();
+    await run(["workspace", "list"], {
+      error: new ConnectError("token rejected", Code.Unauthenticated),
+    });
 
     expect(stderr.text()).toBe("");
+  });
+
+  test("still prints after a platform error other than a rejected login", async () => {
+    resolved([warning("a", "Region degraded")]);
+    using stderr = captureStderr();
+
+    await run(["workspace", "list"], { error: new ConnectError("denied", Code.PermissionDenied) });
+
+    expect(stderr.text()).toContain("Region degraded");
   });
 
   test("still prints after an ordinary command failure", async () => {

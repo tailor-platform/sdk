@@ -1,3 +1,4 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { xdgConfig } from "xdg-basedir";
 import { requestedJsonModeSource } from "#/cli/shared/args";
 import { isCLIError } from "#/cli/shared/errors";
@@ -169,6 +170,8 @@ async function runLookup(
 
 function suppressedByError(error: unknown): boolean {
   if (error instanceof CIPromptError) return true;
+  // The platform rejected the login, including a renewal that failed inside the client.
+  if (error instanceof ConnectError && error.code === Code.Unauthenticated) return true;
   return isCLIError(error) && typeof error.code === "string" && error.code.startsWith("AUTH_");
 }
 
