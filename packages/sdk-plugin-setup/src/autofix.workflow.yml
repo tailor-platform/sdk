@@ -28,11 +28,11 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
+        uses: tailor-platform/actions/setup@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
+        uses: tailor-platform/actions/install@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
         with:
           package-manager: __PACKAGE_MANAGER__
       # Files the steps above leave, such as an .npmrc, are kept out of the fix commit.
