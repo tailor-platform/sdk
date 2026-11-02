@@ -686,7 +686,7 @@ async function assertCheckpointUnchanged(
     code: "MIGRATION_CHECKPOINT_CONFLICT",
     message: `Migration checkpoint ${namespace}/${describeMigrationCheckpoint(expected.number)} changed to ${describeMigrationCheckpoint(remoteState.number)}${history} before migration ${namespace}/${formatMigrationNumber(migration.number)} started.`,
     suggestion:
-      "Another deploy or 'tailor tailordb migration set' changed it while this deploy ran. " +
+      "Another deploy or a 'tailor tailordb migration' command changed it while this deploy ran. " +
       `Run ${command(["status"])} to see it. ` +
       (historyIdMismatch
         ? "If another deploy is running, wait for it to finish. " +

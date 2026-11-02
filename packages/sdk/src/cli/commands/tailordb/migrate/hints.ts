@@ -128,7 +128,7 @@ export function formatNamespaceMigrationHint(options: NamespaceMigrationCommandO
   return formatCommandHint({ command: "tailor", args: namespaceMigrationArgs(options) });
 }
 
-interface CheckpointMoveHintOptions extends MigrationCommandContext {
+interface CheckpointSyncHintOptions extends MigrationCommandContext {
   namespace: string;
   migrationNumber: number;
   /** Whether the namespace records another migration history ID, which only `--force` replaces */
@@ -136,23 +136,19 @@ interface CheckpointMoveHintOptions extends MigrationCommandContext {
 }
 
 /**
- * Describe the two explicit ways to move a checkpoint to a local migration.
+ * Render the `migration sync` command that moves a checkpoint to a local migration.
  * @param options - Target migration and invocation context
- * @returns Commands and their effects on the remote schema
+ * @returns The command, noting when it also replaces the migration history ID
  */
-export function formatCheckpointMoveHints(options: CheckpointMoveHintOptions): string[] {
+export function formatCheckpointSyncHint(options: CheckpointSyncHintOptions): string {
   const { migrationNumber, replaceHistoryId, ...commandOptions } = options;
-  return (["sync", "set"] as const).map((subcommand) => {
-    const command = formatNamespaceMigrationHint({
-      ...commandOptions,
-      subcommand: [
-        subcommand,
-        formatMigrationNumber(migrationNumber),
-        ...(replaceHistoryId ? ["--force"] : []),
-      ],
-    });
-    const effect =
-      subcommand === "sync" ? "rewrites the tables to that snapshot" : "moves only the checkpoint";
-    return `${command} (${effect}${replaceHistoryId ? " and replaces the migration history ID" : ""})`;
+  const command = formatNamespaceMigrationHint({
+    ...commandOptions,
+    subcommand: [
+      "sync",
+      formatMigrationNumber(migrationNumber),
+      ...(replaceHistoryId ? ["--force"] : []),
+    ],
   });
+  return replaceHistoryId ? `${command} (replaces the migration history ID)` : command;
 }

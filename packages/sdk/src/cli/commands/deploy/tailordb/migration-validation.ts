@@ -234,7 +234,7 @@ async function validateMigrationsInProgress(
 
 /**
  * Refuse to deploy while a namespace's remote migration checkpoint is not in its local migration
- * history. Only `tailordb migration sync` and `set` move such a checkpoint.
+ * history. Only `tailordb migration sync` moves such a checkpoint.
  * @param missing - Namespaces whose checkpoint is not in the local migration history
  * @param commandContext - Config and workspace selection of the deploy, kept in the suggested commands
  */

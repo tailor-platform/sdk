@@ -1397,7 +1397,7 @@ describe("migration", () => {
             code: "MIGRATION_CHECKPOINT_CONFLICT",
             message: `Migration checkpoint tailordb/0002 changed to ${changedTo} before migration tailordb/0003 started.`,
             suggestion:
-              "Another deploy or 'tailor tailordb migration set' changed it while this deploy ran. " +
+              "Another deploy or a 'tailor tailordb migration' command changed it while this deploy ran. " +
               "Run `tailor tailordb migration status --namespace tailordb --workspace-id=test-workspace` to see it. " +
               "If another deploy is running, wait for it to finish. " +
               "To keep the migration history deployed to the workspace, deploy from a checkout of that history instead; " +
@@ -1466,7 +1466,7 @@ describe("migration", () => {
           message:
             "Migration checkpoint tailordb/0002 changed to 0000 before migration tailordb/0003 started.",
           suggestion:
-            "Another deploy or 'tailor tailordb migration set' changed it while this deploy ran. " +
+            "Another deploy or a 'tailor tailordb migration' command changed it while this deploy ran. " +
             "Run `tailor tailordb migration status --namespace tailordb --workspace-id=test-workspace` to see it. " +
             "If another deploy is running, wait for it to finish; otherwise return the namespace to the checkpoint with " +
             "`tailor tailordb migration sync 0002 --namespace tailordb --workspace-id=test-workspace`. Then deploy again.",

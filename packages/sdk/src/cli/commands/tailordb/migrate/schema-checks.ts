@@ -19,7 +19,7 @@ import {
   type MigrationDiff,
 } from "./diff-calculator";
 import {
-  formatCheckpointMoveHints,
+  formatCheckpointSyncHint,
   formatNamespaceMigrationHint,
   migrationCommandArgs,
   type MigrationCommandContext,
@@ -642,7 +642,10 @@ export function logRemoteDriftGuidance(
     "  - If local migration history is correct, run 'migration sync <N>' to overwrite remote.",
     { mode: "plain" },
   );
-  logger.info("  - If only bookkeeping is stale, run 'migration set <N>'.", { mode: "plain" });
+  logger.info(
+    "  - If remote already matches another migration, run 'migration sync <N>' with that migration to move only the checkpoint.",
+    { mode: "plain" },
+  );
   if (driftResults && isLikelyPreV2ScriptHashDrift(driftResults)) {
     logger.newline();
     logger.info(
@@ -732,27 +735,29 @@ export function missingCheckpointRecoveryHints(
 ): string[] {
   const missing = results.filter((result) => !result.rebaselinePending);
   if (missing.length === 0) return [];
-  const moveCommands = missing.flatMap(({ namespace, localLatestMigration, historyIdMismatch }) =>
+  const syncCommands = missing.flatMap(({ namespace, localLatestMigration, historyIdMismatch }) =>
     localLatestMigration === null
       ? []
-      : formatCheckpointMoveHints({
-          ...context,
-          namespace,
-          migrationNumber: localLatestMigration,
-          replaceHistoryId: historyIdMismatch,
-        }).map((hint) => `  ${hint}`),
+      : [
+          `  ${formatCheckpointSyncHint({
+            ...context,
+            namespace,
+            migrationNumber: localLatestMigration,
+            replaceHistoryId: historyIdMismatch,
+          })}`,
+        ],
   );
   return [
     PULL_LATEST_MIGRATIONS_SUGGESTION,
     ...(missing.some((result) => result.historyIdMismatch && result.localLatestMigration !== null)
       ? [
-          "For a namespace that records another migration history, work from a checkout of that history instead; run its --force commands below only if the local migration history should replace it.",
+          "For a namespace that records another migration history, work from a checkout of that history instead; run its --force command below only if the local migration history should replace it.",
         ]
       : []),
-    ...(moveCommands.length > 0
+    ...(syncCommands.length > 0
       ? [
-          "To move the checkpoint back to the local history on purpose, run one of these for each namespace, then deploy:",
-          ...moveCommands,
+          "To move the checkpoint back to the local history on purpose, run the following, then deploy. Each command rewrites the tables to that migration, removing the fields it does not have and deleting the tables it does not have together with their data:",
+          ...syncCommands,
         ]
       : []),
   ];

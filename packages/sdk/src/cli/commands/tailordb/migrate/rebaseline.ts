@@ -216,9 +216,9 @@ async function rebaseline(options: RebaselineOptions): Promise<RebaselineResult>
   const remoteContextArgs = ["--config", config.path, ...(commandContext.contextArgs ?? [])];
   const migrationHint = (subcommand: readonly string[]): string =>
     formatNamespaceMigrationHint({ ...commandContext, subcommand, namespace: target.namespace });
-  const setBaselineSuggestion = `Run ${migrationHint(["set", "0", "--force"])}`;
+  const syncBaselineSuggestion = `Run ${migrationHint(["sync", formatMigrationNumber(0), "--force"])}`;
   const latestLabel = formatMigrationNumber(latestMigration);
-  const adoptLocalHistory = `run ${migrationHint(["set", latestLabel, "--force"])}, then run this command again.`;
+  const adoptLocalHistory = `run ${migrationHint(["sync", latestLabel, "--force"])}, which removes the fields that migration does not have and deletes the tables it does not have together with their data, then run this command again.`;
   const rerunSuggestion = "Run the command again.";
   const deploySuggestion = `after resolving the connection error, deploy with schema checks enabled by running ${formatCommandHint(
     { command: "tailor", args: ["deploy", ...remoteContextArgs] },
@@ -361,7 +361,7 @@ async function rebaseline(options: RebaselineOptions): Promise<RebaselineResult>
       code: "REBASELINE_CHECKPOINT_UPDATE_FAILED",
       message:
         "The local migration history was re-baselined, but the connected workspace checkpoint could not be updated.",
-      suggestion: `${setBaselineSuggestion}, or ${deploySuggestion}`,
+      suggestion: `${syncBaselineSuggestion}, or ${deploySuggestion}`,
       cause: error,
     });
   }

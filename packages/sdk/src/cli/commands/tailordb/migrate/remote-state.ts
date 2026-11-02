@@ -142,7 +142,7 @@ export function matchesLocalMigrationHistory(
  * @param state - Remote migration state of the namespace
  * @returns The history ID, `<invalid>`, or `<unset>`
  */
-export function describeMigrationHistoryId(
+function describeMigrationHistoryId(
   state: Pick<RemoteMigrationState, "historyId" | "historyIdInvalid">,
 ): string {
   return state.historyIdInvalid ? "<invalid>" : (state.historyId ?? "<unset>");

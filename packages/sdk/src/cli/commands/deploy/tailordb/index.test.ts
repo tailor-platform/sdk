@@ -2508,7 +2508,7 @@ describe("applyTailorDB migration label reconciliation", () => {
     { mode: "with schema checks", noSchemaCheck: false },
     { mode: "with --no-schema-check", noSchemaCheck: true },
   ])(
-    "suggests pulling the migration files or moving the checkpoint with sync or set $mode",
+    "suggests pulling the migration files or moving the checkpoint with sync $mode",
     async ({ noSchemaCheck }) => {
       const { client } = createMigrationClient({ "sdk-migration": "m0002" });
       using _stderr = captureStderr();
@@ -2528,14 +2528,11 @@ describe("applyTailorDB migration label reconciliation", () => {
       const lines = (error as { suggestion: string }).suggestion.split("\n");
       expect(lines.slice(0, 2)).toEqual([
         "Pull the latest migration files if this checkout is behind.",
-        "To move the checkpoint back to the local history on purpose, run one of these for each namespace, then deploy:",
+        "To move the checkpoint back to the local history on purpose, run the following, then deploy. Each command rewrites the tables to that migration, removing the fields it does not have and deleting the tables it does not have together with their data:",
       ]);
       expect(lines.slice(2)).toEqual([
         expect.stringMatching(
-          /^ {2}`tailor tailordb migration sync 0000 --namespace test-tailordb --config=\S+tailor\.config\.ts --workspace-id=test-workspace --profile=staging` \(rewrites the tables to that snapshot\)$/,
-        ),
-        expect.stringMatching(
-          /^ {2}`tailor tailordb migration set 0000 --namespace test-tailordb --config=\S+tailor\.config\.ts --workspace-id=test-workspace --profile=staging` \(moves only the checkpoint\)$/,
+          /^ {2}`tailor tailordb migration sync 0000 --namespace test-tailordb --config=\S+tailor\.config\.ts --workspace-id=test-workspace --profile=staging`$/,
         ),
       ]);
     },
@@ -2605,13 +2602,13 @@ describe("applyTailorDB migration label reconciliation", () => {
           "Pull the latest migration files if this checkout is behind.",
           ...(historyIdMismatch
             ? [
-                "For a namespace that records another migration history, work from a checkout of that history instead; run its --force commands below only if the local migration history should replace it.",
+                "For a namespace that records another migration history, work from a checkout of that history instead; run its --force command below only if the local migration history should replace it.",
               ]
             : []),
-          "To move the checkpoint back to the local history on purpose, run one of these for each namespace, then deploy:",
+          "To move the checkpoint back to the local history on purpose, run the following, then deploy. Each command rewrites the tables to that migration, removing the fields it does not have and deleting the tables it does not have together with their data:",
         ]);
         const commands = lines.filter((line) => line.startsWith("  "));
-        expect(commands).toHaveLength(2);
+        expect(commands).toHaveLength(1);
         for (const command of commands) {
           expect(command.includes(" 0000 --force --namespace test-tailordb")).toBe(
             historyIdMismatch,
@@ -2680,10 +2677,8 @@ describe("applyTailorDB migration label reconciliation", () => {
       .slice(2)
       .map((line) => line.replace(/ --config=\S+ /, " "));
     expect(commands).toEqual([
-      "  `tailor tailordb migration sync 0000 --namespace inventory --workspace-id=test-workspace` (rewrites the tables to that snapshot)",
-      "  `tailor tailordb migration set 0000 --namespace inventory --workspace-id=test-workspace` (moves only the checkpoint)",
-      "  `tailor tailordb migration sync 0001 --namespace sales --workspace-id=test-workspace` (rewrites the tables to that snapshot)",
-      "  `tailor tailordb migration set 0001 --namespace sales --workspace-id=test-workspace` (moves only the checkpoint)",
+      "  `tailor tailordb migration sync 0000 --namespace inventory --workspace-id=test-workspace`",
+      "  `tailor tailordb migration sync 0001 --namespace sales --workspace-id=test-workspace`",
     ]);
   });
 
