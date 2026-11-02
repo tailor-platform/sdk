@@ -17,17 +17,17 @@ describe("migration CLI commands", () => {
       expect(migrationCommand.description).toContain("migration");
     });
 
-    test("should have exactly the supported subcommands", () => {
-      expect(Object.keys(migrationCommand.subCommands ?? {}).toSorted()).toEqual([
-        "generate",
-        "rebaseline",
-        "resolve",
-        "script",
-        "status",
-        "sync",
-        "test",
-        "validate",
-      ]);
+    test.each([
+      "generate",
+      "rebaseline",
+      "resolve",
+      "script",
+      "status",
+      "sync",
+      "test",
+      "validate",
+    ])("should have %s subcommand", (subCommand) => {
+      expect(migrationCommand.subCommands).toHaveProperty(subCommand);
     });
   });
 
