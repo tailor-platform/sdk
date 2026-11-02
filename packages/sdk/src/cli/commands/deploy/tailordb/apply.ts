@@ -10,6 +10,10 @@ import {
   type MigrationCommandContext,
 } from "#/cli/commands/tailordb/migrate/hints";
 import {
+  getTablesDeletedAfterCheckpoint,
+  includeTablesDeletedAfterCheckpoint,
+} from "#/cli/commands/tailordb/migrate/pre-migration-schema";
+import {
   describeMigrationCheckpoint,
   fetchRemoteMigrationState,
   isCheckpointStillOwned,
@@ -61,7 +65,6 @@ import {
   generateMigrationPhaseManifest,
   type GqlPermissionUndo,
   restoreMigrationRestrictions,
-  getDeletedTableNames,
   getPreMigrationTargetTableNames,
   gqlPermissionUndoFromSnapshots,
   migrationSnapshotCache,
@@ -316,24 +319,6 @@ export async function preflightTailorDB(
   await validateTailorDBMigrationState(client, result);
 }
 
-function includeUndeletedTables(
-  snapshot: SchemaSnapshot,
-  previousSnapshot: SchemaSnapshot | undefined,
-  migration: PendingMigration,
-): SchemaSnapshot {
-  const undeletedTables = [...getDeletedTableNames(migration)].flatMap((tableName) => {
-    const table = previousSnapshot?.tables[tableName];
-    return table ? [[tableName, table] as const] : [];
-  });
-  return {
-    ...snapshot,
-    tables: {
-      ...snapshot.tables,
-      ...Object.fromEntries(undeletedTables),
-    },
-  };
-}
-
 /**
  * Return a partially applied migration's tables to their Pre-phase shape after
  * its Post-phase stopped partway, so the next deploy finds the schema it resumes from.
@@ -446,7 +431,7 @@ function keepMigrationTablesRestricted(
   const migrationTables = new Set([
     ...Object.keys(committed?.tables ?? {}),
     ...Object.keys(migrationSnapshotCache.load(migration).tables),
-    ...getDeletedTableNames(migration),
+    ...getTablesDeletedAfterCheckpoint(migration.diff),
   ]);
   if (!committed) return restrictedByDeploy(namespaceName, migrationTables, history);
   restorationSnapshots.set(namespaceName, { ...committed, tables: {} });
@@ -929,7 +914,7 @@ function indexPendingMigrations(pendingMigrations: PendingMigration[]): PendingM
       index.lastByNamespace.set(migration.namespace, migration);
     }
     const deleted = index.deletedTables.get(migration.namespace) ?? new Set<string>();
-    for (const tableName of getDeletedTableNames(migration)) deleted.add(tableName);
+    for (const tableName of getTablesDeletedAfterCheckpoint(migration.diff)) deleted.add(tableName);
     index.deletedTables.set(migration.namespace, deleted);
     for (const tableName of Object.keys(migrationSnapshotCache.load(migration).tables)) {
       index.snapshotTableKeys.add(`${migration.namespace}/${tableName}`);
@@ -1433,7 +1418,6 @@ async function commitMigration(
       attempt,
       error,
       restoration,
-      previousRestorationSnapshot,
       postMigrationSnapshot,
     );
   }
@@ -1478,7 +1462,6 @@ async function commitMigration(
  * @param attempt - Attempt whose checkpoint update failed
  * @param updateError - Error the checkpoint update failed with
  * @param restoration - What the tables return to, updated in place
- * @param previousRestorationSnapshot - Snapshot to restore before the migration ran
  * @param postMigrationSnapshot - Schema state the migration produced
  */
 async function confirmCheckpointAfterUpdateFailure(
@@ -1486,7 +1469,6 @@ async function confirmCheckpointAfterUpdateFailure(
   attempt: MigrationAttempt,
   updateError: unknown,
   restoration: RestorationState,
-  previousRestorationSnapshot: SchemaSnapshot | undefined,
   postMigrationSnapshot: SchemaSnapshot,
 ): Promise<void> {
   const { migration } = attempt;
@@ -1528,11 +1510,18 @@ async function confirmCheckpointAfterUpdateFailure(
   if (remoteMigrationNumber !== migration.number) {
     restoration.snapshots.set(
       migration.namespace,
-      includeUndeletedTables(postMigrationSnapshot, previousRestorationSnapshot, migration),
+      includeTablesDeletedAfterCheckpoint(postMigrationSnapshot, migration.diff),
     );
+    const resumable =
+      remoteState.inProgress?.kind === "steps" &&
+      remoteState.inProgress.number === migration.number &&
+      (remoteMigrationNumber ?? 0) === migration.number - 1;
     logger.warn(
       `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} could not be confirmed after its update failed; remote remains at ${describeMigrationCheckpoint(remoteMigrationNumber)}. ` +
-        "Leaving the post-migration schema unchanged to avoid rolling back a concurrent deployment. Repair the checkpoint before retrying.",
+        "Leaving the post-migration schema unchanged to avoid rolling back a concurrent deployment. " +
+        (resumable
+          ? "Deploy again to resume the migration; unless you add, remove, rename, or reorder steps, steps that already completed do not run again."
+          : "Repair the checkpoint before retrying."),
     );
     throw updateError;
   }
