@@ -2,28 +2,19 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { z } from "zod";
 
-/** Minimum time between two banners, so a burst of commands shows it once. */
-export const BANNER_INTERVAL_MS = 30 * 60 * 1000;
-
 /** How long to wait after a failed lookup, so an outage does not cost a request per command. */
 export const FAILURE_BACKOFF_MS = 5 * 60 * 1000;
 
 const bannerStateSchema = z.looseObject({
   version: z.literal(1),
-  shownAt: z.iso.datetime().optional(),
   failedAt: z.iso.datetime().optional(),
-  lastSeenIds: z.array(z.string()).default([]),
 });
 
 /** What the banner remembers between runs. */
 export interface BannerState {
   version: 1;
-  /** When the banner was last shown, or the inbox last found empty, as an ISO timestamp. */
-  shownAt?: string | undefined;
   /** When the last lookup failed or went unanswered, as an ISO timestamp. */
   failedAt?: string | undefined;
-  /** Ids shown last time, reserved for a "new since last time" highlight. */
-  lastSeenIds: string[];
 }
 
 /**
@@ -56,13 +47,8 @@ export function readBannerState(file: string): BannerState | undefined {
   }
   const result = bannerStateSchema.safeParse(parsed);
   if (!result.success) return undefined;
-  const { version, shownAt, failedAt, lastSeenIds } = result.data;
-  return {
-    version,
-    ...(shownAt === undefined ? {} : { shownAt }),
-    ...(failedAt === undefined ? {} : { failedAt }),
-    lastSeenIds,
-  };
+  const { version, failedAt } = result.data;
+  return { version, ...(failedAt === undefined ? {} : { failedAt }) };
 }
 
 /**
@@ -77,23 +63,14 @@ export function writeBannerState(file: string, state: BannerState): void {
   fs.renameSync(tmp, file);
 }
 
-function within(timestamp: string | undefined, now: number, interval: number): boolean {
-  if (timestamp === undefined) return false;
-  const elapsed = now - Date.parse(timestamp);
-  return elapsed >= 0 && elapsed < interval;
-}
-
 /**
- * Whether to stay quiet: the banner was shown (or the inbox found empty) within
- * {@link BANNER_INTERVAL_MS}, or a lookup failed within {@link FAILURE_BACKOFF_MS}.
+ * Whether a lookup failed within {@link FAILURE_BACKOFF_MS}, so this run should not send another.
  * @param state - Last persisted state, if any
  * @param now - Current time in milliseconds since the epoch
- * @returns true while either interval has not elapsed
+ * @returns true while the backoff has not elapsed
  */
-export function isThrottled(state: BannerState | undefined, now: number): boolean {
-  if (!state) return false;
-  return (
-    within(state.shownAt, now, BANNER_INTERVAL_MS) ||
-    within(state.failedAt, now, FAILURE_BACKOFF_MS)
-  );
+export function inFailureBackoff(state: BannerState | undefined, now: number): boolean {
+  if (state?.failedAt === undefined) return false;
+  const elapsed = now - Date.parse(state.failedAt);
+  return elapsed >= 0 && elapsed < FAILURE_BACKOFF_MS;
 }

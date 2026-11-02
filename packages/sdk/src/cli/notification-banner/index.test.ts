@@ -124,7 +124,7 @@ describe("notification banner", () => {
     await printNotificationBanner(context);
   }
 
-  test("prints the unread WARNING+ notifications after an ordinary command and records it", async () => {
+  test("prints the unread WARNING+ notifications after an ordinary command", async () => {
     const list = resolved(
       [warning("a", "Region degraded"), warning("b", "Executor retries exceeded")],
       5,
@@ -142,7 +142,18 @@ describe("notification banner", () => {
     expect(text).toContain("WARNING   Region degraded");
     expect(text).toContain("…and 3 more.");
     expect(text).toContain("Run `tailor notification list` for details.");
-    expect(readBannerState(stateFile())).toMatchObject({ version: 1, lastSeenIds: ["a", "b"] });
+  });
+
+  test("shows the banner again on the next command until the notifications are read", async () => {
+    const list = resolved([warning("a", "Region degraded")]);
+    using stderr = captureStderr();
+
+    await run(["workspace", "list"]);
+    await run(["workspace", "list"]);
+
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(stderr.text().match(/Region degraded/g)).toHaveLength(2);
+    expect(fs.existsSync(stateFile())).toBe(false);
   });
 
   test("uses the stored login when no environment token is set", async () => {
@@ -223,13 +234,12 @@ describe("notification banner", () => {
     expect(list).not.toHaveBeenCalled();
   });
 
-  test("stays quiet within the throttle interval and runs again after it", async () => {
+  test("backs off after a failed lookup and runs again once the backoff has elapsed", async () => {
     const list = resolved([warning("a", "x")]);
     using stderr = captureStderr();
     writeBannerState(stateFile(), {
       version: 1,
-      shownAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-      lastSeenIds: [],
+      failedAt: new Date(Date.now() - 60 * 1000).toISOString(),
     });
 
     await run(["workspace", "list"]);
@@ -238,8 +248,7 @@ describe("notification banner", () => {
 
     writeBannerState(stateFile(), {
       version: 1,
-      shownAt: new Date(Date.now() - 31 * 60 * 1000).toISOString(),
-      lastSeenIds: [],
+      failedAt: new Date(Date.now() - 6 * 60 * 1000).toISOString(),
     });
     resetNotificationLookupForTests();
     await run(["workspace", "list"]);
@@ -383,13 +392,13 @@ describe("notification banner", () => {
     expect(readBannerState(stateFile())).toMatchObject({ failedAt: expect.any(String) });
   });
 
-  test("records an empty inbox so it is not polled again within the interval", async () => {
+  test("prints and records nothing for an empty inbox", async () => {
     using stderr = captureStderr();
 
     await run(["workspace", "list"]);
 
     expect(stderr.text()).toBe("");
-    expect(readBannerState(stateFile())).toMatchObject({ version: 1, lastSeenIds: [] });
+    expect(fs.existsSync(stateFile())).toBe(false);
   });
 
   test("prints nothing when JSON mode was turned on by the command's global args", async () => {

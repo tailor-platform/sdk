@@ -80,7 +80,7 @@ function tokensBeforeSeparator(argv: readonly string[]): readonly string[] {
 
 /**
  * Decide from the command line and the environment alone whether the post-command banner's
- * lookup should be skipped. Terminal, JSON-mode, throttle and credential checks are the
+ * lookup should be skipped. Terminal, JSON-mode, backoff and credential checks are the
  * caller's, since they depend on process state.
  * @param argv - Command-line arguments after the executable and script path
  * @param env - Environment to consult

@@ -5,7 +5,12 @@ import { CIPromptError, interactiveTerminal, logger } from "#/cli/shared/logger"
 import { explicitProfileFromArgs } from "#/cli/shared/plugin";
 import { lookupSkipReason } from "./decision";
 import { formatNotificationBanner, type BannerNotification } from "./format";
-import { getBannerStatePath, isThrottled, readBannerState, writeBannerState } from "./throttle";
+import {
+  getBannerStatePath,
+  inFailureBackoff,
+  readBannerState,
+  writeBannerState,
+} from "./throttle";
 /**
  * Post-command notification banner.
  *
@@ -13,8 +18,9 @@ import { getBannerStatePath, isThrottled, readBannerState, writeBannerState } fr
  * are listed briefly on stderr. The lookup starts in politty's global `setup` hook and the
  * banner is printed from the global `cleanup` hook only if the lookup has already answered;
  * a pending request is abandoned, so the command's duration and exit code never change, and
- * every failure is swallowed. It is interactive-terminal only, never in JSON mode, throttled
- * to once per `BANNER_INTERVAL_MS` (throttle.ts), and marks nothing read.
+ * every failure is swallowed. It is interactive-terminal only and never in JSON mode. It is
+ * shown after every eligible command until the notifications are read or dismissed (it marks
+ * nothing read itself); only a failed lookup pauses it, for `FAILURE_BACKOFF_MS` (throttle.ts).
  *
  * The lookup never renews a stored login (no refresh request, no config write, no lock): a
  * token due for renewal skips the banner, and the client is created with `renewToken: false`.
@@ -29,7 +35,7 @@ interface LookupResult {
   /** The profile the command line named, repeated in the hint. */
   explicitProfile: string | undefined;
   totalCount: number;
-  notifications: (BannerNotification & { id: string })[];
+  notifications: BannerNotification[];
 }
 
 interface PendingLookup {
@@ -46,7 +52,7 @@ interface PendingLookup {
 let pending: PendingLookup | undefined;
 
 interface StartOptions {
-  /** XDG config directory for the throttle state; defaults to the current user's. */
+  /** XDG config directory for the backoff state; defaults to the current user's. */
   configDir?: string | undefined;
 }
 
@@ -63,7 +69,7 @@ export function startNotificationLookup(argv: readonly string[], options: StartO
     if (!interactiveTerminal()) return;
     if (requestedJsonModeSource(argv) !== undefined) return;
     const stateFile = getBannerStatePath("configDir" in options ? options.configDir : xdgConfig);
-    if (stateFile && isThrottled(readBannerState(stateFile), Date.now())) return;
+    if (stateFile && inFailureBackoff(readBannerState(stateFile), Date.now())) return;
 
     const controller = new AbortController();
     const lookup: PendingLookup = {
@@ -144,7 +150,6 @@ async function runLookup(
     explicitProfile,
     totalCount: Number(response.totalCount),
     notifications: response.notifications.map((n) => ({
-      id: n.id,
       severity: n.severity,
       title: n.title,
     })),
@@ -158,19 +163,13 @@ function suppressedByError(error: unknown): boolean {
 
 /**
  * Remember that a lookup failed, so the next commands back off instead of each sending a
- * request during an outage. Keeps the last successful `shownAt`.
- * @param stateFile - Throttle state path, if the user has a config directory
+ * request during an outage.
+ * @param stateFile - Backoff state path, if the user has a config directory
  */
 function recordFailure(stateFile: string | undefined): void {
   if (!stateFile) return;
   try {
-    const previous = readBannerState(stateFile);
-    writeBannerState(stateFile, {
-      version: 1,
-      ...(previous?.shownAt === undefined ? {} : { shownAt: previous.shownAt }),
-      failedAt: new Date(Date.now()).toISOString(),
-      lastSeenIds: previous?.lastSeenIds ?? [],
-    });
+    writeBannerState(stateFile, { version: 1, failedAt: new Date(Date.now()).toISOString() });
   } catch {
     // Best effort, like the banner itself.
   }
@@ -199,21 +198,13 @@ export async function printNotificationBanner(context: { error?: unknown }): Pro
     if (suppressedByError(context.error)) return;
     if (logger.jsonMode || !interactiveTerminal()) return;
 
-    if (result.notifications.length > 0) {
-      const banner = formatNotificationBanner(result.notifications, result.totalCount, {
-        profile: result.explicitProfile,
-      });
-      logger.newline();
-      logger.warn(banner.header);
-      for (const line of banner.lines) logger.log(line);
-    }
-    if (lookup.stateFile) {
-      writeBannerState(lookup.stateFile, {
-        version: 1,
-        shownAt: new Date().toISOString(),
-        lastSeenIds: result.notifications.map((n) => n.id),
-      });
-    }
+    if (result.notifications.length === 0) return;
+    const banner = formatNotificationBanner(result.notifications, result.totalCount, {
+      profile: result.explicitProfile,
+    });
+    logger.newline();
+    logger.warn(banner.header);
+    for (const line of banner.lines) logger.log(line);
   } catch {
     // Best effort by design: the command's own outcome is what matters.
   }

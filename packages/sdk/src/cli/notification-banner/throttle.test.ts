@@ -3,10 +3,9 @@ import * as path from "pathe";
 import { describe, expect, test } from "vitest";
 import { tempDir } from "#/cli/shared/test-helpers/temp-dir";
 import {
-  BANNER_INTERVAL_MS,
   FAILURE_BACKOFF_MS,
   getBannerStatePath,
-  isThrottled,
+  inFailureBackoff,
   readBannerState,
   writeBannerState,
 } from "./throttle";
@@ -34,14 +33,14 @@ describe("readBannerState", () => {
     const file = path.join(tmp.dir, "state.json");
     fs.writeFileSync(file, "{not json");
     expect(readBannerState(file)).toBeUndefined();
-    fs.writeFileSync(file, JSON.stringify({ version: 1, shownAt: 42 }));
+    fs.writeFileSync(file, JSON.stringify({ version: 1, failedAt: 42 }));
     expect(readBannerState(file)).toBeUndefined();
   });
 
   test("round-trips what writeBannerState wrote, creating the directory", () => {
     using tmp = tempDir("banner-");
     const file = path.join(tmp.dir, "nested", "state.json");
-    const state = { version: 1 as const, shownAt: new Date(NOW).toISOString(), lastSeenIds: ["a"] };
+    const state = { version: 1 as const, failedAt: new Date(NOW).toISOString() };
     writeBannerState(file, state);
     expect(readBannerState(file)).toEqual(state);
     expect(fs.readdirSync(path.dirname(file))).toEqual(["state.json"]);
@@ -52,49 +51,27 @@ describe("readBannerState", () => {
     const file = path.join(tmp.dir, "state.json");
     fs.writeFileSync(
       file,
-      JSON.stringify({
-        version: 1,
-        shownAt: new Date(NOW).toISOString(),
-        lastSeenIds: [],
-        extra: 1,
-      }),
+      JSON.stringify({ version: 1, failedAt: new Date(NOW).toISOString(), extra: 1 }),
     );
-    expect(readBannerState(file)?.shownAt).toBe(new Date(NOW).toISOString());
+    expect(readBannerState(file)).toEqual({ version: 1, failedAt: new Date(NOW).toISOString() });
   });
 });
 
-describe("isThrottled", () => {
-  test("is false with no state", () => {
-    expect(isThrottled(undefined, NOW)).toBe(false);
+describe("inFailureBackoff", () => {
+  test("is false with no state or no recorded failure", () => {
+    expect(inFailureBackoff(undefined, NOW)).toBe(false);
+    expect(inFailureBackoff({ version: 1 }, NOW)).toBe(false);
   });
 
-  test("is true within the interval and false once it has elapsed", () => {
-    const shownAt = new Date(NOW - BANNER_INTERVAL_MS + 1000).toISOString();
-    expect(isThrottled({ version: 1, shownAt, lastSeenIds: [] }, NOW)).toBe(true);
-    const old = new Date(NOW - BANNER_INTERVAL_MS - 1000).toISOString();
-    expect(isThrottled({ version: 1, shownAt: old, lastSeenIds: [] }, NOW)).toBe(false);
-  });
-
-  test("is false when shownAt is in the future (clock went backwards)", () => {
-    const shownAt = new Date(NOW + 2 * BANNER_INTERVAL_MS).toISOString();
-    expect(isThrottled({ version: 1, shownAt, lastSeenIds: [] }, NOW)).toBe(false);
-  });
-
-  test("backs off for a short while after a failed lookup, without a successful one", () => {
+  test("is true for a short while after a failed lookup and false once it has elapsed", () => {
     const failedAt = new Date(NOW - FAILURE_BACKOFF_MS + 1000).toISOString();
-    expect(isThrottled({ version: 1, failedAt, lastSeenIds: [] }, NOW)).toBe(true);
+    expect(inFailureBackoff({ version: 1, failedAt }, NOW)).toBe(true);
     const old = new Date(NOW - FAILURE_BACKOFF_MS - 1000).toISOString();
-    expect(isThrottled({ version: 1, failedAt: old, lastSeenIds: [] }, NOW)).toBe(false);
-    expect(FAILURE_BACKOFF_MS).toBeLessThan(BANNER_INTERVAL_MS);
+    expect(inFailureBackoff({ version: 1, failedAt: old }, NOW)).toBe(false);
   });
-});
 
-describe("readBannerState with a failure", () => {
-  test("round-trips failedAt without shownAt", () => {
-    using tmp = tempDir("banner-");
-    const file = path.join(tmp.dir, "state.json");
-    const state = { version: 1 as const, failedAt: new Date(NOW).toISOString(), lastSeenIds: [] };
-    writeBannerState(file, state);
-    expect(readBannerState(file)).toEqual(state);
+  test("is false when failedAt is in the future (clock went backwards)", () => {
+    const failedAt = new Date(NOW + 2 * FAILURE_BACKOFF_MS).toISOString();
+    expect(inFailureBackoff({ version: 1, failedAt }, NOW)).toBe(false);
   });
 });
