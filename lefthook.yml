@@ -36,7 +36,7 @@ pre-commit:
         piped: true
         jobs:
           - name: build
-            run: pnpm --filter=@tailor-platform/sdk run build
+            run: pnpm --filter='example^...' --filter='{./packages/create-sdk/templates/*}^...' run build
           - name: generate
             run: pnpm --filter=@tailor-platform/sdk --filter=example run generate
           - name: lint
