@@ -281,12 +281,12 @@ Therefore:
 When `tailor setup update` regenerates a preview workflow generated before the
 cleanup workflow existed, it moves the `tailor-preview-cleanup` job into the
 cleanup workflow, together with the steps and settings you added to it, and
-copies the top-level `env` and `defaults` of the preview workflow into the
-cleanup workflow. Your steps then run from the default branch as described
-above. A job of yours in the preview workflow that runs when the pull request
-is closed no longer runs, because that workflow no longer starts then; move it
-into the cleanup workflow. `setup` warns about each job of yours in the preview
-workflow whose `if` contains an `== 'closed'` comparison.
+copies the top-level `env`, `defaults`, and `concurrency` of the preview
+workflow into the cleanup workflow. Your steps then run from the default branch
+as described above. A job of yours in the preview workflow that runs when the
+pull request is closed no longer runs, because that workflow no longer starts
+then; move it into the cleanup workflow. `setup` warns about each job of yours
+in the preview workflow whose `if` contains an `== 'closed'` comparison.
 
 Fork pull requests are skipped. Every other pull request gets a preview, draft
 pull requests included. `--require` narrows that to one of:
@@ -543,9 +543,12 @@ Each new preview workflow run for a pull request, such as after a push, cancels
 the run still in progress for it, including your jobs, so they do not keep
 running against a workspace that the new run may redeploy. Closing the pull
 request cancels it too, because the cleanup workflow runs in the same
-concurrency group; if you change the group in one of the two workflows, change
-it in the other. Events on a pull request that stays closed, such as a label
-added after merging, do not cancel anything. A job with `if: always()` still
+concurrency group. If you change the group in one of the two workflows, change
+it in the other, and build it only from values that are the same in both, such
+as `github.event.pull_request.number`: `github.ref`, `github.workflow`, and
+`github.event_name` differ between them, and `github.ref` is the default branch
+for every pull request in the cleanup workflow. Events on a pull request that
+stays closed, such as a label added after merging, do not cancel anything. A job with `if: always()` still
 runs when its run is cancelled, and the new run waits for it to finish; use
 `if: ${{ !cancelled() }}` instead so it stops with the run.
 

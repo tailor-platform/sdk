@@ -1105,7 +1105,7 @@ function withMovedCleanupJob(obj: {
       from,
       into: cleanup.render.content,
       jobId: PREVIEW_CLEANUP_JOB,
-      topLevelKeys: ["env", "defaults"],
+      topLevelKeys: ["env", "defaults", "concurrency"],
     }),
   );
   if (!moved) return { main, cleanup };

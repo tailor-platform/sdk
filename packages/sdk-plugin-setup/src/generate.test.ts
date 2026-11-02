@@ -3105,6 +3105,53 @@ export default defineConfig({
         );
       });
 
+      test.each([
+        [
+          "an earlier template's",
+          "tailor-preview-my-app-${{ (github.event.action == 'closed' || github.event.pull_request.state == 'open') && github.event.pull_request.number || github.run_id }}",
+        ],
+        [
+          "the last template's",
+          "tailor-preview-my-app-${{ (github.event.action == 'closed' || github.event.pull_request.state == 'open') && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}",
+        ],
+        ["your", "my-custom-${{ github.event.pull_request.number }}"],
+      ])(
+        "copies %s concurrency group of the preview workflow into the cleanup workflow",
+        async (_name, group) => {
+          const { legacy } = await writeLegacy();
+          const concurrency = /^concurrency:\n(?: {2}.*\n)+/m;
+          expect(legacy).toMatch(concurrency);
+          fs.writeFileSync(
+            path.join(testDir, previewFile),
+            legacy.replace(
+              concurrency,
+              `concurrency:\n  group: ${group}\n  cancel-in-progress: true\n`,
+            ),
+          );
+
+          await setupTarget(opts);
+
+          const groupOf = (file: string) =>
+            String(
+              (parseYAML(read(file)) as { concurrency?: { group?: unknown } }).concurrency?.group,
+            );
+          const pullRequest = { number: 42 };
+          expect(groupOf(previewFile)).toBe(group);
+          expect(groupOf(cleanupFile)).toBe(group);
+          expect(
+            expandExpressions(groupOf(cleanupFile), {
+              run_id: 9002,
+              event: { action: "closed", pull_request: { ...pullRequest, state: "closed" } },
+            }),
+          ).toBe(
+            expandExpressions(groupOf(previewFile), {
+              run_id: 9001,
+              event: { action: "synchronize", pull_request: { ...pullRequest, state: "open" } },
+            }),
+          );
+        },
+      );
+
       test("warns about a job of yours that checks for a closed pull request", async () => {
         await writeLegacy({
           userJob:

@@ -674,7 +674,7 @@ export function mergeUserContent(params: {
  * @param params.from - Content of the workflow the job leaves
  * @param params.into - Content of the workflow the job moves into
  * @param params.jobId - Id of the job
- * @param params.topLevelKeys - Top-level keys of `from` that `into` takes too
+ * @param params.topLevelKeys - Top-level keys of `from` that `into` takes too, replacing its own
  * @returns Both contents after the move, or undefined when `from` has no such job
  */
 export function moveJob(params: {
@@ -704,11 +704,15 @@ export function moveJob(params: {
   }
   const createOptions = { aliasDuplicateObjects: false };
   intoJobs.set(jobId, intoDoc.createNode(job, createOptions));
-  const carried = params.topLevelKeys.flatMap((key) =>
-    isPlainObject(fromPlain) && Object.hasOwn(fromPlain, key)
-      ? [intoDoc.createPair(key, fromPlain[key], createOptions)]
-      : [],
-  );
+  const carried: Pair[] = [];
+  for (const key of params.topLevelKeys) {
+    if (!isPlainObject(fromPlain) || !Object.hasOwn(fromPlain, key)) continue;
+    if (intoRoot.has(key)) {
+      intoRoot.set(key, intoDoc.createNode(fromPlain[key], createOptions));
+    } else {
+      carried.push(intoDoc.createPair(key, fromPlain[key], createOptions));
+    }
+  }
   intoRoot.items.splice(
     intoRoot.items.findIndex((pair) => keyOf(pair) === "jobs"),
     0,
