@@ -50,6 +50,18 @@ pre-commit:
           - name: knip
             run: pnpm --filter=@tailor-platform/sdk run knip
 
+    - name: changed-packages
+      glob: "packages/**/*"
+      group:
+        piped: true
+        jobs:
+          - name: lint-packages
+            run: node scripts/pnpm-staged-packages.js --filter='!@tailor-platform/sdk' run --if-present lint
+          - name: typecheck-packages
+            run: node scripts/pnpm-staged-packages.js --filter='!@tailor-platform/sdk' run --if-present typecheck
+          - name: knip-packages
+            run: node scripts/pnpm-staged-packages.js --filter='!@tailor-platform/sdk' run --if-present knip
+
 post-commit:
   commands:
     verify-signature:

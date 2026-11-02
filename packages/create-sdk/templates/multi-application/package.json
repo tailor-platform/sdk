@@ -16,8 +16,8 @@
     "@tailor-platform/eslint-plugin-sdk": "workspace:^",
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "26.6.5",
-    "oxfmt": "0.74.0",
-    "oxlint": "1.89.0",
+    "oxfmt": "0.75.0",
+    "oxlint": "1.90.0",
     "oxlint-tsgolint": "7.0.2005",
     "typescript": "6.0.3"
   }

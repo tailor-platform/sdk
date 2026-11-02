@@ -1,6 +1,14 @@
 import { logger } from "@tailor-platform/sdk/cli";
+import { setupAutofix, type AutofixSetupOptions } from "./autofix";
 import { setupTarget, type SetupTargetOptions } from "./generate";
-import { readLock, type LockInputs, type LockTarget } from "./lock";
+import {
+  AUTOFIX_LABEL,
+  managedWorkflows,
+  readManagedLock,
+  type LockAutofix,
+  type LockInputs,
+  type LockTarget,
+} from "./lock";
 import { isPackageManager, type PackageManager, type PreviewRequirement } from "./templates";
 
 type UpdateCommon = { force: boolean; outputDir: string };
@@ -11,7 +19,9 @@ function recordedBranchUnlessDetected(inputs: LockInputs): string | undefined {
   return inputs.branchAutoDetected === true ? undefined : (inputs.branch ?? undefined);
 }
 
-function recordedPackageManagerUnlessDetected(inputs: LockInputs): PackageManager | undefined {
+function recordedPackageManagerUnlessDetected(
+  inputs: Pick<LockInputs, "packageManager" | "packageManagerAutoDetected">,
+): PackageManager | undefined {
   if (inputs.packageManagerAutoDetected !== false) return undefined;
   if (!isPackageManager(inputs.packageManager)) {
     throw new Error(
@@ -88,6 +98,23 @@ export function planUpdate(target: LockTarget, common: UpdateCommon): SetupTarge
   }
 }
 
+/**
+ * Translate the lock's autofix entry back into the setup options that regenerate it.
+ * @param autofix - Autofix entry to regenerate
+ * @param common - Options shared by every workflow in this update run
+ * @returns The setup options to regenerate the autofix workflow with
+ */
+function planAutofixUpdate(autofix: LockAutofix, common: UpdateCommon): AutofixSetupOptions {
+  const { provider, securefixServerRepository, dirs } = autofix.inputs;
+  return {
+    provider,
+    securefixServerRepository,
+    dir: dirs,
+    packageManager: recordedPackageManagerUnlessDetected(autofix.inputs),
+    ...common,
+  };
+}
+
 export type UpdateOptions = UpdateCommon &
   Pick<
     SetupTargetOptions,
@@ -114,24 +141,17 @@ function failureSummary(error: unknown): string {
 }
 
 /**
- * Regenerate every target recorded in `.github/tailor.lock` with the inputs it
- * was generated with. A target that cannot be regenerated does not stop the
+ * Regenerate every workflow recorded in `.github/tailor.lock` with the inputs it
+ * was generated with. A workflow that cannot be regenerated does not stop the
  * others; all of them are reported together at the end.
  * @param options - Update options
  */
 export async function setupUpdate(options: UpdateOptions): Promise<void> {
   const { force, outputDir, ...loaders } = options;
-  const lock = readLock(outputDir);
-  if (!lock || lock.targets.length === 0) {
-    throw new Error(
-      "No managed workflows found (.github/tailor.lock is missing or empty). " +
-        "Run `tailor setup ci branch` (or another setup subcommand) first.",
-    );
-  }
+  const lock = readManagedLock(outputDir);
 
-  const { targets } = lock;
   const failures: string[] = [];
-  for (const target of targets) {
+  for (const target of lock.targets) {
     const label = `[${target.kind} ${target.workspaceName}]`;
     try {
       await setupTarget({ ...planUpdate(target, { force, outputDir }), ...loaders });
@@ -139,16 +159,24 @@ export async function setupUpdate(options: UpdateOptions): Promise<void> {
       failures.push(`${label} ${failureSummary(error)}`);
     }
   }
+  if (lock.autofix) {
+    try {
+      await setupAutofix(planAutofixUpdate(lock.autofix, { force, outputDir }));
+    } catch (error) {
+      failures.push(`[${AUTOFIX_LABEL}] ${failureSummary(error)}`);
+    }
+  }
 
-  const updated = targets.length - failures.length;
+  const total = managedWorkflows(lock).length;
+  const updated = total - failures.length;
   if (failures.length === 0) {
     logger.newline();
-    logger.success(`Updated ${String(updated)} target(s). Review and commit the changes.`);
+    logger.success(`Updated ${String(updated)} workflow(s). Review and commit the changes.`);
     return;
   }
   throw new Error(
-    `${String(failures.length)} target(s) could not be updated ` +
-      `(${String(updated)} of ${String(targets.length)} updated):\n` +
+    `${String(failures.length)} workflow(s) could not be updated ` +
+      `(${String(updated)} of ${String(total)} updated):\n` +
       failures.map((failure) => `  ${failure.replaceAll("\n", "\n    ")}`).join("\n") +
       "\nAddress each one above, then re-run `tailor setup update`.",
   );

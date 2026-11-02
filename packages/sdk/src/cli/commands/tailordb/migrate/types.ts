@@ -266,10 +266,7 @@ export interface SchemaDrift {
 /**
  * Reason why remote schema verification was skipped for a namespace
  */
-export type RemoteSchemaVerificationSkipReason =
-  | "not_deployed"
-  | "no_migration_label"
-  | "no_snapshot";
+export type RemoteSchemaVerificationSkipReason = "not_deployed" | "no_snapshot";
 
 export interface MigrationCheckpointRepair {
   namespace: string;
@@ -304,12 +301,18 @@ export interface RemoteSchemaVerificationResult {
    * before `migration rebaseline` ran, rather than a generic history mismatch.
    */
   rebaselinePending?: RebaselinePendingInfo;
+  /** Set alongside `checkpointMissingLocal`: the latest local migration, or `null` when the local history has none */
+  localLatestMigration?: number | null;
+  /** Set alongside `checkpointMissingLocal`: whether the namespace records another migration history ID, or one that cannot be read */
+  historyIdMismatch?: boolean;
   /** Safe checkpoint reset offered after the remote schema matched the local baseline */
   checkpointRepair?: Omit<MigrationCheckpointRepair, "namespace">;
+  /** Set when the namespace has tables but no migration checkpoint, so it was verified as checkpoint 0 */
+  checkpointUnset?: true;
   /** Migration the namespace records as left in progress */
   migrationInProgress?: MigrationInProgress;
   /** Set when the namespace records a migration left in progress that cannot be read */
   migrationInProgressInvalid?: true;
-  /** Set when verification could not run (no remote migration label, or no snapshot at the remote migration number) */
+  /** Set when verification could not run (namespace not deployed, or no snapshot at the remote migration number) */
   skipped?: RemoteSchemaVerificationSkipReason;
 }

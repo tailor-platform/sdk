@@ -4,6 +4,7 @@ import * as path from "pathe";
 import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { writePlatformConfig } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
@@ -152,6 +153,23 @@ describe("workspace ttl", () => {
       }
     });
 
+    test("reports the expiry it records in the success message", async () => {
+      vi.useFakeTimers({ now: Date.parse("2026-10-04T00:00:00.750Z"), toFake: ["Date"] });
+      try {
+        stubClient();
+        using _logger = silenceLogger("out");
+        using successSpy = vi.spyOn(logger, "success").mockImplementation(() => {});
+
+        await runCommand(setCommand, ["--workspace-id", workspaceId, "--ttl", "1h"]);
+
+        expect(successSpy).toHaveBeenCalledWith(
+          "Workspace becomes prunable at 2026-10-04T01:00:00.000Z.",
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     test("reports no change under JSON output when the workspace already records that expiry", async () => {
       const now = Date.parse("2026-10-04T00:00:00.500Z");
       vi.useFakeTimers({ now, toFake: ["Date"] });
@@ -176,13 +194,17 @@ describe("workspace ttl", () => {
       }
     });
 
-    test("rejects a duration it cannot parse before calling the platform", async () => {
+    test.each([
+      ["24", "Invalid duration format"],
+      ["50000000d", "TTL must be less than 50,000,000 days"],
+    ])("rejects --ttl %s before calling the platform", async (ttl, message) => {
       const client = stubClient();
       using _logger = silenceLogger("success", "error");
 
-      const result = await runCommand(setCommand, ["--workspace-id", workspaceId, "--ttl", "24"]);
+      const result = await runCommand(setCommand, ["--workspace-id", workspaceId, "--ttl", ttl]);
 
       expect(result.success).toBe(false);
+      expect(String(result.error)).toContain(message);
       expect(client.setMetadata).not.toHaveBeenCalled();
     });
   });

@@ -23,7 +23,6 @@ interface GeneratedFile {
   path: string;
   content: string;
   skipIfExists?: boolean;
-  executable?: boolean;
 }
 
 /**

@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import { CLIError } from "#/cli/shared/errors";
 import { type MigrationDiff } from "./diff-calculator";
+import { formatNamespaceMigrationHint } from "./hints";
 import { formatMigrationNumber } from "./migration-number";
 import {
   DIFF_FILE_NAME,
@@ -457,17 +458,32 @@ function missingFileSuggestion(label: string, fileName: string, deletable: boole
  * Validate migration files and throw if invalid
  * @param {string} migrationsDir - Migrations directory path
  * @param {string} namespace - Namespace for error messages
+ * @param {string} configPath - Config path the current run used, kept in the suggested command
  * @throws {Error} If validation fails
  */
-export function assertValidMigrationFiles(migrationsDir: string, namespace: string): void {
+export function assertValidMigrationFiles(
+  migrationsDir: string,
+  namespace: string,
+  configPath: string,
+): void {
   const errors = validateMigrationFiles(migrationsDir);
   if (errors.length > 0) {
     const errorMessages = errors.map((e) => `  - ${e.message}`).join("\n");
     const suggestions = new Set(errors.flatMap((e) => (e.suggestion ? [e.suggestion] : [])));
+    if (errors.some((e) => e.suggestion === undefined)) {
+      const initHint = formatNamespaceMigrationHint({
+        subcommand: ["generate", "--init"],
+        namespace,
+        configPath,
+      });
+      suggestions.add(
+        `Restore the migration files from version control. If no workspace has been deployed with these migrations, you can instead recreate ${formatMigrationNumber(INITIAL_SCHEMA_NUMBER)} from the local tables with ${initHint}, which deletes every migration of the namespace.`,
+      );
+    }
     throw CLIError({
       code: "MIGRATION_FILES_INVALID",
       message: `Migration file validation failed for namespace "${namespace}":\n${errorMessages}`,
-      suggestion: suggestions.size > 0 ? [...suggestions].join("\n") : undefined,
+      suggestion: [...suggestions].join("\n"),
     });
   }
 }

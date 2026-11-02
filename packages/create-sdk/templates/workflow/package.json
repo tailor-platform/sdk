@@ -20,8 +20,8 @@
     "@types/node": "26.6.5",
     "graphql": "17.0.2",
     "graphql-request": "7.4.0",
-    "oxfmt": "0.74.0",
-    "oxlint": "1.89.0",
+    "oxfmt": "0.75.0",
+    "oxlint": "1.90.0",
     "oxlint-tsgolint": "7.0.2005",
     "typescript": "6.0.3",
     "vitest": "5.0.5"

@@ -464,10 +464,26 @@ export const multiConfigArg = {
     alias: "c",
     description:
       "Path to SDK config file. Use comma-separated paths to deploy multiple apps together.",
-    env: "TAILOR_PLATFORM_SDK_CONFIG_PATH",
+    env: "TAILOR_CONFIG_PATH",
     completion: { type: "file", extensions: ["ts"] },
   }),
 } satisfies ArgsShape;
+
+/**
+ * Read the deploy config paths set through the environment, warning when the deprecated TAILOR_PLATFORM_SDK_CONFIG_PATH supplies them.
+ * Call it at run time: politty fills `args` from the environment before `--env-file` loads.
+ * @returns TAILOR_CONFIG_PATH, or the deprecated TAILOR_PLATFORM_SDK_CONFIG_PATH; empty values count as not set
+ */
+export function readDeployConfigPathEnv(): string | undefined {
+  const configPath = process.env.TAILOR_CONFIG_PATH;
+  if (configPath) return configPath;
+  const deprecatedConfigPath = process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH;
+  if (!deprecatedConfigPath) return undefined;
+  logger.warn(
+    "TAILOR_PLATFORM_SDK_CONFIG_PATH is deprecated. Please use TAILOR_CONFIG_PATH instead.",
+  );
+  return deprecatedConfigPath;
+}
 
 /**
  * Arguments for commands that interact with deployed resources (includes config)
@@ -486,6 +502,9 @@ export const confirmationArgs = {
     description: "Skip confirmation prompts",
   }),
 } satisfies ArgsShape;
+
+/** Suggestion for a confirmation prompt that {@link confirmationArgs} skips but cannot be shown. */
+export const SKIP_CONFIRMATION_SUGGESTION = "Pass --yes to skip the confirmation.";
 
 /**
  * Arguments for commands that require organization context

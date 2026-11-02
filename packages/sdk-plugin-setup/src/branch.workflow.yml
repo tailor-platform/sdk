@@ -504,7 +504,7 @@ jobs:
             head_missing="true"
           elif ! (
             cd "$GITHUB_WORKSPACE/$APP_DIR" || exit 1
-            TAILOR_PLATFORM_SDK_DTS_PATH="$dts_output/head-$NAMESPACE.d.ts" \
+            TAILOR_DTS_PATH="$dts_output/head-$NAMESPACE.d.ts" \
               run_tailor_cli tailordb erd export --config "$head_config" --namespace "$NAMESPACE" --output "$head_output"
           ) >"$head_log" 2>&1; then
             if grep -q 'not found in local config.db' "$head_log"; then
@@ -524,7 +524,7 @@ jobs:
             echo "Base ERD config not found; rendering current objects as added."
             base_missing="true"
           elif ! (
-            TAILOR_PLATFORM_SDK_DTS_PATH="$dts_output/base-$NAMESPACE.d.ts" \
+            TAILOR_DTS_PATH="$dts_output/base-$NAMESPACE.d.ts" \
               run_base_tailor_cli_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config" --namespace "$NAMESPACE" --output "$base_output"
           ) >"$base_log" 2>&1; then
             if grep -q 'not found in local config.db' "$base_log"; then

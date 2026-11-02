@@ -558,24 +558,24 @@ export async function resolveDeployWorkspace(
   const client = await initOperatorClient(accessToken, platformConfig);
 
   if (explicitWorkspaceId) {
+    const workspaceNotFoundError = () => {
+      const listArgs = ["workspace", "list", ...workspaceCommandArgs(options)];
+      return CLIError({
+        code: "WORKSPACE_NOT_FOUND",
+        message: `Workspace "${explicitWorkspaceId}" was not found.`,
+        suggestion: `Check the workspace ID; run ${formatCommandHint({ command: "tailor", args: listArgs })} to see the workspaces you can access.`,
+        next: executableAction([...listArgs, "--json"]),
+      });
+    };
     let response;
     try {
       response = await client.getWorkspace({ workspaceId: explicitWorkspaceId });
     } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        throw CLIError({
-          code: "WORKSPACE_NOT_FOUND",
-          message: `Workspace "${explicitWorkspaceId}" was not found.`,
-        });
-      }
+      if (error instanceof ConnectError && error.code === Code.NotFound)
+        throw workspaceNotFoundError();
       throw error;
     }
-    if (!response.workspace) {
-      throw CLIError({
-        code: "WORKSPACE_NOT_FOUND",
-        message: `Workspace "${explicitWorkspaceId}" was not found.`,
-      });
-    }
+    if (!response.workspace) throw workspaceNotFoundError();
     return useWorkspace(client, platformUrl, workspaceInfo(response.workspace), options, "warn");
   }
 

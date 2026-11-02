@@ -106,7 +106,8 @@ entirely and `apply.createUpdateServices` follows
 its replan only emits `plan.functionRegistry`, `plan.pipeline`,
 `plan.application`, `plan.executor`, and `plan.workflow` — the other `plan.*`
 spans under `plan` (including `plan.validateTailorDBTypeNames`) reuse their
-result from the first plan instead of running again.
+result from the first plan instead of running again. A second `confirm` span
+follows the replan, asking only about what it added.
 
 The rebuild itself is similarly scoped: it re-resolves `env` and rebundles
 only workflow jobs and auth hooks, the two kinds of bundled code that embed

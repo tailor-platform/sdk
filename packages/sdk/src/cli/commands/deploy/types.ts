@@ -24,6 +24,8 @@ export interface PlanContext {
   noSchemaCheck?: boolean;
   /** Steps of an in-progress multi-step migration to skip, keyed by namespace. */
   migrationSkipSteps?: ReadonlyMap<string, readonly string[]>;
+  /** Profile and env-file arguments of this deploy, kept in the migration commands it suggests. */
+  migrationRecoveryArgs?: readonly string[];
   forceApplyAll?: boolean;
   /**
    * Set of IdP names that have at least one executor with an idpUser trigger.

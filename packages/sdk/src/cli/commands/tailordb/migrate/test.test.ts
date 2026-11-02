@@ -165,6 +165,23 @@ describe("tailordb migration test", () => {
     );
   });
 
+  test("rejects an excessive --keep-ttl before creating a workspace", async () => {
+    const dependencies = createDependencies([]);
+    mocks.dependencies = dependencies;
+
+    const result = await runCommand(testCommand, [
+      "--data",
+      "seed",
+      "--keep",
+      "--keep-ttl",
+      "50000000d",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("TTL must be less than 50,000,000 days");
+    expect(dependencies.createWorkspace).not.toHaveBeenCalled();
+  });
+
   describe("organization and folder from an --env-file", () => {
     const organizationId = "aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaaa";
     const folderId = "bbbbbbbb-2222-4bbb-8bbb-bbbbbbbbbbbb";

@@ -38,6 +38,17 @@ describe("collectForeignKeyReferences", () => {
         ownerID: { foreignKeyType: "User" },
         info: { fields: { ownerCode: { foreignKeyType: "User", foreignKeyField: "code" } } },
       }),
-    ).toEqual([{ table: "User" }, { table: "User", field: "code" }]);
+    ).toEqual([
+      { table: "User", path: "ownerID" },
+      { table: "User", field: "code", path: "info.ownerCode" },
+    ]);
+  });
+
+  test("names each reference by its dotted path through nested fields", () => {
+    expect(
+      collectForeignKeyReferences({
+        a: { fields: { b: { fields: { parentID: { foreignKeyType: "Node" } } } } },
+      }).map((reference) => reference.path),
+    ).toEqual(["a.b.parentID"]);
   });
 });

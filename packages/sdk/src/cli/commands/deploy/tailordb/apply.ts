@@ -5,11 +5,17 @@ import {
 } from "#/cli/commands/tailordb/migrate/config";
 import { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-state";
 import {
+  formatNamespaceMigrationHint,
+  migrationCommandContext,
+  type MigrationCommandContext,
+} from "#/cli/commands/tailordb/migrate/hints";
+import {
   describeMigrationCheckpoint,
   fetchRemoteMigrationState,
   isCheckpointStillOwned,
   type ExpectedMigrationCheckpoint,
 } from "#/cli/commands/tailordb/migrate/remote-state";
+import { locateRemoteCheckpoint } from "#/cli/commands/tailordb/migrate/schema-checks";
 import { usesStepRunner } from "#/cli/commands/tailordb/migrate/script-form";
 import {
   reconstructSnapshotFromMigrations,
@@ -88,24 +94,34 @@ import type { MigrationRunKind, PendingMigration } from "#/cli/commands/tailordb
 import type { ApplyPhase } from "../types";
 import type { planTailorDB, TailorDBChangeSet, TailorDBPlanResult } from "./plan";
 
+function deployCommandContext(context: TailorDBPlanResult["context"]): MigrationCommandContext {
+  return migrationCommandContext({
+    workspaceId: context.workspaceId,
+    configPath: context.config.path,
+    extraArgs: context.migrationRecoveryArgs,
+  });
+}
+
 /**
  * Reconcile each namespace's migration checkpoint and history ID to
  * the working tree after a create-update apply.
  *
  * This records the initial baseline (`0000`), which is deployed via the normal
- * flow and never bumps the label itself, and keeps the label `<= working_tree_max`
- * after a `--no-schema-check` deploy from an older revision. Namespaces without a
- * baseline are skipped so no phantom label is written.
+ * flow and never bumps the label itself. A checkpoint that is not in the local
+ * migration history is left unchanged, so a deploy never moves it back.
+ * Namespaces without a baseline are skipped so no phantom label is written.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param namespacesWithMigrations - Namespaces that have migration directories configured
  * @param migrationHistoryIds - Migration history ID captured during preflight for each namespace
+ * @param commandContext - Config and workspace selection of the deploy, kept in the suggested commands
  */
 async function reconcileMigrationLabels(
   client: OperatorClient,
   workspaceId: string,
   namespacesWithMigrations: NamespaceWithMigrations[],
   migrationHistoryIds: Readonly<Record<string, string | null>>,
+  commandContext: MigrationCommandContext,
 ): Promise<void> {
   for (const { namespace, migrationsDir } of namespacesWithMigrations) {
     if (getMigrationFiles(migrationsDir).length === 0) {
@@ -119,6 +135,20 @@ async function reconcileMigrationLabels(
     ).catch(() => null);
     const currentVersion = remoteState?.number ?? null;
     if (remoteState && currentVersion === targetVersion && remoteState.historyId === historyId) {
+      continue;
+    }
+    if (
+      remoteState &&
+      locateRemoteCheckpoint(
+        remoteState,
+        migrationsDir,
+        reconstructSnapshotFromMigrations(migrationsDir, 0)?.rebaseline,
+      ).kind === "outside"
+    ) {
+      logger.warn(
+        `Migration checkpoint of namespace ${namespace} is ${describeMigrationCheckpoint(currentVersion)}, which is not in the local migration history, so it was left unchanged. ` +
+          `Run ${formatNamespaceMigrationHint({ ...commandContext, subcommand: ["status"], namespace })} to compare.`,
+      );
       continue;
     }
     await updateMigrationLabel(
@@ -146,6 +176,7 @@ async function reconcileMigrationLabels(
  * @param migrationContext - Planned TailorDB context
  * @param machineUsers - Machine user that runs the scripts of each namespace
  * @param maintenanceMode - Whether the migrating namespaces are in maintenance mode
+ * @param migrationHistoryIds - Migration history ID captured during preflight for each namespace
  * @returns Migration context for script execution
  */
 async function buildMigrationContextForScripts(
@@ -153,6 +184,7 @@ async function buildMigrationContextForScripts(
   migrationContext: Awaited<ReturnType<typeof planTailorDB>>["context"],
   machineUsers: MigrationMachineUsers,
   maintenanceMode: boolean,
+  migrationHistoryIds: Readonly<Record<string, string | null>>,
 ): Promise<MigrationContext> {
   // TailorDB apply always runs after staticWebsite apply in the same pass, so a
   // site this deploy just created already exists here even though `env` was
@@ -169,11 +201,15 @@ async function buildMigrationContextForScripts(
     authNamespace: machineUsers.authNamespace,
     machineUserByNamespace: machineUsers.byNamespace,
     env,
-    configDir: path.dirname(migrationContext.config.path),
+    configPath: migrationContext.config.path,
+    ...(migrationContext.migrationRecoveryArgs
+      ? { migrationRecoveryArgs: migrationContext.migrationRecoveryArgs }
+      : {}),
     appName: migrationContext.application.name,
     appId: migrationContext.application.id,
     maintenanceMode,
     skipSteps: migrationContext.migrationSkipSteps,
+    migrationHistoryIds,
   };
 }
 
@@ -223,6 +259,7 @@ async function validateTailorDBMigrationState(
     context.config,
     context.noSchemaCheck,
     context.tailorDBInputs,
+    context.migrationRecoveryArgs,
   );
   const approvedRepairs = context.checkpointRepairs;
   const repairPlanChanged =
@@ -619,6 +656,7 @@ async function applyCreateUpdate(
         migrationContext,
         migrationMachineUsers,
         phaseSettings.restricted,
+        migrationHistoryIds,
       )
     : undefined;
 
@@ -664,16 +702,14 @@ async function applyCreateUpdate(
 
   // Skip when pending migrations ran: each already bumped the label, and
   // re-pinning to working_tree_max could mask one left intentionally pending
-  // (e.g. a missing script). --no-schema-check always re-pins to repair drift.
-  if (
-    namespacesWithMigrations.length > 0 &&
-    (migrationContext.noSchemaCheck || pendingMigrations.length === 0)
-  ) {
+  // (e.g. a missing script).
+  if (namespacesWithMigrations.length > 0 && pendingMigrations.length === 0) {
     await reconcileMigrationLabels(
       client,
       migrationContext.workspaceId,
       namespacesWithMigrations,
       migrationHistoryIds,
+      deployCommandContext(migrationContext),
     );
   }
 
@@ -1237,10 +1273,13 @@ async function rollbackMigration(
     : "cleared";
   if (record !== "cleared") {
     runLog.partial.set(migration.namespace, migration);
-    return rollbackSkippedError(migration, error, phaseSettings.restricted, {
-      confirmed: record === "in-progress",
-      kind,
-    });
+    return rollbackSkippedError(
+      migration,
+      error,
+      phaseSettings.restricted,
+      { confirmed: record === "in-progress", kind },
+      deployCommandContext(migrationContext),
+    );
   }
   const attemptedTables = new Set(attempt.attemptedTables);
   const resumedRollback = rollsBackOnFailure && inProgress;
@@ -1418,12 +1457,15 @@ async function commitMigration(
   try {
     await executeSingleMigrationPostPhaseDeletions(client, changeSet, migration);
   } catch (error) {
+    const syncHint = formatNamespaceMigrationHint({
+      ...deployCommandContext(migrationContext),
+      subcommand: ["sync", formatMigrationNumber(migration.number)],
+      namespace: migration.namespace,
+    });
     logger.warn(
       `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} was committed, but post-checkpoint cleanup failed. ` +
-        (phaseSettings.restricted
-          ? "The leftover resources remain locked. Remove them"
-          : "Remove the leftover resources") +
-        " manually before the next deployment; remote schema verification will fail closed until then.",
+        (phaseSettings.restricted ? "The leftover resources remain locked. " : "") +
+        `Before the next deployment, delete them by running ${syncHint}, or remove them manually; remote schema verification will fail closed until then.`,
     );
     throw error;
   }
@@ -1558,6 +1600,11 @@ async function checkRestorationCheckpoint(
   expectedCheckpoint: ExpectedMigrationCheckpoint,
 ): Promise<CLIError | undefined> {
   const { restricted } = flow.phaseSettings;
+  const statusHint = formatNamespaceMigrationHint({
+    ...deployCommandContext(flow.migrationContext),
+    subcommand: ["status"],
+    namespace: namespaceName,
+  });
   let remoteState: Awaited<ReturnType<typeof fetchRemoteMigrationState>>;
   try {
     remoteState = await fetchRemoteMigrationState(
@@ -1576,7 +1623,7 @@ async function checkRestorationCheckpoint(
         (restricted
           ? `The tables of namespace '${namespaceName}' keep the restrictions this deploy set (${RESTRICTION_EFFECT}). `
           : `The table settings of namespace '${namespaceName}' are left unchanged. `) +
-        `${describeSkippedTables(tables)}Run \`tailor tailordb migration status --namespace ${namespaceName}\` to check the checkpoint, restore connectivity if it fails, then deploy again.`,
+        `${describeSkippedTables(tables)}Run ${statusHint} to check the checkpoint, restore connectivity if it fails, then deploy again.`,
       context: {
         namespace: namespaceName,
         expectedCheckpoint: expectedCheckpoint.number,
@@ -1596,7 +1643,7 @@ async function checkRestorationCheckpoint(
       (restricted
         ? `Another deploy changed the checkpoint, so the tables of namespace '${namespaceName}' keep the restrictions this deploy set (${RESTRICTION_EFFECT}). `
         : `Another deploy changed the checkpoint, so the table settings of namespace '${namespaceName}' are left unchanged. `) +
-      `${describeSkippedTables(tables)}Wait for the other deploy to finish, run \`tailor tailordb migration status --namespace ${namespaceName}\` to see the checkpoint and any migration in progress, then check the tables before deploying again.`,
+      `${describeSkippedTables(tables)}Wait for the other deploy to finish, run ${statusHint} to see the checkpoint and any migration in progress, then check the tables before deploying again.`,
     context: {
       namespace: namespaceName,
       expectedCheckpoint: expectedCheckpoint.number,

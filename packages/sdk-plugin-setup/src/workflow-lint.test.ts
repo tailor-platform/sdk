@@ -11,11 +11,13 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { aroundAll, describe, expect, test } from "vitest";
 import {
+  AUTOFIX_PROVIDERS,
   renderBranchWorkflow,
   renderPreviewWorkflow,
   renderTagWorkflow,
   type PackageManager,
 } from "./templates";
+import { renderAutofixFor } from "./test-helpers/autofix";
 import { tempDir } from "./test-helpers/temp-dir";
 
 function isZizmorAvailable(): boolean {
@@ -361,4 +363,25 @@ describe.skipIf(!zizmorAvailable)("zizmor audit of renderPreviewWorkflow", () =>
     const { ok, output } = writeAndAudit(fileName, content);
     expect(ok, `zizmor findings:\n${output}`).toBe(true);
   });
+});
+
+describe.skipIf(!zizmorAvailable)("zizmor audit of renderAutofixWorkflow", () => {
+  const cases = AUTOFIX_PROVIDERS.flatMap((provider) =>
+    ALL_PM.map((packageManager) => ({
+      name: `autofix / ${provider} / ${packageManager}`,
+      fileName: `autofix-${provider}-${packageManager}`,
+      provider,
+      packageManager,
+      dirs: packageManager === "pnpm" ? ["apps/erp", "apps/users"] : ["."],
+    })),
+  );
+
+  test.each(cases)(
+    "$name has no zizmor findings",
+    ({ fileName, provider, packageManager, dirs }) => {
+      const { content } = renderAutofixFor(provider, { dirs, packageManager });
+      const { ok, output } = writeAndAudit(fileName, content);
+      expect(ok, `zizmor findings:\n${output}`).toBe(true);
+    },
+  );
 });

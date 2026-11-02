@@ -1,5 +1,6 @@
 import { runCommand } from "@politty/zod";
 import { describe, expect, test, vi } from "vitest";
+import { SKIP_CONFIRMATION_SUGGESTION } from "#/cli/shared/args";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
@@ -33,6 +34,9 @@ describe("workspace user remove command", () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toMatchObject({ code: "WORKSPACE_USER_REMOVAL_CANCELLED" });
+    expect(prompt.text).toHaveBeenCalledWith(
+      expect.objectContaining({ suggestion: SKIP_CONFIRMATION_SUGGESTION }),
+    );
     expect(client.removeWorkspacePlatformUser).not.toHaveBeenCalled();
   });
 

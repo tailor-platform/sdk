@@ -1,5 +1,6 @@
 import { runCommand } from "@politty/zod";
 import { describe, expect, test, vi } from "vitest";
+import { SKIP_CONFIRMATION_SUGGESTION } from "#/cli/shared/args";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
@@ -43,6 +44,7 @@ describe("secret delete command", () => {
 
     expect(prompt.text).toHaveBeenCalledWith({
       message: 'Enter the secret name to confirm deletion ("stripe"):',
+      suggestion: SKIP_CONFIRMATION_SUGGESTION,
     });
     expect(result.success).toBe(false);
     expect(result.error).toMatchObject({ code: "SECRET_DELETION_CANCELLED" });

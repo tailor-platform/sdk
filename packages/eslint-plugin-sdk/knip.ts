@@ -6,4 +6,5 @@ export default {
   // still allow >=9.0.0. Nothing imports it directly.
   ignoreDependencies: ["@types/eslint"],
   ignoreBinaries: ["knip", "publint"],
+  treatConfigHintsAsErrors: true,
 } satisfies KnipConfig;

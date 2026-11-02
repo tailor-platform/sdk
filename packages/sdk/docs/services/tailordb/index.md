@@ -243,7 +243,7 @@ const order = db.table("Order", {
 });
 ```
 
-A relation inside `db.object()` that points at its own table is not yet handled by `tailor seed apply` or by the data copy a table rename generates. Both write rows in batches, and the platform rejects a row whose parent is in the same or a later batch.
+A relation inside `db.object()` can point at its own table, for example `links.parentID` on `Node`. `tailor seed apply` inserts a row before the rows that point at it, in whatever order the seed data lists them, and follows every element of an array. This needs a unique `id` on every row, and a reference must match the referenced value exactly, including letter case. Otherwise the rows can be inserted in the order the file lists them. The data copy that a table rename generates inserts such references as null and restores them once every row exists.
 
 Create relations against different fields using `toward.key`:
 

@@ -86,6 +86,36 @@ describe("sortRecordsBySelfReference", () => {
     expect(sortRecordsBySelfReference(records, [])).toBe(records);
   });
 
+  test("orders a parent before a child that points at it from inside a nested object", () => {
+    const records = [
+      { id: "child", link: { parentID: "parent" } },
+      { id: "parent", link: { parentID: null } },
+    ];
+    const sorted = sortRecordsBySelfReference(records, ["link.parentID"]);
+    expect(sorted.map((r) => r.id)).toEqual(["parent", "child"]);
+  });
+
+  test("waits for every parent that elements of a nested array point at", () => {
+    const records = [
+      { id: "c", links: [{ parentID: "a" }, { parentID: "b" }] },
+      { id: "b", links: [{ parentID: "a" }] },
+      { id: "a", links: [] },
+    ];
+    const sorted = sortRecordsBySelfReference(records, ["links.parentID"]);
+    expect(sorted.map((r) => r.id)).toEqual(["a", "b", "c"]);
+  });
+
+  test("resolves a reference inside a nested object through a non-id target key", () => {
+    const records = [
+      { id: "child-id", code: "child", link: { parentCode: "parent" } },
+      { id: "parent-id", code: "parent", link: { parentCode: null } },
+    ];
+    const sorted = sortRecordsBySelfReference(records, ["link.parentCode"], {
+      "link.parentCode": "code",
+    });
+    expect(sorted.map((r) => r.code)).toEqual(["parent", "child"]);
+  });
+
   test("resolves edges through a non-id target key", () => {
     // A self-reference doesn't always point at the parent's `id` — it can be
     // keyed to another unique field (e.g. `code`). Without fieldKeys, the

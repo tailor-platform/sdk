@@ -38,6 +38,7 @@ tailor setup update
 | `setup ci branch`  | Generate a branch-target deploy workflow (push to branch triggers deploy).                                                               |
 | `setup ci tag`     | Generate a tag-target deploy workflow (tag push triggers deploy).                                                                        |
 | `setup ci preview` | Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).                                                        |
+| `setup ci autofix` | Generate a workflow that runs `tailor generate` on each PR and commits what it changes to the PR branch.                                 |
 | `setup ci env`     | Print the secrets and variables each GitHub Environment needs, as `gh` commands or Terraform, or check which are registered (`--check`). |
 | `setup deps`       | Generate a dependency update config for Tailor dependency and workflow updates.                                                          |
 | `setup check`      | Audit generated workflows for drift against the current config/repo (read-only).                                                         |

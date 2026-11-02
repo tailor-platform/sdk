@@ -1248,7 +1248,7 @@ export default createWorkflow({
     test("strips platform-bundle-only symbols from cross-file default import", async () => {
       const result = await buildBundleFixture({ ext: "ts", importPath: "./simple" });
 
-      // The platform bundle must fold away the TAILOR_PLATFORM_BUNDLE gate and
+      // The platform bundle must fold away the __TAILOR_PLATFORM_BUNDLE gate and
       // tree-shake every test-only symbol; otherwise an unsubstituted process.env.*
       // reaches the Platform Web runtime (no `process`) and crashes.
       for (const code of result.bundledCode.values()) {

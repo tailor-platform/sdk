@@ -151,6 +151,11 @@ export type legacy = typeof legacy;
       path.join(sdkNodeModules, "@tailor-platform", "function-kysely-tailordb"),
       path.join(tailorPlatformDir, "function-kysely-tailordb"),
     );
+    fs.mkdirSync(path.join(nodeModulesDir, ".bin"), { recursive: true });
+    fs.symlinkSync(
+      path.resolve(sdkRoot, "..", "sdk-plugin-seed", "bin", "cli.mjs"),
+      path.join(nodeModulesDir, ".bin", "tailor-seed"),
+    );
 
     await runSuite();
   }, 300000);
@@ -412,5 +417,252 @@ export async function main(trx: Transaction): Promise<void> {
       expect(deploy.exitCode).toBe(0);
     },
     cliTestTimeout(CLI_BUDGET_MS.local, CLI_BUDGET_MS.local, CLI_BUDGET_MS.migratingDeploy),
+  );
+
+  function writeNodeType(tableName: "Node" | "Vertex"): void {
+    const other = tableName === "Node" ? "vertex" : "node";
+    fs.rmSync(path.join(tempDir, "tailordb", `${other}.ts`), { force: true });
+    const exportName = tableName.toLowerCase();
+    fs.writeFileSync(
+      path.join(tempDir, "tailordb", `${exportName}.ts`),
+      `import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+
+export const ${exportName} = db.table("${tableName}", {
+  parentID: db.uuid({ optional: true }).relation({ type: "keyOnly", toward: { table: "self" } }),
+  info: db.object(
+    { parentID: db.uuid({ optional: true }).relation({ type: "keyOnly", toward: { table: "self" } }) },
+    { optional: true },
+  ),
+  links: db.object(
+    { parentID: db.uuid({ optional: true }).relation({ type: "keyOnly", toward: { table: "self" } }) },
+    { array: true, optional: true },
+  ),
+}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
+
+export type ${exportName} = typeof ${exportName};
+`,
+    );
+  }
+
+  const ROOT_ID = "60000000-0000-4000-8000-000000000021";
+  const CHILD_ID = "60000000-0000-4000-8000-000000000022";
+  const GRANDCHILD_ID = "60000000-0000-4000-8000-000000000023";
+
+  test(
+    "stores a self-referential foreign key inside a nested field",
+    async ({ signal }) => {
+      writeNodeType("Node");
+      const deploy = await migrateWithScript(
+        "  markerOne: db.string({ optional: true }),\n  markerTwo: db.string({ optional: true }),\n  markerThree: db.string({ optional: true }),\n  markerFour: db.string({ optional: true }),\n  markerFive: db.string({ optional: true }),\n",
+        `import type { Transaction } from "./db";
+
+export async function main(trx: Transaction): Promise<void> {
+  await trx.insertInto("Node").values({ id: "${ROOT_ID}", parentID: null, info: null, links: [] }).execute();
+  await trx
+    .insertInto("Node")
+    .values({
+      id: "${CHILD_ID}",
+      parentID: "${ROOT_ID}",
+      info: { parentID: "${ROOT_ID}" },
+      links: [{ parentID: "${ROOT_ID}" }],
+    })
+    .execute();
+  await trx
+    .insertInto("Node")
+    .values({
+      id: "${GRANDCHILD_ID}",
+      parentID: "${CHILD_ID}",
+      info: { parentID: "${CHILD_ID}" },
+      links: [{ parentID: "${ROOT_ID}" }, { parentID: "${CHILD_ID}" }],
+    })
+    .execute();
+}
+`,
+        signal,
+      );
+
+      expect(deploy.exitCode).toBe(0);
+      const resp = await client.getTailorDBType({
+        workspaceId,
+        namespaceName: tailordbName,
+        tailordbTypeName: "Node",
+      });
+      const fields = resp.tailordbType?.schema?.fields;
+      expect(fields?.info?.fields.parentID).toMatchObject({
+        foreignKey: true,
+        foreignKeyType: "Node",
+        foreignKeyField: "id",
+      });
+      expect(fields?.links?.fields.parentID).toMatchObject({
+        foreignKey: true,
+        foreignKeyType: "Node",
+        foreignKeyField: "id",
+      });
+    },
+    cliTestTimeout(CLI_BUDGET_MS.local, CLI_BUDGET_MS.local, CLI_BUDGET_MS.migratingDeploy),
+  );
+
+  test(
+    "rejects a nested self-reference that points at a missing row",
+    async ({ signal }) => {
+      const deploy = await migrateWithScript(
+        "  markerOne: db.string({ optional: true }),\n  markerTwo: db.string({ optional: true }),\n  markerThree: db.string({ optional: true }),\n  markerFour: db.string({ optional: true }),\n  markerFive: db.string({ optional: true }),\n  markerSix: db.string({ optional: true }),\n",
+        `import type { Transaction } from "./db";
+
+export async function main(trx: Transaction): Promise<void> {
+  let message: string | null = null;
+  try {
+    await trx.insertInto("Node").values({ info: null, links: [{ parentID: "${MISSING_ID}" }] }).execute();
+  } catch (error) {
+    message = String(error);
+  }
+  if (message === null) throw new Error("a nested self-reference to a missing row was accepted");
+  if (!/foreign key/i.test(message)) throw new Error("unexpected error: " + message);
+}
+`,
+        signal,
+      );
+
+      expect(deploy.exitCode).toBe(0);
+    },
+    cliTestTimeout(CLI_BUDGET_MS.local, CLI_BUDGET_MS.local, CLI_BUDGET_MS.migratingDeploy),
+  );
+
+  test(
+    "copies rows whose nested values point at their own table when the table is renamed",
+    async ({ signal }) => {
+      writeNodeType("Vertex");
+      const configPath = createConfig();
+      await runInTempDir(
+        [
+          "tailordb",
+          "migration",
+          "generate",
+          "--config",
+          configPath,
+          "--yes",
+          "--rename",
+          "Node:Vertex",
+        ],
+        CLI_BUDGET_MS.local,
+        signal,
+      );
+      const script = fs.readFileSync(
+        getMigrationFilePath(migrationsDir, latestMigrationNumber(), "migrate"),
+        "utf-8",
+      );
+      expect(script).toContain("clearNestedReferences");
+
+      const deploy = await runInTempDir(
+        ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
+        CLI_BUDGET_MS.migratingDeploy,
+        signal,
+      );
+      expect(deploy.exitCode).toBe(0);
+
+      const readBack = await migrateWithScript(
+        "  markerOne: db.string({ optional: true }),\n  markerTwo: db.string({ optional: true }),\n  markerThree: db.string({ optional: true }),\n  markerFour: db.string({ optional: true }),\n  markerFive: db.string({ optional: true }),\n  markerSix: db.string({ optional: true }),\n  markerSeven: db.string({ optional: true }),\n",
+        `import type { Transaction } from "./db";
+
+export async function main(trx: Transaction): Promise<void> {
+  const rows = await trx.selectFrom("Vertex").selectAll().orderBy("id", "asc").execute();
+  const seen = JSON.stringify(
+    rows.map((row) => ({ id: row.id, parentID: row.parentID, info: row.info, links: row.links })),
+  );
+  const expected = JSON.stringify([
+    { id: "${ROOT_ID}", parentID: null, info: null, links: [] },
+    {
+      id: "${CHILD_ID}",
+      parentID: "${ROOT_ID}",
+      info: { parentID: "${ROOT_ID}" },
+      links: [{ parentID: "${ROOT_ID}" }],
+    },
+    {
+      id: "${GRANDCHILD_ID}",
+      parentID: "${CHILD_ID}",
+      info: { parentID: "${CHILD_ID}" },
+      links: [{ parentID: "${ROOT_ID}" }, { parentID: "${CHILD_ID}" }],
+    },
+  ]);
+  if (seen !== expected) throw new Error("PROBE_MISMATCH " + seen);
+}
+`,
+        signal,
+      );
+      expect(readBack.exitCode).toBe(0);
+    },
+    cliTestTimeout(
+      CLI_BUDGET_MS.local,
+      CLI_BUDGET_MS.migratingDeploy,
+      CLI_BUDGET_MS.local,
+      CLI_BUDGET_MS.local,
+      CLI_BUDGET_MS.migratingDeploy,
+    ),
+  );
+
+  const SEED_ROOT_ID = "60000000-0000-4000-8000-000000000031";
+  const SEED_CHILD_ID = "60000000-0000-4000-8000-000000000032";
+  const SEED_GRANDCHILD_ID = "60000000-0000-4000-8000-000000000033";
+
+  test(
+    "seeds rows that point at their own table through nested values, whatever order the data lists them in",
+    async ({ signal }) => {
+      const rows = [
+        {
+          id: SEED_GRANDCHILD_ID,
+          parentID: SEED_CHILD_ID,
+          info: { parentID: SEED_CHILD_ID },
+          links: [{ parentID: SEED_ROOT_ID }, { parentID: SEED_CHILD_ID }],
+        },
+        {
+          id: SEED_CHILD_ID,
+          parentID: SEED_ROOT_ID,
+          info: { parentID: SEED_ROOT_ID },
+          links: [{ parentID: SEED_ROOT_ID }],
+        },
+        { id: SEED_ROOT_ID, parentID: null, info: null, links: [] },
+      ];
+      fs.writeFileSync(
+        path.join(tempDir, "seed", "data", "Vertex.jsonl"),
+        rows.map((row) => JSON.stringify(row)).join("\n") + "\n",
+      );
+      const configPath = createConfig();
+
+      await runInTempDir(
+        ["seed", "apply", "Vertex", "--config", configPath, "--workspace-id", workspaceId],
+        CLI_BUDGET_MS.deploy,
+        signal,
+      );
+
+      const readBack = await migrateWithScript(
+        "  markerOne: db.string({ optional: true }),\n  markerTwo: db.string({ optional: true }),\n  markerThree: db.string({ optional: true }),\n  markerFour: db.string({ optional: true }),\n  markerFive: db.string({ optional: true }),\n  markerSix: db.string({ optional: true }),\n  markerSeven: db.string({ optional: true }),\n  markerEight: db.string({ optional: true }),\n",
+        `import type { Transaction } from "./db";
+
+export async function main(trx: Transaction): Promise<void> {
+  const rows = await trx
+    .selectFrom("Vertex")
+    .selectAll()
+    .where("id", "in", ["${SEED_ROOT_ID}", "${SEED_CHILD_ID}", "${SEED_GRANDCHILD_ID}"])
+    .orderBy("id", "asc")
+    .execute();
+  const seen = JSON.stringify(
+    rows.map((row) => ({ id: row.id, parentID: row.parentID, info: row.info, links: row.links })),
+  );
+  const expected = JSON.stringify(${JSON.stringify(
+    [...rows].toSorted((a, b) => a.id.localeCompare(b.id)),
+  )});
+  if (seen !== expected) throw new Error("PROBE_MISMATCH " + seen);
+}
+`,
+        signal,
+      );
+      expect(readBack.exitCode).toBe(0);
+    },
+    cliTestTimeout(
+      CLI_BUDGET_MS.deploy,
+      CLI_BUDGET_MS.local,
+      CLI_BUDGET_MS.local,
+      CLI_BUDGET_MS.migratingDeploy,
+    ),
   );
 });

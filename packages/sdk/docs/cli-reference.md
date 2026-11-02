@@ -52,7 +52,8 @@ flag always wins, so `--json=false` forces table output even when the variable i
 `true`, `True`, `TRUE`, `t`, `T`, and `1` enable JSON; `false`, `False`, `FALSE`, `f`, `F`, and `0`
 keep table output. Other values are rejected. JSON mode also disables interactive prompts, so set the
 variable per invocation or per job rather than exporting it from a shell profile; a command that
-needed a prompt names what selected JSON when it refuses.
+needed a prompt names what selected JSON when it refuses. In JSON mode, pass `--yes` to commands that
+ask for confirmation, and pass the options that a command would otherwise prompt for.
 
 When an AI coding agent such as Claude Code, Codex, Cursor, or Gemini CLI runs the CLI, every
 command defaults to JSON as if `TAILOR_JSON_OUTPUT=true` were set, and `--help` starts with a short
@@ -338,7 +339,7 @@ Commands for managing TailorDB tables, data, and schema migrations.
 | [tailordb migration script](./cli/tailordb.md#tailordb-migration-script)         | Add a migration script (migrate.ts) template to an existing migration directory, or record with --no-script that a migration intentionally has none.                                                                                                                                                                      |
 | [tailordb migration set](./cli/tailordb.md#tailordb-migration-set)               | Set migration checkpoint to a specific number.                                                                                                                                                                                                                                                                            |
 | [tailordb migration status](./cli/tailordb.md#tailordb-migration-status)         | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                                                                                                                                                                                                                      |
-| [tailordb migration sync](./cli/tailordb.md#tailordb-migration-sync)             | Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).                                                                                                                                                                                                                     |
+| [tailordb migration sync](./cli/tailordb.md#tailordb-migration-sync)             | Sync remote TailorDB schema and checkpoint to a local migration snapshot to recover from schema drift or a checkpoint outside the local history.                                                                                                                                                                          |
 | [tailordb migration test](./cli/tailordb.md#tailordb-migration-test)             | Test pending migrations with seed fixtures or cloned data in a temporary workspace.                                                                                                                                                                                                                                       |
 | [tailordb migration validate](./cli/tailordb.md#tailordb-migration-validate)     | Validate the full migration history, unreviewed generated migration scripts, and schema drift (local tables vs. migration snapshot, remote schema vs. migration checkpoint) without deploying. This includes the migration and schema-drift checks used by 'deploy' and exits with a non-zero code when issues are found. |
 
