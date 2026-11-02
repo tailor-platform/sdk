@@ -1479,7 +1479,7 @@ async function commitMigration(
     const failure = toError(error);
     throw withErrorDiagnostics(failure, {
       suggestion: [
-        `Deploy again to delete them, or run ${syncHint}.`,
+        `Deploy again to delete the leftover tables, or run ${syncHint}.`,
         getErrorDiagnostics(failure).suggestion,
       ]
         .filter(Boolean)

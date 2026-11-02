@@ -870,7 +870,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     ]);
     expect(checkpoint.state.cleanup).toBe("m0001");
     const { suggestion } = errorToJson(error).error;
-    expect(suggestion).toContain("Deploy again");
+    expect(suggestion).toContain("Deploy again to delete the leftover tables");
     expect(suggestion).toContain("tailor tailordb migration sync 0001 --namespace test-ns");
     expect(suggestion).toContain("--workspace-id=test-workspace --profile=staging");
     expect(stderr.output).toContain("post-checkpoint cleanup failed");
