@@ -704,7 +704,7 @@ const RESTRICTED_TABLES_RECOVERY =
   "Deploy again: once it finishes, the deploy writes the tables' configured settings back.";
 
 export const ROLLBACK_LEFTOVER_RECOVERY =
-  "Check these tables in the workspace and delete or repair them by hand. A deploy that finds a table the migration history does not know stops with remote schema drift, so deploying again does not release them.";
+  "Deploy again to run the migration again: a table left with the migration's pre-migration schema does not stop it. If that deploy stops with remote schema drift on these tables, check them in the workspace and delete or repair them by hand.";
 
 interface LeftRestrictedOptions {
   /** How the tables are released. */

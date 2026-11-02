@@ -26,6 +26,7 @@ import {
   formatMigrationNumber,
   getLatestMigrationNumber,
   getMigrationFiles,
+  isMigrationRestricted,
   type SchemaSnapshot,
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
@@ -249,6 +250,7 @@ async function validateTailorDBMigrationState(
       staleInProgress: [],
       maintenanceModeCheckpoints: {},
       unfinishedRemovals: new Map(),
+      interruptedMigrations: {},
       migrationMachineUsers: undefined,
     };
   }
@@ -473,7 +475,7 @@ interface RestrictionHistory {
   captured: MigrationRestrictionState;
   /** Tables that migration phases rewrote, which also disables their read. */
   touched: ReadonlySet<string>;
-  /** Whether an earlier deploy left this namespace's migration in progress, so its captured settings are already restricted. */
+  /** Whether an earlier deploy left this namespace's migration in progress or in its Pre-phase, so its captured settings are already restricted. */
   resumed: boolean;
 }
 
@@ -759,7 +761,10 @@ interface MigrationFlow extends Omit<MigrationApplyInput, "holdMaintenanceMode">
   pending: PendingMigrationIndex;
   /** Schema state before each namespace's first pending migration. */
   preMigrationSnapshots: Map<string, SchemaSnapshot>;
+  /** Settings captured before this deploy restricted any table. */
   restrictionState: MigrationRestrictionState;
+  /** Captured settings, with a maintenance mode an earlier deploy recorded released. */
+  settingsBeforeMaintenanceMode: MigrationRestrictionState;
   timeline: MaintenanceTimeline | undefined;
 }
 
@@ -784,6 +789,8 @@ interface MigrationAttempt {
   migration: PendingMigration;
   attemptedTables: Set<string>;
   inProgress: boolean;
+  /** Whether an earlier deploy may have applied this migration's Pre-phase, recorded or not. */
+  resumesPrePhase: boolean;
   runsSteps: boolean;
   runsMain: boolean;
   rollsBackOnFailure: boolean;
@@ -826,17 +833,20 @@ async function applyWithMigrations(
   await executeServicesCreation(client, changeSet);
 
   const pending = indexPendingMigrations(validation.pendingMigrations);
+  const preMigrationSnapshots = loadPreMigrationSnapshots(pending.firstByNamespace);
   const flow: MigrationFlow = {
     ...flowInput,
     migratingNamespaces,
     pending,
-    preMigrationSnapshots: loadPreMigrationSnapshots(
+    preMigrationSnapshots,
+    restrictionState,
+    settingsBeforeMaintenanceMode: releaseRecordedMaintenanceModes(
       migrationContext,
       pending.firstByNamespace,
+      preMigrationSnapshots,
       restrictionState,
       validation.maintenanceModeCheckpoints,
     ),
-    restrictionState,
     timeline: phaseSettings.restricted ? new MaintenanceTimeline() : undefined,
   };
 
@@ -849,7 +859,7 @@ async function applyWithMigrations(
 
   const restoration: RestorationState = {
     snapshots: new Map(flow.preMigrationSnapshots),
-    settings: new Map(restrictionState),
+    settings: new Map(flow.settingsBeforeMaintenanceMode),
     checkpoints: new Map(
       [...pending.firstByNamespace.keys()].map((namespaceName) => [
         namespaceName,
@@ -947,20 +957,12 @@ function indexPendingMigrations(pendingMigrations: PendingMigration[]): PendingM
 }
 
 /**
- * Reconstruct the schema state before each namespace's first pending migration, and
- * release the maintenance mode an earlier deploy recorded at that checkpoint from the
- * captured settings.
- * @param migrationContext - Planned TailorDB context
+ * Reconstruct the schema state before each namespace's first pending migration.
  * @param firstByNamespace - First pending migration of each namespace
- * @param restrictionState - Captured table settings, updated in place
- * @param maintenanceModeCheckpoints - Checkpoint of each namespace's recorded maintenance mode
  * @returns Schema state before each namespace's first pending migration
  */
 function loadPreMigrationSnapshots(
-  migrationContext: TailorDBPlanResult["context"],
   firstByNamespace: ReadonlyMap<string, PendingMigration>,
-  restrictionState: MigrationRestrictionState,
-  maintenanceModeCheckpoints: Readonly<Record<string, number>>,
 ): Map<string, SchemaSnapshot> {
   const preMigrationSnapshots = new Map<string, SchemaSnapshot>();
   for (const [namespace, first] of firstByNamespace) {
@@ -972,10 +974,40 @@ function loadPreMigrationSnapshots(
       });
     }
     preMigrationSnapshots.set(namespace, snapshot);
+  }
+  return preMigrationSnapshots;
+}
+
+/**
+ * Release the maintenance mode an earlier deploy recorded at the checkpoint before each
+ * namespace's first pending migration from a copy of the captured settings. The captured
+ * settings themselves stay as they are, so restricting the namespace leaves those tables alone.
+ * @param migrationContext - Planned TailorDB context
+ * @param firstByNamespace - First pending migration of each namespace
+ * @param preMigrationSnapshots - Schema state before each namespace's first pending migration
+ * @param restrictionState - Captured table settings
+ * @param maintenanceModeCheckpoints - Checkpoint of each namespace's recorded maintenance mode
+ * @returns Captured settings with the recorded maintenance modes released
+ */
+function releaseRecordedMaintenanceModes(
+  migrationContext: TailorDBPlanResult["context"],
+  firstByNamespace: ReadonlyMap<string, PendingMigration>,
+  preMigrationSnapshots: ReadonlyMap<string, SchemaSnapshot>,
+  restrictionState: MigrationRestrictionState,
+  maintenanceModeCheckpoints: Readonly<Record<string, number>>,
+): MigrationRestrictionState {
+  const released = new Map(restrictionState);
+  for (const [namespace, first] of firstByNamespace) {
     const input = migrationContext.tailorDBInputs.find((entry) => entry.namespace === namespace);
     const capturedSettings = restrictionState.get(namespace);
-    if (maintenanceModeCheckpoints[namespace] === first.number - 1 && input && capturedSettings) {
-      restrictionState.set(
+    const snapshot = preMigrationSnapshots.get(namespace);
+    if (
+      maintenanceModeCheckpoints[namespace] === first.number - 1 &&
+      input &&
+      capturedSettings &&
+      snapshot
+    ) {
+      released.set(
         namespace,
         releaseRecordedMaintenanceMode(
           capturedSettings,
@@ -986,7 +1018,24 @@ function loadPreMigrationSnapshots(
       );
     }
   }
-  return preMigrationSnapshots;
+  return released;
+}
+
+/**
+ * The migration of a namespace whose Pre-phase an earlier deploy may have applied: the one
+ * recorded as in progress, or the one an interrupted deploy left without recording it.
+ * @param validation - Validation result of this deploy
+ * @param namespace - TailorDB namespace
+ * @returns The migration's number, or `undefined` when no earlier deploy left one
+ */
+function migrationWithEarlierPrePhase(
+  validation: ValidateAndDetectResult,
+  namespace: string,
+): number | undefined {
+  return (
+    validation.inProgressMigrations[namespace]?.number ??
+    validation.interruptedMigrations[namespace]
+  );
 }
 
 function isOutsideMigrations(flow: MigrationFlow, namespaceName: string | undefined): boolean {
@@ -1127,6 +1176,8 @@ async function runMigration(
     migration,
     attemptedTables,
     inProgress,
+    resumesPrePhase:
+      migrationWithEarlierPrePhase(flow.validation, migration.namespace) === migration.number,
     runsSteps,
     runsMain: migration.hasScript && !runsSteps,
     rollsBackOnFailure:
@@ -1272,7 +1323,7 @@ async function rollbackMigration(
   recordMayExist: boolean,
 ): Promise<unknown> {
   const { client, migrationContext, phaseSettings } = flow;
-  const { migration, rollsBackOnFailure, runsMain, inProgress, gqlPermissionUndo } = attempt;
+  const { migration, rollsBackOnFailure, runsMain, resumesPrePhase, gqlPermissionUndo } = attempt;
   const { workspaceId } = migrationContext;
   const kind = runsMain ? "main" : "steps";
   const clearsRecord = (rollsBackOnFailure || runsMain) && recordMayExist;
@@ -1290,13 +1341,12 @@ async function rollbackMigration(
     );
   }
   const attemptedTables = new Set(attempt.attemptedTables);
-  const resumedRollback = rollsBackOnFailure && inProgress;
   const finalMigration = flow.pending.lastByNamespace.get(migration.namespace) ?? migration;
   for (const tableName of readRollbackScope(
     migration,
     finalMigration,
     gqlPermissionUndo,
-    resumedRollback,
+    resumesPrePhase,
   )) {
     attemptedTables.add(tableName);
   }
@@ -1314,22 +1364,23 @@ async function rollbackMigration(
   if (rollsBackOnFailure || clearsRecord) {
     await removeRunResources(client, workspaceId, migration.namespace, migration.number);
   }
-  if (!rollsBackOnFailure || isMigrationStartRefused(error)) return error;
-  if (inProgress) settleRolledBackRestorationSettings(flow, migration, restoration);
-  return rolledBackError(migration, error);
+  if (isMigrationStartRefused(error)) return error;
+  if (resumesPrePhase) settleRolledBackRestorationSettings(flow, migration, restoration);
+  return rollsBackOnFailure ? rolledBackError(migration, error) : error;
 }
 
 /**
  * Read what the rollback has to undo beyond what this attempt recorded: the GraphQL permission each
  * table had at the prior checkpoint, and for a resumed migration also the tables an earlier deploy's
  * Pre-phase wrote. A resumed migration's snapshot-derived permissions replace this deploy's undo
- * records, because a forced update after an SDK upgrade records the permission the earlier Pre-phase
- * installed as the one to restore. A failure to read the prior checkpoint is logged, so the rollback
- * of this deploy's own writes and the original error go ahead.
+ * records, because a forced update after an SDK upgrade, or a write over a permission the earlier
+ * Pre-phase already set, records the permission that Pre-phase installed as the one to restore. A
+ * failure to read the prior checkpoint is logged, so the rollback of this deploy's own writes and
+ * the original error go ahead.
  * @param migration - The migration being rolled back
  * @param finalMigration - The last pending migration of the namespace
  * @param gqlPermissionUndo - Undo records of this attempt, updated in place
- * @param resumed - Whether an earlier deploy left the migration in progress
+ * @param resumed - Whether an earlier deploy may have applied the migration's Pre-phase
  * @returns The tables to roll back besides those this deploy wrote
  */
 function readRollbackScope(
@@ -1360,8 +1411,9 @@ function readRollbackScope(
 
 /**
  * Point the settings a rolled-back migration's tables are restored to at the schema they
- * returned to. The settings captured at the start of a deploy that resumes a migration are
- * the restrictions an earlier deploy applied, which would stay in place after the rollback.
+ * returned to. The settings captured at the start of a deploy that resumes a migration, or runs
+ * again one whose Pre-phase an earlier deploy left without recording it, are the restrictions that
+ * deploy applied, which would stay in place after the rollback, also on a table the rollback deleted.
  * @param flow - Migration flow
  * @param migration - The migration that was rolled back
  * @param restoration - What the tables return to, updated in place
@@ -1397,7 +1449,7 @@ async function commitMigration(
   runLog: MigrationRunLog,
 ): Promise<void> {
   const { client, changeSet, migrationContext, phaseSettings } = flow;
-  const { migration, inProgress, runsSteps, runsMain } = attempt;
+  const { migration, resumesPrePhase, runsSteps, runsMain } = attempt;
   const previousRestorationSnapshot = restoration.snapshots.get(migration.namespace);
   const previousRestorationSettings = restoration.settings.get(migration.namespace);
   const postMigrationSnapshot = migrationSnapshotCache.load(migration);
@@ -1406,7 +1458,7 @@ async function commitMigration(
   const recordsMaintenanceMode = phaseSettings.restricted;
   const deletedTables = getTablesDeletedAfterCheckpoint(migration.diff);
   const recordsCleanup = deletedTables.size > 0;
-  const capturedSettingsAreEarlierRestrictions = inProgress;
+  const capturedSettingsAreEarlierRestrictions = resumesPrePhase;
   const settleRestorationSettings = () => {
     const input = migrationContext.tailorDBInputs.find(
       (entry) => entry.namespace === migration.namespace,
@@ -1420,7 +1472,7 @@ async function commitMigration(
     for (const [tableName, settings] of previousRestorationSettings ?? []) {
       if (previousRestorationSnapshot?.tables[tableName]) continue;
       const restrictedByEarlierDeploy =
-        capturedSettingsAreEarlierRestrictions &&
+        (capturedSettingsAreEarlierRestrictions || isMigrationRestricted(settings)) &&
         postMigrationSnapshot.tables[tableName] !== undefined;
       if (!restrictedByEarlierDeploy) committedSettings.set(tableName, settings);
     }
@@ -1583,8 +1635,8 @@ function restrictionHistoryOf(
 ): RestrictionHistory {
   return {
     maintenanceMode: flow.phaseSettings.restricted,
-    captured: flow.restrictionState,
-    resumed: flow.validation.inProgressMigrations[namespace] !== undefined,
+    captured: flow.settingsBeforeMaintenanceMode,
+    resumed: migrationWithEarlierPrePhase(flow.validation, namespace) !== undefined,
     touched: new Set(
       runLog.touchedTables.flatMap((entry) =>
         entry.namespace === namespace ? [...entry.tables] : [],

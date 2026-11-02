@@ -12,6 +12,7 @@ import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import {
   parsedType,
   remoteType,
+  restrictedRemoteType,
   snapshotType,
   writeDiff,
   writeInitialSchema,
@@ -391,6 +392,50 @@ describe("tailordb migration validate", () => {
       expect(stderr.output).toContain("Remote schema: OK (remote migration: 0001)");
       expect(stderr.output).toContain(
         "The next deploy deletes Legacy, which migration 0001 removed.",
+      );
+    });
+  });
+
+  describe("a migration a deploy left in its Pre-phase without recording it", () => {
+    beforeEach(() => {
+      writeDiff(state.migrationsDir, 1, [
+        { kind: "table_added", tableName: "Post", after: snapshotType("Post") },
+      ]);
+      state.localTypes = { User: parsedType("User"), Post: parsedType("Post") };
+      state.listTailorDBTypes.mockResolvedValue({
+        tailordbTypes: [
+          remoteType("User", ["id", "name"]),
+          restrictedRemoteType("Post", ["id", "name"]),
+        ],
+        nextPageToken: "",
+      });
+    });
+
+    test("reports the remote schema as valid and names the migration", async () => {
+      using stdout = captureStdout();
+      using _json = jsonMode();
+
+      const result = await runCommand(validateCommand, []);
+
+      expect(result.success).toBe(true);
+      const [report] = JSON.parse(stdout.output);
+      expect(report.valid).toBe(true);
+      expect(report.remoteSchema).toEqual({
+        remoteMigrationNumber: 0,
+        hasDrift: false,
+        drifts: [],
+        interruptedMigration: 1,
+      });
+    });
+
+    test("explains that the next deploy runs the migration again", async () => {
+      using stderr = captureStderr();
+
+      const result = await runCommand(validateCommand, []);
+
+      expect(result.success).toBe(true);
+      expect(stderr.output).toContain(
+        "an earlier deploy left migration 0001 without recording it as in progress; the next deploy runs it again from the start",
       );
     });
   });

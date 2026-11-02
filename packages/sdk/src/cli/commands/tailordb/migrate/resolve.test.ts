@@ -13,6 +13,8 @@ import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { resolveCommand } from "./resolve";
 import {
   parsedType,
+  remoteType,
+  restrictedRemoteType,
   snapshotType,
   writeDiff,
   writeInitialSchema,
@@ -661,6 +663,121 @@ describe("tailordb migration resolve", () => {
 
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/cancelled/);
+    expectNothingWritten();
+  });
+
+  describe("a migration a deploy left in its Pre-phase without recording it", () => {
+    /**
+     * Leave `Comment`, which migration 0002 adds, as an interrupted Pre-phase of 0002 created it.
+     * @param labels - Namespace labels besides the checkpoint at 0001
+     */
+    function leftInPrePhaseOf0002(labels: Record<string, string> = {}): void {
+      remoteLabels({ "sdk-migration": "m0001", ...labels });
+      state.listTailorDBTypes.mockResolvedValue({
+        tailordbTypes: [
+          remoteType("User", ["id", "name"]),
+          remoteType("Post", ["id", "name"]),
+          restrictedRemoteType("Comment", ["id", "name"]),
+        ],
+        nextPageToken: "",
+      });
+    }
+
+    test("--rollback returns the namespace to the checkpoint and reports the interrupted migration", async () => {
+      using _json = jsonMode();
+      using stdout = captureStdout();
+      leftInPrePhaseOf0002();
+
+      const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(JSON.parse(stdout.output)).toMatchObject({
+        resolution: "rollback",
+        migrationNumber: 2,
+        checkpoint: 1,
+        interrupted: true,
+        tables: { created: [], deleted: ["Comment"] },
+      });
+      expect(state.removeMigrationWorkflowResources).toHaveBeenCalledWith(
+        expect.anything(),
+        "12345678-1234-4abc-8def-123456789012",
+        "tailordb",
+        2,
+      );
+    });
+
+    test("--rollback says no deploy recorded the migration and asks to check that none is running", async () => {
+      leftInPrePhaseOf0002();
+
+      await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+      const output = state.stderr.join("");
+      expect(output).toMatch(/Interrupted: 0002 \(not recorded as in progress\)/);
+      expect(output).toMatch(/make sure no deploy to this workspace is running/);
+      expect(output).toMatch(/runs again from the start/);
+    });
+
+    test("--rollback removes the record of a maintenance mode a deploy left in place", async () => {
+      leftInPrePhaseOf0002({ "sdk-maintenance-mode": "m0001" });
+
+      const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(state.setMetadata).toHaveBeenCalledWith(
+        expect.objectContaining({ labels: { "sdk-migration": "m0001", "sdk-name": "my-app" } }),
+      );
+    });
+
+    test("--rollback also removes the temporary resources of an in-progress record the checkpoint covers", async () => {
+      leftInPrePhaseOf0002({ "sdk-migration-in-progress": "m0001" });
+
+      const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(state.removeMigrationWorkflowResources.mock.calls.map((call) => call[3])).toEqual([
+        2, 1,
+      ]);
+    });
+
+    test("--rollback explains how to go on when records without a value reject the update", async () => {
+      leftInPrePhaseOf0002();
+      state.updateTailorDBType.mockRejectedValue(
+        new ConnectError(
+          'field "code" cannot be updated from non-required to required when records exist',
+          Code.FailedPrecondition,
+        ),
+      );
+
+      const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+      expect(result.success).toBe(false);
+      const output = state.stderr.join("");
+      expect(output).toMatch(/Fill in those records first/);
+      expect(output).not.toMatch(/stays in progress/);
+    });
+
+    test("--complete refuses, because no migration is in progress", async () => {
+      leftInPrePhaseOf0002();
+
+      const result = await runCommand(resolveCommand, ["--complete", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_NO_IN_PROGRESS" });
+      expectNothingWritten();
+    });
+  });
+
+  test("--rollback refuses when the tables match the checkpoint and no migration is in progress", async () => {
+    remoteLabels({ "sdk-migration": "m0001" });
+    state.listTailorDBTypes.mockResolvedValue({
+      tailordbTypes: [remoteType("User", ["id", "name"]), remoteType("Post", ["id", "name"])],
+      nextPageToken: "",
+    });
+
+    const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_NO_IN_PROGRESS" });
     expectNothingWritten();
   });
 });

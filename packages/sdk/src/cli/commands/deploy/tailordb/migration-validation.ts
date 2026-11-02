@@ -74,6 +74,11 @@ export type ValidateAndDetectResult = {
    * migration; empty when none of them remain.
    */
   unfinishedRemovals: ReadonlyMap<string, readonly string[]>;
+  /**
+   * Migration whose Pre-phase schema or maintenance mode an earlier deploy left in place without
+   * recording it as in progress, by namespace.
+   */
+  interruptedMigrations: Record<string, number>;
 };
 
 interface StaleMigrationInProgress {
@@ -327,6 +332,7 @@ export async function validateAndDetectMigrations(
   const checkpoints = new Map<string, ExpectedMigrationCheckpoint>();
   const maintenanceModeCheckpoints = Object.create(null) as Record<string, number>;
   const unfinishedRemovals = new Map<string, readonly string[]>();
+  const interruptedMigrations = Object.create(null) as Record<string, number>;
 
   if (namespacesWithMigrations.length > 0) {
     // Validate migration file integrity (sequential numbers, no gaps, no duplicates)
@@ -367,7 +373,7 @@ export async function validateAndDetectMigrations(
         namespacesWithMigrations,
         config,
         tailorDBInputs,
-        { acceptUnfinishedRemovals: true },
+        { acceptUnfinishedRemovals: true, acceptInterruptedMigration: true },
       );
       checkpointRepairs = remoteVerificationResults.flatMap((result) =>
         result.checkpointRepair
@@ -435,6 +441,13 @@ export async function validateAndDetectMigrations(
         if (result.unfinishedRemovals.length === 0) continue;
         logger.warn(
           `An earlier deploy committed migration ${result.namespace}/${formatMigrationNumber(result.remoteMigrationNumber)} but did not delete the tables it removed: ${result.unfinishedRemovals.join(", ")}. They will be deleted after confirmation.`,
+        );
+      }
+      for (const { namespace, interruptedMigration } of remoteVerificationResults) {
+        if (interruptedMigration === undefined) continue;
+        interruptedMigrations[namespace] = interruptedMigration;
+        logger.info(
+          `An earlier deploy left the pre-migration schema or maintenance mode of migration ${namespace}/${formatMigrationNumber(interruptedMigration)} in place without recording it as in progress; this deploy runs it again from the start.`,
         );
       }
     }
@@ -530,5 +543,6 @@ export async function validateAndDetectMigrations(
     ...inProgress,
     maintenanceModeCheckpoints,
     unfinishedRemovals,
+    interruptedMigrations,
   };
 }
