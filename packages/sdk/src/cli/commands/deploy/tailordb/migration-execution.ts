@@ -6,7 +6,6 @@ import {
   buildPreMigrationChangesMap,
   buildPreMigrationIndexChangesMap,
   createPreMigrationSnapshotType,
-  getTablesDeletedAfterCheckpoint,
 } from "#/cli/commands/tailordb/migrate/pre-migration-schema";
 import {
   reconstructSnapshotFromMigrations,
@@ -989,33 +988,37 @@ function describeUnrestored(unrestored: readonly RestrictedTables[]): string {
     .join("; ");
 }
 
-export async function executeSingleMigrationPostPhaseDeletions(
+/**
+ * Delete the tables that have a planned deletion, each with its GraphQL permission first, and record them in {@link deletedResources}.
+ * @param client - Operator client instance
+ * @param changeSet - Planned TailorDB changes
+ * @param namespace - Namespace of the tables
+ * @param tableNames - Tables to delete; those without a planned deletion are skipped
+ */
+export async function deletePlannedTables(
   client: OperatorClient,
   changeSet: TailorDBChangeSet,
-  migration: PendingMigration,
+  namespace: string,
+  tableNames: ReadonlySet<string>,
 ): Promise<void> {
-  const deletedTableNames = getTablesDeletedAfterCheckpoint(migration.diff);
-  if (deletedTableNames.size > 0) {
-    const tableKey = (tableName: string) => namespacedTableKey(migration.namespace, tableName);
-    const gqlPermissionsToDelete = entriesOfNamespace(
-      changeSet.gqlPermission.deletes,
-      migration.namespace,
-    ).filter(
-      (del) =>
-        deletedTableNames.has(del.name) && !deletedResources.gqlPermissions.has(tableKey(del.name)),
-    );
-    for (const del of gqlPermissionsToDelete) {
-      await client.deleteTailorDBGQLPermission(del.request);
-      deletedResources.gqlPermissions.add(tableKey(del.name));
-    }
+  const tableKey = (tableName: string) => namespacedTableKey(namespace, tableName);
+  const gqlPermissionsToDelete = entriesOfNamespace(
+    changeSet.gqlPermission.deletes,
+    namespace,
+  ).filter(
+    (del) => tableNames.has(del.name) && !deletedResources.gqlPermissions.has(tableKey(del.name)),
+  );
+  for (const del of gqlPermissionsToDelete) {
+    await client.deleteTailorDBGQLPermission(del.request);
+    deletedResources.gqlPermissions.add(tableKey(del.name));
+  }
 
-    const typesToDelete = entriesOfNamespace(changeSet.type.deletes, migration.namespace).filter(
-      (del) => deletedTableNames.has(del.name) && !deletedResources.types.has(tableKey(del.name)),
-    );
-    for (const del of typesToDelete) {
-      await client.deleteTailorDBType(del.request);
-      deletedResources.types.add(tableKey(del.name));
-    }
+  const typesToDelete = entriesOfNamespace(changeSet.type.deletes, namespace).filter(
+    (del) => tableNames.has(del.name) && !deletedResources.types.has(tableKey(del.name)),
+  );
+  for (const del of typesToDelete) {
+    await client.deleteTailorDBType(del.request);
+    deletedResources.types.add(tableKey(del.name));
   }
 }
 

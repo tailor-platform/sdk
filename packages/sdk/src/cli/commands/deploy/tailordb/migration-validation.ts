@@ -69,6 +69,11 @@ export type ValidateAndDetectResult = {
   staleInProgress: StaleMigrationInProgress[];
   /** Checkpoint named by each namespace's record of a maintenance mode a deploy has not lifted. */
   maintenanceModeCheckpoints: Record<string, number>;
+  /**
+   * Tables to delete in each namespace that records unfinished deletions of its checkpoint's
+   * migration; empty when none of them remain.
+   */
+  unfinishedRemovals: ReadonlyMap<string, readonly string[]>;
 };
 
 interface StaleMigrationInProgress {
@@ -321,6 +326,7 @@ export async function validateAndDetectMigrations(
   const rebaselines = new Map<string, RebaselineMarker | undefined>();
   const checkpoints = new Map<string, ExpectedMigrationCheckpoint>();
   const maintenanceModeCheckpoints = Object.create(null) as Record<string, number>;
+  const unfinishedRemovals = new Map<string, readonly string[]>();
 
   if (namespacesWithMigrations.length > 0) {
     // Validate migration file integrity (sequential numbers, no gaps, no duplicates)
@@ -361,6 +367,7 @@ export async function validateAndDetectMigrations(
         namespacesWithMigrations,
         config,
         tailorDBInputs,
+        { acceptUnfinishedRemovals: true },
       );
       checkpointRepairs = remoteVerificationResults.flatMap((result) =>
         result.checkpointRepair
@@ -420,6 +427,14 @@ export async function validateAndDetectMigrations(
       for (const repair of checkpointRepairs) {
         logger.warn(
           `Remote migration checkpoint for ${repair.namespace} will be reset to 0000 after confirmation (${formatMigrationNumber(repair.from)} → 0000); the remote schema already matches the local baseline.`,
+        );
+      }
+      for (const result of remoteVerificationResults) {
+        if (!result.unfinishedRemovals) continue;
+        unfinishedRemovals.set(result.namespace, result.unfinishedRemovals);
+        if (result.unfinishedRemovals.length === 0) continue;
+        logger.warn(
+          `An earlier deploy committed migration ${result.namespace}/${formatMigrationNumber(result.remoteMigrationNumber)} but did not delete the tables it removed: ${result.unfinishedRemovals.join(", ")}. They will be deleted after confirmation.`,
         );
       }
     }
@@ -514,5 +529,6 @@ export async function validateAndDetectMigrations(
     checkpoints,
     ...inProgress,
     maintenanceModeCheckpoints,
+    unfinishedRemovals,
   };
 }

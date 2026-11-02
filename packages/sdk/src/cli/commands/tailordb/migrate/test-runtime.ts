@@ -44,6 +44,7 @@ import { assertNoMigrationInProgress, fetchRemoteMigrationState } from "./remote
 import {
   assertValidMigrationFiles,
   compareSnapshots,
+  formatMigrationNumber,
   getLatestMigrationNumber,
   normalizeSchemaSnapshot,
   reconstructSnapshotFromMigrations,
@@ -535,8 +536,9 @@ export interface MigrationTestSource extends RecoveryContext {
 }
 
 /**
- * Require every source namespace to match its migration checkpoint and to have
- * no checkpoint repair pending.
+ * Require every source namespace to match its migration checkpoint, with no
+ * checkpoint repair pending and no table its checkpoint's migration removed
+ * left to delete.
  * @param checks - Remote schema verification results of the source namespaces
  * @param source - Source workspace and config, kept in the suggested commands
  */
@@ -571,6 +573,14 @@ export function assertSourceMatchesCheckpoints(
     throw CLIError({
       code: "MIGRATION_TEST_SOURCE_REPAIR_PENDING",
       message: `Source namespace "${pendingRepair.namespace}" has a pending migration checkpoint repair.`,
+      suggestion: "Deploy to the source workspace first.",
+    });
+  }
+  const pendingRemoval = checks.find((check) => check.unfinishedRemovals?.length);
+  if (pendingRemoval) {
+    throw CLIError({
+      code: "MIGRATION_TEST_SOURCE_CLEANUP_PENDING",
+      message: `Source namespace "${pendingRemoval.namespace}" still has tables that migration ${formatMigrationNumber(pendingRemoval.remoteMigrationNumber)} removed: ${pendingRemoval.unfinishedRemovals?.join(", ")}.`,
       suggestion: "Deploy to the source workspace first.",
     });
   }
@@ -810,6 +820,7 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
     namespaces,
     loaded.config,
     inputs,
+    { acceptUnfinishedRemovals: true },
   );
   const source: MigrationTestSource = {
     workspaceId: sourceWorkspaceId,

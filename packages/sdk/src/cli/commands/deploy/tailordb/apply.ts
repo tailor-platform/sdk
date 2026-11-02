@@ -39,6 +39,7 @@ import { assertDefined } from "#/utils/assert";
 import { resourceTrn, writeMetadataLabels } from "../label";
 import {
   clearMaintenanceModeRecord,
+  clearMigrationCleanupRecord,
   clearMigrationInProgress,
   executeMigrations,
   isMigrationOutcomeUnknown,
@@ -59,8 +60,8 @@ import {
   acceptsMigrationWrites,
   captureMigrationRestrictionState,
   deletedResources,
+  deletePlannedTables,
   executeSingleMigrationPostPhase,
-  executeSingleMigrationPostPhaseDeletions,
   executeSingleMigrationPrePhase,
   generateMigrationPhaseManifest,
   type GqlPermissionUndo,
@@ -247,6 +248,7 @@ async function validateTailorDBMigrationState(
       inProgressMigrations: {},
       staleInProgress: [],
       maintenanceModeCheckpoints: {},
+      unfinishedRemovals: new Map(),
       migrationMachineUsers: undefined,
     };
   }
@@ -283,6 +285,21 @@ async function validateTailorDBMigrationState(
       message: "Remote migration checkpoint repair changed after deployment planning.",
       suggestion: "Run the deployment again to review the updated repair.",
     });
+  }
+  for (const [namespace, tableNames] of validation.unfinishedRemovals) {
+    const unplanned = tableNames.filter(
+      (tableName) =>
+        !result.changeSet.type.deletes.some(
+          (del) => del.request.namespaceName === namespace && del.name === tableName,
+        ),
+    );
+    if (unplanned.length > 0) {
+      throw CLIError({
+        code: "DEPLOY_PLAN_STALE",
+        message: `Tables to delete in namespace ${namespace} changed after deployment planning: ${unplanned.join(", ")}.`,
+        suggestion: "Run the deployment again to review the deletion.",
+      });
+    }
   }
   if (!migrationFileStatesEqual(context.migrationFileState, validation.migrationFileState)) {
     throw CLIError({
@@ -626,6 +643,7 @@ async function applyCreateUpdate(
     migrationHistoryIds,
     staleInProgress,
     maintenanceModeCheckpoints,
+    unfinishedRemovals,
     migrationMachineUsers,
   } = validation;
 
@@ -666,6 +684,12 @@ async function applyCreateUpdate(
       stale.namespace,
       stale.migrationNumber,
     );
+  }
+
+  deletedResources.reset();
+  for (const [namespace, tableNames] of unfinishedRemovals) {
+    await deletePlannedTables(client, changeSet, namespace, new Set(tableNames));
+    await clearCleanupRecord(client, migrationContext.workspaceId, namespace);
   }
 
   const migratingNamespaceNames = new Set(pendingMigrations.map((m) => m.namespace));
@@ -789,7 +813,6 @@ async function applyWithMigrations(
 
   // Reset tracking state for this migration run
   processedTables.reset();
-  deletedResources.reset();
   migrationSnapshotCache.reset();
 
   const migratingNamespaces = new Set(validation.pendingMigrations.map((m) => m.namespace));
@@ -1381,6 +1404,8 @@ async function commitMigration(
   restoration.snapshots.set(migration.namespace, postMigrationSnapshot);
   const expectedHistoryId = flow.validation.migrationHistoryIds[migration.namespace] ?? null;
   const recordsMaintenanceMode = phaseSettings.restricted;
+  const deletedTables = getTablesDeletedAfterCheckpoint(migration.diff);
+  const recordsCleanup = deletedTables.size > 0;
   const capturedSettingsAreEarlierRestrictions = inProgress;
   const settleRestorationSettings = () => {
     const input = migrationContext.tailorDBInputs.find(
@@ -1411,6 +1436,7 @@ async function commitMigration(
       migration.number,
       expectedHistoryId ?? undefined,
       recordsMaintenanceMode,
+      recordsCleanup,
     );
   } catch (error) {
     await confirmCheckpointAfterUpdateFailure(
@@ -1439,7 +1465,7 @@ async function commitMigration(
   if (!capturedSettingsAreEarlierRestrictions) settleRestorationSettings();
 
   try {
-    await executeSingleMigrationPostPhaseDeletions(client, changeSet, migration);
+    await deletePlannedTables(client, changeSet, migration.namespace, deletedTables);
   } catch (error) {
     const syncHint = formatNamespaceMigrationHint({
       ...deployCommandContext(migrationContext),
@@ -1447,11 +1473,34 @@ async function commitMigration(
       namespace: migration.namespace,
     });
     logger.warn(
-      `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} was committed, but post-checkpoint cleanup failed. ` +
-        (phaseSettings.restricted ? "The leftover resources remain locked. " : "") +
-        `Before the next deployment, delete them by running ${syncHint}, or remove them manually; remote schema verification will fail closed until then.`,
+      `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} was committed, but post-checkpoint cleanup failed.` +
+        (phaseSettings.restricted ? " The leftover resources remain locked." : ""),
     );
-    throw error;
+    const failure = toError(error);
+    throw withErrorDiagnostics(failure, {
+      suggestion: [
+        `Deploy again to delete the leftover tables, or run ${syncHint}.`,
+        getErrorDiagnostics(failure).suggestion,
+      ]
+        .filter(Boolean)
+        .join(" "),
+    });
+  }
+  if (recordsCleanup)
+    await clearCleanupRecord(client, migrationContext.workspaceId, migration.namespace);
+}
+
+async function clearCleanupRecord(
+  client: OperatorClient,
+  workspaceId: string,
+  namespaceName: string,
+): Promise<void> {
+  try {
+    await clearMigrationCleanupRecord(client, workspaceId, namespaceName);
+  } catch (error) {
+    logger.warn(
+      `The tables of namespace '${namespaceName}' that were pending deletion have been deleted, but the record of the pending deletion could not be removed: ${toError(error).message}. A later deploy removes it.`,
+    );
   }
 }
 
@@ -1840,13 +1889,19 @@ async function applyDeferredChanges(flow: MigrationFlow, deferred: DeferredChang
   ]);
 }
 
+function isDeleted(
+  deleted: ReadonlySet<string>,
+  del: { name: string; request: { namespaceName?: string } },
+): boolean {
+  return deleted.has(`${del.request.namespaceName}/${del.name}`);
+}
+
 async function applyRemainingDeletions(flow: MigrationFlow): Promise<void> {
   const { client, changeSet } = flow;
   // Delete remaining GQL permissions that weren't deleted with their tables
-  const remainingGqlPermissionDeletes = changeSet.gqlPermission.deletes.filter((del) => {
-    const permKey = `${del.request.namespaceName}/${del.name}`;
-    return !deletedResources.gqlPermissions.has(permKey);
-  });
+  const remainingGqlPermissionDeletes = changeSet.gqlPermission.deletes.filter(
+    (del) => !isDeleted(deletedResources.gqlPermissions, del),
+  );
   if (remainingGqlPermissionDeletes.length > 0) {
     await Promise.all(
       remainingGqlPermissionDeletes.map((del) => client.deleteTailorDBGQLPermission(del.request)),
@@ -1857,7 +1912,11 @@ async function applyRemainingDeletions(flow: MigrationFlow): Promise<void> {
   // permissions were just removed above; migration postPhases never see them)
   await Promise.all(
     changeSet.type.deletes
-      .filter((del) => isOutsideMigrations(flow, del.request.namespaceName))
+      .filter(
+        (del) =>
+          isOutsideMigrations(flow, del.request.namespaceName) &&
+          !isDeleted(deletedResources.types, del),
+      )
       .map((del) => client.deleteTailorDBType(del.request)),
   );
 }
@@ -1901,9 +1960,15 @@ async function applyWithoutMigrations(
   // Delete resources (only when no migrations occurred)
   // Migrations already handle deletions in post-migration phase
   await Promise.all(
-    changeSet.gqlPermission.deletes.map((del) => client.deleteTailorDBGQLPermission(del.request)),
+    changeSet.gqlPermission.deletes
+      .filter((del) => !isDeleted(deletedResources.gqlPermissions, del))
+      .map((del) => client.deleteTailorDBGQLPermission(del.request)),
   );
-  await Promise.all(changeSet.type.deletes.map((del) => client.deleteTailorDBType(del.request)));
+  await Promise.all(
+    changeSet.type.deletes
+      .filter((del) => !isDeleted(deletedResources.types, del))
+      .map((del) => client.deleteTailorDBType(del.request)),
+  );
 }
 
 /**

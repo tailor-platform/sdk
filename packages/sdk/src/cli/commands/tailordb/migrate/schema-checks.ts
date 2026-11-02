@@ -27,6 +27,7 @@ import {
 import { collectNestedMemberChanges, getNestedMember } from "./nested-members";
 import {
   buildPreMigrationSnapshot,
+  getTablesDeletedAfterCheckpoint,
   includeTablesDeletedAfterCheckpoint,
 } from "./pre-migration-schema";
 import {
@@ -480,6 +481,29 @@ export function locateRemoteCheckpoint(
   };
 }
 
+/**
+ * List the remote tables a migration removed that are still to be deleted after its checkpoint,
+ * leaving out a table a later local migration adds again.
+ * @param migrationsDir - Migrations directory of the namespace
+ * @param checkpoint - Migration whose checkpoint is committed
+ * @param remoteTypes - Remote tables of the namespace
+ * @returns Names of the tables, sorted
+ */
+function findUnfinishedRemovals(
+  migrationsDir: string,
+  checkpoint: number,
+  remoteTypes: readonly ProtoTailorDBType[],
+): string[] {
+  const diffPath = getMigrationFilePath(migrationsDir, checkpoint, "diff");
+  if (!fs.existsSync(diffPath)) return [];
+  const deleted = getTablesDeletedAfterCheckpoint(loadDiff(diffPath));
+  const latestTables = reconstructSnapshotFromMigrations(migrationsDir)?.tables ?? {};
+  return remoteTypes
+    .map((type) => type.name)
+    .filter((tableName) => deleted.has(tableName) && !Object.hasOwn(latestTables, tableName))
+    .toSorted();
+}
+
 function notDeployedResult(namespace: string): RemoteSchemaVerificationResult {
   return {
     namespace,
@@ -490,6 +514,14 @@ function notDeployedResult(namespace: string): RemoteSchemaVerificationResult {
   };
 }
 
+export interface RemoteSchemaVerificationOptions {
+  /**
+   * Report the tables the checkpoint's migration removed in `unfinishedRemovals` instead of as
+   * drift while the namespace records that their deletion did not finish, since a deploy deletes them.
+   */
+  acceptUnfinishedRemovals?: boolean;
+}
+
 /**
  * Verify remote schema matches the expected snapshot state. A namespace that has tables but no
  * migration checkpoint is verified as checkpoint 0, the way `deploy` applies migrations to it.
@@ -498,6 +530,7 @@ function notDeployedResult(namespace: string): RemoteSchemaVerificationResult {
  * @param {NamespaceWithMigrations[]} namespacesWithMigrations - Namespaces with migration config
  * @param {LoadedConfig} config - Loaded application config
  * @param {ReadonlyArray<TailorDBDeployInput>} tailorDBInputs - Deploy inputs for namespace defaults
+ * @param {RemoteSchemaVerificationOptions} options - Verification options
  * @returns {Promise<RemoteSchemaVerificationResult[]>} Verification results per namespace
  */
 export async function verifyRemoteSchema(
@@ -506,6 +539,7 @@ export async function verifyRemoteSchema(
   namespacesWithMigrations: NamespaceWithMigrations[],
   config: LoadedConfig,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
+  options: RemoteSchemaVerificationOptions = {},
 ): Promise<RemoteSchemaVerificationResult[]> {
   const results: RemoteSchemaVerificationResult[] = [];
 
@@ -572,11 +606,20 @@ export async function verifyRemoteSchema(
       continue;
     }
 
+    const unfinishedRemovals =
+      options.acceptUnfinishedRemovals &&
+      !checkpointRepair &&
+      remoteState.cleanupCheckpoint === remoteMigrationNumber
+        ? findUnfinishedRemovals(migrationsDir, remoteMigrationNumber, remote.types)
+        : undefined;
     const leftInMaintenanceMode =
       inProgress === undefined && remoteState.maintenanceModeCheckpoint === remoteMigrationNumber;
+    const verifiedRemote = unfinishedRemovals?.length
+      ? { ...remote, types: remote.types.filter((type) => !unfinishedRemovals.includes(type.name)) }
+      : remote;
     const compareWith = (snapshot: SchemaSnapshot) =>
       compareRemoteSchemaWithSnapshot(
-        remote,
+        verifiedRemote,
         namespace,
         snapshot,
         config,
@@ -601,6 +644,7 @@ export async function verifyRemoteSchema(
       ...(checkpointRepair && drifts.length === 0 ? { checkpointRepair } : {}),
       ...(remoteState.inProgress ? { migrationInProgress: remoteState.inProgress } : {}),
       ...(remoteState.inProgressInvalid ? { migrationInProgressInvalid: true } : {}),
+      ...(unfinishedRemovals ? { unfinishedRemovals } : {}),
     });
   }
 

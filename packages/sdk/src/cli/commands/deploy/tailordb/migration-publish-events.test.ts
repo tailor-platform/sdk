@@ -860,15 +860,38 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     planResult.context.migrationRecoveryArgs = ["--profile=staging"];
     using stderr = captureStderr();
 
-    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
-      /cleanup failed/,
+    const error = await applyTailorDB(client, planResult, "create-update").catch(
+      (failure: unknown) => failure,
     );
 
+    expect(error).toMatchObject({ message: "cleanup failed" });
     expect(publishFlagWrites(client).filter(([name]) => name === "Retired")).toEqual([
       ["Retired", false],
     ]);
-    expect(stderr.output).toContain("tailor tailordb migration sync 0001 --namespace test-ns");
-    expect(stderr.output).toContain("--workspace-id=test-workspace --profile=staging");
+    expect(checkpoint.state.cleanup).toBe("m0001");
+    const { suggestion } = errorToJson(error).error;
+    expect(suggestion).toContain("Deploy again to delete the leftover tables");
+    expect(suggestion).toContain("tailor tailordb migration sync 0001 --namespace test-ns");
+    expect(suggestion).toContain("--workspace-id=test-workspace --profile=staging");
+    expect(stderr.output).toContain("post-checkpoint cleanup failed");
+  });
+
+  test("records the deletions of a migration's removed tables with its checkpoint until they finish", async () => {
+    const client = createMockClient();
+    const planResult = createMockPlanResult({ creates: [] });
+    const retired = snapshotTable("Retired", { value: { type: "string", required: true } });
+    snapshotState.tablesByVersion = { 0: { Retired: retired }, 1: {} };
+    planResult.changeSet.type.deletes.push(typeDeletion("Retired"));
+    checkpoint.mockPending([
+      mkPendingMigration([
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { kind: "table_removed", tableName: "Retired" } as any,
+      ]),
+    ]);
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    expect(checkpoint.state.cleanupChanges).toEqual(["m0001", null]);
   });
 
   test("restores tables already restricted when applying another restriction fails", async () => {
@@ -1648,6 +1671,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
             inProgress: null,
             inProgressInvalid: false,
             maintenanceModeCheckpoint: 0,
+            cleanupCheckpoint: null,
           });
           return [mkPendingMigration([])];
         },
@@ -1704,6 +1728,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
             inProgress: null,
             inProgressInvalid: false,
             maintenanceModeCheckpoint: 0,
+            cleanupCheckpoint: null,
           });
           return [mkPendingMigration([])];
         },
@@ -1754,6 +1779,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
             inProgress: null,
             inProgressInvalid: false,
             maintenanceModeCheckpoint: 0,
+            cleanupCheckpoint: null,
           });
           return pending;
         },

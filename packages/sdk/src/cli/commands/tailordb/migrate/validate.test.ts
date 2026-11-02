@@ -347,6 +347,54 @@ describe("tailordb migration validate", () => {
     expect(stderr.output).not.toContain("migration sync");
   });
 
+  describe("a table whose deletion the checkpoint's migration did not finish", () => {
+    beforeEach(() => {
+      writeInitialSchema(state.migrationsDir, {
+        User: snapshotType("User"),
+        Legacy: snapshotType("Legacy"),
+      });
+      writeDiff(state.migrationsDir, 1, [
+        { kind: "table_removed", tableName: "Legacy", before: snapshotType("Legacy") },
+      ]);
+      state.getMetadata.mockResolvedValue({
+        metadata: { labels: { "sdk-migration": "m0001", "sdk-migration-cleanup": "m0001" } },
+      });
+      state.listTailorDBTypes.mockResolvedValue({
+        tailordbTypes: [remoteType("User", ["id", "name"]), remoteType("Legacy", ["id", "name"])],
+        nextPageToken: "",
+      });
+    });
+
+    test("is reported as a table the next deploy deletes", async () => {
+      using stdout = captureStdout();
+      using _json = jsonMode();
+
+      const result = await runCommand(validateCommand, []);
+
+      expect(result.success).toBe(true);
+      const [report] = JSON.parse(stdout.output);
+      expect(report.valid).toBe(true);
+      expect(report.remoteSchema).toEqual({
+        remoteMigrationNumber: 1,
+        hasDrift: false,
+        drifts: [],
+        unfinishedRemovals: ["Legacy"],
+      });
+    });
+
+    test("is explained as a table the next deploy deletes", async () => {
+      using stderr = captureStderr();
+
+      const result = await runCommand(validateCommand, []);
+
+      expect(result.success).toBe(true);
+      expect(stderr.output).toContain("Remote schema: OK (remote migration: 0001)");
+      expect(stderr.output).toContain(
+        "The next deploy deletes Legacy, which migration 0001 removed.",
+      );
+    });
+  });
+
   test("reports a checkpoint that fell behind before a rebaseline", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();

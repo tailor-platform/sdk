@@ -57,6 +57,14 @@ export const MIGRATION_EXECUTION_LABEL_KEY = "sdk-migration-execution";
  */
 export const MAINTENANCE_MODE_LABEL_KEY = "sdk-maintenance-mode";
 
+/**
+ * Label key naming the checkpoint whose migration's table deletions have not
+ * finished, so the next deploy deletes the tables that migration removed
+ * instead of treating them as drift. Write it with the checkpoint and remove it
+ * with every other checkpoint write.
+ */
+export const MIGRATION_CLEANUP_LABEL_KEY = "sdk-migration-cleanup";
+
 /** Valid migration history ID syntax for metadata label values. */
 export const MIGRATION_HISTORY_ID_PATTERN = /^[a-z][a-z0-9_-]{0,62}$/;
 
@@ -312,6 +320,11 @@ export interface RemoteSchemaVerificationResult {
   migrationInProgress?: MigrationInProgress;
   /** Set when the namespace records a migration left in progress that cannot be read */
   migrationInProgressInvalid?: true;
+  /**
+   * Set when the caller accepts them and the namespace records that the deletions of its checkpoint's
+   * migration did not finish: the tables that migration removed that remain, left out of `drifts`
+   */
+  unfinishedRemovals?: string[];
   /** Set when verification could not run (namespace not deployed, or no snapshot at the remote migration number) */
   skipped?: RemoteSchemaVerificationSkipReason;
 }

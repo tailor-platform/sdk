@@ -100,6 +100,8 @@ interface CompletedRemoteSchemaReport {
   /** Set alongside `checkpointMissingLocal`: whether the namespace records another migration history ID, or one that cannot be read */
   historyIdMismatch?: boolean;
   checkpointRepair?: { from: number; to: 0 };
+  /** Tables the checkpoint's migration removed that the next deploy deletes */
+  unfinishedRemovals?: string[];
 }
 
 type FailedRemoteSchemaReport = { skipped: "check_failed" } & {
@@ -288,6 +290,9 @@ function buildValidationReports(
         ? { historyIdMismatch: remote.historyIdMismatch }
         : {}),
       ...(remote.checkpointRepair ? { checkpointRepair: remote.checkpointRepair } : {}),
+      ...(remote.unfinishedRemovals?.length
+        ? { unfinishedRemovals: remote.unfinishedRemovals }
+        : {}),
     };
 
     // Only migrations not yet applied to the remote need an acknowledgment;
@@ -414,6 +419,7 @@ async function collectValidationReports(
       checkableNamespaces,
       config,
       tailorDBInputs,
+      { acceptUnfinishedRemovals: true },
     );
   } catch (remoteError) {
     return {
@@ -491,6 +497,11 @@ function printValidationReports(reports: NamespaceValidationReport[]): void {
     } else if (remote) {
       logger.log(
         `  Remote schema: ${styles.success("OK")} (remote migration: ${formatMigrationNumber(remote.remoteMigrationNumber)})`,
+      );
+    }
+    if (remote?.unfinishedRemovals) {
+      logger.log(
+        `    The next deploy deletes ${remote.unfinishedRemovals.join(", ")}, which migration ${formatMigrationNumber(remote.remoteMigrationNumber)} removed.`,
       );
     }
 

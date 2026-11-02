@@ -845,6 +845,33 @@ describe("migration", () => {
       });
     });
 
+    test("records unfinished table deletions atomically with the checkpoint", async () => {
+      const setMetadataMock = vi.fn();
+      const client = createMetadataClient({ labels: {} }, setMetadataMock);
+
+      await updateMigrationLabel(client, workspaceId, namespace, 2, undefined, false, true);
+
+      expect(setMetadataMock).toHaveBeenCalledWith({
+        trn: expectedTrn,
+        labels: { [MIGRATION_LABEL_KEY]: "m0002", "sdk-migration-cleanup": "m0002" },
+      });
+    });
+
+    test("removes the record of unfinished table deletions with any other checkpoint write", async () => {
+      const setMetadataMock = vi.fn();
+      const client = createMetadataClient(
+        { labels: { [MIGRATION_LABEL_KEY]: "m0001", "sdk-migration-cleanup": "m0001" } },
+        setMetadataMock,
+      );
+
+      await updateMigrationLabel(client, workspaceId, namespace, 2);
+
+      expect(setMetadataMock).toHaveBeenCalledWith({
+        trn: expectedTrn,
+        labels: { [MIGRATION_LABEL_KEY]: "m0002" },
+      });
+    });
+
     test("handles missing metadata gracefully", async () => {
       const setMetadataMock = vi.fn();
       const client = createMetadataClient(null, setMetadataMock);

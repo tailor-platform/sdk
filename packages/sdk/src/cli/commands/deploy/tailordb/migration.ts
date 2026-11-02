@@ -63,6 +63,7 @@ import {
   executionIdToLabel,
   inProgressLabel,
   MAINTENANCE_MODE_LABEL_KEY,
+  MIGRATION_CLEANUP_LABEL_KEY,
   MIGRATION_EXECUTION_LABEL_KEY,
   MIGRATION_HISTORY_LABEL_KEY,
   MIGRATION_IN_PROGRESS_LABEL_KEY,
@@ -609,6 +610,7 @@ export async function removeRunResources(
  * @param {number} migrationNumber - Migration number to set
  * @param historyId - Optional migration history ID to set atomically with the checkpoint
  * @param recordMaintenanceMode - Whether to record, atomically with the checkpoint, that the namespace's tables are still in maintenance mode
+ * @param recordCleanup - Whether to record, atomically with the checkpoint, that the tables the migration removed are still to be deleted
  * @returns Whether the labels changed
  */
 export async function updateMigrationLabel(
@@ -618,6 +620,7 @@ export async function updateMigrationLabel(
   migrationNumber: number,
   historyId?: string,
   recordMaintenanceMode = false,
+  recordCleanup = false,
 ): Promise<boolean> {
   const trn = resourceTrn(workspaceId, "tailordb", namespace);
 
@@ -629,9 +632,13 @@ export async function updateMigrationLabel(
       ...(recordMaintenanceMode
         ? { [MAINTENANCE_MODE_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber) }
         : {}),
+      ...(recordCleanup
+        ? { [MIGRATION_CLEANUP_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber) }
+        : {}),
     },
     remove: [
       ...(historyId ? [] : [MIGRATION_HISTORY_LABEL_KEY]),
+      ...(recordCleanup ? [] : [MIGRATION_CLEANUP_LABEL_KEY]),
       MIGRATION_IN_PROGRESS_LABEL_KEY,
       MIGRATION_EXECUTION_LABEL_KEY,
     ],
@@ -750,6 +757,24 @@ export async function clearMigrationInProgress(
     trn: resourceTrn(workspaceId, "tailordb", namespace),
     labels: {},
     remove: [MIGRATION_IN_PROGRESS_LABEL_KEY, MIGRATION_EXECUTION_LABEL_KEY],
+  });
+}
+
+/**
+ * Remove the record that the tables the checkpoint's migration removed are still to be deleted.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param namespace - TailorDB namespace
+ */
+export async function clearMigrationCleanupRecord(
+  client: OperatorClient,
+  workspaceId: string,
+  namespace: string,
+): Promise<void> {
+  await writeMetadataLabelsDirect(client, {
+    trn: resourceTrn(workspaceId, "tailordb", namespace),
+    labels: {},
+    remove: [MIGRATION_CLEANUP_LABEL_KEY],
   });
 }
 
