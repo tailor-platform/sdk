@@ -10,6 +10,8 @@ import type { TailorEnv, TailorPrincipal } from "#/runtime/types";
  * Plugin executor factory function type.
  * Takes context and returns an executor configuration.
  * Returns unknown since the exact return type depends on createExecutor's generic params.
+ *
+ * **Beta:** This API may change in future releases.
  */
 export type PluginExecutorFactory<Ctx> = (ctx: Ctx) => unknown;
 
@@ -20,6 +22,8 @@ export type PluginExecutorFactory<Ctx> = (ctx: Ctx) => unknown;
 /**
  * Base args for plugin executor function operations.
  * Provides typed access to runtime context without requiring specific record types.
+ *
+ * **Beta:** This API may change in future releases.
  */
 export interface PluginFunctionArgs {
   /** Workspace ID where the executor runs */
@@ -38,6 +42,8 @@ export interface PluginFunctionArgs {
 
 /**
  * Args for plugin executors triggered on record creation.
+ *
+ * **Beta:** This API may change in future releases.
  */
 export interface PluginRecordCreatedArgs extends PluginFunctionArgs {
   /** The newly created record */
@@ -46,6 +52,8 @@ export interface PluginRecordCreatedArgs extends PluginFunctionArgs {
 
 /**
  * Args for plugin executors triggered on record update.
+ *
+ * **Beta:** This API may change in future releases.
  */
 export interface PluginRecordUpdatedArgs extends PluginFunctionArgs {
   /** The record after update */
@@ -56,6 +64,8 @@ export interface PluginRecordUpdatedArgs extends PluginFunctionArgs {
 
 /**
  * Args for plugin executors triggered on record deletion.
+ *
+ * **Beta:** This API may change in future releases.
  */
 export interface PluginRecordDeletedArgs extends PluginFunctionArgs {
   /** The deleted record */
@@ -65,12 +75,16 @@ export interface PluginRecordDeletedArgs extends PluginFunctionArgs {
 /**
  * Database schema type for plugins.
  * Since plugins work with dynamic types, the schema uses Record types.
+ *
+ * **Beta:** This API may change in future releases.
  */
 export type PluginDBSchema = Record<string, Record<string, unknown>>;
 
 /**
  * Base record type for TailorDB records.
  * All records have an id field.
+ *
+ * **Beta:** This API may change in future releases.
  */
 export type PluginRecord = { id: string } & Record<string, unknown>;
 
@@ -78,6 +92,8 @@ export type PluginRecord = { id: string } & Record<string, unknown>;
  * Define a plugin executor that receives context at runtime.
  * This allows executor definitions to be in separate files while
  * still receiving dynamic values like typeName, generated types, and namespace.
+ *
+ * **Beta:** This API may change in future releases.
  * @param factory - Function that takes context and returns executor configuration
  * @returns The same factory function (for type inference)
  * @example

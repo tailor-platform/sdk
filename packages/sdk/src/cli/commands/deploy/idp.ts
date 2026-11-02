@@ -27,6 +27,7 @@ import {
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
+import { resourceNameSchema } from "#/parser/service/common";
 import { ALL_EMAIL_DOMAINS, hasImplicitAllEmailDomains } from "#/parser/service/idp/email-domains";
 import {
   findLoggedInOnlyPermitRules,
@@ -203,7 +204,7 @@ export async function applyIdP(
     // Clients
     await Promise.all(
       changeSet.client.deletes.map(async (del) => {
-        await client.deleteIdPClient(del.request);
+        if (!del.vaultOnly) await client.deleteIdPClient(del.request);
 
         // Delete the secret manager vault and secret
         const vaultName = idpClientVaultName(
@@ -631,6 +632,7 @@ type UpdateClient = {
 type DeleteClient = {
   name: string;
   request: MessageInitShape<typeof DeleteIdPClientRequestSchema>;
+  vaultOnly?: boolean;
 };
 
 async function planClients(
@@ -653,6 +655,8 @@ async function planClients(
       return [clients, nextPageToken];
     });
   };
+
+  const isDeletableName = (name: string) => resourceNameSchema.safeParse(name).success;
 
   const clientsByIdp = await Promise.all(idps.map((idp) => fetchClients(idp.name)));
   for (const [i, idp] of idps.entries()) {
@@ -695,6 +699,12 @@ async function planClients(
       }
     }
     existingNames.forEach((name) => {
+      if (!isDeletableName(name)) {
+        logger.warn(
+          `IdP client "${name}" in "${namespaceName}" will not be deleted, because the platform cannot delete a client with this name. The client and its secret vault stay in the workspace. Both are deleted when that IdP is removed.`,
+        );
+        return;
+      }
       changeSet.deletes.push({
         name,
         request: {
@@ -722,6 +732,7 @@ async function planClients(
           namespaceName,
           name: client.name,
         },
+        ...(!isDeletableName(client.name) && { vaultOnly: true }),
       });
     });
   }

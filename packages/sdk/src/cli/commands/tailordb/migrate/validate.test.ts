@@ -11,12 +11,14 @@ import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import {
   parsedType,
+  remoteType,
   snapshotType,
   writeDiff,
   writeInitialSchema,
+  writeRebaselineMarker,
 } from "./test-helpers/schema-fixtures";
 import { validateCommand } from "./validate";
-import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
+import type { CLIError } from "#/cli/shared/errors";
 
 const LEGACY_REVIEW_MARKER = "TODO(tailor-migration-review)";
 
@@ -61,28 +63,6 @@ vi.mock("#/cli/services/application", () => ({
   })),
 }));
 
-function remoteType(name: string, fieldNames: string[]): ProtoTailorDBType {
-  const fields: Record<string, unknown> = {};
-  for (const fieldName of fieldNames) {
-    fields[fieldName] = {
-      type: fieldName === "id" ? "uuid" : "string",
-      required: true,
-      array: false,
-      index: false,
-      unique: false,
-      foreignKey: false,
-      description: "",
-      allowedValues: [],
-      validate: [],
-      fields: {},
-    };
-  }
-  return {
-    name,
-    schema: { fields },
-  } as unknown as ProtoTailorDBType;
-}
-
 function mockConfig(namespaces: string[] = ["tailordb"]): void {
   const db: Record<string, unknown> = {};
   for (const namespace of namespaces) {
@@ -95,38 +75,6 @@ function mockConfig(namespaces: string[] = ["tailordb"]): void {
     },
     plugins: [],
   } as unknown as Awaited<ReturnType<typeof loadConfig>>);
-}
-
-function markHistoryAsRebaselined(): void {
-  const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
-  const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
-  fs.writeFileSync(
-    schemaPath,
-    JSON.stringify({
-      ...schema,
-      rebaseline: {
-        historyId: "htailordb",
-        replacedHistoryId: null,
-        replacedLatestMigration: 5,
-      },
-    }),
-  );
-}
-
-function markHistoryAsRebaselinedFrom(replacedHistoryId: string): void {
-  const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
-  const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
-  fs.writeFileSync(
-    schemaPath,
-    JSON.stringify({
-      ...schema,
-      rebaseline: {
-        historyId: "htailordb",
-        replacedHistoryId,
-        replacedLatestMigration: 5,
-      },
-    }),
-  );
 }
 
 function writeMigrationFile(number: number, fileName: string, content: string): void {
@@ -258,7 +206,7 @@ describe("tailordb migration validate", () => {
     expect(state.listTailorDBTypes).not.toHaveBeenCalled();
   });
 
-  test("skips remote verification when the namespace has no migration label", async () => {
+  test("verifies a namespace without a migration label against 0000", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
     state.getMetadata.mockResolvedValue({ metadata: { labels: {} } });
@@ -272,9 +220,64 @@ describe("tailordb migration validate", () => {
       remoteMigrationNumber: 0,
       hasDrift: false,
       drifts: [],
-      skipped: "no_migration_label",
+      checkpointUnset: true,
     });
-    expect(state.listTailorDBTypes).not.toHaveBeenCalled();
+  });
+
+  test("reports that the tables of a namespace without a migration label match 0000", async () => {
+    using stderr = captureStderr();
+    state.getMetadata.mockResolvedValue({ metadata: { labels: {} } });
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(true);
+    expect(stderr.output).toContain("Remote schema: OK (no checkpoint yet; tables match 0000)");
+  });
+
+  test("fails when the tables of a namespace without a migration label differ from 0000", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    state.getMetadata.mockResolvedValue({ metadata: { labels: {} } });
+    state.listTailorDBTypes.mockResolvedValue({
+      tailordbTypes: [remoteType("User", ["id", "name", "legacyCode"])],
+      nextPageToken: "",
+    });
+
+    const result = await runCommand(validateCommand, ["--profile", "staging"]);
+
+    expect(result.success).toBe(false);
+    const [report] = JSON.parse(stdout.output);
+    expect(report.valid).toBe(false);
+    expect(report.remoteSchema).toMatchObject({
+      remoteMigrationNumber: 0,
+      hasDrift: true,
+      checkpointUnset: true,
+      drifts: [expect.objectContaining({ tableName: "User", fieldName: "legacyCode" })],
+    });
+    const { suggestion } = result.error as CLIError;
+    expect(suggestion).toContain(
+      "`tailor tailordb migration sync 0000 --namespace tailordb --workspace-id=12345678-1234-4abc-8def-123456789012 --profile=staging`",
+    );
+    expect(suggestion).toContain(
+      "`tailor tailordb migration generate --init --namespace tailordb`",
+    );
+  });
+
+  test("explains that a namespace without a migration label must match 0000", async () => {
+    using stderr = captureStderr();
+    state.getMetadata.mockResolvedValue({ metadata: { labels: {} } });
+    state.listTailorDBTypes.mockResolvedValue({
+      tailordbTypes: [remoteType("User", ["id", "name", "legacyCode"])],
+      nextPageToken: "",
+    });
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(stderr.output).toContain(
+      "Remote schema: drift detected (no checkpoint yet; compared with 0000)",
+    );
+    expect(stderr.output).not.toContain("migration sync <N>");
   });
 
   test("treats out-of-range migration labels as unset", async () => {
@@ -292,15 +295,14 @@ describe("tailordb migration validate", () => {
       remoteMigrationNumber: 0,
       hasDrift: false,
       drifts: [],
-      skipped: "no_migration_label",
+      checkpointUnset: true,
     });
-    expect(state.listTailorDBTypes).not.toHaveBeenCalled();
   });
 
   test("reports a repairable remote migration checkpoint as valid", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
-    markHistoryAsRebaselined();
+    writeRebaselineMarker(state.migrationsDir, "htailordb", { replacedLatestMigration: 5 });
     state.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0005" } },
     });
@@ -329,7 +331,7 @@ describe("tailordb migration validate", () => {
 
   test("explains that deploy will repair a checkpoint whose schema matches the baseline", async () => {
     using stderr = captureStderr();
-    markHistoryAsRebaselined();
+    writeRebaselineMarker(state.migrationsDir, "htailordb", { replacedLatestMigration: 5 });
     state.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0005" } },
     });
@@ -345,10 +347,61 @@ describe("tailordb migration validate", () => {
     expect(stderr.output).not.toContain("migration sync");
   });
 
+  describe("a table whose deletion the checkpoint's migration did not finish", () => {
+    beforeEach(() => {
+      writeInitialSchema(state.migrationsDir, {
+        User: snapshotType("User"),
+        Legacy: snapshotType("Legacy"),
+      });
+      writeDiff(state.migrationsDir, 1, [
+        { kind: "table_removed", tableName: "Legacy", before: snapshotType("Legacy") },
+      ]);
+      state.getMetadata.mockResolvedValue({
+        metadata: { labels: { "sdk-migration": "m0001", "sdk-migration-cleanup": "m0001" } },
+      });
+      state.listTailorDBTypes.mockResolvedValue({
+        tailordbTypes: [remoteType("User", ["id", "name"]), remoteType("Legacy", ["id", "name"])],
+        nextPageToken: "",
+      });
+    });
+
+    test("is reported as a table the next deploy deletes", async () => {
+      using stdout = captureStdout();
+      using _json = jsonMode();
+
+      const result = await runCommand(validateCommand, []);
+
+      expect(result.success).toBe(true);
+      const [report] = JSON.parse(stdout.output);
+      expect(report.valid).toBe(true);
+      expect(report.remoteSchema).toEqual({
+        remoteMigrationNumber: 1,
+        hasDrift: false,
+        drifts: [],
+        unfinishedRemovals: ["Legacy"],
+      });
+    });
+
+    test("is explained as a table the next deploy deletes", async () => {
+      using stderr = captureStderr();
+
+      const result = await runCommand(validateCommand, []);
+
+      expect(result.success).toBe(true);
+      expect(stderr.output).toContain("Remote schema: OK (remote migration: 0001)");
+      expect(stderr.output).toContain(
+        "The next deploy deletes Legacy, which migration 0001 removed.",
+      );
+    });
+  });
+
   test("reports a checkpoint that fell behind before a rebaseline", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
-    markHistoryAsRebaselinedFrom("hprevious");
+    writeRebaselineMarker(state.migrationsDir, "htailordb", {
+      replacedHistoryId: "hprevious",
+      replacedLatestMigration: 5,
+    });
     state.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0003", "sdk-migration-history": "hprevious" },
@@ -366,6 +419,8 @@ describe("tailordb migration validate", () => {
       drifts: [],
       checkpointMissingLocal: true,
       rebaselinePending: { replacedLatestMigration: 5 },
+      localLatestMigration: 0,
+      historyIdMismatch: true,
     });
     expect(state.listTailorDBTypes).not.toHaveBeenCalled();
   });
@@ -373,7 +428,10 @@ describe("tailordb migration validate", () => {
   test("does not report rebaseline-pending when the checkpoint is already past the replaced migration", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
-    markHistoryAsRebaselinedFrom("hprevious");
+    writeRebaselineMarker(state.migrationsDir, "htailordb", {
+      replacedHistoryId: "hprevious",
+      replacedLatestMigration: 5,
+    });
     state.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0007", "sdk-migration-history": "hprevious" },
@@ -389,28 +447,67 @@ describe("tailordb migration validate", () => {
       hasDrift: false,
       drifts: [],
       checkpointMissingLocal: true,
+      localLatestMigration: 0,
+      historyIdMismatch: true,
     });
   });
 
-  test("falls back to the generic checkpoint guidance when already past the replaced migration", async () => {
-    using stderr = captureStderr();
-    markHistoryAsRebaselinedFrom("hprevious");
+  test.each([false, true])(
+    "offers checkpoint recovery past the replaced migration only in the error (json=%s)",
+    async (json) => {
+      using _json = json ? jsonMode() : undefined;
+      using stderr = captureStderr();
+      writeRebaselineMarker(state.migrationsDir, "htailordb", {
+        replacedHistoryId: "hprevious",
+        replacedLatestMigration: 5,
+      });
+      state.getMetadata.mockResolvedValue({
+        metadata: {
+          labels: { "sdk-migration": "m0007", "sdk-migration-history": "hprevious" },
+        },
+      });
+
+      const result = await runCommand(validateCommand, [
+        "--config",
+        "custom.config.ts",
+        "--profile",
+        "staging",
+      ]);
+
+      expect(result.success).toBe(false);
+      expect(stderr.output).not.toContain("fell behind");
+      expect(stderr.output).not.toContain("Pull the latest migration files");
+      const { suggestion } = result.error as CLIError;
+      expect(suggestion).toContain("Pull the latest migration files");
+      expect(suggestion).toContain(
+        "sync 0000 --force --namespace tailordb --config=custom.config.ts --workspace-id=12345678-1234-4abc-8def-123456789012 --profile=staging",
+      );
+      expect(suggestion).toContain("rewrites the tables");
+      expect(suggestion).toContain("replaces the migration history ID");
+    },
+  );
+
+  test("does not suggest checkpoint moves without a local migration", async () => {
+    fs.rmSync(state.migrationsDir, { recursive: true });
+    fs.mkdirSync(state.migrationsDir);
     state.getMetadata.mockResolvedValue({
-      metadata: {
-        labels: { "sdk-migration": "m0007", "sdk-migration-history": "hprevious" },
-      },
+      metadata: { labels: { "sdk-migration": "m0007" } },
     });
 
     const result = await runCommand(validateCommand, []);
 
     expect(result.success).toBe(false);
-    expect(stderr.output).not.toContain("fell behind");
-    expect(stderr.output).toContain("Pull the latest migration files");
+    const { suggestion } = result.error as CLIError;
+    expect(suggestion).toContain("Pull the latest migration files");
+    expect(suggestion).not.toContain("migration sync");
   });
 
   test("explains the rebaseline-pending recovery procedure for a checkpoint that fell behind", async () => {
     using stderr = captureStderr();
-    markHistoryAsRebaselinedFrom("hprevious");
+    writeRebaselineMarker(state.migrationsDir, "htailordb", {
+      replacedHistoryId: "hprevious",
+      replacedLatestMigration: 5,
+    });
     state.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0003", "sdk-migration-history": "hprevious" },
@@ -422,6 +519,7 @@ describe("tailordb migration validate", () => {
     expect(result.success).toBe(false);
     expect(stderr.output).toContain("fell behind before 'migration rebaseline' ran");
     expect(stderr.output).toContain("must reach 0005");
+    expect(stderr.output).not.toContain("migration sync");
     expect(stderr.output).toContain(
       "Restore the pre-rebaseline migrations/ directory from git history",
     );

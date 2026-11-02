@@ -31,7 +31,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: read
+      contents: write # push the fix branch
+      pull-requests: write # open or update the pull request and label it
 
     steps:
       - name: Checkout
@@ -48,11 +49,11 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "24.22.1"
+          node-version: "26.13.0"
 
       - name: Audit and fix lockfile
         id: audit_fix
-        uses: tailor-platform/actions/lockfile-audit-fix@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
+        uses: tailor-platform/actions/lockfile-audit-fix@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
 
       - name: Add changeset
         if: steps.audit_fix.outputs.changed == 'true' && steps.audit_fix.outputs.runtime-deps-changed == 'true'
@@ -66,29 +67,14 @@ jobs:
           fix(deps): automated lockfile security fix
           EOF
 
-      - name: Determine repository name
-        if: steps.audit_fix.outputs.changed == 'true'
-        id: repo
-        env:
-          REPOSITORY: ${{ github.repository }}
-        run: echo "name=${REPOSITORY#*/}" >> "$GITHUB_OUTPUT"
-
-      - name: Get GitHub App token
-        if: steps.audit_fix.outputs.changed == 'true'
-        id: get_access_token
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
-        with:
-          client-id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
-          private-key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}
-          repositories: ${{ steps.repo.outputs.name }}
-          permission-contents: write
-          permission-pull-requests: write
-
+      # The pull request is opened with GITHUB_TOKEN, so its checks start only
+      # after someone with write access selects "Approve workflows to run" on
+      # the pull request page.
       - name: Create or update pull request
         if: steps.audit_fix.outputs.changed == 'true'
-        uses: tailor-platform/actions/create-signed-pr@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
+        uses: tailor-platform/actions/create-signed-pr@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
         with:
-          token: ${{ steps.get_access_token.outputs.token }}
+          token: ${{ github.token }}
           branch: chore/lockfile-audit-fix
           commit-message: "fix(deps): automated lockfile security fix"
           title: "fix(deps): automated lockfile security fix"

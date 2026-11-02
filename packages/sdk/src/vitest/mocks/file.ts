@@ -20,7 +20,11 @@ interface FileCall {
   recordId: string;
 }
 
-/** Controls fallback behavior for File calls without a configured result. */
+/**
+ * Controls fallback behavior for File calls without a configured result.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export interface MockFileOptions {
   /** Return a type-compatible fixture or throw when no behavior is configured. */
   onUnhandled?: "fallback" | "error";
@@ -57,6 +61,8 @@ const FILE_DEFAULTS: Partial<Record<FileMethod, unknown>> = {
 
 /**
  * Acquire a disposable mock for `tailordb.file`. Restored on dispose.
+ *
+ * **Beta:** This API may change in future releases.
  * @param options - Controls behavior for calls without a configured result
  * @returns Disposable File mock control object
  * @example

@@ -140,6 +140,7 @@ export interface TailorDBType<
   readonly fields: Fields;
   readonly _output: InferFieldsOutput<Fields>;
   readonly metadata: TailorDBTypeMetadata;
+  /** **Beta:** This API may change in future releases. */
   readonly plugins: PluginAttachment[];
 }
 
@@ -326,6 +327,8 @@ export interface TypeFeatures {
 
 /**
  * Plugin attachment stored on TailorAnyDBType instances.
+ *
+ * **Beta:** This API may change in future releases.
  */
 export interface PluginAttachment {
   pluginId: string;

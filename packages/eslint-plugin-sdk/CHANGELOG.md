@@ -1,5 +1,11 @@
 # @tailor-platform/eslint-plugin-sdk
 
+## 0.3.2
+
+### Patch Changes
+
+- [#2784](https://github.com/tailor-platform/sdk/pull/2784) [`9b00301`](https://github.com/tailor-platform/sdk/commit/9b00301211902826ae78e608f8251e8df238d361) Thanks [@dqn](https://github.com/dqn)! - Fix `no-unconditional-permit` reporting an imported unsafe constant twice when it is re-exported with `export { name }`, and `no-node-only-globals` flagging export names such as `export { proc as process }` and re-exports from other modules such as `export { process } from "./pipeline"` and `export * as process from "./pipeline"`.
+
 ## 0.3.1
 
 ### Patch Changes

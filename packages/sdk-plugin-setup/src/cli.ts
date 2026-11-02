@@ -5,6 +5,7 @@ import {
   annotateTerminalError,
   createCommonArgs,
   defineCommand,
+  loadEnvFilesFromArgv,
   logger,
   runMain,
   serializeError,
@@ -37,6 +38,7 @@ void runMain(mainCommand, {
   version: packageJson.version ?? "0.0.0",
   globalArgs: z.strictObject(createCommonArgs()),
   displayErrors: false,
+  setup: () => loadEnvFilesFromArgv(process.argv.slice(2)),
   // Render errors the way the host CLI does: `setup` used to run inside it, so
   // dropping either branch would regress `--json` consumers and CLIError detail.
   cleanup: ({ error }) => {

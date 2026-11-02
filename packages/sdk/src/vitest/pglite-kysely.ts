@@ -12,7 +12,7 @@ import {
   type Dialect,
   type Driver,
   Kysely,
-  PostgresAdapter,
+  PGliteAdapter,
   PostgresIntrospector,
   PostgresQueryCompiler,
   type QueryResult,
@@ -24,7 +24,11 @@ import {
   type PGliteField,
 } from "./pglite-temporal";
 
-/** Result of a {@link PGliteClient.query} call. */
+/**
+ * Result of a {@link PGliteClient.query} call.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export interface PGliteQueryResult {
   /** Rows returned by the statement. */
   rows: unknown[];
@@ -42,6 +46,8 @@ export interface PGliteQueryResult {
  * The subset of a `@electric-sql/pglite` `PGlite` instance used by
  * {@link createKyselyPGlite}. Any client with a compatible `query`/`close`
  * pair works.
+ *
+ * **Beta:** This API may change in future releases.
  */
 export interface PGliteClient {
   /** Run a single SQL statement with positional (`$1`, `$2`, ...) parameters. */
@@ -130,6 +136,8 @@ type UnmigratedColumn<C> =
  * `DB` as its rows stand before the migration script has run: every column
  * accepts on insert and update whatever it can still hold on read.
  *
+ * **Beta:** This API may change in future releases.
+ *
  * The generated `db.ts` types a column the migration makes required as
  * `ColumnType<T | null, T, T>`, and an enum whose values it narrows as
  * `ColumnType<Before, After, After>`, so `migrate.ts` cannot write a null
@@ -148,7 +156,11 @@ export type Unmigrated<DB> = {
   [T in keyof DB]: { [C in keyof DB[T]]: UnmigratedColumn<DB[T][C]> };
 };
 
-/** Options for {@link createKyselyPGlite}. */
+/**
+ * Options for {@link createKyselyPGlite}.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export interface CreateKyselyPGliteOptions {
   /**
    * Read date/datetime/time columns back as `Temporal.PlainDate`/`Temporal.Instant`/
@@ -165,9 +177,16 @@ export interface CreateKyselyPGliteOptions {
  * {@link Unmigrated} so the test can stage the rows the script has not yet
  * backfilled: `createKyselyPGlite<Unmigrated<Database>>(new PGlite())`.
  *
+ * **Beta:** This API may change in future releases.
+ *
  * PGlite runs full PostgreSQL while TailorDB supports a subset of it, so a
  * statement passing here can still be rejected by the platform; keep a
  * statement-level test (see `createKyselyMock`) alongside.
+ *
+ * While a transaction is open, other queries on the returned Kysely instance
+ * wait for it to finish. Inside the transaction, run every query on the
+ * transaction (`trx`): a query on the returned instance there waits on itself
+ * and never finishes.
  * @param client - A `PGlite` instance from `@electric-sql/pglite`
  * @param options - Adapter options
  * @returns A Kysely instance that executes queries on the client and closes it on `destroy()`
@@ -190,7 +209,7 @@ export function createKyselyPGlite<DB = Record<string, never>>(
 ): Kysely<DB> {
   const temporal = options.temporal ?? false;
   const dialect: Dialect = {
-    createAdapter: () => new PostgresAdapter(),
+    createAdapter: () => new PGliteAdapter(),
     createDriver: () => new PGliteDriver(client, temporal),
     createIntrospector: (db) => new PostgresIntrospector(db),
     createQueryCompiler: () => new PostgresQueryCompiler(),
@@ -225,6 +244,8 @@ async function uncheckRelations(client: PGliteClient): Promise<string> {
  * throws, so the script under test still runs against checked relations, and calls that are nested
  * or overlap keep relations unchecked until all of them are done. NOT NULL, UNIQUE, and CHECK
  * constraints stay enforced.
+ *
+ * **Beta:** This API may change in future releases.
  * @param client - The PGlite instance the rows are written to
  * @param prepare - Writes the rows, for example with the Kysely instance of the same client
  * @returns Whatever `prepare` returns

@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { aroundAll, aroundEach, describe, expect, test } from "vitest";
+import { runWithTsHook } from "#/cli/shared/test-helpers/ts-hook-child";
 import { detectFunctionType } from "./detect";
 
 const TEST_BASE = path.join(__dirname, "__test_detect__");
@@ -333,6 +334,28 @@ export default function(input) {
       const filePath = writeFile("empty.mjs", `export default 42;`);
 
       await expect(detectFunctionType({ filePath })).rejects.toThrow("Could not detect");
+    });
+
+    test("reports a file that does not parse as SYNTAX_INVALID", { timeout: 60_000 }, () => {
+      const filePath = writeFile("broken.ts", "export const broken = ;\n");
+
+      const outcome = runWithTsHook(
+        `
+        const { detectFunctionType } = await import("#/cli/commands/function/detect");
+        try {
+          await detectFunctionType({ filePath: ${JSON.stringify(filePath)} });
+          console.log(JSON.stringify({}));
+        } catch (error) {
+          console.log(JSON.stringify({ code: error.code, message: error.message }));
+        }
+        `,
+        testDir,
+      );
+
+      expect(outcome).toEqual({
+        code: "SYNTAX_INVALID",
+        message: "Invalid syntax in broken.ts:1: Expression expected",
+      });
     });
   });
 });

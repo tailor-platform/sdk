@@ -417,7 +417,9 @@ type DBFieldIndexMethod<
       ? TypeLevelError<".index() has already been set">
       : DBFieldArrayCheck<
           Defined["array"],
-          DBFieldIndexFn<Defined, Output, Nested>,
+          Defined extends { type: "nested" }
+            ? TypeLevelError<"index cannot be set on nested type fields">
+            : DBFieldIndexFn<Defined, Output, Nested>,
           "index cannot be set on array fields"
         >;
 type DBFieldUniqueMethod<
@@ -431,7 +433,9 @@ type DBFieldUniqueMethod<
       ? TypeLevelError<".unique() has already been set">
       : DBFieldArrayCheck<
           Defined["array"],
-          DBFieldUniqueFn<Defined, Output, Nested>,
+          Defined extends { type: "nested" }
+            ? TypeLevelError<"unique cannot be set on nested type fields">
+            : DBFieldUniqueFn<Defined, Output, Nested>,
           "unique cannot be set on array fields"
         >;
 type DBFieldVectorMethod<
@@ -707,6 +711,7 @@ export interface TailorDBType<
       : never;
   };
   omitFields<K extends keyof Fields>(keys: K[]): Omit<Fields, K>;
+  /** **Beta:** This API may change in future releases. */
   plugin<const Config extends Record<string, unknown>>(
     config: Config & PluginConfigGuard<Fields, Config, FileKeys>,
   ): TailorDBType<PluginExtendedFields<Fields, Config>, User, Defined, FileKeys>;

@@ -1,7 +1,6 @@
 import { CLIError } from "#/cli/shared/errors";
 import { assertSkippableSteps } from "./migration-workflow";
-import type { MigrationInProgress } from "#/cli/commands/tailordb/migrate/remote-state";
-import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
+import type { MigrationInProgress, PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { OperatorClient } from "#/cli/shared/client";
 
 /**

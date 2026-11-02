@@ -6,7 +6,7 @@ import { z } from "zod";
 import { resourceTrn } from "#/cli/commands/deploy/label";
 import { updateMigrationLabel } from "#/cli/commands/deploy/tailordb/migration";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
-import { confirmationArgs, deploymentArgs, recoveryContextArgs } from "#/cli/shared/args";
+import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
@@ -20,7 +20,18 @@ import { PluginManager } from "#/plugin/manager";
 import { getNamespacesWithMigrations, selectTargetNamespace } from "./config";
 import { formatMigrationDiff, hasChanges } from "./diff-calculator";
 import { captureFileState, captureMigrationFileState } from "./file-state";
-import { assertNoMigrationInProgress, fetchRemoteMigrationState } from "./remote-state";
+import {
+  formatNamespaceMigrationHint,
+  migrationCommandArgs,
+  migrationCommandContext,
+  migrationContextArgs,
+  type MigrationSubcommandArgs,
+} from "./hints";
+import {
+  assertNoMigrationInProgress,
+  fetchRemoteMigrationState,
+  migrationHistoryMismatchError,
+} from "./remote-state";
 import {
   formatRemoteVerificationResults,
   toTailorDBDeployInput,
@@ -138,10 +149,10 @@ async function rebaseline(options: RebaselineOptions): Promise<RebaselineResult>
   );
   const generateFirstSuggestion = `First run ${formatCommandHint({
     command: "tailor",
-    args: ["tailordb", "migration", "generate", "--config", config.path],
+    args: migrationCommandArgs(["generate"], { configPath: config.path }),
   })}.`;
 
-  assertValidMigrationFiles(target.migrationsDir, target.namespace);
+  assertValidMigrationFiles(target.migrationsDir, target.namespace, config.path);
   const latestSnapshot = reconstructSnapshotFromMigrations(target.migrationsDir);
   if (!latestSnapshot) {
     throw CLIError({
@@ -203,25 +214,19 @@ async function rebaseline(options: RebaselineOptions): Promise<RebaselineResult>
     profile: options.profile,
     workspaceId: options.workspaceId,
   });
-  const remoteContextArgs = [
-    "--config",
-    config.path,
-    ...recoveryContextArgs({ workspaceId, profile: options.profile }),
-  ];
-  const setBaselineSuggestion = `Run ${formatCommandHint({
-    command: "tailor",
-    args: [
-      "tailordb",
-      "migration",
-      "set",
-      "0",
-      "--namespace",
-      target.namespace,
-      ...remoteContextArgs,
-    ],
-  })}`;
+  const commandContext = migrationCommandContext({
+    configPath: config.path,
+    workspaceId,
+    profile: options.profile,
+  });
+  const migrationHint = (subcommand: MigrationSubcommandArgs): string =>
+    formatNamespaceMigrationHint({ ...commandContext, subcommand, namespace: target.namespace });
+  const syncBaselineSuggestion = `Run ${migrationHint(["sync", formatMigrationNumber(0), "--force"])}`;
+  const latestLabel = formatMigrationNumber(latestMigration);
+  const adoptLocalHistory = `run ${migrationHint(["sync", latestLabel, "--force"])}, which removes the fields that migration does not have and deletes the tables it does not have together with their data, then run this command again.`;
+  const rerunSuggestion = "Run the command again.";
   const deploySuggestion = `after resolving the connection error, deploy with schema checks enabled by running ${formatCommandHint(
-    { command: "tailor", args: ["deploy", ...remoteContextArgs] },
+    { command: "tailor", args: ["deploy", ...migrationContextArgs(commandContext)] },
   )}.`;
 
   const assertConnectedWorkspaceReady = async (
@@ -232,7 +237,7 @@ async function rebaseline(options: RebaselineOptions): Promise<RebaselineResult>
       client,
       resourceTrn(workspaceId, "tailordb", target.namespace),
     );
-    assertNoMigrationInProgress(remoteState, target.namespace);
+    assertNoMigrationInProgress(remoteState, target.namespace, commandContext);
     const remoteMigration = remoteState.number;
     if (remoteMigration !== latestMigration) {
       const actual = remoteMigration === null ? "<unset>" : formatMigrationNumber(remoteMigration);
@@ -246,6 +251,10 @@ async function rebaseline(options: RebaselineOptions): Promise<RebaselineResult>
         code: "REBASELINE_REMOTE_HISTORY_INVALID",
         message:
           "Refusing to re-baseline: the connected workspace has an invalid migration history marker.",
+        suggestion:
+          phase === "confirmation"
+            ? rerunSuggestion
+            : `To replace the marker with the local migration history, ${adoptLocalHistory}`,
       });
     }
     if (remoteState.historyId !== expectedHistoryId) {
@@ -254,12 +263,14 @@ async function rebaseline(options: RebaselineOptions): Promise<RebaselineResult>
             code: "REBASELINE_STATE_CHANGED",
             message:
               "The connected workspace migration history changed while waiting for confirmation.",
-            suggestion: "Run the command again.",
+            suggestion: rerunSuggestion,
           })
-        : CLIError({
+        : migrationHistoryMismatchError({
+            state: remoteState,
+            localHistoryId: expectedHistoryId,
+            namespace: target.namespace,
             code: "REBASELINE_REMOTE_HISTORY_MISMATCH",
-            message:
-              "Refusing to re-baseline: the connected workspace does not match the local migration history.",
+            suggestion: `Run this command from a checkout of the migration history that was deployed to the workspace. To replace that history with the local one on purpose, ${adoptLocalHistory}`,
           });
     }
 
@@ -281,6 +292,11 @@ async function rebaseline(options: RebaselineOptions): Promise<RebaselineResult>
         code: "REBASELINE_REMOTE_SCHEMA_MISMATCH",
         message:
           "Refusing to re-baseline: the connected workspace remote schema must match the latest migration.",
+        suggestion:
+          phase === "confirmation"
+            ? rerunSuggestion
+            : `Run ${migrationHint(["status"])} to compare the workspace with the local migration history. ` +
+              `To rewrite the workspace's tables to the latest migration, run ${migrationHint(["sync", latestLabel])}, which deletes the tables and fields that migration does not have together with their data, then run this command again.`,
       });
     }
   };
@@ -312,20 +328,20 @@ async function rebaseline(options: RebaselineOptions): Promise<RebaselineResult>
     }
   }
 
-  assertValidMigrationFiles(target.migrationsDir, target.namespace);
+  assertValidMigrationFiles(target.migrationsDir, target.namespace, config.path);
   const currentFileState = captureMigrationFileState([target])[target.namespace];
   if (currentFileState !== initialFileState) {
     throw CLIError({
       code: "REBASELINE_STATE_CHANGED",
       message: "Migration files changed while waiting for confirmation.",
-      suggestion: "Run the command again.",
+      suggestion: rerunSuggestion,
     });
   }
   if (captureFileState(localSourceFiles()) !== initialLocalFileState) {
     throw CLIError({
       code: "REBASELINE_STATE_CHANGED",
       message: "Local TailorDB table or config files changed.",
-      suggestion: "Run the command again.",
+      suggestion: rerunSuggestion,
     });
   }
   assertLocalTypesReady();
@@ -350,7 +366,7 @@ async function rebaseline(options: RebaselineOptions): Promise<RebaselineResult>
       code: "REBASELINE_CHECKPOINT_UPDATE_FAILED",
       message:
         "The local migration history was re-baselined, but the connected workspace checkpoint could not be updated.",
-      suggestion: `${setBaselineSuggestion}, or ${deploySuggestion}`,
+      suggestion: `${syncBaselineSuggestion}, or ${deploySuggestion}`,
       cause: error,
     });
   }

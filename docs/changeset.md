@@ -36,9 +36,30 @@ external system is not an SDK breaking change when it preserves existing SDK inv
 code, and configuration. If that distinction cannot be established from the repository, confirm the
 expected compatibility with the user before choosing `major`.
 
+#### Breaking changes to beta features
+
+A feature is beta only when it carries the beta mark itself:
+
+- An exported symbol, or a property or method of one: `**Beta:**` in its JSDoc. The members of a
+  marked symbol share its mark.
+- A CLI command or option: `(beta)` in its description. A command's subcommands and options share
+  its mark.
+- Behavior with no symbol or command of its own is beta only when listed here: how the CLI dispatches
+  `tailor <name>` to a `tailor-<name>` plugin executable and the environment variables it passes, and
+  how `tailor deploy` applies pending TailorDB migrations (schema verification, migration phases,
+  checkpoints, and scripts), including the `migrate.ts` contract.
+
+Where the docs explain or mention an API does not change this; the `(Beta)` in `packages/sdk/docs/`
+only repeats the mark for readers. When a change to a beta API also changes a non-beta one, such as a
+beta type that also shapes non-beta command output, the non-beta one decides the level.
+
+A breaking change to a beta feature is `minor`, and its description starts with
+`**Breaking change (beta)**:` followed by the user impact and migration steps.
+
 ### `minor` — New capabilities
 
 SDK users can do something new that they couldn't before. Their existing code continues to work without changes.
+[Breaking changes to beta features](#breaking-changes-to-beta-features) are also `minor`.
 
 - New CLI command (e.g., `function logs`, `executor list`, `completion`)
 - New field type (e.g., `t.decimal()`, `db.decimal()`)
@@ -62,14 +83,15 @@ SDK users don't need to know about this change. Their code works exactly the sam
 
 ## Common Mistakes
 
-| Change                  | Wrong | Correct   | Reason                                         |
-| ----------------------- | ----- | --------- | ---------------------------------------------- |
-| New CLI command         | patch | **minor** | Users can do something new                     |
-| New config option       | patch | **minor** | Users can configure something new              |
-| New field type          | patch | **minor** | Users can define new schemas                   |
-| Internal refactoring    | minor | **patch** | Invisible to users                             |
-| Performance improvement | minor | **patch** | Same behavior, just faster                     |
-| Better validation error | minor | **patch** | Existing behavior improved, not new capability |
+| Change                            | Wrong | Correct   | Reason                                          |
+| --------------------------------- | ----- | --------- | ----------------------------------------------- |
+| New CLI command                   | patch | **minor** | Users can do something new                      |
+| New config option                 | patch | **minor** | Users can configure something new               |
+| New field type                    | patch | **minor** | Users can define new schemas                    |
+| Internal refactoring              | minor | **patch** | Invisible to users                              |
+| Performance improvement           | minor | **patch** | Same behavior, just faster                      |
+| Better validation error           | minor | **patch** | Existing behavior improved, not new capability  |
+| Breaking change to a beta feature | major | **minor** | Beta features can break outside a major release |
 
 ## When No Changeset Is Needed
 

@@ -356,12 +356,12 @@ export async function bundleWorkflowJobs(
       runtimeGlobals: { label: `Workflow job "${job.name}"`, allowed: allowedRuntimeGlobals },
       createTransformPlugin: () => createWorkflowTransformPlugin(job, usedJobs, startContext),
       entry: (absoluteSourcePath) => ml /* js */ `
-        import { ${job.exportName} } from "${absoluteSourcePath}";
+        import { ${JSON.stringify(job.exportName)} as _internalJob } from "${absoluteSourcePath}";
 
         export async function main(input) {
           const env = ${JSON.stringify(env)};
           const invoker = ${INVOKER_EXPR};
-          return await ${job.exportName}.body(input, { env, invoker });
+          return await _internalJob.body(input, { env, invoker });
         }
       `,
     });

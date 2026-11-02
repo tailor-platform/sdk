@@ -11,28 +11,17 @@ import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import { statusCommand } from "./status";
-import { writeDiff, writeInitialSchema } from "./test-helpers/schema-fixtures";
+import { migrationDbConfig } from "./test-helpers/migration-config";
+import {
+  writeDiff,
+  writeInitialSchema,
+  writeRebaselineMarker,
+} from "./test-helpers/schema-fixtures";
 
 const state = vi.hoisted(() => ({
   migrationsDir: "",
   getMetadata: vi.fn(),
 }));
-
-function markHistoryAsRebaselined(historyId = "hlocal"): void {
-  const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
-  const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
-  fs.writeFileSync(
-    schemaPath,
-    JSON.stringify({
-      ...schema,
-      rebaseline: {
-        historyId,
-        replacedHistoryId: null,
-        replacedLatestMigration: 0,
-      },
-    }),
-  );
-}
 
 vi.mock("#/cli/shared/config-loader", () => ({
   loadConfig: vi.fn(),
@@ -47,6 +36,8 @@ vi.mock("#/cli/shared/client", async (importOriginal) => ({
   ...(await importOriginal()),
   initOperatorClient: vi.fn(),
 }));
+
+const workspaceArg = "--workspace-id=12345678-1234-4abc-8def-123456789012";
 
 describe("tailordb migration status --json", () => {
   aroundEach(async (runTest) => {
@@ -126,8 +117,156 @@ describe("tailordb migration status --json", () => {
     await runCommand(statusCommand, []);
 
     expect(JSON.parse(stdout.output)).toMatchObject([
-      { status: "ok", inProgressMigration: 2, inProgressMigrationLabel: "0002" },
+      {
+        status: "ok",
+        inProgressMigration: 2,
+        inProgressMigrationLabel: "0002",
+        inProgressMigrationRun: "steps",
+        inProgressMigrationActions: [
+          { action: "resume", command: "tailor", args: ["deploy", workspaceArg] },
+          {
+            action: "rollback",
+            command: "tailor",
+            args: [
+              "tailordb",
+              "migration",
+              "resolve",
+              "--rollback",
+              "--namespace",
+              "tailordb",
+              workspaceArg,
+            ],
+          },
+          {
+            action: "complete",
+            command: "tailor",
+            args: [
+              "tailordb",
+              "migration",
+              "resolve",
+              "--complete",
+              "--namespace",
+              "tailordb",
+              workspaceArg,
+            ],
+          },
+        ],
+      },
     ]);
+  });
+
+  test("reports a `main` run whose outcome an earlier deploy could not settle", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002-main" },
+      },
+    });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    await runCommand(statusCommand, []);
+
+    const [row] = JSON.parse(stdout.output) as Record<string, unknown>[];
+    expect(row).toMatchObject({
+      status: "ok",
+      inProgressMigration: 2,
+      inProgressMigrationRun: "main",
+    });
+    expect(row?.inProgressMigrationActions).toEqual([
+      expect.objectContaining({
+        action: "complete",
+        args: [
+          "tailordb",
+          "migration",
+          "resolve",
+          "--complete",
+          "--namespace",
+          "tailordb",
+          workspaceArg,
+        ],
+      }),
+      expect.objectContaining({
+        action: "rollback",
+        args: [
+          "tailordb",
+          "migration",
+          "resolve",
+          "--rollback",
+          "--namespace",
+          "tailordb",
+          workspaceArg,
+        ],
+      }),
+    ]);
+  });
+
+  test.each([
+    {
+      name: "a namespace without a checkpoint",
+      labels: { "sdk-migration-in-progress": "m0001" },
+      actions: ["resume", "rollback", "complete"],
+    },
+    {
+      name: "a record ahead of the migration after the checkpoint",
+      labels: { "sdk-migration": "m0000", "sdk-migration-in-progress": "m0002" },
+      actions: [],
+    },
+  ])("lists the in-progress commands that accept $name", async (row) => {
+    state.getMetadata.mockResolvedValue({ metadata: { labels: row.labels } });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    await runCommand(statusCommand, []);
+
+    const [status] = JSON.parse(stdout.output) as {
+      inProgressMigrationActions: { action: string }[];
+    }[];
+    expect(status?.inProgressMigrationActions.map(({ action }) => action)).toEqual(row.actions);
+  });
+
+  test("keeps the config, workspace, and profile of the run in the in-progress commands", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002" },
+      },
+    });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    await runCommand(statusCommand, ["--config", "apps/tailor.config.ts", "--profile", "staging"]);
+
+    const [row] = JSON.parse(stdout.output) as {
+      inProgressMigrationActions: { args: string[] }[];
+    }[];
+    const context = ["--config=apps/tailor.config.ts", workspaceArg, "--profile=staging"];
+    expect(row?.inProgressMigrationActions.map(({ args }) => args)).toEqual([
+      ["deploy", ...context],
+      ["tailordb", "migration", "resolve", "--rollback", "--namespace", "tailordb", ...context],
+      ["tailordb", "migration", "resolve", "--complete", "--namespace", "tailordb", ...context],
+    ]);
+  });
+
+  test("tells the user to settle a `main` run whose outcome is not settled", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002-main" },
+      },
+    });
+    using stderr = captureStderr();
+
+    await runCommand(statusCommand, []);
+
+    expect(stderr.output).toContain("In progress: 0002");
+    expect(stderr.output).toContain(
+      `Complete: \`tailor tailordb migration resolve --complete --namespace tailordb ${workspaceArg}\``,
+    );
+    expect(stderr.output).toContain(
+      `Roll back: \`tailor tailordb migration resolve --rollback --namespace tailordb ${workspaceArg}\``,
+    );
+    expect(stderr.output).not.toContain("tailor deploy");
   });
 
   test("does not report an in-progress record the checkpoint already passed", async () => {
@@ -145,9 +284,10 @@ describe("tailordb migration status --json", () => {
     const [row] = JSON.parse(stdout.output) as Record<string, unknown>[];
     expect(row).toMatchObject({ status: "ok", currentMigration: 2 });
     expect(row).not.toHaveProperty("inProgressMigration");
+    expect(row).not.toHaveProperty("inProgressMigrationActions");
   });
 
-  test("tells the user how an in-progress migration continues", async () => {
+  test("tells the user how to resume, roll back, or complete an in-progress migration", async () => {
     state.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002" },
@@ -158,6 +298,13 @@ describe("tailordb migration status --json", () => {
     await runCommand(statusCommand, []);
 
     expect(stderr.output).toContain("In progress: 0002");
+    expect(stderr.output).toContain(`Resume: \`tailor deploy ${workspaceArg}\``);
+    expect(stderr.output).toContain(
+      `Roll back: \`tailor tailordb migration resolve --rollback --namespace tailordb ${workspaceArg}\``,
+    );
+    expect(stderr.output).toContain(
+      `Complete: \`tailor tailordb migration resolve --complete --namespace tailordb ${workspaceArg}\``,
+    );
   });
 
   test("reports unreadable in-progress labels as an error", async () => {
@@ -315,7 +462,7 @@ describe("tailordb migration status --json", () => {
   });
 
   test("reports a remote migration history mismatch", async () => {
-    markHistoryAsRebaselined();
+    writeRebaselineMarker(state.migrationsDir, "hlocal");
     state.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0001", "sdk-migration-history": "hremote" },
@@ -337,8 +484,91 @@ describe("tailordb migration status --json", () => {
     ]);
   });
 
+  test("reports a remote checkpoint ahead of the local migration history as an error", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0009" } },
+    });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    const result = await runCommand(statusCommand, [
+      "--config",
+      "custom.config.ts",
+      "--profile",
+      "staging",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(JSON.parse(stdout.output)).toMatchObject([
+      {
+        status: "error",
+        namespace: "tailordb",
+        error: expect.stringMatching(/checkpoint 0009.*ahead.*latest local migration 0002/i),
+      },
+    ]);
+    const [{ error }] = JSON.parse(stdout.output);
+    const context = `--config=custom.config.ts ${workspaceArg} --profile=staging`;
+    expect(error).toContain(`sync 0002 --namespace tailordb ${context}`);
+    expect(error).toContain(
+      "Each command rewrites the tables to that migration, removing the fields it does not have and deleting the tables it does not have together with their data",
+    );
+    expect(error).not.toContain("--force");
+  });
+
+  test.each([
+    { history: "another migration history ID", label: "hremote" },
+    { history: "a migration history label it cannot read", label: "Not a history ID" },
+  ])("offers to replace $history with --force", async ({ label }) => {
+    writeRebaselineMarker(state.migrationsDir, "hlocal");
+    state.getMetadata.mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0001", "sdk-migration-history": label } },
+    });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    const result = await runCommand(statusCommand, []);
+
+    expect(result.success).toBe(false);
+    const [{ error }] = JSON.parse(stdout.output);
+    expect(error).toContain("Pull the latest migration files");
+    expect(error).toContain("sync 0002 --force --namespace tailordb");
+    expect(error).toContain("replaces the migration history ID");
+  });
+
+  test("does not offer to move a checkpoint the next deploy resets to the new baseline", async () => {
+    writeRebaselineMarker(state.migrationsDir, "hlocal", { replacedHistoryId: "hprevious" });
+    state.getMetadata.mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0000", "sdk-migration-history": "hprevious" } },
+    });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    await runCommand(statusCommand, []);
+
+    const [{ error }] = JSON.parse(stdout.output);
+    expect(error).not.toContain("migration sync");
+  });
+
+  test("does not suggest checkpoint moves without a local snapshot", async () => {
+    fs.rmSync(state.migrationsDir, { recursive: true });
+    fs.mkdirSync(state.migrationsDir);
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    const result = await runCommand(statusCommand, []);
+
+    expect(result.success).toBe(false);
+    const [{ error }] = JSON.parse(stdout.output);
+    expect(error).toContain("Pull the latest migration files");
+    expect(error).not.toContain("migration sync");
+  });
+
   test("identifies a migration history mismatch in human-readable output", async () => {
-    markHistoryAsRebaselined();
+    writeRebaselineMarker(state.migrationsDir, "hlocal");
     state.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0001", "sdk-migration-history": "hremote" },
@@ -356,7 +586,7 @@ describe("tailordb migration status --json", () => {
   });
 
   test("accepts a matching remote migration history", async () => {
-    markHistoryAsRebaselined();
+    writeRebaselineMarker(state.migrationsDir, "hlocal");
     state.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0001", "sdk-migration-history": "hlocal" },
@@ -379,7 +609,7 @@ describe("tailordb migration status --json", () => {
   });
 
   test("does not report a history mismatch for an undeployed namespace", async () => {
-    markHistoryAsRebaselined();
+    writeRebaselineMarker(state.migrationsDir, "hlocal");
     state.getMetadata.mockRejectedValue(new ConnectError("metadata not found", Code.NotFound));
     using stdout = captureStdout();
     using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
@@ -401,10 +631,7 @@ describe("tailordb migration status --json", () => {
     vi.mocked(loadConfig).mockResolvedValue({
       config: {
         path: path.join(path.dirname(state.migrationsDir), "tailor.config.ts"),
-        db: {
-          tailordb: { migration: { directory: state.migrationsDir } },
-          analyticsdb: { migration: { directory: state.migrationsDir } },
-        },
+        db: migrationDbConfig(["tailordb", "analyticsdb"], state.migrationsDir),
       },
     } as unknown as Awaited<ReturnType<typeof loadConfig>>);
     state.getMetadata.mockImplementation(({ trn }: { trn: string }) =>

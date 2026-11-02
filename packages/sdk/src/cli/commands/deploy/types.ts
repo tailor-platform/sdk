@@ -24,6 +24,8 @@ export interface PlanContext {
   noSchemaCheck?: boolean;
   /** Steps of an in-progress multi-step migration to skip, keyed by namespace. */
   migrationSkipSteps?: ReadonlyMap<string, readonly string[]>;
+  /** Profile and env-file arguments of this deploy, kept in the migration commands it suggests. */
+  migrationRecoveryArgs?: readonly string[];
   forceApplyAll?: boolean;
   /**
    * Set of IdP names that have at least one executor with an idpUser trigger.
@@ -64,4 +66,6 @@ export interface PlanContext {
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
   /** Committed schema snapshots used internally by `tailordb migration test`. Consumed by TailorDB planning only. */
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
+  /** Machine user that runs migration scripts in place of the configured one, given by `tailordb migration test`. Consumed by TailorDB planning only. */
+  migrationMachineUserOverride?: string;
 }

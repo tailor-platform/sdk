@@ -48,9 +48,7 @@ describe("query-bundler", () => {
 
       expect(bundledCode).toContain("export");
       expect(bundledCode).toContain("main");
-      expect(bundledCode).toContain("sql.raw");
       expect(bundledCode).toContain("Kysely");
-      expect(bundledCode).toContain("TailordbDialect");
       expect(bundledCode).toContain("new tailordb.Client");
       expect(bundledCode).toContain("rowCount");
     });
@@ -63,7 +61,6 @@ describe("query-bundler", () => {
       expect(bundledCode).toContain("fetch");
       expect(bundledCode).toContain("Authorization");
       expect(bundledCode).toContain("GraphQL request failed");
-      expect(bundledCode).toContain("response.ok");
     });
 
     test("keeps SQL and GraphQL runtime concerns separated", async () => {
@@ -71,13 +68,19 @@ describe("query-bundler", () => {
       const gqlBundle = await bundleQueryScript("gql", __dirname);
 
       expect(sqlBundle).toContain("tailordb.Client");
-      expect(sqlBundle).toContain("TailordbDialect");
-      expect(sqlBundle).toContain("sql.raw(query).execute");
-      expect(sqlBundle).not.toContain("fetch(input.endpoint");
+      expect(sqlBundle).toContain("Kysely");
+      expect(sqlBundle).not.toContain("GraphQL request failed");
 
-      expect(gqlBundle).toContain("fetch(input.endpoint");
-      expect(gqlBundle).not.toContain("TailordbDialect");
+      expect(gqlBundle).toContain("GraphQL request failed");
+      expect(gqlBundle).not.toContain("Kysely");
       expect(gqlBundle).not.toContain("tailordb.Client");
+    });
+
+    test("strips annotation comments", async () => {
+      const bundledCode = await bundleQueryScript("sql", __dirname);
+
+      expect(bundledCode).not.toContain("@__PURE__");
+      expect(bundledCode).not.toContain("@__NO_SIDE_EFFECTS__");
     });
 
     test("writes entry files to query output directory (bundle output is in-memory only)", async () => {

@@ -12,7 +12,11 @@ interface IdpCall {
   namespace: string;
 }
 
-/** Controls fallback behavior for IdP calls without a configured result. */
+/**
+ * Controls fallback behavior for IdP calls without a configured result.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export interface MockIdpOptions {
   /** Return a type-compatible fixture or throw when no behavior is configured. */
   onUnhandled?: "fallback" | "error";
@@ -55,6 +59,8 @@ const IDP_DEFAULTS: Record<IdpMethod, unknown> = {
 
 /**
  * Acquire a disposable mock for `tailor.idp`. Restored on dispose.
+ *
+ * **Beta:** This API may change in future releases.
  * @param options - Controls behavior for calls without a configured result
  * @returns Disposable IDP mock control object
  * @example

@@ -175,6 +175,14 @@ db.string().index();
 db.string().unique();
 ```
 
+`.unique()` and `.index()` also work on a field inside a `db.object()` that is not an array: with `.unique()` the value must be unique across rows, while `.index()` only indexes it and still allows duplicates. Inside an array of objects (`db.object(..., { array: true })`) the platform does not reject duplicate values, so both are rejected there with an error, as on an array field.
+
+`.unique()` and `.index()` cannot be set on a `db.object()` field itself, whether it is a table field or a member of another `db.object()`, because the platform cannot index an object value.
+
+A project that already uses `.unique()` or `.index()` on a field inside a `db.object()` was deployed with the setting stored as off, so its next `tailor deploy` stops with `MIGRATION_REMOTE_DRIFT`, and `tailor tailordb migration validate` fails the same way. `tailor tailordb migration generate` reports no differences. Run `tailor deploy --no-schema-check` once to apply the setting. If stored rows already hold duplicate values for a field that gains `.unique()`, that deploy fails and the schema stays unchanged until the duplicates are resolved.
+
+A project that sets `.unique()` or `.index()` on a member that is itself a `db.object()` now fails with an error naming the field. Remove the modifier. Then, in a namespace with `migration.directory`, run `tailor tailordb migration generate` and `tailor deploy --no-schema-check` once; later deploys need no flag.
+
 ### Relations
 
 Add a relation to field with automatic index and foreign key constraint:
@@ -218,6 +226,25 @@ const user = db.table("User", {
 });
 ```
 
+A relation can also be set on a field inside `db.object()`. The inner field gets the foreign key constraint only: no index, no unique constraint, and no forward or backward relationship, as with `type: "keyOnly"`.
+
+```typescript
+const order = db.table("Order", {
+  items: db.object(
+    {
+      productId: db.uuid().relation({
+        type: "keyOnly",
+        toward: { table: product },
+      }),
+      quantity: db.int(),
+    },
+    { array: true },
+  ),
+});
+```
+
+A relation inside `db.object()` can point at its own table, for example `links.parentID` on `Node`. `tailor seed apply` inserts a row before the rows that point at it, in whatever order the seed data lists them, and follows every element of an array. This needs a unique `id` on every row, and a reference must match the referenced value exactly, including letter case. Otherwise the rows can be inserted in the order the file lists them. The data copy that a table rename generates inserts such references as null and restores them once every row exists.
+
 Create relations against different fields using `toward.key`:
 
 ```typescript
@@ -235,6 +262,11 @@ const userProfile = db.table("UserProfile", {
 
 `userEmail` does not end in `ID`, `Id`, or `id`, so this example specifies the forward relation
 name with `toward.as`.
+
+A relation field must have the same type as the field it points at: `db.uuid()` for the default
+`id`, and the type of the `toward.key` field otherwise. The SDK rejects a relation whose types
+differ, such as a `db.string()` field related to `id`. A custom `toward.key` must be unique,
+through `.unique()` or a one-to-one relation.
 
 Customize relation names using `toward.as` / `backward` options:
 
@@ -539,7 +571,7 @@ db.table("User", {
 - When not specified, `deploy` sets it from the executors taking part in the same run: `true` while one of them uses this table with `recordCreatedTrigger`, `recordUpdatedTrigger`, or `recordDeletedTrigger`, and `false` once none does. Removing the last such trigger turns publishing back off on the next `deploy`
 - When explicitly set to `false` while an executor taking part in the same run uses this table, `deploy` fails
 - An executor declared with `disabled: true` never runs, so it does not count as using the table
-- While a `deploy` applies pending migrations with [maintenance mode](./migration.md#maintenance-mode) on, every table in the migrating namespace is restricted: the GraphQL create, update, and delete operations and bulk upsert are disabled, and the table's `read` setting is not switched off for the migration (a table the migration creates uses its configured setting), so nothing writes an intermediate schema and readable tables are not shut down. Record event publishing is also switched off so a migration script's writes do not reach executors from the previous deploy. With `maintenanceMode: false`, these restrictions are not applied. After success, the configured settings take effect. If a later migration fails, settings from the last confirmed checkpoint are restored; an uncommitted migration restores existing tables' prior settings and leaves its newly created tables restricted until a successful retry. A table that already refuses create, update, delete, and bulk upsert and publishes no record events is left as it is. Restoration is skipped if the checkpoint number or migration history changed concurrently, or if checkpoint ownership cannot be verified; the deploy then reports the namespace whose tables stay restricted and points to `tailor tailordb migration status --namespace <namespace>`. When a failed migration or a failed restoration leaves tables restricted, the deploy lists their names, and deploying again releases them once the migration completes. A table that a failed rollback could not delete or revert is the exception: the deploy also lists it, but the next deploy stops with remote schema drift until you delete or repair that table by hand. A table left behind by a failed post-checkpoint deletion also remains read-only for manual recovery, and the deploy does not list it by name
+- While a `deploy` applies pending migrations with [maintenance mode](./migration.md#maintenance-mode) on, every table in the migrating namespace is restricted: the GraphQL create, update, and delete operations and bulk upsert are disabled, and the table's `read` setting is not switched off for the migration (a table the migration creates uses its configured setting), so nothing writes an intermediate schema and readable tables are not shut down. Record event publishing is also switched off so a migration script's writes do not reach executors from the previous deploy. With `maintenanceMode: false`, these restrictions are not applied. After success, the configured settings take effect. If a later migration fails, settings from the last confirmed checkpoint are restored; an uncommitted migration restores existing tables' prior settings and leaves its newly created tables restricted until a successful retry. A table that already refuses create, update, delete, and bulk upsert and publishes no record events is left as it is. Restoration is skipped if the checkpoint number or migration history changed concurrently, or if checkpoint ownership cannot be verified; the deploy then reports the namespace whose tables stay restricted and points to `tailor tailordb migration status --namespace <namespace>`. When a failed migration or a failed restoration leaves tables restricted, the deploy lists their names, and deploying again releases them once the migration completes. A table that a failed rollback could not delete or revert is the exception: the deploy also lists it, but the next deploy stops with remote schema drift until you delete or repair that table by hand. A table left behind by a failed post-checkpoint deletion also remains read-only, and the deploy does not list it by name; the next deploy deletes it
 
 **Use cases:**
 
@@ -746,7 +778,7 @@ db.table("User", {
 
 **Warning**: Do not use `unsafeAllowAllTypePermission` or `unsafeAllowAllGqlPermission` in production environments as they effectively disable authorization checks.
 
-## Migrations
+## Migrations (Beta)
 
 When you change a TailorDB table definition, the SDK can generate a migration that captures the diff and, for breaking changes, runs a data transformation script during `tailor deploy`. See the [TailorDB Migrations guide](./migration.md) for the full workflow, configuration, supported change types, team coordination, and troubleshooting.
 

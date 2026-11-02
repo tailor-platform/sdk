@@ -77,7 +77,7 @@ export default defineConfig([
     name: "dts",
     dts: {
       emitDtsOnly: true,
-      eager: true,
+      tsc: { eager: true },
     },
     unbundle: true,
     root: "src",

@@ -1,4 +1,5 @@
 import { describe, test, expect, vi, aroundEach } from "vitest";
+import type * as PromptModule from "./prompt";
 
 describe("prompt", () => {
   describe("CI environment", () => {
@@ -26,6 +27,41 @@ describe("prompt", () => {
       const { CIPromptError } = await import("./logger");
 
       await expect(prompt.text({ message: "test" })).rejects.toThrow(CIPromptError);
+    });
+
+    test.each([
+      {
+        kind: "confirm",
+        ask: (prompt: typeof PromptModule.prompt) =>
+          prompt.confirm({ message: "test", suggestion: "Pass --value." }),
+      },
+      {
+        kind: "text",
+        ask: (prompt: typeof PromptModule.prompt) =>
+          prompt.text({ message: "test", suggestion: "Pass --value." }),
+      },
+      {
+        kind: "password",
+        ask: (prompt: typeof PromptModule.prompt) =>
+          prompt.password({ message: "test", suggestion: "Pass --value." }),
+      },
+      {
+        kind: "select",
+        ask: (prompt: typeof PromptModule.prompt) =>
+          prompt.select({ message: "test", choices: [{ value: 1 }], suggestion: "Pass --value." }),
+      },
+    ])("$kind reports the caller's suggestion when isCI is true", async ({ ask }) => {
+      vi.doMock("std-env", () => ({ isCI: true }));
+
+      const [{ prompt }, { CIPromptError }, { getErrorDiagnostics }] = await Promise.all([
+        import("./prompt"),
+        import("./logger"),
+        import("./error-diagnostics"),
+      ]);
+
+      const error = await ask(prompt).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(CIPromptError);
+      expect(getErrorDiagnostics(error as Error).suggestion).toBe("Pass --value.");
     });
 
     test("does not suggest a JSON remedy in CI even with TTYs", async () => {

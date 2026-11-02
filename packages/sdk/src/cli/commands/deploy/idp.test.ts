@@ -101,6 +101,23 @@ describe("applyIdP phase separation", () => {
     });
   });
 
+  test("delete-resources phase deletes only the vault of a vault-only client delete", async () => {
+    const client = createMockClientWithSpies();
+    const planResult = createMockPlanResult();
+    planResult.changeSet.client.deletes[0] = {
+      ...planResult.changeSet.client.deletes[0]!,
+      vaultOnly: true,
+    };
+
+    await applyIdP(client, planResult, "delete-resources");
+
+    expect(client.deleteIdPClient).not.toHaveBeenCalled();
+    expect(client.deleteSecretManagerVault).toHaveBeenCalledWith({
+      workspaceId: "test-workspace",
+      secretmanagerVaultName: "idp-test-idp-test-client",
+    });
+  });
+
   test("delete-resources phase propagates other errors from deleting a client vault", async () => {
     const client = createMockClientWithSpies();
     vi.mocked(client.deleteSecretManagerVault).mockRejectedValue(
@@ -324,6 +341,20 @@ describe("applyIdP client updates forced by the SDK version", () => {
     await applyIdP(client, createPlanResult(), "create-update");
 
     expect(registerSecretSpy).toHaveBeenCalledWith("secret-from-get");
+  });
+
+  test.each([
+    { name: "Internal", code: Code.Internal, message: "boom" },
+    {
+      name: "InvalidArgument",
+      code: Code.InvalidArgument,
+      message: "name: does not match regex pattern",
+    },
+  ])("fails the deploy when getIdPClient fails with $name", async ({ code, message }) => {
+    const client = createClient({ vaultExists: false });
+    vi.mocked(client.getIdPClient).mockRejectedValue(new ConnectError(message, code));
+
+    await expect(applyIdP(client, createPlanResult(), "create-update")).rejects.toThrow(message);
   });
 
   test("does not call getIdPClient or create anything when the vault already exists", async () => {
