@@ -369,7 +369,7 @@ describe("notification banner", () => {
     expect(stderr.text()).toBe("");
   });
 
-  test("prints nothing, aborts, and backs off when the sent request is still pending", async () => {
+  test("prints nothing, aborts, and does not back off when the sent request is still pending", async () => {
     let signal: AbortSignal | undefined;
     mockLookup(
       vi.fn().mockImplementation((_req, options: { signal: AbortSignal }) => {
@@ -389,7 +389,27 @@ describe("notification banner", () => {
 
     expect(stderr.text()).toBe("");
     expect(signal?.aborted).toBe(true);
-    expect(readBannerState(stateFile())).toMatchObject({ failedAt: expect.any(String) });
+    expect(fs.existsSync(stateFile())).toBe(false);
+  });
+
+  test("does not back off when the command's end aborts a request that is still in flight", async () => {
+    let signal: AbortSignal | undefined;
+    mockLookup(
+      vi.fn().mockImplementation((_req, options: { signal: AbortSignal }) => {
+        signal = options.signal;
+        return new Promise((_resolve, reject) => {
+          options.signal.addEventListener("abort", () => reject(new Error("aborted")));
+        });
+      }),
+    );
+    startNotificationLookup(["workspace", "list"], { configDir: tmp.dir });
+    await vi.waitFor(() => expect(signal).toBeDefined());
+
+    await printNotificationBanner({});
+    await lookupSettledForTests();
+
+    expect(signal?.aborted).toBe(true);
+    expect(fs.existsSync(stateFile())).toBe(false);
   });
 
   test("prints and records nothing for an empty inbox", async () => {

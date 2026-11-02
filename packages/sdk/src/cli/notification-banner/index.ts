@@ -43,8 +43,8 @@ interface PendingLookup {
   promise: Promise<void>;
   /** The request has been sent to the platform; only then can a failure cost load. */
   dispatched: boolean;
-  /** The lookup has finished, with a result, a skip, or an error. */
-  done: boolean;
+  /** The command ended first; the abort that follows is not a platform failure. */
+  abandoned: boolean;
   settled?: LookupResult | undefined;
   stateFile: string | undefined;
 }
@@ -76,7 +76,7 @@ export function startNotificationLookup(argv: readonly string[], options: StartO
       controller,
       promise: Promise.resolve(),
       dispatched: false,
-      done: false,
+      abandoned: false,
       stateFile,
     };
     const timeout = setTimeout(() => controller.abort(), LOOKUP_TIMEOUT_MS);
@@ -86,14 +86,14 @@ export function startNotificationLookup(argv: readonly string[], options: StartO
     })
       .then(
         (result) => {
-          lookup.done = true;
           lookup.settled = result;
         },
         () => {
-          lookup.done = true;
           lookup.settled = undefined;
-          // Persist right away, so other terminals back off while this command keeps running.
-          if (lookup.dispatched) recordFailure(lookup.stateFile);
+          // An error or the timeout while the command runs: persist right away, so other
+          // terminals back off too. A request the command's end abandons is not a failure: the
+          // platform may simply be slower than the command.
+          if (lookup.dispatched && !lookup.abandoned) recordFailure(lookup.stateFile);
         },
       )
       .finally(() => clearTimeout(timeout));
@@ -186,15 +186,10 @@ export async function printNotificationBanner(context: { error?: unknown }): Pro
   pending = undefined;
   if (!lookup) return;
   try {
+    lookup.abandoned = true;
     lookup.controller.abort();
     const result = lookup.settled;
-    if (!result) {
-      // A sent request the command abandons counts as failed: during a hanging outage, short
-      // commands would otherwise each send one. A failure was already recorded when it happened,
-      // and a lookup that never sent anything (or skipped) records nothing.
-      if (lookup.dispatched && !lookup.done) recordFailure(lookup.stateFile);
-      return;
-    }
+    if (!result) return;
     if (suppressedByError(context.error)) return;
     if (logger.jsonMode || !interactiveTerminal()) return;
 
