@@ -3010,6 +3010,53 @@ describe("applyTailorDB migration label reconciliation", () => {
     }
   }
 
+  describe("a recorded migration in progress that the deploy cannot resume", () => {
+    test("refuses a record that names a migration other than the next pending one", async () => {
+      writeEmptyMigrationsThrough(1);
+      const { client } = createMigrationClient({
+        "sdk-migration": "m0000",
+        "sdk-migration-in-progress": "m0002",
+      });
+
+      await expect(runValidation(client, makePlanResult(true))).rejects.toMatchObject({
+        code: "MIGRATION_IN_PROGRESS_INVALID",
+        message:
+          "Migration test-tailordb/0002 is in progress, but the next pending migration is 0001.",
+      });
+    });
+
+    test("refuses a partially applied migration whose script no longer exports steps", async () => {
+      writeEmptyMigrationsThrough(1);
+      fs.writeFileSync(
+        path.join(tmpDir, "0001", "migrate.ts"),
+        "export async function main() {}\n",
+      );
+      const { client } = createMigrationClient({
+        "sdk-migration": "m0000",
+        "sdk-migration-in-progress": "m0001",
+      });
+
+      await expect(runValidation(client, makePlanResult(true))).rejects.toMatchObject({
+        code: "MIGRATION_IN_PROGRESS_INVALID",
+        message:
+          "Migration test-tailordb/0001 was partially applied by its steps, but its migrate.ts no longer exports `steps`.",
+      });
+    });
+
+    test("refuses an in-progress record it cannot read", async () => {
+      writeEmptyMigrationsThrough(1);
+      const { client } = createMigrationClient({
+        "sdk-migration": "m0000",
+        "sdk-migration-in-progress": "not-a-migration",
+      });
+
+      await expect(runValidation(client, makePlanResult(true))).rejects.toMatchObject({
+        code: "MIGRATION_IN_PROGRESS_INVALID",
+        message: 'The in-progress migration recorded for namespace "test-tailordb" cannot be read.',
+      });
+    });
+  });
+
   describe("a `main` run whose outcome an earlier deploy could not settle", () => {
     const executionId = "0190f3a2-7c1e-7d4b-9a6f-1b2c3d4e5f60";
     const unsettledRecord = {
