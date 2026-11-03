@@ -196,7 +196,7 @@ Use this after a deploy failed partway through a migration whose `migrate.ts` ex
 
 For a run that a deploy could not confirm, the command reads how the run ended and shows it before asking for confirmation: use `--complete` when it succeeded, and `--rollback` when it failed, was canceled, or did not start. It refuses while the run is still running, and warns when the option you chose does not fit how the run ended.
 
-`--rollback` also settles a migration that no deploy recorded as in progress, but whose pre-migration schema or maintenance mode a deploy left in place, for example because the deploy stopped before recording it. It runs only when every table of the namespace has the schema of the checkpoint or the migration's pre-migration schema. A deploy that is still running looks the same until it records the migration, so make sure none is running.
+`--rollback` also settles a migration that no deploy recorded as in progress, but whose pre-migration schema or maintenance mode a deploy left in place, for example because the deploy stopped before recording it. See "Settling a migration that stays in progress" in the TailorDB Migrations guide for when it runs.
 
 Both options remove the in-progress record, take the tables out of maintenance mode, and remove the temporary resources of the failed run, so `deploy` and the other migration commands work again. As with `tailordb migration sync`, the local migration history must reproduce the current table definitions. If sending the schema stops partway, run the command again.
 
