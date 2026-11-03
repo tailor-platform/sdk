@@ -350,7 +350,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Notes**
 
-Migration scripts are checked across the full migration history, not only the pending migrations that `deploy` checks. The command does not check the machine user that runs the scripts or whether the scripts can be bundled.
+Migration scripts are checked across the full migration history, not only the pending migrations that `deploy` checks. Like `deploy`, the command bundles only the pending scripts and checks the machine user that runs them.
 
 **See also:** For migration concepts, configuration, workflow, and troubleshooting, see the [TailorDB Migrations guide](../services/tailordb/migration.md).
 

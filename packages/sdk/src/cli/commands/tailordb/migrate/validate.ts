@@ -1010,7 +1010,7 @@ export const validateCommand = defineAppCommand({
   name: "validate",
   description:
     "Run the migration and schema-drift checks that 'deploy' runs before changing anything, without deploying, and exit with a non-zero code when issues are found.",
-  notes: `Migration scripts are checked across the full migration history, not only the pending migrations that \`deploy\` checks. The command does not check the machine user that runs the scripts or whether the scripts can be bundled.`,
+  notes: `Migration scripts are checked across the full migration history, not only the pending migrations that \`deploy\` checks. Like \`deploy\`, the command bundles only the pending scripts and checks the machine user that runs them.`,
   args: z.strictObject({
     ...deploymentArgs,
     namespace: arg(z.string().optional(), {
