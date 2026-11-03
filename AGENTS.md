@@ -28,6 +28,7 @@ When editing files matching these globs, read and follow the linked rule documen
 - `packages/sdk/src/**/*.ts`: [JSDoc Parameter Rules (SDK)](.agents/rules/jsdoc.md)
 - `packages/sdk/src/types/**/*.ts`, `packages/sdk/src/parser/**/types.ts`, `packages/sdk/src/configure/**/types.ts`, `packages/sdk/src/configure/**/*.types.ts`, `packages/sdk/src/plugin/types.ts`, `packages/sdk/src/runtime/types.ts`, `packages/sdk/src/parser/**/schema.ts`, `packages/sdk/zinfer.config.ts`: [Schema Types](.agents/rules/schema-types.md)
 - `packages/sdk/src/configure/**/*.ts`, `packages/sdk/src/parser/**/*.ts`, `packages/sdk/src/cli/**/*.ts`, `packages/sdk/src/plugin/**/*.ts`, `packages/sdk/src/types/**/*.ts`: [SDK Internals](.agents/rules/sdk-internals.md)
+- `packages/sdk/src/cli/commands/deploy/tailordb/**`: [TailorDB Migration Deploy Flow](.agents/rules/tailordb-migration-deploy.md)
 
 <!-- agent-rules:end -->
 
