@@ -84,15 +84,11 @@ vi.mock("#/cli/services/application", () => ({
   })),
 }));
 
-function mockConfig(namespaces: string[] = ["tailordb"]): void {
-  const db: Record<string, unknown> = {};
-  for (const namespace of namespaces) {
-    db[namespace] = { migration: { directory: state.migrationsDir } };
-  }
+function mockConfig(migration: { machineUser?: string } = {}): void {
   vi.mocked(loadConfig).mockResolvedValue({
     config: {
       path: path.join(path.dirname(state.migrationsDir), "tailor.config.ts"),
-      db,
+      db: { tailordb: { migration: { directory: state.migrationsDir, ...migration } } },
     },
     plugins: [],
   } as unknown as Awaited<ReturnType<typeof loadConfig>>);
@@ -1580,7 +1576,7 @@ describe("tailordb migration validate", () => {
         "tailordb",
         1,
         {},
-        expect.any(String),
+        tmpDir,
         false,
         "legacy",
       );
@@ -1597,11 +1593,31 @@ describe("tailordb migration validate", () => {
       expect(stderr.output).toContain("Pending migration scripts: OK (0001, 0002 run as 'admin')");
     });
 
-    test("reports a pending script that no machine user can run", async () => {
+    test.each([
+      {
+        case: "no auth",
+        authService: undefined,
+        machineUser: undefined,
+        code: "AUTH_CONFIG_REQUIRED",
+      },
+      {
+        case: "an auth without machine users",
+        authService: { config: { name: "auth", machineUsers: {} } },
+        machineUser: undefined,
+        code: "MACHINE_USER_REQUIRED",
+      },
+      {
+        case: "a machine user the auth does not define",
+        authService: { config: { name: "auth", machineUsers: { admin: {} } } },
+        machineUser: "nobody",
+        code: "MACHINE_USER_NOT_FOUND",
+      },
+    ])("reports a pending script that cannot run with $case", async (row) => {
       using stdout = captureStdout();
       using _json = jsonMode();
       writeMainMigration(1);
-      state.authService = undefined;
+      state.authService = row.authService;
+      mockConfig({ machineUser: row.machineUser });
 
       const result = await runCommand(validateCommand, []);
 
@@ -1613,7 +1629,7 @@ describe("tailordb migration validate", () => {
         pendingMigrationScripts: {
           valid: false,
           migrationNumbers: [1],
-          error: { code: "AUTH_CONFIG_REQUIRED" },
+          error: { code: row.code },
         },
       });
       expect(bundleMigrationScript).not.toHaveBeenCalled();
