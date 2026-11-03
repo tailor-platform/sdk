@@ -8,6 +8,7 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
+  queue: max
 
 permissions: {}
 
@@ -41,8 +42,14 @@ jobs:
         run: pnpm add -g npm@latest # zizmor: ignore[adhoc-packages]
         shell: bash
 
+      - name: Check release base
+        id: release-base
+        run: node .github/scripts/release-state.mjs check >> "$GITHUB_OUTPUT"
+        shell: bash
+
       - name: Create Release PR or Publish
         id: changesets
+        if: steps.release-base.outputs.current == 'true'
         uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
           publish-script: "node .github/scripts/changeset-publish.mjs"
