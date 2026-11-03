@@ -9,11 +9,19 @@ on:
     paths:
       - .github/scripts/changeset-publish.mjs
       - .github/scripts/changeset-publish.test.mjs
+      - .github/scripts/release-state.mjs
+      - .github/scripts/release-state.test.mjs
+      - .github/scripts/resolve-pending-release-versions.sh
+      - .github/workflows/release.yml
       - .github/workflows/changeset-publish.yml
   pull_request:
     paths:
       - .github/scripts/changeset-publish.mjs
       - .github/scripts/changeset-publish.test.mjs
+      - .github/scripts/release-state.mjs
+      - .github/scripts/release-state.test.mjs
+      - .github/scripts/resolve-pending-release-versions.sh
+      - .github/workflows/release.yml
       - .github/workflows/changeset-publish.yml
 
 concurrency:
@@ -36,4 +44,4 @@ jobs:
           persist-credentials: false
 
       - name: Run tests
-        run: node --test .github/scripts/changeset-publish.test.mjs
+        run: node --test .github/scripts/changeset-publish.test.mjs .github/scripts/release-state.test.mjs
