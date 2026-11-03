@@ -20,9 +20,11 @@ import {
   snapshotAt,
   snapshotTable,
   type SnapshotTablesByVersion,
+  tailordbTypeWrites,
   typeEntry,
 } from "./test-helpers/migration-apply";
 import { applyTailorDB } from "./index";
+import type { TailorDBSnapshotType } from "#/cli/commands/tailordb/migrate/snapshot";
 import type { OperatorClient } from "#/cli/shared/client";
 
 vi.mock("./migration", async (importOriginal) => ({
@@ -53,6 +55,7 @@ describe("migration flow: creates of types predating the pending migrations", ()
     creates: string[];
     updates?: string[];
     gqlPermissionTypes?: string[];
+    local?: TailorDBSnapshotType[];
   }) {
     return createPlanResult({
       type: {
@@ -62,6 +65,7 @@ describe("migration flow: creates of types predating the pending migrations", ()
       gqlPermission: {
         creates: (options.gqlPermissionTypes ?? []).map((name) => gqlPermissionEntry(name)),
       },
+      local: options.local,
     });
   }
 
@@ -100,18 +104,19 @@ describe("migration flow: creates of types predating the pending migrations", ()
 
   test("creates a baseline type no pending diff names, from its snapshot, before the script", async () => {
     const client = checkpoint.createMockClient();
+    const audit = snapshotTable("Audit", { legacy: { type: "string", required: false } });
+    const user = snapshotTable("User", { name: { type: "string", required: true } });
     const planResult = createMockPlanResult({
       creates: ["User", "Audit"],
       updates: ["Metrics"],
       gqlPermissionTypes: ["User"],
+      local: [
+        audit,
+        user,
+        snapshotTable("Metrics", { total: { type: "integer", required: true } }),
+      ],
     });
-    snapshotState.tablesByVersion = {
-      0: { Audit: snapshotTable("Audit", { legacy: { type: "string", required: false } }) },
-      1: {
-        Audit: snapshotTable("Audit", { legacy: { type: "string", required: false } }),
-        User: snapshotTable("User", { name: { type: "string", required: true } }),
-      },
-    };
+    snapshotState.tablesByVersion = { 0: { Audit: audit }, 1: { Audit: audit, User: user } };
     checkpoint.mockPending([
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       mkPendingMigration([{ kind: "table_added", tableName: "User" } as any]),
@@ -131,14 +136,11 @@ describe("migration flow: creates of types predating the pending migrations", ()
       .find((request) => request.tailordbType?.name === "Audit");
     expect(Object.keys(auditRequest?.tailordbType?.schema?.fields ?? {})).toContain("legacy");
 
-    // Updates of types no pending diff names stay skipped: the final schema
-    // must not be enforced outside the per-migration phases.
-    const updatedTypes = vi.mocked(client.updateTailorDBType).mock.calls.map((call) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const request = call[0] as any;
-      return `${request.namespaceName}/${request.tailordbType?.name}`;
-    });
-    expect(updatedTypes).not.toContain("test-ns/Metrics");
+    // The final schema of a type no pending diff names is enforced only after the script.
+    const metricsWrites = tailordbTypeWrites(client).filter((write) => write.name === "Metrics");
+    expect(metricsWrites.length).toBeGreaterThan(0);
+    for (const write of metricsWrites) expect(write.order).toBeGreaterThan(firstScriptOrder()!);
+    expect(Object.keys(metricsWrites.at(-1)?.tailordbType.schema?.fields ?? {})).toEqual(["total"]);
   });
 
   test("data-only migration: every baseline type is created exactly once before the script", async () => {
