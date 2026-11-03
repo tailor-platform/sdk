@@ -180,14 +180,64 @@ async function getCurrentMigrationNumber(
 }
 
 /**
- * List the diffs of the migrations after a checkpoint, which a deploy applies in this order.
+ * List the numbers of the migrations after a checkpoint, in the order a deploy applies them.
  * @param migrationsDir - Migrations directory path
  * @param checkpoint - Migration number the namespace is at
- * @returns Diff files of the migrations after the checkpoint
+ * @returns Numbers of the migrations after the checkpoint
  */
-export function migrationDiffsAfter(migrationsDir: string, checkpoint: number) {
-  return getMigrationFiles(migrationsDir).filter(
-    (file) => file.type === "diff" && file.number > checkpoint,
+function migrationNumbersAfter(migrationsDir: string, checkpoint: number): number[] {
+  return getMigrationFiles(migrationsDir)
+    .filter((file) => file.type === "diff" && file.number > checkpoint)
+    .map((file) => file.number);
+}
+
+/**
+ * Read a migration's diff and locate its script, without inspecting the script.
+ * @param namespace - TailorDB namespace
+ * @param migrationsDir - Migrations directory path
+ * @param migrationNumber - Migration number
+ * @returns The migration, without its script form
+ */
+function readPendingMigration(
+  namespace: string,
+  migrationsDir: string,
+  migrationNumber: number,
+): Omit<PendingMigration, "scriptForm"> {
+  const diffPath = getMigrationFilePath(migrationsDir, migrationNumber, "diff");
+  const scriptPath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
+  return {
+    number: migrationNumber,
+    scriptPath,
+    hasScript: fs.existsSync(scriptPath),
+    diffPath,
+    namespace,
+    migrationsDir,
+    diff: loadDiff(diffPath),
+  };
+}
+
+function withScriptForm(migration: Omit<PendingMigration, "scriptForm">): PendingMigration {
+  return {
+    ...migration,
+    scriptForm: migration.hasScript ? analyzeMigrationScript(migration.scriptPath) : null,
+  };
+}
+
+/**
+ * Read the migrations a deploy applies after a checkpoint, without checking whether their scripts
+ * are ready to run.
+ * @param namespace - TailorDB namespace
+ * @param migrationsDir - Migrations directory path
+ * @param checkpoint - Migration number the namespace is at
+ * @returns The migrations after the checkpoint, in the order a deploy applies them
+ */
+export function pendingMigrationsAfter(
+  namespace: string,
+  migrationsDir: string,
+  checkpoint: number,
+): PendingMigration[] {
+  return migrationNumbersAfter(migrationsDir, checkpoint).map((migrationNumber) =>
+    withScriptForm(readPendingMigration(namespace, migrationsDir, migrationNumber)),
   );
 }
 
@@ -217,33 +267,29 @@ export async function detectPendingMigrations(
       currentMigrationOverrides?.get(namespace) ??
       (await getCurrentMigrationNumber(client, workspaceId, namespace, remoteStates));
 
-    for (const file of migrationDiffsAfter(migrationsDir, currentMigration)) {
-      const diffPath = getMigrationFilePath(migrationsDir, file.number, "diff");
-
-      // Load the diff to inspect breaking/warning classification
-      const diff = loadDiff(diffPath);
+    for (const migrationNumber of migrationNumbersAfter(migrationsDir, currentMigration)) {
+      const migration = readPendingMigration(namespace, migrationsDir, migrationNumber);
+      const { diff, scriptPath, hasScript } = migration;
 
       // The migration script is executed when migrate.ts exists on disk.
       // Breaking changes hard-require a script unless the user recorded an
       // explicit skip acknowledgment; warnings (e.g. field_removed) may
       // optionally have one added via `tailordb migration script <num>`.
-      const scriptPath = getMigrationFilePath(migrationsDir, file.number, "migrate");
-      const hasScript = fs.existsSync(scriptPath);
       if (diff.requiresMigrationScript && !hasScript && !diff.scriptSkipped) {
-        const commandOptions = { migrationNumber: file.number, namespace, configPath };
+        const commandOptions = { migrationNumber, namespace, configPath };
         throw CLIError({
           code: "MIGRATION_SCRIPT_REQUIRED",
-          message: `Migration ${namespace}/${formatMigrationNumber(file.number)} requires a migration script but migrate.ts was not found.`,
+          message: `Migration ${namespace}/${formatMigrationNumber(migrationNumber)} requires a migration script but migrate.ts was not found.`,
           suggestion: `Add a script: ${formatMigrationScriptHint(commandOptions)}\nOr record that no script is needed: ${formatMigrationScriptHint({ ...commandOptions, noScript: true })}`,
         });
       }
       if (diff.scriptSkipped) {
-        const migrationLabel = `${namespace}/${formatMigrationNumber(file.number)}`;
+        const migrationLabel = `${namespace}/${formatMigrationNumber(migrationNumber)}`;
         if (hasScript) {
           throw CLIError({
             code: "MIGRATION_SCRIPT_SKIP_CONFLICT",
             message: `Migration ${migrationLabel} has both a --no-script skip acknowledgment and migrate.ts.`,
-            suggestion: `Keep the script and clear the stale acknowledgment: ${formatMigrationScriptHint({ migrationNumber: file.number, namespace, configPath })}\nOr keep the skip: delete migrate.ts`,
+            suggestion: `Keep the script and clear the stale acknowledgment: ${formatMigrationScriptHint({ migrationNumber, namespace, configPath })}\nOr keep the skip: delete migrate.ts`,
           });
         }
         logger.info(
@@ -254,25 +300,17 @@ export async function detectPendingMigrations(
       if (hasScript && countUnresolvedTodosInFile(scriptPath) > 0) {
         throw CLIError({
           code: "MIGRATION_SCRIPT_REVIEW_REQUIRED",
-          message: `Migration ${namespace}/${formatMigrationNumber(file.number)} still has a TODO() call or review marker in migrate.ts, where the generated script leaves a value or logic for you to decide.`,
+          message: `Migration ${namespace}/${formatMigrationNumber(migrationNumber)} still has a TODO() call or review marker in migrate.ts, where the generated script leaves a value or logic for you to decide.`,
           suggestion: UNRESOLVED_TODO_SUGGESTION,
         });
       }
 
-      const scriptForm = hasScript ? analyzeMigrationScript(scriptPath) : null;
+      const pendingMigration = withScriptForm(migration);
+      const { scriptForm } = pendingMigration;
       if (scriptForm?.kind === "main" && scriptForm.ignoredSteps) {
-        logger.warn(ignoredStepsWarning(`${namespace}/${formatMigrationNumber(file.number)}`));
+        logger.warn(ignoredStepsWarning(`${namespace}/${formatMigrationNumber(migrationNumber)}`));
       }
-      pendingMigrations.push({
-        number: file.number,
-        scriptPath,
-        hasScript,
-        scriptForm,
-        diffPath,
-        namespace,
-        migrationsDir,
-        diff,
-      });
+      pendingMigrations.push(pendingMigration);
     }
   }
 

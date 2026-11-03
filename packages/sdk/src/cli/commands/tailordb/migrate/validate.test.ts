@@ -8,6 +8,11 @@ import {
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import {
+  bundleMigrationScript,
+  bundleMigrationSteps,
+  bundleSingleStepMigration,
+} from "#/cli/commands/tailordb/migrate/bundler";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
@@ -31,6 +36,7 @@ const state = vi.hoisted(() => ({
   migrationsDir: "",
   localTypes: {} as Record<string, unknown>,
   extraServices: [] as unknown[],
+  authService: undefined as unknown,
   listTailorDBTypes: vi.fn(),
   listTailorDBGQLPermissions: vi.fn(),
   getMetadata: vi.fn(),
@@ -52,8 +58,16 @@ vi.mock("#/cli/shared/client", async (importOriginal) => ({
   initOperatorClient: vi.fn(),
 }));
 
+vi.mock("#/cli/commands/tailordb/migrate/bundler", () => ({
+  bundleMigrationScript: vi.fn(async () => ({ bundledCode: "" })),
+  bundleMigrationSteps: vi.fn(async () => ({ bundledCode: "" })),
+  bundleSingleStepMigration: vi.fn(async () => ({ bundledCode: "" })),
+}));
+
 vi.mock("#/cli/services/application", () => ({
   defineApplication: vi.fn(() => ({
+    env: {},
+    authService: state.authService,
     tailorDBServices: [
       {
         namespace: "tailordb",
@@ -103,6 +117,10 @@ describe("tailordb migration validate", () => {
     mockConfig();
     state.localTypes = { User: parsedType("User") };
     state.extraServices = [];
+    state.authService = { config: { name: "auth", machineUsers: { admin: {} } } };
+    vi.mocked(bundleMigrationScript).mockReset();
+    vi.mocked(bundleMigrationSteps).mockReset();
+    vi.mocked(bundleSingleStepMigration).mockReset();
 
     state.listTailorDBTypes.mockResolvedValue({
       tailordbTypes: [remoteType("User", ["id", "name"])],
@@ -846,6 +864,8 @@ describe("tailordb migration validate", () => {
   test("fails when the remote migration state cannot be read", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
+    writeDiff(state.migrationsDir, 1, [], { requiresMigrationScript: true });
+    writeMigrationFile(1, "migrate.ts", "export async function main() {}");
     state.getMetadata.mockRejectedValue(new ConnectError("boom", Code.Internal));
 
     const result = await runCommand(validateCommand, []);
@@ -860,6 +880,7 @@ describe("tailordb migration validate", () => {
       localSchema: { hasDiff: false },
       remoteSchema: { skipped: "check_failed" },
     });
+    expect(bundleMigrationScript).not.toHaveBeenCalled();
   });
 
   test("does not load credentials when no namespaces can be checked", async () => {
@@ -1306,6 +1327,8 @@ describe("tailordb migration validate", () => {
       expect(result.success).toBe(true);
       const [report] = JSON.parse(stdout.output);
       expect(report).not.toHaveProperty("migrationInProgress");
+      expect(report).not.toHaveProperty("pendingMigrationScripts");
+      expect(bundleMigrationSteps).not.toHaveBeenCalled();
     });
 
     test("shows the migration the next deploy resumes", async () => {
@@ -1426,6 +1449,7 @@ describe("tailordb migration validate", () => {
           migrationNumber: 1,
           skipped: "check_failed",
         });
+        expect(report).not.toHaveProperty("pendingMigrationScripts");
       });
 
       test("shows a check that could not run as not checked", async () => {
@@ -1529,6 +1553,195 @@ describe("tailordb migration validate", () => {
           context: { namespace: "audit", requested: ["backfill"] },
         });
       });
+    });
+  });
+
+  describe("pending migration scripts", () => {
+    function writeMainMigration(migrationNumber: number): void {
+      writeDiff(state.migrationsDir, migrationNumber, [], { requiresMigrationScript: true });
+      writeMigrationFile(migrationNumber, "migrate.ts", "export async function main() {}");
+    }
+
+    test("reports the pending scripts and the machine user that runs them", async () => {
+      using stdout = captureStdout();
+      using _json = jsonMode();
+      writeMainMigration(1);
+
+      const result = await runCommand(validateCommand, []);
+
+      expect(result.success).toBe(true);
+      const [report] = JSON.parse(stdout.output);
+      expect(report).toMatchObject({
+        valid: true,
+        pendingMigrationScripts: { valid: true, migrationNumbers: [1], machineUser: "admin" },
+      });
+      expect(bundleMigrationScript).toHaveBeenCalledWith(
+        path.join(state.migrationsDir, "0001", "migrate.ts"),
+        "tailordb",
+        1,
+        {},
+        expect.any(String),
+        false,
+        "legacy",
+      );
+    });
+
+    test("shows the pending scripts and the machine user that runs them", async () => {
+      using stderr = captureStderr();
+      writeMainMigration(1);
+      writeMainMigration(2);
+
+      const result = await runCommand(validateCommand, []);
+
+      expect(result.success).toBe(true);
+      expect(stderr.output).toContain("Pending migration scripts: OK (0001, 0002 run as 'admin')");
+    });
+
+    test("reports a pending script that no machine user can run", async () => {
+      using stdout = captureStdout();
+      using _json = jsonMode();
+      writeMainMigration(1);
+      state.authService = undefined;
+
+      const result = await runCommand(validateCommand, []);
+
+      expect(result.success).toBe(false);
+      expect(String(result.error)).toMatch(/Migration validation failed for 1 namespace/);
+      const [report] = JSON.parse(stdout.output);
+      expect(report).toMatchObject({
+        valid: false,
+        pendingMigrationScripts: {
+          valid: false,
+          migrationNumbers: [1],
+          error: { code: "AUTH_CONFIG_REQUIRED" },
+        },
+      });
+      expect(bundleMigrationScript).not.toHaveBeenCalled();
+    });
+
+    test("reports a pending script that cannot be bundled", async () => {
+      using stdout = captureStdout();
+      using _json = jsonMode();
+      writeMainMigration(1);
+      vi.mocked(bundleMigrationScript).mockRejectedValue(
+        new Error('Could not resolve "./missing"'),
+      );
+
+      const result = await runCommand(validateCommand, []);
+
+      expect(result.success).toBe(false);
+      const [report] = JSON.parse(stdout.output);
+      expect(report).toMatchObject({
+        valid: false,
+        pendingMigrationScripts: {
+          valid: false,
+          migrationNumbers: [1],
+          error: {
+            code: "MIGRATION_SCRIPT_BUNDLE_FAILED",
+            message: 'Could not resolve "./missing"',
+          },
+        },
+      });
+    });
+
+    test("reports a bundler error without its colors, as deploy does", async () => {
+      using stdout = captureStdout();
+      using _json = jsonMode();
+      writeMainMigration(1);
+      vi.mocked(bundleMigrationScript).mockRejectedValue(
+        new Error("Build failed:\n\u001b[31m[UNRESOLVED_IMPORT]\u001b[0m Could not resolve"),
+      );
+
+      await runCommand(validateCommand, []);
+
+      const [report] = JSON.parse(stdout.output);
+      expect(report.pendingMigrationScripts.error.message).toBe(
+        "Build failed:\n[UNRESOLVED_IMPORT] Could not resolve",
+      );
+    });
+
+    test("indents the lines of a multi-line error under its section", async () => {
+      using stderr = captureStderr();
+      writeMainMigration(1);
+      vi.mocked(bundleMigrationScript).mockRejectedValue(
+        new Error("Build failed:\n[UNRESOLVED_IMPORT] Could not resolve"),
+      );
+
+      await runCommand(validateCommand, []);
+
+      expect(stderr.output).toContain(
+        "  Pending migration scripts: Build failed:\n    [UNRESOLVED_IMPORT] Could not resolve",
+      );
+    });
+
+    test("shows why a pending script cannot run and what to do", async () => {
+      using stderr = captureStderr();
+      writeMainMigration(1);
+      state.authService = undefined;
+
+      const result = await runCommand(validateCommand, []);
+
+      expect(result.success).toBe(false);
+      expect(stderr.output).toContain(
+        "Pending migration scripts: Auth configuration is required to execute migration scripts.",
+      );
+      expect(stderr.output).toContain(
+        "Define auth with machine users in this config; migration scripts run as one of them.",
+      );
+    });
+
+    test("bundles a resumed multi-step migration with the step runner", async () => {
+      using _stdout = captureStdout();
+      using _json = jsonMode();
+      writeDiff(state.migrationsDir, 1, [], { requiresMigrationScript: true });
+      writeMigrationFile(
+        1,
+        "migrate.ts",
+        "export const steps = { backfill: { run: async () => {} } };",
+      );
+      state.getMetadata.mockResolvedValue({
+        metadata: { labels: { "sdk-migration": "m0000", "sdk-migration-in-progress": "m0001" } },
+      });
+
+      const result = await runCommand(validateCommand, []);
+
+      expect(result.success).toBe(true);
+      expect(bundleMigrationSteps).toHaveBeenCalledOnce();
+      expect(bundleSingleStepMigration).not.toHaveBeenCalled();
+    });
+
+    test("treats every migration as pending in a namespace whose checkpoint the next deploy resets", async () => {
+      using stdout = captureStdout();
+      using _json = jsonMode();
+      writeRebaselineMarker(state.migrationsDir, "htailordb", { replacedLatestMigration: 5 });
+      writeMainMigration(1);
+      state.getMetadata.mockResolvedValue({ metadata: { labels: { "sdk-migration": "m0005" } } });
+
+      const result = await runCommand(validateCommand, []);
+
+      const [report] = JSON.parse(stdout.output);
+      expect(report.remoteSchema.checkpointRepair).toMatchObject({ from: 5, to: 0 });
+      expect(report.pendingMigrationScripts).toEqual({
+        valid: true,
+        migrationNumbers: [1],
+        machineUser: "admin",
+      });
+      expect(result.success).toBe(true);
+    });
+
+    test("leaves the scripts to the checkpoint check when the checkpoint is not in the local history", async () => {
+      using stdout = captureStdout();
+      using _json = jsonMode();
+      writeMainMigration(1);
+      state.getMetadata.mockResolvedValue({ metadata: { labels: { "sdk-migration": "m0005" } } });
+
+      const result = await runCommand(validateCommand, []);
+
+      expect(result.success).toBe(false);
+      const [report] = JSON.parse(stdout.output);
+      expect(report.remoteSchema.checkpointMissingLocal).toBe(true);
+      expect(report).not.toHaveProperty("pendingMigrationScripts");
+      expect(bundleMigrationScript).not.toHaveBeenCalled();
     });
   });
 });

@@ -931,7 +931,7 @@ When your branch and main each generated the same number, merging or rebasing st
 ### CI / CD
 
 - For non-interactive environments, pass `--yes` to `migration generate` and `--yes` to `apply`. `apply` runs migrations automatically when the `migrations/` directory is configured.
-- Run `tailor tailordb migration validate` in CI to catch uncommitted migrations, broken migration files, unreviewed generated normalization logic, and remote schema drift before deploying. It exits with a non-zero code when validation fails and supports `--json`. Add `--strict` to also require an explicit acknowledgment (a `migrate.ts` or a recorded `--no-script` reason) for every pending migration that can drop data, so destructive changes cannot merge unnoticed.
+- Run `tailor tailordb migration validate` in CI to catch, before deploying, uncommitted migrations, broken migration files, unreviewed generated normalization logic, remote schema drift, and pending migration scripts that `tailor deploy` could not run. It exits with a non-zero code when validation fails and supports `--json`. Add `--strict` to also require an explicit acknowledgment (a `migrate.ts` or a recorded `--no-script` reason) for every pending migration that can drop data, so destructive changes cannot merge unnoticed.
 - `tailor tailordb migration status` validates the layout and file-format compatibility of the full local history, compares its history ID with the deployed namespace, and shows applied and pending migrations for a human-readable comparison. Its exit code is non-zero on invalid or incompatible files, migration history mismatches, a remote checkpoint ahead of the latest local migration, and remote read errors, so check the output.
 - Avoid running migrations in parallel against the same workspace — there is no locking. Serialize deploys per environment.
 
@@ -988,7 +988,7 @@ Migration scripts execute server-side under a machine user identity. The CLI sel
 
 The selected user must be defined in `auth.machineUsers`. The CLI logs the selected user before running scripts (`Using machine user: ...`).
 
-When a pending migration has a `migrate.ts`, `tailor deploy` checks while planning that auth is configured, that a machine user is selected and defined in `auth.machineUsers`, and that each script can be bundled. A failure stops the deploy before anything is applied, and `tailor deploy --dry-run` reports it too.
+When a pending migration has a `migrate.ts`, `tailor deploy` checks while planning that auth is configured, that a machine user is selected and defined in `auth.machineUsers`, and that each script can be bundled. A failure stops the deploy before anything is applied, and `tailor deploy --dry-run` reports it too. `tailor tailordb migration validate` runs the same checks for the migrations that are pending in the workspace it validates.
 
 **Permissions required**
 
@@ -1237,13 +1237,13 @@ One specific cause is a `migration rebaseline` run on a different environment wh
 
 ### "No machine user available for migration execution"
 
-**Cause:** Neither `migration.machineUser` is set nor are there any machine users in `auth.machineUsers`. `tailor deploy` reports this while planning, including with `--dry-run`, before anything is applied.
+**Cause:** Neither `migration.machineUser` is set nor are there any machine users in `auth.machineUsers`. `tailor deploy` reports this while planning, including with `--dry-run`, before anything is applied, and `tailor tailordb migration validate` reports it too.
 
 **Resolution:** Add a machine user to `auth.machineUsers`, then run `tailor deploy` again. The deploy creates the machine user before it runs the migration scripts.
 
 ### "Machine user for migration execution is not defined in auth"
 
-**Cause:** `migration.machineUser`, or `--machine-user` of `tailor tailordb migration test`, names a machine user that is not in `auth.machineUsers`. `tailor deploy` reports this while planning, including with `--dry-run`, before anything is applied.
+**Cause:** `migration.machineUser`, or `--machine-user` of `tailor tailordb migration test`, names a machine user that is not in `auth.machineUsers`. `tailor deploy` reports this while planning, including with `--dry-run`, before anything is applied, and `tailor tailordb migration validate` reports it too.
 
 **Resolution:** Either add the machine user to `auth.machineUsers`, or name one that is defined there.
 
