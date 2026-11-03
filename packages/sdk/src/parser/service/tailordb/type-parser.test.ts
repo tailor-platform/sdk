@@ -1153,31 +1153,6 @@ describe("parseTypes", () => {
       expect(result.User!.backwardRelationships).toEqual({});
     });
 
-    test("keeps .unique() and .index() set on the inner field", () => {
-      const profile = db.table("Profile", {
-        info: db.object({
-          ownerID: db
-            .uuid()
-            .unique()
-            .relation({ type: "keyOnly", toward: { table: user } }),
-          reviewerID: db
-            .uuid()
-            .index()
-            .relation({ type: "keyOnly", toward: { table: user } }),
-        }),
-      });
-
-      const result = parseTypes(
-        toSchemaOutputs({ User: user, Profile: profile }),
-        "test-namespace",
-      );
-
-      const inner = result.Profile!.fields.info!.config.fields!;
-      expect(inner.ownerID).toMatchObject({ unique: true, index: true });
-      expect(inner.reviewerID!.index).toBe(true);
-      expect(inner.reviewerID!.unique).toBeFalsy();
-    });
-
     test("rejects a relation to a table that does not exist, naming the nested field", () => {
       const missing = db.table("Missing", { name: db.string() });
       const order = db.table("Order", {

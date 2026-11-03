@@ -220,7 +220,7 @@ export function applyNestedRelationMetadata(
       const { foreignKey, foreignKeyType, foreignKeyField } = processRelationMetadata(
         inner.rawRelation,
         innerContext,
-        inner,
+        { array: inner.array },
       );
       return [name, { ...inner, foreignKey, foreignKeyType, foreignKeyField }];
     }),
