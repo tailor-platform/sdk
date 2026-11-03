@@ -49,6 +49,9 @@ const CLIENT_SECRET: EnvRequirement = {
   description: "Client secret of the same platform machine user",
   howTo: `${MACHINE_USER_HOW_TO}; use its client secret`,
 };
+/** Secrets that only an environment's protection rules guard, so they belong on the environment. */
+export const ENVIRONMENT_ONLY_SECRETS: ReadonlySet<string> = new Set([CLIENT_SECRET.name]);
+
 const WORKSPACE_ID: EnvRequirement = {
   name: "TAILOR_PLATFORM_WORKSPACE_ID",
   type: "variable",
@@ -285,14 +288,17 @@ export function describeGroup(group: EnvironmentRequirements): string {
 }
 
 /**
- * Render `gh` commands that create each missing environment and set its secrets and variables.
+ * Render `gh` commands that create each missing environment and set its secrets and variables,
+ * followed by commented-out commands that delete the given repository secrets.
  * @param environments - Requirements grouped by environment; `exists: true` skips creating it
  * @param repository - Target repository; when null, gh resolves it from the current directory
+ * @param repositorySecretsToDelete - Repository secrets to delete once the environments hold them
  * @returns Shell script text
  */
 export function renderGhCommands(
   environments: (EnvironmentRequirements & { exists?: boolean })[],
   repository: Repository | null = null,
+  repositorySecretsToDelete: string[] = [],
 ): string {
   const repoPath = repository ? `${repository.owner}/${repository.name}` : "{owner}/{repo}";
   const hostPrefix = repository?.host ? `${repository.host}/` : "";
@@ -320,6 +326,15 @@ export function renderGhCommands(
     }
     return lines.join("\n");
   });
+  if (repositorySecretsToDelete.length > 0) {
+    blocks.push(
+      [
+        "# Repository secrets that any workflow on any branch can read. Delete each once every",
+        "# environment and workflow that reads it has its own; GitHub cannot restore a deleted secret.",
+        ...repositorySecretsToDelete.map((name) => `# gh secret delete ${name}${repoFlag}`),
+      ].join("\n"),
+    );
+  }
   const header = [
     "# Run these one at a time: each `gh ... set` prompts for its value.",
     ...(repository
