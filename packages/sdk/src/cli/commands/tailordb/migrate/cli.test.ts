@@ -102,9 +102,8 @@ describe("migration CLI commands", () => {
     test("should describe its migration-specific validation scope", () => {
       expect(validateCommand.name).toBe("validate");
       expect(validateCommand.description).toContain("full migration history");
-      expect(validateCommand.description).toContain("unreviewed generated migration scripts");
       expect(validateCommand.description).toContain(
-        "migration and schema-drift checks used by 'deploy'",
+        "migration and schema-drift checks that 'deploy' runs",
       );
       expect(validateCommand.description).not.toContain("same checks as 'deploy'");
     });
