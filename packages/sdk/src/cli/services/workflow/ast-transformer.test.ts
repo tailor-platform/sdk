@@ -767,7 +767,7 @@ const workflow2 = createWorkflow({ name: "workflow-two", mainJob: job2 });
 
 describe("AST Transformer - transformStartCalls", () => {
   describe("workflow start transformation", () => {
-    test("transforms workflow.start() calls to tailor.workflow.startWorkflow()", () => {
+    test("transforms workflow.start() calls to globalThis.tailor.workflow.startWorkflow()", () => {
       const source = `
 const workflowRunId = await orderWorkflow.start(
   { orderId: "123", customerId: "456" },
@@ -779,7 +779,7 @@ const workflowRunId = await orderWorkflow.start(
 
       const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
-      expect(result).toContain('tailor.workflow.startWorkflow("order-processing"');
+      expect(result).toContain('await globalThis.tailor.workflow.startWorkflow("order-processing"');
       expect(result).toContain('{ orderId: "123", customerId: "456" }');
       expect(result).toContain('{ invoker: "admin" }');
     });
@@ -981,7 +981,7 @@ const result = await myWorkflow.start({ id: 1 }, { invoker: "kiosk" });
     });
   });
   describe("job start transformation", () => {
-    test("transforms job.start() calls to tailor.workflow.execJobFunction()", () => {
+    test("transforms job.start() calls to globalThis.tailor.workflow.execJobFunction()", () => {
       const source = `
 const result = await fetchCustomer.start({ customerId: "123" });
 `;
@@ -990,7 +990,7 @@ const result = await fetchCustomer.start({ customerId: "123" });
 
       const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
-      expect(result).toContain('tailor.workflow.execJobFunction("fetch-customer"');
+      expect(result).toContain('await globalThis.tailor.workflow.execJobFunction("fetch-customer"');
       expect(result).toContain('{ customerId: "123" }');
     });
 
@@ -1336,7 +1336,7 @@ console.log(customer);
       const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain(
-        'const customer = await tailor.workflow.execJobFunction("fetch-customer", { customerId: "123" })',
+        'const customer = await globalThis.tailor.workflow.execJobFunction("fetch-customer", { customerId: "123" })',
       );
     });
 
@@ -1366,8 +1366,8 @@ const executionId = await orderWorkflow.start({ orderId: "123" }, { invoker });
 
       const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
-      expect(result).toContain('await tailor.workflow.startWorkflow("order-processing"');
-      expect(result).not.toContain("(async () => tailor.workflow.startWorkflow");
+      expect(result).toContain('await globalThis.tailor.workflow.startWorkflow("order-processing"');
+      expect(result).not.toContain("(async () => globalThis.tailor.workflow.startWorkflow");
     });
 
     test("replaces job.start() without await with the raw platform result", () => {
@@ -1380,7 +1380,7 @@ const customerPromise = fetchCustomer.start({ customerId: "123" });
       const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain(
-        'const customerPromise = tailor.workflow.execJobFunction("fetch-customer", { customerId: "123" })',
+        'const customerPromise = globalThis.tailor.workflow.execJobFunction("fetch-customer", { customerId: "123" })',
       );
       expect(result).not.toMatch(/\bawait\b/);
     });
@@ -1436,7 +1436,7 @@ await myWorkflow.start(fetchCustomer.start({ customerId: "123" }));
       const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain(
-        'await tailor.workflow.startWorkflow("my-workflow", fetchCustomer.start({ customerId: "123" }));',
+        'await globalThis.tailor.workflow.startWorkflow("my-workflow", fetchCustomer.start({ customerId: "123" }));',
       );
       expect(warnSpy).toHaveBeenCalledWith(
         'Nested start call "fetchCustomer.start(...)" inside "myWorkflow.start(...)" cannot be converted. Move it to a separate statement and pass the result instead.',
