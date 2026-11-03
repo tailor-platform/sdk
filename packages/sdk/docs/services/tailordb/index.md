@@ -226,7 +226,9 @@ const user = db.table("User", {
 });
 ```
 
-A relation can also be set on a field inside `db.object()`. The inner field gets the foreign key constraint only: no index, no unique constraint, and no forward or backward relationship, as with `type: "keyOnly"`.
+A `keyOnly` relation does not make the field unique; add `.unique()` to the field to make it unique.
+
+A relation can also be set on a field inside `db.object()`, where it adds only the foreign key constraint to the inner field, and `.unique()` and `.index()` set on that field work as described in [Index / Unique](#index--unique).
 
 ```typescript
 const order = db.table("Order", {
