@@ -1058,7 +1058,7 @@ export async function assertSkippableSteps(options: SkippableStepsOptions): Prom
       invalid.map(({ step, reason }) => `'${step}' ${SKIP_REJECTION_REASONS[reason]}`).join("; ") +
       ".",
     suggestion: onlyUnverified
-      ? "Deploy again to retry reading the earlier run; if it keeps failing, check connectivity to the platform."
+      ? "Run the command again to retry reading the earlier run; if it keeps failing, check connectivity to the platform."
       : skipSuggestion(succeededSteps, order),
     context: {
       namespace,

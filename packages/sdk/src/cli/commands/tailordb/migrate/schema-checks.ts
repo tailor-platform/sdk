@@ -622,6 +622,8 @@ export interface RemoteSchemaVerificationOptions {
    * checkpoint's shape or the Pre-phase shape of the next migration, and report that migration
    */
   acceptInterruptedMigration?: boolean;
+  /** Collects the remote migration state of each namespace, as the verification read it. */
+  remoteStates?: Map<string, RemoteMigrationState>;
 }
 
 /**
@@ -651,6 +653,7 @@ export async function verifyRemoteSchema(
       client,
       resourceTrn(workspaceId, "tailordb", namespace),
     );
+    options.remoteStates?.set(namespace, remoteState);
     const location = locateRemoteCheckpoint(
       remoteState,
       migrationsDir,

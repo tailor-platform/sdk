@@ -180,6 +180,18 @@ async function getCurrentMigrationNumber(
 }
 
 /**
+ * List the diffs of the migrations after a checkpoint, which a deploy applies in this order.
+ * @param migrationsDir - Migrations directory path
+ * @param checkpoint - Migration number the namespace is at
+ * @returns Diff files of the migrations after the checkpoint
+ */
+export function migrationDiffsAfter(migrationsDir: string, checkpoint: number) {
+  return getMigrationFiles(migrationsDir).filter(
+    (file) => file.type === "diff" && file.number > checkpoint,
+  );
+}
+
+/**
  * Detect pending migrations that need to be executed
  * @param {OperatorClient} client - Operator client instance
  * @param {string} workspaceId - Workspace ID
@@ -205,20 +217,8 @@ export async function detectPendingMigrations(
       currentMigrationOverrides?.get(namespace) ??
       (await getCurrentMigrationNumber(client, workspaceId, namespace, remoteStates));
 
-    // Get all migration files
-    const migrationFiles = getMigrationFiles(migrationsDir);
-
-    // Find migrations that haven't been applied yet
-    for (const file of migrationFiles) {
-      if (file.number <= currentMigration) {
-        continue;
-      }
-
-      // Check for diff file (all migrations must have a diff)
+    for (const file of migrationDiffsAfter(migrationsDir, currentMigration)) {
       const diffPath = getMigrationFilePath(migrationsDir, file.number, "diff");
-      if (!fs.existsSync(diffPath)) {
-        continue;
-      }
 
       // Load the diff to inspect breaking/warning classification
       const diff = loadDiff(diffPath);
