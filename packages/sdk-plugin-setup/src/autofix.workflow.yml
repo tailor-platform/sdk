@@ -101,7 +101,7 @@ jobs:
       # __SECUREFIX_START__
       - id: tailor-securefix
         if: steps.tailor-autofix-diff.outputs.changed == 'true'
-        uses: csm-actions/securefix-action@ada5710dddfb54a0a55109e320830a757472ce04 # v0.6.4
+        uses: csm-actions/securefix-action@6da661e4377faf2d71294c1c09b1c03c161ce7c1 # v0.6.8
         with:
           action: client
           client_id: ${{ vars.TAILOR_AUTOFIX_APP_CLIENT_ID }}
