@@ -3,14 +3,15 @@ import { arg } from "@politty/zod";
 import * as path from "pathe";
 import { z } from "zod";
 import {
-  assertMigrationScriptsBundle,
+  assertPendingMigrationsRunnable,
+  isScriptBundleFailure,
   pendingMigrationsAfter,
-  resolveMigrationMachineUsers,
+  type MigrationMachineUsers,
 } from "#/cli/commands/deploy/tailordb/migration";
 import {
-  assertMigrationSkipSteps,
   noStepsToSkipError,
   parseMigrationSkipSteps,
+  selectSkipStepsOfNamespaces,
 } from "#/cli/commands/deploy/tailordb/migration-skip-steps";
 import {
   checkMigrationInProgress,
@@ -155,18 +156,16 @@ function sectionError(error: unknown): SectionError {
 }
 
 interface MigrationInProgressReport {
-  /** Whether the next deploy resumes the migration, skipping the requested steps */
+  /** Whether the next deploy resumes the migration */
   valid: boolean;
   /** The migration an earlier deploy left in progress; absent when its record cannot be read or the checkpoint already covers it */
   migrationNumber?: number;
   /** Why the next deploy would stop, as the deploy reports it */
   error?: SectionError;
-  /** Set when the check could not run */
-  skipped?: "check_failed";
 }
 
 interface PendingMigrationScriptsReport {
-  /** Whether the next deploy can run every pending script */
+  /** Whether the next deploy can run every pending script, skipping the requested steps */
   valid: boolean;
   /** The pending migrations that have a migrate.ts */
   migrationNumbers: number[];
@@ -174,6 +173,8 @@ interface PendingMigrationScriptsReport {
   machineUser?: string;
   /** Why the next deploy would stop, as the deploy reports it */
   error?: SectionError;
+  /** Set when the check could not run */
+  skipped?: "check_failed";
 }
 
 interface NamespaceValidationReport {
@@ -185,13 +186,14 @@ interface NamespaceValidationReport {
   /** Omitted when the migration files are invalid */
   remoteSchema?: RemoteSchemaReport;
   /**
-   * Present when the namespace records a migration in progress or --migration-skip-steps names it;
-   * omitted when the remote migration checkpoint is not in the local migration history
+   * Present when the namespace records a migration in progress; omitted when the remote migration
+   * checkpoint is not in the local migration history
    */
   migrationInProgress?: MigrationInProgressReport;
   /**
-   * Present when a pending migration has a migrate.ts; omitted when the remote migration checkpoint
-   * is unknown or not in the local migration history
+   * Present when a pending migration has a migrate.ts or --migration-skip-steps names the namespace;
+   * omitted when the remote migration checkpoint is unknown or not in the local migration history,
+   * or when the in-progress check fails
    */
   pendingMigrationScripts?: PendingMigrationScriptsReport;
   /** Present only with --strict; omitted when the remote migration checkpoint is unknown */
@@ -232,14 +234,14 @@ interface NamespacePendingCheck {
   checkpointRepaired: boolean;
 }
 
-interface NamespaceInProgressCheck extends NamespacePendingCheck {
-  skipSteps: readonly string[] | undefined;
-}
-
 interface NamespaceInProgressResult {
   report?: MigrationInProgressReport;
   /** The record the next deploy resumes */
   resumed?: MigrationInProgress;
+}
+
+interface NamespaceScriptsResult {
+  report?: PendingMigrationScriptsReport;
   /** Failure that kept the check from running */
   error?: unknown;
 }
@@ -385,107 +387,94 @@ function assertSkipStepsCheckable(
 }
 
 /**
- * Check one namespace's in-progress record and requested skips the way a deploy checks them.
+ * Check one namespace's in-progress record the way a deploy checks it.
  * @param check - The namespace, its remote migration state, and its pending migrations
  * @returns What the next deploy does with the record
  */
 async function checkNamespaceInProgress(
-  check: NamespaceInProgressCheck,
+  check: NamespacePendingCheck,
 ): Promise<MigrationInProgressOutcome> {
-  const { checks, namespace, state, pending, checkpointRepaired, skipSteps } = check;
+  const { checks, namespace, state, pending, checkpointRepaired } = check;
   const { client, workspaceId, commandContext } = checks;
   if (checkpointRepaired && (state.inProgress || state.inProgressInvalid)) {
     throw checkpointRepairInProgressError(namespace);
   }
-  const next = pending[0];
-  const outcome = await checkMigrationInProgress({
+  return await checkMigrationInProgress({
     client,
     workspaceId,
     namespace,
     state,
-    next,
+    next: pending[0],
     commandContext,
   });
-  if (skipSteps) {
-    await assertMigrationSkipSteps({
-      client,
-      workspaceId,
-      requested: new Map([[namespace, skipSteps]]),
-      pendingMigrations: next ? [next] : [],
-      inProgressByNamespace: outcome.kind === "resume" ? { [namespace]: outcome.inProgress } : {},
-    });
-  }
-  return outcome;
 }
 
 /**
- * Report one namespace's in-progress record and requested skips, with the error the next deploy
- * would stop with.
+ * Report one namespace's in-progress record, with the error the next deploy would stop with.
  * @param check - The namespace, its remote migration state, and its pending migrations
- * @returns The namespace's report, the record the next deploy resumes, and a failure that kept the check from running
+ * @returns The namespace's report and the record the next deploy resumes
  */
 async function reportNamespaceInProgress(
   check: NamespacePendingCheck,
 ): Promise<NamespaceInProgressResult> {
-  const { checks, namespace, state } = check;
-  const skipSteps = checks.skipSteps.get(namespace);
-  if (!state.inProgress && !state.inProgressInvalid && !skipSteps) return {};
+  const { state } = check;
+  if (!state.inProgress && !state.inProgressInvalid) return {};
   const recorded =
     state.inProgress && !isStaleMigrationInProgress(state)
       ? { migrationNumber: state.inProgress.number }
       : {};
   try {
-    const outcome = await checkNamespaceInProgress({ ...check, skipSteps });
+    const outcome = await checkNamespaceInProgress(check);
     if (outcome.kind !== "resume") return {};
     return {
       report: { valid: true, migrationNumber: outcome.inProgress.number },
       resumed: outcome.inProgress,
     };
   } catch (caught) {
-    if (!isCLIError(caught)) {
-      return { report: { valid: false, ...recorded, skipped: "check_failed" }, error: caught };
-    }
+    if (!isCLIError(caught)) throw caught;
     return { report: { valid: false, ...recorded, error: sectionError(caught) } };
   }
 }
 
 /**
- * Report whether a deploy can run one namespace's pending migration scripts: a machine user runs
- * them and each one bundles the way its run executes it.
+ * Report whether a deploy can run one namespace's pending migrations: the requested skips apply, a
+ * machine user runs the scripts, and each script bundles the way its run executes it.
  * @param check - The namespace's pending migrations and the record the next deploy resumes
- * @returns The namespace's report, or undefined when no pending migration has a script
+ * @returns The namespace's report (absent when it has no pending script and no requested skip) and a failure that kept the check from running
  */
-async function reportPendingScripts(
-  check: NamespaceScriptsCheck,
-): Promise<PendingMigrationScriptsReport | undefined> {
+async function reportPendingScripts(check: NamespaceScriptsCheck): Promise<NamespaceScriptsResult> {
   const { checks, namespace, pending, resumed } = check;
+  const skipSteps = checks.skipSteps.get(namespace);
   const migrationNumbers = pending
     .filter((migration) => migration.hasScript)
     .map((migration) => migration.number);
-  if (migrationNumbers.length === 0) return undefined;
+  if (migrationNumbers.length === 0 && !skipSteps) return {};
+  let machineUsers: MigrationMachineUsers | undefined;
   try {
-    const machineUser = assertDefined(
-      resolveMigrationMachineUsers(
-        { application: checks.application, config: checks.config },
-        pending,
-      )?.byNamespace.get(namespace),
-      "a namespace with a pending script has a machine user to run it",
-    );
-    await assertMigrationScriptsBundle(
-      pending,
-      resumed ? { [namespace]: resumed } : {},
-      checks.application.env,
-      path.dirname(checks.config.path),
-    );
-    return { valid: true, migrationNumbers, machineUser };
-  } catch (error) {
-    return { valid: false, migrationNumbers, error: sectionError(error) };
+    machineUsers = await assertPendingMigrationsRunnable({
+      client: checks.client,
+      workspaceId: checks.workspaceId,
+      requested: selectSkipStepsOfNamespaces(checks.skipSteps, [namespace]),
+      pendingMigrations: pending,
+      inProgressByNamespace: resumed ? { [namespace]: resumed } : {},
+      source: { application: checks.application, config: checks.config },
+    });
+  } catch (caught) {
+    if (!isCLIError(caught) && !isScriptBundleFailure(caught)) {
+      return { report: { valid: false, migrationNumbers, skipped: "check_failed" }, error: caught };
+    }
+    return { report: { valid: false, migrationNumbers, error: sectionError(caught) } };
   }
+  const machineUser = assertDefined(
+    machineUsers?.byNamespace.get(namespace),
+    "a namespace whose pending scripts can run has a machine user to run them",
+  );
+  return { report: { valid: true, migrationNumbers, machineUser } };
 }
 
 /**
  * Check each namespace's pending migrations the way a deploy checks them while planning: the
- * in-progress record and requested skips, then the pending scripts.
+ * in-progress record, then the requested skips and the pending scripts.
  * @param checks - Namespaces and the remote migration state the remote schema check read
  * @returns Per-namespace reports, and the first failure that kept a check from running
  */
@@ -516,17 +505,15 @@ async function checkPendingMigrations(
       checkpointRepaired,
     });
     if (inProgress.report) inProgressReports.set(namespace, inProgress.report);
-    if (inProgress.error !== undefined) {
-      error ??= inProgress.error;
-      continue;
-    }
+    if (inProgress.report?.valid === false) continue;
     const scripts = await reportPendingScripts({
       checks,
       namespace,
       pending,
       resumed: inProgress.resumed,
     });
-    if (scripts) scriptReports.set(namespace, scripts);
+    if (scripts.report) scriptReports.set(namespace, scripts.report);
+    error ??= scripts.error;
   }
   return { inProgressReports, scriptReports, ...(error === undefined ? {} : { error }) };
 }
@@ -865,9 +852,7 @@ function printValidationReports(reports: NamespaceValidationReport[]): void {
     }
 
     const inProgress = report.migrationInProgress;
-    if (inProgress?.skipped === "check_failed") {
-      logger.log(`  Migration in progress: ${styles.error("not checked")}`);
-    } else if (inProgress?.error) {
+    if (inProgress?.error) {
       printSectionError("Migration in progress", inProgress.error);
     } else if (inProgress?.migrationNumber !== undefined) {
       logger.log(
@@ -876,7 +861,9 @@ function printValidationReports(reports: NamespaceValidationReport[]): void {
     }
 
     const scripts = report.pendingMigrationScripts;
-    if (scripts?.error) {
+    if (scripts?.skipped === "check_failed") {
+      logger.log(`  Pending migration scripts: ${styles.error("not checked")}`);
+    } else if (scripts?.error) {
       printSectionError("Pending migration scripts", scripts.error);
     } else if (scripts) {
       const migrations = scripts.migrationNumbers.map(formatMigrationNumber).join(", ");

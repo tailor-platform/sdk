@@ -78,6 +78,7 @@ import { protoEnumName } from "#/cli/shared/proto-enum";
 import { spinner } from "#/cli/shared/spinner";
 import { assertDefined } from "#/utils/assert";
 import { resourceTrn, writeMetadataLabelsDirect } from "../label";
+import { assertMigrationSkipSteps, type MigrationSkipStepsCheck } from "./migration-skip-steps";
 import { formatDuration, ScriptRunTimer, type MaintenanceTimeline } from "./migration-timing";
 import {
   executeMigrationAsWorkflow,
@@ -422,6 +423,17 @@ interface MigrationBundleOptions {
   skipSteps?: readonly string[];
 }
 
+const SCRIPT_BUNDLE_FAILED = "MIGRATION_SCRIPT_BUNDLE_FAILED";
+
+/**
+ * Whether a failure is the bundler's, raised while bundling a pending migration's script.
+ * @param error - Failure to inspect
+ * @returns True when the bundler failed on the script
+ */
+export function isScriptBundleFailure(error: unknown): boolean {
+  return error instanceof Error && getErrorDiagnostics(error).code === SCRIPT_BUNDLE_FAILED;
+}
+
 /**
  * Bundle a pending migration's script the way its run executes it.
  * @param migration - Pending migration with a script
@@ -473,7 +485,7 @@ async function bundlePendingMigration(
   } catch (error) {
     if (error instanceof Error && !isCLIError(error)) {
       withErrorDiagnostics(error, {
-        code: "MIGRATION_SCRIPT_BUNDLE_FAILED",
+        code: SCRIPT_BUNDLE_FAILED,
         context: { namespace: migration.namespace, migrationNumber: migration.number },
       });
     }
@@ -489,7 +501,7 @@ async function bundlePendingMigration(
  * @param env - Environment variables injected into the scripts
  * @param configDir - Directory of the config file
  */
-export async function assertMigrationScriptsBundle(
+async function assertMigrationScriptsBundle(
   pendingMigrations: readonly PendingMigration[],
   inProgressByNamespace: Readonly<Record<string, MigrationInProgress>>,
   env: Record<string, string | number | boolean>,
@@ -1509,6 +1521,34 @@ function undefinedMachineUserSuggestion(
 function describeNamespaces(namespaces: readonly string[]): string {
   const quoted = namespaces.map((namespace) => `'${namespace}'`).join(", ");
   return `${namespaces.length === 1 ? "namespace" : "namespaces"} ${quoted}`;
+}
+
+/** The pending migrations a deploy checks while planning, and what it checks them against. */
+export interface PendingMigrationsRunnableCheck extends MigrationSkipStepsCheck {
+  pendingMigrations: readonly PendingMigration[];
+  /** Auth, config, and environment variables of the deploy */
+  source: MigrationMachineUserSource & { application: Pick<Application, "authService" | "env"> };
+}
+
+/**
+ * Check, as a deploy does while planning, that it can run the pending migrations: the requested
+ * skips apply, a machine user runs the scripts, and each script bundles.
+ * @param check - The pending migrations, the requested skips, and the deploy's auth and config
+ * @returns Machine user of each namespace with a script to run, or undefined when no script runs
+ */
+export async function assertPendingMigrationsRunnable(
+  check: PendingMigrationsRunnableCheck,
+): Promise<MigrationMachineUsers | undefined> {
+  const { pendingMigrations, inProgressByNamespace, source } = check;
+  await assertMigrationSkipSteps(check);
+  const machineUsers = resolveMigrationMachineUsers(source, pendingMigrations);
+  await assertMigrationScriptsBundle(
+    pendingMigrations,
+    inProgressByNamespace,
+    source.application.env,
+    path.dirname(source.config.path),
+  );
+  return machineUsers;
 }
 
 /**

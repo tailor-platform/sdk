@@ -1218,6 +1218,8 @@ describe("tailordb migration validate", () => {
         message:
           "Migration tailordb/0001 was partially applied by its steps, but its migrate.ts no longer exports `steps`.",
       });
+      expect(report).not.toHaveProperty("pendingMigrationScripts");
+      expect(bundleMigrationScript).not.toHaveBeenCalled();
     });
 
     test("reports an in-progress record it cannot read", async () => {
@@ -1378,6 +1380,11 @@ describe("tailordb migration validate", () => {
         expect(result.success).toBe(true);
         const [report] = JSON.parse(stdout.output);
         expect(report.migrationInProgress).toEqual({ valid: true, migrationNumber: 1 });
+        expect(report.pendingMigrationScripts).toEqual({
+          valid: true,
+          migrationNumbers: [1],
+          machineUser: "admin",
+        });
       });
 
       test("reports a step that did not succeed in the earlier run", async () => {
@@ -1391,9 +1398,10 @@ describe("tailordb migration validate", () => {
 
         expect(result.success).toBe(false);
         const [report] = JSON.parse(stdout.output);
-        expect(report.migrationInProgress).toEqual({
+        expect(report.migrationInProgress).toEqual({ valid: true, migrationNumber: 1 });
+        expect(report.pendingMigrationScripts).toEqual({
           valid: false,
-          migrationNumber: 1,
+          migrationNumbers: [1],
           error: expect.objectContaining({
             code: "MIGRATION_SKIP_STEPS_INVALID",
             message: expect.stringContaining("'recompute' did not succeed in the earlier run"),
@@ -1413,12 +1421,33 @@ describe("tailordb migration validate", () => {
 
         expect(result.success).toBe(false);
         const [report] = JSON.parse(stdout.output);
-        expect(report.migrationInProgress).toEqual({
+        expect(report).not.toHaveProperty("migrationInProgress");
+        expect(report.pendingMigrationScripts).toEqual({
           valid: false,
+          migrationNumbers: [1],
           error: expect.objectContaining({
             code: "MIGRATION_SKIP_STEPS_INVALID",
             message: expect.stringContaining("no multi-step migration of it is partially applied"),
           }),
+        });
+      });
+
+      test("reports steps to skip in a namespace with no pending migration", async () => {
+        using stdout = captureStdout();
+        using _json = jsonMode();
+        recordLabels({ "sdk-migration": "m0001" });
+
+        const result = await runCommand(validateCommand, [
+          "--migration-skip-steps",
+          "tailordb/backfill",
+        ]);
+
+        expect(result.success).toBe(false);
+        const [report] = JSON.parse(stdout.output);
+        expect(report.pendingMigrationScripts).toEqual({
+          valid: false,
+          migrationNumbers: [],
+          error: expect.objectContaining({ code: "MIGRATION_SKIP_STEPS_INVALID" }),
         });
       });
 
@@ -1440,12 +1469,12 @@ describe("tailordb migration validate", () => {
           hasDrift: false,
           drifts: [],
         });
-        expect(report.migrationInProgress).toEqual({
+        expect(report.migrationInProgress).toEqual({ valid: true, migrationNumber: 1 });
+        expect(report.pendingMigrationScripts).toEqual({
           valid: false,
-          migrationNumber: 1,
+          migrationNumbers: [1],
           skipped: "check_failed",
         });
-        expect(report).not.toHaveProperty("pendingMigrationScripts");
       });
 
       test("shows a check that could not run as not checked", async () => {
@@ -1459,7 +1488,7 @@ describe("tailordb migration validate", () => {
 
         expect(result.success).toBe(false);
         expect(stderr.output).toContain("Remote schema: OK (remote migration: 0000)");
-        expect(stderr.output).toContain("Migration in progress: not checked");
+        expect(stderr.output).toContain("Pending migration scripts: not checked");
       });
 
       test("rejects an entry that is not <namespace>/<step>", async () => {
