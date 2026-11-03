@@ -56,7 +56,7 @@ const envCommand = defineAppCommand({
     }),
     check: arg(z.boolean().default(false), {
       description:
-        "Check with gh which of them are registered in GitHub, and print gh commands for the missing ones; fails when a required one is missing",
+        "Check with gh which of them are registered in GitHub, and print gh commands for the missing ones and for a machine user client secret to move onto its environment; fails when a required one is missing",
     }),
   }),
   run: (args) => {
