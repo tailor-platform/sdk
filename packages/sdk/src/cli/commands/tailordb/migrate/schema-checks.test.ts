@@ -24,6 +24,7 @@ import { generateTailorDBTypeManifestFromSnapshot } from "./snapshot-manifest";
 import { createMockMigrationDiff } from "./test-helpers/migration-diff";
 import {
   remoteType,
+  restrictedRemoteType,
   snapshotField,
   snapshotType,
   writeDiff,
@@ -471,6 +472,294 @@ describe("verifyRemoteSchema", () => {
           details: "required: remote=true, expected=false",
         }),
       ]);
+    });
+  });
+
+  describe("a namespace a deploy left after the Pre-phase of the next migration", () => {
+    function withOptionalEmail(type: ProtoTailorDBType): ProtoTailorDBType {
+      const fields = type.schema!.fields;
+      return {
+        ...type,
+        schema: {
+          ...type.schema,
+          fields: { ...fields, email: { ...fields.name, required: false } },
+        },
+      } as ProtoTailorDBType;
+    }
+
+    function migrationsDirAddingEmail(): string {
+      const dir = migrationsDirWithUser();
+      writeDiff(dir, 1, [
+        {
+          kind: "field_added",
+          tableName: "User",
+          fieldName: "email",
+          after: snapshotField("string"),
+        },
+      ]);
+      return dir;
+    }
+
+    function verifyAcceptingInterrupted(
+      client: OperatorClient,
+      migrationsDir: string,
+      config = {} as LoadedConfig,
+    ) {
+      return verifyRemoteSchema(
+        client,
+        "workspace",
+        [{ namespace: "tailordb", migrationsDir }],
+        config,
+        [],
+        { acceptInterruptedMigration: true },
+      );
+    }
+
+    test("accepts a restricted table in the Pre-phase shape without an in-progress record", async () => {
+      const client = remoteClient({ labels: { "sdk-migration": "m0000" } }, [
+        withOptionalEmail(restrictedRemoteType("User", ["id", "name"])),
+      ]);
+
+      await expect(verifyAcceptingInterrupted(client, migrationsDirAddingEmail())).resolves.toEqual(
+        [
+          {
+            namespace: "tailordb",
+            remoteMigrationNumber: 0,
+            drifts: [],
+            hasDrift: false,
+            interruptedMigration: 1,
+          },
+        ],
+      );
+    });
+
+    test("accepts tables of which only some reached the Pre-phase", async () => {
+      const dir = migrationsDirWith({ User: snapshotType("User"), Post: snapshotType("Post") });
+      writeDiff(dir, 1, [
+        {
+          kind: "field_added",
+          tableName: "User",
+          fieldName: "email",
+          after: snapshotField("string"),
+        },
+        {
+          kind: "field_added",
+          tableName: "Post",
+          fieldName: "email",
+          after: snapshotField("string"),
+        },
+      ]);
+      const client = remoteClient({ labels: { "sdk-migration": "m0000" } }, [
+        withOptionalEmail(restrictedRemoteType("User", ["id", "name"])),
+        restrictedRemoteType("Post", ["id", "name"]),
+      ]);
+
+      const [result] = await verifyAcceptingInterrupted(client, dir);
+
+      expect(result).toMatchObject({ hasDrift: false, interruptedMigration: 1 });
+    });
+
+    test("accepts tables left in maintenance mode in the checkpoint's shape", async () => {
+      const client = remoteClient({ labels: { "sdk-migration": "m0000" } }, [
+        restrictedRemoteType("User", ["id", "name"]),
+      ]);
+
+      const [result] = await verifyAcceptingInterrupted(client, migrationsDirAddingEmail());
+
+      expect(result).toMatchObject({ hasDrift: false, interruptedMigration: 1 });
+    });
+
+    test("accepts a table in the Pre-phase shape outside maintenance mode when maintenance mode is off", async () => {
+      const client = remoteClient({ labels: { "sdk-migration": "m0000" } }, [
+        withOptionalEmail(remoteType("User", ["id", "name"])),
+      ]);
+
+      const [result] = await verifyAcceptingInterrupted(client, migrationsDirAddingEmail(), {
+        maintenanceMode: false,
+      } as LoadedConfig);
+
+      expect(result).toMatchObject({ hasDrift: false, interruptedMigration: 1 });
+    });
+
+    test("reports drift for a table in the Pre-phase shape outside maintenance mode", async () => {
+      const client = remoteClient({ labels: { "sdk-migration": "m0000" } }, [
+        withOptionalEmail(remoteType("User", ["id", "name"])),
+      ]);
+
+      const [result] = await verifyAcceptingInterrupted(client, migrationsDirAddingEmail());
+
+      expect(result).toMatchObject({ hasDrift: true });
+      expect(result).not.toHaveProperty("interruptedMigration");
+    });
+
+    test("reports drift for a table that matches neither the checkpoint nor the Pre-phase", async () => {
+      const client = remoteClient({ labels: { "sdk-migration": "m0000" } }, [
+        withOptionalEmail(restrictedRemoteType("User", ["id", "name", "legacyCode"])),
+      ]);
+
+      const [result] = await verifyAcceptingInterrupted(client, migrationsDirAddingEmail());
+
+      expect(result).toMatchObject({ hasDrift: true });
+      expect(result?.drifts).toContainEqual(
+        expect.objectContaining({ tableName: "User", fieldName: "legacyCode" }),
+      );
+      expect(result).not.toHaveProperty("interruptedMigration");
+    });
+
+    test("reports drift unless the caller accepts an interrupted migration", async () => {
+      const client = remoteClient({ labels: { "sdk-migration": "m0000" } }, [
+        withOptionalEmail(restrictedRemoteType("User", ["id", "name"])),
+      ]);
+
+      const [result] = await verify(client, migrationsDirAddingEmail());
+
+      expect(result).toMatchObject({ hasDrift: true });
+      expect(result).not.toHaveProperty("interruptedMigration");
+    });
+
+    test("accepts a table the Pre-phase created before it wrote the table's GraphQL permission", async () => {
+      const dir = migrationsDirWithUser();
+      writeDiff(dir, 1, [
+        {
+          kind: "table_added",
+          tableName: "Post",
+          after: {
+            ...snapshotType("Post"),
+            permissions: { gql: [{ conditions: [], actions: ["all"], permit: "allow" }] },
+          },
+        },
+      ]);
+      const client = remoteClient({ labels: { "sdk-migration": "m0000" } }, [
+        remoteType("User", ["id", "name"]),
+        restrictedRemoteType("Post", ["id", "name"]),
+      ]);
+
+      const [result] = await verifyAcceptingInterrupted(client, dir);
+
+      expect(result).toMatchObject({ hasDrift: false, interruptedMigration: 1 });
+    });
+
+    test.each([
+      ["no checkpoint yet", {}, 0],
+      [
+        "an in-progress record the checkpoint already covers",
+        { "sdk-migration": "m0000", "sdk-migration-in-progress": "m0000" },
+        0,
+      ],
+    ])("accepts the state in a namespace with %s", async (_label, labels, checkpoint) => {
+      const client = remoteClient({ labels }, [
+        withOptionalEmail(restrictedRemoteType("User", ["id", "name"])),
+      ]);
+
+      const [result] = await verifyAcceptingInterrupted(client, migrationsDirAddingEmail());
+
+      expect(result).toMatchObject({
+        hasDrift: false,
+        remoteMigrationNumber: checkpoint,
+        interruptedMigration: 1,
+      });
+    });
+
+    test.each([
+      ["records a later migration as in progress", "m0002"],
+      ["records an in-progress migration that cannot be read", "not-a-migration"],
+    ])("reports drift in a namespace that %s", async (_label, record) => {
+      const client = remoteClient(
+        { labels: { "sdk-migration": "m0000", "sdk-migration-in-progress": record } },
+        [withOptionalEmail(restrictedRemoteType("User", ["id", "name"]))],
+      );
+
+      const [result] = await verifyAcceptingInterrupted(client, migrationsDirAddingEmail());
+
+      expect(result).toMatchObject({ hasDrift: true });
+      expect(result).not.toHaveProperty("interruptedMigration");
+    });
+
+    test.each([
+      [
+        "removed",
+        { kind: "table_removed", tableName: "Post", before: snapshotType("Post") },
+        { User: snapshotType("User"), Post: snapshotType("Post") },
+      ],
+      [
+        "renamed away",
+        {
+          kind: "table_renamed",
+          tableName: "Article",
+          previousTableName: "Post",
+          before: snapshotType("Post"),
+          after: snapshotType("Article"),
+        },
+        { User: snapshotType("User"), Post: snapshotType("Post") },
+      ],
+    ])(
+      "reports drift for a table the checkpoint %s that the next migration adds again",
+      async (_label, removal, baseline) => {
+        const dir = migrationsDirWith(baseline);
+        writeDiff(dir, 1, [removal]);
+        writeDiff(dir, 2, [
+          { kind: "table_added", tableName: "Post", after: snapshotType("Post") },
+        ]);
+        const remoteTables = [
+          remoteType("User", ["id", "name"]),
+          restrictedRemoteType("Post", ["id", "name"]),
+          ...(removal.kind === "table_renamed" ? [remoteType("Article", ["id", "name"])] : []),
+        ];
+        const client = remoteClient({ labels: { "sdk-migration": "m0001" } }, remoteTables);
+
+        const [result] = await verifyAcceptingInterrupted(client, dir);
+
+        expect(result).toMatchObject({ hasDrift: true });
+        expect(result).not.toHaveProperty("interruptedMigration");
+      },
+    );
+
+    test("accepts the state alongside a table whose deletion the checkpoint's migration did not finish", async () => {
+      const dir = migrationsDirWith({ User: snapshotType("User"), Legacy: snapshotType("Legacy") });
+      writeDiff(dir, 1, [
+        { kind: "table_removed", tableName: "Legacy", before: snapshotType("Legacy") },
+      ]);
+      writeDiff(dir, 2, [
+        {
+          kind: "field_added",
+          tableName: "User",
+          fieldName: "email",
+          after: snapshotField("string"),
+        },
+      ]);
+      const client = remoteClient(
+        { labels: { "sdk-migration": "m0001", "sdk-migration-cleanup": "m0001" } },
+        [
+          withOptionalEmail(restrictedRemoteType("User", ["id", "name"])),
+          restrictedRemoteType("Legacy", ["id", "name"]),
+        ],
+      );
+
+      const [result] = await verifyRemoteSchema(
+        client,
+        "workspace",
+        [{ namespace: "tailordb", migrationsDir: dir }],
+        {} as LoadedConfig,
+        [],
+        { acceptUnfinishedRemovals: true, acceptInterruptedMigration: true },
+      );
+
+      expect(result).toMatchObject({
+        hasDrift: false,
+        interruptedMigration: 2,
+        unfinishedRemovals: ["Legacy"],
+      });
+    });
+
+    test("reports drift when no local migration follows the checkpoint", async () => {
+      const client = remoteClient({ labels: { "sdk-migration": "m0000" } }, [
+        restrictedRemoteType("User", ["id", "name"]),
+      ]);
+
+      const [result] = await verifyAcceptingInterrupted(client, migrationsDirWithUser());
+
+      expect(result).toMatchObject({ hasDrift: true });
+      expect(result).not.toHaveProperty("interruptedMigration");
     });
   });
 });

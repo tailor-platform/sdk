@@ -89,6 +89,27 @@ export function remoteType(name: string, fieldNames: string[]): ProtoTailorDBTyp
 }
 
 /**
+ * {@link remoteType} with the settings a migration's maintenance mode writes
+ * @param {string} name - Table name
+ * @param {string[]} fieldNames - Field names
+ * @returns {ProtoTailorDBType} Deployed table in maintenance mode
+ */
+export function restrictedRemoteType(name: string, fieldNames: string[]): ProtoTailorDBType {
+  const type = remoteType(name, fieldNames);
+  return {
+    ...type,
+    schema: {
+      ...type.schema,
+      settings: {
+        bulkUpsert: false,
+        publishRecordEvents: false,
+        disableGqlOperations: { create: true, update: true, delete: true, read: false },
+      },
+    },
+  } as ProtoTailorDBType;
+}
+
+/**
  * Write a 0000 baseline schema snapshot into a migrations directory
  * @param {string} migrationsDir - Migrations directory path
  * @param {Record<string, TailorDBSnapshotType>} tables - Snapshot tables

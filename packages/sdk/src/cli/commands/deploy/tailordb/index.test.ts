@@ -3307,6 +3307,222 @@ describe("applyTailorDB migration label reconciliation", () => {
     );
   });
 
+  describe("a migration an earlier deploy left in its Pre-phase without recording it", () => {
+    const namespaceTrn = "trn:v1:workspace:test-workspace:tailordb:test-tailordb";
+    const restrictedSettings = {
+      ...(unchangedRemoteSettings() as object),
+      disableGqlOperations: { create: true, update: true, delete: true, read: false },
+    };
+
+    function remoteTable(name: string, settings: object, fields: Record<string, object> = {}) {
+      return {
+        name,
+        schema: {
+          fields: {
+            id: { type: "uuid", required: true, allowedValues: [], validate: [], fields: {} },
+            ...fields,
+          },
+          settings: { ...settings, pluralForm: `${name.toLowerCase()}s` },
+          relationships: {},
+          indexes: {},
+          files: {},
+        },
+      };
+    }
+
+    function interruptedClient(
+      remoteTables: unknown[],
+      initialLabels: Record<string, string> = { "sdk-migration": "m0000" },
+    ): OperatorClient {
+      const client = schemaVerificationClient(unchangedRemoteSettings());
+      vi.mocked(client.listTailorDBTypes).mockResolvedValue({
+        tailordbTypes: remoteTables,
+        nextPageToken: "",
+      } as never);
+      let labels = initialLabels;
+      vi.mocked(client.getMetadata).mockImplementation(
+        async () => ({ metadata: { labels } }) as never,
+      );
+      vi.mocked(client.setMetadata).mockImplementation(async (request) => {
+        if (request.trn === namespaceTrn) labels = { ...labels, ...request.labels };
+        return {} as never;
+      });
+      return client;
+    }
+
+    function lastWrittenSettings(client: OperatorClient, tableName: string) {
+      return vi
+        .mocked(client.updateTailorDBType)
+        .mock.calls.filter(([request]) => request.tailordbType?.name === tableName)
+        .at(-1)?.[0].tailordbType?.schema?.settings;
+    }
+
+    test("keeps the migration pending and says the deploy runs it again", async () => {
+      using stderr = captureStderr();
+      const userType = userSnapshotType();
+      writeUserSchemaSnapshot(userType);
+      writeEmptyMigrationsThrough(1);
+      const client = interruptedClient([remoteTable("User", restrictedSettings)]);
+
+      const result = await runValidation(client, planWithDeployDerivedSettings(userType));
+
+      expect(result.interruptedMigrations).toEqual({ "test-tailordb": 1 });
+      expect(result.pendingMigrations.map((migration) => migration.number)).toEqual([1]);
+      expect(stderr.output).toContain("this deploy runs it again from the start");
+    });
+
+    test("lifts the maintenance mode an earlier deploy left on a table in the checkpoint's shape", async () => {
+      using _stderr = captureStderr();
+      const userType = userSnapshotType();
+      writeUserSchemaSnapshot(userType);
+      writeEmptyMigrationsThrough(1);
+      const client = interruptedClient([remoteTable("User", restrictedSettings)]);
+
+      await applyTailorDB(client, planWithDeployDerivedSettings(userType), "create-update");
+
+      expect(lastWrittenSettings(client, "User")).toMatchObject({
+        disableGqlOperations: { update: false, delete: false },
+      });
+    });
+
+    /**
+     * Migration 0001 adds `Post`, and an earlier deploy's Pre-phase already created it in
+     * maintenance mode.
+     * @param userSettings - Settings `User` was left with
+     * @returns Plan and client of the deploy that runs 0001 again
+     */
+    function postCreatedByEarlierPrePhase(userSettings = unchangedRemoteSettings() as object) {
+      const userType = userSnapshotType();
+      const postType: TailorDBSnapshotType = { ...userType, name: "Post", pluralForm: "Posts" };
+      writeUserSchemaSnapshot(userType);
+      fs.mkdirSync(path.join(tmpDir, "0001"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, "0001", "diff.json"),
+        JSON.stringify(
+          createMockMigrationDiff({
+            namespace: "test-tailordb",
+            changes: [{ kind: "table_added", tableName: "Post", after: postType }],
+          }),
+        ),
+      );
+      const planResult = planWithDeployDerivedSettings(userType);
+      planResult.context.tailorDBInputs[0]!.types.Post = postType;
+      planResult.changeSet.type.updates.push({
+        name: "Post",
+        request: {
+          workspaceId: "test-workspace",
+          namespaceName: "test-tailordb",
+          tailordbType: { name: "Post" },
+        },
+        metaRequest: { trn: `${namespaceTrn}:type:Post`, labels: {} },
+      });
+      const client = interruptedClient([
+        remoteTable("User", userSettings),
+        remoteTable("Post", restrictedSettings),
+      ]);
+      return { planResult, client };
+    }
+
+    test("lifts maintenance mode from a table the earlier Pre-phase created once the migration completes", async () => {
+      using _stderr = captureStderr();
+      const { planResult, client } = postCreatedByEarlierPrePhase();
+
+      await applyTailorDB(client, planResult, "create-update");
+
+      expect(lastWrittenSettings(client, "Post")).toMatchObject({
+        disableGqlOperations: { update: false, delete: false },
+      });
+    });
+
+    test("does not write back a table the earlier Pre-phase created once a rollback deleted it", async () => {
+      using _stderr = captureStderr();
+      const { planResult, client } = postCreatedByEarlierPrePhase();
+      let prePhaseFailed = false;
+      vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
+        if (request.tailordbType?.name === "Post" && !prePhaseFailed) {
+          prePhaseFailed = true;
+          throw new Error("Pre-phase update failed");
+        }
+        return {} as never;
+      });
+
+      await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+        "Pre-phase update failed",
+      );
+
+      const deletion = vi
+        .mocked(client.deleteTailorDBType)
+        .mock.calls.findIndex(([request]) => request.tailordbTypeName === "Post");
+      expect(deletion).not.toBe(-1);
+      const deletedAt = vi.mocked(client.deleteTailorDBType).mock.invocationCallOrder[deletion]!;
+      const update = vi.mocked(client.updateTailorDBType).mock;
+      const postWritesAfterDeletion = update.calls.filter(
+        ([request], index) =>
+          request.tailordbType?.name === "Post" && update.invocationCallOrder[index]! > deletedAt,
+      );
+      expect(postWritesAfterDeletion).toEqual([]);
+    });
+
+    test("names the tables the earlier deploy restricted when it cannot restore them", async () => {
+      using _stderr = captureStderr();
+      const { planResult, client } = postCreatedByEarlierPrePhase(restrictedSettings);
+      let checkpoint = "m0000";
+      vi.mocked(client.getMetadata).mockImplementation(
+        async () => ({ metadata: { labels: { "sdk-migration": checkpoint } } }) as never,
+      );
+      vi.mocked(client.setMetadata).mockImplementation(async (request) => {
+        if (request.trn === namespaceTrn && request.labels?.["sdk-migration"] === "m0001") {
+          checkpoint = "m0002";
+        }
+        return {} as never;
+      });
+
+      await expect(applyTailorDB(client, planResult, "create-update")).rejects.toMatchObject({
+        code: "MIGRATION_CHECKPOINT_CONFLICT",
+        suggestion: expect.stringContaining("Restricted tables: Post, User."),
+      });
+    });
+
+    test("keeps a table in its Pre-phase shape while it releases a maintenance mode recorded at the checkpoint", async () => {
+      using _stderr = captureStderr();
+      const userType = userSnapshotType();
+      const email: SnapshotFieldConfig = { type: "string", required: false };
+      writeUserSchemaSnapshot(userType);
+      fs.mkdirSync(path.join(tmpDir, "0001"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, "0001", "diff.json"),
+        JSON.stringify(
+          createMockMigrationDiff({
+            namespace: "test-tailordb",
+            changes: [{ kind: "field_added", tableName: "User", fieldName: "email", after: email }],
+          }),
+        ),
+      );
+      const planResult = planWithDeployDerivedSettings(userType);
+      planResult.context.tailorDBInputs[0]!.types.User = {
+        ...userType,
+        fields: { ...userType.fields, email },
+      };
+      const user = remoteTable("User", restrictedSettings, {
+        email: { type: "string", required: false, allowedValues: [], validate: [], fields: {} },
+      });
+      const client = interruptedClient([user], {
+        "sdk-migration": "m0000",
+        "sdk-maintenance-mode": "m0000",
+      });
+
+      await applyTailorDB(client, planResult, "create-update");
+
+      const userWrites = vi
+        .mocked(client.updateTailorDBType)
+        .mock.calls.filter(([request]) => request.tailordbType?.name === "User");
+      expect(userWrites.length).toBeGreaterThan(0);
+      for (const [request] of userWrites) {
+        expect(request.tailordbType?.schema?.fields).toHaveProperty("email");
+      }
+    });
+  });
+
   test("rejects a table whose GraphQL writes are only partly disabled", async () => {
     const userType = userSnapshotType();
     writeUserSchemaSnapshot(userType);

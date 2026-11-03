@@ -102,6 +102,8 @@ interface CompletedRemoteSchemaReport {
   checkpointRepair?: { from: number; to: 0 };
   /** Tables the checkpoint's migration removed that the next deploy deletes */
   unfinishedRemovals?: string[];
+  /** Migration whose Pre-phase schema or maintenance mode a deploy left in place without recording it as in progress; the next deploy runs it again */
+  interruptedMigration?: number;
 }
 
 type FailedRemoteSchemaReport = { skipped: "check_failed" } & {
@@ -293,6 +295,9 @@ function buildValidationReports(
       ...(remote.unfinishedRemovals?.length
         ? { unfinishedRemovals: remote.unfinishedRemovals }
         : {}),
+      ...(remote.interruptedMigration !== undefined
+        ? { interruptedMigration: remote.interruptedMigration }
+        : {}),
     };
 
     // Only migrations not yet applied to the remote need an acknowledgment;
@@ -419,7 +424,7 @@ async function collectValidationReports(
       checkableNamespaces,
       config,
       tailorDBInputs,
-      { acceptUnfinishedRemovals: true },
+      { acceptUnfinishedRemovals: true, acceptInterruptedMigration: true },
     );
   } catch (remoteError) {
     return {
@@ -465,6 +470,10 @@ function printValidationReports(reports: NamespaceValidationReport[]): void {
     } else if (remote?.checkpointRepair) {
       logger.log(
         `  Remote schema: ${styles.success("OK")} (next deploy will reset the checkpoint to 0000 from ${formatMigrationNumber(remote.checkpointRepair.from)})`,
+      );
+    } else if (remote?.interruptedMigration !== undefined) {
+      logger.log(
+        `  Remote schema: ${styles.success("OK")} (an earlier deploy left migration ${formatMigrationNumber(remote.interruptedMigration)} without recording it as in progress; the next deploy runs it again from the start)`,
       );
     } else if (remote?.checkpointMissingLocal) {
       logger.log(
