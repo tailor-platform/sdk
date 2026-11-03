@@ -895,7 +895,7 @@ async function validate(options: ValidateOptions): Promise<void> {
 export const validateCommand = defineAppCommand({
   name: "validate",
   description:
-    "Validate the full migration history, unreviewed generated migration scripts, and schema drift (local tables vs. migration snapshot, remote schema vs. migration checkpoint) without deploying. This includes the migration and schema-drift checks used by 'deploy' and exits with a non-zero code when issues are found.",
+    "Run the migration and schema-drift checks that 'deploy' runs before changing anything, without deploying, and exit with a non-zero code when issues are found. Migration scripts are checked across the full migration history, not only the pending migrations that 'deploy' checks. It does not check the machine user that runs the scripts or whether the scripts bundle.",
   args: z.strictObject({
     ...deploymentArgs,
     namespace: arg(z.string().optional(), {
