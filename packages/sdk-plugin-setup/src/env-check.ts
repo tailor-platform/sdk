@@ -1,7 +1,7 @@
 import { logger } from "@tailor-platform/sdk/cli";
 import {
   describeGroup,
-  ENVIRONMENT_ONLY_SECRETS,
+  ENVIRONMENT_PREFERRED_SECRETS,
   type EnvRequirement,
   type EnvironmentRequirements,
   loadEnvironmentRequirements,
@@ -53,7 +53,7 @@ function checkRequirement(requirement: EnvRequirement, scopes: ScopedNames[]): R
   const belongsOnEnvironment =
     checksEnvironment &&
     requirement.type === "secret" &&
-    ENVIRONMENT_ONLY_SECRETS.has(requirement.name);
+    ENVIRONMENT_PREFERRED_SECRETS.has(requirement.name);
   return {
     ...requirement,
     registered: foundIn !== null || (fallback && otherTypeIn !== null),

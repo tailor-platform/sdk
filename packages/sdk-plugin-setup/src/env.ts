@@ -49,8 +49,8 @@ const CLIENT_SECRET: EnvRequirement = {
   description: "Client secret of the same platform machine user",
   howTo: `${MACHINE_USER_HOW_TO}; use its client secret`,
 };
-/** Secrets that only an environment's protection rules guard, so they belong on the environment. */
-export const ENVIRONMENT_ONLY_SECRETS: ReadonlySet<string> = new Set([CLIENT_SECRET.name]);
+/** Secrets that belong on the environment, since its protection rules do not guard them elsewhere. */
+export const ENVIRONMENT_PREFERRED_SECRETS: ReadonlySet<string> = new Set([CLIENT_SECRET.name]);
 
 const WORKSPACE_ID: EnvRequirement = {
   name: "TAILOR_PLATFORM_WORKSPACE_ID",
