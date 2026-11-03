@@ -15,20 +15,15 @@
 # up here. See docs/deprecation.md.
 #
 # Pushes the fixup straight to the release PR branch through the GitHub
-# Contents API rather than a local git commit/push, since this token has no
+# GraphQL API rather than a local git commit/push, since this token has no
 # configured git identity or signing key.
 #
-# `gh pr checkout` moves the working tree onto the release PR branch, but the
-# workflow trigger's commit is HEAD going into this step. Restore it on every
-# exit path so a later step never mistakes the release-PR branch for that
-# trigger commit.
+# Restore the base checkout without moving either local branch on exit.
 set -euo pipefail
 
 original_ref="$(git rev-parse HEAD)"
-content_file="$(mktemp)"
-# --hard: the resolvers and oxfmt below leave tracked files modified, and a
-# plain `git checkout` refuses to switch away from a dirty tracked file.
-trap 'rm -f "$content_file"; git reset --hard --quiet "$original_ref"' EXIT
+node .github/scripts/release-state.mjs assert "$original_ref"
+trap 'git checkout --quiet --detach --force "$original_ref"' EXIT
 
 # changesets/action applies `changeset version`'s file
 # edits (package.json bumps, CHANGELOG.md, consumed .changeset/*.md deletions)
@@ -43,8 +38,9 @@ git clean -fdq
 
 PR_BRANCH="$(gh pr view "$PR_NUMBER" --json headRefName -q .headRefName)"
 gh pr checkout "$PR_NUMBER"
-# Detach so the trap's reset only moves HEAD, not the local branch gh pr checkout made.
 git checkout --quiet --detach
+release_head="$(git rev-parse HEAD)"
+git merge-base --is-ancestor "$original_ref" "$release_head"
 
 PREVIOUS_SDK_VERSION="$(git show "${original_ref}:packages/sdk/package.json" | jq -r .version)" \
   pnpm codemod:resolve-pending
@@ -58,19 +54,4 @@ fi
 
 pnpm exec oxfmt --write "${resolved_paths[@]}"
 
-# One Contents API call per file: each creates its own commit on the release PR
-# branch, and the blob sha is re-read per file so a preceding push in this loop
-# does not invalidate the next one.
-for path in "${resolved_paths[@]}"; do
-  base64 <"$path" | tr -d '\n' >"$content_file"
-  sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${PR_BRANCH}" -q .sha)"
-
-  gh api "repos/${GITHUB_REPOSITORY}/contents/${path}" \
-    -X PUT \
-    -f message="chore: resolve pending release version in ${path}" \
-    -F content=@"$content_file" \
-    -f sha="${sha}" \
-    -f branch="${PR_BRANCH}"
-done
-
-echo "Resolved ${#resolved_paths[@]} pending version placeholder(s) on ${PR_BRANCH}."
+node .github/scripts/release-state.mjs commit "$original_ref" "$PR_BRANCH" "$release_head"
