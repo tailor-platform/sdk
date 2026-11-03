@@ -402,7 +402,7 @@ export type AuthConfigInput =
                   uniqueness?: "global" | "none" | "server" | undefined;
                   /** List of canonical values */
                   canonicalValues?: string[] | null | undefined;
-                  subAttributes?: any | null | undefined;
+                  subAttributes?: SCIMAttribute[] | null | undefined;
                 }[];
               };
               /** Attribute mapping configuration */
@@ -1534,7 +1534,7 @@ export type AuthConfigInput =
                   uniqueness?: "global" | "none" | "server" | undefined;
                   /** List of canonical values */
                   canonicalValues?: string[] | null | undefined;
-                  subAttributes?: any | null | undefined;
+                  subAttributes?: SCIMAttribute[] | null | undefined;
                 }[];
               };
               /** Attribute mapping configuration */
@@ -1811,7 +1811,7 @@ export type AuthConfig =
                   uniqueness?: "global" | "none" | "server" | undefined;
                   /** List of canonical values */
                   canonicalValues?: string[] | null | undefined;
-                  subAttributes?: any | null | undefined;
+                  subAttributes?: SCIMAttribute[] | null | undefined;
                 }[];
               };
               /** Attribute mapping configuration */
@@ -3017,7 +3017,7 @@ export type AuthConfig =
                   uniqueness?: "global" | "none" | "server" | undefined;
                   /** List of canonical values */
                   canonicalValues?: string[] | null | undefined;
-                  subAttributes?: any | null | undefined;
+                  subAttributes?: SCIMAttribute[] | null | undefined;
                 }[];
               };
               /** Attribute mapping configuration */
