@@ -4,20 +4,29 @@ import * as path from "pathe";
 
 let collecting: Set<string> | undefined;
 
-const CANDIDATE_EXTENSIONS = [".ts", ".mts", ".js", ".mjs", ".json"];
+const TS_EXTENSIONS = [".ts", ".mts"];
+const KNOWN_EXTENSIONS = [".ts", ".tsx", ".mts", ".js", ".mjs", ".json"];
+const JS_TO_TS = [
+  [".js", ".ts"],
+  [".mjs", ".mts"],
+] as const;
 
 function isLocalSpecifier(specifier: string): boolean {
   return specifier.startsWith("./") || specifier.startsWith("../") || specifier.startsWith("/");
 }
 
 function candidatePaths(specifier: string, parentURL: string): string[] {
-  const parsed = new URL(specifier, parentURL);
-  const target = fileURLToPath(parsed);
-  if (path.extname(target)) return [target];
-  return [
-    ...CANDIDATE_EXTENSIONS.map((extension) => target + extension),
-    ...CANDIDATE_EXTENSIONS.map((extension) => path.join(target, `index${extension}`)),
-  ];
+  const target = fileURLToPath(new URL(specifier, parentURL));
+  if (!KNOWN_EXTENSIONS.some((extension) => target.endsWith(extension))) {
+    return [
+      ...TS_EXTENSIONS.map((extension) => target + extension),
+      ...TS_EXTENSIONS.map((extension) => path.join(target, `index${extension}`)),
+    ];
+  }
+  const substituted = JS_TO_TS.filter(([js]) => target.endsWith(js)).map(
+    ([js, ts]) => target.slice(0, -js.length) + ts,
+  );
+  return [target, ...substituted];
 }
 
 /**

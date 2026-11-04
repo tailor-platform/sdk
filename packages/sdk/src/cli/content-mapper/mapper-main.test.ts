@@ -151,4 +151,27 @@ describe("content mapper process", () => {
     },
     TIMEOUT_MS,
   );
+
+  test.each([
+    { specifier: "./helper.js", created: ["helper.ts"] },
+    { specifier: "./helper.mjs", created: ["helper.mts"] },
+    {
+      specifier: "./user.model",
+      created: ["user.model.ts", "user.model.mts", "user.model/index.ts"],
+    },
+  ])(
+    "watches the TypeScript files the import resolver would find for $specifier",
+    async ({ specifier, created }) => {
+      const dir = projectDir();
+      fs.writeFileSync(path.join(dir, "tailor.config.ts"), `import "${specifier}";\n${CONFIG}`);
+      const mapper = startMapper();
+
+      const opened = await open(mapper, dir);
+
+      expect(opened.watchedFiles).toEqual(
+        expect.arrayContaining(created.map((file) => path.join(dir, file))),
+      );
+    },
+    TIMEOUT_MS,
+  );
 });
