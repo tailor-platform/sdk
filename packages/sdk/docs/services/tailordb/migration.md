@@ -1008,10 +1008,16 @@ If you see `No machine user available for migration execution`, either:
 
 If your project defines multiple TailorDB namespaces (`db: { ns1: { ... }, ns2: { ... } }`), each has its own `migrations/` directory and its own migration label. During `apply`:
 
-- Migrations are grouped by namespace and executed namespace by namespace.
-- Within a namespace, migrations run sequentially in number order.
-- There is no cross-namespace ordering guarantee. Do not write a migration in `ns1` that depends on data produced by a migration in `ns2` running first.
+- Pending migrations run one namespace at a time, in alphabetical order of the namespace names, and within a namespace in migration number order. With pending migrations in `inventory` and `billing`, every one of `billing` runs before any of `inventory`.
+- With [maintenance mode](#maintenance-mode) on, every namespace of the config that has pending migrations enters maintenance mode before the first migration runs, and they leave it together: after the last migration with `"migration"`, and after the whole deploy with `"deploy"`. [Maintenance mode](#maintenance-mode) describes the exceptions when a deploy stops early.
+- The order follows the namespace names, not dependencies between namespaces. Do not write a migration in `ns1` that depends on data produced by a migration in `ns2` running first.
 - Each namespace can specify its own `migration.machineUser`.
+
+### Several configs in one deploy
+
+When one deploy applies several configs (see [Multiple Config Deploys](../../cli/application.md#deploy)), it applies each kind of resource for every config, in the order the configs are listed, before it moves on to the next kind. For `tailor deploy --config supplier.ts,buyer.ts`, the secrets, static websites, AI gateways, IdPs, auth services and machine users, and function registries of both configs are applied first. Then the TailorDB changes and migrations of `supplier` are applied, then those of `buyer`, then the resolvers of `supplier` and `buyer`, and so on through the applications, executors, and workflows. Each config's `maintenanceMode` covers only its own namespaces, so with `"deploy"` in `supplier`, its tables stay in maintenance mode while the migrations of `buyer` run.
+
+If a migration of `buyer` fails, the deploy stops there and leaves `supplier` in this state: its migrations have completed and its checkpoint has advanced, its tables are out of maintenance mode even with `"deploy"`, and nothing after TailorDB has been applied, including its resolvers, executors, and workflows. Its tables therefore have the new schema while the resolvers and executors of the previous deploy still use them. When you fix the migration of `buyer` and deploy both configs again, `supplier` has no pending migrations, and the deploy applies the rest of its changes. If the migration of `buyer` must first be settled with `tailor tailordb migration resolve` (see [Failure Recovery](#failure-recovery)), every deploy of the two configs stops before changing anything until then.
 
 ## Performance and Large Tables
 
