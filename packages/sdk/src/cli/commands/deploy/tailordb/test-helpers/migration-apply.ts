@@ -20,7 +20,10 @@ import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { TailorDBChangeSet, TailorDBPlanResult } from "../plan";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { TailorDBType_FieldConfigSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
+import type {
+  TailorDBType_FieldConfigSchema,
+  TailorDBTypeSchema,
+} from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 const WORKSPACE_ID = "test-workspace";
 const NAMESPACE = "test-ns";
@@ -159,6 +162,29 @@ export function createRemoteCheckpoint(initialNumber: number | null) {
   };
 }
 
+/**
+ * List every table definition the client created or updated, in call order.
+ * @param client - Mocked operator client
+ * @returns Table name and written definition of each write
+ */
+export function tailordbTypeWrites(client: OperatorClient) {
+  const writes: Array<{
+    order: number;
+    name: string;
+    tailordbType: MessageInitShape<typeof TailorDBTypeSchema>;
+  }> = [];
+  for (const fn of [client.createTailorDBType, client.updateTailorDBType]) {
+    const mock = vi.mocked(fn);
+    mock.mock.calls.forEach((call, index) => {
+      const tailordbType = call[0].tailordbType;
+      const order = mock.mock.invocationCallOrder[index];
+      if (tailordbType?.name === undefined || order === undefined) return;
+      writes.push({ order, name: tailordbType.name, tailordbType });
+    });
+  }
+  return writes.toSorted((a, b) => a.order - b.order);
+}
+
 export const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
 
 type ChangeEntries<Group extends TailorDBChangeSet[keyof TailorDBChangeSet]> = Partial<
@@ -170,6 +196,8 @@ interface PlanResultOptions {
   gqlPermission?: ChangeEntries<TailorDBChangeSet["gqlPermission"]>;
   application?: Partial<Application>;
   context?: Partial<TailorDBPlanResult["context"]>;
+  /** Local table definitions of the test namespace, as the plan reads them from the config. */
+  local?: TailorDBSnapshotType[];
 }
 
 function changeGroup(entries: ChangeEntries<TailorDBChangeSet[keyof TailorDBChangeSet]> = {}) {
@@ -205,7 +233,15 @@ export function createPlanResult(options: PlanResultOptions = {}): TailorDBPlanR
         authService: { config: { name: "auth", machineUsers: { migrator: {} } } },
         ...options.application,
       },
-      tailorDBInputs: [],
+      tailorDBInputs: options.local
+        ? [
+            {
+              namespace: NAMESPACE,
+              config: {},
+              types: Object.fromEntries(options.local.map((type) => [type.name, type])),
+            },
+          ]
+        : [],
       executorUsedTables: new Set<string>(),
       config: mockConfig,
       noSchemaCheck: true,

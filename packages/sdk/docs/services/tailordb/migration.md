@@ -776,6 +776,7 @@ Maintenance mode restricts GraphQL writes and record events only. Resolvers, exe
 **When a deploy stops early:**
 
 - If a migration fails, the tables leave maintenance mode before the error is reported: they return to the settings of the last checkpoint that completed. A migration that did not reach its checkpoint returns existing tables to their previous settings and drops the tables it created (see [Failure Recovery](#failure-recovery)). A created table that the rollback cannot drop stays in maintenance mode, and the deploy names it; deploying again runs the migration again. The settings are not restored if the checkpoint number or migration history changed concurrently, or if checkpoint ownership cannot be verified. A table left behind by a failed post-checkpoint deletion stays in maintenance mode until the next deploy deletes it (see [Failure Recovery](#failure-recovery)).
+- With `--no-schema-check`, if a local table definition that the migrations do not include cannot be applied after they complete, the existing tables leave maintenance mode with the definitions of the last migration before the error is reported (see [Schema verification](#schema-verification)).
 - A [multi-step migration](#splitting-a-migration-into-steps) left in progress keeps its tables in maintenance mode until a deploy completes it.
 - A migration whose script run a deploy could not confirm keeps its tables in maintenance mode until you settle it with `tailor tailordb migration resolve` (see [Failure Recovery](#failure-recovery)).
 - With `"deploy"`, if a later part of the deploy fails, the tables leave maintenance mode before the error is reported. When the deploy ends maintenance mode, it leaves the tables of a namespace unchanged if that namespace's checkpoint number or migration history changed concurrently, or if checkpoint ownership cannot be verified, and reports it.
@@ -793,17 +794,17 @@ Maintenance mode lasts for the whole migration job, including the time the platf
 
 When [maintenance mode](#maintenance-mode) is on, `tailor deploy` reports how long the migrating namespaces' tables were restricted, split into phases. With `"deploy"`, the window also includes the remaining deployment changes and ends when their restrictions are lifted. No maintenance report is emitted with `maintenanceMode: false`.
 
-| Phase              | Covers                                                                                   |
-| ------------------ | ---------------------------------------------------------------------------------------- |
-| `restrict`         | Putting the tables into maintenance mode                                                 |
-| `pre-migration`    | Pre-migration schema changes                                                             |
-| `job setup`        | Bundling `migrate.ts` and registering it as a job                                        |
-| `waiting to start` | Time when the platform has accepted the job but none of its code runs yet                |
-| `running`          | Time when the script runs                                                                |
-| `job cleanup`      | Collecting the script's logs and removing its job, unless its steps run as separate jobs |
-| `post-migration`   | Post-migration schema changes, the checkpoint update, and cleanup                        |
-| `remaining deploy` | With `"deploy"`, applying the remaining deployment changes while tables stay restricted  |
-| `restore`          | Taking the tables out of maintenance mode                                                |
+| Phase              | Covers                                                                                                                             |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `restrict`         | Putting the tables into maintenance mode                                                                                           |
+| `pre-migration`    | Pre-migration schema changes                                                                                                       |
+| `job setup`        | Bundling `migrate.ts` and registering it as a job                                                                                  |
+| `waiting to start` | Time when the platform has accepted the job but none of its code runs yet                                                          |
+| `running`          | Time when the script runs                                                                                                          |
+| `job cleanup`      | Collecting the script's logs and removing its job, unless its steps run as separate jobs                                           |
+| `post-migration`   | Post-migration schema changes, the checkpoint update, cleanup, and [local definitions](#schema-verification) no migration includes |
+| `remaining deploy` | With `"deploy"`, applying the remaining deployment changes while tables stay restricted                                            |
+| `restore`          | Taking the tables out of maintenance mode                                                                                          |
 
 Phases that repeat across several migrations are added up. The report is printed only after the migrations succeed and the tables leave maintenance mode; when a migration fails, deploy reports the error instead (see [Failure Recovery](#failure-recovery)). When deploy resumes a migration that an earlier deploy left in progress, the tables were already in maintenance mode before it started, and the report covers only this deploy. A job can be reported as started on the platform well before its code runs, so deploy tells waiting from running by a line every job of a migration logs before your script: `[tailor-sdk] migration script started`. You may see that line in function execution logs; deploy leaves it out of the logs it prints. A script that exports [`steps`](#splitting-a-migration-into-steps) waits for each step's job to start, and that time counts as `waiting to start` too. Time when deploy cannot tell whether the script is running — because the run or a running job's logs could not be read, or because an older SDK version started the run and it never logs the line — is reported as `waiting to start or running` instead.
 
@@ -844,6 +845,8 @@ To bypass both checks during deploy (not recommended outside of recovery scenari
 ```bash
 tailor deploy --no-schema-check
 ```
+
+With pending migrations, each migration still applies its own table definitions in its [phases](#per-migration-phases), so `migrate.ts` sees the schema it was written for. Local table definitions that differ from the last pending migration are applied after every pending migration has completed, and the deploy lists those tables. With [maintenance mode](#maintenance-mode) on, existing tables stay in it until their local definitions are applied. If one of them cannot be applied, for example a unique constraint on a field whose records hold duplicate values, the deploy fails with `MIGRATION_LOCAL_DEFINITIONS_FAILED`: the migrations stay applied, tables already created for their local definitions remain, and the existing tables keep the definitions of the last migration and leave maintenance mode.
 
 `--no-schema-check` does not bypass the check that the remote migration checkpoint is in the local migration history. See ["Remote migration checkpoint is not in the local migration history" error](#remote-migration-checkpoint-is-not-in-the-local-migration-history-error).
 
@@ -968,6 +971,8 @@ Before a migration's script starts, `tailor deploy` checks that the namespace's 
 The checkpoint is advanced only after the reversible post-migration schema updates succeed. If the checkpoint write reports an error, the SDK reads it back: a matching value is treated as committed. Any other observed value leaves the post-migration schema unchanged rather than risk rolling back a concurrent deployment; a value beyond the current migration confirms a concurrent deploy, while an older or missing value means the checkpoint must be repaired before retrying, unless the value is the previous checkpoint and the multi-step migration is still recorded as in progress, which the next deploy resumes. If read-back also fails, the SDK likewise leaves the post-migration schema unchanged; verify the remote checkpoint before retrying.
 
 Removed tables are deleted only after the checkpoint is committed. The deploy records with the checkpoint that these deletions are still to run, and clears the record once they finish. If that cleanup fails or the deploy is interrupted, the checkpoint remains at the new migration, and the next deploy finishes the cleanup: it lists the tables that migration removed among the tables to delete, and deletes them and their GQL permissions with their data before it runs any pending migration. `tailor tailordb migration validate` reports them as tables the next deploy deletes. To delete them without deploying, run `tailor tailordb migration sync <N>` with the committed migration as `<N>` (when the cleanup fails, the deploy error's suggestion names the command). A same-named remote table is still reported as remote schema drift when no unfinished cleanup is recorded, for example a table created again after the cleanup completed or one left by an SDK version that did not record the cleanup, and when a later migration adds the table back; delete it with `migration sync <N>` or by hand, and then deploy again. A deploy with `--no-schema-check` does not finish the cleanup of a namespace that has pending migrations, and once those migrations commit, the leftover tables are reported as drift as well.
+
+With `--no-schema-check`, local table definitions that the pending migrations do not include are applied after every migration has committed (see [Schema verification](#schema-verification)). If one of them cannot be applied, the deploy fails with `MIGRATION_LOCAL_DEFINITIONS_FAILED`: the migrations stay committed, the existing tables go back to the definitions of the last migration, and tables already created for their local definitions remain. Fix the cause and deploy again. When existing records refuse the definition, for example a unique constraint on a field whose records hold duplicate values, run `tailor tailordb migration generate` to add the change in a migration whose script updates those records, then deploy again; the error's suggestion names the command.
 
 ## Rollback Strategy
 

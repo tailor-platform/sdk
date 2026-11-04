@@ -1,3 +1,4 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import {
   getNamespacesWithMigrations,
@@ -30,6 +31,7 @@ import {
   type SchemaSnapshot,
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
+import { generateTailorDBTypeManifestFromSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
 import { handleOptionalToRequiredError } from "#/cli/commands/tailordb/migrate/types";
 import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
@@ -37,7 +39,9 @@ import { CLIError, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { withSpan } from "#/cli/telemetry/index";
 import { assertDefined } from "#/utils/assert";
+import { areNormalizedEqual } from "../compare";
 import { resourceTrn, writeMetadataLabels } from "../label";
+import { normalizeComparableTailorDBType } from "./compare";
 import {
   clearMaintenanceModeRecord,
   clearMigrationCleanupRecord,
@@ -805,9 +809,11 @@ interface MigrationOutcome {
   restorationFailures: Record<string, Error>;
 }
 
-interface DeferredChanges {
-  typeKeys: Set<string>;
-  gqlPermissionKeys: Set<string>;
+interface LocalDefinitionWrites {
+  /** Planned creates that the migrations did not perform, by namespace. */
+  creates: Map<string, TailorDBChangeSet["type"]["creates"]>;
+  /** Local definitions that differ from the last pending migration, by namespace and table name. */
+  updates: Map<string, Record<string, TailorDBSnapshotType>>;
 }
 
 async function applyWithMigrations(
@@ -850,7 +856,7 @@ async function applyWithMigrations(
     timeline: phaseSettings.restricted ? new MaintenanceTimeline() : undefined,
   };
 
-  const deferred = await applyChangesBeforeMigrations(flow);
+  const deferredGqlPermissionKeys = await applyChangesBeforeMigrations(flow);
 
   if (flow.migrationsRequiringScripts.length > 0) {
     logger.info(`Executing ${flow.migrationsRequiringScripts.length} data migration(s)...`);
@@ -881,12 +887,9 @@ async function applyWithMigrations(
   const runFailure = await runPendingMigrations(flow, restoration, runLog);
 
   flow.timeline?.enter("restore");
-  const { failure, restorationFailures } = await verifyRestorationCheckpoints(
-    flow,
-    restoration,
-    runLog,
-    runFailure,
-  );
+  const verified = await verifyRestorationCheckpoints(flow, restoration, runLog, runFailure);
+  const { restorationFailures } = verified;
+  const failure = verified.failure ?? (await applyLocalDefinitions(flow, restoration));
   keepPartialMigrationsRestricted(flow, restoration, runLog);
 
   const held = failure ? undefined : holdMaintenanceMode;
@@ -913,7 +916,7 @@ async function applyWithMigrations(
   }
   const maintenance = held ? undefined : finishMaintenance(flow);
 
-  await applyDeferredChanges(flow, deferred);
+  await applyDeferredGqlPermissions(flow, deferredGqlPermissionKeys);
   await applyRemainingDeletions(flow);
 
   // Write table metadata, which the migration phases above do not.
@@ -1050,31 +1053,27 @@ function isOutsideMigrations(flow: MigrationFlow, namespaceName: string | undefi
  * its first pending migration — the whole baseline on a fresh-workspace replay, and
  * every table when the pending migration is data-only — are equally dropped by the loop
  * and run here too, built from that snapshot so scripts see the checkpoint state rather
- * than the final schema. Updates of types no pending diff names stay skipped: applying
- * the final schema outside the per-migration phases could enforce a change whose
- * migration has not run. Under --no-schema-check, planned tables absent from every
- * snapshot are deferred until migrations settle. Deletes are irreversible and stay last.
+ * than the final schema. Every other planned create and update in a migrating namespace
+ * waits until every migration has committed: enforcing the final schema earlier could
+ * apply a change whose migration has not run. Deletes are irreversible and stay last.
  * @param flow - Migration flow
- * @returns Changes to apply once migrations settle
+ * @returns `<namespace>/<table>` of the GraphQL permissions to apply once migrations settle
  */
-async function applyChangesBeforeMigrations(flow: MigrationFlow): Promise<DeferredChanges> {
+async function applyChangesBeforeMigrations(flow: MigrationFlow): Promise<Set<string>> {
   const { client, changeSet, migrationContext, phaseSettings, pending } = flow;
-  const deferred: DeferredChanges = {
-    typeKeys: new Set(),
-    gqlPermissionKeys: new Set(
-      [...changeSet.gqlPermission.creates, ...changeSet.gqlPermission.updates]
-        .filter((permission) => {
-          const namespaceName = permission.request.namespaceName;
-          return (
-            migrationContext.noSchemaCheck &&
-            namespaceName !== undefined &&
-            flow.migratingNamespaces.has(namespaceName) &&
-            !pending.snapshotTableKeys.has(`${namespaceName}/${permission.name}`)
-          );
-        })
-        .map((permission) => `${permission.request.namespaceName}/${permission.name}`),
-    ),
-  };
+  const deferredGqlPermissionKeys = new Set(
+    [...changeSet.gqlPermission.creates, ...changeSet.gqlPermission.updates]
+      .filter((permission) => {
+        const namespaceName = permission.request.namespaceName;
+        return (
+          migrationContext.noSchemaCheck &&
+          namespaceName !== undefined &&
+          flow.migratingNamespaces.has(namespaceName) &&
+          !pending.snapshotTableKeys.has(`${namespaceName}/${permission.name}`)
+        );
+      })
+      .map((permission) => `${permission.request.namespaceName}/${permission.name}`),
+  );
 
   try {
     for (const create of changeSet.type.creates) {
@@ -1086,15 +1085,7 @@ async function applyChangesBeforeMigrations(flow: MigrationFlow): Promise<Deferr
       const tableName = create.request.tailordbType?.name;
       if (!namespaceName || !tableName) continue;
       const priorTable = flow.preMigrationSnapshots.get(namespaceName)?.tables[tableName];
-      if (!priorTable) {
-        if (
-          migrationContext.noSchemaCheck &&
-          !pending.snapshotTableKeys.has(`${namespaceName}/${tableName}`)
-        ) {
-          deferred.typeKeys.add(`${namespaceName}/${tableName}`);
-        }
-        continue;
-      }
+      if (!priorTable) continue;
       // A type some pending migration removes or renames away is created
       // only when its re-adding migration runs; materializing it early
       // would erase the removal boundary (the plan holds no delete entry
@@ -1124,7 +1115,7 @@ async function applyChangesBeforeMigrations(flow: MigrationFlow): Promise<Deferr
       .filter((update) => isOutsideMigrations(flow, update.request.namespaceName))
       .map((update) => client.updateTailorDBGQLPermission(update.request)),
   ]);
-  return deferred;
+  return deferredGqlPermissionKeys;
 }
 
 async function runPendingMigrations(
@@ -1918,25 +1909,229 @@ function finishMaintenance(flow: MigrationFlow): MaintenanceReport | undefined {
   return report;
 }
 
-async function applyDeferredChanges(flow: MigrationFlow, deferred: DeferredChanges): Promise<void> {
-  const { client, changeSet } = flow;
+function collectLocalDefinitionWrites(flow: MigrationFlow): LocalDefinitionWrites {
+  const { changeSet, migrationContext } = flow;
+  const creates = new Map<string, TailorDBChangeSet["type"]["creates"]>();
+  const createKeys = new Set<string>();
   for (const create of changeSet.type.creates) {
     const namespaceName = create.request.namespaceName;
     const tableName = create.request.tailordbType?.name;
-    if (!namespaceName || !tableName) continue;
-    if (!deferred.typeKeys.has(`${namespaceName}/${tableName}`)) continue;
-    await client.createTailorDBType(create.request);
+    if (!namespaceName || !tableName || !flow.migratingNamespaces.has(namespaceName)) continue;
+    const key = namespacedTableKey(namespaceName, tableName);
+    if (processedTables.created.has(key)) continue;
+    creates.set(namespaceName, [...(creates.get(namespaceName) ?? []), create]);
+    createKeys.add(key);
   }
+  const updates = new Map<string, Record<string, TailorDBSnapshotType>>();
+  for (const [namespaceName, lastMigration] of flow.pending.lastByNamespace) {
+    const input = migrationContext.tailorDBInputs.find(
+      (entry) => entry.namespace === namespaceName,
+    );
+    if (!input) continue;
+    const settledTables = migrationSnapshotCache.load(lastMigration).tables;
+    const comparable = (type: TailorDBSnapshotType) =>
+      normalizeComparableTailorDBType(
+        generateTailorDBTypeManifestFromSnapshot(type, {
+          subscribed: migrationContext.executorUsedTables.has(type.name),
+          namespaceGqlOperations: input.config.gqlOperations,
+        }),
+      );
+    const differing = Object.entries(input.types).filter(([tableName, localType]) => {
+      const key = namespacedTableKey(namespaceName, tableName);
+      if (createKeys.has(key)) return false;
+      const settledType = settledTables[tableName];
+      if (settledType) return !areNormalizedEqual(comparable(localType), comparable(settledType));
+      return (
+        processedTables.created.has(key) ||
+        changeSet.type.updates.some(
+          (update) => update.request.namespaceName === namespaceName && update.name === tableName,
+        )
+      );
+    });
+    if (differing.length > 0) updates.set(namespaceName, Object.fromEntries(differing));
+  }
+  return { creates, updates };
+}
+
+/**
+ * Whether existing records refused a table update. The platform reports a unique index over
+ * duplicated values as AlreadyExists, and marks a required field over null values, alone among
+ * its FailedPrecondition refusals, with a PreconditionFailure detail.
+ * @param error - Failure of the update
+ * @returns True when the records refused it
+ */
+function isRefusedByRecords(error: unknown): boolean {
+  if (!(error instanceof ConnectError)) return false;
+  if (error.code === Code.AlreadyExists) return true;
+  return (
+    error.code === Code.FailedPrecondition &&
+    error.details.some(
+      (detail) => "type" in detail && detail.type === "google.rpc.PreconditionFailure",
+    )
+  );
+}
+
+interface FailedLocalDefinition {
+  namespaceName: string;
+  tableName: string;
+  /** Tables created for local definitions before the failure, by namespace. */
+  created: ReadonlyMap<string, readonly string[]>;
+  refusedByRecords: boolean;
+}
+
+function localDefinitionError(
+  flow: MigrationFlow,
+  failed: FailedLocalDefinition,
+  error: unknown,
+): Error {
+  const { namespaceName, tableName, refusedByRecords } = failed;
+  const failure = toError(error);
+  const lastMigration = assertDefined(
+    flow.pending.lastByNamespace.get(namespaceName),
+    "local definitions are written only to namespaces with pending migrations",
+  );
+  const created = [...failed.created].map(([namespace, tables]) => ({ namespace, tables }));
+  const generateCommand = formatNamespaceMigrationHint({
+    subcommand: ["generate"],
+    namespace: namespaceName,
+    configPath: flow.migrationContext.config.path,
+  });
+  return withErrorDiagnostics(failure, {
+    code: "MIGRATION_LOCAL_DEFINITIONS_FAILED",
+    suggestion: [
+      `The pending migrations completed, and the existing tables of namespace '${namespaceName}' keep the definitions of migration ${namespaceName}/${formatMigrationNumber(lastMigration.number)}.`,
+      created.length > 0 &&
+        `Tables created for their local definitions remain: ${created.map((entry) => `namespace '${entry.namespace}': ${entry.tables.join(", ")}`).join("; ")}.`,
+      refusedByRecords &&
+        `The local definition of table '${tableName}' conflicts with its existing records and is not in any migration: run ${generateCommand} to add it with a migration script that updates those records, then deploy again.`,
+      getErrorDiagnostics(failure).suggestion,
+      !refusedByRecords &&
+        `Once the cause is fixed, deploy again to apply the local definition of table '${tableName}'.`,
+    ]
+      .filter(Boolean)
+      .join(" "),
+    context: { namespace: namespaceName, table: tableName, created },
+  });
+}
+
+/**
+ * Under --no-schema-check, apply the local definitions the pending migrations do not
+ * include, once every migration has committed. Each migration writes its own snapshot so
+ * its script sees the schema it was written for; the local definition is the final state.
+ * Planned creates the migrations did not perform go first, so updates can refer to them.
+ * Restoration then lifts maintenance mode onto these definitions instead of the last
+ * migration's snapshot.
+ * @param flow - Migration flow
+ * @param restoration - What the tables return to, updated in place once every write succeeds
+ * @returns The failure of a write, which leaves restoration at the last migration's snapshot
+ */
+async function applyLocalDefinitions(
+  flow: MigrationFlow,
+  restoration: RestorationState,
+): Promise<MigrationFailure | undefined> {
+  const { client, migrationContext, phaseSettings } = flow;
+  if (!migrationContext.noSchemaCheck) return undefined;
+  const { creates, updates } = collectLocalDefinitionWrites(flow);
+  if (creates.size === 0 && updates.size === 0) return undefined;
+
+  const created = new Map<string, string[]>();
+  flow.timeline?.enter("postMigration");
+  try {
+    for (const [namespaceName, namespaceCreates] of creates) {
+      for (const create of namespaceCreates) {
+        const tableName = create.name;
+        try {
+          await client.createTailorDBType(create.request);
+        } catch (error) {
+          return {
+            error: localDefinitionError(
+              flow,
+              { namespaceName, tableName, created, refusedByRecords: false },
+              error,
+            ),
+          };
+        }
+        created.set(namespaceName, [...(created.get(namespaceName) ?? []), tableName]);
+      }
+    }
+    for (const [namespaceName, tables] of updates) {
+      for (const [tableName, localType] of Object.entries(tables)) {
+        try {
+          await client.updateTailorDBType({
+            workspaceId: migrationContext.workspaceId,
+            namespaceName,
+            tailordbType: generateMigrationPhaseManifest(localType, namespaceName, phaseSettings),
+          });
+        } catch (error) {
+          return {
+            error: localDefinitionError(
+              flow,
+              { namespaceName, tableName, created, refusedByRecords: isRefusedByRecords(error) },
+              error,
+            ),
+          };
+        }
+      }
+    }
+  } finally {
+    flow.timeline?.enter("restore");
+  }
+
+  for (const [namespaceName, tables] of updates) {
+    const snapshot = assertDefined(
+      restoration.snapshots.get(namespaceName),
+      "every migrating namespace that passed checkpoint verification has a snapshot to restore",
+    );
+    restoration.snapshots.set(namespaceName, {
+      ...snapshot,
+      tables: { ...snapshot.tables, ...tables },
+    });
+    const input = assertDefined(
+      migrationContext.tailorDBInputs.find((entry) => entry.namespace === namespaceName),
+      "local definitions come from the namespace's deploy input",
+    );
+    const settings = restoration.settings.get(namespaceName);
+    if (!settings) continue;
+    restoration.settings.set(
+      namespaceName,
+      new Map([
+        ...settings,
+        ...resolveMigrationSnapshotSettings(
+          { ...snapshot, tables },
+          input,
+          migrationContext.executorUsedTables,
+        ),
+      ]),
+    );
+  }
+  for (const namespaceName of flow.migratingNamespaces) {
+    const tableNames = [
+      ...(creates.get(namespaceName) ?? []).map((create) => create.name),
+      ...Object.keys(updates.get(namespaceName) ?? {}),
+    ].toSorted();
+    if (tableNames.length === 0) continue;
+    const lastMigration = assertDefined(
+      flow.pending.lastByNamespace.get(namespaceName),
+      "every migrating namespace has a last pending migration",
+    );
+    logger.info(
+      `Applied local definitions that migration ${namespaceName}/${formatMigrationNumber(lastMigration.number)} does not include, after the pending migrations: ${tableNames.join(", ")}.`,
+    );
+  }
+  return undefined;
+}
+
+async function applyDeferredGqlPermissions(
+  flow: MigrationFlow,
+  deferredKeys: ReadonlySet<string>,
+): Promise<void> {
+  const { client, changeSet } = flow;
   await Promise.all([
     ...changeSet.gqlPermission.creates
-      .filter((create) =>
-        deferred.gqlPermissionKeys.has(`${create.request.namespaceName}/${create.name}`),
-      )
+      .filter((create) => deferredKeys.has(`${create.request.namespaceName}/${create.name}`))
       .map((create) => client.createTailorDBGQLPermission(create.request)),
     ...changeSet.gqlPermission.updates
-      .filter((update) =>
-        deferred.gqlPermissionKeys.has(`${update.request.namespaceName}/${update.name}`),
-      )
+      .filter((update) => deferredKeys.has(`${update.request.namespaceName}/${update.name}`))
       .map((update) => client.updateTailorDBGQLPermission(update.request)),
   ]);
 }
