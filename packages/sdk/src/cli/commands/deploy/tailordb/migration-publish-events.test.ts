@@ -15,6 +15,7 @@ import {
   gqlPermissionEntry,
   mkPendingMigration,
   mockConfig,
+  mockPendingMigrations,
   type RemoteCheckpoint,
   snapshotAt,
   snapshotTable,
@@ -1645,21 +1646,11 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         maintenanceMode: "migration",
       });
       snapshotState.tablesByVersion = { 0: { Order: orderTable() }, 1: { Order: orderTable() } };
-      vi.mocked(migrationModule.detectPendingMigrations).mockImplementation(
-        async (_client, _workspaceId, _namespaces, _configPath, _overrides, remoteStates) => {
-          remoteStates?.set("test-ns", {
-            metadataExists: true,
-            number: 0,
-            historyId: null,
-            historyIdInvalid: false,
-            inProgress: null,
-            inProgressInvalid: false,
-            maintenanceModeCheckpoint: 0,
-            cleanupCheckpoint: null,
-          });
-          return [mkPendingMigration([])];
-        },
-      );
+      mockPendingMigrations([mkPendingMigration([])], () => ({
+        number: 0,
+        historyId: null,
+        maintenanceModeCheckpoint: 0,
+      }));
       checkpoint.state.maintenanceMode = "m0000";
       vi.mocked(migrationModule.executeMigrations).mockRejectedValueOnce(
         new Error("script failed"),
@@ -1702,21 +1693,11 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         maintenanceMode: "migration",
       });
       snapshotState.tablesByVersion = { 0: { Order: orderTable() }, 1: { Order: orderTable() } };
-      vi.mocked(migrationModule.detectPendingMigrations).mockImplementation(
-        async (_client, _workspaceId, _namespaces, _configPath, _overrides, remoteStates) => {
-          remoteStates?.set("test-ns", {
-            metadataExists: true,
-            number: 0,
-            historyId: null,
-            historyIdInvalid: false,
-            inProgress: null,
-            inProgressInvalid: false,
-            maintenanceModeCheckpoint: 0,
-            cleanupCheckpoint: null,
-          });
-          return [mkPendingMigration([])];
-        },
-      );
+      mockPendingMigrations([mkPendingMigration([])], () => ({
+        number: 0,
+        historyId: null,
+        maintenanceModeCheckpoint: 0,
+      }));
       checkpoint.state.maintenanceMode = "m0000";
       vi.mocked(client.listTailorDBTypes).mockRejectedValueOnce(new Error("table lookup failed"));
 
@@ -1753,21 +1734,11 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         [],
         "/test/tailor.config.ts",
       );
-      vi.mocked(migrationModule.detectPendingMigrations).mockImplementation(
-        async (_client, _workspaceId, _namespaces, _configPath, _overrides, remoteStates) => {
-          remoteStates?.set("test-ns", {
-            metadataExists: true,
-            number: 0,
-            historyId: null,
-            historyIdInvalid: false,
-            inProgress: null,
-            inProgressInvalid: false,
-            maintenanceModeCheckpoint: 0,
-            cleanupCheckpoint: null,
-          });
-          return pending;
-        },
-      );
+      mockPendingMigrations(pending, () => ({
+        number: 0,
+        historyId: null,
+        maintenanceModeCheckpoint: 0,
+      }));
       checkpoint.state.maintenanceMode = "m0000";
       vi.mocked(migrationModule.executeMigrations).mockRejectedValueOnce(
         new Error("script failed"),

@@ -159,7 +159,10 @@ import { CLIError } from "#/cli/shared/errors";
 import * as migrationModule from "./migration";
 import { MaintenanceTimeline, ScriptRunTimer } from "./migration-timing";
 import { assertSkippableSteps, removeMigrationWorkflowResources } from "./migration-workflow";
-import { mockPendingMigrations } from "./test-helpers/migration-apply";
+import {
+  mockPendingMigrations,
+  planPendingMigrationsAsMocked,
+} from "./test-helpers/migration-apply";
 import type { RemoteMigrationState } from "#/cli/commands/tailordb/migrate/remote-state";
 import type { MigrationScriptForm } from "#/cli/commands/tailordb/migrate/script-form";
 import type { SnapshotGqlPermission } from "#/cli/commands/tailordb/migrate/snapshot";
@@ -247,7 +250,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       conflicts: [],
       unmanaged: [],
       resourceOwners: new Set<string>(),
-      context: {
+      context: planPendingMigrationsAsMocked({
         workspaceId: "test-workspace",
         application: {
           name: "test-app",
@@ -265,7 +268,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         migrationFileState: captureMigrationFileState([
           { namespace: "test-ns", migrationsDir: "/test/migrations" },
         ]),
-      },
+      }),
     };
   }
 
@@ -2127,22 +2130,11 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     }
 
     function remoteInProgress(state: Partial<RemoteMigrationState>): void {
-      vi.mocked(migrationModule.detectPendingMigrations).mockImplementation(
-        async (_client, _workspaceId, _namespaces, _configPath, _overrides, remoteStates) => {
-          remoteStates?.set("test-ns", {
-            metadataExists: true,
-            number: 0,
-            historyId: null,
-            historyIdInvalid: false,
-            inProgress: null,
-            inProgressInvalid: false,
-            maintenanceModeCheckpoint: null,
-            cleanupCheckpoint: null,
-            ...state,
-          });
-          return state.number === 1 ? [] : [mkStepsMigration()];
-        },
-      );
+      mockPendingMigrations(state.number === 1 ? [] : [mkStepsMigration()], () => ({
+        number: 0,
+        historyId: null,
+        ...state,
+      }));
     }
 
     aroundEach(async (runTest) => {
@@ -2551,22 +2543,11 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         migration: PendingMigration,
         ...following: PendingMigration[]
       ): void {
-        remoteInProgress({ inProgress: { number: 1, executionId: "exec-1", kind: "steps" } });
-        vi.mocked(migrationModule.detectPendingMigrations).mockImplementation(
-          async (_client, _workspaceId, _namespaces, _configPath, _overrides, remoteStates) => {
-            remoteStates?.set("test-ns", {
-              metadataExists: true,
-              number: 0,
-              historyId: null,
-              historyIdInvalid: false,
-              inProgress: { number: 1, executionId: "exec-1", kind: "steps" },
-              inProgressInvalid: false,
-              maintenanceModeCheckpoint: null,
-              cleanupCheckpoint: null,
-            });
-            return [migration, ...following];
-          },
-        );
+        mockPendingMigrations([migration, ...following], () => ({
+          number: 0,
+          historyId: null,
+          inProgress: { number: 1, executionId: "exec-1", kind: "steps" },
+        }));
       }
 
       test("undoes a permission an earlier Pre-phase installed when a later pending migration removes it again", async () => {

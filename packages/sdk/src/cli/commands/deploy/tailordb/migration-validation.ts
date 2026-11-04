@@ -29,6 +29,7 @@ import {
   type CheckpointRecoveryInput,
   type TailorDBDeployInput,
 } from "#/cli/commands/tailordb/migrate/schema-checks";
+import { ignoredStepsWarning } from "#/cli/commands/tailordb/migrate/script-form";
 import {
   reconstructSnapshotFromMigrations,
   assertValidMigrationFiles,
@@ -71,9 +72,9 @@ export type ValidateAndDetectResult = {
   maintenanceModeCheckpoints: Record<string, number>;
   /**
    * Tables to delete in each namespace that records unfinished deletions of its checkpoint's
-   * migration; empty when none of them remain.
+   * migration; `tableNames` is empty when none of them remain.
    */
-  unfinishedRemovals: ReadonlyMap<string, readonly string[]>;
+  unfinishedRemovals: ReadonlyMap<string, UnfinishedRemoval>;
   /**
    * Migration whose Pre-phase schema or maintenance mode an earlier deploy left in place without
    * recording it as in progress, by namespace.
@@ -84,6 +85,12 @@ export type ValidateAndDetectResult = {
 interface StaleMigrationInProgress {
   namespace: string;
   migrationNumber: number;
+}
+
+interface UnfinishedRemoval {
+  /** The checkpoint's migration, which removed the tables. */
+  migrationNumber: number;
+  tableNames: readonly string[];
 }
 
 interface InProgressValidation {
@@ -378,7 +385,7 @@ export async function validateAndDetectMigrations(
   const rebaselines = new Map<string, RebaselineMarker | undefined>();
   const checkpoints = new Map<string, ExpectedMigrationCheckpoint>();
   const maintenanceModeCheckpoints = Object.create(null) as Record<string, number>;
-  const unfinishedRemovals = new Map<string, readonly string[]>();
+  const unfinishedRemovals = new Map<string, UnfinishedRemoval>();
   const interruptedMigrations = Object.create(null) as Record<string, number>;
 
   if (namespacesWithMigrations.length > 0) {
@@ -477,25 +484,16 @@ export async function validateAndDetectMigrations(
             undefined,
         });
       }
-      for (const repair of checkpointRepairs) {
-        logger.warn(
-          `Remote migration checkpoint for ${repair.namespace} will be reset to 0000 after confirmation (${formatMigrationNumber(repair.from)} → 0000); the remote schema already matches the local baseline.`,
-        );
-      }
       for (const result of remoteVerificationResults) {
-        if (!result.unfinishedRemovals) continue;
-        unfinishedRemovals.set(result.namespace, result.unfinishedRemovals);
-        if (result.unfinishedRemovals.length === 0) continue;
-        logger.warn(
-          `An earlier deploy committed migration ${result.namespace}/${formatMigrationNumber(result.remoteMigrationNumber)} but did not delete the tables it removed: ${result.unfinishedRemovals.join(", ")}. They will be deleted after confirmation.`,
-        );
-      }
-      for (const { namespace, interruptedMigration } of remoteVerificationResults) {
-        if (interruptedMigration === undefined) continue;
-        interruptedMigrations[namespace] = interruptedMigration;
-        logger.info(
-          `An earlier deploy left the pre-migration schema or maintenance mode of migration ${namespace}/${formatMigrationNumber(interruptedMigration)} in place without recording it as in progress; this deploy runs it again from the start.`,
-        );
+        if (result.unfinishedRemovals) {
+          unfinishedRemovals.set(result.namespace, {
+            migrationNumber: result.remoteMigrationNumber,
+            tableNames: result.unfinishedRemovals,
+          });
+        }
+        if (result.interruptedMigration !== undefined) {
+          interruptedMigrations[result.namespace] = result.interruptedMigration;
+        }
       }
     }
 
@@ -556,28 +554,6 @@ export async function validateAndDetectMigrations(
       if (state.maintenanceModeCheckpoint === null) continue;
       maintenanceModeCheckpoints[namespace] = state.maintenanceModeCheckpoint;
     }
-
-    if (pendingMigrations.length > 0) {
-      logger.newline();
-
-      // Classify migrations by whether a migrate.ts will run for them.
-      const withScripts = pendingMigrations.filter((m) => m.hasScript);
-      const withoutScripts = pendingMigrations.filter((m) => !m.hasScript);
-
-      logger.info(`${pendingMigrations.length} pending migration(s) will be applied:`);
-      if (withoutScripts.length > 0) {
-        logger.info(
-          `  • ${withoutScripts.length} schema change(s) (applied automatically with schema deployment)`,
-          { mode: "plain" },
-        );
-      }
-      if (withScripts.length > 0) {
-        logger.info(
-          `  • ${withScripts.length} data migration(s) (requires migration script execution)`,
-          { mode: "plain" },
-        );
-      }
-    }
   }
 
   return {
@@ -592,4 +568,59 @@ export async function validateAndDetectMigrations(
     unfinishedRemovals,
     interruptedMigrations,
   };
+}
+
+/**
+ * Tell what the deploy will do to the migration state it validated. Call it once, at plan time:
+ * the later validations of the same deploy only confirm that nothing changed.
+ * @param result - Validated migration state
+ */
+export function logMigrationPlanNotices(result: ValidateAndDetectResult): void {
+  const { checkpointRepairs, unfinishedRemovals, interruptedMigrations, pendingMigrations } =
+    result;
+  for (const repair of checkpointRepairs) {
+    logger.warn(
+      `Remote migration checkpoint for ${repair.namespace} will be reset to 0000 after confirmation (${formatMigrationNumber(repair.from)} → 0000); the remote schema already matches the local baseline.`,
+    );
+  }
+  for (const [namespace, { migrationNumber, tableNames }] of unfinishedRemovals) {
+    if (tableNames.length === 0) continue;
+    logger.warn(
+      `An earlier deploy committed migration ${namespace}/${formatMigrationNumber(migrationNumber)} but did not delete the tables it removed: ${tableNames.join(", ")}. They will be deleted after confirmation.`,
+    );
+  }
+  for (const [namespace, migrationNumber] of Object.entries(interruptedMigrations)) {
+    logger.info(
+      `An earlier deploy left the pre-migration schema or maintenance mode of migration ${namespace}/${formatMigrationNumber(migrationNumber)} in place without recording it as in progress; this deploy runs it again from the start.`,
+    );
+  }
+  for (const migration of pendingMigrations) {
+    const migrationLabel = `${migration.namespace}/${formatMigrationNumber(migration.number)}`;
+    const { scriptSkipped } = migration.diff;
+    if (scriptSkipped) {
+      logger.info(
+        `Migration ${migrationLabel} runs without a script (skip acknowledged at ${scriptSkipped.acknowledgedAt}: ${scriptSkipped.reason})`,
+      );
+    }
+    if (migration.scriptForm?.kind === "main" && migration.scriptForm.ignoredSteps) {
+      logger.warn(ignoredStepsWarning(migrationLabel));
+    }
+  }
+  if (pendingMigrations.length === 0) return;
+  logger.newline();
+  const withScripts = pendingMigrations.filter((m) => m.hasScript);
+  const withoutScripts = pendingMigrations.filter((m) => !m.hasScript);
+  logger.info(`${pendingMigrations.length} pending migration(s) will be applied:`);
+  if (withoutScripts.length > 0) {
+    logger.info(
+      `  • ${withoutScripts.length} schema change(s) (applied automatically with schema deployment)`,
+      { mode: "plain" },
+    );
+  }
+  if (withScripts.length > 0) {
+    logger.info(
+      `  • ${withScripts.length} data migration(s) (requires migration script execution)`,
+      { mode: "plain" },
+    );
+  }
 }

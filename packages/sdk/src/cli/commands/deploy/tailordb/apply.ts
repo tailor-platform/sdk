@@ -222,6 +222,32 @@ async function buildMigrationContextForScripts(
   };
 }
 
+type MigrationRef = Pick<PendingMigration, "namespace" | "number">;
+
+function assertPendingMigrationsUnchanged(
+  planned: readonly MigrationRef[],
+  current: readonly MigrationRef[],
+): void {
+  const labelOf = (migration: MigrationRef) =>
+    `${migration.namespace}/${formatMigrationNumber(migration.number)}`;
+  const plannedLabels = planned.map(labelOf);
+  const currentLabels = current.map(labelOf);
+  if (
+    plannedLabels.length === currentLabels.length &&
+    plannedLabels.every((label, index) => label === currentLabels[index])
+  ) {
+    return;
+  }
+  const refs = (migrations: readonly MigrationRef[]) =>
+    migrations.map(({ namespace, number }) => ({ namespace, migrationNumber: number }));
+  throw CLIError({
+    code: "DEPLOY_PLAN_STALE",
+    message: `Pending migrations changed after deployment planning because the remote migration checkpoint moved (planned: ${plannedLabels.join(", ") || "none"}; now: ${currentLabels.join(", ") || "none"}).`,
+    suggestion: "Run the deployment again to review the pending migrations.",
+    context: { plannedPendingMigrations: refs(planned), pendingMigrations: refs(current) },
+  });
+}
+
 interface TailorDBMigrationState extends ValidateAndDetectResult {
   /** Machine user that runs the scripts of each namespace, or undefined when no script runs. */
   migrationMachineUsers: MigrationMachineUsers | undefined;
@@ -292,7 +318,7 @@ async function validateTailorDBMigrationState(
       suggestion: "Run the deployment again to review the updated repair.",
     });
   }
-  for (const [namespace, tableNames] of validation.unfinishedRemovals) {
+  for (const [namespace, { tableNames }] of validation.unfinishedRemovals) {
     const unplanned = tableNames.filter(
       (tableName) =>
         !result.changeSet.type.deletes.some(
@@ -314,6 +340,7 @@ async function validateTailorDBMigrationState(
       suggestion: "Run the deployment again to create a fresh plan.",
     });
   }
+  assertPendingMigrationsUnchanged(context.pendingMigrations, validation.pendingMigrations);
   await assertMigrationSkipSteps({
     client,
     workspaceId: context.workspaceId,
@@ -693,7 +720,7 @@ async function applyCreateUpdate(
   }
 
   deletedResources.reset();
-  for (const [namespace, tableNames] of unfinishedRemovals) {
+  for (const [namespace, { tableNames }] of unfinishedRemovals) {
     await deletePlannedTables(client, changeSet, namespace, new Set(tableNames));
     await clearCleanupRecord(client, migrationContext.workspaceId, namespace);
   }

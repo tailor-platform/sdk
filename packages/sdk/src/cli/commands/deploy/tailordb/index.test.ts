@@ -27,6 +27,7 @@ import { symbols } from "#/cli/shared/logger";
 import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import { sdkNameLabelKey } from "../label";
+import { logMigrationPlanNotices } from "./migration-validation";
 import {
   gqlPermissionDeletion,
   typeDeletion,
@@ -37,6 +38,7 @@ import {
   captureMigrationFileState,
   formatTailorDBResourceChangeEntries,
   planTailorDB,
+  preflightTailorDB,
   validateAndDetectMigrations,
 } from ".";
 import type {
@@ -1299,6 +1301,42 @@ describe("planTailorDB (service level)", () => {
       await expect(planTailorDB(ctx)).rejects.toThrow(/requires a migration script/);
     });
 
+    test("announces a migration whose script was skipped at plan time only", async () => {
+      using stderr = captureStderr();
+      fs.mkdirSync(path.join(migrationsDir, "0001"));
+      fs.writeFileSync(
+        path.join(migrationsDir, "0001", "diff.json"),
+        JSON.stringify(
+          createMockMigrationDiff({
+            namespace: "test-tailordb",
+            hasBreakingChanges: true,
+            requiresMigrationScript: true,
+            scriptSkipped: { reason: "no data yet", acknowledgedAt: "2026-07-22T00:00:00.000Z" },
+          }),
+        ),
+      );
+      const client = createMockClient([]);
+
+      const result = await planTailorDB({
+        client,
+        workspaceId,
+        application: createMockApplication([createMockTailorDBService("test-tailordb")]),
+        forRemoval: false,
+        config: {
+          path: path.join(migrationsDir, "tailor.config.ts"),
+          name: appName,
+          db: { "test-tailordb": { migration: { directory: "." } } },
+        } as unknown as LoadedConfig,
+        noSchemaCheck: true,
+      });
+      await preflightTailorDB(client, result);
+
+      expect(stderr.output.match(/runs without a script/g)).toHaveLength(1);
+      expect(stderr.output).toContain(
+        "Migration test-tailordb/0001 runs without a script (skip acknowledged at 2026-07-22T00:00:00.000Z: no data yet)",
+      );
+    });
+
     describe("a pending migration with a script", () => {
       aroundEach(async (runTest) => {
         fs.mkdirSync(path.join(migrationsDir, "0001"));
@@ -1345,6 +1383,69 @@ describe("planTailorDB (service level)", () => {
           noSchemaCheck: true,
         });
       }
+
+      test("announces the pending migration at plan time only", async () => {
+        using stderr = captureStderr();
+
+        const result = await planWithScript({
+          config: { name: "auth", machineUsers: { migrator: {} } },
+        });
+        await preflightTailorDB(createMockClient([]), result);
+
+        expect(stderr.output.match(/pending migration\(s\) will be applied/g)).toHaveLength(1);
+      });
+
+      test("warns at plan time only that the script's steps are ignored", async () => {
+        using stderr = captureStderr();
+        fs.appendFileSync(
+          path.join(migrationsDir, "0001", "migrate.ts"),
+          "export const steps = { backfill: { run: async () => {} } };\n",
+        );
+
+        const result = await planWithScript({
+          config: { name: "auth", machineUsers: { migrator: {} } },
+        });
+        await preflightTailorDB(createMockClient([]), result);
+
+        expect(stderr.output.match(/`steps` is ignored/g)).toHaveLength(1);
+      });
+
+      test("stops when another deploy applied the pending migration after planning", async () => {
+        using _stderr = captureStderr();
+        const result = await planWithScript({
+          config: { name: "auth", machineUsers: { migrator: {} } },
+        });
+        const client = createMockClient([]);
+        vi.mocked(client.getMetadata).mockResolvedValue({
+          metadata: { labels: { "sdk-migration": "m0001" } },
+        } as never);
+
+        await expect(preflightTailorDB(client, result)).rejects.toMatchObject({
+          code: "DEPLOY_PLAN_STALE",
+          message:
+            "Pending migrations changed after deployment planning because the remote migration checkpoint moved (planned: test-tailordb/0001; now: none).",
+          context: {
+            plannedPendingMigrations: [{ namespace: "test-tailordb", migrationNumber: 1 }],
+            pendingMigrations: [],
+          },
+        });
+      });
+
+      test("stops before applying a migration that became pending after planning", async () => {
+        using _stderr = captureStderr();
+        const result = await planWithScript({
+          config: { name: "auth", machineUsers: { migrator: {} } },
+        });
+        result.context.pendingMigrations = [];
+
+        await expect(
+          applyTailorDB(createMockClient([]), result, "create-update"),
+        ).rejects.toMatchObject({
+          code: "DEPLOY_PLAN_STALE",
+          message:
+            "Pending migrations changed after deployment planning because the remote migration checkpoint moved (planned: none; now: test-tailordb/0001).",
+        });
+      });
 
       test("fails at plan time when no auth is configured to run the script", async () => {
         await expect(planWithScript(undefined)).rejects.toMatchObject({
@@ -1572,6 +1673,7 @@ describe("applyTailorDB phase separation", () => {
         namespacesWithMigrations: [],
         migrationFileState: {},
         checkpointRepairs: [],
+        pendingMigrations: [],
       },
     } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
   }
@@ -2392,6 +2494,7 @@ describe("applyTailorDB migration label reconciliation", () => {
           { namespace: "test-tailordb", migrationsDir: tmpDir },
         ]),
         checkpointRepairs: [],
+        pendingMigrations: [],
       },
     } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
   }
@@ -3412,10 +3515,25 @@ describe("applyTailorDB migration label reconciliation", () => {
       const client = interruptedClient([remoteTable("User", restrictedSettings)]);
 
       const result = await runValidation(client, planWithDeployDerivedSettings(userType));
+      logMigrationPlanNotices(result);
 
       expect(result.interruptedMigrations).toEqual({ "test-tailordb": 1 });
       expect(result.pendingMigrations.map((migration) => migration.number)).toEqual([1]);
       expect(stderr.output).toContain("this deploy runs it again from the start");
+    });
+
+    test("does not announce running the migration again once the plan has", async () => {
+      using stderr = captureStderr();
+      const userType = userSnapshotType();
+      writeUserSchemaSnapshot(userType);
+      writeEmptyMigrationsThrough(1);
+      const client = interruptedClient([remoteTable("User", restrictedSettings)]);
+      const planResult = planWithDeployDerivedSettings(userType);
+      planResult.context.pendingMigrations = [{ namespace: "test-tailordb", number: 1 }];
+
+      await preflightTailorDB(client, planResult);
+
+      expect(stderr.output).not.toContain("runs it again from the start");
     });
 
     test("lifts the maintenance mode an earlier deploy left on a table in the checkpoint's shape", async () => {
@@ -3424,8 +3542,10 @@ describe("applyTailorDB migration label reconciliation", () => {
       writeUserSchemaSnapshot(userType);
       writeEmptyMigrationsThrough(1);
       const client = interruptedClient([remoteTable("User", restrictedSettings)]);
+      const planResult = planWithDeployDerivedSettings(userType);
+      planResult.context.pendingMigrations = [{ namespace: "test-tailordb", number: 1 }];
 
-      await applyTailorDB(client, planWithDeployDerivedSettings(userType), "create-update");
+      await applyTailorDB(client, planResult, "create-update");
 
       expect(lastWrittenSettings(client, "User")).toMatchObject({
         disableGqlOperations: { update: false, delete: false },
@@ -3453,6 +3573,7 @@ describe("applyTailorDB migration label reconciliation", () => {
         ),
       );
       const planResult = planWithDeployDerivedSettings(userType);
+      planResult.context.pendingMigrations = [{ namespace: "test-tailordb", number: 1 }];
       planResult.context.tailorDBInputs[0]!.types.Post = postType;
       planResult.changeSet.type.updates.push({
         name: "Post",
@@ -3546,6 +3667,7 @@ describe("applyTailorDB migration label reconciliation", () => {
         ),
       );
       const planResult = planWithDeployDerivedSettings(userType);
+      planResult.context.pendingMigrations = [{ namespace: "test-tailordb", number: 1 }];
       planResult.context.tailorDBInputs[0]!.types.User = {
         ...userType,
         fields: { ...userType.fields, email },
@@ -3713,8 +3835,11 @@ describe("applyTailorDB migration label reconciliation", () => {
     } as never);
 
     const result = await runValidation(client, planWithoutTables());
+    logMigrationPlanNotices(result);
 
-    expect(result.unfinishedRemovals).toEqual(new Map([["test-tailordb", ["User"]]]));
+    expect(result.unfinishedRemovals).toEqual(
+      new Map([["test-tailordb", { migrationNumber: 1, tableNames: ["User"] }]]),
+    );
     expect(stderr.output).toContain("test-tailordb/0001");
     expect(stderr.output).toContain("User");
   });
@@ -3818,6 +3943,21 @@ describe("applyTailorDB migration label reconciliation", () => {
     expect(labels[NAMESPACE_TRN]).toEqual({ "sdk-migration": "m0001" });
   });
 
+  test("does not announce the tables the checkpoint's migration left behind again before deleting them", async () => {
+    using stderr = captureStderr();
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+    writeUserRemovalMigration(userType);
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    vi.mocked(client.getMetadata).mockResolvedValue({
+      metadata: { labels: UNFINISHED_CLEANUP_LABELS },
+    } as never);
+
+    await preflightTailorDB(client, planUserDeletion());
+
+    expect(stderr.output).not.toContain("did not delete the tables it removed");
+  });
+
   test("refuses to apply when a table the checkpoint's migration removed appears after planning", async () => {
     using _stderr = captureStderr();
     const userType = userSnapshotType();
@@ -3852,6 +3992,7 @@ describe("applyTailorDB migration label reconciliation", () => {
     planResult.context.migrationFileState = captureMigrationFileState(
       planResult.context.namespacesWithMigrations,
     );
+    planResult.context.pendingMigrations = [{ namespace: "test-tailordb", number: 2 }];
     addPostCreate(planResult, "test-tailordb");
     const client = schemaVerificationClient(unchangedRemoteSettings());
     dropUserOnceDeleted(client);
@@ -3904,6 +4045,7 @@ describe("applyTailorDB migration label reconciliation", () => {
     };
     planResult.context.namespacesWithMigrations = namespacesWithMigrations;
     planResult.context.migrationFileState = captureMigrationFileState(namespacesWithMigrations);
+    planResult.context.pendingMigrations = [{ namespace: "other", number: 1 }];
     planResult.context.tailorDBInputs = [
       { namespace: "test-tailordb", config: { files: [] }, types: {} },
       { namespace: "other", config: { files: [] }, types: { Post: postSnapshotType() } },
@@ -3966,6 +4108,7 @@ describe("applyTailorDB migration label reconciliation", () => {
     } as never);
 
     const result = await runValidation(client, planResult);
+    logMigrationPlanNotices(result);
 
     expect(result.checkpointRepairs).toEqual([
       {
@@ -3982,6 +4125,33 @@ describe("applyTailorDB migration label reconciliation", () => {
     expect(stderr.output).toContain("will be reset to 0000");
     expect(client.listTailorDBTypes).toHaveBeenCalledOnce();
     expect(client.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("does not announce a confirmed checkpoint reset again before applying it", async () => {
+    using stderr = captureStderr();
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType, {
+      historyId: "hcurrent",
+      replacedHistoryId: null,
+      replacedLatestMigration: 5,
+    });
+    writeEmptyMigrationsThrough(5);
+    const planResult = planWithDeployDerivedSettings(userType);
+    planResult.context.checkpointRepairs = [
+      { namespace: "test-tailordb", from: 5, to: 0, fromHistoryId: null, toHistoryId: "hcurrent" },
+    ];
+    planResult.context.pendingMigrations = [1, 2, 3, 4, 5].map((number) => ({
+      namespace: "test-tailordb",
+      number,
+    }));
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    vi.mocked(client.getMetadata).mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0005" } },
+    } as never);
+
+    await preflightTailorDB(client, planResult);
+
+    expect(stderr.output).not.toContain("will be reset to 0000");
   });
 
   test.each([
@@ -4070,6 +4240,7 @@ describe("applyTailorDB migration label reconciliation", () => {
     } as never);
 
     const result = await runValidation(client, planResult);
+    logMigrationPlanNotices(result);
 
     expect(result.checkpointRepairs).toEqual([]);
     expect(stderr.output).not.toContain("will be reset to 0000");
@@ -4200,6 +4371,7 @@ describe("applyTailorDB migration label reconciliation", () => {
         toHistoryId: "hcurrent",
       },
     ];
+    planResult.context.pendingMigrations = [{ namespace: "test-tailordb", number: 1 }];
     planResult.context.migrationFileState = captureMigrationFileState(
       planResult.context.namespacesWithMigrations,
     );
@@ -4575,6 +4747,7 @@ describe("applyTailorDB table apply concurrency", () => {
         namespacesWithMigrations: [],
         migrationFileState: {},
         checkpointRepairs: [],
+        pendingMigrations: [],
       },
     } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
 
