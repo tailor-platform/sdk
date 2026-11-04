@@ -218,8 +218,13 @@ describe("migration flow: local definitions that no pending migration includes",
       return {} as never;
     });
     mockPending([addNickname]);
+    const localUser = snapshotTable("User", {
+      name: { type: "string", required: true },
+      nickname: { type: "string", required: false },
+      age: { type: "integer", required: false },
+    });
     const planResult = createMockPlanResult({
-      local: [userWithNickname, localPost],
+      local: [localUser, localPost],
       updates: ["User", "Post"],
     });
 
@@ -236,6 +241,10 @@ describe("migration flow: local definitions that no pending migration includes",
       context: { namespace: "test-ns", table: "Post", created: [] },
     });
     expect(checkpoint.state.number).toBe(1);
+    const userWrites = writesOf(client, "User");
+    expect(userWrites.some((write) => fieldNames(write).includes("age"))).toBe(true);
+    expect(fieldNames(userWrites.at(-1))).toEqual(["name", "nickname"]);
+    expect(userWrites.at(-1)?.tailordbType.schema?.settings?.disableGqlOperations).toBeUndefined();
     const last = writesOf(client, "Post").at(-1);
     expect(fieldNames(last)).toEqual(["title"]);
     expect(last?.tailordbType.schema?.settings?.disableGqlOperations).toBeUndefined();
