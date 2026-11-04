@@ -163,32 +163,35 @@ interface SerialFormat {
   prefix: string;
   width: number;
   zeroPad: boolean;
-  conversion: "d" | "x" | "X";
+  conversion: "d" | "o" | "x" | "X";
   suffix: string;
 }
 
-// printf-style with exactly one conversion specifier; octal has no Postgres
-// formatting function to stand in for it.
+const SERIAL_FORMAT =
+  /^(?<prefix>(?:%%|[^%])*)%(?<zero>0?)(?<width>\d*)(?<conversion>[doxX])(?<suffix>(?:%%|[^%])*)$/;
+
 function parseSerialFormat(format: string, label: string): SerialFormat {
-  const match =
-    /^(?<prefix>[^%]*)%(?<zero>0?)(?<width>\d*)(?<conversion>[a-zA-Z])(?<suffix>[^%]*)$/.exec(
-      format,
-    );
-  const groups = match?.groups;
-  const conversion = groups?.conversion;
-  if (!groups || (conversion !== "d" && conversion !== "x" && conversion !== "X")) {
+  const groups = SERIAL_FORMAT.exec(format)?.groups;
+  if (!groups) {
     throw new Error(
-      `Serial format "${format}" of field ${label} is not supported; use a single %d, %x, or %X specifier with an optional width (e.g. "INV-%05d").`,
+      `Serial format "${format}" of field ${label} is not supported; use a single %d, %o, %x, or %X specifier with an optional width (e.g. "INV-%05d"), and write a literal % as %%.`,
     );
   }
   return {
-    prefix: groups.prefix ?? "",
+    prefix: (groups.prefix ?? "").replaceAll("%%", "%"),
     zeroPad: groups.zero === "0",
     width: groups.width ? Number(groups.width) : 0,
-    conversion,
-    suffix: groups.suffix ?? "",
+    conversion: groups.conversion as SerialFormat["conversion"],
+    suffix: (groups.suffix ?? "").replaceAll("%%", "%"),
   };
 }
+
+const TO_OCT_FUNCTION = `CREATE OR REPLACE FUNCTION tailor_to_oct(n bigint) RETURNS text LANGUAGE sql IMMUTABLE AS ${dollarQuoted(
+  `WITH RECURSIVE o(q, s) AS (
+  SELECT n / 8, (n % 8)::text
+  UNION ALL SELECT q / 8, (q % 8)::text || s FROM o WHERE q > 0
+) SELECT s FROM o WHERE q = 0`,
+)}`;
 
 function sequenceName(tableName: string, fieldName: string): string {
   return derivedIdentifier(tableName, fieldName, "seq");
@@ -203,6 +206,7 @@ function sequenceRange(serial: NonNullable<DDLFieldConfig["serial"]>): string {
 
 const SERIAL_CONVERSIONS: Record<SerialFormat["conversion"], (nextval: string) => string> = {
   d: (nextval) => nextval,
+  o: (nextval) => `tailor_to_oct(${nextval})`,
   x: (nextval) => `to_hex(${nextval})`,
   X: (nextval) => `upper(to_hex(${nextval}))`,
 };
@@ -582,7 +586,8 @@ export interface TableDDLOptions {
 }
 
 /**
- * DDL statements that create one table: any sequences its string serial
+ * DDL statements that create one table: `tailor_to_oct` when a serial format
+ * uses `%o`, any sequences its string serial
  * fields draw from, the table, the sequences' ownership of their columns,
  * its unique indexes, then the triggers that enforce the references Postgres
  * cannot express as a FOREIGN KEY (inside array and nested columns): one
@@ -614,6 +619,15 @@ export function generateTableDDL(table: DDLTableConfig, options: TableDDLOptions
   for (const [fieldName, field] of Object.entries(table.fields)) {
     if (fieldName === "id") continue;
     if (field.serial && field.type !== "integer") {
+      const { format } = field.serial;
+      const label = `${tableIdentifier}.${identifier(fieldName)}`;
+      if (
+        !sequences.includes(TO_OCT_FUNCTION) &&
+        format !== undefined &&
+        parseSerialFormat(format, label).conversion === "o"
+      ) {
+        sequences.push(TO_OCT_FUNCTION);
+      }
       const sequence = sequenceName(table.name, fieldName);
       sequences.push(`CREATE SEQUENCE IF NOT EXISTS ${sequence} ${sequenceRange(field.serial)}`);
       ownerships.push(

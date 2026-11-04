@@ -299,8 +299,78 @@ describe("generateTableDDL", () => {
       );
     });
 
+    test("a %% in the text before or after the specifier is a literal percent sign", () => {
+      expect(
+        columnLine({ n: { type: "string", serial: { start: 1, format: "100%%-%05d" } } }, "n"),
+      ).toBe(
+        "\"n\" text DEFAULT ('100%-' || translate(format('%5s', nextval('\"Item_n_88d982cf_seq\"')), ' ', '0'))",
+      );
+      expect(
+        columnLine({ n: { type: "string", serial: { start: 1, format: "%d%%%%" } } }, "n"),
+      ).toBe("\"n\" text DEFAULT (nextval('\"Item_n_88d982cf_seq\"')::text || '%%')");
+    });
+
+    test("octal serial formats render through tailor_to_oct, padded like %d", () => {
+      expect(columnLine({ n: { type: "string", serial: { start: 1, format: "%o" } } }, "n")).toBe(
+        '"n" text DEFAULT (tailor_to_oct(nextval(\'"Item_n_88d982cf_seq"\')))',
+      );
+      expect(
+        columnLine({ n: { type: "string", serial: { start: 1, format: "A%%%05o-x" } } }, "n"),
+      ).toBe(
+        "\"n\" text DEFAULT ('A%' || translate(format('%5s', tailor_to_oct(nextval('\"Item_n_88d982cf_seq\"'))), ' ', '0') || '-x')",
+      );
+    });
+
+    test("tailor_to_oct is created once, before the sequences, only for an octal format", () => {
+      const octal = generateTableDDL(
+        table({
+          a: { type: "string", serial: { start: 1, format: "%o" } },
+          b: { type: "string", serial: { start: 1, format: "%05o" } },
+        }),
+      );
+      const created = octal.filter((s) => s.includes("FUNCTION tailor_to_oct"));
+      expect(created).toHaveLength(1);
+      expect(octal.indexOf(created[0]!)).toBeLessThan(
+        octal.findIndex((s) => s.startsWith("CREATE SEQUENCE")),
+      );
+
+      const decimal = generateTableDDL(
+        table({ n: { type: "string", serial: { start: 1, format: "%d" } } }),
+      );
+      expect(decimal.some((s) => s.includes("tailor_to_oct"))).toBe(false);
+    });
+
+    test("octal serial values count in base eight, from the start and after a setval", async () => {
+      const db = newPglite();
+      const sql = generateSchemaDDL([
+        table({ code: { type: "string", serial: { start: 7, format: "A%%%05o-x" } } }),
+      ]);
+      await db.exec(sql);
+      const next = async () => {
+        const { rows } = await db.query<{ code: string }>(
+          `INSERT INTO "Item" DEFAULT VALUES RETURNING "code"`,
+        );
+        return rows[0]!.code;
+      };
+      expect(await next()).toBe("A%00007-x");
+      expect(await next()).toBe("A%00010-x");
+      await db.exec(`SELECT setval(pg_get_serial_sequence('"Item"', 'code'), 63)`);
+      expect(await next()).toBe("A%00100-x");
+    });
+
+    test("applying the schema twice keeps tailor_to_oct usable", async () => {
+      const db = newPglite();
+      const sql = generateSchemaDDL([
+        table({ code: { type: "string", serial: { start: 1, format: "%o" } } }),
+      ]);
+      await db.exec(sql);
+      await db.exec(sql);
+      const { rows } = await db.query<{ oct: string }>(`SELECT tailor_to_oct(0) AS oct`);
+      expect(rows[0]!.oct).toBe("0");
+    });
+
     test("rejects serial formats it cannot reproduce", () => {
-      for (const format of ["%o", "%d-%d", "no-specifier", "%s"]) {
+      for (const format of ["%d-%d", "no-specifier", "%s", "%%d", "%o%o", "100%"]) {
         expect(() =>
           generateTableDDL(table({ n: { type: "string", serial: { start: 1, format } } })),
         ).toThrow(/"n"/);

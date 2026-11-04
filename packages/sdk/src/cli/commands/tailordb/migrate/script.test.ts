@@ -272,7 +272,7 @@ describe("addMigrationScriptFiles", () => {
         ...snapshotType("User"),
         fields: {
           ...snapshotType("User").fields,
-          code: { type: "string", required: true, serial: { start: 1, format: "%o" } },
+          code: { type: "string", required: true, serial: { start: 1, format: "%s" } },
         },
       },
     });
@@ -700,7 +700,7 @@ describe("script command with an existing migrate.ts", () => {
         ...snapshotType("User"),
         fields: {
           ...snapshotType("User").fields,
-          code: { type: "string", required: true, serial: { start: 1, format: "%o" } },
+          code: { type: "string", required: true, serial: { start: 1, format: "%s" } },
         },
       },
     });
@@ -942,7 +942,7 @@ describe("script command results", () => {
         ...snapshotType("User"),
         fields: {
           ...snapshotType("User").fields,
-          code: { type: "string", required: true, serial: { start: 1, format: "%o" } },
+          code: { type: "string", required: true, serial: { start: 1, format: "%s" } },
         },
       },
     });
