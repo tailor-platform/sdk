@@ -28,6 +28,11 @@ function project(): Disposable & { dir: string; config: string; tsconfig: string
   };
 }
 
+function ancestors(dir: string): string[] {
+  const parent = path.dirname(dir);
+  return parent === dir ? [] : [parent, ...ancestors(parent)];
+}
+
 type Handlers = ReturnType<typeof createContentMapperHandlers>;
 
 async function open(handlers: Handlers, configFileName: string, options?: unknown) {
@@ -140,7 +145,10 @@ describe("content mapper", () => {
       const opened = await open(handlers, path.join(dir, "tsconfig.json"));
       const result = await transform(handlers, "", REGISTRY_FILE);
 
-      expect(opened.watchedFiles).toEqual([path.join(dir, "tailor.config.ts")]);
+      expect(opened.watchedFiles).toEqual([
+        path.join(dir, "tailor.config.ts"),
+        ...ancestors(dir).map((ancestor) => path.join(ancestor, "tailor.config.ts")),
+      ]);
       expect(result.diagnostics).toEqual([
         {
           messageText: `No tailor.config.ts found in ${dir} or its parent directories`,

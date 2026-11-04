@@ -37,14 +37,11 @@ const ATOM_SPAN = 1;
 const DEFINITION_FEATURES = (1 << 3) | (1 << 4);
 const PROJECT_NOT_OPENED = "The project was not opened; restart the TypeScript server";
 
-function configCandidatesBelow(searchFrom: string, configPath: string): string[] {
+function configCandidates(searchFrom: string, foundIn?: string): string[] {
   const candidates: string[] = [];
-  for (
-    let dir = searchFrom;
-    dir !== path.dirname(configPath) && dir !== path.dirname(dir);
-    dir = path.dirname(dir)
-  ) {
+  for (let dir = searchFrom; dir !== foundIn; dir = path.dirname(dir)) {
     candidates.push(path.join(dir, DEFAULT_CONFIG_PATH));
+    if (path.dirname(dir) === dir) break;
   }
   return candidates;
 }
@@ -58,7 +55,7 @@ async function loadProject(
   if (!configPath) {
     return {
       error: `No ${DEFAULT_CONFIG_PATH} found in ${searchFrom} or its parent directories`,
-      watchedFiles: [path.join(searchFrom, DEFAULT_CONFIG_PATH)],
+      watchedFiles: configCandidates(searchFrom),
     };
   }
   const cwd = process.cwd();
@@ -70,7 +67,7 @@ async function loadProject(
       return generateTypeDefinitionFromConfig(config);
     });
     const watchedFiles = [
-      ...new Set([configPath, ...configCandidatesBelow(searchFrom, configPath), ...files]),
+      ...new Set([...configCandidates(searchFrom, path.dirname(configPath)), configPath, ...files]),
     ];
     if (outcome.status === "rejected") {
       return {

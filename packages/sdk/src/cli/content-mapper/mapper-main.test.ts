@@ -123,4 +123,32 @@ describe("content mapper process", () => {
     },
     TIMEOUT_MS,
   );
+
+  test(
+    "watches where an import that does not exist yet would be created, so creating it reloads the project",
+    async () => {
+      const dir = projectDir();
+      fs.writeFileSync(path.join(dir, "tailor.config.ts"), `import "./helper";\n${CONFIG}`);
+      const mapper = startMapper();
+
+      const opened = await open(mapper, dir);
+      expect(opened.watchedFiles).toContain(path.join(dir, "helper.ts"));
+
+      fs.writeFileSync(path.join(dir, "helper.ts"), "export {};\n");
+      await mapper.call("openProject", {
+        configFileName: path.join(dir, "tsconfig.json"),
+        projectHandle: "p1",
+        compilerOptions: {},
+      });
+      const result = (await mapper.call("transform", {
+        fileName: REGISTRY_FILE,
+        content: "",
+        projectHandle: "p1",
+      })) as { diagnostics: unknown[]; text: string };
+
+      expect(result.diagnostics).toEqual([]);
+      expect(result.text).toContain("stage: string;");
+    },
+    TIMEOUT_MS,
+  );
 });
