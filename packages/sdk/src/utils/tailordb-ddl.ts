@@ -628,6 +628,14 @@ export interface TableDDLOptions {
   deferredReferences?: ReadonlySet<string>;
 }
 
+/** DDL statements of one table, without trailing semicolons. */
+interface TableDDL {
+  /** Statements creating the functions that the table's statements call, to run before them */
+  functions: readonly string[];
+  /** Statements creating the table and everything it owns, in execution order */
+  statements: string[];
+}
+
 /**
  * DDL statements that create one table: the functions its string serial
  * formats call, any sequences its string serial fields draw from, the table,
@@ -644,10 +652,10 @@ export interface TableDDLOptions {
  * `IF NOT EXISTS` would otherwise silently skip.
  * @param table - Table name, fields, and indexes
  * @param options - The schema's other tables, and references to leave to later statements
- * @returns Statements in execution order, without trailing semicolons
+ * @returns The functions apart from the other statements, so a schema creates each function once
  * @throws If a field type, default, or serial format cannot be expressed
  */
-export function generateTableDDL(table: DDLTableConfig, options: TableDDLOptions = {}): string[] {
+export function generateTableDDL(table: DDLTableConfig, options: TableDDLOptions = {}): TableDDL {
   const tableIdentifier = identifier(table.name);
   const tables = new Map((options.tables ?? [table]).map((t) => [t.name, t]));
   const functions = new Set<string>();
@@ -695,19 +703,21 @@ export function generateTableDDL(table: DDLTableConfig, options: TableDDLOptions
     referencedColumnType(reference, tables, `${table.name}.${reference.column}`);
   }
 
-  return [
-    ...functions,
-    ...sequences,
-    `CREATE TABLE IF NOT EXISTS ${tableIdentifier} (\n${columns.join(",\n")}\n)`,
-    ...ownerships,
-    ...indexes,
-    ...referenceTrigger(
-      table,
-      references.filter((r) => !isConstraintReference(r)),
-      tables,
-    ),
-    ...referencedTrigger(table, tables),
-  ];
+  return {
+    functions: [...functions],
+    statements: [
+      ...sequences,
+      `CREATE TABLE IF NOT EXISTS ${tableIdentifier} (\n${columns.join(",\n")}\n)`,
+      ...ownerships,
+      ...indexes,
+      ...referenceTrigger(
+        table,
+        references.filter((r) => !isConstraintReference(r)),
+        tables,
+      ),
+      ...referencedTrigger(table, tables),
+    ],
+  };
 }
 
 function addForeignKey(table: DDLTableConfig, reference: Reference): string {
@@ -751,24 +761,26 @@ function planCreation(tables: readonly DDLTableConfig[]): {
 }
 
 /**
- * A single SQL script creating every given table, for `pglite.exec()`. Tables
- * are created after the tables they reference.
+ * A single SQL script creating every given table, for `pglite.exec()`. The
+ * functions that serial formats call are created first, once, and tables are
+ * created after the tables they reference.
  * @param tables - Tables to create
  * @returns The script, empty when there are no tables
  * @throws If a field references a table or field that is not among the tables
  */
 export function generateSchemaDDL(tables: readonly DDLTableConfig[]): string {
   const { ordered, deferred } = planCreation(tables);
-  const statements = ordered.map((table) =>
+  const tableDDLs = ordered.map((table) =>
     generateTableDDL(table, {
       tables,
       deferredReferences: new Set(deferred.get(table)?.map((r) => r.column)),
     }),
   );
+  const functions = [...new Set(tableDDLs.flatMap((ddl) => ddl.functions))];
   const constraints = ordered.flatMap((table) =>
     (deferred.get(table) ?? []).map((reference) => addForeignKey(table, reference)),
   );
-  return [...statements, constraints]
+  return [functions, ...tableDDLs.map((ddl) => ddl.statements), constraints]
     .filter((group) => group.length > 0)
     .map((group) => group.map((statement) => `${statement};`).join("\n"))
     .join("\n\n");
