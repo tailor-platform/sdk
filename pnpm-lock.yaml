@@ -184,8 +184,8 @@ importers:
         specifier: workspace:^
         version: link:packages/sdk
       '@types/node':
-        specifier: 26.6.5
-        version: 26.6.5
+        specifier: 26.6.6
+        version: 26.6.6
       eslint-plugin-zod:
         specifier: 5.2.2
         version: 5.2.2(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.90.0(oxlint-tsgolint@7.0.2005))(zod@4.6.7)
@@ -248,8 +248,8 @@ importers:
         specifier: workspace:^
         version: link:../packages/sdk-plugin-tailordb-erd
       '@types/node':
-        specifier: 26.6.5
-        version: 26.6.5
+        specifier: 26.6.6
+        version: 26.6.6
       eslint-plugin-zod:
         specifier: 5.2.2
         version: 5.2.2(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.90.0(oxlint-tsgolint@7.0.2005))(zod@4.6.7)
@@ -285,13 +285,13 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 5.0.5
-        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   llm-challenge:
     devDependencies:
       '@types/node':
-        specifier: 26.6.5
-        version: 26.6.5
+        specifier: 26.6.6
+        version: 26.6.6
       eslint-plugin-zod:
         specifier: 5.2.2
         version: 5.2.2(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.90.0(oxlint-tsgolint@7.0.2005))(zod@4.6.7)
@@ -309,7 +309,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 5.0.5
-        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   packages/create-sdk:
     dependencies:
@@ -318,7 +318,7 @@ importers:
         version: 1.8.1
       '@politty/zod':
         specifier: 0.6.3
-        version: 0.6.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.5))(zod@4.6.7)
+        version: 0.6.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(zod@4.6.7)
       execa:
         specifier: 10.2.1
         version: 10.2.1
@@ -333,8 +333,8 @@ importers:
         version: 4.6.7
     devDependencies:
       '@types/node':
-        specifier: 26.6.5
-        version: 26.6.5
+        specifier: 26.6.6
+        version: 26.6.6
       eslint-plugin-zod:
         specifier: 5.2.2
         version: 5.2.2(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.90.0(oxlint-tsgolint@7.0.2005))(zod@4.6.7)
@@ -352,7 +352,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 5.0.5
-        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   packages/create-sdk/templates/executor:
     devDependencies:
@@ -363,8 +363,8 @@ importers:
         specifier: workspace:^
         version: link:../../../sdk
       '@types/node':
-        specifier: 26.6.5
-        version: 26.6.5
+        specifier: 26.6.6
+        version: 26.6.6
       oxfmt:
         specifier: 0.75.0
         version: 0.75.0
@@ -379,7 +379,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 5.0.5
-        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   packages/create-sdk/templates/generators:
     devDependencies:
@@ -393,8 +393,8 @@ importers:
         specifier: workspace:^
         version: link:../../../sdk-plugin-seed
       '@types/node':
-        specifier: 26.6.5
-        version: 26.6.5
+        specifier: 26.6.6
+        version: 26.6.6
       oxfmt:
         specifier: 0.75.0
         version: 0.75.0
@@ -409,7 +409,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 5.0.5
-        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   packages/create-sdk/templates/hello-world:
     devDependencies:
@@ -420,8 +420,8 @@ importers:
         specifier: workspace:^
         version: link:../../../sdk
       '@types/node':
-        specifier: 26.6.5
-        version: 26.6.5
+        specifier: 26.6.6
+        version: 26.6.6
       oxfmt:
         specifier: 0.75.0
         version: 0.75.0
@@ -444,8 +444,8 @@ importers:
         specifier: workspace:^
         version: link:../../../sdk
       '@types/node':
-        specifier: 26.6.5
-        version: 26.6.5
+        specifier: 26.6.6
+        version: 26.6.6
       oxfmt:
         specifier: 0.75.0
         version: 0.75.0
@@ -468,8 +468,8 @@ importers:
         specifier: workspace:^
         version: link:../../../sdk
       '@types/node':
-        specifier: 26.6.5
-        version: 26.6.5
+        specifier: 26.6.6
+        version: 26.6.6
       oxfmt:
         specifier: 0.75.0
         version: 0.75.0
@@ -492,8 +492,8 @@ importers:
         specifier: workspace:^
         version: link:../../../sdk
       '@types/node':
-        specifier: 26.6.5
-        version: 26.6.5
+        specifier: 26.6.6
+        version: 26.6.6
       oxfmt:
         specifier: 0.75.0
         version: 0.75.0
@@ -508,7 +508,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 5.0.5
-        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   packages/create-sdk/templates/static-web-site:
     devDependencies:
@@ -519,8 +519,8 @@ importers:
         specifier: workspace:^
         version: link:../../../sdk
       '@types/node':
-        specifier: 26.6.5
-        version: 26.6.5
+        specifier: 26.6.6
+        version: 26.6.6
       oxfmt:
         specifier: 0.75.0
         version: 0.75.0
@@ -543,8 +543,8 @@ importers:
         specifier: workspace:^
         version: link:../../../sdk
       '@types/node':
-        specifier: 26.6.5
-        version: 26.6.5
+        specifier: 26.6.6
+        version: 26.6.6
       oxfmt:
         specifier: 0.75.0
         version: 0.75.0
@@ -559,7 +559,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 5.0.5
-        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   packages/create-sdk/templates/workflow:
     devDependencies:
@@ -570,8 +570,8 @@ importers:
         specifier: workspace:^
         version: link:../../../sdk
       '@types/node':
-        specifier: 26.6.5
-        version: 26.6.5
+        specifier: 26.6.6
+        version: 26.6.6
       graphql:
         specifier: 17.0.2
         version: 17.0.2
@@ -592,7 +592,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 5.0.5
-        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   packages/eslint-plugin-sdk:
     dependencies:
@@ -604,8 +604,8 @@ importers:
         specifier: workspace:^
         version: link:../shared
       '@types/node':
-        specifier: 26.6.5
-        version: 26.6.5
+        specifier: 26.6.6
+        version: 26.6.6
       eslint:
         specifier: 10.14.0
         version: 10.14.0(jiti@2.7.0)(supports-color@7.2.0)
@@ -620,7 +620,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 5.0.5
-        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   packages/sdk:
     dependencies:
@@ -653,10 +653,10 @@ importers:
         version: 0.2.0
       '@inquirer/core':
         specifier: 12.0.6
-        version: 12.0.6(@types/node@26.6.5)
+        version: 12.0.6(@types/node@26.6.6)
       '@inquirer/prompts':
         specifier: 8.7.5
-        version: 8.7.5(@types/node@26.6.5)
+        version: 8.7.5(@types/node@26.6.6)
       '@jridgewell/trace-mapping':
         specifier: 0.3.31
         version: 0.3.31
@@ -686,7 +686,7 @@ importers:
         version: 0.156.0
       '@politty/zod':
         specifier: 0.6.3
-        version: 0.6.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.5))(zod@4.6.7)
+        version: 0.6.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(zod@4.6.7)
       '@secretlint/core':
         specifier: 13.1.0
         version: 13.1.0(supports-color@7.2.0)
@@ -734,7 +734,7 @@ importers:
         version: 0.29.7
       lines-db:
         specifier: 0.18.1
-        version: 0.18.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.5))(typescript@6.0.3)
+        version: 0.18.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(typescript@6.0.3)
       mime-types:
         specifier: 3.0.2
         version: 3.0.2
@@ -779,7 +779,7 @@ importers:
         version: 5.10.0
       vite:
         specifier: ^6.0.0 || ^7.0.0 || ^8.0.0
-        version: 8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
+        version: 8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
       xdg-basedir:
         specifier: 5.1.0
         version: 5.1.0
@@ -803,8 +803,8 @@ importers:
         specifier: 3.0.1
         version: 3.0.1
       '@types/node':
-        specifier: 26.6.5
-        version: 26.6.5
+        specifier: 26.6.6
+        version: 26.6.6
       '@types/semver':
         specifier: 7.8.0
         version: 7.8.0
@@ -843,7 +843,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 5.0.5
-        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       zinfer:
         specifier: 0.5.2
         version: 0.5.2(typescript@7.1.0-beta)(zod@4.6.7)
@@ -855,7 +855,7 @@ importers:
         version: 0.51.0
       '@politty/zod':
         specifier: 0.6.3
-        version: 0.6.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.5))(zod@4.6.7)
+        version: 0.6.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(zod@4.6.7)
       diff:
         specifier: 9.0.0
         version: 9.0.0
@@ -879,8 +879,8 @@ importers:
         specifier: workspace:^
         version: link:../shared
       '@types/node':
-        specifier: 26.6.5
-        version: 26.6.5
+        specifier: 26.6.6
+        version: 26.6.6
       '@types/picomatch':
         specifier: 4.0.3
         version: 4.0.3
@@ -904,7 +904,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 5.0.5
-        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   packages/sdk-plugin-frontend:
     dependencies:
@@ -916,8 +916,8 @@ importers:
         specifier: workspace:^
         version: link:../sdk
       '@types/node':
-        specifier: 26.6.5
-        version: 26.6.5
+        specifier: 26.6.6
+        version: 26.6.6
       oxlint:
         specifier: 1.90.0
         version: 1.90.0(oxlint-tsgolint@7.0.2005)
@@ -932,13 +932,13 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 5.0.5
-        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   packages/sdk-plugin-seed:
     dependencies:
       '@politty/zod':
         specifier: 0.6.3
-        version: 0.6.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.5))(zod@4.6.7)
+        version: 0.6.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(zod@4.6.7)
       pathe:
         specifier: 2.0.3
         version: 2.0.3
@@ -953,8 +953,8 @@ importers:
         specifier: workspace:^
         version: link:../sdk
       '@types/node':
-        specifier: 26.6.5
-        version: 26.6.5
+        specifier: 26.6.6
+        version: 26.6.6
       oxlint:
         specifier: 1.90.0
         version: 1.90.0(oxlint-tsgolint@7.0.2005)
@@ -969,7 +969,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 5.0.5
-        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   packages/sdk-plugin-setup:
     dependencies:
@@ -978,7 +978,7 @@ importers:
         version: 0.2.2
       '@politty/zod':
         specifier: 0.6.3
-        version: 0.6.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.5))(zod@4.6.7)
+        version: 0.6.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(zod@4.6.7)
       json5:
         specifier: 2.2.3
         version: 2.2.3
@@ -1002,8 +1002,8 @@ importers:
         specifier: workspace:^
         version: link:../sdk
       '@types/node':
-        specifier: 26.6.5
-        version: 26.6.5
+        specifier: 26.6.6
+        version: 26.6.6
       confbox:
         specifier: 0.3.2
         version: 0.3.2
@@ -1021,13 +1021,13 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 5.0.5
-        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   packages/sdk-plugin-tailordb-erd:
     dependencies:
       '@politty/zod':
         specifier: 0.6.3
-        version: 0.6.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.5))(zod@4.6.7)
+        version: 0.6.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(zod@4.6.7)
       chokidar:
         specifier: 5.0.0
         version: 5.0.0
@@ -1054,8 +1054,8 @@ importers:
         specifier: 3.0.1
         version: 3.0.1
       '@types/node':
-        specifier: 26.6.5
-        version: 26.6.5
+        specifier: 26.6.6
+        version: 26.6.6
       oxlint:
         specifier: 1.90.0
         version: 1.90.0(oxlint-tsgolint@7.0.2005)
@@ -1070,7 +1070,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 5.0.5
-        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   packages/shared:
     devDependencies:
@@ -1082,7 +1082,7 @@ importers:
         version: 7.0.2005
       vitest:
         specifier: 5.0.5
-        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   packages/tailor-proto:
     dependencies:
@@ -2783,8 +2783,8 @@ packages:
   '@types/mime-types@3.0.1':
     resolution: {integrity: sha512-xRMsfuQbnRq1Ef+C+RKaENOxXX87Ygl38W1vDfPHRku02TgQr+Qd8iivLtAMcR0KF5/29xlnFihkTlbqFrGOVQ==}
 
-  '@types/node@26.6.5':
-    resolution: {integrity: sha512-uMzsv9stDdofIZBx4UGh4Z9ZgXnGC9seRDscilBcTHAeOFk67MZg/k9bWVfO+bk4qZmG+l52hRnLwUiH2LnJTg==}
+  '@types/node@26.6.6':
+    resolution: {integrity: sha512-MzQj+8Kx3XI40OmUAE6Qoh58ZMNstNNMwn2nfd3qWsfe7nDNSqJNzes4njhz6AHwrSHOffSLwXU6yb474Q4aog==}
 
   '@types/picomatch@4.0.3':
     resolution: {integrity: sha512-iG0T6+nYJ9FAPmx9SsUlnwcq1ZVRuCXcVEvWnntoPlrOpwtSTKNDC9uVAxTsC3PUvJ+99n4RpAcNgBbHX3JSnQ==}
@@ -5111,122 +5111,122 @@ snapshots:
 
   '@inquirer/ansi@2.0.10': {}
 
-  '@inquirer/checkbox@5.2.8(@types/node@26.6.5)':
+  '@inquirer/checkbox@5.2.8(@types/node@26.6.6)':
     dependencies:
       '@inquirer/ansi': 2.0.10
-      '@inquirer/core': 12.0.6(@types/node@26.6.5)
+      '@inquirer/core': 12.0.6(@types/node@26.6.6)
       '@inquirer/figures': 2.0.10
-      '@inquirer/type': 4.2.1(@types/node@26.6.5)
+      '@inquirer/type': 4.2.1(@types/node@26.6.6)
     optionalDependencies:
-      '@types/node': 26.6.5
+      '@types/node': 26.6.6
 
-  '@inquirer/confirm@6.3.5(@types/node@26.6.5)':
+  '@inquirer/confirm@6.3.5(@types/node@26.6.6)':
     dependencies:
-      '@inquirer/core': 12.0.6(@types/node@26.6.5)
-      '@inquirer/type': 4.2.1(@types/node@26.6.5)
+      '@inquirer/core': 12.0.6(@types/node@26.6.6)
+      '@inquirer/type': 4.2.1(@types/node@26.6.6)
     optionalDependencies:
-      '@types/node': 26.6.5
+      '@types/node': 26.6.6
 
-  '@inquirer/core@12.0.6(@types/node@26.6.5)':
+  '@inquirer/core@12.0.6(@types/node@26.6.6)':
     dependencies:
       '@inquirer/ansi': 2.0.10
       '@inquirer/figures': 2.0.10
-      '@inquirer/type': 4.2.1(@types/node@26.6.5)
+      '@inquirer/type': 4.2.1(@types/node@26.6.6)
       cli-width: 4.1.0
       fast-wrap-ansi: 0.2.2
       mute-stream: 3.0.0
       signal-exit: 4.1.0
     optionalDependencies:
-      '@types/node': 26.6.5
+      '@types/node': 26.6.6
 
-  '@inquirer/editor@5.3.6(@types/node@26.6.5)':
+  '@inquirer/editor@5.3.6(@types/node@26.6.6)':
     dependencies:
-      '@inquirer/core': 12.0.6(@types/node@26.6.5)
-      '@inquirer/external-editor': 3.0.7(@types/node@26.6.5)
-      '@inquirer/type': 4.2.1(@types/node@26.6.5)
+      '@inquirer/core': 12.0.6(@types/node@26.6.6)
+      '@inquirer/external-editor': 3.0.7(@types/node@26.6.6)
+      '@inquirer/type': 4.2.1(@types/node@26.6.6)
     optionalDependencies:
-      '@types/node': 26.6.5
+      '@types/node': 26.6.6
 
-  '@inquirer/expand@5.1.8(@types/node@26.6.5)':
+  '@inquirer/expand@5.1.8(@types/node@26.6.6)':
     dependencies:
-      '@inquirer/core': 12.0.6(@types/node@26.6.5)
-      '@inquirer/type': 4.2.1(@types/node@26.6.5)
+      '@inquirer/core': 12.0.6(@types/node@26.6.6)
+      '@inquirer/type': 4.2.1(@types/node@26.6.6)
     optionalDependencies:
-      '@types/node': 26.6.5
+      '@types/node': 26.6.6
 
-  '@inquirer/external-editor@3.0.7(@types/node@26.6.5)':
+  '@inquirer/external-editor@3.0.7(@types/node@26.6.6)':
     dependencies:
       chardet: 2.2.0
       iconv-lite: 0.7.3
     optionalDependencies:
-      '@types/node': 26.6.5
+      '@types/node': 26.6.6
 
   '@inquirer/figures@2.0.10': {}
 
-  '@inquirer/input@5.1.9(@types/node@26.6.5)':
+  '@inquirer/input@5.1.9(@types/node@26.6.6)':
     dependencies:
-      '@inquirer/core': 12.0.6(@types/node@26.6.5)
-      '@inquirer/type': 4.2.1(@types/node@26.6.5)
+      '@inquirer/core': 12.0.6(@types/node@26.6.6)
+      '@inquirer/type': 4.2.1(@types/node@26.6.6)
     optionalDependencies:
-      '@types/node': 26.6.5
+      '@types/node': 26.6.6
 
-  '@inquirer/number@4.2.6(@types/node@26.6.5)':
+  '@inquirer/number@4.2.6(@types/node@26.6.6)':
     dependencies:
-      '@inquirer/core': 12.0.6(@types/node@26.6.5)
-      '@inquirer/type': 4.2.1(@types/node@26.6.5)
+      '@inquirer/core': 12.0.6(@types/node@26.6.6)
+      '@inquirer/type': 4.2.1(@types/node@26.6.6)
     optionalDependencies:
-      '@types/node': 26.6.5
+      '@types/node': 26.6.6
 
-  '@inquirer/password@5.2.5(@types/node@26.6.5)':
-    dependencies:
-      '@inquirer/ansi': 2.0.10
-      '@inquirer/core': 12.0.6(@types/node@26.6.5)
-      '@inquirer/type': 4.2.1(@types/node@26.6.5)
-    optionalDependencies:
-      '@types/node': 26.6.5
-
-  '@inquirer/prompts@8.7.5(@types/node@26.6.5)':
-    dependencies:
-      '@inquirer/checkbox': 5.2.8(@types/node@26.6.5)
-      '@inquirer/confirm': 6.3.5(@types/node@26.6.5)
-      '@inquirer/editor': 5.3.6(@types/node@26.6.5)
-      '@inquirer/expand': 5.1.8(@types/node@26.6.5)
-      '@inquirer/input': 5.1.9(@types/node@26.6.5)
-      '@inquirer/number': 4.2.6(@types/node@26.6.5)
-      '@inquirer/password': 5.2.5(@types/node@26.6.5)
-      '@inquirer/rawlist': 5.3.8(@types/node@26.6.5)
-      '@inquirer/search': 4.3.6(@types/node@26.6.5)
-      '@inquirer/select': 5.2.8(@types/node@26.6.5)
-    optionalDependencies:
-      '@types/node': 26.6.5
-
-  '@inquirer/rawlist@5.3.8(@types/node@26.6.5)':
-    dependencies:
-      '@inquirer/core': 12.0.6(@types/node@26.6.5)
-      '@inquirer/type': 4.2.1(@types/node@26.6.5)
-    optionalDependencies:
-      '@types/node': 26.6.5
-
-  '@inquirer/search@4.3.6(@types/node@26.6.5)':
-    dependencies:
-      '@inquirer/core': 12.0.6(@types/node@26.6.5)
-      '@inquirer/figures': 2.0.10
-      '@inquirer/type': 4.2.1(@types/node@26.6.5)
-    optionalDependencies:
-      '@types/node': 26.6.5
-
-  '@inquirer/select@5.2.8(@types/node@26.6.5)':
+  '@inquirer/password@5.2.5(@types/node@26.6.6)':
     dependencies:
       '@inquirer/ansi': 2.0.10
-      '@inquirer/core': 12.0.6(@types/node@26.6.5)
-      '@inquirer/figures': 2.0.10
-      '@inquirer/type': 4.2.1(@types/node@26.6.5)
+      '@inquirer/core': 12.0.6(@types/node@26.6.6)
+      '@inquirer/type': 4.2.1(@types/node@26.6.6)
     optionalDependencies:
-      '@types/node': 26.6.5
+      '@types/node': 26.6.6
 
-  '@inquirer/type@4.2.1(@types/node@26.6.5)':
+  '@inquirer/prompts@8.7.5(@types/node@26.6.6)':
+    dependencies:
+      '@inquirer/checkbox': 5.2.8(@types/node@26.6.6)
+      '@inquirer/confirm': 6.3.5(@types/node@26.6.6)
+      '@inquirer/editor': 5.3.6(@types/node@26.6.6)
+      '@inquirer/expand': 5.1.8(@types/node@26.6.6)
+      '@inquirer/input': 5.1.9(@types/node@26.6.6)
+      '@inquirer/number': 4.2.6(@types/node@26.6.6)
+      '@inquirer/password': 5.2.5(@types/node@26.6.6)
+      '@inquirer/rawlist': 5.3.8(@types/node@26.6.6)
+      '@inquirer/search': 4.3.6(@types/node@26.6.6)
+      '@inquirer/select': 5.2.8(@types/node@26.6.6)
     optionalDependencies:
-      '@types/node': 26.6.5
+      '@types/node': 26.6.6
+
+  '@inquirer/rawlist@5.3.8(@types/node@26.6.6)':
+    dependencies:
+      '@inquirer/core': 12.0.6(@types/node@26.6.6)
+      '@inquirer/type': 4.2.1(@types/node@26.6.6)
+    optionalDependencies:
+      '@types/node': 26.6.6
+
+  '@inquirer/search@4.3.6(@types/node@26.6.6)':
+    dependencies:
+      '@inquirer/core': 12.0.6(@types/node@26.6.6)
+      '@inquirer/figures': 2.0.10
+      '@inquirer/type': 4.2.1(@types/node@26.6.6)
+    optionalDependencies:
+      '@types/node': 26.6.6
+
+  '@inquirer/select@5.2.8(@types/node@26.6.6)':
+    dependencies:
+      '@inquirer/ansi': 2.0.10
+      '@inquirer/core': 12.0.6(@types/node@26.6.6)
+      '@inquirer/figures': 2.0.10
+      '@inquirer/type': 4.2.1(@types/node@26.6.6)
+    optionalDependencies:
+      '@types/node': 26.6.6
+
+  '@inquirer/type@4.2.1(@types/node@26.6.6)':
+    optionalDependencies:
+      '@types/node': 26.6.6
 
   '@isaacs/nonrecursive-glob-match@1.0.3': {}
 
@@ -5704,21 +5704,21 @@ snapshots:
 
   '@pnpm/deps.graph-sequencer@1100.0.1': {}
 
-  '@politty/loculus@0.2.2(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.5))(loculus@0.4.1)':
+  '@politty/loculus@0.2.2(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(loculus@0.4.1)':
     dependencies:
       loculus: 0.4.1
       yaml: 2.9.1
     optionalDependencies:
       '@clack/prompts': 1.8.1
-      '@inquirer/prompts': 8.7.5(@types/node@26.6.5)
+      '@inquirer/prompts': 8.7.5(@types/node@26.6.6)
 
-  '@politty/zod@0.6.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.5))(zod@4.6.7)':
+  '@politty/zod@0.6.3(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(zod@4.6.7)':
     dependencies:
       yaml: 2.9.1
       zod: 4.6.7
     optionalDependencies:
       '@clack/prompts': 1.8.1
-      '@inquirer/prompts': 8.7.5(@types/node@26.6.5)
+      '@inquirer/prompts': 8.7.5(@types/node@26.6.6)
 
   '@prettier/sync@0.6.1(prettier@3.6.2)':
     dependencies:
@@ -5862,7 +5862,7 @@ snapshots:
 
   '@types/mime-types@3.0.1': {}
 
-  '@types/node@26.6.5':
+  '@types/node@26.6.6':
     dependencies:
       undici-types: 8.9.0
 
@@ -5996,7 +5996,7 @@ snapshots:
       obug: 3.0.0
       std-env: 4.3.0
       tinyrainbow: 3.2.0
-      vitest: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+      vitest: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   '@vitest/istanbul-lib-coverage@1.0.2': {}
 
@@ -6004,14 +6004,14 @@ snapshots:
     dependencies:
       '@vitest/istanbul-lib-coverage': 1.0.2
 
-  '@vitest/mocker@5.0.5(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))':
+  '@vitest/mocker@5.0.5(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       '@vitest/spy': 5.0.5
       estree-walker: 3.0.3
       magic-string: 1.4.5
     optionalDependencies:
-      vite: 8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
+      vite: 8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
 
   '@vitest/spy@5.0.5': {}
 
@@ -6811,9 +6811,9 @@ snapshots:
       lightningcss-win32-arm64-msvc: 1.33.0
       lightningcss-win32-x64-msvc: 1.33.0
 
-  lines-db@0.18.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.5))(typescript@6.0.3):
+  lines-db@0.18.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(typescript@6.0.3):
     dependencies:
-      '@politty/loculus': 0.2.2(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.5))(loculus@0.4.1)
+      '@politty/loculus': 0.2.2(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(loculus@0.4.1)
       '@standard-schema/spec': 1.1.0
       amaro: 1.3.0
       loculus: 0.4.1
@@ -7544,7 +7544,7 @@ snapshots:
 
   verkit@0.5.0: {}
 
-  vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1):
+  vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1):
     dependencies:
       lightningcss: 1.33.0
       picomatch: 4.0.7
@@ -7552,17 +7552,17 @@ snapshots:
       rolldown: 1.2.15
       tinyglobby: 0.2.17
     optionalDependencies:
-      '@types/node': 26.6.5
+      '@types/node': 26.6.6
       esbuild: 0.28.2
       fsevents: 2.3.3
       jiti: 2.7.0
       tsx: 4.23.15
       yaml: 2.9.1
 
-  vitest@5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)):
+  vitest@5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)):
     dependencies:
       '@types/chai': 5.2.3
-      '@vitest/mocker': 5.0.5(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+      '@vitest/mocker': 5.0.5(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       chai: 6.3.0
       es-module-lexer: 2.3.2
       expect-type: 1.4.0
@@ -7573,11 +7573,11 @@ snapshots:
       tinybench: 6.2.2
       tinyexec: 1.3.1
       tinyglobby: 0.2.17
-      vite: 8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
+      vite: 8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
       why-is-node-running: 3.2.1
     optionalDependencies:
       '@opentelemetry/api': 1.10.0
-      '@types/node': 26.6.5
+      '@types/node': 26.6.6
       '@vitest/coverage-v8': 5.0.5(vitest@5.0.5)
     transitivePeerDependencies:
       - msw
