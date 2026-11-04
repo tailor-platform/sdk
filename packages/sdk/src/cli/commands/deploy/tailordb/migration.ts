@@ -1422,9 +1422,9 @@ export function getMigrationMachineUser(
   return undefined;
 }
 
-/** Where the machine user that runs a deploy's migration scripts comes from. */
-interface MigrationMachineUserSource {
-  application: Pick<Application, "authService">;
+/** The auth, config, and environment variables a deploy runs its migration scripts with. */
+interface MigrationRunSource {
+  application: Pick<Application, "authService" | "env">;
   config: LoadedConfig;
   /** Machine user that runs every namespace's scripts in place of the configured one. */
   migrationMachineUserOverride?: string;
@@ -1444,7 +1444,7 @@ export interface MigrationMachineUsers {
  * @returns Machine user of each namespace with a script to run, or undefined when no script runs
  */
 export function resolveMigrationMachineUsers(
-  source: MigrationMachineUserSource,
+  source: MigrationRunSource,
   pendingMigrations: readonly PendingMigration[],
 ): MigrationMachineUsers | undefined {
   const namespaces = new Set(
@@ -1527,13 +1527,13 @@ function describeNamespaces(namespaces: readonly string[]): string {
 export interface PendingMigrationsRunnableCheck extends MigrationSkipStepsCheck {
   pendingMigrations: readonly PendingMigration[];
   /** Auth, config, and environment variables of the deploy */
-  source: MigrationMachineUserSource & { application: Pick<Application, "authService" | "env"> };
+  source: MigrationRunSource;
 }
 
 /**
  * Check, as a deploy does while planning, that it can run the pending migrations: the requested
  * skips apply, a machine user runs the scripts, and each script bundles.
- * @param check - The pending migrations, the requested skips, and the deploy's auth and config
+ * @param check - The pending migrations, the requested skips, and the deploy's auth, config, and environment variables
  * @returns Machine user of each namespace with a script to run, or undefined when no script runs
  */
 export async function assertPendingMigrationsRunnable(
