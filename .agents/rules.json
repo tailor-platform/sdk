@@ -74,6 +74,11 @@
         "packages/sdk/src/types/**/*.ts"
       ],
       "file": ".agents/rules/sdk-internals.md"
+    },
+    {
+      "name": "tailordb-migration-deploy",
+      "paths": ["packages/sdk/src/cli/commands/deploy/tailordb/**"],
+      "file": ".agents/rules/tailordb-migration-deploy.md"
     }
   ]
 }

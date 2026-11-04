@@ -1433,6 +1433,25 @@ describe("errorHandlingInterceptor", () => {
     });
   });
 
+  test("keeps the error details of a failed RPC", async () => {
+    const detail = { type: "google.rpc.PreconditionFailure", value: new Uint8Array([10, 0]) };
+    const original = Object.assign(new ConnectError("refused", Code.FailedPrecondition), {
+      details: [detail],
+    });
+    const req = {
+      stream: false,
+      service: OperatorService,
+      method: OperatorService.method.updateTailorDBType,
+      header: new Headers(),
+      message: { workspaceId: "workspace-id", namespaceName: "db" },
+    } as unknown as UnaryRequest;
+    const error = await errorHandlingInterceptor()(vi.fn().mockRejectedValue(original))(req).catch(
+      (error: unknown) => error,
+    );
+    expect(error).toBeInstanceOf(ConnectError);
+    expect(error).toMatchObject({ code: Code.FailedPrecondition, details: [detail] });
+  });
+
   test.each([
     { code: Code.Unauthenticated, stableCode: "RPC_UNAUTHENTICATED" },
     { code: Code.PermissionDenied, stableCode: "RPC_PERMISSION_DENIED" },

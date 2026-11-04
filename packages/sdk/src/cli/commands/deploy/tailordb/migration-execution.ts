@@ -704,7 +704,7 @@ const RESTRICTED_TABLES_RECOVERY =
   "Deploy again: once it finishes, the deploy writes the tables' configured settings back.";
 
 export const ROLLBACK_LEFTOVER_RECOVERY =
-  "Check these tables in the workspace and delete or repair them by hand. A deploy that finds a table the migration history does not know stops with remote schema drift, so deploying again does not release them.";
+  "Deploy again to run the migration again: a table left with the migration's pre-migration schema does not stop it. If that deploy stops with remote schema drift on these tables, check them in the workspace and delete or repair them by hand.";
 
 interface LeftRestrictedOptions {
   /** How the tables are released. */
@@ -907,14 +907,16 @@ export async function applyMigrationRestrictions(
 /**
  * Restore normal event publishing and GraphQL operations after migrations.
  *
- * Uses the latest schema that completed its post-phase in each namespace. If a
- * later migration fails, this avoids applying schema changes that never settled.
+ * Uses the latest schema that settled in each namespace: that of the last migration
+ * that completed its post-phase, with, under --no-schema-check, the local definitions
+ * applied after every migration committed. If a later migration fails, this avoids
+ * applying schema changes that never settled.
  *
  * Callers must run this even when the migration loop throws because a committed
  * checkpoint drops its migration from the next run's pending set.
  * @param client - Operator client instance
  * @param snapshots - Latest schema that settled in each migrating namespace
- * @param settingsToRestore - Settings for the latest confirmed checkpoint, including exact active settings for snapshot-external tables
+ * @param settingsToRestore - Settings of the latest schema that settled, including exact active settings for snapshot-external tables
  * @param tailorDBInputs - TailorDB deploy inputs for the run
  * @param executorUsedTables - Tables an enabled executor subscribes to
  * @param workspaceId - Target workspace ID

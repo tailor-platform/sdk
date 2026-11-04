@@ -1619,8 +1619,10 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       expect(warn.mock.calls.map(([line]) => line).join("\n")).toContain(
         "namespace 'test-ns': StockReservation",
       );
+      expect(log).toHaveBeenCalledWith(
+        expect.stringContaining("Deploy again to run the migration again"),
+      );
       expect(log).toHaveBeenCalledWith(expect.stringContaining("remote schema drift"));
-      expect(log).not.toHaveBeenCalledWith(expect.stringContaining("Deploy again"));
       warn.mockRestore();
       log.mockRestore();
     });
@@ -1800,6 +1802,9 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
 
       expect(warn.mock.calls.map(([line]) => line).join("\n")).toContain(
         "was not rolled back completely",
+      );
+      expect(log).toHaveBeenCalledWith(
+        expect.stringContaining("Deploy again to run the migration again"),
       );
       expect(log).toHaveBeenCalledWith(expect.stringContaining("remote schema drift"));
       warn.mockRestore();
