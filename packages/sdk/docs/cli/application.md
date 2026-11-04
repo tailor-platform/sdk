@@ -183,16 +183,20 @@ Names that identify a resource across the whole workspace, such as application, 
 
 Each config's `files` and `ignores` patterns (see [Service Configuration](../configuration.md#service-configuration)) resolve relative to that config's own directory, not the directory you ran `deploy` from. For example, `apps/buyer/tailor.config.ts` declaring `files: ["db/**/*.ts"]` loads files from `apps/buyer/db/`, independent of where `apps/supplier/tailor.config.ts`'s patterns resolve. If a config's relative patterns match nothing under its own directory, the SDK falls back to the invocation directory and logs a warning (see [Service Configuration](../configuration.md#service-configuration) for details).
 
-**Migration Handling:**
+**Migration Handling (Beta):**
 
-When migrations are configured (`db.tailordb.migration` in config), the `deploy` command automatically:
+When migrations are configured (`db.<namespace>.migration` in config), the `deploy` command:
 
-1. Detects pending migration scripts that haven't been executed
-2. Applies schema changes in a safe order (pre-migration → script execution → post-migration)
-3. Runs the pending migration scripts
-4. Updates the migration checkpoint so the same migrations are not re-run
+1. Checks the migration files and the migration state of each namespace (see Schema Check below) three times: while planning, so `--dry-run` reports a failure too; before it applies anything for any config; and again when it applies each config's TailorDB changes. If the migration files, a checkpoint reset, or the tables to delete changed after planning, the deploy stops with `DEPLOY_PLAN_STALE`.
+2. Resets the checkpoints that the plan showed would be reset to `0000` after a re-baseline, clears an in-progress record that an earlier deploy left on a migration it had already committed, and deletes the tables that a committed migration removed but an earlier deploy did not delete.
+3. Applies the changes of namespaces without pending migrations, except deletions. This also takes their tables out of a maintenance mode that an interrupted deploy left.
+4. Puts every namespace with pending migrations into maintenance mode, unless `maintenanceMode` is `false`.
+5. Runs the pending migrations one namespace at a time, in alphabetical order of the namespace names, and in number order within a namespace. Each migration applies its pre-migration schema, runs its `migrate.ts`, applies its post-migration schema, advances the checkpoint, and then deletes the tables and GraphQL permissions it removed.
+6. With `--no-schema-check`, applies the local table definitions that the pending migrations do not include (see [Schema verification](../services/tailordb/migration.md#schema-verification)).
+7. Takes the tables out of maintenance mode, or with `maintenanceMode: "deploy"`, leaves that to the end of the deploy.
+8. Deletes the remaining tables and GraphQL permissions that are no longer in the config.
 
-See [Automatic Migration Execution](../services/tailordb/migration.md#automatic-migration-execution) for details on automatic migration execution.
+See [Automatic Migration Execution](../services/tailordb/migration.md#automatic-migration-execution) for details on automatic migration execution, and [Several configs in one deploy](../services/tailordb/migration.md#several-configs-in-one-deploy) for the state a failed migration leaves the other configs in.
 
 **Concurrent Deploys:**
 
