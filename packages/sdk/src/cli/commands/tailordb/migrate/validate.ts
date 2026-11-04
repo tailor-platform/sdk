@@ -2,12 +2,24 @@ import * as fs from "node:fs";
 import { arg } from "@politty/zod";
 import * as path from "pathe";
 import { z } from "zod";
+import { migrationDiffsAfter } from "#/cli/commands/deploy/tailordb/migration";
+import {
+  assertMigrationSkipSteps,
+  noStepsToSkipError,
+  parseMigrationSkipSteps,
+} from "#/cli/commands/deploy/tailordb/migration-skip-steps";
+import {
+  checkMigrationInProgress,
+  checkpointRepairInProgressError,
+  type MigrationInProgressOutcome,
+} from "#/cli/commands/deploy/tailordb/migration-validation";
 import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
 import { deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { CLIError, errorSummary } from "#/cli/shared/errors";
+import { errorToJson } from "#/cli/shared/error-json";
+import { CLIError, errorSummary, isCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { PluginManager } from "#/plugin/manager";
@@ -28,6 +40,7 @@ import {
   migrationCommandContext,
   type MigrationCommandContext,
 } from "./hints";
+import { isStaleMigrationInProgress, type RemoteMigrationState } from "./remote-state";
 import {
   checkMigrationDiffs,
   logRebaselinePendingGuidance,
@@ -43,6 +56,7 @@ import {
   countUnresolvedTodosInFile,
   ignoredStepsWarning,
   UNRESOLVED_TODO_SUGGESTION,
+  type MigrationScriptForm,
 } from "./script-form";
 import {
   assertValidMigrationFiles,
@@ -53,6 +67,7 @@ import {
   loadDiff,
   reconstructSnapshotFromMigrations,
 } from "./snapshot";
+import type { OperatorClient } from "#/cli/shared/client";
 import type {
   RebaselinePendingInfo,
   RemoteSchemaVerificationResult,
@@ -67,6 +82,8 @@ interface ValidateOptions {
   profile?: string;
   json?: boolean;
   strict?: boolean;
+  /** Steps a deploy would be asked to skip, keyed by namespace */
+  migrationSkipSteps?: ReadonlyMap<string, readonly string[]>;
 }
 
 interface MigrationFilesReport {
@@ -123,6 +140,17 @@ interface WarningAcknowledgmentsReport {
   missing: UnacknowledgedWarningMigration[];
 }
 
+interface MigrationInProgressReport {
+  /** Whether the next deploy resumes the migration, skipping the requested steps */
+  valid: boolean;
+  /** The migration an earlier deploy left in progress; absent when its record cannot be read or the checkpoint already covers it */
+  migrationNumber?: number;
+  /** Why the next deploy would stop, as the deploy reports it */
+  error?: ReturnType<typeof errorToJson>["error"];
+  /** Set when the check could not run */
+  skipped?: "check_failed";
+}
+
 interface NamespaceValidationReport {
   namespace: string;
   valid: boolean;
@@ -131,6 +159,11 @@ interface NamespaceValidationReport {
   localSchema?: LocalSchemaReport;
   /** Omitted when the migration files are invalid */
   remoteSchema?: RemoteSchemaReport;
+  /**
+   * Present when the namespace records a migration in progress or --migration-skip-steps names it;
+   * omitted when the remote migration checkpoint is not in the local migration history
+   */
+  migrationInProgress?: MigrationInProgressReport;
   /** Present only with --strict; omitted when the remote migration checkpoint is unknown */
   warningAcknowledgments?: WarningAcknowledgmentsReport;
 }
@@ -140,8 +173,36 @@ interface BuildValidationReportsOptions {
   migrationFileErrors: Map<string, string>;
   localResults: MigrationCheckResult[];
   remoteResults?: RemoteSchemaVerificationResult[];
+  inProgressReports?: ReadonlyMap<string, MigrationInProgressReport>;
   /** Per-namespace candidates for the --strict warning acknowledgment check */
   unacknowledgedWarnings?: Map<string, UnacknowledgedWarningMigration[]>;
+}
+
+interface MigrationInProgressChecks {
+  client: OperatorClient;
+  workspaceId: string;
+  namespaces: readonly NamespaceWithMigrations[];
+  remoteResults: readonly RemoteSchemaVerificationResult[];
+  /** Remote migration state of each namespace, as the remote schema check read it */
+  remoteStates: ReadonlyMap<string, RemoteMigrationState>;
+  /** Steps to skip, keyed by namespace */
+  skipSteps: ReadonlyMap<string, readonly string[]>;
+  commandContext: MigrationCommandContext;
+}
+
+interface NamespaceInProgressCheck {
+  checks: MigrationInProgressChecks;
+  namespace: string;
+  migrationsDir: string;
+  state: RemoteMigrationState;
+  checkpointRepaired: boolean;
+  skipSteps: readonly string[] | undefined;
+}
+
+interface MigrationInProgressResults {
+  reports: Map<string, MigrationInProgressReport>;
+  /** First failure that kept a check from running */
+  error?: unknown;
 }
 
 interface CollectedValidationReports {
@@ -229,6 +290,141 @@ function assertMigrationScriptsReady(
 }
 
 /**
+ * Reject --migration-skip-steps entries that validation cannot check against an in-progress
+ * migration: for a namespace the config does not define, one without migrations, or one that
+ * --namespace leaves out.
+ * @param requested - Steps to skip, keyed by namespace
+ * @param tailorDBNamespaces - TailorDB namespaces of the config
+ * @param migrationNamespaces - Namespaces with migrations configured
+ * @param targetNamespace - The --namespace value, if any
+ */
+function assertSkipStepsCheckable(
+  requested: ReadonlyMap<string, readonly string[]>,
+  tailorDBNamespaces: ReadonlySet<string>,
+  migrationNamespaces: ReadonlySet<string>,
+  targetNamespace: string | undefined,
+): void {
+  for (const [namespace, steps] of requested) {
+    if (!tailorDBNamespaces.has(namespace)) {
+      const namespaces = [...tailorDBNamespaces];
+      throw CLIError({
+        code: "MIGRATION_SKIP_STEPS_INVALID",
+        message: `Cannot check the steps to skip in namespace '${namespace}': the config defines no TailorDB namespace with that name.`,
+        suggestion:
+          namespaces.length > 0
+            ? `Use one of the config's TailorDB namespaces: ${namespaces.join(", ")}. To check a namespace of another config, run the command with that config.`
+            : "The config defines no TailorDB namespace. Remove --migration-skip-steps.",
+        context: { namespace, requested: [...steps], namespaces },
+      });
+    }
+    if (!migrationNamespaces.has(namespace)) throw noStepsToSkipError(namespace, steps);
+    if (targetNamespace !== undefined && namespace !== targetNamespace) {
+      throw CLIError({
+        code: "MIGRATION_VALIDATE_OPTIONS_CONFLICT",
+        message: `Cannot check the steps to skip in namespace '${namespace}': --namespace limits validation to '${targetNamespace}'.`,
+        suggestion:
+          "Remove --namespace, or remove the --migration-skip-steps entries of other namespaces.",
+        context: { namespace, requested: [...steps] },
+      });
+    }
+  }
+}
+
+function readMigrationScriptForm(
+  migrationsDir: string,
+  migrationNumber: number,
+): MigrationScriptForm | null {
+  const scriptPath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
+  return fs.existsSync(scriptPath) ? analyzeMigrationScript(scriptPath) : null;
+}
+
+/**
+ * Check one namespace's in-progress record and requested skips the way a deploy checks them.
+ * @param check - The namespace and its remote migration state
+ * @returns What the next deploy does with the record
+ */
+async function checkNamespaceInProgress(
+  check: NamespaceInProgressCheck,
+): Promise<MigrationInProgressOutcome> {
+  const { checks, namespace, migrationsDir, state, checkpointRepaired, skipSteps } = check;
+  const { client, workspaceId, commandContext } = checks;
+  if (checkpointRepaired && (state.inProgress || state.inProgressInvalid)) {
+    throw checkpointRepairInProgressError(namespace);
+  }
+  const [nextDiff] = migrationDiffsAfter(migrationsDir, state.number ?? 0);
+  const next = nextDiff && {
+    namespace,
+    number: nextDiff.number,
+    scriptForm: readMigrationScriptForm(migrationsDir, nextDiff.number),
+  };
+  const outcome = await checkMigrationInProgress({
+    client,
+    workspaceId,
+    namespace,
+    state,
+    next,
+    commandContext,
+  });
+  if (skipSteps) {
+    await assertMigrationSkipSteps({
+      client,
+      workspaceId,
+      requested: new Map([[namespace, skipSteps]]),
+      pendingMigrations: next ? [next] : [],
+      inProgressByNamespace: outcome.kind === "resume" ? { [namespace]: outcome.inProgress } : {},
+    });
+  }
+  return outcome;
+}
+
+/**
+ * Check each namespace's in-progress record and requested skips, reporting a failure per namespace
+ * with the error the next deploy would stop with.
+ * @param checks - Namespaces and the remote migration state the remote schema check read
+ * @returns Per-namespace reports, and the first failure that kept a check from running
+ */
+async function checkMigrationsInProgress(
+  checks: MigrationInProgressChecks,
+): Promise<MigrationInProgressResults> {
+  const reports = new Map<string, MigrationInProgressReport>();
+  let error: unknown;
+  for (const { namespace, migrationsDir } of checks.namespaces) {
+    const remote = checks.remoteResults.find((result) => result.namespace === namespace);
+    const state = assertDefined(
+      checks.remoteStates.get(namespace),
+      `remote migration state missing for namespace "${namespace}"`,
+    );
+    if (remote?.checkpointMissingLocal) continue;
+    const skipSteps = checks.skipSteps.get(namespace);
+    if (!state.inProgress && !state.inProgressInvalid && !skipSteps) continue;
+    const recorded =
+      state.inProgress && !isStaleMigrationInProgress(state)
+        ? { migrationNumber: state.inProgress.number }
+        : {};
+    try {
+      const outcome = await checkNamespaceInProgress({
+        checks,
+        namespace,
+        migrationsDir,
+        state,
+        checkpointRepaired: remote?.checkpointRepair !== undefined,
+        skipSteps,
+      });
+      if (outcome.kind !== "resume") continue;
+      reports.set(namespace, { valid: true, migrationNumber: outcome.inProgress.number });
+    } catch (caught) {
+      if (!isCLIError(caught)) {
+        error ??= caught;
+        reports.set(namespace, { valid: false, ...recorded, skipped: "check_failed" });
+        continue;
+      }
+      reports.set(namespace, { valid: false, ...recorded, error: errorToJson(caught).error });
+    }
+  }
+  return { reports, ...(error === undefined ? {} : { error }) };
+}
+
+/**
  * Build per-namespace reports from the checks that completed
  * @param {BuildValidationReportsOptions} options - Completed validation results
  * @returns {NamespaceValidationReport[]} Validation reports per namespace
@@ -241,6 +437,7 @@ function buildValidationReports(
     migrationFileErrors,
     localResults,
     remoteResults,
+    inProgressReports,
     unacknowledgedWarnings,
   } = options;
 
@@ -310,6 +507,7 @@ function buildValidationReports(
       );
       warningAcknowledgments = { valid: missing.length === 0, missing };
     }
+    const migrationInProgress = inProgressReports?.get(target.namespace);
 
     return {
       namespace: target.namespace,
@@ -317,10 +515,12 @@ function buildValidationReports(
         !localSchema.hasDiff &&
         !remoteSchema.hasDrift &&
         !checkpointMissingLocal &&
+        migrationInProgress?.valid !== false &&
         warningAcknowledgments?.valid !== false,
       migrationFiles: { valid: true },
       localSchema,
       remoteSchema,
+      ...(migrationInProgress ? { migrationInProgress } : {}),
       ...(warningAcknowledgments ? { warningAcknowledgments } : {}),
     };
   });
@@ -370,6 +570,13 @@ async function collectValidationReports(
       });
     }
   }
+  const skipSteps = options.migrationSkipSteps ?? new Map<string, readonly string[]>();
+  assertSkipStepsCheckable(
+    skipSteps,
+    new Set(application.tailorDBServices.map((service) => service.namespace)),
+    new Set(namespacesWithMigrations.map((target) => target.namespace)),
+    options.namespace,
+  );
   const tailorDBInputs = application.tailorDBServices.map(toTailorDBDeployInput);
   const typesByNamespace = new Map(tailorDBInputs.map((input) => [input.namespace, input.types]));
 
@@ -412,19 +619,22 @@ async function collectValidationReports(
 
   let remoteResults: RemoteSchemaVerificationResult[];
   let workspaceId: string;
+  let client: OperatorClient;
+  const remoteStates = new Map<string, RemoteMigrationState>();
   try {
     const context = await loadOperatorWorkspaceContext({
       profile: options.profile,
       workspaceId: options.workspaceId,
     });
     workspaceId = context.workspaceId;
+    client = context.client;
     remoteResults = await verifyRemoteSchema(
-      context.client,
+      client,
       workspaceId,
       checkableNamespaces,
       config,
       tailorDBInputs,
-      { acceptUnfinishedRemovals: true, acceptInterruptedMigration: true },
+      { acceptUnfinishedRemovals: true, acceptInterruptedMigration: true, remoteStates },
     );
   } catch (remoteError) {
     return {
@@ -433,9 +643,28 @@ async function collectValidationReports(
     };
   }
 
-  return {
-    reports: buildValidationReports({ ...localReportOptions, remoteResults }),
+  const inProgress = await checkMigrationsInProgress({
+    client,
     workspaceId,
+    namespaces: checkableNamespaces,
+    remoteResults,
+    remoteStates,
+    skipSteps,
+    commandContext: migrationCommandContext({
+      configPath: options.configPath,
+      workspaceId,
+      profile: options.profile,
+    }),
+  });
+
+  return {
+    reports: buildValidationReports({
+      ...localReportOptions,
+      remoteResults,
+      inProgressReports: inProgress.reports,
+    }),
+    workspaceId,
+    ...("error" in inProgress ? { remoteError: inProgress.error } : {}),
   };
 }
 
@@ -511,6 +740,21 @@ function printValidationReports(reports: NamespaceValidationReport[]): void {
     if (remote?.unfinishedRemovals) {
       logger.log(
         `    The next deploy deletes ${remote.unfinishedRemovals.join(", ")}, which migration ${formatMigrationNumber(remote.remoteMigrationNumber)} removed.`,
+      );
+    }
+
+    const inProgress = report.migrationInProgress;
+    if (inProgress?.skipped === "check_failed") {
+      logger.log(`  Migration in progress: ${styles.error("not checked")}`);
+    } else if (inProgress?.error) {
+      const { message, suggestion } = inProgress.error;
+      logger.log(`  Migration in progress: ${styles.error(String(message))}`);
+      if (typeof suggestion === "string") {
+        for (const line of suggestion.split("\n")) logger.log(`    ${line}`);
+      }
+    } else if (inProgress?.migrationNumber !== undefined) {
+      logger.log(
+        `  Migration in progress: ${styles.success("OK")} (the next deploy resumes ${formatMigrationNumber(inProgress.migrationNumber)})`,
       );
     }
 
@@ -651,7 +895,8 @@ async function validate(options: ValidateOptions): Promise<void> {
 export const validateCommand = defineAppCommand({
   name: "validate",
   description:
-    "Validate the full migration history, unreviewed generated migration scripts, and schema drift (local tables vs. migration snapshot, remote schema vs. migration checkpoint) without deploying. This includes the migration and schema-drift checks used by 'deploy' and exits with a non-zero code when issues are found.",
+    "Run the migration and schema-drift checks that 'deploy' runs before changing anything, without deploying, and exit with a non-zero code when issues are found.",
+  notes: `Migration scripts are checked across the full migration history, not only the pending migrations that \`deploy\` checks. The command does not check the machine user that runs the scripts or whether the scripts can be bundled.`,
   args: z.strictObject({
     ...deploymentArgs,
     namespace: arg(z.string().optional(), {
@@ -660,6 +905,10 @@ export const validateCommand = defineAppCommand({
     }),
     strict: arg(z.boolean().default(false), {
       description: "Also fail when a pending migration can drop data without an acknowledgment",
+    }),
+    "migration-skip-steps": arg(z.string().optional(), {
+      description:
+        "Also check that 'deploy --migration-skip-steps' can skip these steps of a partially applied multi-step migration, as comma-separated namespace/step entries",
     }),
   }),
   run: async (args) => {
@@ -670,6 +919,7 @@ export const validateCommand = defineAppCommand({
       profile: args.profile,
       json: logger.jsonMode,
       strict: args.strict,
+      migrationSkipSteps: parseMigrationSkipSteps(args["migration-skip-steps"]),
     });
   },
 });

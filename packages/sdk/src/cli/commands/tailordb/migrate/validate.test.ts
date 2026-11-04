@@ -2,6 +2,10 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { runCommand } from "@politty/zod";
+import {
+  WorkflowExecution_Status,
+  WorkflowJobExecution_Status,
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
@@ -30,6 +34,8 @@ const state = vi.hoisted(() => ({
   listTailorDBTypes: vi.fn(),
   listTailorDBGQLPermissions: vi.fn(),
   getMetadata: vi.fn(),
+  getWorkflowExecution: vi.fn(),
+  getFunctionExecution: vi.fn(),
 }));
 
 vi.mock("#/cli/shared/config-loader", () => ({
@@ -108,10 +114,14 @@ describe("tailordb migration validate", () => {
         labels: { "sdk-migration": "m0000" },
       },
     });
+    state.getWorkflowExecution.mockReset();
+    state.getFunctionExecution.mockReset();
     vi.mocked(initOperatorClient).mockResolvedValue({
       listTailorDBTypes: state.listTailorDBTypes,
       listTailorDBGQLPermissions: state.listTailorDBGQLPermissions,
       getMetadata: state.getMetadata,
+      getWorkflowExecution: state.getWorkflowExecution,
+      getFunctionExecution: state.getFunctionExecution,
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("12345678-1234-4abc-8def-123456789012");
@@ -1095,5 +1105,430 @@ describe("tailordb migration validate", () => {
     expect(result.success).toBe(true);
     const [report] = JSON.parse(stdout.output);
     expect(report).not.toHaveProperty("warningAcknowledgments");
+  });
+
+  describe("a migration an earlier deploy left in progress", () => {
+    const STEPS_SCRIPT =
+      'export const steps = { backfill: { run: async () => {} }, recompute: { dependsOn: ["backfill"], run: async () => {} } };';
+    const EXECUTION_ID = "0190f3a2-7c1e-7d4b-9a6f-1b2c3d4e5f60";
+    const EXECUTION_LABEL = "e0190f3a27c1e7d4b9a6f1b2c3d4e5f60";
+    const STEP_RUNNER = "tailordb-migration--tailordb--0001--step";
+
+    function writeStepsMigration(): void {
+      writeDiff(state.migrationsDir, 1, [], { requiresMigrationScript: true });
+      writeMigrationFile(1, "migrate.ts", STEPS_SCRIPT);
+    }
+
+    function recordLabels(labels: Record<string, string>): void {
+      state.getMetadata.mockResolvedValue({ metadata: { labels } });
+    }
+
+    function earlierRunWithFailedRecompute(): void {
+      state.getWorkflowExecution.mockResolvedValue({
+        execution: {
+          id: EXECUTION_ID,
+          status: WorkflowExecution_Status.FAILED,
+          jobExecutions: ["backfill", "recompute"].map((step, callIndex) => ({
+            executionId: `fn-${step}`,
+            status:
+              step === "backfill"
+                ? WorkflowJobExecution_Status.SUCCESS
+                : WorkflowJobExecution_Status.FAILED,
+            position: { callIndex, depth: 1 },
+            kind: { case: "jobFunction", value: { name: STEP_RUNNER } },
+          })),
+        },
+      });
+      state.getFunctionExecution.mockImplementation(
+        async ({ executionId }: { executionId: string }) => ({
+          execution: { result: JSON.stringify({ step: executionId.slice("fn-".length) }) },
+        }),
+      );
+    }
+
+    test("reports a record that names a migration other than the next pending one", async () => {
+      using stdout = captureStdout();
+      using _json = jsonMode();
+      writeStepsMigration();
+      recordLabels({ "sdk-migration": "m0000", "sdk-migration-in-progress": "m0002" });
+
+      const result = await runCommand(validateCommand, []);
+
+      expect(result.success).toBe(false);
+      expect(String(result.error)).toMatch(/Migration validation failed for 1 namespace/);
+      const [report] = JSON.parse(stdout.output);
+      expect(report.valid).toBe(false);
+      expect(report.migrationInProgress).toEqual({
+        valid: false,
+        migrationNumber: 2,
+        error: expect.objectContaining({
+          code: "MIGRATION_IN_PROGRESS_INVALID",
+          message:
+            "Migration tailordb/0002 is in progress, but the next pending migration is 0001.",
+        }),
+      });
+    });
+
+    test("reports a record past the local migration history", async () => {
+      using stdout = captureStdout();
+      using _json = jsonMode();
+      writeStepsMigration();
+      recordLabels({ "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002" });
+
+      const result = await runCommand(validateCommand, []);
+
+      expect(result.success).toBe(false);
+      const [report] = JSON.parse(stdout.output);
+      expect(report.migrationInProgress.error).toMatchObject({
+        code: "MIGRATION_IN_PROGRESS_INVALID",
+        message: "Migration tailordb/0002 is in progress, but the next pending migration is none.",
+      });
+    });
+
+    test("reports a partially applied migration whose script no longer exports steps", async () => {
+      using stdout = captureStdout();
+      using _json = jsonMode();
+      writeDiff(state.migrationsDir, 1, [], { requiresMigrationScript: true });
+      writeMigrationFile(1, "migrate.ts", "export async function main() {}");
+      recordLabels({ "sdk-migration": "m0000", "sdk-migration-in-progress": "m0001" });
+
+      const result = await runCommand(validateCommand, []);
+
+      expect(result.success).toBe(false);
+      const [report] = JSON.parse(stdout.output);
+      expect(report.migrationInProgress.error).toMatchObject({
+        code: "MIGRATION_IN_PROGRESS_INVALID",
+        message:
+          "Migration tailordb/0001 was partially applied by its steps, but its migrate.ts no longer exports `steps`.",
+      });
+    });
+
+    test("reports an in-progress record it cannot read", async () => {
+      using stdout = captureStdout();
+      using _json = jsonMode();
+      writeStepsMigration();
+      recordLabels({ "sdk-migration": "m0000", "sdk-migration-in-progress": "not-a-migration" });
+
+      const result = await runCommand(validateCommand, []);
+
+      expect(result.success).toBe(false);
+      const [report] = JSON.parse(stdout.output);
+      expect(report.migrationInProgress).toEqual({
+        valid: false,
+        error: expect.objectContaining({ code: "MIGRATION_IN_PROGRESS_INVALID" }),
+      });
+    });
+
+    test("reports a `main` run whose outcome an earlier deploy did not settle", async () => {
+      using stdout = captureStdout();
+      using _json = jsonMode();
+      writeDiff(state.migrationsDir, 1, [], { requiresMigrationScript: true });
+      writeMigrationFile(1, "migrate.ts", "export async function main() {}");
+      recordLabels({
+        "sdk-migration": "m0000",
+        "sdk-migration-in-progress": "m0001-main",
+        "sdk-migration-execution": EXECUTION_LABEL,
+      });
+      state.getWorkflowExecution.mockResolvedValue({
+        execution: { id: EXECUTION_ID, status: WorkflowExecution_Status.FAILED, jobExecutions: [] },
+      });
+
+      const result = await runCommand(validateCommand, []);
+
+      expect(result.success).toBe(false);
+      const [report] = JSON.parse(stdout.output);
+      expect(report.migrationInProgress.error).toMatchObject({
+        code: "MIGRATION_OUTCOME_UNSETTLED",
+        message: expect.stringContaining("its run failed"),
+        next: {
+          command: "tailor",
+          args: expect.arrayContaining(["resolve", "--rollback", "--namespace", "tailordb"]),
+        },
+      });
+    });
+
+    test.each([
+      { record: "a readable record", inProgressLabel: "m0006" },
+      { record: "a record it cannot read", inProgressLabel: "not-a-migration" },
+    ])(
+      "reports $record in a namespace whose checkpoint the next deploy would reset",
+      async ({ inProgressLabel }) => {
+        using stdout = captureStdout();
+        using _json = jsonMode();
+        writeRebaselineMarker(state.migrationsDir, "htailordb", { replacedLatestMigration: 5 });
+        recordLabels({ "sdk-migration": "m0005", "sdk-migration-in-progress": inProgressLabel });
+
+        const result = await runCommand(validateCommand, []);
+
+        expect(result.success).toBe(false);
+        const [report] = JSON.parse(stdout.output);
+        expect(report.migrationInProgress.error).toMatchObject({
+          code: "MIGRATION_IN_PROGRESS_CONFLICT",
+        });
+      },
+    );
+
+    test("leaves the record to the checkpoint check when the checkpoint is not in the local history", async () => {
+      using stdout = captureStdout();
+      using _json = jsonMode();
+      recordLabels({ "sdk-migration": "m0005", "sdk-migration-in-progress": "m0006" });
+
+      const result = await runCommand(validateCommand, []);
+
+      expect(result.success).toBe(false);
+      const [report] = JSON.parse(stdout.output);
+      expect(report.remoteSchema.checkpointMissingLocal).toBe(true);
+      expect(report).not.toHaveProperty("migrationInProgress");
+    });
+
+    test("accepts a multi-step migration the next deploy resumes", async () => {
+      using stdout = captureStdout();
+      using _json = jsonMode();
+      writeStepsMigration();
+      recordLabels({ "sdk-migration": "m0000", "sdk-migration-in-progress": "m0001" });
+
+      const result = await runCommand(validateCommand, []);
+
+      expect(result.success).toBe(true);
+      const [report] = JSON.parse(stdout.output);
+      expect(report.valid).toBe(true);
+      expect(report.migrationInProgress).toEqual({ valid: true, migrationNumber: 1 });
+    });
+
+    test("ignores a record of a migration the checkpoint already covers", async () => {
+      using stdout = captureStdout();
+      using _json = jsonMode();
+      writeStepsMigration();
+      recordLabels({ "sdk-migration": "m0001", "sdk-migration-in-progress": "m0001" });
+
+      const result = await runCommand(validateCommand, []);
+
+      expect(result.success).toBe(true);
+      const [report] = JSON.parse(stdout.output);
+      expect(report).not.toHaveProperty("migrationInProgress");
+    });
+
+    test("shows the migration the next deploy resumes", async () => {
+      using stderr = captureStderr();
+      writeStepsMigration();
+      recordLabels({ "sdk-migration": "m0000", "sdk-migration-in-progress": "m0001" });
+
+      const result = await runCommand(validateCommand, []);
+
+      expect(result.success).toBe(true);
+      expect(stderr.output).toContain("Migration in progress: OK (the next deploy resumes 0001)");
+    });
+
+    test("shows why the next deploy cannot resume the migration and what to do", async () => {
+      using stderr = captureStderr();
+      writeDiff(state.migrationsDir, 1, [], { requiresMigrationScript: true });
+      writeMigrationFile(1, "migrate.ts", "export async function main() {}");
+      recordLabels({ "sdk-migration": "m0000", "sdk-migration-in-progress": "m0001" });
+
+      const result = await runCommand(validateCommand, []);
+
+      expect(result.success).toBe(false);
+      expect(stderr.output).toContain(
+        "Migration in progress: Migration tailordb/0001 was partially applied by its steps, but its migrate.ts no longer exports `steps`.",
+      );
+      expect(stderr.output).toContain(
+        "Keep the migration as `steps` so the deploy can finish it; steps that already completed do not run again.",
+      );
+    });
+
+    describe("--migration-skip-steps", () => {
+      beforeEach(() => {
+        writeStepsMigration();
+        recordLabels({
+          "sdk-migration": "m0000",
+          "sdk-migration-in-progress": "m0001",
+          "sdk-migration-execution": EXECUTION_LABEL,
+        });
+        earlierRunWithFailedRecompute();
+      });
+
+      test("accepts a step that succeeded in the earlier run", async () => {
+        using stdout = captureStdout();
+        using _json = jsonMode();
+
+        const result = await runCommand(validateCommand, [
+          "--migration-skip-steps",
+          "tailordb/backfill",
+        ]);
+
+        expect(result.success).toBe(true);
+        const [report] = JSON.parse(stdout.output);
+        expect(report.migrationInProgress).toEqual({ valid: true, migrationNumber: 1 });
+      });
+
+      test("reports a step that did not succeed in the earlier run", async () => {
+        using stdout = captureStdout();
+        using _json = jsonMode();
+
+        const result = await runCommand(validateCommand, [
+          "--migration-skip-steps",
+          "tailordb/recompute",
+        ]);
+
+        expect(result.success).toBe(false);
+        const [report] = JSON.parse(stdout.output);
+        expect(report.migrationInProgress).toEqual({
+          valid: false,
+          migrationNumber: 1,
+          error: expect.objectContaining({
+            code: "MIGRATION_SKIP_STEPS_INVALID",
+            message: expect.stringContaining("'recompute' did not succeed in the earlier run"),
+          }),
+        });
+      });
+
+      test("reports steps to skip in a namespace with nothing in progress", async () => {
+        using stdout = captureStdout();
+        using _json = jsonMode();
+        recordLabels({ "sdk-migration": "m0000" });
+
+        const result = await runCommand(validateCommand, [
+          "--migration-skip-steps",
+          "tailordb/backfill",
+        ]);
+
+        expect(result.success).toBe(false);
+        const [report] = JSON.parse(stdout.output);
+        expect(report.migrationInProgress).toEqual({
+          valid: false,
+          error: expect.objectContaining({
+            code: "MIGRATION_SKIP_STEPS_INVALID",
+            message: expect.stringContaining("no multi-step migration of it is partially applied"),
+          }),
+        });
+      });
+
+      test("keeps the other checks when the earlier run cannot be read", async () => {
+        using stdout = captureStdout();
+        using _json = jsonMode();
+        state.getWorkflowExecution.mockRejectedValue(new ConnectError("boom", Code.Internal));
+
+        const result = await runCommand(validateCommand, [
+          "--migration-skip-steps",
+          "tailordb/backfill",
+        ]);
+
+        expect(result.success).toBe(false);
+        expect(String(result.error)).toMatch(/boom/);
+        const [report] = JSON.parse(stdout.output);
+        expect(report.remoteSchema).toEqual({
+          remoteMigrationNumber: 0,
+          hasDrift: false,
+          drifts: [],
+        });
+        expect(report.migrationInProgress).toEqual({
+          valid: false,
+          migrationNumber: 1,
+          skipped: "check_failed",
+        });
+      });
+
+      test("shows a check that could not run as not checked", async () => {
+        using stderr = captureStderr();
+        state.getWorkflowExecution.mockRejectedValue(new ConnectError("boom", Code.Internal));
+
+        const result = await runCommand(validateCommand, [
+          "--migration-skip-steps",
+          "tailordb/backfill",
+        ]);
+
+        expect(result.success).toBe(false);
+        expect(stderr.output).toContain("Remote schema: OK (remote migration: 0000)");
+        expect(stderr.output).toContain("Migration in progress: not checked");
+      });
+
+      test("rejects an entry that is not <namespace>/<step>", async () => {
+        const result = await runCommand(validateCommand, ["--migration-skip-steps", "backfill"]);
+
+        expect(result.success).toBe(false);
+        expect((result.error as CLIError).code).toBe("MIGRATION_SKIP_STEPS_FORMAT_INVALID");
+      });
+
+      test("rejects a namespace the config does not define", async () => {
+        const result = await runCommand(validateCommand, [
+          "--migration-skip-steps",
+          "other/backfill",
+        ]);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toMatchObject({
+          code: "MIGRATION_SKIP_STEPS_INVALID",
+          message:
+            "Cannot check the steps to skip in namespace 'other': the config defines no TailorDB namespace with that name.",
+          suggestion: expect.stringContaining(
+            "Use one of the config's TailorDB namespaces: tailordb.",
+          ),
+          context: { namespace: "other", requested: ["backfill"], namespaces: ["tailordb"] },
+        });
+        expect(state.getMetadata).not.toHaveBeenCalled();
+      });
+
+      test("rejects a namespace without migrations", async () => {
+        state.extraServices = [
+          {
+            namespace: "audit",
+            config: {},
+            typeSourceInfo: {},
+            loadTypes: vi.fn().mockResolvedValue(undefined),
+            processNamespacePlugins: vi.fn().mockResolvedValue(undefined),
+            types: {},
+          },
+        ];
+
+        const result = await runCommand(validateCommand, [
+          "--migration-skip-steps",
+          "audit/backfill",
+        ]);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toMatchObject({
+          code: "MIGRATION_SKIP_STEPS_INVALID",
+          message: expect.stringContaining("no multi-step migration of it is partially applied"),
+        });
+      });
+
+      test("rejects a namespace that --namespace leaves out", async () => {
+        const auditMigrationsDir = path.join(tmpDir, "audit-migrations");
+        writeInitialSchema(auditMigrationsDir, {});
+        vi.mocked(loadConfig).mockResolvedValue({
+          config: {
+            path: path.join(tmpDir, "tailor.config.ts"),
+            db: {
+              tailordb: { migration: { directory: state.migrationsDir } },
+              audit: { migration: { directory: auditMigrationsDir } },
+            },
+          },
+          plugins: [],
+        } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+        state.extraServices = [
+          {
+            namespace: "audit",
+            config: {},
+            typeSourceInfo: {},
+            loadTypes: vi.fn().mockResolvedValue(undefined),
+            processNamespacePlugins: vi.fn().mockResolvedValue(undefined),
+            types: {},
+          },
+        ];
+
+        const result = await runCommand(validateCommand, [
+          "--namespace",
+          "tailordb",
+          "--migration-skip-steps",
+          "audit/backfill",
+        ]);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toMatchObject({
+          code: "MIGRATION_VALIDATE_OPTIONS_CONFLICT",
+          context: { namespace: "audit", requested: ["backfill"] },
+        });
+      });
+    });
   });
 });
