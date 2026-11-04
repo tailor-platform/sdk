@@ -74,11 +74,25 @@ export type RenderMigrationTestParams = {
   label: string;
   /**
    * Dedicated GitHub Environment holding the source workspace in
-   * `TAILOR_PLATFORM_MIGRATION_TEST_SOURCE_WORKSPACE_ID`; omit to use the plan/deploy
+   * `TAILOR_PLATFORM_MIGRATION_TEST_SOURCE_WORKSPACE_ID`; omit to use the deploy
    * environment and its `TAILOR_PLATFORM_WORKSPACE_ID`.
    */
   environment?: string;
 };
+
+/**
+ * GitHub Environment the plan job of a branch target runs in apart from the deploy job.
+ * @param target - Deploy environment and whether the plan environment is split
+ * @param target.environment - GitHub Environment of the deploy job
+ * @param target.splitPlanEnvironment - Whether the plan job runs in its own environment
+ * @returns `<environment>-plan`, or undefined when the plan job shares the deploy environment
+ */
+export function planEnvironmentOf(target: {
+  environment: string;
+  splitPlanEnvironment?: boolean;
+}): string | undefined {
+  return target.splitPlanEnvironment ? `${target.environment}-plan` : undefined;
+}
 
 export type RenderBranchParams = {
   workspaceName: string;
@@ -88,8 +102,13 @@ export type RenderBranchParams = {
   apps?: RenderApp[];
   /** Extra `paths` filter patterns beyond the app directories. */
   extraPaths?: string[];
-  /** GitHub Environment for the plan/deploy jobs; defaults to the workspace name. */
+  /**
+   * GitHub Environment for the deploy job, and for the plan job unless `splitPlanEnvironment`;
+   * defaults to the workspace name.
+   */
   environment: string;
+  /** Run the plan job in {@link planEnvironmentOf} instead of `environment` (default: false). */
+  splitPlanEnvironment?: boolean;
   packageManager: PackageManager;
   /** Include the seed-validate step in the plan job (default: false). */
   seedValidate?: boolean;
@@ -537,6 +556,7 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
   }
 
   out = applyCommon(out, params).replaceAll("__BRANCH__", () => branch);
+  out = out.replace("__PLAN_ENVIRONMENT__", () => planEnvironmentOf(params) ?? params.environment);
 
   if (migrationTest) {
     const migrationTestValues: Record<string, string> = {

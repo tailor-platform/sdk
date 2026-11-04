@@ -173,8 +173,8 @@ and file blobs are not copied.
 
 Two setups are supported:
 
-- **Source is the plan/deploy workspace (default).** The job uses the same GitHub
-  Environment as the plan and deploy jobs, so it reads the same
+- **Source is the deploy workspace (default).** The job uses the same GitHub
+  Environment as the deploy job, so it reads the same
   `TAILOR_PLATFORM_WORKSPACE_ID` variable and machine-user secrets. Nothing
   extra to configure. If that workspace holds too little data to be a useful
   test, point the job at a workspace that does with the next setup.
@@ -203,6 +203,51 @@ the source workspace holds production data.
 
 Fork pull requests cannot read secrets, so the job is skipped for them.
 `--migration-test` is not available together with several `--dir` values.
+
+#### Running the plan job in its own environment
+
+The plan job runs on pull requests, and a pull request from a branch of the same
+repository can change the workflow it runs, so its code can read every secret
+and variable of the environment the plan job enters. When plan and deploy share
+one environment, that includes the deploy machine user. Pass
+`--split-plan-environment` on a branch target to run the plan job in an
+environment of its own:
+
+```bash
+tailor setup ci branch --name my-app-stg --split-plan-environment
+```
+
+The plan job then enters an environment named after the deploy environment with
+`-plan` appended (`my-app-stg-plan` here). The deploy job, and the migration test job unless you
+pass `--migration-test-environment`, stay in the deploy environment. Set these
+on the plan environment:
+
+- `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID` and
+  `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` of a machine user of its own. The
+  plan only reads, so a viewer role on the organization or folder that holds the
+  workspace is enough. Set them on the plan environment itself: otherwise the job
+  reads the ones set on the repository or organization, and
+  `tailor setup ci env --check` reports them as missing.
+- `TAILOR_PLATFORM_WORKSPACE_ID`, the same workspace the deploy environment
+  deploys to.
+
+Keep the deploy machine user off the plan environment. `tailor setup ci env`
+lists what each of the two environments needs.
+
+The flag alone does not keep the deploy credentials from a pull request, which
+can point the plan job back at the deploy environment. Under **Settings →
+Environments**, limit the deploy environment's **Deployment branches and tags**
+to the target branch, so that GitHub refuses a pull request job in it. With that
+limit in place:
+
+- The migration test job also runs on pull requests, so give it its own
+  environment with `--migration-test-environment` (see
+  [Choosing the source workspace](#choosing-the-source-workspace)).
+- The jobs of a preview target run on pull requests too, so pass
+  `setup ci preview` an `--environment` other than the limited one.
+
+`setup update` keeps the flag, but re-running `setup ci branch` does not carry it
+over: pass it each time, or the plan job moves back into the deploy environment.
 
 ### Tag target (recommended for production)
 
@@ -378,7 +423,9 @@ environment before the first deploy.
 
 Because the variable is scoped to a GitHub Environment, both the `plan` and
 `deploy` jobs declare `environment:` so the value resolves. When you omit
-`--environment`, the environment name defaults to the workspace name.
+`--environment`, the environment name defaults to the workspace name. With
+`--split-plan-environment`, set the variable on the plan environment as well (see
+[Running the plan job in its own environment](#running-the-plan-job-in-its-own-environment)).
 
 1. Provision the workspace (once per environment) and obtain its id. For now
    this is a manual step:
@@ -403,8 +450,9 @@ provisioned yet instead of running a dry-run.
 
 If the target environment has required reviewers, that approval gate applies to
 the `plan` job as well as `deploy`, because `plan` must enter the environment to
-read the variable. (A token-based read that lets `plan` run without entering the
-environment is planned.)
+read the variable, unless a branch target runs `plan` in its own environment with
+`--split-plan-environment`. (A token-based read that lets `plan` run without
+entering the environment is planned.)
 
 ## Package manager
 
@@ -713,7 +761,9 @@ protection rules no longer guard your deploys, and `tailor setup ci env --check`
 warns about the client secret (see
 [Checking what is registered](#checking-what-is-registered)). To share one machine
 user and keep that protection, set the same client secret on each environment
-instead.
+instead. The plan environment of `--split-plan-environment` is the exception: give
+it a machine user of its own (see
+[Running the plan job in its own environment](#running-the-plan-job-in-its-own-environment)).
 
 ### Setting secrets and variables
 
@@ -756,6 +806,16 @@ The list follows what each generated workflow actually reads:
 The autofix workflow uses no GitHub Environment, so its two entries are set on
 the repository; the output lists them under the repository instead of an
 environment.
+
+A branch target generated with `--split-plan-environment` reads from two
+environments. The plan environment needs its own
+`TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID` and
+`TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET`, for which a viewer role is enough,
+and `TAILOR_PLATFORM_WORKSPACE_ID`; of the optional entries, only the plan job's
+`TAILOR_PLATFORM_FAIL_ON_DRIFT` and `SEED_USER_PASSWORD` apply to it. A manual dry
+run reads `SEED_USER_PASSWORD` from there, and pull requests can read it too, like
+everything on that environment. The deploy environment needs the rest, without
+`TAILOR_PLATFORM_FAIL_ON_DRIFT`.
 
 See [Account management](https://docs.tailor.tech/administration/account-management)
 for how organizations, folders, workspaces, and machine users relate.
@@ -807,6 +867,10 @@ values.
   warning stops once the client secret is set only on the environments; when
   every target shares one machine user, set the same client secret on each of
   them.
+- On the plan environment of `--split-plan-environment`, the machine user's
+  client ID and client secret count only when set on that environment, since
+  the plan job would otherwise sign in as the machine user set on the repository
+  or organization.
 - An entry registered as the other kind, such as `TAILOR_PLATFORM_WORKSPACE_ID`
   set as a secret, is reported as missing, because the workflow does not read it.
   `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID` set as a secret still counts, with a
@@ -838,7 +902,10 @@ environment-scoped secrets there.
 
 Required reviewers gate the `plan` job as well, because `plan` must enter the
 environment to read `TAILOR_PLATFORM_WORKSPACE_ID`. (A token-based read that
-lets `plan` run without entering the environment is planned.)
+lets `plan` run without entering the environment is planned.) On a branch target,
+`--split-plan-environment` moves `plan` into an environment of its own, whose
+settings then apply to it instead (see
+[Running the plan job in its own environment](#running-the-plan-job-in-its-own-environment)).
 
 ## Manual runs and dry-run
 
@@ -873,7 +940,11 @@ can deploy, configure **Deployment branches and tags** on the target's GitHub
 Environment and keep the machine-user secrets on that environment. Because the
 plan job also enters the environment, allow `refs/pull/*/merge` as well so pull
 request plans keep running, and note that dry runs from other branches are then
-rejected too.
+rejected too. On a branch target, `--split-plan-environment` moves the plan job,
+dry runs included, into an environment of its own instead, so the deploy
+environment can allow the target branch alone once the migration test job, if
+any, has its own environment as well (see
+[Running the plan job in its own environment](#running-the-plan-job-in-its-own-environment)).
 
 ## Seeding the workspace after deploy
 

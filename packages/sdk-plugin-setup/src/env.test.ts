@@ -43,6 +43,18 @@ const namesOf = (kind: TargetKind) =>
     .map((r) => `${r.type} ${r.name}`)
     .toSorted();
 
+// A job in another environment, such as a dedicated migration test's, reads that environment's.
+function namesInEnvironment(content: string, environment: string): string[] {
+  const doc = parseDocument(content);
+  const jobs = doc.get("jobs");
+  if (!isMap(jobs)) throw new Error("expected a jobs mapping");
+  jobs.items = jobs.items.filter((pair) => {
+    const jobEnvironment = isMap(pair.value) ? pair.value.get("environment") : undefined;
+    return jobEnvironment === undefined || jobEnvironment === environment;
+  });
+  return referencedNames(doc.toString({ lineWidth: 0 }));
+}
+
 function fallbackSecretNames(content: string): string[] {
   const names = new Set<string>();
   for (const match of content.matchAll(/\bvars\.([A-Za-z_][A-Za-z0-9_]*) \|\| secrets\.\1\b/g)) {
@@ -64,17 +76,8 @@ describe("targetRequirements matches the secrets/vars the rendered templates ref
     return kind === null ? [] : [{ ...rendered, kind }];
   });
 
-  // A job in another environment, such as a dedicated migration test's, reads that environment's.
-  function namesInTargetEnvironment(content: string): string[] {
-    const doc = parseDocument(content);
-    const jobs = doc.get("jobs");
-    if (!isMap(jobs)) throw new Error("expected a jobs mapping");
-    jobs.items = jobs.items.filter((pair) => {
-      const environment = isMap(pair.value) ? pair.value.get("environment") : undefined;
-      return environment === undefined || environment === RENDERED_ENVIRONMENT;
-    });
-    return referencedNames(doc.toString({ lineWidth: 0 }));
-  }
+  const namesInTargetEnvironment = (content: string) =>
+    namesInEnvironment(content, RENDERED_ENVIRONMENT);
 
   test.each(renders)("$name reads only what its target kind lists", ({ kind, content }) => {
     expect(namesOf(kind)).toEqual(expect.arrayContaining(namesInTargetEnvironment(content)));
@@ -369,6 +372,60 @@ describe("collectEnvironmentRequirements", () => {
       expect(referencedNames(job)).toEqual(
         dedicated?.requirements.map((r) => `${r.type} ${r.name}`).toSorted(),
       );
+    });
+  });
+
+  describe("split plan environment", () => {
+    const split = (workspaceName: string, environment: string) =>
+      target("branch", workspaceName, environment, { splitPlanEnvironment: true });
+
+    test("lists the plan environment with its own machine user, for which a viewer role is enough", () => {
+      const environments = collectEnvironmentRequirements(lockOf(split("my-app", "stg")));
+      const plan = environments.find((e) => e.environment === "stg-plan");
+
+      expect(environments.map((e) => [e.environment, e.targets])).toEqual([
+        ["stg", ["branch my-app"]],
+        ["stg-plan", ["branch my-app (plan)"]],
+      ]);
+      expect(plan?.requirements.filter((r) => r.required).map((r) => [r.type, r.name])).toEqual([
+        ["variable", "TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID"],
+        ["secret", "TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET"],
+        ["variable", "TAILOR_PLATFORM_WORKSPACE_ID"],
+      ]);
+      expect(plan?.requirements[0]?.description).toMatch(/a viewer role .* is enough/);
+    });
+
+    test("lists for each environment what the jobs running in it read", () => {
+      const { content } = renderBranchWorkflow({
+        workspaceName: "my-app",
+        environment: "stg",
+        packageManager: "pnpm",
+        branch: "main",
+        erdPreview: null,
+        seedValidate: true,
+        seed: { datasets: [] },
+        splitPlanEnvironment: true,
+      });
+      const names = (environment: string) =>
+        collectEnvironmentRequirements(lockOf(split("my-app", "stg")))
+          .find((e) => e.environment === environment)
+          ?.requirements.map((r) => `${r.type} ${r.name}`)
+          .toSorted();
+
+      expect(names("stg-plan")).toEqual(namesInEnvironment(content, "stg-plan"));
+      expect(names("stg")).toEqual(namesInEnvironment(content, "stg"));
+    });
+
+    test("keeps the deploy wording when another target deploys through the plan environment", () => {
+      const plan = collectEnvironmentRequirements(
+        lockOf(split("my-app", "stg"), target("branch", "other", "stg-plan")),
+      ).find((e) => e.environment === "stg-plan");
+      const description = (name: string) =>
+        plan?.requirements.find((r) => r.name === name)?.description;
+
+      expect(plan?.targets).toEqual(["branch my-app (plan)", "branch other"]);
+      expect(description("TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID")).toMatch(/editor or admin/);
+      expect(description("TAILOR_PLATFORM_WORKSPACE_ID")).toMatch(/this environment deploys to/);
     });
   });
 

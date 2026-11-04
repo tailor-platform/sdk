@@ -25,7 +25,10 @@ type ScopedNames = { scope: Scope; names: Names };
 type SharedScope = Exclude<Scope, "environment">;
 
 type RequirementCheck = EnvRequirement & {
-  /** Whether the workflow finds a value, counting the deprecated secret fallback. */
+  /**
+   * Whether the workflow finds a value, counting the deprecated secret fallback; an
+   * environment-only entry counts only when set on the environment.
+   */
   registered: boolean;
   /** Scope GitHub resolves the entry from; null when no scope has it. */
   foundIn: Scope | null;
@@ -42,13 +45,24 @@ type EnvironmentCheck = Omit<EnvironmentRequirements, "requirements"> & {
 
 const OTHER_TYPE = { secret: "variable", variable: "secret" } as const;
 
+/**
+ * Scope the workflow reads an entry from, counting the deprecated secret fallback.
+ * @param check - The entry and where each type of it was found
+ * @returns The scope, or null when the workflow finds no value
+ */
+function scopeRead(
+  check: EnvRequirement & Pick<RequirementCheck, "foundIn" | "otherTypeIn">,
+): Scope | null {
+  const fallback = check.type === "variable" && SECRET_FALLBACK_VARIABLES.has(check.name);
+  return check.foundIn ?? (fallback ? check.otherTypeIn : null);
+}
+
 function checkRequirement(requirement: EnvRequirement, scopes: ScopedNames[]): RequirementCheck {
   const scopeHolding = (type: EntryType) =>
     scopes.find(({ names }) => names[type].has(requirement.name))?.scope ?? null;
   const foundIn = scopeHolding(requirement.type);
   const otherTypeIn = foundIn === null ? scopeHolding(OTHER_TYPE[requirement.type]) : null;
-  const fallback =
-    requirement.type === "variable" && SECRET_FALLBACK_VARIABLES.has(requirement.name);
+  const readFrom = scopeRead({ ...requirement, foundIn, otherTypeIn });
   const checksEnvironment = scopes.some(({ scope }) => scope === "environment");
   const belongsOnEnvironment =
     checksEnvironment &&
@@ -56,7 +70,8 @@ function checkRequirement(requirement: EnvRequirement, scopes: ScopedNames[]): R
     ENVIRONMENT_PREFERRED_SECRETS.has(requirement.name);
   return {
     ...requirement,
-    registered: foundIn !== null || (fallback && otherTypeIn !== null),
+    registered:
+      readFrom !== null && (requirement.environmentOnly !== true || readFrom === "environment"),
     foundIn,
     otherTypeIn,
     exposedIn: belongsOnEnvironment
@@ -295,7 +310,7 @@ function printReport(checks: EnvironmentCheck[], fullName: string, repository: R
     .map((check) => ({
       ...check,
       requirements: check.requirements.flatMap((r): EnvRequirement[] => {
-        if (r.foundIn === null) return [r];
+        if (r.foundIn === null || !r.registered) return [r];
         if (r.foundIn === "environment" || r.exposedIn.length === 0) return [];
         return [
           {
@@ -326,6 +341,10 @@ function statusLine(check: RequirementCheck): string {
   const label = `${check.name} (${check.type}${scope})`;
   if (check.registered && check.foundIn === null) {
     return `⚠ ${label}: set as a secret, a deprecated fallback; set it as a variable and delete the secret`;
+  }
+  const readFrom = scopeRead(check);
+  if (!check.registered && readFrom !== null) {
+    return `✖ ${label}: missing on the environment, which needs its own rather than the one set on the ${readFrom}`;
   }
   if (check.exposedIn.length > 0) return `⚠ ${label}: ${exposureWarning(check)}`;
   if (check.registered) return `✔ ${label}`;

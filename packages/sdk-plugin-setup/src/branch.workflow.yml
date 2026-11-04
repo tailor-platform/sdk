@@ -28,7 +28,7 @@ jobs:
     # __PLAN_IF__
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: __ENVIRONMENT__
+    environment: __PLAN_ENVIRONMENT__
     permissions:
       contents: read
       pull-requests: write

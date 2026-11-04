@@ -237,6 +237,36 @@ describe("renderBranchWorkflow", () => {
     expect(content.match(/environment: production/g)).toHaveLength(2);
   });
 
+  test("moves only the plan job into the -plan environment when the plan environment is split", () => {
+    const { content } = renderBranchWorkflow({
+      ...branchBase,
+      environment: "production",
+      migrationDriftCheck: true,
+      migrationTest: { label: "tailor:migration-test" },
+      splitPlanEnvironment: true,
+    });
+    const { jobs } = parseYAML(content) as Workflow;
+
+    expect(jobs["tailor-plan"]?.environment).toBe("production-plan");
+    expect(jobs["tailor-deploy"]?.environment).toBe("production");
+    expect(jobs["tailor-migration-test"]?.environment).toBe("production");
+  });
+
+  test.each(["__WORKSPACE_NAME__", "__BRANCH__"])(
+    "keeps a split plan environment derived from %s literal",
+    (environment) => {
+      const { content } = renderBranchWorkflow({
+        ...branchBase,
+        environment,
+        splitPlanEnvironment: true,
+      });
+
+      expect((parseYAML(content) as Workflow).jobs["tailor-plan"]?.environment).toBe(
+        `${environment}-plan`,
+      );
+    },
+  );
+
   test("passes the workspace name as the plan label", () => {
     const { content } = renderBranchWorkflow(branchBase);
     expect(content).toContain("label: my-app");
@@ -2283,6 +2313,22 @@ describe("setupTarget (integration)", () => {
     expect(readLock(testDir)?.targets[0]?.inputs.environment).toBe("production");
   });
 
+  test("runs the plan job in <environment>-plan with --split-plan-environment and records it in the lock", async () => {
+    await setupTarget(
+      baseOptions({ workspaceName: "my-app", environment: "stg", splitPlanEnvironment: true }),
+    );
+    const { jobs } = parseYAML(
+      fs.readFileSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"), "utf-8"),
+    ) as Workflow;
+
+    expect(jobs["tailor-plan"]?.environment).toBe("stg-plan");
+    expect(jobs["tailor-deploy"]?.environment).toBe("stg");
+    expect(readLock(testDir)?.targets[0]?.inputs).toMatchObject({
+      environment: "stg",
+      splitPlanEnvironment: true,
+    });
+  });
+
   test("records a package manager detected from the root lockfile as auto-detected", async () => {
     await setupTarget(baseOptions({ workspaceName: "my-app" }));
     const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"), "utf-8");
@@ -2829,6 +2875,22 @@ export default defineConfig({
 
     expect(output).toContain("tailor setup ci env --environment stg");
     expect(output).not.toContain("gh secret set");
+  });
+
+  test("next steps name the plan environment too when the plan environment is split", async () => {
+    using log = vi.spyOn(logger, "log").mockImplementation(() => {});
+    printTargetNextSteps(
+      await setupTarget(
+        baseOptions({ workspaceName: "my-app", environment: "stg", splitPlanEnvironment: true }),
+      ),
+    );
+    const output = log.mock.calls.map(([line]) => line).join("\n");
+
+    expect(output).toContain('the "stg" and "stg-plan" environments need');
+    expect(output).toMatch(/tailor setup ci env --environment stg --environment stg-plan +#/);
+    expect(output).toMatch(
+      /tailor setup ci env --environment stg --environment stg-plan --check +#/,
+    );
   });
 
   test("next steps suggest checking with --check what the environment still lacks", async () => {

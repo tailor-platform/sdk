@@ -49,6 +49,7 @@ import {
 import {
   appSlug,
   isPackageManager,
+  planEnvironmentOf,
   renderBranchWorkflow,
   renderPreviewCleanupWorkflow,
   renderPreviewWorkflow,
@@ -105,6 +106,8 @@ export type BranchSetupOptions = CommonSetupOptions & {
   migrationTestLabel?: string;
   /** Dedicated GitHub Environment holding the migration test's source workspace. */
   migrationTestEnvironment?: string;
+  /** Run the plan job in its own `<environment>-plan` GitHub Environment. */
+  splitPlanEnvironment?: boolean;
 };
 
 type TagSetupOptions = CommonSetupOptions & {
@@ -746,6 +749,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       migrationTest,
       restrictDispatch: options.restrictDispatch ?? false,
       seed: options.seed,
+      splitPlanEnvironment: options.splitPlanEnvironment ?? false,
     });
   } else if (kind === "tag") {
     branch = options.branch ?? null;
@@ -819,6 +823,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     migrationTest: migrationTest ? true : undefined,
     migrationTestLabel: migrationTest?.label,
     migrationTestEnvironment: migrationTest?.environment,
+    splitPlanEnvironment: kind === "branch" && options.splitPlanEnvironment ? true : undefined,
     apps:
       apps && appErdNamespaces.size > 0
         ? apps.map((app) => ({ ...app, erdNamespaces: appErdNamespaces.get(app.dir) ?? [] }))
@@ -1012,21 +1017,18 @@ export function logWritten(decision: Decision, file: string): void {
   }
 }
 
-function printEnvironmentStep(environment: string): void {
+function printEnvironmentStep(environments: readonly string[]): void {
+  const names = environments.map((environment) => `"${environment}"`).join(" and ");
+  const flags = environments.map((environment) => `--environment ${environment}`).join(" ");
   logger.log(
-    `1. Set the secrets and variables the "${environment}" environment needs. ` +
+    `1. Set the secrets and variables the ${names} ` +
+      `${environments.length === 1 ? "environment needs" : "environments need"}. ` +
       "This lists them and where each value comes from (drop --environment to list every " +
       "environment in .github/tailor.lock):",
   );
-  logger.log(
-    `   tailor setup ci env --environment ${environment}                       # gh commands`,
-  );
-  logger.log(
-    `   tailor setup ci env --environment ${environment} --format terraform    # or Terraform`,
-  );
-  logger.log(
-    `   tailor setup ci env --environment ${environment} --check               # then what is still missing`,
-  );
+  logger.log(`   tailor setup ci env ${flags}                       # gh commands`);
+  logger.log(`   tailor setup ci env ${flags} --format terraform    # or Terraform`);
+  logger.log(`   tailor setup ci env ${flags} --check               # then what is still missing`);
 }
 
 export type SetupTargetResult = {
@@ -1035,6 +1037,8 @@ export type SetupTargetResult = {
   file: string;
   /** Resolved GitHub Environment name. */
   environment: string;
+  /** GitHub Environment of the plan job, when it runs apart from `environment`. */
+  planEnvironment?: string;
   /** Whether the app id was moved out of tailor.config.ts. */
   configEdited: boolean;
 };
@@ -1044,12 +1048,14 @@ export type SetupTargetResult = {
  * @param result - What {@link setupTarget} generated
  */
 export function printTargetNextSteps(result: SetupTargetResult): void {
-  const { environment, configEdited } = result;
+  const { environment, planEnvironment, configEdited } = result;
 
   logger.newline();
   logger.info("Next steps:");
   logger.newline();
-  printEnvironmentStep(environment);
+  printEnvironmentStep(
+    planEnvironment === undefined ? [environment] : [environment, planEnvironment],
+  );
 
   logger.newline();
   logger.log("2. Commit the generated files:");
@@ -1293,6 +1299,7 @@ export async function setupTarget(options: SetupTargetOptions): Promise<SetupTar
     kind: resolved.kind,
     file: resolved.file,
     environment: resolved.environment,
+    planEnvironment: planEnvironmentOf(resolved.inputs),
     configEdited,
   };
 }
