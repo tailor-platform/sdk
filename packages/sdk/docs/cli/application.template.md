@@ -84,7 +84,8 @@ tailor deploy \
 `--create-workspace` only creates when the account has no workspace. If the existing workspace
 matches the requested name, region, organization, and folder, `deploy` reuses it so the same command
 is safe to rerun. If multiple workspaces exist, the flag never creates another one or guesses which
-workspace to use. `--yes` skips deployment confirmation but does not authorize workspace creation.
+workspace to use. `--yes` accepts the deployment confirmations described under Confirmation below
+but does not authorize workspace creation.
 
 If a saved workspace has been deleted or is no longer accessible, interactive terminals return to
 workspace selection. Non-interactive environments stop with `WORKSPACE_CONTEXT_STALE` instead of
@@ -112,20 +113,24 @@ Names that identify a resource across the whole workspace, such as application, 
 
 Each config's `files` and `ignores` patterns (see [Service Configuration](../configuration.md#service-configuration)) resolve relative to that config's own directory, not the directory you ran `deploy` from. For example, `apps/buyer/tailor.config.ts` declaring `files: ["db/**/*.ts"]` loads files from `apps/buyer/db/`, independent of where `apps/supplier/tailor.config.ts`'s patterns resolve. If a config's relative patterns match nothing under its own directory, the SDK falls back to the invocation directory and logs a warning (see [Service Configuration](../configuration.md#service-configuration) for details).
 
-**Migration Handling:**
+**Migration Handling (Beta):**
 
-When migrations are configured (`db.tailordb.migration` in config), the `deploy` command automatically:
+When migrations are configured (`db.<namespace>.migration` in config), the `deploy` command:
 
-1. Detects pending migration scripts that haven't been executed
-2. Applies schema changes in a safe order (pre-migration → script execution → post-migration)
-3. Runs the pending migration scripts
-4. Updates the migration checkpoint so the same migrations are not re-run
+1. Checks the migration files and the migration state of each namespace (see Schema Check below) three times: while planning, so `--dry-run` reports a failure too; before it applies anything for any config; and again when it applies each config's TailorDB changes. If the migration files, a checkpoint reset, or the tables to delete changed after planning, the deploy stops with `DEPLOY_PLAN_STALE`.
+2. Resets the checkpoints that the plan showed would be reset to `0000` after a re-baseline, clears an in-progress record that an earlier deploy left on a migration it had already committed, and deletes the tables that a committed migration removed but an earlier deploy did not delete.
+3. Applies the changes of namespaces without pending migrations, except deletions. This also takes their tables out of a maintenance mode that an interrupted deploy left.
+4. Puts every namespace with pending migrations into maintenance mode, unless `maintenanceMode` is `false`.
+5. Runs the pending migrations one namespace at a time, in alphabetical order of the namespace names, and in number order within a namespace. Each migration applies its pre-migration schema, runs its `migrate.ts`, applies its post-migration schema, advances the checkpoint, and then deletes the tables and GraphQL permissions it removed.
+6. With `--no-schema-check`, applies the local table definitions that the pending migrations do not include (see [Schema verification](../services/tailordb/migration.md#schema-verification)).
+7. Takes the tables out of maintenance mode, or with `maintenanceMode: "deploy"`, leaves that to the end of the deploy.
+8. Deletes the remaining tables and GraphQL permissions that are no longer in the config.
 
-See [Automatic Migration Execution](../services/tailordb/migration.md#automatic-migration-execution) for details on automatic migration execution.
+See [Automatic Migration Execution](../services/tailordb/migration.md#automatic-migration-execution) for details on automatic migration execution, and [Several configs in one deploy](../services/tailordb/migration.md#several-configs-in-one-deploy) for the state a failed migration leaves the other configs in.
 
 **Concurrent Deploys:**
 
-Deploys that target the same workspace and application from the same project directory are serialized while secrets and auth connections are updated: one deploy proceeds and the other waits for it to finish. A deploy that cannot proceed within 5 minutes fails with an error, which normally means another deploy is still running. If a previous deploy was interrupted, the next deploy recovers automatically within about a minute. Deploys to different workspaces or applications are not affected.
+Deploys that target the same workspace and application from the same project directory are serialized while secrets and auth connections are updated: one deploy proceeds and the other waits for it to finish. A deploy that cannot proceed within 5 minutes fails with an error, which normally means another deploy is still running. If a previous deploy was interrupted, the next deploy recovers automatically within about a minute. If the error persists, stop any `tailor deploy` still running from the project directory, then delete the lock directory that the error names and retry. Deploys to different workspaces or applications are not affected.
 
 **Schema Check:**
 
@@ -136,7 +141,7 @@ By default, `deploy` performs two verification steps:
 
 If remote schema drift is detected, the deploy will fail with an error showing the differences. This helps prevent applying migrations to an inconsistent state.
 
-Use `--no-schema-check` to skip both verifications (not recommended for production).
+Use `--no-schema-check` to skip both verifications (not recommended for production). It does not skip the check that the remote migration checkpoint is in the local migration history: when the deployed checkpoint is ahead of the local migration files or belongs to another migration history, the deploy stops before changing anything. Pull the latest migration files, or move the checkpoint on purpose with `tailor tailordb migration sync`, adding `--force` when the checkpoint belongs to another migration history or has a history label that cannot be read, then deploy again.
 
 **Plan Output:**
 
@@ -169,6 +174,22 @@ tailor deploy --dry-run > plan.txt
 
 In apply mode, the plan is printed to stderr so it does not interfere with piped output.
 
+**Confirmation:**
+
+After printing the plan, `deploy` asks for confirmation before applying when the plan includes any of the following:
+
+- TailorDB migration checkpoints that must be reset before deploying (Beta)
+- Applications recorded as depending on this deploy that are missing from it
+- Resources owned by another application, or tagged with a different application id
+- Existing resources that `tailor` does not manage yet
+- Deletion of TailorDB tables, static websites, AI gateways, OAuth2 clients (including a client type change), Auth connections, Secret Manager vaults, or Secret Manager secrets
+
+Declining cancels the deploy. When the plan includes none of these, `deploy` applies it without asking.
+
+`--yes` accepts these confirmations without asking. In a non-interactive environment or with `--json`, a deploy that needs one of them fails unless `--yes` is passed. `--dry-run` lists them as warnings without asking.
+
+When [`env`](../configuration.md#environment-variables) references the URL of a static website that the same deploy creates, `deploy` first applies static websites and the other resources that cannot reference that URL, then plans the rest again with the real URL and prints that plan as well. It asks again only about what the new plan adds; declining at that point leaves the resources applied first in place.
+
 **JSON Output:**
 
 Pass the global `--json` / `-j` flag to get machine-readable output.
@@ -200,7 +221,8 @@ Pass the global `--json` / `-j` flag to get machine-readable output.
 
 - `summary` — counts of each change type. `forcedBySdkVersion` counts the updates forced by the SDK version, which are also included in `update`.
 - `changes` — planned resource changes, each with `action`, `name`, and optional `labels` / `namespace`. An update forced by the SDK version also has `forcedBySdkVersion: true`.
-- `warnings` — resources not in config (`type: "unmanaged"`) or secrets with missing values (`type: "skippedSecret"`). Unmanaged resources require confirmation in apply mode (apply is cancelled if declined); skipped secrets are non-blocking.
+- `warnings` — resources not in config (`type: "unmanaged"`), secrets with missing values (`type: "skippedSecret"`), or applications recorded as depending on this deploy but missing from it (`type: "missingDependentApp"`). Unmanaged resources and missing dependent applications require confirmation in apply mode (apply is cancelled if declined); skipped secrets are non-blocking.
+  - A `missingDependentApp` entry names the missing application's `appId`, the `reason` it depends on this deploy, and the resource whose event publishing turns off when applying without it (`resourceType` and `name`, plus `namespace` for a TailorDB table or resolver). An entry about a workflow's jobs rather than the workflow itself has `scope: "jobs"`.
 - `conflicts` — resources owned by another application that conflict with the current config. Require confirmation in apply mode; apply is cancelled if declined.
 - `resourceType` in `warnings` and `conflicts` is a stable identifier of the resource kind, such as `executor`, `tailordb.service`, or `secret.secret`. The human-readable plan shows a display name instead.
 
@@ -209,9 +231,22 @@ Pass the global `--json` / `-j` flag to get machine-readable output.
 ```json
 {
   "summary": { "create": 1, "update": 2, "delete": 0, "replace": 0, "forcedBySdkVersion": 0 },
-  "status": "applied"
+  "status": "applied",
+  "workspaceId": "ws_abc123",
+  "applications": [
+    {
+      "name": "my-app",
+      "configPath": "/path/to/my-app/tailor.config.ts",
+      "url": "https://my-app.example.com",
+      "domain": "my-app.example.com",
+      "aiGateways": [],
+      "staticWebsites": {}
+    }
+  ]
 }
 ```
+
+Some deploys also add `tailordbMaintenance` or `deployedHooks`, as described under **JSON result** above.
 
 {{politty:command:remove}}
 {{politty:command:show}}

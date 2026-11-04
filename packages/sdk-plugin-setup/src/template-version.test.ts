@@ -88,14 +88,17 @@ describe("templateVersionDrift", () => {
     ).toBeUndefined();
   });
 
-  test("asks to mark the change as pending when the templates changed without it", () => {
-    expect(
-      templateVersionDrift({
-        changedSinceRelease: false,
-        releasedFingerprint: OLD,
-        currentHash: NOW,
-      }),
-    ).toMatch(/TEMPLATE_CHANGED_SINCE_RELEASE = true/);
+  test("explains both template changes and added renders when the fingerprint changed", () => {
+    const message = templateVersionDrift({
+      changedSinceRelease: false,
+      releasedFingerprint: OLD,
+      currentHash: NOW,
+    });
+
+    expect(message).toMatch(/TEMPLATE_CHANGED_SINCE_RELEASE = true/);
+    expect(message).toMatch(/only added renders to `renderedTemplates\(\)`/);
+    expect(message).toMatch(/re-record the released fingerprint/);
+    expect(message).toMatch(/TEMPLATE_CHANGED_SINCE_RELEASE = false/);
   });
 
   test("asks to clear the pending mark when the templates render as released", () => {

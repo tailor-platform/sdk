@@ -1,63 +1,33 @@
 import { describe, expect, test } from "vitest";
 import { stripAnsi } from "../shared/test-helpers/strip-ansi";
-import { highlightGraphqlLine, highlightSqlLine, replTransform } from "./repl-editor";
+import { highlightGraphqlLines, highlightSqlLines, replTransform } from "./repl-editor";
 import type { TransformEvent, TransformState } from "@toiroakr/read-multiline";
 
-describe("highlightSqlLine", () => {
-  test("wraps SQL keywords in ANSI colour", () => {
-    const out = highlightSqlLine("SELECT * FROM users WHERE id = 1");
-    expect(out).not.toBe("SELECT * FROM users WHERE id = 1");
-    expect(out).toContain("\x1b[34mSELECT\x1b[0m");
-    expect(out).toContain("\x1b[34mFROM\x1b[0m");
-    expect(out).toContain("\x1b[34mWHERE\x1b[0m");
-    expect(stripAnsi(out)).toBe("SELECT * FROM users WHERE id = 1");
+describe("highlightSqlLines", () => {
+  test("applies the ANSI theme without changing the text", () => {
+    const lines = ["SELECT id FROM users", "WHERE id = 1"];
+    const out = highlightSqlLines(lines);
+    expect(out).not.toEqual(lines);
+    expect(out.map(stripAnsi)).toEqual(lines);
   });
 
-  test("colours identifiers and numbers distinctly from keywords", () => {
-    const out = highlightSqlLine("SELECT id FROM users");
-    expect(out).toContain("\x1b[33mid\x1b[0m");
-    expect(out).toContain("\x1b[33musers\x1b[0m");
+  test("treats a backslash in a string literal as an ordinary character", () => {
+    const out = highlightSqlLines(["SELECT replace(path, '\\', '/') AS p", "FROM t"]);
+    expect(out[1]).toEqual(highlightSqlLines(["FROM t"])[0]);
   });
 
-  test("leaves unrelated text intact", () => {
-    const out = highlightSqlLine("");
-    expect(out).toBe("");
+  test("treats a square bracket as an array subscript, not a quoted identifier", () => {
+    const [out] = highlightSqlLines(["SELECT ARRAY['a', 'b'] AS xs"]);
+    expect(out).toContain(highlightSqlLines(["'a'"])[0]);
   });
 });
 
-describe("highlightGraphqlLine", () => {
-  test("dims GraphQL comment lines", () => {
-    const out = highlightGraphqlLine("# this is a comment");
-    expect(out).toBe("\x1b[90m# this is a comment\x1b[0m");
-  });
-
-  test("colours keyword, operation name and field name separately", () => {
-    const out = highlightGraphqlLine("query Q { name }");
-    expect(out).toContain("\x1b[34mquery\x1b[0m");
-    expect(out).toContain("\x1b[1;36mQ\x1b[0m");
-    expect(out).toContain("\x1b[94mname\x1b[0m");
-    expect(stripAnsi(out)).toBe("query Q { name }");
-  });
-
-  test("distinguishes argument names, variables and types", () => {
-    const out = highlightGraphqlLine("user(id: ID!, active: $flag)");
-    expect(out).toContain("\x1b[3;33mid\x1b[0m");
-    expect(out).toContain("\x1b[36mID\x1b[0m");
-    expect(out).toContain("\x1b[35m$\x1b[0m");
-    expect(out).toContain("\x1b[35mflag\x1b[0m");
-  });
-
-  test("styles braces and parentheses", () => {
-    const out = highlightGraphqlLine("{ user(id: 1) }");
-    expect(out).toContain("\x1b[33m{\x1b[0m");
-    expect(out).toContain("\x1b[33m}\x1b[0m");
-    expect(out).toContain("\x1b[2;33m(\x1b[0m");
-    expect(out).toContain("\x1b[2;33m)\x1b[0m");
-  });
-
-  test("returns the line as-is when the lexer rejects the input", () => {
-    const input = "@@@ invalid @@@";
-    expect(stripAnsi(highlightGraphqlLine(input))).toBe(input);
+describe("highlightGraphqlLines", () => {
+  test("applies the ANSI theme without changing the text", () => {
+    const lines = ["query Q {", "  user(id: 1) { name }", "}"];
+    const out = highlightGraphqlLines(lines);
+    expect(out).not.toEqual(lines);
+    expect(out.map(stripAnsi)).toEqual(lines);
   });
 });
 

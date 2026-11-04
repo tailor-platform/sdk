@@ -2,9 +2,11 @@ import { parse, Lang } from "@ast-grep/napi";
 import {
   collectBindingNames,
   findImportStatements,
+  firstDeclaratorChild,
   importBindings,
   importSource,
   importSpecNames,
+  isInsideImportStatement,
   isTypeOnlyImport,
   localDeclarationNames,
 } from "../../../../src/ast-grep-helpers";
@@ -174,15 +176,6 @@ function replaceImportStatement(importStmt: SgNode, nextText: string, sourceText
     endPos += 1;
   }
   return { startPos: range.start.index, endPos, insertedText: "" };
-}
-
-function isInsideImportStatement(node: SgNode): boolean {
-  let current = node.parent();
-  while (current) {
-    if (current.kind() === "import_statement") return true;
-    current = current.parent();
-  }
-  return false;
 }
 
 function isInsideExportSpecifier(node: SgNode): boolean {
@@ -362,10 +355,6 @@ function directValueBindingNames(node: SgNode, names: Set<string>): Set<string> 
     }
   }
   return result;
-}
-
-function firstDeclaratorChild(node: SgNode): SgNode | null {
-  return node.children().find((child) => child.kind() !== "=") ?? null;
 }
 
 type ShadowedRanges = Map<string, Array<{ start: number; end: number }>>;

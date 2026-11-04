@@ -2,6 +2,7 @@ import { logger } from "@tailor-platform/sdk/cli";
 import { describe, expect, test, vi } from "vitest";
 import { checkEnv } from "./env-check";
 import { LOCK_VERSION, type LockTarget, writeLock } from "./lock";
+import { autofixLockEntry } from "./test-helpers/autofix";
 import { envTarget as target } from "./test-helpers/env-target";
 import { tempDir } from "./test-helpers/temp-dir";
 import type { GhOutput, GhRunner } from "./gh";
@@ -10,6 +11,7 @@ import type { GitRunner } from "./git";
 const CLIENT_ID = "TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID";
 const CLIENT_SECRET = "TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET";
 const WORKSPACE_ID = "TAILOR_PLATFORM_WORKSPACE_ID";
+const SLACK_BOT_TOKEN = "TAILOR_SLACK_BOT_TOKEN";
 
 type Entries = { secrets?: readonly string[]; variables?: readonly string[] };
 
@@ -21,6 +23,9 @@ type FakeGitHub = Entries & {
   /** Raw results keyed by API path (without query), replacing the simulated ones. */
   responses?: Record<string, GhOutput | null>;
 };
+
+/** Repository state plus the secrets of the `stg` environment. */
+type ClientSecretPlacement = FakeGitHub & { environmentSecrets?: readonly string[] };
 
 const ok = (stdout: string): GhOutput => ({ status: 0, stdout, stderr: "" });
 const httpError = (code: number, message: string): GhOutput => ({
@@ -121,6 +126,46 @@ function setup(...targets: LockTarget[]) {
   return tmp;
 }
 
+describe("checkEnv for the autofix workflow", () => {
+  const APP_CLIENT_ID = "TAILOR_AUTOFIX_APP_CLIENT_ID";
+  const APP_PRIVATE_KEY = "TAILOR_AUTOFIX_APP_PRIVATE_KEY";
+
+  function setupAutofixLock() {
+    const tmp = tempDir("setup-env-check-");
+    writeLock(tmp.dir, {
+      version: LOCK_VERSION,
+      targets: [],
+      autofix: autofixLockEntry("github-app"),
+    });
+    return tmp;
+  }
+
+  test("fails when the GitHub App settings are missing from the repository", () => {
+    using tmp = setupAutofixLock();
+    using output = captureOutput();
+    const gh = fakeGh({ variables: [APP_CLIENT_ID] });
+
+    expect(() => checkEnv({ outputDir: tmp.dir, gitRunner: origin, ghRunner: gh })).toThrow(
+      /1 required secret or variable is missing/,
+    );
+    expect(output.stderr()).toContain("Repository secrets and variables (autofix)");
+    expect(output.stderr()).toContain(`✔ ${APP_CLIENT_ID} (variable, set on the repository)`);
+    expect(output.stderr()).toContain(`✖ ${APP_PRIVATE_KEY} (secret): missing`);
+    expect(output.stdout()).toContain(`gh secret set ${APP_PRIVATE_KEY} --repo=acme/app`);
+    expect(gh.calls.some((args) => args.some((arg) => arg.includes("/environments/")))).toBe(false);
+  });
+
+  test("counts settings on the organization as registered", () => {
+    using tmp = setupAutofixLock();
+    using output = captureOutput();
+    const gh = fakeGh({ organization: { secrets: [APP_PRIVATE_KEY], variables: [APP_CLIENT_ID] } });
+
+    checkEnv({ outputDir: tmp.dir, gitRunner: origin, ghRunner: gh });
+
+    expect(output.stderr()).toContain(`✔ ${APP_PRIVATE_KEY} (secret, set on the organization)`);
+  });
+});
+
 describe("checkEnv", () => {
   test("fails when an environment lacks a required secret, naming it", () => {
     using tmp = setup();
@@ -143,12 +188,17 @@ describe("checkEnv", () => {
     checkEnv({ outputDir: tmp.dir, gitRunner: origin, ghRunner: gh });
 
     expect(output.stderr()).toMatch(/TAILOR_SLACK_BOT_TOKEN \(secret\): optional, not set/);
-    expect(output.stderr()).toMatch(/All required secrets and variables are registered/);
+    expect(output.stderr().split("\n")).toContain(`  ✔ ${CLIENT_SECRET} (secret)`);
+    expect(output.stderr()).not.toContain("⚠");
+    expect(output.stdout()).not.toContain("gh secret delete");
+    expect(output.stderr().split("\n").at(-1)).toBe(
+      "All required secrets and variables are registered.",
+    );
   });
 
   test.each([
-    ["repository", { secrets: [CLIENT_SECRET] }],
-    ["organization", { organization: { secrets: [CLIENT_SECRET] } }],
+    ["repository", { secrets: [SLACK_BOT_TOKEN] }],
+    ["organization", { organization: { secrets: [SLACK_BOT_TOKEN] } }],
   ] as const)(
     "counts a secret set on the %s as registered, since the workflow reads it from there",
     (scope, github) => {
@@ -156,14 +206,126 @@ describe("checkEnv", () => {
       using output = captureOutput();
       const gh = fakeGh({
         ...github,
-        environments: { stg: { variables: [CLIENT_ID, WORKSPACE_ID] } },
+        environments: { stg: { secrets: [CLIENT_SECRET], variables: [CLIENT_ID, WORKSPACE_ID] } },
       });
 
       checkEnv({ outputDir: tmp.dir, gitRunner: origin, ghRunner: gh });
 
-      expect(output.stderr()).toContain(`✔ ${CLIENT_SECRET} (secret, set on the ${scope})`);
+      expect(output.stderr()).toContain(`✔ ${SLACK_BOT_TOKEN} (secret, set on the ${scope})`);
     },
   );
+
+  const UNGUARDED = "so the environment's protection rules do not guard it";
+  const STG_SUMMARY =
+    "All required secrets and variables are registered, but any workflow on any branch can read " +
+    `${CLIENT_SECRET} outside the protection rules of environment "stg".`;
+  const SET = `gh secret set ${CLIENT_SECRET} --env=stg --repo=acme/app`;
+  const DELETE = `# gh secret delete ${CLIENT_SECRET} --repo=acme/app`;
+  const HOW_TO_REUSE = "#   How to get: the value set on the";
+  const howToReuse = (scope: string) =>
+    `${HOW_TO_REUSE} ${scope} (GitHub does not show secret values, so use the copy you stored)`;
+
+  test.each([
+    [
+      "only on the repository",
+      { secrets: [CLIENT_SECRET] },
+      `(secret, set on the repository): any workflow on any branch can read it from the repository, ${UNGUARDED}; ` +
+        "set it on the environment and delete it from the repository",
+      [howToReuse("repository"), SET, DELETE],
+    ],
+    [
+      "only on the organization",
+      { organization: { secrets: [CLIENT_SECRET] } },
+      `(secret, set on the organization): any workflow on any branch can read it from the organization, ${UNGUARDED}; ` +
+        "set it on the environment and have an organization owner stop sharing it with this repository",
+      [howToReuse("organization"), SET],
+    ],
+    [
+      "on the repository and the organization",
+      { secrets: [CLIENT_SECRET], organization: { secrets: [CLIENT_SECRET] } },
+      "(secret, set on the repository): any workflow on any branch can read it from the repository and the " +
+        `organization, ${UNGUARDED}; set it on the environment, delete it from the repository, and have an ` +
+        "organization owner stop sharing it with this repository",
+      [howToReuse("repository"), SET, DELETE],
+    ],
+    [
+      "on the environment and also on the repository",
+      { secrets: [CLIENT_SECRET], environmentSecrets: [CLIENT_SECRET] },
+      "(secret): set on the environment and also on the repository, where any workflow on any branch can " +
+        `read it, ${UNGUARDED}; delete it from the repository`,
+      [DELETE],
+    ],
+    [
+      "on the environment and also on the organization",
+      { organization: { secrets: [CLIENT_SECRET] }, environmentSecrets: [CLIENT_SECRET] },
+      "(secret): set on the environment and also on the organization, where any workflow on any branch can " +
+        `read it, ${UNGUARDED}; have an organization owner stop sharing it with this repository`,
+      [],
+    ],
+  ] as const)(
+    "warns, without failing, about the client secret set %s, and prints the gh commands that fix it",
+    (_, { environmentSecrets = [], ...github }: ClientSecretPlacement, line, commands) => {
+      using tmp = setup();
+      using output = captureOutput();
+      const gh = fakeGh({
+        ...github,
+        environments: {
+          stg: { secrets: environmentSecrets, variables: [CLIENT_ID, WORKSPACE_ID] },
+        },
+      });
+
+      checkEnv({ outputDir: tmp.dir, gitRunner: origin, ghRunner: gh });
+
+      const stderr = output.stderr().split("\n");
+      expect(stderr).toContain(`  ⚠ ${CLIENT_SECRET} ${line}`);
+      expect(output.stderr()).not.toContain(`✔ ${CLIENT_SECRET}`);
+      expect(stderr.at(-1)).toBe(STG_SUMMARY);
+
+      const stdout = output.stdout().split("\n");
+      expect(
+        stdout.filter((text) => text === SET || text === DELETE || text.startsWith(HOW_TO_REUSE)),
+      ).toEqual(commands);
+    },
+  );
+
+  test("moves a repository client secret to every environment reading it, deleting it once", () => {
+    using tmp = setup(target("branch", "my-app", "stg"), target("tag", "my-app", "production"));
+    using output = captureOutput();
+    const gh = fakeGh({
+      secrets: [CLIENT_SECRET],
+      environments: {
+        stg: { variables: [CLIENT_ID, WORKSPACE_ID] },
+        production: { variables: [CLIENT_ID, WORKSPACE_ID] },
+      },
+    });
+
+    checkEnv({ outputDir: tmp.dir, gitRunner: origin, ghRunner: gh });
+
+    const lines = output.stdout().split("\n");
+    expect(lines).toContain(`gh secret set ${CLIENT_SECRET} --env=stg --repo=acme/app`);
+    expect(lines).toContain(`gh secret set ${CLIENT_SECRET} --env=production --repo=acme/app`);
+    expect(lines.filter((line) => line.includes("gh secret delete"))).toEqual([
+      `# gh secret delete ${CLIENT_SECRET} --repo=acme/app`,
+    ]);
+    expect(output.stderr().split("\n").at(-1)).toBe(
+      "All required secrets and variables are registered, but any workflow on any branch can read " +
+        `${CLIENT_SECRET} outside the protection rules of environments "stg" and "production".`,
+    );
+  });
+
+  test("warns about a repository client secret for an environment that does not exist yet, creating it in the commands", () => {
+    using tmp = setup();
+    using output = captureOutput();
+    const gh = fakeGh({ secrets: [CLIENT_SECRET], variables: [CLIENT_ID, WORKSPACE_ID] });
+
+    checkEnv({ outputDir: tmp.dir, gitRunner: origin, ghRunner: gh });
+
+    expect(output.stderr()).toContain(`⚠ ${CLIENT_SECRET} (secret, set on the repository)`);
+    expect(output.stdout()).toContain('gh api -X PUT "repos/acme/app/environments/stg" --silent');
+    expect(output.stdout().split("\n")).toContain(
+      `gh secret set ${CLIENT_SECRET} --env=stg --repo=acme/app`,
+    );
+  });
 
   test("skips organization-level entries for a repository a user owns", () => {
     using tmp = setup();
@@ -346,6 +508,7 @@ describe("checkEnv", () => {
     using output = captureOutput();
     using _json = vi.spyOn(logger, "jsonMode", "get").mockReturnValue(true);
     const gh = fakeGh({
+      secrets: [CLIENT_SECRET],
       environments: { stg: { secrets: [CLIENT_SECRET], variables: [CLIENT_ID] } },
     });
 
@@ -368,6 +531,12 @@ describe("checkEnv", () => {
               registered: true,
               foundIn: "environment",
               otherTypeIn: null,
+              exposedIn: [],
+            }),
+            expect.objectContaining({
+              name: CLIENT_SECRET,
+              foundIn: "environment",
+              exposedIn: ["repository"],
             }),
             expect.objectContaining({ name: WORKSPACE_ID, registered: false, foundIn: null }),
           ]),

@@ -6,6 +6,7 @@ import {
   mapFieldTypeToPostgresType,
   type DDLFieldConfig,
   type DDLTableConfig,
+  dropUnresolvableReferences,
 } from "./tailordb-ddl";
 
 const openDatabases: PGlite[] = [];
@@ -542,6 +543,104 @@ describe("foreign keys", { timeout: 30_000 }, () => {
     ).rejects.toThrow(/not found/);
   });
 
+  describe("unique fields inside nested fields", () => {
+    const nestedUnique = (): DDLTableConfig => ({
+      name: "Order",
+      fields: {
+        id: { type: "uuid" },
+        info: {
+          type: "nested",
+          required: false,
+          fields: {
+            code: { type: "string", unique: true },
+            seq: { type: "integer", unique: true },
+            group: {
+              type: "nested",
+              fields: { token: { type: "uuid", unique: true } },
+            },
+            note: { type: "string" },
+          },
+        },
+      },
+    });
+    const insertInfo = (db: PGlite, info: unknown) =>
+      db.query(`INSERT INTO "Order" (info) VALUES ($1::jsonb)`, [JSON.stringify(info)]);
+
+    const token = crypto.randomUUID();
+    test.each([
+      ["a string member", { code: "dup" }],
+      ["an integer member", { seq: 7 }],
+      ["a member of a nested object", { group: { token } }],
+    ])("rejects a second row with the same value of %s", async (_label, info) => {
+      const db = await pglite(generateSchemaDDL([nestedUnique()]));
+
+      await insertInfo(db, info);
+      await expect(insertInfo(db, info)).rejects.toThrow(/duplicate key value violates unique/);
+    });
+
+    test("compares a decimal member as a number without rounding it to its scale, as the platform does", async () => {
+      const db = await pglite(
+        generateSchemaDDL([
+          {
+            name: "Order",
+            fields: {
+              id: { type: "uuid" },
+              info: {
+                type: "nested",
+                fields: { amount: { type: "decimal", scale: 2, unique: true } },
+              },
+            },
+          },
+        ]),
+      );
+
+      await insertInfo(db, { amount: "1.231" });
+      await expect(insertInfo(db, { amount: "1.234" })).resolves.toBeDefined();
+      await expect(insertInfo(db, { amount: "1.231" })).rejects.toThrow(
+        /duplicate key value violates unique/,
+      );
+    });
+
+    test("is not skipped by a table index that has the same name as the member path", async () => {
+      const db = await pglite(
+        generateSchemaDDL([
+          {
+            name: "Order",
+            fields: {
+              id: { type: "uuid" },
+              other: { type: "string", required: false },
+              info: { type: "nested", fields: { code: { type: "string", unique: true } } },
+            },
+            indexes: { "info.code": { fields: ["other"], unique: true } },
+          },
+        ]),
+      );
+
+      await insertInfo(db, { code: "dup" });
+      await expect(insertInfo(db, { code: "dup" })).rejects.toThrow(
+        /duplicate key value violates unique/,
+      );
+    });
+
+    test("accepts distinct values, and rows that leave the member out", async () => {
+      const db = await pglite(generateSchemaDDL([nestedUnique()]));
+
+      await insertInfo(db, { code: "a", seq: 1 });
+      await insertInfo(db, { code: "b", seq: 2 });
+      await insertInfo(db, { note: "x" });
+      await insertInfo(db, { note: "y" });
+      await insertInfo(db, { code: null });
+      await expect(insertInfo(db, { code: null })).resolves.toBeDefined();
+    });
+
+    test("applying the script twice leaves the database unchanged", async () => {
+      const script = generateSchemaDDL([nestedUnique()]);
+      const db = await pglite(script);
+
+      await expect(db.exec(script)).resolves.toBeDefined();
+    });
+  });
+
   test("applying the script twice leaves the database unchanged", async () => {
     const script = generateSchemaDDL([
       {
@@ -574,6 +673,18 @@ describe("foreign keys", { timeout: 30_000 }, () => {
         },
       ]),
     ).toThrow(/"Parent"."code", which must be unique and of the same type/);
+  });
+
+  test("a reference to id from a field that is not a uuid is rejected", () => {
+    expect(() =>
+      generateSchemaDDL([
+        { name: "Parent", fields: { id: { type: "uuid" } } },
+        {
+          name: "Child",
+          fields: { id: { type: "uuid" }, parentRef: ref("Parent", { type: "string" }) },
+        },
+      ]),
+    ).toThrow(/"Parent"."id", which must be unique and of the same type/);
   });
 
   test("a reference to a table outside the schema is rejected", () => {
@@ -630,6 +741,58 @@ describe("foreign keys to a non-id field and edge columns", { timeout: 30_000 },
     );
     expect(script).toContain('"id" uuid PRIMARY KEY DEFAULT gen_random_uuid()\n');
     expect(script).not.toContain("REFERENCES");
+  });
+});
+
+describe("dropUnresolvableReferences", () => {
+  const parent: DDLTableConfig = { name: "Parent", fields: { id: { type: "uuid" } } };
+  const toParent = (extra: Partial<DDLFieldConfig> = {}): DDLFieldConfig => ({
+    type: "uuid",
+    foreignKey: true,
+    foreignKeyType: "Parent",
+    ...extra,
+  });
+
+  test("keeps references that resolve, including inside nested fields", () => {
+    const child: DDLTableConfig = {
+      name: "Child",
+      fields: {
+        id: { type: "uuid" },
+        owner: toParent(),
+        info: { type: "nested", fields: { owner: toParent() } },
+      },
+    };
+    expect(dropUnresolvableReferences([parent, child])).toEqual([parent, child]);
+  });
+
+  test("drops only the references that do not resolve, inside nested fields too", () => {
+    const [, child] = dropUnresolvableReferences([
+      parent,
+      {
+        name: "Child",
+        fields: {
+          id: { type: "uuid" },
+          owner: toParent(),
+          ghost: toParent({ foreignKeyType: "Ghost" }),
+          info: {
+            type: "nested",
+            fields: { owner: toParent(), ghost: toParent({ foreignKeyType: "Ghost" }) },
+          },
+        },
+      },
+    ]);
+    expect(child!.fields.owner).toMatchObject({ foreignKey: true });
+    expect(child!.fields.ghost).toEqual({ type: "uuid" });
+    expect(child!.fields.info!.fields!.owner).toMatchObject({ foreignKey: true });
+    expect(child!.fields.info!.fields!.ghost).toEqual({ type: "uuid" });
+  });
+
+  test("drops a reference to id from a field that is not a uuid", () => {
+    const [, child] = dropUnresolvableReferences([
+      parent,
+      { name: "Child", fields: { id: { type: "uuid" }, owner: toParent({ type: "string" }) } },
+    ]);
+    expect(child!.fields.owner).toEqual({ type: "string" });
   });
 });
 
@@ -783,45 +946,259 @@ describe("reference triggers see the rows actually written", { timeout: 30_000 }
   });
 });
 
-describe("a string field related to id", { timeout: 30_000 }, () => {
-  const tables: DDLTableConfig[] = [
-    { name: "Parent", fields: { id: { type: "uuid" } } },
-    {
-      name: "Child",
+describe("deleting a parent that an array or nested value points at", { timeout: 30_000 }, () => {
+  const parent: DDLTableConfig = {
+    name: "Parent",
+    fields: { id: { type: "uuid" }, code: { type: "string", unique: true } },
+  };
+  const reference = (extra: Partial<DDLFieldConfig> = {}): DDLFieldConfig => ({
+    type: "uuid",
+    foreignKey: true,
+    foreignKeyType: "Parent",
+    ...extra,
+  });
+  const child: DDLTableConfig = {
+    name: "Child",
+    fields: {
+      id: { type: "uuid" },
+      ids: reference({ array: true }),
+      info: { type: "nested", fields: { ownerID: reference() } },
+      lines: { type: "nested", array: true, fields: { assigneeID: reference() } },
+    },
+  };
+  const stillReferenced =
+    /update or delete on table `Parent` violates foreign key constraint: some record is still referenced from table `Child`/;
+
+  async function setup(tables: DDLTableConfig[] = [parent, child]): Promise<PGlite> {
+    const db = newPglite();
+    await db.exec(generateSchemaDDL(tables));
+    return db;
+  }
+
+  async function insertParent(db: PGlite, code = "p"): Promise<string> {
+    const { rows } = await db.query<{ id: string }>(
+      `INSERT INTO "Parent" (code) VALUES ($1) RETURNING id`,
+      [code],
+    );
+    return rows[0]!.id;
+  }
+
+  test.each([
+    [
+      "an element of an array column",
+      `INSERT INTO "Child" (ids) VALUES ($1)`,
+      (id: string) => `{${id}}`,
+    ],
+    [
+      "a nested value",
+      `INSERT INTO "Child" (info) VALUES ($1::jsonb)`,
+      (id: string) => JSON.stringify({ ownerID: id }),
+    ],
+    [
+      "an element of a nested array",
+      `INSERT INTO "Child" (lines) VALUES ($1::jsonb)`,
+      (id: string, other: string) => JSON.stringify([{ assigneeID: other }, { assigneeID: id }]),
+    ],
+  ])("refuses to delete a parent that %s points at", async (_, insert, value) => {
+    const db = await setup();
+    const id = await insertParent(db);
+    const other = await insertParent(db, "other");
+    await db.query(insert, [value(id, other)]);
+
+    await expect(db.query(`DELETE FROM "Parent" WHERE id = $1`, [id])).rejects.toThrow(
+      stillReferenced,
+    );
+  });
+
+  test("deletes a parent nothing points at, and one whose referencing row was changed", async () => {
+    const db = await setup();
+    const free = await insertParent(db, "free");
+    const held = await insertParent(db, "held");
+    await db.query(`INSERT INTO "Child" (ids) VALUES ($1)`, [`{${held}}`]);
+
+    await db.query(`DELETE FROM "Parent" WHERE id = $1`, [free]);
+    await db.query(`UPDATE "Child" SET ids = '{}'`);
+    await db.query(`DELETE FROM "Parent" WHERE id = $1`, [held]);
+
+    const { rows } = await db.query(`SELECT 1 FROM "Parent"`);
+    expect(rows).toHaveLength(0);
+  });
+
+  test("a null column, an empty array and a JSON null do not hold a parent", async () => {
+    const db = await setup();
+    const id = await insertParent(db);
+    await db.query(`INSERT INTO "Child" (ids, info, lines) VALUES (NULL, NULL, NULL)`);
+    await db.query(`INSERT INTO "Child" (ids, info, lines) VALUES ('{}', $1::jsonb, '[]')`, [
+      JSON.stringify({ ownerID: null }),
+    ]);
+
+    await db.query(`DELETE FROM "Parent" WHERE id = $1`, [id]);
+
+    const { rows } = await db.query(`SELECT 1 FROM "Parent"`);
+    expect(rows).toHaveLength(0);
+  });
+
+  test("a nested value written in upper case still holds the parent", async () => {
+    const db = await setup();
+    const id = await insertParent(db);
+    await db.query(`INSERT INTO "Child" (info) VALUES ($1::jsonb)`, [
+      JSON.stringify({ ownerID: id.toUpperCase() }),
+    ]);
+
+    await expect(db.query(`DELETE FROM "Parent" WHERE id = $1`, [id])).rejects.toThrow(
+      stillReferenced,
+    );
+  });
+
+  test("names the table of whichever child still points at the parent", async () => {
+    const other: DDLTableConfig = {
+      name: "Other",
+      fields: { id: { type: "uuid" }, ids: reference({ array: true }) },
+    };
+    const db = await setup([parent, child, other]);
+    const id = await insertParent(db);
+    await db.query(`INSERT INTO "Other" (ids) VALUES ($1)`, [`{${id}}`]);
+
+    await expect(db.query(`DELETE FROM "Parent" WHERE id = $1`, [id])).rejects.toThrow(
+      /still referenced from table `Other`/,
+    );
+  });
+
+  test("follows foreignKeyField when the reference is not to the id", async () => {
+    const byCode: DDLTableConfig = {
+      name: "ByCode",
       fields: {
         id: { type: "uuid" },
-        parentRef: {
+        codes: {
           type: "string",
+          array: true,
           foreignKey: true,
           foreignKeyType: "Parent",
-          foreignKeyField: "id",
+          foreignKeyField: "code",
         },
       },
-    },
-  ];
+    };
+    const db = await setup([parent, byCode]);
+    const id = await insertParent(db, "held");
+    await db.query(`INSERT INTO "ByCode" (codes) VALUES ('{held}')`);
 
-  test("is accepted by the generator, as the platform accepts it", () => {
-    expect(() => generateSchemaDDL(tables)).not.toThrow();
-  });
-
-  test("rejects an id with no parent, including a value that is not a uuid", async () => {
-    const db = newPglite();
-    await db.exec(generateSchemaDDL(tables));
-    for (const value of [crypto.randomUUID(), "abc"]) {
-      await expect(
-        db.query(`INSERT INTO "Child" ("parentRef") VALUES ($1)`, [value]),
-      ).rejects.toThrow(/not found in "Parent"."id"/);
-    }
-  });
-
-  test("accepts an existing id and null", async () => {
-    const db = newPglite();
-    await db.exec(generateSchemaDDL(tables));
-    const { rows } = await db.query<{ id: string }>(
-      `INSERT INTO "Parent" DEFAULT VALUES RETURNING id`,
+    await expect(db.query(`DELETE FROM "Parent" WHERE id = $1`, [id])).rejects.toThrow(
+      /still referenced from table `ByCode`/,
     );
-    await db.query(`INSERT INTO "Child" ("parentRef") VALUES ($1), (NULL)`, [rows[0]!.id]);
-    const { rows: written } = await db.query(`SELECT 1 FROM "Child"`);
-    expect(written).toHaveLength(2);
+  });
+
+  describe("a table whose array points at its own rows", () => {
+    const node: DDLTableConfig = {
+      name: "Node",
+      fields: {
+        id: { type: "uuid" },
+        ids: { type: "uuid", array: true, foreignKey: true, foreignKeyType: "Node" },
+      },
+    };
+    const stillReferencedFromNode =
+      /update or delete on table `Node` violates foreign key constraint: some record is still referenced from table `Node`/;
+
+    test("refuses to delete a row that only points at itself", async () => {
+      const db = await setup([node]);
+      const id = crypto.randomUUID();
+      await db.query(`INSERT INTO "Node" (id, ids) VALUES ($1, $2)`, [id, `{${id}}`]);
+
+      await expect(db.query(`DELETE FROM "Node" WHERE id = $1`, [id])).rejects.toThrow(
+        stillReferencedFromNode,
+      );
+    });
+
+    test("refuses to delete in one statement two rows that point at each other", async () => {
+      const db = await setup([node]);
+      const [first, second] = [crypto.randomUUID(), crypto.randomUUID()];
+      await db.query(`INSERT INTO "Node" (id) VALUES ($1)`, [second]);
+      await db.query(`INSERT INTO "Node" (id, ids) VALUES ($1, $2)`, [first, `{${second}}`]);
+
+      await expect(
+        db.query(`DELETE FROM "Node" WHERE id IN ($1, $2)`, [first, second]),
+      ).rejects.toThrow(stillReferencedFromNode);
+    });
+
+    test("deletes the referencing row first, then the row it pointed at", async () => {
+      const db = await setup([node]);
+      const [first, second] = [crypto.randomUUID(), crypto.randomUUID()];
+      await db.query(`INSERT INTO "Node" (id) VALUES ($1)`, [second]);
+      await db.query(`INSERT INTO "Node" (id, ids) VALUES ($1, $2)`, [first, `{${second}}`]);
+
+      await db.query(`DELETE FROM "Node" WHERE id = $1`, [first]);
+      await db.query(`DELETE FROM "Node" WHERE id = $1`, [second]);
+
+      const { rows } = await db.query(`SELECT 1 FROM "Node"`);
+      expect(rows).toHaveLength(0);
+    });
+  });
+
+  test("a nested value that is not a uuid does not stop deleting a parent", async () => {
+    const db = await setup();
+    const id = await insertParent(db);
+    await db.exec("SET session_replication_role = replica");
+    await db.query(`INSERT INTO "Child" (info) VALUES ($1::jsonb)`, [
+      JSON.stringify({ ownerID: "legacy-123" }),
+    ]);
+    await db.exec("SET session_replication_role = origin");
+
+    await db.query(`DELETE FROM "Parent" WHERE id = $1`, [id]);
+
+    const { rows } = await db.query(`SELECT 1 FROM "Parent"`);
+    expect(rows).toHaveLength(0);
+  });
+
+  test("applying the script again leaves the database unchanged", async () => {
+    const db = await setup();
+    await expect(db.exec(generateSchemaDDL([parent, child]))).resolves.toBeDefined();
+  });
+
+  describe("changing the key a parent is pointed at by", () => {
+    const byCode: DDLTableConfig = {
+      name: "ByCode",
+      fields: {
+        id: { type: "uuid" },
+        codes: {
+          type: "string",
+          array: true,
+          foreignKey: true,
+          foreignKeyType: "Parent",
+          foreignKeyField: "code",
+        },
+      },
+    };
+
+    test("refuses to change a key that an array element still points at", async () => {
+      const db = await setup([parent, byCode]);
+      const id = await insertParent(db, "held");
+      await db.query(`INSERT INTO "ByCode" (codes) VALUES ('{held}')`);
+
+      await expect(
+        db.query(`UPDATE "Parent" SET code = 'renamed' WHERE id = $1`, [id]),
+      ).rejects.toThrow(/still referenced from table `ByCode`/);
+    });
+
+    test("refuses to change the id that an array element still points at", async () => {
+      const db = await setup();
+      const id = await insertParent(db);
+      await db.query(`INSERT INTO "Child" (ids) VALUES ($1)`, [`{${id}}`]);
+
+      await expect(
+        db.query(`UPDATE "Parent" SET id = $2 WHERE id = $1`, [id, crypto.randomUUID()]),
+      ).rejects.toThrow(stillReferenced);
+    });
+
+    test("allows changing a column nothing points at, and a key nothing points at", async () => {
+      const db = await setup([parent, byCode]);
+      const held = await insertParent(db, "held");
+      const free = await insertParent(db, "free");
+      await db.query(`INSERT INTO "ByCode" (codes) VALUES ('{held}')`);
+
+      await db.query(`UPDATE "Parent" SET code = 'free-renamed' WHERE id = $1`, [free]);
+      await db.query(`UPDATE "Parent" SET code = code WHERE id = $1`, [held]);
+
+      const { rows } = await db.query(`SELECT 1 FROM "Parent" WHERE code = 'free-renamed'`);
+      expect(rows).toHaveLength(1);
+    });
   });
 });

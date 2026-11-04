@@ -66,6 +66,46 @@ aroundEach(async (runTest) => {
   }
 });
 
+type CallbackResponse = { status: number; contentType: string | undefined; body: string };
+
+function getCallback(path: string): Promise<CallbackResponse> {
+  return new Promise((resolve, reject) => {
+    http
+      .get(`http://localhost:8080${path}`, { agent: false }, (res) => {
+        let body = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk: string) => (body += chunk));
+        res.on("end", () =>
+          resolve({ status: res.statusCode ?? 0, contentType: res.headers["content-type"], body }),
+        );
+      })
+      .on("error", reject);
+  });
+}
+
+function mockOAuth2Connection(exchangeMock: ReturnType<typeof vi.fn>) {
+  listAuthConnectionsMock.mockResolvedValue({
+    connections: [
+      {
+        name: "my-connection",
+        config: {
+          case: "oauth2",
+          value: {
+            providerUrl,
+            clientId: "client-id",
+            authUrl: "https://idp.example.com/authorize",
+          },
+        },
+      },
+    ],
+    nextPageToken: "",
+  });
+  clientMocks.initOperatorClient.mockResolvedValue({
+    listAuthConnections: listAuthConnectionsMock,
+    exchangeAuthConnectionAuthorizationCode: exchangeMock,
+  });
+}
+
 describe("authconnection authorize", () => {
   test("reports an OIDC discovery connection failure as a normal command error", async () => {
     const fetchError = new TypeError("fetch failed");
@@ -147,6 +187,62 @@ describe("authconnection authorize", () => {
       workspaceId: "workspace-id",
       name: "my-connection",
     });
+  });
+
+  test("returns an HTML page telling the user to close the tab after a successful authorization", async () => {
+    mockOAuth2Connection(vi.fn().mockResolvedValue({}));
+    let pending: Promise<CallbackResponse> | undefined;
+    openMock.mockImplementation(async (authorizeUrl: string) => {
+      const state = new URL(authorizeUrl).searchParams.get("state");
+      pending = getCallback(`/callback?code=c&state=${state}`);
+      await pending;
+    });
+
+    const result = await runCommand(authorizeAuthConnectionCommand, ["--name", "my-connection"]);
+    const response = await pending;
+
+    expect(result.success).toBe(true);
+    expect(response?.status).toBe(200);
+    expect(response?.contentType).toContain("text/html");
+    expect(response?.body).toContain("Authorization successful");
+    expect(response?.body).toContain("close this tab");
+    expect(response?.body).toContain("window.close()");
+  });
+
+  test("returns an escaped HTML failure page with 400 when the provider reports an error", async () => {
+    mockOAuth2Connection(vi.fn());
+    let pending: Promise<CallbackResponse> | undefined;
+    openMock.mockImplementation(async () => {
+      pending = getCallback(`/callback?error=${encodeURIComponent("<script>x</script>")}`);
+      await pending;
+    });
+
+    const result = await runCommand(authorizeAuthConnectionCommand, ["--name", "my-connection"]);
+    const response = await pending;
+
+    expect(result.success).toBe(false);
+    expect(response?.status).toBe(400);
+    expect(response?.contentType).toContain("text/html");
+    expect(response?.body).toContain("Authorization failed");
+    expect(response?.body).toContain("&lt;script&gt;x&lt;/script&gt;");
+    expect(response?.body).not.toContain("<script>x");
+  });
+
+  test("does not expose internal error messages on the failure page", async () => {
+    mockOAuth2Connection(vi.fn().mockRejectedValue(new Error("secret-internal-detail")));
+    let pending: Promise<CallbackResponse> | undefined;
+    openMock.mockImplementation(async (authorizeUrl: string) => {
+      const state = new URL(authorizeUrl).searchParams.get("state");
+      pending = getCallback(`/callback?code=c&state=${state}`);
+      await pending;
+    });
+
+    const result = await runCommand(authorizeAuthConnectionCommand, ["--name", "my-connection"]);
+    const response = await pending;
+
+    expect(result.success).toBe(false);
+    expect(response?.body).toContain("Authorization failed");
+    expect(response?.body).not.toContain("secret-internal-detail");
   });
 
   test("names the run's profile and workspace in the Console fallback when the callback port is taken", async () => {

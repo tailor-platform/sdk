@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import { parseEnv } from "node:util";
-import { arg, parseArgv, type ArgSource } from "@politty/zod";
+import { arg, extractFields, parseArgv, toCamelCase, type ArgSource } from "@politty/zod";
 import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import * as path from "pathe";
 import { z } from "zod";
@@ -195,6 +195,7 @@ const VERBOSE_ARG_NAME = "verbose";
 const GLOBAL_FLAG_PARSER_OPTIONS = {
   aliasMap: new Map([[JSON_ARG_ALIAS, JSON_ARG_NAME]]),
   booleanFlags: new Set([JSON_ARG_NAME, VERBOSE_ARG_NAME]),
+  defaultNegationDisabledFields: new Set<string>(),
 };
 
 let globalArgsWereApplied = false;
@@ -233,7 +234,11 @@ function globalFlagValue(argv: readonly string[], name: string, alias?: string):
   return parseGlobalFlag(
     options.filter((value) => {
       const [token] = value.split("=", 1);
-      return token === `--${name}` || (alias !== undefined && token === `-${alias}`);
+      return (
+        token === `--${name}` ||
+        value === `--no-${name}` ||
+        (alias !== undefined && token === `-${alias}`)
+      );
     }),
     name,
   );
@@ -278,7 +283,8 @@ export function requestedJsonModeSource(argv: readonly string[]): JsonModeSource
  * @param argv - Command-line arguments after the executable and script path
  */
 export function resolveEarlyFailure(error: unknown, argv: readonly string[]): void {
-  if (globalFlagValue(argv, VERBOSE_ARG_NAME) === true) logger.verbose = true;
+  const verbose = globalFlagValue(argv, VERBOSE_ARG_NAME);
+  if (typeof verbose === "boolean") logger.verbose = verbose;
   const source = requestedJsonModeSource(argv);
   if (!source) return;
   logger.setJsonMode(true, source);
@@ -305,7 +311,7 @@ function jsonArgSource(source: ArgSource | undefined): JsonModeSource {
     : "flag";
 }
 
-interface CommonArgsOptions {
+export interface CommonArgsOptions {
   /** Extra short alias for `--verbose` (e.g. `"v"`), for plugins that need one */
   verboseAlias?: string;
 }
@@ -324,26 +330,28 @@ interface CommonArgsOptions {
  */
 export function createCommonArgs(options: CommonArgsOptions = {}) {
   return {
-    "env-file": arg(z.string().optional(), {
+    "env-file": arg(z.array(z.string()).optional(), {
       alias: "e",
-      description: "Path to the environment file (error if not found)",
+      description: "Path to an environment file, repeatable (error if not found)",
       completion: { type: "file", matcher: [".env.*", ".env"] },
     }),
-    "env-file-if-exists": arg(z.string().optional(), {
-      description: "Path to the environment file (ignored if not found)",
+    "env-file-if-exists": arg(z.array(z.string()).optional(), {
+      description: "Path to an environment file, repeatable (ignored if not found)",
       completion: { type: "file", matcher: [".env.*", ".env"] },
+      // Sets nothing new after loadEnvFilesFromArgv; loads the files for runs that skip it.
       effect: (_value, { args }) => {
         loadEnvFiles(
-          args["env-file"] as string | undefined,
-          args["env-file-if-exists"] as string | undefined,
+          args["env-file"] as string[] | undefined,
+          args["env-file-if-exists"] as string[] | undefined,
         );
       },
     }),
     [VERBOSE_ARG_NAME]: arg(z.boolean().default(false), {
       ...(options.verboseAlias === undefined ? {} : { alias: options.verboseAlias }),
       description: "Enable verbose logging",
-      effect: (value) => {
-        logger.verbose = value;
+      negation: true,
+      effect: (value, { args }) => {
+        logger.verbose = args.$source?.(VERBOSE_ARG_NAME) === "cli" ? value : undefined;
       },
     }),
     [JSON_ARG_NAME]: arg(
@@ -351,6 +359,7 @@ export function createCommonArgs(options: CommonArgsOptions = {}) {
       {
         alias: JSON_ARG_ALIAS,
         description: "Output as JSON",
+        negation: true,
         env: JSON_OUTPUT_ENV_VAR,
         effect: (value, { args }) => {
           globalArgsWereApplied = true;
@@ -365,6 +374,133 @@ export function createCommonArgs(options: CommonArgsOptions = {}) {
  * Common arguments for all CLI commands
  */
 export const commonArgs = createCommonArgs();
+
+interface NamedOption {
+  cliName: string;
+  alias?: readonly string[] | undefined;
+}
+
+/**
+ * Spell an option every way the CLI accepts it on the command line.
+ * @param option - Option field as `extractFields` describes it
+ * @returns `-x` for each one-letter name, and the kebab-case and camelCase forms of each longer one
+ */
+export function flagTokensOf(option: NamedOption): string[] {
+  return [option.cliName, ...(option.alias ?? [])].flatMap((name) =>
+    name.length === 1 ? [`-${name}`] : [`--${name}`, `--${toCamelCase(name)}`],
+  );
+}
+
+/** Env file paths given on the command line, in the order given. */
+export interface EnvFileArgs {
+  envFiles: string[];
+  envFilesIfExists: string[];
+}
+
+const envFileArgKeys = new Map<string, keyof EnvFileArgs>([
+  ["env-file", "envFiles"],
+  ["env-file-if-exists", "envFilesIfExists"],
+]);
+
+const envFileArgKeyByToken: ReadonlyMap<string, keyof EnvFileArgs> = new Map(
+  extractFields(z.strictObject(commonArgs)).fields.flatMap((field) => {
+    const key = envFileArgKeys.get(field.name);
+    if (key === undefined) return [];
+    return flagTokensOf(field).map((token) => [token, key] as const);
+  }),
+);
+
+/**
+ * List the short aliases of the global boolean flags.
+ * @param options - Per-plugin adjustments the common arguments were built with
+ * @returns Every alias of a boolean flag in the common arguments
+ */
+function globalBooleanAliases(options: CommonArgsOptions): ReadonlySet<string> {
+  return new Set(
+    extractFields(z.strictObject(createCommonArgs(options)))
+      .fields.filter((field) => field.type === "boolean")
+      .flatMap((field) => field.alias ?? []),
+  );
+}
+
+interface OptionToken {
+  flag: string;
+  value: string | undefined;
+}
+
+/**
+ * Split an option token into its flag and the value it carries. A short-option
+ * bundle such as `-je.env` yields its first option that is not a global
+ * boolean, with the rest of the bundle as the value.
+ * @param token - Command-line token
+ * @param booleanAliases - Short aliases of the global boolean flags
+ * @returns The flag, and its value when the token carries one
+ */
+function splitOptionToken(token: string, booleanAliases: ReadonlySet<string>): OptionToken {
+  if (
+    token.startsWith("-") &&
+    !token.startsWith("--") &&
+    token.length > 2 &&
+    !token.includes("=")
+  ) {
+    const chars = Array.from(token.slice(1));
+    const index = chars.findIndex((char) => !booleanAliases.has(char));
+    if (index === -1) return { flag: token, value: undefined };
+    const value = chars.slice(index + 1).join("");
+    return { flag: `-${chars[index]}`, value: value === "" ? undefined : value };
+  }
+  const separator = token.indexOf("=");
+  return separator === -1
+    ? { flag: token, value: undefined }
+    : { flag: token.slice(0, separator), value: token.slice(separator + 1) };
+}
+
+/**
+ * Read the env file paths given on the command line. A short-option bundle
+ * counts only when every option before `-e` in it is a global boolean, as in
+ * `-je .env`.
+ * @param argv - Command-line arguments after the executable and script path
+ * @param options - Options passed to {@link createCommonArgs} for the global arguments
+ * @returns Every `--env-file` and `--env-file-if-exists` value before `--`
+ */
+export function readEnvFileArgs(
+  argv: readonly string[],
+  options: CommonArgsOptions = {},
+): EnvFileArgs {
+  const result: EnvFileArgs = { envFiles: [], envFilesIfExists: [] };
+  const booleanAliases = globalBooleanAliases(options);
+  const tokens = optionTokens(argv);
+  for (let index = 0; index < tokens.length; index++) {
+    const { flag, value: inlineValue } = splitOptionToken(tokens[index] ?? "", booleanAliases);
+    const key = envFileArgKeyByToken.get(flag);
+    if (key === undefined) continue;
+    if (inlineValue !== undefined) {
+      result[key].push(inlineValue);
+      continue;
+    }
+    const value = tokens[index + 1];
+    if (value !== undefined && !value.startsWith("-")) {
+      result[key].push(value);
+      index++;
+    }
+  }
+  return result;
+}
+
+/**
+ * Load the env files given on the command line, so that options backed by an
+ * environment variable read the values these files set. Call it before the
+ * CLI parses its arguments, such as from the `setup` hook of `runMain`.
+ * @param argv - Command-line arguments after the executable and script path
+ * @param options - Options passed to {@link createCommonArgs} for the global arguments
+ */
+export function loadEnvFilesFromArgv(
+  argv: readonly string[],
+  options: CommonArgsOptions = {},
+): void {
+  const { envFiles, envFilesIfExists } = readEnvFileArgs(argv, options);
+  loadEnvFiles(envFiles, envFilesIfExists);
+}
 
 /**
  * Arguments for commands that require workspace context
@@ -456,10 +592,25 @@ export const multiConfigArg = {
     alias: "c",
     description:
       "Path to SDK config file. Use comma-separated paths to deploy multiple apps together.",
-    env: "TAILOR_PLATFORM_SDK_CONFIG_PATH",
+    env: "TAILOR_CONFIG_PATH",
     completion: { type: "file", extensions: ["ts"] },
   }),
 } satisfies ArgsShape;
+
+/**
+ * Read the deploy config paths set through the environment, warning when the deprecated TAILOR_PLATFORM_SDK_CONFIG_PATH supplies them.
+ * @returns TAILOR_CONFIG_PATH, or the deprecated TAILOR_PLATFORM_SDK_CONFIG_PATH; empty values count as not set
+ */
+export function readDeployConfigPathEnv(): string | undefined {
+  const configPath = process.env.TAILOR_CONFIG_PATH;
+  if (configPath) return configPath;
+  const deprecatedConfigPath = process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH;
+  if (!deprecatedConfigPath) return undefined;
+  logger.warn(
+    "TAILOR_PLATFORM_SDK_CONFIG_PATH is deprecated. Please use TAILOR_CONFIG_PATH instead.",
+  );
+  return deprecatedConfigPath;
+}
 
 /**
  * Arguments for commands that interact with deployed resources (includes config)
@@ -478,6 +629,9 @@ export const confirmationArgs = {
     description: "Skip confirmation prompts",
   }),
 } satisfies ArgsShape;
+
+/** Suggestion for a confirmation prompt that {@link confirmationArgs} skips but cannot be shown. */
+export const SKIP_CONFIRMATION_SUGGESTION = "Pass --yes to skip the confirmation.";
 
 /**
  * Arguments for commands that require organization context
@@ -538,26 +692,28 @@ export const folderArgs = {
   }),
 } satisfies ArgsShape;
 
+type LocationIdName = "organization-id" | "folder-id";
+
 type LocationIdArgs = {
-  "organization-id"?: string;
-  "folder-id"?: string;
+  [name in LocationIdName]?: string | undefined;
+} & {
+  $source?: ((name: LocationIdName) => ArgSource) | undefined;
 };
 
 /**
- * Read the organization and folder ID options, including IDs loaded by `--env-file`.
- * politty fills `args` from the environment before `--env-file` loads, so only env-file values reach the fallback.
+ * Read the organization and folder ID options.
  * @param args - Parsed command arguments
- * @returns Organization and folder IDs; empty env-file values count as not given
+ * @returns Organization and folder IDs; empty values from the environment count as not given
  */
-export function locationIdsWithEnvFile(args: LocationIdArgs): {
+export function locationIds(args: LocationIdArgs): {
   organizationId?: string;
   folderId?: string;
 } {
-  return {
-    organizationId:
-      args["organization-id"] ?? (process.env.TAILOR_PLATFORM_ORGANIZATION_ID || undefined),
-    folderId: args["folder-id"] ?? (process.env.TAILOR_PLATFORM_FOLDER_ID || undefined),
+  const read = (name: LocationIdName) => {
+    const value = args[name];
+    return value === "" && args.$source?.(name) === "env" ? undefined : value;
   };
+  return { organizationId: read("organization-id"), folderId: read("folder-id") };
 }
 
 export type CommonArgsType = z.infer<z.ZodObject<typeof commonArgs>>;

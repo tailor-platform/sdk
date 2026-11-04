@@ -1,46 +1,78 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import {
   getNamespacesWithMigrations,
   type NamespaceWithMigrations,
 } from "#/cli/commands/tailordb/migrate/config";
 import { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-state";
-import { fetchRemoteMigrationState } from "#/cli/commands/tailordb/migrate/remote-state";
+import {
+  formatNamespaceMigrationHint,
+  migrationCommandContext,
+  type MigrationCommandContext,
+} from "#/cli/commands/tailordb/migrate/hints";
+import {
+  getTablesDeletedAfterCheckpoint,
+  includeTablesDeletedAfterCheckpoint,
+} from "#/cli/commands/tailordb/migrate/pre-migration-schema";
+import {
+  describeMigrationCheckpoint,
+  fetchRemoteMigrationState,
+  isCheckpointStillOwned,
+  type ExpectedMigrationCheckpoint,
+} from "#/cli/commands/tailordb/migrate/remote-state";
+import { locateRemoteCheckpoint } from "#/cli/commands/tailordb/migrate/schema-checks";
 import { usesStepRunner } from "#/cli/commands/tailordb/migrate/script-form";
 import {
   reconstructSnapshotFromMigrations,
   formatMigrationNumber,
   getLatestMigrationNumber,
   getMigrationFiles,
+  isMigrationRestricted,
   type SchemaSnapshot,
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
+import { generateTailorDBTypeManifestFromSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
 import { handleOptionalToRequiredError } from "#/cli/commands/tailordb/migrate/types";
 import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { withSpan } from "#/cli/telemetry/index";
+import { assertDefined } from "#/utils/assert";
+import { areNormalizedEqual } from "../compare";
 import { resourceTrn, writeMetadataLabels } from "../label";
+import { normalizeComparableTailorDBType } from "./compare";
 import {
   clearMaintenanceModeRecord,
+  clearMigrationCleanupRecord,
   clearMigrationInProgress,
   executeMigrations,
   isMigrationOutcomeUnknown,
   isMigrationPartiallyApplied,
+  isMigrationRunEnded,
+  isMigrationStartRefused,
+  isRollbackSkippedWithRecord,
+  removeRunResources,
+  resolveMigrationMachineUsers,
+  rolledBackError,
+  rollbackSkippedError,
   updateMigrationLabel,
   type MigrationContext,
+  type MigrationMachineUsers,
 } from "./migration";
 import {
   applyMigrationRestrictions,
   acceptsMigrationWrites,
   captureMigrationRestrictionState,
   deletedResources,
+  deletePlannedTables,
   executeSingleMigrationPostPhase,
-  executeSingleMigrationPostPhaseDeletions,
   executeSingleMigrationPrePhase,
   generateMigrationPhaseManifest,
+  type GqlPermissionUndo,
   restoreMigrationRestrictions,
-  getDeletedTableNames,
+  getPreMigrationTargetTableNames,
+  gqlPermissionUndoFromSnapshots,
   migrationSnapshotCache,
   namespacedTableKey,
   processedTables,
@@ -51,6 +83,7 @@ import {
   RESTRICTION_EFFECT,
   resolveMigrationSnapshotSettings,
   rollbackSingleMigrationAfterFailure,
+  type RollbackLeftovers,
   warnTablesLeftRestricted,
   type MigrationRestrictionState,
   type RestrictedTables,
@@ -66,30 +99,38 @@ import {
   validateAndDetectMigrations,
   type ValidateAndDetectResult,
 } from "./migration-validation";
-import { removeMigrationWorkflowResources } from "./migration-workflow";
-import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
-import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
+import type { MigrationRunKind, PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { ApplyPhase } from "../types";
 import type { planTailorDB, TailorDBChangeSet, TailorDBPlanResult } from "./plan";
+
+function deployCommandContext(context: TailorDBPlanResult["context"]): MigrationCommandContext {
+  return migrationCommandContext({
+    workspaceId: context.workspaceId,
+    configPath: context.config.path,
+    extraArgs: context.migrationRecoveryArgs,
+  });
+}
 
 /**
  * Reconcile each namespace's migration checkpoint and history ID to
  * the working tree after a create-update apply.
  *
  * This records the initial baseline (`0000`), which is deployed via the normal
- * flow and never bumps the label itself, and keeps the label `<= working_tree_max`
- * after a `--no-schema-check` deploy from an older revision. Namespaces without a
- * baseline are skipped so no phantom label is written.
+ * flow and never bumps the label itself. A checkpoint that is not in the local
+ * migration history is left unchanged, so a deploy never moves it back.
+ * Namespaces without a baseline are skipped so no phantom label is written.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param namespacesWithMigrations - Namespaces that have migration directories configured
  * @param migrationHistoryIds - Migration history ID captured during preflight for each namespace
+ * @param commandContext - Config and workspace selection of the deploy, kept in the suggested commands
  */
 async function reconcileMigrationLabels(
   client: OperatorClient,
   workspaceId: string,
   namespacesWithMigrations: NamespaceWithMigrations[],
   migrationHistoryIds: Readonly<Record<string, string | null>>,
+  commandContext: MigrationCommandContext,
 ): Promise<void> {
   for (const { namespace, migrationsDir } of namespacesWithMigrations) {
     if (getMigrationFiles(migrationsDir).length === 0) {
@@ -103,6 +144,20 @@ async function reconcileMigrationLabels(
     ).catch(() => null);
     const currentVersion = remoteState?.number ?? null;
     if (remoteState && currentVersion === targetVersion && remoteState.historyId === historyId) {
+      continue;
+    }
+    if (
+      remoteState &&
+      locateRemoteCheckpoint(
+        remoteState,
+        migrationsDir,
+        reconstructSnapshotFromMigrations(migrationsDir, 0)?.rebaseline,
+      ).kind === "outside"
+    ) {
+      logger.warn(
+        `Migration checkpoint of namespace ${namespace} is ${describeMigrationCheckpoint(currentVersion)}, which is not in the local migration history, so it was left unchanged. ` +
+          `Run ${formatNamespaceMigrationHint({ ...commandContext, subcommand: ["status"], namespace })} to compare.`,
+      );
       continue;
     }
     await updateMigrationLabel(
@@ -128,33 +183,18 @@ async function reconcileMigrationLabels(
  * Build migration execution context for script-based migrations.
  * @param client - Operator client instance
  * @param migrationContext - Planned TailorDB context
- * @param migrationsRequiringScripts - Migrations that require scripts
+ * @param machineUsers - Machine user that runs the scripts of each namespace
  * @param maintenanceMode - Whether the migrating namespaces are in maintenance mode
+ * @param migrationHistoryIds - Migration history ID captured during preflight for each namespace
  * @returns Migration context for script execution
  */
 async function buildMigrationContextForScripts(
   client: OperatorClient,
   migrationContext: Awaited<ReturnType<typeof planTailorDB>>["context"],
-  migrationsRequiringScripts: PendingMigration[],
+  machineUsers: MigrationMachineUsers,
   maintenanceMode: boolean,
+  migrationHistoryIds: Readonly<Record<string, string | null>>,
 ): Promise<MigrationContext> {
-  const authService = migrationContext.application.authService;
-  if (!authService) {
-    throw CLIError({
-      code: "AUTH_CONFIG_REQUIRED",
-      message: "Auth configuration is required to execute migration scripts.",
-    });
-  }
-
-  const dbConfigMap: Record<string, TailorDBServiceConfig | undefined> = {};
-  for (const migration of migrationsRequiringScripts) {
-    if (!(migration.namespace in dbConfigMap)) {
-      dbConfigMap[migration.namespace] = migrationContext.config.db?.[migration.namespace] as
-        | TailorDBServiceConfig
-        | undefined;
-    }
-  }
-
   // TailorDB apply always runs after staticWebsite apply in the same pass, so a
   // site this deploy just created already exists here even though `env` was
   // resolved earlier, at build time, before that site existed.
@@ -167,24 +207,30 @@ async function buildMigrationContextForScripts(
   return {
     client,
     workspaceId: migrationContext.workspaceId,
-    authNamespace: authService.config.name,
-    machineUsers: authService.config.machineUsers
-      ? Object.keys(authService.config.machineUsers)
-      : undefined,
-    dbConfig: dbConfigMap,
+    authNamespace: machineUsers.authNamespace,
+    machineUserByNamespace: machineUsers.byNamespace,
     env,
-    configDir: path.dirname(migrationContext.config.path),
+    configPath: migrationContext.config.path,
+    ...(migrationContext.migrationRecoveryArgs
+      ? { migrationRecoveryArgs: migrationContext.migrationRecoveryArgs }
+      : {}),
     appName: migrationContext.application.name,
     appId: migrationContext.application.id,
     maintenanceMode,
     skipSteps: migrationContext.migrationSkipSteps,
+    migrationHistoryIds,
   };
+}
+
+interface TailorDBMigrationState extends ValidateAndDetectResult {
+  /** Machine user that runs the scripts of each namespace, or undefined when no script runs. */
+  migrationMachineUsers: MigrationMachineUsers | undefined;
 }
 
 async function validateTailorDBMigrationState(
   client: OperatorClient,
   result: TailorDBPlanResult,
-): Promise<ValidateAndDetectResult> {
+): Promise<TailorDBMigrationState> {
   const { context } = result;
   if (context.migrationTestBaselines) {
     const currentMigrationFileState = captureMigrationFileState(
@@ -203,9 +249,13 @@ async function validateTailorDBMigrationState(
       namespacesWithMigrations: [],
       migrationFileState: currentMigrationFileState,
       migrationHistoryIds: {},
+      checkpoints: new Map(),
       inProgressMigrations: {},
       staleInProgress: [],
       maintenanceModeCheckpoints: {},
+      unfinishedRemovals: new Map(),
+      interruptedMigrations: {},
+      migrationMachineUsers: undefined,
     };
   }
   const typesByNamespace = new Map<string, Record<string, TailorDBSnapshotType>>();
@@ -220,6 +270,7 @@ async function validateTailorDBMigrationState(
     context.config,
     context.noSchemaCheck,
     context.tailorDBInputs,
+    context.migrationRecoveryArgs,
   );
   const approvedRepairs = context.checkpointRepairs;
   const repairPlanChanged =
@@ -241,6 +292,21 @@ async function validateTailorDBMigrationState(
       suggestion: "Run the deployment again to review the updated repair.",
     });
   }
+  for (const [namespace, tableNames] of validation.unfinishedRemovals) {
+    const unplanned = tableNames.filter(
+      (tableName) =>
+        !result.changeSet.type.deletes.some(
+          (del) => del.request.namespaceName === namespace && del.name === tableName,
+        ),
+    );
+    if (unplanned.length > 0) {
+      throw CLIError({
+        code: "DEPLOY_PLAN_STALE",
+        message: `Tables to delete in namespace ${namespace} changed after deployment planning: ${unplanned.join(", ")}.`,
+        suggestion: "Run the deployment again to review the deletion.",
+      });
+    }
+  }
   if (!migrationFileStatesEqual(context.migrationFileState, validation.migrationFileState)) {
     throw CLIError({
       code: "DEPLOY_PLAN_STALE",
@@ -258,7 +324,10 @@ async function validateTailorDBMigrationState(
     pendingMigrations: validation.pendingMigrations,
     inProgressByNamespace: validation.inProgressMigrations,
   });
-  return validation;
+  return {
+    ...validation,
+    migrationMachineUsers: resolveMigrationMachineUsers(context, validation.pendingMigrations),
+  };
 }
 
 /**
@@ -273,24 +342,6 @@ export async function preflightTailorDB(
   await validateTailorDBMigrationState(client, result);
 }
 
-function includeUndeletedTables(
-  snapshot: SchemaSnapshot,
-  previousSnapshot: SchemaSnapshot | undefined,
-  migration: PendingMigration,
-): SchemaSnapshot {
-  const undeletedTables = [...getDeletedTableNames(migration)].flatMap((tableName) => {
-    const table = previousSnapshot?.tables[tableName];
-    return table ? [[tableName, table] as const] : [];
-  });
-  return {
-    ...snapshot,
-    tables: {
-      ...snapshot.tables,
-      ...Object.fromEntries(undeletedTables),
-    },
-  };
-}
-
 /**
  * Return a partially applied migration's tables to their Pre-phase shape after
  * its Post-phase stopped partway, so the next deploy finds the schema it resumes from.
@@ -299,6 +350,7 @@ function includeUndeletedTables(
  * @param migration - Migration whose Post-phase failed
  * @param phaseSettings - How this deploy's migration phases write table settings
  * @param attemptedTables - Tables the migration's phases touched
+ * @param gqlPermissionUndo - Records how to undo each GraphQL permission the migration wrote
  */
 async function reapplyPrePhaseAfterPostPhaseFailure(
   client: OperatorClient,
@@ -306,6 +358,7 @@ async function reapplyPrePhaseAfterPostPhaseFailure(
   migration: PendingMigration,
   phaseSettings: MigrationPhaseSettings,
   attemptedTables: Set<string>,
+  gqlPermissionUndo: GqlPermissionUndo,
 ): Promise<void> {
   try {
     await executeSingleMigrationPrePhase(
@@ -314,6 +367,7 @@ async function reapplyPrePhaseAfterPostPhaseFailure(
       migration,
       phaseSettings,
       attemptedTables,
+      gqlPermissionUndo,
     );
   } catch (error) {
     logger.warn(
@@ -323,19 +377,59 @@ async function reapplyPrePhaseAfterPostPhaseFailure(
   }
 }
 
-async function removeRunResources(
+type RecordState = "cleared" | "in-progress" | "unknown";
+
+/**
+ * Read whether the migration's record is gone with its checkpoint still the one before it, or
+ * remains with that checkpoint. A record of another migration, a checkpoint that moved on, or a
+ * state that cannot be read means a concurrent deploy may own the schema, so nothing is assumed.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param migration - Migration whose record was being cleared
+ * @returns What the remote state confirms about the record
+ */
+async function readRecordState(
   client: OperatorClient,
   workspaceId: string,
-  namespace: string,
-  migrationNumber: number,
-): Promise<void> {
+  migration: PendingMigration,
+): Promise<RecordState> {
   try {
-    await removeMigrationWorkflowResources(client, workspaceId, namespace, migrationNumber);
-  } catch (error) {
-    logger.warn(
-      `Could not remove the temporary resources of migration ${namespace}/${formatMigrationNumber(migrationNumber)}: ` +
-        `${error instanceof Error ? error.message : String(error)}. A later deploy removes them.`,
+    const state = await fetchRemoteMigrationState(
+      client,
+      resourceTrn(workspaceId, "tailordb", migration.namespace),
     );
+    if (state.inProgressInvalid) return "unknown";
+    const checkpoint = state.number ?? (migration.number === 1 ? 0 : null);
+    if (checkpoint !== migration.number - 1) return "unknown";
+    if (state.inProgress === null) return "cleared";
+    return state.inProgress.number === migration.number ? "in-progress" : "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+async function clearRolledBackRecord(
+  client: OperatorClient,
+  workspaceId: string,
+  migration: PendingMigration,
+  kind: MigrationRunKind,
+): Promise<RecordState> {
+  const { namespace } = migration;
+  try {
+    await clearMigrationInProgress(client, workspaceId, namespace);
+    return "cleared";
+  } catch (error) {
+    const state = await readRecordState(client, workspaceId, migration);
+    if (state === "cleared") return state;
+    logger.warn(
+      `Could not clear the in-progress record of migration ${namespace}/${formatMigrationNumber(migration.number)}: ` +
+        `${error instanceof Error ? error.message : String(error)}. ` +
+        "Its schema is left as it is, the migration stays in progress, and its tables stay in maintenance mode; " +
+        (kind === "main"
+          ? "settle it with 'tailor tailordb migration resolve'."
+          : "deploy again to resume it."),
+    );
+    return state;
   }
 }
 
@@ -360,7 +454,7 @@ function keepMigrationTablesRestricted(
   const migrationTables = new Set([
     ...Object.keys(committed?.tables ?? {}),
     ...Object.keys(migrationSnapshotCache.load(migration).tables),
-    ...getDeletedTableNames(migration),
+    ...getTablesDeletedAfterCheckpoint(migration.diff),
   ]);
   if (!committed) return restrictedByDeploy(namespaceName, migrationTables, history);
   restorationSnapshots.set(namespaceName, { ...committed, tables: {} });
@@ -385,7 +479,7 @@ interface RestrictionHistory {
   captured: MigrationRestrictionState;
   /** Tables that migration phases rewrote, which also disables their read. */
   touched: ReadonlySet<string>;
-  /** Whether an earlier deploy left this namespace's migration in progress, so its captured settings are already restricted. */
+  /** Whether an earlier deploy left this namespace's migration in progress or in its Pre-phase, so its captured settings are already restricted. */
   resumed: boolean;
 }
 
@@ -436,23 +530,6 @@ async function clearRecordAfterRelease(
       `Namespace '${namespaceName}' left maintenance mode, but its record could not be removed: ${toError(error).message}. A later deploy removes it.`,
     );
   }
-}
-
-function describeMigrationCheckpoint(number: number | null | undefined): string {
-  return number == null ? "<unset>" : formatMigrationNumber(number);
-}
-
-type ExpectedMigrationCheckpoint = { number: number | null; historyId: string | null };
-
-function isCheckpointStillOwned(
-  remoteState: Awaited<ReturnType<typeof fetchRemoteMigrationState>>,
-  expectedCheckpoint: ExpectedMigrationCheckpoint,
-): boolean {
-  return (
-    remoteState.number === expectedCheckpoint.number &&
-    !remoteState.historyIdInvalid &&
-    remoteState.historyId === expectedCheckpoint.historyId
-  );
 }
 
 /**
@@ -572,6 +649,8 @@ async function applyCreateUpdate(
     migrationHistoryIds,
     staleInProgress,
     maintenanceModeCheckpoints,
+    unfinishedRemovals,
+    migrationMachineUsers,
   } = validation;
 
   // Resolved before any mutation below -- including the checkpoint-repair
@@ -580,15 +659,15 @@ async function applyCreateUpdate(
   // ...) aborts before any TailorDB migration state changes instead of
   // after.
   const migrationsRequiringScripts = pendingMigrations.filter((m) => m.hasScript);
-  const migrationCtx =
-    migrationsRequiringScripts.length > 0
-      ? await buildMigrationContextForScripts(
-          client,
-          migrationContext,
-          migrationsRequiringScripts,
-          phaseSettings.restricted,
-        )
-      : undefined;
+  const migrationCtx = migrationMachineUsers
+    ? await buildMigrationContextForScripts(
+        client,
+        migrationContext,
+        migrationMachineUsers,
+        phaseSettings.restricted,
+        migrationHistoryIds,
+      )
+    : undefined;
 
   for (const repair of checkpointRepairs) {
     await updateMigrationLabel(
@@ -613,6 +692,12 @@ async function applyCreateUpdate(
     );
   }
 
+  deletedResources.reset();
+  for (const [namespace, tableNames] of unfinishedRemovals) {
+    await deletePlannedTables(client, changeSet, namespace, new Set(tableNames));
+    await clearCleanupRecord(client, migrationContext.workspaceId, namespace);
+  }
+
   const migratingNamespaceNames = new Set(pendingMigrations.map((m) => m.namespace));
   let maintenance: MaintenanceReport | undefined;
   if (pendingMigrations.length > 0) {
@@ -632,16 +717,14 @@ async function applyCreateUpdate(
 
   // Skip when pending migrations ran: each already bumped the label, and
   // re-pinning to working_tree_max could mask one left intentionally pending
-  // (e.g. a missing script). --no-schema-check always re-pins to repair drift.
-  if (
-    namespacesWithMigrations.length > 0 &&
-    (migrationContext.noSchemaCheck || pendingMigrations.length === 0)
-  ) {
+  // (e.g. a missing script).
+  if (namespacesWithMigrations.length > 0 && pendingMigrations.length === 0) {
     await reconcileMigrationLabels(
       client,
       migrationContext.workspaceId,
       namespacesWithMigrations,
       migrationHistoryIds,
+      deployCommandContext(migrationContext),
     );
   }
 
@@ -682,7 +765,10 @@ interface MigrationFlow extends Omit<MigrationApplyInput, "holdMaintenanceMode">
   pending: PendingMigrationIndex;
   /** Schema state before each namespace's first pending migration. */
   preMigrationSnapshots: Map<string, SchemaSnapshot>;
+  /** Settings captured before this deploy restricted any table. */
   restrictionState: MigrationRestrictionState;
+  /** Captured settings, with a maintenance mode an earlier deploy recorded released. */
+  settingsBeforeMaintenanceMode: MigrationRestrictionState;
   timeline: MaintenanceTimeline | undefined;
 }
 
@@ -690,7 +776,7 @@ interface MigrationFlow extends Omit<MigrationApplyInput, "holdMaintenanceMode">
 interface RestorationState {
   snapshots: Map<string, SchemaSnapshot>;
   settings: MigrationRestrictionState;
-  /** Checkpoint a namespace must still be at for its tables to be restored. */
+  /** Checkpoint a namespace must still be at for its next migration to start and its tables to be restored. */
   checkpoints: Map<string, ExpectedMigrationCheckpoint>;
   skipped: Set<string>;
 }
@@ -698,7 +784,7 @@ interface RestorationState {
 interface MigrationRunLog {
   reached: Set<PendingMigration>;
   partial: Map<string, PendingMigration>;
-  unrolledBack: { migration: PendingMigration; tables: string[] }[];
+  unrolledBack: ({ migration: PendingMigration } & RollbackLeftovers)[];
   touchedTables: { namespace: string; tables: ReadonlySet<string> }[];
   recordedNamespaces: Set<string>;
 }
@@ -707,7 +793,12 @@ interface MigrationAttempt {
   migration: PendingMigration;
   attemptedTables: Set<string>;
   inProgress: boolean;
+  /** Whether an earlier deploy may have applied this migration's Pre-phase, recorded or not. */
+  resumesPrePhase: boolean;
   runsSteps: boolean;
+  runsMain: boolean;
+  rollsBackOnFailure: boolean;
+  gqlPermissionUndo: GqlPermissionUndo;
 }
 
 type MigrationFailure = { error: unknown };
@@ -718,9 +809,11 @@ interface MigrationOutcome {
   restorationFailures: Record<string, Error>;
 }
 
-interface DeferredChanges {
-  typeKeys: Set<string>;
-  gqlPermissionKeys: Set<string>;
+interface LocalDefinitionWrites {
+  /** Planned creates that the migrations did not perform, by namespace. */
+  creates: Map<string, TailorDBChangeSet["type"]["creates"]>;
+  /** Local definitions that differ from the last pending migration, by namespace and table name. */
+  updates: Map<string, Record<string, TailorDBSnapshotType>>;
 }
 
 async function applyWithMigrations(
@@ -733,7 +826,6 @@ async function applyWithMigrations(
 
   // Reset tracking state for this migration run
   processedTables.reset();
-  deletedResources.reset();
   migrationSnapshotCache.reset();
 
   const migratingNamespaces = new Set(validation.pendingMigrations.map((m) => m.namespace));
@@ -747,21 +839,24 @@ async function applyWithMigrations(
   await executeServicesCreation(client, changeSet);
 
   const pending = indexPendingMigrations(validation.pendingMigrations);
+  const preMigrationSnapshots = loadPreMigrationSnapshots(pending.firstByNamespace);
   const flow: MigrationFlow = {
     ...flowInput,
     migratingNamespaces,
     pending,
-    preMigrationSnapshots: loadPreMigrationSnapshots(
+    preMigrationSnapshots,
+    restrictionState,
+    settingsBeforeMaintenanceMode: releaseRecordedMaintenanceModes(
       migrationContext,
       pending.firstByNamespace,
+      preMigrationSnapshots,
       restrictionState,
       validation.maintenanceModeCheckpoints,
     ),
-    restrictionState,
     timeline: phaseSettings.restricted ? new MaintenanceTimeline() : undefined,
   };
 
-  const deferred = await applyChangesBeforeMigrations(flow);
+  const deferredGqlPermissionKeys = await applyChangesBeforeMigrations(flow);
 
   if (flow.migrationsRequiringScripts.length > 0) {
     logger.info(`Executing ${flow.migrationsRequiringScripts.length} data migration(s)...`);
@@ -770,14 +865,14 @@ async function applyWithMigrations(
 
   const restoration: RestorationState = {
     snapshots: new Map(flow.preMigrationSnapshots),
-    settings: new Map(restrictionState),
+    settings: new Map(flow.settingsBeforeMaintenanceMode),
     checkpoints: new Map(
-      [...pending.firstByNamespace].map(([namespaceName, firstMigration]) => [
+      [...pending.firstByNamespace.keys()].map((namespaceName) => [
         namespaceName,
-        {
-          number: firstMigration.number > 0 ? firstMigration.number - 1 : null,
-          historyId: validation.migrationHistoryIds[namespaceName] ?? null,
-        },
+        assertDefined(
+          validation.checkpoints.get(namespaceName),
+          "validation read the checkpoint of every namespace with pending migrations",
+        ),
       ]),
     ),
     skipped: new Set(),
@@ -792,12 +887,9 @@ async function applyWithMigrations(
   const runFailure = await runPendingMigrations(flow, restoration, runLog);
 
   flow.timeline?.enter("restore");
-  const { failure, restorationFailures } = await verifyRestorationCheckpoints(
-    flow,
-    restoration,
-    runLog,
-    runFailure,
-  );
+  const verified = await verifyRestorationCheckpoints(flow, restoration, runLog, runFailure);
+  const { restorationFailures } = verified;
+  const failure = verified.failure ?? (await applyLocalDefinitions(flow, restoration));
   keepPartialMigrationsRestricted(flow, restoration, runLog);
 
   const held = failure ? undefined : holdMaintenanceMode;
@@ -824,7 +916,7 @@ async function applyWithMigrations(
   }
   const maintenance = held ? undefined : finishMaintenance(flow);
 
-  await applyDeferredChanges(flow, deferred);
+  await applyDeferredGqlPermissions(flow, deferredGqlPermissionKeys);
   await applyRemainingDeletions(flow);
 
   // Write table metadata, which the migration phases above do not.
@@ -858,7 +950,7 @@ function indexPendingMigrations(pendingMigrations: PendingMigration[]): PendingM
       index.lastByNamespace.set(migration.namespace, migration);
     }
     const deleted = index.deletedTables.get(migration.namespace) ?? new Set<string>();
-    for (const tableName of getDeletedTableNames(migration)) deleted.add(tableName);
+    for (const tableName of getTablesDeletedAfterCheckpoint(migration.diff)) deleted.add(tableName);
     index.deletedTables.set(migration.namespace, deleted);
     for (const tableName of Object.keys(migrationSnapshotCache.load(migration).tables)) {
       index.snapshotTableKeys.add(`${migration.namespace}/${tableName}`);
@@ -868,20 +960,12 @@ function indexPendingMigrations(pendingMigrations: PendingMigration[]): PendingM
 }
 
 /**
- * Reconstruct the schema state before each namespace's first pending migration, and
- * release the maintenance mode an earlier deploy recorded at that checkpoint from the
- * captured settings.
- * @param migrationContext - Planned TailorDB context
+ * Reconstruct the schema state before each namespace's first pending migration.
  * @param firstByNamespace - First pending migration of each namespace
- * @param restrictionState - Captured table settings, updated in place
- * @param maintenanceModeCheckpoints - Checkpoint of each namespace's recorded maintenance mode
  * @returns Schema state before each namespace's first pending migration
  */
 function loadPreMigrationSnapshots(
-  migrationContext: TailorDBPlanResult["context"],
   firstByNamespace: ReadonlyMap<string, PendingMigration>,
-  restrictionState: MigrationRestrictionState,
-  maintenanceModeCheckpoints: Readonly<Record<string, number>>,
 ): Map<string, SchemaSnapshot> {
   const preMigrationSnapshots = new Map<string, SchemaSnapshot>();
   for (const [namespace, first] of firstByNamespace) {
@@ -893,10 +977,40 @@ function loadPreMigrationSnapshots(
       });
     }
     preMigrationSnapshots.set(namespace, snapshot);
+  }
+  return preMigrationSnapshots;
+}
+
+/**
+ * Release the maintenance mode an earlier deploy recorded at the checkpoint before each
+ * namespace's first pending migration from a copy of the captured settings. The captured
+ * settings themselves stay as they are, so restricting the namespace leaves those tables alone.
+ * @param migrationContext - Planned TailorDB context
+ * @param firstByNamespace - First pending migration of each namespace
+ * @param preMigrationSnapshots - Schema state before each namespace's first pending migration
+ * @param restrictionState - Captured table settings
+ * @param maintenanceModeCheckpoints - Checkpoint of each namespace's recorded maintenance mode
+ * @returns Captured settings with the recorded maintenance modes released
+ */
+function releaseRecordedMaintenanceModes(
+  migrationContext: TailorDBPlanResult["context"],
+  firstByNamespace: ReadonlyMap<string, PendingMigration>,
+  preMigrationSnapshots: ReadonlyMap<string, SchemaSnapshot>,
+  restrictionState: MigrationRestrictionState,
+  maintenanceModeCheckpoints: Readonly<Record<string, number>>,
+): MigrationRestrictionState {
+  const released = new Map(restrictionState);
+  for (const [namespace, first] of firstByNamespace) {
     const input = migrationContext.tailorDBInputs.find((entry) => entry.namespace === namespace);
     const capturedSettings = restrictionState.get(namespace);
-    if (maintenanceModeCheckpoints[namespace] === first.number - 1 && input && capturedSettings) {
-      restrictionState.set(
+    const snapshot = preMigrationSnapshots.get(namespace);
+    if (
+      maintenanceModeCheckpoints[namespace] === first.number - 1 &&
+      input &&
+      capturedSettings &&
+      snapshot
+    ) {
+      released.set(
         namespace,
         releaseRecordedMaintenanceMode(
           capturedSettings,
@@ -907,7 +1021,24 @@ function loadPreMigrationSnapshots(
       );
     }
   }
-  return preMigrationSnapshots;
+  return released;
+}
+
+/**
+ * The migration of a namespace whose Pre-phase an earlier deploy may have applied: the one
+ * recorded as in progress, or the one an interrupted deploy left without recording it.
+ * @param validation - Validation result of this deploy
+ * @param namespace - TailorDB namespace
+ * @returns The migration's number, or `undefined` when no earlier deploy left one
+ */
+function migrationWithEarlierPrePhase(
+  validation: ValidateAndDetectResult,
+  namespace: string,
+): number | undefined {
+  return (
+    validation.inProgressMigrations[namespace]?.number ??
+    validation.interruptedMigrations[namespace]
+  );
 }
 
 function isOutsideMigrations(flow: MigrationFlow, namespaceName: string | undefined): boolean {
@@ -922,31 +1053,27 @@ function isOutsideMigrations(flow: MigrationFlow, namespaceName: string | undefi
  * its first pending migration — the whole baseline on a fresh-workspace replay, and
  * every table when the pending migration is data-only — are equally dropped by the loop
  * and run here too, built from that snapshot so scripts see the checkpoint state rather
- * than the final schema. Updates of types no pending diff names stay skipped: applying
- * the final schema outside the per-migration phases could enforce a change whose
- * migration has not run. Under --no-schema-check, planned tables absent from every
- * snapshot are deferred until migrations settle. Deletes are irreversible and stay last.
+ * than the final schema. Every other planned create and update in a migrating namespace
+ * waits until every migration has committed: enforcing the final schema earlier could
+ * apply a change whose migration has not run. Deletes are irreversible and stay last.
  * @param flow - Migration flow
- * @returns Changes to apply once migrations settle
+ * @returns `<namespace>/<table>` of the GraphQL permissions to apply once migrations settle
  */
-async function applyChangesBeforeMigrations(flow: MigrationFlow): Promise<DeferredChanges> {
+async function applyChangesBeforeMigrations(flow: MigrationFlow): Promise<Set<string>> {
   const { client, changeSet, migrationContext, phaseSettings, pending } = flow;
-  const deferred: DeferredChanges = {
-    typeKeys: new Set(),
-    gqlPermissionKeys: new Set(
-      [...changeSet.gqlPermission.creates, ...changeSet.gqlPermission.updates]
-        .filter((permission) => {
-          const namespaceName = permission.request.namespaceName;
-          return (
-            migrationContext.noSchemaCheck &&
-            namespaceName !== undefined &&
-            flow.migratingNamespaces.has(namespaceName) &&
-            !pending.snapshotTableKeys.has(`${namespaceName}/${permission.name}`)
-          );
-        })
-        .map((permission) => `${permission.request.namespaceName}/${permission.name}`),
-    ),
-  };
+  const deferredGqlPermissionKeys = new Set(
+    [...changeSet.gqlPermission.creates, ...changeSet.gqlPermission.updates]
+      .filter((permission) => {
+        const namespaceName = permission.request.namespaceName;
+        return (
+          migrationContext.noSchemaCheck &&
+          namespaceName !== undefined &&
+          flow.migratingNamespaces.has(namespaceName) &&
+          !pending.snapshotTableKeys.has(`${namespaceName}/${permission.name}`)
+        );
+      })
+      .map((permission) => `${permission.request.namespaceName}/${permission.name}`),
+  );
 
   try {
     for (const create of changeSet.type.creates) {
@@ -958,15 +1085,7 @@ async function applyChangesBeforeMigrations(flow: MigrationFlow): Promise<Deferr
       const tableName = create.request.tailordbType?.name;
       if (!namespaceName || !tableName) continue;
       const priorTable = flow.preMigrationSnapshots.get(namespaceName)?.tables[tableName];
-      if (!priorTable) {
-        if (
-          migrationContext.noSchemaCheck &&
-          !pending.snapshotTableKeys.has(`${namespaceName}/${tableName}`)
-        ) {
-          deferred.typeKeys.add(`${namespaceName}/${tableName}`);
-        }
-        continue;
-      }
+      if (!priorTable) continue;
       // A type some pending migration removes or renames away is created
       // only when its re-adding migration runs; materializing it early
       // would erase the removal boundary (the plan holds no delete entry
@@ -996,7 +1115,7 @@ async function applyChangesBeforeMigrations(flow: MigrationFlow): Promise<Deferr
       .filter((update) => isOutsideMigrations(flow, update.request.namespaceName))
       .map((update) => client.updateTailorDBGQLPermission(update.request)),
   ]);
-  return deferred;
+  return deferredGqlPermissionKeys;
 }
 
 async function runPendingMigrations(
@@ -1043,29 +1162,46 @@ async function runMigration(
   runLog.touchedTables.push({ namespace: migration.namespace, tables: attemptedTables });
   const inProgress =
     flow.validation.inProgressMigrations[migration.namespace]?.number === migration.number;
+  const runsSteps = usesStepRunner(migration.scriptForm, inProgress);
   const attempt: MigrationAttempt = {
     migration,
     attemptedTables,
     inProgress,
-    runsSteps: usesStepRunner(migration.scriptForm, inProgress),
+    resumesPrePhase:
+      migrationWithEarlierPrePhase(flow.validation, migration.namespace) === migration.number,
+    runsSteps,
+    runsMain: migration.hasScript && !runsSteps,
+    rollsBackOnFailure:
+      runsSteps &&
+      migration.scriptForm?.kind === "steps" &&
+      migration.scriptForm.rollbackOnFailure === true,
+    gqlPermissionUndo: new Map(),
   };
-  await runPreMigrationPhase(flow, attempt, runLog);
-  await runPostMigrationPhase(flow, attempt, runLog);
+  await runPreMigrationPhase(flow, attempt, restoration, runLog);
+  await runPostMigrationPhase(flow, attempt, restoration, runLog);
   await commitMigration(flow, attempt, restoration, runLog);
 }
 
 async function runPreMigrationPhase(
   flow: MigrationFlow,
   attempt: MigrationAttempt,
+  restoration: RestorationState,
   runLog: MigrationRunLog,
 ): Promise<void> {
   const { client, changeSet, phaseSettings, migrationCtx } = flow;
-  const { migration, attemptedTables, inProgress } = attempt;
+  const { migration, attemptedTables, inProgress, rollsBackOnFailure, gqlPermissionUndo } = attempt;
   flow.timeline?.enter("preMigration");
   try {
     // Pre-migration phase: Create/update tables with breaking fields as optional
     await withSpan("apply.tailorDB.migration.prePhase", () =>
-      executeSingleMigrationPrePhase(client, changeSet, migration, phaseSettings, attemptedTables),
+      executeSingleMigrationPrePhase(
+        client,
+        changeSet,
+        migration,
+        phaseSettings,
+        attemptedTables,
+        gqlPermissionUndo,
+      ),
     );
 
     // Script execution (only if migrate.ts exists for this migration)
@@ -1074,6 +1210,7 @@ async function runPreMigrationPhase(
         executeMigrations(
           migrationCtx,
           [migration],
+          restoration.checkpoints,
           flow.validation.inProgressMigrations,
           flow.timeline,
         ),
@@ -1081,30 +1218,54 @@ async function runPreMigrationPhase(
     }
   } catch (error) {
     const shouldKeepPreMigrationSchema =
-      inProgress || isMigrationPartiallyApplied(error) || isMigrationOutcomeUnknown(error);
+      isMigrationOutcomeUnknown(error) ||
+      (rollsBackOnFailure
+        ? !isRollbackSafe(error, inProgress)
+        : inProgress || isMigrationPartiallyApplied(error));
     if (shouldKeepPreMigrationSchema) {
       runLog.partial.set(migration.namespace, migration);
       throw error;
     }
-    await rollbackMigration(flow, attempt, runLog);
-    throw error;
+    const recordMayExist = inProgress || isMigrationPartiallyApplied(error);
+    throw await rollbackMigration(flow, attempt, restoration, runLog, error, recordMayExist);
   }
+}
+
+/**
+ * Whether a failure of a migration that asked to be rolled back leaves no step writing. A resumed
+ * migration's earlier workflow execution is only known to have ended when the runner observed it,
+ * so a failure that happened before the runner (a Pre-phase or bundling error) does not count.
+ * @param error - The failure of the Pre-phase or the script
+ * @param inProgress - Whether an earlier deploy left the migration in progress
+ * @returns True when rolling back cannot race a running step
+ */
+function isRollbackSafe(error: unknown, inProgress: boolean): boolean {
+  if (isMigrationRunEnded(error)) return true;
+  return !inProgress && !isMigrationPartiallyApplied(error);
 }
 
 async function runPostMigrationPhase(
   flow: MigrationFlow,
   attempt: MigrationAttempt,
+  restoration: RestorationState,
   runLog: MigrationRunLog,
 ): Promise<void> {
   const { client, changeSet, phaseSettings } = flow;
-  const { migration, attemptedTables, inProgress, runsSteps } = attempt;
+  const {
+    migration,
+    attemptedTables,
+    inProgress,
+    runsSteps,
+    rollsBackOnFailure,
+    gqlPermissionUndo,
+  } = attempt;
   flow.timeline?.enter("postMigration");
   try {
     await withSpan("apply.tailorDB.migration.postPhase", () =>
       executeSingleMigrationPostPhase(client, changeSet, migration, phaseSettings, attemptedTables),
     );
   } catch (error) {
-    if (inProgress || runsSteps) {
+    if (!rollsBackOnFailure && (inProgress || runsSteps)) {
       runLog.partial.set(migration.namespace, migration);
       await reapplyPrePhaseAfterPostPhaseFailure(
         client,
@@ -1112,29 +1273,164 @@ async function runPostMigrationPhase(
         migration,
         phaseSettings,
         attemptedTables,
+        gqlPermissionUndo,
       );
       throw error;
     }
-    await rollbackMigration(flow, attempt, runLog);
-    throw error;
+    const failure = await rollbackMigration(flow, attempt, restoration, runLog, error, true);
+    if (isRollbackSkippedWithRecord(failure)) {
+      await reapplyPrePhaseAfterPostPhaseFailure(
+        client,
+        changeSet,
+        migration,
+        phaseSettings,
+        attemptedTables,
+        gqlPermissionUndo,
+      );
+    }
+    throw failure;
   }
 }
 
+/**
+ * Roll a failed migration's schema back. A migration that asked to be rolled back, or whose `main`
+ * run is recorded, clears its in-progress record first, because a record that survives a rollback
+ * describes a schema the namespace no longer has.
+ * @param flow - Migration flow
+ * @param attempt - Attempt that failed
+ * @param restoration - What the tables return to, updated in place
+ * @param runLog - Receives what the rollback could not revert
+ * @param error - The failure that triggered the rollback
+ * @param recordMayExist - Whether the migration may still be recorded as in progress; a failure that
+ * settled the record itself, such as a Pre-phase schema error, leaves nothing to clear
+ * @returns The error to raise in place of the failure
+ */
 async function rollbackMigration(
   flow: MigrationFlow,
   attempt: MigrationAttempt,
+  restoration: RestorationState,
   runLog: MigrationRunLog,
-): Promise<void> {
+  error: unknown,
+  recordMayExist: boolean,
+): Promise<unknown> {
+  const { client, migrationContext, phaseSettings } = flow;
+  const { migration, rollsBackOnFailure, runsMain, resumesPrePhase, gqlPermissionUndo } = attempt;
+  const { workspaceId } = migrationContext;
+  const kind = runsMain ? "main" : "steps";
+  const clearsRecord = (rollsBackOnFailure || runsMain) && recordMayExist;
+  const record = clearsRecord
+    ? await clearRolledBackRecord(client, workspaceId, migration, kind)
+    : "cleared";
+  if (record !== "cleared") {
+    runLog.partial.set(migration.namespace, migration);
+    return rollbackSkippedError(
+      migration,
+      error,
+      phaseSettings.restricted,
+      { confirmed: record === "in-progress", kind },
+      deployCommandContext(migrationContext),
+    );
+  }
+  const attemptedTables = new Set(attempt.attemptedTables);
+  const finalMigration = flow.pending.lastByNamespace.get(migration.namespace) ?? migration;
+  for (const tableName of readRollbackScope(
+    migration,
+    finalMigration,
+    gqlPermissionUndo,
+    resumesPrePhase,
+  )) {
+    attemptedTables.add(tableName);
+  }
   runLog.unrolledBack.push({
-    migration: attempt.migration,
-    tables: await rollbackSingleMigrationAfterFailure(
-      flow.client,
-      attempt.migration,
-      flow.migrationContext.workspaceId,
-      flow.phaseSettings,
-      attempt.attemptedTables,
-    ),
+    migration,
+    ...(await rollbackSingleMigrationAfterFailure(
+      client,
+      migration,
+      workspaceId,
+      phaseSettings,
+      attemptedTables,
+      gqlPermissionUndo,
+    )),
   });
+  if (rollsBackOnFailure || clearsRecord) {
+    await removeRunResources(client, workspaceId, migration.namespace, migration.number);
+  }
+  if (isMigrationStartRefused(error)) return error;
+  if (resumesPrePhase) settleRolledBackRestorationSettings(flow, migration, restoration);
+  return rollsBackOnFailure ? rolledBackError(migration, error) : error;
+}
+
+/**
+ * Read what the rollback has to undo beyond what this attempt recorded: the GraphQL permission each
+ * table had at the prior checkpoint, and for a resumed migration also the tables an earlier deploy's
+ * Pre-phase wrote. A resumed migration's snapshot-derived permissions replace this deploy's undo
+ * records, because a forced update after an SDK upgrade, or a write over a permission the earlier
+ * Pre-phase already set, records the permission that Pre-phase installed as the one to restore. A
+ * failure to read the prior checkpoint is logged, so the rollback of this deploy's own writes and
+ * the original error go ahead.
+ * @param migration - The migration being rolled back
+ * @param finalMigration - The last pending migration of the namespace
+ * @param gqlPermissionUndo - Undo records of this attempt, updated in place
+ * @param resumed - Whether an earlier deploy may have applied the migration's Pre-phase
+ * @returns The tables to roll back besides those this deploy wrote
+ */
+function readRollbackScope(
+  migration: PendingMigration,
+  finalMigration: PendingMigration,
+  gqlPermissionUndo: GqlPermissionUndo,
+  resumed: boolean,
+): ReadonlySet<string> {
+  try {
+    const tables = resumed ? getPreMigrationTargetTableNames(migration) : new Set<string>();
+    const recordedTables = resumed ? new Set(gqlPermissionUndo.keys()) : undefined;
+    for (const [tableName, undo] of gqlPermissionUndoFromSnapshots(
+      migration,
+      finalMigration,
+      recordedTables,
+    )) {
+      if (resumed || !gqlPermissionUndo.has(tableName)) gqlPermissionUndo.set(tableName, undo);
+    }
+    return tables;
+  } catch (error) {
+    logger.warn(
+      `Could not read migration ${migration.namespace}/${formatMigrationNumber(migration.number)} or its prior checkpoint: ` +
+        `${error instanceof Error ? error.message : String(error)}. Only what this deploy wrote is rolled back.`,
+    );
+    return new Set();
+  }
+}
+
+/**
+ * Point the settings a rolled-back migration's tables are restored to at the schema they
+ * returned to. The settings captured at the start of a deploy that resumes a migration, or runs
+ * again one whose Pre-phase an earlier deploy left without recording it, are the restrictions that
+ * deploy applied, which would stay in place after the rollback, also on a table the rollback deleted.
+ * @param flow - Migration flow
+ * @param migration - The migration that was rolled back
+ * @param restoration - What the tables return to, updated in place
+ */
+function settleRolledBackRestorationSettings(
+  flow: MigrationFlow,
+  migration: PendingMigration,
+  restoration: RestorationState,
+): void {
+  const input = flow.migrationContext.tailorDBInputs.find(
+    (entry) => entry.namespace === migration.namespace,
+  );
+  const committedSnapshot = restoration.snapshots.get(migration.namespace);
+  if (!input || !committedSnapshot) return;
+  const settings = resolveMigrationSnapshotSettings(
+    committedSnapshot,
+    input,
+    flow.migrationContext.executorUsedTables,
+  );
+  const migrationTables = migrationSnapshotCache.load(migration).tables;
+  for (const [tableName, captured] of restoration.settings.get(migration.namespace) ?? []) {
+    if (!committedSnapshot.tables[tableName] && !migrationTables[tableName]) {
+      settings.set(tableName, captured);
+    }
+  }
+  restoration.settings.set(migration.namespace, settings);
 }
 
 async function commitMigration(
@@ -1144,15 +1440,16 @@ async function commitMigration(
   runLog: MigrationRunLog,
 ): Promise<void> {
   const { client, changeSet, migrationContext, phaseSettings } = flow;
-  const { migration, inProgress, runsSteps } = attempt;
+  const { migration, resumesPrePhase, runsSteps, runsMain } = attempt;
   const previousRestorationSnapshot = restoration.snapshots.get(migration.namespace);
   const previousRestorationSettings = restoration.settings.get(migration.namespace);
   const postMigrationSnapshot = migrationSnapshotCache.load(migration);
   restoration.snapshots.set(migration.namespace, postMigrationSnapshot);
   const expectedHistoryId = flow.validation.migrationHistoryIds[migration.namespace] ?? null;
-  const recordsMaintenanceMode =
-    phaseSettings.restricted && flow.pending.lastByNamespace.get(migration.namespace) === migration;
-  const capturedSettingsAreEarlierRestrictions = inProgress;
+  const recordsMaintenanceMode = phaseSettings.restricted;
+  const deletedTables = getTablesDeletedAfterCheckpoint(migration.diff);
+  const recordsCleanup = deletedTables.size > 0;
+  const capturedSettingsAreEarlierRestrictions = resumesPrePhase;
   const settleRestorationSettings = () => {
     const input = migrationContext.tailorDBInputs.find(
       (entry) => entry.namespace === migration.namespace,
@@ -1166,7 +1463,7 @@ async function commitMigration(
     for (const [tableName, settings] of previousRestorationSettings ?? []) {
       if (previousRestorationSnapshot?.tables[tableName]) continue;
       const restrictedByEarlierDeploy =
-        capturedSettingsAreEarlierRestrictions &&
+        (capturedSettingsAreEarlierRestrictions || isMigrationRestricted(settings)) &&
         postMigrationSnapshot.tables[tableName] !== undefined;
       if (!restrictedByEarlierDeploy) committedSettings.set(tableName, settings);
     }
@@ -1182,6 +1479,7 @@ async function commitMigration(
       migration.number,
       expectedHistoryId ?? undefined,
       recordsMaintenanceMode,
+      recordsCleanup,
     );
   } catch (error) {
     await confirmCheckpointAfterUpdateFailure(
@@ -1189,7 +1487,6 @@ async function commitMigration(
       attempt,
       error,
       restoration,
-      previousRestorationSnapshot,
       postMigrationSnapshot,
     );
   }
@@ -1199,7 +1496,7 @@ async function commitMigration(
     historyId: expectedHistoryId,
   });
   if (recordsMaintenanceMode) runLog.recordedNamespaces.add(migration.namespace);
-  if (runsSteps) {
+  if (runsSteps || runsMain) {
     await removeRunResources(
       client,
       migrationContext.workspaceId,
@@ -1211,16 +1508,42 @@ async function commitMigration(
   if (!capturedSettingsAreEarlierRestrictions) settleRestorationSettings();
 
   try {
-    await executeSingleMigrationPostPhaseDeletions(client, changeSet, migration);
+    await deletePlannedTables(client, changeSet, migration.namespace, deletedTables);
+  } catch (error) {
+    const syncHint = formatNamespaceMigrationHint({
+      ...deployCommandContext(migrationContext),
+      subcommand: ["sync", formatMigrationNumber(migration.number)],
+      namespace: migration.namespace,
+    });
+    logger.warn(
+      `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} was committed, but post-checkpoint cleanup failed.` +
+        (phaseSettings.restricted ? " The leftover resources remain locked." : ""),
+    );
+    const failure = toError(error);
+    throw withErrorDiagnostics(failure, {
+      suggestion: [
+        `Deploy again to delete the leftover tables, or run ${syncHint}.`,
+        getErrorDiagnostics(failure).suggestion,
+      ]
+        .filter(Boolean)
+        .join(" "),
+    });
+  }
+  if (recordsCleanup)
+    await clearCleanupRecord(client, migrationContext.workspaceId, migration.namespace);
+}
+
+async function clearCleanupRecord(
+  client: OperatorClient,
+  workspaceId: string,
+  namespaceName: string,
+): Promise<void> {
+  try {
+    await clearMigrationCleanupRecord(client, workspaceId, namespaceName);
   } catch (error) {
     logger.warn(
-      `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} was committed, but post-checkpoint cleanup failed. ` +
-        (phaseSettings.restricted
-          ? "The leftover resources remain locked. Remove them"
-          : "Remove the leftover resources") +
-        " manually before the next deployment; remote schema verification will fail closed until then.",
+      `The tables of namespace '${namespaceName}' that were pending deletion have been deleted, but the record of the pending deletion could not be removed: ${toError(error).message}. A later deploy removes it.`,
     );
-    throw error;
   }
 }
 
@@ -1231,7 +1554,6 @@ async function commitMigration(
  * @param attempt - Attempt whose checkpoint update failed
  * @param updateError - Error the checkpoint update failed with
  * @param restoration - What the tables return to, updated in place
- * @param previousRestorationSnapshot - Snapshot to restore before the migration ran
  * @param postMigrationSnapshot - Schema state the migration produced
  */
 async function confirmCheckpointAfterUpdateFailure(
@@ -1239,7 +1561,6 @@ async function confirmCheckpointAfterUpdateFailure(
   attempt: MigrationAttempt,
   updateError: unknown,
   restoration: RestorationState,
-  previousRestorationSnapshot: SchemaSnapshot | undefined,
   postMigrationSnapshot: SchemaSnapshot,
 ): Promise<void> {
   const { migration } = attempt;
@@ -1281,11 +1602,18 @@ async function confirmCheckpointAfterUpdateFailure(
   if (remoteMigrationNumber !== migration.number) {
     restoration.snapshots.set(
       migration.namespace,
-      includeUndeletedTables(postMigrationSnapshot, previousRestorationSnapshot, migration),
+      includeTablesDeletedAfterCheckpoint(postMigrationSnapshot, migration.diff),
     );
+    const resumable =
+      remoteState.inProgress?.kind === "steps" &&
+      remoteState.inProgress.number === migration.number &&
+      (remoteMigrationNumber ?? 0) === migration.number - 1;
     logger.warn(
       `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} could not be confirmed after its update failed; remote remains at ${describeMigrationCheckpoint(remoteMigrationNumber)}. ` +
-        "Leaving the post-migration schema unchanged to avoid rolling back a concurrent deployment. Repair the checkpoint before retrying.",
+        "Leaving the post-migration schema unchanged to avoid rolling back a concurrent deployment. " +
+        (resumable
+          ? "Deploy again to resume the migration; unless you add, remove, rename, or reorder steps, steps that already completed do not run again."
+          : "Repair the checkpoint before retrying."),
     );
     throw updateError;
   }
@@ -1298,8 +1626,8 @@ function restrictionHistoryOf(
 ): RestrictionHistory {
   return {
     maintenanceMode: flow.phaseSettings.restricted,
-    captured: flow.restrictionState,
-    resumed: flow.validation.inProgressMigrations[namespace] !== undefined,
+    captured: flow.settingsBeforeMaintenanceMode,
+    resumed: migrationWithEarlierPrePhase(flow.validation, namespace) !== undefined,
     touched: new Set(
       runLog.touchedTables.flatMap((entry) =>
         entry.namespace === namespace ? [...entry.tables] : [],
@@ -1353,6 +1681,11 @@ async function checkRestorationCheckpoint(
   expectedCheckpoint: ExpectedMigrationCheckpoint,
 ): Promise<CLIError | undefined> {
   const { restricted } = flow.phaseSettings;
+  const statusHint = formatNamespaceMigrationHint({
+    ...deployCommandContext(flow.migrationContext),
+    subcommand: ["status"],
+    namespace: namespaceName,
+  });
   let remoteState: Awaited<ReturnType<typeof fetchRemoteMigrationState>>;
   try {
     remoteState = await fetchRemoteMigrationState(
@@ -1371,7 +1704,7 @@ async function checkRestorationCheckpoint(
         (restricted
           ? `The tables of namespace '${namespaceName}' keep the restrictions this deploy set (${RESTRICTION_EFFECT}). `
           : `The table settings of namespace '${namespaceName}' are left unchanged. `) +
-        `${describeSkippedTables(tables)}Run \`tailor tailordb migration status --namespace ${namespaceName}\` to check the checkpoint, restore connectivity if it fails, then deploy again.`,
+        `${describeSkippedTables(tables)}Run ${statusHint} to check the checkpoint, restore connectivity if it fails, then deploy again.`,
       context: {
         namespace: namespaceName,
         expectedCheckpoint: expectedCheckpoint.number,
@@ -1391,7 +1724,7 @@ async function checkRestorationCheckpoint(
       (restricted
         ? `Another deploy changed the checkpoint, so the tables of namespace '${namespaceName}' keep the restrictions this deploy set (${RESTRICTION_EFFECT}). `
         : `Another deploy changed the checkpoint, so the table settings of namespace '${namespaceName}' are left unchanged. `) +
-      `${describeSkippedTables(tables)}Wait for the other deploy to finish, run \`tailor tailordb migration status --namespace ${namespaceName}\` to see the checkpoint and any migration in progress, then check the tables before deploying again.`,
+      `${describeSkippedTables(tables)}Wait for the other deploy to finish, run ${statusHint} to see the checkpoint and any migration in progress, then check the tables before deploying again.`,
     context: {
       namespace: namespaceName,
       expectedCheckpoint: expectedCheckpoint.number,
@@ -1532,7 +1865,7 @@ function warnIncompleteRollbacks(
   runLog: MigrationRunLog,
   unrestored: readonly RestrictedTables[],
 ): void {
-  for (const { migration, tables } of runLog.unrolledBack) {
+  for (const { migration, tables, permissions } of runLog.unrolledBack) {
     const failedRestoration = unrestored.find((entry) => entry.namespace === migration.namespace);
     const lifted = new Set(
       restoration.skipped.has(migration.namespace) || failedRestoration?.tables.length === 0
@@ -1542,6 +1875,16 @@ function warnIncompleteRollbacks(
             ...(restoration.settings.get(migration.namespace)?.keys() ?? []),
           ].filter((tableName) => !failedRestoration?.tables.includes(tableName)),
     );
+    // Restoration writes table definitions but not GraphQL permissions, so a failed
+    // permission undo stays unreverted even for a table restoration lifted.
+    if (permissions.length > 0) {
+      logger.warn(
+        `Migration ${migration.namespace}/${formatMigrationNumber(migration.number)} was not rolled back completely. GraphQL permissions needing manual repair in namespace '${migration.namespace}': ${permissions.join(", ")}.`,
+      );
+      logger.log(
+        "Check the GraphQL permission of these tables in the workspace and set it back by hand.",
+      );
+    }
     const remaining = tables.filter((tableName) => !lifted.has(tableName));
     if (remaining.length === 0) continue;
     if (!flow.phaseSettings.restricted) {
@@ -1566,36 +1909,246 @@ function finishMaintenance(flow: MigrationFlow): MaintenanceReport | undefined {
   return report;
 }
 
-async function applyDeferredChanges(flow: MigrationFlow, deferred: DeferredChanges): Promise<void> {
-  const { client, changeSet } = flow;
+function collectLocalDefinitionWrites(flow: MigrationFlow): LocalDefinitionWrites {
+  const { changeSet, migrationContext } = flow;
+  const creates = new Map<string, TailorDBChangeSet["type"]["creates"]>();
+  const createKeys = new Set<string>();
   for (const create of changeSet.type.creates) {
     const namespaceName = create.request.namespaceName;
     const tableName = create.request.tailordbType?.name;
-    if (!namespaceName || !tableName) continue;
-    if (!deferred.typeKeys.has(`${namespaceName}/${tableName}`)) continue;
-    await client.createTailorDBType(create.request);
+    if (!namespaceName || !tableName || !flow.migratingNamespaces.has(namespaceName)) continue;
+    const key = namespacedTableKey(namespaceName, tableName);
+    if (processedTables.created.has(key)) continue;
+    creates.set(namespaceName, [...(creates.get(namespaceName) ?? []), create]);
+    createKeys.add(key);
   }
+  const updates = new Map<string, Record<string, TailorDBSnapshotType>>();
+  for (const [namespaceName, lastMigration] of flow.pending.lastByNamespace) {
+    const input = migrationContext.tailorDBInputs.find(
+      (entry) => entry.namespace === namespaceName,
+    );
+    if (!input) continue;
+    const settledTables = migrationSnapshotCache.load(lastMigration).tables;
+    const comparable = (type: TailorDBSnapshotType) =>
+      normalizeComparableTailorDBType(
+        generateTailorDBTypeManifestFromSnapshot(type, {
+          subscribed: migrationContext.executorUsedTables.has(type.name),
+          namespaceGqlOperations: input.config.gqlOperations,
+        }),
+      );
+    const differing = Object.entries(input.types).filter(([tableName, localType]) => {
+      const key = namespacedTableKey(namespaceName, tableName);
+      if (createKeys.has(key)) return false;
+      const settledType = settledTables[tableName];
+      if (settledType) return !areNormalizedEqual(comparable(localType), comparable(settledType));
+      return (
+        processedTables.created.has(key) ||
+        changeSet.type.updates.some(
+          (update) => update.request.namespaceName === namespaceName && update.name === tableName,
+        )
+      );
+    });
+    if (differing.length > 0) updates.set(namespaceName, Object.fromEntries(differing));
+  }
+  return { creates, updates };
+}
+
+/**
+ * Whether existing records refused a table update. The platform reports a unique index over
+ * duplicated values as AlreadyExists, and marks a required field over null values, alone among
+ * its FailedPrecondition refusals, with a PreconditionFailure detail.
+ * @param error - Failure of the update
+ * @returns True when the records refused it
+ */
+function isRefusedByRecords(error: unknown): boolean {
+  if (!(error instanceof ConnectError)) return false;
+  if (error.code === Code.AlreadyExists) return true;
+  return (
+    error.code === Code.FailedPrecondition &&
+    error.details.some(
+      (detail) => "type" in detail && detail.type === "google.rpc.PreconditionFailure",
+    )
+  );
+}
+
+interface FailedLocalDefinition {
+  namespaceName: string;
+  tableName: string;
+  /** Tables created for local definitions before the failure, by namespace. */
+  created: ReadonlyMap<string, readonly string[]>;
+  refusedByRecords: boolean;
+}
+
+function localDefinitionError(
+  flow: MigrationFlow,
+  failed: FailedLocalDefinition,
+  error: unknown,
+): Error {
+  const { namespaceName, tableName, refusedByRecords } = failed;
+  const failure = toError(error);
+  const lastMigration = assertDefined(
+    flow.pending.lastByNamespace.get(namespaceName),
+    "local definitions are written only to namespaces with pending migrations",
+  );
+  const created = [...failed.created].map(([namespace, tables]) => ({ namespace, tables }));
+  const generateCommand = formatNamespaceMigrationHint({
+    subcommand: ["generate"],
+    namespace: namespaceName,
+    configPath: flow.migrationContext.config.path,
+  });
+  return withErrorDiagnostics(failure, {
+    code: "MIGRATION_LOCAL_DEFINITIONS_FAILED",
+    suggestion: [
+      `The pending migrations completed, and the existing tables of namespace '${namespaceName}' keep the definitions of migration ${namespaceName}/${formatMigrationNumber(lastMigration.number)}.`,
+      created.length > 0 &&
+        `Tables created for their local definitions remain: ${created.map((entry) => `namespace '${entry.namespace}': ${entry.tables.join(", ")}`).join("; ")}.`,
+      refusedByRecords &&
+        `The local definition of table '${tableName}' conflicts with its existing records and is not in any migration: run ${generateCommand} to add it with a migration script that updates those records, then deploy again.`,
+      getErrorDiagnostics(failure).suggestion,
+      !refusedByRecords &&
+        `Once the cause is fixed, deploy again to apply the local definition of table '${tableName}'.`,
+    ]
+      .filter(Boolean)
+      .join(" "),
+    context: { namespace: namespaceName, table: tableName, created },
+  });
+}
+
+/**
+ * Under --no-schema-check, apply the local definitions the pending migrations do not
+ * include, once every migration has committed. Each migration writes its own snapshot so
+ * its script sees the schema it was written for; the local definition is the final state.
+ * Planned creates the migrations did not perform go first, so updates can refer to them.
+ * Restoration then lifts maintenance mode onto these definitions instead of the last
+ * migration's snapshot.
+ * @param flow - Migration flow
+ * @param restoration - What the tables return to, updated in place once every write succeeds
+ * @returns The failure of a write, which leaves restoration at the last migration's snapshot
+ */
+async function applyLocalDefinitions(
+  flow: MigrationFlow,
+  restoration: RestorationState,
+): Promise<MigrationFailure | undefined> {
+  const { client, migrationContext, phaseSettings } = flow;
+  if (!migrationContext.noSchemaCheck) return undefined;
+  const { creates, updates } = collectLocalDefinitionWrites(flow);
+  if (creates.size === 0 && updates.size === 0) return undefined;
+
+  const created = new Map<string, string[]>();
+  flow.timeline?.enter("postMigration");
+  try {
+    for (const [namespaceName, namespaceCreates] of creates) {
+      for (const create of namespaceCreates) {
+        const tableName = create.name;
+        try {
+          await client.createTailorDBType(create.request);
+        } catch (error) {
+          return {
+            error: localDefinitionError(
+              flow,
+              { namespaceName, tableName, created, refusedByRecords: false },
+              error,
+            ),
+          };
+        }
+        created.set(namespaceName, [...(created.get(namespaceName) ?? []), tableName]);
+      }
+    }
+    for (const [namespaceName, tables] of updates) {
+      for (const [tableName, localType] of Object.entries(tables)) {
+        try {
+          await client.updateTailorDBType({
+            workspaceId: migrationContext.workspaceId,
+            namespaceName,
+            tailordbType: generateMigrationPhaseManifest(localType, namespaceName, phaseSettings),
+          });
+        } catch (error) {
+          return {
+            error: localDefinitionError(
+              flow,
+              { namespaceName, tableName, created, refusedByRecords: isRefusedByRecords(error) },
+              error,
+            ),
+          };
+        }
+      }
+    }
+  } finally {
+    flow.timeline?.enter("restore");
+  }
+
+  for (const [namespaceName, tables] of updates) {
+    const snapshot = assertDefined(
+      restoration.snapshots.get(namespaceName),
+      "every migrating namespace that passed checkpoint verification has a snapshot to restore",
+    );
+    restoration.snapshots.set(namespaceName, {
+      ...snapshot,
+      tables: { ...snapshot.tables, ...tables },
+    });
+    const input = assertDefined(
+      migrationContext.tailorDBInputs.find((entry) => entry.namespace === namespaceName),
+      "local definitions come from the namespace's deploy input",
+    );
+    const settings = restoration.settings.get(namespaceName);
+    if (!settings) continue;
+    restoration.settings.set(
+      namespaceName,
+      new Map([
+        ...settings,
+        ...resolveMigrationSnapshotSettings(
+          { ...snapshot, tables },
+          input,
+          migrationContext.executorUsedTables,
+        ),
+      ]),
+    );
+  }
+  for (const namespaceName of flow.migratingNamespaces) {
+    const tableNames = [
+      ...(creates.get(namespaceName) ?? []).map((create) => create.name),
+      ...Object.keys(updates.get(namespaceName) ?? {}),
+    ].toSorted();
+    if (tableNames.length === 0) continue;
+    const lastMigration = assertDefined(
+      flow.pending.lastByNamespace.get(namespaceName),
+      "every migrating namespace has a last pending migration",
+    );
+    logger.info(
+      `Applied local definitions that migration ${namespaceName}/${formatMigrationNumber(lastMigration.number)} does not include, after the pending migrations: ${tableNames.join(", ")}.`,
+    );
+  }
+  return undefined;
+}
+
+async function applyDeferredGqlPermissions(
+  flow: MigrationFlow,
+  deferredKeys: ReadonlySet<string>,
+): Promise<void> {
+  const { client, changeSet } = flow;
   await Promise.all([
     ...changeSet.gqlPermission.creates
-      .filter((create) =>
-        deferred.gqlPermissionKeys.has(`${create.request.namespaceName}/${create.name}`),
-      )
+      .filter((create) => deferredKeys.has(`${create.request.namespaceName}/${create.name}`))
       .map((create) => client.createTailorDBGQLPermission(create.request)),
     ...changeSet.gqlPermission.updates
-      .filter((update) =>
-        deferred.gqlPermissionKeys.has(`${update.request.namespaceName}/${update.name}`),
-      )
+      .filter((update) => deferredKeys.has(`${update.request.namespaceName}/${update.name}`))
       .map((update) => client.updateTailorDBGQLPermission(update.request)),
   ]);
+}
+
+function isDeleted(
+  deleted: ReadonlySet<string>,
+  del: { name: string; request: { namespaceName?: string } },
+): boolean {
+  return deleted.has(`${del.request.namespaceName}/${del.name}`);
 }
 
 async function applyRemainingDeletions(flow: MigrationFlow): Promise<void> {
   const { client, changeSet } = flow;
   // Delete remaining GQL permissions that weren't deleted with their tables
-  const remainingGqlPermissionDeletes = changeSet.gqlPermission.deletes.filter((del) => {
-    const permKey = `${del.request.namespaceName}/${del.name}`;
-    return !deletedResources.gqlPermissions.has(permKey);
-  });
+  const remainingGqlPermissionDeletes = changeSet.gqlPermission.deletes.filter(
+    (del) => !isDeleted(deletedResources.gqlPermissions, del),
+  );
   if (remainingGqlPermissionDeletes.length > 0) {
     await Promise.all(
       remainingGqlPermissionDeletes.map((del) => client.deleteTailorDBGQLPermission(del.request)),
@@ -1606,7 +2159,11 @@ async function applyRemainingDeletions(flow: MigrationFlow): Promise<void> {
   // permissions were just removed above; migration postPhases never see them)
   await Promise.all(
     changeSet.type.deletes
-      .filter((del) => isOutsideMigrations(flow, del.request.namespaceName))
+      .filter(
+        (del) =>
+          isOutsideMigrations(flow, del.request.namespaceName) &&
+          !isDeleted(deletedResources.types, del),
+      )
       .map((del) => client.deleteTailorDBType(del.request)),
   );
 }
@@ -1650,9 +2207,15 @@ async function applyWithoutMigrations(
   // Delete resources (only when no migrations occurred)
   // Migrations already handle deletions in post-migration phase
   await Promise.all(
-    changeSet.gqlPermission.deletes.map((del) => client.deleteTailorDBGQLPermission(del.request)),
+    changeSet.gqlPermission.deletes
+      .filter((del) => !isDeleted(deletedResources.gqlPermissions, del))
+      .map((del) => client.deleteTailorDBGQLPermission(del.request)),
   );
-  await Promise.all(changeSet.type.deletes.map((del) => client.deleteTailorDBType(del.request)));
+  await Promise.all(
+    changeSet.type.deletes
+      .filter((del) => !isDeleted(deletedResources.types, del))
+      .map((del) => client.deleteTailorDBType(del.request)),
+  );
 }
 
 /**

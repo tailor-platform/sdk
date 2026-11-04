@@ -119,3 +119,31 @@ describe.each(["deploy", "snapshot"])("%s Pre-phase nested constraints", (mode) 
     expect(after.fields?.geo?.fields?.lng?.required).toBe(true);
   });
 });
+
+describe.each(["deploy", "snapshot"])("%s Pre-phase foreign keys", (mode) => {
+  const reference = { foreignKey: true, foreignKeyType: "User", foreignKeyField: "id" } as const;
+  const ownerId: SnapshotFieldConfig = { type: "uuid", required: false };
+
+  test("withholds a foreign key the migration adds to an existing field", () => {
+    const after = { ...ownerId, ...reference };
+    const pre = preField(mode, after, ownerId);
+
+    expect(pre).toMatchObject({ type: "uuid" });
+    expect(pre).not.toHaveProperty("foreignKey");
+    expect(pre).not.toHaveProperty("foreignKeyType");
+    expect(pre).not.toHaveProperty("foreignKeyField");
+    expect(after).toMatchObject(reference);
+  });
+
+  test("keeps a foreign key the migration adds to a nested member", () => {
+    const nested = (owner: SnapshotFieldConfig): SnapshotFieldConfig => ({
+      type: "nested",
+      required: false,
+      fields: { owner },
+    });
+
+    expect(
+      preField(mode, nested({ ...ownerId, ...reference }), nested(ownerId))?.fields?.owner,
+    ).toMatchObject(reference);
+  });
+});

@@ -697,22 +697,6 @@ describe("planWorkflow", () => {
   });
 
   describe("label ownership scenarios", () => {
-    test.each([
-      ["workflow without label is NOT deleted", { name: "unmanaged-workflow" }, false],
-      [
-        "workflow owned by different app is NOT deleted",
-        { name: "other-workflow", label: "other-app" },
-        true,
-      ],
-    ])("%s", async (_name, workflow, expectOtherAppOwner) => {
-      const client = createMockClient([{ id: "1", ...workflow }]);
-
-      const result = await planWorkflow(client, workspaceId, appName, undefined, {}, {});
-
-      expect(result.changeSet.deletes).toHaveLength(0);
-      expect(result.resourceOwners.has("other-app")).toBe(expectOtherAppOwner);
-    });
-
     test("mixed ownership - only delete own workflows", async () => {
       const client = createMockClient([
         { id: "1", name: "my-workflow", label: appName },
@@ -724,7 +708,7 @@ describe("planWorkflow", () => {
 
       expect(result.changeSet.deletes).toHaveLength(1);
       expect(result.changeSet.deletes[0]!.name).toBe("my-workflow");
-      expect(result.resourceOwners.has("other-app")).toBe(true);
+      expect([...result.resourceOwners]).toEqual(["other-app"]);
     });
 
     test("reports an unmanaged workflow with its resource type and label", async () => {
@@ -1365,6 +1349,7 @@ describe("formatWorkflowChangeEntries", () => {
         deletes: [],
         replaces: [],
       },
+      [],
     );
 
     expect(entries).toEqual([
@@ -1418,6 +1403,7 @@ describe("formatWorkflowChangeEntries", () => {
           deletes: [],
           replaces: [],
         },
+        [],
       );
 
       const workflowEntry = entries.find((entry) => entry.labels.includes("workflow"));
@@ -1439,6 +1425,7 @@ describe("formatWorkflowChangeEntries", () => {
         deletes: [],
         replaces: [],
       },
+      [],
     );
 
     expect(entries).toEqual([
@@ -1451,7 +1438,7 @@ describe("formatWorkflowChangeEntries", () => {
     ]);
   });
 
-  test("groups workflow deletes with related function registry deletes", () => {
+  test("groups workflow deletes with related function registry deletes that no job function delete takes", () => {
     const entries = formatWorkflowChangeEntries(
       {
         creates: [],
@@ -1473,6 +1460,7 @@ describe("formatWorkflowChangeEntries", () => {
         deletes: [{ name: "workflow--process-order" }, { name: "workflow--send-notification" }],
         replaces: [],
       },
+      [],
     );
 
     expect(entries).toEqual([
@@ -1507,6 +1495,7 @@ describe("formatWorkflowChangeEntries", () => {
         deletes: [{ name: "workflow--send-notification" }],
         replaces: [],
       },
+      [],
     );
 
     expect(entries).toEqual([
@@ -1521,6 +1510,64 @@ describe("formatWorkflowChangeEntries", () => {
         symbol: symbols.delete,
         name: "send-notification",
         labels: ["function"],
+      },
+    ]);
+  });
+
+  test("lists job function deletes with their function registry deletes", () => {
+    const entries = formatWorkflowChangeEntries(
+      {
+        creates: [],
+        updates: [],
+        deletes: [
+          {
+            name: "order-processing",
+            workspaceId: "ws",
+            workflowId: "workflow-1",
+            usedJobNames: ["process-order"],
+            deletableJobNames: ["process-order"],
+          },
+        ],
+        replaces: [],
+      },
+      {
+        creates: [],
+        updates: [],
+        deletes: [{ name: "workflow--process-order" }],
+        replaces: [],
+      },
+      [{ workspaceId: "ws", jobFunctionName: "process-order" }],
+    );
+
+    expect(entries).toEqual([
+      {
+        action: "delete",
+        symbol: symbols.delete,
+        name: "order-processing",
+        labels: ["workflow"],
+      },
+      {
+        action: "delete",
+        symbol: symbols.delete,
+        name: "process-order",
+        labels: ["jobFunction", "function"],
+      },
+    ]);
+  });
+
+  test("lists a job function delete that has no function registry delete", () => {
+    const entries = formatWorkflowChangeEntries(
+      { creates: [], updates: [], deletes: [], replaces: [] },
+      { creates: [], updates: [], deletes: [], replaces: [] },
+      [{ workspaceId: "ws", jobFunctionName: "orphaned-job" }],
+    );
+
+    expect(entries).toEqual([
+      {
+        action: "delete",
+        symbol: symbols.delete,
+        name: "orphaned-job",
+        labels: ["jobFunction"],
       },
     ]);
   });

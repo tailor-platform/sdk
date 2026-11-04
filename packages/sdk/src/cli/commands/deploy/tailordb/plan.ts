@@ -41,19 +41,15 @@ import {
   resourceTrn,
   tailorDBTypeTrn,
 } from "../label";
-import {
-  fetchExistingResourcesWithLabels,
-  trackDesiredResourceOwnership,
-  trackRemainingResourceOwner,
-} from "../owned-resource";
+import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "../owned-resource";
 import {
   areTailorDBServicesEqual,
   normalizeComparableGqlPermission,
   normalizeComparableTailorDBType,
 } from "./compare";
-import { assertMigrationSkipSteps, selectSkipStepsOfNamespaces } from "./migration-skip-steps";
+import { assertPendingMigrationsRunnable } from "./migration";
+import { selectSkipStepsOfNamespaces } from "./migration-skip-steps";
 import { validateAndDetectMigrations } from "./migration-validation";
-import type { OwnerConflict, UnmanagedResource } from "../confirm";
 import type { PlanContext } from "../types";
 
 export type TailorDBPlanResult = Awaited<ReturnType<typeof planTailorDB>>;
@@ -74,6 +70,7 @@ export async function planTailorDB(context: PlanContext) {
     config,
     noSchemaCheck,
     migrationSkipSteps,
+    migrationRecoveryArgs,
     forceApplyAll = false,
   } = context;
   const tailordbs: TailorDBDeployInput[] = [];
@@ -106,8 +103,9 @@ export async function planTailorDB(context: PlanContext) {
     }
   }
 
-  // Validate migrations at plan time so a missing migration script fails the
-  // deploy (including --dry-run) before any resource is applied.
+  // Validate migrations at plan time so a migration script that is missing,
+  // cannot be bundled, or has no machine user to run it fails the deploy
+  // (including --dry-run) before any resource is applied.
   const typesByNamespace = new Map<string, Record<string, TailorDBSnapshotType>>();
   for (const tailordb of tailordbs) {
     typesByNamespace.set(tailordb.namespace, tailordb.types);
@@ -136,7 +134,9 @@ export async function planTailorDB(context: PlanContext) {
       }
     }
   }
-  const migrationConfig = getNamespacesWithMigrations(config, path.dirname(config.path));
+  const migrationConfig = forRemoval
+    ? []
+    : getNamespacesWithMigrations(config, path.dirname(config.path));
   const detected =
     forRemoval || migrationTestBaselines
       ? undefined
@@ -147,9 +147,10 @@ export async function planTailorDB(context: PlanContext) {
           config,
           noSchemaCheck ?? false,
           tailordbs,
+          migrationRecoveryArgs,
         );
   if (detected) {
-    await assertMigrationSkipSteps({
+    await assertPendingMigrationsRunnable({
       client,
       workspaceId,
       requested: selectSkipStepsOfNamespaces(
@@ -158,11 +159,12 @@ export async function planTailorDB(context: PlanContext) {
       ),
       pendingMigrations: detected.pendingMigrations,
       inProgressByNamespace: detected.inProgressMigrations,
+      source: context,
     });
   }
   const { namespacesWithMigrations, migrationFileState, checkpointRepairs } = detected ?? {
-    namespacesWithMigrations: forRemoval ? [] : migrationConfig,
-    migrationFileState: forRemoval ? {} : captureMigrationFileState(migrationConfig),
+    namespacesWithMigrations: migrationConfig,
+    migrationFileState: captureMigrationFileState(migrationConfig),
     checkpointRepairs: [],
   };
 
@@ -215,7 +217,11 @@ export async function planTailorDB(context: PlanContext) {
       config,
       noSchemaCheck: noSchemaCheck ?? false,
       ...(migrationSkipSteps ? { migrationSkipSteps } : {}),
+      ...(migrationRecoveryArgs ? { migrationRecoveryArgs } : {}),
       ...(migrationTestBaselines ? { migrationTestBaselines } : {}),
+      ...(context.migrationMachineUserOverride !== undefined
+        ? { migrationMachineUserOverride: context.migrationMachineUserOverride }
+        : {}),
       namespacesWithMigrations,
       migrationFileState,
       checkpointRepairs,
@@ -249,9 +255,7 @@ async function planServices(
   const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>(
     "TailorDB services",
   );
-  const conflicts: OwnerConflict[] = [];
-  const unmanaged: UnmanagedResource[] = [];
-  const resourceOwners = new Set<string>();
+  const ownership = createOwnershipTracker(appName, appId);
 
   const existingServices = await fetchExistingResourcesWithLabels({
     client,
@@ -275,16 +279,10 @@ async function planServices(
       appId,
     });
     if (existing) {
-      const owned = trackDesiredResourceOwnership({
-        labels: existing.allLabels,
-        ownerLabel: existing.label,
-        appName,
-        appId,
+      const owned = ownership.ownsDesired(existing.allLabels, {
         resourceType: "tailordb.service",
         resourceLabel: "TailorDB service",
         resourceName: tailordb.namespace,
-        conflicts,
-        unmanaged,
       });
 
       const configUnchanged = owned && areTailorDBServicesEqual(existing.resource, tailordb);
@@ -313,14 +311,7 @@ async function planServices(
   }
   Object.entries(existingServices).forEach(([namespaceName]) => {
     const entry = existingServices[namespaceName];
-    const owned = trackRemainingResourceOwner({
-      labels: entry?.allLabels,
-      ownerLabel: entry?.label,
-      appName,
-      appId,
-      resourceOwners,
-    });
-    if (owned) {
+    if (ownership.ownsRemaining(entry?.allLabels)) {
       changeSet.deletes.push({
         name: namespaceName,
         request: {
@@ -331,7 +322,7 @@ async function planServices(
     }
   });
 
-  return { changeSet, conflicts, unmanaged, resourceOwners };
+  return { changeSet, ...ownership.result };
 }
 
 type CreateType = {
@@ -512,6 +503,9 @@ type CreateGqlPermission = {
 type UpdateGqlPermission = {
   name: string;
   request: MessageInitShape<typeof UpdateTailorDBGQLPermissionRequestSchema>;
+  previousPermission: MessageInitShape<
+    typeof UpdateTailorDBGQLPermissionRequestSchema
+  >["permission"];
 };
 
 type DeleteGqlPermission = {
@@ -577,6 +571,7 @@ async function planGqlPermissions(
               typeName: tableName,
               permission: desiredPermission,
             },
+            previousPermission: existingPermission?.permission,
             ...(configUnchanged && { forcedBySdkVersion: true }),
           });
         }

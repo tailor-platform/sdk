@@ -352,7 +352,7 @@ export default createResolver({
 });
 ```
 
-Wait points can be imported and used in any file (workflow jobs, resolvers, executors). For local testing, see [Jobs that wait on approval](../testing.md#jobs-that-wait-on-approval) in the testing guide.
+Wait points can be imported and used in any file (workflow jobs, resolvers, executors). For local testing, see [Jobs that wait on approval](../testing.md#jobs-that-wait-on-approval-beta) in the testing guide.
 
 ### Keys With Runtime Values
 

@@ -47,7 +47,7 @@ process.stderr.write(
     "Every deprecation states the version it shipped in and the codemod that migrates callers:\n" +
     `  @deprecated since ${PENDING_SINCE} — use {@link newApi} instead. codemod: v2/old-to-new\n` +
     "A deprecation with no replacement and no mechanical migration ends with `codemod: none (<reason>)` instead.\n" +
-    "See .agents/rules/deprecation.md.\n\n",
+    "See docs/deprecation.md.\n\n",
 );
 for (const failure of failures) {
   process.stderr.write(`  ${failure}\n`);

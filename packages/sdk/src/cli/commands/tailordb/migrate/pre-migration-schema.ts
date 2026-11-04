@@ -13,7 +13,9 @@
  *   from a nested field are re-inserted so migrate.ts can read them, and the
  *   new member of a confirmed nested rename is relaxed to optional until the
  *   copy script has filled it. Required additions, requiredness changes, and
- *   enum removals inside nested fields are relaxed until Post-phase.
+ *   enum removals inside nested fields are relaxed until Post-phase. A foreign
+ *   key added to a top-level field is withheld until Post-phase, so
+ *   migrate.ts can update rows whose values point at no record.
  * - `field_renamed`: keep the old field (readable by migrate.ts) and relax
  *   the new field's required/unique constraints until Post-phase.
  * - `field_type_modified`: keep the complete previous field config until
@@ -38,6 +40,7 @@
 import { assertDefined } from "#/utils/assert";
 import { collectNestedMemberChanges, getNestedMember } from "./nested-members";
 import { applyDiffToSnapshot, isBreakingIndexChange } from "./snapshot";
+import { addsForeignKey } from "./snapshot-comparison";
 import {
   convertFieldConfigToProto,
   convertIndexToProto,
@@ -191,9 +194,10 @@ function buildPreMigrationChangesMapFromDiffs(
  *
  * - Removed fields are re-inserted using their pre-migration config.
  * - Newly added required fields are relaxed to optional.
- * - Modified fields keep the looser side of unique/required/enum, members
- *   removed from a nested field are re-inserted, and the new member of a
- *   confirmed nested rename is relaxed to optional.
+ * - Modified fields keep the looser side of unique/required/enum, a foreign
+ *   key added to a top-level field is withheld, members removed from a
+ *   nested field are re-inserted, and the new member of a confirmed nested
+ *   rename is relaxed to optional.
  *
  * @param {Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>>} fields - Field map to adjust (mutated in place)
  * @param {Map<string, FieldDiffChange>} typeChanges - Changes for this table, keyed by fieldName
@@ -229,12 +233,14 @@ function applyPreMigrationFieldAdjustmentsToSnapshot(
         const parentMembers = getNestedMember(field, member.path.slice(0, -1))?.fields;
         const memberName = member.path.at(-1);
         if (!parentMembers || memberName === undefined) continue;
-        defineRecordEntry(parentMembers, memberName, structuredClone(member.before));
+        const restored = structuredClone(member.before);
+        relaxMemberUnique(restored);
+        defineRecordEntry(parentMembers, memberName, restored);
       }
       for (const rename of change.memberRenames ?? []) {
         const renamed = getNestedMember(field, rename.path);
         if (renamed?.required) renamed.required = false;
-        if (renamed?.unique) renamed.unique = false;
+        if (renamed) relaxMemberUnique(renamed);
       }
     },
   });
@@ -244,6 +250,9 @@ function applyPreMigrationFieldAdjustmentsToSnapshot(
 interface PreMigrationField {
   required?: boolean;
   unique?: boolean;
+  foreignKey?: boolean;
+  foreignKeyType?: string;
+  foreignKeyField?: string;
   allowedValues?: { value?: string; description?: string }[];
   fields?: Record<string, PreMigrationField>;
 }
@@ -255,14 +264,32 @@ interface PreMigrationFieldStrategy<F extends PreMigrationField> {
   adjustNestedMembers?: (field: F, change: FieldModifiedChange) => void;
 }
 
+function relaxMemberUnique(member: PreMigrationField): void {
+  if (member.unique) member.unique = false;
+  relaxNestedUnique(member);
+}
+
+function relaxNestedUnique(field: PreMigrationField): void {
+  for (const member of Object.values(field.fields ?? {})) {
+    if (member.unique) member.unique = false;
+    relaxNestedUnique(member);
+  }
+}
+
 function relaxFieldsForPreMigration<F extends PreMigrationField>(
   fields: Record<string, F>,
   typeChanges: Map<string, FieldDiffChange>,
   strategy: PreMigrationFieldStrategy<F>,
 ): void {
+  const restoreField = (config: SnapshotFieldConfig): F => {
+    const restored = strategy.toField(config);
+    relaxNestedUnique(restored);
+    return restored;
+  };
+
   for (const [fieldName, change] of typeChanges) {
     if (change.kind === "field_removed") {
-      defineRecordEntry(fields, fieldName, strategy.toField(change.before));
+      defineRecordEntry(fields, fieldName, restoreField(change.before));
       continue;
     }
 
@@ -273,11 +300,12 @@ function relaxFieldsForPreMigration<F extends PreMigrationField>(
       // constraints. Unique is always deferred because stored values of a
       // previously removed field with the new name may still contain
       // duplicates until the copy overwrites them.
-      defineRecordEntry(fields, change.previousFieldName, strategy.toField(change.before));
+      defineRecordEntry(fields, change.previousFieldName, restoreField(change.before));
       const newField: PreMigrationField | undefined = fields[fieldName];
       if (newField) {
         if (change.after.required) newField.required = false;
         if (change.after.unique ?? false) newField.unique = false;
+        relaxNestedUnique(newField);
       }
       continue;
     }
@@ -295,7 +323,7 @@ function relaxFieldsForPreMigration<F extends PreMigrationField>(
     }
 
     if (change.kind === "field_type_modified") {
-      defineRecordEntry(fields, fieldName, strategy.toField(change.before));
+      defineRecordEntry(fields, fieldName, restoreField(change.before));
       continue;
     }
 
@@ -317,6 +345,11 @@ function relaxFieldsForPreMigration<F extends PreMigrationField>(
     }
 
     relaxModifiedFieldConstraints(relaxed, before, after);
+    if (addsForeignKey(before, after)) {
+      delete relaxed.foreignKey;
+      delete relaxed.foreignKeyType;
+      delete relaxed.foreignKeyField;
+    }
   }
 }
 
@@ -393,20 +426,19 @@ function restoreRemovedNestedMembers(
       `parent of removed nested member "${memberPath}" missing from the Pre-phase field`,
     );
     const memberName = assertDefined(change.path.at(-1), "removed nested member path is empty");
-    const restored = processNestedFieldsFromSnapshot({ [memberName]: change.before });
-    defineRecordEntry(
-      parentMembers,
-      memberName,
-      assertDefined(restored[memberName], `restored nested member "${memberPath}" missing`),
+    const restored = assertDefined(
+      processNestedFieldsFromSnapshot({ [memberName]: change.before })[memberName],
+      `restored nested member "${memberPath}" missing`,
     );
+    relaxMemberUnique(restored);
+    defineRecordEntry(parentMembers, memberName, restored);
   }
 }
 
 /**
  * Relax the new member of each confirmed nested rename to optional and
  * non-unique; the Post-phase enforces both after the copy script has filled
- * it. The manifest currently sends every nested member as non-unique, so the
- * unique relaxation only guards a manifest that starts sending it.
+ * it.
  * @param {ProtoFieldConfig} field - Pre-phase proto field to adjust (mutated in place)
  * @param {readonly NestedMemberRename[]} memberRenames - Confirmed renames inside the field
  */
@@ -417,7 +449,7 @@ function relaxRenamedNestedMembers(
   for (const rename of memberRenames) {
     const member = getProtoNestedMember(field, rename.path);
     if (member?.required) member.required = false;
-    if (member?.unique) member.unique = false;
+    if (member) relaxMemberUnique(member);
   }
 }
 
@@ -550,11 +582,43 @@ export function buildPreMigrationSnapshot(
     }
     tables[table.name] = adjusted;
   }
+  return includeTablesDeletedAfterCheckpoint({ ...target, tables }, diff);
+}
 
-  for (const change of diff.changes) {
-    if (change.kind === "table_removed" || change.kind === "table_renamed") {
-      tables[change.before.name] = change.before;
+type DeletedTable = { name: string; before: TailorDBSnapshotType };
+
+function tablesDeletedAfterCheckpoint(diff: MigrationDiff): DeletedTable[] {
+  return diff.changes.flatMap((change): DeletedTable[] => {
+    if (change.kind === "table_removed") return [{ name: change.tableName, before: change.before }];
+    if (change.kind === "table_renamed") {
+      return [{ name: change.previousTableName, before: change.before }];
     }
-  }
-  return { ...target, tables };
+    return [];
+  });
+}
+
+/**
+ * Name the tables a migration removes, or renames away, which a deploy deletes only after the
+ * migration's checkpoint is committed.
+ * @param diff - The migration's diff
+ * @returns Names of those tables
+ */
+export function getTablesDeletedAfterCheckpoint(diff: MigrationDiff): Set<string> {
+  return new Set(tablesDeletedAfterCheckpoint(diff).map((table) => table.name));
+}
+
+/**
+ * Add the tables {@link getTablesDeletedAfterCheckpoint} names to a schema of the migration, as
+ * they were before it, since they stay until its checkpoint is committed.
+ * @param snapshot - Schema of the migration
+ * @param diff - The migration's diff
+ * @returns The schema with those tables added
+ */
+export function includeTablesDeletedAfterCheckpoint(
+  snapshot: SchemaSnapshot,
+  diff: MigrationDiff,
+): SchemaSnapshot {
+  const tables = copySnapshotRecord(snapshot.tables);
+  for (const { name, before } of tablesDeletedAfterCheckpoint(diff)) tables[name] = before;
+  return { ...snapshot, tables };
 }

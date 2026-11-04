@@ -73,6 +73,21 @@ The CLI module cannot import from configure directly (except configure pure type
 2. Validation logic lives in one place (parser)
 3. CLI depends on validated/transformed types, not raw user input
 
+### CLI Plugin Dispatch
+
+`main.ts` wires politty's `onUnknownSubcommand` to `dispatchPluginWithInstallHint` (`packages/sdk/src/cli/shared/plugin.ts`); [CLI Plugins](../packages/sdk/docs/cli-reference.md#cli-plugins-beta) describes what users see.
+
+- politty calls `onUnknownSubcommand` for a top-level name (`tailor seed`) before `runMain`'s `setup` and for a nested one (`tailor tailordb erd`) after it, and in neither case runs the effects of `globalArgs` (such as `--verbose`) first, so host-side preparation for a plugin belongs in the dispatcher.
+- The dispatcher reads `--env-file` and `--profile` from the forwarded args itself, before the plugin parses them. A first-party plugin that passes options to `createCommonArgs()` needs the same options in `KNOWN_PLUGIN_COMMON_ARGS_OPTIONS`, and one that changes how it parses `--profile` needs the same change in `explicitProfileFromArgs`.
+
+### CLI Command Design: Flags Over Positionals
+
+politty's plugin dispatch ([CLI Plugin Dispatch](#cli-plugin-dispatch)) skips any command that defines `run`, regardless of whether that `run` parses a positional — so a command that both parses one and has `subCommands` (a "hybrid") leaves no way to tell an unrecognized first argument apart from a subcommand name.
+
+- Prefer flags and subcommands over positional arguments. They're order-independent, unambiguous, and subcommand groups remain a plugin extension point.
+- If a leaf command needs a positional, limit it to a single natural subject (e.g. `api inspect <endpoint>`) and give that command **no** `subCommands` of its own.
+- Don't add a new hybrid command. `api` (`packages/sdk/src/cli/commands/api/index.ts`) is the one existing exception; this doesn't apply retroactively to commands whose `run` just forwards to a default subcommand with no arguments.
+
 ## Package Exports
 
 | Entry point                     | Source module       | Used by                                                          |

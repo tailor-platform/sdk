@@ -14,7 +14,7 @@ import {
 import { z } from "zod";
 import { createApplyLimiter } from "./apply-concurrency";
 import { withErrorDiagnostics } from "./error-diagnostics";
-import { CLIError } from "./errors";
+import { CLIError, isCLIError } from "./errors";
 import { logger } from "./logger";
 import { userAgent } from "./user-agent";
 import { invalidDataError } from "./validation-errors";
@@ -25,6 +25,7 @@ export const defaultConsoleBaseUrl = "https://console.tailor.tech";
 
 const defaultOAuth2ClientId = "cpoc_0Iudir72fqSpqC6GQ58ri1cLAqcq5vJl";
 const oauth2DiscoveryEndpoint = "/.well-known/oauth-authorization-server/oauth2/platform";
+const OAUTH2_REQUEST_TIMEOUT_MS = 30_000;
 
 export type PlatformClientConfig = {
   platformUrl?: string;
@@ -34,12 +35,26 @@ export type PlatformClientConfig = {
 
 const tokenPlatformConfigs = new Map<string, PlatformClientConfig>();
 
+const warnedDeprecatedEnvNames = new Set<string>();
+
+function readRenamedEnv(name: string, deprecatedName: string): string | undefined {
+  const value = process.env[name];
+  if (value) return value;
+  const deprecatedValue = process.env[deprecatedName];
+  if (!deprecatedValue) return undefined;
+  if (!warnedDeprecatedEnvNames.has(deprecatedName)) {
+    warnedDeprecatedEnvNames.add(deprecatedName);
+    logger.warn(`${deprecatedName} is deprecated. Please use ${name} instead.`);
+  }
+  return deprecatedValue;
+}
+
 function getEnvPlatformUrl(): string | undefined {
-  return process.env.TAILOR_PLATFORM_URL ?? process.env.PLATFORM_URL;
+  return readRenamedEnv("TAILOR_PLATFORM_URL", "PLATFORM_URL");
 }
 
 function getEnvOAuth2ClientId(): string | undefined {
-  return process.env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID ?? process.env.PLATFORM_OAUTH2_CLIENT_ID;
+  return readRenamedEnv("TAILOR_PLATFORM_OAUTH2_CLIENT_ID", "PLATFORM_OAUTH2_CLIENT_ID");
 }
 
 export function normalizeBaseUrl(value: string): string {
@@ -116,13 +131,58 @@ export function initOAuth2Client(config?: PlatformClientConfig) {
     clientId: getOAuth2ClientId(config),
     server: getPlatformBaseUrl(config),
     discoveryEndpoint: oauth2DiscoveryEndpoint,
+    fetch: (input, init) =>
+      fetch(input, {
+        ...init,
+        signal: AbortSignal.any([
+          ...(init?.signal ? [init.signal] : []),
+          AbortSignal.timeout(OAUTH2_REQUEST_TIMEOUT_MS),
+        ]),
+      }),
   });
 }
 
 export type OperatorClient = Client<typeof OperatorService>;
 
 /**
+ * Supplies the access token the Operator client sends, and a replacement after the
+ * Platform rejects one.
+ * @internal
+ */
+export type AccessTokenSource = {
+  /** Token to send now. */
+  current(): Promise<string>;
+  /** A different token to retry with after `rejected` was refused, if there is one. */
+  replaceRejected(rejected: string): Promise<string | undefined>;
+};
+
+const accessTokenSources = new Map<string, AccessTokenSource>();
+
+/**
+ * Let Operator clients created with `accessToken` take their token from `source`.
+ * @internal
+ * @param accessToken - Token a caller passes to {@link initOperatorClient}
+ * @param source - Source that renews the token
+ */
+export function registerAccessTokenSource(accessToken: string, source: AccessTokenSource) {
+  accessTokenSources.set(accessToken, source);
+}
+
+/**
+ * Find the source registered for an access token.
+ * @internal
+ * @param accessToken - Token a caller passes to {@link initOperatorClient}
+ * @returns The registered source, if any
+ */
+export function findAccessTokenSource(accessToken: string): AccessTokenSource | undefined {
+  return accessTokenSources.get(accessToken);
+}
+
+/**
  * Initialize an Operator client with the given access token.
+ * A client created with a token that `loadAccessToken` returned for a browser login
+ * (`tailor login`) renews the token while it runs, so it keeps working past the token's
+ * lifetime; this can refresh and save the stored login. Other tokens are sent as given.
  * @param accessToken - Access token for authentication
  * @param config - Optional platform connection settings
  * @returns Configured Operator client
@@ -133,10 +193,14 @@ export async function initOperatorClient(accessToken: string, config?: PlatformC
     import("#/cli/telemetry/interceptor"),
     import("@tailor-platform/tailor-proto/service_pb"),
   ]);
+  const tokenSource = findAccessTokenSource(accessToken) ?? {
+    current: async () => accessToken,
+    replaceRejected: async () => undefined,
+  };
 
   const interceptors: Interceptor[] = [
     await userAgentInterceptor(),
-    await bearerTokenInterceptor(accessToken),
+    await bearerTokenInterceptor(tokenSource),
     retryInterceptor(),
     errorHandlingInterceptor(),
     createTracingInterceptor(),
@@ -417,15 +481,52 @@ async function userAgentInterceptor(): Promise<Interceptor> {
 export { userAgent };
 
 /**
- * Create an interceptor that sets the Authorization bearer token.
- * @param accessToken - Access token to use
+ * Create an interceptor that sets the Authorization bearer token, and retries a unary request
+ * once with a replacement token when the Platform rejects the token. A streaming request is not
+ * retried because its body cannot be sent again.
+ * @param source - Source of the token to send
  * @returns Bearer token interceptor
  */
-async function bearerTokenInterceptor(accessToken: string): Promise<Interceptor> {
+async function bearerTokenInterceptor(source: AccessTokenSource): Promise<Interceptor> {
   return (next) => async (req) => {
-    req.header.set("Authorization", `Bearer ${accessToken}`);
-    return await next(req);
+    const token = await currentAccessToken(source);
+    req.header.set("Authorization", `Bearer ${token}`);
+    try {
+      return await next(req);
+    } catch (error) {
+      if (req.stream || !(error instanceof ConnectError) || error.code !== Code.Unauthenticated) {
+        throw error;
+      }
+      const replacement = await source.replaceRejected(token).catch((replaceError: unknown) => {
+        logger.debug(`Could not replace the rejected access token: ${String(replaceError)}`);
+        return undefined;
+      });
+      if (!replacement || replacement === token) throw error;
+      req.header.set("Authorization", `Bearer ${replacement}`);
+      return await next(req);
+    }
   };
+}
+
+async function currentAccessToken(source: AccessTokenSource): Promise<string> {
+  try {
+    return await source.current();
+  } catch (error) {
+    throw withErrorDiagnostics(
+      new ConnectError(
+        error instanceof Error ? error.message : String(error),
+        Code.Unauthenticated,
+        undefined,
+        undefined,
+        error,
+      ),
+      {
+        ...(isCLIError(error) && error.code ? { code: error.code } : {}),
+        ...(isCLIError(error) && error.suggestion ? { suggestion: error.suggestion } : {}),
+        causes: { authentication: error },
+      },
+    );
+  }
 }
 
 /**
@@ -733,10 +834,13 @@ export function errorHandlingInterceptor(): Interceptor {
         // Re-throw as ConnectError with enhanced message to avoid re-wrapping
         // Use rawMessage to avoid duplicating the error code prefix
         throw withErrorDiagnostics(
-          new ConnectError(
-            `Failed to ${operation} ${resourceType}${identity}: ${error.rawMessage}`,
-            error.code,
-            error.metadata,
+          Object.assign(
+            new ConnectError(
+              `Failed to ${operation} ${resourceType}${identity}: ${error.rawMessage}`,
+              error.code,
+              error.metadata,
+            ),
+            { details: error.details },
           ),
           { context: { method: req.method.name, identifiers } },
         );
@@ -798,6 +902,10 @@ const METHOD_IDENTITY_KEYS: Readonly<Record<string, readonly string[]>> = {
   AddCustomDomain: ["domain"],
   GetCustomDomain: ["domain"],
   RemoveCustomDomain: ["domain"],
+  RequestCustomDomainTransfer: ["domain"],
+  CancelCustomDomainTransfer: ["domain"],
+  AcceptCustomDomainTransfer: ["domain"],
+  GetCustomDomainTransfer: ["domain"],
   CreateWorkflowJobFunctionExecutionPolicy: ["executionPolicyKey"],
   UpdateWorkflowJobFunctionExecutionPolicy: ["executionPolicyKey"],
   GetWorkflowJobFunctionExecutionPolicyByKey: ["executionPolicyKey"],
@@ -980,6 +1088,7 @@ export async function fetchUserInfo(accessToken: string, config?: PlatformClient
       Authorization: `Bearer ${accessToken}`,
       "User-Agent": await userAgent(),
     },
+    signal: AbortSignal.timeout(OAUTH2_REQUEST_TIMEOUT_MS),
   });
   if (!resp.ok) {
     throw new Error(`Failed to fetch user info: ${resp.statusText}`);

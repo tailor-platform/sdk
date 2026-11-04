@@ -11,11 +11,6 @@ async function mdFormatter(content: string): Promise<string> {
   return result.code;
 }
 
-vi.mock("node:module", async () => {
-  const actual = await vi.importActual("node:module");
-  return { ...actual, register: vi.fn() };
-});
-
 vi.mock("@politty/zod", async () => {
   const actual = await vi.importActual("@politty/zod");
   return { ...actual, runMain: vi.fn() };

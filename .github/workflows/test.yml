@@ -48,8 +48,11 @@ jobs:
       fail-fast: false
       matrix:
         node: [22, 24]
+        shard: [1, 2, 3, 4]
+        # Must equal the number of `shard` values.
+        shard-total: [4]
     runs-on: ubuntu-latest
-    name: Test (Node ${{ matrix.node }})
+    name: Test (Node ${{ matrix.node }}, shard ${{ matrix.shard }}/${{ matrix.shard-total }})
     timeout-minutes: 15
     permissions:
       contents: read
@@ -68,14 +71,22 @@ jobs:
       - name: Build packages
         run: pnpm -r --filter '!@tailor-platform/sdk' run build
 
-      - name: Run tests
-        run: pnpm -r run test --project 'unit*'
+      - name: Run SDK tests
+        run: pnpm --filter @tailor-platform/sdk run test --project 'unit*' --shard="${SHARD}/${SHARD_TOTAL}"
+        env:
+          SHARD: ${{ matrix.shard }}
+          SHARD_TOTAL: ${{ matrix.shard-total }}
 
-  plugin-windows:
+      # More concurrent packages push eslint-plugin-sdk's oxlint-spawning tests past their 5s timeout.
+      - name: Run other package tests
+        if: ${{ !cancelled() && matrix.shard == matrix.shard-total }}
+        run: pnpm -r --workspace-concurrency=2 --filter '!@tailor-platform/sdk' run test --project 'unit*'
+
+  unit-windows:
     needs: changes
     if: needs.changes.outputs.should_run == 'true'
     runs-on: windows-latest
-    name: Plugin tests (Windows)
+    name: Unit tests (Windows)
     timeout-minutes: 15
     permissions:
       contents: read
@@ -93,20 +104,15 @@ jobs:
         run: pnpm -r --filter '!@tailor-platform/sdk' run build
         shell: bash
 
-      # Windows-specific PATHEXT resolution and .cmd/.ps1 spawn branches are
-      # only exercised here; the main unit suite runs on Linux.
-      - name: Run plugin tests
-        run: pnpm --filter @tailor-platform/sdk exec vitest run --project unit-plugin
-        shell: bash
-
-      # Suggested command lines are only run through cmd.exe and PowerShell here.
-      - name: Run shell quoting tests
-        run: pnpm --filter @tailor-platform/sdk exec vitest run --project unit-shell
+      # The Windows-specific branches of these tests only run here; the main
+      # unit suite runs on Linux.
+      - name: Run Windows unit tests
+        run: pnpm --filter @tailor-platform/sdk exec vitest run --project unit-windows
         shell: bash
 
   test-summary:
     name: test-summary # required status check context (ruleset status_check_main) — keep equal to the job id
-    needs: [changes, test, plugin-windows]
+    needs: [changes, test, unit-windows]
     if: >-
       always() &&
       (github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]')
@@ -119,7 +125,7 @@ jobs:
           CHANGES_RESULT: ${{ needs.changes.result }}
           SHOULD_RUN: ${{ needs.changes.outputs.should_run }}
           TEST_RESULT: ${{ needs.test.result }}
-          PLUGIN_WINDOWS_RESULT: ${{ needs.plugin-windows.result }}
+          UNIT_WINDOWS_RESULT: ${{ needs.unit-windows.result }}
         run: |
           # Fail closed: if the paths-filter job itself failed, should_run is
           # empty and must not be mistaken for "no relevant changes".
@@ -135,8 +141,8 @@ jobs:
             echo "Test jobs failed"
             exit 1
           fi
-          if [[ "$PLUGIN_WINDOWS_RESULT" != "success" ]]; then
-            echo "Plugin tests (Windows) failed"
+          if [[ "$UNIT_WINDOWS_RESULT" != "success" ]]; then
+            echo "Unit tests (Windows) failed"
             exit 1
           fi
           echo "All test jobs succeeded"

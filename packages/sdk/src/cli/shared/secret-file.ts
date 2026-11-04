@@ -1,5 +1,7 @@
+import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "pathe";
+import { CLIError } from "./errors";
 
 const DIR_MODE = 0o700;
 const FILE_MODE = 0o600;
@@ -29,13 +31,71 @@ function chmodIfDifferent(target: string, mode: number): void {
  * tokens, or crash report payloads. On Windows the POSIX mode bits are
  * effectively ignored and ACLs govern access, so the chmod calls are
  * best-effort and silently skipped.
+ *
+ * The content is written to a temporary file that then replaces the target,
+ * so a concurrent reader sees either the old or the new content in full.
+ * A symlinked target keeps its link, and the file it points to is replaced.
  * @param filePath - Absolute path to write
  * @param content - File content
  */
 export function writeSecretFile(filePath: string, content: string | Buffer): void {
   ensureSecretDir(path.dirname(filePath));
-  fs.writeFileSync(filePath, content, { mode: FILE_MODE });
-  chmodIfDifferent(filePath, FILE_MODE);
+  const target = resolveWriteTarget(filePath);
+  const tempPath = `${target}.${crypto.randomUUID()}.tmp`;
+  try {
+    fs.writeFileSync(tempPath, content, { mode: FILE_MODE, flag: "wx" });
+    chmodIfDifferent(tempPath, FILE_MODE);
+    renameReplacing(tempPath, target);
+  } catch (error) {
+    fs.rmSync(tempPath, { force: true });
+    throw error;
+  }
+}
+
+const MAX_SYMLINK_DEPTH = 40;
+
+function resolveWriteTarget(filePath: string): string {
+  let current = filePath;
+  for (let depth = 0; depth < MAX_SYMLINK_DEPTH; depth++) {
+    let stat: fs.Stats;
+    try {
+      stat = fs.lstatSync(current);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return current;
+      throw error;
+    }
+    if (!stat.isSymbolicLink()) return current;
+    current = path.resolve(fs.realpathSync(path.dirname(current)), fs.readlinkSync(current));
+  }
+  throw CLIError({
+    code: "SYMLINK_LOOP",
+    message: `Too many levels of symbolic links: ${filePath}`,
+    suggestion: "Point the symbolic link at a regular file.",
+    context: { path: filePath },
+  });
+}
+
+const WINDOWS_RENAME_RETRY_CODES: ReadonlySet<string> = new Set(["EACCES", "EBUSY", "EPERM"]);
+const WINDOWS_RENAME_ATTEMPTS = 10;
+
+function renameReplacing(from: string, to: string): void {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      fs.renameSync(from, to);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (
+        process.platform !== "win32" ||
+        attempt >= WINDOWS_RENAME_ATTEMPTS ||
+        code === undefined ||
+        !WINDOWS_RENAME_RETRY_CODES.has(code)
+      ) {
+        throw error;
+      }
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, attempt * 20);
+    }
+  }
 }
 
 /**

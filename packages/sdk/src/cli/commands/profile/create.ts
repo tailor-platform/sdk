@@ -7,6 +7,15 @@ import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import type { ProfileInfo } from "./types";
 
+function assertProfileAvailable(
+  config: Awaited<ReturnType<typeof readPlatformConfig>>,
+  name: string,
+) {
+  if (config.profiles[name]) {
+    throw CLIError({ code: "PROFILE_EXISTS", message: `Profile "${name}" already exists.` });
+  }
+}
+
 export const createCommand = defineAppCommand({
   name: "create",
   description: "Create a new profile.",
@@ -59,11 +68,7 @@ export const createCommand = defineAppCommand({
     }
 
     const config = await readPlatformConfig();
-
-    // Check if profile already exists
-    if (config.profiles[args.name]) {
-      throw CLIError({ code: "PROFILE_EXISTS", message: `Profile "${args.name}" already exists.` });
-    }
+    assertProfileAvailable(config, args.name);
 
     // Check if user exists
     const platformConfigInput = {
@@ -78,6 +83,7 @@ export const createCommand = defineAppCommand({
       args.user,
       platformConfig,
     );
+    assertProfileAvailable(config, args.name);
 
     // Check if workspace exists
     const client = await initOperatorClient(token, platformConfig);

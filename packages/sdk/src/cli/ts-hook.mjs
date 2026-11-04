@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
 import { dirname, join, resolve as resolvePath } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 // Node.js module hook: TypeScript resolver + type stripper via amaro.
@@ -124,27 +123,6 @@ function matchTsconfigPaths(specifier, paths) {
   return null;
 }
 
-async function tryResolveWithExtensions(base, context, nextResolve) {
-  if (!TS_EXTENSIONS.some((ext) => base.endsWith(ext))) {
-    for (const ext of TS_EXTENSIONS) {
-      for (const suffix of ["", "/index"]) {
-        try {
-          return await nextResolve(base + suffix + ext, context);
-        } catch (e) {
-          if (e?.code !== "ERR_MODULE_NOT_FOUND") throw e;
-        }
-      }
-    }
-  }
-  try {
-    return await nextResolve(base, context);
-  } catch (e) {
-    const code = e?.code;
-    if (code !== "ERR_MODULE_NOT_FOUND" && code !== "ERR_UNSUPPORTED_DIR_IMPORT") throw e;
-  }
-  return null;
-}
-
 function tryResolveWithExtensionsSync(base, context, nextResolve) {
   if (!TS_EXTENSIONS.some((ext) => base.endsWith(ext))) {
     for (const ext of TS_EXTENSIONS) {
@@ -197,97 +175,6 @@ function isProjectLocalSpecifier(specifier) {
 }
 
 // --- module hooks ---
-
-export async function resolve(specifier, context, nextResolve) {
-  const { parentURL } = context;
-  const resolved = await resolveTs(specifier, context, nextResolve);
-  return isProjectLocalSpecifier(specifier) ? propagateImportNonce(resolved, parentURL) : resolved;
-}
-
-async function resolveTs(specifier, context, nextResolve) {
-  const { parentURL } = context;
-  try {
-    return await nextResolve(specifier, context);
-  } catch (err) {
-    if (err.code !== "ERR_MODULE_NOT_FOUND" && err.code !== "ERR_UNSUPPORTED_DIR_IMPORT") throw err;
-
-    if (
-      err.code === "ERR_UNSUPPORTED_DIR_IMPORT" &&
-      (specifier.startsWith(".") || specifier.startsWith("/"))
-    ) {
-      for (const ext of TS_EXTENSIONS) {
-        try {
-          return await nextResolve(specifier + "/index" + ext, context);
-        } catch (e) {
-          if (e?.code !== "ERR_MODULE_NOT_FOUND") throw e;
-        }
-      }
-      throw err;
-    }
-
-    if (!specifier.startsWith(".") && !specifier.startsWith("/")) {
-      // Non-relative: try tsconfig path aliases
-      if (parentURL?.startsWith("file://")) {
-        const parentParsed = new URL(parentURL);
-        const parentNonce = parentParsed.searchParams.get(IMPORT_NONCE_PARAM) ?? "";
-        parentParsed.search = "";
-        parentParsed.hash = "";
-        const parentDir = dirname(fileURLToPath(parentParsed));
-        const tsconfigPaths = loadTsconfigPaths(parentDir, parentNonce);
-        const candidates = matchTsconfigPaths(specifier, tsconfigPaths);
-        if (candidates) {
-          for (const candidate of candidates) {
-            const result = await tryResolveWithExtensions(candidate, context, nextResolve);
-            if (result) return propagateImportNonce(result, parentURL);
-          }
-        }
-      }
-      throw err;
-    }
-
-    const lastSegment = specifier.split("/").pop() ?? "";
-    if (!KNOWN_EXTENSIONS.some((ext) => lastSegment.endsWith(ext))) {
-      for (const ext of TS_EXTENSIONS) {
-        try {
-          return await nextResolve(specifier + ext, context);
-        } catch (e) {
-          if (e?.code !== "ERR_MODULE_NOT_FOUND") throw e;
-        }
-      }
-    }
-
-    for (const [jsExt, tsExt] of JS_TO_TS) {
-      if (specifier.endsWith(jsExt)) {
-        try {
-          return await nextResolve(specifier.slice(0, -jsExt.length) + tsExt, context);
-        } catch (e) {
-          if (e?.code !== "ERR_MODULE_NOT_FOUND") throw e;
-        }
-      }
-    }
-
-    throw err;
-  }
-}
-
-export async function load(url, context, nextLoad) {
-  if (url.startsWith("file:")) {
-    const parsedUrl = new URL(url);
-    if (
-      TS_EXTENSIONS.some((ext) => parsedUrl.pathname.endsWith(ext)) &&
-      !parsedUrl.pathname.endsWith(".d.ts") &&
-      !parsedUrl.pathname.endsWith(".d.mts")
-    ) {
-      parsedUrl.search = "";
-      parsedUrl.hash = "";
-      const filePath = fileURLToPath(parsedUrl);
-      const source = await readFile(filePath, "utf-8");
-      const { code } = transformSync(source, { mode: "transform", filename: filePath });
-      return { format: "module", shortCircuit: true, source: `${code}\n//# sourceURL=${url}` };
-    }
-  }
-  return nextLoad(url, context);
-}
 
 // Sync hooks for module.registerHooks() (Node >= 22.15.0). Node < 22.18.0 crashes
 // on require() of scheme-only builtins (node:sqlite, node:test, node:sea) once both

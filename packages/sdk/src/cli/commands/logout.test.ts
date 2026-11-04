@@ -10,6 +10,7 @@ import {
   writePlatformConfig,
 } from "#/cli/shared/context";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { writeHeldConfigLock } from "#/cli/shared/test-helpers/config-lock";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { logoutCommand } from "./logout";
@@ -132,6 +133,26 @@ describe("logout --profile", () => {
     await expect(loadAccessToken({ profile: "dev" })).rejects.toThrow(
       'User "u@example.com" not found',
     );
+  });
+
+  test("reads the config only after another process releases the config lock", async () => {
+    const lockPath = path.join(xdgTempDir, "tailor-platform", "config.yaml.lock");
+    writeHeldConfigLock(lockPath);
+    setTimeout(() => {
+      void (async () => {
+        const config = await readPlatformConfig();
+        config.profiles.staging = { user: "u@example.com", workspace_id: validUUID };
+        writePlatformConfig(config);
+        fs.rmSync(lockPath);
+      })();
+    }, 100);
+
+    const result = await runCommand(logoutCommand, ["--profile", "dev"]);
+
+    expect(result.success).toBe(true);
+    const config = await readPlatformConfig();
+    expect(config.profiles.staging).toEqual({ user: "u@example.com", workspace_id: validUUID });
+    expect(fs.existsSync(lockPath)).toBe(false);
   });
 
   test("prints the logged-out user and the revocation under JSON output", async () => {

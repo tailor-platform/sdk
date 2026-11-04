@@ -1,11 +1,16 @@
 import type { TreeshakeOptions } from "#/configure/config/types";
-import type { TreeshakingOptions } from "rolldown";
+import type { CommentsOptions, TreeshakingOptions } from "rolldown";
 
 const BASE_FUNCTION_TREESHAKE_OPTIONS = {
   moduleSideEffects: false,
   annotations: true,
   unknownGlobalSideEffects: false,
 } as const satisfies TreeshakingOptions;
+
+// Takes effect only on minified output.
+export const FUNCTION_BUNDLE_COMMENT_OPTIONS = {
+  annotation: false,
+} as const satisfies CommentsOptions;
 
 export function mergeFunctionTreeshakeOptions(
   fragments: readonly TreeshakingOptions[],

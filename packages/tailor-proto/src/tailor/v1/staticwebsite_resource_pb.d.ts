@@ -89,6 +89,79 @@ export declare type CustomDomain = Message<"tailor.v1.CustomDomain"> & {
 export declare const CustomDomainSchema: GenMessage<CustomDomain>;
 
 /**
+ * CustomDomainTransfer is an offer to move a custom domain from a source workspace to a target
+ * workspace without re-issuing its certificate or changing DNS.
+ *
+ * @generated from message tailor.v1.CustomDomainTransfer
+ */
+export declare type CustomDomainTransfer = Message<"tailor.v1.CustomDomainTransfer"> & {
+  /**
+   * @generated from field: string domain = 1;
+   */
+  domain: string;
+
+  /**
+   * @generated from field: string source_workspace_id = 2;
+   */
+  sourceWorkspaceId: string;
+
+  /**
+   * @generated from field: string source_static_website_name = 3;
+   */
+  sourceStaticWebsiteName: string;
+
+  /**
+   * @generated from field: string target_workspace_id = 4;
+   */
+  targetWorkspaceId: string;
+
+  /**
+   * Set on completion.
+   *
+   * @generated from field: string target_static_website_name = 5;
+   */
+  targetStaticWebsiteName: string;
+
+  /**
+   * @generated from field: tailor.v1.CustomDomainTransferStatus status = 6;
+   */
+  status: CustomDomainTransferStatus;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp expires_at = 7;
+   */
+  expiresAt?: Timestamp;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp completed_at = 8;
+   */
+  completedAt?: Timestamp;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp created_at = 9;
+   */
+  createdAt?: Timestamp;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp updated_at = 10;
+   */
+  updatedAt?: Timestamp;
+
+  /**
+   * Unset until the source edge cache purge is confirmed; the offer cannot be accepted before then.
+   *
+   * @generated from field: google.protobuf.Timestamp request_purged_at = 11;
+   */
+  requestPurgedAt?: Timestamp;
+};
+
+/**
+ * Describes the message tailor.v1.CustomDomainTransfer.
+ * Use `create(CustomDomainTransferSchema)` to create a new message.
+ */
+export declare const CustomDomainTransferSchema: GenMessage<CustomDomainTransfer>;
+
+/**
  * @generated from enum tailor.v1.CustomDomainStatus
  */
 export enum CustomDomainStatus {
@@ -121,10 +194,52 @@ export enum CustomDomainStatus {
    * @generated from enum value: CUSTOM_DOMAIN_STATUS_FAILED = 5;
    */
   FAILED = 5,
+
+  /**
+   * The domain is being removed; it cannot be re-added until removal completes.
+   *
+   * @generated from enum value: CUSTOM_DOMAIN_STATUS_REMOVING = 6;
+   */
+  REMOVING = 6,
 }
 
 /**
  * Describes the enum tailor.v1.CustomDomainStatus.
  */
 export declare const CustomDomainStatusSchema: GenEnum<CustomDomainStatus>;
+
+/**
+ * @generated from enum tailor.v1.CustomDomainTransferStatus
+ */
+export enum CustomDomainTransferStatus {
+  /**
+   * @generated from enum value: CUSTOM_DOMAIN_TRANSFER_STATUS_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: CUSTOM_DOMAIN_TRANSFER_STATUS_PENDING = 1;
+   */
+  PENDING = 1,
+
+  /**
+   * @generated from enum value: CUSTOM_DOMAIN_TRANSFER_STATUS_COMPLETED = 2;
+   */
+  COMPLETED = 2,
+
+  /**
+   * @generated from enum value: CUSTOM_DOMAIN_TRANSFER_STATUS_CANCELLED = 3;
+   */
+  CANCELLED = 3,
+
+  /**
+   * @generated from enum value: CUSTOM_DOMAIN_TRANSFER_STATUS_EXPIRED = 4;
+   */
+  EXPIRED = 4,
+}
+
+/**
+ * Describes the enum tailor.v1.CustomDomainTransferStatus.
+ */
+export declare const CustomDomainTransferStatusSchema: GenEnum<CustomDomainTransferStatus>;
 

@@ -11,7 +11,11 @@ interface LogCall {
   attributes?: LogAttributes;
 }
 
-/** Initial fixtures for a logger mock. */
+/**
+ * Initial fixtures for a logger mock.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface MockLoggerOptions {}
 
@@ -23,6 +27,8 @@ export interface MockLoggerOptions {}
  * Acquire a disposable mock for `tailor.logger`. Each method is a `vi.fn`, so
  * calls can be asserted directly; `calls` returns the `debug`/`info`/`warn`/
  * `error` entries in the order they were emitted. Restored on dispose.
+ *
+ * **Beta:** This API may change in future releases.
  * @param _options - Reserved for future initial fixtures
  * @returns Disposable logger mock control object
  * @example

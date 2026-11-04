@@ -2,129 +2,92 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import { runCommand } from "@politty/zod";
 import * as path from "pathe";
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
+import {
+  applyWorkflowJobFunctionExecutionPolicy,
+  planWorkflowJobFunctionExecutionPolicy,
+} from "#/cli/commands/deploy/workflow-execution-policy";
 import { defineApplication } from "#/cli/services/application";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { logger } from "#/cli/shared/logger";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import {
+  emptyPlanResults,
+  plannedDeleteLists,
+  PLANNED_DELETE,
+} from "./deploy/test-helpers/plan-results";
 import { removeCommand } from "./remove";
+import type { PlanResults } from "./deploy/apply-phases";
 
-const mocks = vi.hoisted(() => {
-  const changeSet = () => ({
-    creates: [],
-    updates: [],
-    deletes: [],
-    replaces: [],
-    unchanged: [],
-    isEmpty: () => true,
-    lines: () => [],
-  });
-  const ownership = () => ({ conflicts: [], unmanaged: [], resourceOwners: new Set<string>() });
-
-  return {
-    changeSet,
-    ownership,
-    planAIGateway: vi.fn(async () => ({ changeSet: changeSet(), ...ownership() })),
-    applyAIGateway: vi.fn(),
-    planApplication: vi.fn(async () => changeSet()),
-    applyApplication: vi.fn(),
-    planAuth: vi.fn(async () => ({
-      changeSet: {
-        service: changeSet(),
-        idpConfig: changeSet(),
-        userProfileConfig: changeSet(),
-        tenantConfig: changeSet(),
-        machineUser: changeSet(),
-        oauth2Client: changeSet(),
-        authHook: changeSet(),
-        scim: changeSet(),
-        scimResource: changeSet(),
-        connection: changeSet(),
-      },
-      ...ownership(),
-    })),
-    applyAuth: vi.fn(),
-    planExecutor: vi.fn(async () => ({ changeSet: changeSet(), ...ownership() })),
-    applyExecutor: vi.fn(),
-    planFunctionRegistry: vi.fn(async () => ({ changeSet: changeSet(), ...ownership() })),
-    applyFunctionRegistry: vi.fn(),
-    planIdP: vi.fn(async () => ({
-      changeSet: { service: changeSet(), client: changeSet() },
-      ...ownership(),
-    })),
-    applyIdP: vi.fn(),
-    planPipeline: vi.fn(async () => ({
-      changeSet: { service: changeSet(), resolver: changeSet() },
-      ...ownership(),
-    })),
-    applyPipeline: vi.fn(),
-    planSecretManager: vi.fn(async () => ({
-      vaultChangeSet: changeSet(),
-      secretChangeSet: changeSet(),
-      ...ownership(),
-    })),
-    applySecretManager: vi.fn(),
-    planStaticWebsite: vi.fn(async () => ({ changeSet: changeSet(), ...ownership() })),
-    applyStaticWebsite: vi.fn(),
-    planTailorDB: vi.fn(async () => ({
-      changeSet: {
-        service: changeSet(),
-        type: changeSet(),
-        gqlPermission: changeSet(),
-      },
-      ...ownership(),
-    })),
-    applyTailorDB: vi.fn(),
-    planWorkflow: vi.fn(async () => ({ changeSet: changeSet(), ...ownership() })),
-    applyWorkflow: vi.fn(),
-  };
-});
+const mocks = vi.hoisted(() => ({
+  plans: undefined as unknown as PlanResults,
+  applyAIGateway: vi.fn(),
+  applyApplication: vi.fn(),
+  applyAuth: vi.fn(),
+  applyExecutor: vi.fn(),
+  applyFunctionRegistry: vi.fn(),
+  applyIdP: vi.fn(),
+  applyPipeline: vi.fn(),
+  applySecretManager: vi.fn(),
+  applyStaticWebsite: vi.fn(),
+  applyTailorDB: vi.fn(),
+  applyWorkflow: vi.fn(),
+}));
 
 vi.mock("#/cli/commands/deploy/aigateway", () => ({
-  planAIGateway: mocks.planAIGateway,
+  planAIGateway: async () => mocks.plans.aiGateway,
   applyAIGateway: mocks.applyAIGateway,
 }));
 vi.mock("#/cli/commands/deploy/application", () => ({
-  planApplication: mocks.planApplication,
+  planApplication: async () => mocks.plans.app,
   applyApplication: mocks.applyApplication,
 }));
 vi.mock("#/cli/commands/deploy/auth", () => ({
-  planAuth: mocks.planAuth,
+  planAuth: async () => mocks.plans.auth,
   applyAuth: mocks.applyAuth,
 }));
 vi.mock("#/cli/commands/deploy/executor", () => ({
-  planExecutor: mocks.planExecutor,
+  planExecutor: async () => mocks.plans.executor,
   applyExecutor: mocks.applyExecutor,
 }));
 vi.mock("#/cli/commands/deploy/function-registry", () => ({
-  planFunctionRegistry: mocks.planFunctionRegistry,
+  planFunctionRegistry: async () => mocks.plans.functionRegistry,
   applyFunctionRegistry: mocks.applyFunctionRegistry,
 }));
 vi.mock("#/cli/commands/deploy/idp", () => ({
-  planIdP: mocks.planIdP,
+  planIdP: async () => mocks.plans.idp,
   applyIdP: mocks.applyIdP,
 }));
 vi.mock("#/cli/commands/deploy/resolver", () => ({
-  planPipeline: mocks.planPipeline,
+  planPipeline: async () => mocks.plans.pipeline,
   applyPipeline: mocks.applyPipeline,
 }));
 vi.mock("#/cli/commands/deploy/secret-manager", () => ({
-  planSecretManager: mocks.planSecretManager,
+  planSecretManager: async () => mocks.plans.secretManager,
   applySecretManager: mocks.applySecretManager,
 }));
-vi.mock("#/cli/commands/deploy/staticwebsite", () => ({
-  planStaticWebsite: mocks.planStaticWebsite,
+vi.mock("#/cli/commands/deploy/staticwebsite", async (importOriginal) => ({
+  ...(await importOriginal()),
+  planStaticWebsite: async () => mocks.plans.staticWebsite,
   applyStaticWebsite: mocks.applyStaticWebsite,
 }));
 vi.mock("#/cli/commands/deploy/tailordb/index", () => ({
-  planTailorDB: mocks.planTailorDB,
+  planTailorDB: async () => mocks.plans.tailorDB,
   applyTailorDB: mocks.applyTailorDB,
 }));
 vi.mock("#/cli/commands/deploy/workflow", () => ({
-  planWorkflow: mocks.planWorkflow,
+  planWorkflow: async () => mocks.plans.workflow,
   applyWorkflow: mocks.applyWorkflow,
 }));
+vi.mock(import("#/cli/commands/deploy/workflow-execution-policy"), async (original) => {
+  const actual = await original();
+  return {
+    ...actual,
+    planWorkflowJobFunctionExecutionPolicy: vi.fn(actual.planWorkflowJobFunctionExecutionPolicy),
+    applyWorkflowJobFunctionExecutionPolicy: vi.fn(actual.applyWorkflowJobFunctionExecutionPolicy),
+  };
+});
 vi.mock("#/cli/services/application", () => ({
   defineApplication: vi.fn(() => ({ name: "my-app", id: "app-id" })),
 }));
@@ -162,7 +125,34 @@ vi.mock("#/cli/shared/logger", async (importOriginal) => ({
 }));
 vi.mock("#/cli/shared/readonly-guard", () => ({ assertWritable: vi.fn() }));
 
+// Removal desires no static website, so it plans no custom domain change.
+const DELETE_LISTS_REMOVAL_NEVER_PLANS = new Set([
+  "staticWebsite.customDomainChangeSet",
+  "staticWebsite.customDomainTransferChangeSet",
+]);
+
+const APPLY_BY_PLAN: Record<keyof PlanResults, { mock: { calls: unknown[][] } }> = {
+  functionRegistry: mocks.applyFunctionRegistry,
+  tailorDB: mocks.applyTailorDB,
+  staticWebsite: mocks.applyStaticWebsite,
+  aiGateway: mocks.applyAIGateway,
+  idp: mocks.applyIdP,
+  auth: mocks.applyAuth,
+  pipeline: mocks.applyPipeline,
+  app: mocks.applyApplication,
+  executor: mocks.applyExecutor,
+  workflow: mocks.applyWorkflow,
+  workflowExecutionPolicy: vi.mocked(applyWorkflowJobFunctionExecutionPolicy),
+  secretManager: mocks.applySecretManager,
+};
+
 describe("remove command", () => {
+  beforeEach(() => {
+    mocks.plans = emptyPlanResults();
+    vi.mocked(planWorkflowJobFunctionExecutionPolicy).mockReset();
+    vi.mocked(applyWorkflowJobFunctionExecutionPolicy).mockReset();
+  });
+
   test("deletes a managed workflow execution policy when it is the only remaining resource", async () => {
     const client = {
       listWorkflowJobFunctionExecutionPolicies: vi.fn(async () => ({
@@ -242,6 +232,52 @@ describe("remove command", () => {
     });
   });
 
+  test("names only delete lists that plan results contain as never planned by removal", () => {
+    const paths = new Set(plannedDeleteLists(emptyPlanResults()).keys());
+
+    expect([...DELETE_LISTS_REMOVAL_NEVER_PLANS].filter((path) => !paths.has(path))).toEqual([]);
+  });
+
+  test.each(
+    [...plannedDeleteLists(emptyPlanResults()).keys()].filter(
+      (path) => !DELETE_LISTS_REMOVAL_NEVER_PLANS.has(path),
+    ),
+  )("lists and applies a planned delete from %s when it is the only one", async (path) => {
+    const client = { deleteWorkflowJobFunctionExecutionPolicy: vi.fn() };
+    vi.mocked(initOperatorClient).mockResolvedValue(client as never);
+    vi.mocked(planWorkflowJobFunctionExecutionPolicy).mockImplementation(
+      async () => mocks.plans.workflowExecutionPolicy,
+    );
+    plannedDeleteLists(mocks.plans).get(path)!.push(PLANNED_DELETE);
+    const kind = path.split(".")[0] as keyof PlanResults;
+    using _json = jsonMode();
+
+    await runCommand(removeCommand, ["--yes"]);
+
+    expect(logger.log).toHaveBeenCalledWith(expect.stringContaining(`- ${PLANNED_DELETE.name}`));
+    expect(APPLY_BY_PLAN[kind].mock.calls.flat()).toContain(mocks.plans[kind]);
+    expect(logger.out).toHaveBeenCalledWith(expect.objectContaining({ changed: true }));
+  });
+
+  test("lists workflow job functions under their own heading", async () => {
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      listWorkflowJobFunctionExecutionPolicies: vi.fn(async () => ({
+        policies: [],
+        nextPageToken: "",
+      })),
+    } as never);
+    mocks.plans.workflow.jobFunctionDeletes.push({
+      workspaceId: "workspace-id",
+      jobFunctionName: "process-order",
+    });
+
+    await runCommand(removeCommand, ["--yes"]);
+
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.stringContaining("Workflow job functions:\n  - process-order"),
+    );
+  });
+
   test("removes by the app id recorded in the governing lock", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "remove-lock-"));
     try {
@@ -285,12 +321,7 @@ describe("remove command", () => {
       getMetadata: vi.fn(async () => ({ metadata: { labels: {} } })),
     };
     vi.mocked(initOperatorClient).mockResolvedValue(client as never);
-    mocks.planExecutor.mockResolvedValueOnce({
-      changeSet: mocks.changeSet(),
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set(["my-app"]),
-    });
+    mocks.plans.executor.resourceOwners.add("my-app");
 
     await runCommand(removeCommand, ["--yes"]);
 
@@ -316,12 +347,7 @@ describe("remove command", () => {
       })),
       getMetadata: vi.fn(async () => ({ metadata: { labels: {} } })),
     } as never);
-    mocks.planExecutor.mockResolvedValueOnce({
-      changeSet: mocks.changeSet(),
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set(["my-app"]),
-    });
+    mocks.plans.executor.resourceOwners.add("my-app");
     using _json = jsonMode();
 
     await runCommand(removeCommand, ["--yes"]);

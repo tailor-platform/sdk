@@ -5,6 +5,7 @@ import type { HasName } from "./change-set";
 import type { ImportantResourceDeletion, OwnerConflict, UnmanagedResource } from "./confirm";
 import type { BuiltDeploymentTarget } from "./deployment-target";
 import type { ManagedResourceType } from "./managed-resource-type";
+import type { OwnershipResult } from "./owned-resource";
 
 /**
  * Decide which renamed-away applications should be deleted. Excludes the
@@ -41,11 +42,6 @@ export function assertUniqueGlobalResourceNames(
 ): void {
   assertNoDuplicateResourceNames(targets, DEPLOY_MANAGED_RESOURCE_DEFINITIONS);
 }
-type OwnershipTrackedPlan = {
-  conflicts: OwnerConflict[];
-  unmanaged: UnmanagedResource[];
-  resourceOwners: Set<string>;
-};
 
 /**
  * Every `PlanResults` entry carries ownership-tracking fields; deriving the
@@ -54,7 +50,7 @@ type OwnershipTrackedPlan = {
  * @param results - Plan results for a single deployment
  * @returns The ownership-tracking plan entries
  */
-function ownershipTrackedPlans(results: PlanResults): ReadonlyArray<OwnershipTrackedPlan> {
+function ownershipTrackedPlans(results: PlanResults): ReadonlyArray<OwnershipResult> {
   return Object.values(results);
 }
 
@@ -507,7 +503,7 @@ export function dropCrossDeploymentManagedDeletes(
   });
 }
 
-export function collectDeploymentResourceOwners(
+function collectDeploymentResourceOwners(
   deployments: ReadonlyArray<PlannedDeployment>,
 ): Set<string> {
   const owners = new Set<string>();
@@ -517,4 +513,39 @@ export function collectDeploymentResourceOwners(
     }
   }
   return owners;
+}
+
+/**
+ * Append a delete to `app.deletes` for each application that taking over its
+ * resources leaves empty (see `computeRenamedAppDeletions`), unless a
+ * deployment already deletes it.
+ * @param deployments - Planned deployments of this run
+ */
+export function scheduleRenamedAppDeletes(deployments: ReadonlyArray<PlannedDeployment>): void {
+  const protectedAppNames = new Set(deployments.map((deployment) => deployment.application.name));
+  const resourceOwners = collectDeploymentResourceOwners(deployments);
+  const scheduled = new Set(
+    deployments.flatMap((deployment) => deployment.app.deletes.map((del) => del.name)),
+  );
+
+  for (const deployment of deployments) {
+    const conflicts = collectOwnerConflicts(deploymentPlanResults(deployment));
+    for (const name of computeRenamedAppDeletions({
+      conflicts,
+      resourceOwners,
+      protectedAppNames,
+    })) {
+      if (scheduled.has(name)) {
+        continue;
+      }
+      scheduled.add(name);
+      deployment.app.deletes.push({
+        name,
+        request: {
+          workspaceId: deployment.tailorDB.context.workspaceId,
+          applicationName: name,
+        },
+      });
+    }
+  }
 }

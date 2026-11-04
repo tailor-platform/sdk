@@ -1,8 +1,12 @@
-import { parse, Lang } from "@ast-grep/napi";
 import {
+  callArgument,
+  excerptOf,
   findImportStatements,
   importBindings,
+  lineOf,
   localDeclarationNames,
+  pairValue,
+  parseRoot,
   stringValue,
 } from "../../../../src/ast-grep-helpers";
 import type { LlmReviewFinding } from "../../../../src/types";
@@ -13,23 +17,7 @@ const DEFINE_CONFIG = "defineConfig";
 const GROUP_KEY = "buildOptions";
 const MOVED_KEYS: ReadonlySet<string> = new Set(["inlineSourcemap", "logLevel"]);
 const NESTED_INDENT = "  ";
-const ARGUMENT_PUNCTUATION: ReadonlySet<string> = new Set(["(", ")", ",", "comment"]);
 const OBJECT_PUNCTUATION: ReadonlySet<string> = new Set(["{", "}", ",", "comment"]);
-
-function sourceLang(filePath: string, source: string): Lang {
-  const lowerPath = filePath.toLowerCase();
-  if (/\.(?:ts|mts|cts)$/u.test(lowerPath)) return Lang.TypeScript;
-  if (/\.(?:tsx|jsx|js)$/u.test(lowerPath)) return Lang.Tsx;
-  return source.includes("</") ? Lang.Tsx : Lang.TypeScript;
-}
-
-function parseRoot(source: string, filePath: string): SgNode | null {
-  try {
-    return parse(sourceLang(filePath, source), source).root();
-  } catch {
-    return null;
-  }
-}
 
 /** Local names through which a file reaches the SDK's `defineConfig`. */
 type DefineConfigBindings = {
@@ -74,13 +62,6 @@ function defineConfigCalleeName(call: SgNode, bindings: DefineConfigBindings): s
   return bindings.namespaces.has(object.text()) ? object.text() : null;
 }
 
-function callArgument(call: SgNode): SgNode | null {
-  const args = call.children().find((child) => child.kind() === "arguments");
-  const values =
-    args?.children().filter((child) => !ARGUMENT_PUNCTUATION.has(String(child.kind()))) ?? [];
-  return values.length === 1 ? values[0]! : null;
-}
-
 function objectEntries(object: SgNode): SgNode[] {
   return object.children().filter((child) => !OBJECT_PUNCTUATION.has(String(child.kind())));
 }
@@ -91,13 +72,6 @@ function entryKey(entry: SgNode): string | null {
   const key = entry.children()[0];
   if (key?.kind() !== "property_identifier" && key?.kind() !== "string") return null;
   return stringValue(key);
-}
-
-function pairValue(pair: SgNode): SgNode | null {
-  const children = pair.children();
-  const colonIndex = children.findIndex((child) => child.kind() === ":");
-  if (colonIndex === -1) return null;
-  return children.slice(colonIndex + 1).find((child) => child.kind() !== "comment") ?? null;
 }
 
 function lineStart(source: string, index: number): number {
@@ -286,9 +260,9 @@ export function reviewFindings(
       ? [
           {
             file: relativePath,
-            line: result.node.range().start.line + 1,
+            line: lineOf(result.node),
             message: `Move inlineSourcemap and logLevel into buildOptions by hand: ${result.reason}.`,
-            excerpt: result.node.text().split("\n", 1)[0]!.trim(),
+            excerpt: excerptOf(result.node),
           },
         ]
       : [],

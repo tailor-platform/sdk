@@ -22,6 +22,7 @@ export {
   confirmationArgs,
   deploymentArgs,
   loadEnvFiles,
+  loadEnvFilesFromArgv,
   type CommonArgsType,
 } from "./shared/args";
 export { deploy, deploy as apply } from "./commands/deploy/deploy";
@@ -214,6 +215,7 @@ export { truncate, type TruncateOptions } from "./commands/tailordb/truncate";
 export {
   generate as migrateGenerate,
   type GenerateOptions as MigrateGenerateOptions,
+  type GenerateResult as MigrateGenerateResult,
 } from "./commands/tailordb/migrate/generate";
 export {
   createSnapshotFromLocalTypes,

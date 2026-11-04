@@ -7,4 +7,5 @@ export const statusLabels: Record<CustomDomainStatus, string> = {
   [CustomDomainStatus.CERT_ISSUED]: "cert_issued",
   [CustomDomainStatus.ACTIVE]: "active",
   [CustomDomainStatus.FAILED]: "failed",
+  [CustomDomainStatus.REMOVING]: "removing",
 };

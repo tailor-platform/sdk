@@ -1,0 +1,39 @@
+name: Changeset Publish
+
+# Tests changeset-publish.mjs, the publish script release.yml gives
+# changesets/action. The tests fake pnpm and git, so this only needs a
+# checkout.
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/scripts/changeset-publish.mjs
+      - .github/scripts/changeset-publish.test.mjs
+      - .github/workflows/changeset-publish.yml
+  pull_request:
+    paths:
+      - .github/scripts/changeset-publish.mjs
+      - .github/scripts/changeset-publish.test.mjs
+      - .github/workflows/changeset-publish.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  test:
+    name: Test changeset-publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run tests
+        run: node --test .github/scripts/changeset-publish.test.mjs

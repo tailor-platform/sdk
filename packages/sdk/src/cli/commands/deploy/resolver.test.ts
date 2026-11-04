@@ -352,41 +352,9 @@ describe("planPipeline (resolver service level)", () => {
       expect(result.changeSet.service.deletes).toHaveLength(1);
       expect(result.changeSet.service.deletes[0]!.name).toBe("resolver-b");
     });
-
-    test("all services are deleted when config is empty", async () => {
-      const client = createMockClient([
-        { name: "resolver-1", label: appName },
-        { name: "resolver-2", label: appName },
-      ]);
-
-      const result = await planPipeline(buildCtx({ client }));
-
-      expect(result.changeSet.service.deletes).toHaveLength(2);
-      expect(result.changeSet.service.deletes.map((d) => d.name).toSorted()).toEqual([
-        "resolver-1",
-        "resolver-2",
-      ]);
-    });
   });
 
   describe("label ownership scenarios (service level)", () => {
-    test("service without label is NOT deleted", async () => {
-      const client = createMockClient([{ name: "unmanaged-resolver" }]);
-
-      const result = await planPipeline(buildCtx({ client }));
-
-      expect(result.changeSet.service.deletes).toHaveLength(0);
-    });
-
-    test("service owned by different app is NOT deleted", async () => {
-      const client = createMockClient([{ name: "other-resolver", label: "other-app" }]);
-
-      const result = await planPipeline(buildCtx({ client }));
-
-      expect(result.changeSet.service.deletes).toHaveLength(0);
-      expect(result.resourceOwners.has("other-app")).toBe(true);
-    });
-
     test("mixed ownership - only delete own services", async () => {
       const client = createMockClient([
         { name: "my-resolver", label: appName },

@@ -1,7 +1,6 @@
 import { CLIError } from "#/cli/shared/errors";
 import { assertSkippableSteps } from "./migration-workflow";
-import type { MigrationInProgress } from "#/cli/commands/tailordb/migrate/remote-state";
-import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
+import type { MigrationInProgress, PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { OperatorClient } from "#/cli/shared/client";
 
 /**
@@ -65,9 +64,25 @@ export interface MigrationSkipStepsCheck {
   workspaceId: string;
   /** Steps to skip, keyed by namespace. */
   requested: ReadonlyMap<string, readonly string[]>;
-  pendingMigrations: readonly PendingMigration[];
+  pendingMigrations: readonly Pick<PendingMigration, "namespace" | "number" | "scriptForm">[];
   /** Migrations an earlier deploy left in progress, by namespace. */
   inProgressByNamespace: Readonly<Record<string, MigrationInProgress>>;
+}
+
+/**
+ * Create the error for requested skips in a namespace that has no multi-step migration in progress.
+ * @param namespace - TailorDB namespace of the entries
+ * @param steps - Steps requested to skip in the namespace
+ * @returns The error
+ */
+export function noStepsToSkipError(namespace: string, steps: readonly string[]): CLIError {
+  return CLIError({
+    code: "MIGRATION_SKIP_STEPS_INVALID",
+    message: `Cannot skip steps in namespace '${namespace}': no multi-step migration of it is partially applied by an earlier deploy.`,
+    suggestion:
+      "Skipping applies only to a multi-step migration that an earlier deploy left partially applied. Remove these entries from --migration-skip-steps.",
+    context: { namespace, requested: [...steps] },
+  });
 }
 
 /**
@@ -85,13 +100,7 @@ export async function assertMigrationSkipSteps(check: MigrationSkipStepsCheck): 
         pending.scriptForm?.kind === "steps",
     );
     if (!inProgress || migration?.scriptForm?.kind !== "steps") {
-      throw CLIError({
-        code: "MIGRATION_SKIP_STEPS_INVALID",
-        message: `Cannot skip steps in namespace '${namespace}': no multi-step migration of it is partially applied by an earlier deploy.`,
-        suggestion:
-          "Skipping applies only to a multi-step migration that an earlier deploy left partially applied. Remove these entries from --migration-skip-steps.",
-        context: { namespace, requested: [...steps] },
-      });
+      throw noStepsToSkipError(namespace, steps);
     }
     await assertSkippableSteps({
       client,

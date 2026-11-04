@@ -1,5 +1,0 @@
-name: "@tailor-platform/plugin-export-name-normalize"
-version: "1.0.0"
-description: "Normalize the plugin config export name (generator/generators) to plugins"
-engine: jssg
-language: typescript

@@ -12,7 +12,7 @@ import {
   normalizeSchemaSnapshot,
 } from "./snapshot-normalization";
 import { schemaSnapshotSchema, migrationDiffSchema } from "./snapshot-schema";
-import { type NormalizedSchemaSnapshot, type SchemaSnapshot } from "./snapshot-types";
+import { type NormalizedSchemaSnapshot } from "./snapshot-types";
 import { deriveWarningsFromChanges } from "./snapshot-warnings";
 
 // ============================================================================
@@ -21,24 +21,52 @@ import { deriveWarningsFromChanges } from "./snapshot-warnings";
 
 /**
  * Initial schema migration number (0000)
+ *
+ * **Beta:** This API may change in future releases.
  */
 export const INITIAL_SCHEMA_NUMBER = 0;
 
 /**
  * Migration file names (used within migration directories)
+ *
+ * **Beta:** This API may change in future releases.
  */
 export const SCHEMA_FILE_NAME = "schema.json";
-/** File name for migration diff metadata. */
+/**
+ * File name for migration diff metadata.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export const DIFF_FILE_NAME = "diff.json";
-/** File name for migration script. */
+/**
+ * File name for migration script.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export const MIGRATE_FILE_NAME = "migrate.ts";
-/** File name for migration script unit test. */
+/**
+ * File name for migration script unit test.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export const MIGRATE_TEST_FILE_NAME = "migrate.test.ts";
-/** File name for generated DB type definitions. */
+/**
+ * File name for generated DB type definitions.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export const DB_TYPES_FILE_NAME = "db.ts";
-/** File name for the generated PGlite schema script module. */
+/**
+ * File name for the generated PGlite schema script module.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export const DB_PGLITE_SCHEMA_FILE_NAME = "db.pglite.ts";
-/** File name for the migration script PGlite test. */
+/**
+ * File name for the migration script PGlite test.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export const MIGRATE_PGLITE_TEST_FILE_NAME = "migrate.pglite.test.ts";
 
 /**
@@ -94,6 +122,8 @@ export const MIGRATION_FILE_NAMES: Record<MigrationFileType, string> = {
 
 /**
  * Get migration directory path for a given number
+ *
+ * **Beta:** This API may change in future releases.
  * @param {string} migrationsDir - Base migrations directory path
  * @param {number} num - Migration number
  * @returns {string} Full directory path for the migration
@@ -105,6 +135,8 @@ export function getMigrationDirPath(migrationsDir: string, num: number): string 
 
 /**
  * Get migration file path for a given number and type
+ *
+ * **Beta:** This API may change in future releases.
  * @param {string} migrationsDir - Migrations directory path
  * @param {number} num - Migration number
  * @param {MigrationFileType} type - File type
@@ -204,6 +236,8 @@ export function loadDiff(filePath: string): MigrationDiff {
 
 /**
  * Get all migration directories and their files, sorted by number
+ *
+ * **Beta:** This API may change in future releases.
  * @param {string} migrationsDir - Migrations directory path
  * @returns {Array<{number: number, type: "schema" | "diff", path: string}>} Migration files sorted by number
  */
@@ -254,9 +288,37 @@ export function getMigrationFiles(
   return migrations.toSorted((a, b) => a.number - b.number);
 }
 
+const MIGRATION_FILE_TYPES = Object.keys(MIGRATION_FILE_NAMES) as MigrationFileType[];
+
+/**
+ * Get the known migration files present in each migration directory, sorted by number
+ * @param {string} migrationsDir - Migrations directory path
+ * @returns {Array<{number: number, fileTypes: MigrationFileType[]}>} Directories holding at least one known migration file
+ */
+export function getMigrationArtifacts(
+  migrationsDir: string,
+): { number: number; fileTypes: MigrationFileType[] }[] {
+  if (!fs.existsSync(migrationsDir)) return [];
+
+  return fs
+    .readdirSync(migrationsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && isValidMigrationNumber(entry.name))
+    .map((entry) => {
+      const number = Number.parseInt(entry.name, 10);
+      const fileTypes = MIGRATION_FILE_TYPES.filter((type) =>
+        fs.existsSync(getMigrationFilePath(migrationsDir, number, type)),
+      );
+      return { number, fileTypes };
+    })
+    .filter(({ fileTypes }) => fileTypes.length > 0)
+    .toSorted((a, b) => a.number - b.number);
+}
+
 /**
  * Get the next migration number for a directory
  * Returns INITIAL_SCHEMA_NUMBER (0) if no migrations exist
+ *
+ * **Beta:** This API may change in future releases.
  * @param {string} migrationsDir - Migrations directory path
  * @returns {number} Next migration number
  */
@@ -269,6 +331,8 @@ export function getNextMigrationNumber(migrationsDir: string): number {
 /**
  * Get the latest migration number from a directory
  * Returns 0 if no migrations exist
+ *
+ * **Beta:** This API may change in future releases.
  * @param {string} migrationsDir - Migrations directory path
  * @returns {number} Latest migration number or 0 if no migrations exist
  */
@@ -304,42 +368,4 @@ export function assertMigrationNumberExists(
     });
   }
   return latestMigrationNumber(files);
-}
-
-// ============================================================================
-// Snapshot Writing
-// ============================================================================
-
-/**
- * Write a schema snapshot to a file (creates directory structure)
- * @param {SchemaSnapshot} snapshot - Snapshot to write
- * @param {string} migrationsDir - Migrations directory path
- * @param {number} num - Migration number
- * @returns {string} Path to the written file
- */
-export function writeSnapshot(
-  snapshot: SchemaSnapshot,
-  migrationsDir: string,
-  num: number,
-): string {
-  const migrationDir = getMigrationDirPath(migrationsDir, num);
-  fs.mkdirSync(migrationDir, { recursive: true });
-  const filePath = getMigrationFilePath(migrationsDir, num, "schema");
-  fs.writeFileSync(filePath, JSON.stringify(snapshot, null, 2));
-  return filePath;
-}
-
-/**
- * Write a migration diff to a file (creates directory structure)
- * @param {MigrationDiff} diff - Diff to write
- * @param {string} migrationsDir - Migrations directory path
- * @param {number} num - Migration number
- * @returns {string} Path to the written file
- */
-export function writeDiff(diff: MigrationDiff, migrationsDir: string, num: number): string {
-  const migrationDir = getMigrationDirPath(migrationsDir, num);
-  fs.mkdirSync(migrationDir, { recursive: true });
-  const filePath = getMigrationFilePath(migrationsDir, num, "diff");
-  fs.writeFileSync(filePath, JSON.stringify(diff, null, 2));
-  return filePath;
 }

@@ -4,7 +4,7 @@
 
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
-import type { CustomDomain, StaticWebsite } from "./staticwebsite_resource_pb";
+import type { CustomDomain, CustomDomainTransfer, CustomDomainTransferStatus, StaticWebsite } from "./staticwebsite_resource_pb";
 import type { PageDirection } from "./resource_pb";
 
 /**
@@ -392,6 +392,13 @@ export declare type AddCustomDomainResponse = Message<"tailor.v1.AddCustomDomain
    * @generated from field: tailor.v1.CustomDomain custom_domain = 1;
    */
   customDomain?: CustomDomain;
+
+  /**
+   * Set only when the add completed (or, on an idempotent repeat, matches) a custom domain transfer.
+   *
+   * @generated from field: tailor.v1.CustomDomainTransfer transfer = 2;
+   */
+  transfer?: CustomDomainTransfer;
 };
 
 /**
@@ -506,4 +513,232 @@ export declare type RemoveCustomDomainResponse = Message<"tailor.v1.RemoveCustom
  * Use `create(RemoveCustomDomainResponseSchema)` to create a new message.
  */
 export declare const RemoveCustomDomainResponseSchema: GenMessage<RemoveCustomDomainResponse>;
+
+/**
+ * @generated from message tailor.v1.RequestCustomDomainTransferRequest
+ */
+export declare type RequestCustomDomainTransferRequest = Message<"tailor.v1.RequestCustomDomainTransferRequest"> & {
+  /**
+   * The source — the caller's workspace.
+   *
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string domain = 2;
+   */
+  domain: string;
+
+  /**
+   * @generated from field: string target_workspace_id = 3;
+   */
+  targetWorkspaceId: string;
+};
+
+/**
+ * Describes the message tailor.v1.RequestCustomDomainTransferRequest.
+ * Use `create(RequestCustomDomainTransferRequestSchema)` to create a new message.
+ */
+export declare const RequestCustomDomainTransferRequestSchema: GenMessage<RequestCustomDomainTransferRequest>;
+
+/**
+ * @generated from message tailor.v1.RequestCustomDomainTransferResponse
+ */
+export declare type RequestCustomDomainTransferResponse = Message<"tailor.v1.RequestCustomDomainTransferResponse"> & {
+  /**
+   * @generated from field: tailor.v1.CustomDomainTransfer transfer = 1;
+   */
+  transfer?: CustomDomainTransfer;
+};
+
+/**
+ * Describes the message tailor.v1.RequestCustomDomainTransferResponse.
+ * Use `create(RequestCustomDomainTransferResponseSchema)` to create a new message.
+ */
+export declare const RequestCustomDomainTransferResponseSchema: GenMessage<RequestCustomDomainTransferResponse>;
+
+/**
+ * @generated from message tailor.v1.CancelCustomDomainTransferRequest
+ */
+export declare type CancelCustomDomainTransferRequest = Message<"tailor.v1.CancelCustomDomainTransferRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string domain = 2;
+   */
+  domain: string;
+};
+
+/**
+ * Describes the message tailor.v1.CancelCustomDomainTransferRequest.
+ * Use `create(CancelCustomDomainTransferRequestSchema)` to create a new message.
+ */
+export declare const CancelCustomDomainTransferRequestSchema: GenMessage<CancelCustomDomainTransferRequest>;
+
+/**
+ * @generated from message tailor.v1.CancelCustomDomainTransferResponse
+ */
+export declare type CancelCustomDomainTransferResponse = Message<"tailor.v1.CancelCustomDomainTransferResponse"> & {
+};
+
+/**
+ * Describes the message tailor.v1.CancelCustomDomainTransferResponse.
+ * Use `create(CancelCustomDomainTransferResponseSchema)` to create a new message.
+ */
+export declare const CancelCustomDomainTransferResponseSchema: GenMessage<CancelCustomDomainTransferResponse>;
+
+/**
+ * @generated from message tailor.v1.AcceptCustomDomainTransferRequest
+ */
+export declare type AcceptCustomDomainTransferRequest = Message<"tailor.v1.AcceptCustomDomainTransferRequest"> & {
+  /**
+   * The target — the caller's workspace.
+   *
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string static_website_name = 2;
+   */
+  staticWebsiteName: string;
+
+  /**
+   * @generated from field: string domain = 3;
+   */
+  domain: string;
+};
+
+/**
+ * Describes the message tailor.v1.AcceptCustomDomainTransferRequest.
+ * Use `create(AcceptCustomDomainTransferRequestSchema)` to create a new message.
+ */
+export declare const AcceptCustomDomainTransferRequestSchema: GenMessage<AcceptCustomDomainTransferRequest>;
+
+/**
+ * @generated from message tailor.v1.AcceptCustomDomainTransferResponse
+ */
+export declare type AcceptCustomDomainTransferResponse = Message<"tailor.v1.AcceptCustomDomainTransferResponse"> & {
+  /**
+   * @generated from field: tailor.v1.CustomDomain custom_domain = 1;
+   */
+  customDomain?: CustomDomain;
+
+  /**
+   * @generated from field: tailor.v1.CustomDomainTransfer transfer = 2;
+   */
+  transfer?: CustomDomainTransfer;
+};
+
+/**
+ * Describes the message tailor.v1.AcceptCustomDomainTransferResponse.
+ * Use `create(AcceptCustomDomainTransferResponseSchema)` to create a new message.
+ */
+export declare const AcceptCustomDomainTransferResponseSchema: GenMessage<AcceptCustomDomainTransferResponse>;
+
+/**
+ * @generated from message tailor.v1.GetCustomDomainTransferRequest
+ */
+export declare type GetCustomDomainTransferRequest = Message<"tailor.v1.GetCustomDomainTransferRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string domain = 2;
+   */
+  domain: string;
+};
+
+/**
+ * Describes the message tailor.v1.GetCustomDomainTransferRequest.
+ * Use `create(GetCustomDomainTransferRequestSchema)` to create a new message.
+ */
+export declare const GetCustomDomainTransferRequestSchema: GenMessage<GetCustomDomainTransferRequest>;
+
+/**
+ * @generated from message tailor.v1.GetCustomDomainTransferResponse
+ */
+export declare type GetCustomDomainTransferResponse = Message<"tailor.v1.GetCustomDomainTransferResponse"> & {
+  /**
+   * @generated from field: tailor.v1.CustomDomainTransfer transfer = 1;
+   */
+  transfer?: CustomDomainTransfer;
+};
+
+/**
+ * Describes the message tailor.v1.GetCustomDomainTransferResponse.
+ * Use `create(GetCustomDomainTransferResponseSchema)` to create a new message.
+ */
+export declare const GetCustomDomainTransferResponseSchema: GenMessage<GetCustomDomainTransferResponse>;
+
+/**
+ * @generated from message tailor.v1.ListCustomDomainTransfersRequest
+ */
+export declare type ListCustomDomainTransfersRequest = Message<"tailor.v1.ListCustomDomainTransfersRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * Optional; UNSPECIFIED means no filter. A value outside the enum is rejected rather than
+   * read as "nothing matches".
+   *
+   * @generated from field: tailor.v1.CustomDomainTransferStatus status = 2;
+   */
+  status: CustomDomainTransferStatus;
+
+  /**
+   * @generated from field: string page_token = 3;
+   */
+  pageToken: string;
+
+  /**
+   * @generated from field: uint32 page_size = 4;
+   */
+  pageSize: number;
+
+  /**
+   * @generated from field: tailor.v1.PageDirection page_direction = 5;
+   */
+  pageDirection: PageDirection;
+};
+
+/**
+ * Describes the message tailor.v1.ListCustomDomainTransfersRequest.
+ * Use `create(ListCustomDomainTransfersRequestSchema)` to create a new message.
+ */
+export declare const ListCustomDomainTransfersRequestSchema: GenMessage<ListCustomDomainTransfersRequest>;
+
+/**
+ * @generated from message tailor.v1.ListCustomDomainTransfersResponse
+ */
+export declare type ListCustomDomainTransfersResponse = Message<"tailor.v1.ListCustomDomainTransfersResponse"> & {
+  /**
+   * @generated from field: repeated tailor.v1.CustomDomainTransfer transfers = 1;
+   */
+  transfers: CustomDomainTransfer[];
+
+  /**
+   * @generated from field: string next_page_token = 2;
+   */
+  nextPageToken: string;
+
+  /**
+   * @generated from field: int64 total_count = 3;
+   */
+  totalCount: bigint;
+};
+
+/**
+ * Describes the message tailor.v1.ListCustomDomainTransfersResponse.
+ * Use `create(ListCustomDomainTransfersResponseSchema)` to create a new message.
+ */
+export declare const ListCustomDomainTransfersResponseSchema: GenMessage<ListCustomDomainTransfersResponse>;
 

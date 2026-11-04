@@ -5,127 +5,54 @@
  */
 
 import { describe, test, expect, vi, beforeEach } from "vitest";
+import { reconstructSnapshotFromMigrations } from "#/cli/commands/tailordb/migrate/snapshot";
 import { errorToJson } from "#/cli/shared/error-json";
 import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
-import { applyTailorDB, captureMigrationFileState, type MaintenanceModeRelease } from "./index";
-import type { DiffChange } from "#/cli/commands/tailordb/migrate/diff-calculator";
-import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
-import type { Application } from "#/cli/services/application";
-import type { TailorDBService } from "#/cli/services/tailordb/service";
+import * as migrationModule from "./migration";
+import {
+  createPlanResult,
+  createRemoteCheckpoint,
+  gqlPermissionEntry,
+  mkPendingMigration,
+  mockConfig,
+  type RemoteCheckpoint,
+  snapshotAt,
+  snapshotTable,
+  type SnapshotTablesByVersion,
+  tailordbTypeWrites,
+  typeDeletion,
+  typeEntry,
+} from "./test-helpers/migration-apply";
+import { applyTailorDB, type MaintenanceModeRelease } from "./index";
+import type { TailorDBSnapshotType } from "#/cli/commands/tailordb/migrate/snapshot";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 
-const remoteCheckpoint = vi.hoisted(() => ({
-  number: 0 as number | null,
-  historyId: null as string | null,
-  maintenanceMode: null as string | null,
-  maintenanceModeChanges: [] as Array<string | null>,
+vi.mock("./migration", async (importOriginal) => ({
+  ...(await importOriginal()),
+  detectPendingMigrations: vi.fn(),
+  executeMigrations: vi.fn().mockResolvedValue(undefined),
+  updateMigrationLabel: vi.fn(),
 }));
 
-// Mock label.ts to suppress real metadata building
-vi.mock("../label", async (importOriginal) => {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("../label");
-  return {
-    ...original,
-    buildMetaRequest: vi.fn().mockImplementation(async () => ({
-      trn: "trn:v1:workspace:test-workspace:tailordb:test-ns",
-      labels: {},
-    })),
-  };
-});
-
-// Mock createChangeSet to suppress output in tests
-vi.mock("../change-set", async (importOriginal) => {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("../change-set");
-  return {
-    ...original,
-    createChangeSet: (title: string) => ({
-      ...original.createChangeSet(title),
-      lines: () => [],
-    }),
-  };
-});
-
-// Mock the migration helpers so applyTailorDB enters the migration flow without
-// touching the filesystem or the remote workspace.
-vi.mock("./migration", async (importOriginal) => {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("./migration");
-  return {
-    ...original,
-    detectPendingMigrations: vi.fn(),
-    executeMigrations: vi.fn().mockResolvedValue(undefined),
-    updateMigrationLabel: vi
-      .fn()
-      .mockImplementation(
-        async (
-          _client: unknown,
-          _workspaceId: string,
-          _namespace: string,
-          number: number,
-          historyId?: string,
-        ) => {
-          remoteCheckpoint.number = number;
-          remoteCheckpoint.historyId = historyId ?? null;
-        },
-      ),
-  };
-});
-
-// Mock migration config / snapshot helpers (called inside validateAndDetectMigrations)
 vi.mock("#/cli/commands/tailordb/migrate/config", () => ({
-  getNamespacesWithMigrations: vi.fn().mockReturnValue([
-    {
-      namespace: "test-ns",
-      migrationsDir: "/test/migrations",
-    },
+  getNamespacesWithMigrations: vi.fn(() => [
+    { namespace: "test-ns", migrationsDir: "/test/migrations" },
   ]),
+}));
+
+vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => ({
+  ...(await importOriginal()),
+  assertValidMigrationFiles: vi.fn(),
+  reconstructSnapshotFromMigrations: vi.fn(),
 }));
 
 // Per-test schema states keyed by migration number, so reconstruction returns
 // the state as of the requested checkpoint like the real replay does.
-const snapshotState = vi.hoisted(() => ({
-  tablesByVersion: {} as Record<number, unknown>,
+const snapshotState = {
+  tablesByVersion: {} as SnapshotTablesByVersion,
   historyId: null as string | null,
-}));
-
-vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => {
-  const original =
-    // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-    (await importOriginal()) as typeof import("#/cli/commands/tailordb/migrate/snapshot");
-  return {
-    ...original,
-    assertValidMigrationFiles: vi.fn(),
-    reconstructSnapshotFromMigrations: vi.fn((migrationsDir: string, maxVersion?: number) => {
-      void migrationsDir;
-      const versions = Object.keys(snapshotState.tablesByVersion).map(Number);
-      const number = maxVersion ?? Math.max(...versions);
-      const tables = snapshotState.tablesByVersion[number];
-      if (!tables) {
-        throw new Error(`No snapshot fixture configured for migration number: ${number}`);
-      }
-      return {
-        version: 1,
-        namespace: "test-ns",
-        createdAt: "2026-01-01T00:00:00.000Z",
-        tables,
-        ...(snapshotState.historyId && {
-          rebaseline: {
-            historyId: snapshotState.historyId,
-            replacedHistoryId: null,
-            replacedLatestMigration: 0,
-          },
-        }),
-      };
-    }),
-  };
-});
-
-import * as migrationModule from "./migration";
-
-const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
+};
 
 describe("migration flow: namespace restrictions while migrations run", () => {
   type WrittenSettings = {
@@ -139,58 +66,17 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     };
   };
 
+  let checkpoint: RemoteCheckpoint;
+
   function createMockClient(
     options: {
       existingSettings?: Record<string, WrittenSettings>;
       existingTableNames?: string[];
     } = {},
   ) {
-    return {
-      createTailorDBService: vi.fn().mockResolvedValue({}),
-      setMetadata: vi.fn(async (request: { trn: string; labels: Record<string, string> }) => {
-        const maintenanceMode = request.labels["sdk-maintenance-mode"] ?? null;
-        if (
-          request.trn.endsWith(":tailordb:test-ns") &&
-          maintenanceMode !== remoteCheckpoint.maintenanceMode
-        ) {
-          remoteCheckpoint.maintenanceMode = maintenanceMode;
-          remoteCheckpoint.maintenanceModeChanges.push(maintenanceMode);
-        }
-        return {};
-      }),
-      getMetadata: vi.fn().mockImplementation(async () => ({
-        metadata: {
-          labels: {
-            ...(remoteCheckpoint.number !== null && {
-              "sdk-migration": `m${String(remoteCheckpoint.number).padStart(4, "0")}`,
-            }),
-            ...(remoteCheckpoint.historyId && {
-              "sdk-migration-history": remoteCheckpoint.historyId,
-            }),
-            ...(remoteCheckpoint.maintenanceMode && {
-              "sdk-maintenance-mode": remoteCheckpoint.maintenanceMode,
-            }),
-          },
-        },
-      })),
+    return checkpoint.createMockClient({
       listTailorDBTypes: vi.fn().mockImplementation(async () => {
-        const tables = snapshotState.tablesByVersion[0] as
-          | Record<
-              string,
-              {
-                settings?: {
-                  bulkUpsert?: boolean;
-                  publishEvents?: boolean;
-                  gqlOperations?: {
-                    create?: boolean;
-                    update?: boolean;
-                    delete?: boolean;
-                    read?: boolean;
-                  };
-                };
-              }
-            >
-          | undefined;
+        const tables = snapshotState.tablesByVersion[0];
         const names = options.existingTableNames ?? Object.keys(tables ?? {});
         const tailordbTypes = names.map((name) => {
           const snapshotSettings = tables?.[name]?.settings;
@@ -216,51 +102,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         });
         return { tailordbTypes };
       }),
-      createTailorDBType: vi.fn().mockResolvedValue({}),
-      updateTailorDBType: vi.fn().mockResolvedValue({}),
-      createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
-      updateTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
-      deleteTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
-      deleteTailorDBType: vi.fn().mockResolvedValue({}),
-      deleteTailorDBService: vi.fn().mockResolvedValue({}),
-    } as unknown as OperatorClient;
-  }
-
-  function snapshotTable(
-    name: string,
-    fields: Record<string, { type: string; required: boolean }>,
-    settings?: {
-      bulkUpsert?: boolean;
-      publishEvents?: boolean;
-      gqlOperations?: {
-        create?: boolean;
-        update?: boolean;
-        delete?: boolean;
-        read?: boolean;
-      };
-    },
-  ) {
-    return { name, pluralForm: `${name.toLowerCase()}s`, fields, ...(settings && { settings }) };
-  }
-
-  function typeCreate(tableName: string) {
-    return {
-      name: tableName,
-      request: {
-        workspaceId: "test-workspace",
-        namespaceName: "test-ns",
-        tailordbType: {
-          name: tableName,
-          schema: {
-            fields: { name: { type: "string", required: true } },
-          },
-        },
-      },
-      metaRequest: {
-        trn: `trn:v1:workspace:test-workspace:tailordb:test-ns:type:${tableName}`,
-        labels: { "sdk-name": "test-app" },
-      },
-    };
+    });
   }
 
   function createMockPlanResult(options: {
@@ -271,138 +113,40 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     subscribedTables?: string[];
     /** Defaults to "migration"; pass `undefined` explicitly to leave it unset. */
     maintenanceMode?: LoadedConfig["maintenanceMode"];
+    /** Local definitions; defaults to a `status` field on every planned table. */
+    local?: TailorDBSnapshotType[];
   }) {
-    const migratedService = {
-      namespace: "test-ns",
-      loadTypes: vi.fn().mockResolvedValue({}),
-      types: {},
-    } as unknown as TailorDBService;
-
-    return {
-      changeSet: {
-        service: {
-          creates: [],
-          updates: [],
-          deletes: [],
-          title: "TailorDB Services",
-          isEmpty: () => true,
-          lines: () => [],
-        },
-        type: {
-          creates: options.creates.map(typeCreate),
-          updates: (options.updates ?? []).map(typeCreate),
-          deletes: [],
-          unchanged: [],
-          title: "TailorDB Types",
-          isEmpty: () => false,
-          lines: () => [],
-        },
-        gqlPermission: {
-          creates: (options.gqlPermissionTypes ?? []).map((tableName) => ({
-            name: tableName,
-            request: {
-              workspaceId: "test-workspace",
-              namespaceName: "test-ns",
-              typeName: tableName,
-              permission: {},
-            },
-          })),
-          updates: [],
-          deletes: [],
-          title: "TailorDB GQL Permissions",
-          isEmpty: () => false,
-          lines: () => [],
-        },
+    return createPlanResult({
+      type: {
+        creates: options.creates.map((name) => typeEntry(name)),
+        updates: (options.updates ?? []).map((name) => typeEntry(name)),
       },
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set<string>(),
+      gqlPermission: {
+        creates: (options.gqlPermissionTypes ?? []).map((name) => gqlPermissionEntry(name)),
+      },
+      // The restore step reads the final schema from here, the way the real
+      // plan supplies it.
+      local:
+        options.local ??
+        [...options.creates, ...(options.updates ?? [])].map((name) =>
+          snapshotTable(name, { status: { type: "string", required: true } }),
+        ),
       context: {
-        workspaceId: "test-workspace",
-        application: {
-          name: "test-app",
-          tailorDBServices: [migratedService],
-          authService: {
-            config: { name: "test-auth", machineUsers: { admin: {} } },
-          },
-        } as unknown as Application,
-        // The restore step reads the final schema from here, the way the real
-        // plan supplies it.
-        tailorDBInputs: [
-          {
-            namespace: "test-ns",
-            config: {} as never,
-            types: Object.fromEntries(
-              [...options.creates, ...(options.updates ?? [])].map((name) => [
-                name,
-                snapshotTable(name, { status: { type: "string", required: true } }),
-              ]),
-            ),
-          },
-        ] as never,
         executorUsedTables: new Set<string>(options.subscribedTables ?? []),
         config: {
           ...mockConfig,
           maintenanceMode: "maintenanceMode" in options ? options.maintenanceMode : "migration",
         },
-        noSchemaCheck: true,
-        checkpointRepairs: [],
-        namespacesWithMigrations: [{ namespace: "test-ns", migrationsDir: "/test/migrations" }],
-        migrationFileState: captureMigrationFileState([
-          { namespace: "test-ns", migrationsDir: "/test/migrations" },
-        ]),
       },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any;
+    });
   }
 
-  function mkPendingMigration(
-    changes: DiffChange[],
-    options: { number?: number; hasScript?: boolean } = {},
-  ): PendingMigration {
-    const number = options.number ?? 1;
-    const label = String(number).padStart(4, "0");
-    return {
-      number,
-      scriptPath: `/test/migrations/${label}/migrate.ts`,
-      diffPath: `/test/migrations/${label}/diff.json`,
-      namespace: "test-ns",
-      migrationsDir: "/test/migrations",
-      hasScript: options.hasScript ?? true,
-      scriptForm: (options.hasScript ?? true) ? { kind: "main" } : null,
-      diff: {
-        version: 1,
-        namespace: "test-ns",
-        createdAt: "2026-01-01T00:00:00.000Z",
-        changes,
-        hasBreakingChanges: false,
-        breakingChanges: [],
-        hasWarnings: false,
-        warnings: [],
-        requiresMigrationScript: true,
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    };
-  }
-
-  function typeSettingWrites(client: OperatorClient) {
-    const writes: Array<{
-      order: number;
-      entry: readonly [string, WrittenSettings | undefined];
-    }> = [];
-    for (const fn of [client.createTailorDBType, client.updateTailorDBType]) {
-      const mock = vi.mocked(fn);
-      mock.mock.calls.forEach((call, index) => {
-        const request = call[0];
-        const name = request.tailordbType?.name;
-        if (name === undefined) return;
-        writes.push({
-          order: mock.mock.invocationCallOrder[index]!,
-          entry: [name, request.tailordbType?.schema?.settings],
-        });
-      });
-    }
-    return writes.toSorted((a, b) => a.order - b.order).map(({ entry }) => entry);
+  function typeSettingWrites(
+    client: OperatorClient,
+  ): Array<readonly [string, WrittenSettings | undefined]> {
+    return tailordbTypeWrites(client).map(
+      ({ name, tailordbType }) => [name, tailordbType.schema?.settings] as const,
+    );
   }
 
   function publishFlagWrites(client: OperatorClient): Array<[string, boolean | undefined]> {
@@ -427,20 +171,19 @@ describe("migration flow: namespace restrictions while migrations run", () => {
   beforeEach(() => {
     snapshotState.tablesByVersion = {};
     snapshotState.historyId = null;
-    remoteCheckpoint.number = 0;
-    remoteCheckpoint.historyId = null;
-    remoteCheckpoint.maintenanceMode = null;
-    remoteCheckpoint.maintenanceModeChanges = [];
-    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(
-      async (_client, _workspaceId, _namespace, number, historyId, recordMaintenanceMode) => {
-        remoteCheckpoint.number = number;
-        remoteCheckpoint.historyId = historyId ?? null;
-        if (recordMaintenanceMode) {
-          remoteCheckpoint.maintenanceMode = `m${String(number).padStart(4, "0")}`;
-          remoteCheckpoint.maintenanceModeChanges.push(remoteCheckpoint.maintenanceMode);
-        }
-        return true;
-      },
+    checkpoint = createRemoteCheckpoint(0);
+    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
+    vi.mocked(reconstructSnapshotFromMigrations).mockImplementation(
+      (_migrationsDir, maxVersion) => ({
+        ...snapshotAt(snapshotState.tablesByVersion, maxVersion),
+        ...(snapshotState.historyId && {
+          rebaseline: {
+            historyId: snapshotState.historyId,
+            replacedHistoryId: null,
+            replacedLatestMigration: 0,
+          },
+        }),
+      }),
     );
   });
 
@@ -454,7 +197,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       0: {},
       1: { Order: snapshotTable("Order", { status: { type: "string", required: true } }) },
     };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    checkpoint.mockPending([
       mkPendingMigration([
         { kind: "table_added", tableName: "Order" },
         // A required field forces a pre-phase relaxation and a post-phase
@@ -498,7 +241,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       0: { Bill: snapshotTable("Bill", { status: { type: "string", required: true } }) },
       1: { Invoice: snapshotTable("Invoice", { status: { type: "string", required: true } }) },
     };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    checkpoint.mockPending([
       mkPendingMigration([
         // The change names the table it becomes, so that is the one to restore;
         // the old name is dropped and must not be written back.
@@ -525,7 +268,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     const planResult = createMockPlanResult({ creates: ["Order"], subscribedTables: ["Order"] });
     const table = snapshotTable("Order", { status: { type: "string", required: true } });
     snapshotState.tablesByVersion = { 0: { Order: table }, 1: { Order: table } };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration([])]);
+    checkpoint.mockPending([mkPendingMigration([])]);
 
     await applyTailorDB(client, planResult, "create-update");
 
@@ -557,7 +300,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       { publishEvents: true },
     );
     snapshotState.tablesByVersion = { 0: { Order: before }, 1: { Order: after } };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    checkpoint.mockPending([
       mkPendingMigration([
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         { kind: "table_settings_modified", tableName: "Order" } as any,
@@ -587,7 +330,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     );
     const after = snapshotTable("Order", { status: { type: "string", required: true } });
     snapshotState.tablesByVersion = { 0: { Order: before }, 1: { Order: after } };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    checkpoint.mockPending([
       mkPendingMigration([
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         { kind: "table_settings_modified", tableName: "Order" } as any,
@@ -617,7 +360,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       1: { Current: current },
       2: { Current: current, Future: future },
     };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    checkpoint.mockPending([
       mkPendingMigration([], { number: 1 }),
       mkPendingMigration(
         [
@@ -657,7 +400,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     });
     const current = snapshotTable("Current", { value: { type: "string", required: true } });
     snapshotState.tablesByVersion = { 0: { Current: current }, 1: { Current: current } };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration([])]);
+    checkpoint.mockPending([mkPendingMigration([])]);
     const order: string[] = [];
     vi.mocked(migrationModule.executeMigrations).mockImplementation(async () => {
       order.push("script");
@@ -678,16 +421,16 @@ describe("migration flow: namespace restrictions while migrations run", () => {
 
   test("silences a table that declares publishEvents, then restores it", async () => {
     const client = createMockClient();
-    // No executor subscribes: `publishEvents: true` publishes on its own, so
-    // `subscribed: false` alone would not silence it.
-    const planResult = createMockPlanResult({ creates: ["Order"] });
     const declaring = snapshotTable(
       "Order",
       { status: { type: "string", required: true } },
       { publishEvents: true },
     );
+    // No executor subscribes: `publishEvents: true` publishes on its own, so
+    // `subscribed: false` alone would not silence it.
+    const planResult = createMockPlanResult({ creates: ["Order"], local: [declaring] });
     snapshotState.tablesByVersion = { 0: { Order: declaring }, 1: { Order: declaring } };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    checkpoint.mockPending([
       mkPendingMigration([
         { kind: "table_added", tableName: "Order" },
         {
@@ -717,7 +460,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     snapshotState.tablesByVersion = { 0: { Order: table }, 1: { Order: table } };
     // A data-only migration carries an empty diff, so nothing names Order.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration([])]);
+    checkpoint.mockPending([mkPendingMigration([])]);
 
     await applyTailorDB(client, planResult, "create-update");
 
@@ -734,17 +477,12 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     });
     const planResult = createMockPlanResult({ creates: [] });
     planResult.changeSet.gqlPermission.updates.push({
-      name: "Drift",
-      request: {
-        workspaceId: "test-workspace",
-        namespaceName: "test-ns",
-        typeName: "Drift",
-        permission: {},
-      },
+      ...gqlPermissionEntry("Drift"),
+      previousPermission: undefined,
     });
     const order = snapshotTable("Order", { status: { type: "string", required: true } });
     snapshotState.tablesByVersion = { 0: { Order: order }, 1: { Order: order } };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration([])]);
+    checkpoint.mockPending([mkPendingMigration([])]);
 
     await applyTailorDB(client, planResult, "create-update");
 
@@ -773,17 +511,12 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     });
     const planResult = createMockPlanResult({ creates: [] });
     planResult.changeSet.gqlPermission.updates.push({
-      name: "Drift",
-      request: {
-        workspaceId: "test-workspace",
-        namespaceName: "test-ns",
-        typeName: "Drift",
-        permission: {},
-      },
+      ...gqlPermissionEntry("Drift"),
+      previousPermission: undefined,
     });
     const order = snapshotTable("Order", { status: { type: "string", required: true } });
     snapshotState.tablesByVersion = { 0: { Order: order }, 1: { Order: order } };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration([])]);
+    checkpoint.mockPending([mkPendingMigration([])]);
 
     await applyTailorDB(client, planResult, "create-update");
 
@@ -809,7 +542,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       0: { Order: order, PrivateLog: privateLog },
       1: { Order: order, PrivateLog: privateLog },
     };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration([])]);
+    checkpoint.mockPending([mkPendingMigration([])]);
 
     await applyTailorDB(client, planResult, "create-update");
 
@@ -832,9 +565,11 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     const planResult = createMockPlanResult({ creates: ["Order"], subscribedTables: ["Order"] });
     const table = snapshotTable("Order", { status: { type: "string", required: true } });
     snapshotState.tablesByVersion = { 0: { Order: table }, 1: { Order: table } };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    checkpoint.mockPending([
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      mkPendingMigration([{ kind: "table_added", tableName: "Order" } as any], { hasScript: true }),
+      mkPendingMigration([{ kind: "table_added", tableName: "Order" } as any], {
+        hasScript: true,
+      }),
     ]);
     // The checkpoint update has no rollback: it fails with the schema applied,
     // so only a `finally` can put publishing back.
@@ -868,7 +603,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       0: { Keep: keep, Retired: retired },
       1: { Keep: keep },
     };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    checkpoint.mockPending([
       mkPendingMigration([
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         { kind: "table_removed", tableName: "Retired" } as any,
@@ -896,7 +631,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     const planResult = createMockPlanResult({ creates: [] });
     const order = snapshotTable("Order", { value: { type: "string", required: true } });
     snapshotState.tablesByVersion = { 0: { Order: order }, 1: { Order: order } };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration([])]);
+    checkpoint.mockPending([mkPendingMigration([])]);
     vi.mocked(migrationModule.updateMigrationLabel).mockRejectedValueOnce(
       new Error("checkpoint update failed"),
     );
@@ -916,17 +651,10 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     const planResult = createMockPlanResult({ creates: [] });
     const retired = snapshotTable("Retired", { value: { type: "string", required: true } });
     snapshotState.historyId = "hlocal";
-    remoteCheckpoint.historyId = "hlocal";
+    checkpoint.state.historyId = "hlocal";
     snapshotState.tablesByVersion = { 0: { Retired: retired }, 1: {} };
-    planResult.changeSet.type.deletes.push({
-      name: "Retired",
-      request: {
-        workspaceId: "test-workspace",
-        namespaceName: "test-ns",
-        tailordbTypeName: "Retired",
-      },
-    });
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    planResult.changeSet.type.deletes.push(typeDeletion("Retired"));
+    checkpoint.mockPending([
       mkPendingMigration([
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         { kind: "table_removed", tableName: "Retired" } as any,
@@ -957,9 +685,9 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     const planResult = createMockPlanResult({ creates: [] });
     const order = snapshotTable("Order", { value: { type: "string", required: true } });
     snapshotState.historyId = "hlocal";
-    remoteCheckpoint.historyId = "hlocal";
+    checkpoint.state.historyId = "hlocal";
     snapshotState.tablesByVersion = { 0: { Order: order }, 1: { Order: order } };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration([])]);
+    checkpoint.mockPending([mkPendingMigration([])]);
     vi.mocked(migrationModule.updateMigrationLabel).mockRejectedValueOnce(
       new Error("checkpoint update failed"),
     );
@@ -987,8 +715,8 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     const planResult = createMockPlanResult({ creates: [] });
     const order = snapshotTable("Order", { value: { type: "string", required: true } });
     snapshotState.tablesByVersion = { 0: { Order: order }, 1: { Order: order } };
-    remoteCheckpoint.number = 0;
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration([])]);
+    checkpoint.state.number = 0;
+    checkpoint.mockPending([mkPendingMigration([])]);
     vi.mocked(client.getMetadata).mockRejectedValueOnce(new Error("ownership read failed"));
 
     await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
@@ -1006,12 +734,10 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     const planResult = createMockPlanResult({ creates: [] });
     const order = snapshotTable("Order", { value: { type: "string", required: true } });
     snapshotState.tablesByVersion = { 0: { Order: order }, 1: { Order: order } };
-    remoteCheckpoint.number = 0;
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
-      mkPendingMigration([], { hasScript: true }),
-    ]);
+    checkpoint.state.number = 0;
+    checkpoint.mockPending([mkPendingMigration([], { hasScript: true })]);
     vi.mocked(migrationModule.executeMigrations).mockImplementationOnce(async () => {
-      remoteCheckpoint.number = 2;
+      checkpoint.state.number = 2;
       throw new Error("migration failed");
     });
 
@@ -1023,6 +749,64 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     ]);
   });
 
+  test("hands each migration the checkpoint read before the deploy, or the one the deploy committed", async () => {
+    checkpoint = createRemoteCheckpoint(null);
+    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
+    snapshotState.historyId = "hlocal";
+    const client = createMockClient();
+    const order = snapshotTable("Order", { value: { type: "string", required: true } });
+    snapshotState.tablesByVersion = {
+      0: { Order: order },
+      1: { Order: order },
+      2: { Order: order },
+    };
+    checkpoint.mockPending([mkPendingMigration([]), mkPendingMigration([], { number: 2 })]);
+    const handed: unknown[] = [];
+    const recordHanded: typeof migrationModule.executeMigrations = async (
+      _context,
+      migrations,
+      checkpoints,
+    ) => {
+      handed.push(checkpoints.get(migrations[0]!.namespace));
+    };
+    vi.mocked(migrationModule.executeMigrations)
+      .mockImplementationOnce(recordHanded)
+      .mockImplementationOnce(recordHanded);
+
+    await applyTailorDB(client, createMockPlanResult({ creates: [] }), "create-update");
+
+    expect(handed).toEqual([
+      { number: null, historyId: null },
+      { number: 1, historyId: "hlocal" },
+    ]);
+  });
+
+  test("restores a namespace without a checkpoint whose first migration fails before committing", async () => {
+    checkpoint = createRemoteCheckpoint(null);
+    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
+    const client = createMockClient({
+      existingSettings: { Order: { publishRecordEvents: true } },
+    });
+    const planResult = createMockPlanResult({ creates: [] });
+    const order = snapshotTable("Order", { value: { type: "string", required: true } });
+    snapshotState.tablesByVersion = { 0: { Order: order }, 1: { Order: order } };
+    checkpoint.mockPending([mkPendingMigration([], { hasScript: true })]);
+    vi.mocked(migrationModule.executeMigrations).mockRejectedValueOnce(
+      new Error("migration failed"),
+    );
+
+    const error = await applyTailorDB(client, planResult, "create-update").catch(
+      (failure: unknown) => failure,
+    );
+
+    expect(error).toMatchObject({ message: "migration failed" });
+    expect(JSON.stringify(errorToJson(error))).not.toContain("MIGRATION_CHECKPOINT_CONFLICT");
+    expect(publishFlagWrites(client).filter(([name]) => name === "Order")).toEqual([
+      ["Order", false],
+      ["Order", true],
+    ]);
+  });
+
   test("does not restore over a checkpoint that advances after this migration commits", async () => {
     const client = createMockClient({
       existingSettings: { Order: { publishRecordEvents: true } },
@@ -1030,7 +814,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     const planResult = createMockPlanResult({ creates: [] });
     const order = snapshotTable("Order", { value: { type: "string", required: true } });
     snapshotState.tablesByVersion = { 0: { Order: order }, 1: { Order: order } };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration([])]);
+    checkpoint.mockPending([mkPendingMigration([])]);
     vi.mocked(client.getMetadata).mockResolvedValueOnce({
       metadata: { labels: { "sdk-migration": "m0002" } },
     } as never);
@@ -1050,29 +834,49 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     const planResult = createMockPlanResult({ creates: [] });
     const retired = snapshotTable("Retired", { value: { type: "string", required: true } });
     snapshotState.tablesByVersion = { 0: { Retired: retired }, 1: {} };
-    planResult.changeSet.type.deletes.push({
-      name: "Retired",
-      request: {
-        workspaceId: "test-workspace",
-        namespaceName: "test-ns",
-        tailordbTypeName: "Retired",
-      },
-    });
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    planResult.changeSet.type.deletes.push(typeDeletion("Retired"));
+    checkpoint.mockPending([
       mkPendingMigration([
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         { kind: "table_removed", tableName: "Retired" } as any,
       ]),
     ]);
     vi.mocked(client.deleteTailorDBType).mockRejectedValueOnce(new Error("cleanup failed"));
+    planResult.context.migrationRecoveryArgs = ["--profile=staging"];
+    using stderr = captureStderr();
 
-    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
-      /cleanup failed/,
+    const error = await applyTailorDB(client, planResult, "create-update").catch(
+      (failure: unknown) => failure,
     );
 
+    expect(error).toMatchObject({ message: "cleanup failed" });
     expect(publishFlagWrites(client).filter(([name]) => name === "Retired")).toEqual([
       ["Retired", false],
     ]);
+    expect(checkpoint.state.cleanup).toBe("m0001");
+    const { suggestion } = errorToJson(error).error;
+    expect(suggestion).toContain("Deploy again to delete the leftover tables");
+    expect(suggestion).toContain("tailor tailordb migration sync 0001 --namespace test-ns");
+    expect(suggestion).toContain("--workspace-id=test-workspace --profile=staging");
+    expect(stderr.output).toContain("post-checkpoint cleanup failed");
+  });
+
+  test("records the deletions of a migration's removed tables with its checkpoint until they finish", async () => {
+    const client = createMockClient();
+    const planResult = createMockPlanResult({ creates: [] });
+    const retired = snapshotTable("Retired", { value: { type: "string", required: true } });
+    snapshotState.tablesByVersion = { 0: { Retired: retired }, 1: {} };
+    planResult.changeSet.type.deletes.push(typeDeletion("Retired"));
+    checkpoint.mockPending([
+      mkPendingMigration([
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { kind: "table_removed", tableName: "Retired" } as any,
+      ]),
+    ]);
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    expect(checkpoint.state.cleanupChanges).toEqual(["m0001", null]);
   });
 
   test("restores tables already restricted when applying another restriction fails", async () => {
@@ -1084,7 +888,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       0: { Order: order, Log: log },
       1: { Order: order, Log: log },
     };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration([])]);
+    checkpoint.mockPending([mkPendingMigration([])]);
     let restrictionFailed = false;
     vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
       if (
@@ -1125,7 +929,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         }),
       },
     };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    checkpoint.mockPending([
       mkPendingMigration([
         {
           kind: "field_added",
@@ -1189,7 +993,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         ),
       },
     };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    checkpoint.mockPending([
       mkPendingMigration([
         {
           kind: "field_added",
@@ -1236,7 +1040,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         }),
       },
     };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    checkpoint.mockPending([
       mkPendingMigration([
         {
           kind: "field_added",
@@ -1261,12 +1065,13 @@ describe("migration flow: namespace restrictions while migrations run", () => {
 
   test("does not write the live read setting back over what an earlier migration in the same run committed", async () => {
     const client = createMockClient();
-    const planResult = createMockPlanResult({ creates: [], updates: ["Order"] });
     const fields = {
       status: { type: "string", required: true },
       first: { type: "string", required: true },
       second: { type: "string", required: true },
     } as const;
+    const final = snapshotTable("Order", fields, { gqlOperations: { read: false } });
+    const planResult = createMockPlanResult({ creates: [], updates: ["Order"], local: [final] });
     snapshotState.tablesByVersion = {
       0: { Order: snapshotTable("Order", { status: fields.status }) },
       1: {
@@ -1276,9 +1081,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
           { gqlOperations: { read: false } },
         ),
       },
-      2: {
-        Order: snapshotTable("Order", fields, { gqlOperations: { read: false } }),
-      },
+      2: { Order: final },
     };
     const added = (fieldName: "first" | "second") =>
       ({
@@ -1288,7 +1091,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         after: { type: "string", required: true },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       }) as any;
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    checkpoint.mockPending([
       mkPendingMigration([added("first")], { number: 1 }),
       mkPendingMigration([added("second")], { number: 2 }),
     ]);
@@ -1321,7 +1124,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       },
       1: { Current: current },
     };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    checkpoint.mockPending([
       mkPendingMigration([
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         { kind: "table_removed", tableName: "Historical" } as any,
@@ -1346,7 +1149,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       0: { Order: order, Log: log },
       1: { Order: order, Log: log },
     };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration([])]);
+    checkpoint.mockPending([mkPendingMigration([])]);
     vi.mocked(migrationModule.executeMigrations).mockRejectedValueOnce(
       new Error("original migration failure"),
     );
@@ -1388,7 +1191,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         }),
       },
     };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    checkpoint.mockPending([
       mkPendingMigration([], { number: 1 }),
       mkPendingMigration([], { number: 2 }),
     ]);
@@ -1438,7 +1241,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       1: { Order: committed },
       2: { Order: committed },
     };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    checkpoint.mockPending([
       mkPendingMigration(
         [
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1471,7 +1274,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     const planResult = createMockPlanResult({ creates: [], updates: ["Order"] });
     const order = snapshotTable("Order", { status: { type: "string", required: true } });
     snapshotState.tablesByVersion = { 0: { Order: order }, 1: {}, 2: { Order: order } };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    checkpoint.mockPending([
       mkPendingMigration(
         [
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1509,7 +1312,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       0: {},
       1: { Order: snapshotTable("Order", { status: { type: "string", required: true } }) },
     };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    checkpoint.mockPending([
       mkPendingMigration([
         { kind: "table_added", tableName: "Order" },
         // A required field forces a pre-phase relaxation and a post-phase
@@ -1538,7 +1341,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
 
     function mockAddedOrderMigration() {
       snapshotState.tablesByVersion = { 0: {}, 1: { Order: orderTable() } };
-      vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      checkpoint.mockPending([
         mkPendingMigration([
           { kind: "table_added", tableName: "Order" },
           {
@@ -1599,13 +1402,11 @@ describe("migration flow: namespace restrictions while migrations run", () => {
             0: { Order: orderTable() },
             1: { Order: orderTable() },
           };
-          vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
-            mkPendingMigration([]),
-          ]);
+          checkpoint.mockPending([mkPendingMigration([])]);
         }
         if (failure === "checkpoint") {
           vi.mocked(migrationModule.updateMigrationLabel).mockImplementationOnce(async () => {
-            remoteCheckpoint.number = 2;
+            checkpoint.state.number = 2;
             return true;
           });
         } else {
@@ -1624,6 +1425,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         expect(vi.mocked(migrationModule.executeMigrations)).toHaveBeenCalledWith(
           expect.objectContaining({ maintenanceMode: false }),
           expect.any(Array),
+          expect.any(Map),
           expect.any(Object),
           undefined,
         );
@@ -1650,7 +1452,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         expect.objectContaining(restricted),
       );
       expect(lastOrderSettings(client)).toEqual(expect.objectContaining(released));
-      expect(remoteCheckpoint.maintenanceModeChanges).toEqual(["m0001", null]);
+      expect(checkpoint.state.maintenanceModeChanges).toEqual(["m0001", null]);
       expect(holdMaintenanceMode).not.toHaveBeenCalled();
     });
 
@@ -1671,9 +1473,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         },
         1: { Order: orderTable() },
       };
-      vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
-        mkPendingMigration([]),
-      ]);
+      checkpoint.mockPending([mkPendingMigration([])]);
 
       await applyTailorDB(client, planResult, "create-update");
 
@@ -1709,7 +1509,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         clock.mockReturnValue(10_000);
         vi.mocked(client.setMetadata).mockImplementationOnce(async (request) => {
           clock.mockReturnValue(30_000);
-          remoteCheckpoint.maintenanceMode = request.labels?.["sdk-maintenance-mode"] ?? null;
+          checkpoint.state.maintenanceMode = request.labels?.["sdk-maintenance-mode"] ?? null;
           return {} as never;
         });
         const releasedReport = await releases[0]?.(client);
@@ -1727,7 +1527,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       [
         "advanced",
         (_client: OperatorClient) => {
-          remoteCheckpoint.number = 2;
+          checkpoint.state.number = 2;
         },
         /advanced concurrently to 0002/i,
       ],
@@ -1771,7 +1571,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
 
       await applyTailorDB(client, planResult, "create-update");
 
-      expect(remoteCheckpoint.maintenanceModeChanges).toEqual(["m0001", null]);
+      expect(checkpoint.state.maintenanceModeChanges).toEqual(["m0001", null]);
     });
 
     test('"deploy" keeps its checkpoint recorded until the held release runs', async () => {
@@ -1788,14 +1588,14 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         holdMaintenanceMode: (release) => releases.push(release),
       });
 
-      expect(remoteCheckpoint.maintenanceMode).toBe("m0001");
+      expect(checkpoint.state.maintenanceMode).toBe("m0001");
 
       await releases[0]?.(client);
 
-      expect(remoteCheckpoint.maintenanceModeChanges).toEqual(["m0001", null]);
+      expect(checkpoint.state.maintenanceModeChanges).toEqual(["m0001", null]);
     });
 
-    test("records only the last checkpoint of a namespace, together with it", async () => {
+    test("records the maintenance mode with every checkpoint of a namespace", async () => {
       const client = createMockClient();
       const planResult = createMockPlanResult({
         creates: ["Order"],
@@ -1807,7 +1607,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         1: { Order: orderTable() },
         2: { Order: orderTable() },
       };
-      vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      checkpoint.mockPending([
         mkPendingMigration([], { number: 1 }),
         mkPendingMigration([], { number: 2 }),
       ]);
@@ -1822,10 +1622,10 @@ describe("migration flow: namespace restrictions while migrations run", () => {
             recordMaintenanceMode,
           ]),
       ).toEqual([
-        [1, false],
+        [1, true],
         [2, true],
       ]);
-      expect(remoteCheckpoint.maintenanceModeChanges).toEqual(["m0002", null]);
+      expect(checkpoint.state.maintenanceModeChanges).toEqual(["m0001", "m0002", null]);
     });
 
     test("releases tables an earlier deploy left in maintenance mode when the next migration fails", async () => {
@@ -1855,11 +1655,12 @@ describe("migration flow: namespace restrictions while migrations run", () => {
             inProgress: null,
             inProgressInvalid: false,
             maintenanceModeCheckpoint: 0,
+            cleanupCheckpoint: null,
           });
           return [mkPendingMigration([])];
         },
       );
-      remoteCheckpoint.maintenanceMode = "m0000";
+      checkpoint.state.maintenanceMode = "m0000";
       vi.mocked(migrationModule.executeMigrations).mockRejectedValueOnce(
         new Error("script failed"),
       );
@@ -1887,7 +1688,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         /script failed/,
       );
 
-      expect(remoteCheckpoint.maintenanceModeChanges).toEqual([]);
+      expect(checkpoint.state.maintenanceModeChanges).toEqual([]);
     });
 
     test("keeps an earlier maintenance record when listing tables fails", async () => {
@@ -1911,11 +1712,12 @@ describe("migration flow: namespace restrictions while migrations run", () => {
             inProgress: null,
             inProgressInvalid: false,
             maintenanceModeCheckpoint: 0,
+            cleanupCheckpoint: null,
           });
           return [mkPendingMigration([])];
         },
       );
-      remoteCheckpoint.maintenanceMode = "m0000";
+      checkpoint.state.maintenanceMode = "m0000";
       vi.mocked(client.listTailorDBTypes).mockRejectedValueOnce(new Error("table lookup failed"));
 
       await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
@@ -1926,14 +1728,14 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         expect.objectContaining({ workspaceId: "test-workspace", namespaceName: "test-ns" }),
       );
       expect(client.updateTailorDBType).not.toHaveBeenCalled();
-      expect(remoteCheckpoint.number).toBe(0);
-      expect(remoteCheckpoint.maintenanceMode).toBe("m0000");
-      expect(remoteCheckpoint.maintenanceModeChanges).toEqual([]);
+      expect(checkpoint.state.number).toBe(0);
+      expect(checkpoint.state.maintenanceMode).toBe("m0000");
+      expect(checkpoint.state.maintenanceModeChanges).toEqual([]);
 
       await applyTailorDB(client, planResult, "create-update");
 
-      expect(remoteCheckpoint.number).toBe(1);
-      expect(remoteCheckpoint.maintenanceMode).toBeNull();
+      expect(checkpoint.state.number).toBe(1);
+      expect(checkpoint.state.maintenanceMode).toBeNull();
       expect(lastOrderSettings(client)).toEqual(expect.objectContaining(released));
     });
 
@@ -1961,11 +1763,12 @@ describe("migration flow: namespace restrictions while migrations run", () => {
             inProgress: null,
             inProgressInvalid: false,
             maintenanceModeCheckpoint: 0,
+            cleanupCheckpoint: null,
           });
           return pending;
         },
       );
-      remoteCheckpoint.maintenanceMode = "m0000";
+      checkpoint.state.maintenanceMode = "m0000";
       vi.mocked(migrationModule.executeMigrations).mockRejectedValueOnce(
         new Error("script failed"),
       );
@@ -1974,7 +1777,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         /script failed/,
       );
 
-      expect(remoteCheckpoint.maintenanceModeChanges).toEqual([null]);
+      expect(checkpoint.state.maintenanceModeChanges).toEqual([null]);
     });
 
     test.each([
@@ -2006,7 +1809,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         maintenanceMode: "deploy",
       });
       snapshotState.tablesByVersion = { 0: { Order: orderTable() }, 1: { Order: orderTable() } };
-      vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      checkpoint.mockPending([
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         mkPendingMigration([{ kind: "table_added", tableName: "Order" } as any]),
       ]);

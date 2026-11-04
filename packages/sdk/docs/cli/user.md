@@ -70,10 +70,10 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Commands**
 
-| Command                       | Description                                                                           |
-| ----------------------------- | ------------------------------------------------------------------------------------- |
-| [`auth status`](#auth-status) | Show the active Tailor Platform authentication status without printing tokens.        |
-| [`auth token`](#auth-token)   | Print a valid Tailor Platform access token to stdout, refreshing it first if expired. |
+| Command                       | Description                                                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| [`auth status`](#auth-status) | Show the active Tailor Platform authentication status without printing tokens.                               |
+| [`auth token`](#auth-token)   | Print a valid Tailor Platform access token to stdout, refreshing it first if it expires within five minutes. |
 
 ### auth status
 
@@ -95,7 +95,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 ### auth token
 
-Print a valid Tailor Platform access token to stdout, refreshing it first if expired.
+Print a valid Tailor Platform access token to stdout, refreshing it first if it expires within five minutes.
 
 **Usage**
 
@@ -330,7 +330,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Notes**
 
-`workspace create`, workspace creation during `deploy`, and the programmatic `createWorkspace()` use the default folder, or directly use the default organization when no folder is set. Giving either an organization or a folder replaces both defaults for that run. For the CLI, use --organization-id or --folder-id, or TAILOR_PLATFORM_ORGANIZATION_ID / TAILOR_PLATFORM_FOLDER_ID. The defaults are not used while TAILOR_PLATFORM_TOKEN is set, because that token does not belong to a user logged in here.
+`workspace create`, workspace creation during `deploy`, and the programmatic `createWorkspace()` use the default folder, or directly use the default organization when no folder is set. Every workspace belongs to an organization, so creation fails when neither the command nor these defaults give one. Giving either an organization or a folder replaces both defaults for that run. For the CLI, use --organization-id or --folder-id, or TAILOR_PLATFORM_ORGANIZATION_ID / TAILOR_PLATFORM_FOLDER_ID. The defaults are not used while TAILOR_PLATFORM_TOKEN is set, because that token does not belong to a user logged in here.
 
 Each run replaces both defaults: --default-organization-id alone clears the default folder, --default-folder-id is accepted only together with --default-organization-id, and --default-organization-id "" clears both. The IDs are not checked against the Platform here; `workspace create` and `deploy` point back to them when the Platform cannot find them or denies access to them.
 

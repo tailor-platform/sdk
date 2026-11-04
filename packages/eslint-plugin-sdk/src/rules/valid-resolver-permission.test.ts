@@ -1,12 +1,12 @@
-/* oxlint-disable vitest/expect-expect -- Assertions are centralized in shared lint helpers. */
-import { describe, test } from "vitest";
-import { expectClean, expectViolation } from "./test-helpers.js";
+import { describe } from "vitest";
+import { runRuleTests } from "./test-helpers.js";
 
 const RULE = "valid-resolver-permission";
-const NO_PERMIT = "must include at least one `permit: true` policy";
-const NO_POLICY = "Resolver permission must have at least one policy";
-const NO_CONDITION = "Resolver permission policy must have at least one condition";
-const USER_SIDE = "must reference a `user` operand on exactly one side";
+const NO_PERMIT =
+  "Resolver permission must include at least one `permit: true` policy; a policy list with only `permit: false` policies lets through any caller who does not authenticate.";
+const USER_SIDE =
+  "Resolver permission condition must reference a `user` operand on exactly one side (comparing two `user` operands to each other can match on `undefined === undefined`).";
+const OPERAND_VALUE = "A `user` operand must compare to a string or a boolean.";
 
 function resolver(permission: string): string {
   return `import { createResolver } from "@tailor-platform/sdk";\nexport default createResolver({ name: "r", body: () => 1, permission: ${permission} });`;
@@ -16,140 +16,138 @@ function config(defaultPermission: string): string {
   return `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "app", resolver: { main: { files: ["./src/resolver/*.ts"], defaultPermission: ${defaultPermission} } } });`;
 }
 
-describe("valid-resolver-permission", () => {
-  test("rejects permission arrays without a permit: true policy", () => {
-    expectViolation(
-      resolver('[{ conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false }]'),
-      RULE,
-      NO_PERMIT,
-    );
-    expectViolation(resolver("[]"), RULE, NO_POLICY);
-    expectViolation(
-      config('[{ conditions: [[{ user: "role" }, "!=", "ADMIN"]], permit: false }]'),
-      RULE,
-      NO_PERMIT,
-    );
+describe("rejects permission arrays without a permit: true policy", () => {
+  runRuleTests(RULE, {
+    invalid: [
+      {
+        code: resolver('[{ conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false }]'),
+        errors: [NO_PERMIT],
+      },
+      {
+        code: resolver("[]"),
+        errors: ["Resolver permission must have at least one policy."],
+      },
+      {
+        code: config('[{ conditions: [[{ user: "role" }, "!=", "ADMIN"]], permit: false }]'),
+        errors: [NO_PERMIT],
+      },
+    ],
   });
+});
 
-  test("rejects conditions that compare user operands to each other or to nothing", () => {
-    expectViolation(
-      resolver('[{ conditions: [[{ user: "role" }, "=", { user: "team" }]], permit: true }]'),
-      RULE,
-      USER_SIDE,
-    );
-    expectViolation(
-      resolver('[{ conditions: [["ADMIN", "=", "ADMIN"]], permit: true }]'),
-      RULE,
-      USER_SIDE,
-    );
-    expectViolation(
-      resolver('[{ conditions: [{ user: "role" }, "=", { user: "team" }], permit: true }]'),
-      RULE,
-      USER_SIDE,
-    );
-    expectViolation(resolver("[{ conditions: [], permit: true }]"), RULE, NO_CONDITION);
+describe("rejects conditions that compare user operands to each other or to nothing", () => {
+  runRuleTests(RULE, {
+    invalid: [
+      {
+        code: resolver(
+          '[{ conditions: [[{ user: "role" }, "=", { user: "team" }]], permit: true }]',
+        ),
+        errors: [USER_SIDE],
+      },
+      {
+        code: resolver('[{ conditions: [["ADMIN", "=", "ADMIN"]], permit: true }]'),
+        errors: [USER_SIDE],
+      },
+      {
+        code: resolver('[{ conditions: [{ user: "role" }, "=", { user: "team" }], permit: true }]'),
+        errors: [USER_SIDE],
+      },
+      {
+        code: resolver("[{ conditions: [], permit: true }]"),
+        errors: ["Resolver permission policy must have at least one condition."],
+      },
+    ],
   });
+});
 
-  test("rejects known user operands compared to the wrong literal type", () => {
-    expectViolation(
-      resolver('[{ conditions: [[{ user: "_loggedIn" }, "=", "true"]], permit: true }]'),
-      RULE,
-      "`_loggedIn` must compare to a boolean",
-    );
-    expectViolation(
-      resolver('[{ conditions: [[true, "=", { user: "id" }]], permit: true }]'),
-      RULE,
-      "`id` must compare to a string",
-    );
+describe("rejects known user operands compared to the wrong literal type", () => {
+  runRuleTests(RULE, {
+    invalid: [
+      {
+        code: resolver('[{ conditions: [[{ user: "_loggedIn" }, "=", "true"]], permit: true }]'),
+        errors: ["`_loggedIn` must compare to a boolean."],
+      },
+      {
+        code: resolver('[{ conditions: [[true, "=", { user: "id" }]], permit: true }]'),
+        errors: ["`id` must compare to a string."],
+      },
+    ],
   });
+});
 
-  test("rejects operands that are not a user object, string, or boolean", () => {
-    expectViolation(
-      resolver('[{ conditions: [[{ user: "id" }, "=", 5]], permit: true }]'),
-      RULE,
-      "A `user` operand must compare to a string or a boolean",
-    );
-    expectViolation(
-      resolver('[{ conditions: [[{ user: "role" }, "=", 5]], permit: true }]'),
-      RULE,
-      "A `user` operand must compare to a string or a boolean",
-    );
-    expectViolation(
-      resolver('[{ conditions: [[{ user: "role" }, "=", null]], permit: true }]'),
-      RULE,
-      "A `user` operand must compare to a string or a boolean",
-    );
+describe("rejects operands that are not a user object, string, or boolean", () => {
+  runRuleTests(RULE, {
+    invalid: [
+      {
+        code: resolver('[{ conditions: [[{ user: "id" }, "=", 5]], permit: true }]'),
+        errors: [OPERAND_VALUE],
+      },
+      {
+        code: resolver('[{ conditions: [[{ user: "role" }, "=", 5]], permit: true }]'),
+        errors: [OPERAND_VALUE],
+      },
+      {
+        code: resolver('[{ conditions: [[{ user: "role" }, "=", null]], permit: true }]'),
+        errors: [OPERAND_VALUE],
+      },
+    ],
   });
+});
 
-  test("accepts valid permissions", () => {
-    expectClean(
+describe("accepts valid permissions", () => {
+  runRuleTests(RULE, {
+    valid: [
       resolver('[{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }]'),
-      RULE,
-    );
-    expectClean(
       resolver(
         '[{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }, { conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false, description: "banned" }]',
       ),
-      RULE,
-    );
-    expectClean(resolver('[{ conditions: [{ user: "role" }, "=", "ADMIN"], permit: true }]'), RULE);
-    expectClean(
+      resolver('[{ conditions: [{ user: "role" }, "=", "ADMIN"], permit: true }]'),
       resolver('[{ conditions: [["ADMIN", "!=", { user: "role" }]], permit: true }]'),
-      RULE,
-    );
-    expectClean(resolver('"allowAnonymous"'), RULE);
-    expectClean(
+      resolver('"allowAnonymous"'),
       config('[{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }]'),
-      RULE,
-    );
-    expectClean(config('"allowAnonymous"'), RULE);
+      config('"allowAnonymous"'),
+    ],
   });
+});
 
-  test("follows const values", () => {
-    expectViolation(
-      'import { createResolver } from "@tailor-platform/sdk";\nconst denyBanned = { conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false };\nconst permission = [denyBanned];\nexport default createResolver({ name: "r", body: () => 1, permission });',
-      RULE,
-      NO_PERMIT,
-    );
+describe("follows const values", () => {
+  runRuleTests(RULE, {
+    invalid: [
+      {
+        code: 'import { createResolver } from "@tailor-platform/sdk";\nconst denyBanned = { conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false };\nconst permission = [denyBanned];\nexport default createResolver({ name: "r", body: () => 1, permission });',
+        errors: [NO_PERMIT],
+      },
+    ],
   });
+});
 
-  test("skips a permission a later spread can override", () => {
-    expectClean(
+describe("skips a permission a later spread can override", () => {
+  runRuleTests(RULE, {
+    valid: [
       'import { createResolver } from "@tailor-platform/sdk";\nexport default createResolver({ name: "r", body: () => 1, permission: [], ...overrides });',
-      RULE,
-    );
-    expectClean(
       'import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "app", resolver: { main: { files: [], defaultPermission: [] }, ...extra } });',
-      RULE,
-    );
+    ],
   });
+});
 
-  test("skips values it cannot resolve statically", () => {
-    expectClean(resolver("buildPermission()"), RULE);
-    expectClean(
+describe("skips values it cannot resolve statically", () => {
+  runRuleTests(RULE, {
+    valid: [
+      resolver("buildPermission()"),
       resolver('[{ conditions: [[{ user: "role" }, "=", "BANNED"]], permit: allow }]'),
-      RULE,
-    );
-    expectClean(
       resolver(
         '[...sharedPolicies, { conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false }]',
       ),
-      RULE,
-    );
-    expectClean(
       resolver('[{ conditions: [[{ user: "role" }, "=", expected]], permit: true }]'),
-      RULE,
-    );
-    expectClean(
       resolver('[{ conditions: [[operand, "=", { user: "role" }]], permit: true }]'),
-      RULE,
-    );
+    ],
   });
+});
 
-  test("ignores same-named factories from other packages", () => {
-    expectClean(
+describe("ignores same-named factories from other packages", () => {
+  runRuleTests(RULE, {
+    valid: [
       'import { createResolver } from "another-sdk";\nexport default createResolver({ permission: [{ conditions: [], permit: false }] });',
-      RULE,
-    );
+    ],
   });
 });

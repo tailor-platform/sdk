@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { getOAuth2ClientId, getPlatformBaseUrl } from "./client";
 import { logger } from "./logger";
 import {
@@ -46,7 +46,7 @@ describe("resolvePlugin / listPlugins", () => {
   let originalPath: string | undefined;
 
   beforeEach(() => {
-    tempDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "tailor-plugin-")));
+    tempDir = makeTempDir("tailor-plugin-");
     originalCwd = process.cwd();
     originalPath = process.env.PATH;
   });
@@ -188,7 +188,7 @@ describe("dispatchPlugin", () => {
   let outFile: string;
 
   beforeEach(() => {
-    tempDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "tailor-dispatch-")));
+    tempDir = makeTempDir("tailor-dispatch-");
     originalCwd = process.cwd();
     originalPath = process.env.PATH;
     originalContextEnv = Object.fromEntries(CONTEXT_ENV_KEYS.map((k) => [k, process.env[k]]));
@@ -315,6 +315,46 @@ describe("dispatchPlugin", () => {
     expect(env.TAILOR_PLATFORM_URL).toBeUndefined();
     expect(env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID).toBeUndefined();
     expect(env.TAILOR_CONFIG_PATH).toBe("/proj/tailor.config.ts");
+  });
+
+  test("injects the config path a forwarded env file sets, leaving a missing one to the plugin", async () => {
+    const project = path.join(tempDir, "project");
+    writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-hello`, outFile);
+    process.chdir(project);
+    process.env.PATH = "";
+    fs.writeFileSync(path.join(project, ".env.staging"), "TAILOR_CONFIG_PATH=env/tailor.config.ts");
+    contextMocks.loadConfigPath.mockImplementation(() => process.env.TAILOR_CONFIG_PATH);
+
+    const code = await dispatchPlugin({
+      name: "hello",
+      args: ["deploy", "-e", ".env.staging", "-e", ".env.missing"],
+      cliName: CLI,
+    });
+
+    expect(code).toBe(0);
+    expect(readCapture().env.TAILOR_CONFIG_PATH).toBe("env/tailor.config.ts");
+  });
+
+  test("reads an env file bundled after the seed plugin's -v alias", async () => {
+    const project = path.join(tempDir, "project");
+    writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-seed`, outFile);
+    process.chdir(project);
+    process.env.PATH = "";
+    fs.writeFileSync(path.join(project, ".env.staging"), "TAILOR_CONFIG_PATH=env/tailor.config.ts");
+    contextMocks.loadConfigPath.mockImplementation(
+      () => process.env.TAILOR_CONFIG_PATH ?? "/proj/tailor.config.ts",
+    );
+
+    const code = await dispatchPlugin({
+      name: "seed",
+      args: ["validate", "-ve", ".env.staging"],
+      cliName: CLI,
+    });
+
+    expect(code).toBe(0);
+    const { env } = readCapture();
+    expect(env.TAILOR_CONFIG_PATH).toBe("env/tailor.config.ts");
+    expect(env.TAILOR_PLATFORM_TOKEN).toBeUndefined();
   });
 
   // `main.ts` hands the host-consumed tokens to `dispatchPlugin` already
@@ -446,7 +486,7 @@ describe("dispatchPluginWithInstallHint", () => {
   let originalPath: string | undefined;
 
   beforeEach(() => {
-    tempDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "tailor-hint-")));
+    tempDir = makeTempDir("tailor-hint-");
     originalCwd = process.cwd();
     originalPath = process.env.PATH;
     const project = path.join(tempDir, "project");
@@ -541,9 +581,13 @@ describe("hasEnvFileFlag", () => {
     [["deploy", "-e", ".env"], true],
     [["deploy", "--env-file=.env"], true],
     [["deploy", "--env-file-if-exists", ".env"], true],
+    [["deploy", "--envFile", ".env"], true],
+    [["deploy", "--envFileIfExists=.env"], true],
+    [["deploy", "-e"], false],
+    [["deploy", "-e", "--json"], false],
     [["deploy"], false],
     [["deploy", "--", "--env-file", ".env"], false],
   ])("detects env-file flag in %j", (args, expected) => {
-    expect(hasEnvFileFlag(args)).toBe(expected);
+    expect(hasEnvFileFlag(args, {})).toBe(expected);
   });
 });

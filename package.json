@@ -55,14 +55,14 @@
     "@changesets/changelog-github": "1.0.1",
     "@changesets/cli": "3.0.3",
     "@tailor-platform/sdk": "workspace:^",
-    "@types/node": "24.19.2",
-    "eslint-plugin-zod": "5.2.0",
-    "knip": "6.41.0",
+    "@types/node": "26.6.5",
+    "eslint-plugin-zod": "5.2.2",
+    "knip": "6.43.0",
     "lefthook": "2.2.1",
     "madge": "8.0.0",
-    "oxfmt": "0.73.0",
-    "oxlint": "1.88.0",
-    "pkg-pr-new": "0.0.91",
+    "oxfmt": "0.75.0",
+    "oxlint": "1.90.0",
+    "pkg-pr-new": "0.0.92",
     "publint": "0.3.25",
     "tsx": "4.23.15",
     "typescript": "6.0.3"
@@ -70,5 +70,5 @@
   "engines": {
     "node": ">= 22.18.0"
   },
-  "packageManager": "pnpm@12.14.0"
+  "packageManager": "pnpm@12.16.1"
 }

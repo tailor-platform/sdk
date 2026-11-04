@@ -44,7 +44,7 @@ describe("confirmOwnerConflict", () => {
   });
 
   test("returns immediately when conflicts is empty", async () => {
-    await confirmOwnerConflict([], "my-app", false);
+    await confirmOwnerConflict([], "my-app", "prompt");
     expect(prompt.confirm).not.toHaveBeenCalled();
   });
 
@@ -57,7 +57,7 @@ describe("confirmOwnerConflict", () => {
         currentOwner: "my-app",
       },
     ];
-    await confirmOwnerConflict(conflicts, "my-app", false, "id-2");
+    await confirmOwnerConflict(conflicts, "my-app", "prompt", "id-2");
 
     expect(prompt.confirm).toHaveBeenCalledTimes(1);
     const message = vi.mocked(prompt.confirm).mock.calls[0]![0].message;
@@ -77,7 +77,7 @@ describe("confirmOwnerConflict", () => {
         currentOwner: "my-app",
       },
     ];
-    await confirmOwnerConflict(conflicts, "my-app", false, undefined);
+    await confirmOwnerConflict(conflicts, "my-app", "prompt", undefined);
 
     const message = vi.mocked(prompt.confirm).mock.calls[0]![0].message;
     expect(message).not.toContain("regenerated");
@@ -94,7 +94,7 @@ describe("confirmOwnerConflict", () => {
         currentOwner: "old-app",
       },
     ];
-    await confirmOwnerConflict(conflicts, "new-app", false);
+    await confirmOwnerConflict(conflicts, "new-app", "prompt");
 
     expect(prompt.confirm).toHaveBeenCalledTimes(1);
     const message = vi.mocked(prompt.confirm).mock.calls[0]![0].message;
@@ -118,7 +118,7 @@ describe("confirmOwnerConflict", () => {
         currentOwner: "old-app",
       },
     ];
-    await confirmOwnerConflict(conflicts, "my-app", false, "id-2");
+    await confirmOwnerConflict(conflicts, "my-app", "prompt", "id-2");
 
     expect(prompt.confirm).toHaveBeenCalledTimes(2);
     expect(vi.mocked(prompt.confirm).mock.calls[0]![0].message).toContain("Re-tag");
@@ -138,7 +138,7 @@ describe("confirmOwnerConflict", () => {
       const conflicts: OwnerConflict[] = [
         { resourceType: "executor", resourceLabel: "Executor", resourceName: "ex-1", currentOwner },
       ];
-      await confirmOwnerConflict(conflicts, appName, true, appId);
+      await confirmOwnerConflict(conflicts, appName, "yes", appId);
 
       expect(prompt.confirm).not.toHaveBeenCalled();
       expect(
@@ -147,6 +147,25 @@ describe("confirmOwnerConflict", () => {
           .mock.calls.map((call) => String(call[0]))
           .join("\n"),
       ).toContain(reported);
+    },
+  );
+
+  test.each([
+    ["id regeneration", "my-app", "my-app", "id-2", "Application id was regenerated"],
+    ["missing config id", "my-app", "my-app", undefined, "No application id resolved"],
+    ["name mismatch", "old-app", "new-app", undefined, "Application name mismatch detected"],
+  ])(
+    "warns without prompting or reporting an action in dry-run (%s)",
+    async (_label, currentOwner, appName, appId, warning) => {
+      const { logger } = await import("#/cli/shared/logger");
+      const conflicts: OwnerConflict[] = [
+        { resourceType: "executor", resourceLabel: "Executor", resourceName: "ex-1", currentOwner },
+      ];
+      await confirmOwnerConflict(conflicts, appName, "dry-run", appId);
+
+      expect(prompt.confirm).not.toHaveBeenCalled();
+      expect(String(vi.mocked(logger.warn).mock.calls[0]?.[0])).toContain(warning);
+      expect(logger.success).not.toHaveBeenCalled();
     },
   );
 
@@ -160,7 +179,7 @@ describe("confirmOwnerConflict", () => {
     const conflicts: OwnerConflict[] = [
       { resourceType: "executor", resourceLabel: "Executor", resourceName: "ex-1", currentOwner },
     ];
-    await confirmOwnerConflict(conflicts, "my-app", true, appId);
+    await confirmOwnerConflict(conflicts, "my-app", "yes", appId);
 
     expect(vi.mocked(logger.log).mock.calls.flat()).toContain('    • Executor "ex-1"');
   });
@@ -175,7 +194,7 @@ describe("confirmOwnerConflict", () => {
         currentOwner: "my-app",
       },
     ];
-    await expect(confirmOwnerConflict(conflicts, "my-app", false, "id-2")).rejects.toThrow(
+    await expect(confirmOwnerConflict(conflicts, "my-app", "prompt", "id-2")).rejects.toThrow(
       /tagged with the previous id/,
     );
   });
@@ -190,7 +209,7 @@ describe("confirmOwnerConflict", () => {
         currentOwner: "old-app",
       },
     ];
-    await expect(confirmOwnerConflict(conflicts, "new-app", false)).rejects.toThrow(
+    await expect(confirmOwnerConflict(conflicts, "new-app", "prompt")).rejects.toThrow(
       /managed by their current applications/,
     );
   });
@@ -209,7 +228,7 @@ describe("confirmUnmanagedResources", () => {
     await confirmUnmanagedResources(
       [{ resourceType: "executor", resourceLabel: "Executor", resourceName: "ex-1" }],
       "my-app",
-      true,
+      "yes",
     );
 
     expect(vi.mocked(logger.log).mock.calls.flat()).toContain('    • Executor "ex-1"');
@@ -226,7 +245,7 @@ describe("confirmMigrationCheckpointRepairs", () => {
   });
 
   test("does not prompt when there are no checkpoint repairs", async () => {
-    await confirmMigrationCheckpointRepairs([], false);
+    await confirmMigrationCheckpointRepairs([], "prompt");
     expect(prompt.confirm).not.toHaveBeenCalled();
   });
 
@@ -251,7 +270,7 @@ describe("confirmMigrationCheckpointRepairs", () => {
           toHistoryId: "htailordb",
         },
       ],
-      false,
+      "prompt",
     );
 
     expect(prompt.confirm).toHaveBeenCalledTimes(1);
@@ -286,7 +305,7 @@ describe("confirmMigrationCheckpointRepairs", () => {
             toHistoryId: "htailordb",
           },
         ],
-        false,
+        "prompt",
       ),
     ).rejects.toThrow(/Apply cancelled/);
   });
@@ -298,6 +317,10 @@ describe("confirmMissingDependentApps", () => {
   const missing: MissingDependentApp[] = [
     {
       resource: 'TailorDB table "Order"',
+      resourceType: "tailordb.type",
+      namespace: "db",
+      name: "Order",
+      scope: "resource",
       appId: "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81",
       reason: "publish-events",
     },
@@ -310,14 +333,14 @@ describe("confirmMissingDependentApps", () => {
   });
 
   test("returns immediately when nothing is missing", async () => {
-    await confirmMissingDependentApps([], false);
+    await confirmMissingDependentApps([], "prompt");
     expect(prompt.confirm).not.toHaveBeenCalled();
   });
 
   test("asks before continuing without a recorded dependency", async () => {
     vi.mocked(prompt.confirm).mockResolvedValue(true);
 
-    await confirmMissingDependentApps(missing, false);
+    await confirmMissingDependentApps(missing, "prompt");
 
     expect(prompt.confirm).toHaveBeenCalledTimes(1);
   });
@@ -325,7 +348,7 @@ describe("confirmMissingDependentApps", () => {
   test("names the absent application and the resource it depends on", async () => {
     const { logger } = await import("#/cli/shared/logger");
 
-    await confirmMissingDependentApps(missing, false);
+    await confirmMissingDependentApps(missing, "prompt");
 
     // The record names its dependent, so stating it the other way round tells the
     // reader to keep the wrong config in `--config`. Records live on the resource,
@@ -338,11 +361,11 @@ describe("confirmMissingDependentApps", () => {
   test("cancels the deploy when the answer is no", async () => {
     vi.mocked(prompt.confirm).mockResolvedValue(false);
 
-    await expect(confirmMissingDependentApps(missing, false)).rejects.toThrow(/Apply cancelled/);
+    await expect(confirmMissingDependentApps(missing, "prompt")).rejects.toThrow(/Apply cancelled/);
   });
 
   test("continues without asking when --yes is passed", async () => {
-    await confirmMissingDependentApps(missing, true);
+    await confirmMissingDependentApps(missing, "yes");
 
     expect(prompt.confirm).not.toHaveBeenCalled();
   });

@@ -5,6 +5,7 @@ import {
   importBindings,
   importSource,
   importSpecNames,
+  isInsideImportStatement,
   isTypeOnlyImport,
   localDeclarationNames,
 } from "../../../../src/ast-grep-helpers";
@@ -128,15 +129,6 @@ function findDirectAuthCalls(root: SgNode, authLocalNames: Set<string>): TokenCa
     });
   }
   return calls;
-}
-
-function isInsideImportStatement(node: SgNode): boolean {
-  let current = node.parent();
-  while (current) {
-    if (current.kind() === "import_statement") return true;
-    current = current.parent();
-  }
-  return false;
 }
 
 function isInsideScheduledRange(node: SgNode, ranges: Array<[number, number]>): boolean {

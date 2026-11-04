@@ -1,7 +1,7 @@
 // oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { afterEach, describe, expect, test, expectTypeOf } from "vitest";
-import { setupWaitPointMock, setupWorkflowMock } from "#/utils/test/mock";
 import { getRegisteredWaitPoints, restoreWaitPointRegistry } from "#/utils/wait-point-registry";
+import { mockWorkflow } from "#/vitest/mock";
 import { createWaitPoint, createWaitPoints } from "./wait-point";
 import type { TailorRuntime } from "#/runtime/index";
 import type { TypeLevelError } from "#/types/helpers";
@@ -126,14 +126,6 @@ describe("createWaitPoints", () => {
     expect(() => wps.approval.wait()).toThrow("mockWorkflow");
   });
 
-  test("throws a helpful error when only setupWorkflowMock is active (wait/resolve auto-stubbed)", () => {
-    setupWorkflowMock(() => undefined);
-    const wps = createWaitPoints((define) => ({
-      approval: define<undefined, { ok: boolean }>(),
-    }));
-    expect(() => wps.approval.wait()).toThrow("mockWorkflow");
-  });
-
   test("rejects Result = undefined (callback must return a value)", () => {
     createWaitPoints((define) => ({
       // @ts-expect-error - Result cannot be undefined; platform throws if callback returns undefined
@@ -156,9 +148,8 @@ describe("createWaitPoints", () => {
   });
 
   test("wait() delegates to mock", async () => {
-    const { waitCalls } = setupWaitPointMock({
-      onWait: (_key, _payload) => ({ approved: true }),
-    });
+    using wf = mockWorkflow();
+    wf.setWaitHandler((_key, _payload) => ({ approved: true }));
 
     const wps = createWaitPoints((define) => ({
       approval: define<{ msg: string }, { approved: boolean }>(),
@@ -166,15 +157,14 @@ describe("createWaitPoints", () => {
 
     const result = await wps.approval.wait({ msg: "please" });
     expect(result).toEqual({ approved: true });
-    expect(waitCalls).toHaveLength(1);
-    expect(waitCalls[0]).toEqual({ key: "approval", payload: { msg: "please" } });
+    expect(wf.waitCalls).toHaveLength(1);
+    expect(wf.waitCalls[0]).toEqual({ key: "approval", payload: { msg: "please" } });
   });
 
   test("resolve() delegates to mock", async () => {
-    const { resolveCalls } = setupWaitPointMock({
-      onResolve: async (_execId, _key, callback) => {
-        callback({ msg: "hello" });
-      },
+    using wf = mockWorkflow();
+    wf.setResolveHandler(async (_execId, _key, callback) => {
+      callback({ msg: "hello" });
     });
 
     const wps = createWaitPoints((define) => ({
@@ -185,21 +175,20 @@ describe("createWaitPoints", () => {
       expect(payload).toEqual({ msg: "hello" });
       return { ok: true };
     });
-    expect(resolveCalls).toHaveLength(1);
-    expect(resolveCalls[0]).toEqual({ executionId: "exec-1", key: "approval" });
+    expect(wf.resolveCalls).toHaveLength(1);
+    expect(wf.resolveCalls[0]).toEqual({ executionId: "exec-1", key: "approval" });
   });
 
   test("sets correct key from property name", async () => {
-    const { waitCalls } = setupWaitPointMock({
-      onWait: () => "ok",
-    });
+    using wf = mockWorkflow();
+    wf.setWaitHandler(() => "ok");
 
     const wps = createWaitPoints((define) => ({
       step: define<undefined, string>(),
     }));
 
     await wps.step.wait();
-    expect(waitCalls[0]).toEqual({ key: "step", payload: undefined });
+    expect(wf.waitCalls[0]).toEqual({ key: "step", payload: undefined });
   });
 });
 
@@ -226,37 +215,37 @@ describe("createWaitPoint", () => {
   });
 
   test("uses the provided key", async () => {
-    const { waitCalls } = setupWaitPointMock({
-      onWait: (_key, _payload) => ({ ok: true }),
-    });
+    using wf = mockWorkflow();
+    wf.setWaitHandler((_key, _payload) => ({ ok: true }));
 
     const wp = createWaitPoint<{ msg: string }, { ok: boolean }>("approval");
     await wp.wait({ msg: "please" });
-    expect(waitCalls[0]).toEqual({ key: "approval", payload: { msg: "please" } });
+    expect(wf.waitCalls[0]).toEqual({ key: "approval", payload: { msg: "please" } });
   });
 
   test("resolve delegates to mock", async () => {
-    const { resolveCalls } = setupWaitPointMock({
-      onResolve: async (_execId, _key, callback) => {
-        callback(undefined);
-      },
+    using wf = mockWorkflow();
+    wf.setResolveHandler(async (_execId, _key, callback) => {
+      callback(undefined);
     });
 
     const wp = createWaitPoint<undefined, { ok: boolean }>("my-step");
     await wp.resolve("exec-1", () => ({ ok: true }));
-    expect(resolveCalls[0]).toEqual({ executionId: "exec-1", key: "my-step" });
+    expect(wf.resolveCalls[0]).toEqual({ executionId: "exec-1", key: "my-step" });
   });
 
   test("accepts a run of hyphens, which the key grammar allows", async () => {
-    const { waitCalls } = setupWaitPointMock({ onWait: () => "ok" });
+    using wf = mockWorkflow();
+    wf.setWaitHandler(() => "ok");
 
     const wp = createWaitPoint<undefined, string>("my--step");
     await wp.wait();
-    expect(waitCalls[0]).toEqual({ key: "my--step", payload: undefined });
+    expect(wf.waitCalls[0]).toEqual({ key: "my--step", payload: undefined });
   });
 
   test("reads a bare $ as a literal, the way the type does", async () => {
-    const { waitCalls } = setupWaitPointMock({ onWait: () => "ok" });
+    using wf = mockWorkflow();
+    wf.setWaitHandler(() => "ok");
 
     // `$` on its own names no param. The type says so, so the value has to
     // agree: `.wait()` rather than a `.with()` the type never showed.
@@ -266,7 +255,7 @@ describe("createWaitPoint", () => {
     try {
       const wp = createWaitPoint<undefined, string>("my-$");
       await wp.wait();
-      expect(waitCalls[0]).toEqual({ key: "my-$", payload: undefined });
+      expect(wf.waitCalls[0]).toEqual({ key: "my-$", payload: undefined });
     } finally {
       restoreWaitPointRegistry(mark);
     }
@@ -314,9 +303,8 @@ describe("$param keys", () => {
   });
 
   test("with() substitutes params into the key", async () => {
-    const { waitCalls } = setupWaitPointMock({
-      onWait: () => ({ approved: true }),
-    });
+    using wf = mockWorkflow();
+    wf.setWaitHandler(() => ({ approved: true }));
 
     const wps = createWaitPoints((define) => ({
       lineApproval: define.for("line-approval-$lineId")<
@@ -330,13 +318,14 @@ describe("$param keys", () => {
       .wait({ message: "please" });
 
     expect(result).toEqual({ approved: true });
-    expect(waitCalls).toEqual([
+    expect(wf.waitCalls).toEqual([
       { key: "line-approval-0191f3a2-7c4e", payload: { message: "please" } },
     ]);
   });
 
   test("with() keeps concurrent bindings apart", async () => {
-    const { waitCalls } = setupWaitPointMock({ onWait: () => ({ approved: true }) });
+    using wf = mockWorkflow();
+    wf.setWaitHandler(() => ({ approved: true }));
 
     const wps = createWaitPoints((define) => ({
       lineApproval: define.for("line-approval-$lineId")<undefined, { approved: boolean }>(),
@@ -347,14 +336,13 @@ describe("$param keys", () => {
       wps.lineApproval.with({ lineId: "a2" }).wait(),
     ]);
 
-    expect(waitCalls.map((c) => c.key)).toEqual(["line-approval-a1", "line-approval-a2"]);
+    expect(wf.waitCalls.map((c) => c.key)).toEqual(["line-approval-a1", "line-approval-a2"]);
   });
 
   test("with() substitutes params for resolve too", async () => {
-    const { resolveCalls } = setupWaitPointMock({
-      onResolve: async (_execId, _key, callback) => {
-        callback(undefined);
-      },
+    using wf = mockWorkflow();
+    wf.setResolveHandler(async (_execId, _key, callback) => {
+      callback(undefined);
     });
 
     const wps = createWaitPoints((define) => ({
@@ -363,7 +351,7 @@ describe("$param keys", () => {
 
     await wps.lineApproval.with({ lineId: "a1" }).resolve("exec-1", () => ({ approved: true }));
 
-    expect(resolveCalls).toEqual([{ executionId: "exec-1", key: "line-approval-a1" }]);
+    expect(wf.resolveCalls).toEqual([{ executionId: "exec-1", key: "line-approval-a1" }]);
   });
 
   test("rejects param values that would break the key grammar", () => {
@@ -391,14 +379,15 @@ describe("$param keys", () => {
   });
 
   test("accepts a run of hyphens alongside $params", async () => {
-    const { waitCalls } = setupWaitPointMock({ onWait: () => ({ approved: true }) });
+    using wf = mockWorkflow();
+    wf.setWaitHandler(() => ({ approved: true }));
 
     const wps = createWaitPoints((define) => ({
       lineApproval: define.for("line--approval-$lineId")<undefined, { approved: boolean }>(),
     }));
 
     await wps.lineApproval.with({ lineId: "a1" }).wait();
-    expect(waitCalls[0]?.key).toBe("line--approval-a1");
+    expect(wf.waitCalls[0]?.key).toBe("line--approval-a1");
   });
 
   test("leaves a bare `$` to the grammar rather than binding it as a param", () => {

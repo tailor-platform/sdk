@@ -7,15 +7,14 @@ import { printMutationResult } from "#/cli/shared/mutation-result";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { parseOptions } from "#/cli/shared/parse-options";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { assertDefined } from "#/utils/assert";
-import { ageArg, parseAge } from "../age";
-import { decodeExpiresAt, encodeExpiresAt, writeWorkspaceExpiry } from "../expiry";
+import { parseAge, ttlArg, ttlLimit } from "../age";
+import { recordedExpiresAt, writeWorkspaceExpiry } from "../expiry";
 
 // strip unknown keys
 const setTtlOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
   profile: z.string().optional(),
-  ttl: ageArg,
+  ttl: ttlArg,
 });
 
 type SetTtlOptions = z.input<typeof setTtlOptionsSchema>;
@@ -41,7 +40,7 @@ async function setWorkspaceTtl(options: SetTtlOptions): Promise<RecordedExpiry> 
     workspaceId: validated.workspaceId,
   });
 
-  const expiresAt = new Date(Date.now() + parseAge(validated.ttl));
+  const expiresAt = recordedExpiresAt(new Date(Date.now() + parseAge(validated.ttl)));
   const changed = await writeWorkspaceExpiry(client, workspaceId, expiresAt);
   return { workspaceId, expiresAt, changed };
 }
@@ -56,8 +55,8 @@ export const setCommand = defineAppCommand({
   `,
   args: z.strictObject({
     ...workspaceArgs,
-    ttl: arg(ageArg, {
-      description: "Time from now until the workspace becomes prunable, such as 30m, 24h, or 7d",
+    ttl: arg(ttlArg, {
+      description: `Time from now until the workspace becomes prunable, such as 30m, 24h, or 7d (${ttlLimit})`,
     }),
   }),
   run: async (args) => {
@@ -69,10 +68,6 @@ export const setCommand = defineAppCommand({
     });
 
     logger.success(`Workspace becomes prunable at ${expiresAt.toISOString()}.`);
-    const recorded = assertDefined(
-      decodeExpiresAt(encodeExpiresAt(expiresAt)),
-      "encoded workspace expiry must decode",
-    );
-    printMutationResult({ changed, workspaceId, expiresAt: recorded.toISOString() });
+    printMutationResult({ changed, workspaceId, expiresAt: expiresAt.toISOString() });
   },
 });

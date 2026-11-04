@@ -1,11 +1,12 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { beforeEach, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
+import { prompt } from "#/cli/shared/prompt";
 import { captureStderr, captureStdoutStream } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { defineStaticWebSite } from "#/configure/services/staticwebsite/index";
-import { createChangeSet } from "./change-set";
+import { emptyPlanResults } from "./test-helpers/plan-results";
 import type { Plugin } from "#/plugin/types";
 import type { PlanResults } from "./apply-phases";
 import type { BuiltDeploymentTarget } from "./deployment-target";
@@ -18,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   getStaticWebsite: vi.fn(),
   getAIGateway: vi.fn(),
   listAuthOAuth2Clients: vi.fn(),
+  fetchMissingDependentApps: vi.fn(),
+  planTailorDB: vi.fn(),
 }));
 vi.mock(import("./deployment-target"), async (original) => ({
   ...(await original()),
@@ -44,7 +47,7 @@ vi.mock("./metadata-lookup", () => ({
 }));
 vi.mock(import("./dependency-records"), async (original) => ({
   ...(await original()),
-  fetchMissingDependentApps: async () => [],
+  fetchMissingDependentApps: mocks.fetchMissingDependentApps,
 }));
 vi.mock(import("./apply-phases"), async (original) => ({
   ...(await original()),
@@ -58,7 +61,7 @@ vi.mock(import("./function-registry"), async (original) => ({
 }));
 vi.mock(import("./tailordb"), async (original) => ({
   ...(await original()),
-  planTailorDB: async () => mocks.results.tailorDB,
+  planTailorDB: mocks.planTailorDB,
 }));
 vi.mock(import("./staticwebsite"), async (original) => ({
   ...(await original()),
@@ -101,127 +104,6 @@ vi.mock(import("./secret-manager"), async (original) => ({
   planSecretManager: async () => mocks.results.secretManager,
 }));
 import { deploy, deployMigrationTestBaseline, deployMigrationTestTarget } from "./deploy";
-function emptyFunctionChanges() {
-  return { creates: [], updates: [], deletes: [], replaces: [], unchanged: [] };
-}
-
-function emptyOwnership() {
-  return { conflicts: [], unmanaged: [], resourceOwners: new Set<string>() };
-}
-
-function emptyResults(): PlanResults {
-  return {
-    functionRegistry: {
-      changeSet: createChangeSet("Function registry"),
-      workflowJobChanges: emptyFunctionChanges(),
-      resolverFunctionChanges: emptyFunctionChanges(),
-      executorFunctionChanges: emptyFunctionChanges(),
-      authHookFunctionChanges: emptyFunctionChanges(),
-      ...emptyOwnership(),
-      existingMap: {},
-    },
-    tailorDB: {
-      changeSet: {
-        service: createChangeSet("TailorDB services"),
-        type: createChangeSet("TailorDB tables"),
-        gqlPermission: createChangeSet("TailorDB gqlPermissions"),
-      },
-      ...emptyOwnership(),
-      context: {
-        workspaceId: "ws",
-        application: {} as PlanResults["tailorDB"]["context"]["application"],
-        tailorDBInputs: [],
-        executorUsedTables: new Set<string>(),
-        config: {} as PlanResults["tailorDB"]["context"]["config"],
-        noSchemaCheck: false,
-        namespacesWithMigrations: [],
-        migrationFileState: {},
-        checkpointRepairs: [],
-      },
-    },
-    staticWebsite: {
-      changeSet: createChangeSet("StaticWebsites"),
-      customDomainChangeSet: createChangeSet("CustomDomains"),
-      ...emptyOwnership(),
-    },
-    aiGateway: {
-      changeSet: createChangeSet("AIGateways"),
-      ...emptyOwnership(),
-    },
-    idp: {
-      changeSet: {
-        service: createChangeSet("IdP services"),
-        client: createChangeSet("IdP clients"),
-      },
-      ...emptyOwnership(),
-    },
-    auth: {
-      connectionStateScope: {
-        workspaceId: "workspace-id",
-        applicationId: "application-id",
-        applicationName: "my-app",
-      },
-      changeSet: {
-        service: createChangeSet("Auth services"),
-        idpConfig: createChangeSet("Auth idpConfigs"),
-        userProfileConfig: createChangeSet("Auth userProfileConfigs"),
-        tenantConfig: createChangeSet("Auth tenantConfigs"),
-        machineUser: createChangeSet("Auth machineUsers"),
-        oauth2Client: createChangeSet("Auth oauth2Clients"),
-        authHook: createChangeSet("Auth hooks"),
-        scim: createChangeSet("Auth scim"),
-        scimResource: createChangeSet("Auth scimResources"),
-        connection: createChangeSet("Auth connections"),
-      },
-      ...emptyOwnership(),
-    },
-    pipeline: {
-      changeSet: {
-        service: createChangeSet("Pipeline services"),
-        resolver: createChangeSet("Pipeline resolvers"),
-      },
-      ...emptyOwnership(),
-      existingServices: {},
-      existingResolvers: new Map(),
-    },
-    app: Object.assign(
-      createChangeSet("Applications"),
-      emptyOwnership(),
-    ) as unknown as PlanResults["app"],
-    executor: {
-      changeSet: createChangeSet("Executors"),
-      ...emptyOwnership(),
-      existingExecutors: {},
-    },
-    workflow: {
-      changeSet: createChangeSet("Workflows"),
-      unchangedWorkflowJobNames: new Set<string>(),
-      jobFunctionDeletes: [],
-      jobFunctionPublishEvents: new Map<string, boolean>(),
-      ...emptyOwnership(),
-      appName: "my-app",
-      appId: undefined,
-      existingJobFunctions: new Map(),
-      existingWorkflows: {},
-    },
-    workflowExecutionPolicy: {
-      changeSet: createChangeSet("Workflow execution policies"),
-      ...emptyOwnership(),
-    },
-    secretManager: {
-      stateScope: {
-        workspaceId: "workspace-id",
-        applicationId: "application-id",
-        applicationName: "my-app",
-      },
-      vaultChangeSet: createChangeSet("Vaults"),
-      secretChangeSet: createChangeSet("Secrets"),
-      skippedSecrets: [],
-      ...emptyOwnership(),
-    },
-  } satisfies PlanResults;
-}
-
 beforeEach(() => {
   const application = {
     name: "app",
@@ -249,8 +131,10 @@ beforeEach(() => {
       authHooks: new Map(),
     },
   } as unknown as BuiltDeploymentTarget;
-  mocks.results = emptyResults();
+  mocks.results = emptyPlanResults();
+  mocks.planTailorDB.mockImplementation(async () => mocks.results.tailorDB);
   mocks.apply.mockResolvedValue([]);
+  mocks.fetchMissingDependentApps.mockResolvedValue([]);
   mocks.getApplication.mockResolvedValue({ application: { url: "https://app", domain: "app" } });
   mocks.getStaticWebsite.mockResolvedValue({ staticwebsite: { url: "https://web" } });
   mocks.getAIGateway.mockResolvedValue({ aigateway: { name: "ai", url: "https://ai" } });
@@ -332,6 +216,13 @@ test("does not execute hooks during a migration target deploy", async () => {
   expect(hook).not.toHaveBeenCalled();
   expect(mocks.getApplication).not.toHaveBeenCalled();
 });
+test("plans a migration target deploy to run the scripts as the given machine user", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  await deployMigrationTestTarget({ yes: true, noValidate: true }, new Map(), "admin");
+  expect(mocks.planTailorDB).toHaveBeenCalledWith(
+    expect.objectContaining({ migrationMachineUserOverride: "admin" }),
+  );
+});
 test("adds hook outputs to the JSON deployment result", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
   using _json = jsonMode();
@@ -379,25 +270,112 @@ test("does not fetch hook context when no deploy hook is registered", async () =
   expect(mocks.getStaticWebsite).not.toHaveBeenCalled();
 });
 
-test("runs the original plugin once after the URL rebuild has been applied", async () => {
-  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+function referenceWebsiteUrlFromEnv(onPrerequisite?: () => void) {
   mocks.target.config = {
     ...mocks.target.config,
     staticWebsites: [defineStaticWebSite("web", {})],
   };
   mocks.target.application = { ...mocks.target.application, env: { website: "web:url" } };
-  const hook = vi.fn(() => {
-    expect(mocks.apply).toHaveBeenCalledOnce();
-  });
-  register(hook);
   mocks.prerequisite.mockImplementationOnce(async () => {
     mocks.target = {
       ...mocks.target,
       application: { ...mocks.target.application, env: { website: "https://web" } },
     };
+    onPrerequisite?.();
   });
+}
+
+test("runs the original plugin once after the URL rebuild has been applied", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  referenceWebsiteUrlFromEnv();
+  const hook = vi.fn(() => {
+    expect(mocks.apply).toHaveBeenCalledOnce();
+  });
+  register(hook);
   await deploy({ yes: true, noValidate: true });
   expect(hook).toHaveBeenCalledOnce();
+});
+
+test("applies a renamed application's cleanup delete from the plan the URL rebuild makes", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log", "newline");
+  mocks.results.tailorDB.conflicts.push({
+    resourceType: "tailordb.service",
+    resourceLabel: "TailorDB service",
+    resourceName: "db",
+    currentOwner: "old-app",
+  });
+  referenceWebsiteUrlFromEnv(() => {
+    mocks.results = { ...mocks.results, app: emptyPlanResults().app };
+  });
+
+  await deploy({ yes: true, noValidate: true });
+
+  const [, , applied] = mocks.apply.mock.calls[0]!;
+  expect(applied[0].app.deletes.map((del: { name: string }) => del.name)).toEqual(["old-app"]);
+});
+
+function planPrintedAt(): number | undefined {
+  const { calls, invocationCallOrder } = vi.mocked(logger.log).mock;
+  const index = calls.findIndex(([message]) => String(message).includes("Plan: "));
+  return index === -1 ? undefined : invocationCallOrder[index];
+}
+
+test("prints the plan before asking to confirm a table deletion that is then declined", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log", "newline");
+  using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(false);
+  mocks.results.tailorDB.changeSet.type.deletes.push({ name: "Order", request: {} });
+
+  await expect(deploy({ noValidate: true })).rejects.toMatchObject({ code: "DEPLOY_CANCELLED" });
+
+  expect(planPrintedAt()).toBeLessThan(confirm.mock.invocationCallOrder[0]!);
+  expect(mocks.prerequisite).not.toHaveBeenCalled();
+});
+
+test("confirms a deletion against the printed plan before applying what the URL rebuild waits for", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log", "newline");
+  using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(true);
+  referenceWebsiteUrlFromEnv();
+  mocks.results.tailorDB.changeSet.type.deletes.push({ name: "Order", request: {} });
+
+  await deploy({ noValidate: true });
+
+  expect(confirm).toHaveBeenCalledOnce();
+  expect(planPrintedAt()).toBeLessThan(confirm.mock.invocationCallOrder[0]!);
+  expect(confirm.mock.invocationCallOrder[0]).toBeLessThan(
+    mocks.prerequisite.mock.invocationCallOrder[0]!,
+  );
+});
+
+test("asks again only about what the URL rebuild's plan adds", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log", "newline");
+  using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(true);
+  mocks.results.tailorDB.changeSet.type.deletes.push({ name: "Order", request: {} });
+  referenceWebsiteUrlFromEnv(() => {
+    mocks.results = {
+      ...mocks.results,
+      functionRegistry: {
+        ...mocks.results.functionRegistry,
+        unmanaged: [
+          {
+            resourceType: "function_registry",
+            resourceLabel: "Function",
+            resourceName: "legacy",
+          },
+        ],
+      },
+    };
+  });
+
+  await deploy({ noValidate: true });
+
+  expect(confirm.mock.calls.map(([options]) => options.message)).toEqual([
+    "Are you sure you want to delete these resources?",
+    'Allow tailor to manage these resources for "app"?',
+  ]);
+  expect(confirm.mock.invocationCallOrder[1]).toBeGreaterThan(
+    mocks.prerequisite.mock.invocationCallOrder[0]!,
+  );
+  expect(mocks.apply).toHaveBeenCalledOnce();
 });
 
 test("does not execute hooks after resource application fails", async () => {
@@ -563,4 +541,47 @@ test("--json dry-run prints one JSON object on stdout", async () => {
   register(vi.fn());
   await deploy({ dryRun: true, noValidate: true });
   expect(expectOneJsonObject(stdout.output)).toMatchObject({ summary: expect.any(Object) });
+});
+test("--json dry-run prints a plan that deletes a table without asking to confirm the deletion", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log", "newline");
+  using _json = jsonMode();
+  using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(false);
+  mocks.results.tailorDB.changeSet.type.deletes.push({ name: "Order", request: {} });
+  await deploy({ dryRun: true, noValidate: true });
+  expect(confirm).not.toHaveBeenCalled();
+  expect(logger.out).toHaveBeenCalledWith(
+    expect.objectContaining({ summary: expect.objectContaining({ delete: 1 }) }),
+  );
+});
+test("--json dry-run lists a missing dependent application in warnings without asking", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log", "newline");
+  using _json = jsonMode();
+  using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(false);
+  mocks.fetchMissingDependentApps.mockResolvedValue([
+    {
+      resource: 'TailorDB table "Order"',
+      resourceType: "tailordb.type",
+      namespace: "db",
+      name: "Order",
+      scope: "resource",
+      appId: "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81",
+      reason: "publish-events",
+    },
+  ]);
+  await deploy({ dryRun: true, noValidate: true });
+  expect(confirm).not.toHaveBeenCalled();
+  expect(logger.out).toHaveBeenCalledWith(
+    expect.objectContaining({
+      warnings: [
+        {
+          type: "missingDependentApp",
+          resourceType: "tailordb.type",
+          namespace: "db",
+          name: "Order",
+          appId: "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81",
+          reason: "publish-events",
+        },
+      ],
+    }),
+  );
 });

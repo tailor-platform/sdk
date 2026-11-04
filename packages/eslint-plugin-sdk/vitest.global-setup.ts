@@ -20,6 +20,6 @@ export default function setup(): void {
   if (result.error) throw result.error;
   if (result.status !== 0) {
     const reason = result.signal ?? `exit code ${result.status}`;
-    throw new Error(`Failed to build the plugin that rule tests lint fixtures with (${reason}).`);
+    throw new Error(`Failed to build the plugin that the Oxlint smoke test loads (${reason}).`);
   }
 }

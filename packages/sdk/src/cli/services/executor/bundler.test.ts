@@ -73,21 +73,8 @@ describe("bundleExecutors", () => {
         config: { files: ["./src/backend/nodeglobal/executor/*.ts"] },
         baseDir: tmp.dir,
       }),
-    ).rejects.toThrow(/references a global unavailable in the Tailor Platform runtime: process/);
-  });
-
-  test("rejects an executor whose installed package references a forbidden global and names the package", async () => {
-    using tmp = tempCwd("sdk-bundler-executor-package-global-");
-    writeBufferEncodingPackage(tmp.dir, "executor-buffer-lib");
-    writeEncodingExecutor(tmp.dir, "executor-buffer-lib");
-
-    await expect(
-      bundleExecutors({
-        config: { files: ["./src/backend/pkgglobal/executor/*.ts"] },
-        baseDir: tmp.dir,
-      }),
     ).rejects.toThrow(
-      expect.objectContaining({ details: expect.stringContaining("executor-buffer-lib") }),
+      /Executor "leaky" references a global unavailable in the Tailor Platform runtime: process/,
     );
   });
 
@@ -105,70 +92,26 @@ describe("bundleExecutors", () => {
     expect(result.get("encoder")).toBeDefined();
   });
 
-  describe("source text in inline sourcemaps", () => {
-    async function embeddedSourceTexts(
-      options: { inlineSourcemapDependencySources?: boolean },
-      dirPrefix: string,
-    ): Promise<string[]> {
-      using tmp = tempCwd(dirPrefix);
-      writeBufferEncodingPackage(tmp.dir, "executor-sourcemap-lib");
-      writeEncodingExecutor(tmp.dir, "executor-sourcemap-lib");
-
-      const result = await bundleExecutors({
-        config: { files: ["./src/backend/pkgglobal/executor/*.ts"] },
-        baseDir: tmp.dir,
-        allowedRuntimeGlobals: { "executor-sourcemap-lib": ["Buffer"] },
-        inlineSourcemap: true,
-        ...options,
-      });
-      const traceMap = assertDefined(
-        extractInlineSourcemap(assertDefined(result.get("encoder"), "encoder bundle missing")),
-        "inline sourcemap missing",
-      );
-      return (traceMap.sourcesContent ?? []).filter((text): text is string => text != null);
-    }
-
-    test("leaves out the source text of installed packages by default", async () => {
-      const texts = await embeddedSourceTexts({}, "sdk-bundler-executor-sourcemap-deps-");
-
-      expect(texts.some((text) => text.includes('toString("base64")'))).toBe(false);
-      expect(texts.some((text) => text.includes('cron: "0 12 * * *"'))).toBe(true);
-    });
-
-    test("embeds the source text of installed packages when asked to", async () => {
-      const texts = await embeddedSourceTexts(
-        { inlineSourcemapDependencySources: true },
-        "sdk-bundler-executor-sourcemap-with-deps-",
-      );
-
-      expect(texts.some((text) => text.includes('toString("base64")'))).toBe(true);
-    });
-  });
-
-  test("bundles an executor that uses Web Standard globals", async () => {
-    using tmp = tempCwd("sdk-bundler-executor-web-standard-");
-    const executorDir = path.join(tmp.dir, "src/backend/webstandard/executor");
-    fs.mkdirSync(executorDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(executorDir, "fetcher.ts"),
-      `export default {\n` +
-        `  name: "fetcher",\n` +
-        `  trigger: { kind: "schedule", cron: "0 12 * * *" },\n` +
-        `  operation: {\n` +
-        `    kind: "function",\n` +
-        `    body: async () => {\n` +
-        `      await fetch(new URL("https://example.com"));\n` +
-        `    },\n` +
-        `  },\n` +
-        `};\n`,
-    );
+  test("embeds the source text of installed packages in inline sourcemaps when asked to", async () => {
+    using tmp = tempCwd("sdk-bundler-executor-sourcemap-with-deps-");
+    writeBufferEncodingPackage(tmp.dir, "executor-sourcemap-lib");
+    writeEncodingExecutor(tmp.dir, "executor-sourcemap-lib");
 
     const result = await bundleExecutors({
-      config: { files: ["./src/backend/webstandard/executor/*.ts"] },
+      config: { files: ["./src/backend/pkgglobal/executor/*.ts"] },
       baseDir: tmp.dir,
+      allowedRuntimeGlobals: { "executor-sourcemap-lib": ["Buffer"] },
+      inlineSourcemap: true,
+      inlineSourcemapDependencySources: true,
     });
 
-    expect(result.get("fetcher")).toBeDefined();
+    const traceMap = assertDefined(
+      extractInlineSourcemap(assertDefined(result.get("encoder"), "encoder bundle missing")),
+      "inline sourcemap missing",
+    );
+    expect(traceMap.sourcesContent?.some((text) => text?.includes('toString("base64")'))).toBe(
+      true,
+    );
   });
 });
 

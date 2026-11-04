@@ -26,6 +26,8 @@ const MIGRATION_LABEL_PREFIX = "m";
 
 /**
  * Label key for storing migration state in TailorDB Service metadata
+ *
+ * **Beta:** This API may change in future releases.
  */
 export const MIGRATION_LABEL_KEY = "sdk-migration";
 
@@ -33,10 +35,17 @@ export const MIGRATION_LABEL_KEY = "sdk-migration";
 export const MIGRATION_HISTORY_LABEL_KEY = "sdk-migration-history";
 
 /**
- * Label key naming the migration whose steps have partly committed, so the
- * next deploy resumes it instead of treating the schema as drift.
+ * Label key naming the migration an earlier deploy left in progress: one that
+ * runs as steps, which the next deploy resumes instead of treating the schema
+ * as drift, or one whose `main` run has started and has not been settled. It
+ * only names the migration right after the checkpoint, which counts as 0000
+ * when unset; keep it that way by committing the checkpoint after every
+ * migration and removing this label with every checkpoint write.
  */
 export const MIGRATION_IN_PROGRESS_LABEL_KEY = "sdk-migration-in-progress";
+
+/** Suffix of an in-progress label value that names a `main` run rather than steps. */
+const MAIN_RUN_LABEL_SUFFIX = "-main";
 
 /** Label key holding the execution of the migration named by the in-progress label. */
 export const MIGRATION_EXECUTION_LABEL_KEY = "sdk-migration-execution";
@@ -48,22 +57,16 @@ export const MIGRATION_EXECUTION_LABEL_KEY = "sdk-migration-execution";
  */
 export const MAINTENANCE_MODE_LABEL_KEY = "sdk-maintenance-mode";
 
+/**
+ * Label key naming the checkpoint whose migration's table deletions have not
+ * finished, so the next deploy deletes the tables that migration removed
+ * instead of treating them as drift. Write it with the checkpoint and remove it
+ * with every other checkpoint write.
+ */
+export const MIGRATION_CLEANUP_LABEL_KEY = "sdk-migration-cleanup";
+
 /** Valid migration history ID syntax for metadata label values. */
 export const MIGRATION_HISTORY_ID_PATTERN = /^[a-z][a-z0-9_-]{0,62}$/;
-
-// ============================================================================
-// Error Constants
-// ============================================================================
-
-/**
- * Error patterns that indicate schema corruption
- */
-export const SCHEMA_ERROR_PATTERNS = [
-  "failed to fetch schema",
-  "sqlaccess error",
-  "schema not found",
-  "invalid schema",
-] as const;
 
 // ============================================================================
 // Types
@@ -89,6 +92,21 @@ export interface PendingMigration {
   migrationsDir: string;
   /** Migration diff content */
   diff: MigrationDiff;
+}
+
+/** How a run executes a migration's script: `main` as one job, `steps` each step as its own job. */
+export type MigrationRunKind = "main" | "steps";
+
+/** A migration an earlier deploy left partially applied, or whose `main` run it left unsettled. */
+export interface MigrationInProgress {
+  number: number;
+  /** The run to resume or settle; absent when the deploy stopped before recording it. */
+  executionId?: string;
+  /**
+   * A deploy resumes a `steps` run; it does not resume a `main` run, which `migration resolve`
+   * settles.
+   */
+  kind: MigrationRunKind;
 }
 
 // ============================================================================
@@ -122,6 +140,32 @@ export function parseMigrationLabelNumber(label: string): number | null {
   if (!/^\d+$/.test(numStr)) return null;
   const num = parseInt(numStr, 10);
   return num > 9999 ? null : num;
+}
+
+/**
+ * Build the in-progress label value naming a migration.
+ * @param migrationNumber - Migration left in progress
+ * @param kind - How the recorded run executes the script
+ * @returns Label value
+ */
+export function inProgressLabel(migrationNumber: number, kind: MigrationRunKind): string {
+  const label = sanitizeMigrationLabel(migrationNumber);
+  return kind === "main" ? `${label}${MAIN_RUN_LABEL_SUFFIX}` : label;
+}
+
+/**
+ * Parse an in-progress label value written by {@link inProgressLabel}.
+ * @param label - Label value
+ * @returns The migration and how the recorded run executes its script, or null for malformed input
+ */
+export function parseInProgressLabel(
+  label: string,
+): { number: number; kind: MigrationRunKind } | null {
+  const kind = label.endsWith(MAIN_RUN_LABEL_SUFFIX) ? "main" : "steps";
+  const number = parseMigrationLabelNumber(
+    kind === "main" ? label.slice(0, -MAIN_RUN_LABEL_SUFFIX.length) : label,
+  );
+  return number === null ? null : { number, kind };
 }
 
 /**
@@ -163,16 +207,6 @@ export function createMigrationHistoryId(): string {
 // ============================================================================
 // Error Helper Functions
 // ============================================================================
-
-/**
- * Check if an error message indicates schema corruption
- * @param {string} errorMessage - Error message to check
- * @returns {boolean} True if error indicates schema corruption
- */
-export function isSchemaError(errorMessage: string): boolean {
-  const lowerMessage = errorMessage.toLowerCase();
-  return SCHEMA_ERROR_PATTERNS.some((pattern) => lowerMessage.includes(pattern));
-}
 
 /**
  * Handle optional-to-required field change error with helpful message
@@ -239,10 +273,7 @@ export interface SchemaDrift {
 /**
  * Reason why remote schema verification was skipped for a namespace
  */
-export type RemoteSchemaVerificationSkipReason =
-  | "not_deployed"
-  | "no_migration_label"
-  | "no_snapshot";
+export type RemoteSchemaVerificationSkipReason = "not_deployed" | "no_snapshot";
 
 export interface MigrationCheckpointRepair {
   namespace: string;
@@ -277,10 +308,30 @@ export interface RemoteSchemaVerificationResult {
    * before `migration rebaseline` ran, rather than a generic history mismatch.
    */
   rebaselinePending?: RebaselinePendingInfo;
+  /** Set alongside `checkpointMissingLocal`: the latest local migration, or `null` when the local history has none */
+  localLatestMigration?: number | null;
+  /** Set alongside `checkpointMissingLocal`: whether the namespace records another migration history ID, or one that cannot be read */
+  historyIdMismatch?: boolean;
   /** Safe checkpoint reset offered after the remote schema matched the local baseline */
   checkpointRepair?: Omit<MigrationCheckpointRepair, "namespace">;
-  /** Set when the namespace records a migration left in progress */
-  migrationInProgress?: boolean;
-  /** Set when verification could not run (no remote migration label, or no snapshot at the remote migration number) */
+  /** Set when the namespace has tables but no migration checkpoint, so it was verified as checkpoint 0 */
+  checkpointUnset?: true;
+  /** Migration the namespace records as left in progress */
+  migrationInProgress?: MigrationInProgress;
+  /** Set when the namespace records a migration left in progress that cannot be read */
+  migrationInProgressInvalid?: true;
+  /**
+   * Set when the caller accepts them and the namespace records that the deletions of its checkpoint's
+   * migration did not finish: the tables that migration removed that remain, left out of `drifts`
+   */
+  unfinishedRemovals?: string[];
+  /**
+   * Migration whose Pre-phase schema or maintenance mode a deploy left in place without
+   * recording it as in progress; set only when the verification was asked to accept that
+   */
+  interruptedMigration?: number;
+  /** Set when the namespace records its maintenance mode at the checkpoint, so tables in maintenance mode were compared without the settings it overrides */
+  leftInMaintenanceMode?: true;
+  /** Set when verification could not run (namespace not deployed, or no snapshot at the remote migration number) */
   skipped?: RemoteSchemaVerificationSkipReason;
 }

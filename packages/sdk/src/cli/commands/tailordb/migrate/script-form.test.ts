@@ -76,6 +76,71 @@ describe("analyzeMigrationScriptSource", () => {
     expect(form).toMatchObject({ kind: "steps", order: ["backfill", "recompute"] });
   });
 
+  test('reads onFailure = "rollback" next to steps', () => {
+    const form = analyze(ml`
+      export const onFailure = "rollback";
+      export const steps = { backfill: { run: async (trx) => {} } };
+    `);
+
+    expect(form).toEqual({ kind: "steps", order: ["backfill"], rollbackOnFailure: true });
+  });
+
+  test.each([
+    ['onFailure = "resume"', 'export const onFailure = "resume";'],
+    ["no onFailure", ""],
+  ])("keeps resuming a stopped migration with %s", (_label, declaration) => {
+    const form = analyze(ml`
+      ${declaration}
+      export const steps = { backfill: { run: async (trx) => {} } };
+    `);
+
+    expect(form).toEqual({ kind: "steps", order: ["backfill"] });
+  });
+
+  test("accepts onFailure written with as const or satisfies", () => {
+    expect(
+      analyze(ml`
+        export const onFailure = "rollback" as const;
+        export const steps = { backfill: { run: async (trx) => {} } };
+      `),
+    ).toMatchObject({ rollbackOnFailure: true });
+    expect(
+      analyze(ml`
+        export const onFailure = "rollback" satisfies string;
+        export const steps = { backfill: { run: async (trx) => {} } };
+      `),
+    ).toMatchObject({ rollbackOnFailure: true });
+  });
+
+  test.each([
+    ["an unknown value", 'export const onFailure = "abort";'],
+    ["a value that is not a string literal", "export const onFailure = pick();"],
+    ["a reassignable declaration", 'export let onFailure = "rollback";'],
+    ["an export specifier", 'const onFailure = "rollback";\nexport { onFailure };'],
+    ["a destructured declaration", "export const { onFailure } = defineOptions();"],
+    ["a function", 'export function onFailure() { return "rollback"; }'],
+    ["a class", "export class onFailure {}"],
+    ["an enum", 'export enum onFailure { rollback = "rollback" }'],
+    ["a namespace", 'export namespace onFailure { export const mode = "rollback"; }'],
+    ["a namespace re-export", 'export * as onFailure from "./policy";'],
+  ])("rejects onFailure written as %s", (_label, declaration) => {
+    expect(() =>
+      analyze(ml`
+        ${declaration}
+        export const steps = { backfill: { run: async (trx) => {} } };
+      `),
+    ).toThrow('declare `onFailure` as `export const onFailure = "resume"` or `"rollback"`');
+  });
+
+  test("ignores onFailure when the script runs main", () => {
+    expect(
+      analyze(ml`
+        export const onFailure = "rollback";
+        export async function main(trx) {}
+      `),
+    ).toEqual({ kind: "main" });
+  });
+
   test("rejects a script that exports neither main nor steps", () => {
     expect(() => analyze("export const other = 1;")).toThrow(
       "Invalid migration script 0003/migrate.ts: it must export either `main` or `steps`",

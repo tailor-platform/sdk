@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "pathe";
 import * as rolldown from "rolldown";
 import { afterEach, describe, expect, test } from "vitest";
+import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import { createBundleLog } from "./bundle-log";
 import { createTsconfigLookupCache, createTsconfigPathsPlugin } from "./tsconfig-paths-plugin";
@@ -17,7 +17,7 @@ describe("createTsconfigPathsPlugin", () => {
   });
 
   function makeDir(prefix: string): string {
-    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
+    const dir = makeTempDir(prefix);
     tmpDirs.push(dir);
     return dir;
   }

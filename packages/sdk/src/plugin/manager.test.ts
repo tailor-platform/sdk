@@ -81,7 +81,7 @@ describe("PluginManager", () => {
     await manager.processNamespacePlugins("analytics");
 
     expect(manager.getPluginGeneratedTables()).toHaveLength(1);
-    expect(manager.getPluginGeneratedExecutors()).toHaveLength(1);
+    expect(manager.getPluginGeneratedExecutorsWithImportPath()).toHaveLength(1);
   });
 
   test("preserves pluralForm and plugin attachments when extending tables", () => {

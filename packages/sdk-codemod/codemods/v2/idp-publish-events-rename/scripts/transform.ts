@@ -1,9 +1,11 @@
 import { parse, Lang } from "@ast-grep/napi";
 import {
+  excerptOf,
   findImportStatements,
   importBindings,
   importSource,
   isTypeOnlyImport,
+  lineOf,
   localDeclarationNames,
   stringValue,
 } from "../../../../src/ast-grep-helpers";
@@ -151,14 +153,6 @@ export default function transform(source: string, filePath = ""): string | null 
   }
 
   return edits.length > 0 ? root.commitEdits(edits) : null;
-}
-
-function lineOf(node: SgNode): number {
-  return node.range().start.line + 1;
-}
-
-function excerptOf(node: SgNode): string {
-  return node.text().split("\n", 1)[0]!.trim();
 }
 
 type Range = { start: number; end: number };

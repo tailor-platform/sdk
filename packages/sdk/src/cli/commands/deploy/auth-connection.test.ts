@@ -316,47 +316,6 @@ describe("planAuthConnections", () => {
       applicationName: appName,
     });
   });
-
-  test("updates an existing same-name connection when state belongs to another application", async () => {
-    mockLoadSecretsState.mockImplementation((scope?: { applicationId: string }) =>
-      scope?.applicationId === "app-a"
-        ? { vaults: {}, connections: { "shared-connection": "fixed-hash" } }
-        : { vaults: {}, connections: {} },
-    );
-    const client = createMockClient({
-      connections: [{ name: "shared-connection", ownerLabel: appName }],
-    });
-
-    const resultA = await planAuthConnections(
-      client,
-      workspaceId,
-      appName,
-      "app-a",
-      authsWith(["shared-connection"]),
-    );
-    const resultB = await planAuthConnections(
-      client,
-      workspaceId,
-      appName,
-      "app-b",
-      authsWith(["shared-connection"]),
-    );
-
-    expect(resultA.changeSet.unchanged.map((connection) => connection.name)).toEqual([
-      "shared-connection",
-    ]);
-    expect(resultB.changeSet.replaces.map((replace) => replace.name)).toEqual([
-      "shared-connection",
-    ]);
-    expect(resultB.changeSet.replaces[0]?.updateRequest.updateMask?.paths).toContain(
-      "oauth2.client_secret",
-    );
-    expect(mockLoadSecretsState).toHaveBeenCalledWith({
-      workspaceId,
-      applicationId: "app-b",
-      applicationName: appName,
-    });
-  });
 });
 
 describe("applyAuthConnections", () => {

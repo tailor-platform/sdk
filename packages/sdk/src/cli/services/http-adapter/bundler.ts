@@ -9,6 +9,7 @@ import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import {
   composeFunctionTreeshakeOptions,
   createUserTreeshakeOptions,
+  FUNCTION_BUNDLE_COMMENT_OPTIONS,
 } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
@@ -185,6 +186,7 @@ async function bundleAdapterScript(
           format: "iife",
           sourcemap: false,
           minify: true,
+          comments: FUNCTION_BUNDLE_COMMENT_OPTIONS,
           codeSplitting: false,
         },
         tsconfig,

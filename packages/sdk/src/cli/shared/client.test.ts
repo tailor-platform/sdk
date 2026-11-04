@@ -16,24 +16,29 @@ import {
   fetchMachineUserToken,
   fetchPaged,
   fetchPlatformMachineUserToken,
+  fetchUserInfo,
   getConsoleBaseUrl,
   getEffectivePlatformConfig,
   getOAuth2ClientId,
   getOrNull,
   getPlatformBaseUrl,
+  initOAuth2Client,
   initOperatorClient,
   MAX_PAGE_SIZE,
   parseMethodName,
   POOLED_UPLOAD_METHODS,
+  registerAccessTokenSource,
   rememberPlatformConfigForToken,
   resolveStaticWebsiteUrls,
   resolveStaticWebsiteUrlsInEnv,
   RETRY_SAFE_CREATE_METHODS,
   retryInterceptor,
   staticWebsiteNameFromPlaceholder,
+  type AccessTokenSource,
   type OperatorClient,
 } from "./client";
 import { errorToJson } from "./error-json";
+import { CLIError } from "./errors";
 import { logger } from "./logger";
 
 vi.mock("@connectrpc/connect-node", () => ({
@@ -56,6 +61,58 @@ describe("client environment configuration", () => {
     vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.staging.tailor.test");
     const client = await import("./client");
     expect(client.getPlatformBaseUrl()).toBe("https://api.staging.tailor.test");
+  });
+});
+
+describe("initOAuth2Client", () => {
+  aroundEach(async (runTest) => {
+    await runTest();
+    vi.unstubAllGlobals();
+  });
+
+  test("gives every OAuth2 request a deadline", async () => {
+    const fetchSpy = vi.fn<typeof fetch>(async () => new Response("{}"));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const client = initOAuth2Client();
+    await client.settings.fetch?.("https://api.tailor.tech/oauth2/platform/token", {
+      method: "POST",
+    });
+
+    expect(fetchSpy.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  test("keeps the caller's abort signal alongside the deadline", async () => {
+    const fetchSpy = vi.fn<typeof fetch>(async () => new Response("{}"));
+    vi.stubGlobal("fetch", fetchSpy);
+    const caller = new AbortController();
+    caller.abort();
+
+    const client = initOAuth2Client();
+    await client.settings.fetch?.("https://api.tailor.tech/oauth2/platform/token", {
+      signal: caller.signal,
+    });
+
+    expect(fetchSpy.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+  });
+});
+
+describe("fetchUserInfo", () => {
+  aroundEach(async (runTest) => {
+    await runTest();
+    vi.unstubAllGlobals();
+  });
+
+  test("gives the user info request a deadline", async () => {
+    const fetchSpy = vi.fn<typeof fetch>(
+      async () =>
+        new Response(JSON.stringify({ sub: "platform-user-sub", email: "u@example.com" })),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await fetchUserInfo("access-token");
+
+    expect(fetchSpy.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
   });
 });
 
@@ -542,6 +599,131 @@ describe("initOperatorClient", () => {
   });
 });
 
+describe("access token renewal in the operator client", () => {
+  type Next = (req: UnaryRequest) => Promise<unknown>;
+
+  aroundEach(async (runTest) => {
+    sent = [];
+    await runTest();
+    vi.clearAllMocks();
+  });
+
+  async function callThroughClient(token: string, server: Next, stream = false) {
+    await initOperatorClient(token);
+    const connectNode = await import("@connectrpc/connect-node");
+    const interceptors = vi.mocked(connectNode.createConnectTransport).mock.calls.at(-1)?.[0]
+      .interceptors as Array<(next: Next) => Next>;
+    const call = interceptors.reduceRight<Next>(
+      (next, interceptor) => interceptor(next),
+      (req) => {
+        sent.push(req.header.get("Authorization"));
+        return server(req);
+      },
+    );
+    return await call({
+      stream,
+      service: OperatorService,
+      method: OperatorService.method.getWorkflowExecution,
+      header: new Headers(),
+      message: {},
+    } as unknown as UnaryRequest);
+  }
+
+  function sourceOf(current: string, replacement?: string): AccessTokenSource {
+    return {
+      current: vi.fn(async () => current),
+      replaceRejected: vi.fn(async () => replacement),
+    };
+  }
+
+  const unauthenticated = () => new ConnectError("invalid token", Code.Unauthenticated);
+  let sent: Array<string | null> = [];
+
+  test("sends the token its source currently holds", async () => {
+    registerAccessTokenSource("issued-1", sourceOf("renewed-1"));
+    const server = vi.fn<Next>().mockResolvedValue({ message: {} });
+
+    await callThroughClient("issued-1", server);
+
+    expect(sent).toEqual(["Bearer renewed-1"]);
+  });
+
+  test("retries a rejected request once with the replacement token", async () => {
+    const source = sourceOf("renewed-2", "replacement-2");
+    registerAccessTokenSource("issued-2", source);
+    const server = vi
+      .fn<Next>()
+      .mockRejectedValueOnce(unauthenticated())
+      .mockResolvedValueOnce({ message: {} });
+
+    await callThroughClient("issued-2", server);
+
+    expect(source.replaceRejected).toHaveBeenCalledWith("renewed-2");
+    expect(sent).toEqual(["Bearer renewed-2", "Bearer replacement-2"]);
+  });
+
+  test.each([
+    { case: "no replacement is available", replacement: undefined, rejections: 1 },
+    { case: "the replacement is rejected too", replacement: "replacement-3", rejections: 2 },
+  ])("surfaces the rejection when $case", async ({ replacement, rejections }) => {
+    registerAccessTokenSource(`issued-3-${rejections}`, sourceOf("renewed-3", replacement));
+    const server = vi.fn<Next>().mockRejectedValue(unauthenticated());
+
+    await expect(callThroughClient(`issued-3-${rejections}`, server)).rejects.toMatchObject({
+      code: Code.Unauthenticated,
+    });
+    expect(server).toHaveBeenCalledTimes(rejections);
+  });
+
+  test("keeps the rejection when looking for a replacement fails", async () => {
+    const source = sourceOf("renewed-4");
+    vi.mocked(source.replaceRejected).mockRejectedValue(new Error("keyring locked"));
+    registerAccessTokenSource("issued-4", source);
+    const server = vi.fn<Next>().mockRejectedValue(unauthenticated());
+
+    await expect(callThroughClient("issued-4", server)).rejects.toMatchObject({
+      code: Code.Unauthenticated,
+      rawMessage: expect.stringContaining("invalid token"),
+    });
+  });
+
+  test("does not replay a streaming request", async () => {
+    const source = sourceOf("renewed-5", "replacement-5");
+    registerAccessTokenSource("issued-5", source);
+    const server = vi.fn<Next>().mockRejectedValue(unauthenticated());
+
+    await expect(callThroughClient("issued-5", server, true)).rejects.toThrow("invalid token");
+    expect(source.replaceRejected).not.toHaveBeenCalled();
+  });
+
+  test("reports a token its source cannot provide as unauthenticated", async () => {
+    const source = sourceOf("unused");
+    const next = { command: "tailor", args: ["login", "--help"] };
+    vi.mocked(source.current).mockRejectedValue(
+      CLIError({ code: "AUTH_TOKEN_REFRESH_FAILED", message: "Failed to refresh token.", next }),
+    );
+    registerAccessTokenSource("issued-6", source);
+    const server = vi.fn<Next>();
+
+    const error = await callThroughClient("issued-6", server).catch((error: unknown) => error);
+
+    expect(error).toMatchObject({ code: Code.Unauthenticated });
+    expect(errorToJson(error).error).toMatchObject({
+      code: "AUTH_TOKEN_REFRESH_FAILED",
+      suggestion: expect.stringContaining("tailor auth status"),
+      context: { authentication: { code: "AUTH_TOKEN_REFRESH_FAILED", next } },
+    });
+    expect(server).not.toHaveBeenCalled();
+  });
+
+  test("sends a token without a source as is and does not retry it", async () => {
+    const server = vi.fn<Next>().mockRejectedValue(unauthenticated());
+
+    await expect(callThroughClient("plain-token", server)).rejects.toThrow("invalid token");
+    expect(sent).toEqual(["Bearer plain-token"]);
+  });
+});
+
 describe("getConsoleBaseUrl", () => {
   aroundEach(async (runTest) => {
     await runTest();
@@ -575,21 +757,85 @@ describe("platform environment variables", () => {
   aroundEach(async (runTest) => {
     await runTest();
     vi.unstubAllEnvs();
+    vi.resetModules();
   });
 
-  test("uses legacy platform env vars when renamed vars are absent", () => {
+  async function importFreshClient() {
+    vi.resetModules();
+    const { logger } = await import("./logger");
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    return { client: await import("./client"), warnSpy };
+  }
+
+  test("uses legacy platform env vars when renamed vars are absent, warning once per name", async () => {
     vi.stubEnv("PLATFORM_URL", "https://api.legacy.tailor.tech");
     vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", "legacy-client");
+    const { client, warnSpy } = await importFreshClient();
 
-    expect(getPlatformBaseUrl()).toBe("https://api.legacy.tailor.tech");
-    expect(getOAuth2ClientId()).toBe("legacy-client");
-    expect(getEffectivePlatformConfig()).toEqual({
+    expect(client.getPlatformBaseUrl()).toBe("https://api.legacy.tailor.tech");
+    expect(client.getOAuth2ClientId()).toBe("legacy-client");
+    expect(client.getEffectivePlatformConfig()).toEqual({
       platformUrl: "https://api.legacy.tailor.tech",
       oauth2ClientId: "legacy-client",
     });
+    expect(warnSpy.mock.calls).toEqual([
+      ["PLATFORM_URL is deprecated. Please use TAILOR_PLATFORM_URL instead."],
+      [
+        "PLATFORM_OAUTH2_CLIENT_ID is deprecated. Please use TAILOR_PLATFORM_OAUTH2_CLIENT_ID instead.",
+      ],
+    ]);
   });
 
-  test("prefers renamed platform env vars over legacy env vars", () => {
+  test.each([
+    {
+      name: "uses the default platform when neither name is set",
+      env: {},
+      platformUrl: "https://api.tailor.tech",
+      warnings: [],
+    },
+    {
+      name: "uses the renamed var without warning",
+      env: { TAILOR_PLATFORM_URL: "https://api.dev.tailor.tech" },
+      platformUrl: "https://api.dev.tailor.tech",
+      warnings: [],
+    },
+    {
+      name: "treats an empty renamed var as unset",
+      env: { TAILOR_PLATFORM_URL: "", PLATFORM_URL: "https://api.legacy.tailor.tech" },
+      platformUrl: "https://api.legacy.tailor.tech",
+      warnings: [["PLATFORM_URL is deprecated. Please use TAILOR_PLATFORM_URL instead."]],
+    },
+    {
+      name: "treats empty vars as unset without warning",
+      env: { TAILOR_PLATFORM_URL: "", PLATFORM_URL: "" },
+      platformUrl: "https://api.tailor.tech",
+      warnings: [],
+    },
+  ])("$name", async ({ env, platformUrl, warnings }) => {
+    for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
+    const { client, warnSpy } = await importFreshClient();
+
+    expect(client.getPlatformBaseUrl()).toBe(platformUrl);
+    expect(warnSpy.mock.calls).toEqual(warnings);
+  });
+
+  test("does not warn when the profile supplies the platform settings", async () => {
+    vi.stubEnv("PLATFORM_URL", "https://api.legacy.tailor.tech");
+    vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", "legacy-client");
+    const { client, warnSpy } = await importFreshClient();
+    const profile = {
+      platformUrl: "https://api.profile.tailor.tech",
+      oauth2ClientId: "profile-client",
+    };
+
+    expect(client.getPlatformBaseUrl(profile)).toBe("https://api.profile.tailor.tech");
+    expect(client.getOAuth2ClientId(profile)).toBe("profile-client");
+    expect(client.getEffectivePlatformConfig(profile)).toEqual(profile);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test("prefers renamed platform env vars over legacy env vars without warning", () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     vi.stubEnv("PLATFORM_URL", "https://api.legacy.tailor.tech");
     vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", "legacy-client");
     vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
@@ -601,6 +847,7 @@ describe("platform environment variables", () => {
       platformUrl: "https://api.dev.tailor.tech",
       oauth2ClientId: "dev-client",
     });
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -879,7 +1126,7 @@ describe("retryInterceptor", () => {
             idempotency === MethodOptions_IdempotencyLevel.NO_SIDE_EFFECTS ||
             idempotency === MethodOptions_IdempotencyLevel.IDEMPOTENT,
         )
-        .filter(({ name }) => !/^(Download|Get|List)/.test(name))
+        .filter(({ name }) => !/^(Count|Download|Get|List)/.test(name))
         .map(({ name }) => name);
 
     const methods = Object.values(OperatorService.method);
@@ -1184,6 +1431,25 @@ describe("errorHandlingInterceptor", () => {
         identifiers: { id: "workspace-id" },
       },
     });
+  });
+
+  test("keeps the error details of a failed RPC", async () => {
+    const detail = { type: "google.rpc.PreconditionFailure", value: new Uint8Array([10, 0]) };
+    const original = Object.assign(new ConnectError("refused", Code.FailedPrecondition), {
+      details: [detail],
+    });
+    const req = {
+      stream: false,
+      service: OperatorService,
+      method: OperatorService.method.updateTailorDBType,
+      header: new Headers(),
+      message: { workspaceId: "workspace-id", namespaceName: "db" },
+    } as unknown as UnaryRequest;
+    const error = await errorHandlingInterceptor()(vi.fn().mockRejectedValue(original))(req).catch(
+      (error: unknown) => error,
+    );
+    expect(error).toBeInstanceOf(ConnectError);
+    expect(error).toMatchObject({ code: Code.FailedPrecondition, details: [detail] });
   });
 
   test.each([

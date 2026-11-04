@@ -14,18 +14,23 @@ import {
   type HttpAdapterService,
 } from "#/cli/services/http-adapter/service";
 import { bundleResolvers } from "#/cli/services/resolver/bundler";
-import { createResolverService, type ResolverService } from "#/cli/services/resolver/service";
+import {
+  createResolverService,
+  type PluginResolverSource,
+  type ResolverService,
+} from "#/cli/services/resolver/service";
 import { createTailorDBService, type TailorDBService } from "#/cli/services/tailordb/service";
 import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
 import { bundleWorkflowJobs, type BundleWorkflowJobsResult } from "#/cli/services/workflow/bundler";
 import { createWorkflowService, type WorkflowService } from "#/cli/services/workflow/service";
 import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
-import { buildOptionsOf } from "#/cli/shared/build-options";
+import { buildOptionsOf, projectSourcesOf } from "#/cli/shared/build-options";
 import { resolveBundleLogLevel } from "#/cli/shared/bundle-log-level";
 import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
 import { type LoadedConfig } from "#/cli/shared/config-loader";
 import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { getDistDir } from "#/cli/shared/dist-dir";
+import { CLIError } from "#/cli/shared/errors";
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { logger } from "#/cli/shared/logger";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
@@ -55,6 +60,8 @@ import { collectWaitPointKeyFailures } from "#/parser/service/workflow/wait-poin
 import { getScopedWaitPoints } from "#/utils/wait-point-registry";
 import type { BundleCache } from "#/cli/cache/bundle-cache";
 import type { BundledScripts } from "#/cli/commands/deploy/function-registry-types";
+import type { SdkBuilderAnnotationCache } from "#/cli/shared/sdk-builder-pure-plugin";
+import type { ProjectSourcesFilter } from "#/cli/shared/sourcemap-sources";
 import type { TailorDBServiceInput } from "#/configure/services/tailordb/types";
 import type { PluginManager } from "#/plugin/manager";
 import type { EffectiveDateDefault } from "#/runtime/types";
@@ -97,8 +104,10 @@ export type Application = {
 interface ReusableBuildState {
   readonly startContext: StartContext;
   readonly tsconfigCache: TsconfigLookupCache;
+  readonly sdkBuilderAnnotationCache: SdkBuilderAnnotationCache;
   readonly inlineSourcemap: boolean;
   readonly inlineSourcemapDependencySources: boolean | string[];
+  readonly inlineSourcemapProjectSources: ProjectSourcesFilter;
   readonly bundleLogLevel: LogLevel;
 }
 
@@ -210,9 +219,17 @@ type DefineResolverResult = {
   subgraphs: Array<{ Type: string; Name: string }>;
 };
 
+function pluginResolverSource(
+  config: LoadedConfig,
+  pluginManager: PluginManager | undefined,
+): PluginResolverSource | undefined {
+  return pluginManager && { pluginManager, appName: config.name, configPath: config.path };
+}
+
 function defineResolver(
   config: ResolverServiceInput | undefined,
   baseDir: string,
+  plugins: PluginResolverSource | undefined,
 ): DefineResolverResult {
   const resolverServices: ResolverService[] = [];
   const subgraphs: Array<{ Type: string; Name: string }> = [];
@@ -223,13 +240,50 @@ function defineResolver(
 
   for (const [namespace, serviceConfig] of Object.entries(config)) {
     if (!("external" in serviceConfig)) {
-      const resolverService = createResolverService(namespace, serviceConfig, baseDir);
+      const resolverService = createResolverService(namespace, serviceConfig, baseDir, plugins);
       resolverServices.push(resolverService);
     }
     subgraphs.push({ Type: "pipeline", Name: namespace });
   }
 
   return { resolverServices, subgraphs };
+}
+
+/**
+ * Define resolver services for namespaces that plugins generate resolvers into without a `resolver` entry.
+ * Call after table and namespace plugins have run.
+ * @param config - Loaded configuration
+ * @param pluginManager - Plugin manager holding the generated resolvers
+ * @returns Resolver services for those namespaces
+ */
+export function definePluginResolverServices(
+  config: LoadedConfig,
+  pluginManager: PluginManager | undefined,
+): ResolverService[] {
+  const baseDir = path.dirname(config.path);
+  const resolverServices: ResolverService[] = [];
+  for (const { namespace, pluginId } of pluginManager?.getPluginGeneratedResolvers() ?? []) {
+    const serviceConfig = config.resolver?.[namespace];
+    if (serviceConfig && "external" in serviceConfig) {
+      throw CLIError({
+        code: "PLUGIN_RESOLVER_NAMESPACE_EXTERNAL",
+        message: `Plugin "${pluginId}" cannot generate resolvers in external namespace "${namespace}".`,
+        context: { pluginId, namespace, resourceType: "pipeline.service" },
+      });
+    }
+    if (serviceConfig || resolverServices.some((service) => service.namespace === namespace)) {
+      continue;
+    }
+    resolverServices.push(
+      createResolverService(
+        namespace,
+        { files: [] },
+        baseDir,
+        pluginResolverSource(config, pluginManager),
+      ),
+    );
+  }
+  return resolverServices;
 }
 
 type DefineIdpResult = {
@@ -466,7 +520,11 @@ function defineServices(
     effectiveDateDefault(config),
     pluginManager,
   );
-  const resolverResult = defineResolver(config.resolver, baseDir);
+  const resolverResult = defineResolver(
+    config.resolver,
+    baseDir,
+    pluginResolverSource(config, pluginManager),
+  );
   const idpResult = defineIdp(config.idp, config.path);
   const authResult = defineAuth(
     config.auth,
@@ -687,7 +745,7 @@ export async function loadApplication(
   // 1. Define services (synchronous)
   const {
     tailordbResult,
-    resolverResult,
+    resolverResult: configuredResolverResult,
     idpResult,
     authResult,
     staticWebsiteServices,
@@ -709,7 +767,7 @@ export async function loadApplication(
         })
       : (config.env ?? {});
 
-  // 3. Load TailorDB tables and process namespace plugins
+  // 3. Load TailorDB tables, process namespace plugins, and define plugin resolver namespaces
   for (const tailordb of tailordbResult.tailorDBServices) {
     await tailordb.loadTypes();
     await tailordb.processNamespacePlugins();
@@ -717,6 +775,14 @@ export async function loadApplication(
   assertUniqueLocalTailorDBTypeNames({
     tailorDBServices: tailordbResult.tailorDBServices,
   });
+  const pluginResolverServices = definePluginResolverServices(config, pluginManager);
+  const resolverResult: DefineResolverResult = {
+    resolverServices: [...configuredResolverResult.resolverServices, ...pluginResolverServices],
+    subgraphs: [
+      ...configuredResolverResult.subgraphs,
+      ...pluginResolverServices.map(({ namespace }) => ({ Type: "pipeline", Name: namespace })),
+    ],
+  };
 
   // 4. Generate plugin files and determine executor file paths
   const pluginExecutorFiles = generatePluginFilesIfNeeded(
@@ -743,6 +809,7 @@ export async function loadApplication(
   // Shared across the start context and every bundle below so a project with many
   // resolvers/executors/etc. reads and parses each ancestor tsconfig once instead of once per item.
   const tsconfigCache = createTsconfigLookupCache();
+  const sdkBuilderAnnotationCache: SdkBuilderAnnotationCache = new Map();
 
   // 8. Build start context for workflow/job start transformation
   const startContext = await buildStartContext(
@@ -757,6 +824,7 @@ export async function loadApplication(
   const buildOptions = buildOptionsOf(config);
   const inlineSourcemap = resolveInlineSourcemap(buildOptions.inlineSourcemap);
   const inlineSourcemapDependencySources = buildOptions.inlineSourcemapDependencySources ?? false;
+  const inlineSourcemapProjectSources = projectSourcesOf({ buildOptions, baseDir });
   const bundleLogLevel = resolveBundleLogLevel(buildOptions.logLevel);
   const dateDefault = effectiveDateDefault(config);
 
@@ -770,18 +838,21 @@ export async function loadApplication(
 
   // 10. Bundle resolvers
   for (const pipeline of resolverResult.resolverServices) {
+    await pipeline.loadResolvers();
     const resolverBundles = await bundleResolvers({
       namespace: pipeline.namespace,
-      config: pipeline.config,
+      files: Object.keys(pipeline.resolvers),
       baseDir,
       defaultPermission: pipeline.defaultPermission,
       startContext,
       cache: bundleCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
       bundleLogLevel,
       bundleTreeshake: buildOptions.treeshake,
       tsconfigCache,
+      sdkBuilderAnnotationCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault,
     });
@@ -799,10 +870,12 @@ export async function loadApplication(
       cache: bundleCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
       bundleLogLevel,
       bundleTreeshake: buildOptions.treeshake,
       baseDir,
       tsconfigCache,
+      sdkBuilderAnnotationCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault,
     });
@@ -812,22 +885,23 @@ export async function loadApplication(
   let workflowBuildResult: BundleWorkflowJobsResult | undefined;
   if (workflowService && workflowService.jobs.length > 0) {
     const mainJobNames = workflowService.workflowSources.map((ws) => ws.workflow.mainJob.name);
-    workflowBuildResult = await bundleWorkflowJobs(
-      workflowService.jobs,
+    workflowBuildResult = await bundleWorkflowJobs({
+      allJobs: workflowService.jobs,
       mainJobNames,
       env,
       startContext,
       baseDir,
-      bundleCache,
+      cache: bundleCache,
       inlineSourcemap,
-      bundleLogLevel,
-      tsconfigCache,
-      undefined,
-      buildOptions.allowedRuntimeGlobals,
-      dateDefault,
-      buildOptions.treeshake,
       inlineSourcemapDependencySources,
-    );
+      inlineSourcemapProjectSources,
+      bundleLogLevel,
+      bundleTreeshake: buildOptions.treeshake,
+      tsconfigCache,
+      sdkBuilderAnnotationCache,
+      allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
+      dateDefault,
+    });
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
 
@@ -861,10 +935,12 @@ export async function loadApplication(
       cache: bundleCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
       bundleLogLevel,
       bundleTreeshake: buildOptions.treeshake,
       baseDir,
       tsconfigCache,
+      sdkBuilderAnnotationCache,
       dateDefault,
     });
   }
@@ -915,8 +991,10 @@ export async function loadApplication(
     reusableBuildState: {
       startContext,
       tsconfigCache,
+      sdkBuilderAnnotationCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
       bundleLogLevel,
     },
   };
@@ -952,8 +1030,10 @@ async function reloadEnvDependentBundles(params: {
   const {
     startContext,
     tsconfigCache,
+    sdkBuilderAnnotationCache,
     inlineSourcemap,
     inlineSourcemapDependencySources,
+    inlineSourcemapProjectSources,
     bundleLogLevel,
   } = reusableBuildState;
 
@@ -972,22 +1052,24 @@ async function reloadEnvDependentBundles(params: {
   let workflowBuildResult = previous.workflowBuildResult;
   if (workflowService && workflowService.jobs.length > 0) {
     const mainJobNames = workflowService.workflowSources.map((ws) => ws.workflow.mainJob.name);
-    workflowBuildResult = await bundleWorkflowJobs(
-      workflowService.jobs,
+    workflowBuildResult = await bundleWorkflowJobs({
+      allJobs: workflowService.jobs,
       mainJobNames,
       env,
       startContext,
       baseDir,
-      bundleCache,
+      cache: bundleCache,
       inlineSourcemap,
-      bundleLogLevel,
-      tsconfigCache,
-      previous.workflowBuildResult,
-      buildOptionsOf(config).allowedRuntimeGlobals,
-      effectiveDateDefault(config),
-      buildOptionsOf(config).treeshake,
       inlineSourcemapDependencySources,
-    );
+      inlineSourcemapProjectSources,
+      bundleLogLevel,
+      bundleTreeshake: buildOptionsOf(config).treeshake,
+      tsconfigCache,
+      sdkBuilderAnnotationCache,
+      previousUsedJobs: previous.workflowBuildResult,
+      allowedRuntimeGlobals: buildOptionsOf(config).allowedRuntimeGlobals,
+      dateDefault: effectiveDateDefault(config),
+    });
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
 
@@ -1002,10 +1084,12 @@ async function reloadEnvDependentBundles(params: {
       cache: bundleCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
+      inlineSourcemapProjectSources,
       bundleLogLevel,
       bundleTreeshake: buildOptionsOf(config).treeshake,
       baseDir,
       tsconfigCache,
+      sdkBuilderAnnotationCache,
       dateDefault: effectiveDateDefault(config),
     });
   }

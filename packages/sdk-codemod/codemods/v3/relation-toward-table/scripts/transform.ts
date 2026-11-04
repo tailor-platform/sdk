@@ -1,109 +1,22 @@
-import { parse, Lang } from "@ast-grep/napi";
-import { stringValue } from "../../../../src/ast-grep-helpers";
+import {
+  callArgument,
+  excerptOf,
+  lineOf,
+  pairValue,
+  parseRoot,
+  stringValue,
+} from "../../../../src/ast-grep-helpers";
+import {
+  hasDynamicProperties,
+  isRelationCall,
+  objectPair,
+  relationAliases,
+} from "../../../../src/relation-call";
 import type { LlmReviewFinding } from "../../../../src/types";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
 const LEGACY_KEY = "type";
 const NEW_KEY = "table";
-
-function sourceLang(filePath: string, source: string): Lang {
-  const lowerPath = filePath.toLowerCase();
-  if (/\.(?:ts|mts|cts)$/u.test(lowerPath)) return Lang.TypeScript;
-  if (/\.(?:tsx|jsx|js)$/u.test(lowerPath)) return Lang.Tsx;
-  return source.includes("</") ? Lang.Tsx : Lang.TypeScript;
-}
-
-function relationBindingName(pattern: SgNode): string | null {
-  if (pattern.kind() !== "object_pattern") return null;
-
-  for (const child of pattern.children()) {
-    if (child.kind() === "shorthand_property_identifier_pattern" && child.text() === "relation") {
-      return child.text();
-    }
-    if (child.kind() === "pair_pattern" && stringValue(child.field("key")) === "relation") {
-      const value = child.field("value");
-      return value?.kind() === "identifier" ? value.text() : null;
-    }
-    if (child.kind() === "object_assignment_pattern") {
-      const binding = child
-        .children()
-        .find((node) => node.kind() === "shorthand_property_identifier_pattern");
-      if (binding?.text() === "relation") return binding.text();
-    }
-  }
-
-  return null;
-}
-
-function relationAliases(root: SgNode): Set<string> {
-  const aliases = new Set<string>();
-  for (const pattern of root.findAll({ rule: { kind: "object_pattern" } })) {
-    const name = relationBindingName(pattern);
-    if (name) aliases.add(name);
-  }
-  return aliases;
-}
-
-function isRelationCall(call: SgNode, aliases: ReadonlySet<string>): boolean {
-  const callee = call.children()[0];
-  if (!callee) return false;
-  if (callee.kind() === "identifier") return aliases.has(callee.text());
-  if (callee.kind() === "subscript_expression") {
-    const property = literalStringValue(callee.field("index"));
-    return property === null || property === "relation";
-  }
-  if (callee.kind() !== "member_expression") return false;
-
-  const property = callee
-    .children()
-    .findLast((child) => child.kind() === "property_identifier" || child.kind() === "identifier");
-  return property?.text() === "relation";
-}
-
-function callArgument(call: SgNode): SgNode | null {
-  const args = call.children().find((child) => child.kind() === "arguments");
-  if (!args) return null;
-
-  const values = args.children().filter((child) => {
-    const kind = child.kind();
-    return kind !== "(" && kind !== ")" && kind !== "," && kind !== "comment";
-  });
-  return values.length === 1 ? values[0]! : null;
-}
-
-function pairKey(pair: SgNode): string | null {
-  const key = pair.children()[0];
-  return stringValue(key ?? null);
-}
-
-function pairValue(pair: SgNode): SgNode | null {
-  const children = pair.children();
-  const colonIndex = children.findIndex((child) => child.kind() === ":");
-  if (colonIndex === -1) return null;
-  return children.slice(colonIndex + 1).find((child) => child.kind() !== "comment") ?? null;
-}
-
-function objectPair(object: SgNode, key: string): SgNode | null {
-  return (
-    object.children().find((child) => child.kind() === "pair" && pairKey(child) === key) ?? null
-  );
-}
-
-function literalStringValue(node: SgNode | null): string | null {
-  if (node?.kind() !== "string") return null;
-  return stringValue(node);
-}
-
-function hasDynamicProperties(object: SgNode): boolean {
-  return object.children().some((child) => {
-    const kind = child.kind();
-    if (kind === "{" || kind === "}" || kind === "," || kind === "comment") return false;
-    if (kind !== "pair") return true;
-
-    const keyKind = child.children()[0]?.kind();
-    return keyKind !== "property_identifier" && keyKind !== "string";
-  });
-}
 
 /**
  * Same as {@link hasDynamicProperties}, but for a `toward` object
@@ -157,14 +70,6 @@ function renameEdit(entry: LegacyEntry): Edit {
   return entry.node.replace(`${quote}${NEW_KEY}${quote}`);
 }
 
-function parseRoot(source: string, filePath: string): SgNode | null {
-  try {
-    return parse(sourceLang(filePath, source), source).root();
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Rename `.relation()`'s `toward.type` option to `toward.table`.
  * @param source - File contents
@@ -203,14 +108,6 @@ export default function transform(source: string, filePath = ""): string | null 
   }
 
   return edits.length > 0 ? root.commitEdits(edits) : null;
-}
-
-function lineOf(node: SgNode): number {
-  return node.range().start.line + 1;
-}
-
-function excerptOf(node: SgNode): string {
-  return node.text().split("\n", 1)[0]!.trim();
 }
 
 /**

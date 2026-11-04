@@ -1,34 +1,12 @@
-import * as path from "pathe";
-import * as rolldown from "rolldown";
-import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
 import { loadFilesWithIgnores, type FileLoadConfig } from "#/cli/services/file-loader";
-import { createStartTransformPlugin } from "#/cli/services/workflow/start-transformer";
+import { buildFunctionBundle, type FunctionBundleSettings } from "#/cli/services/function-bundle";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
-import { createBundleLog } from "#/cli/shared/bundle-log";
-import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
-import {
-  checkForbiddenRuntimeGlobals,
-  assertPackageRuntimeGlobalsAllowed,
-} from "#/cli/shared/forbidden-runtime-globals";
-import {
-  composeFunctionTreeshakeOptions,
-  createUserTreeshakeOptions,
-} from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
-import { createPlatformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
-import { chunkCodeWithSourcemap } from "#/cli/shared/sourcemap-sources";
-import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
-import {
-  createTsconfigPathsPlugin,
-  type TsconfigLookupCache,
-} from "#/cli/shared/tsconfig-paths-plugin";
-import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadExecutor } from "./loader";
-import type { AllowedRuntimeGlobals, LogLevel, TreeshakeOptions } from "#/configure/config/types";
-import type { EffectiveDateDefault } from "#/runtime/types";
+import type { AllowedRuntimeGlobals } from "#/configure/config/types";
 
 interface ExecutorInfo {
   name: string;
@@ -38,31 +16,15 @@ interface ExecutorInfo {
 /**
  * Options for bundling executors
  */
-export interface BundleExecutorsOptions {
+export interface BundleExecutorsOptions extends FunctionBundleSettings {
   /** Executor file loading configuration */
   config: FileLoadConfig;
-  /** Start context for workflow/job transformations */
-  startContext?: StartContext;
   /** Additional files to bundle (e.g., plugin-generated executors) */
   additionalFiles?: string[];
-  /** Optional bundle cache for skipping unchanged builds */
-  cache?: BundleCache;
-  /** Whether to enable inline sourcemaps */
-  inlineSourcemap?: boolean;
-  /** Whether inline sourcemaps embed the source text of installed packages */
-  inlineSourcemapDependencySources?: boolean | string[];
-  /** Controls which console calls are kept in bundled code */
-  bundleLogLevel?: LogLevel;
-  /** Overrides how unused code is removed from bundled code */
-  bundleTreeshake?: TreeshakeOptions;
   /** Directory the config's file patterns are resolved against */
   baseDir: string;
-  /** Optional tsconfig lookup cache shared across bundles in this CLI run */
-  tsconfigCache?: TsconfigLookupCache;
   /** Globals each installed package may reference */
   allowedRuntimeGlobals?: AllowedRuntimeGlobals;
-  /** Representation applied to `t` date fields that omit `as` */
-  dateDefault?: EffectiveDateDefault;
 }
 
 /**
@@ -78,20 +40,7 @@ export async function bundleExecutors(
   options: BundleExecutorsOptions,
 ): Promise<Map<string, string>> {
   const bundledCode = new Map<string, string>();
-  const {
-    config,
-    startContext,
-    additionalFiles = [],
-    cache,
-    inlineSourcemap,
-    inlineSourcemapDependencySources,
-    bundleLogLevel = "DEBUG",
-    bundleTreeshake,
-    baseDir,
-    tsconfigCache,
-    allowedRuntimeGlobals,
-    dateDefault = "legacy",
-  } = options;
+  const { config, additionalFiles = [], baseDir, allowedRuntimeGlobals } = options;
   const configFiles = loadFilesWithIgnores(config, baseDir);
   const files = [...configFiles, ...additionalFiles];
   if (files.length === 0) {
@@ -134,68 +83,15 @@ export async function bundleExecutors(
 
   // Process each executor, capped by TAILOR_BUNDLE_CONCURRENCY to bound native
   // memory use (each rolldown.build allocates its own module graph).
-  const results = await withBundleConcurrency(executors, (executor) =>
-    bundleSingleExecutor(
-      executor,
+  const results = await withBundleConcurrency(executors, async (executor) => {
+    const code = await buildFunctionBundle({
+      ...options,
+      kind: "executor",
+      name: executor.name,
+      sourceFile: executor.sourceFile,
       tsconfig,
-      startContext,
-      cache,
-      inlineSourcemap,
-      inlineSourcemapDependencySources,
-      bundleLogLevel,
-      tsconfigCache,
-      allowedRuntimeGlobals,
-      dateDefault,
-      bundleTreeshake,
-    ),
-  );
-
-  for (const [name, code] of results) {
-    bundledCode.set(name, code);
-  }
-
-  logger.log(`${styles.success("Bundled")} ${styles.info('"executor"')}`);
-
-  return bundledCode;
-}
-
-async function bundleSingleExecutor(
-  executor: ExecutorInfo,
-  tsconfig: string | undefined,
-  startContext?: StartContext,
-  cache?: BundleCache,
-  inlineSourcemap?: boolean,
-  inlineSourcemapDependencySources?: boolean | string[],
-  bundleLogLevel: LogLevel = "DEBUG",
-  tsconfigCache?: TsconfigLookupCache,
-  allowedRuntimeGlobals?: AllowedRuntimeGlobals,
-  dateDefault: EffectiveDateDefault = "legacy",
-  bundleTreeshake?: TreeshakeOptions,
-): Promise<[string, string]> {
-  const serializedStartContext = serializeStartContext(startContext);
-
-  const contextHash = computeBundlerContextHash({
-    sourceFile: executor.sourceFile,
-    // The date default is folded into the bundle but lives in the config file,
-    // so a cached bundle would otherwise survive a change to it.
-    extraContext: JSON.stringify([serializedStartContext, dateDefault]),
-    tsconfig,
-    inlineSourcemap,
-    inlineSourcemapDependencySources,
-    bundleLogLevel,
-    bundleTreeshake,
-  });
-
-  const { code, packageRuntimeGlobals } = await withCache({
-    cache,
-    kind: "executor",
-    name: executor.name,
-    sourceFile: executor.sourceFile,
-    contextHash,
-    async build(cachePlugins, trackDependency) {
-      const absoluteSourcePath = path.resolve(executor.sourceFile);
-
-      const entryContent = ml /* js */ `
+      runtimeGlobals: { label: `Executor "${executor.name}"`, allowed: allowedRuntimeGlobals },
+      entry: (absoluteSourcePath) => ml /* js */ `
         import _internalExecutor from "${absoluteSourcePath}";
 
         const __executor_function = async (args) => {
@@ -204,67 +100,16 @@ async function bundleSingleExecutor(
         };
 
         export { __executor_function as main };
-      `;
-      const entry = createVirtualEntry(
-        `executor:${executor.name}`,
-        entryContent,
-        "js",
-        absoluteSourcePath,
-      );
-
-      const startPlugin = createStartTransformPlugin(startContext);
-      const plugins: rolldown.Plugin[] = [entry.plugin];
-      if (startPlugin) {
-        plugins.push(startPlugin);
-      }
-      plugins.push(
-        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
-        createPlatformBundleDefinePlugin(undefined, dateDefault),
-        ...cachePlugins,
-      );
-
-      const bundleLog = createBundleLog({ tsconfig });
-      const result = await rolldown.build({
-        input: entry.input,
-        write: false,
-        output: {
-          format: "esm",
-          sourcemap: true,
-          minify: inlineSourcemap
-            ? {
-                mangle: {
-                  keepNames: true,
-                },
-              }
-            : true,
-          codeSplitting: false,
-        },
-        tsconfig,
-        plugins,
-        treeshake: composeFunctionTreeshakeOptions([
-          createLogLevelTreeshakeOptions(bundleLogLevel),
-          createUserTreeshakeOptions(bundleTreeshake),
-        ]),
-        ...bundleLog.options,
-      } as rolldown.BuildOptions);
-      bundleLog.assertAllResolved();
-
-      const [chunk] = result.output;
-      return {
-        code: chunkCodeWithSourcemap({
-          chunk,
-          inlineSourcemap: inlineSourcemap ?? false,
-          dependencySources: inlineSourcemapDependencySources ?? false,
-        }),
-        packageRuntimeGlobals: checkForbiddenRuntimeGlobals(chunk, `Executor "${executor.name}"`),
-      };
-    },
+      `,
+    });
+    return [executor.name, code] as const;
   });
-  assertPackageRuntimeGlobalsAllowed(
-    packageRuntimeGlobals,
-    `Executor "${executor.name}"`,
-    allowedRuntimeGlobals,
-  );
 
-  return [executor.name, code];
+  for (const [name, code] of results) {
+    bundledCode.set(name, code);
+  }
+
+  logger.log(`${styles.success("Bundled")} ${styles.info('"executor"')}`);
+
+  return bundledCode;
 }

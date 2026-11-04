@@ -6,6 +6,7 @@ export interface IncomingWebhookArgs<T extends IncomingWebhookRequest> {
   body: T["body"];
   headers: T["headers"];
   method: "POST" | "GET" | "PUT" | "DELETE";
+  /** Raw request body, base64-encoded. */
   rawBody: string;
   env: TailorEnv;
 }

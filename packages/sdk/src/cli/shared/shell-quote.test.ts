@@ -1,8 +1,8 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { aroundAll, describe, expect, test, vi } from "vitest";
+import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { formatShellCommandLines, type ShellCommandLines } from "./shell-quote";
 
 const isWindows = process.platform === "win32";
@@ -275,7 +275,7 @@ describe("formatShellCommandLines", () => {
   let configs: ShellConfig[];
 
   aroundAll(async (runSuite) => {
-    tempDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "tailor-shell-quote-")));
+    tempDir = makeTempDir("tailor-shell-quote-");
     configs = shellConfigs(tempDir);
     try {
       await runSuite();

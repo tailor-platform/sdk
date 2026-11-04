@@ -12,7 +12,7 @@
 #
 # All describe the version a change ships in, which is unknown while the
 # change is being written, so they are authored against a sentinel and fixed
-# up here. See .agents/rules/deprecation.md.
+# up here. See docs/deprecation.md.
 #
 # Pushes the fixup straight to the release PR branch through the GitHub
 # Contents API rather than a local git commit/push, since this token has no

@@ -1,7 +1,16 @@
 import { logger } from "@tailor-platform/sdk/cli";
+import { setupAutofix, type AutofixSetupOptions } from "./autofix";
 import { setupTarget, type SetupTargetOptions } from "./generate";
-import { readLock, type LockInputs, type LockTarget } from "./lock";
-import { isPackageManager, type PackageManager } from "./templates";
+import {
+  AUTOFIX_LABEL,
+  managedWorkflows,
+  readManagedLock,
+  targetWorkflows,
+  type LockAutofix,
+  type LockInputs,
+  type LockTarget,
+} from "./lock";
+import { isPackageManager, type PackageManager, type PreviewRequirement } from "./templates";
 
 type UpdateCommon = { force: boolean; outputDir: string };
 
@@ -11,7 +20,9 @@ function recordedBranchUnlessDetected(inputs: LockInputs): string | undefined {
   return inputs.branchAutoDetected === true ? undefined : (inputs.branch ?? undefined);
 }
 
-function recordedPackageManagerUnlessDetected(inputs: LockInputs): PackageManager | undefined {
+function recordedPackageManagerUnlessDetected(
+  inputs: Pick<LockInputs, "packageManager" | "packageManagerAutoDetected">,
+): PackageManager | undefined {
   if (inputs.packageManagerAutoDetected !== false) return undefined;
   if (!isPackageManager(inputs.packageManager)) {
     throw new Error(
@@ -21,6 +32,16 @@ function recordedPackageManagerUnlessDetected(inputs: LockInputs): PackageManage
     );
   }
   return inputs.packageManager;
+}
+
+/**
+ * Read the requirement of a preview target recorded before `require` existed: those workflows
+ * always skipped drafts, and deployed only labeled PRs when `requirePreviewLabel` was set.
+ * @param inputs - Inputs recorded in the lock
+ * @returns The requirement that reproduces the recorded workflow, as nearly as one can
+ */
+function legacyPreviewRequirement(inputs: LockInputs): PreviewRequirement {
+  return inputs.requirePreviewLabel ? "label" : "ready";
 }
 
 /**
@@ -70,9 +91,29 @@ export function planUpdate(target: LockTarget, common: UpdateCommon): SetupTarge
         branch: recordedBranchUnlessDetected(inputs),
         extraPaths: inputs.paths,
         region: inputs.region ?? "",
-        requirePreviewLabel: inputs.requirePreviewLabel ?? false,
+        require:
+          inputs.require === undefined
+            ? legacyPreviewRequirement(inputs)
+            : (inputs.require ?? undefined),
       };
   }
+}
+
+/**
+ * Translate the lock's autofix entry back into the setup options that regenerate it.
+ * @param autofix - Autofix entry to regenerate
+ * @param common - Options shared by every workflow in this update run
+ * @returns The setup options to regenerate the autofix workflow with
+ */
+function planAutofixUpdate(autofix: LockAutofix, common: UpdateCommon): AutofixSetupOptions {
+  const { provider, securefixServerRepository, dirs } = autofix.inputs;
+  return {
+    provider,
+    securefixServerRepository,
+    dir: dirs,
+    packageManager: recordedPackageManagerUnlessDetected(autofix.inputs),
+    ...common,
+  };
 }
 
 export type UpdateOptions = UpdateCommon &
@@ -101,42 +142,47 @@ function failureSummary(error: unknown): string {
 }
 
 /**
- * Regenerate every target recorded in `.github/tailor.lock` with the inputs it
- * was generated with. A target that cannot be regenerated does not stop the
+ * Regenerate every workflow recorded in `.github/tailor.lock` with the inputs it
+ * was generated with. A workflow that cannot be regenerated does not stop the
  * others; all of them are reported together at the end.
  * @param options - Update options
  */
 export async function setupUpdate(options: UpdateOptions): Promise<void> {
   const { force, outputDir, ...loaders } = options;
-  const lock = readLock(outputDir);
-  if (!lock || lock.targets.length === 0) {
-    throw new Error(
-      "No managed workflows found (.github/tailor.lock is missing or empty). " +
-        "Run `tailor setup ci branch` (or another setup subcommand) first.",
-    );
-  }
+  const lock = readManagedLock(outputDir);
 
-  const { targets } = lock;
-  const failures: string[] = [];
-  for (const target of targets) {
+  const failures: { message: string; workflows: number }[] = [];
+  for (const target of lock.targets) {
     const label = `[${target.kind} ${target.workspaceName}]`;
     try {
       await setupTarget({ ...planUpdate(target, { force, outputDir }), ...loaders });
     } catch (error) {
-      failures.push(`${label} ${failureSummary(error)}`);
+      failures.push({
+        message: `${label} ${failureSummary(error)}`,
+        workflows: targetWorkflows(target).length,
+      });
+    }
+  }
+  if (lock.autofix) {
+    try {
+      await setupAutofix(planAutofixUpdate(lock.autofix, { force, outputDir }));
+    } catch (error) {
+      failures.push({ message: `[${AUTOFIX_LABEL}] ${failureSummary(error)}`, workflows: 1 });
     }
   }
 
-  const updated = targets.length - failures.length;
+  const total = managedWorkflows(readManagedLock(outputDir)).length;
+  const failed = failures.reduce((sum, failure) => sum + failure.workflows, 0);
+  const updated = total - failed;
   if (failures.length === 0) {
     logger.newline();
-    logger.success(`Updated ${String(updated)} target(s). Review and commit the changes.`);
+    logger.success(`Updated ${String(updated)} workflow(s). Review and commit the changes.`);
     return;
   }
   throw new Error(
-    `${String(failures.length)} target(s) could not be updated ` +
-      `(${String(updated)} of ${String(targets.length)} updated):\n` +
-      failures.map((failure) => `  ${failure.replaceAll("\n", "\n    ")}`).join("\n") +
+    `${String(failed)} workflow(s) could not be updated ` +
+      `(${String(updated)} of ${String(total)} updated):\n` +
+      failures.map(({ message }) => `  ${message.replaceAll("\n", "\n    ")}`).join("\n") +
       "\nAddress each one above, then re-run `tailor setup update`.",
   );
 }

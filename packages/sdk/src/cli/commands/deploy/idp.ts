@@ -27,6 +27,7 @@ import {
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
+import { resourceNameSchema } from "#/parser/service/common";
 import { ALL_EMAIL_DOMAINS, hasImplicitAllEmailDomains } from "#/parser/service/idp/email-domains";
 import {
   findLoggedInOnlyPermitRules,
@@ -46,11 +47,7 @@ import {
   resourceTrn,
   writeMetadataLabels,
 } from "./label";
-import {
-  fetchExistingResourcesWithLabels,
-  trackDesiredResourceOwnership,
-  trackRemainingResourceOwner,
-} from "./owned-resource";
+import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
 import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type {
@@ -60,7 +57,6 @@ import type {
   StandardIdPPermissionCondition,
 } from "#/parser/service/idp/types";
 import type { IdP, IdPLang as IdPLangInput } from "#/types/idp.generated";
-import type { OwnerConflict, UnmanagedResource } from "./confirm";
 
 type IdPServiceMutationRequest = {
   workspaceId?: string;
@@ -208,7 +204,7 @@ export async function applyIdP(
     // Clients
     await Promise.all(
       changeSet.client.deletes.map(async (del) => {
-        await client.deleteIdPClient(del.request);
+        if (!del.vaultOnly) await client.deleteIdPClient(del.request);
 
         // Delete the secret manager vault and secret
         const vaultName = idpClientVaultName(
@@ -469,9 +465,7 @@ async function planServices(
     never,
     UnchangedService
   >("IdP services");
-  const conflicts: OwnerConflict[] = [];
-  const unmanaged: UnmanagedResource[] = [];
-  const resourceOwners = new Set<string>();
+  const ownership = createOwnershipTracker(appName, appId);
 
   const existingServices = await fetchExistingResourcesWithLabels({
     client,
@@ -583,16 +577,10 @@ async function planServices(
     };
 
     if (existing) {
-      const owned = trackDesiredResourceOwnership({
-        labels: existing.allLabels,
-        ownerLabel: existing.label,
-        appName,
-        appId,
+      const owned = ownership.ownsDesired(existing.allLabels, {
         resourceType: "idp.service",
         resourceLabel: "IdP service",
         resourceName: idp.name,
-        conflicts,
-        unmanaged,
       });
       const configUnchanged = owned && areIdPServicesEqual(existing.resource, desired);
       if (configUnchanged && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
@@ -616,14 +604,7 @@ async function planServices(
   }
   Object.entries(existingServices).forEach(([namespaceName]) => {
     const entry = existingServices[namespaceName];
-    const owned = trackRemainingResourceOwner({
-      labels: entry?.allLabels,
-      ownerLabel: entry?.label,
-      appName,
-      appId,
-      resourceOwners,
-    });
-    if (owned) {
+    if (ownership.ownsRemaining(entry?.allLabels)) {
       changeSet.deletes.push({
         name: namespaceName,
         request: {
@@ -634,7 +615,7 @@ async function planServices(
     }
   });
 
-  return { changeSet, conflicts, unmanaged, resourceOwners };
+  return { changeSet, ...ownership.result };
 }
 
 type CreateClient = {
@@ -651,6 +632,7 @@ type UpdateClient = {
 type DeleteClient = {
   name: string;
   request: MessageInitShape<typeof DeleteIdPClientRequestSchema>;
+  vaultOnly?: boolean;
 };
 
 async function planClients(
@@ -673,6 +655,8 @@ async function planClients(
       return [clients, nextPageToken];
     });
   };
+
+  const isDeletableName = (name: string) => resourceNameSchema.safeParse(name).success;
 
   const clientsByIdp = await Promise.all(idps.map((idp) => fetchClients(idp.name)));
   for (const [i, idp] of idps.entries()) {
@@ -715,6 +699,12 @@ async function planClients(
       }
     }
     existingNames.forEach((name) => {
+      if (!isDeletableName(name)) {
+        logger.warn(
+          `IdP client "${name}" in "${namespaceName}" will not be deleted, because the platform cannot delete a client with this name. The client and its secret vault stay in the workspace. Both are deleted when that IdP is removed.`,
+        );
+        return;
+      }
       changeSet.deletes.push({
         name,
         request: {
@@ -742,6 +732,7 @@ async function planClients(
           namespaceName,
           name: client.name,
         },
+        ...(!isDeletableName(client.name) && { vaultOnly: true }),
       });
     });
   }

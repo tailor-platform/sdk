@@ -132,8 +132,8 @@ afterEach(() => {
 
 function runDumpCommand(args: string[]) {
   return runCommand(seedDumpCommand, args, {
-    // Strip unknown global arguments like the plugin entrypoint.
-    globalArgs: z.object(createCommonArgs({ verboseAlias: "v" })),
+    // Parse global arguments like the plugin entrypoint.
+    globalArgs: z.strictObject(createCommonArgs({ verboseAlias: "v" })),
   });
 }
 

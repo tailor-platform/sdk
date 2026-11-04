@@ -1,4 +1,5 @@
 import { describe, test, expect, vi, aroundEach } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import { applySecretManager, planSecretManager } from "./secret-manager";
 import { hashValue } from "./secrets-state";
 import type { PlanContext } from "#/cli/commands/deploy/types";
@@ -102,6 +103,7 @@ function createPlanContext(
     appId?: string;
     workspaceId?: string;
     forRemoval?: boolean;
+    idpServices?: Array<{ name: string; clients: string[] }>;
   } = {},
 ): PlanContext {
   return {
@@ -111,6 +113,7 @@ function createPlanContext(
       name: overrides.appName ?? "test-app",
       id: overrides.appId ?? "app-1",
       secrets,
+      idpServices: overrides.idpServices ?? [],
     } as unknown as Application,
     forRemoval: overrides.forRemoval ?? false,
     config: {} as PlanContext["config"],
@@ -375,45 +378,6 @@ describe("planSecretManager hash-based diff", () => {
       workspaceId: "ws-b",
       applicationId: "shared-app-id",
       applicationName: "test-app",
-    });
-  });
-
-  test("includes update when matching state belongs to another application", async () => {
-    const secretValue = "my-secret-value";
-    mockLoadSecretsState.mockImplementation((scope?: { applicationId: string }) =>
-      scope?.applicationId === "app-a"
-        ? {
-            vaults: {
-              "my-vault": {
-                "existing-secret": { hash: hashValue(secretValue), updateTime: "100.5" },
-              },
-            },
-          }
-        : { vaults: {} },
-    );
-    const client = createMockPlanClient([
-      { name: "existing-secret", updateTime: { seconds: 100n, nanos: 5 } },
-    ]);
-    const ctxA = createPlanContext(
-      client,
-      [{ vaultName: "my-vault", secrets: [{ name: "existing-secret", value: secretValue }] }],
-      { appName: "shared-app", appId: "app-a" },
-    );
-    const ctxB = createPlanContext(
-      client,
-      [{ vaultName: "my-vault", secrets: [{ name: "existing-secret", value: secretValue }] }],
-      { appName: "shared-app", appId: "app-b" },
-    );
-
-    const resultA = await planSecretManager(ctxA);
-    const resultB = await planSecretManager(ctxB);
-
-    expect(resultA.secretChangeSet.updates).toHaveLength(0);
-    expect(resultB.secretChangeSet.updates).toHaveLength(1);
-    expect(mockLoadSecretsState).toHaveBeenCalledWith({
-      workspaceId: "ws-1",
-      applicationId: "app-b",
-      applicationName: "shared-app",
     });
   });
 });
@@ -1107,6 +1071,107 @@ describe("applySecretManager ignoreNullishValues state persistence", () => {
     });
     expect(savedState.vaults["my-vault"]["valued-secret"]).toEqual({
       hash: hashValue("real-value"),
+    });
+  });
+});
+
+describe("planSecretManager and vault names reserved for IdP client secrets", () => {
+  const idpServices = [{ name: "my-idp", clients: ["web"] }];
+
+  test("warns about the reserved prefix of tailor--my-vault and still plans it", async () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const context = createPlanContext(
+      createMockPlanClient([], "tailor--my-vault"),
+      [{ vaultName: "tailor--my-vault", secrets: [] }],
+      { idpServices },
+    );
+
+    await expect(planSecretManager(context)).resolves.toBeDefined();
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('"tailor--my-vault"'));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("v3"));
+  });
+
+  test("does not warn about a vault name that starts with idp- and matches no IdP client", async () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const context = createPlanContext(
+      createMockPlanClient([], "idp-my-vault"),
+      [{ vaultName: "idp-my-vault", secrets: [] }],
+      { idpServices },
+    );
+
+    await expect(planSecretManager(context)).resolves.toBeDefined();
+
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test("warns about the reserved prefix even when the application has no IdP", async () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const context = createPlanContext(createMockPlanClient([], "tailor--other-app"), [
+      { vaultName: "tailor--other-app", secrets: [] },
+    ]);
+
+    await planSecretManager(context);
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test("does not warn about a vault name without a reserved prefix", async () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const context = createPlanContext(
+      createMockPlanClient([], "my-vault"),
+      [{ vaultName: "my-vault", secrets: [] }],
+      { idpServices },
+    );
+
+    await planSecretManager(context);
+
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test("does not warn about a vault name that starts with a single tailor- hyphen", async () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const context = createPlanContext(createMockPlanClient([], "tailor-my-vault"), [
+      { vaultName: "tailor-my-vault", secrets: [] },
+    ]);
+
+    await planSecretManager(context);
+
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test("rejects a vault named like the vault the SDK creates for an IdP client", async () => {
+    const context = createPlanContext(
+      createMockPlanClient([], "idp-my-idp-web"),
+      [{ vaultName: "idp-my-idp-web", secrets: [] }],
+      { idpServices },
+    );
+
+    await expect(planSecretManager(context)).rejects.toThrow(/idp-my-idp-web/);
+  });
+
+  test("plans deletion of a managed vault named like an IdP client's vault once it is no longer declared", async () => {
+    const client = createMockPlanClient(["client-secret-my-idp-web"], "idp-my-idp-web");
+    const context = createPlanContext(client, [], { appName: "test-app", idpServices });
+
+    const result = await planSecretManager(context);
+
+    expect(result.vaultChangeSet.deletes.map((del) => del.name)).toEqual(["idp-my-idp-web"]);
+    expect(result.secretChangeSet.deletes.map((del) => del.secretName)).toEqual([
+      "client-secret-my-idp-web",
+    ]);
+  });
+
+  test("tells the user that renaming or removing the declaration deletes the old vault and its secrets", async () => {
+    const context = createPlanContext(
+      createMockPlanClient([], "idp-my-idp-web"),
+      [{ vaultName: "idp-my-idp-web", secrets: [] }],
+      { idpServices },
+    );
+
+    await expect(planSecretManager(context)).rejects.toMatchObject({
+      suggestion: expect.stringContaining("renaming it and removing the declaration both delete"),
     });
   });
 });

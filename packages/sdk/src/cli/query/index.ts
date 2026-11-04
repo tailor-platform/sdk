@@ -505,10 +505,10 @@ async function runRepl(
   const execute = await prepareQueryExecutor(options);
   const historyPath = getReplHistoryPath(options.engine, options.profile, options.workspaceId);
   const validate = createReplValidator(options.engine);
-  // Lazy-load the editor module so the `graphql` and `sql-highlight` libs are
+  // Lazy-load the editor module so the `@enlumine/*` highlighters are
   // only pulled in when the REPL is actually entered, not on every CLI startup.
-  const { highlightSqlLine, highlightGraphqlLine, replTransform } = await import("./repl-editor");
-  const highlight = options.engine === "sql" ? highlightSqlLine : highlightGraphqlLine;
+  const { highlightSqlLines, highlightGraphqlLines, replTransform } = await import("./repl-editor");
+  const highlightLines = options.engine === "sql" ? highlightSqlLines : highlightGraphqlLines;
 
   // NOTE: Each prompt() call reloads history from the file synchronously while the
   // previous call's async save may still be in-flight. In practice the race window
@@ -519,7 +519,7 @@ async function runRepl(
     prefix: "",
     preferNewlineOnEnter: options.newlineOnEnter,
     validate,
-    highlight,
+    highlightLines,
     transform: replTransform,
     theme: { submitRender: "preserve" },
     history: historyPath ? { filePath: historyPath, maxEntries: 100 } : [],

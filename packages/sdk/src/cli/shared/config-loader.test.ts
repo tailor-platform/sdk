@@ -255,12 +255,16 @@ const syntaxDiagnostic = {
 };
 
 describe("atConfigSource", () => {
-  test("renders unparsable source as an Error pointing at the line it failed on", () => {
+  test("reports unparsable source as SYNTAX_INVALID at the line it failed on", () => {
     const result = atConfigSource(syntaxDiagnostic, "/repo/tailor.config.ts");
 
-    expect(result).toBeInstanceOf(SyntaxError);
-    expect((result as Error).message).toBe(syntaxDiagnostic.message);
-    expect((result as Error).cause).toBe(syntaxDiagnostic);
+    expect(result).toMatchObject({
+      name: "CLIError",
+      code: "SYNTAX_INVALID",
+      message: `Invalid syntax in ${path.relative(process.cwd(), "/repo/tailordb/User.ts")}:4: Unexpected token \`=\`. Expected an identifier`,
+      context: { file: "/repo/tailordb/User.ts", line: 4 },
+      cause: syntaxDiagnostic,
+    });
     expect(getErrorDiagnostics(result as Error).location).toEqual({
       file: "/repo/tailordb/User.ts",
       line: 4,
@@ -305,6 +309,10 @@ describe("atConfigSource", () => {
 
     const result = atConfigSource(withoutLine, "/repo/tailor.config.ts");
 
+    expect(result).toMatchObject({
+      message: `Invalid syntax in ${path.relative(process.cwd(), "/repo/tailordb/User.ts")}: Unexpected token \`=\`. Expected an identifier`,
+    });
+    expect((result as { context?: unknown }).context).toEqual({ file: "/repo/tailordb/User.ts" });
     expect(getErrorDiagnostics(result as Error).location).toEqual({
       file: "/repo/tailordb/User.ts",
     });

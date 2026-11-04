@@ -7,7 +7,7 @@ import { logger } from "#/cli/shared/logger";
 export const tokenCommand = defineAppCommand({
   name: "token",
   description:
-    "Print a valid Tailor Platform access token to stdout, refreshing it first if expired.",
+    "Print a valid Tailor Platform access token to stdout, refreshing it first if it expires within five minutes.",
   args: z.strictObject({
     profile: workspaceArgs.profile,
   }),

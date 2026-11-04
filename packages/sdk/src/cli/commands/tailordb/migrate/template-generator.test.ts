@@ -29,8 +29,6 @@ import {
   generateMigrationPgliteTestScript,
   generateMigrationScript,
   generateMigrationTestScript,
-  migrationScriptExists,
-  getMigrationScriptPath,
 } from "./template-generator";
 import { createMockMigrationDiff } from "./test-helpers/migration-diff";
 import type { DiffChange } from "./diff-calculator";
@@ -65,6 +63,37 @@ function getTypeScriptDiagnostics(
       code: diagnostic.code,
       messageText: ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
     }));
+}
+
+function replaceTodoCalls(source: string, replacement: string): string {
+  const ast = ts.createSourceFile("migrate.ts", source, ts.ScriptTarget.Latest, true);
+  const calls: ts.CallExpression[] = [];
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "TODO"
+    ) {
+      calls.push(node);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  return calls
+    .reduceRight(
+      (edited, call) => edited.slice(0, call.getStart(ast)) + replacement + edited.slice(call.end),
+      source,
+    )
+    .replace(
+      'import { TODO, type MigrationSteps, type Transaction } from "./db";',
+      'import type { MigrationSteps, Transaction } from "./db";',
+    );
+}
+
+async function importTypeScript(source: string) {
+  return import(
+    `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString("base64")}`
+  );
 }
 
 describe("template-generator", () => {
@@ -417,6 +446,26 @@ describe("template-generator", () => {
         expect(script).toContain('copyOrderToPurchase: { dependsOn: ["copyCustomerToClient"]');
       });
 
+      test("copies the parent first when the child points at it from inside a nested field", () => {
+        const nestedChild = {
+          ...child,
+          after: {
+            ...child.after,
+            fields: {
+              info: {
+                type: "nested",
+                required: false,
+                fields: { customerId: { type: "uuid", required: false, foreignKeyType: "Client" } },
+              },
+            },
+          },
+        } as const;
+
+        const script = generateMigrationScript(stepsDiff(nestedChild, parent));
+
+        expect(order(script)).toEqual(["copyCustomerToClient", "copyOrderToPurchase"]);
+      });
+
       test("keeps the listed order when the parent is already first", () => {
         const script = generateMigrationScript(stepsDiff(parent, child));
 
@@ -526,6 +575,34 @@ describe("template-generator", () => {
 
       expect(order(script)).toEqual(["copyUserToPerson", "updateOrderOwnerId"]);
       expect(script).toContain('updateOrderOwnerId: { dependsOn: ["copyUserToPerson"]');
+    });
+
+    test("orders the check of an added relation after the change to the key it points at", () => {
+      const script = generateMigrationScript(
+        stepsDiff(
+          {
+            kind: "field_modified",
+            tableName: "User",
+            fieldName: "code",
+            before: { type: "string", required: true },
+            after: { type: "string", required: true, unique: true },
+          },
+          {
+            kind: "field_modified",
+            tableName: "Order",
+            fieldName: "ownerCode",
+            before: { type: "string", required: false },
+            after: {
+              type: "string",
+              required: false,
+              foreignKeyType: "User",
+              foreignKeyField: "code",
+            },
+          },
+        ),
+      );
+
+      expect(script).toContain('updateOrderOwnerCode: { dependsOn: ["updateUserCode"]');
     });
 
     test("orders an index's duplicate resolution after the changes to the fields it covers", () => {
@@ -1491,9 +1568,304 @@ describe("template-generator", () => {
       const backfillPosition = scriptContent.indexOf("Backfill the self-referential column(s)");
       expect(insertPosition).toBeGreaterThan(-1);
       expect(backfillPosition).toBeGreaterThan(insertPosition);
-      expect(scriptContent).toContain('.whereRef("Category.id", "=", "Section.id")');
+      expect(scriptContent).toContain('.updateTable("Section")');
+      expect(scriptContent).toContain("const restored = { parentId: row.parentId };");
+      expect(scriptContent).toContain(".set(restored)");
+      expect(scriptContent).toContain("continue;");
+      expect(scriptContent).toContain('.where("id", "=", row.id)');
+      expect(scriptContent).not.toContain("whereRef");
 
       expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
+    }, 15_000);
+
+    test("should restore self-references on the copied rows and skip rows that have none to restore", async () => {
+      const selfRefFields = (foreignKeyType: string) =>
+        ({
+          parentId: {
+            type: "uuid",
+            required: false,
+            foreignKey: true,
+            foreignKeyType,
+            foreignKeyField: "id",
+          },
+        }) as const;
+      const renamePreviousSnapshot = createTestSnapshot({
+        Category: { name: "Category", pluralForm: "Categories", fields: selfRefFields("Category") },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "table_renamed",
+            tableName: "Section",
+            previousTableName: "Category",
+            before: {
+              name: "Category",
+              pluralForm: "Categories",
+              fields: selfRefFields("Category"),
+            },
+            after: { name: "Section", pluralForm: "Sections", fields: selfRefFields("Section") },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          { tableName: "Section", reason: "Table renamed from Category to Section" },
+        ],
+        requiresMigrationScript: true,
+      });
+      const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
+      const source = await fs.readFile(result.migrateFilePath!, "utf8");
+      const { steps } = await import(
+        `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString("base64")}`
+      );
+      const { pgliteSchema } = await import(
+        `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(await fs.readFile(result.pgliteSchemaFilePath!, "utf8"))).toString("base64")}`
+      );
+
+      const ids = {
+        root: "00000000-0000-0000-0000-000000000001",
+        otherRoot: "00000000-0000-0000-0000-000000000002",
+        child: "00000000-0000-0000-0000-000000000003",
+        grandchild: "00000000-0000-0000-0000-000000000004",
+      };
+      type Row = { id: string; parentId: string | null };
+      const pglite = new PGlite();
+      const db = createKyselyPGlite<{ Category: Row; Section: Row }>(pglite);
+      try {
+        await pglite.exec(pgliteSchema.tailordb);
+        await pglite.exec(`
+          CREATE TABLE update_log (table_name text);
+          CREATE FUNCTION log_update() RETURNS trigger AS $$ BEGIN INSERT INTO update_log VALUES (TG_TABLE_NAME); RETURN NEW; END $$ LANGUAGE plpgsql;
+          CREATE TRIGGER section_update AFTER UPDATE ON "Section" FOR EACH ROW EXECUTE FUNCTION log_update();
+        `);
+        await db
+          .insertInto("Category")
+          .values([
+            { id: ids.root, parentId: null },
+            { id: ids.otherRoot, parentId: null },
+            { id: ids.child, parentId: ids.root },
+            { id: ids.grandchild, parentId: ids.child },
+          ])
+          .execute();
+
+        await runMigrationSteps(steps, { transaction: (run) => db.transaction().execute(run) });
+
+        expect(await db.selectFrom("Section").selectAll().orderBy("id").execute()).toEqual([
+          { id: ids.root, parentId: null },
+          { id: ids.otherRoot, parentId: null },
+          { id: ids.child, parentId: ids.root },
+          { id: ids.grandchild, parentId: ids.child },
+        ]);
+        const updates = await pglite.query<{ count: string }>(
+          "SELECT count(*) AS count FROM update_log WHERE table_name = 'Section'",
+        );
+        expect(Number(updates.rows[0]!.count)).toBe(2);
+      } finally {
+        await db.destroy();
+      }
+    }, 30_000);
+
+    test("should restore nested self-references on the copied rows and skip rows whose nested value holds no reference", async () => {
+      const nestedFields = (foreignKeyType: string) =>
+        ({
+          info: {
+            type: "nested",
+            required: false,
+            fields: {
+              parentID: {
+                type: "uuid",
+                required: false,
+                foreignKey: true,
+                foreignKeyType,
+                foreignKeyField: "id",
+              },
+            },
+          },
+        }) as const;
+      const renamePreviousSnapshot = createTestSnapshot({
+        Node: { name: "Node", pluralForm: "Nodes", fields: nestedFields("Node") },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "table_renamed",
+            tableName: "Vertex",
+            previousTableName: "Node",
+            before: { name: "Node", pluralForm: "Nodes", fields: nestedFields("Node") },
+            after: { name: "Vertex", pluralForm: "Vertices", fields: nestedFields("Vertex") },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [{ tableName: "Vertex", reason: "Table renamed from Node to Vertex" }],
+        requiresMigrationScript: true,
+      });
+      const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
+      const source = await fs.readFile(result.migrateFilePath!, "utf8");
+      const { steps } = await import(
+        `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString("base64")}`
+      );
+      const { pgliteSchema } = await import(
+        `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(await fs.readFile(result.pgliteSchemaFilePath!, "utf8"))).toString("base64")}`
+      );
+
+      const ids = {
+        root: "00000000-0000-0000-0000-000000000011",
+        otherRoot: "00000000-0000-0000-0000-000000000012",
+        child: "00000000-0000-0000-0000-000000000013",
+        emptyReference: "00000000-0000-0000-0000-000000000014",
+      };
+      type Row = { id: string; info: { parentID: string | null } | null };
+      const pglite = new PGlite();
+      const db = createKyselyPGlite<{ Node: Row; Vertex: Row }>(pglite);
+      try {
+        await pglite.exec(pgliteSchema.tailordb);
+        await pglite.exec(`
+          CREATE TABLE update_log (table_name text);
+          CREATE FUNCTION log_update() RETURNS trigger AS $$ BEGIN INSERT INTO update_log VALUES (TG_TABLE_NAME); RETURN NEW; END $$ LANGUAGE plpgsql;
+          CREATE TRIGGER vertex_update AFTER UPDATE ON "Vertex" FOR EACH ROW EXECUTE FUNCTION log_update();
+        `);
+        await db
+          .insertInto("Node")
+          .values([
+            { id: ids.root, info: null },
+            { id: ids.otherRoot, info: null },
+            { id: ids.child, info: { parentID: ids.root } },
+            { id: ids.emptyReference, info: { parentID: null } },
+          ])
+          .execute();
+
+        await runMigrationSteps(steps, { transaction: (run) => db.transaction().execute(run) });
+
+        expect(await db.selectFrom("Vertex").selectAll().orderBy("id").execute()).toEqual([
+          { id: ids.root, info: null },
+          { id: ids.otherRoot, info: null },
+          { id: ids.child, info: { parentID: ids.root } },
+          { id: ids.emptyReference, info: { parentID: null } },
+        ]);
+        const updates = await pglite.query<{ count: string }>(
+          "SELECT count(*) AS count FROM update_log WHERE table_name = 'Vertex'",
+        );
+        expect(Number(updates.rows[0]!.count)).toBe(1);
+      } finally {
+        await db.destroy();
+      }
+    }, 30_000);
+
+    test("should insert self-referential foreign keys inside a nested field as null and backfill the nested column", async () => {
+      const nestedFields = (foreignKeyType: string, array: boolean) =>
+        ({
+          links: {
+            type: "nested",
+            required: false,
+            array,
+            fields: {
+              parentID: {
+                type: "uuid",
+                required: false,
+                foreignKey: true,
+                foreignKeyType,
+                foreignKeyField: "id",
+              },
+              label: { type: "string", required: false },
+            },
+          },
+        }) as const;
+      const renamePreviousSnapshot = createTestSnapshot({
+        Node: { name: "Node", pluralForm: "Nodes", fields: nestedFields("Node", true) },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "table_renamed",
+            tableName: "Vertex",
+            previousTableName: "Node",
+            before: { name: "Node", pluralForm: "Nodes", fields: nestedFields("Node", true) },
+            after: { name: "Vertex", pluralForm: "Vertices", fields: nestedFields("Vertex", true) },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [{ tableName: "Vertex", reason: "Table renamed from Node to Vertex" }],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
+
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      expect(scriptContent).toContain(
+        '.values(pending.map((row) => ({ ...row, links: clearNestedReferences(row.links, ["parentID"]) })))',
+      );
+      const insertPosition = scriptContent.indexOf('insertInto("Vertex")');
+      const backfillPosition = scriptContent.indexOf("Backfill the self-referential column(s)");
+      expect(backfillPosition).toBeGreaterThan(insertPosition);
+      expect(scriptContent).toContain('.select(["id", "links"])');
+      expect(scriptContent).toContain("const restored = { links: row.links };");
+      expect(scriptContent).toContain(".set(restored)");
+      expect(scriptContent).not.toContain("whereRef");
+
+      expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
+    }, 15_000);
+
+    test("should clear and restore a self-referential column named __proto__ as an own property", async () => {
+      const selfRefColumn = (foreignKeyType: string) => ({
+        type: "uuid",
+        required: false,
+        foreignKey: true,
+        foreignKeyType,
+        foreignKeyField: "id",
+      });
+      const fieldsFor = (foreignKeyType: string) =>
+        Object.fromEntries([["__proto__", selfRefColumn(foreignKeyType)]]) as Record<
+          string,
+          ReturnType<typeof selfRefColumn>
+        >;
+      const renamePreviousSnapshot = createTestSnapshot({
+        Node: { name: "Node", pluralForm: "Nodes", fields: fieldsFor("Node") },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "table_renamed",
+            tableName: "Vertex",
+            previousTableName: "Node",
+            before: { name: "Node", pluralForm: "Nodes", fields: fieldsFor("Node") },
+            after: { name: "Vertex", pluralForm: "Vertices", fields: fieldsFor("Vertex") },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [{ tableName: "Vertex", reason: "Table renamed from Node to Vertex" }],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
+
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      expect(scriptContent).toContain('({ ...row, ["__proto__"]: null })');
+      expect(scriptContent).toContain('const restored = { ["__proto__"]: row["__proto__"] };');
+      expect(scriptContent).not.toContain("__proto__: null");
+    }, 15_000);
+
+    test("should not emit the nested reference helper for a rename without nested self-references", async () => {
+      const renamePreviousSnapshot = createTestSnapshot({
+        User: { name: "User", pluralForm: "Users", fields: {} },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "table_renamed",
+            tableName: "Person",
+            previousTableName: "User",
+            before: { name: "User", pluralForm: "Users", fields: {} },
+            after: { name: "Person", pluralForm: "People", fields: {} },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [{ tableName: "Person", reason: "Table renamed from User to Person" }],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
+
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      expect(scriptContent).not.toContain("clearNestedReferences");
     }, 15_000);
 
     test("should not scaffold a reference fixup for a retarget that follows a table rename", async () => {
@@ -1980,6 +2352,147 @@ describe("template-generator", () => {
       expect(scriptContent.match(/\{\n {4}const orphanedRecords =/g) ?? []).toHaveLength(2);
     });
 
+    describe("references that point at no record", () => {
+      const first = "00000000-0000-0000-0000-000000000001";
+      const second = "00000000-0000-0000-0000-000000000002";
+      const third = "00000000-0000-0000-0000-000000000003";
+      const missing = "00000000-0000-0000-0000-000000000009";
+      const reference = (table: string, field = "id") =>
+        ({ foreignKey: true, foreignKeyType: table, foreignKeyField: field }) as const;
+      const user = {
+        name: "User",
+        pluralForm: "Users",
+        fields: { code: { type: "string", required: true, unique: true } },
+      } as const;
+      const order = (ownerId: SnapshotFieldConfig) => ({
+        name: "Order",
+        pluralForm: "Orders",
+        fields: { ownerId },
+      });
+      const uuid = { type: "uuid", required: false } as const;
+      const string = { type: "string", required: false } as const;
+
+      const generate = async (
+        previous: SchemaSnapshot["tables"],
+        current: SchemaSnapshot["tables"],
+      ) => {
+        const diff = compareSnapshots(
+          normalizeSchemaSnapshot(createTestSnapshot(previous)),
+          normalizeSchemaSnapshot(createTestSnapshot(current)),
+        );
+        return generateDiffFiles(diff, tempDir, 1, createTestSnapshot(previous));
+      };
+
+      test.each<{
+        change: string;
+        previous: SchemaSnapshot["tables"];
+        current: SchemaSnapshot["tables"];
+        fixtures: string;
+        expected: (string | null)[];
+      }>([
+        {
+          change: "an added relation",
+          previous: { User: user, Order: order(uuid) },
+          current: { User: user, Order: order({ ...uuid, ...reference("User") }) },
+          fixtures: `INSERT INTO "User" (id, code) VALUES ('${first}', 'a');
+            INSERT INTO "Order" (id, "ownerId") VALUES ('${first}', '${first}'), ('${second}', '${missing}'), ('${third}', NULL);`,
+          expected: [first, null, null],
+        },
+        {
+          change: "an added relation to a key other than id",
+          previous: { User: user, Order: order(string) },
+          current: { User: user, Order: order({ ...string, ...reference("User", "code") }) },
+          fixtures: `INSERT INTO "User" (id, code) VALUES ('${first}', 'a');
+            INSERT INTO "Order" (id, "ownerId") VALUES ('${first}', 'a'), ('${second}', 'z'), ('${third}', NULL);`,
+          expected: ["a", null, null],
+        },
+        {
+          change: "an added relation to its own table",
+          previous: { Order: order(uuid) },
+          current: { Order: order({ ...uuid, ...reference("Order") }) },
+          fixtures: `INSERT INTO "Order" (id, "ownerId") VALUES ('${first}', NULL), ('${second}', '${first}'), ('${third}', '${missing}');`,
+          expected: [null, first, null],
+        },
+        {
+          change: "a relation retargeted to its own table",
+          previous: { User: user, Order: order({ ...uuid, ...reference("User") }) },
+          current: { User: user, Order: order({ ...uuid, ...reference("Order") }) },
+          fixtures: `INSERT INTO "User" (id, code) VALUES ('${missing}', 'a');
+            INSERT INTO "Order" (id, "ownerId") VALUES ('${first}', NULL), ('${second}', '${first}'), ('${third}', '${missing}');`,
+          expected: [null, first, null],
+        },
+      ])(
+        "clears the values that point at no record after $change",
+        async ({ previous, current, fixtures, expected }) => {
+          const result = await generate(previous, current);
+          const source = await fs.readFile(result.migrateFilePath!, "utf8");
+          expect(countUnresolvedTodos(source, "migrate.ts")).toBe(1);
+          const edited = replaceTodoCalls(source, "null");
+          await fs.writeFile(result.migrateFilePath!, edited);
+          const { steps } = await importTypeScript(edited);
+          const { pgliteSchema } = await importTypeScript(
+            await fs.readFile(result.pgliteSchemaFilePath!, "utf8"),
+          );
+          const pglite = new PGlite();
+          const db = createKyselyPGlite(pglite);
+          try {
+            await pglite.exec(pgliteSchema.tailordb);
+            await pglite.exec(fixtures);
+            await runMigrationSteps(steps, { transaction: (run) => db.transaction().execute(run) });
+            const { rows } = await pglite.query<{ ownerId: string | null }>(
+              'SELECT "ownerId" FROM "Order" ORDER BY id',
+            );
+            expect(rows.map((row) => row.ownerId)).toEqual(expected);
+          } finally {
+            await db.destroy();
+          }
+          expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
+        },
+        30_000,
+      );
+
+      test("leaves the values of an array field to a TODO call", async () => {
+        const uuids = { ...uuid, array: true } as const;
+        const result = await generate(
+          { User: user, Order: order(uuids) },
+          { User: user, Order: order({ ...uuids, ...reference("User") }) },
+        );
+        const source = await fs.readFile(result.migrateFilePath!, "utf8");
+
+        expect(countUnresolvedTodos(source, "migrate.ts")).toBe(1);
+        expect(source).toContain(
+          'void TODO("resolve the Order.ownerId elements that point at no User record");',
+        );
+        expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
+      }, 30_000);
+
+      test("resolves the values before the duplicates of a one-to-one relation", async () => {
+        const result = await generate(
+          { User: user, Order: order(uuid) },
+          { User: user, Order: order({ ...uuid, unique: true, ...reference("User") }) },
+        );
+        const source = await fs.readFile(result.migrateFilePath!, "utf8");
+
+        expect(source.indexOf("const orphanedRecords =")).toBeGreaterThan(-1);
+        expect(source.indexOf("const orphanedRecords =")).toBeLessThan(
+          source.indexOf("const duplicates ="),
+        );
+      });
+
+      test("resolves the values before the null ones of a required relation are filled", async () => {
+        const result = await generate(
+          { User: user, Order: order(uuid) },
+          { User: user, Order: order({ ...uuid, required: true, ...reference("User") }) },
+        );
+        const source = await fs.readFile(result.migrateFilePath!, "utf8");
+
+        expect(source.indexOf("const orphanedRecords =")).toBeGreaterThan(-1);
+        expect(source.indexOf("const orphanedRecords =")).toBeLessThan(
+          source.indexOf('.where("ownerId", "is", null)'),
+        );
+      });
+    });
+
     test("should warn that decreasing decimal scale can round values", async () => {
       const snapshotWithScale4 = createTestSnapshot({
         Item: {
@@ -2218,32 +2731,11 @@ describe("template-generator", () => {
         const result = await generateDiffFiles(diff, tempDir, 1, snapshot);
         const source = await fs.readFile(result.migrateFilePath!, "utf8");
         expect(countUnresolvedTodos(source, "migrate.ts")).toBe(1);
-        const ast = ts.createSourceFile("migrate.ts", source, ts.ScriptTarget.Latest, true);
-        let edited = source;
-        function replaceTodo(node: ts.Node) {
-          if (
-            ts.isCallExpression(node) &&
-            ts.isIdentifier(node.expression) &&
-            node.expression.text === "TODO"
-          ) {
-            edited =
-              source.slice(0, node.getStart(ast)) +
-              JSON.stringify("ACTIVE") +
-              source.slice(node.end);
-          }
-          ts.forEachChild(node, replaceTodo);
-        }
-        replaceTodo(ast);
-        edited = edited.replace(
-          'import { TODO, type MigrationSteps, type Transaction } from "./db";',
-          'import type { MigrationSteps, Transaction } from "./db";',
-        );
+        const edited = replaceTodoCalls(source, JSON.stringify("ACTIVE"));
         await fs.writeFile(result.migrateFilePath!, edited);
-        const { steps } = await import(
-          `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(edited)).toString("base64")}`
-        );
-        const { pgliteSchema } = await import(
-          `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(await fs.readFile(result.pgliteSchemaFilePath!, "utf8"))).toString("base64")}`
+        const { steps } = await importTypeScript(edited);
+        const { pgliteSchema } = await importTypeScript(
+          await fs.readFile(result.pgliteSchemaFilePath!, "utf8"),
         );
         const pglite = new PGlite();
         const db = createKyselyPGlite<{ Task: { id: string; status: string[] | null } }>(pglite);
@@ -2445,7 +2937,7 @@ describe("template-generator", () => {
 
       expect(script).toContain('import { PGlite } from "@electric-sql/pglite"');
       expect(script).toContain(
-        'import { applyDateRepresentation, createKyselyPGlite, type Unmigrated } from "@tailor-platform/sdk/vitest"',
+        'import { applyDateRepresentation, createKyselyPGlite, prepareFixtures, type Unmigrated } from "@tailor-platform/sdk/vitest"',
       );
       expect(script).toContain('import type { Database } from "./db"');
       expect(script).toContain('import { pgliteSchema } from "./db.pglite"');
@@ -2457,6 +2949,23 @@ describe("template-generator", () => {
       );
       expect(script).toContain('describe("tailordb migration (PGlite)"');
     });
+
+    test.each(["main", "steps"] as const)(
+      "prepares the records with relations unchecked before the %s script runs against checked ones",
+      (scriptKind) => {
+        const script = generateMigrationPgliteTestScript(createMockMigrationDiff(), scriptKind);
+        const prepare = script.indexOf("await prepareFixtures(pglite, async () => {");
+        const run = script.indexOf(scriptKind === "main" ? "main(trx)" : "runMigrationSteps(steps");
+
+        expect(script).toContain("prepareFixtures");
+        expect(script).toMatch(
+          /import \{[^}]*\bprepareFixtures\b[^}]*\} from "@tailor-platform\/sdk\/vitest"/,
+        );
+        expect(prepare).toBeGreaterThan(-1);
+        expect(run).toBeGreaterThan(prepare);
+        expect(script).not.toContain("session_replication_role");
+      },
+    );
 
     test("reads Temporal values from PGlite for a migration recorded as temporal", () => {
       const script = generateMigrationPgliteTestScript(createMockMigrationDiff({ temporal: true }));
@@ -2473,7 +2982,7 @@ describe("template-generator", () => {
       );
 
       expect(script).toContain(
-        'import { applyDateRepresentation, createKyselyPGlite, type Unmigrated } from "@tailor-platform/sdk/vitest"',
+        'import { applyDateRepresentation, createKyselyPGlite, prepareFixtures, type Unmigrated } from "@tailor-platform/sdk/vitest"',
       );
       expect(script).toContain('applyDateRepresentation("temporal")');
       expect(script).toContain("tailor-runtime");
@@ -2572,32 +3081,6 @@ describe("template-generator", () => {
       const script = generateMigrationTestScript(createMockMigrationDiff({ namespace: 'we"ird' }));
 
       expect(script).toContain('describe("we\\"ird migration"');
-    });
-  });
-
-  describe("migrationScriptExists", () => {
-    test("should return true if migration script exists in directory", async () => {
-      await writeExistingMigrateFile(2);
-
-      const exists = await migrationScriptExists(tempDir, 2);
-      expect(exists).toBe(true);
-    });
-
-    test("should return false if migration script does not exist", async () => {
-      const exists = await migrationScriptExists(tempDir, 999);
-      expect(exists).toBe(false);
-    });
-  });
-
-  describe("getMigrationScriptPath", () => {
-    test.each([
-      [1, "0001"],
-      [2, "0002"],
-      [10, "0010"],
-      [100, "0100"],
-    ])("should return correct path for migration number %i", (migrationNumber, dir) => {
-      const result = getMigrationScriptPath(tempDir, migrationNumber);
-      expect(result).toBe(path.join(tempDir, dir, MIGRATE_FILE_NAME));
     });
   });
 });

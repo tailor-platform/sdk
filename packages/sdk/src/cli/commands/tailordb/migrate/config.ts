@@ -13,6 +13,8 @@ import type { AppConfig } from "#/configure/config/types";
 
 /**
  * Namespace with migrations configuration
+ *
+ * **Beta:** This API may change in future releases.
  */
 export interface NamespaceWithMigrations {
   namespace: string;
@@ -36,6 +38,8 @@ function hasMigrationConfig(dbConfig: unknown): dbConfig is { migration: { direc
 
 /**
  * Get namespaces that have migrations configured
+ *
+ * **Beta:** This API may change in future releases.
  * @param {AppConfig} config - Application configuration
  * @param {string} configDir - Configuration directory path
  * @returns {NamespaceWithMigrations[]} Array of namespaces with migrations configured
@@ -52,6 +56,27 @@ export function getNamespacesWithMigrations(
 
     const migrationsDir = path.resolve(configDir, dbConfig.migration.directory);
     result.push({ namespace, migrationsDir });
+  }
+
+  const namespacesByDirectory = Map.groupBy(result, (entry) => entry.migrationsDir);
+  const conflicts = [...namespacesByDirectory]
+    .filter(([, entries]) => entries.length > 1)
+    .map(([directory, entries]) => ({
+      directory,
+      namespaces: entries.map((entry) => entry.namespace),
+    }));
+  if (conflicts.length > 0) {
+    throw CLIError({
+      code: "MIGRATION_DIRECTORY_CONFLICT",
+      message: conflicts
+        .map(
+          ({ directory, namespaces }) =>
+            `TailorDB namespaces ${namespaces.map((name) => `"${name}"`).join(", ")} share the migration directory ${directory}`,
+        )
+        .join("\n"),
+      suggestion: "Set a different `migration.directory` for each namespace in tailor.config.ts.",
+      context: { conflicts },
+    });
   }
 
   return result;

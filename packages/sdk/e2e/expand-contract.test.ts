@@ -15,6 +15,7 @@ import { describe, test, expect, aroundAll } from "vitest";
 import {
   getMigrationFilePath,
   getMigrationFiles,
+  loadDiff,
   reconstructSnapshotFromMigrations,
 } from "../src/cli/commands/tailordb/migrate/snapshot";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
@@ -26,6 +27,7 @@ import {
   trackWorkspace,
   trackTempDir,
 } from "./globalSetup";
+import { mergeStepsIntoOne, runTailorDBScript } from "./migration-workspace";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -53,6 +55,17 @@ describe("E2E: TailorDB expand-contract field type change", { concurrent: false 
 
   function tryInTempDir(args: string[], timeoutMs: number, signal: AbortSignal) {
     return tryCli(args, { cwd: tempDir, timeoutMs, signal });
+  }
+
+  function runTailorDBScriptInTempDir(body: string, signal: AbortSignal) {
+    return runTailorDBScript({
+      cwd: tempDir,
+      configPath: createConfig(),
+      workspaceId,
+      namespace: tailordbName,
+      body,
+      signal,
+    });
   }
 
   /**
@@ -162,31 +175,14 @@ export type user = typeof user;
         signal,
       );
 
-      // A schema change is what earns a migration to hang the seed script on.
-      updateTypeFile("db.int()", "db.string()", "  seedMarker: db.string({ optional: true }),\n");
-      await runInTempDir(
-        ["tailordb", "migration", "generate", "--config", configPath, "--yes"],
-        CLI_BUDGET_MS.local,
-        signal,
-      );
-      fs.writeFileSync(
-        getMigrationFilePath(migrationsDir, 1, "migrate"),
-        `import type { Transaction } from "./db";
-
-export async function main(trx: Transaction): Promise<void> {
-  await trx
+      await runTailorDBScriptInTempDir(
+        `  await db
     .insertInto("User")
     .values([
       { id: "${FIRST_ID}", name: "First", email: "first@example.com", price: 1250, tags: "alpha" },
       { id: "${SECOND_ID}", name: "Second", email: "second@example.com", price: -7, tags: "beta" },
     ])
-    .execute();
-}
-`,
-      );
-      await runInTempDir(
-        ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
-        CLI_BUDGET_MS.deploy,
+    .execute();`,
         signal,
       );
 
@@ -194,22 +190,13 @@ export async function main(trx: Transaction): Promise<void> {
         reconstructSnapshotFromMigrations(migrationsDir)?.tables.User?.fields.price?.type,
       ).toBe("integer");
     },
-    cliTestTimeout(
-      CLI_BUDGET_MS.local,
-      CLI_BUDGET_MS.deploy,
-      CLI_BUDGET_MS.local,
-      CLI_BUDGET_MS.deploy,
-    ),
+    cliTestTimeout(CLI_BUDGET_MS.local, CLI_BUDGET_MS.deploy, CLI_BUDGET_MS.script),
   );
 
   test(
     "rejects the type change until the conversion is requested",
     async ({ signal }) => {
-      updateTypeFile(
-        "db.bool()",
-        "db.string({ array: true })",
-        "  seedMarker: db.string({ optional: true }),\n",
-      );
+      updateTypeFile("db.bool()", "db.string({ array: true })");
       const configPath = createConfig();
 
       const result = await tryInTempDir(
@@ -283,7 +270,7 @@ export async function main(trx: Transaction): Promise<void> {
           "const convertedValue = row.price > 0;",
         );
       expect(reviewed).not.toMatch(/\bTODO\(/);
-      fs.writeFileSync(migratePath, reviewed);
+      fs.writeFileSync(migratePath, mergeStepsIntoOne(reviewed));
 
       await runInTempDir(
         ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
@@ -297,48 +284,21 @@ export async function main(trx: Transaction): Promise<void> {
   test(
     "reads every row back through the new type",
     async ({ signal }) => {
-      const configPath = createConfig();
-      updateTypeFile(
-        "db.bool()",
-        "db.string({ array: true })",
-        "  seedMarker: db.string({ optional: true }),\n  readbackMarker: db.string({ optional: true }),\n",
-      );
-      await runInTempDir(
-        ["tailordb", "migration", "generate", "--config", configPath, "--yes"],
-        CLI_BUDGET_MS.local,
+      const rows = (await runTailorDBScriptInTempDir(
+        `  return await db.selectFrom("User").selectAll().orderBy("id", "asc").execute();`,
         signal,
-      );
+      )) as Record<string, unknown>[];
 
-      const readbackNumber = Math.max(...getMigrationFiles(migrationsDir).map((f) => f.number));
-      fs.writeFileSync(
-        getMigrationFilePath(migrationsDir, readbackNumber, "migrate"),
-        `import type { Transaction } from "./db";
-
-export async function main(trx: Transaction): Promise<void> {
-  const rows = await trx.selectFrom("User").selectAll().orderBy("id", "asc").execute();
-  const seen = rows
-    .map((row) => \`\${row.id}=\${typeof row.price}:\${String(row.price)}:\${JSON.stringify(row.tags)}\`)
-    .join("|");
-  if (seen !== '${FIRST_ID}=boolean:true:["alpha"]|${SECOND_ID}=boolean:false:["beta"]') {
-    throw new Error("PROBE_MISMATCH " + seen);
-  }
-  if ("priceMigrate" in rows[0]! || "tagsMigrate" in rows[0]!) {
-    throw new Error("PROBE_TEMP_FIELD_REMAINS");
-  }
-}
-`,
-      );
-
-      const result = await tryInTempDir(
-        ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
-        CLI_BUDGET_MS.migratingDeploy,
-        signal,
-      );
-      expect(result.output).not.toContain("PROBE_MISMATCH");
-      expect(result.output).not.toContain("PROBE_TEMP_FIELD_REMAINS");
-      expect(result.ok).toBe(true);
+      expect(rows).toEqual([
+        expect.objectContaining({ id: FIRST_ID, price: true, tags: ["alpha"] }),
+        expect.objectContaining({ id: SECOND_ID, price: false, tags: ["beta"] }),
+      ]);
+      for (const row of rows) {
+        expect(Object.keys(row)).not.toContain("priceMigrate");
+        expect(Object.keys(row)).not.toContain("tagsMigrate");
+      }
     },
-    cliTestTimeout(CLI_BUDGET_MS.local, CLI_BUDGET_MS.migratingDeploy),
+    cliTestTimeout(CLI_BUDGET_MS.script),
   );
 
   test("replays local history to the declared schema", () => {
@@ -351,4 +311,28 @@ export async function main(trx: Transaction): Promise<void> {
     );
     expect(replayed?.tables.User?.fields.tagsMigrate).toBeUndefined();
   });
+
+  test(
+    "generates the next migration on top of the finished conversion",
+    async ({ signal }) => {
+      updateTypeFile(
+        "db.bool()",
+        "db.string({ array: true })",
+        "  note: db.string({ optional: true }),\n",
+      );
+      const configPath = createConfig();
+
+      await runInTempDir(
+        ["tailordb", "migration", "generate", "--config", configPath, "--yes"],
+        CLI_BUDGET_MS.local,
+        signal,
+      );
+
+      const latest = Math.max(...getMigrationFiles(migrationsDir).map((f) => f.number));
+      expect(loadDiff(getMigrationFilePath(migrationsDir, latest, "diff")).changes).toEqual([
+        expect.objectContaining({ kind: "field_added", fieldName: "note" }),
+      ]);
+    },
+    cliTestTimeout(CLI_BUDGET_MS.local),
+  );
 });

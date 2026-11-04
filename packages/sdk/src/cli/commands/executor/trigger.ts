@@ -8,7 +8,7 @@ import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { getExecutorWaitFailure, watchExecutorJob } from "./jobs";
+import { getExecutorWaitFailure, printDownstreamExecution, watchExecutorJob } from "./jobs";
 import { executorTriggerTypeToString } from "./status";
 import type { IncomingWebhookTrigger, ScheduleTriggerInput } from "#/types/executor.generated";
 import type { JsonObject } from "@bufbuild/protobuf";
@@ -309,49 +309,7 @@ The \`--logs\` option displays logs from the downstream execution when available
         logger.log(styles.bold(`\nTarget Type: ${watchResult.targetType}`));
         logger.log(`Job Status: ${watchResult.job.status}`);
 
-        if (watchResult.workflowExecutionId) {
-          logger.log(styles.bold("\nWorkflow Execution:"));
-          logger.log(`  ID: ${watchResult.workflowExecutionId}`);
-          if (watchResult.workflowStatus) {
-            logger.log(`  Status: ${watchResult.workflowStatus}`);
-          }
-          if (watchResult.workflowJobLogs && watchResult.workflowJobLogs.length > 0) {
-            for (const jobLog of watchResult.workflowJobLogs) {
-              logger.log(styles.bold(`\n  Job: ${jobLog.jobName}`));
-              if (jobLog.logs) {
-                logger.log(styles.dim("    Logs:"));
-                for (const line of jobLog.logs.split("\n")) {
-                  logger.log(`      ${line}`);
-                }
-              }
-              if (jobLog.result) {
-                logger.log(styles.dim("    Result:"));
-                try {
-                  const parsed = JSON.parse(jobLog.result);
-                  const formatted = JSON.stringify(parsed, null, 2);
-                  for (const line of formatted.split("\n")) {
-                    logger.log(`      ${line}`);
-                  }
-                } catch {
-                  logger.log(`      ${jobLog.result}`);
-                }
-              }
-            }
-          }
-        }
-        if (watchResult.functionExecutionId) {
-          logger.log(styles.bold("\nFunction Execution:"));
-          logger.log(`  ID: ${watchResult.functionExecutionId}`);
-          if (watchResult.functionStatus) {
-            logger.log(`  Status: ${watchResult.functionStatus}`);
-          }
-          if (watchResult.functionLogs) {
-            logger.log(styles.dim("  Logs:"));
-            for (const line of watchResult.functionLogs.split("\n")) {
-              logger.log(`    ${line}`);
-            }
-          }
-        }
+        printDownstreamExecution(watchResult);
       } else {
         logger.out(watchResult);
       }

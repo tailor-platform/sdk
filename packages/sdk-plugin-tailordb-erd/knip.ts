@@ -4,4 +4,5 @@ export default {
   // Copied into dist by tsdown.config.ts and read at runtime, never imported.
   ignore: ["src/viewer-assets/**"],
   ignoreBinaries: ["knip", "publint"],
+  treatConfigHintsAsErrors: true,
 } satisfies KnipConfig;

@@ -1,6 +1,17 @@
 import { parse, Lang } from "@ast-grep/napi";
 import * as path from "pathe";
 import { transformPackageScripts } from "../../../../src/package-json-scripts";
+import {
+  nodeRangeKey,
+  sourceArrayElements,
+  sourceStaticStringContent,
+  sourceStringContent,
+} from "../../../../src/source-strings";
+import {
+  TAILOR_CLI_COMMANDS,
+  TAILOR_CLI_VALUE_FLAG_SET,
+  TAILOR_CLI_VALUE_FLAGS,
+} from "../../../../src/tailor-cli-tokens";
 import type { SgNode } from "@ast-grep/napi";
 
 const SOURCE_ARG_VALUE = `(?:[^\\s'"\`;|&]+|'[^']*'|"(?:(?:\\\\.)|[^"\\\\])*")`;
@@ -36,62 +47,8 @@ const PKG_RUNNER_RE = new RegExp(
 // (e.g. `tailor-sdk-skills`) to avoid partial-match rewrites.
 const TAILOR_SDK_RE = /(?<![.\w-])tailor-sdk(?![\w-])(@[^\s'"`;|&)]+)?/g;
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
-const TAILOR_CLI_COMMANDS = [
-  "api",
-  "apply",
-  "authconnection",
-  "completion",
-  "crash-report",
-  "crashreport",
-  "deploy",
-  "executor",
-  "function",
-  "generate",
-  "init",
-  "login",
-  "logout",
-  "machineuser",
-  "oauth2client",
-  "open",
-  "organization",
-  "profile",
-  "query",
-  "remove",
-  "secret",
-  "setup",
-  "show",
-  "skills",
-  "staticwebsite",
-  "tailordb",
-  "upgrade",
-  "user",
-  "workflow",
-  "workspace",
-] as const;
 const TAILOR_CLI_COMMAND_PATTERN = `(?:${TAILOR_CLI_COMMANDS.join("|")})`;
-const TAILOR_CLI_VALUE_FLAG =
-  "(?:--env-file-if-exists|--env-file|--profile|--config|--workspace-id|--arg|--query|--file|--name|--namespace|--dir|-e|-p|-c|-w|-a|-q|-f|-n)";
-const TAILOR_CLI_VALUE_FLAGS = new Set([
-  "--env-file-if-exists",
-  "--env-file",
-  "--profile",
-  "--config",
-  "--workspace-id",
-  "--arg",
-  "--query",
-  "--file",
-  "--name",
-  "--namespace",
-  "--dir",
-  "-e",
-  "-p",
-  "-c",
-  "-w",
-  "-a",
-  "-q",
-  "-f",
-  "-n",
-]);
+const TAILOR_CLI_VALUE_FLAG = `(?:${TAILOR_CLI_VALUE_FLAGS.join("|")})`;
 const TAILOR_CLI_COMMAND_VALUE_FLAGS = new Set(["--value", "-v"]);
 const SOURCE_ESCAPED_QUOTED_VALUE = String.raw`\\"(?:\\\\.|[^"\\])*\\"|\\'(?:\\\\.|[^'\\])*\\'`;
 const SOURCE_CLI_ARG_VALUE = `(?:${SOURCE_ESCAPED_QUOTED_VALUE}|${SOURCE_ARG_VALUE})`;
@@ -711,7 +668,7 @@ function isTailorCliValueToken(tokens: readonly string[], index: number): boolea
   const flag = token.split("=", 1)[0]!;
   if (
     token.includes("=") &&
-    TAILOR_CLI_VALUE_FLAGS.has(flag) &&
+    TAILOR_CLI_VALUE_FLAG_SET.has(flag) &&
     tokens.slice(0, index).some((value) => isTailorCliTokenValue(value))
   ) {
     return true;
@@ -720,7 +677,7 @@ function isTailorCliValueToken(tokens: readonly string[], index: number): boolea
   const previous = tokens[index - 1];
   return (
     previous != null &&
-    TAILOR_CLI_VALUE_FLAGS.has(previous.split("=", 1)[0]!) &&
+    TAILOR_CLI_VALUE_FLAG_SET.has(previous.split("=", 1)[0]!) &&
     !previous.includes("=") &&
     tokens.slice(0, index - 1).some((value) => isTailorCliTokenValue(value))
   );
@@ -732,7 +689,7 @@ function tokensAfterCliBinaryNeedRename(tokens: readonly string[], start: number
     const token = tokens[index]!;
     if (token === "--machineuser" || token.startsWith("--machineuser=")) return true;
     if (token.startsWith("-")) {
-      if (TAILOR_CLI_VALUE_FLAGS.has(token.split("=", 1)[0]!) && !token.includes("=")) {
+      if (TAILOR_CLI_VALUE_FLAG_SET.has(token.split("=", 1)[0]!) && !token.includes("=")) {
         index += 1;
       }
       continue;
@@ -851,140 +808,11 @@ function pushSourceTextEdit(
   }
 }
 
-function nodeRangeKey(node: SgNode): string {
-  const range = node.range();
-  return `${range.start.index}:${range.end.index}`;
-}
-
-function sourceStringContent(node: SgNode, source: string): string | null {
-  const kind = node.kind();
-  if (kind !== "string" && kind !== "template_string") return null;
-  if (
-    kind === "template_string" &&
-    node.children().some((child: SgNode) => child.kind() === "template_substitution")
-  ) {
-    return null;
-  }
-  const range = node.range();
-  return source.slice(range.start.index + 1, range.end.index - 1);
-}
-
 function sourceStringRawContent(node: SgNode, source: string): string | null {
   const kind = node.kind();
   if (kind !== "string" && kind !== "template_string") return null;
   const range = node.range();
   return source.slice(range.start.index + 1, range.end.index - 1);
-}
-
-function sourceConstInitializerContent(node: SgNode, source: string): string | null {
-  const directValue = sourceStringContent(node, source);
-  if (directValue != null) return directValue;
-  if (
-    node.kind() !== "as_expression" &&
-    node.kind() !== "satisfies_expression" &&
-    node.kind() !== "parenthesized_expression"
-  ) {
-    return null;
-  }
-  for (const child of node.children()) {
-    const childValue = sourceConstInitializerContent(child, source);
-    if (childValue != null) return childValue;
-  }
-  return null;
-}
-
-function isConstVariableDeclarator(node: SgNode): boolean {
-  return (
-    node
-      .parent()
-      ?.children()
-      .some((child) => child.kind() === "const") ?? false
-  );
-}
-
-function sourceStaticStringContent(node: SgNode, source: string): string | null {
-  return (
-    sourceStringContent(node, source) ??
-    (node.kind() === "identifier" ? sourceScopedStringVariableContent(node, source) : null)
-  );
-}
-
-function sourceScopedStringVariableContent(identifier: SgNode, source: string): string | null {
-  const name = identifier.text();
-  const before = identifier.range().start.index;
-  let current = identifier.parent();
-  while (current != null) {
-    if (isSourceScopeNode(current)) {
-      const value = findSourceStringVariableInScope(current, name, before, source);
-      if (value != null) return value;
-    }
-    current = current.parent();
-  }
-  return null;
-}
-
-function findSourceStringVariableInScope(
-  scope: SgNode,
-  name: string,
-  before: number,
-  source: string,
-): string | null {
-  let value: string | null = null;
-  const visit = (node: SgNode): void => {
-    if (node !== scope && isSourceScopeNode(node)) return;
-    if (node.kind() === "variable_declarator" && node.range().end.index < before) {
-      const declarationValue = sourceStringVariableDeclarationValue(node, name, source);
-      if (declarationValue != null) value = declarationValue;
-      return;
-    }
-    for (const child of node.children()) {
-      visit(child);
-    }
-  };
-  visit(scope);
-  return value;
-}
-
-function sourceStringVariableDeclarationValue(
-  node: SgNode,
-  name: string,
-  source: string,
-): string | null {
-  if (!isConstVariableDeclarator(node)) return null;
-  const children = node.children();
-  const identifier = children.find((child) => child.kind() === "identifier");
-  if (identifier?.text() !== name) return null;
-  const initializer = children.findLast(
-    (child) => sourceConstInitializerContent(child, source) != null,
-  );
-  return initializer == null ? null : sourceConstInitializerContent(initializer, source);
-}
-
-function isSourceScopeNode(node: SgNode): boolean {
-  const kind = node.kind();
-  return (
-    kind === "program" ||
-    kind === "statement_block" ||
-    kind === "function_declaration" ||
-    kind === "arrow_function" ||
-    kind === "method_definition"
-  );
-}
-
-function isSyntaxOnlyNode(node: SgNode): boolean {
-  const kind = node.kind();
-  return (
-    kind === "[" ||
-    kind === "]" ||
-    kind === "(" ||
-    kind === ")" ||
-    kind === "," ||
-    kind === "comment"
-  );
-}
-
-function sourceArrayElements(node: SgNode): SgNode[] {
-  return node.children().filter((child: SgNode) => !isSyntaxOnlyNode(child));
 }
 
 function nodeIndex(nodes: SgNode[], node: SgNode): number {
@@ -1017,7 +845,7 @@ function firstNonOptionIndex(
 }
 
 function isTailorCliValueFlag(value: string): boolean {
-  return TAILOR_CLI_VALUE_FLAGS.has(value.split("=", 1)[0]!) || isPotentialValueFlag(value);
+  return TAILOR_CLI_VALUE_FLAG_SET.has(value.split("=", 1)[0]!) || isPotentialValueFlag(value);
 }
 
 function packageRunnerPackageStartIndex(
@@ -1337,7 +1165,7 @@ function arrayHasCliRenameLegacyArgs(elements: SgNode[], start: number, source: 
     if (value == null) continue;
     if (value === "--machineuser" || value.startsWith("--machineuser=")) return true;
     if (
-      TAILOR_CLI_VALUE_FLAGS.has(value.split("=", 1)[0]!) ||
+      TAILOR_CLI_VALUE_FLAG_SET.has(value.split("=", 1)[0]!) ||
       (commandSeen && TAILOR_CLI_COMMAND_VALUE_FLAGS.has(value.split("=", 1)[0]!))
     ) {
       if (!value.includes("=")) index += 1;

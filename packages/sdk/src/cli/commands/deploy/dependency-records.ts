@@ -1,7 +1,6 @@
 import { getOrNull } from "#/cli/shared/client";
 import { eventSourceLabel } from "#/cli/shared/publish-events";
 import {
-  type DependencyScope,
   eventSourceKey,
   recordedDependencies,
   resolverTrn,
@@ -19,11 +18,7 @@ type RecomputedResource = {
   trn: string;
   /** Key the run's own subscriptions are recorded under. */
   key: string;
-  /** Which of the resource's values this entry concerns. */
-  scope: DependencyScope;
-  /** How it is named in the confirmation, e.g. `Workflow "nightly"`. */
-  label: string;
-};
+} & Pick<MissingDependentApp, "resource" | "resourceType" | "namespace" | "name" | "scope">;
 
 /**
  * List the resources whose `publishEvents` this run recomputes.
@@ -52,7 +47,10 @@ function recomputedResources(
           trn: tailorDBTypeTrn(workspaceId, service.namespace, tableName),
           key: eventSourceKey.tailorDBType(service.namespace, tableName),
           scope: "resource",
-          label: eventSourceLabel.tailorDBType(tableName),
+          resource: eventSourceLabel.tailorDBType(tableName),
+          resourceType: "tailordb.type",
+          namespace: service.namespace,
+          name: tableName,
         });
       }
     }
@@ -65,7 +63,10 @@ function recomputedResources(
           trn: resolverTrn(workspaceId, service.namespace, resolver.name),
           key: eventSourceKey.resolver(service.namespace, resolver.name),
           scope: "resource",
-          label: eventSourceLabel.resolver(resolver.name),
+          resource: eventSourceLabel.resolver(resolver.name),
+          resourceType: "pipeline.resolver",
+          namespace: service.namespace,
+          name: resolver.name,
         });
       }
     }
@@ -77,7 +78,9 @@ function recomputedResources(
         trn: resourceTrn(workspaceId, "idp", idp.name),
         key: eventSourceKey.idp(idp.name),
         scope: "resource",
-        label: eventSourceLabel.idpService(idp.name),
+        resource: eventSourceLabel.idpService(idp.name),
+        resourceType: "idp.service",
+        name: idp.name,
       });
     }
   }
@@ -100,7 +103,9 @@ function recomputedResources(
         trn,
         key: eventSourceKey.workflow(workflow.name),
         scope: "resource",
-        label: eventSourceLabel.workflow(workflow.name),
+        resource: eventSourceLabel.workflow(workflow.name),
+        resourceType: "workflow",
+        name: workflow.name,
       });
     }
     // Only the jobs this workflow runs decide whether its job records matter, and
@@ -116,7 +121,9 @@ function recomputedResources(
         trn,
         key: eventSourceKey.workflowJobs(workflow.name),
         scope: "jobs",
-        label: eventSourceLabel.workflowJobs(workflow.name),
+        resource: eventSourceLabel.workflowJobs(workflow.name),
+        resourceType: "workflow",
+        name: workflow.name,
       });
     }
   }
@@ -156,15 +163,11 @@ export async function fetchMissingDependentApps(params: {
   const found = await Promise.all(
     recomputedResources(workspaceId, application, jobsByWorkflow, subscribedKeys)
       .filter(({ key }) => !subscribedKeys.has(key))
-      .map(async ({ trn, scope, label }) => {
+      .map(async ({ trn, key: _key, ...resource }) => {
         const metadata = await getOrNull(() => client.getMetadata({ trn }));
-        return recordedDependencies(metadata?.metadata?.labels, scope)
+        return recordedDependencies(metadata?.metadata?.labels, resource.scope)
           .filter((dependency) => !runAppIds.has(dependency.appId))
-          .map((dependency) => ({
-            resource: label,
-            appId: dependency.appId,
-            reason: dependency.reason,
-          }));
+          .map((dependency) => ({ ...resource, ...dependency }));
       }),
   );
   return found.flat();

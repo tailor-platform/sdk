@@ -7,16 +7,12 @@ import {
   getMigrationFiles,
   getNextMigrationNumber,
   getLatestMigrationNumber,
-  writeSnapshot,
-  writeDiff,
   SCHEMA_SNAPSHOT_VERSION,
-  SCHEMA_FILE_NAME,
-  DIFF_FILE_NAME,
   INITIAL_SCHEMA_NUMBER,
-  formatMigrationNumber,
   type NormalizedSchemaSnapshot,
   type SchemaSnapshot,
 } from "./snapshot";
+import { generateSchemaFile } from "./template-generator";
 import {
   cleanupTestMigrationsBase,
   writeDiffToDir,
@@ -208,7 +204,7 @@ describe("snapshot", () => {
   });
 
   // ==========================================================================
-  // loadSnapshot / loadDiff / writeSnapshot / writeDiff
+  // loadSnapshot / loadDiff
   // ==========================================================================
   describe("loadSnapshot", () => {
     test("loads snapshot from file", () => {
@@ -1378,7 +1374,7 @@ describe("snapshot", () => {
       expect(loaded.tables.Product?.pluralForm).toBe("Products");
     });
 
-    test("unknown extra keys survive loadSnapshot → writeSnapshot round-trip", () => {
+    test("unknown extra keys survive loadSnapshot → generateSchemaFile round-trip", async () => {
       // A snapshot written by a newer CLI may include unknown fields; they
       // must not be silently dropped on load/save.
       const snapshotWithExtra = {
@@ -1401,7 +1397,7 @@ describe("snapshot", () => {
       fs.writeFileSync(loadPath, JSON.stringify(snapshotWithExtra, null, 2));
 
       const loaded = loadSnapshot(loadPath);
-      const savedPath = writeSnapshot(loaded, testDir, 99);
+      const { filePath: savedPath } = await generateSchemaFile(loaded, testDir, 99);
       const saved = JSON.parse(fs.readFileSync(savedPath, "utf-8")) as Record<string, unknown>;
 
       expect(saved.futureTopLevelField).toBe("keep-me");
@@ -1523,49 +1519,6 @@ describe("snapshot", () => {
       );
 
       expect(() => loadDiff(filePath)).toThrow(/reason/i);
-    });
-  });
-
-  describe("writeSnapshot", () => {
-    test("writes snapshot to directory structure with correct name", () => {
-      const snapshot: SchemaSnapshot = {
-        version: SCHEMA_SNAPSHOT_VERSION,
-        namespace,
-        createdAt: new Date().toISOString(),
-        tables: {},
-      };
-
-      const filePath = writeSnapshot(snapshot, testDir, INITIAL_SCHEMA_NUMBER);
-
-      expect(filePath).toBe(
-        path.join(testDir, formatMigrationNumber(INITIAL_SCHEMA_NUMBER), SCHEMA_FILE_NAME),
-      );
-      expect(fs.existsSync(filePath)).toBe(true);
-
-      const loaded = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-      expect(SCHEMA_SNAPSHOT_VERSION).toBe(8);
-      expect(loaded.version).toBe(8);
-    });
-  });
-
-  describe("writeDiff", () => {
-    test("writes diff to directory structure with correct name", () => {
-      const diff: MigrationDiff = {
-        version: SCHEMA_SNAPSHOT_VERSION,
-        namespace,
-        createdAt: new Date().toISOString(),
-        changes: [],
-        hasBreakingChanges: false,
-        breakingChanges: [],
-        hasWarnings: false,
-        warnings: [],
-        requiresMigrationScript: false,
-      };
-
-      const filePath = writeDiff(diff, testDir, 1);
-
-      expect(filePath).toBe(path.join(testDir, formatMigrationNumber(1), DIFF_FILE_NAME));
-      expect(fs.existsSync(filePath)).toBe(true);
     });
   });
 });

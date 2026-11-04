@@ -1,3 +1,4 @@
+import { parse } from "graphql";
 import { describe, expect, expectTypeOf, test } from "vitest";
 import {
   ExecutorSchema,
@@ -60,19 +61,22 @@ describe("FunctionOperationSchema", () => {
 });
 
 describe("GqlOperationSchema", () => {
-  const documentNode = {
-    kind: "Document",
-    definitions: [],
-    toString: () => "query { users { id } }",
-  };
-
-  test.each([
-    ["converts query to string", documentNode],
-    ["accepts string query directly", "query { users { id } }"],
-  ] as const)("%s", (_description, query) => {
-    const result = GqlOperationSchema.safeParse({ kind: "graphql", query });
+  test("accepts string query directly", () => {
+    const result = GqlOperationSchema.safeParse({
+      kind: "graphql",
+      query: "query { users { id } }",
+    });
     const data = expectParseSuccess(result);
     expect(data.query).toBe("query { users { id } }");
+  });
+
+  test("prints a DocumentNode query as a GraphQL string", () => {
+    const result = GqlOperationSchema.safeParse({
+      kind: "graphql",
+      query: parse("query Users { users { id } }"),
+    });
+    const data = expectParseSuccess(result);
+    expect(data.query).toBe("query Users {\n  users {\n    id\n  }\n}");
   });
 
   test("rejects unknown options", () => {
@@ -307,11 +311,6 @@ describe("ExecutorSchema", () => {
   });
 
   test("transforms graphql executor correctly", () => {
-    const documentNode = {
-      kind: "Document",
-      toString: () => "mutation { createUser { id } }",
-    };
-
     const result = ExecutorSchema.safeParse({
       name: "test-executor",
       trigger: {
@@ -320,7 +319,7 @@ describe("ExecutorSchema", () => {
       },
       operation: {
         kind: "graphql",
-        query: documentNode,
+        query: parse("mutation { createUser { id } }"),
       },
     });
 
@@ -329,7 +328,7 @@ describe("ExecutorSchema", () => {
     if (data.operation.kind !== "graphql") {
       throw new Error("Expected graphql operation");
     }
-    expect(data.operation.query).toBe("mutation { createUser { id } }");
+    expect(data.operation.query).toBe("mutation {\n  createUser {\n    id\n  }\n}");
   });
 
   test("rejects unknown options on operations", () => {

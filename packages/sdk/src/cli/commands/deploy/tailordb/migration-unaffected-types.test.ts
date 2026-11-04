@@ -9,271 +9,64 @@
  */
 
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import { applyTailorDB, captureMigrationFileState } from "./index";
-import type { DiffChange } from "#/cli/commands/tailordb/migrate/diff-calculator";
-import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
-import type { Application } from "#/cli/services/application";
-import type { TailorDBService } from "#/cli/services/tailordb/service";
+import { reconstructSnapshotFromMigrations } from "#/cli/commands/tailordb/migrate/snapshot";
+import * as migrationModule from "./migration";
+import {
+  createPlanResult,
+  createRemoteCheckpoint,
+  gqlPermissionEntry,
+  mkPendingMigration,
+  type RemoteCheckpoint,
+  snapshotAt,
+  snapshotTable,
+  type SnapshotTablesByVersion,
+  tailordbTypeWrites,
+  typeEntry,
+} from "./test-helpers/migration-apply";
+import { applyTailorDB } from "./index";
+import type { TailorDBSnapshotType } from "#/cli/commands/tailordb/migrate/snapshot";
 import type { OperatorClient } from "#/cli/shared/client";
-import type { LoadedConfig } from "#/cli/shared/config-loader";
 
-const remoteCheckpoint = vi.hoisted(() => ({
-  number: null as number | null,
-  historyId: null as string | null,
+vi.mock("./migration", async (importOriginal) => ({
+  ...(await importOriginal()),
+  detectPendingMigrations: vi.fn(),
+  executeMigrations: vi.fn().mockResolvedValue(undefined),
+  updateMigrationLabel: vi.fn(),
 }));
 
-// Mock label.ts to suppress real metadata building
-vi.mock("../label", async (importOriginal) => {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("../label");
-  return {
-    ...original,
-    buildMetaRequest: vi.fn().mockImplementation(async () => ({
-      trn: "trn:v1:workspace:test-workspace:tailordb:test-ns",
-      labels: {},
-    })),
-  };
-});
-
-// Mock createChangeSet to suppress output in tests
-vi.mock("../change-set", async (importOriginal) => {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("../change-set");
-  return {
-    ...original,
-    createChangeSet: (title: string) => ({
-      ...original.createChangeSet(title),
-      lines: () => [],
-    }),
-  };
-});
-
-// Mock the migration helpers so applyTailorDB enters the migration flow without
-// touching the filesystem or the remote workspace.
-vi.mock("./migration", async (importOriginal) => {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("./migration");
-  return {
-    ...original,
-    detectPendingMigrations: vi.fn(),
-    executeMigrations: vi.fn().mockResolvedValue(undefined),
-    updateMigrationLabel: vi
-      .fn()
-      .mockImplementation(
-        async (
-          _client: unknown,
-          _workspaceId: string,
-          _namespace: string,
-          number: number,
-          historyId?: string,
-        ) => {
-          remoteCheckpoint.number = number;
-          remoteCheckpoint.historyId = historyId ?? null;
-        },
-      ),
-  };
-});
-
-// Mock migration config / snapshot helpers (called inside validateAndDetectMigrations)
 vi.mock("#/cli/commands/tailordb/migrate/config", () => ({
-  getNamespacesWithMigrations: vi.fn().mockReturnValue([
-    {
-      namespace: "test-ns",
-      migrationsDir: "/test/migrations",
-    },
+  getNamespacesWithMigrations: vi.fn(() => [
+    { namespace: "test-ns", migrationsDir: "/test/migrations" },
   ]),
+}));
+
+vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => ({
+  ...(await importOriginal()),
+  assertValidMigrationFiles: vi.fn(),
+  reconstructSnapshotFromMigrations: vi.fn(),
 }));
 
 // Per-test schema states keyed by migration number, so reconstruction returns
 // the state as of the requested checkpoint like the real replay does.
-const snapshotState = vi.hoisted(() => ({
-  tablesByVersion: {} as Record<number, unknown>,
-}));
-
-vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => {
-  const original =
-    // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-    (await importOriginal()) as typeof import("#/cli/commands/tailordb/migrate/snapshot");
-  return {
-    ...original,
-    assertValidMigrationFiles: vi.fn(),
-    reconstructSnapshotFromMigrations: vi.fn((migrationsDir: string, maxVersion?: number) => {
-      void migrationsDir;
-      const versions = Object.keys(snapshotState.tablesByVersion).map(Number);
-      const number = maxVersion ?? Math.max(...versions);
-      const tables = snapshotState.tablesByVersion[number];
-      if (!tables) {
-        throw new Error(`No snapshot fixture configured for migration number: ${number}`);
-      }
-      return {
-        version: 1,
-        namespace: "test-ns",
-        createdAt: "2026-01-01T00:00:00.000Z",
-        tables,
-      };
-    }),
-  };
-});
-
-import * as migrationModule from "./migration";
-
-const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
+const snapshotState = { tablesByVersion: {} as SnapshotTablesByVersion };
 
 describe("migration flow: creates of types predating the pending migrations", () => {
-  function createMockClient() {
-    return {
-      createTailorDBService: vi.fn().mockResolvedValue({}),
-      setMetadata: vi.fn().mockResolvedValue({}),
-      getMetadata: vi.fn().mockImplementation(async () => ({
-        metadata: {
-          labels: {
-            ...(remoteCheckpoint.number !== null && {
-              "sdk-migration": `m${String(remoteCheckpoint.number).padStart(4, "0")}`,
-            }),
-            ...(remoteCheckpoint.historyId && {
-              "sdk-migration-history": remoteCheckpoint.historyId,
-            }),
-          },
-        },
-      })),
-      listTailorDBTypes: vi.fn().mockResolvedValue({ tailordbTypes: [] }),
-      createTailorDBType: vi.fn().mockResolvedValue({}),
-      updateTailorDBType: vi.fn().mockResolvedValue({}),
-      createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
-      updateTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
-      deleteTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
-      deleteTailorDBType: vi.fn().mockResolvedValue({}),
-      deleteTailorDBService: vi.fn().mockResolvedValue({}),
-    } as unknown as OperatorClient;
-  }
-
-  function snapshotTable(
-    name: string,
-    fields: Record<string, { type: string; required: boolean }>,
-  ) {
-    return { name, pluralForm: `${name.toLowerCase()}s`, fields };
-  }
-
-  function typeCreate(tableName: string) {
-    return {
-      name: tableName,
-      request: {
-        workspaceId: "test-workspace",
-        namespaceName: "test-ns",
-        tailordbType: {
-          name: tableName,
-          schema: {
-            fields: { name: { type: "string", required: true } },
-          },
-        },
-      },
-      metaRequest: {
-        trn: `trn:v1:workspace:test-workspace:tailordb:test-ns:type:${tableName}`,
-        labels: { "sdk-name": "test-app" },
-      },
-    };
-  }
-
   function createMockPlanResult(options: {
     creates: string[];
     updates?: string[];
     gqlPermissionTypes?: string[];
+    local?: TailorDBSnapshotType[];
   }) {
-    const migratedService = {
-      namespace: "test-ns",
-      loadTypes: vi.fn().mockResolvedValue({}),
-      types: {},
-    } as unknown as TailorDBService;
-
-    return {
-      changeSet: {
-        service: {
-          creates: [],
-          updates: [],
-          deletes: [],
-          title: "TailorDB Services",
-          isEmpty: () => true,
-          lines: () => [],
-        },
-        type: {
-          creates: options.creates.map(typeCreate),
-          updates: (options.updates ?? []).map(typeCreate),
-          deletes: [],
-          unchanged: [],
-          title: "TailorDB Types",
-          isEmpty: () => false,
-          lines: () => [],
-        },
-        gqlPermission: {
-          creates: (options.gqlPermissionTypes ?? []).map((tableName) => ({
-            name: tableName,
-            request: {
-              workspaceId: "test-workspace",
-              namespaceName: "test-ns",
-              typeName: tableName,
-              permission: {},
-            },
-          })),
-          updates: [],
-          deletes: [],
-          title: "TailorDB GQL Permissions",
-          isEmpty: () => false,
-          lines: () => [],
-        },
+    return createPlanResult({
+      type: {
+        creates: options.creates.map((name) => typeEntry(name)),
+        updates: (options.updates ?? []).map((name) => typeEntry(name)),
       },
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set<string>(),
-      context: {
-        workspaceId: "test-workspace",
-        application: {
-          name: "test-app",
-          tailorDBServices: [migratedService],
-          authService: {
-            config: { name: "test-auth", machineUsers: { admin: {} } },
-          },
-        } as unknown as Application,
-        tailorDBInputs: [],
-        executorUsedTables: new Set<string>(),
-        config: mockConfig,
-        noSchemaCheck: true,
-        checkpointRepairs: [],
-        namespacesWithMigrations: [{ namespace: "test-ns", migrationsDir: "/test/migrations" }],
-        migrationFileState: captureMigrationFileState([
-          { namespace: "test-ns", migrationsDir: "/test/migrations" },
-        ]),
+      gqlPermission: {
+        creates: (options.gqlPermissionTypes ?? []).map((name) => gqlPermissionEntry(name)),
       },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any;
-  }
-
-  function mkPendingMigration(
-    changes: DiffChange[],
-    options: { number?: number; hasScript?: boolean } = {},
-  ): PendingMigration {
-    const number = options.number ?? 1;
-    const label = String(number).padStart(4, "0");
-    return {
-      number,
-      scriptPath: `/test/migrations/${label}/migrate.ts`,
-      diffPath: `/test/migrations/${label}/diff.json`,
-      namespace: "test-ns",
-      migrationsDir: "/test/migrations",
-      hasScript: options.hasScript ?? true,
-      scriptForm: (options.hasScript ?? true) ? { kind: "main" } : null,
-      diff: {
-        version: 1,
-        namespace: "test-ns",
-        createdAt: "2026-01-01T00:00:00.000Z",
-        changes,
-        hasBreakingChanges: false,
-        breakingChanges: [],
-        hasWarnings: false,
-        warnings: [],
-        requiresMigrationScript: true,
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    };
+      local: options.local,
+    });
   }
 
   function createdTypeCalls(client: OperatorClient) {
@@ -298,34 +91,33 @@ describe("migration flow: creates of types predating the pending migrations", ()
     return vi.mocked(migrationModule.executeMigrations).mock.invocationCallOrder[0];
   }
 
+  let checkpoint: RemoteCheckpoint;
+
   beforeEach(() => {
     snapshotState.tablesByVersion = {};
-    remoteCheckpoint.number = null;
-    remoteCheckpoint.historyId = null;
-    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(
-      async (_client, _workspaceId, _namespace, number, historyId) => {
-        remoteCheckpoint.number = number;
-        remoteCheckpoint.historyId = historyId ?? null;
-        return true;
-      },
+    checkpoint = createRemoteCheckpoint(null);
+    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
+    vi.mocked(reconstructSnapshotFromMigrations).mockImplementation((_migrationsDir, maxVersion) =>
+      snapshotAt(snapshotState.tablesByVersion, maxVersion),
     );
   });
 
   test("creates a baseline type no pending diff names, from its snapshot, before the script", async () => {
-    const client = createMockClient();
+    const client = checkpoint.createMockClient();
+    const audit = snapshotTable("Audit", { legacy: { type: "string", required: false } });
+    const user = snapshotTable("User", { name: { type: "string", required: true } });
     const planResult = createMockPlanResult({
       creates: ["User", "Audit"],
       updates: ["Metrics"],
       gqlPermissionTypes: ["User"],
+      local: [
+        audit,
+        user,
+        snapshotTable("Metrics", { total: { type: "integer", required: true } }),
+      ],
     });
-    snapshotState.tablesByVersion = {
-      0: { Audit: snapshotTable("Audit", { legacy: { type: "string", required: false } }) },
-      1: {
-        Audit: snapshotTable("Audit", { legacy: { type: "string", required: false } }),
-        User: snapshotTable("User", { name: { type: "string", required: true } }),
-      },
-    };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    snapshotState.tablesByVersion = { 0: { Audit: audit }, 1: { Audit: audit, User: user } };
+    checkpoint.mockPending([
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       mkPendingMigration([{ kind: "table_added", tableName: "User" } as any]),
     ]);
@@ -344,18 +136,15 @@ describe("migration flow: creates of types predating the pending migrations", ()
       .find((request) => request.tailordbType?.name === "Audit");
     expect(Object.keys(auditRequest?.tailordbType?.schema?.fields ?? {})).toContain("legacy");
 
-    // Updates of types no pending diff names stay skipped: the final schema
-    // must not be enforced outside the per-migration phases.
-    const updatedTypes = vi.mocked(client.updateTailorDBType).mock.calls.map((call) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const request = call[0] as any;
-      return `${request.namespaceName}/${request.tailordbType?.name}`;
-    });
-    expect(updatedTypes).not.toContain("test-ns/Metrics");
+    // The final schema of a type no pending diff names is enforced only after the script.
+    const metricsWrites = tailordbTypeWrites(client).filter((write) => write.name === "Metrics");
+    expect(metricsWrites.length).toBeGreaterThan(0);
+    for (const write of metricsWrites) expect(write.order).toBeGreaterThan(firstScriptOrder()!);
+    expect(Object.keys(metricsWrites.at(-1)?.tailordbType.schema?.fields ?? {})).toEqual(["total"]);
   });
 
   test("data-only migration: every baseline type is created exactly once before the script", async () => {
-    const client = createMockClient();
+    const client = checkpoint.createMockClient();
     const planResult = createMockPlanResult({
       creates: ["User", "Audit"],
       gqlPermissionTypes: ["User"],
@@ -365,7 +154,7 @@ describe("migration flow: creates of types predating the pending migrations", ()
       Audit: snapshotTable("Audit", { legacy: { type: "string", required: false } }),
     };
     snapshotState.tablesByVersion = { 0: baseline, 1: baseline };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration([])]);
+    checkpoint.mockPending([mkPendingMigration([])]);
 
     await applyTailorDB(client, planResult, "create-update");
 
@@ -380,7 +169,7 @@ describe("migration flow: creates of types predating the pending migrations", ()
   });
 
   test("creates a baseline type a later migration modifies before the earlier script", async () => {
-    const client = createMockClient();
+    const client = checkpoint.createMockClient();
     const planResult = createMockPlanResult({ creates: ["User"] });
     const baselineUser = snapshotTable("User", { name: { type: "string", required: true } });
     snapshotState.tablesByVersion = {
@@ -393,7 +182,7 @@ describe("migration flow: creates of types predating the pending migrations", ()
         }),
       },
     };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    checkpoint.mockPending([
       mkPendingMigration([]),
       mkPendingMigration(
         [
@@ -418,7 +207,7 @@ describe("migration flow: creates of types predating the pending migrations", ()
   });
 
   test("does not pre-create a type that a later pending migration adds", async () => {
-    const client = createMockClient();
+    const client = checkpoint.createMockClient();
     const planResult = createMockPlanResult({ creates: ["Report", "Audit"] });
     const audit = snapshotTable("Audit", { legacy: { type: "string", required: false } });
     snapshotState.tablesByVersion = {
@@ -429,7 +218,7 @@ describe("migration flow: creates of types predating the pending migrations", ()
         Report: snapshotTable("Report", { name: { type: "string", required: true } }),
       },
     };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    checkpoint.mockPending([
       mkPendingMigration([]),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       mkPendingMigration([{ kind: "table_added", tableName: "Report" } as any], {
@@ -448,7 +237,7 @@ describe("migration flow: creates of types predating the pending migrations", ()
   });
 
   test("does not pre-create a baseline type a pending migration removes and re-adds", async () => {
-    const client = createMockClient();
+    const client = checkpoint.createMockClient();
     const planResult = createMockPlanResult({ creates: ["Draft", "Audit"] });
     const audit = snapshotTable("Audit", { legacy: { type: "string", required: false } });
     const draft = snapshotTable("Draft", { name: { type: "string", required: true } });
@@ -458,7 +247,7 @@ describe("migration flow: creates of types predating the pending migrations", ()
       2: { Audit: audit },
       3: { Audit: audit, Draft: draft },
     };
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    checkpoint.mockPending([
       mkPendingMigration([]),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       mkPendingMigration([{ kind: "table_removed", tableName: "Draft" } as any], {

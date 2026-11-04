@@ -1,116 +1,114 @@
-/* oxlint-disable vitest/expect-expect -- Assertions are centralized in shared lint helpers. */
-import { describe, test } from "vitest";
-import { expectClean, expectViolation } from "./test-helpers.js";
+import { describe } from "vitest";
+import { runRuleTests } from "./test-helpers.js";
 
 const RULE = "valid-workflow-job-definition";
 const IMPORT = 'import { createWorkflowJob } from "@tailor-platform/sdk";\n';
+const OPTIONS_NOT_LITERAL =
+  "createWorkflowJob's options must be an inline object literal; the build cannot detect a job whose options come from a variable or call.";
+const NAME_NOT_LITERAL =
+  'createWorkflowJob\'s "name" must be a string literal; the build cannot detect a job whose name is a variable, template literal, or computed value.';
+const BODY_NOT_FUNCTION =
+  'createWorkflowJob\'s "body" must be an inline function expression; the build cannot bundle a body that is a variable or wrapped in another call.';
 
-describe("valid-workflow-job-definition", () => {
-  test("rejects options that are not an inline object literal", () => {
-    expectViolation(
-      `${IMPORT}const options = { name: "job", body: () => 1 };\nexport const job = createWorkflowJob(options);`,
-      RULE,
-      "createWorkflowJob's options must be an inline object literal",
-    );
-    expectViolation(
-      `${IMPORT}export const job = createWorkflowJob(buildOptions());`,
-      RULE,
-      "createWorkflowJob's options must be an inline object literal",
-    );
-    expectViolation(
-      `${IMPORT}export const job = createWorkflowJob();`,
-      RULE,
-      "createWorkflowJob's options must be an inline object literal",
-    );
+describe("rejects options that are not an inline object literal", () => {
+  runRuleTests(RULE, {
+    invalid: [
+      {
+        code: `${IMPORT}const options = { name: "job", body: () => 1 };\nexport const job = createWorkflowJob(options);`,
+        errors: [OPTIONS_NOT_LITERAL],
+      },
+      {
+        code: `${IMPORT}export const job = createWorkflowJob(buildOptions());`,
+        errors: [OPTIONS_NOT_LITERAL],
+      },
+      {
+        code: `${IMPORT}export const job = createWorkflowJob();`,
+        errors: [OPTIONS_NOT_LITERAL],
+      },
+    ],
   });
+});
 
-  test("rejects a missing or non-literal name", () => {
-    expectViolation(
-      `${IMPORT}export const job = createWorkflowJob({ body: () => 1 });`,
-      RULE,
-      'createWorkflowJob\'s "name" must be a string literal',
-    );
-    expectViolation(
-      `${IMPORT}const name = "job";\nexport const job = createWorkflowJob({ name, body: () => 1 });`,
-      RULE,
-      'createWorkflowJob\'s "name" must be a string literal',
-    );
-    expectViolation(
-      `${IMPORT}export const job = createWorkflowJob({ name: \`job-\${suffix}\`, body: () => 1 });`,
-      RULE,
-      'createWorkflowJob\'s "name" must be a string literal',
-    );
-    expectViolation(
-      `${IMPORT}export const job = createWorkflowJob({ name: \`job\`, body: () => 1 });`,
-      RULE,
-      'createWorkflowJob\'s "name" must be a string literal',
-    );
+describe("rejects a missing or non-literal name", () => {
+  runRuleTests(RULE, {
+    invalid: [
+      {
+        code: `${IMPORT}export const job = createWorkflowJob({ body: () => 1 });`,
+        errors: [NAME_NOT_LITERAL],
+      },
+      {
+        code: `${IMPORT}const name = "job";\nexport const job = createWorkflowJob({ name, body: () => 1 });`,
+        errors: [NAME_NOT_LITERAL],
+      },
+      {
+        code: `${IMPORT}export const job = createWorkflowJob({ name: \`job-\${suffix}\`, body: () => 1 });`,
+        errors: [NAME_NOT_LITERAL],
+      },
+      {
+        code: `${IMPORT}export const job = createWorkflowJob({ name: \`job\`, body: () => 1 });`,
+        errors: [NAME_NOT_LITERAL],
+      },
+    ],
   });
+});
 
-  test("rejects a missing or non-inline body", () => {
-    expectViolation(
-      `${IMPORT}export const job = createWorkflowJob({ name: "job" });`,
-      RULE,
-      'createWorkflowJob\'s "body" must be an inline function expression',
-    );
-    expectViolation(
-      `${IMPORT}const run = () => 1;\nexport const job = createWorkflowJob({ name: "job", body: run });`,
-      RULE,
-      'createWorkflowJob\'s "body" must be an inline function expression',
-    );
-    expectViolation(
-      `${IMPORT}export const job = createWorkflowJob({ name: "job", body: withLogging(() => 1) });`,
-      RULE,
-      'createWorkflowJob\'s "body" must be an inline function expression',
-    );
-    expectViolation(
-      `${IMPORT}export const job = createWorkflowJob({ name: "job", body: (() => 1) as () => number });`,
-      RULE,
-      'createWorkflowJob\'s "body" must be an inline function expression',
-    );
+describe("rejects a missing or non-inline body", () => {
+  runRuleTests(RULE, {
+    invalid: [
+      {
+        code: `${IMPORT}export const job = createWorkflowJob({ name: "job" });`,
+        errors: [BODY_NOT_FUNCTION],
+      },
+      {
+        code: `${IMPORT}const run = () => 1;\nexport const job = createWorkflowJob({ name: "job", body: run });`,
+        errors: [BODY_NOT_FUNCTION],
+      },
+      {
+        code: `${IMPORT}export const job = createWorkflowJob({ name: "job", body: withLogging(() => 1) });`,
+        errors: [BODY_NOT_FUNCTION],
+      },
+      {
+        code: `${IMPORT}export const job = createWorkflowJob({ name: "job", body: (() => 1) as () => number });`,
+        errors: [BODY_NOT_FUNCTION],
+      },
+    ],
   });
+});
 
-  test("checks calls through aliases, namespaces, and nested scopes", () => {
-    expectViolation(
-      `import { createWorkflowJob as defineJob } from "@tailor-platform/sdk";\nexport const job = defineJob({ name: "job", body: run });`,
-      RULE,
-      'createWorkflowJob\'s "body" must be an inline function expression',
-    );
-    expectViolation(
-      `import * as sdk from "@tailor-platform/sdk";\nexport const job = sdk.createWorkflowJob({ name: "job", body: run });`,
-      RULE,
-      'createWorkflowJob\'s "body" must be an inline function expression',
-    );
-    expectViolation(
-      `${IMPORT}function makeJob(name: string) {\n  return createWorkflowJob({ name, body: () => 1 });\n}\nexport const job = makeJob("job");`,
-      RULE,
-      'createWorkflowJob\'s "name" must be a string literal',
-    );
+describe("checks calls through aliases, namespaces, and nested scopes", () => {
+  runRuleTests(RULE, {
+    invalid: [
+      {
+        code: `import { createWorkflowJob as defineJob } from "@tailor-platform/sdk";\nexport const job = defineJob({ name: "job", body: run });`,
+        errors: [BODY_NOT_FUNCTION],
+      },
+      {
+        code: `import * as sdk from "@tailor-platform/sdk";\nexport const job = sdk.createWorkflowJob({ name: "job", body: run });`,
+        errors: [BODY_NOT_FUNCTION],
+      },
+      {
+        code: `${IMPORT}function makeJob(name: string) {\n  return createWorkflowJob({ name, body: () => 1 });\n}\nexport const job = makeJob("job");`,
+        errors: [NAME_NOT_LITERAL],
+      },
+    ],
   });
+});
 
-  test("accepts statically detectable definitions", () => {
-    expectClean(
+describe("accepts statically detectable definitions", () => {
+  runRuleTests(RULE, {
+    valid: [
       `${IMPORT}export const job = createWorkflowJob({ name: "job", body: async (input: { id: string }) => input.id });`,
-      RULE,
-    );
-    expectClean(
       `${IMPORT}export const job = createWorkflowJob({ name: "job", body: function (input: { id: string }) { return input.id; } });`,
-      RULE,
-    );
-    expectClean(
       `${IMPORT}export const job = createWorkflowJob({ "name": "job", body: () => 1, publishEvents: true });`,
-      RULE,
-    );
-    expectClean(
       `${IMPORT}const defaults = { publishEvents: true };\nexport const job = createWorkflowJob({ ...defaults, name: "job", body: () => 1 });`,
-      RULE,
-    );
+    ],
   });
+});
 
-  test("ignores same-named factories from other packages", () => {
-    expectClean(
+describe("ignores same-named factories from other packages", () => {
+  runRuleTests(RULE, {
+    valid: [
       'import { createWorkflowJob } from "another-sdk";\nexport const job = createWorkflowJob(options);',
-      RULE,
-    );
+    ],
   });
 });

@@ -22,6 +22,7 @@ import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared
 import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
+import { canPrompt } from "#/cli/shared/prompt";
 import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { assertDefined } from "#/utils/assert";
@@ -493,8 +494,7 @@ async function script(options: ScriptOptions): Promise<void> {
   if (!fileToOpen) return;
 
   const editor = getConfiguredEditorCommand();
-  // The editor shares stdout, which carries the JSON result under --json.
-  if (!editor || logger.jsonMode) return;
+  if (!editor || !canPrompt()) return;
 
   logger.newline();
   logger.info(`Opening ${path.basename(fileToOpen)} in ${editor}...`);

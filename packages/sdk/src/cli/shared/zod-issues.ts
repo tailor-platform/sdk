@@ -9,7 +9,8 @@ export type FlatIssue = {
 
 /**
  * Flatten Zod issues into one entry per offending field. A failed union is
- * replaced by the issues of the branch the input came closest to matching.
+ * replaced by the issues of the branch the input came closest to matching,
+ * and an invalid record key by the issues of the key schema.
  * @param issues - Issues from a failed parse
  * @param prefix - Path of the parsed value, prepended to every issue path
  * @returns Issues with absolute paths
@@ -22,6 +23,9 @@ export function flattenZodIssues(
     const path = [...prefix, ...issue.path];
     if (issue.code === "invalid_union") {
       return flattenUnion(issue, path);
+    }
+    if (issue.code === "invalid_key") {
+      return flattenZodIssues(issue.issues, path);
     }
     return [toFlatIssue(issue, path)];
   });

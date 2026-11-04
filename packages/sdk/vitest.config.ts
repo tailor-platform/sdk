@@ -1,4 +1,4 @@
-import { globSync, readFileSync } from "node:fs";
+import { existsSync, globSync, readFileSync } from "node:fs";
 import * as path from "node:path";
 import { configDefaults, defineConfig } from "vitest/config";
 
@@ -15,28 +15,30 @@ const packageJson = JSON.parse(
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-const sdkSourceAliases = Object.entries(packageJson.exports).map(([exportName, target]) => {
-  const publicImport =
-    exportName === "." ? "@tailor-platform/sdk" : `@tailor-platform/sdk/${exportName.slice(2)}`;
-  const distImport = target.import ?? target.default;
+const sdkSourceAliases = Object.entries(packageJson.exports)
+  .filter(([, target]) => target.import ?? target.default)
+  .map(([exportName, target]) => {
+    const publicImport =
+      exportName === "." ? "@tailor-platform/sdk" : `@tailor-platform/sdk/${exportName.slice(2)}`;
+    const distImport = target.import ?? target.default;
 
-  if (!distImport?.startsWith("./dist/") || !distImport.endsWith(".mjs")) {
-    throw new Error(
-      `Unsupported @tailor-platform/sdk export ${exportName}: expected ./dist/*.mjs import target`,
-    );
-  }
+    if (!distImport?.startsWith("./dist/") || !distImport.endsWith(".mjs")) {
+      throw new Error(
+        `Unsupported @tailor-platform/sdk export ${exportName}: expected ./dist/*.mjs import target`,
+      );
+    }
 
-  return {
-    find: new RegExp(`^${escapeRegExp(publicImport)}$`),
-    replacement: path.resolve(
-      import.meta.dirname,
-      distImport
-        .replace(/^\.\//, "")
-        .replace(/^dist\//, "src/")
-        .replace(/\.mjs$/, ".ts"),
-    ),
-  };
-});
+    return {
+      find: new RegExp(`^${escapeRegExp(publicImport)}$`),
+      replacement: path.resolve(
+        import.meta.dirname,
+        distImport
+          .replace(/^\.\//, "")
+          .replace(/^dist\//, "src/")
+          .replace(/\.mjs$/, ".ts"),
+      ),
+    };
+  });
 
 // E2e files whose measured V8 coverage contribution justifies running them in
 // the coverage CI job ("e2e-coverage" project below): deploy.test.ts calls
@@ -55,17 +57,23 @@ const integrationTestIncludes = [
   "src/plugin/compat.test.ts",
 ];
 
-// The CLI plugin test exercises Windows-specific PATHEXT/`.cmd`/`.ps1` spawn
-// branches, so it gets its own project ("unit-plugin", which the `unit*` glob
-// still picks up on Linux) that a Windows CI job can run via `--project
-// unit-plugin` — no separator-sensitive path filter needed. Excluded from the
-// general unit split below so it does not run twice.
-const pluginTestInclude = "src/cli/shared/plugin.test.ts";
+// Tests whose behavior differs on Windows get their own project ("unit-windows",
+// which the `unit*` glob still picks up on Linux) that the Windows CI job runs
+// via `--project unit-windows` — no separator-sensitive path filter needed.
+// Excluded from the general unit split below so they do not run twice.
+const windowsTestIncludes = [
+  "src/cli/shared/plugin.test.ts",
+  "src/cli/shared/shell-quote.test.ts",
+  "src/cli/shared/test-helpers/temp-cwd.test.ts",
+  "src/cli/shared/test-helpers/temp-dir.test.ts",
+];
 
-// Runs suggested command lines through the platform's real shells (cmd.exe and
-// PowerShell on Windows), so the Windows CI job runs it too via `--project
-// unit-shell`.
-const shellQuoteTestInclude = "src/cli/shared/shell-quote.test.ts";
+const missingWindowsTests = windowsTestIncludes.filter(
+  (file) => !existsSync(path.resolve(import.meta.dirname, file)),
+);
+if (missingWindowsTests.length > 0) {
+  throw new Error(`windowsTestIncludes lists missing files: ${missingWindowsTests.join(", ")}`);
+}
 
 // Split unit tests by whether they mutate worker-global state. With
 // `isolate: false` a worker shares one module registry and one global object
@@ -83,9 +91,7 @@ const classifyUnitTests = (): { isolated: string[]; shared: string[] } => {
     file.includes("/node_modules/") ||
     file.includes("/__test_fixtures__/") ||
     integrationTestFiles.has(file) ||
-    // Carved into their own "unit-plugin" and "unit-shell" projects (see below).
-    file === pluginTestInclude ||
-    file === shellQuoteTestInclude ||
+    windowsTestIncludes.includes(file) ||
     // Self-contained nested vitest project with its own config.
     file.startsWith("src/vitest/integration/");
 
@@ -110,6 +116,10 @@ const { isolated: isolatedUnitTests, shared: sharedUnitTests } = classifyUnitTes
 
 // CLI subprocesses keep human-readable output when the suite runs inside an AI coding agent.
 const e2eEnv = { POLITTY_NO_AGENT: "1" };
+
+const e2eMaxWorkers = 8;
+
+const e2eGroupOrder = 1;
 
 export default defineConfig({
   resolve: {
@@ -147,18 +157,8 @@ export default defineConfig({
       },
       {
         test: {
-          // Carved out so a Windows CI job can run just the plugin test via
-          // `--project unit-plugin`; the `unit*` glob still runs it on Linux.
-          name: "unit-plugin",
-          include: [pluginTestInclude],
-          setupFiles: ["./vitest.setup.ts"],
-          typecheck: { enabled: false },
-        },
-      },
-      {
-        test: {
-          name: "unit-shell",
-          include: [shellQuoteTestInclude],
+          name: "unit-windows",
+          include: windowsTestIncludes,
           setupFiles: ["./vitest.setup.ts"],
           typecheck: { enabled: false },
         },
@@ -182,6 +182,8 @@ export default defineConfig({
           ],
           testTimeout: 120000,
           hookTimeout: 300000,
+          maxWorkers: e2eMaxWorkers,
+          sequence: { groupOrder: e2eGroupOrder },
           globalSetup: ["e2e/globalSetup.ts"],
           env: e2eEnv,
         },
@@ -194,6 +196,8 @@ export default defineConfig({
           include: e2eCoverageTestIncludes,
           testTimeout: 120000,
           hookTimeout: 300000,
+          maxWorkers: e2eMaxWorkers,
+          sequence: { groupOrder: e2eGroupOrder },
           globalSetup: ["e2e/globalSetup.ts"],
           env: e2eEnv,
           typecheck: { enabled: false },

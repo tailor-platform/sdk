@@ -11,6 +11,11 @@
 
 import * as fs from "node:fs/promises";
 import { CLIError } from "#/cli/shared/errors";
+import {
+  collectForeignKeyReferences,
+  collectForeignKeyTargets,
+  type ForeignKeyTargetField,
+} from "#/utils/foreign-key-targets";
 import { isMigrationStepName } from "#/utils/migration-steps";
 import { formatFieldShape, isSingleValueToArrayChange } from "./field-type-change";
 import { writeMigrationTypeFiles } from "./pglite-schema-generator";
@@ -22,13 +27,14 @@ import {
   isBreakingIndexChange,
   type SchemaSnapshot,
 } from "./snapshot";
-import { collectBreakingNestedMemberChanges } from "./snapshot-comparison";
+import { addsForeignKey, collectBreakingNestedMemberChanges } from "./snapshot-comparison";
 import type { EffectiveDateDefault } from "#/runtime/types";
 import type {
   MigrationDiff,
   DiffChange,
   FieldModifiedChange,
   FieldRenamedChange,
+  FieldTypeModifiedChange,
   TableRenamedChange,
 } from "./diff-calculator";
 import type { ExpandContractPlan } from "./expand-contract";
@@ -335,11 +341,6 @@ const OVERWRITE_NOTE = `// Overwrites existing values. Once this step commits it
 
 const capitalize = (name: string): string => name.charAt(0).toUpperCase() + name.slice(1);
 
-/** The part of a table field that says which table it points to. */
-interface ForeignKeyField {
-  foreignKeyType?: string;
-}
-
 /**
  * The tables other than itself that the fields of a table point to.
  * @param fields - Fields of the table
@@ -347,16 +348,10 @@ interface ForeignKeyField {
  * @returns Names of the referenced tables
  */
 function foreignKeyTargets(
-  fields: Readonly<Record<string, ForeignKeyField>>,
+  fields: Readonly<Record<string, ForeignKeyTargetField>>,
   tableName: string,
 ): string[] {
-  return [
-    ...new Set(
-      Object.values(fields)
-        .map((field) => field.foreignKeyType)
-        .filter((target): target is string => target !== undefined && target !== tableName),
-    ),
-  ];
+  return collectForeignKeyTargets(fields).filter((target) => target !== tableName);
 }
 
 /**
@@ -459,7 +454,7 @@ function describeChange(change: DiffChange): { preferredName: string; touches: F
         touches: [
           { table: change.tableName, field: change.fieldName },
           ...(target && target !== change.before.foreignKeyType
-            ? [{ table: target, field: "id" }]
+            ? [{ table: target, field: change.after.foreignKeyField ?? "id" }]
             : []),
         ],
       };
@@ -667,11 +662,17 @@ export function generateMigrationScript(
 
   const steps = buildScriptSteps(diff, expandPlans, typeRenameTargets, finishedExpansions);
 
-  const helpers = diff.changes.some(
-    (change) => change.kind === "field_modified" && change.memberRenames?.length,
-  )
-    ? `\n${NESTED_MEMBER_RENAME_HELPER}`
-    : "";
+  const helperSources = [
+    diff.changes.some((change) => change.kind === "field_modified" && change.memberRenames?.length)
+      ? NESTED_MEMBER_RENAME_HELPER
+      : "",
+    diff.changes.some(
+      (change) => change.kind === "table_renamed" && nestedSelfReferencePaths(change).size > 0,
+    )
+      ? CLEAR_NESTED_REFERENCES_HELPER
+      : "",
+  ].filter((source) => source !== "");
+  const helpers = helperSources.map((source) => `\n${source}`).join("");
 
   return `/**
  * Migration script for ${diff.namespace}
@@ -801,7 +802,7 @@ export function generateMigrationPgliteTestScript(
  */
 
 import { PGlite } from "@electric-sql/pglite";
-import { applyDateRepresentation, createKyselyPGlite${isSteps ? ", runMigrationSteps" : ""}, type Unmigrated } from "@tailor-platform/sdk/vitest";
+import { applyDateRepresentation, createKyselyPGlite, prepareFixtures${isSteps ? ", runMigrationSteps" : ""}, type Unmigrated } from "@tailor-platform/sdk/vitest";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import type { Database } from "./db";
 import { pgliteSchema } from "./db.pglite";
@@ -820,8 +821,11 @@ afterAll(async () => {
 
 describe(${JSON.stringify(`${diff.namespace} migration (PGlite)`)}, () => {
   test("transforms the staged rows", async () => {
-    // Stage the rows the script converts:
-    // await db.insertInto("Table").values([{ field: "before" }]).execute();
+    // Stage the rows the script converts. Relations are not checked while preparing, so rows that
+    // predate a relation can be staged; they are checked again once the script runs.
+    await prepareFixtures(pglite, async () => {
+      // await db.insertInto("Table").values([{ field: "before" }]).execute();
+    });
 
 ${
   isSteps
@@ -955,6 +959,24 @@ function generateChangeScripts(
     scripts.push(generateNestedMemberRenameCopyScript(change));
   }
 
+  // Foreign key relationship changed. A retarget that follows a confirmed
+  // type rename needs no fixup: record ids are preserved by the rename copy.
+  if (isBreakingForeignKeyRetarget(before, after, typeRenameTargets)) {
+    scripts.push(
+      generateUnmatchedReferenceScript(
+        change,
+        `Migrate ${change.fieldName} references from ${before.foreignKeyType} to ${after.foreignKeyType}`,
+      ),
+    );
+  } else if (addsForeignKey(before, after)) {
+    scripts.push(
+      generateUnmatchedReferenceScript(
+        change,
+        `Check existing ${change.fieldName} values against the new foreign key to ${after.foreignKeyType}`,
+      ),
+    );
+  }
+
   // Optional to required
   if (!before.required && after.required) {
     scripts.push(`  // Set ${change.fieldName} for ${change.tableName} records where it is null
@@ -1038,30 +1060,41 @@ ${removedValues.map((value) => `            case ${JSON.stringify(value)}:`).joi
     }
   }
 
-  // Foreign key relationship changed. A retarget that follows a confirmed
-  // type rename needs no fixup: record ids are preserved by the rename copy.
-  if (isBreakingForeignKeyRetarget(before, after, typeRenameTargets)) {
-    scripts.push(`  // Migrate ${change.fieldName} references from ${before.foreignKeyType} to ${after.foreignKeyType}
-  // Find records that don't have a valid reference in the new target table
+  return scripts;
+}
+
+function generateUnmatchedReferenceScript(
+  change: FieldModifiedChange | FieldTypeModifiedChange,
+  heading: string,
+): string {
+  const { tableName, fieldName, after } = change;
+  const target = after.foreignKeyType;
+  if (after.array) {
+    const message = `resolve the ${tableName}.${fieldName} elements that point at no ${target} record`;
+    return `  // ${heading}
+  void TODO(${JSON.stringify(message)});`;
+  }
+  // Aliased so that a relation to its own table can join it a second time.
+  const alias = `${tableName}Target`;
+  const key = after.foreignKeyField ?? "id";
+  return `  // ${heading}
+  // Find records that don't have a valid reference in ${target}
   {
     const orphanedRecords = await trx
-      .selectFrom("${change.tableName}")
-      .leftJoin("${after.foreignKeyType}", "${change.tableName}.${change.fieldName}", "${after.foreignKeyType}.id")
-      .select(["${change.tableName}.id", "${change.tableName}.${change.fieldName}"])
-      .where("${after.foreignKeyType}.id", "is", null)
-      .where("${change.tableName}.${change.fieldName}", "is not", null)
+      .selectFrom("${tableName}")
+      .leftJoin("${target} as ${alias}", "${tableName}.${fieldName}", "${alias}.${key}")
+      .select(["${tableName}.id", "${tableName}.${fieldName}"])
+      .where("${alias}.${key}", "is", null)
+      .where("${tableName}.${fieldName}", "is not", null)
       .execute();
     for (const record of orphanedRecords) {
       await trx
-        .updateTable("${change.tableName}")
-        .set({ ${change.fieldName}: TODO("set the ${after.foreignKeyType} reference for ${change.tableName}.${change.fieldName}") })
+        .updateTable("${tableName}")
+        .set({ ${fieldName}: TODO("set the ${target} reference for ${tableName}.${fieldName}") })
         .where("id", "=", record.id)
         .execute();
     }
-  }`);
-  }
-
-  return scripts;
+  }`;
 }
 
 function renameCopyCanCollapseValues(change: FieldRenamedChange): boolean {
@@ -1183,37 +1216,128 @@ function renameNestedMember(value: unknown, path: readonly string[], newName: st
 }
 `;
 
+// Emitted once per script that copies a renamed table holding a self-referential
+// foreign key inside a nested field. Nested values reach the script as objects
+// (or arrays of objects for array members).
+const CLEAR_NESTED_REFERENCES_HELPER = `/**
+ * Return a copy of a nested value with the members at the dotted \`paths\` set to
+ * null, descending into arrays at every level.
+ */
+function clearNestedReferences<T>(value: T, paths: readonly string[]): T {
+  const clear = (current: unknown, path: readonly string[]): unknown => {
+    if (current === null || current === undefined) return current;
+    if (Array.isArray(current)) return current.map((item) => clear(item, path));
+    if (typeof current !== "object") return current;
+    const record = current as Record<string, unknown>;
+    const [head, ...rest] = path;
+    if (head === undefined || !Object.hasOwn(record, head)) return current;
+    const copy = { ...record };
+    Object.defineProperty(copy, head, {
+      value: rest.length === 0 ? null : clear(record[head], rest),
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+    return copy;
+  };
+  return paths.reduce((current, path) => clear(current, path.split(".")), value as unknown) as T;
+}
+`;
+
+/**
+ * Dotted paths of the self-referential foreign keys inside each nested field of a renamed table.
+ * @param change - Table rename
+ * @returns Paths to null while copying, keyed by the nested column that holds them
+ */
+function nestedSelfReferencePaths(change: TableRenamedChange): Map<string, string[]> {
+  const paths = new Map<string, string[]>();
+  for (const [name, field] of Object.entries(change.after.fields)) {
+    if (!field.fields) continue;
+    const own = collectForeignKeyReferences(field.fields)
+      .filter((reference) => reference.table === change.tableName)
+      .map((reference) => reference.path);
+    if (own.length > 0) paths.set(name, own);
+  }
+  return paths;
+}
+
+// A bare `__proto__: value` in an object literal sets the prototype instead of
+// creating a property, so that column name needs a computed key.
+function objectKey(name: string): string {
+  return name === "__proto__" ? '["__proto__"]' : name;
+}
+
+function rowValue(name: string): string {
+  return name === "__proto__" ? 'row["__proto__"]' : `row.${name}`;
+}
+
 function generateTypeRenameCopyScript(change: TableRenamedChange): string {
   const { tableName, previousTableName } = change;
   const columns = ["id", ...Object.keys(change.before.fields).filter((name) => name !== "id")];
   const columnList = columns.map((name) => JSON.stringify(name)).join(", ");
   // Self-referential foreign keys may point at rows in later batches, so they
   // are inserted as null and backfilled once every row exists.
-  const selfRefColumns = Object.entries(change.after.fields)
-    .filter(([, field]) => field.foreignKeyType === tableName)
-    .map(([name]) => name);
+  const nestedSelfRefPaths = nestedSelfReferencePaths(change);
+  const selfRefColumns = [
+    ...Object.entries(change.after.fields)
+      .filter(([, field]) => field.foreignKeyType === tableName)
+      .map(([name]) => name),
+    ...nestedSelfRefPaths.keys(),
+  ];
+  const clearedValues = [
+    ...selfRefColumns
+      .filter((name) => !nestedSelfRefPaths.has(name))
+      .map((name) => `${objectKey(name)}: null`),
+    ...[...nestedSelfRefPaths].map(
+      ([name, paths]) =>
+        `${objectKey(name)}: clearNestedReferences(${rowValue(name)}, ${JSON.stringify(paths)})`,
+    ),
+  ];
   const insertValues =
     selfRefColumns.length > 0
-      ? `pending.map((row) => ({ ...row, ${selfRefColumns.map((name) => `${name}: null`).join(", ")} }))`
+      ? `pending.map((row) => ({ ...row, ${clearedValues.join(", ")} }))`
       : "pending";
+  const hasReferenceToRestore = selfRefColumns
+    .map((name) => {
+      const paths = nestedSelfRefPaths.get(name);
+      return paths
+        ? `JSON.stringify(clearNestedReferences(${rowValue(name)}, ${JSON.stringify(paths)})) !== JSON.stringify(${rowValue(name)})`
+        : `${rowValue(name)} !== null && ${rowValue(name)} !== undefined`;
+    })
+    .join(" || ");
   const selfRefBackfill =
     selfRefColumns.length > 0
       ? `
 
   // Backfill the self-referential column(s) now that every row exists.
-  await trx
-    .updateTable("${tableName}")
-    .set((eb) => ({
-${selfRefColumns
-  .map(
-    (name) => `      ${name}: eb
+  {
+    let lastId: string | undefined;
+    while (true) {
+      let query = trx
         .selectFrom("${previousTableName}")
-        .select("${previousTableName}.${name}")
-        .whereRef("${previousTableName}.id", "=", "${tableName}.id"),`,
-  )
-  .join("\n")}
-    }))
-    .execute();`
+        .select(["id", ${selfRefColumns.map((name) => JSON.stringify(name)).join(", ")}])
+        .orderBy("id", "asc")
+        .limit(100);
+      if (lastId) {
+        query = query.where("id", ">", lastId);
+      }
+      const rows = await query.execute();
+      if (rows.length === 0) break;
+
+      for (const row of rows) {
+        const restored = { ${selfRefColumns.map((name) => `${objectKey(name)}: ${rowValue(name)}`).join(", ")} };
+        if (!(${hasReferenceToRestore})) {
+          continue;
+        }
+        await trx
+          .updateTable("${tableName}")
+          .set(restored)
+          .where("id", "=", row.id)
+          .execute();
+      }
+      lastId = rows[rows.length - 1]!.id;
+    }
+  }`
       : "";
 
   return `  // Copy every ${previousTableName} row into ${tableName}, preserving ids so that
@@ -1440,28 +1564,4 @@ function generateDecimalScaleChangeScript(change: DiffChange): string | null {
       lastId = rows[rows.length - 1]!.id;
     }
   }`;
-}
-
-/**
- * Check if a migration script exists for a given migration number
- * @param {string} migrationsDir - Migrations directory path
- * @param {number} migrationNumber - Migration number
- * @returns {Promise<boolean>} True if script exists
- */
-export async function migrationScriptExists(
-  migrationsDir: string,
-  migrationNumber: number,
-): Promise<boolean> {
-  const filePath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
-  return fileExists(filePath);
-}
-
-/**
- * Get the migration script path for a given migration number
- * @param {string} migrationsDir - Migrations directory path
- * @param {number} migrationNumber - Migration number
- * @returns {string} Full path to migration script
- */
-export function getMigrationScriptPath(migrationsDir: string, migrationNumber: number): string {
-  return getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
 }

@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { aroundAll, describe, expect, test, vi } from "vitest";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
-import { setupInvokerMock, setupTailordbMock, setupTailorErrorsMock } from "#/utils/test/mock";
+import { injectMocks } from "#/vitest/mock";
 import { prepareFixtures } from "./prepare";
 import type { BundledScripts } from "#/cli/commands/deploy/function-registry";
 
@@ -53,9 +53,7 @@ describe("deploy command integration tests", () => {
   aroundAll(async (runSuite) => {
     vi.useFakeTimers();
     vi.setSystemTime(fixedSystemTime);
-    setupTailordbMock();
-    setupTailorErrorsMock();
-    setupInvokerMock(null);
+    using _mocks = injectMocks(globalThis);
     const result = await prepareFixtures();
     outputDir = result.outputDir;
     bundledScripts = result.bundledScripts;

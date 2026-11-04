@@ -1,13 +1,11 @@
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
+import { idpClientVaultName } from "./idp";
 import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn, writeMetadataLabels } from "./label";
-import {
-  fetchExistingResourcesWithLabels,
-  trackDesiredResourceOwnership,
-  trackRemainingResourceOwner,
-} from "./owned-resource";
+import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
 import {
   hashValue,
   loadSecretsState,
@@ -17,7 +15,6 @@ import {
 } from "./secrets-state";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Application } from "#/cli/services/application";
-import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type {
   CreateSecretManagerSecretRequestSchema,
@@ -109,6 +106,35 @@ export function secretUpdateRequest(
   };
 }
 
+function collectIdPClientVaultNames(idpServices: Application["idpServices"]) {
+  return new Set(
+    idpServices.flatMap((idp) => idp.clients.map((name) => idpClientVaultName(idp.name, name))),
+  );
+}
+
+const RESERVED_VAULT_NAME_PREFIX = "tailor--";
+
+function validateDeclaredVaultNames(
+  secretVaults: ReadonlyArray<{ vaultName: string }>,
+  idpClientVaultNames: ReadonlySet<string>,
+) {
+  for (const { vaultName } of secretVaults) {
+    if (idpClientVaultNames.has(vaultName)) {
+      throw CLIError({
+        code: "RESERVED_VAULT_NAME",
+        message: `Vault "${vaultName}" has the name of the vault the SDK creates for an IdP client.`,
+        suggestion:
+          "Rename the vault in defineSecretManager(). If this application already manages a vault with that name, renaming it and removing the declaration both delete the old vault and its secrets on the next deploy, including the secret of an IdP client that already exists.",
+      });
+    }
+    if (vaultName.startsWith(RESERVED_VAULT_NAME_PREFIX)) {
+      logger.warn(
+        `Vault "${vaultName}" starts with "${RESERVED_VAULT_NAME_PREFIX}", a prefix reserved for vaults the platform manages. In v3 this will be an error; rename the vault in defineSecretManager().`,
+      );
+    }
+  }
+}
+
 /**
  * Plan secret manager changes based on current and desired state.
  * @param context - Planning context
@@ -117,6 +143,8 @@ export function secretUpdateRequest(
 export async function planSecretManager(context: PlanContext) {
   const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
   const secretVaults = forRemoval ? [] : application.secrets;
+  const idpClientVaultNames = collectIdPClientVaultNames(application.idpServices);
+  validateDeclaredVaultNames(secretVaults, idpClientVaultNames);
 
   const vaultChangeSet = createChangeSet<CreateVault, ExistingVault, DeleteVault>(
     "Secret Manager vaults",
@@ -124,9 +152,7 @@ export async function planSecretManager(context: PlanContext) {
   const secretChangeSet = createChangeSet<CreateSecret, UpdateSecret, DeleteSecret>(
     "Secret Manager secrets",
   );
-  const conflicts: OwnerConflict[] = [];
-  const unmanaged: UnmanagedResource[] = [];
-  const resourceOwners = new Set<string>();
+  const ownership = createOwnershipTracker(application.name, application.id);
 
   // Fetch all existing vaults with metadata to track managed resources
   const existingVaults = await fetchExistingResourcesWithLabels({
@@ -162,16 +188,10 @@ export async function planSecretManager(context: PlanContext) {
           appName: application.name,
           appId: application.id,
         });
-        const owned = trackDesiredResourceOwnership({
-          labels: existing.allLabels,
-          ownerLabel: existing.label,
-          appName: application.name,
-          appId: application.id,
+        const owned = ownership.ownsDesired(existing.allLabels, {
           resourceType: "secret.vault",
           resourceLabel: "Secret Manager vault",
           resourceName: vaultName,
-          conflicts,
-          unmanaged,
         });
         if (owned && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
           vaultChangeSet.unchanged.push({ name: vaultName });
@@ -266,14 +286,7 @@ export async function planSecretManager(context: PlanContext) {
   // Remaining existing vaults not in config - mark managed ones for deletion
   for (const [name, entry] of Object.entries(existingVaults)) {
     if (!entry) continue;
-    const owned = trackRemainingResourceOwner({
-      labels: entry.allLabels,
-      ownerLabel: entry.label,
-      appName: application.name,
-      appId: application.id,
-      resourceOwners,
-    });
-    if (owned) {
+    if (ownership.ownsRemaining(entry.allLabels)) {
       // Delete secrets inside the vault before deleting the vault itself
       const secrets = await fetchAllTolerant(async (pageToken, maxPageSize) => {
         const { secrets, nextPageToken } = await client.listSecretManagerSecrets({
@@ -304,9 +317,7 @@ export async function planSecretManager(context: PlanContext) {
     vaultChangeSet,
     secretChangeSet,
     skippedSecrets,
-    conflicts,
-    unmanaged,
-    resourceOwners,
+    ...ownership.result,
     stateScope,
   };
 }

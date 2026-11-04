@@ -89,7 +89,11 @@ function updateValues(node: OperationNode): Record<string, unknown> {
   return result;
 }
 
-/** A single statement executed against the mock, captured in order. */
+/**
+ * A single statement executed against the mock, captured in order.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export interface ExecutedQuery {
   /** The Kysely operation node kind, e.g. `"SelectQueryNode"`. */
   kind: OperationNodeKind;
@@ -138,7 +142,11 @@ function toStagedResult(result: MockResult): StagedResult {
   };
 }
 
-/** Controls and assertions for a {@link createKyselyMock} instance. */
+/**
+ * Controls and assertions for a {@link createKyselyMock} instance.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export interface KyselyMock<DB> {
   /** The mock Kysely instance to run queries against. */
   db: Kysely<DB>;
@@ -237,6 +245,8 @@ function byKind(state: MockState, kind: OperationNodeKind): ExecutedQuery[] {
  * Create a mock Kysely instance for unit-testing code that runs Kysely queries.
  * Pass the namespace schema as the type argument, e.g.
  * `createKyselyMock<Namespace["main-db"]>()`.
+ *
+ * **Beta:** This API may change in future releases.
  * @returns A {@link KyselyMock} with the mock `db`, recorded queries, and result staging.
  */
 export function createKyselyMock<DB = Record<string, never>>(): KyselyMock<DB> {

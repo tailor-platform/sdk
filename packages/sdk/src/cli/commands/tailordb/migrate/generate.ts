@@ -43,7 +43,7 @@ import {
   type ExpandContractPlan,
 } from "./expand-contract";
 import { formatFieldShape, hasFieldShapeChange } from "./field-type-change";
-import { formatMigrationScriptHint } from "./hints";
+import { formatMigrationScriptHint, formatRebaselineHint } from "./hints";
 import {
   dropSpecApplies,
   findNestedMemberRenameCandidates,
@@ -63,13 +63,10 @@ import {
   typeRenameSpecApplies,
   type FieldDropSpec,
   type FieldExpandContractSpec,
-  type FieldRenameCandidate,
   type FieldRenameSpec,
   type NestedMemberDropSpec,
-  type NestedMemberRenameCandidate,
   type NestedMemberRenameSpec,
   type TypeDropSpec,
-  type TypeRenameCandidate,
   type TypeRenameSpec,
 } from "./rename-detection";
 import { markMigrationScriptSkipped, resolveTargetNamespace } from "./script";
@@ -94,6 +91,7 @@ import {
 } from "./template-generator";
 import type { EffectiveDateDefault } from "#/runtime/types";
 
+/** **Beta:** This API may change in future releases. */
 export interface GenerateOptions {
   configPath?: string;
   name?: string;
@@ -101,7 +99,7 @@ export interface GenerateOptions {
   init?: boolean;
   /** Create a migration with no schema changes that exists to run a migration script. */
   dataOnly?: boolean;
-  /** Namespace the `--data-only` migration targets. */
+  /** Namespace targeted by `--data-only`, or the only namespace `--init` resets. */
   namespace?: string;
   /**
    * `--rename Table.oldField:newField` / `--rename OldTable:NewTable` /
@@ -131,6 +129,29 @@ export function getUnsupportedMigrationHintLines(): string[] {
     "               migrate data from the temporary field, then remove it",
     "  Important: Reusing the name while stored old values remain can make subsequent reads fail",
   ];
+}
+
+function assertNoNestedNamespaceMigrations(
+  target: NamespaceWithMigrations,
+  all: NamespaceWithMigrations[],
+): void {
+  const realPath = (dir: string) => (fs.existsSync(dir) ? fs.realpathSync(dir) : dir);
+  const isInside = (parent: string, child: string) =>
+    path.relative(parent, child).split("/")[0] !== "..";
+  const targetDir = realPath(target.migrationsDir);
+  const nested = all.filter(
+    ({ namespace, migrationsDir }) =>
+      namespace !== target.namespace &&
+      (isInside(target.migrationsDir, migrationsDir) ||
+        isInside(targetDir, realPath(migrationsDir))),
+  );
+  if (nested.length === 0) return;
+  throw CLIError({
+    code: "MIGRATION_GENERATE_OPTIONS_CONFLICT",
+    message: `--init --namespace ${target.namespace} would also delete the migrations of ${nested.map(({ namespace }) => namespace).join(", ")}, whose directories are inside ${target.migrationsDir}.`,
+    suggestion: "Run --init without --namespace, or move the nested migration directories out.",
+    command: "tailordb migration generate",
+  });
 }
 
 /**
@@ -204,10 +225,13 @@ type GeneratedMigration = {
   pgliteSchemaError: string | null;
 };
 
-type GenerateResult = {
+/** **Beta:** The outcome of generating TailorDB migrations. */
+export type GenerateResult = {
   changed: boolean;
   /** Namespaces whose migration directory --init deleted */
   clearedNamespaces: string[];
+  /** Namespaces whose breaking changes the user declined to generate */
+  skippedNamespaces: string[];
   migrations: GeneratedMigration[];
 };
 
@@ -235,17 +259,21 @@ function generatedMigration(namespace: string, files: WrittenMigrationFiles): Ge
 
 /**
  * Generate migration files for TailorDB schema changes
+ *
+ * **Beta:** This API may change in future releases.
+ * Declining a breaking-change confirmation skips that namespace and resolves successfully.
+ * Declining the `--init` confirmation rejects with `MIGRATION_GENERATE_CANCELLED`.
  * @param {GenerateOptions} options - Generation options
- * @returns {Promise<void>} Promise that resolves when generation is complete
+ * @returns {Promise<GenerateResult>} The migrations written, the directories cleared, and the namespaces skipped
  */
-export async function generate(options: GenerateOptions): Promise<void> {
-  await generateMigrations(options);
+export async function generate(options: GenerateOptions): Promise<GenerateResult> {
+  return generateMigrations(options);
 }
 
 /**
  * Generate migration files for TailorDB schema changes
  * @param {GenerateOptions} options - Generation options
- * @returns {Promise<GenerateResult>} The migrations written and the directories cleared
+ * @returns {Promise<GenerateResult>} The migrations written, the directories cleared, and the namespaces skipped
  */
 async function generateMigrations(options: GenerateOptions): Promise<GenerateResult> {
   logBetaWarning("tailordb migration");
@@ -267,16 +295,14 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
     logger.info(
       'Add "migration: { directory: \\"./migrations\\" }" to your db config to enable migrations.',
     );
-    return { changed: false, clearedNamespaces: [], migrations: [] };
+    return { changed: false, clearedNamespaces: [], skippedNamespaces: [], migrations: [] };
   }
 
-  // Parse --rename/--drop flags before any destructive step so a malformed
-  // value fails the command while the migrations directories are still intact.
   // The dots before any ":" pick the target: none for a table, one for a
   // field, two or more for a member inside a nested field.
-  const renameFlags: RenameFlag[] = [];
-  const typeRenameFlags: TypeRenameFlag[] = [];
-  const nestedRenameFlags: NestedMemberRenameFlag[] = [];
+  const renameFlags: ParsedFlag<FieldRenameSpec>[] = [];
+  const typeRenameFlags: ParsedFlag<TypeRenameSpec>[] = [];
+  const nestedRenameFlags: ParsedFlag<NestedMemberRenameSpec>[] = [];
   for (const raw of options.renames ?? []) {
     const depth = targetDepth(raw);
     if (depth >= 2) {
@@ -287,9 +313,9 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
       typeRenameFlags.push({ raw, spec: parseTypeRenameOption(raw) });
     }
   }
-  const dropFlags: DropFlag[] = [];
-  const typeDropFlags: TypeDropFlag[] = [];
-  const nestedDropFlags: NestedMemberDropFlag[] = [];
+  const dropFlags: ParsedFlag<FieldDropSpec>[] = [];
+  const typeDropFlags: ParsedFlag<TypeDropSpec>[] = [];
+  const nestedDropFlags: ParsedFlag<NestedMemberDropSpec>[] = [];
   for (const raw of options.drops ?? []) {
     const depth = targetDepth(raw);
     if (depth >= 2) {
@@ -300,10 +326,9 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
       typeDropFlags.push({ raw, spec: parseTypeDropOption(raw) });
     }
   }
-  const expandContractFlags: ExpandContractFlag[] = (options.expandContracts ?? []).map((raw) => ({
-    raw,
-    spec: parseExpandContractOption(raw),
-  }));
+  const expandContractFlags: ParsedFlag<FieldExpandContractSpec>[] = (
+    options.expandContracts ?? []
+  ).map((raw) => ({ raw, spec: parseExpandContractOption(raw) }));
   // --init regenerates the baseline from scratch, so there is no previous
   // schema a rename, drop, or field conversion could apply to
   const hasRenameOrDropFlags =
@@ -320,51 +345,22 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
       command: "tailordb migration generate",
     });
   }
-  const droppedFieldKeys = new Set(
-    dropFlags.map(({ spec }) => `${spec.tableName}.${spec.fieldName}`),
+  assertNoRenameDropConflict(
+    renameFlags.map(({ spec }) => fieldKey(spec.tableName, spec.previousFieldName)),
+    dropFlags.map(({ spec }) => fieldKey(spec.tableName, spec.fieldName)),
   );
-  const conflictingFlags = renameFlags.filter(({ spec }) =>
-    droppedFieldKeys.has(`${spec.tableName}.${spec.previousFieldName}`),
+  assertNoRenameDropConflict(
+    nestedRenameFlags.map(({ spec }) => nestedMemberKey({ ...spec, path: spec.previousPath })),
+    nestedDropFlags.map(({ spec }) => nestedMemberKey(spec)),
   );
-  if (conflictingFlags.length > 0) {
-    throw CLIError({
-      code: "MIGRATION_RENAME_DROP_CONFLICT",
-      message: `--rename and --drop conflict for: ${conflictingFlags
-        .map(({ spec }) => `${spec.tableName}.${spec.previousFieldName}`)
-        .join(", ")}`,
-      command: "tailordb migration generate",
-    });
-  }
-  const droppedMemberKeys = new Set(nestedDropFlags.map(({ spec }) => nestedMemberKey(spec)));
-  const conflictingNestedFlags = nestedRenameFlags.filter(({ spec }) =>
-    droppedMemberKeys.has(nestedMemberKey({ ...spec, path: spec.previousPath })),
+  assertNoRenameDropConflict(
+    typeRenameFlags.map(({ spec }) => spec.previousTableName),
+    typeDropFlags.map(({ spec }) => spec.tableName),
   );
-  if (conflictingNestedFlags.length > 0) {
-    throw CLIError({
-      code: "MIGRATION_RENAME_DROP_CONFLICT",
-      message: `--rename and --drop conflict for: ${conflictingNestedFlags
-        .map(({ spec }) => nestedMemberKey({ ...spec, path: spec.previousPath }))
-        .join(", ")}`,
-      command: "tailordb migration generate",
-    });
-  }
-  const droppedTypeNames = new Set(typeDropFlags.map(({ spec }) => spec.tableName));
-  const conflictingTypeFlags = typeRenameFlags.filter(({ spec }) =>
-    droppedTypeNames.has(spec.previousTableName),
-  );
-  if (conflictingTypeFlags.length > 0) {
-    throw CLIError({
-      code: "MIGRATION_RENAME_DROP_CONFLICT",
-      message: `--rename and --drop conflict for: ${conflictingTypeFlags
-        .map(({ spec }) => spec.previousTableName)
-        .join(", ")}`,
-      command: "tailordb migration generate",
-    });
-  }
-  if (options.namespace !== undefined && !options.dataOnly) {
+  if (options.namespace !== undefined && !options.dataOnly && !options.init) {
     throw CLIError({
       code: "MIGRATION_GENERATE_OPTIONS_CONFLICT",
-      message: "--namespace can only be used together with --data-only.",
+      message: "--namespace can only be used together with --data-only or --init.",
       command: "tailordb migration generate",
     });
   }
@@ -382,18 +378,18 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
     });
   }
 
-  const dataOnlyTargetNamespace = options.dataOnly
-    ? resolveTargetNamespace(namespacesWithMigrations, options.namespace)
-    : undefined;
+  const targetNamespace =
+    options.dataOnly || options.namespace !== undefined
+      ? resolveTargetNamespace(namespacesWithMigrations, options.namespace)
+      : undefined;
   const namespacesToLoad =
-    dataOnlyTargetNamespace === undefined
+    targetNamespace === undefined
       ? namespacesWithMigrations
-      : namespacesWithMigrations.filter(({ namespace }) => namespace === dataOnlyTargetNamespace);
-
-  // Handle --init option: delete existing migrations directory
-  const clearedNamespaces = options.init
-    ? await handleInitOption(namespacesWithMigrations, options.yes)
-    : [];
+      : namespacesWithMigrations.filter(({ namespace }) => namespace === targetNamespace);
+  const initTarget = options.init ? namespacesToLoad[0] : undefined;
+  if (initTarget && targetNamespace !== undefined) {
+    assertNoNestedNamespaceMigrations(initTarget, namespacesWithMigrations);
+  }
 
   // Initialize plugin manager if plugins are provided
   let pluginManager: PluginManager | undefined;
@@ -406,13 +402,14 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
   const application = defineApplication({ config, pluginManager });
 
   // Schema generation loads every namespace before writing so --rename flags
-  // can be validated globally; data-only generation loads only its target.
+  // can be validated globally; --data-only and --init --namespace load only their target.
   const generations: NamespaceGeneration[] = [];
   for (const { namespace, migrationsDir } of namespacesToLoad) {
     logger.info(`Processing namespace: ${styles.bold(namespace)}`);
 
-    // Validate existing migration files before generating new ones
-    assertValidMigrationFiles(migrationsDir, namespace);
+    // Validate existing migration files before generating new ones; --init
+    // discards them, so a broken history must not block it
+    if (!options.init) assertValidMigrationFiles(migrationsDir, namespace, config.path);
 
     // Find the TailorDB service for this namespace
     const tailordbService = application.tailorDBServices.find((s) => s.namespace === namespace);
@@ -434,19 +431,24 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
       currentSnapshot: createSnapshotFromLocalTypes(localTypesObj, namespace),
       // Returns null when the migrations directory is missing or empty;
       // throws when existing migration files are invalid.
-      previousSnapshot: reconstructSnapshotFromMigrations(migrationsDir),
+      previousSnapshot: options.init ? null : reconstructSnapshotFromMigrations(migrationsDir),
     });
   }
 
-  if (dataOnlyTargetNamespace !== undefined) {
+  if (options.dataOnly && targetNamespace !== undefined) {
     const migration = await generateDataOnlyMigration(
       generations,
-      dataOnlyTargetNamespace,
+      targetNamespace,
       options,
       temporal,
       dateDefault,
     );
-    return { changed: true, clearedNamespaces, migrations: [migration] };
+    return {
+      changed: true,
+      clearedNamespaces: [],
+      skippedNamespaces: [],
+      migrations: [migration],
+    };
   }
 
   // A flag applies to a namespace only when that namespace actually removed
@@ -490,11 +492,11 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
   );
 
   const expandContractKeysByNamespace = new Map<string, Set<string>>();
-  const matchedExpandContractFlags = new Set<ExpandContractFlag>();
+  const matchedExpandContractFlags = new Set<ParsedFlag<FieldExpandContractSpec>>();
   const ineligibleExpandContracts: string[] = [];
   for (const { namespace, previousSnapshot, currentSnapshot } of generations) {
     if (!previousSnapshot) continue;
-    const applicable: ExpandContractFlag[] = [];
+    const applicable: ParsedFlag<FieldExpandContractSpec>[] = [];
     for (const flag of expandContractFlags) {
       const { spec } = flag;
       const before = previousSnapshot.tables[spec.tableName]?.fields[spec.fieldName];
@@ -590,7 +592,19 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
     });
   }
 
-  const declinedNamespaces: string[] = [];
+  assertMigrationNumbersAvailable(
+    generations.filter(
+      ({ previousSnapshot, diff }) => previousSnapshot && diff && hasChanges(diff),
+    ),
+    options.configPath,
+  );
+
+  // --init deletes only after every step above, so their failures keep the migrations intact
+  const clearedNamespaces = options.init
+    ? await handleInitOption(namespacesToLoad, options.yes)
+    : [];
+
+  const skippedNamespaces: string[] = [];
   const migrations: GeneratedMigration[] = [];
   for (const {
     namespace,
@@ -614,20 +628,17 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
         temporal,
         dateDefault,
       );
-      if (generated.declined) declinedNamespaces.push(namespace);
+      if (generated.declined) skippedNamespaces.push(namespace);
       migrations.push(...generated.migrations.map((files) => generatedMigration(namespace, files)));
     }
   }
-  if (declinedNamespaces.length > 0) {
-    throw CLIError({
-      code: "MIGRATION_GENERATE_CANCELLED",
-      message: `Migration generation cancelled for ${declinedNamespaces.join(", ")}.`,
-      context: { namespaces: declinedNamespaces },
-    });
+  if (skippedNamespaces.length > 0) {
+    logger.info(`Skipped: ${skippedNamespaces.join(", ")}`);
   }
   return {
     changed: clearedNamespaces.length > 0 || migrations.length > 0,
     clearedNamespaces,
+    skippedNamespaces,
     migrations,
   };
 }
@@ -677,6 +688,7 @@ async function generateDataOnlyMigration(
     });
   }
 
+  assertMigrationNumbersAvailable([generation], options.configPath);
   const migrationNumber = getNextMigrationNumber(migrationsDir);
   const result = await generateDataOnlyMigrationFiles({
     diff: { ...diff, requiresMigrationScript: true },
@@ -723,14 +735,14 @@ function logPgliteSchemaResult(result: {
 
 /**
  * Open a generated migrate.ts in the configured editor, silently skipping
- * when no editor is configured, the file is missing, or the editor fails.
+ * when no editor is configured, the run is not interactive, the file is
+ * missing, or the editor fails.
  * @param {string} migrateFilePath - Path of the generated migration script
  * @returns {Promise<void>} Promise that resolves when the editor is closed or skipped
  */
 async function openMigrationScriptInEditor(migrateFilePath: string): Promise<void> {
   const editor = getConfiguredEditorCommand();
-  // The editor shares stdout, which carries the JSON result under --json.
-  if (!editor || logger.jsonMode) {
+  if (!editor || !canPrompt()) {
     return;
   }
 
@@ -838,22 +850,10 @@ async function generateInitialSnapshot(
   };
 }
 
-/** A parsed field-form `--rename` flag together with its raw value. */
-interface RenameFlag {
+/** A parsed `--rename`, `--drop`, or `--expand-contract` flag together with its raw value. */
+interface ParsedFlag<S> {
   raw: string;
-  spec: FieldRenameSpec;
-}
-
-/** A parsed nested-member-form `--rename` flag together with its raw value. */
-interface NestedMemberRenameFlag {
-  raw: string;
-  spec: NestedMemberRenameSpec;
-}
-
-/** A parsed nested-member-form `--drop` flag together with its raw value. */
-interface NestedMemberDropFlag {
-  raw: string;
-  spec: NestedMemberDropSpec;
+  spec: S;
 }
 
 /**
@@ -885,17 +885,37 @@ function nestedMemberKey(member: NestedMemberLocation): string {
 }
 
 /**
+ * Fail when a `--rename` and a `--drop` flag name the same field, table, or nested member.
+ * @param {readonly string[]} renamedKeys - Dotted keys of the items `--rename` flags rename
+ * @param {readonly string[]} droppedKeys - Dotted keys of the items `--drop` flags drop
+ */
+function assertNoRenameDropConflict(
+  renamedKeys: readonly string[],
+  droppedKeys: readonly string[],
+): void {
+  const dropped = new Set(droppedKeys);
+  const conflicting = renamedKeys.filter((key) => dropped.has(key));
+  if (conflicting.length > 0) {
+    throw CLIError({
+      code: "MIGRATION_RENAME_DROP_CONFLICT",
+      message: `--rename and --drop conflict for: ${conflicting.join(", ")}`,
+      command: "tailordb migration generate",
+    });
+  }
+}
+
+/**
  * Match `--rename` / `--drop` flags against every namespace's snapshots.
  * Throws when a flag applies to no namespace, so a typo cannot silently fall
  * back to remove + add.
- * @param {readonly { raw: string; spec: S }[]} flags - Parsed flags of one form
+ * @param {readonly ParsedFlag<S>[]} flags - Parsed flags of one form
  * @param {readonly NamespaceGeneration[]} generations - Snapshots per namespace
  * @param {(spec: S, previous: SchemaSnapshot, current: SchemaSnapshot) => boolean} applies - Whether a spec matches a namespace's snapshot pair
  * @param {string} unmatchedError - Error prefix for flags that match no namespace
  * @returns {Map<string, S[]>} Applicable specs keyed by namespace
  */
 function matchFlagsToNamespaces<S>(
-  flags: readonly { raw: string; spec: S }[],
+  flags: readonly ParsedFlag<S>[],
   generations: readonly NamespaceGeneration[],
   applies: (spec: S, previous: SchemaSnapshot, current: SchemaSnapshot) => boolean,
   unmatchedError: string,
@@ -924,28 +944,40 @@ function matchFlagsToNamespaces<S>(
   return specsByNamespace;
 }
 
-/** A parsed table-form `--rename` flag together with its raw value. */
-interface TypeRenameFlag {
-  raw: string;
-  spec: TypeRenameSpec;
-}
-
-/** A parsed field-form `--drop` flag together with its raw value. */
-interface DropFlag {
-  raw: string;
-  spec: FieldDropSpec;
-}
-
-/** A parsed `--expand-contract` flag together with its raw value. */
-interface ExpandContractFlag {
-  raw: string;
-  spec: FieldExpandContractSpec;
-}
-
-/** A parsed table-form `--drop` flag together with its raw value. */
-interface TypeDropFlag {
-  raw: string;
-  spec: TypeDropSpec;
+/**
+ * Fail before any migration file is written when a namespace has too few
+ * migration numbers left within {@link MAX_MIGRATION_NUMBER}.
+ * @param {readonly NamespaceGeneration[]} generations - Namespaces about to receive migrations
+ * @param {string | undefined} configPath - Config path the current run used, for the re-baseline command
+ */
+function assertMigrationNumbersAvailable(
+  generations: readonly NamespaceGeneration[],
+  configPath: string | undefined,
+): void {
+  const last = formatMigrationNumber(MAX_MIGRATION_NUMBER);
+  const exhausted = generations.flatMap(({ namespace, migrationsDir, expandPlans }) => {
+    const convertsFieldType = (expandPlans?.length ?? 0) > 0;
+    const lastNeeded = getNextMigrationNumber(migrationsDir) + (convertsFieldType ? 1 : 0);
+    if (lastNeeded <= MAX_MIGRATION_NUMBER) return [];
+    return [
+      {
+        namespace,
+        reason: convertsFieldType
+          ? `Namespace "${namespace}" needs two migration numbers to convert a field type, and ${last} is the last one available.`
+          : `Namespace "${namespace}" has reached migration ${last}, the last number available.`,
+      },
+    ];
+  });
+  if (exhausted.length === 0) return;
+  const rebaselineCommands = exhausted
+    .map(({ namespace }) => formatRebaselineHint({ namespace, configPath }))
+    .join(" and ");
+  throw CLIError({
+    code: "MIGRATION_NUMBER_EXHAUSTED",
+    message: exhausted.map(({ reason }) => reason).join("\n"),
+    suggestion: `Re-baseline the migration history with ${rebaselineCommands}, then generate again. Re-baselining requires the history to reproduce the local schema, so set aside schema changes not yet in a migration until it finishes.`,
+    context: { namespaces: exhausted.map(({ namespace }) => namespace) },
+  });
 }
 
 /** Snapshots collected for one namespace before any migration file is written. */
@@ -984,129 +1016,48 @@ interface NamespaceRenameSpecs {
   nestedMemberDrops: readonly NestedMemberDropSpec[];
 }
 
-function availableNestedMemberRenameTargets(
-  candidate: NestedMemberRenameCandidate,
-  claimedMembers: ReadonlySet<string>,
-): string[] {
-  const parent = candidate.previousPath.slice(0, -1);
-  return candidate.added.filter(
-    (name) => !claimedMembers.has(nestedMemberKey({ ...candidate, path: [...parent, name] })),
-  );
+/** A removed field, table, or nested member with the added siblings it could have been renamed to. */
+interface RenameQuestion {
+  label: string;
+  /** Not derived from `label`: names can contain dots, so splitting `label` cannot recover it. */
+  oldName: string;
+  added: string[];
+  keyOf: (name: string) => string;
+  claimed: Set<string>;
+  dropped: ReadonlySet<string>;
+  kind: "table" | "field" | "member";
+  record: (newName: string) => void;
 }
 
 /**
- * Ask the user whether a removed nested member was renamed to one of the
- * compatible added siblings. Returns the confirmed new member name, or undefined.
- * @param {NestedMemberRenameCandidate} candidate - Candidate to confirm
+ * Ask the user whether a removed field, table, or nested member was renamed to
+ * one of the compatible added siblings. Returns the confirmed new name, or undefined.
+ * @param {RenameQuestion} question - Removed item to ask about
  * @param {string[]} addedNames - Added sibling names still available as rename targets
- * @returns {Promise<string | undefined>} Confirmed new member name, if any
+ * @returns {Promise<string | undefined>} Confirmed new name, if any
  */
-async function promptNestedMemberRenameCandidate(
-  candidate: NestedMemberRenameCandidate,
+async function promptRename(
+  question: RenameQuestion,
   addedNames: string[],
 ): Promise<string | undefined> {
-  const oldLabel = nestedMemberKey({ ...candidate, path: candidate.previousPath });
-  const oldName = candidate.previousPath[candidate.previousPath.length - 1] ?? "";
+  const { label, oldName, kind } = question;
+  const compatibility = kind === "table" ? "schema" : "type";
   const [firstName] = addedNames;
   if (addedNames.length === 1 && firstName) {
     const isRename = await prompt.confirm({
-      message: `${oldLabel} was removed and ${firstName} was added with a compatible type. Was it renamed to ${firstName}?`,
+      message: `${label} was removed and ${firstName} was added with a compatible ${compatibility}. Was it renamed to ${firstName}?`,
       default: true,
     });
     return isRename ? firstName : undefined;
   }
   const selected = await prompt.select({
-    message: `${oldLabel} was removed. Was it renamed to one of these added members?`,
+    message: `${label} was removed. Was it renamed to one of these added ${kind}s?`,
     choices: [
       ...addedNames.map((name) => ({
         name: `Yes, renamed to ${name}`,
         value: name as string | null,
       })),
       { name: `No, ${oldName} was removed`, value: null },
-    ],
-  });
-  return selected ?? undefined;
-}
-
-function availableRenameTargets(
-  candidate: FieldRenameCandidate,
-  claimedFields: ReadonlySet<string>,
-): string[] {
-  return candidate.added
-    .filter((added) => !claimedFields.has(`${candidate.tableName}.${added.fieldName}`))
-    .map((added) => added.fieldName);
-}
-
-/**
- * Ask the user whether a removed field was renamed to one of the compatible
- * added fields. Returns the confirmed new field name, or undefined.
- * @param {FieldRenameCandidate} candidate - Candidate to confirm
- * @param {string[]} addedFieldNames - Added field names still available as rename targets
- * @returns {Promise<string | undefined>} Confirmed new field name, if any
- */
-async function promptRenameCandidate(
-  candidate: FieldRenameCandidate,
-  addedFieldNames: string[],
-): Promise<string | undefined> {
-  const oldLabel = `${candidate.tableName}.${candidate.removed.fieldName}`;
-  const [firstFieldName] = addedFieldNames;
-  if (addedFieldNames.length === 1 && firstFieldName) {
-    const isRename = await prompt.confirm({
-      message: `${oldLabel} was removed and ${firstFieldName} was added with a compatible type. Was it renamed to ${firstFieldName}?`,
-      default: true,
-    });
-    return isRename ? firstFieldName : undefined;
-  }
-  const selected = await prompt.select({
-    message: `${oldLabel} was removed. Was it renamed to one of these added fields?`,
-    choices: [
-      ...addedFieldNames.map((fieldName) => ({
-        name: `Yes, renamed to ${fieldName}`,
-        value: fieldName as string | null,
-      })),
-      { name: `No, ${candidate.removed.fieldName} was removed`, value: null },
-    ],
-  });
-  return selected ?? undefined;
-}
-
-function availableTypeRenameTargets(
-  candidate: TypeRenameCandidate,
-  claimedTypes: ReadonlySet<string>,
-): string[] {
-  return candidate.added
-    .filter((added) => !claimedTypes.has(added.tableName))
-    .map((added) => added.tableName);
-}
-
-/**
- * Ask the user whether a removed type was renamed to one of the compatible
- * added tables. Returns the confirmed new table name, or undefined.
- * @param {TypeRenameCandidate} candidate - Candidate to confirm
- * @param {string[]} addedTypeNames - Added table names still available as rename targets
- * @returns {Promise<string | undefined>} Confirmed new table name, if any
- */
-async function promptTypeRenameCandidate(
-  candidate: TypeRenameCandidate,
-  addedTypeNames: string[],
-): Promise<string | undefined> {
-  const oldTypeName = candidate.removed.tableName;
-  const [firstTypeName] = addedTypeNames;
-  if (addedTypeNames.length === 1 && firstTypeName) {
-    const isRename = await prompt.confirm({
-      message: `${oldTypeName} was removed and ${firstTypeName} was added with a compatible schema. Was it renamed to ${firstTypeName}?`,
-      default: true,
-    });
-    return isRename ? firstTypeName : undefined;
-  }
-  const selected = await prompt.select({
-    message: `${oldTypeName} was removed. Was it renamed to one of these added tables?`,
-    choices: [
-      ...addedTypeNames.map((tableName) => ({
-        name: `Yes, renamed to ${tableName}`,
-        value: tableName as string | null,
-      })),
-      { name: `No, ${oldTypeName} was removed`, value: null },
     ],
   });
   return selected ?? undefined;
@@ -1132,128 +1083,118 @@ async function resolveRenames(
   options: GenerateOptions,
   specs: NamespaceRenameSpecs,
 ): Promise<RenameResolution> {
-  const confirmed: FieldRenameSpec[] = [...specs.fieldRenames];
+  const fieldRenames = [...specs.fieldRenames];
+  const typeRenames = [...specs.typeRenames];
+  const nestedMemberRenames = [...specs.nestedMemberRenames];
+  const claimedTypes = new Set(
+    typeRenames.flatMap((spec) => [spec.previousTableName, spec.tableName]),
+  );
+  const droppedTypes = new Set(specs.typeDrops.map((spec) => spec.tableName));
   const claimedFields = new Set(
-    confirmed.flatMap((spec) => [
-      `${spec.tableName}.${spec.previousFieldName}`,
-      `${spec.tableName}.${spec.fieldName}`,
+    fieldRenames.flatMap((spec) => [
+      fieldKey(spec.tableName, spec.previousFieldName),
+      fieldKey(spec.tableName, spec.fieldName),
     ]),
   );
   const droppedFields = new Set(
-    specs.fieldDrops.map((spec) => `${spec.tableName}.${spec.fieldName}`),
+    specs.fieldDrops.map((spec) => fieldKey(spec.tableName, spec.fieldName)),
   );
-  const confirmedTypes: TypeRenameSpec[] = [...specs.typeRenames];
-  const claimedTypes = new Set(
-    confirmedTypes.flatMap((spec) => [spec.previousTableName, spec.tableName]),
-  );
-  const droppedTypes = new Set(specs.typeDrops.map((spec) => spec.tableName));
-  const confirmedNested: NestedMemberRenameSpec[] = [...specs.nestedMemberRenames];
   const claimedMembers = new Set(
-    confirmedNested.flatMap((spec) => [
+    nestedMemberRenames.flatMap((spec) => [
       nestedMemberKey({ ...spec, path: spec.previousPath }),
       nestedMemberKey(spec),
     ]),
   );
   const droppedMembers = new Set(specs.nestedMemberDrops.map((spec) => nestedMemberKey(spec)));
 
-  const typeCandidates = findTypeRenameCandidates(diff).filter(
-    (candidate) =>
-      !droppedTypes.has(candidate.removed.tableName) &&
-      !claimedTypes.has(candidate.removed.tableName) &&
-      availableTypeRenameTargets(candidate, claimedTypes).length > 0,
+  const questions: RenameQuestion[] = [
+    ...findTypeRenameCandidates(diff).map((candidate): RenameQuestion => {
+      const { removed, added } = candidate;
+      return {
+        label: removed.tableName,
+        oldName: removed.tableName,
+        added: added.map((change) => change.tableName),
+        keyOf: (name) => name,
+        claimed: claimedTypes,
+        dropped: droppedTypes,
+        kind: "table",
+        record: (tableName) => {
+          typeRenames.push({ previousTableName: removed.tableName, tableName });
+        },
+      };
+    }),
+    ...findRenameCandidates(diff).map((candidate): RenameQuestion => {
+      const { tableName, removed, added } = candidate;
+      return {
+        label: fieldKey(tableName, removed.fieldName),
+        oldName: removed.fieldName,
+        added: added.map((change) => change.fieldName),
+        keyOf: (name) => fieldKey(tableName, name),
+        claimed: claimedFields,
+        dropped: droppedFields,
+        kind: "field",
+        record: (fieldName) => {
+          fieldRenames.push({ tableName, previousFieldName: removed.fieldName, fieldName });
+        },
+      };
+    }),
+    ...findNestedMemberRenameCandidates(diff).map((candidate): RenameQuestion => {
+      const { tableName, fieldName, previousPath } = candidate;
+      const parent = previousPath.slice(0, -1);
+      return {
+        label: nestedMemberKey({ tableName, fieldName, path: previousPath }),
+        oldName: previousPath[previousPath.length - 1] ?? "",
+        added: candidate.added,
+        keyOf: (name) => nestedMemberKey({ tableName, fieldName, path: [...parent, name] }),
+        claimed: claimedMembers,
+        dropped: droppedMembers,
+        kind: "member",
+        record: (name) => {
+          nestedMemberRenames.push({ tableName, fieldName, previousPath, path: [...parent, name] });
+        },
+      };
+    }),
+  ];
+
+  const availableTargets = (question: RenameQuestion): string[] =>
+    question.added.filter((name) => !question.claimed.has(question.keyOf(name)));
+  const pending = questions.filter(
+    (question) =>
+      !question.dropped.has(question.label) &&
+      !question.claimed.has(question.label) &&
+      availableTargets(question).length > 0,
   );
-  const candidates = findRenameCandidates(diff).filter(
-    (candidate) =>
-      !droppedFields.has(`${candidate.tableName}.${candidate.removed.fieldName}`) &&
-      !claimedFields.has(`${candidate.tableName}.${candidate.removed.fieldName}`) &&
-      availableRenameTargets(candidate, claimedFields).length > 0,
-  );
-  const nestedCandidates = findNestedMemberRenameCandidates(diff).filter((candidate) => {
-    const key = nestedMemberKey({ ...candidate, path: candidate.previousPath });
-    return (
-      !droppedMembers.has(key) &&
-      !claimedMembers.has(key) &&
-      availableNestedMemberRenameTargets(candidate, claimedMembers).length > 0
-    );
-  });
 
   const unresolved: UnresolvedRenameCandidate[] = [];
   if (options.yes || !canPrompt()) {
-    for (const candidate of typeCandidates) {
+    for (const question of pending) {
       unresolved.push({
         namespace: diff.namespace,
-        label: candidate.removed.tableName,
-        targets: availableTypeRenameTargets(candidate, claimedTypes),
-      });
-    }
-    for (const candidate of candidates) {
-      unresolved.push({
-        namespace: diff.namespace,
-        label: `${candidate.tableName}.${candidate.removed.fieldName}`,
-        targets: availableRenameTargets(candidate, claimedFields),
-      });
-    }
-    for (const candidate of nestedCandidates) {
-      unresolved.push({
-        namespace: diff.namespace,
-        label: nestedMemberKey({ ...candidate, path: candidate.previousPath }),
-        targets: availableNestedMemberRenameTargets(candidate, claimedMembers),
+        label: question.label,
+        targets: availableTargets(question),
       });
     }
   } else {
-    for (const candidate of typeCandidates) {
-      const addedTypeNames = availableTypeRenameTargets(candidate, claimedTypes);
-      if (addedTypeNames.length === 0) continue;
-      const newTypeName = await promptTypeRenameCandidate(candidate, addedTypeNames);
-      if (newTypeName) {
-        confirmedTypes.push({
-          previousTableName: candidate.removed.tableName,
-          tableName: newTypeName,
-        });
-        claimedTypes.add(candidate.removed.tableName);
-        claimedTypes.add(newTypeName);
-      }
-    }
-    for (const candidate of candidates) {
-      const addedFieldNames = availableRenameTargets(candidate, claimedFields);
-      if (addedFieldNames.length === 0) continue;
-      const newFieldName = await promptRenameCandidate(candidate, addedFieldNames);
-      if (newFieldName) {
-        confirmed.push({
-          tableName: candidate.tableName,
-          previousFieldName: candidate.removed.fieldName,
-          fieldName: newFieldName,
-        });
-        claimedFields.add(`${candidate.tableName}.${candidate.removed.fieldName}`);
-        claimedFields.add(`${candidate.tableName}.${newFieldName}`);
-      }
-    }
-    for (const candidate of nestedCandidates) {
-      const addedNames = availableNestedMemberRenameTargets(candidate, claimedMembers);
+    for (const question of pending) {
+      const addedNames = availableTargets(question);
       if (addedNames.length === 0) continue;
-      const newName = await promptNestedMemberRenameCandidate(candidate, addedNames);
+      const newName = await promptRename(question, addedNames);
       if (newName) {
-        const spec: NestedMemberRenameSpec = {
-          tableName: candidate.tableName,
-          fieldName: candidate.fieldName,
-          previousPath: candidate.previousPath,
-          path: [...candidate.previousPath.slice(0, -1), newName],
-        };
-        confirmedNested.push(spec);
-        claimedMembers.add(nestedMemberKey({ ...spec, path: spec.previousPath }));
-        claimedMembers.add(nestedMemberKey(spec));
+        question.record(newName);
+        question.claimed.add(question.label);
+        question.claimed.add(question.keyOf(newName));
       }
     }
   }
 
-  if (confirmed.length === 0 && confirmedTypes.length === 0 && confirmedNested.length === 0) {
+  if (fieldRenames.length === 0 && typeRenames.length === 0 && nestedMemberRenames.length === 0) {
     return { diff, unresolved };
   }
   return {
     diff: compareSnapshots(previousSnapshot, currentSnapshot, {
-      fieldRenames: confirmed,
-      typeRenames: confirmedTypes,
-      nestedMemberRenames: confirmedNested,
+      fieldRenames,
+      typeRenames,
+      nestedMemberRenames,
     }),
     unresolved,
   };
@@ -1507,13 +1448,6 @@ async function generateExpandContractMigrations(
   });
 
   const expandNumber = getNextMigrationNumber(migrationsDir);
-  if (expandNumber + 1 > MAX_MIGRATION_NUMBER) {
-    throw CLIError({
-      code: "MIGRATION_NUMBER_EXHAUSTED",
-      message: `Converting a field type needs two migration numbers, and ${formatMigrationNumber(MAX_MIGRATION_NUMBER)} is the last one available.`,
-      suggestion: "Re-baseline the migration history first.",
-    });
-  }
   const expand = await generateDiffFiles(
     expandDiff,
     migrationsDir,
@@ -1621,7 +1555,8 @@ export const generateCommand = defineAppCommand({
       description: "Optional description for the migration",
     }),
     init: arg(z.boolean().default(false), {
-      description: "Delete existing migrations and start fresh",
+      description:
+        "Delete existing migrations and start fresh (all namespaces with migrations configured, or only the one given by --namespace)",
     }),
     "data-only": arg(z.boolean().default(false), {
       description:
@@ -1629,7 +1564,7 @@ export const generateCommand = defineAppCommand({
     }),
     namespace: arg(z.string().optional(), {
       description:
-        "Target TailorDB namespace for --data-only (required if multiple namespaces exist)",
+        "Target TailorDB namespace for --data-only (required if multiple namespaces exist), or the only namespace --init resets",
     }),
     rename: arg(z.array(z.string()).optional(), {
       description:

@@ -25,6 +25,7 @@ export type ManagedResourceType =
   | "secret.vault"
   | "staticwebsite"
   | "staticwebsite.custom_domain"
+  | "staticwebsite.custom_domain_transfer"
   | "tailordb.gql_permission"
   | "tailordb.service"
   | "tailordb.type"

@@ -6,13 +6,14 @@ import {
   logBetaWarning,
 } from "@tailor-platform/sdk/cli";
 import { z } from "zod";
+import { printAutofixNextSteps, setupAutofix } from "./autofix";
 import { checkGitHub } from "./check";
 import { setupDelete } from "./delete";
 import { setupEnv } from "./env";
 import { checkEnv } from "./env-check";
 import { PREVIEW_NAME_MAX_LENGTH, printTargetNextSteps, setupTarget } from "./generate";
 import { setupRenovate } from "./renovate";
-import { PACKAGE_MANAGERS } from "./templates";
+import { AUTOFIX_PROVIDERS, PACKAGE_MANAGERS, PREVIEW_REQUIREMENTS } from "./templates";
 import { setupUpdate } from "./update";
 
 const seedArgs = {
@@ -45,7 +46,7 @@ const checkCommand = defineAppCommand({
 const envCommand = defineAppCommand({
   name: "env",
   description:
-    "Print the secrets and variables each GitHub Environment used by the generated workflows needs, or check which are registered (read-only).",
+    "Print the secrets and variables each GitHub Environment used by the generated workflows needs, and those the autofix workflow needs on the repository, or check which are registered (read-only).",
   args: z.strictObject({
     format: arg(z.enum(["gh", "terraform"]).default("gh"), {
       description: "Output format: gh CLI commands, or Terraform (integrations/github provider)",
@@ -55,7 +56,7 @@ const envCommand = defineAppCommand({
     }),
     check: arg(z.boolean().default(false), {
       description:
-        "Check with gh which of them are registered in GitHub, and print gh commands for the missing ones; fails when a required one is missing",
+        "Check with gh which of them are registered in GitHub, and print gh commands for the missing ones and for a machine user client secret to move onto its environment; fails when a required one is missing",
     }),
   }),
   run: (args) => {
@@ -207,7 +208,8 @@ const tagCommand = defineAppCommand({
 
 const previewCommand = defineAppCommand({
   name: "preview",
-  description: "Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).",
+  description:
+    "Generate preview workflows: PR open/sync deploys to a per-PR workspace, and closing the PR deletes it.",
   args: z.strictObject({
     name: arg(z.string().min(1).optional(), {
       alias: "n",
@@ -219,8 +221,9 @@ const previewCommand = defineAppCommand({
     region: arg(z.string().min(1), {
       description: "Workspace region for preview workspace creation (e.g. us-west). Required.",
     }),
-    "require-preview-label": arg(z.boolean().default(false), {
-      description: "Deploy preview only for PRs labeled `tailor:preview` instead of all PRs.",
+    require: arg(z.enum(PREVIEW_REQUIREMENTS).optional(), {
+      description:
+        "What a PR must satisfy before its preview deploys: `ready` skips draft PRs and deploys when the PR is marked ready for review, `label` deploys only PRs labeled `tailor:preview`. By default every PR, drafts included, gets a preview.",
     }),
     environment: arg(z.string().min(1).optional(), {
       description: "GitHub Environment for the preview jobs (defaults to the workspace name)",
@@ -248,7 +251,7 @@ const previewCommand = defineAppCommand({
       workspaceName: args.name,
       branch: args.branch,
       region: args.region,
-      requirePreviewLabel: args["require-preview-label"],
+      require: args.require,
       environment: args.environment,
       packageManager: args["package-manager"],
       dir: args.dir,
@@ -261,6 +264,44 @@ const previewCommand = defineAppCommand({
   },
 });
 
+const autofixCommand = defineAppCommand({
+  name: "autofix",
+  description:
+    "Generate a workflow that runs `tailor generate` on each pull request and commits what it changes to the pull request branch.",
+  args: z.strictObject({
+    provider: arg(z.enum(AUTOFIX_PROVIDERS).default("github-token"), {
+      description:
+        "What commits the changes: `github-token` (the workflow token; GitHub holds the checks of the fix commit until someone with write access approves them), `github-app` (a GitHub App token, which runs the checks without approval), `autofix-ci` (the autofix.ci GitHub App), or `securefix` (a securefix server repository)",
+    }),
+    "securefix-server-repository": arg(z.string().min(1).optional(), {
+      description:
+        "Name of the repository, under the same owner, that runs the securefix server workflow (required with --provider securefix)",
+    }),
+    dir: arg(z.array(z.string().min(1)).default(["."]), {
+      alias: "d",
+      description:
+        "App directory to run `tailor generate` in (for monorepo setups). Repeat for several apps",
+    }),
+    "package-manager": packageManagerArg,
+    force: arg(z.boolean().default(false), {
+      description:
+        "Reset hand edits to SDK-managed parts (your own jobs and steps are kept) / take over an unmanaged file",
+    }),
+  }),
+  run: async (args) => {
+    logBetaWarning("setup");
+    const result = await setupAutofix({
+      provider: args.provider,
+      securefixServerRepository: args["securefix-server-repository"],
+      dir: args.dir,
+      packageManager: args["package-manager"],
+      force: args.force,
+      outputDir: process.cwd(),
+    });
+    printAutofixNextSteps(result);
+  },
+});
+
 const updateCommand = defineAppCommand({
   name: "update",
   description:
@@ -268,7 +309,7 @@ const updateCommand = defineAppCommand({
   args: z.strictObject({
     force: arg(z.boolean().default(false), {
       description:
-        "Reset hand edits to SDK-managed parts of every target (your own jobs and steps are kept)",
+        "Reset hand edits to SDK-managed parts of every workflow (your own jobs and steps are kept)",
     }),
   }),
   run: async (args) => {
@@ -302,7 +343,8 @@ const depsCommand = defineAppCommand({
 
 const deleteCommand = defineAppCommand({
   name: "delete",
-  description: "Delete managed workflow file(s) and their .github/tailor.lock entries.",
+  description:
+    "Delete managed workflow file(s) and their .github/tailor.lock entries. Either workflow of a preview target deletes both.",
   args: z.strictObject({
     ...confirmationArgs,
     files: arg(z.string().array().min(1), {
@@ -319,11 +361,12 @@ const deleteCommand = defineAppCommand({
 const ciCommand = defineCommand({
   name: "ci",
   description:
-    "Generate a GitHub Actions deploy workflow, tracked in .github/tailor.lock and drift-checked by `setup check`, and list the GitHub Environment settings it needs.",
+    "Generate a GitHub Actions deploy or autofix workflow, tracked in .github/tailor.lock and drift-checked by `setup check`, and list the GitHub settings it needs.",
   subCommands: {
     branch: branchCommand,
     tag: tagCommand,
     preview: previewCommand,
+    autofix: autofixCommand,
     env: envCommand,
   },
 });

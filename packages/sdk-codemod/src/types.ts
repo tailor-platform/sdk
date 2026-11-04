@@ -33,13 +33,11 @@ export interface CodemodPackage {
   /** Earliest prerelease target that should apply this codemod before `until` is stable. */
   prereleaseUntil?: string;
   /**
-   * Path to the jssg transform script relative to the codemods root. Omit for a
+   * Path to the transform script relative to the codemods root. Omit for a
    * codemod-less ("manual") migration that ships only guidance — `prompt`,
    * `examples`, and/or `suspiciousPatterns` — with no automatic transform.
    */
   scriptPath?: string;
-  /** Target language for codemod CLI (default: "typescript") */
-  language?: string;
   /** Custom file glob patterns. Defaults to TypeScript patterns when omitted. */
   filePatterns?: string[];
   /**

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { resourceNameSchema } from "#/parser/service/common";
 import {
   ALL_EMAIL_DOMAINS,
   allowedEmailDomainPattern,
@@ -343,7 +344,7 @@ export const IdPSchema = z
       .union([z.literal("insecure"), z.literal("loggedIn"), z.strictObject({ cel: z.string() })])
       .optional()
       .describe("Authorization mode for IdP API access"),
-    clients: z.array(z.string()).describe("OAuth2 client names that can use this IdP"),
+    clients: z.array(resourceNameSchema).describe("OAuth2 client names that can use this IdP"),
     lang: IdPLangSchema.optional().describe("UI language for IdP pages"),
     userAuthPolicy: IdPUserAuthPolicySchema.transform((input) =>
       // transform input may be undefined before schema parse

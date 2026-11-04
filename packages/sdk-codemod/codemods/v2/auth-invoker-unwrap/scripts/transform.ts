@@ -1,19 +1,11 @@
 import { parse, Lang } from "@ast-grep/napi";
+import { isInsideImportStatement } from "../../../../src/ast-grep-helpers";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
 const QUICK_FILTER_NEEDLES = ["auth.invoker", "authInvoker"];
 
 function quickFilter(source: string): boolean {
   return QUICK_FILTER_NEEDLES.some((needle) => source.includes(needle));
-}
-
-function isInsideImportStatement(node: SgNode): boolean {
-  let current: SgNode | null = node.parent();
-  while (current) {
-    if (current.kind() === "import_statement") return true;
-    current = current.parent();
-  }
-  return false;
 }
 
 interface InvokerCall {

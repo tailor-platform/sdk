@@ -14,13 +14,8 @@ import {
   resourceTrn,
   writeMetadataLabels,
 } from "./label";
-import {
-  fetchExistingResourcesWithLabels,
-  trackDesiredResourceOwnership,
-  trackRemainingResourceOwner,
-} from "./owned-resource";
+import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
 import type { ExecutionPolicyInstance } from "#/configure/services/workflow/execution-policy.types";
-import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase } from "./phase";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { ConcurrencyPolicySchema } from "@tailor-platform/tailor-proto/workflow_resource_pb";
@@ -141,9 +136,7 @@ export async function planWorkflowJobFunctionExecutionPolicy(
   const changeSet = createChangeSet<CreatePolicy, UpdatePolicy, DeletePolicy, ReplacePolicy>(
     "Workflow execution policies",
   );
-  const conflicts: OwnerConflict[] = [];
-  const unmanaged: UnmanagedResource[] = [];
-  const resourceOwners = new Set<string>();
+  const ownership = createOwnershipTracker(appName, appId);
 
   const declaredList = Object.values(declared);
   for (const policy of declaredList) {
@@ -183,16 +176,10 @@ export async function planWorkflowJobFunctionExecutionPolicy(
     const found = existing[policy.name];
 
     if (found) {
-      const owned = trackDesiredResourceOwnership({
-        labels: found.allLabels,
-        ownerLabel: found.label,
-        appName,
-        appId,
+      const owned = ownership.ownsDesired(found.allLabels, {
         resourceType: "workflow_job_function_execution_policy",
         resourceLabel: "Workflow execution policy",
         resourceName: policy.name,
-        conflicts,
-        unmanaged,
       });
 
       const remoteKey = found.resource.executionPolicyKey;
@@ -228,19 +215,12 @@ export async function planWorkflowJobFunctionExecutionPolicy(
 
   for (const [name, remaining] of Object.entries(existing)) {
     if (!remaining) continue;
-    const owned = trackRemainingResourceOwner({
-      labels: remaining.allLabels,
-      ownerLabel: remaining.label,
-      appName,
-      appId,
-      resourceOwners,
-    });
-    if (owned) {
+    if (ownership.ownsRemaining(remaining.allLabels)) {
       changeSet.deletes.push({ name, workspaceId });
     }
   }
 
-  return { changeSet, conflicts, unmanaged, resourceOwners };
+  return { changeSet, ...ownership.result };
 }
 
 /**

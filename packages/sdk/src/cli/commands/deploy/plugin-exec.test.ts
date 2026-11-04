@@ -1,13 +1,13 @@
 import { fstatSync } from "node:fs";
-import { mkdtemp, realpath, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { rm } from "node:fs/promises";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test } from "vitest";
+import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { execPluginCommand } from "./plugin-exec";
 
 let dir: string;
 aroundEach(async (runTest) => {
-  dir = await realpath(await mkdtemp(path.join(tmpdir(), "plugin-exec-")));
+  dir = makeTempDir("plugin-exec-");
   try {
     await runTest();
   } finally {

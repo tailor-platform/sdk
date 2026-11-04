@@ -1,4 +1,5 @@
 import { parse, Lang } from "@ast-grep/napi";
+import { isTypeOnlyImport } from "../../../../src/ast-grep-helpers";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
 const CLI_MODULE = "@tailor-platform/sdk/cli";
@@ -23,11 +24,6 @@ function* iterateImportSpecs(importStmt: SgNode): Generator<ImportSpec> {
     if (idents.length === 0) continue;
     yield { importedName: idents[0]!.text(), text: spec.text() };
   }
-}
-
-/** True for `import type { ... }` (statement-level `type`), not inline `{ type x }`. */
-function isTypeOnlyImport(importStmt: SgNode): boolean {
-  return importStmt.children().some((c: SgNode) => c.kind() === "type");
 }
 
 /** True when the import has a default binding or a `* as x` namespace binding. */

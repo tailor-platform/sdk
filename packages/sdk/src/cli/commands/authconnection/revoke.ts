@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { z } from "zod";
-import { confirmationArgs, workspaceArgs } from "#/cli/shared/args";
+import { confirmationArgs, SKIP_CONFIRMATION_SUGGESTION, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
@@ -31,6 +31,7 @@ export const revokeAuthConnectionCommand = defineAppCommand({
     if (!args.yes) {
       const confirmation = await prompt.text({
         message: `Enter the connection name to confirm revocation ("${args.name}"):`,
+        suggestion: SKIP_CONFIRMATION_SUGGESTION,
       });
 
       if (confirmation !== args.name) {

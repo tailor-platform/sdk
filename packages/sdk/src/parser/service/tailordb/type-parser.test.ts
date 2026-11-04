@@ -3,6 +3,12 @@ import { db } from "#/configure/services/tailordb/schema";
 import { toSchemaOutputs } from "#/utils/test/internal";
 import { parseTypes } from "./type-parser";
 
+// Bypass type check by directly setting metadata
+function withMetadataFlag<F>(field: F, key: "index" | "unique"): F {
+  (field as unknown as { _metadata: Record<string, boolean> })._metadata[key] = true;
+  return field;
+}
+
 describe("parseTypes", () => {
   test("allows type names that match Object prototype properties", () => {
     const testType = db.table("toString", {
@@ -32,18 +38,27 @@ describe("parseTypes", () => {
       ["index", "index cannot be set on array fields"],
       ["unique", "unique cannot be set on array fields"],
     ] as const)("should throw error when %s is set on array field", (metadataKey, message) => {
-      // Bypass type check by directly setting metadata
-      const field = db.string({ array: true });
-      (field as unknown as { _metadata: Record<string, boolean> })._metadata[metadataKey] = true;
-
       const testType = db.table("Test", {
-        tags: field,
+        tags: withMetadataFlag(db.string({ array: true }), metadataKey),
       });
 
       expect(() => parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace")).toThrow(
         `Field "tags" on table "Test": ${message}`,
       );
     });
+
+    test.each(["index", "unique"] as const)(
+      "should report array fields when %s is set on an array of objects",
+      (metadataKey) => {
+        const testType = db.table("Test", {
+          geos: withMetadataFlag(db.object({ lat: db.float() }, { array: true }), metadataKey),
+        });
+
+        expect(() => parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace")).toThrow(
+          `Field "geos" on table "Test": ${metadataKey} cannot be set on array fields`,
+        );
+      },
+    );
 
     test.each([
       ["index", () => db.string().index()],
@@ -55,6 +70,97 @@ describe("parseTypes", () => {
 
       const result = parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace");
       expect(result.Test!.fields.email!.config[metadataKey]).toBe(true);
+    });
+  });
+
+  describe("nested type field validation", () => {
+    test.each(["index", "unique"] as const)("rejects %s on a nested type field", (modifier) => {
+      const testType = db.table("Test", {
+        geo: withMetadataFlag(db.object({ lat: db.float() }), modifier),
+      });
+
+      expect(() => parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace")).toThrow(
+        `Field "geo" on table "Test": ${modifier} cannot be set on nested type fields`,
+      );
+    });
+
+    test.each(["index", "unique"] as const)(
+      "rejects %s on a member that is itself an object",
+      (modifier) => {
+        const testType = db.table("Test", {
+          info: db.object({
+            geo: withMetadataFlag(db.object({ lat: db.float() }), modifier),
+          } as never),
+        });
+
+        expect(() => parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace")).toThrow(
+          `Field "info.geo" on table "Test": ${modifier} cannot be set on nested type fields`,
+        );
+      },
+    );
+
+    test("reports nested type fields for an object member inside an array of objects", () => {
+      const testType = db.table("Test", {
+        info: db.object(
+          { geo: withMetadataFlag(db.object({ lat: db.float() }), "index") } as never,
+          { array: true },
+        ),
+      });
+
+      expect(() => parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace")).toThrow(
+        'Field "info.geo" on table "Test": index cannot be set on nested type fields',
+      );
+    });
+  });
+
+  describe("fields inside an array of objects", () => {
+    test.each([
+      ["unique", () => db.string().unique()],
+      ["index", () => db.string().index()],
+    ] as const)("rejects %s on a member of an array of objects", (modifier, buildField) => {
+      const testType = db.table("Test", {
+        info: db.object({ code: buildField() }, { array: true }),
+      });
+
+      expect(() => parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace")).toThrow(
+        `Field "info.code" on table "Test": ${modifier} cannot be set on a field inside an array of objects`,
+      );
+    });
+
+    test("rejects unique on a member nested deeper inside an array of objects", () => {
+      const testType = db.table("Test", {
+        info: db.object({ geo: db.object({ code: db.string().unique() }) } as never, {
+          array: true,
+        }),
+      });
+
+      expect(() => parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace")).toThrow(
+        'Field "info.geo.code" on table "Test": unique cannot be set on a field inside an array of objects',
+      );
+    });
+
+    test.each([
+      ["unique", () => db.string().unique().clone({ array: true })],
+      ["index", () => db.string().index().clone({ array: true })],
+    ] as const)("rejects %s on a member that is itself an array", (modifier, buildField) => {
+      const testType = db.table("Test", {
+        info: db.object({ codes: buildField() as never }),
+      });
+
+      expect(() => parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace")).toThrow(
+        `Field "info.codes" on table "Test": ${modifier} cannot be set on array fields`,
+      );
+    });
+
+    test("allows unique and index on members of an object that is not an array", () => {
+      const testType = db.table("Test", {
+        info: db.object({ code: db.string().unique(), tag: db.string().index() }),
+      });
+
+      const result = parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace");
+
+      expect(result.Test!.fields.info!.config.fields?.code?.unique).toBe(true);
+      expect(result.Test!.fields.info!.config.fields?.tag?.index).toBe(true);
     });
   });
 
@@ -654,6 +760,141 @@ describe("parseTypes", () => {
     );
   });
 
+  describe("relation key validation", () => {
+    const user = db.table("User", { email: db.string().unique() });
+
+    test.each([
+      ["a uuid field to id", db.uuid().relation({ type: "n-1", toward: { table: user } })],
+      [
+        "a uuid array field to id",
+        db.uuid({ array: true }).relation({ type: "keyOnly", toward: { table: user } }),
+      ],
+      [
+        "a string field to a string key",
+        db.string().relation({ type: "1-1", toward: { table: user, key: "email", as: "user" } }),
+      ],
+    ])("accepts a relation from %s", (_, userID) => {
+      const post = db.table("Post", { userID });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
+      ).not.toThrow();
+    });
+
+    test.each([
+      [
+        "a string field to id",
+        db.string().relation({ type: "n-1", toward: { table: user } }),
+        /"userID" on table "Post" is of type "string", but the field it references, "User\.id", is of type "uuid"/,
+      ],
+      [
+        "a string array field to id",
+        db.string({ array: true }).relation({ type: "keyOnly", toward: { table: user } }),
+        /"userID" on table "Post" is of type "string", but the field it references, "User\.id", is of type "uuid"/,
+      ],
+      [
+        "an integer field to a string key",
+        db.int().relation({ type: "keyOnly", toward: { table: user, key: "email" } }),
+        /"userID" on table "Post" is of type "integer", but the field it references, "User\.email", is of type "string"/,
+      ],
+    ])("rejects a relation from %s", (_, userID, error) => {
+      const post = db.table("Post", { userID });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
+      ).toThrow(error);
+    });
+
+    test("rejects a same-type relation to a non-unique key", () => {
+      const user = db.table("User", { email: db.string() });
+      const post = db.table("Post", {
+        userEmail: db.string().relation({ type: "keyOnly", toward: { table: user, key: "email" } }),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
+      ).toThrow('Field "userEmail" on table "Post" references "User.email", which must be unique.');
+    });
+
+    test.each([
+      [
+        "a 1-1 relation",
+        (account: ReturnType<typeof db.table>) =>
+          db.uuid().relation({ type: "1-1", toward: { table: account } }),
+      ],
+      [
+        "a oneToOne relation",
+        (account: ReturnType<typeof db.table>) =>
+          db.uuid().relation({ type: "oneToOne", toward: { table: account } }),
+      ],
+      [
+        ".unique() on a keyOnly relation field",
+        (account: ReturnType<typeof db.table>) =>
+          db
+            .uuid()
+            .unique()
+            .relation({ type: "keyOnly", toward: { table: account } }),
+      ],
+    ] as const)("accepts a relation to a key made unique by %s", (_label, buildAccountID) => {
+      const account = db.table("Account", { name: db.string() });
+      const user = db.table("User", {
+        accountID: buildAccountID(account),
+      });
+      const post = db.table("Post", {
+        accountID: db.uuid().relation({
+          type: "keyOnly",
+          toward: { table: user, key: "accountID" },
+        }),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ Account: account, User: user, Post: post }), "test-namespace"),
+      ).not.toThrow();
+    });
+
+    test("rejects a relation to an array key with a 1-1 relation", () => {
+      const account = db.table("Account", { name: db.string() });
+      const user = db.table("User", {
+        accountIDs: db
+          .uuid({ array: true })
+          .relation({ type: "1-1", toward: { table: account, as: "accounts" } }),
+      });
+      const post = db.table("Post", {
+        accountID: db.uuid().relation({
+          type: "keyOnly",
+          toward: { table: user, key: "accountIDs" },
+        }),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ Account: account, User: user, Post: post }), "test-namespace"),
+      ).toThrow(
+        'Field "accountID" on table "Post" references "User.accountIDs", which must be unique.',
+      );
+    });
+
+    test.each(["missing", "toString"])("rejects a key %s that the table does not have", (key) => {
+      const node = db.table("Node", {
+        parentID: db.uuid().relation({ type: "keyOnly", toward: { table: "self", key } }),
+      });
+
+      expect(() => parseTypes(toSchemaOutputs({ Node: node }), "test-namespace")).toThrow(
+        `Field "parentID" on table "Node" references unknown field "${key}" on table "Node".`,
+      );
+    });
+
+    test("rejects a relation to a missing table named after an Object prototype property", () => {
+      const missing = db.table("toString", { name: db.string() });
+      const post = db.table("Post", {
+        ownerID: db.uuid().relation({ type: "keyOnly", toward: { table: missing } }),
+      });
+
+      expect(() => parseTypes({ ...toSchemaOutputs({ Post: post }) }, "test-namespace")).toThrow(
+        'Field "ownerID" on table "Post" references unknown table "toString".',
+      );
+    });
+  });
+
   describe("processRelation", () => {
     test("should compute derived metadata for relations", () => {
       const user = db.table("User", {
@@ -746,6 +987,32 @@ describe("parseTypes", () => {
           db
             .uuid()
             .unique()
+            .relation({ type: "keyOnly", toward: { table: user } }),
+      ],
+      [
+        "unique after relation",
+        (user: ReturnType<typeof db.table>) =>
+          db
+            .uuid()
+            .relation({ type: "keyOnly", toward: { table: user } })
+            .unique(),
+      ],
+    ] as const)("should keep unique=true for keyOnly relations (%s)", (_label, buildUserId) => {
+      const user = db.table("User", { name: db.string() });
+      const post = db.table("Post", { userId: buildUserId(user) });
+
+      const result = parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace");
+
+      expect(result.Post!.fields.userId!.config.unique).toBe(true);
+    });
+
+    test.each([
+      [
+        "unique before relation",
+        (user: ReturnType<typeof db.table>) =>
+          db
+            .uuid()
+            .unique()
             .relation({
               type: "n-1",
               toward: { table: user },
@@ -813,10 +1080,104 @@ describe("parseTypes", () => {
 
       const result = parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace");
 
+      expect(result.Post!.fields.userId!.config.unique).toBe(false);
       // keyOnly should not create relation info
       expect(result.Post!.fields.userId!.relation).toBeUndefined();
       expect(result.Post!.forwardRelationships).toEqual({});
       expect(result.User!.backwardRelationships).toEqual({});
+    });
+  });
+
+  describe("relations inside object fields", () => {
+    const user = db.table("User", { name: db.string() });
+
+    test("sets the foreign key on the inner field", () => {
+      const order = db.table("Order", {
+        info: db.object({
+          ownerID: db.uuid().relation({ type: "n-1", toward: { table: user, key: "id" } }),
+        }),
+      });
+
+      const result = parseTypes(toSchemaOutputs({ User: user, Order: order }), "test-namespace");
+
+      expect(result.Order!.fields.info!.config.fields!.ownerID).toMatchObject({
+        foreignKey: true,
+        foreignKeyType: "User",
+        foreignKeyField: "id",
+      });
+    });
+
+    test("sets the foreign key on the inner fields of an object array", () => {
+      const order = db.table("Order", {
+        items: db.object(
+          { ownerID: db.uuid().relation({ type: "keyOnly", toward: { table: user } }) },
+          { array: true },
+        ),
+      });
+
+      const result = parseTypes(toSchemaOutputs({ User: user, Order: order }), "test-namespace");
+
+      expect(result.Order!.fields.items!.config.fields!.ownerID).toMatchObject({
+        foreignKey: true,
+        foreignKeyType: "User",
+      });
+    });
+
+    test("resolves a self reference to the table name", () => {
+      const node = db.table("Node", {
+        links: db.object({
+          parentID: db.uuid().relation({ type: "n-1", toward: { table: "self" } }),
+        }),
+      });
+
+      const result = parseTypes(toSchemaOutputs({ Node: node }), "test-namespace");
+
+      expect(result.Node!.fields.links!.config.fields!.parentID!.foreignKeyType).toBe("Node");
+    });
+
+    test("does not add an index, a unique constraint, or forward and backward relationships", () => {
+      const profile = db.table("Profile", {
+        info: db.object({ ownerID: db.uuid().relation({ type: "1-1", toward: { table: user } }) }),
+      });
+
+      const result = parseTypes(
+        toSchemaOutputs({ User: user, Profile: profile }),
+        "test-namespace",
+      );
+
+      const inner = result.Profile!.fields.info!.config.fields!.ownerID!;
+      expect(inner.index).toBeFalsy();
+      expect(inner.unique).toBeFalsy();
+      expect(result.Profile!.fields.info!.relation).toBeUndefined();
+      expect(result.Profile!.forwardRelationships).toEqual({});
+      expect(result.User!.backwardRelationships).toEqual({});
+    });
+
+    test("rejects a relation to a table that does not exist, naming the nested field", () => {
+      const missing = db.table("Missing", { name: db.string() });
+      const order = db.table("Order", {
+        info: db.object({
+          ownerID: db.uuid().relation({ type: "n-1", toward: { table: missing } }),
+        }),
+      });
+
+      expect(() => parseTypes(toSchemaOutputs({ Order: order }), "test-namespace")).toThrow(
+        /info\.ownerID.*unknown table "Missing"/,
+      );
+    });
+
+    test("rejects a relation whose type differs from the field it references, naming the nested field", () => {
+      const order = db.table("Order", {
+        info: db.object({
+          ownerID: db.string().relation({ type: "keyOnly", toward: { table: user } }),
+        }),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Order: order }), "test-namespace"),
+      ).toThrow(
+        /"info\.ownerID" on table "Order" is of type "string".*"User\.id", is of type "uuid"/,
+      );
     });
   });
 });

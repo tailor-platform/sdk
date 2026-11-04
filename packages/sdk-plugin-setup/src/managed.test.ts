@@ -13,6 +13,7 @@ import {
   isManagedHash,
   mergeUserContent,
 } from "./managed";
+import { renderedTemplates } from "./template-fingerprint";
 import {
   renderBranchWorkflow,
   renderPreviewWorkflow,
@@ -20,6 +21,7 @@ import {
   type RenderBranchParams,
   type RenderResult,
 } from "./templates";
+import { renderAutofixFor } from "./test-helpers/autofix";
 
 const branchBase: RenderBranchParams = {
   workspaceName: "my-app",
@@ -29,53 +31,7 @@ const branchBase: RenderBranchParams = {
   erdPreview: null,
 };
 
-const variants: Array<[string, RenderResult]> = [
-  ["branch", renderBranchWorkflow(branchBase)],
-  [
-    "branch with every option",
-    renderBranchWorkflow({
-      ...branchBase,
-      workingDirectory: "apps/api",
-      seedValidate: true,
-      migrationDriftCheck: true,
-      erdPreview: { namespaces: ["main", "audit"] },
-      restrictDispatch: true,
-    }),
-  ],
-  [
-    "tag without guard",
-    renderTagWorkflow({
-      workspaceName: "my-app",
-      tagPattern: "v*",
-      environment: "my-app",
-      packageManager: "npm",
-    }),
-  ],
-  [
-    "tag with guard",
-    renderTagWorkflow({
-      workspaceName: "my-app",
-      tagPattern: "v*",
-      branch: "main",
-      environment: "my-app",
-      packageManager: "npm",
-      seedValidate: true,
-      migrationDriftCheck: true,
-      restrictDispatch: true,
-    }),
-  ],
-  [
-    "preview",
-    renderPreviewWorkflow({
-      workspaceName: "my-app",
-      branch: "main",
-      environment: "my-app",
-      packageManager: "pnpm",
-      region: "us-west",
-      requirePreviewLabel: true,
-    }),
-  ],
-];
+const templates = renderedTemplates();
 
 function idsIn(content: string): string[] {
   const doc = parseDocument(content).toJS() as Record<string, unknown>;
@@ -86,7 +42,7 @@ function idsIn(content: string): string[] {
   );
 }
 
-describe.each(variants)("%s template", (_name, render) => {
+describe.each(templates)("$name template", (render) => {
   test("round-trips through the merge unchanged when there is nothing to keep", () => {
     const result = mergeUserContent({
       current: render.content,
@@ -114,7 +70,7 @@ describe.each(variants)("%s template", (_name, render) => {
 
 describe("RESULT_JOBS", () => {
   test("lists exactly the managed jobs that always run to report the workflow result", () => {
-    const resultJobs = variants.flatMap(([, { content }]) =>
+    const resultJobs = templates.flatMap(({ content }) =>
       Object.entries(
         (parseDocument(content).toJS() as { jobs: Record<string, Record<string, unknown>> }).jobs,
       )
@@ -139,8 +95,8 @@ describe("EDITABLE_WITH_KEYS", () => {
 describe("ENVIRONMENT_EDITABLE_JOBS", () => {
   const jobsOf = (environment: boolean): Set<string> =>
     new Set(
-      variants
-        .flatMap(([, { content }]) =>
+      templates
+        .flatMap(({ content }) =>
           Object.entries(
             (parseDocument(content).toJS() as { jobs: Record<string, Record<string, unknown>> })
               .jobs,
@@ -530,15 +486,19 @@ describe("mergeUserContent", () => {
       return { hashed: keys.filter(isHashed), unhashed: keys.filter((key) => !isHashed(key)) };
     };
 
-    test("is only the preview workflow's concurrency", () => {
-      const unhashed = variants.flatMap(([name, render]) =>
-        topLevelKeys(render).unhashed.map((key) => `${name}: ${key}`),
+    test("is only the concurrency of the preview workflows", () => {
+      const unhashed = templates.flatMap((render) =>
+        topLevelKeys(render).unhashed.map((key) => `${render.name}: ${key}`),
       );
 
-      expect(unhashed).toEqual(["preview: concurrency"]);
+      expect(unhashed).toEqual(
+        templates
+          .filter(({ template }) => template === "preview" || template === "preview-cleanup")
+          .map(({ name }) => `${name}: concurrency`),
+      );
     });
 
-    test.each(variants)("leaves the %s header naming exactly the hashed ones", (_name, render) => {
+    test.each(templates)("leaves the $name header naming exactly the hashed ones", (render) => {
       const hashed = topLevelKeys(render).hashed.filter((key) => key !== "jobs");
       const listed = new Intl.ListFormat("en", { type: "conjunction" }).format(hashed);
 
@@ -732,10 +692,13 @@ describe("mergeUserContent", () => {
 });
 
 describe("environment on a managed job", () => {
-  test("keeps a user environment on the changes detection job across regeneration", () => {
-    const render = renderBranchWorkflow({ ...branchBase, workingDirectory: "apps/api" });
+  test.each([
+    ["tailor-changes", renderBranchWorkflow({ ...branchBase, workingDirectory: "apps/api" })],
+    ["tailor-autofix", renderAutofixFor("github-app")],
+    ["tailor-autofix-push", renderAutofixFor("github-app")],
+  ])("keeps a user environment on the %s job across regeneration", (jobId, render) => {
     const edited = render.content.replace(
-      /( {2}tailor-changes:\n)/,
+      new RegExp(`( {2}${jobId}:\\n)`),
       "$1    environment: registry\n",
     );
     expect(edited).not.toBe(render.content);
@@ -915,7 +878,7 @@ describe("needs of the result job", () => {
     });
     const edited = withUserJob(
       preview.content,
-      "needs:\n      - tailor-preview-deploy\n      - tailor-preview-cleanup\n      - e2e\n",
+      "needs:\n      - tailor-preview-deploy\n      - e2e\n",
       "tailor-preview-result",
     );
     expect(computeManagedHash(edited, preview.generatedIds)).toBe(
@@ -1066,7 +1029,7 @@ describe("runs-on of a managed job the merge adds", () => {
         ["tailor-preview-deploy"],
         "runs-on: &runner [self-hosted, linux]",
       ),
-      ["tailor-preview-cleanup", "tailor-preview-result"],
+      ["tailor-preview-result"],
       "runs-on: *runner",
     );
     const content = merge(edited, preview, previewWithDir);

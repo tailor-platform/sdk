@@ -1,6 +1,9 @@
 import { logger } from "@tailor-platform/sdk/cli";
 import {
+  describeGroup,
+  ENVIRONMENT_PREFERRED_SECRETS,
   type EnvRequirement,
+  type EnvironmentRequirements,
   loadEnvironmentRequirements,
   renderGhCommands,
   SECRET_FALLBACK_VARIABLES,
@@ -19,6 +22,8 @@ type Scope = "environment" | "repository" | "organization";
 
 type ScopedNames = { scope: Scope; names: Names };
 
+type SharedScope = Exclude<Scope, "environment">;
+
 type RequirementCheck = EnvRequirement & {
   /** Whether the workflow finds a value, counting the deprecated secret fallback. */
   registered: boolean;
@@ -26,12 +31,11 @@ type RequirementCheck = EnvRequirement & {
   foundIn: Scope | null;
   /** Scope holding an entry of the same name but the other type; null when none does. */
   otherTypeIn: Scope | null;
+  /** Scopes outside the environment holding a secret that belongs on it; empty for other entries. */
+  exposedIn: SharedScope[];
 };
 
-type EnvironmentCheck = {
-  environment: string;
-  /** Lock targets using this environment, as `<kind> <workspaceName>`. */
-  targets: string[];
+type EnvironmentCheck = Omit<EnvironmentRequirements, "requirements"> & {
   exists: boolean;
   requirements: RequirementCheck[];
 };
@@ -45,11 +49,21 @@ function checkRequirement(requirement: EnvRequirement, scopes: ScopedNames[]): R
   const otherTypeIn = foundIn === null ? scopeHolding(OTHER_TYPE[requirement.type]) : null;
   const fallback =
     requirement.type === "variable" && SECRET_FALLBACK_VARIABLES.has(requirement.name);
+  const checksEnvironment = scopes.some(({ scope }) => scope === "environment");
+  const belongsOnEnvironment =
+    checksEnvironment &&
+    requirement.type === "secret" &&
+    ENVIRONMENT_PREFERRED_SECRETS.has(requirement.name);
   return {
     ...requirement,
     registered: foundIn !== null || (fallback && otherTypeIn !== null),
     foundIn,
     otherTypeIn,
+    exposedIn: belongsOnEnvironment
+      ? scopes.flatMap(({ scope, names }) =>
+          scope !== "environment" && names.secret.has(requirement.name) ? [scope] : [],
+        )
+      : [],
   };
 }
 
@@ -169,6 +183,16 @@ export function checkEnv(options: {
   }
 
   const checks = environments.map(({ environment, targets, requirements }): EnvironmentCheck => {
+    if (environment === null) {
+      return {
+        environment,
+        targets,
+        exists: true,
+        requirements: requirements.map((requirement) =>
+          checkRequirement(requirement, repositoryScopes),
+        ),
+      };
+    }
     const base = `repos/${path}/environments/${encodeURIComponent(environment)}`;
     const result = ghApi([base]);
     if (result.status !== 0 && httpStatus(result) !== 404) {
@@ -235,25 +259,63 @@ function report(checks: EnvironmentCheck[], fullName: string, repository: Reposi
   }
   printReport(checks, fullName, repository);
   if (missing > 0) throw new Error(`${summary} Set them with the gh commands printed above.`);
-  logger.success("All required secrets and variables are registered.");
+  const exposedGroups = checks.filter(({ requirements }) =>
+    requirements.some((check) => check.exposedIn.length > 0),
+  );
+  if (exposedGroups.length === 0) {
+    logger.success("All required secrets and variables are registered.");
+    return;
+  }
+  const secrets = new Set(
+    exposedGroups.flatMap(({ requirements }) =>
+      requirements.filter((check) => check.exposedIn.length > 0).map((check) => check.name),
+    ),
+  );
+  const environments = exposedGroups.flatMap(({ environment }) =>
+    environment === null ? [] : [`"${environment}"`],
+  );
+  logger.warn(
+    "All required secrets and variables are registered, but any workflow on any branch can read " +
+      `${andList.format([...secrets])} outside the protection rules of ` +
+      `${environments.length === 1 ? "environment" : "environments"} ${andList.format(environments)}.`,
+  );
 }
 
 function printReport(checks: EnvironmentCheck[], fullName: string, repository: Repository): void {
   logger.info(`Checking the GitHub Environment secrets and variables of ${fullName}`);
-  for (const { environment, targets, exists, requirements } of checks) {
-    const heading = `Environment "${environment}" (${targets.join(", ")})`;
+  for (const group of checks) {
+    const { exists, requirements } = group;
+    const heading = describeGroup(group);
     logger.info(exists ? heading : `${heading} does not exist in ${fullName}`);
     for (const check of requirements) {
       logger.log(`  ${statusLine(check)}`);
     }
   }
-  const unset = checks
+  const toSet = checks
     .map((check) => ({
       ...check,
-      requirements: check.requirements.filter((r) => r.foundIn === null),
+      requirements: check.requirements.flatMap((r): EnvRequirement[] => {
+        if (r.foundIn === null) return [r];
+        if (r.foundIn === "environment" || r.exposedIn.length === 0) return [];
+        return [
+          {
+            ...r,
+            howTo: `the value set on the ${r.foundIn} (GitHub does not show secret values, so use the copy you stored)`,
+          },
+        ];
+      }),
     }))
     .filter((check) => check.requirements.length > 0);
-  if (unset.length > 0) logger.out(renderGhCommands(unset, repository));
+  const toDelete = [
+    ...new Set(
+      checks.flatMap(({ requirements }) =>
+        requirements.filter((r) => r.exposedIn.includes("repository")).map((r) => r.name),
+      ),
+    ),
+  ];
+  if (toSet.length > 0 || toDelete.length > 0) {
+    logger.out(renderGhCommands(toSet, repository, toDelete));
+  }
 }
 
 function statusLine(check: RequirementCheck): string {
@@ -265,9 +327,30 @@ function statusLine(check: RequirementCheck): string {
   if (check.registered && check.foundIn === null) {
     return `⚠ ${label}: set as a secret, a deprecated fallback; set it as a variable and delete the secret`;
   }
+  if (check.exposedIn.length > 0) return `⚠ ${label}: ${exposureWarning(check)}`;
   if (check.registered) return `✔ ${label}`;
   const status = check.required ? `✖ ${label}: missing` : `- ${label}: optional, not set`;
   if (check.otherTypeIn === null) return status;
   const other = OTHER_TYPE[check.type];
   return `${status}; a ${other} of this name is set on the ${check.otherTypeIn}, but the workflow reads a ${check.type}`;
+}
+
+const andList = new Intl.ListFormat("en", { type: "conjunction" });
+
+const REMOVE_FROM: Record<SharedScope, string> = {
+  repository: "delete it from the repository",
+  organization: "have an organization owner stop sharing it with this repository",
+};
+
+function exposureWarning({ foundIn, exposedIn }: RequirementCheck): string {
+  const places = andList.format(exposedIn.map((scope) => `the ${scope}`));
+  const fixes = [
+    ...(foundIn === "environment" ? [] : ["set it on the environment"]),
+    ...exposedIn.map((scope) => REMOVE_FROM[scope]),
+  ];
+  const exposure =
+    foundIn === "environment"
+      ? `set on the environment and also on ${places}, where any workflow on any branch can read it`
+      : `any workflow on any branch can read it from ${places}`;
+  return `${exposure}, so the environment's protection rules do not guard it; ${andList.format(fixes)}`;
 }

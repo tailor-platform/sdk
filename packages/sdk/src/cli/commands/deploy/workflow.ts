@@ -5,7 +5,7 @@ import { CLIError, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
 import { assertDefined } from "#/utils/assert";
-import { createChangeSet, type ChangeSet } from "./change-set";
+import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { workflowJobFunctionName } from "./function-registry";
 import {
@@ -21,17 +21,15 @@ import {
   hasMatchingSdkVersion,
   type MetadataLabelWrite,
   resourceTrn,
-  sdkNameLabelKey,
   type WithLabel,
   writeMetadataLabels,
 } from "./label";
 import {
+  createOwnershipTracker,
   fetchExistingResourcesWithLabels,
-  trackDesiredResourceOwnership,
-  trackRemainingResourceOwner,
+  type OwnershipTracker,
 } from "./owned-resource";
 import type { ConcurrencyPolicy, Workflow, RetryPolicy } from "#/types/workflow.generated";
-import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase } from "./phase";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { CreateWorkflowRequestSchema } from "@tailor-platform/tailor-proto/workflow_pb";
@@ -535,9 +533,7 @@ export async function planWorkflow(
     never,
     UnchangedWorkflow
   >("Workflows");
-  const conflicts: OwnerConflict[] = [];
-  const unmanaged: UnmanagedResource[] = [];
-  const resourceOwners = new Set<string>();
+  const ownership = createOwnershipTracker(appName, appId);
   const unchangedWorkflowJobNames = new Set<string>();
   const retainedWorkflowJobNames = new Set<string>();
 
@@ -632,16 +628,10 @@ export async function planWorkflow(
     };
 
     if (existing) {
-      const owned = trackDesiredResourceOwnership({
-        labels: existing.allLabels,
-        ownerLabel: existing.label,
-        appName,
-        appId,
+      const owned = ownership.ownsDesired(existing.allLabels, {
         resourceType: "workflow",
         resourceLabel: "Workflow",
         resourceName: workflow.name,
-        conflicts,
-        unmanaged,
       });
 
       const configUnchanged =
@@ -692,13 +682,7 @@ export async function planWorkflow(
     if (!existing) {
       return;
     }
-    const owned = trackRemainingResourceOwner({
-      labels: existing.allLabels,
-      ownerLabel: existing.label,
-      appName,
-      appId,
-      resourceOwners,
-    });
+    const owned = ownership.ownsRemaining(existing.allLabels);
     const usedJobNames = getExistingWorkflowJobNames(existing.resource);
     if (owned) {
       deleteWorkflows.push({
@@ -716,11 +700,9 @@ export async function planWorkflow(
   const jobFunctionDeletes = await planWorkflowJobFunctionDeletes({
     client,
     workspaceId,
-    appName,
-    appId,
+    ownership,
     existingJobFunctionNames: [...existingJobFunctions.keys()],
     retainedWorkflowJobNames,
-    resourceOwners,
   });
   const deletableJobNames = new Set(jobFunctionDeletes.map((del) => del.jobFunctionName));
 
@@ -735,9 +717,7 @@ export async function planWorkflow(
 
   return {
     changeSet,
-    conflicts,
-    unmanaged,
-    resourceOwners,
+    ...ownership.result,
     appName,
     appId,
     unchangedWorkflowJobNames,
@@ -769,25 +749,16 @@ async function fetchExistingJobFunctions(
 type PlanWorkflowJobFunctionDeletesParams = {
   client: OperatorClient;
   workspaceId: string;
-  appName: string;
-  appId: string | undefined;
+  ownership: OwnershipTracker;
   existingJobFunctionNames: readonly string[];
   retainedWorkflowJobNames: ReadonlySet<string>;
-  resourceOwners: Set<string>;
 };
 
 async function planWorkflowJobFunctionDeletes(
   params: PlanWorkflowJobFunctionDeletesParams,
 ): Promise<DeleteWorkflowJobFunction[]> {
-  const {
-    client,
-    workspaceId,
-    appName,
-    appId,
-    existingJobFunctionNames,
-    retainedWorkflowJobNames,
-    resourceOwners,
-  } = params;
+  const { client, workspaceId, ownership, existingJobFunctionNames, retainedWorkflowJobNames } =
+    params;
   const candidates = existingJobFunctionNames.filter(
     (jobName) => !retainedWorkflowJobNames.has(jobName),
   );
@@ -798,13 +769,7 @@ async function planWorkflowJobFunctionDeletes(
       });
       // Record the owner of what is skipped, so remove can say it left something
       // behind instead of reporting that it deleted everything.
-      return trackRemainingResourceOwner({
-        labels: metadata?.labels,
-        ownerLabel: metadata?.labels[sdkNameLabelKey],
-        appName,
-        appId,
-        resourceOwners,
-      })
+      return ownership.ownsRemaining(metadata?.labels)
         ? { workspaceId, jobFunctionName }
         : undefined;
     }),
@@ -818,6 +783,7 @@ type WorkflowDisplayEntry = GroupedDisplayEntry;
  * Format workflow changes for grouped dry-run display.
  * @param changeSet - Workflow changes
  * @param workflowJobFunctionChanges - Related function registry changes for workflow jobs
+ * @param jobFunctionDeletes - Planned workflow job function deletes
  * @returns Display entries for workflow output
  */
 export function formatWorkflowChangeEntries(
@@ -825,17 +791,45 @@ export function formatWorkflowChangeEntries(
     ChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow>,
     "creates" | "updates" | "deletes" | "replaces"
   >,
-  workflowJobFunctionChanges?: RelatedFunctionRegistryChanges,
+  workflowJobFunctionChanges: RelatedFunctionRegistryChanges,
+  jobFunctionDeletes: ReadonlyArray<DeleteWorkflowJobFunction>,
 ): WorkflowDisplayEntry[] {
-  return formatChangeEntriesWithFunctionRegistry(
-    "workflow",
-    changeSet,
-    workflowJobFunctionChanges,
-    (item) =>
-      "usedJobNames" in item
-        ? item.usedJobNames.map((jobName) => workflowJobFunctionName(jobName))
-        : [],
+  const jobFunctionRegistryNames = new Set(
+    jobFunctionDeletes.map((del) => workflowJobFunctionName(del.jobFunctionName)),
   );
+  const isJobFunctionRegistryDelete = (item: HasName) => jobFunctionRegistryNames.has(item.name);
+  return [
+    ...formatChangeEntriesWithFunctionRegistry(
+      "workflow",
+      changeSet,
+      {
+        ...workflowJobFunctionChanges,
+        deletes: workflowJobFunctionChanges.deletes.filter(
+          (item) => !isJobFunctionRegistryDelete(item),
+        ),
+      },
+      (item) =>
+        "usedJobNames" in item
+          ? item.usedJobNames.map((jobName) => workflowJobFunctionName(jobName))
+          : [],
+    ),
+    ...formatChangeEntriesWithFunctionRegistry(
+      "jobFunction",
+      {
+        creates: [],
+        updates: [],
+        deletes: jobFunctionDeletes.map((del) => ({ name: del.jobFunctionName })),
+        replaces: [],
+      },
+      {
+        creates: [],
+        updates: [],
+        deletes: workflowJobFunctionChanges.deletes.filter(isJobFunctionRegistryDelete),
+        replaces: [],
+      },
+      (item) => [workflowJobFunctionName(item.name)],
+    ),
+  ];
 }
 
 type ExistingWorkflowResource = {

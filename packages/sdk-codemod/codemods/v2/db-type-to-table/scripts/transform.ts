@@ -1,8 +1,10 @@
 import { parse, Lang } from "@ast-grep/napi";
 import {
   findImportStatements,
+  firstDeclaratorChild,
   importBindings,
   importSource,
+  isInsideImportStatement,
 } from "../../../../src/ast-grep-helpers";
 import type { LlmReviewFinding } from "../../../../src/types";
 import type { Edit, SgNode } from "@ast-grep/napi";
@@ -20,15 +22,6 @@ function namespaceImportNames(importStmt: SgNode): string[] {
     .findAll({ rule: { kind: "namespace_import" } })
     .flatMap((node) => node.children().filter((child) => child.kind() === "identifier"))
     .map((node) => node.text());
-}
-
-function isInsideImportStatement(node: SgNode): boolean {
-  let current = node.parent();
-  while (current) {
-    if (current.kind() === "import_statement") return true;
-    current = current.parent();
-  }
-  return false;
 }
 
 function isBindingLeafKind(kind: ReturnType<SgNode["kind"]>): boolean {
@@ -70,10 +63,6 @@ function directBindingNodes(node: SgNode, names: Set<string>): SgNode[] {
     if (isBindingPatternKind(child.kind())) collectBindingNodes(child, names, result);
   }
   return result;
-}
-
-function firstDeclaratorChild(node: SgNode): SgNode | null {
-  return node.children().find((child) => child.kind() !== "=") ?? null;
 }
 
 function declaratorValue(node: SgNode): SgNode | null {

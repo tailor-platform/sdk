@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import { stripVTControlCharacters } from "node:util";
 import { create, type MessageInitShape } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
@@ -10,8 +9,10 @@ import {
   FunctionExecution_Status,
   FunctionExecution_Type,
   FunctionExecutionSchema,
+  FunctionExecutionSummarySchema,
   FunctionLogEntrySchema,
   FunctionLogSeverity,
+  FunctionLogSource,
 } from "@tailor-platform/tailor-proto/function_resource_pb";
 import * as path from "pathe";
 import { afterEach, aroundEach, describe, test, expect, vi } from "vitest";
@@ -23,6 +24,7 @@ import {
 } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { stripAnsi } from "#/cli/shared/test-helpers/strip-ansi";
+import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import {
   composeExecutionErrorString,
   downloadScriptForMapping,
@@ -30,7 +32,10 @@ import {
   logsCommand,
 } from "./logs";
 import type { OperatorClient } from "#/cli/shared/client";
-import type { FunctionExecution } from "@tailor-platform/tailor-proto/function_resource_pb";
+import type {
+  FunctionExecution,
+  FunctionExecutionSummary,
+} from "@tailor-platform/tailor-proto/function_resource_pb";
 
 function makeDownloadClient(chunks: Uint8Array[], metadata?: { updatedAt: Date }): OperatorClient {
   return {
@@ -255,7 +260,7 @@ describe("formatExecutionError with a deployed bundle", () => {
   });
 
   function inProject(files: Record<string, string>): void {
-    projectDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "logs-deployed-bundle-")));
+    projectDir = makeTempDir("logs-deployed-bundle-");
     for (const [relativePath, content] of Object.entries(files)) {
       const file = path.join(projectDir, relativePath);
       fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -432,11 +437,17 @@ vi.mock("#/cli/shared/client", async (importActual) => {
   return { ...actual, initOperatorClient: vi.fn() };
 });
 
-function logEntry(message: string, severity: FunctionLogSeverity, at: string) {
+function logEntry(
+  message: string,
+  severity: FunctionLogSeverity,
+  at: string,
+  source = FunctionLogSource.USER,
+) {
   return create(FunctionLogEntrySchema, {
     message,
     severity,
     timestamp: timestampFromDate(new Date(at)),
+    source,
   });
 }
 
@@ -468,6 +479,12 @@ describe("logs command detail output", () => {
     logEntry("starting", FunctionLogSeverity.INFO, "2026-09-05T00:00:00.000Z"),
     logEntry("careful", FunctionLogSeverity.WARNING, "2026-09-05T00:00:01.000Z"),
   ];
+  const platformNotice = logEntry(
+    "runs close to the limit",
+    FunctionLogSeverity.WARNING,
+    "2026-09-05T00:00:02.000Z",
+    FunctionLogSource.PLATFORM,
+  );
 
   aroundEach(async (runTest) => {
     vi.clearAllMocks();
@@ -491,6 +508,42 @@ describe("logs command detail output", () => {
         { message: "careful", severity: "WARNING", timestamp: "2026-09-05T00:00:01.000Z" },
       ],
     });
+  });
+
+  test("--json reports the source of each entry and whether the Platform wrote any", async () => {
+    using stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+    mockClient([
+      functionExecution({
+        logEntries: [entries[0]!, platformNotice],
+        hasPlatformLogs: true,
+      }),
+    ]);
+
+    await runCommand(logsCommand, ["exec-1"]);
+
+    expect(JSON.parse(stdout.output)).toMatchObject({
+      hasPlatformLogs: true,
+      logEntries: [
+        { message: "starting", source: "USER" },
+        { message: "runs close to the limit", source: "PLATFORM" },
+      ],
+    });
+  });
+
+  test("marks entries the Platform wrote apart from the function's own output", async () => {
+    using _stdout = captureStdout();
+    using stderr = captureStderr();
+    mockClient([functionExecution({ logEntries: [entries[1]!, platformNotice] })]);
+
+    await runCommand(logsCommand, ["exec-1"]);
+
+    const plain = stripAnsi(stderr.output);
+    expect(plain).toContain("2026-09-05T00:00:01.000Z [WARNING] careful");
+    expect(plain).toContain(
+      "2026-09-05T00:00:02.000Z [WARNING] [PLATFORM] runs close to the limit",
+    );
   });
 
   test("prints each structured entry once", async () => {
@@ -586,10 +639,13 @@ describe("logs command detail output", () => {
     const third = logEntry("three", FunctionLogSeverity.ERROR, "2026-09-05T00:00:02.000Z");
     const getFunctionExecution = mockClient([
       functionExecution({ status: FunctionExecution_Status.RUNNING, logEntries: [first] }),
-      functionExecution({ status: FunctionExecution_Status.RUNNING, logEntries: [first, second] }),
+      functionExecution({
+        status: FunctionExecution_Status.RUNNING,
+        logEntries: [first, second, platformNotice],
+      }),
       functionExecution({
         status: FunctionExecution_Status.FAILED,
-        logEntries: [first, second, third],
+        logEntries: [first, second, platformNotice, third],
         error: { name: "Error", message: "boom", stackTrace: "" },
       }),
     ]);
@@ -599,7 +655,12 @@ describe("logs command detail output", () => {
     const plain = stripAnsi(stderr.output);
     expect(getFunctionExecution).toHaveBeenCalledTimes(3);
     expect(plain.indexOf("[LOG] one")).toBeLessThan(plain.indexOf("[LOG] two"));
-    expect(plain.indexOf("[LOG] two")).toBeLessThan(plain.indexOf("[ERROR] three"));
+    expect(plain.indexOf("[LOG] two")).toBeLessThan(
+      plain.indexOf("[WARNING] [PLATFORM] runs close to the limit"),
+    );
+    expect(plain.indexOf("[PLATFORM] runs close to the limit")).toBeLessThan(
+      plain.indexOf("[ERROR] three"),
+    );
     expect(plain.match(/\[LOG\] one/g)).toHaveLength(1);
     expect(plain.match(/\[LOG\] two/g)).toHaveLength(1);
     expect(plain).toContain("Status: FAILED");
@@ -780,6 +841,18 @@ describe("logs command list output", () => {
     await runTest();
   });
 
+  function listedExecution(
+    overrides: MessageInitShape<typeof FunctionExecutionSummarySchema>,
+  ): FunctionExecutionSummary {
+    return create(FunctionExecutionSummarySchema, {
+      id: "exec-1",
+      scriptName: "workflow--billing.main",
+      status: FunctionExecution_Status.SUCCESS,
+      type: FunctionExecution_Type.JOB,
+      ...overrides,
+    });
+  }
+
   test("--json lists the default 50 executions and reports that more exist", async () => {
     using stdout = captureStdout();
     using stderr = captureStderr();
@@ -787,7 +860,7 @@ describe("logs command list output", () => {
     vi.mocked(initOperatorClient).mockResolvedValue({
       listFunctionExecutions: vi.fn(async ({ pageSize }: { pageSize: number }) => ({
         executions: Array.from({ length: pageSize }, (_, index) =>
-          functionExecution({ id: `exec-${index}` }),
+          listedExecution({ id: `exec-${index}` }),
         ),
         nextPageToken: "more",
       })),
@@ -802,7 +875,7 @@ describe("logs command list output", () => {
     );
   });
 
-  function mockList(executions: FunctionExecution[]): void {
+  function mockList(executions: FunctionExecutionSummary[]): void {
     vi.mocked(initOperatorClient).mockResolvedValue({
       listFunctionExecutions: vi.fn(async () => ({ executions, nextPageToken: "" })),
     } as unknown as OperatorClient);
@@ -813,27 +886,27 @@ describe("logs command list output", () => {
     using _stderr = captureStderr();
     using _json = jsonMode();
     mockList([
-      functionExecution({ id: "exec-ok", errorKind: FunctionErrorKind.NONE }),
-      functionExecution({
+      listedExecution({ id: "exec-ok", errorKind: FunctionErrorKind.NONE, hasPlatformLogs: true }),
+      listedExecution({
         id: "exec-user",
         status: FunctionExecution_Status.FAILED,
         errorKind: FunctionErrorKind.USER_RUNTIME,
         error: { name: "TypeError", message: "x is undefined" },
       }),
-      functionExecution({
+      listedExecution({
         id: "exec-syntax",
         status: FunctionExecution_Status.FAILED,
         errorKind: FunctionErrorKind.USER_NON_RUNTIME,
         error: { name: "SyntaxError", message: "Unexpected token '}'" },
       }),
-      functionExecution({
+      listedExecution({
         id: "exec-timeout",
         status: FunctionExecution_Status.FAILED,
         errorKind: FunctionErrorKind.PLATFORM,
         error: { message: "execution aborted due to timeout or cancellation" },
       }),
-      functionExecution({ id: "exec-unrecorded", status: FunctionExecution_Status.FAILED }),
-      functionExecution({ id: "exec-newer-kind", errorKind: 99 as FunctionErrorKind }),
+      listedExecution({ id: "exec-unrecorded", status: FunctionExecution_Status.FAILED }),
+      listedExecution({ id: "exec-newer-kind", errorKind: 99 as FunctionErrorKind }),
     ]);
 
     await runCommand(logsCommand, []);
@@ -852,6 +925,7 @@ describe("logs command list output", () => {
         errorKind: "NONE",
         errorName: null,
         errorMessage: null,
+        hasPlatformLogs: true,
       },
       {
         ...common,
@@ -860,6 +934,7 @@ describe("logs command list output", () => {
         errorKind: "USER_RUNTIME",
         errorName: "TypeError",
         errorMessage: "x is undefined",
+        hasPlatformLogs: false,
       },
       {
         ...common,
@@ -868,6 +943,7 @@ describe("logs command list output", () => {
         errorKind: "USER_NON_RUNTIME",
         errorName: "SyntaxError",
         errorMessage: "Unexpected token '}'",
+        hasPlatformLogs: false,
       },
       {
         ...common,
@@ -876,6 +952,7 @@ describe("logs command list output", () => {
         errorKind: "PLATFORM",
         errorName: null,
         errorMessage: "execution aborted due to timeout or cancellation",
+        hasPlatformLogs: false,
       },
       {
         ...common,
@@ -884,6 +961,7 @@ describe("logs command list output", () => {
         errorKind: "UNSPECIFIED",
         errorName: null,
         errorMessage: null,
+        hasPlatformLogs: false,
       },
       {
         ...common,
@@ -892,6 +970,7 @@ describe("logs command list output", () => {
         errorKind: "UNSPECIFIED",
         errorName: null,
         errorMessage: null,
+        hasPlatformLogs: false,
       },
     ]);
   });
@@ -900,7 +979,7 @@ describe("logs command list output", () => {
     using stdout = captureStdoutStream();
     using _stderr = captureStderr();
     mockList([
-      functionExecution({
+      listedExecution({
         status: FunctionExecution_Status.FAILED,
         errorKind: FunctionErrorKind.USER_RUNTIME,
         error: { name: "TypeError", message: "x is undefined" },
@@ -915,5 +994,31 @@ describe("logs command list output", () => {
     expect(plain).toContain("TypeError");
     expect(plain).not.toContain("errorMessage");
     expect(plain).not.toContain("x is undefined");
+  });
+
+  test("flags executions with Platform logs without marking the others as having none", async () => {
+    using stdout = captureStdoutStream();
+    using _stderr = captureStderr();
+    mockList([
+      listedExecution({ id: "exec-flagged", hasPlatformLogs: true }),
+      listedExecution({ id: "exec-unflagged" }),
+    ]);
+
+    await runCommand(logsCommand, []);
+
+    const rows = stripAnsi(stdout.output).split("\n");
+    expect(rows.find((row) => row.includes("scriptName"))).toContain("hasPlatformLogs");
+    expect(rows.find((row) => row.includes("exec-flagged"))).toMatch(/│\s*yes\s*│/);
+    expect(rows.find((row) => row.includes("exec-unflagged"))).not.toMatch(/yes|no|false/);
+  });
+
+  test("leaves the Platform logs column out when no execution is flagged", async () => {
+    using stdout = captureStdoutStream();
+    using _stderr = captureStderr();
+    mockList([listedExecution({ id: "exec-unflagged" })]);
+
+    await runCommand(logsCommand, []);
+
+    expect(stripAnsi(stdout.output)).not.toContain("hasPlatformLogs");
   });
 });

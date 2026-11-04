@@ -39,15 +39,10 @@ import {
   type WithLabel,
   writeMetadataLabels,
 } from "./label";
-import {
-  fetchExistingResourcesWithLabels,
-  trackDesiredResourceOwnership,
-  trackRemainingResourceOwner,
-} from "./owned-resource";
+import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Application } from "#/cli/services/application";
 import type { Executor } from "#/types/executor.generated";
-import type { OwnerConflict, UnmanagedResource } from "./confirm";
 
 type ExistingExecutors = WithLabel<
   Awaited<ReturnType<OperatorClient["listExecutorExecutors"]>>["executors"][number]
@@ -113,9 +108,7 @@ type DeleteExecutor = {
 export async function planExecutor(context: PlanContext, previousExisting?: ExistingExecutors) {
   const { client, workspaceId, application, forRemoval } = context;
   const changeSet = createChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor>("Executors");
-  const conflicts: OwnerConflict[] = [];
-  const unmanaged: UnmanagedResource[] = [];
-  const resourceOwners = new Set<string>();
+  const ownership = createOwnershipTracker(application.name, application.id);
 
   const fetchedExecutors =
     previousExisting ??
@@ -146,16 +139,10 @@ export async function planExecutor(context: PlanContext, previousExisting?: Exis
     });
     const desiredExecutor = protoExecutor(context, executor, application.env);
     if (existing) {
-      const owned = trackDesiredResourceOwnership({
-        labels: existing.allLabels,
-        ownerLabel: existing.label,
-        appName: application.name,
-        appId: application.id,
+      const owned = ownership.ownsDesired(existing.allLabels, {
         resourceType: "executor",
         resourceLabel: "Executor",
         resourceName: executor.name,
-        conflicts,
-        unmanaged,
       });
 
       const configUnchanged = owned && areExecutorsEqual(existing.resource, desiredExecutor);
@@ -186,15 +173,7 @@ export async function planExecutor(context: PlanContext, previousExisting?: Exis
   }
   Object.entries(existingExecutors).forEach(([name]) => {
     const entry = existingExecutors[name];
-    const label = entry?.label;
-    const owned = trackRemainingResourceOwner({
-      labels: entry?.allLabels,
-      ownerLabel: label,
-      appName: application.name,
-      appId: application.id,
-      resourceOwners,
-    });
-    if (owned) {
+    if (ownership.ownsRemaining(entry?.allLabels)) {
       changeSet.deletes.push({
         name,
         request: {
@@ -205,7 +184,7 @@ export async function planExecutor(context: PlanContext, previousExisting?: Exis
     }
   });
 
-  return { changeSet, conflicts, unmanaged, resourceOwners, existingExecutors: fetchedExecutors };
+  return { changeSet, ...ownership.result, existingExecutors: fetchedExecutors };
 }
 
 type ExecutorDisplayEntry = GroupedDisplayEntry;

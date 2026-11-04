@@ -1,72 +1,20 @@
 import * as url from "node:url";
 import * as path from "pathe";
 import { gte, lt, parse, valid } from "semver";
+import { TAILOR_CLI_COMMANDS, TAILOR_CLI_VALUE_FLAGS } from "./tailor-cli-tokens";
 import type { CodemodPackage } from "./types";
 
 const CODEMODS_ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), "codemods");
-const RENAME_BIN_SOURCE_VALUE_FLAGS = [
-  "--env-file-if-exists",
-  "--env-file",
-  "--profile",
-  "--config",
-  "--workspace-id",
-  "--arg",
-  "--query",
-  "--file",
-  "--name",
-  "--namespace",
-  "--dir",
-  "-e",
-  "-p",
-  "-c",
-  "-w",
-  "-a",
-  "-q",
-  "-f",
-  "-n",
-];
-const RENAME_BIN_SOURCE_COMMANDS = [
-  "api",
-  "apply",
-  "authconnection",
-  "completion",
-  "crash-report",
-  "crashreport",
-  "deploy",
-  "executor",
-  "function",
-  "generate",
-  "init",
-  "login",
-  "logout",
-  "machineuser",
-  "oauth2client",
-  "open",
-  "organization",
-  "profile",
-  "query",
-  "remove",
-  "secret",
-  "setup",
-  "show",
-  "skills",
-  "staticwebsite",
-  "tailordb",
-  "upgrade",
-  "user",
-  "workflow",
-  "workspace",
-];
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-const RENAME_BIN_SOURCE_VALUE_GUARDS = RENAME_BIN_SOURCE_VALUE_FLAGS.flatMap((flag) => {
+const RENAME_BIN_SOURCE_VALUE_GUARDS = TAILOR_CLI_VALUE_FLAGS.flatMap((flag) => {
   const escaped = escapeRegExp(flag);
   return [`(?<!${escaped}\\s+)`, `(?<!${escaped}=)`];
 }).join("");
-const RENAME_BIN_SOURCE_COMMAND_OR_FLAG = `(?:--?[\\w-]+|${RENAME_BIN_SOURCE_COMMANDS.join("|")})`;
+const RENAME_BIN_SOURCE_COMMAND_OR_FLAG = `(?:--?[\\w-]+|${TAILOR_CLI_COMMANDS.join("|")})`;
 const RENAME_BIN_SOURCE_COMMAND_TOKEN =
   "tailor-sdk(?:(?:\\.(?:cmd|ps1|exe))|(?:@[^\\s'\"`;|&)]+))?(?![\\w-])";
 const RENAME_BIN_SOURCE_LEGACY_PATTERN = new RegExp(
@@ -982,7 +930,7 @@ export const allCodemods: CodemodPackage[] = [
     id: "v3/remove-workflow-exec-job-function",
     name: "workflow.execJobFunction (imported) removed — use job.start()",
     description:
-      "`execJobFunction` on the `workflow` value imported from @tailor-platform/sdk/runtime(/workflow) is removed in v3. Calling it directly from a workflow job body to reach another job is not detected as a build-time dependency and has no working use; the target job's own `.start()` method is the only supported way to call it. This does not affect the ambient `tailor.workflow.execJobFunction` global — that's what `.start()` itself compiles down to at build time, and it remains fully supported.",
+      "`execJobFunction` on the `workflow` value imported from @tailor-platform/sdk/runtime(/workflow) is removed in v3. Calling it directly from a workflow job body to reach another job is not detected as a build-time dependency and has no working use; the target job's own `.start()` method is the only supported way to call it. This does not affect the ambient `tailor.workflow.execJobFunction` global, which remains fully supported — `.start()` itself compiles down to `globalThis.tailor.workflow.execJobFunction` at build time.",
     since: "1.0.0",
     until: "3.0.0",
     // No scriptPath: rewriting a call site requires resolving the job-name
@@ -1006,7 +954,8 @@ export const allCodemods: CodemodPackage[] = [
       "",
       "This only removes the re-export from @tailor-platform/sdk/runtime. It does",
       "not affect the ambient tailor.workflow.execJobFunction global, which stays",
-      "fully supported and is what .start() itself compiles down to at build time.",
+      "fully supported; .start() itself compiles down to",
+      "globalThis.tailor.workflow.execJobFunction at build time.",
       "This codemod does not rewrite ambient tailor.workflow.execJobFunction(...)",
       "call sites, since removing the import re-export does not affect them — but",
       "if such a call site sits inside workflow job source and calls another job",
