@@ -9,9 +9,12 @@
  */
 
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import { CLIError, formatCommandHint } from "#/cli/shared/errors";
 import { joinFunctionLogMessages } from "#/cli/shared/function-execution";
 import {
   createTemporaryWorkflow,
+  isExecutionActive,
+  listTemporaryWorkflowExecutions,
   pollUntilTerminal,
   reclaimTemporaryWorkflow,
   teardownTemporaryWorkflow,
@@ -78,6 +81,7 @@ export async function withScriptWorkflow<T>(
   const { client, workspaceId, name, appName, invoker, leftoverNote } = options;
   const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
 
+  await assertNoActiveExecution(client, workspaceId, name);
   await reclaimTemporaryWorkflow({
     client,
     workspaceId,
@@ -151,6 +155,36 @@ export async function withScriptWorkflow<T>(
       leftoverNote,
     });
   }
+}
+
+/**
+ * Refuse to remove the resources of an earlier run that is still executing: an interrupted
+ * command leaves its chunk running on the platform, and removing the workflow under it would make
+ * the chunk's outcome unknowable.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param name - Shared resource name
+ */
+async function assertNoActiveExecution(
+  client: OperatorClient,
+  workspaceId: string,
+  name: string,
+): Promise<void> {
+  const executions = await listTemporaryWorkflowExecutions(client, workspaceId, name);
+  const active = executions.find(isExecutionActive);
+  if (!active) return;
+
+  throw CLIError({
+    code: "SCRIPT_WORKFLOW_EXECUTION_ACTIVE",
+    message: `The temporary workflow '${name}' still has an execution that is running (${active.id}).`,
+    suggestion:
+      "An earlier command that was interrupted can still be applying its chunk. " +
+      `Wait for the execution to finish (${formatCommandHint({
+        command: "tailor",
+        args: ["workflow", "executions", active.id],
+      })}), then run the command again.`,
+    context: { workflowName: name, executionId: active.id },
+  });
 }
 
 /** Reads of the job's function execution tried through transient errors. */

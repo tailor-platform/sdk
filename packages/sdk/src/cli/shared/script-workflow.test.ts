@@ -28,6 +28,8 @@ interface MockClientOptions {
   errorMessage?: string;
   /** Workflow left behind by an interrupted earlier run. */
   leftoverWorkflowId?: string;
+  /** Executions of the leftover workflow, newest first. */
+  leftoverExecutions?: { id: string; status: WorkflowExecution_Status }[];
 }
 
 function createMockClient(options: MockClientOptions = {}) {
@@ -43,6 +45,13 @@ function createMockClient(options: MockClientOptions = {}) {
         return Promise.reject(new ConnectError("not found", Code.NotFound));
       }
       return Promise.resolve({ workflow: { id: options.leftoverWorkflowId } });
+    }),
+    listWorkflowExecutions: vi.fn(() => {
+      calls.push("listWorkflowExecutions");
+      if (options.leftoverWorkflowId === undefined) {
+        return Promise.reject(new ConnectError("not found", Code.NotFound));
+      }
+      return Promise.resolve({ executions: options.leftoverExecutions ?? [], nextPageToken: "" });
     }),
     deleteWorkflow: vi.fn(() => record("deleteWorkflow", {})),
     deleteWorkflowJobFunction: vi.fn(() => record("deleteWorkflowJobFunction", {})),
@@ -199,6 +208,34 @@ describe("withScriptWorkflow", () => {
     expect(vi.mocked(logger.warn).mock.calls.map(([message]) => message)).toEqual([
       expect.stringContaining("It is removed by the next run."),
     ]);
+  });
+
+  test("stops without removing anything when an earlier run of the workflow is still executing", async () => {
+    const { client, mocks } = createMockClient({
+      leftoverWorkflowId: "wf-old",
+      leftoverExecutions: [{ id: "exec-old", status: WorkflowExecution_Status.RUNNING }],
+    });
+
+    const run = withScriptWorkflow({ ...baseOptions, client }, (run) => run({}));
+
+    await expect(run).rejects.toMatchObject({
+      code: "SCRIPT_WORKFLOW_EXECUTION_ACTIVE",
+      context: { workflowName: "tailordb-seed--tailordb", executionId: "exec-old" },
+    });
+    expect(mocks.deleteWorkflow).not.toHaveBeenCalled();
+    expect(mocks.deleteFunctionRegistry).not.toHaveBeenCalled();
+    expect(mocks.createFunctionRegistry).not.toHaveBeenCalled();
+  });
+
+  test("reclaims the leftovers of an earlier run that has finished", async () => {
+    const { client, mocks } = createMockClient({
+      leftoverWorkflowId: "wf-old",
+      leftoverExecutions: [{ id: "exec-old", status: WorkflowExecution_Status.FAILED }],
+    });
+
+    await withScriptWorkflow({ ...baseOptions, client }, (run) => run({}));
+
+    expect(mocks.deleteWorkflow).toHaveBeenCalledWith({ workspaceId: "ws", workflowId: "wf-old" });
   });
 
   test("reclaims the leftovers of an interrupted run before registering the script", async () => {
