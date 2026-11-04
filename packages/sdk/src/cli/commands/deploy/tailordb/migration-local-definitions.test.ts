@@ -4,6 +4,7 @@
  * applied once every migration has committed, in the same deploy.
  */
 
+import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { reconstructSnapshotFromMigrations } from "#/cli/commands/tailordb/migrate/snapshot";
 import { errorToJson } from "#/cli/shared/error-json";
@@ -116,6 +117,13 @@ describe("migration flow: local definitions that no pending migration includes",
     after: { type: "string", required: false },
   } as DiffChange;
 
+  function rejectLocalPost(client: OperatorClient, rejection: Error) {
+    vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
+      if (request.tailordbType?.schema?.fields?.body) throw rejection;
+      return {} as never;
+    });
+  }
+
   function writesOf(client: OperatorClient, tableName: string) {
     return tailordbTypeWrites(client).filter((write) => write.name === tableName);
   }
@@ -211,51 +219,117 @@ describe("migration flow: local definitions that no pending migration includes",
     expect(released?.tailordbType.schema?.settings?.disableGqlOperations).toBeUndefined();
   });
 
-  test("fails after the migrations commit when a local definition cannot be applied", async () => {
+  test.each([
+    ["already_exists", new ConnectError("duplicated key", Code.AlreadyExists)],
+    [
+      "failed_precondition with a PreconditionFailure detail",
+      Object.assign(new ConnectError("null values", Code.FailedPrecondition), {
+        details: [{ type: "google.rpc.PreconditionFailure", value: new Uint8Array() }],
+      }),
+    ],
+  ])(
+    "fails after the migrations commit when existing records refuse a local definition (%s)",
+    async (_reason, rejection) => {
+      const client = createMockClient();
+      rejectLocalPost(client, rejection);
+      mockPending([addNickname]);
+      const localUser = snapshotTable("User", {
+        name: { type: "string", required: true },
+        nickname: { type: "string", required: false },
+        age: { type: "integer", required: false },
+      });
+      const planResult = createMockPlanResult({
+        local: [localUser, localPost],
+        updates: ["User", "Post"],
+      });
+
+      const error = await applyTailorDB(client, planResult, "create-update").catch(
+        (failure: unknown) => failure,
+      );
+
+      expect(error).toBe(rejection);
+      expect(errorToJson(error).error).toMatchObject({
+        code: "MIGRATION_LOCAL_DEFINITIONS_FAILED",
+        suggestion: expect.stringMatching(
+          /run `tailor tailordb migration generate --namespace test-ns --config=\S*\/test\/tailor\.config\.ts` to add it/,
+        ),
+        context: { namespace: "test-ns", table: "Post", created: [] },
+      });
+      expect(checkpoint.state.number).toBe(1);
+      const userWrites = writesOf(client, "User");
+      expect(userWrites.some((write) => fieldNames(write).includes("age"))).toBe(true);
+      expect(fieldNames(userWrites.at(-1))).toEqual(["name", "nickname"]);
+      expect(
+        userWrites.at(-1)?.tailordbType.schema?.settings?.disableGqlOperations,
+      ).toBeUndefined();
+      const last = writesOf(client, "Post").at(-1);
+      expect(fieldNames(last)).toEqual(["title"]);
+      expect(last?.tailordbType.schema?.settings?.disableGqlOperations).toBeUndefined();
+    },
+  );
+
+  test.each([
+    ["unavailable", new ConnectError("connection reset", Code.Unavailable)],
+    [
+      "failed_precondition without a PreconditionFailure detail",
+      new ConnectError("serial state conflict", Code.FailedPrecondition),
+    ],
+    ["a plain error", new Error("socket hang up")],
+  ])(
+    "suggests deploying again when a local definition fails for a reason other than existing records (%s)",
+    async (_reason, rejection) => {
+      const client = createMockClient();
+      rejectLocalPost(client, rejection);
+      mockPending([addNickname]);
+      const planResult = createMockPlanResult({
+        local: [userWithNickname, localPost],
+        updates: ["User", "Post"],
+      });
+
+      const error = await applyTailorDB(client, planResult, "create-update").catch(
+        (failure: unknown) => failure,
+      );
+
+      const { code, suggestion } = errorToJson(error).error;
+      expect(code).toBe("MIGRATION_LOCAL_DEFINITIONS_FAILED");
+      expect(suggestion).toContain(
+        "Once the cause is fixed, deploy again to apply the local definition of table 'Post'.",
+      );
+      expect(suggestion).not.toContain("migration generate");
+    },
+  );
+
+  test("suggests deploying again when a table cannot be created for its local definition", async () => {
     const client = createMockClient();
-    vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
-      if (request.tailordbType?.schema?.fields?.body) throw new Error("rows lack body");
+    vi.mocked(client.createTailorDBType).mockImplementation(async (request) => {
+      if (request.tailordbType?.name === "Tag") {
+        throw new ConnectError("table exists", Code.AlreadyExists);
+      }
       return {} as never;
     });
     mockPending([addNickname]);
-    const localUser = snapshotTable("User", {
-      name: { type: "string", required: true },
-      nickname: { type: "string", required: false },
-      age: { type: "integer", required: false },
-    });
+    const tag = snapshotTable("Tag", { label: { type: "string", required: true } });
     const planResult = createMockPlanResult({
-      local: [localUser, localPost],
-      updates: ["User", "Post"],
+      local: [userWithNickname, post, tag],
+      creates: ["Tag"],
+      updates: ["User"],
     });
 
     const error = await applyTailorDB(client, planResult, "create-update").catch(
       (failure: unknown) => failure,
     );
 
-    expect(error).toMatchObject({ message: "rows lack body" });
-    expect(errorToJson(error).error).toMatchObject({
-      code: "MIGRATION_LOCAL_DEFINITIONS_FAILED",
-      suggestion: expect.stringMatching(
-        /run `tailor tailordb migration generate --namespace test-ns --config=\S*\/test\/tailor\.config\.ts` to add it/,
-      ),
-      context: { namespace: "test-ns", table: "Post", created: [] },
-    });
-    expect(checkpoint.state.number).toBe(1);
-    const userWrites = writesOf(client, "User");
-    expect(userWrites.some((write) => fieldNames(write).includes("age"))).toBe(true);
-    expect(fieldNames(userWrites.at(-1))).toEqual(["name", "nickname"]);
-    expect(userWrites.at(-1)?.tailordbType.schema?.settings?.disableGqlOperations).toBeUndefined();
-    const last = writesOf(client, "Post").at(-1);
-    expect(fieldNames(last)).toEqual(["title"]);
-    expect(last?.tailordbType.schema?.settings?.disableGqlOperations).toBeUndefined();
+    const { code, suggestion } = errorToJson(error).error;
+    expect(code).toBe("MIGRATION_LOCAL_DEFINITIONS_FAILED");
+    expect(suggestion).toContain(
+      "Once the cause is fixed, deploy again to apply the local definition of table 'Tag'.",
+    );
+    expect(suggestion).not.toContain("migration generate");
   });
 
   test("names the tables it already created when a later local definition fails", async () => {
     const client = createMockClient();
-    vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
-      if (request.tailordbType?.schema?.fields?.body) throw new Error("rows lack body");
-      return {} as never;
-    });
+    rejectLocalPost(client, new Error("socket hang up"));
     mockPending([addNickname]);
     const tag = snapshotTable("Tag", { label: { type: "string", required: true } });
     const planResult = createMockPlanResult({

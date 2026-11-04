@@ -1,3 +1,4 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import {
   getNamespacesWithMigrations,
@@ -1952,11 +1953,30 @@ function collectLocalDefinitionWrites(flow: MigrationFlow): LocalDefinitionWrite
   return { creates, updates };
 }
 
+/**
+ * Whether existing records refused a table update. The platform reports a unique index over
+ * duplicated values as AlreadyExists, and marks a required field over null values, alone among
+ * its FailedPrecondition refusals, with a PreconditionFailure detail.
+ * @param error - Failure of the update
+ * @returns True when the records refused it
+ */
+function isRefusedByRecords(error: unknown): boolean {
+  if (!(error instanceof ConnectError)) return false;
+  if (error.code === Code.AlreadyExists) return true;
+  return (
+    error.code === Code.FailedPrecondition &&
+    error.details.some(
+      (detail) => "type" in detail && detail.type === "google.rpc.PreconditionFailure",
+    )
+  );
+}
+
 interface FailedLocalDefinition {
   namespaceName: string;
   tableName: string;
   /** Tables created for local definitions before the failure, by namespace. */
   created: ReadonlyMap<string, readonly string[]>;
+  refusedByRecords: boolean;
 }
 
 function localDefinitionError(
@@ -1964,7 +1984,7 @@ function localDefinitionError(
   failed: FailedLocalDefinition,
   error: unknown,
 ): Error {
-  const { namespaceName, tableName } = failed;
+  const { namespaceName, tableName, refusedByRecords } = failed;
   const failure = toError(error);
   const lastMigration = assertDefined(
     flow.pending.lastByNamespace.get(namespaceName),
@@ -1982,8 +2002,11 @@ function localDefinitionError(
       `The pending migrations completed, and the existing tables of namespace '${namespaceName}' keep the definitions of migration ${namespaceName}/${formatMigrationNumber(lastMigration.number)}.`,
       created.length > 0 &&
         `Tables created for their local definitions remain: ${created.map((entry) => `namespace '${entry.namespace}': ${entry.tables.join(", ")}`).join("; ")}.`,
-      `The local definition of table '${tableName}' is not in any migration: run ${generateCommand} to add it, with a migration script if existing records need one, then deploy again.`,
+      refusedByRecords &&
+        `The local definition of table '${tableName}' conflicts with its existing records and is not in any migration: run ${generateCommand} to add it with a migration script that updates those records, then deploy again.`,
       getErrorDiagnostics(failure).suggestion,
+      !refusedByRecords &&
+        `Once the cause is fixed, deploy again to apply the local definition of table '${tableName}'.`,
     ]
       .filter(Boolean)
       .join(" "),
@@ -2021,7 +2044,11 @@ async function applyLocalDefinitions(
           await client.createTailorDBType(create.request);
         } catch (error) {
           return {
-            error: localDefinitionError(flow, { namespaceName, tableName, created }, error),
+            error: localDefinitionError(
+              flow,
+              { namespaceName, tableName, created, refusedByRecords: false },
+              error,
+            ),
           };
         }
         created.set(namespaceName, [...(created.get(namespaceName) ?? []), tableName]);
@@ -2037,7 +2064,11 @@ async function applyLocalDefinitions(
           });
         } catch (error) {
           return {
-            error: localDefinitionError(flow, { namespaceName, tableName, created }, error),
+            error: localDefinitionError(
+              flow,
+              { namespaceName, tableName, created, refusedByRecords: isRefusedByRecords(error) },
+              error,
+            ),
           };
         }
       }
