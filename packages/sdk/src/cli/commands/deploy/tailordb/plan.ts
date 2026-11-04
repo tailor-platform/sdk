@@ -47,8 +47,8 @@ import {
   normalizeComparableGqlPermission,
   normalizeComparableTailorDBType,
 } from "./compare";
-import { assertMigrationScriptsBundle, resolveMigrationMachineUsers } from "./migration";
-import { assertMigrationSkipSteps, selectSkipStepsOfNamespaces } from "./migration-skip-steps";
+import { assertPendingMigrationsRunnable } from "./migration";
+import { selectSkipStepsOfNamespaces } from "./migration-skip-steps";
 import { validateAndDetectMigrations } from "./migration-validation";
 import type { PlanContext } from "../types";
 
@@ -150,7 +150,7 @@ export async function planTailorDB(context: PlanContext) {
           migrationRecoveryArgs,
         );
   if (detected) {
-    await assertMigrationSkipSteps({
+    await assertPendingMigrationsRunnable({
       client,
       workspaceId,
       requested: selectSkipStepsOfNamespaces(
@@ -159,14 +159,8 @@ export async function planTailorDB(context: PlanContext) {
       ),
       pendingMigrations: detected.pendingMigrations,
       inProgressByNamespace: detected.inProgressMigrations,
+      source: context,
     });
-    resolveMigrationMachineUsers(context, detected.pendingMigrations);
-    await assertMigrationScriptsBundle(
-      detected.pendingMigrations,
-      detected.inProgressMigrations,
-      application.env,
-      path.dirname(config.path),
-    );
   }
   const { namespacesWithMigrations, migrationFileState, checkpointRepairs } = detected ?? {
     namespacesWithMigrations: migrationConfig,

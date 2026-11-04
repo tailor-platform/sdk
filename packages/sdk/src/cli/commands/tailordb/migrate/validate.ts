@@ -2,11 +2,16 @@ import * as fs from "node:fs";
 import { arg } from "@politty/zod";
 import * as path from "pathe";
 import { z } from "zod";
-import { migrationDiffsAfter } from "#/cli/commands/deploy/tailordb/migration";
 import {
-  assertMigrationSkipSteps,
+  assertPendingMigrationsRunnable,
+  isScriptBundleFailure,
+  pendingMigrationsAfter,
+  type MigrationMachineUsers,
+} from "#/cli/commands/deploy/tailordb/migration";
+import {
   noStepsToSkipError,
   parseMigrationSkipSteps,
+  selectSkipStepsOfNamespaces,
 } from "#/cli/commands/deploy/tailordb/migration-skip-steps";
 import {
   checkMigrationInProgress,
@@ -18,7 +23,7 @@ import { deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { errorToJson } from "#/cli/shared/error-json";
+import { serializeError, type errorToJson } from "#/cli/shared/error-json";
 import { CLIError, errorSummary, isCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
@@ -56,7 +61,6 @@ import {
   countUnresolvedTodosInFile,
   ignoredStepsWarning,
   UNRESOLVED_TODO_SUGGESTION,
-  type MigrationScriptForm,
 } from "./script-form";
 import {
   assertValidMigrationFiles,
@@ -67,8 +71,12 @@ import {
   loadDiff,
   reconstructSnapshotFromMigrations,
 } from "./snapshot";
+import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
+import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type {
+  MigrationInProgress,
+  PendingMigration,
   RebaselinePendingInfo,
   RemoteSchemaVerificationResult,
   RemoteSchemaVerificationSkipReason,
@@ -140,13 +148,31 @@ interface WarningAcknowledgmentsReport {
   missing: UnacknowledgedWarningMigration[];
 }
 
+/** A failure as `tailor deploy --json` reports it: without colors, with registered secrets redacted */
+type SectionError = ReturnType<typeof errorToJson>["error"];
+
+function sectionError(error: unknown): SectionError {
+  return (JSON.parse(serializeError(error)) as ReturnType<typeof errorToJson>).error;
+}
+
 interface MigrationInProgressReport {
-  /** Whether the next deploy resumes the migration, skipping the requested steps */
+  /** Whether the next deploy resumes the migration */
   valid: boolean;
   /** The migration an earlier deploy left in progress; absent when its record cannot be read or the checkpoint already covers it */
   migrationNumber?: number;
   /** Why the next deploy would stop, as the deploy reports it */
-  error?: ReturnType<typeof errorToJson>["error"];
+  error?: SectionError;
+}
+
+interface PendingMigrationScriptsReport {
+  /** Whether the next deploy can run every pending script, skipping the requested steps */
+  valid: boolean;
+  /** The pending migrations that have a migrate.ts */
+  migrationNumbers: number[];
+  /** The machine user that runs the scripts */
+  machineUser?: string;
+  /** Why the next deploy would stop, as the deploy reports it */
+  error?: SectionError;
   /** Set when the check could not run */
   skipped?: "check_failed";
 }
@@ -160,10 +186,16 @@ interface NamespaceValidationReport {
   /** Omitted when the migration files are invalid */
   remoteSchema?: RemoteSchemaReport;
   /**
-   * Present when the namespace records a migration in progress or --migration-skip-steps names it;
-   * omitted when the remote migration checkpoint is not in the local migration history
+   * Present when the namespace records a migration in progress; omitted when the remote migration
+   * checkpoint is not in the local migration history
    */
   migrationInProgress?: MigrationInProgressReport;
+  /**
+   * Present when a pending migration has a migrate.ts or --migration-skip-steps names the namespace;
+   * omitted when the remote migration checkpoint is unknown or not in the local migration history,
+   * or when the in-progress check fails
+   */
+  pendingMigrationScripts?: PendingMigrationScriptsReport;
   /** Present only with --strict; omitted when the remote migration checkpoint is unknown */
   warningAcknowledgments?: WarningAcknowledgmentsReport;
 }
@@ -174,13 +206,16 @@ interface BuildValidationReportsOptions {
   localResults: MigrationCheckResult[];
   remoteResults?: RemoteSchemaVerificationResult[];
   inProgressReports?: ReadonlyMap<string, MigrationInProgressReport>;
+  scriptReports?: ReadonlyMap<string, PendingMigrationScriptsReport>;
   /** Per-namespace candidates for the --strict warning acknowledgment check */
   unacknowledgedWarnings?: Map<string, UnacknowledgedWarningMigration[]>;
 }
 
-interface MigrationInProgressChecks {
+interface PendingMigrationChecks {
   client: OperatorClient;
   workspaceId: string;
+  application: Pick<Application, "authService" | "env">;
+  config: LoadedConfig;
   namespaces: readonly NamespaceWithMigrations[];
   remoteResults: readonly RemoteSchemaVerificationResult[];
   /** Remote migration state of each namespace, as the remote schema check read it */
@@ -190,17 +225,38 @@ interface MigrationInProgressChecks {
   commandContext: MigrationCommandContext;
 }
 
-interface NamespaceInProgressCheck {
-  checks: MigrationInProgressChecks;
+interface NamespacePendingCheck {
+  checks: PendingMigrationChecks;
   namespace: string;
-  migrationsDir: string;
   state: RemoteMigrationState;
+  /** Migrations after the checkpoint the next deploy uses */
+  pending: readonly PendingMigration[];
   checkpointRepaired: boolean;
-  skipSteps: readonly string[] | undefined;
 }
 
-interface MigrationInProgressResults {
-  reports: Map<string, MigrationInProgressReport>;
+interface NamespaceInProgressResult {
+  report?: MigrationInProgressReport;
+  /** The record the next deploy resumes */
+  resumed?: MigrationInProgress;
+}
+
+interface NamespaceScriptsResult {
+  report?: PendingMigrationScriptsReport;
+  /** Failure that kept the check from running */
+  error?: unknown;
+}
+
+interface NamespaceScriptsCheck {
+  checks: PendingMigrationChecks;
+  namespace: string;
+  pending: readonly PendingMigration[];
+  /** The record the next deploy resumes, which decides how a multi-step script is bundled */
+  resumed: MigrationInProgress | undefined;
+}
+
+interface PendingMigrationResults {
+  inProgressReports: Map<string, MigrationInProgressReport>;
+  scriptReports: Map<string, PendingMigrationScriptsReport>;
   /** First failure that kept a check from running */
   error?: unknown;
 }
@@ -330,63 +386,103 @@ function assertSkipStepsCheckable(
   }
 }
 
-function readMigrationScriptForm(
-  migrationsDir: string,
-  migrationNumber: number,
-): MigrationScriptForm | null {
-  const scriptPath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
-  return fs.existsSync(scriptPath) ? analyzeMigrationScript(scriptPath) : null;
-}
-
 /**
- * Check one namespace's in-progress record and requested skips the way a deploy checks them.
- * @param check - The namespace and its remote migration state
+ * Check one namespace's in-progress record the way a deploy checks it.
+ * @param check - The namespace, its remote migration state, and its pending migrations
  * @returns What the next deploy does with the record
  */
 async function checkNamespaceInProgress(
-  check: NamespaceInProgressCheck,
+  check: NamespacePendingCheck,
 ): Promise<MigrationInProgressOutcome> {
-  const { checks, namespace, migrationsDir, state, checkpointRepaired, skipSteps } = check;
+  const { checks, namespace, state, pending, checkpointRepaired } = check;
   const { client, workspaceId, commandContext } = checks;
   if (checkpointRepaired && (state.inProgress || state.inProgressInvalid)) {
     throw checkpointRepairInProgressError(namespace);
   }
-  const [nextDiff] = migrationDiffsAfter(migrationsDir, state.number ?? 0);
-  const next = nextDiff && {
-    namespace,
-    number: nextDiff.number,
-    scriptForm: readMigrationScriptForm(migrationsDir, nextDiff.number),
-  };
-  const outcome = await checkMigrationInProgress({
+  return await checkMigrationInProgress({
     client,
     workspaceId,
     namespace,
     state,
-    next,
+    next: pending[0],
     commandContext,
   });
-  if (skipSteps) {
-    await assertMigrationSkipSteps({
-      client,
-      workspaceId,
-      requested: new Map([[namespace, skipSteps]]),
-      pendingMigrations: next ? [next] : [],
-      inProgressByNamespace: outcome.kind === "resume" ? { [namespace]: outcome.inProgress } : {},
-    });
-  }
-  return outcome;
 }
 
 /**
- * Check each namespace's in-progress record and requested skips, reporting a failure per namespace
- * with the error the next deploy would stop with.
+ * Report one namespace's in-progress record, with the error the next deploy would stop with.
+ * @param check - The namespace, its remote migration state, and its pending migrations
+ * @returns The namespace's report and the record the next deploy resumes
+ */
+async function reportNamespaceInProgress(
+  check: NamespacePendingCheck,
+): Promise<NamespaceInProgressResult> {
+  const { state } = check;
+  if (!state.inProgress && !state.inProgressInvalid) return {};
+  const recorded =
+    state.inProgress && !isStaleMigrationInProgress(state)
+      ? { migrationNumber: state.inProgress.number }
+      : {};
+  try {
+    const outcome = await checkNamespaceInProgress(check);
+    if (outcome.kind !== "resume") return {};
+    return {
+      report: { valid: true, migrationNumber: outcome.inProgress.number },
+      resumed: outcome.inProgress,
+    };
+  } catch (caught) {
+    if (!isCLIError(caught)) throw caught;
+    return { report: { valid: false, ...recorded, error: sectionError(caught) } };
+  }
+}
+
+/**
+ * Report whether a deploy can run one namespace's pending migrations: the requested skips apply, a
+ * machine user runs the scripts, and each script bundles the way its run executes it.
+ * @param check - The namespace's pending migrations and the record the next deploy resumes
+ * @returns The namespace's report (absent when it has no pending script and no requested skip) and a failure that kept the check from running
+ */
+async function reportPendingScripts(check: NamespaceScriptsCheck): Promise<NamespaceScriptsResult> {
+  const { checks, namespace, pending, resumed } = check;
+  const skipSteps = checks.skipSteps.get(namespace);
+  const migrationNumbers = pending
+    .filter((migration) => migration.hasScript)
+    .map((migration) => migration.number);
+  if (migrationNumbers.length === 0 && !skipSteps) return {};
+  let machineUsers: MigrationMachineUsers | undefined;
+  try {
+    machineUsers = await assertPendingMigrationsRunnable({
+      client: checks.client,
+      workspaceId: checks.workspaceId,
+      requested: selectSkipStepsOfNamespaces(checks.skipSteps, [namespace]),
+      pendingMigrations: pending,
+      inProgressByNamespace: resumed ? { [namespace]: resumed } : {},
+      source: { application: checks.application, config: checks.config },
+    });
+  } catch (caught) {
+    if (!isCLIError(caught) && !isScriptBundleFailure(caught)) {
+      return { report: { valid: false, migrationNumbers, skipped: "check_failed" }, error: caught };
+    }
+    return { report: { valid: false, migrationNumbers, error: sectionError(caught) } };
+  }
+  const machineUser = assertDefined(
+    machineUsers?.byNamespace.get(namespace),
+    "a namespace whose pending scripts can run has a machine user to run them",
+  );
+  return { report: { valid: true, migrationNumbers, machineUser } };
+}
+
+/**
+ * Check each namespace's pending migrations the way a deploy checks them while planning: the
+ * in-progress record, then the requested skips and the pending scripts.
  * @param checks - Namespaces and the remote migration state the remote schema check read
  * @returns Per-namespace reports, and the first failure that kept a check from running
  */
-async function checkMigrationsInProgress(
-  checks: MigrationInProgressChecks,
-): Promise<MigrationInProgressResults> {
-  const reports = new Map<string, MigrationInProgressReport>();
+async function checkPendingMigrations(
+  checks: PendingMigrationChecks,
+): Promise<PendingMigrationResults> {
+  const inProgressReports = new Map<string, MigrationInProgressReport>();
+  const scriptReports = new Map<string, PendingMigrationScriptsReport>();
   let error: unknown;
   for (const { namespace, migrationsDir } of checks.namespaces) {
     const remote = checks.remoteResults.find((result) => result.namespace === namespace);
@@ -395,33 +491,31 @@ async function checkMigrationsInProgress(
       `remote migration state missing for namespace "${namespace}"`,
     );
     if (remote?.checkpointMissingLocal) continue;
-    const skipSteps = checks.skipSteps.get(namespace);
-    if (!state.inProgress && !state.inProgressInvalid && !skipSteps) continue;
-    const recorded =
-      state.inProgress && !isStaleMigrationInProgress(state)
-        ? { migrationNumber: state.inProgress.number }
-        : {};
-    try {
-      const outcome = await checkNamespaceInProgress({
-        checks,
-        namespace,
-        migrationsDir,
-        state,
-        checkpointRepaired: remote?.checkpointRepair !== undefined,
-        skipSteps,
-      });
-      if (outcome.kind !== "resume") continue;
-      reports.set(namespace, { valid: true, migrationNumber: outcome.inProgress.number });
-    } catch (caught) {
-      if (!isCLIError(caught)) {
-        error ??= caught;
-        reports.set(namespace, { valid: false, ...recorded, skipped: "check_failed" });
-        continue;
-      }
-      reports.set(namespace, { valid: false, ...recorded, error: errorToJson(caught).error });
-    }
+    const checkpointRepaired = remote?.checkpointRepair !== undefined;
+    const pending = pendingMigrationsAfter(
+      namespace,
+      migrationsDir,
+      remote?.checkpointRepair?.to ?? state.number ?? 0,
+    );
+    const inProgress = await reportNamespaceInProgress({
+      checks,
+      namespace,
+      state,
+      pending,
+      checkpointRepaired,
+    });
+    if (inProgress.report) inProgressReports.set(namespace, inProgress.report);
+    if (inProgress.report?.valid === false) continue;
+    const scripts = await reportPendingScripts({
+      checks,
+      namespace,
+      pending,
+      resumed: inProgress.resumed,
+    });
+    if (scripts.report) scriptReports.set(namespace, scripts.report);
+    error ??= scripts.error;
   }
-  return { reports, ...(error === undefined ? {} : { error }) };
+  return { inProgressReports, scriptReports, ...(error === undefined ? {} : { error }) };
 }
 
 /**
@@ -438,6 +532,7 @@ function buildValidationReports(
     localResults,
     remoteResults,
     inProgressReports,
+    scriptReports,
     unacknowledgedWarnings,
   } = options;
 
@@ -508,6 +603,7 @@ function buildValidationReports(
       warningAcknowledgments = { valid: missing.length === 0, missing };
     }
     const migrationInProgress = inProgressReports?.get(target.namespace);
+    const pendingMigrationScripts = scriptReports?.get(target.namespace);
 
     return {
       namespace: target.namespace,
@@ -516,11 +612,13 @@ function buildValidationReports(
         !remoteSchema.hasDrift &&
         !checkpointMissingLocal &&
         migrationInProgress?.valid !== false &&
+        pendingMigrationScripts?.valid !== false &&
         warningAcknowledgments?.valid !== false,
       migrationFiles: { valid: true },
       localSchema,
       remoteSchema,
       ...(migrationInProgress ? { migrationInProgress } : {}),
+      ...(pendingMigrationScripts ? { pendingMigrationScripts } : {}),
       ...(warningAcknowledgments ? { warningAcknowledgments } : {}),
     };
   });
@@ -643,9 +741,11 @@ async function collectValidationReports(
     };
   }
 
-  const inProgress = await checkMigrationsInProgress({
+  const pending = await checkPendingMigrations({
     client,
     workspaceId,
+    application,
+    config,
     namespaces: checkableNamespaces,
     remoteResults,
     remoteStates,
@@ -661,11 +761,19 @@ async function collectValidationReports(
     reports: buildValidationReports({
       ...localReportOptions,
       remoteResults,
-      inProgressReports: inProgress.reports,
+      inProgressReports: pending.inProgressReports,
+      scriptReports: pending.scriptReports,
     }),
     workspaceId,
-    ...("error" in inProgress ? { remoteError: inProgress.error } : {}),
+    ...("error" in pending ? { remoteError: pending.error } : {}),
   };
+}
+
+function printSectionError(label: string, error: SectionError): void {
+  const [first, ...rest] = String(error.message).split("\n");
+  logger.log(`  ${label}: ${styles.error(first ?? "")}`);
+  const details = typeof error.suggestion === "string" ? error.suggestion.split("\n") : [];
+  for (const line of [...rest, ...details]) logger.log(line ? `    ${line}` : "");
 }
 
 function printValidationReports(reports: NamespaceValidationReport[]): void {
@@ -744,17 +852,23 @@ function printValidationReports(reports: NamespaceValidationReport[]): void {
     }
 
     const inProgress = report.migrationInProgress;
-    if (inProgress?.skipped === "check_failed") {
-      logger.log(`  Migration in progress: ${styles.error("not checked")}`);
-    } else if (inProgress?.error) {
-      const { message, suggestion } = inProgress.error;
-      logger.log(`  Migration in progress: ${styles.error(String(message))}`);
-      if (typeof suggestion === "string") {
-        for (const line of suggestion.split("\n")) logger.log(`    ${line}`);
-      }
+    if (inProgress?.error) {
+      printSectionError("Migration in progress", inProgress.error);
     } else if (inProgress?.migrationNumber !== undefined) {
       logger.log(
         `  Migration in progress: ${styles.success("OK")} (the next deploy resumes ${formatMigrationNumber(inProgress.migrationNumber)})`,
+      );
+    }
+
+    const scripts = report.pendingMigrationScripts;
+    if (scripts?.skipped === "check_failed") {
+      logger.log(`  Pending migration scripts: ${styles.error("not checked")}`);
+    } else if (scripts?.error) {
+      printSectionError("Pending migration scripts", scripts.error);
+    } else if (scripts) {
+      const migrations = scripts.migrationNumbers.map(formatMigrationNumber).join(", ");
+      logger.log(
+        `  Pending migration scripts: ${styles.success("OK")} (${migrations} ${scripts.migrationNumbers.length === 1 ? "runs" : "run"} as '${scripts.machineUser}')`,
       );
     }
 
@@ -896,7 +1010,7 @@ export const validateCommand = defineAppCommand({
   name: "validate",
   description:
     "Run the migration and schema-drift checks that 'deploy' runs before changing anything, without deploying, and exit with a non-zero code when issues are found.",
-  notes: `Migration scripts are checked across the full migration history, not only the pending migrations that \`deploy\` checks. The command does not check the machine user that runs the scripts or whether the scripts can be bundled.`,
+  notes: `Migration scripts are checked across the full migration history, not only the pending migrations that \`deploy\` checks. Like \`deploy\`, the command bundles only the pending scripts and checks the machine user that runs them.`,
   args: z.strictObject({
     ...deploymentArgs,
     namespace: arg(z.string().optional(), {

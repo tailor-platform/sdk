@@ -244,7 +244,8 @@ describe("migration", () => {
         {
           application: {
             authService: { config: { name: "auth", machineUsers } },
-          } as unknown as Pick<Application, "authService">,
+            env: {},
+          } as unknown as Pick<Application, "authService" | "env">,
           config: { path: "/project/tailor.config.ts", db } as unknown as LoadedConfig,
           ...(migrationMachineUserOverride !== undefined && { migrationMachineUserOverride }),
         },
