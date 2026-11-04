@@ -156,6 +156,7 @@ vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => {
 import { reconstructSnapshotFromMigrations } from "#/cli/commands/tailordb/migrate/snapshot";
 import { protoGqlPermission } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
 import { CLIError } from "#/cli/shared/errors";
+import { tailorDBPlanResultContext } from "../test-helpers/plan-results";
 import * as migrationModule from "./migration";
 import { MaintenanceTimeline, ScriptRunTimer } from "./migration-timing";
 import { assertSkippableSteps, removeMigrationWorkflowResources } from "./migration-workflow";
@@ -247,7 +248,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       conflicts: [],
       unmanaged: [],
       resourceOwners: new Set<string>(),
-      context: {
+      context: tailorDBPlanResultContext({
         workspaceId: "test-workspace",
         application: {
           name: "test-app",
@@ -256,17 +257,13 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
             config: { name: "auth", machineUsers: { migrator: {} } },
           },
         } as unknown as Application,
-        tailorDBInputs: [],
-        executorUsedTables: new Set<string>(),
         config: mockConfig,
         noSchemaCheck: true,
-        checkpointRepairs: [],
         namespacesWithMigrations: [{ namespace: "test-ns", migrationsDir: "/test/migrations" }],
         migrationFileState: captureMigrationFileState([
           { namespace: "test-ns", migrationsDir: "/test/migrations" },
         ]),
-        pendingMigrations: [],
-      },
+      }),
     };
   }
 

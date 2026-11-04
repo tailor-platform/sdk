@@ -6,6 +6,7 @@ import {
   sanitizeMigrationLabel,
   type PendingMigration,
 } from "#/cli/commands/tailordb/migrate/types";
+import { tailorDBPlanResultContext } from "../../test-helpers/plan-results";
 import { detectPendingMigrations, type updateMigrationLabel } from "../migration";
 import type { NamespaceWithMigrations } from "#/cli/commands/tailordb/migrate/config";
 import type { DiffChange, MigrationDiff } from "#/cli/commands/tailordb/migrate/diff-calculator";
@@ -293,31 +294,28 @@ export function createPlanResult(options: PlanResultOptions = {}): TailorDBPlanR
       type: changeGroup(options.type),
       gqlPermission: changeGroup(options.gqlPermission),
     },
-    context: {
+    context: tailorDBPlanResultContext({
       workspaceId: WORKSPACE_ID,
       application: {
         name: APP_NAME,
         authService: { config: { name: "auth", machineUsers: { migrator: {} } } },
         ...options.application,
-      },
+      } as Application,
       tailorDBInputs: options.local
         ? [
             {
               namespace: NAMESPACE,
-              config: {},
+              config: { files: [] },
               types: Object.fromEntries(options.local.map((type) => [type.name, type])),
             },
           ]
         : [],
-      executorUsedTables: new Set<string>(),
       config: mockConfig,
       noSchemaCheck: true,
-      checkpointRepairs: [],
       namespacesWithMigrations,
       migrationFileState: captureMigrationFileState(namespacesWithMigrations),
-      pendingMigrations: [],
       ...options.context,
-    },
+    }),
   } as unknown as TailorDBPlanResult;
 }
 
