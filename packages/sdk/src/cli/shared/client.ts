@@ -538,13 +538,15 @@ async function currentAccessToken(source: AccessTokenSource): Promise<string> {
  * cloning are excluded because they have no idempotency key and a lost response
  * is ambiguous: a retry could start a second operation, or fail while the first
  * keeps running.
+ * A connection that closed before the TLS handshake completed is retried for every
+ * unary method, since no request reached the server.
  * As a targeted exception for the deploy/apply flow, a post-retry `AlreadyExists`
  * from an allowlisted Create (see `RETRY_SAFE_CREATE_METHODS`) is treated as
  * success, since it means a prior attempt already committed the resource
- * server-side. A first-attempt `AlreadyExists` from such a Create still
- * surfaces, but is routed to crash/error reporting first (the top-level handler
- * skips `ConnectError`), so the otherwise-silent compound-create race is
- * trackable.
+ * server-side. An `AlreadyExists` from such a Create that no prior attempt could
+ * have committed still surfaces, but is routed to crash/error reporting first (the
+ * top-level handler skips `ConnectError`), so the otherwise-silent compound-create
+ * race is trackable.
  * @internal
  * @returns Retry interceptor
  */
@@ -555,6 +557,7 @@ export function retryInterceptor(): Interceptor {
     }
 
     let lastError: unknown;
+    let priorAttemptMayHaveCommitted = false;
     for (let i = 0; i < MAX_RETRY_ATTEMPTS; i++) {
       if (i > 0) {
         await waitRetryBackoff(i);
@@ -564,33 +567,35 @@ export function retryInterceptor(): Interceptor {
         return await next(req);
       } catch (error) {
         // A retry that comes back AlreadyExists is treated as success: a prior
-        // attempt (the one whose retriable error sent us here) already created
+        // attempt (one whose retriable error sent us here) already created
         // the resource server-side, but its response was lost as
         // Unavailable/ResourceExhausted under load. The identical retry then
         // races against that committed write and fails with `already_exists`.
         // Restricted to RETRY_SAFE_CREATE_METHODS (deploy creates whose response
-        // body is unused) and to actual retries (i > 0).
+        // body is unused) and to retries after an attempt that may have committed.
         if (isRetrySafeCreateAlreadyExists(error, req.method.name)) {
-          if (i > 0) {
+          if (priorAttemptMayHaveCommitted) {
             logger.debug(
               `retry: ${req.method.name} returned AlreadyExists on attempt ${i + 1}; ` +
                 `treating as success (prior attempt likely committed)`,
             );
             return synthesizeEmptyUnaryResponse(req);
           }
-          // First-attempt AlreadyExists on a retry-safe create: no retry of ours
-          // preceded it, so the resource was committed out-of-band (a concurrent
-          // or non-idempotent compound create under load — #1350). The top-level
-          // handler skips ConnectError, so route it to error tracking here before
-          // letting it surface as the deploy error.
+          // No prior attempt of ours could have committed it, so the resource was
+          // committed out-of-band (a concurrent or non-idempotent compound create
+          // under load — #1350). The top-level handler skips ConnectError, so
+          // route it to error tracking here before letting it surface as the
+          // deploy error.
           const { reportCrash } = await import("#/cli/crashreport/index");
           await reportCrash(error, "handledError");
         }
+        const preHandshakeDisconnect = isPreHandshakeDisconnect(error);
         if (
-          !NON_RETRIED_METHODS.has(req.method.name) &&
-          isRetirable(error, req.method.idempotency)
+          preHandshakeDisconnect ||
+          (!NON_RETRIED_METHODS.has(req.method.name) && isRetirable(error, req.method.idempotency))
         ) {
           lastError = error;
+          priorAttemptMayHaveCommitted ||= !preHandshakeDisconnect;
           logger.debug(
             `retry: ${req.method.name} attempt ${i + 1} failed with ` +
               `${retryErrorCodeName(error)}; retrying`,
@@ -789,6 +794,23 @@ function isTransportDisconnectError(error: unknown): error is Error & { code: st
 }
 
 /**
+ * Whether the connection closed before the TLS handshake completed, so no request
+ * reached the server.
+ * @param error - Error thrown by the request
+ * @returns True if the error wraps Node's pre-handshake `ECONNRESET`
+ */
+function isPreHandshakeDisconnect(error: unknown): boolean {
+  if (!(error instanceof ConnectError)) return false;
+  const { cause } = error;
+  return (
+    isTransportDisconnectError(cause) &&
+    cause.code === "ECONNRESET" &&
+    cause.message ===
+      "Client network socket disconnected before secure TLS connection was established"
+  );
+}
+
+/**
  * Determine whether the given error is retriable for the method idempotency.
  * @param error - Error thrown by the request
  * @param idempotency - Method idempotency level
@@ -839,6 +861,8 @@ export function errorHandlingInterceptor(): Interceptor {
               `Failed to ${operation} ${resourceType}${identity}: ${error.rawMessage}`,
               error.code,
               error.metadata,
+              undefined,
+              error.cause,
             ),
             { details: error.details },
           ),
