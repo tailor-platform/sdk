@@ -660,6 +660,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
   // --environment is omitted it defaults to the workspace name.
   const environment = options.environment ?? workspaceName;
   validateEnvironment(environment);
+  const file = workflowFilePath(kind, workspaceName);
 
   if (kind === "tag") {
     validateTagPattern(options.tagPattern);
@@ -734,6 +735,18 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       hasSeeds = await loadHasSeeds(configPath);
     }
     migrationTest = resolveMigrationTest(options, { multi, hasMigrations });
+    if (
+      options.splitPlanEnvironment &&
+      migrationTest &&
+      (migrationTest.environment ?? environment).toLowerCase() === environment.toLowerCase()
+    ) {
+      logger.warn(
+        `${file}: the migration test job, which runs pull request code, stays in the deploy ` +
+          `environment "${environment}" under --split-plan-environment. Re-run ` +
+          "`tailor setup ci branch` with --migration-test-environment set to an environment " +
+          "of its own.",
+      );
+    }
     render = renderBranchWorkflow({
       workspaceName,
       branch,
@@ -804,8 +817,6 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       }),
     };
   }
-
-  const file = workflowFilePath(kind, workspaceName);
 
   const inputs: LockInputs = {
     branch,

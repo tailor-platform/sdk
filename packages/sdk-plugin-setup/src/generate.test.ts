@@ -3500,8 +3500,11 @@ export default defineConfig({
       ) as Workflow;
 
     test("generates the job with the default label and clone data, and records the inputs in the lock", async () => {
+      using warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
       await setupTarget(enabled());
 
+      expect(warn).not.toHaveBeenCalled();
       expect(readWorkflow().jobs["tailor-migration-test"]?.if).toContain(
         "github.event.label.name == 'tailor:migration-test'",
       );
@@ -3530,6 +3533,40 @@ export default defineConfig({
           migrationTestEnvironment: "prod-source",
         },
       });
+    });
+
+    test.each([undefined, "STG"])(
+      "warns that the job stays in the deploy environment beside a split plan environment (--migration-test-environment %s)",
+      async (migrationTestEnvironment) => {
+        using warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+        await setupTarget(
+          enabled({ environment: "stg", splitPlanEnvironment: true, migrationTestEnvironment }),
+        );
+
+        expect(warn.mock.calls).toEqual([
+          [
+            ".github/workflows/tailor-my-app.yml: the migration test job, which runs pull " +
+              'request code, stays in the deploy environment "stg" under ' +
+              "--split-plan-environment. Re-run `tailor setup ci branch` with " +
+              "--migration-test-environment set to an environment of its own.",
+          ],
+        ]);
+      },
+    );
+
+    test("does not warn when the job has its own environment beside a split plan environment", async () => {
+      using warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+      await setupTarget(
+        enabled({
+          environment: "stg",
+          splitPlanEnvironment: true,
+          migrationTestEnvironment: "stg-migration-test",
+        }),
+      );
+
+      expect(warn).not.toHaveBeenCalled();
     });
 
     test("rejects enabling it for a config without TailorDB migrations", async () => {
