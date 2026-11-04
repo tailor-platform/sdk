@@ -74,11 +74,9 @@ export function isContentMapperEnabled(configPath: string): boolean {
     const project = projectFor(file);
     if (!project) return false;
     const { contentMappers } = project.config as { contentMappers?: unknown };
-    return (
-      Array.isArray(contentMappers) &&
-      contentMappers.some(isSdkMapper) &&
-      findUpSync(DEFAULT_CONFIG_PATH, { cwd: path.dirname(project.tsconfigPath) }) === file
-    );
+    if (!Array.isArray(contentMappers) || !contentMappers.some(isSdkMapper)) return false;
+    const found = findUpSync(DEFAULT_CONFIG_PATH, { cwd: path.dirname(project.tsconfigPath) });
+    return found !== undefined && path.resolve(found) === file;
   } catch {
     return false;
   }

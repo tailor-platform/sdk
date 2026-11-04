@@ -1,8 +1,15 @@
 import * as fs from "node:fs";
+import { findUpSync } from "find-up-simple";
 import * as path from "pathe";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { isContentMapperEnabled } from "./content-mapper-config";
 import { tempDir } from "./test-helpers/temp-dir";
+import type * as FindUp from "find-up-simple";
+
+vi.mock("find-up-simple", async (importOriginal) => {
+  const actual = await importOriginal<typeof FindUp>();
+  return { ...actual, findUpSync: vi.fn(actual.findUpSync) };
+});
 
 const MAPPER = { contentMappers: [{ package: "@tailor-platform/sdk", extensions: [".tailor"] }] };
 
@@ -53,6 +60,16 @@ describe("isContentMapperEnabled", () => {
     expect(isContentMapperEnabled(path.join(t.dir, "packages", "app", "tailor.config.ts"))).toBe(
       false,
     );
+  });
+
+  test("matches the config it finds by its normalized path, so a Windows path with backslashes still counts", () => {
+    using t = tempDir("mapper-config-");
+    write(path.join(t.dir, "tsconfig.json"), MAPPER);
+    write(path.join(t.dir, "tailor.config.ts"), "");
+    const configPath = path.join(t.dir, "tailor.config.ts");
+    vi.mocked(findUpSync).mockReturnValueOnce(configPath.replaceAll("/", "\\"));
+
+    expect(isContentMapperEnabled(configPath)).toBe(true);
   });
 
   test("is false when the config is not named tailor.config.ts, which is the only name the mapper looks for", () => {
