@@ -159,34 +159,69 @@ function defaultExpression(field: DDLFieldConfig, label: string): string {
   return scalarLiteral(value, field, label);
 }
 
+const OCTAL_FUNCTION_NAME = "tailor_to_oct";
+
+// to_oct() needs Postgres 17; PGlite 0.2 runs Postgres 16.
+const OCTAL_FUNCTION_DDL = `CREATE OR REPLACE FUNCTION ${OCTAL_FUNCTION_NAME}(n bigint) RETURNS text LANGUAGE sql IMMUTABLE AS ${dollarQuoted(
+  [
+    "WITH RECURSIVE o(q, s) AS (",
+    "  SELECT n / 8, (n % 8)::text",
+    "  UNION ALL SELECT q / 8, (q % 8)::text || s FROM o WHERE q > 0",
+    ")",
+    "SELECT s FROM o WHERE q = 0",
+  ].join("\n"),
+)}`;
+
+interface SerialConversion {
+  /** Expression rendering the sequence's next value in this conversion's base */
+  render: (nextval: string) => string;
+  /** Statements creating the functions `render` calls */
+  functions: readonly string[];
+}
+
+const SERIAL_CONVERSIONS = {
+  d: { render: (nextval) => nextval, functions: [] },
+  o: {
+    render: (nextval) => `${OCTAL_FUNCTION_NAME}(${nextval})`,
+    functions: [OCTAL_FUNCTION_DDL],
+  },
+  x: { render: (nextval) => `to_hex(${nextval})`, functions: [] },
+  X: { render: (nextval) => `upper(to_hex(${nextval}))`, functions: [] },
+} satisfies Record<string, SerialConversion>;
+
+type SerialConversionName = keyof typeof SERIAL_CONVERSIONS;
+
+function isSerialConversion(name: string): name is SerialConversionName {
+  return Object.hasOwn(SERIAL_CONVERSIONS, name);
+}
+
 interface SerialFormat {
   prefix: string;
   width: number;
   zeroPad: boolean;
-  conversion: "d" | "x" | "X";
+  conversion: SerialConversionName;
   suffix: string;
 }
 
-// printf-style with exactly one conversion specifier; octal has no Postgres
-// formatting function to stand in for it.
+// printf-style with exactly one conversion specifier.
 function parseSerialFormat(format: string, label: string): SerialFormat {
   const match =
-    /^(?<prefix>[^%]*)%(?<zero>0?)(?<width>\d*)(?<conversion>[a-zA-Z])(?<suffix>[^%]*)$/.exec(
+    /^(?<prefix>(?:%%|[^%])*)%(?<zero>0?)(?<width>\d*)(?<conversion>[a-zA-Z])(?<suffix>(?:%%|[^%])*)$/.exec(
       format,
     );
   const groups = match?.groups;
   const conversion = groups?.conversion;
-  if (!groups || (conversion !== "d" && conversion !== "x" && conversion !== "X")) {
+  if (!groups || conversion === undefined || !isSerialConversion(conversion)) {
     throw new Error(
-      `Serial format "${format}" of field ${label} is not supported; use a single %d, %x, or %X specifier with an optional width (e.g. "INV-%05d").`,
+      `Serial format "${format}" of field ${label} is not supported; use a single %d, %o, %x, or %X specifier with an optional width (e.g. "INV-%05d"), and %% for a literal %.`,
     );
   }
   return {
-    prefix: groups.prefix ?? "",
+    prefix: (groups.prefix ?? "").replaceAll("%%", "%"),
     zeroPad: groups.zero === "0",
     width: groups.width ? Number(groups.width) : 0,
     conversion,
-    suffix: groups.suffix ?? "",
+    suffix: (groups.suffix ?? "").replaceAll("%%", "%"),
   };
 }
 
@@ -201,17 +236,22 @@ function sequenceRange(serial: NonNullable<DDLFieldConfig["serial"]>): string {
   return range.join(" ");
 }
 
-const SERIAL_CONVERSIONS: Record<SerialFormat["conversion"], (nextval: string) => string> = {
-  d: (nextval) => nextval,
-  x: (nextval) => `to_hex(${nextval})`,
-  X: (nextval) => `upper(to_hex(${nextval}))`,
-};
+interface SqlWithFunctions {
+  sql: string;
+  /** Statements creating the functions `sql` calls */
+  functions: readonly string[];
+}
 
-function serialStringDefault(sequence: string, format: string | undefined, label: string): string {
+function serialStringDefault(
+  sequence: string,
+  format: string | undefined,
+  label: string,
+): SqlWithFunctions {
   const nextval = `nextval(${stringLiteral(sequence)})`;
-  if (format === undefined) return `(${nextval}::text)`;
+  if (format === undefined) return { sql: `(${nextval}::text)`, functions: [] };
   const { prefix, width, zeroPad, conversion, suffix } = parseSerialFormat(format, label);
-  const number = SERIAL_CONVERSIONS[conversion](nextval);
+  const { render, functions } = SERIAL_CONVERSIONS[conversion];
+  const number = render(nextval);
   let value = conversion === "d" ? `${number}::text` : number;
   if (width > 0) {
     value = `format('%${width}s', ${number})`;
@@ -222,10 +262,14 @@ function serialStringDefault(sequence: string, format: string | undefined, label
     value,
     ...(suffix ? [stringLiteral(suffix)] : []),
   ];
-  return `(${parts.join(" || ")})`;
+  return { sql: `(${parts.join(" || ")})`, functions };
 }
 
-function columnDefinition(tableName: string, fieldName: string, field: DDLFieldConfig): string {
+function columnDefinition(
+  tableName: string,
+  fieldName: string,
+  field: DDLFieldConfig,
+): SqlWithFunctions {
   const column = identifier(fieldName);
   const label = `${identifier(tableName)}.${column}`;
   const parts = [column, columnType(field)];
@@ -234,14 +278,17 @@ function columnDefinition(tableName: string, fieldName: string, field: DDLFieldC
     if (field.type === "integer") {
       parts.push(`GENERATED BY DEFAULT AS IDENTITY (${sequenceRange(field.serial)})`);
       if (field.unique) parts.push("UNIQUE");
-      return parts.join(" ");
+      return { sql: parts.join(" "), functions: [] };
     }
     if (field.required) parts.push("NOT NULL");
     if (field.unique) parts.push("UNIQUE");
-    parts.push(
-      `DEFAULT ${serialStringDefault(sequenceName(tableName, fieldName), field.serial.format, label)}`,
+    const serialDefault = serialStringDefault(
+      sequenceName(tableName, fieldName),
+      field.serial.format,
+      label,
     );
-    return parts.join(" ");
+    parts.push(`DEFAULT ${serialDefault.sql}`);
+    return { sql: parts.join(" "), functions: serialDefault.functions };
   }
 
   const hasDefault = field.default !== undefined;
@@ -249,7 +296,7 @@ function columnDefinition(tableName: string, fieldName: string, field: DDLFieldC
   if (field.required && (hasDefault || !filledOnCreate)) parts.push("NOT NULL");
   if (field.unique) parts.push("UNIQUE");
   if (hasDefault) parts.push(`DEFAULT ${defaultExpression(field, label)}`);
-  return parts.join(" ");
+  return { sql: parts.join(" "), functions: [] };
 }
 
 interface Reference {
@@ -582,18 +629,18 @@ export interface TableDDLOptions {
 }
 
 /**
- * DDL statements that create one table: any sequences its string serial
- * fields draw from, the table, the sequences' ownership of their columns,
- * its unique indexes, then the triggers that enforce the references Postgres
- * cannot express as a FOREIGN KEY (inside array and nested columns): one
- * checking the references the table holds, one refusing to delete a row, and
- * one refusing to change the key of a row, that another table's array or
- * nested value still points at. Every statement
- * is `IF NOT EXISTS` or otherwise idempotent, so re-applying the script on a
- * database that already has the table is a no-op. Owning a sequence makes
- * `DROP TABLE` drop it and `TRUNCATE ... RESTART IDENTITY` reset it to the
- * configured start. Index names end in `_idx` so they cannot take the
- * `<table>_<column>_key` name Postgres gives a UNIQUE column, which
+ * DDL statements that create one table: the functions its string serial
+ * formats call, any sequences its string serial fields draw from, the table,
+ * the sequences' ownership of their columns, its unique indexes, then the
+ * triggers that enforce the references Postgres cannot express as a FOREIGN
+ * KEY (inside array and nested columns): one checking the references the table
+ * holds, one refusing to delete a row, and one refusing to change the key of a
+ * row, that another table's array or nested value still points at. Every
+ * statement is `IF NOT EXISTS` or otherwise idempotent, so re-applying the
+ * script on a database that already has the table is a no-op. Owning a
+ * sequence makes `DROP TABLE` drop it and `TRUNCATE ... RESTART IDENTITY`
+ * reset it to the configured start. Index names end in `_idx` so they cannot
+ * take the `<table>_<column>_key` name Postgres gives a UNIQUE column, which
  * `IF NOT EXISTS` would otherwise silently skip.
  * @param table - Table name, fields, and indexes
  * @param options - The schema's other tables, and references to leave to later statements
@@ -603,6 +650,7 @@ export interface TableDDLOptions {
 export function generateTableDDL(table: DDLTableConfig, options: TableDDLOptions = {}): string[] {
   const tableIdentifier = identifier(table.name);
   const tables = new Map((options.tables ?? [table]).map((t) => [t.name, t]));
+  const functions = new Set<string>();
   const sequences: string[] = [];
   const ownerships: string[] = [];
   const columns = [`  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid()`];
@@ -625,7 +673,9 @@ export function generateTableDDL(table: DDLTableConfig, options: TableDDLOptions
       constraint && !options.deferredReferences?.has(fieldName)
         ? ` ${referenceClause(constraint)}`
         : "";
-    columns.push(`  ${columnDefinition(table.name, fieldName, field)}${inline}`);
+    const column = columnDefinition(table.name, fieldName, field);
+    for (const statement of column.functions) functions.add(statement);
+    columns.push(`  ${column.sql}${inline}`);
   }
 
   const indexes = [
@@ -646,6 +696,7 @@ export function generateTableDDL(table: DDLTableConfig, options: TableDDLOptions
   }
 
   return [
+    ...functions,
     ...sequences,
     `CREATE TABLE IF NOT EXISTS ${tableIdentifier} (\n${columns.join(",\n")}\n)`,
     ...ownerships,

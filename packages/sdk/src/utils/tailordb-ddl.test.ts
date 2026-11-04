@@ -299,8 +299,46 @@ describe("generateTableDDL", () => {
       );
     });
 
+    test("a doubled %% in the text around the specifier is a literal %", () => {
+      expect(
+        columnLine({ n: { type: "string", serial: { start: 1, format: "100%%-%05d" } } }, "n"),
+      ).toBe(
+        "\"n\" text DEFAULT ('100%-' || translate(format('%5s', nextval('\"Item_n_88d982cf_seq\"')), ' ', '0'))",
+      );
+      expect(
+        columnLine({ n: { type: "string", serial: { start: 1, format: "%d%%%%" } } }, "n"),
+      ).toBe("\"n\" text DEFAULT (nextval('\"Item_n_88d982cf_seq\"')::text || '%%')");
+    });
+
+    test("octal serial formats render through a helper function, padded like %d", () => {
+      expect(columnLine({ n: { type: "string", serial: { start: 1, format: "%o" } } }, "n")).toBe(
+        '"n" text DEFAULT (tailor_to_oct(nextval(\'"Item_n_88d982cf_seq"\')))',
+      );
+      expect(columnLine({ n: { type: "string", serial: { start: 1, format: "%5o" } } }, "n")).toBe(
+        "\"n\" text DEFAULT (format('%5s', tailor_to_oct(nextval('\"Item_n_88d982cf_seq\"'))))",
+      );
+      expect(
+        columnLine({ n: { type: "string", serial: { start: 1, format: "A%%%05o-x" } } }, "n"),
+      ).toBe(
+        "\"n\" text DEFAULT ('A%' || translate(format('%5s', tailor_to_oct(nextval('\"Item_n_88d982cf_seq\"'))), ' ', '0') || '-x')",
+      );
+    });
+
+    test("a table with octal serials creates the helper function once, before its sequences", () => {
+      const statements = generateTableDDL(
+        table({
+          a: { type: "string", serial: { start: 1, format: "%o" } },
+          b: { type: "string", serial: { start: 1, format: "B-%04o" } },
+        }),
+      );
+      const functions = statements.filter((s) => s.startsWith("CREATE OR REPLACE FUNCTION"));
+      expect(functions).toHaveLength(1);
+      expect(statements[0]).toBe(functions[0]);
+      expect(functions[0]).toMatch(/^CREATE OR REPLACE FUNCTION tailor_to_oct\(n bigint\)/);
+    });
+
     test("rejects serial formats it cannot reproduce", () => {
-      for (const format of ["%o", "%d-%d", "no-specifier", "%s"]) {
+      for (const format of ["%d-%d", "no-specifier", "%s", "%d%", "%%d"]) {
         expect(() =>
           generateTableDDL(table({ n: { type: "string", serial: { start: 1, format } } })),
         ).toThrow(/"n"/);
@@ -405,6 +443,36 @@ describe("generateSchemaDDL", () => {
 
   test("is empty for no tables", () => {
     expect(generateSchemaDDL([])).toBe("");
+  });
+});
+
+describe("serial formats on PGlite", { timeout: 30_000 }, () => {
+  const octal = (name: string): DDLTableConfig => ({
+    name,
+    fields: {
+      id: { type: "uuid" },
+      code: { type: "string", serial: { start: 7, format: "A%%%05o-x" } },
+      label: { type: "string", serial: { start: 1, format: "100%%-%05d" } },
+    },
+  });
+
+  test("render octal and literal % like the platform, across re-applied scripts", async () => {
+    const db = newPglite();
+    const script = generateSchemaDDL([octal("First"), octal("Second")]);
+    await db.exec(script);
+    await db.exec(script);
+    const insert = async (tableName: string) => {
+      const { rows } = await db.query<{ code: string; label: string }>(
+        `INSERT INTO "${tableName}" DEFAULT VALUES RETURNING "code", "label"`,
+      );
+      return rows[0];
+    };
+
+    expect(await insert("First")).toEqual({ code: "A%00007-x", label: "100%-00001" });
+    expect(await insert("First")).toEqual({ code: "A%00010-x", label: "100%-00002" });
+    await db.query(`SELECT setval(pg_get_serial_sequence('"First"', 'code'), 63)`);
+    expect(await insert("First")).toEqual({ code: "A%00100-x", label: "100%-00003" });
+    expect(await insert("Second")).toEqual({ code: "A%00007-x", label: "100%-00001" });
   });
 });
 
