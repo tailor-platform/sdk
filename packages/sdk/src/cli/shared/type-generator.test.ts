@@ -5,6 +5,7 @@ import { t } from "#/configure/types/type";
 import {
   extractAttributesFromConfig,
   generateTypeDefinition,
+  generateTypeDefinitionFromConfig,
   resolveTypeDefinitionPath,
 } from "./type-generator";
 import type { AttributeListConfig, AttributesConfig } from "./type-generator";
@@ -608,5 +609,26 @@ describe("generateTypeDefinition DateRepresentationRegistry", () => {
     expect(generateTypeDefinition(undefined, undefined)).toContain(
       "interface DateRepresentationRegistry {}",
     );
+  });
+});
+
+describe("generateTypeDefinitionFromConfig", () => {
+  test("declares the registries of the config without writing a file", () => {
+    const config = {
+      name: "test-app",
+      env: { stage: "dev" },
+      auth: defineAuth("auth", {
+        machineUserAttributes: { role: t.enum(["ADMIN", "WORKER"]) },
+        machineUsers: { admin: { attributes: { role: "ADMIN" } } },
+      }),
+    };
+
+    const content = generateTypeDefinitionFromConfig(config);
+
+    expect(content).toContain('role: "ADMIN" | "WORKER";');
+    expect(content).toContain("admin: true;");
+    expect(content).toContain("stage: string;");
+    expect(content).toContain('"test-app": "unset";');
+    expect(content).toContain('declare module "@tailor-platform/sdk"');
   });
 });

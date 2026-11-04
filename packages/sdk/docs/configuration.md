@@ -1,5 +1,5 @@
 ---
-description: "Configure your application in tailor.config.ts, including application settings, services, bundling, auth, static websites, secrets, environment variables, workflows, and plugins."
+description: "Configure your application in tailor.config.ts, including application settings, services, bundling, auth, static websites, secrets, environment variables, workflows, plugins, and type definitions."
 ---
 
 # Configuration
@@ -126,6 +126,22 @@ export default defineConfig({
   maintenanceMode: "migration",
 });
 ```
+
+### Type Definitions Without `tailor generate`
+
+`tailor generate` and `tailor deploy` write `tailor.d.ts`, which declares the names and values your config defines (`Env`, `Attributes`, `MachineUserName`, `IdpName`, and so on) so your code is checked and autocompleted against them. With TypeScript 7.1 or later, TypeScript can read them from `tailor.config.ts` itself, so they are current without running either command.
+
+Add the SDK as a content mapper for `.tailor` files in `tsconfig.json`:
+
+```json
+{
+  "contentMappers": [{ "package": "@tailor-platform/sdk", "extensions": [".tailor"] }]
+}
+```
+
+Run `tsc` with `--runExternalCode`. TypeScript then runs your `tailor.config.ts` and the files it imports each time it checks the project, the same code `tailor generate` loads; without the flag it reports error TS18068 instead. Enable it only for projects whose code you trust. You do not create or import any `.tailor` file; the SDK ships the one TypeScript reads.
+
+Once this works, delete `tailor.d.ts`. While the file remains, TypeScript merges it with what it reads from `tailor.config.ts`, so a name you removed from the config (a machine user you deleted, for example) is still accepted until you delete the file. `tailor generate` and `tailor deploy` still write `tailor.d.ts` each time they run.
 
 ### Service Configuration
 

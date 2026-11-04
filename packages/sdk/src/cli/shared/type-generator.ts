@@ -402,6 +402,36 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
 }
 
 /**
+ * Generate the contents of the user-defined type definition file for an app config.
+ * @param config - Application config with resolved `env` values
+ * @returns Generated type definition source
+ */
+export function generateTypeDefinitionFromConfig(config: ResolvedEnvAppConfig): string {
+  const {
+    attributes,
+    attributeList,
+    machineUserNames,
+    idpNames,
+    connectionNames,
+    aiGatewayNames,
+    authNamespaceNames,
+    secretVaultNames,
+  } = extractAttributesFromConfig(config);
+  return generateTypeDefinition(
+    attributes,
+    attributeList,
+    config.env,
+    machineUserNames,
+    idpNames,
+    connectionNames,
+    aiGatewayNames,
+    authNamespaceNames,
+    secretVaultNames,
+    { appName: config.name, defaultDateRepresentation: config.defaultDateRepresentation },
+  );
+}
+
+/**
  * Resolve the output path for the generated type definition file.
  *
  * When the `TAILOR_DTS_PATH` environment variable is set, the value is
@@ -481,19 +511,7 @@ export async function generateUserTypes(options: GenerateUserTypesOptions): Prom
       logger.debug(`Extracted Env: ${JSON.stringify(env)}`);
     }
 
-    // Generate type definition
-    const typeDefContent = generateTypeDefinition(
-      attributes,
-      attributeList,
-      env,
-      machineUserNames,
-      idpNames,
-      connectionNames,
-      aiGatewayNames,
-      authNamespaceNames,
-      secretVaultNames,
-      { appName: config.name, defaultDateRepresentation: config.defaultDateRepresentation },
-    );
+    const typeDefContent = generateTypeDefinitionFromConfig(config);
     const outputPath = resolveTypeDefinitionPath(configPath);
 
     // Write to file

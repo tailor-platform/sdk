@@ -2,6 +2,7 @@ export const entry = [
   "src/configure/index.ts",
   "src/cli/main.ts",
   "src/cli/lib.ts",
+  "src/cli/content-mapper/mapper-main.ts",
   "src/utils/test/index.ts",
   "src/kysely/index.ts",
   "src/plugin/index.ts",
