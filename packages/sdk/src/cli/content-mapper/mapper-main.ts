@@ -1,4 +1,3 @@
-// The process TypeScript starts as the `.tailor` content mapper (`typescript.contentMapper` in package.json).
 import { createLazyHandlers } from "./lazy-handlers";
 import { serveJsonRpc } from "./rpc";
 

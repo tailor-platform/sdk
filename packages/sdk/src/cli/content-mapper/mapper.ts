@@ -37,6 +37,18 @@ const ATOM_SPAN = 1;
 const DEFINITION_FEATURES = (1 << 3) | (1 << 4);
 const PROJECT_NOT_OPENED = "The project was not opened; restart the TypeScript server";
 
+function configCandidatesBelow(searchFrom: string, configPath: string): string[] {
+  const candidates: string[] = [];
+  for (
+    let dir = searchFrom;
+    dir !== path.dirname(configPath) && dir !== path.dirname(dir);
+    dir = path.dirname(dir)
+  ) {
+    candidates.push(path.join(dir, DEFAULT_CONFIG_PATH));
+  }
+  return candidates;
+}
+
 async function loadProject(
   tsconfigPath: string,
   previousWatchedFiles: string[] | undefined,
@@ -53,21 +65,21 @@ async function loadProject(
   try {
     process.chdir(path.dirname(configPath));
     beginUserModuleRun();
-    const { value, files } = await collectLoadedFiles(async () => {
+    const { outcome, files } = await collectLoadedFiles(async () => {
       const { config } = await loadConfig(configPath);
       return generateTypeDefinitionFromConfig(config);
     });
-    return {
-      configPath,
-      registryTypes: value,
-      watchedFiles: [...new Set([configPath, ...files])],
-    };
-  } catch (error) {
-    return {
-      configPath,
-      error: errorSummary(error),
-      watchedFiles: previousWatchedFiles ?? [configPath],
-    };
+    const watchedFiles = [
+      ...new Set([configPath, ...configCandidatesBelow(searchFrom, configPath), ...files]),
+    ];
+    if (outcome.status === "rejected") {
+      return {
+        configPath,
+        error: errorSummary(outcome.reason),
+        watchedFiles: [...new Set([...(previousWatchedFiles ?? []), ...watchedFiles])],
+      };
+    }
+    return { configPath, registryTypes: outcome.value, watchedFiles };
   } finally {
     process.chdir(cwd);
   }

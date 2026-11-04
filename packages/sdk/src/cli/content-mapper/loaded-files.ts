@@ -24,15 +24,16 @@ export function observeLoadedFiles(): void {
  * Run `load` and collect the project files it imported, when
  * {@link observeLoadedFiles} is active. Calls must not overlap.
  * @param load - Work that imports project modules
- * @returns What `load` resolved to, and the files it imported
+ * @returns How `load` settled, and the files it imported even when it failed
  */
 export async function collectLoadedFiles<T>(
   load: () => Promise<T>,
-): Promise<{ value: T; files: string[] }> {
+): Promise<{ outcome: PromiseSettledResult<T>; files: string[] }> {
   const files = new Set<string>();
   collecting = files;
   try {
-    return { value: await load(), files: [...files] };
+    const [outcome] = await Promise.allSettled([load()]);
+    return { outcome, files: [...files] };
   } finally {
     collecting = undefined;
   }

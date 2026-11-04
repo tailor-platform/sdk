@@ -114,6 +114,24 @@ describe("content mapper", () => {
     ]);
   });
 
+  test("watches the tailor.config.ts a nearer directory could add above the one it uses", async () => {
+    using p = project();
+    const nested = path.join(p.dir, "packages", "app");
+    fs.mkdirSync(nested, { recursive: true });
+    const handlers = createContentMapperHandlers();
+    await handlers.initialize({ positionEncodings: ["utf-16"] });
+
+    const opened = await open(handlers, path.join(nested, "tsconfig.json"));
+
+    expect(opened.watchedFiles).toEqual(
+      expect.arrayContaining([
+        p.config,
+        path.join(nested, "tailor.config.ts"),
+        path.join(p.dir, "packages", "tailor.config.ts"),
+      ]),
+    );
+  });
+
   test("reports a project without tailor.config.ts and watches for one", async () => {
     const dir = makeTempDir("sdk-content-mapper-no-config-");
     try {
