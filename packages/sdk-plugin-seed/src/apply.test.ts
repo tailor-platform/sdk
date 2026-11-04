@@ -800,6 +800,46 @@ describe("seedApplyCommand", () => {
     );
   });
 
+  test("bundles the TailorDB seed script with the build options of the config", async () => {
+    sdk.loadSeedContext.mockResolvedValue({
+      config: { path: "/workspace/tailor.config.ts", buildOptions: { inlineSourcemap: false } },
+      distPath: "/seed",
+      idpUser: undefined,
+      machineUserName: undefined,
+      namespaces: [
+        {
+          dependencies: { User: [] },
+          namespace: "tailordb",
+          requiredFields: { User: [] },
+          selfRefTypes: [],
+          types: ["User"],
+        },
+      ],
+    });
+    jsonl.loadSeedData.mockImplementation(() => ({ User: [{ id: "u1" }] }));
+    sdk.bundleSeedScript.mockResolvedValue({
+      bundledCode: "code",
+      namespace: "tailordb",
+      typesIncluded: ["User"],
+    });
+    sdk.chunkSeedData.mockReturnValue([{ data: { User: [{ id: "u1" }] }, order: ["User"] }]);
+    workflow.runScript.mockResolvedValue({
+      error: undefined,
+      logs: "",
+      result: '{"success":true,"processed":{},"errors":[]}',
+      success: true,
+    });
+
+    await runApply(["--skip-idp"]);
+
+    expect(sdk.bundleSeedScript).toHaveBeenCalledWith(
+      "tailordb",
+      ["User"],
+      "/workspace",
+      expect.objectContaining({ inlineSourcemap: false }),
+    );
+  });
+
   test("stops running the remaining TailorDB chunks after one fails", async () => {
     jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
       Object.fromEntries(typeNames.map((typeName) => [typeName, [{ id: "u1" }]])),

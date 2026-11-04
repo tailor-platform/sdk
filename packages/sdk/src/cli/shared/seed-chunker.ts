@@ -164,6 +164,14 @@ export function chunkSeedData(options: ChunkSeedDataOptions): SeedChunk[] {
   return chunks.map((chunk) => ({ ...chunk, total }));
 }
 
+const ESCAPED_TO_6_BYTES = /[<>&]/g;
+const ESCAPED_FROM_3_TO_6_BYTES = /[\u2028\u2029]/g;
+
+// The platform decodes the start argument and encodes it again with Go's json.Marshal before it
+// checks the size, and that encoding writes <, > and & as \u003c, \u003e and \u0026 (6 bytes
+// instead of 1) and U+2028 and U+2029 as \u2028 and \u2029 (6 bytes instead of 3).
 function byteSize(str: string): number {
-  return new TextEncoder().encode(str).length;
+  const escaped = (str.match(ESCAPED_TO_6_BYTES)?.length ?? 0) * 5;
+  const escapedLineSeparators = (str.match(ESCAPED_FROM_3_TO_6_BYTES)?.length ?? 0) * 3;
+  return new TextEncoder().encode(str).length + escaped + escapedLineSeparators;
 }
