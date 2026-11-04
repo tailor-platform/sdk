@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
+import { isContentMapperEnabled } from "#/cli/shared/content-mapper-config";
 import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
 import type { ResolvedEnvAppConfig } from "#/cli/shared/config-loader";
@@ -466,6 +467,15 @@ interface GenerateUserTypesOptions {
 export async function generateUserTypes(options: GenerateUserTypesOptions): Promise<void> {
   const { config, configPath } = options;
   try {
+    if (!process.env.TAILOR_DTS_PATH && isContentMapperEnabled(configPath)) {
+      const existing = resolveTypeDefinitionPath(configPath);
+      if (fs.existsSync(existing)) {
+        logger.warn(
+          `${path.relative(process.cwd(), existing)} is no longer updated because tsconfig.json enables the content mapper; delete it, since it keeps names you removed from the config`,
+        );
+      }
+      return;
+    }
     const {
       attributes,
       attributeList,

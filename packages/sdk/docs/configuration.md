@@ -141,7 +141,9 @@ Add the SDK as a content mapper for `.tailor` files in `tsconfig.json`:
 
 Run `tsc` with `--runExternalCode`. TypeScript then runs your `tailor.config.ts` and the files it imports each time it checks the project, the same code `tailor generate` loads; without the flag it reports error TS18068 instead. Enable it only for projects whose code you trust. You do not create or import any `.tailor` file; the SDK ships the one TypeScript reads.
 
-Once this works, delete `tailor.d.ts`. While the file remains, TypeScript merges it with what it reads from `tailor.config.ts`, so a name you removed from the config (a machine user you deleted, for example) is still accepted until you delete the file. `tailor generate` and `tailor deploy` still write `tailor.d.ts` each time they run.
+Once this works, `tailor generate` and `tailor deploy` stop writing `tailor.d.ts`, and warn when an old copy remains. Delete it: while the file remains, TypeScript merges it with what it reads from `tailor.config.ts`, so a name you removed from the config (a machine user you deleted, for example) is still accepted.
+
+The commands read the `tsconfig.json` that applies to `tailor.config.ts`: the nearest one that includes the file, following `extends`, so a base config shared by a monorepo's packages works. A `tsconfig.json` that only lists `references` is not followed; put `contentMappers` in the one that includes `tailor.config.ts`, or the commands keep writing `tailor.d.ts`. If you set `TAILOR_DTS_PATH`, they write the file there regardless.
 
 ### Service Configuration
 
