@@ -33,6 +33,7 @@ import {
 import {
   describeMigrationCheckpoint,
   fetchRemoteMigrationState,
+  isStaleMigrationInProgress,
   matchesLocalMigrationHistory,
   type RemoteMigrationState,
 } from "./remote-state";
@@ -62,6 +63,7 @@ import {
   type TailorDBSnapshotType,
   type NormalizedSchemaSnapshot,
 } from "./snapshot";
+import { createSnapshotRecord } from "./snapshot-normalization";
 import {
   type MigrationCheckpointRepair,
   type MigrationInProgress,
@@ -317,6 +319,21 @@ function stripKeptFieldScripts(fields: Record<string, SnapshotFieldConfig>, name
   if (kept) fields[name] = stripFieldScriptProps(kept);
 }
 
+function loadMigrationDiff(migrationsDir: string, migrationNumber: number): MigrationDiff | null {
+  const diffPath = getMigrationFilePath(migrationsDir, migrationNumber, "diff");
+  return fs.existsSync(diffPath) ? loadDiff(diffPath) : null;
+}
+
+function reconstructPreMigrationSnapshot(
+  migrationsDir: string,
+  migrationNumber: number,
+): SchemaSnapshot | null {
+  const previous = reconstructSnapshotFromMigrations(migrationsDir, migrationNumber - 1);
+  const diff = loadMigrationDiff(migrationsDir, migrationNumber);
+  if (!previous || !diff) return null;
+  return buildInProgressSnapshot(previous, diff);
+}
+
 /**
  * The schema a namespace's remote must match. Each table may instead match `postPhase`, the schema
  * the Post-phase of a migration whose steps are in progress writes, because a deploy can stop
@@ -337,9 +354,8 @@ function reconstructExpectedRemoteSchema(
     return snapshot && { snapshot };
   }
   const previous = reconstructSnapshotFromMigrations(migrationsDir, inProgress.number - 1);
-  const diffPath = getMigrationFilePath(migrationsDir, inProgress.number, "diff");
-  if (!previous || !fs.existsSync(diffPath)) return null;
-  const diff = loadDiff(diffPath);
+  const diff = loadMigrationDiff(migrationsDir, inProgress.number);
+  if (!previous || !diff) return null;
   return {
     snapshot: buildInProgressSnapshot(previous, diff),
     ...(inProgress.kind === "steps" && {
@@ -504,6 +520,87 @@ function findUnfinishedRemovals(
     .toSorted();
 }
 
+type InterruptedMigrationCheck = {
+  remote: RemoteSchema;
+  namespace: string;
+  migrationsDir: string;
+  checkpoint: number;
+  checkpointSnapshot: SchemaSnapshot;
+  config: LoadedConfig;
+  tailorDBInputs: ReadonlyArray<TailorDBDeployInput>;
+};
+
+function withGqlPermissionsOf(snapshot: SchemaSnapshot, source: SchemaSnapshot): SchemaSnapshot {
+  const tables = createSnapshotRecord<TailorDBSnapshotType>();
+  for (const [tableName, type] of Object.entries(snapshot.tables)) {
+    const { permissions, ...rest } = type;
+    const { gql: _, ...otherPermissions } = permissions ?? {};
+    const gql = source.tables[tableName]?.permissions?.gql;
+    const tablePermissions = gql ? { ...otherPermissions, gql } : otherPermissions;
+    tables[tableName] =
+      Object.keys(tablePermissions).length > 0 ? { ...rest, permissions: tablePermissions } : rest;
+  }
+  return { ...snapshot, tables };
+}
+
+/**
+ * Find the migration whose Pre-phase an interrupted deploy left in place: every table must
+ * match the checkpoint, or match the next migration's Pre-phase schema, with the GraphQL
+ * permission of either, because the Pre-phase writes permissions after every table. With
+ * maintenance mode on, a table in the Pre-phase shape must also be in maintenance mode, and the
+ * settings maintenance mode overrides are not compared on tables in maintenance mode. A table
+ * the checkpoint's migration deletes never counts as Pre-phase shaped, because a deploy whose
+ * cleanup failed leaves it in place.
+ * @param check - Remote schema and the checkpoint it is compared against
+ * @returns The next migration's number, or `undefined` when a table matches neither schema
+ */
+function findInterruptedMigration(check: InterruptedMigrationCheck): number | undefined {
+  const {
+    remote,
+    namespace,
+    migrationsDir,
+    checkpoint,
+    checkpointSnapshot,
+    config,
+    tailorDBInputs,
+  } = check;
+  const nextMigration = checkpoint + 1;
+  const prePhaseSnapshot = reconstructPreMigrationSnapshot(migrationsDir, nextMigration);
+  if (!prePhaseSnapshot) return undefined;
+  const maintenanceMode = config.maintenanceMode !== false;
+  const compare = (snapshot: SchemaSnapshot) =>
+    compareRemoteSchemaWithSnapshot(
+      remote,
+      namespace,
+      snapshot,
+      config,
+      tailorDBInputs,
+      maintenanceMode ? MIGRATION_RESTRICTION_SETTINGS : [],
+      "maintenance-mode",
+    );
+  const restrictedTables = new Set(
+    remote.types
+      .filter((type) => isMigrationRestricted(type.schema?.settings))
+      .map((type) => type.name),
+  );
+  const checkpointDiff = loadMigrationDiff(migrationsDir, checkpoint);
+  const deletedByCheckpoint = checkpointDiff
+    ? getTablesDeletedAfterCheckpoint(checkpointDiff)
+    : new Set();
+  const driftedTables = (snapshot: SchemaSnapshot) =>
+    new Set(compare(snapshot).map((drift) => drift.tableName));
+  const prePhaseMismatches = driftedTables(prePhaseSnapshot).intersection(
+    driftedTables(withGqlPermissionsOf(prePhaseSnapshot, checkpointSnapshot)),
+  );
+  const accepted = compare(checkpointSnapshot).every(
+    (drift) =>
+      !prePhaseMismatches.has(drift.tableName) &&
+      !deletedByCheckpoint.has(drift.tableName) &&
+      (!maintenanceMode || restrictedTables.has(drift.tableName)),
+  );
+  return accepted ? nextMigration : undefined;
+}
+
 function notDeployedResult(namespace: string): RemoteSchemaVerificationResult {
   return {
     namespace,
@@ -520,6 +617,13 @@ export interface RemoteSchemaVerificationOptions {
    * drift while the namespace records that their deletion did not finish, since a deploy deletes them.
    */
   acceptUnfinishedRemovals?: boolean;
+  /**
+   * Accept a namespace with no migration recorded as in progress whose tables each have the
+   * checkpoint's shape or the Pre-phase shape of the next migration, and report that migration
+   */
+  acceptInterruptedMigration?: boolean;
+  /** Collects the remote migration state of each namespace, as the verification read it. */
+  remoteStates?: Map<string, RemoteMigrationState>;
 }
 
 /**
@@ -549,6 +653,7 @@ export async function verifyRemoteSchema(
       client,
       resourceTrn(workspaceId, "tailordb", namespace),
     );
+    options.remoteStates?.set(namespace, remoteState);
     const location = locateRemoteCheckpoint(
       remoteState,
       migrationsDir,
@@ -634,12 +739,32 @@ export async function verifyRemoteSchema(
       );
       drifts = drifts.filter((drift) => postPhaseDriftTables.has(drift.tableName));
     }
+    const noMigrationInProgress =
+      !remoteState.inProgressInvalid &&
+      (remoteState.inProgress === null || isStaleMigrationInProgress(remoteState));
+    const interruptedMigration =
+      drifts.length > 0 &&
+      options.acceptInterruptedMigration &&
+      noMigrationInProgress &&
+      !checkpointRepair
+        ? findInterruptedMigration({
+            remote: verifiedRemote,
+            namespace,
+            migrationsDir,
+            checkpoint: remoteMigrationNumber,
+            checkpointSnapshot: expected.snapshot,
+            config,
+            tailorDBInputs,
+          })
+        : undefined;
 
     results.push({
       namespace,
       remoteMigrationNumber,
-      drifts,
-      hasDrift: drifts.length > 0,
+      ...(interruptedMigration === undefined
+        ? { drifts, hasDrift: drifts.length > 0 }
+        : { drifts: [], hasDrift: false, interruptedMigration }),
+      ...(leftInMaintenanceMode ? { leftInMaintenanceMode } : {}),
       ...(checkpointUnset ? { checkpointUnset } : {}),
       ...(checkpointRepair && drifts.length === 0 ? { checkpointRepair } : {}),
       ...(remoteState.inProgress ? { migrationInProgress: remoteState.inProgress } : {}),

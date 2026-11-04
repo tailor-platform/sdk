@@ -834,10 +834,13 @@ export function errorHandlingInterceptor(): Interceptor {
         // Re-throw as ConnectError with enhanced message to avoid re-wrapping
         // Use rawMessage to avoid duplicating the error code prefix
         throw withErrorDiagnostics(
-          new ConnectError(
-            `Failed to ${operation} ${resourceType}${identity}: ${error.rawMessage}`,
-            error.code,
-            error.metadata,
+          Object.assign(
+            new ConnectError(
+              `Failed to ${operation} ${resourceType}${identity}: ${error.rawMessage}`,
+              error.code,
+              error.metadata,
+            ),
+            { details: error.details },
           ),
           { context: { method: req.method.name, identifiers } },
         );

@@ -98,16 +98,16 @@ tailor tailordb migration <command>
 
 **Commands**
 
-| Command                                                           | Description                                                                                                                                                                                                                                                                                                               |
-| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`tailordb migration generate`](#tailordb-migration-generate)     | Generate migration files by detecting schema differences between current local tables and the previous migration snapshot.                                                                                                                                                                                                |
-| [`tailordb migration rebaseline`](#tailordb-migration-rebaseline) | Collapse the full migration history into a new 0000 baseline.                                                                                                                                                                                                                                                             |
-| [`tailordb migration resolve`](#tailordb-migration-resolve)       | Settle a migration that a failed deploy left partially applied, or whose run a deploy could not confirm.                                                                                                                                                                                                                  |
-| [`tailordb migration script`](#tailordb-migration-script)         | Add a migration script (migrate.ts) template to an existing migration directory, or record with --no-script that a migration intentionally has none.                                                                                                                                                                      |
-| [`tailordb migration status`](#tailordb-migration-status)         | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                                                                                                                                                                                                                      |
-| [`tailordb migration sync`](#tailordb-migration-sync)             | Sync remote TailorDB schema and checkpoint to a local migration snapshot to recover from schema drift or a checkpoint outside the local history.                                                                                                                                                                          |
-| [`tailordb migration test`](#tailordb-migration-test)             | Test pending migrations with seed fixtures or cloned data in a temporary workspace.                                                                                                                                                                                                                                       |
-| [`tailordb migration validate`](#tailordb-migration-validate)     | Validate the full migration history, unreviewed generated migration scripts, and schema drift (local tables vs. migration snapshot, remote schema vs. migration checkpoint) without deploying. This includes the migration and schema-drift checks used by 'deploy' and exits with a non-zero code when issues are found. |
+| Command                                                           | Description                                                                                                                                                    |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`tailordb migration generate`](#tailordb-migration-generate)     | Generate migration files by detecting schema differences between current local tables and the previous migration snapshot.                                     |
+| [`tailordb migration rebaseline`](#tailordb-migration-rebaseline) | Collapse the full migration history into a new 0000 baseline.                                                                                                  |
+| [`tailordb migration resolve`](#tailordb-migration-resolve)       | Settle a migration that a failed deploy left partially applied, or whose run a deploy could not confirm.                                                       |
+| [`tailordb migration script`](#tailordb-migration-script)         | Add a migration script (migrate.ts) template to an existing migration directory, or record with --no-script that a migration intentionally has none.           |
+| [`tailordb migration status`](#tailordb-migration-status)         | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                                                           |
+| [`tailordb migration sync`](#tailordb-migration-sync)             | Sync remote TailorDB schema and checkpoint to a local migration snapshot to recover from schema drift or a checkpoint outside the local history.               |
+| [`tailordb migration test`](#tailordb-migration-test)             | Test pending migrations with seed fixtures or cloned data in a temporary workspace.                                                                            |
+| [`tailordb migration validate`](#tailordb-migration-validate)     | Run the migration and schema-drift checks that 'deploy' runs before changing anything, without deploying, and exit with a non-zero code when issues are found. |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -195,6 +195,8 @@ Use this after a deploy failed partway through a migration whose `migrate.ts` ex
 - `--complete` sends the schema of the failed migration itself and records it as completed, without running its `migrate.ts` again. Fix the data first (for example with `tailor query`), and make sure no record lacks a value for a field that becomes required.
 
 For a run that a deploy could not confirm, the command reads how the run ended and shows it before asking for confirmation: use `--complete` when it succeeded, and `--rollback` when it failed, was canceled, or did not start. It refuses while the run is still running, and warns when the option you chose does not fit how the run ended.
+
+`--rollback` also settles a migration that no deploy recorded as in progress, but whose pre-migration schema or maintenance mode a deploy left in place, for example because the deploy stopped before recording it. See "Settling a migration that stays in progress" in the TailorDB Migrations guide for when it runs.
 
 Both options remove the in-progress record, take the tables out of maintenance mode, and remove the temporary resources of the failed run, so `deploy` and the other migration commands work again. As with `tailordb migration sync`, the local migration history must reproduce the current table definitions. If sending the schema stops partway, run the command again.
 
@@ -325,7 +327,7 @@ The source workspace is read-only. Without --target-workspace-id, the command cr
 
 #### tailordb migration validate
 
-Validate the full migration history, unreviewed generated migration scripts, and schema drift (local tables vs. migration snapshot, remote schema vs. migration checkpoint) without deploying. This includes the migration and schema-drift checks used by 'deploy' and exits with a non-zero code when issues are found.
+Run the migration and schema-drift checks that 'deploy' runs before changing anything, without deploying, and exit with a non-zero code when issues are found.
 
 **Usage**
 
@@ -335,15 +337,20 @@ tailor tailordb migration validate [options]
 
 **Options**
 
-| Option                          | Alias | Description                                                                | Required | Default              | Env                            |
-| ------------------------------- | ----- | -------------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                               | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                          | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
-| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                                 | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
-| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (validates all namespaces if not specified)      | No       | -                    | -                              |
-| `--strict`                      | -     | Also fail when a pending migration can drop data without an acknowledgment | No       | `false`              | -                              |
+| Option                                          | Alias | Description                                                                                                                                                 | Required | Default              | Env                            |
+| ----------------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>`                 | `-w`  | Workspace ID                                                                                                                                                | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`                           | `-p`  | Workspace profile                                                                                                                                           | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`                             | `-c`  | Path to Tailor config file                                                                                                                                  | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
+| `--namespace <NAMESPACE>`                       | `-n`  | Target TailorDB namespace (validates all namespaces if not specified)                                                                                       | No       | -                    | -                              |
+| `--strict`                                      | -     | Also fail when a pending migration can drop data without an acknowledgment                                                                                  | No       | `false`              | -                              |
+| `--migration-skip-steps <MIGRATION_SKIP_STEPS>` | -     | Also check that 'deploy --migration-skip-steps' can skip these steps of a partially applied multi-step migration, as comma-separated namespace/step entries | No       | -                    | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Notes**
+
+Migration scripts are checked across the full migration history, not only the pending migrations that `deploy` checks. Like `deploy`, the command bundles only the pending scripts and checks the machine user that runs them.
 
 **See also:** For migration concepts, configuration, workflow, and troubleshooting, see the [TailorDB Migrations guide](../services/tailordb/migration.md).
 

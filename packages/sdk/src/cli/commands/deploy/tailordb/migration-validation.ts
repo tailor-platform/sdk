@@ -74,6 +74,11 @@ export type ValidateAndDetectResult = {
    * migration; empty when none of them remain.
    */
   unfinishedRemovals: ReadonlyMap<string, readonly string[]>;
+  /**
+   * Migration whose Pre-phase schema or maintenance mode an earlier deploy left in place without
+   * recording it as in progress, by namespace.
+   */
+  interruptedMigrations: Record<string, number>;
 };
 
 interface StaleMigrationInProgress {
@@ -165,10 +170,88 @@ async function assertMainRunSettled(
 }
 
 /**
+ * Create the error for a namespace whose checkpoint would be repaired while it records a migration
+ * in progress.
+ * @param namespace - TailorDB namespace
+ * @returns The error
+ */
+export function checkpointRepairInProgressError(namespace: string): CLIError {
+  return CLIError({
+    code: "MIGRATION_IN_PROGRESS_CONFLICT",
+    message: `A migration is in progress in namespace "${namespace}", so its checkpoint cannot be repaired.`,
+    suggestion:
+      "From a checkout of the migration history that started the migration, finish a multi-step migration with a deploy, or settle the migration with 'tailor tailordb migration resolve' first.",
+  });
+}
+
+export interface MigrationInProgressCheck {
+  client: OperatorClient;
+  workspaceId: string;
+  namespace: string;
+  /** Checkpoint and in-progress record of the namespace. */
+  state: Pick<RemoteMigrationState, "number" | "inProgress" | "inProgressInvalid">;
+  /** The namespace's first pending migration, if any. */
+  next: Pick<PendingMigration, "number" | "scriptForm"> | undefined;
+  /** Config and workspace selection of the command, kept in the suggested commands. */
+  commandContext: MigrationCommandContext;
+}
+
+/** What a deploy does with a namespace's in-progress record. */
+export type MigrationInProgressOutcome =
+  | { kind: "none" }
+  | { kind: "stale"; migrationNumber: number }
+  | { kind: "resume"; inProgress: MigrationInProgress };
+
+/**
+ * Check what an earlier deploy recorded as in progress in one namespace against its checkpoint and
+ * its next pending migration, so a deploy never resumes the wrong migration nor runs a `main`
+ * script whose earlier run is not settled.
+ * @param check - The namespace's state and next pending migration
+ * @returns What a deploy does with the record
+ */
+export async function checkMigrationInProgress(
+  check: MigrationInProgressCheck,
+): Promise<MigrationInProgressOutcome> {
+  const { client, workspaceId, namespace, state, next, commandContext } = check;
+  if (state.inProgressInvalid) {
+    throw CLIError({
+      code: "MIGRATION_IN_PROGRESS_INVALID",
+      message: `The in-progress migration recorded for namespace "${namespace}" cannot be read.`,
+      suggestion:
+        "The namespace metadata was edited outside the SDK. Restore the in-progress labels it recorded before deploying again.",
+    });
+  }
+  const inProgress = state.inProgress;
+  if (!inProgress) return { kind: "none" };
+  if (isStaleMigrationInProgress(state)) {
+    return { kind: "stale", migrationNumber: inProgress.number };
+  }
+  const migrationLabel = `${namespace}/${formatMigrationNumber(inProgress.number)}`;
+  await assertMainRunSettled(client, workspaceId, namespace, state, commandContext);
+  if (next?.number !== inProgress.number) {
+    throw CLIError({
+      code: "MIGRATION_IN_PROGRESS_INVALID",
+      message: `Migration ${migrationLabel} is in progress, but the next pending migration is ${
+        next ? formatMigrationNumber(next.number) : "none"
+      }.`,
+      suggestion:
+        "Deploy the migration history that started the migration and let it complete first.",
+    });
+  }
+  if (next.scriptForm?.kind !== "steps") {
+    throw CLIError({
+      code: "MIGRATION_IN_PROGRESS_INVALID",
+      message: `Migration ${migrationLabel} was partially applied by its steps, but its migrate.ts no longer exports \`steps\`.`,
+      suggestion:
+        "Keep the migration as `steps` so the deploy can finish it; steps that already completed do not run again.",
+    });
+  }
+  return { kind: "resume", inProgress };
+}
+
+/**
  * Validate what earlier deploys recorded as in progress against the remote
- * checkpoint and the local migrations, so a deploy never resumes the wrong
- * migration nor runs a `main` script whose earlier run is not settled. Runs
- * even when schema checks are skipped.
+ * checkpoint and the local migrations. Runs even when schema checks are skipped.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param remoteStates - Remote migration state of each namespace whose checkpoint is not being repaired
@@ -186,53 +269,22 @@ async function validateMigrationsInProgress(
   commandContext: MigrationCommandContext,
 ): Promise<InProgressValidation> {
   const repaired = repairedInProgress[0];
-  if (repaired !== undefined) {
-    throw CLIError({
-      code: "MIGRATION_IN_PROGRESS_CONFLICT",
-      message: `A migration is in progress in namespace "${repaired}", so its checkpoint cannot be repaired.`,
-      suggestion:
-        "From a checkout of the migration history that started the migration, finish a multi-step migration with a deploy, or settle the migration with 'tailor tailordb migration resolve' first.",
-    });
-  }
+  if (repaired !== undefined) throw checkpointRepairInProgressError(repaired);
 
   const result: InProgressValidation = { inProgressMigrations: {}, staleInProgress: [] };
   for (const [namespace, state] of remoteStates) {
-    if (state.inProgressInvalid) {
-      throw CLIError({
-        code: "MIGRATION_IN_PROGRESS_INVALID",
-        message: `The in-progress migration recorded for namespace "${namespace}" cannot be read.`,
-        suggestion:
-          "The namespace metadata was edited outside the SDK. Restore the in-progress labels it recorded before deploying again.",
-      });
+    const outcome = await checkMigrationInProgress({
+      client,
+      workspaceId,
+      namespace,
+      state,
+      next: pendingMigrations.find((migration) => migration.namespace === namespace),
+      commandContext,
+    });
+    if (outcome.kind === "stale") {
+      result.staleInProgress.push({ namespace, migrationNumber: outcome.migrationNumber });
     }
-    const inProgress = state.inProgress;
-    if (!inProgress) continue;
-    const migrationLabel = `${namespace}/${formatMigrationNumber(inProgress.number)}`;
-    if (isStaleMigrationInProgress(state)) {
-      result.staleInProgress.push({ namespace, migrationNumber: inProgress.number });
-      continue;
-    }
-    await assertMainRunSettled(client, workspaceId, namespace, state, commandContext);
-    const next = pendingMigrations.find((migration) => migration.namespace === namespace);
-    if (next?.number !== inProgress.number) {
-      throw CLIError({
-        code: "MIGRATION_IN_PROGRESS_INVALID",
-        message: `Migration ${migrationLabel} is in progress, but the next pending migration is ${
-          next ? formatMigrationNumber(next.number) : "none"
-        }.`,
-        suggestion:
-          "Deploy the migration history that started the migration and let it complete first.",
-      });
-    }
-    if (next.scriptForm?.kind !== "steps") {
-      throw CLIError({
-        code: "MIGRATION_IN_PROGRESS_INVALID",
-        message: `Migration ${migrationLabel} was partially applied by its steps, but its migrate.ts no longer exports \`steps\`.`,
-        suggestion:
-          "Keep the migration as `steps` so the deploy can finish it; steps that already completed do not run again.",
-      });
-    }
-    result.inProgressMigrations[namespace] = inProgress;
+    if (outcome.kind === "resume") result.inProgressMigrations[namespace] = outcome.inProgress;
   }
   return result;
 }
@@ -327,6 +379,7 @@ export async function validateAndDetectMigrations(
   const checkpoints = new Map<string, ExpectedMigrationCheckpoint>();
   const maintenanceModeCheckpoints = Object.create(null) as Record<string, number>;
   const unfinishedRemovals = new Map<string, readonly string[]>();
+  const interruptedMigrations = Object.create(null) as Record<string, number>;
 
   if (namespacesWithMigrations.length > 0) {
     // Validate migration file integrity (sequential numbers, no gaps, no duplicates)
@@ -367,7 +420,7 @@ export async function validateAndDetectMigrations(
         namespacesWithMigrations,
         config,
         tailorDBInputs,
-        { acceptUnfinishedRemovals: true },
+        { acceptUnfinishedRemovals: true, acceptInterruptedMigration: true },
       );
       checkpointRepairs = remoteVerificationResults.flatMap((result) =>
         result.checkpointRepair
@@ -435,6 +488,13 @@ export async function validateAndDetectMigrations(
         if (result.unfinishedRemovals.length === 0) continue;
         logger.warn(
           `An earlier deploy committed migration ${result.namespace}/${formatMigrationNumber(result.remoteMigrationNumber)} but did not delete the tables it removed: ${result.unfinishedRemovals.join(", ")}. They will be deleted after confirmation.`,
+        );
+      }
+      for (const { namespace, interruptedMigration } of remoteVerificationResults) {
+        if (interruptedMigration === undefined) continue;
+        interruptedMigrations[namespace] = interruptedMigration;
+        logger.info(
+          `An earlier deploy left the pre-migration schema or maintenance mode of migration ${namespace}/${formatMigrationNumber(interruptedMigration)} in place without recording it as in progress; this deploy runs it again from the start.`,
         );
       }
     }
@@ -530,5 +590,6 @@ export async function validateAndDetectMigrations(
     ...inProgress,
     maintenanceModeCheckpoints,
     unfinishedRemovals,
+    interruptedMigrations,
   };
 }

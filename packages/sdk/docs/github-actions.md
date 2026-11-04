@@ -709,7 +709,11 @@ keeps them alongside that environment's `TAILOR_PLATFORM_WORKSPACE_ID`
 variable. You can also set the client secret as a repository-level secret and the
 client ID as a repository-level variable if every target shares one machine user,
 but then any workflow on any branch can read them, so the environment's
-protection rules no longer guard your deploys.
+protection rules no longer guard your deploys, and `tailor setup ci env --check`
+warns about the client secret (see
+[Checking what is registered](#checking-what-is-registered)). To share one machine
+user and keep that protection, set the same client secret on each environment
+instead.
 
 ### Setting secrets and variables
 
@@ -784,13 +788,25 @@ to manage those settings in Terraform instead.
 environment and for the repository entries of the autofix workflow, which of
 these entries are registered. It fails when a required
 entry is missing, reports missing optional entries without failing, and prints
-the `gh` commands that set only the missing entries, with where each value comes
-from. It changes nothing, and it checks names only, since GitHub never returns
-secret values.
+the `gh` commands that set the missing entries, with where each value comes
+from, and that move the client secret onto its environment (see below). It
+changes nothing, and it checks names only, since GitHub never returns secret
+values.
 
 - An entry set on the repository, or on the organization and shared with the
   repository, counts as registered, because the workflow reads it from there when
   the environment does not set it. The report says where each entry was found.
+- `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` set on the repository or the
+  organization is reported with ⚠, even when the environment also sets it: any
+  workflow on any branch can read it there, so the environment's protection rules
+  do not guard it. The check still passes. The printed commands set it on the
+  environment, with the value you set on the repository or organization, and list
+  a commented-out `gh secret delete` for the repository copy: run it once every
+  environment and workflow that reads that secret has its own. An organization
+  owner has to stop sharing an organization secret with the repository. The
+  warning stops once the client secret is set only on the environments; when
+  every target shares one machine user, set the same client secret on each of
+  them.
 - An entry registered as the other kind, such as `TAILOR_PLATFORM_WORKSPACE_ID`
   set as a secret, is reported as missing, because the workflow does not read it.
   `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID` set as a secret still counts, with a

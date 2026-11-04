@@ -78,6 +78,7 @@ import { protoEnumName } from "#/cli/shared/proto-enum";
 import { spinner } from "#/cli/shared/spinner";
 import { assertDefined } from "#/utils/assert";
 import { resourceTrn, writeMetadataLabelsDirect } from "../label";
+import { assertMigrationSkipSteps, type MigrationSkipStepsCheck } from "./migration-skip-steps";
 import { formatDuration, ScriptRunTimer, type MaintenanceTimeline } from "./migration-timing";
 import {
   executeMigrationAsWorkflow,
@@ -180,6 +181,68 @@ async function getCurrentMigrationNumber(
 }
 
 /**
+ * List the numbers of the migrations after a checkpoint, in the order a deploy applies them.
+ * @param migrationsDir - Migrations directory path
+ * @param checkpoint - Migration number the namespace is at
+ * @returns Numbers of the migrations after the checkpoint
+ */
+function migrationNumbersAfter(migrationsDir: string, checkpoint: number): number[] {
+  return getMigrationFiles(migrationsDir)
+    .filter((file) => file.type === "diff" && file.number > checkpoint)
+    .map((file) => file.number);
+}
+
+/**
+ * Read a migration's diff and locate its script, without inspecting the script.
+ * @param namespace - TailorDB namespace
+ * @param migrationsDir - Migrations directory path
+ * @param migrationNumber - Migration number
+ * @returns The migration, without its script form
+ */
+function readPendingMigration(
+  namespace: string,
+  migrationsDir: string,
+  migrationNumber: number,
+): Omit<PendingMigration, "scriptForm"> {
+  const diffPath = getMigrationFilePath(migrationsDir, migrationNumber, "diff");
+  const scriptPath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
+  return {
+    number: migrationNumber,
+    scriptPath,
+    hasScript: fs.existsSync(scriptPath),
+    diffPath,
+    namespace,
+    migrationsDir,
+    diff: loadDiff(diffPath),
+  };
+}
+
+function withScriptForm(migration: Omit<PendingMigration, "scriptForm">): PendingMigration {
+  return {
+    ...migration,
+    scriptForm: migration.hasScript ? analyzeMigrationScript(migration.scriptPath) : null,
+  };
+}
+
+/**
+ * Read the migrations a deploy applies after a checkpoint, without checking whether their scripts
+ * are ready to run.
+ * @param namespace - TailorDB namespace
+ * @param migrationsDir - Migrations directory path
+ * @param checkpoint - Migration number the namespace is at
+ * @returns The migrations after the checkpoint, in the order a deploy applies them
+ */
+export function pendingMigrationsAfter(
+  namespace: string,
+  migrationsDir: string,
+  checkpoint: number,
+): PendingMigration[] {
+  return migrationNumbersAfter(migrationsDir, checkpoint).map((migrationNumber) =>
+    withScriptForm(readPendingMigration(namespace, migrationsDir, migrationNumber)),
+  );
+}
+
+/**
  * Detect pending migrations that need to be executed
  * @param {OperatorClient} client - Operator client instance
  * @param {string} workspaceId - Workspace ID
@@ -205,45 +268,29 @@ export async function detectPendingMigrations(
       currentMigrationOverrides?.get(namespace) ??
       (await getCurrentMigrationNumber(client, workspaceId, namespace, remoteStates));
 
-    // Get all migration files
-    const migrationFiles = getMigrationFiles(migrationsDir);
-
-    // Find migrations that haven't been applied yet
-    for (const file of migrationFiles) {
-      if (file.number <= currentMigration) {
-        continue;
-      }
-
-      // Check for diff file (all migrations must have a diff)
-      const diffPath = getMigrationFilePath(migrationsDir, file.number, "diff");
-      if (!fs.existsSync(diffPath)) {
-        continue;
-      }
-
-      // Load the diff to inspect breaking/warning classification
-      const diff = loadDiff(diffPath);
+    for (const migrationNumber of migrationNumbersAfter(migrationsDir, currentMigration)) {
+      const migration = readPendingMigration(namespace, migrationsDir, migrationNumber);
+      const { diff, scriptPath, hasScript } = migration;
 
       // The migration script is executed when migrate.ts exists on disk.
       // Breaking changes hard-require a script unless the user recorded an
       // explicit skip acknowledgment; warnings (e.g. field_removed) may
       // optionally have one added via `tailordb migration script <num>`.
-      const scriptPath = getMigrationFilePath(migrationsDir, file.number, "migrate");
-      const hasScript = fs.existsSync(scriptPath);
       if (diff.requiresMigrationScript && !hasScript && !diff.scriptSkipped) {
-        const commandOptions = { migrationNumber: file.number, namespace, configPath };
+        const commandOptions = { migrationNumber, namespace, configPath };
         throw CLIError({
           code: "MIGRATION_SCRIPT_REQUIRED",
-          message: `Migration ${namespace}/${formatMigrationNumber(file.number)} requires a migration script but migrate.ts was not found.`,
+          message: `Migration ${namespace}/${formatMigrationNumber(migrationNumber)} requires a migration script but migrate.ts was not found.`,
           suggestion: `Add a script: ${formatMigrationScriptHint(commandOptions)}\nOr record that no script is needed: ${formatMigrationScriptHint({ ...commandOptions, noScript: true })}`,
         });
       }
       if (diff.scriptSkipped) {
-        const migrationLabel = `${namespace}/${formatMigrationNumber(file.number)}`;
+        const migrationLabel = `${namespace}/${formatMigrationNumber(migrationNumber)}`;
         if (hasScript) {
           throw CLIError({
             code: "MIGRATION_SCRIPT_SKIP_CONFLICT",
             message: `Migration ${migrationLabel} has both a --no-script skip acknowledgment and migrate.ts.`,
-            suggestion: `Keep the script and clear the stale acknowledgment: ${formatMigrationScriptHint({ migrationNumber: file.number, namespace, configPath })}\nOr keep the skip: delete migrate.ts`,
+            suggestion: `Keep the script and clear the stale acknowledgment: ${formatMigrationScriptHint({ migrationNumber, namespace, configPath })}\nOr keep the skip: delete migrate.ts`,
           });
         }
         logger.info(
@@ -254,25 +301,17 @@ export async function detectPendingMigrations(
       if (hasScript && countUnresolvedTodosInFile(scriptPath) > 0) {
         throw CLIError({
           code: "MIGRATION_SCRIPT_REVIEW_REQUIRED",
-          message: `Migration ${namespace}/${formatMigrationNumber(file.number)} still has a TODO() call or review marker in migrate.ts, where the generated script leaves a value or logic for you to decide.`,
+          message: `Migration ${namespace}/${formatMigrationNumber(migrationNumber)} still has a TODO() call or review marker in migrate.ts, where the generated script leaves a value or logic for you to decide.`,
           suggestion: UNRESOLVED_TODO_SUGGESTION,
         });
       }
 
-      const scriptForm = hasScript ? analyzeMigrationScript(scriptPath) : null;
+      const pendingMigration = withScriptForm(migration);
+      const { scriptForm } = pendingMigration;
       if (scriptForm?.kind === "main" && scriptForm.ignoredSteps) {
-        logger.warn(ignoredStepsWarning(`${namespace}/${formatMigrationNumber(file.number)}`));
+        logger.warn(ignoredStepsWarning(`${namespace}/${formatMigrationNumber(migrationNumber)}`));
       }
-      pendingMigrations.push({
-        number: file.number,
-        scriptPath,
-        hasScript,
-        scriptForm,
-        diffPath,
-        namespace,
-        migrationsDir,
-        diff,
-      });
+      pendingMigrations.push(pendingMigration);
     }
   }
 
@@ -384,6 +423,17 @@ interface MigrationBundleOptions {
   skipSteps?: readonly string[];
 }
 
+const SCRIPT_BUNDLE_FAILED = "MIGRATION_SCRIPT_BUNDLE_FAILED";
+
+/**
+ * Whether a failure is the bundler's, raised while bundling a pending migration's script.
+ * @param error - Failure to inspect
+ * @returns True when the bundler failed on the script
+ */
+export function isScriptBundleFailure(error: unknown): boolean {
+  return error instanceof Error && getErrorDiagnostics(error).code === SCRIPT_BUNDLE_FAILED;
+}
+
 /**
  * Bundle a pending migration's script the way its run executes it.
  * @param migration - Pending migration with a script
@@ -435,7 +485,7 @@ async function bundlePendingMigration(
   } catch (error) {
     if (error instanceof Error && !isCLIError(error)) {
       withErrorDiagnostics(error, {
-        code: "MIGRATION_SCRIPT_BUNDLE_FAILED",
+        code: SCRIPT_BUNDLE_FAILED,
         context: { namespace: migration.namespace, migrationNumber: migration.number },
       });
     }
@@ -451,7 +501,7 @@ async function bundlePendingMigration(
  * @param env - Environment variables injected into the scripts
  * @param configDir - Directory of the config file
  */
-export async function assertMigrationScriptsBundle(
+async function assertMigrationScriptsBundle(
   pendingMigrations: readonly PendingMigration[],
   inProgressByNamespace: Readonly<Record<string, MigrationInProgress>>,
   env: Record<string, string | number | boolean>,
@@ -1372,9 +1422,9 @@ export function getMigrationMachineUser(
   return undefined;
 }
 
-/** Where the machine user that runs a deploy's migration scripts comes from. */
-interface MigrationMachineUserSource {
-  application: Pick<Application, "authService">;
+/** The auth, config, and environment variables a deploy runs its migration scripts with. */
+interface MigrationRunSource {
+  application: Pick<Application, "authService" | "env">;
   config: LoadedConfig;
   /** Machine user that runs every namespace's scripts in place of the configured one. */
   migrationMachineUserOverride?: string;
@@ -1394,7 +1444,7 @@ export interface MigrationMachineUsers {
  * @returns Machine user of each namespace with a script to run, or undefined when no script runs
  */
 export function resolveMigrationMachineUsers(
-  source: MigrationMachineUserSource,
+  source: MigrationRunSource,
   pendingMigrations: readonly PendingMigration[],
 ): MigrationMachineUsers | undefined {
   const namespaces = new Set(
@@ -1471,6 +1521,34 @@ function undefinedMachineUserSuggestion(
 function describeNamespaces(namespaces: readonly string[]): string {
   const quoted = namespaces.map((namespace) => `'${namespace}'`).join(", ");
   return `${namespaces.length === 1 ? "namespace" : "namespaces"} ${quoted}`;
+}
+
+/** The pending migrations a deploy checks while planning, and what it checks them against. */
+export interface PendingMigrationsRunnableCheck extends MigrationSkipStepsCheck {
+  pendingMigrations: readonly PendingMigration[];
+  /** Auth, config, and environment variables of the deploy */
+  source: MigrationRunSource;
+}
+
+/**
+ * Check, as a deploy does while planning, that it can run the pending migrations: the requested
+ * skips apply, a machine user runs the scripts, and each script bundles.
+ * @param check - The pending migrations, the requested skips, and the deploy's auth, config, and environment variables
+ * @returns Machine user of each namespace with a script to run, or undefined when no script runs
+ */
+export async function assertPendingMigrationsRunnable(
+  check: PendingMigrationsRunnableCheck,
+): Promise<MigrationMachineUsers | undefined> {
+  const { pendingMigrations, inProgressByNamespace, source } = check;
+  await assertMigrationSkipSteps(check);
+  const machineUsers = resolveMigrationMachineUsers(source, pendingMigrations);
+  await assertMigrationScriptsBundle(
+    pendingMigrations,
+    inProgressByNamespace,
+    source.application.env,
+    path.dirname(source.config.path),
+  );
+  return machineUsers;
 }
 
 /**
