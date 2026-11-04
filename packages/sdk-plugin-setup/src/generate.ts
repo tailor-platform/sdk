@@ -17,6 +17,7 @@ import { detectDefaultBranch, type GitRunner } from "./git";
 import {
   findTarget,
   LOCK_VERSION,
+  planEnvironmentCollisions,
   readLock,
   targetWorkflows,
   writeLock,
@@ -1287,6 +1288,7 @@ export async function setupTarget(options: SetupTargetOptions): Promise<SetupTar
     appIds: appIdPlan.appIds,
   });
   const { configEdited } = await removeAdoptedConfigIds(appIdPlan);
+  const knownCollisions = new Set(planEnvironmentCollisions(lock?.targets ?? []));
 
   for (const { decision, file, movedFrom } of written) {
     if (movedFrom === undefined) {
@@ -1304,6 +1306,9 @@ export async function setupTarget(options: SetupTargetOptions): Promise<SetupTar
           `starts this workflow. Move it into ${cleanup.file}.`,
       );
     }
+  }
+  for (const collision of planEnvironmentCollisions(targets)) {
+    if (!knownCollisions.has(collision)) logger.warn(collision);
   }
 
   return {

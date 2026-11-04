@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import { type AppIds, parseAppIds, TAILOR_LOCK_FILENAME } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
-import type { AutofixProvider } from "./templates";
+import { planEnvironmentOf, type AutofixProvider } from "./templates";
 
 /**
  * Highest lock schema version this plugin understands. Pinned here rather than
@@ -163,6 +163,62 @@ export function targetWorkflows(target: LockTarget): ManagedWorkflow[] {
 export function managedWorkflows(lock: LockFile): ManagedWorkflow[] {
   const targets = lock.targets.flatMap(targetWorkflows);
   return lock.autofix ? [...targets, lock.autofix] : targets;
+}
+
+export type JobEnvironment = {
+  job: "deploy" | "plan" | "migrationTest";
+  environment: string;
+  /** `<kind> <workspaceName>`, followed by ` (plan)` or ` (migration test)` for those jobs. */
+  label: string;
+};
+
+/**
+ * List the GitHub Environments the jobs of a target run in: its own environment, then the split
+ * plan environment and the dedicated migration test environment when it has them.
+ * @param target - Lock target
+ * @returns The target's job environments
+ */
+export function targetJobEnvironments(target: LockTarget): JobEnvironment[] {
+  const label = `${target.kind} ${target.workspaceName}`;
+  const { environment, migrationTest, migrationTestEnvironment } = target.inputs;
+  const jobs: JobEnvironment[] = [{ job: "deploy", environment, label }];
+  const planEnvironment = target.kind === "branch" ? planEnvironmentOf(target.inputs) : undefined;
+  if (planEnvironment !== undefined) {
+    jobs.push({ job: "plan", environment: planEnvironment, label: `${label} (plan)` });
+  }
+  if (target.kind === "branch" && migrationTest && migrationTestEnvironment !== undefined) {
+    jobs.push({
+      job: "migrationTest",
+      environment: migrationTestEnvironment,
+      label: `${label} (migration test)`,
+    });
+  }
+  return jobs;
+}
+
+/**
+ * Describe each job environment of the lock that matches a split plan environment, ignoring case.
+ * @param targets - Lock targets
+ * @returns One warning per plan environment and other job sharing it
+ */
+export function planEnvironmentCollisions(targets: readonly LockTarget[]): string[] {
+  const jobs = targets.flatMap(targetJobEnvironments);
+  return jobs
+    .filter(({ job }) => job === "plan")
+    .flatMap((plan) =>
+      jobs
+        .filter(
+          (other) =>
+            other.job !== "plan" &&
+            other.environment.toLowerCase() === plan.environment.toLowerCase(),
+        )
+        .map(
+          (other) =>
+            `GitHub Environment "${plan.environment}" is used by both ${plan.label} and ` +
+            `${other.label}, so the plan job, which runs pull request code, signs in with the ` +
+            `machine user set there for ${other.label}. Give one of them another environment.`,
+        ),
+    );
 }
 
 /**

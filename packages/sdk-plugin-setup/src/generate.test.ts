@@ -2329,6 +2329,27 @@ describe("setupTarget (integration)", () => {
     });
   });
 
+  test("warns once when a split plan environment is another target's environment", async () => {
+    await setupTarget(baseOptions({ workspaceName: "other", environment: "stg-plan" }));
+    const split = baseOptions({
+      workspaceName: "my-app",
+      environment: "stg",
+      splitPlanEnvironment: true,
+    });
+    using warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    await setupTarget(split);
+    await setupTarget(split);
+
+    expect(warn.mock.calls).toEqual([
+      [
+        expect.stringMatching(
+          /^GitHub Environment "stg-plan" is used by both branch my-app \(plan\) and branch other,/,
+        ),
+      ],
+    ]);
+  });
+
   test("records a package manager detected from the root lockfile as auto-detected", async () => {
     await setupTarget(baseOptions({ workspaceName: "my-app" }));
     const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"), "utf-8");

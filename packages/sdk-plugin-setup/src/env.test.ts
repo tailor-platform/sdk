@@ -918,6 +918,46 @@ describe("setupEnv", () => {
     expect(out).toHaveBeenCalledWith(renderGhCommands([stg!]));
   });
 
+  test("warns when a plan environment is also another target's environment", () => {
+    using tmp = tempDir("setup-env-");
+    writeLock(
+      tmp.dir,
+      lockOf(
+        target("branch", "my-app", "stg", { splitPlanEnvironment: true }),
+        target("branch", "other", "stg-plan"),
+      ),
+    );
+    using _out = vi.spyOn(logger, "out").mockImplementation(() => {});
+    using warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    setupEnv({ outputDir: tmp.dir, format: "gh", ghRunner: noGh });
+
+    expect(warn.mock.calls).toEqual([
+      [
+        expect.stringMatching(
+          /^GitHub Environment "stg-plan" is used by both branch my-app \(plan\) and branch other,/,
+        ),
+      ],
+    ]);
+  });
+
+  test("rejects an invalid environment name before warning about it", () => {
+    using tmp = tempDir("setup-env-");
+    writeLock(
+      tmp.dir,
+      lockOf(
+        target("branch", "my-app", "stg;", { splitPlanEnvironment: true }),
+        target("branch", "other", "stg;-plan"),
+      ),
+    );
+    using warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    expect(() => setupEnv({ outputDir: tmp.dir, format: "gh", ghRunner: noGh })).toThrow(
+      /Invalid environment name/,
+    );
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   test("rejects an --environment that no workflow uses, listing the ones that exist", () => {
     using tmp = tempDir("setup-env-");
     writeLock(

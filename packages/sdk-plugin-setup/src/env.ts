@@ -2,8 +2,16 @@ import { logger } from "@tailor-platform/sdk/cli";
 import { validateEnvironment, validateWorkspaceName } from "./generate";
 import { type GhRunner, viewRepository } from "./gh";
 import { detectRepository, type GitRunner, type Repository } from "./git";
-import { AUTOFIX_LABEL, type LockFile, readManagedLock, type TargetKind } from "./lock";
-import { planEnvironmentOf, type AutofixProvider } from "./templates";
+import {
+  AUTOFIX_LABEL,
+  type JobEnvironment,
+  type LockFile,
+  planEnvironmentCollisions,
+  readManagedLock,
+  targetJobEnvironments,
+  type TargetKind,
+} from "./lock";
+import type { AutofixProvider } from "./templates";
 
 export type EnvRequirement = {
   name: string;
@@ -296,24 +304,17 @@ export function collectEnvironmentRequirements(lock: LockFile): EnvironmentRequi
     }
   };
   for (const target of lock.targets) {
-    const { environment, migrationTest, migrationTestEnvironment } = target.inputs;
-    validateEnvironment(environment);
     validateWorkspaceName(target.workspaceName);
-    const label = `${target.kind} ${target.workspaceName}`;
-    const planEnvironment = target.kind === "branch" ? planEnvironmentOf(target.inputs) : undefined;
-    if (planEnvironment !== undefined) {
-      add(environment, label, SPLIT_DEPLOY_REQUIREMENTS);
-      add(planEnvironment, `${label} (plan)`, PLAN_REQUIREMENTS);
-    } else {
-      add(environment, label, targetRequirements(target.kind));
-    }
-    if (target.kind === "branch" && migrationTest && migrationTestEnvironment !== undefined) {
-      validateEnvironment(migrationTestEnvironment);
-      add(migrationTestEnvironment, `${label} (migration test)`, [
-        MIGRATION_TEST_CLIENT_ID,
-        CLIENT_SECRET,
-        MIGRATION_TEST_SOURCE_WORKSPACE_ID,
-      ]);
+    const jobs = targetJobEnvironments(target);
+    const split = jobs.some(({ job }) => job === "plan");
+    const requirementsOf = {
+      deploy: split ? SPLIT_DEPLOY_REQUIREMENTS : targetRequirements(target.kind),
+      plan: PLAN_REQUIREMENTS,
+      migrationTest: [MIGRATION_TEST_CLIENT_ID, CLIENT_SECRET, MIGRATION_TEST_SOURCE_WORKSPACE_ID],
+    } satisfies Record<JobEnvironment["job"], readonly EnvRequirement[]>;
+    for (const { job, environment, label } of jobs) {
+      validateEnvironment(environment);
+      add(environment, label, requirementsOf[job]);
     }
   }
   for (const entry of byEnvironment.values()) {
@@ -626,7 +627,8 @@ function selectEnvironments(
 }
 
 /**
- * Read the lock and group the requirements of its targets by GitHub Environment.
+ * Read the lock and group the requirements of its targets by GitHub Environment, warning about
+ * each split plan environment another job also runs in.
  * @param outputDir - Repository root where `.github` lives
  * @param names - Only these environments; all when empty
  * @returns One entry per selected environment, in lock order
@@ -635,7 +637,12 @@ export function loadEnvironmentRequirements(
   outputDir: string,
   names: string[] = [],
 ): EnvironmentRequirements[] {
-  return selectEnvironments(collectEnvironmentRequirements(readManagedLock(outputDir)), names);
+  const lock = readManagedLock(outputDir);
+  const environments = collectEnvironmentRequirements(lock);
+  for (const collision of planEnvironmentCollisions(lock.targets)) {
+    logger.warn(collision);
+  }
+  return selectEnvironments(environments, names);
 }
 
 /**
