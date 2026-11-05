@@ -355,6 +355,39 @@ export function plainRedacted(text: string): string {
   return renderWithRedaction(text, stripVTControlCharacters);
 }
 
+// C0 controls other than tab and newline, DEL, C1 controls, and the Unicode line and paragraph
+// separators. Tab and newline are handled as whitespace below so they become a single space.
+// The control characters are the point of this expression.
+// oxlint-disable-next-line no-control-regex
+const TERMINAL_CONTROL_CHARACTERS = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u2028\u2029]/g;
+
+/**
+ * Makes text that came from a remote source safe to print on a terminal: strips ANSI escape and
+ * OSC sequences and every control character, and collapses whitespace runs into one space.
+ * Use it on server-provided free text (titles, bodies) before it reaches `logger`.
+ * @param text - Text received from a remote source
+ * @returns Single-line text with no terminal escapes or control characters
+ */
+export function sanitizeTerminalText(text: string): string {
+  return stripVTControlCharacters(text)
+    .replace(TERMINAL_CONTROL_CHARACTERS, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Makes multi-line text that came from a remote source safe to print on a terminal: strips ANSI
+ * escape and OSC sequences and every control character except tab and newline, and normalizes
+ * CRLF to LF. Line structure and indentation are kept, so Markdown bodies stay readable.
+ * @param text - Text received from a remote source
+ * @returns The text with no terminal escapes or control characters, newlines kept
+ */
+export function sanitizeTerminalBlock(text: string): string {
+  return stripVTControlCharacters(text)
+    .replace(/\r\n?/g, "\n")
+    .replace(TERMINAL_CONTROL_CHARACTERS, "");
+}
+
 /**
  * Reset the registered-secret redaction state. Used for testing.
  *
