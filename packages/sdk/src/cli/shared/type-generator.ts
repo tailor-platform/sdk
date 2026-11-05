@@ -471,7 +471,7 @@ export async function generateUserTypes(options: GenerateUserTypesOptions): Prom
       const existing = resolveTypeDefinitionPath(configPath);
       if (fs.existsSync(existing)) {
         logger.warn(
-          `${path.relative(process.cwd(), existing)} is no longer updated because tsconfig.json enables the content mapper; delete it, since it keeps names you removed from the config`,
+          `${path.relative(process.cwd(), existing)} is no longer updated because tsconfig.json enables the content mapper; delete it, since it keeps names you removed from the config, and enable the content mapper in every tsconfig project that reads it`,
         );
       }
       return;
