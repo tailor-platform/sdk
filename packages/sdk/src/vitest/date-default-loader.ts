@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import * as mod from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { isSyntaxDiagnostic } from "#/utils/syntax-diagnostic";
 import { installTailordbClientStub } from "#/utils/tailordb-client-stub";
 import type { EffectiveDateDefault } from "#/runtime/types";
 
@@ -86,6 +87,12 @@ function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function describeParseError(error: unknown, configPath: string): string {
+  if (!isSyntaxDiagnostic(error)) return `${configPath}: ${describeError(error)}`;
+  const { message, filename, startLine } = error;
+  return `${filename}${startLine === undefined ? "" : `:${startLine}`}: ${message}`;
+}
+
 /**
  * Load `defaultDateRepresentation` from a `tailor.config.ts` file in the
  * Vitest host process, before the tailor-runtime environment applies.
@@ -109,7 +116,7 @@ export async function loadDateDefaultFromConfig(configPath: string): Promise<Eff
     configModule = await serialize(() => importLikeCli(configPath));
   } catch (error) {
     if (isSourceParseError(error)) {
-      throw new Error(`tailor-runtime could not parse ${configPath}: ${describeError(error)}`, {
+      throw new Error(`tailor-runtime could not parse ${describeParseError(error, configPath)}`, {
         cause: error,
       });
     }

@@ -1,4 +1,5 @@
 import * as path from "pathe";
+import { isSyntaxDiagnostic } from "#/utils/syntax-diagnostic";
 import { withErrorDiagnostics } from "./error-diagnostics";
 import { CLIError, internalError } from "./errors";
 import { flattenZodIssues, formatIssueList, type FlatIssue } from "./zod-issues";
@@ -116,25 +117,6 @@ export function definitionExportError(params: DefinitionErrorParams): CLIError {
       context: { kind, file, exportName },
     }),
     { location: { file } },
-  );
-}
-
-/** Plain object the TypeScript transform throws for source it cannot parse. */
-interface SyntaxDiagnostic {
-  code: "InvalidSyntax";
-  message: string;
-  filename: string;
-  startLine?: number;
-}
-
-function isSyntaxDiagnostic(value: unknown): value is SyntaxDiagnostic {
-  if (typeof value !== "object" || value === null || value instanceof Error) return false;
-  const { code, message, filename, startLine } = value as Record<string, unknown>;
-  return (
-    code === "InvalidSyntax" &&
-    typeof message === "string" &&
-    typeof filename === "string" &&
-    (startLine === undefined || typeof startLine === "number")
   );
 }
 
