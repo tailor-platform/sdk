@@ -7,8 +7,21 @@ import type { KyselyTypeMetadata, KyselyNamespaceMetadata } from "./types";
 /** Unique identifier for the Kysely type generator plugin. */
 export const KyselyGeneratorID = "@tailor-platform/kysely-type";
 
-type KyselyTypePluginOptions = {
-  distPath?: string;
+type KyselyTypePluginOptions = (
+  | {
+      /** Output file path for generated types. */
+      distPath: string;
+      contentMapper?: never;
+    }
+  | {
+      /**
+       * When `true`, no types file is generated. Import `getDB` from
+       * `@tailor-platform/sdk/plugin/kysely-type/db` and let TypeScript derive its types through the content mapper.
+       */
+      contentMapper: true;
+      distPath?: never;
+    }
+) & {
   pgliteSchemaPath?: string;
   /**
    * When `true`, generated tables map date/datetime fields and top-level time fields to
@@ -31,14 +44,15 @@ declare module "@tailor-platform/sdk/plugin" {
 
 /**
  * Conventional output path `kyselyTypePlugin` once assumed when `distPath` was not configured; the SDK no longer uses it.
- * @deprecated since NEXT_RELEASE — omit `distPath` and import `getDB` from `@tailor-platform/sdk/plugin/kysely-type/db` instead. codemod: none (callers can only stop using it)
+ * @deprecated since NEXT_RELEASE — set `contentMapper: true` in place of `distPath` and import `getDB` from `@tailor-platform/sdk/plugin/kysely-type/db`. codemod: none (callers can only stop using it)
  */
 export const DEFAULT_KYSELY_TYPES_DIST_PATH = "./generated/tailordb.ts";
 
 /**
  * Plugin that generates Kysely type definitions for TailorDB tables.
  * @param options - Plugin options
- * @param options.distPath - Output file path for generated types; omit to import `getDB` from `@tailor-platform/sdk/plugin/kysely-type/db` instead
+ * @param options.distPath - Output file path for generated types; set either this or `contentMapper`, not both
+ * @param options.contentMapper - When `true`, no types file is generated and you import `getDB` from `@tailor-platform/sdk/plugin/kysely-type/db` instead; set either this or `distPath`, not both
  * @param options.pgliteSchemaPath - Output file path for the PGlite `CREATE TABLE` script module; omit to skip it
  * @param options.temporal - When `true`, generated tables map date/datetime fields and
  * top-level time fields to their `Temporal.PlainDate`/`Temporal.Instant`/
@@ -49,6 +63,13 @@ export const DEFAULT_KYSELY_TYPES_DIST_PATH = "./generated/tailordb.ts";
 export function kyselyTypePlugin(
   options: KyselyTypePluginOptions,
 ): Plugin<unknown, KyselyTypePluginOptions> {
+  const { distPath, contentMapper } = options as { distPath?: string; contentMapper?: boolean };
+  if (distPath !== undefined && contentMapper !== undefined) {
+    throw new Error("kyselyTypePlugin accepts either distPath or contentMapper: true, not both.");
+  }
+  if (distPath === undefined && contentMapper !== true) {
+    throw new Error("kyselyTypePlugin requires either distPath or contentMapper: true.");
+  }
   return {
     id: KyselyGeneratorID,
     description: "Generates Kysely type definitions for TailorDB tables",

@@ -121,7 +121,7 @@ export const order = db
         `import { defineConfig, definePlugins } from "@tailor-platform/sdk";
 import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
 export default defineConfig({ name: "app", db: { main: { files: ["./tailordb/*.ts"] } } });
-export const plugins = definePlugins(kyselyTypePlugin({ distPath: "./generated/db.ts" }));
+export const plugins = definePlugins(kyselyTypePlugin({ contentMapper: true }));
 `,
       );
       const mapper = startMapper();

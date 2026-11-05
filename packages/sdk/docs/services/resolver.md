@@ -285,7 +285,7 @@ Define actual resolver logic in the `body` function. Function arguments include:
 
 ### Using Kysely for Database Access
 
-If you configure `kyselyTypePlugin`, you can use `getDB` to execute typed queries. Import it from the types file `tailor generate` writes at the plugin's `distPath`, or, when you omit `distPath`, from `@tailor-platform/sdk/plugin/kysely-type/db` (see [Plugins](../configuration.md#plugins-beta)). By default, `date`/`datetime`/`time` columns come back as `Date`/`string`; configure `kyselyTypePlugin({ temporal: true })` to get `Temporal.PlainDate`/`Temporal.Instant` for date/datetime fields and `Temporal.PlainTime` for top-level time fields. Time fields inside nested objects remain strings.
+If you configure `kyselyTypePlugin`, you can use `getDB` to execute typed queries. Import it from the types file `tailor generate` writes at the plugin's `distPath`, or, when you set `contentMapper: true` instead of `distPath`, from `@tailor-platform/sdk/plugin/kysely-type/db` (see [Plugins](../configuration.md#plugins-beta)). By default, `date`/`datetime`/`time` columns come back as `Date`/`string`; configure `kyselyTypePlugin({ temporal: true })` to get `Temporal.PlainDate`/`Temporal.Instant` for date/datetime fields and `Temporal.PlainTime` for top-level time fields. Time fields inside nested objects remain strings.
 
 ```typescript
 import { getDB } from "../generated/tailordb";

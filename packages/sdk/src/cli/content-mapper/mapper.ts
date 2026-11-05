@@ -38,7 +38,8 @@ interface Project {
   watchedFiles: string[];
 }
 
-const KYSELY_PLUGIN_MISSING = "kyselyTypePlugin is not configured in tailor.config.ts";
+const KYSELY_PLUGIN_MISSING =
+  "kyselyTypePlugin is not configured with contentMapper: true in tailor.config.ts";
 const EMPTY_MODULE = "export {};\n";
 const PROJECT_DIAGNOSTIC_CODE = 2;
 const OPTION_DIAGNOSTIC_CODE = 3;
@@ -68,7 +69,7 @@ async function kyselyTypesOf(
   plugins: Plugin[],
 ): Promise<Pick<Evaluation, "kyselyTypes" | "kyselyError">> {
   const options = resolvePluginConfig(plugins, KyselyGeneratorID);
-  if (!options) return {};
+  if (options?.contentMapper !== true) return {};
   try {
     const { namespaces } = await loadConfigNamespaces(config, plugins);
     return { kyselyTypes: await generateKyselyTypesSource(namespaces, options.temporal ?? false) };

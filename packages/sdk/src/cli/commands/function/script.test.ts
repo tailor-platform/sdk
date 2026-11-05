@@ -132,10 +132,12 @@ describe("function script", () => {
     expect(fetchRemoteSchemaSnapshot).not.toHaveBeenCalled();
   });
 
-  test("scaffolds a skeleton importing getDB from the SDK when kyselyTypePlugin has no distPath", async () => {
+  test("scaffolds a skeleton importing getDB from the SDK when kyselyTypePlugin sets contentMapper", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
-    mockConfig(tmp.dir, { plugins: [{ ...kyselyPluginStub, pluginConfig: {} }] });
+    mockConfig(tmp.dir, {
+      plugins: [{ ...kyselyPluginStub, pluginConfig: { contentMapper: true } }],
+    });
 
     await runCommand(scriptCommand, ["scripts/fix.ts", "--namespace", "tailordb"]);
 

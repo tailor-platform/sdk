@@ -553,10 +553,14 @@ export const plugins = definePlugins(
 );
 ```
 
-`distPath` is optional for `kyselyTypePlugin`. Without it, `tailor generate` writes no types file, and you import `getDB()` from the SDK instead:
+`kyselyTypePlugin` requires either `distPath` or `contentMapper: true`, and accepts only one of them. With `contentMapper: true`, `tailor generate` writes no types file, and you import `getDB()` from the SDK instead:
+
+```typescript
+kyselyTypePlugin({ contentMapper: true });
+```
 
 ```typescript
 import { getDB } from "@tailor-platform/sdk/plugin/kysely-type/db";
 ```
 
-TypeScript 7.1 or later derives the types of that `getDB()` from your TailorDB definitions and the plugin options, `temporal` included, when the SDK is enabled as a content mapper for `.tailor` files as described in [Type Definitions Without `tailor generate`](#type-definitions-without-tailor-generate). Without the mapper, no types are available for it; keep `distPath` so `tailor generate` writes the types file, and import `getDB()` from that file.
+TypeScript 7.1 or later derives the types of that `getDB()` from your TailorDB definitions and the plugin options, `temporal` included, when the SDK is enabled as a content mapper for `.tailor` files as described in [Type Definitions Without `tailor generate`](#type-definitions-without-tailor-generate). Without the mapper, no types are available for it; use `distPath` instead of `contentMapper: true` so `tailor generate` writes the types file, and import `getDB()` from that file.

@@ -262,6 +262,6 @@ $ tailor function script scripts/fix-prices.ts --namespace shared --remote
 
 The scaffolded script is a plain default-exported function; execute it with `tailor function run <file>`.
 
-By default, when the project configures `kyselyTypePlugin`, the skeleton imports `getDB()` from the plugin's generated types, or from `@tailor-platform/sdk/plugin/kysely-type/db` when the plugin has no `distPath`. Without the plugin, the command uses the namespace's local table definitions to write a script-scoped `db.ts` plus a `db.snapshot.json` next to the script; `function run` refuses to run the script when that snapshot no longer matches the deployed or locally defined table and field structure.
+By default, when the project configures `kyselyTypePlugin`, the skeleton imports `getDB()` from the plugin's generated types, or from `@tailor-platform/sdk/plugin/kysely-type/db` when the plugin sets `contentMapper: true`. Without the plugin, the command uses the namespace's local table definitions to write a script-scoped `db.ts` plus a `db.snapshot.json` next to the script; `function run` refuses to run the script when that snapshot no longer matches the deployed or locally defined table and field structure.
 
 Pass `--remote` to generate the script-scoped files from the deployed schema instead, even when `kyselyTypePlugin` is configured. This is required for an external namespace. Re-running the command refreshes `db.ts` and `db.snapshot.json` from the selected source and leaves the script itself untouched.

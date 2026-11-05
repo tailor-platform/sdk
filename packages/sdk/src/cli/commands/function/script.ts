@@ -56,7 +56,7 @@ export const scriptCommand = defineAppCommand({
   }),
   notes: `The scaffolded script is a plain default-exported function; execute it with \`tailor function run <file>\`.
 
-By default, when the project configures \`kyselyTypePlugin\`, the skeleton imports \`getDB()\` from the plugin's generated types, or from \`@tailor-platform/sdk/plugin/kysely-type/db\` when the plugin has no \`distPath\`. Without the plugin, the command uses the namespace's local table definitions to write a script-scoped \`db.ts\` plus a \`db.snapshot.json\` next to the script; \`function run\` refuses to run the script when that snapshot no longer matches the deployed or locally defined table and field structure.
+By default, when the project configures \`kyselyTypePlugin\`, the skeleton imports \`getDB()\` from the plugin's generated types, or from \`@tailor-platform/sdk/plugin/kysely-type/db\` when the plugin sets \`contentMapper: true\`. Without the plugin, the command uses the namespace's local table definitions to write a script-scoped \`db.ts\` plus a \`db.snapshot.json\` next to the script; \`function run\` refuses to run the script when that snapshot no longer matches the deployed or locally defined table and field structure.
 
 Pass \`--remote\` to generate the script-scoped files from the deployed schema instead, even when \`kyselyTypePlugin\` is configured. This is required for an external namespace. Re-running the command refreshes \`db.ts\` and \`db.snapshot.json\` from the selected source and leaves the script itself untouched.`,
   examples: [
@@ -320,7 +320,7 @@ const SDK_KYSELY_DB_SPECIFIER = "@tailor-platform/sdk/plugin/kysely-type/db";
 /**
  * Resolve where a script imports `getDB()` from when the project configures `kyselyTypePlugin`.
  * A configured `distPath` is a generated types file, which resolves against the working
- * directory like where `tailor generate` writes it; without one, the SDK provides `getDB()`.
+ * directory like where `tailor generate` writes it; with `contentMapper: true`, the SDK provides `getDB()`.
  * @param plugins - The project's configured plugins
  * @param scriptDir - Directory the script is written to
  * @returns The import specifier, and the generated types file it points at when there is one
@@ -329,8 +329,11 @@ function resolveKyselyTypesImport(
   plugins: readonly Plugin[],
   scriptDir: string,
 ): { specifier: string; generatedFile?: string } {
-  const distPath = resolvePluginConfig(plugins, KyselyGeneratorID)?.distPath;
-  if (distPath === undefined) return { specifier: SDK_KYSELY_DB_SPECIFIER };
+  const options = resolvePluginConfig(plugins, KyselyGeneratorID);
+  const distPath = options?.distPath;
+  if (options?.contentMapper === true || distPath === undefined) {
+    return { specifier: SDK_KYSELY_DB_SPECIFIER };
+  }
   if (distPath.length === 0) {
     throw CLIError({
       code: "KYSELY_TYPE_PLUGIN_INVALID",

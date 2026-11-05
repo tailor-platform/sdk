@@ -33,7 +33,7 @@ const DB_FILE = "/node_modules/@tailor-platform/sdk/dist/plugin/builtin/kysely-t
 const ORDER_TABLE_CONFIG = `import { defineConfig, definePlugins } from "@tailor-platform/sdk";
 import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
 export default defineConfig({ name: "app", db: { main: { files: ["./tailordb/*.ts"] } } });
-export const plugins = definePlugins(kyselyTypePlugin({ distPath: "./generated/db.ts", temporal: true }));
+export const plugins = definePlugins(kyselyTypePlugin({ contentMapper: true, temporal: true }));
 `;
 
 const ORDER_TABLE = `import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
@@ -144,6 +144,29 @@ describe("content mapper", () => {
     ]);
     expect(db.text).toBe("export {};\n");
     expect(registry.diagnostics).toEqual([]);
+  });
+
+  test("reports db.tailor when kyselyTypePlugin writes a generated file instead of setting contentMapper", async () => {
+    using p = projectWithOrderTable();
+    fs.writeFileSync(
+      p.config,
+      ORDER_TABLE_CONFIG.replace("contentMapper: true", 'distPath: "./generated/db.ts"'),
+    );
+    const handlers = createContentMapperHandlers();
+    await handlers.initialize({ positionEncodings: ["utf-16"] });
+    await open(handlers, p.tsconfig);
+
+    const db = await transform(handlers, "", DB_FILE);
+
+    expect(db.diagnostics).toEqual([
+      {
+        messageText: expect.stringContaining("contentMapper: true"),
+        start: 0,
+        length: 0,
+        code: 2,
+      },
+    ]);
+    expect(db.text).toBe("export {};\n");
   });
 
   test("reports db.tailor when a TailorDB definition fails to load, and still types registry.tailor", async () => {
