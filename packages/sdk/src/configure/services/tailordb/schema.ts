@@ -1,4 +1,3 @@
-import { cloneDeep } from "es-toolkit/object";
 import {
   type AllowedValues,
   type AllowedValuesOutput,
@@ -10,6 +9,7 @@ import {
   type FieldParseInternalArgs,
 } from "#/runtime/field-parse";
 import { brandValue } from "#/utils/brand";
+import { clonePlain } from "./clone-plain";
 import type {
   FieldOptions,
   FieldOutput,
@@ -986,8 +986,8 @@ function createTailorDBFieldRuntime<
       // Create a new field with cloned configuration
       const clonedField = createTailorDBFieldRuntime(type, options, clonedFields, values);
 
-      // Deep copy metadata using cloneDeep (preserves function references)
-      Object.assign(clonedField._metadata, cloneDeep(this._metadata));
+      // Deep copy metadata (preserves function references)
+      Object.assign(clonedField._metadata, clonePlain(this._metadata));
 
       // Apply new options if provided
       if (cloneOptions) {
@@ -1001,7 +1001,7 @@ function createTailorDBFieldRuntime<
 
       // Copy raw relation if exists
       if (_rawRelation) {
-        clonedField._setRawRelation(cloneDeep(_rawRelation));
+        clonedField._setRawRelation(clonePlain(_rawRelation));
       }
 
       return clonedField;
