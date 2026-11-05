@@ -614,6 +614,7 @@ function processResolver(
   knownMachineUsers: ReadonlySet<string> | undefined,
   invokerReferences: InvokerReference[],
 ): MessageInitShape<typeof PipelineResolverSchema> {
+  const invokerContext = `Resolver "${resolver.name}"`;
   const pipelines: MessageInitShape<typeof PipelineResolver_PipelineSchema>[] = [
     {
       name: "body",
@@ -627,13 +628,8 @@ function processResolver(
       postScript: `args.body`,
       invoker: trackInvoker(
         invokerReferences,
-        normalizeInvoker(
-          resolver.invoker,
-          authNamespace,
-          `Resolver "${resolver.name}"`,
-          knownMachineUsers,
-        ),
-        `Resolver "${resolver.name}"`,
+        normalizeInvoker(resolver.invoker, authNamespace, invokerContext, knownMachineUsers),
+        invokerContext,
       ),
     },
   ];
