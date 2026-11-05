@@ -30,6 +30,12 @@ declare module "@tailor-platform/sdk/plugin" {
 }
 
 /**
+ * Conventional output path `kyselyTypePlugin` once assumed when `distPath` was not configured; the SDK no longer uses it.
+ * @deprecated since NEXT_RELEASE — omit `distPath` and import `getDB` from `@tailor-platform/sdk/plugin/kysely-type/db` instead. codemod: none (callers can only stop using it)
+ */
+export const DEFAULT_KYSELY_TYPES_DIST_PATH = "./generated/tailordb.ts";
+
+/**
  * Plugin that generates Kysely type definitions for TailorDB tables.
  * @param options - Plugin options
  * @param options.distPath - Output file path for generated types; omit to import `getDB` from `@tailor-platform/sdk/plugin/kysely-type/db` instead
