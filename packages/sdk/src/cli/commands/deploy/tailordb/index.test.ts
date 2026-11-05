@@ -1448,9 +1448,12 @@ describe("planTailorDB (service level)", () => {
       });
 
       test("fails at plan time when no auth is configured to run the script", async () => {
+        using stderr = captureStderr();
+
         await expect(planWithScript(undefined)).rejects.toMatchObject({
           code: "AUTH_CONFIG_REQUIRED",
         });
+        expect(stderr.output).not.toContain("pending migration(s) will be applied");
       });
 
       test("fails at plan time when no machine user is available to run the script", async () => {

@@ -150,7 +150,6 @@ export async function planTailorDB(context: PlanContext) {
           migrationRecoveryArgs,
         );
   if (detected) {
-    logMigrationPlanNotices(detected);
     await assertPendingMigrationsRunnable({
       client,
       workspaceId,
@@ -162,6 +161,7 @@ export async function planTailorDB(context: PlanContext) {
       inProgressByNamespace: detected.inProgressMigrations,
       source: context,
     });
+    logMigrationPlanNotices(detected);
   }
   const { namespacesWithMigrations, migrationFileState, checkpointRepairs, pendingMigrations } =
     detected ?? {
