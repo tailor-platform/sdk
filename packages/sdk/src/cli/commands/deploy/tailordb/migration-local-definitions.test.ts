@@ -160,14 +160,15 @@ describe("migration flow: local definitions that no pending migration includes",
       0: { User: user, Post: post, Comment: comment },
       1: { User: userWithNickname, Post: post, Comment: comment },
     };
-    mockPending([addNickname]);
-    return createMockPlanResult({
+    const planResult = createMockPlanResult({
       local: [userWithNickname, post],
       updates: ["User"],
       unchanged: ["Post"],
       deletes: ["Comment", "Archive"],
       maintenanceMode: "deploy",
     });
+    planResult.context.pendingMigrations = mockPending([addNickname]);
+    return planResult;
   }
 
   function writesOf(client: OperatorClient, tableName: string) {
@@ -541,13 +542,16 @@ describe("migration flow: local definitions that no pending migration includes",
       1: { User: userWithNickname, Post: post, Comment: comment },
     };
     const client = createMockClient(["User", "Post", "Comment", "Draft"]);
-    mockPending([addNickname, { kind: "table_removed", tableName: "Draft" } as DiffChange]);
     const planResult = createMockPlanResult({
       local: [userWithNickname, post],
       updates: ["User"],
       unchanged: ["Post"],
       deletes: ["Comment", "Draft"],
     });
+    planResult.context.pendingMigrations = mockPending([
+      addNickname,
+      { kind: "table_removed", tableName: "Draft" } as DiffChange,
+    ]);
 
     await applyTailorDB(client, planResult, "create-update");
 
