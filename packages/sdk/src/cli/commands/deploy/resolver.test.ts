@@ -392,6 +392,18 @@ describe("planPipeline (resolver service level)", () => {
       });
     });
 
+    test("rejects a machine user that the run removes from the auth config but the workspace still has", async () => {
+      await expect(
+        planPipeline(
+          buildCtx({
+            client: createMockClient([], {}, {}, ["legacy", "portal"]),
+            application: createExternalAuthApplication("legacy"),
+            plannedMachineUsers: new Map([["external-auth", new Set(["portal"])]]),
+          }),
+        ),
+      ).rejects.toMatchObject({ code: "INVOKER_MACHINE_USER_NOT_FOUND" });
+    });
+
     test("accepts a machine user that another config in the same deploy creates", async () => {
       const result = await planPipeline(
         buildCtx({
@@ -749,10 +761,11 @@ describe("processResolver invoker mapping", () => {
   async function planWithResolverService(
     resolverService: ResolverService,
     extraApplicationFields: Record<string, unknown> = {},
+    plannedMachineUsers?: ReadonlyMap<string, ReadonlySet<string>>,
   ) {
     const client = createMockClient([{ name: "test-ns", label: appName }]);
     const application = createMockApplication([resolverService], extraApplicationFields);
-    return planPipeline(buildCtx({ client, application }));
+    return planPipeline(buildCtx({ client, application, plannedMachineUsers }));
   }
 
   test("invoker is mapped to proto invoker field", async () => {
@@ -776,9 +789,11 @@ describe("processResolver invoker mapping", () => {
   test("string invoker is normalized using the configured auth service name", async () => {
     const resolverService = createResolverServiceWithAuthInvoker("batch-user");
 
-    const result = await planWithResolverService(resolverService, {
-      authService: { config: { name: "my-auth", machineUsers: { "batch-user": {} } } },
-    });
+    const result = await planWithResolverService(
+      resolverService,
+      { authService: { config: { name: "my-auth" } } },
+      new Map([["my-auth", new Set(["batch-user"])]]),
+    );
 
     const resolverCreate = result.changeSet.resolver.creates[0];
     expect(resolverCreate).toBeDefined();

@@ -314,7 +314,7 @@ export default createResolver({
 
 Type narrowing is provided by the generated `tailor.d.ts` (the `MachineUserNameRegistry` interface). Run `tailor generate` (or `deploy`) after defining new machine users to refresh it.
 
-`tailor deploy` checks the string `invoker` of every resolver and executor against the machine users of the Auth service it resolves to, and stops with `INVOKER_MACHINE_USER_NOT_FOUND` when the name does not exist. The `invoker` passed to `workflow.start()` is not checked at deploy time. The check covers machine users that already exist in the workspace and machine users that configs deployed in the same run define.
+`tailor deploy` checks the string `invoker` of every resolver and executor against the machine users of the Auth service it resolves to, and stops with `INVOKER_MACHINE_USER_NOT_FOUND` when the name does not exist. The `invoker` passed to `workflow.start()` is not checked at deploy time. When a config deployed in the same run defines the Auth service, the machine users it lists are the ones checked, because deploy removes the machine users it no longer lists. When the Auth service is only referenced as external, the machine users that exist in the workspace are checked.
 
 When the Auth service is an external one (`auth: { name: "...", external: true }`), the machine users are not in your config, so `tailor.d.ts` cannot narrow the invoker type and any string passes type checking. For resolvers and executors, the deploy-time check is what catches a misspelled name in that case.
 

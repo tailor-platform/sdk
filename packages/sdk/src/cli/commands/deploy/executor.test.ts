@@ -666,12 +666,30 @@ describe("planExecutor", () => {
       test("accepts a machine user declared in the own auth config before it exists in the workspace", async () => {
         const application = createMockApplication([createInvokerExecutor("batch-user")], {
           authName: "my-auth",
-          authMachineUsers: ["batch-user"],
         });
 
-        const result = await planExecutor(buildPlanContext(application));
+        const result = await planExecutor(
+          buildPlanContext(application, {
+            plannedMachineUsers: new Map([["my-auth", new Set(["batch-user"])]]),
+          }),
+        );
 
         expect(result.changeSet.creates).toHaveLength(1);
+      });
+
+      test("rejects a machine user that the run removes from the auth config but the workspace still has", async () => {
+        const application = createMockApplication([createInvokerExecutor("legacy")], {
+          authName: "my-auth",
+        });
+
+        await expect(
+          planExecutor(
+            buildPlanContext(application, {
+              client: createMockClient([], ["legacy", "admin"]),
+              plannedMachineUsers: new Map([["my-auth", new Set(["admin"])]]),
+            }),
+          ),
+        ).rejects.toMatchObject({ code: "INVOKER_MACHINE_USER_NOT_FOUND" });
       });
     });
   });

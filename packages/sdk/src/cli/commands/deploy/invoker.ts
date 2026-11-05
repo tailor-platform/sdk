@@ -14,14 +14,14 @@ import type { AuthInvoker } from "#/types/auth.generated";
  * @param invoker - String machine user name or internal object form
  * @param authNamespace - Auth service namespace (required when invoker is a string)
  * @param context - Contextual label used in error messages (e.g. `resolver "foo"`)
- * @param knownMachineUsers - Machine user names that exist in `authNamespace`; when given, a string invoker outside it is rejected
+ * @param knownMachineUsers - Machine user names that `authNamespace` has after the deploy; a string invoker outside it is rejected. Pass undefined to skip the check
  * @returns Object form of the invoker, or undefined
  */
 export function normalizeInvoker(
   invoker: string | AuthInvoker | undefined,
   authNamespace: string | undefined,
   context: string,
-  knownMachineUsers?: ReadonlySet<string>,
+  knownMachineUsers: ReadonlySet<string> | undefined,
 ): { namespace: string; machineUserName: string } | undefined {
   if (invoker === undefined) return undefined;
   if (typeof invoker === "string") {
@@ -48,38 +48,19 @@ export function normalizeInvoker(
   return invoker;
 }
 
-type ListKnownMachineUsersParams = {
-  client: OperatorClient;
-  workspaceId: string;
-  authNamespace: string;
-  /** Machine users that this deploy creates, which do not exist in the workspace yet. */
-  plannedMachineUsers?: Iterable<string>;
-};
-
-/**
- * List the machine user names a string invoker may refer to in an auth namespace.
- * @param params - Workspace, auth namespace, and machine users planned by the current deploy
- * @returns Names of machine users in the workspace plus the planned ones
- */
-export async function listKnownMachineUsers(
-  params: ListKnownMachineUsersParams,
-): Promise<ReadonlySet<string>> {
-  const { client, workspaceId, authNamespace, plannedMachineUsers = [] } = params;
-  const existing = await listAuthMachineUsersTolerant(client, workspaceId, authNamespace);
-  return new Set([...existing.map((machineUser) => machineUser.name), ...plannedMachineUsers]);
-}
-
 type ListInvokerMachineUsersParams = {
   client: OperatorClient;
   workspaceId: string;
   application: Readonly<Application>;
-  /** Machine user names that every config in the deploy run defines, keyed by Auth namespace. */
+  /** Machine users that each Auth namespace has after this deploy run, for the namespaces a config in the run defines. */
   plannedMachineUsers?: ReadonlyMap<string, ReadonlySet<string>>;
 };
 
 /**
  * List the machine users a string invoker of an application may refer to.
- * @param params - Client, workspace, application, and machine users planned by the deploy run
+ * When a config in the deploy run defines the Auth namespace, the machine users it lists are the final set,
+ * because the deploy deletes the ones it no longer lists. Otherwise the workspace's machine users are used.
+ * @param params - Client, workspace, application, and machine users the deploy run defines
  * @returns Known machine user names, or undefined when the application has no Auth namespace
  */
 export async function listInvokerMachineUsers(
@@ -88,13 +69,8 @@ export async function listInvokerMachineUsers(
   const { client, workspaceId, application, plannedMachineUsers } = params;
   const authNamespace = getApplicationAuthNamespace(application);
   if (!authNamespace) return undefined;
-  return listKnownMachineUsers({
-    client,
-    workspaceId,
-    authNamespace,
-    plannedMachineUsers: [
-      ...Object.keys(application.authService?.config.machineUsers ?? {}),
-      ...(plannedMachineUsers?.get(authNamespace) ?? []),
-    ],
-  });
+  const planned = plannedMachineUsers?.get(authNamespace);
+  if (planned) return planned;
+  const existing = await listAuthMachineUsersTolerant(client, workspaceId, authNamespace);
+  return new Set(existing.map((machineUser) => machineUser.name));
 }
