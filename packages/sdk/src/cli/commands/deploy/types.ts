@@ -41,6 +41,8 @@ export interface PlanContext {
   expectedLocalStaticWebsiteNames?: ReadonlySet<string>;
   /** Planned external Auth IDP config names keyed by Auth namespace. */
   externalAuthIdpConfigNames?: ReadonlyMap<string, string | undefined>;
+  /** Machine user names that every config in the same deploy run defines, keyed by Auth namespace. */
+  plannedMachineUsers?: ReadonlyMap<string, ReadonlySet<string>>;
   /** TailorDB namespaces keyed by type name for same-run external trigger resolution. */
   tailorDBTypeNamespaces?: ReadonlyMap<string, string | undefined>;
   /** Pipeline namespaces keyed by resolver name for same-run external trigger resolution. */

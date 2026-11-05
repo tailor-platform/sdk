@@ -13,6 +13,7 @@ import {
   confirmDeploymentPlans,
   collectExpectedLocalStaticWebsiteNamesFromConfigs,
   collectExternalAuthIdpConfigNames,
+  collectPlannedMachineUsers,
   needsEnvRebuild,
   planDeploymentTargets,
   shouldForceApplyAll,
@@ -2167,6 +2168,42 @@ describe("collectExternalAuthIdpConfigNames", () => {
         fakeAuthTarget("shared-auth", "my-idp"),
       ]),
     ).not.toThrow();
+  });
+});
+
+describe("collectPlannedMachineUsers", () => {
+  function targetWithMachineUsers(
+    name: string,
+    machineUsers: ReadonlyArray<string>,
+  ): Parameters<typeof collectPlannedMachineUsers>[0][number] {
+    return {
+      application: {
+        authService: {
+          config: { name, machineUsers: Object.fromEntries(machineUsers.map((m) => [m, {}])) },
+        },
+      },
+    } as unknown as Parameters<typeof collectPlannedMachineUsers>[0][number];
+  }
+
+  test("collects the machine users each config declares, keyed by auth namespace", () => {
+    const result = collectPlannedMachineUsers([
+      targetWithMachineUsers("core-auth", ["customer-portal"]),
+      targetWithMachineUsers("other-auth", ["batch"]),
+    ]);
+
+    expect(result.get("core-auth")).toEqual(new Set(["customer-portal"]));
+    expect(result.get("other-auth")).toEqual(new Set(["batch"]));
+  });
+
+  test("ignores configs that only reference an external auth", () => {
+    const externalOnly = {
+      application: {
+        authService: undefined,
+        config: { auth: { name: "core-auth", external: true } },
+      },
+    } as unknown as Parameters<typeof collectPlannedMachineUsers>[0][number];
+
+    expect(collectPlannedMachineUsers([externalOnly]).size).toBe(0);
   });
 });
 

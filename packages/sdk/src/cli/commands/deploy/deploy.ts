@@ -272,7 +272,10 @@ export async function shouldForceApplyAll(
 
 type DeployRunPlanInputs = Pick<
   PlanContext,
-  "expectedLocalStaticWebsiteNames" | "externalAuthIdpConfigNames" | "runAppIds"
+  | "expectedLocalStaticWebsiteNames"
+  | "externalAuthIdpConfigNames"
+  | "plannedMachineUsers"
+  | "runAppIds"
 > & {
   /** Every event subscription in the run, resolved to its declaring config. */
   eventSubscriptions: ReadonlyArray<EventSubscription>;
@@ -429,6 +432,25 @@ export function collectExternalAuthIdpConfigNames(
   return idpConfigNames;
 }
 
+export function collectPlannedMachineUsers(
+  targets: ReadonlyArray<BuiltDeploymentTarget>,
+): ReadonlyMap<string, ReadonlySet<string>> {
+  const machineUsers = new Map<string, Set<string>>();
+  for (const target of targets) {
+    const authService = target.application.authService;
+    if (!authService) {
+      continue;
+    }
+    const { name } = authService.config;
+    const names = machineUsers.get(name) ?? new Set<string>();
+    for (const machineUserName of Object.keys(authService.config.machineUsers ?? {})) {
+      names.add(machineUserName);
+    }
+    machineUsers.set(name, names);
+  }
+  return machineUsers;
+}
+
 function collectDeployRunPlanInputs(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
   writes: boolean,
@@ -442,6 +464,7 @@ function collectDeployRunPlanInputs(
     ),
     expectedLocalStaticWebsiteNames: collectExpectedLocalStaticWebsiteNames(targets),
     externalAuthIdpConfigNames: collectExternalAuthIdpConfigNames(targets),
+    plannedMachineUsers: collectPlannedMachineUsers(targets),
   };
 }
 

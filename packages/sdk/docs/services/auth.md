@@ -314,6 +314,10 @@ export default createResolver({
 
 Type narrowing is provided by the generated `tailor.d.ts` (the `MachineUserNameRegistry` interface). Run `tailor generate` (or `deploy`) after defining new machine users to refresh it.
 
+`tailor deploy` checks every string `invoker` against the machine users of the Auth service it resolves to, and stops with `INVOKER_MACHINE_USER_NOT_FOUND` when the name does not exist. The check covers machine users that already exist in the workspace and machine users that configs deployed in the same run define.
+
+When the Auth service is an external one (`auth: { name: "...", external: true }`), the machine users are not in your config, so `tailor.d.ts` cannot narrow the invoker type and any string passes type checking. The deploy-time check is what catches a misspelled name in that case.
+
 ## OAuth 2.0 Clients
 
 Configure OAuth 2.0 clients for third-party applications:

@@ -107,8 +107,13 @@ describe("planExecutor", () => {
       resource?: Record<string, unknown>;
       sdkVersion?: string;
     }>,
+    workspaceMachineUsers: string[] = [],
   ): OperatorClient {
     return {
+      listAuthMachineUsers: vi.fn().mockResolvedValue({
+        machineUsers: workspaceMachineUsers.map((name) => ({ name })),
+        nextPageToken: "",
+      }),
       listExecutorExecutors: vi.fn().mockResolvedValue({
         executors: existingExecutors.map((e) => e.resource ?? { name: e.name }),
         nextPageToken: "",
@@ -148,6 +153,7 @@ describe("planExecutor", () => {
       resolverNames?: Record<string, string>;
       idpNames?: ReadonlyArray<string>;
       authName?: string;
+      authMachineUsers?: ReadonlyArray<string>;
       externalAuthName?: string;
     },
   ): Application {
@@ -175,7 +181,16 @@ describe("planExecutor", () => {
       tailorDBServices,
       resolverServices,
       idpServices,
-      authService: options?.authName ? { config: { name: options.authName } } : undefined,
+      authService: options?.authName
+        ? {
+            config: {
+              name: options.authName,
+              machineUsers: Object.fromEntries(
+                (options.authMachineUsers ?? []).map((name) => [name, {}]),
+              ),
+            },
+          }
+        : undefined,
       config: options?.externalAuthName
         ? { auth: { name: options.externalAuthName, external: true } }
         : {},
@@ -582,43 +597,81 @@ describe("planExecutor", () => {
       expect(variablesExpr).toContain("error: args.failed?.error");
     });
 
-    test("string invoker uses external auth config name", async () => {
-      const client = createMockClient([]);
-      const executor: Executor = {
-        name: "test-executor",
-        description: "Executor test-executor",
-        disabled: false,
-        trigger: {
-          kind: "schedule",
-          timezone: "UTC",
-          cron: "0 * * * *",
-        },
-        operation: {
-          kind: "function",
-          body: () => {},
-          invoker: "batch-user",
-        },
-      };
-      const application = createMockApplication([executor], {
-        externalAuthName: "external-auth",
-      });
+    describe("string invoker", () => {
+      function createInvokerExecutor(invoker: string): Executor {
+        return {
+          name: "test-executor",
+          description: "Executor test-executor",
+          disabled: false,
+          trigger: { kind: "schedule", timezone: "UTC", cron: "0 * * * *" },
+          operation: { kind: "function", body: () => {}, invoker },
+        };
+      }
 
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      });
-
-      const create = result.changeSet.creates[0]!;
-      const targetConfig = create.request.executor?.targetConfig?.config as {
+      type FunctionTarget = {
         case: "function";
         value: { invoker: { namespace: string; machineUserName: string } };
       };
-      expect(targetConfig.value.invoker).toEqual({
-        namespace: "external-auth",
-        machineUserName: "batch-user",
+
+      test("uses external auth config name when the machine user exists in the workspace", async () => {
+        const application = createMockApplication([createInvokerExecutor("batch-user")], {
+          externalAuthName: "external-auth",
+        });
+
+        const result = await planExecutor(
+          buildPlanContext(application, {
+            client: createMockClient([], ["batch-user"]),
+          }),
+        );
+
+        const targetConfig = result.changeSet.creates[0]!.request.executor?.targetConfig
+          ?.config as FunctionTarget;
+        expect(targetConfig.value.invoker).toEqual({
+          namespace: "external-auth",
+          machineUserName: "batch-user",
+        });
+      });
+
+      test("rejects a machine user that exists nowhere in the external auth namespace", async () => {
+        const application = createMockApplication([createInvokerExecutor("batch-usr")], {
+          externalAuthName: "external-auth",
+        });
+
+        await expect(
+          planExecutor(
+            buildPlanContext(application, {
+              client: createMockClient([], ["batch-user"]),
+            }),
+          ),
+        ).rejects.toMatchObject({
+          code: "INVOKER_MACHINE_USER_NOT_FOUND",
+          message: expect.stringContaining('Executor "test-executor"'),
+        });
+      });
+
+      test("accepts a machine user that another config in the same deploy creates", async () => {
+        const application = createMockApplication([createInvokerExecutor("batch-user")], {
+          externalAuthName: "external-auth",
+        });
+
+        const result = await planExecutor(
+          buildPlanContext(application, {
+            plannedMachineUsers: new Map([["external-auth", new Set(["batch-user"])]]),
+          }),
+        );
+
+        expect(result.changeSet.creates).toHaveLength(1);
+      });
+
+      test("accepts a machine user declared in the own auth config before it exists in the workspace", async () => {
+        const application = createMockApplication([createInvokerExecutor("batch-user")], {
+          authName: "my-auth",
+          authMachineUsers: ["batch-user"],
+        });
+
+        const result = await planExecutor(buildPlanContext(application));
+
+        expect(result.changeSet.creates).toHaveLength(1);
       });
     });
   });
