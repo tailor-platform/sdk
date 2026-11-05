@@ -74,3 +74,26 @@ export async function listInvokerMachineUsers(
   const existing = await listAuthMachineUsersTolerant(client, workspaceId, authNamespace);
   return new Set(existing.map((machineUser) => machineUser.name));
 }
+
+/** An invoker a resolver or an executor uses, kept to check it once every plan of the run is known. */
+export type InvokerReference = {
+  namespace: string;
+  machineUserName: string;
+  context: string;
+};
+
+/**
+ * Record a normalized invoker so it can be checked against the whole deploy run.
+ * @param references - Collector of the invokers the plan uses
+ * @param invoker - Normalized invoker, or undefined when the resource has none
+ * @param context - Contextual label used in error messages (e.g. `Resolver "foo"`)
+ * @returns The same invoker
+ */
+export function trackInvoker(
+  references: InvokerReference[],
+  invoker: { namespace: string; machineUserName: string } | undefined,
+  context: string,
+): { namespace: string; machineUserName: string } | undefined {
+  if (invoker) references.push({ ...invoker, context });
+  return invoker;
+}

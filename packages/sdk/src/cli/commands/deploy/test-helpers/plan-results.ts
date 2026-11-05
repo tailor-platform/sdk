@@ -114,6 +114,7 @@ export function emptyPlanResults(): PlanResults {
       ...emptyOwnership(),
       existingServices: {},
       existingResolvers: new Map(),
+      invokerReferences: [],
     },
     app: Object.assign(
       createChangeSet("Applications"),
@@ -123,6 +124,7 @@ export function emptyPlanResults(): PlanResults {
       changeSet: createChangeSet("Executors"),
       ...emptyOwnership(),
       existingExecutors: {},
+      invokerReferences: [],
     },
     workflow: {
       changeSet: createChangeSet("Workflows"),

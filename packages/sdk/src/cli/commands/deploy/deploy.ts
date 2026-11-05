@@ -74,6 +74,7 @@ import {
   planFunctionRegistry,
 } from "./function-registry";
 import { planIdP } from "./idp";
+import { assertInvokersSurviveDeploy } from "./invoker-validation";
 import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn, sdkNameLabelKey } from "./label";
 import {
   assertUniqueGlobalResourceNames,
@@ -1004,6 +1005,7 @@ async function deployInternal(
         previousDeployments: reuse?.previousDeployments,
       });
       dropCrossDeploymentManagedDeletes(deployments);
+      assertInvokersSurviveDeploy(deployments);
       assertNoSingleRunTransferHandoff(deployments);
       return { planTargets, metadataClient, runInputs, deployments };
     };
