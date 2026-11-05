@@ -114,7 +114,7 @@ describe("content mapper", () => {
 
   test("types db.tailor with the Kysely types of the project's TailorDB definitions", async () => {
     using p = projectWithOrderTable();
-    const handlers = createContentMapperHandlers();
+    const handlers = createContentMapperHandlers(evaluateConfigInProcess);
     await handlers.initialize({ positionEncodings: ["utf-16"] });
     await open(handlers, p.tsconfig);
 
@@ -132,7 +132,7 @@ describe("content mapper", () => {
 
   test("reports db.tailor when tailor.config.ts does not configure kyselyTypePlugin, and still types registry.tailor", async () => {
     using p = project();
-    const handlers = createContentMapperHandlers();
+    const handlers = createContentMapperHandlers(evaluateConfigInProcess);
     await handlers.initialize({ positionEncodings: ["utf-16"] });
     await open(handlers, p.tsconfig);
 
@@ -152,7 +152,7 @@ describe("content mapper", () => {
       p.config,
       ORDER_TABLE_CONFIG.replace("contentMapper: true", 'distPath: "./generated/db.ts"'),
     );
-    const handlers = createContentMapperHandlers();
+    const handlers = createContentMapperHandlers(evaluateConfigInProcess);
     await handlers.initialize({ positionEncodings: ["utf-16"] });
     await open(handlers, p.tsconfig);
 
@@ -171,7 +171,7 @@ describe("content mapper", () => {
 
   test("reports db.tailor when a TailorDB definition fails to load, and still types registry.tailor", async () => {
     using p = projectWithOrderTable();
-    const handlers = createContentMapperHandlers();
+    const handlers = createContentMapperHandlers(evaluateConfigInProcess);
     await handlers.initialize({ positionEncodings: ["utf-16"] });
     await open(handlers, p.tsconfig);
 
@@ -207,7 +207,7 @@ describe("content mapper", () => {
 
   test("changes its identity and db.tailor types when a TailorDB definition changes", async () => {
     using p = projectWithOrderTable();
-    const handlers = createContentMapperHandlers();
+    const handlers = createContentMapperHandlers(evaluateConfigInProcess);
     await handlers.initialize({ positionEncodings: ["utf-16"] });
     const before = await open(handlers, p.tsconfig);
 
