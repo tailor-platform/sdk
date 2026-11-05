@@ -54,22 +54,22 @@ export function createMockClient(overrides: MockClientOverrides = {}): OperatorC
   } as unknown as OperatorClient;
 }
 
-let mockedPendingMigrations: PendingMigration[] = [];
-
 type MockedRemoteState = Pick<RemoteMigrationState, "number" | "historyId"> &
   Partial<RemoteMigrationState>;
+
+export type PlannedPendingMigrations = TailorDBPlanResult["context"]["pendingMigrations"];
 
 /**
  * Have the mocked detection find `migrations` pending and read each namespace's checkpoint the way
  * the real detection does, so the deploy expects that checkpoint.
  * @param migrations - Migrations to report as pending
  * @param remoteStateOf - Checkpoint, history ID, and any other remote state of a namespace when the detection runs
+ * @returns The pending migrations a plan made at this point would record, for `context.pendingMigrations`
  */
 export function mockPendingMigrations(
   migrations: PendingMigration[],
   remoteStateOf: (namespace: string) => MockedRemoteState,
-): void {
-  mockedPendingMigrations = migrations;
+): PlannedPendingMigrations {
   vi.mocked(detectPendingMigrations).mockImplementation(
     async (_client, _workspaceId, namespaces, _configPath, overrides, remoteStates) => {
       for (const { namespace } of namespaces) {
@@ -87,24 +87,7 @@ export function mockPendingMigrations(
       return migrations;
     },
   );
-}
-
-/**
- * Have the plan context's pending migrations follow the latest `mockPendingMigrations` until a test
- * assigns them, as a plan of a Platform that has not changed since would record them.
- * @param context - Plan context to update
- * @returns The same context
- */
-export function planPendingMigrationsAsMocked<Context extends object>(context: Context): Context {
-  let assigned: TailorDBPlanResult["context"]["pendingMigrations"] | undefined;
-  return Object.defineProperty(context, "pendingMigrations", {
-    get: () => assigned ?? mockedPendingMigrations,
-    set: (value: TailorDBPlanResult["context"]["pendingMigrations"]) => {
-      assigned = value;
-    },
-    enumerable: true,
-    configurable: true,
-  });
+  return migrations.map(({ namespace, number }) => ({ namespace, number }));
 }
 
 export type RemoteCheckpoint = ReturnType<typeof createRemoteCheckpoint>;
@@ -147,13 +130,13 @@ export function createRemoteCheckpoint(initialNumber: number | null) {
     /**
      * Has the mocked detection find `migrations` pending on the checkpoint as it stands then.
      * @param migrations - Migrations to report as pending
+     * @returns The pending migrations a plan made at this point would record, for `context.pendingMigrations`
      */
-    mockPending: (migrations: PendingMigration[]): void => {
+    mockPending: (migrations: PendingMigration[]): PlannedPendingMigrations =>
       mockPendingMigrations(migrations, () => ({
         number: state.number,
         historyId: state.historyId,
-      }));
-    },
+      })),
     createMockClient: (overrides: MockClientOverrides = {}): OperatorClient =>
       createMockClient({
         getMetadata: vi.fn(async () => ({
@@ -238,8 +221,7 @@ function changeGroup(entries: ChangeEntries<TailorDBChangeSet[keyof TailorDBChan
  * Build a plan result for tests that mock the pending migrations. It skips the schema checks, so a
  * test that needs the remote schema verification before the apply belongs with the
  * "applyTailorDB migration label reconciliation" tests in `index.test.ts`, which read real
- * migration files. Unless `options.context` sets them, its pending migrations are those
- * `mockPendingMigrations` reports when the apply reads them.
+ * migration files.
  * @param options - Planned changes and context overrides
  * @returns Plan result for `applyTailorDB`
  */
@@ -252,32 +234,31 @@ export function createPlanResult(options: PlanResultOptions = {}): TailorDBPlanR
       type: changeGroup(options.type),
       gqlPermission: changeGroup(options.gqlPermission),
     },
-    context: Object.assign(
-      planPendingMigrationsAsMocked({
-        workspaceId: WORKSPACE_ID,
-        application: {
-          name: APP_NAME,
-          authService: { config: { name: "auth", machineUsers: { migrator: {} } } },
-          ...options.application,
-        },
-        tailorDBInputs: options.local
-          ? [
-              {
-                namespace: NAMESPACE,
-                config: {},
-                types: Object.fromEntries(options.local.map((type) => [type.name, type])),
-              },
-            ]
-          : [],
-        executorUsedTables: new Set<string>(),
-        config: mockConfig,
-        noSchemaCheck: true,
-        checkpointRepairs: [],
-        namespacesWithMigrations,
-        migrationFileState: captureMigrationFileState(namespacesWithMigrations),
-      }),
-      options.context,
-    ),
+    context: {
+      workspaceId: WORKSPACE_ID,
+      application: {
+        name: APP_NAME,
+        authService: { config: { name: "auth", machineUsers: { migrator: {} } } },
+        ...options.application,
+      },
+      tailorDBInputs: options.local
+        ? [
+            {
+              namespace: NAMESPACE,
+              config: {},
+              types: Object.fromEntries(options.local.map((type) => [type.name, type])),
+            },
+          ]
+        : [],
+      executorUsedTables: new Set<string>(),
+      config: mockConfig,
+      noSchemaCheck: true,
+      checkpointRepairs: [],
+      namespacesWithMigrations,
+      migrationFileState: captureMigrationFileState(namespacesWithMigrations),
+      pendingMigrations: [],
+      ...options.context,
+    },
   } as unknown as TailorDBPlanResult;
 }
 
