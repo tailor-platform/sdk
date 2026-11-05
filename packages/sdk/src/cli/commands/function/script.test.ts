@@ -146,6 +146,17 @@ describe("function script", () => {
     expect(script).toContain('getDB("tailordb")');
   });
 
+  test("fails when kyselyTypePlugin sets neither distPath nor contentMapper, instead of guessing where getDB comes from", async () => {
+    using tmp = tempCwd("sdk-function-script-");
+    using _logger = silenceLogger("info", "success", "warn");
+    mockConfig(tmp.dir, { plugins: [{ ...kyselyPluginStub, pluginConfig: {} }] });
+
+    const result = await runCommand(scriptCommand, ["scripts/fix.ts", "--namespace", "tailordb"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toMatch(/without a distPath or contentMapper: true/);
+  });
+
   test("generates db.ts and db.snapshot.json from local definitions without authentication by default", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");

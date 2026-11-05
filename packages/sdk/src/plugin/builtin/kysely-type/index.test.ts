@@ -116,6 +116,17 @@ describe("KyselyTypePlugin integration tests", () => {
       );
     });
 
+    test("rejects both options, neither option, and contentMapper: false at the type level", () => {
+      // @ts-expect-error distPath and contentMapper are mutually exclusive
+      expect(() => kyselyTypePlugin({ distPath: "./db.ts", contentMapper: true })).toThrow(
+        /not both/,
+      );
+      // @ts-expect-error one of distPath or contentMapper is required
+      expect(() => kyselyTypePlugin({ temporal: true })).toThrow(/requires either/);
+      // @ts-expect-error contentMapper only accepts true
+      expect(() => kyselyTypePlugin({ contentMapper: false })).toThrow(/requires either/);
+    });
+
     test("accepts contentMapper: true alone", () => {
       expect(kyselyTypePlugin({ contentMapper: true }).pluginConfig).toEqual({
         contentMapper: true,

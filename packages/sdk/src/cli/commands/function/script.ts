@@ -331,13 +331,12 @@ function resolveKyselyTypesImport(
 ): { specifier: string; generatedFile?: string } {
   const options = resolvePluginConfig(plugins, KyselyGeneratorID);
   const distPath = options?.distPath;
-  if (options?.contentMapper === true || distPath === undefined) {
-    return { specifier: SDK_KYSELY_DB_SPECIFIER };
-  }
-  if (distPath.length === 0) {
+  if (options?.contentMapper === true) return { specifier: SDK_KYSELY_DB_SPECIFIER };
+  if (!distPath) {
     throw CLIError({
       code: "KYSELY_TYPE_PLUGIN_INVALID",
-      message: "kyselyTypePlugin is configured with an empty distPath; cannot locate getDB().",
+      message:
+        "kyselyTypePlugin is configured without a distPath or contentMapper: true; cannot locate getDB().",
     });
   }
   const generatedFile = path.resolve(distPath);
