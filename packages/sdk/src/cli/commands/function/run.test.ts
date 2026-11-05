@@ -138,6 +138,20 @@ describe("function run --json", () => {
     expect(JSON.parse(stdout.output)).toMatchObject({ success: true });
   });
 
+  test("loads the config path from TAILOR_CONFIG_PATH when --config is absent", async () => {
+    vi.stubEnv("TAILOR_CONFIG_PATH", "env/tailor.config.ts");
+    using _stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+    try {
+      await runCommand(runFunctionCommand, [scriptPath, "--machine-user", "admin"]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+
+    expect(loadConfig).toHaveBeenCalledWith("env/tailor.config.ts");
+  });
+
   test.each([
     [["function", "test-run"]],
     [["function", "--verbose", "test-run"]],
