@@ -35,6 +35,7 @@ import { userCommand } from "./commands/user";
 import { workflowCommand } from "./commands/workflow";
 import { workspaceCommand } from "./commands/workspace";
 import { initCrashReporting } from "./crashreport";
+import { printNotificationBanner, startNotificationLookup } from "./notification-banner/index";
 import { queryCommand } from "./query";
 import {
   commonArgs,
@@ -149,6 +150,10 @@ void runMain(mainCommand, {
   setup: ({ agent }) => {
     setJsonDefaultAgent(agent?.id);
     loadEnvFilesFromArgv(process.argv.slice(2));
+    // Best-effort unread-notification lookup for the post-command banner, started after the
+    // env files so it sees their values. It runs alongside the command; cleanup prints it,
+    // waiting at most 150 ms for an answer.
+    startNotificationLookup(process.argv.slice(2));
   },
   // CLI plugin dispatch: an unknown subcommand at any level execs the external
   // `tailor-<path...>-<name>` binary, forwarding args and injecting context.
@@ -201,6 +206,8 @@ void runMain(mainCommand, {
         await reportCrash(error, "handledError");
       }
     }
+    // After the error (the user reads that first), before telemetry shuts down.
+    await printNotificationBanner({ error });
     const { shutdownTelemetry } = await import("#/cli/telemetry/index");
     await shutdownTelemetry();
   },

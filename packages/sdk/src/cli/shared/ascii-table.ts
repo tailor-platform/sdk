@@ -68,7 +68,7 @@ const ZERO_WIDTH_CLUSTER_PATTERN =
 // alone would measure as narrow/neutral.
 const RGI_EMOJI_PATTERN = /^\p{RGI_Emoji}$/v;
 
-function displayWidth(value: string): number {
+export function displayWidth(value: string): number {
   let width = 0;
   for (const { segment } of graphemeSegmenter.segment(value.replace(ANSI_ESCAPE_PATTERN, ""))) {
     if (ZERO_WIDTH_CLUSTER_PATTERN.test(segment)) {
