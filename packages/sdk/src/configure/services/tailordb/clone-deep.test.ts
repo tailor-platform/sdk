@@ -164,6 +164,19 @@ describe("cloneDeep", () => {
     });
   });
 
+  describe("objects that hold internal state", () => {
+    test.each([
+      ["Promise", Promise.resolve(1)],
+      ["WeakMap", new WeakMap()],
+      ["WeakSet", new WeakSet()],
+      ["URL", new URL("https://example.com/a")],
+      ["URLSearchParams", new URLSearchParams("a=1")],
+      ["AbortController", new AbortController()],
+    ])("returns a %s as it is, because a copy of it would be unusable", (_name, source) => {
+      expect(cloneDeep({ held: source }).held).toBe(source);
+    });
+  });
+
   describe("unusual objects", () => {
     test("keeps holes in sparse arrays", () => {
       const sparse: number[] = [];

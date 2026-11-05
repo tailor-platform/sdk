@@ -59,6 +59,16 @@ function clone<T>(value: T, seen: WeakMap<object, unknown>): T {
 
   const isBoxedPrimitive =
     value instanceof Number || value instanceof String || value instanceof Boolean;
+  const tag = Object.prototype.toString.call(value);
+  const isCopyable =
+    isBoxedPrimitive ||
+    value instanceof Error ||
+    tag === "[object Object]" ||
+    tag === "[object Arguments]" ||
+    Object.hasOwn(value, Symbol.toStringTag);
+  if (!isCopyable) {
+    return value;
+  }
   const copy = isBoxedPrimitive
     ? Object.setPrototypeOf(Object(value.valueOf()), Object.getPrototypeOf(value))
     : Object.create(Object.getPrototypeOf(value));
