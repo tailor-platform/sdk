@@ -68,7 +68,7 @@ export async function loadApplicationNamespaces(
  * @param selector - Namespaces to load; omit to load all owned namespaces
  * @returns The config, plugins, application, and TailorDB namespace data.
  */
-async function loadConfigNamespaces(
+export async function loadConfigNamespaces(
   config: LoadedConfig,
   plugins: Plugin[],
   selector?: TailorDBNamespaceSelector,

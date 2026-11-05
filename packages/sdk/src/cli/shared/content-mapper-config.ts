@@ -8,6 +8,7 @@ import { TAILOR_FILE_EXTENSION } from "./tailor-file-extension";
 interface ContentMapperEntry {
   package?: unknown;
   extensions?: unknown;
+  options?: unknown;
 }
 
 interface Project {
@@ -24,6 +25,15 @@ function isSdkMapper(entry: unknown): boolean {
   return (
     name === SDK_PACKAGE && Array.isArray(extensions) && extensions.includes(TAILOR_FILE_EXTENSION)
   );
+}
+
+function configOption(entry: ContentMapperEntry): string | undefined {
+  const { options } = entry;
+  const config =
+    typeof options === "object" && options !== null
+      ? (options as { config?: unknown }).config
+      : undefined;
+  return typeof config === "string" ? config : undefined;
 }
 
 function includes(tsconfigPath: string, file: string): Project | undefined {
@@ -63,8 +73,9 @@ function projectFor(file: string): Project | undefined {
  * `tailor.d.ts` for it is not needed. The project is the one TypeScript's
  * language server picks: the nearest tsconfig.json that includes the file, or
  * that references a project which does, with `extends` resolved. The mapper
- * then looks for `tailor.config.ts` upward from that tsconfig's directory, so
- * this is true only when that search finds this very file.
+ * then reads the config its `config` option names, or else looks for
+ * `tailor.config.ts` upward from that tsconfig's directory, so this is true
+ * only when that is this very file.
  * @param configPath - Path of `tailor.config.ts`
  * @returns true when the mapper is enabled and resolves this config; false when it is not, resolves another file, or the tsconfig cannot be read
  */
@@ -74,8 +85,14 @@ export function isContentMapperEnabled(configPath: string): boolean {
     const project = projectFor(file);
     if (!project) return false;
     const { contentMappers } = project.config as { contentMappers?: unknown };
-    if (!Array.isArray(contentMappers) || !contentMappers.some(isSdkMapper)) return false;
-    const found = findUpSync(DEFAULT_CONFIG_PATH, { cwd: path.dirname(project.tsconfigPath) });
+    const entry = Array.isArray(contentMappers) ? contentMappers.find(isSdkMapper) : undefined;
+    if (!entry) return false;
+    const directory = path.dirname(project.tsconfigPath);
+    const option = configOption(entry);
+    const found =
+      option === undefined
+        ? findUpSync(DEFAULT_CONFIG_PATH, { cwd: directory })
+        : path.resolve(directory, option);
     return found !== undefined && path.resolve(found) === file;
   } catch {
     return false;

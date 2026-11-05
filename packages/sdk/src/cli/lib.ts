@@ -25,6 +25,11 @@ export {
   loadEnvFilesFromArgv,
   type CommonArgsType,
 } from "./shared/args";
+export {
+  tailorResolvers,
+  type ResolverClientPlugin,
+  type TailorResolversOptions,
+} from "./resolver-client/vite-plugin";
 export { deploy, deploy as apply } from "./commands/deploy/deploy";
 export type { DeployOptions, DeployOptions as ApplyOptions } from "./commands/deploy/deploy";
 export type { BundledScripts } from "./commands/deploy/function-registry";

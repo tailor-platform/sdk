@@ -62,6 +62,38 @@ describe("isContentMapperEnabled", () => {
     );
   });
 
+  test("is false when the mapper's config option names another config than this one", () => {
+    using t = tempDir("mapper-config-");
+    write(path.join(t.dir, "tsconfig.json"), {
+      contentMappers: [
+        {
+          package: "@tailor-platform/sdk",
+          extensions: [".tailor"],
+          options: { config: "./backend/tailor.config.ts" },
+        },
+      ],
+    });
+    write(path.join(t.dir, "tailor.config.ts"), "");
+
+    expect(isContentMapperEnabled(path.join(t.dir, "tailor.config.ts"))).toBe(false);
+  });
+
+  test("is true when the mapper's config option names this config, even though its name is not tailor.config.ts", () => {
+    using t = tempDir("mapper-config-");
+    write(path.join(t.dir, "tsconfig.json"), {
+      contentMappers: [
+        {
+          package: "@tailor-platform/sdk",
+          extensions: [".tailor"],
+          options: { config: "./custom.config.ts" },
+        },
+      ],
+    });
+    write(path.join(t.dir, "custom.config.ts"), "");
+
+    expect(isContentMapperEnabled(path.join(t.dir, "custom.config.ts"))).toBe(true);
+  });
+
   test("matches the config it finds by its normalized path, so a Windows path with backslashes still counts", () => {
     using t = tempDir("mapper-config-");
     write(path.join(t.dir, "tsconfig.json"), MAPPER);
