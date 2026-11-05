@@ -334,23 +334,38 @@ export type AuthServiceInput<
 };
 
 declare const authDefinitionBrand: unique symbol;
-export type AuthDefinitionBrand = { readonly [authDefinitionBrand]: true };
+type AuthDefinitionBrand = { readonly [authDefinitionBrand]: true };
 
 export type DefinedAuth<Name extends string, Config> = Config & {
   name: Name;
-} & AuthDefinitionBrand;
+} & AuthDefinitionBrand & {
+    /**
+     * Reference this auth from another app's config as an external auth.
+     * Only the name and the machine users are taken over; the app that defines the auth still deploys the rest.
+     * @returns External auth reference to use as `auth` of the other app's `defineConfig`
+     */
+    asExternal(): AuthExternalReference<Name, Config>;
+  };
 
-export type AuthExternalConfig = { name: string; external: true };
+export type AuthExternalConfig = {
+  name: string;
+  external: true;
+};
+
+/** Reference to another app's auth returned by `asExternal()` of a `defineAuth` result. */
+type AuthExternalReference<Name extends string, Config> = {
+  readonly name: Name;
+  readonly external: true;
+  readonly machineUsers: [Config] extends [{ machineUsers?: infer MachineUsers }]
+    ? NonNullable<MachineUsers>
+    : never;
+};
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AuthServiceInputLoose = AuthServiceInput<any, any, any, string, any>;
 
-export type AuthOwnConfig = DefinedAuth<
-  string,
-  // Intentionally permissive: AuthConfig is the "container" type for AppConfig.auth.
-  // We want any concrete `defineAuth(...)` result to be assignable here, while the
-  // strong typing remains on the `defineAuth` return type itself.
-  AuthServiceInputLoose
->;
+export type AuthOwnConfig = AuthServiceInputLoose & {
+  name: string;
+} & AuthDefinitionBrand;
 
 export type AuthConfig = AuthOwnConfig | AuthExternalConfig;

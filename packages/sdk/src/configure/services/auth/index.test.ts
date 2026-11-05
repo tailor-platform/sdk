@@ -5,6 +5,7 @@ import { t } from "#/configure/types/type";
 import { db } from "../tailordb/schema";
 import { defineAuth } from "./index";
 import type {
+  AuthConfig,
   BeforeLoginHook,
   BeforeLoginHookArgs,
   FederatedIdentity,
@@ -204,6 +205,53 @@ describe("defineAuth", () => {
     });
 
     expect(authConfig.machineUsers?.worker.attributes).toBeUndefined();
+  });
+
+  describe("asExternal", () => {
+    const coreAuth = defineAuth("core-auth", {
+      userProfile: basicUserProfile,
+      machineUsers: { portal: {}, batch: {} },
+      oauth2Clients: { web: { redirectURIs: ["https://example.com/callback"] } },
+    });
+
+    test("returns an external reference carrying the name and machine users", () => {
+      expect(coreAuth.asExternal()).toEqual({
+        name: "core-auth",
+        external: true,
+        machineUsers: { portal: {}, batch: {} },
+      });
+    });
+
+    test("does not add asExternal to the keys of the definition itself", () => {
+      expect(Object.keys(coreAuth)).not.toContain("asExternal");
+    });
+
+    test("keeps the name and machine user names as literal types", () => {
+      const external = coreAuth.asExternal();
+
+      expectTypeOf(external.name).toEqualTypeOf<"core-auth">();
+      expectTypeOf(external.external).toEqualTypeOf<true>();
+      expectTypeOf<keyof typeof external.machineUsers>().toEqualTypeOf<"portal" | "batch">();
+    });
+
+    test("carries an empty machine user record when the definition has none", () => {
+      const noMachineUsers = defineAuth("lonely-auth", { userProfile: basicUserProfile });
+
+      expect(noMachineUsers.asExternal().machineUsers).toEqual({});
+    });
+
+    test("keeps narrowing an auth config by `in machineUsers`", () => {
+      const oauth2ClientsOf = (auth: AuthConfig) =>
+        "machineUsers" in auth ? auth.oauth2Clients : undefined;
+
+      expect(oauth2ClientsOf(coreAuth)).toBeDefined();
+      expect(oauth2ClientsOf(coreAuth.asExternal())).toBeUndefined();
+    });
+
+    test("is accepted wherever an auth config is", () => {
+      const _config: AuthConfig = coreAuth.asExternal();
+      expect(_config.name).toBe("core-auth");
+    });
   });
 
   describe("name literal type inference", () => {

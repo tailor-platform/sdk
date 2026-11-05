@@ -329,6 +329,18 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
     expect(content).not.toContain("nickname: string;");
   });
 
+  test("extracts machine user names from an external auth reference", () => {
+    const coreAuth = defineAuth("core-auth", {
+      machineUserAttributes: {},
+      machineUsers: { portal: {}, batch: {} },
+    });
+    const config = { name: "portal-app", auth: coreAuth.asExternal() };
+
+    const { machineUserNames } = extractAttributesFromConfig(config);
+
+    expect(machineUserNames).toEqual(["portal", "batch"]);
+  });
+
   test("extracts machine user names into MachineUserNameRegistry", () => {
     const config = {
       name: "test-app",
