@@ -1,5 +1,8 @@
+import * as fs from "node:fs";
 import * as mod from "node:module";
 import { fileURLToPath } from "node:url";
+import { findUpSync } from "find-up-simple";
+import { createPathsMatcher, getTsconfig } from "get-tsconfig";
 import * as path from "pathe";
 
 let collecting: Set<string> | undefined;
@@ -15,8 +18,54 @@ function isLocalSpecifier(specifier: string): boolean {
   return specifier.startsWith("./") || specifier.startsWith("../") || specifier.startsWith("/");
 }
 
-function candidatePaths(specifier: string, parentURL: string): string[] {
-  const target = fileURLToPath(new URL(specifier, parentURL));
+function packageImportTargets(specifier: string, parentDir: string): string[] {
+  const packageJson = findUpSync("package.json", { cwd: parentDir });
+  if (!packageJson) return [];
+  const imports = (JSON.parse(fs.readFileSync(packageJson, "utf8")) as { imports?: unknown })
+    .imports;
+  if (typeof imports !== "object" || imports === null) return [];
+  const leaves = (target: unknown): string[] =>
+    typeof target === "string"
+      ? [target]
+      : typeof target === "object" && target !== null
+        ? Object.values(target).flatMap(leaves)
+        : [];
+  return Object.entries(imports).flatMap(([key, target]) => {
+    const star = key.indexOf("*");
+    const matched =
+      star < 0
+        ? key === specifier
+          ? ""
+          : undefined
+        : specifier.startsWith(key.slice(0, star)) && specifier.endsWith(key.slice(star + 1))
+          ? specifier.slice(star, specifier.length - (key.length - star - 1))
+          : undefined;
+    return matched === undefined
+      ? []
+      : leaves(target).map((leaf) =>
+          path.resolve(path.dirname(packageJson), leaf.replace("*", matched)),
+        );
+  });
+}
+
+function tsconfigPathTargets(specifier: string, parentDir: string): string[] {
+  const tsconfig = getTsconfig(parentDir);
+  return (tsconfig && createPathsMatcher(tsconfig)?.(specifier)) || [];
+}
+
+function missingTargets(specifier: string, parentURL: string): string[] {
+  if (isLocalSpecifier(specifier)) return [fileURLToPath(new URL(specifier, parentURL))];
+  const parentDir = path.dirname(fileURLToPath(parentURL));
+  try {
+    return specifier.startsWith("#")
+      ? packageImportTargets(specifier, parentDir)
+      : tsconfigPathTargets(specifier, parentDir);
+  } catch {
+    return [];
+  }
+}
+
+function candidatePaths(target: string): string[] {
   if (!KNOWN_EXTENSIONS.some((extension) => target.endsWith(extension))) {
     return [
       ...TS_EXTENSIONS.map((extension) => target + extension),
@@ -40,9 +89,13 @@ export function observeLoadedFiles(): void {
       try {
         return nextResolve(specifier, context);
       } catch (error) {
-        if (collecting && context.parentURL?.startsWith("file:") && isLocalSpecifier(specifier)) {
-          for (const candidate of candidatePaths(specifier, context.parentURL)) {
-            collecting.add(candidate);
+        if (
+          collecting &&
+          context.parentURL?.startsWith("file:") &&
+          !specifier.startsWith("node:")
+        ) {
+          for (const target of missingTargets(specifier, context.parentURL)) {
+            for (const candidate of candidatePaths(target)) collecting.add(candidate);
           }
         }
         throw error;

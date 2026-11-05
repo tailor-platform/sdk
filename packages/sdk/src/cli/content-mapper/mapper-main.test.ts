@@ -174,4 +174,76 @@ describe("content mapper process", () => {
     },
     TIMEOUT_MS,
   );
+
+  test.each([
+    {
+      name: "a tsconfig paths alias",
+      files: {
+        "tsconfig.json": JSON.stringify({ compilerOptions: { paths: { "@/*": ["./src/*"] } } }),
+      },
+      specifier: "@/stages",
+      created: ["src/stages.ts", "src/stages.mts", "src/stages/index.ts"],
+    },
+    {
+      name: "a tsconfig paths alias in a tsconfig with comments and trailing commas",
+      files: {
+        "tsconfig.json": `{
+  // aliases
+  "compilerOptions": { "paths": { "@/*": ["./src/*"], }, },
+}`,
+      },
+      specifier: "@/stages",
+      created: ["src/stages.ts", "src/stages.mts", "src/stages/index.ts"],
+    },
+    {
+      name: "a tsconfig paths alias inherited through extends",
+      files: {
+        "tsconfig.json": JSON.stringify({ extends: "./tsconfig.base.json" }),
+        "tsconfig.base.json": JSON.stringify({
+          compilerOptions: { paths: { "@/*": ["./lib/*"] } },
+        }),
+      },
+      specifier: "@/stages",
+      created: ["lib/stages.ts", "lib/stages.mts", "lib/stages/index.ts"],
+    },
+    {
+      name: "a package.json imports pattern",
+      files: { "package.json": JSON.stringify({ imports: { "#app/*": "./src/*" } }) },
+      specifier: "#app/stages",
+      created: ["src/stages.ts", "src/stages.mts", "src/stages/index.ts"],
+    },
+    {
+      name: "a package.json imports pattern with conditions",
+      files: {
+        "package.json": JSON.stringify({
+          imports: { "#app/*.js": { import: "./src/*.ts", default: "./lib/*.js" } },
+        }),
+      },
+      specifier: "#app/stages.js",
+      created: ["src/stages.ts", "lib/stages.js"],
+    },
+    {
+      name: "an exact package.json imports key",
+      files: { "package.json": JSON.stringify({ imports: { "#stages": "./src/stages.ts" } }) },
+      specifier: "#stages",
+      created: ["src/stages.ts"],
+    },
+  ])(
+    "watches where $name would find a file that does not exist yet",
+    async ({ files, specifier, created }) => {
+      const dir = projectDir();
+      for (const [name, content] of Object.entries(files)) {
+        fs.writeFileSync(path.join(dir, name), content);
+      }
+      fs.writeFileSync(path.join(dir, "tailor.config.ts"), `import "${specifier}";\n${CONFIG}`);
+      const mapper = startMapper();
+
+      const opened = await open(mapper, dir);
+
+      expect(opened.watchedFiles).toEqual(
+        expect.arrayContaining(created.map((file) => path.join(dir, file))),
+      );
+    },
+    TIMEOUT_MS,
+  );
 });
