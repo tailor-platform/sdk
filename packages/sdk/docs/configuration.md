@@ -564,3 +564,5 @@ import { getDB } from "@tailor-platform/sdk/plugin/kysely-type/db";
 ```
 
 TypeScript 7.1 or later derives the types of that `getDB()` from your TailorDB definitions and the plugin options, `temporal` included, when the SDK is enabled as a content mapper for `.tailor` files as described in [Type Definitions Without `tailor generate`](#type-definitions-without-tailor-generate). Without the mapper, no types are available for it; use `distPath` instead of `contentMapper: true` so `tailor generate` writes the types file, and import `getDB()` from that file.
+
+The types follow edits to your TailorDB definition files and to the plugin options. A new definition file is not picked up while TypeScript is running: restart the TypeScript server in your editor, or the `tsc --watch` process, after adding one. A single `tsc` run always reads the current files.
