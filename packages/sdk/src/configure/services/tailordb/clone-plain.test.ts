@@ -41,6 +41,113 @@ describe("clonePlain", () => {
     expect(copy.own).toEqual({ nested: 1 });
   });
 
+  describe("collections and binary values", () => {
+    test("copies Map keys and values deeply", () => {
+      const key = { k: 1 };
+      const value = { v: [1] };
+      const copy = clonePlain(new Map([[key, value]]));
+      const [copiedKey, copiedValue] = [...copy][0]!;
+      expect(copiedKey).toEqual(key);
+      expect(copiedKey).not.toBe(key);
+      expect(copiedValue).toEqual(value);
+      expect(copiedValue).not.toBe(value);
+    });
+
+    test("copies Set members deeply", () => {
+      const member = { m: 1 };
+      const copy = clonePlain(new Set([member, 2]));
+      const [copiedMember] = [...copy];
+      expect(copy.size).toBe(2);
+      expect(copiedMember).toEqual(member);
+      expect(copiedMember).not.toBe(member);
+    });
+
+    test("copies RegExp source, flags and lastIndex", () => {
+      const source = /ab+c/gi;
+      source.lastIndex = 3;
+      const copy = clonePlain(source);
+      expect(copy).not.toBe(source);
+      expect(copy.source).toBe("ab+c");
+      expect(copy.flags).toBe("gi");
+      expect(copy.lastIndex).toBe(3);
+    });
+
+    test("copies ArrayBuffer and typed arrays without sharing memory", () => {
+      const bytes = new Uint8Array([1, 2, 3]);
+      const copy = clonePlain({ bytes, buffer: bytes.buffer });
+      copy.bytes[0] = 9;
+      expect(bytes[0]).toBe(1);
+      expect(copy.buffer).not.toBe(bytes.buffer);
+      expect(copy.bytes).toBeInstanceOf(Uint8Array);
+    });
+
+    test("keeps the offset and length of a DataView over part of a buffer", () => {
+      const view = new DataView(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]).buffer, 2, 4);
+      const copy = clonePlain(view);
+      expect(copy.byteOffset).toBe(2);
+      expect(copy.byteLength).toBe(4);
+      expect(copy.getUint8(0)).toBe(3);
+      expect(copy.buffer).not.toBe(view.buffer);
+    });
+  });
+
+  describe("references", () => {
+    test("rebuilds a circular reference in the copy instead of overflowing the stack", () => {
+      const source: { name: string; self?: unknown } = { name: "a" };
+      source.self = source;
+      const copy = clonePlain(source);
+      expect(copy).not.toBe(source);
+      expect(copy.self).toBe(copy);
+    });
+
+    test("keeps two references to one object pointing at a single copy", () => {
+      const shared = { s: 1 };
+      const copy = clonePlain({ a: shared, b: [shared] });
+      expect(copy.a).not.toBe(shared);
+      expect(copy.b[0]).toBe(copy.a);
+    });
+  });
+
+  describe("unusual objects", () => {
+    test("keeps holes in sparse arrays", () => {
+      const sparse: number[] = [];
+      sparse[0] = 1;
+      sparse[2] = 3;
+      const copy = clonePlain(sparse);
+      expect(copy.length).toBe(3);
+      expect(1 in copy).toBe(false);
+    });
+
+    test("copies a __proto__ key from JSON as an own property without changing the prototype", () => {
+      const source = JSON.parse('{"a":1,"__proto__":{"polluted":"yes"}}');
+      const copy = clonePlain(source);
+      expect(Object.getPrototypeOf(copy)).toBe(Object.prototype);
+      expect((copy as { polluted?: string }).polluted).toBeUndefined();
+      expect(Object.keys(copy)).toEqual(["a", "__proto__"]);
+    });
+
+    test("keeps a null prototype", () => {
+      const source = Object.assign(Object.create(null), { a: { b: 1 } });
+      const copy = clonePlain(source);
+      expect(Object.getPrototypeOf(copy)).toBeNull();
+      expect(copy.a).not.toBe(source.a);
+    });
+
+    test("deep-copies a plain object whose Symbol.toStringTag claims another type", () => {
+      const source = { a: { b: 1 }, [Symbol.toStringTag]: "Map" };
+      const copy = clonePlain(source);
+      expect(copy.a).toEqual({ b: 1 });
+      expect(copy.a).not.toBe(source.a);
+    });
+
+    test("copies an object that shadows hasOwnProperty", () => {
+      const source = { hasOwnProperty: 1, nested: { n: 1 } };
+      const copy = clonePlain(source);
+      expect(copy.hasOwnProperty).toBe(1);
+      expect(copy.nested).not.toBe(source.nested);
+    });
+  });
+
   test.each([
     ["primitives", 1],
     ["null", null],
