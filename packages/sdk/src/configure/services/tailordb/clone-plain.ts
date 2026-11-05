@@ -6,11 +6,13 @@ export function clonePlain<T>(value: T): T {
     return new Date(value.getTime()) as T;
   }
   if (typeof value === "object" && value !== null) {
-    const copy = Object.create(Object.getPrototypeOf(value));
-    for (const [k, v] of Object.entries(value)) {
-      copy[k] = clonePlain(v);
-    }
-    return copy;
+    return Object.keys(value).reduce<Record<string, unknown>>(
+      (copy, key) => {
+        copy[key] = clonePlain((value as Record<string, unknown>)[key]);
+        return copy;
+      },
+      Object.create(Object.getPrototypeOf(value)),
+    ) as T;
   }
   return value;
 }
