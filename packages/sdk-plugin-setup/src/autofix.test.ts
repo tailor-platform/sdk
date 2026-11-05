@@ -1124,15 +1124,76 @@ describe("tailor-codemod step script", () => {
     ]);
   });
 
-  test("runs no codemod when the base branch resolves the SDK the same way, such as to a link", () => {
-    using tmp = tempDir("codemod-step-");
-    const link = pnpmLock(
-      "  .:\n    dependencies:\n      '@tailor-platform/sdk':\n        specifier: link:../sdk\n        version: link:../sdk\n",
-    );
-    const { result, calls } = runCodemodStep(tmp.dir, { baseLock: link, headLock: link });
-    expect(result.failure).toBeUndefined();
-    expect(calls).toEqual([]);
-  });
+  test.each([
+    [
+      "pnpm-lock.yaml",
+      pnpmLock(
+        "  .:\n    dependencies:\n      '@tailor-platform/sdk':\n        specifier: link:../sdk\n        version: link:../sdk\n",
+      ),
+      "link:../sdk",
+    ],
+    [
+      "package-lock.json",
+      JSON.stringify({
+        name: "root",
+        lockfileVersion: 3,
+        packages: {
+          "": { name: "root", workspaces: ["packages/sdk"] },
+          "node_modules/@tailor-platform/sdk": { resolved: "packages/sdk", link: true },
+          "packages/sdk": { name: "@tailor-platform/sdk", version: "3.0.0" },
+        },
+      }),
+      "link:packages/sdk",
+    ],
+    [
+      "yarn.lock",
+      [
+        "__metadata:",
+        "  version: 8",
+        "  cacheKey: 10c0",
+        "",
+        '"@tailor-platform/sdk@workspace:*, @tailor-platform/sdk@workspace:packages/sdk":',
+        "  version: 0.0.0-use.local",
+        '  resolution: "@tailor-platform/sdk@workspace:packages/sdk"',
+        "",
+        '"app@workspace:.":',
+        "  version: 0.0.0-use.local",
+        '  resolution: "app@workspace:."',
+        "  dependencies:",
+        '    "@tailor-platform/sdk": "workspace:*"',
+        "",
+      ].join("\n"),
+      "workspace:*",
+    ],
+    [
+      "bun.lock",
+      JSON.stringify({
+        lockfileVersion: 1,
+        workspaces: {
+          "": { name: "root", devDependencies: { "@tailor-platform/sdk": "workspace:*" } },
+          "packages/sdk": { name: "@tailor-platform/sdk", version: "3.0.0" },
+        },
+        packages: { "@tailor-platform/sdk": ["@tailor-platform/sdk@workspace:packages/sdk"] },
+      }),
+      "workspace:packages/sdk",
+    ],
+  ])(
+    "%s: notes that no codemod runs when both branches link the SDK instead of naming a version",
+    (lockfile, lock, reference) => {
+      using tmp = tempDir("codemod-step-");
+      const { result, calls, annotations } = runCodemodStep(tmp.dir, {
+        codemod: "error",
+        lockfile,
+        baseLock: lock,
+        headLock: lock,
+      });
+      expect(result.failure).toBeUndefined();
+      expect(calls).toEqual([]);
+      expect(annotations).toEqual([
+        `::notice::@tailor-platform/sdk for the root app is ${reference} on both branches, not a version, so no codemod runs there.`,
+      ]);
+    },
+  );
 
   test("fails when it cannot read the SDK version from the pull request's lockfile either", () => {
     using tmp = tempDir("codemod-step-");

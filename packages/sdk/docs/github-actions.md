@@ -437,7 +437,8 @@ tailor setup ci autofix --codemod deterministic  # commit what they rewrite
 - **Which upgrade:** for each `--dir`, the workflow upgrades from the SDK
   version that the lockfile at the repository root resolves on the pull
   request's base branch to the version the pull request installs. A pull
-  request that keeps the version runs no codemod.
+  request that keeps the version, or keeps the SDK linked from a workspace
+  (such as with `workspace:*`), runs no codemod.
 - **Reports:** the files left for you get annotations, and the job summary
   lists every file, with the migration prompt of each change left for review.
   Hand the prompt to an AI coding assistant, or follow it yourself.
@@ -459,7 +460,9 @@ tailor setup ci autofix --codemod deterministic  # commit what they rewrite
 - **Lockfile:** bun needs the text `bun.lock`, not `bun.lockb`. A `yarn.lock`
   does not record which app uses which version, so when the base branch has
   several SDK versions and the pull request changes them, the workflow fails and
-  you run `tailor upgrade` yourself.
+  you run `tailor upgrade` yourself. Yarn 1 leaves workspace packages out of
+  `yarn.lock`, so the workflow also fails for an app that takes the SDK from a
+  workspace there.
 - **Skipped pull requests:** fork and Dependabot pull requests skip the whole
   workflow (except fork pull requests with `autofix-ci`), so `error` does not
   check them, and a skipped check counts as passing.

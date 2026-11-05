@@ -84,6 +84,7 @@ jobs:
 
           const SDK = "@tailor-platform/sdk";
           const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+          const LOCAL = /^(?:workspace|link|portal|file):/;
           const [command, ...prefix] = "__TAILOR_CLI__".split(" ");
           const mode = process.env.CODEMOD;
           const lockfile = process.env.LOCKFILE;
@@ -171,35 +172,38 @@ jobs:
             const { packages = {} } = JSON.parse(lock);
             for (const candidate of ancestors(dir)) {
               const entry = packages[path.posix.join(candidate, "node_modules", SDK)];
-              if (entry) return entry.version;
+              if (entry) return entry.link ? `link:${entry.resolved}` : entry.version;
             }
           }
 
           function yarnVersions(lock) {
             const versions = new Set();
+            let local;
             let inSdk = false;
             for (const line of lock.split(/\r?\n/)) {
               if (/^[^\s#]/.test(line)) {
-                inSdk = line
+                const ranges = line
                   .split(/,\s*/)
-                  .map((spec) => spec.replace(/^"/, ""))
-                  .some(
-                    (spec) =>
-                      spec.startsWith(`${SDK}@`) && !/@(?:workspace|link|portal|file):/.test(spec),
-                  );
+                  .map((spec) => spec.replace(/^"|"?:?$/g, ""))
+                  .filter((spec) => spec.startsWith(`${SDK}@`))
+                  .map((spec) => spec.slice(SDK.length + 1));
+                local ??= ranges.find((range) => LOCAL.test(range));
+                inSdk = ranges.some((range) => !LOCAL.test(range));
               } else if (inSdk) {
                 const entry = /^ {2}version:? "?([^"\s]+)"?$/.exec(line);
                 if (entry) versions.add(entry[1]);
               }
             }
-            return versions;
+            return { versions, local };
           }
 
           // yarn.lock does not record which workspace uses which version.
           function yarnVersion(lock, dir) {
-            const versions = [...yarnVersions(lock)];
-            if (versions.length <= 1) return versions[0];
-            const head = yarnVersions(headLock);
+            const { versions: found, local } = yarnVersions(lock);
+            const versions = [...found];
+            if (versions.length === 0) return local;
+            if (versions.length === 1) return versions[0];
+            const head = yarnVersions(headLock).versions;
             if (head.size === versions.length && versions.every((version) => head.has(version))) {
               return installedVersion(dir);
             }
@@ -357,7 +361,15 @@ jobs:
               annotate("notice", `The base branch has no ${SDK} for ${app}, so no codemod runs there.`);
               continue;
             }
-            if (from === head || from === to) continue;
+            if (from === head || from === to) {
+              if (LOCAL.test(from)) {
+                annotate(
+                  "notice",
+                  `${SDK} for ${app} is ${from} on both branches, not a version, so no codemod runs there.`,
+                );
+              }
+              continue;
+            }
             if (!VERSION.test(from)) {
               fail(`The base branch has ${SDK} ${from} for ${app}, which tailor upgrade cannot start from.`);
             }
