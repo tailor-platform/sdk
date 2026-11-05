@@ -2,15 +2,15 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { logger } from "./logger";
-import { withScriptWorkflow } from "./script-workflow";
+import { assertNoActiveScriptWorkflow, withScriptWorkflow } from "./script-workflow";
 import type { OperatorClient } from "./client";
 import type { ScriptInvoker } from "./script-executor";
 
-vi.mock("#/cli/shared/logger", () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), log: vi.fn() },
-  styles: { bold: (s: string) => s },
-  redactSecrets: (s: string) => s,
-}));
+vi.mock(import("#/cli/shared/logger"), async (importOriginal) => {
+  const actual = await importOriginal();
+  const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), log: vi.fn() };
+  return { ...actual, logger: logger as unknown as typeof actual.logger };
+});
 
 vi.mock("#/cli/commands/deploy/label", () => ({
   resourceTrn: (workspaceId: string, kind: string, name: string) =>
@@ -244,5 +244,48 @@ describe("withScriptWorkflow", () => {
     await withScriptWorkflow({ ...baseOptions, client }, (run) => run({}));
 
     expect(calls.indexOf("deleteWorkflow")).toBeLessThan(calls.indexOf("createFunctionRegistry"));
+  });
+});
+
+describe("assertNoActiveScriptWorkflow", () => {
+  const running = [{ id: "exec-old", status: WorkflowExecution_Status.RUNNING }];
+
+  test("names the workspace and profile in the command that inspects the running execution", async () => {
+    const { client } = createMockClient({
+      leftoverWorkflowId: "wf-old",
+      leftoverExecutions: running,
+    });
+
+    const check = assertNoActiveScriptWorkflow({
+      client,
+      workspaceId: "ws",
+      names: ["tailordb-seed--tailordb"],
+      profile: "staging",
+    });
+
+    await expect(check).rejects.toMatchObject({
+      suggestion: expect.stringContaining(
+        "tailor workflow executions exec-old --workspace-id=ws --profile=staging",
+      ),
+    });
+  });
+
+  test("passes when none of the workflows exists", async () => {
+    const { client } = createMockClient();
+
+    await expect(
+      assertNoActiveScriptWorkflow({ client, workspaceId: "ws", names: ["a", "b"] }),
+    ).resolves.toBeUndefined();
+  });
+
+  test("passes when the workflow's executions have all finished", async () => {
+    const { client } = createMockClient({
+      leftoverWorkflowId: "wf-old",
+      leftoverExecutions: [{ id: "exec-old", status: WorkflowExecution_Status.SUCCESS }],
+    });
+
+    await expect(
+      assertNoActiveScriptWorkflow({ client, workspaceId: "ws", names: ["a"] }),
+    ).resolves.toBeUndefined();
   });
 });

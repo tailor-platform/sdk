@@ -4,6 +4,7 @@ import { z } from "zod";
 import { seedApplyCommand } from "./apply";
 
 const sdk = vi.hoisted(() => ({
+  assertNoActiveScriptWorkflow: vi.fn(),
   bundleSeedScript: vi.fn(),
   chunkSeedData: vi.fn(),
   initOperatorClient: vi.fn(),
@@ -416,6 +417,38 @@ describe("seedApplyCommand", () => {
       3,
       expect.objectContaining({ name: "tailor-seed-idp-seed--idp" }),
     );
+  });
+
+  test("checks every workflow the command touches for a running execution before truncating", async () => {
+    await runApply(["--truncate", "--yes", "--profile", "staging"]);
+
+    expect(sdk.assertNoActiveScriptWorkflow).toHaveBeenCalledWith({
+      client: expect.anything(),
+      workspaceId: "workspace-id",
+      profile: "staging",
+      names: [
+        "tailor-seed-tailordb--tailordb",
+        "tailor-seed-idp-seed--idp",
+        "tailor-seed-idp-list--idp",
+        "tailor-seed-idp-truncate--idp",
+      ],
+    });
+  });
+
+  test("deletes nothing when an earlier run of a seed workflow is still executing", async () => {
+    sdk.assertNoActiveScriptWorkflow.mockRejectedValue(new Error("still executing"));
+
+    const result = await runApplyCommand(["--machine-user", "manager", "--truncate", "--yes"]);
+
+    expect(result.exitCode).not.toBe(0);
+    expect(sdk.truncate).not.toHaveBeenCalled();
+    expect(workflow.runScript).not.toHaveBeenCalled();
+  });
+
+  test("does not check for running executions without --truncate", async () => {
+    await runApply(["--yes"]);
+
+    expect(sdk.assertNoActiveScriptWorkflow).not.toHaveBeenCalled();
   });
 
   test("limits truncation to a namespace and excludes the IdP user", async () => {

@@ -1,4 +1,5 @@
 import {
+  assertNoActiveScriptWorkflow,
   buildOptionsOf,
   bundleSeedScript,
   chunkSeedData,
@@ -45,6 +46,7 @@ interface SeedExecutionContext {
   authNamespace: string;
   machineUserName: string;
   appName: string;
+  profile: string | undefined;
 }
 
 interface SeedWorkflowParams {
@@ -67,6 +69,7 @@ function withSeedWorkflow<T>(
   use: (run: RunScript) => Promise<T>,
 ): Promise<T> {
   const { execution, kind, namespace, description, code } = params;
+  const { profile } = execution;
   return withScriptWorkflow(
     {
       client: execution.operatorClient,
@@ -80,6 +83,7 @@ function withSeedWorkflow<T>(
       },
       appName: execution.appName,
       leftoverNote: "It is removed by the next `tailor seed apply` for this namespace.",
+      profile,
     },
     use,
   );
@@ -649,9 +653,30 @@ export const seedApplyCommand = defineAppCommand({
       authNamespace: appInfo.auth,
       machineUserName,
       appName: appInfo.name,
+      profile: args.profile,
     };
 
     if (args.truncate) {
+      const shouldTruncateUser =
+        hasIdpUser &&
+        !args["skip-idp"] &&
+        !args.namespace &&
+        (args.entities.length === 0 || (selection.entitiesToProcess ?? []).includes("_User"));
+      const idpNamespace = shouldTruncateUser ? context.idpUser?.idpNamespace : undefined;
+      await assertNoActiveScriptWorkflow({
+        client: execution.operatorClient,
+        workspaceId: execution.workspaceId,
+        profile: args.profile,
+        names: [
+          ...namespacesToProcess.map((namespace) => seedWorkflowName("tailordb", namespace)),
+          ...(idpNamespace
+            ? (["idp-seed", "idp-list", "idp-truncate"] as const).map((kind) =>
+                seedWorkflowName(kind, idpNamespace),
+              )
+            : []),
+        ],
+      });
+
       const confirmed =
         args.yes ||
         (await prompt.confirm({ message: "Are you sure you want to truncate?", default: false }));
@@ -690,11 +715,6 @@ export const seedApplyCommand = defineAppCommand({
         });
       }
 
-      const shouldTruncateUser =
-        hasIdpUser &&
-        !args["skip-idp"] &&
-        !args.namespace &&
-        (args.entities.length === 0 || (selection.entitiesToProcess ?? []).includes("_User"));
       if (shouldTruncateUser && context.idpUser) {
         const truncated = await truncateIdpUser(execution, context.idpUser);
         if (!truncated) {

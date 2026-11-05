@@ -290,6 +290,7 @@ export {
   type ExecutionWaitResult,
 } from "./shared/script-executor";
 export {
+  assertNoActiveScriptWorkflow,
   withScriptWorkflow,
   type RunScript,
   type ScriptWorkflowOptions,

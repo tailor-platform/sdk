@@ -9,6 +9,7 @@
  */
 
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import { recoveryContextArgs } from "#/cli/shared/args";
 import { CLIError, formatCommandHint } from "#/cli/shared/errors";
 import { joinFunctionLogMessages } from "#/cli/shared/function-execution";
 import {
@@ -57,6 +58,8 @@ export interface ScriptWorkflowOptions {
   appName: string;
   /** Sentence telling how a resource left behind after a failed removal gets removed */
   leftoverNote: string;
+  /** Profile the run uses, carried into the hint of a refusal so the hinted command selects it too */
+  profile?: string | undefined;
   /** Poll interval in milliseconds (default: 3000ms) */
   pollIntervalMs?: number;
 }
@@ -78,10 +81,10 @@ export async function withScriptWorkflow<T>(
   options: ScriptWorkflowOptions,
   use: (run: RunScript) => Promise<T>,
 ): Promise<T> {
-  const { client, workspaceId, name, appName, invoker, leftoverNote } = options;
+  const { client, workspaceId, name, appName, invoker, leftoverNote, profile } = options;
   const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
 
-  await assertNoActiveExecution(client, workspaceId, name);
+  await assertNoActiveScriptWorkflow({ client, workspaceId, names: [name], profile });
   await reclaimTemporaryWorkflow({
     client,
     workspaceId,
@@ -158,33 +161,52 @@ export async function withScriptWorkflow<T>(
 }
 
 /**
- * Refuse to remove the resources of an earlier run that is still executing: an interrupted
- * command leaves its chunk running on the platform, and removing the workflow under it would make
- * the chunk's outcome unknowable.
- * @param client - Operator client instance
- * @param workspaceId - Workspace ID
- * @param name - Shared resource name
+ * Options for {@link assertNoActiveScriptWorkflow}
  */
-async function assertNoActiveExecution(
-  client: OperatorClient,
-  workspaceId: string,
-  name: string,
-): Promise<void> {
-  const executions = await listTemporaryWorkflowExecutions(client, workspaceId, name);
-  const active = executions.find(isExecutionActive);
-  if (!active) return;
+export interface AssertNoActiveScriptWorkflowOptions {
+  /** Operator client instance */
+  client: OperatorClient;
+  /** Workspace ID */
+  workspaceId: string;
+  /** Names of the temporary workflows to check */
+  names: readonly string[];
+  /** Profile the run uses, carried into the hint so the hinted command selects it too */
+  profile?: string | undefined;
+}
 
-  throw CLIError({
-    code: "SCRIPT_WORKFLOW_EXECUTION_ACTIVE",
-    message: `The temporary workflow '${name}' still has an execution that is running (${active.id}).`,
-    suggestion:
-      "An earlier command that was interrupted can still be applying its chunk. " +
-      `Wait for the execution to finish (${formatCommandHint({
-        command: "tailor",
-        args: ["workflow", "executions", active.id],
-      })}), then run the command again.`,
-    context: { workflowName: name, executionId: active.id },
-  });
+/**
+ * Refuse to go on while an earlier run of one of the workflows is still executing: an interrupted
+ * command leaves its chunk running on the platform, and removing the workflow under it would make
+ * the chunk's outcome unknowable. A caller that deletes data before it runs a script calls this
+ * first, so the refusal comes before anything is deleted.
+ * @param options - Workflows to check and the workspace they live in
+ */
+export async function assertNoActiveScriptWorkflow(
+  options: AssertNoActiveScriptWorkflowOptions,
+): Promise<void> {
+  const { client, workspaceId, names, profile } = options;
+  for (const name of names) {
+    const executions = await listTemporaryWorkflowExecutions(client, workspaceId, name);
+    const active = executions.find(isExecutionActive);
+    if (!active) continue;
+
+    throw CLIError({
+      code: "SCRIPT_WORKFLOW_EXECUTION_ACTIVE",
+      message: `The temporary workflow '${name}' still has an execution that is running (${active.id}).`,
+      suggestion:
+        "An earlier command that was interrupted can still be applying its chunk. " +
+        `Wait for the execution to finish (${formatCommandHint({
+          command: "tailor",
+          args: [
+            "workflow",
+            "executions",
+            active.id,
+            ...recoveryContextArgs({ workspaceId, profile }),
+          ],
+        })}), then run the command again.`,
+      context: { workflowName: name, executionId: active.id },
+    });
+  }
 }
 
 /** Reads of the job's function execution tried through transient errors. */
