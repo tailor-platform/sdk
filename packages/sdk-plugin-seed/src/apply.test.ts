@@ -435,6 +435,20 @@ describe("seedApplyCommand", () => {
     });
   });
 
+  test("checks only the workflows of the selected entities when tables are filtered", async () => {
+    await runApply(["--truncate", "--yes", "_User"]);
+
+    expect(sdk.assertNoActiveScriptWorkflow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        names: [
+          "tailor-seed-idp-seed--idp",
+          "tailor-seed-idp-list--idp",
+          "tailor-seed-idp-truncate--idp",
+        ],
+      }),
+    );
+  });
+
   test("deletes nothing when an earlier run of a seed workflow is still executing", async () => {
     sdk.assertNoActiveScriptWorkflow.mockRejectedValue(new Error("still executing"));
 

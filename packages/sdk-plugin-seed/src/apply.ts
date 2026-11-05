@@ -662,13 +662,17 @@ export const seedApplyCommand = defineAppCommand({
         !args["skip-idp"] &&
         !args.namespace &&
         (args.entities.length === 0 || (selection.entitiesToProcess ?? []).includes("_User"));
+      const touchedNamespaces =
+        args.entities.length > 0 && !args.namespace
+          ? plans.map((plan) => plan.namespace)
+          : namespacesToProcess;
       const idpNamespace = shouldTruncateUser ? context.idpUser?.idpNamespace : undefined;
       await assertNoActiveScriptWorkflow({
         client: execution.operatorClient,
         workspaceId: execution.workspaceId,
         profile: args.profile,
         names: [
-          ...namespacesToProcess.map((namespace) => seedWorkflowName("tailordb", namespace)),
+          ...touchedNamespaces.map((namespace) => seedWorkflowName("tailordb", namespace)),
           ...(idpNamespace
             ? (["idp-seed", "idp-list", "idp-truncate"] as const).map((kind) =>
                 seedWorkflowName(kind, idpNamespace),
