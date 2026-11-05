@@ -24,9 +24,6 @@ function clone<T>(value: T, seen: WeakMap<object, unknown>): T {
   if (value instanceof Date) {
     return new Date(value.getTime()) as T;
   }
-  if (value instanceof Number || value instanceof String || value instanceof Boolean) {
-    return Object.setPrototypeOf(Object(value.valueOf()), Object.getPrototypeOf(value)) as T;
-  }
   if (value instanceof RegExp) {
     const copy = new RegExp(value.source, value.flags);
     copy.lastIndex = value.lastIndex;
@@ -60,7 +57,11 @@ function clone<T>(value: T, seen: WeakMap<object, unknown>): T {
     ) as T;
   }
 
-  const copy = Object.create(Object.getPrototypeOf(value));
+  const isBoxedPrimitive =
+    value instanceof Number || value instanceof String || value instanceof Boolean;
+  const copy = isBoxedPrimitive
+    ? Object.setPrototypeOf(Object(value.valueOf()), Object.getPrototypeOf(value))
+    : Object.create(Object.getPrototypeOf(value));
   seen.set(value, copy);
   if (value instanceof Error) {
     for (const key of ["message", "stack", "cause"] as const) {
@@ -79,6 +80,7 @@ function clone<T>(value: T, seen: WeakMap<object, unknown>): T {
     if (Object.prototype.propertyIsEnumerable.call(value, symbol)) keys.push(symbol);
   }
   for (const key of keys) {
+    if (Object.getOwnPropertyDescriptor(copy, key)?.writable === false) continue;
     const cloned = clone((value as Record<string | symbol, unknown>)[key], seen);
     if (key === "__proto__") {
       Object.defineProperty(copy, key, {

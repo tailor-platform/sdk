@@ -140,6 +140,28 @@ describe("cloneDeep", () => {
       expect(copy.valueOf()).toBe(primitive);
       expect(Object.getPrototypeOf(copy)).toBe(Object.getPrototypeOf(source));
     });
+
+    test("copies enumerable own properties attached to a boxed primitive", () => {
+      const key = Symbol("k");
+      const number = Object.assign(new Number(3), { nested: { x: 1 }, [key]: { y: 2 } });
+      const copy = cloneDeep(number);
+      expect(copy.valueOf()).toBe(3);
+      expect((copy as unknown as { nested: unknown }).nested).toEqual({ x: 1 });
+      expect((copy as unknown as { nested: unknown }).nested).not.toBe(
+        (number as unknown as { nested: unknown }).nested,
+      );
+      expect((copy as unknown as Record<symbol, unknown>)[key]).toEqual({ y: 2 });
+    });
+
+    test("copies extra properties of a boxed String without touching its character indexes", () => {
+      const string = Object.assign(new String("ab"), { extra: { z: 1 } });
+      const copy = cloneDeep(string);
+      expect(String(copy)).toBe("ab");
+      expect((copy as unknown as { extra: unknown }).extra).toEqual({ z: 1 });
+      expect((copy as unknown as { extra: unknown }).extra).not.toBe(
+        (string as unknown as { extra: unknown }).extra,
+      );
+    });
   });
 
   describe("unusual objects", () => {
