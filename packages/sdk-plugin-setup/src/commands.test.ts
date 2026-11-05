@@ -85,6 +85,18 @@ describe("setup ci subcommand nesting", () => {
     );
   });
 
+  test.each([
+    [[], false],
+    [["--split-plan-environment"], true],
+  ] as const)("ci branch %j passes splitPlanEnvironment %s", async (flags, expected) => {
+    const result = await runCommand(setupCommand, ["ci", "branch", ...flags]);
+
+    expect(result.success).toBe(true);
+    expect(setupTarget).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "branch", splitPlanEnvironment: expected }),
+    );
+  });
+
   test("ci branch rejects the removed --branch alias", async () => {
     const result = await runCommand(setupCommand, ["ci", "branch", "--branch", "release"]);
 

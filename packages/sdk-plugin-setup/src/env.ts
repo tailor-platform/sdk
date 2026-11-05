@@ -2,7 +2,15 @@ import { logger } from "@tailor-platform/sdk/cli";
 import { validateEnvironment, validateWorkspaceName } from "./generate";
 import { type GhRunner, viewRepository } from "./gh";
 import { detectRepository, type GitRunner, type Repository } from "./git";
-import { AUTOFIX_LABEL, type LockFile, readManagedLock, type TargetKind } from "./lock";
+import {
+  AUTOFIX_LABEL,
+  type JobEnvironment,
+  type LockFile,
+  planEnvironmentCollisions,
+  readManagedLock,
+  targetJobEnvironments,
+  type TargetKind,
+} from "./lock";
 import type { AutofixProvider } from "./templates";
 
 export type EnvRequirement = {
@@ -13,6 +21,8 @@ export type EnvRequirement = {
   description: string;
   /** Where the value comes from. */
   howTo: string;
+  /** Counts only when set on the environment itself, not inherited from the repository or organization. */
+  environmentOnly?: boolean;
 };
 
 export type EnvironmentRequirements = {
@@ -58,6 +68,26 @@ const WORKSPACE_ID: EnvRequirement = {
   required: true,
   description: "ID of the workspace this environment deploys to",
   howTo: "the id printed by `tailor workspace create`, or listed by `tailor workspace list`",
+};
+const DEPLOY_CLIENT_ID: EnvRequirement = {
+  ...CLIENT_ID,
+  description:
+    "Client ID of the platform machine user that CI signs in as for deploy; it needs an editor " +
+    "or admin role on the organization or folder that holds the workspace",
+};
+const PLAN_CLIENT_ID: EnvRequirement = {
+  ...CLIENT_ID,
+  description:
+    "Client ID of the platform machine user that the plan job signs in as; a viewer role on the " +
+    "organization or folder that holds the workspace is enough. Pull requests run this job with " +
+    "their own code, so do not use the deploy machine user here",
+  environmentOnly: true,
+};
+const PLAN_CLIENT_SECRET: EnvRequirement = { ...CLIENT_SECRET, environmentOnly: true };
+const PLAN_WORKSPACE_ID: EnvRequirement = {
+  ...WORKSPACE_ID,
+  description:
+    "ID of the workspace the plan job compares against: the one the deploy job deploys to",
 };
 const MIGRATION_TEST_CLIENT_ID: EnvRequirement = {
   ...CLIENT_ID,
@@ -160,6 +190,28 @@ const REQUIREMENTS: Record<TargetKind, EnvRequirement[]> = {
   ],
 };
 
+const SPLIT_DEPLOY_REQUIREMENTS = [
+  DEPLOY_CLIENT_ID,
+  CLIENT_SECRET,
+  WORKSPACE_ID,
+  SLACK_BOT_TOKEN,
+  SLACK_CHANNEL_ID,
+  SEED_USER_PASSWORD,
+  SLACK_USER_MAPPING,
+];
+
+const PLAN_REQUIREMENTS = [
+  PLAN_CLIENT_ID,
+  PLAN_CLIENT_SECRET,
+  PLAN_WORKSPACE_ID,
+  FAIL_ON_DRIFT,
+  SEED_USER_PASSWORD,
+];
+/** Plan environment variants, which a deploy job's entry replaces when it shares the environment. */
+const PLAN_VARIANTS: ReadonlySet<EnvRequirement> = new Set(
+  PLAN_REQUIREMENTS.filter((requirement) => !DEPLOY_REQUIREMENTS.includes(requirement)),
+);
+
 const AUTOFIX_APP_CLIENT_ID: EnvRequirement = {
   name: "TAILOR_AUTOFIX_APP_CLIENT_ID",
   type: "variable",
@@ -240,26 +292,29 @@ export function collectEnvironmentRequirements(lock: LockFile): EnvironmentRequi
     entry.targets.push(targetLabel);
     for (const requirement of requirements) {
       const existing = entry.requirements.findIndex((r) => r.name === requirement.name);
-      if (existing === -1) {
+      const current = entry.requirements[existing];
+      if (current === undefined) {
         entry.requirements.push(requirement);
-      } else if (requirement.required && !entry.requirements[existing]?.required) {
+      } else if (
+        (requirement.required && !current.required) ||
+        (PLAN_VARIANTS.has(current) && !PLAN_VARIANTS.has(requirement))
+      ) {
         entry.requirements[existing] = requirement;
       }
     }
   };
   for (const target of lock.targets) {
-    const { environment, migrationTest, migrationTestEnvironment } = target.inputs;
-    validateEnvironment(environment);
     validateWorkspaceName(target.workspaceName);
-    const label = `${target.kind} ${target.workspaceName}`;
-    add(environment, label, targetRequirements(target.kind));
-    if (target.kind === "branch" && migrationTest && migrationTestEnvironment !== undefined) {
-      validateEnvironment(migrationTestEnvironment);
-      add(migrationTestEnvironment, `${label} (migration test)`, [
-        MIGRATION_TEST_CLIENT_ID,
-        CLIENT_SECRET,
-        MIGRATION_TEST_SOURCE_WORKSPACE_ID,
-      ]);
+    const jobs = targetJobEnvironments(target);
+    const split = jobs.some(({ job }) => job === "plan");
+    const requirementsOf = {
+      deploy: split ? SPLIT_DEPLOY_REQUIREMENTS : targetRequirements(target.kind),
+      plan: PLAN_REQUIREMENTS,
+      migrationTest: [MIGRATION_TEST_CLIENT_ID, CLIENT_SECRET, MIGRATION_TEST_SOURCE_WORKSPACE_ID],
+    } satisfies Record<JobEnvironment["job"], readonly EnvRequirement[]>;
+    for (const { job, environment, label } of jobs) {
+      validateEnvironment(environment);
+      add(environment, label, requirementsOf[job]);
     }
   }
   for (const entry of byEnvironment.values()) {
@@ -572,7 +627,8 @@ function selectEnvironments(
 }
 
 /**
- * Read the lock and group the requirements of its targets by GitHub Environment.
+ * Read the lock and group the requirements of its targets by GitHub Environment, warning about
+ * each split plan environment another job also runs in.
  * @param outputDir - Repository root where `.github` lives
  * @param names - Only these environments; all when empty
  * @returns One entry per selected environment, in lock order
@@ -581,7 +637,12 @@ export function loadEnvironmentRequirements(
   outputDir: string,
   names: string[] = [],
 ): EnvironmentRequirements[] {
-  return selectEnvironments(collectEnvironmentRequirements(readManagedLock(outputDir)), names);
+  const lock = readManagedLock(outputDir);
+  const environments = collectEnvironmentRequirements(lock);
+  for (const collision of planEnvironmentCollisions(lock.targets)) {
+    logger.warn(collision);
+  }
+  return selectEnvironments(environments, names);
 }
 
 /**

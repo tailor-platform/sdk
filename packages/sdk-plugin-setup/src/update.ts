@@ -74,6 +74,7 @@ export function planUpdate(target: LockTarget, common: UpdateCommon): SetupTarge
         migrationTest: inputs.migrationTest,
         migrationTestLabel: inputs.migrationTestLabel,
         migrationTestEnvironment: inputs.migrationTestEnvironment,
+        splitPlanEnvironment: inputs.splitPlanEnvironment,
         restrictDispatch: inputs.restrictDispatch ?? false,
       };
     case "tag":

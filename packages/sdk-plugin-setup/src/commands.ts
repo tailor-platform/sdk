@@ -90,7 +90,12 @@ const branchCommand = defineAppCommand({
       description: "Deploy trigger branch (defaults to the detected default branch)",
     }),
     environment: arg(z.string().min(1).optional(), {
-      description: "GitHub Environment for the plan/deploy jobs (defaults to the workspace name)",
+      description:
+        "GitHub Environment for the deploy job, and for the plan job unless --split-plan-environment (defaults to the workspace name)",
+    }),
+    "split-plan-environment": arg(z.boolean().default(false), {
+      description:
+        "Run the plan job in its own GitHub Environment, named after the deploy environment with -plan appended, so pull requests sign in with that environment's machine user (a viewer role is enough) instead of the deploy one",
     }),
     "package-manager": packageManagerArg,
     "erd-preview": arg(z.boolean().default(false), {
@@ -113,7 +118,7 @@ const branchCommand = defineAppCommand({
     }),
     "migration-test-environment": arg(z.string().min(1).optional(), {
       description:
-        "GitHub Environment for the migration test job, holding its own credentials and TAILOR_PLATFORM_MIGRATION_TEST_SOURCE_WORKSPACE_ID (defaults to the plan/deploy environment and its workspace)",
+        "GitHub Environment for the migration test job, holding its own credentials and TAILOR_PLATFORM_MIGRATION_TEST_SOURCE_WORKSPACE_ID (defaults to the deploy environment and its workspace)",
     }),
     paths: arg(z.array(z.string().min(1)).default([]), {
       description:
@@ -144,6 +149,7 @@ const branchCommand = defineAppCommand({
       migrationTest: args["migration-test"],
       migrationTestLabel: args["migration-test-label"],
       migrationTestEnvironment: args["migration-test-environment"],
+      splitPlanEnvironment: args["split-plan-environment"],
       dir: args.dir,
       extraPaths: args.paths,
       seed: seedOption(args),

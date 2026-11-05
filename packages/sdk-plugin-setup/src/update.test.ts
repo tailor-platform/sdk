@@ -52,6 +52,12 @@ describe("planUpdate", () => {
     });
   });
 
+  test("branch: keeps the plan job in its own environment when the lock records it", () => {
+    const plan = planUpdate(lockTarget("branch", "my-app", { splitPlanEnvironment: true }), common);
+
+    expect(plan).toMatchObject({ kind: "branch", splitPlanEnvironment: true });
+  });
+
   test("branch: regenerates with the recorded name, dir, environment, branch and flags", () => {
     const plan = planUpdate(
       lockTarget("branch", "my-app", {

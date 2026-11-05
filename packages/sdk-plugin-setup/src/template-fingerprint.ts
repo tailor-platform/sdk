@@ -152,6 +152,20 @@ export function renderedTemplates(): RenderedTemplate[] {
     }),
   );
   add(
+    "branch",
+    "split-plan-environment",
+    renderBranchWorkflow({
+      ...full,
+      branch: "main",
+      seedValidate: true,
+      migrationDriftCheck: true,
+      erdPreview: null,
+      migrationTest: { label: "tailor:migration-test" },
+      seed: { datasets: [] },
+      splitPlanEnvironment: true,
+    }),
+  );
+  add(
     "tag",
     "full",
     renderTagWorkflow({
