@@ -579,6 +579,24 @@ function areResolversEqual(
   );
 }
 
+/**
+ * Derive the inputs and the response a resolver is registered with.
+ * @param resolver - Parsed resolver definition
+ * @returns One input per `input` key, and the response described by `output`
+ */
+export function buildResolverSignature(resolver: Resolver): {
+  inputs: MessageInitShape<typeof PipelineResolver_FieldSchema>[];
+  response: MessageInitShape<typeof PipelineResolver_FieldSchema>;
+} {
+  const typeBaseName = inflection.camelize(resolver.name);
+  const inputs = resolver.input ? protoFields(resolver.input, `${typeBaseName}Input`, true) : [];
+  const response = assertDefined(
+    protoFields({ "": resolver.output }, `${typeBaseName}Output`, false)[0],
+    "resolver output field missing",
+  );
+  return { inputs, response };
+}
+
 function processResolver(
   namespace: string,
   resolver: Resolver,
@@ -601,18 +619,7 @@ function processResolver(
     },
   ];
 
-  const typeBaseName = inflection.camelize(resolver.name);
-
-  // Build inputs
-  const inputs: MessageInitShape<typeof PipelineResolver_FieldSchema>[] = resolver.input
-    ? protoFields(resolver.input, `${typeBaseName}Input`, true)
-    : [];
-
-  // Build response
-  const response: MessageInitShape<typeof PipelineResolver_FieldSchema> = assertDefined(
-    protoFields({ "": resolver.output }, `${typeBaseName}Output`, false)[0],
-    "resolver output field missing",
-  );
+  const { inputs, response } = buildResolverSignature(resolver);
 
   // Build description (combine resolver description and output description)
   const resolverDescription = resolver.description || `${resolver.name} resolver`;

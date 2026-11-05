@@ -1,7 +1,12 @@
 import { describe, test, expect, vi } from "vitest";
 import { symbols } from "#/cli/shared/logger";
 import { sdkNameLabelKey } from "./label";
-import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./resolver";
+import {
+  applyPipeline,
+  buildResolverSignature,
+  formatResolverChangeEntries,
+  planPipeline,
+} from "./resolver";
 import type { Application } from "#/cli/services/application";
 import type { ExecutorService } from "#/cli/services/executor/service";
 import type { ResolverService } from "#/cli/services/resolver/service";
@@ -885,5 +890,37 @@ describe("applyPipeline phase separation", () => {
 
     expect(client.deletePipelineResolver).not.toHaveBeenCalled();
     expect(client.deletePipelineService).not.toHaveBeenCalled();
+  });
+});
+
+describe("buildResolverSignature", () => {
+  const field = (type: string, metadata: Record<string, unknown> = {}, fields = {}) =>
+    ({ type, metadata, fields }) as never;
+
+  test("derives one input per key and the response from the output field", () => {
+    const { inputs, response } = buildResolverSignature({
+      name: "add",
+      operation: "query",
+      body: () => 0,
+      input: { a: field("integer", { required: true }), b: field("integer") },
+      output: field("integer"),
+    });
+
+    expect(inputs.map((input) => [input.name, input.type?.name, input.required])).toEqual([
+      ["a", "Int", true],
+      ["b", "Int", true],
+    ]);
+    expect(response.type?.name).toBe("Int");
+  });
+
+  test("has no inputs for a resolver declaring none", () => {
+    const { inputs } = buildResolverSignature({
+      name: "test",
+      operation: "query",
+      body: () => 0,
+      output: field("boolean"),
+    });
+
+    expect(inputs).toEqual([]);
   });
 });
