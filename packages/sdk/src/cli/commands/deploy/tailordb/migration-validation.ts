@@ -571,8 +571,7 @@ export async function validateAndDetectMigrations(
 }
 
 /**
- * Tell what the deploy will do to the migration state it validated. Call it once, at plan time:
- * the later validations of the same deploy only confirm that nothing changed.
+ * Tell what the deploy will do to the migration state it validated.
  * @param result - Validated migration state
  */
 export function logMigrationPlanNotices(result: ValidateAndDetectResult): void {
