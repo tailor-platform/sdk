@@ -208,9 +208,17 @@ describe("content mapper process", () => {
     },
     {
       name: "a package.json imports pattern",
-      files: { "package.json": JSON.stringify({ imports: { "#app/*": "./src/*" } }) },
+      files: { "package.json": JSON.stringify({ imports: { "#app/*": "./src/*.ts" } }) },
       specifier: "#app/stages",
-      created: ["src/stages.ts", "src/stages.mts", "src/stages/index.ts"],
+      created: ["src/stages.ts"],
+    },
+    {
+      name: "a package.json imports pattern with a target that repeats the wildcard",
+      files: {
+        "package.json": JSON.stringify({ imports: { "#app/*": "./src/*/index.*.ts" } }),
+      },
+      specifier: "#app/stages",
+      created: ["src/stages/index.stages.ts"],
     },
     {
       name: "a package.json imports pattern with conditions",
@@ -243,6 +251,75 @@ describe("content mapper process", () => {
       expect(opened.watchedFiles).toEqual(
         expect.arrayContaining(created.map((file) => path.join(dir, file))),
       );
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "resolves a paths alias from a tsconfig with comments and trailing commas once the file it points to is created",
+    async () => {
+      const dir = projectDir();
+      fs.writeFileSync(
+        path.join(dir, "tsconfig.json"),
+        `{
+  // aliases
+  "compilerOptions": { "paths": { "@/*": ["./src/*"], }, },
+}`,
+      );
+      fs.writeFileSync(path.join(dir, "tailor.config.ts"), `import "@/stages";\n${CONFIG}`);
+      const mapper = startMapper();
+      const typesOf = async () => {
+        await open(mapper, dir);
+        return (await mapper.call("transform", {
+          fileName: REGISTRY_FILE,
+          content: "",
+          projectHandle: "p1",
+        })) as { text: string; diagnostics: unknown[] };
+      };
+
+      expect((await typesOf()).diagnostics).not.toEqual([]);
+      fs.mkdirSync(path.join(dir, "src"));
+      fs.writeFileSync(path.join(dir, "src", "stages.ts"), "export {};\n");
+      const recovered = await typesOf();
+
+      expect(recovered.diagnostics).toEqual([]);
+      expect(recovered.text).toContain("stage: string;");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "watches only the file a package.json imports target names, since the import resolver adds no extension to it",
+    async () => {
+      const dir = projectDir();
+      fs.writeFileSync(
+        path.join(dir, "package.json"),
+        JSON.stringify({ imports: { "#app/*": "./src/*" } }),
+      );
+      fs.writeFileSync(path.join(dir, "tailor.config.ts"), `import "#app/stages";\n${CONFIG}`);
+      const mapper = startMapper();
+
+      const opened = await open(mapper, dir);
+
+      expect(opened.watchedFiles).toContain(path.join(dir, "src", "stages"));
+      expect(opened.watchedFiles).not.toContain(path.join(dir, "src", "stages.ts"));
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "answers openProject even when the config leaves a timer running",
+    async () => {
+      const dir = projectDir();
+      fs.writeFileSync(
+        path.join(dir, "tailor.config.ts"),
+        `setInterval(() => {}, 1000);\n${CONFIG}`,
+      );
+      const mapper = startMapper();
+
+      const opened = await open(mapper, dir);
+
+      expect(opened.watchedFiles).toContain(path.join(dir, "tailor.config.ts"));
     },
     TIMEOUT_MS,
   );

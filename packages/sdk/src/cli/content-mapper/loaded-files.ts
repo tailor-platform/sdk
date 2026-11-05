@@ -43,7 +43,10 @@ function packageImportTargets(specifier: string, parentDir: string): string[] {
     return matched === undefined
       ? []
       : leaves(target).map((leaf) =>
-          path.resolve(path.dirname(packageJson), leaf.replace("*", matched)),
+          path.resolve(
+            path.dirname(packageJson),
+            leaf.replaceAll("*", () => matched),
+          ),
         );
   });
 }
@@ -53,13 +56,15 @@ function tsconfigPathTargets(specifier: string, parentDir: string): string[] {
   return (tsconfig && createPathsMatcher(tsconfig)?.(specifier)) || [];
 }
 
-function missingTargets(specifier: string, parentURL: string): string[] {
-  if (isLocalSpecifier(specifier)) return [fileURLToPath(new URL(specifier, parentURL))];
+function missingCandidates(specifier: string, parentURL: string): string[] {
+  if (isLocalSpecifier(specifier)) {
+    return candidatePaths(fileURLToPath(new URL(specifier, parentURL)));
+  }
   const parentDir = path.dirname(fileURLToPath(parentURL));
   try {
     return specifier.startsWith("#")
       ? packageImportTargets(specifier, parentDir)
-      : tsconfigPathTargets(specifier, parentDir);
+      : tsconfigPathTargets(specifier, parentDir).flatMap(candidatePaths);
   } catch {
     return [];
   }
@@ -94,8 +99,8 @@ export function observeLoadedFiles(): void {
           context.parentURL?.startsWith("file:") &&
           !specifier.startsWith("node:")
         ) {
-          for (const target of missingTargets(specifier, context.parentURL)) {
-            for (const candidate of candidatePaths(target)) collecting.add(candidate);
+          for (const candidate of missingCandidates(specifier, context.parentURL)) {
+            collecting.add(candidate);
           }
         }
         throw error;

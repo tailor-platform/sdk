@@ -15,7 +15,8 @@ const { EVALUATE_FLAG } = await import("./evaluate-process");
 if (process.argv[2] === EVALUATE_FLAG) {
   await registerProjectModuleHooks();
   const { evaluateConfigInProcess } = await import("./mapper");
-  writeProtocol(JSON.stringify(await evaluateConfigInProcess(process.argv[3] ?? "")));
+  const evaluation = JSON.stringify(await evaluateConfigInProcess(process.argv[3] ?? ""));
+  writeProtocol(evaluation, () => process.exit(0));
 } else {
   await serveJsonRpc(
     createLazyHandlers(async () => {
