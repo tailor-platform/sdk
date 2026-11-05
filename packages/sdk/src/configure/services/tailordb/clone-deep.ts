@@ -32,7 +32,7 @@ function clone<T>(value: T, seen: WeakMap<object, unknown>): T {
   if (value instanceof Map) {
     const copy = new Map();
     seen.set(value, copy);
-    value.forEach((v, k) => copy.set(clone(k, seen), clone(v, seen)));
+    value.forEach((v, k) => copy.set(k, clone(v, seen)));
     return copy as T;
   }
   if (value instanceof Set) {

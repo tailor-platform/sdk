@@ -42,15 +42,13 @@ describe("cloneDeep", () => {
   });
 
   describe("collections and binary values", () => {
-    test("copies Map keys and values deeply", () => {
+    test("keeps Map keys by reference and copies the values deeply", () => {
       const key = { k: 1 };
       const value = { v: [1] };
       const copy = cloneDeep(new Map([[key, value]]));
-      const [copiedKey, copiedValue] = [...copy][0]!;
-      expect(copiedKey).toEqual(key);
-      expect(copiedKey).not.toBe(key);
-      expect(copiedValue).toEqual(value);
-      expect(copiedValue).not.toBe(value);
+      expect(copy.has(key)).toBe(true);
+      expect(copy.get(key)).toEqual(value);
+      expect(copy.get(key)).not.toBe(value);
     });
 
     test("copies Set members deeply", () => {
