@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   AUTOFIX_PROVIDERS,
+  COPILOT_AUTHS,
   PACKAGE_MANAGERS,
   renderBranchWorkflow,
   renderPreviewCleanupWorkflow,
@@ -256,6 +257,15 @@ export function renderedTemplates(): RenderedTemplate[] {
       "autofix",
       `${provider}-deterministic`,
       renderAutofixFor(provider, { codemod: "deterministic" }),
+    );
+    add("autofix", `${provider}-claude`, renderAutofixFor(provider, { codemod: "claude" }));
+  }
+  add("autofix", "github-token-codex", renderAutofixFor("github-token", { codemod: "codex" }));
+  for (const copilotAuth of COPILOT_AUTHS) {
+    add(
+      "autofix",
+      `github-token-copilot-${copilotAuth}`,
+      renderAutofixFor("github-token", { codemod: "copilot", copilotAuth }),
     );
   }
   for (const codemod of ["warn", "error"] as const) {

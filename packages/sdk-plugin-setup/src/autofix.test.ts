@@ -8,12 +8,16 @@ import { printAutofixNextSteps, setupAutofix, type AutofixSetupOptions } from ".
 import { LOCK_VERSION, readLock, writeLock, type LockTarget } from "./lock";
 import { computeManagedHash } from "./managed";
 import {
+  AUTOFIX_AGENTS,
   AUTOFIX_CODEMODS,
   AUTOFIX_PROVIDERS,
   AUTOFIX_WORKFLOW_FILE,
   TEMPLATE_VERSION,
+  type AutofixAgent,
   type AutofixCodemod,
+  type AutofixCodemodParams,
   type AutofixProvider,
+  type CopilotAuth,
   type PackageManager,
 } from "./templates";
 import { autofixSetupOptions, renderAutofixFor } from "./test-helpers/autofix";
@@ -27,12 +31,15 @@ type Step = {
   env?: Record<string, string>;
   with?: Record<string, unknown>;
   "working-directory"?: string;
+  "continue-on-error"?: boolean;
+  "timeout-minutes"?: number;
 };
 type Job = {
   if?: string;
-  needs?: string;
+  needs?: string | string[];
   permissions?: Record<string, string>;
   outputs?: Record<string, string>;
+  concurrency?: Record<string, unknown>;
   steps: Step[];
 };
 type Workflow = { name: string; jobs: Record<string, Job> };
@@ -126,6 +133,187 @@ describe("renderAutofixWorkflow", () => {
       }
     },
   );
+
+  const AGENT_STEPS: Record<AutofixAgent, string[]> = {
+    claude: ["tailor-claude"],
+    codex: ["tailor-codex"],
+    copilot: ["tailor-setup-node", "tailor-install-copilot", "tailor-copilot"],
+  };
+
+  test.each(AUTOFIX_PROVIDERS)(
+    "%s, agents: hand the prompt and the patch to a job that runs none of the project's code",
+    (provider) => {
+      for (const codemod of AUTOFIX_AGENTS) {
+        const workflow = workflowOf(provider, { codemod });
+        const autofix = workflow.jobs["tailor-autofix"];
+        expect(autofix?.outputs).toEqual({
+          changed: "${{ steps.tailor-autofix-diff.outputs.changed }}",
+          agent: "${{ steps.tailor-codemod.outputs.agent }}",
+        });
+        expect(autofix?.steps.slice(-3).map((step) => step.id)).toEqual([
+          "tailor-autofix-diff",
+          "tailor-upload-patch",
+          "tailor-codemod-agent-prompt",
+        ]);
+        expect(stepOf(workflow, "tailor-autofix", "tailor-codemod-agent-prompt")).toMatchObject({
+          if: "steps.tailor-codemod.outputs.agent == 'true'",
+          with: {
+            name: "tailor-codemod-agent-prompt",
+            path: "${{ runner.temp }}/tailor-codemod-agent",
+          },
+        });
+
+        const agent = workflow.jobs["tailor-codemod-agent"];
+        expect(agent?.needs).toBe("tailor-autofix");
+        expect(agent?.if).toBe(
+          "needs.tailor-autofix.outputs.agent == 'true' &&\ngithub.event.pull_request.head.repo.full_name == github.repository",
+        );
+        expect(agent?.concurrency).toEqual({
+          group: "tailor-codemod-agent-${{ github.event.pull_request.number }}",
+          "cancel-in-progress": true,
+        });
+        expect(agent?.steps.map((step) => step.id)).toEqual([
+          "tailor-checkout",
+          "tailor-download-patch",
+          "tailor-download-prompt",
+          "tailor-codemod-agent-baseline",
+          ...AGENT_STEPS[codemod],
+          "tailor-codemod-agent-diff",
+          "tailor-upload-patch",
+        ]);
+        for (const step of agent?.steps ?? []) {
+          expect(step.uses ?? "").not.toMatch(/^tailor-platform\/actions\//);
+          expect(step.run ?? "").not.toContain("pnpm");
+        }
+      }
+    },
+  );
+
+  test.each([
+    ["github-token", ["tailor-checkout", "tailor-download-patch", "tailor-commit"]],
+    [
+      "github-app",
+      ["tailor-app-token", "tailor-checkout", "tailor-download-patch", "tailor-commit"],
+    ],
+    [
+      "autofix-ci",
+      [
+        "tailor-checkout",
+        "tailor-download-patch",
+        "tailor-apply-patch",
+        "tailor-autofix-ci-auth",
+        "tailor-autofix-ci",
+      ],
+    ],
+    [
+      "securefix",
+      ["tailor-checkout", "tailor-download-patch", "tailor-apply-patch", "tailor-securefix"],
+    ],
+  ] as const)(
+    "%s, agents: commits the agent's patch, or the generate job's when no agent ran, from a job of its own",
+    (provider, steps) => {
+      const workflow = workflowOf(provider, { codemod: "claude" });
+      expect(Object.keys(workflow.jobs)).toEqual([
+        "tailor-autofix",
+        "tailor-codemod-agent",
+        "tailor-autofix-push",
+      ]);
+      const push = workflow.jobs["tailor-autofix-push"];
+      expect(push?.needs).toEqual(["tailor-autofix", "tailor-codemod-agent"]);
+      expect(push?.if).toBe(
+        "${{ !cancelled() && needs.tailor-autofix.result == 'success' && ((needs.tailor-codemod-agent.result == 'success' && needs.tailor-codemod-agent.outputs.changed == 'true') || (needs.tailor-codemod-agent.result == 'skipped' && needs.tailor-autofix.outputs.changed == 'true')) }}",
+      );
+      expect(push?.steps.map((step) => step.id)).toEqual(steps);
+      const message =
+        "${{ needs.tailor-codemod-agent.outputs.commit-message || 'chore: run tailor generate' }}";
+      const commit = push?.steps.at(-1);
+      expect(
+        commit?.env?.COMMIT_MESSAGE ??
+          commit?.with?.["commit-message"] ??
+          commit?.with?.commit_message,
+      ).toBe(message);
+    },
+  );
+
+  test("agents: run each agent with its secret, only the tools it needs, and Renovate as the only bot", () => {
+    const step = (codemod: AutofixAgent, id: string, copilotAuth?: CopilotAuth) =>
+      stepOf(workflowOf("github-token", { codemod, copilotAuth }), "tailor-codemod-agent", id);
+    const bounded = { "continue-on-error": true, "timeout-minutes": 20 };
+    expect(step("claude", "tailor-claude")).toEqual({
+      id: "tailor-claude",
+      ...bounded,
+      uses: "anthropics/claude-code-action@6b6870e649b5ff408753befeaee5fc7989d4e6a9",
+      with: {
+        anthropic_api_key: "${{ secrets.TAILOR_AUTOFIX_ANTHROPIC_API_KEY }}",
+        github_token: "${{ github.token }}",
+        allowed_bots: "renovate",
+        prompt: "Follow the instructions in ${{ runner.temp }}/tailor-codemod-agent/prompt.md.",
+        claude_args:
+          "--add-dir ${{ runner.temp }}/tailor-codemod-agent --allowedTools Edit,Write,Read,Glob,Grep --disallowedTools Bash,WebFetch,WebSearch",
+      },
+    });
+    expect(step("codex", "tailor-codex")).toEqual({
+      id: "tailor-codex",
+      ...bounded,
+      uses: "openai/codex-action@bdf19a4a223ec2549a3e2274a0cf61556bc07675",
+      with: {
+        "openai-api-key": "${{ secrets.TAILOR_AUTOFIX_OPENAI_API_KEY }}",
+        "prompt-file": "${{ runner.temp }}/tailor-codemod-agent/prompt.md",
+        "permission-profile": ":workspace",
+        "codex-version": "0.163.0",
+        "allow-bot-users": "renovate",
+      },
+    });
+    expect(step("copilot", "tailor-setup-node")["continue-on-error"]).toBe(true);
+    expect(step("copilot", "tailor-install-copilot")).toEqual({
+      id: "tailor-install-copilot",
+      "continue-on-error": true,
+      "timeout-minutes": 5,
+      run: "npm install -g @github/copilot@1.0.102",
+    });
+    const copilot = (copilotAuth: CopilotAuth) => step("copilot", "tailor-copilot", copilotAuth);
+    expect(copilot("pat")).toMatchObject(bounded);
+    expect(copilot("pat").run).toContain(
+      'copilot -s --no-ask-user --allow-tool=write --deny-tool=shell --deny-tool=url --disable-builtin-mcps < "$RUNNER_TEMP/tailor-codemod-agent/prompt.md"',
+    );
+    expect(copilot("pat").env).toEqual({
+      COPILOT_GITHUB_TOKEN: "${{ secrets.TAILOR_AUTOFIX_COPILOT_TOKEN }}",
+      COPILOT_AUTO_UPDATE: "false",
+      ACTOR: "${{ github.actor }}",
+    });
+    expect(copilot("github-token").env).toEqual({
+      GITHUB_TOKEN: "${{ github.token }}",
+      COPILOT_AUTO_UPDATE: "false",
+      ACTOR: "${{ github.actor }}",
+    });
+  });
+
+  test("agents: leave claude-code-action's reset configuration files out only with claude", () => {
+    const diff = (codemod: AutofixAgent) =>
+      stepOf(
+        workflowOf("github-token", { codemod }),
+        "tailor-codemod-agent",
+        "tailor-codemod-agent-diff",
+      ).run ?? "";
+    expect(diff("claude")).toContain("rm -rf .claude-pr");
+    expect(diff("claude")).toContain("| CLAUDE.md |");
+    for (const codemod of ["codex", "copilot"] as const) {
+      expect(diff(codemod)).not.toMatch(/claude/i);
+    }
+  });
+
+  test("agents: give the agent job only read access, and Copilot's requests with --copilot-auth github-token", () => {
+    const permissions = (codemod: AutofixAgent, copilotAuth?: CopilotAuth) =>
+      workflowOf("github-token", { codemod, copilotAuth }).jobs["tailor-codemod-agent"]
+        ?.permissions;
+    expect(permissions("claude")).toEqual({ contents: "read" });
+    expect(permissions("codex")).toEqual({ contents: "read" });
+    expect(permissions("copilot", "pat")).toEqual({ contents: "read" });
+    expect(permissions("copilot", "github-token")).toEqual({
+      contents: "read",
+      "copilot-requests": "write",
+    });
+  });
 
   test.each(AUTOFIX_PROVIDERS)("%s, without --codemod: adds no codemod step", (provider) => {
     const { content, generatedIds } = render(provider);
@@ -342,7 +530,7 @@ function runSteps(obj: {
     const env = Object.fromEntries(
       Object.entries(step.env ?? {}).map(([key, value]) => [
         key,
-        value.replaceAll(/\$\{\{ ([\w.-]+) \}\}/g, (_match, expression: string) => {
+        value.replaceAll(/\$\{\{ (.+?) \}\}/g, (_match, expression: string) => {
           const resolved = resolve(expression);
           if (resolved === undefined) throw new Error(`No test value for ${expression}`);
           return resolved;
@@ -697,6 +885,221 @@ function runCodemodBaseStep(
   return { result, calls: callsOf(root), runnerTemp };
 }
 
+/**
+ * Run the agent job's steps around a stand-in for the agent, in a checkout of the pull request
+ * head whose `CLAUDE.md` the pull request changed.
+ * @param root - Scratch directory
+ * @param options - How the run goes
+ * @param options.patch - Whether the generate job left a patch: it changes `generated.txt`
+ * @param options.agent - What the agent does in the checkout
+ * @param options.outcome - Outcome of the agent step
+ * @returns The diff step's result, the checkout, and the patch it left, if any
+ */
+function runAgentJob(
+  root: string,
+  options: { patch?: boolean; agent?: (checkout: string) => void; outcome?: string } = {},
+) {
+  const checkout = path.join(root, "checkout");
+  const runnerTemp = path.join(root, "runner-temp");
+  for (const dir of [checkout, path.join(checkout, "src"), runnerTemp]) fs.mkdirSync(dir);
+  fs.writeFileSync(path.join(checkout, "generated.txt"), "old\n");
+  fs.writeFileSync(path.join(checkout, "src", "a.ts"), "a();\n");
+  fs.writeFileSync(path.join(checkout, "CLAUDE.md"), "changed in the pull request\n");
+  fs.mkdirSync(path.join(checkout, ".github", "workflows"), { recursive: true });
+  fs.writeFileSync(path.join(checkout, ".github", "workflows", "ci.yml"), "name: ci\n");
+  git(checkout, "init", "-q");
+  git(checkout, "add", "-A");
+  git(checkout, "commit", "-q", "-m", "feature change");
+  const patchFile = path.join(runnerTemp, "tailor-autofix.patch");
+  if (options.patch ?? true) {
+    fs.writeFileSync(path.join(checkout, "generated.txt"), "new\n");
+    fs.writeFileSync(patchFile, `${git(checkout, "diff", "--binary")}\n`);
+    git(checkout, "checkout", "-q", "--", ".");
+  }
+
+  const workflow = workflowOf("github-token", { codemod: "claude" });
+  const run = (steps: string[], outputs?: StepOutputs, context?: Record<string, string>) =>
+    runSteps({
+      workflow,
+      job: "tailor-codemod-agent",
+      steps,
+      cwd: checkout,
+      runnerTemp,
+      outputs,
+      context,
+    });
+  const baseline = run(["tailor-codemod-agent-baseline"]);
+  if (baseline.failure !== undefined) throw new Error(baseline.failure);
+  options.agent?.(checkout);
+  const diff = run(["tailor-codemod-agent-diff"], baseline.outputs, {
+    "steps.tailor-claude.outcome": options.outcome ?? "success",
+  });
+  return {
+    diff,
+    checkout,
+    annotations: diff.log.split("\n").filter((line) => line.startsWith("::")),
+    patch: fs.existsSync(patchFile) ? fs.readFileSync(patchFile, "utf-8") : undefined,
+  };
+}
+
+/**
+ * Stand in for claude: edit the migration and a workflow, and leave what claude-code-action
+ * leaves: `CLAUDE.md` reset to the base branch's, a new `.claude/` file, the pull request's
+ * version under `.claude-pr/`, a hook, and a remote with a token.
+ * @param checkout - Checkout the agent edits
+ */
+function agentEdits(checkout: string): void {
+  fs.writeFileSync(path.join(checkout, "src", "a.ts"), "b();\n");
+  fs.mkdirSync(path.join(checkout, ".claude"));
+  fs.writeFileSync(path.join(checkout, ".claude", "settings.json"), "{}\n");
+  fs.writeFileSync(path.join(checkout, ".github", "workflows", "ci.yml"), "name: edited\n");
+  fs.writeFileSync(path.join(checkout, "CLAUDE.md"), "from the base branch\n");
+  fs.mkdirSync(path.join(checkout, ".claude-pr"));
+  fs.writeFileSync(path.join(checkout, ".claude-pr", "CLAUDE.md"), "changed in the pull request\n");
+  fs.appendFileSync(path.join(checkout, ".git", "info", "exclude"), "/.claude-pr/\n");
+  fs.writeFileSync(
+    path.join(checkout, ".git", "hooks", "post-checkout"),
+    `#!/bin/sh\ntouch "${path.join(checkout, "..", "hook-ran")}"\n`,
+    { mode: 0o755 },
+  );
+  git(checkout, "remote", "add", "origin", "https://x-access-token:secret@github.com/acme/widgets");
+}
+
+describe("tailor-codemod-agent job scripts", () => {
+  const runCopilot = (root: string, actor: string) => {
+    const runnerTemp = path.join(root, "runner-temp");
+    fs.mkdirSync(path.join(runnerTemp, "tailor-codemod-agent"), { recursive: true });
+    fs.writeFileSync(path.join(runnerTemp, "tailor-codemod-agent", "prompt.md"), "Migrate.\n");
+    const PATH = fakeCommands(root, {
+      copilot: `#!/usr/bin/env bash\ncat > "${path.join(root, "calls")}"\n`,
+    });
+    const result = runSteps({
+      workflow: workflowOf("github-token", { codemod: "copilot" }),
+      job: "tailor-codemod-agent",
+      steps: ["tailor-copilot"],
+      cwd: root,
+      runnerTemp,
+      context: { "secrets.TAILOR_AUTOFIX_COPILOT_TOKEN": "token", "github.actor": actor },
+      env: { PATH },
+    });
+    return { result, prompt: callsOf(root) };
+  };
+
+  test.each(["renovate[bot]", "octocat"])("copilot: reads the prompt for %s", (actor) => {
+    using tmp = tempDir("codemod-copilot-");
+    const { result, prompt } = runCopilot(tmp.dir, actor);
+    expect(result.failure).toBeUndefined();
+    expect(prompt).toBe("Migrate.\n");
+  });
+
+  test("copilot: does not start for a bot other than Renovate", () => {
+    using tmp = tempDir("codemod-copilot-");
+    const { result, prompt } = runCopilot(tmp.dir, "github-actions[bot]");
+    expect(result.failure).toContain(
+      "::warning::Only renovate[bot] among bots can start copilot, not github-actions[bot].",
+    );
+    expect(prompt).toBe("");
+  });
+
+  test("commits the agent's migration with the generate job's patch, and nothing it must not change", () => {
+    using tmp = tempDir("codemod-agent-");
+    const { diff, checkout, annotations, patch } = runAgentJob(tmp.dir, { agent: agentEdits });
+    expect(diff.failure).toBeUndefined();
+    expect(diff.outputs["tailor-codemod-agent-diff"]).toEqual({
+      changed: "true",
+      "commit-message": "chore: apply the SDK upgrade with claude",
+    });
+    expect(patch).toMatch(/generated\.txt[\s\S]*src\/a\.ts/);
+    expect(patch).not.toMatch(/ci\.yml|CLAUDE\.md|claude-pr|settings\.json/);
+    expect(annotations).toEqual([
+      "::warning file=.github/workflows/ci.yml::claude changed this workflow file, which the fix commit cannot change, so it is left out.",
+    ]);
+    expect(git(checkout, "remote")).toBe("");
+    expect(fs.existsSync(path.join(tmp.dir, "hook-ran"))).toBe(false);
+  });
+
+  test("leaves the agent's edits out when it did not finish", () => {
+    using tmp = tempDir("codemod-agent-");
+    const { diff, annotations, patch } = runAgentJob(tmp.dir, {
+      agent: agentEdits,
+      outcome: "failure",
+    });
+    expect(diff.failure).toBeUndefined();
+    expect(diff.outputs["tailor-codemod-agent-diff"]).toEqual({
+      changed: "true",
+      "commit-message": "chore: run tailor generate",
+    });
+    expect(patch).toContain("generated.txt");
+    expect(patch).not.toMatch(/a\.ts|ci\.yml|CLAUDE\.md|claude-pr/);
+    expect(annotations).toEqual([
+      "::warning::claude did not finish (failure), so the fix commit carries only what tailor upgrade and tailor generate changed.",
+    ]);
+  });
+
+  test.each([
+    ["no patch and no edit", { patch: false }, { changed: "false" }],
+    [
+      "edits but no patch",
+      { patch: false, agent: agentEdits },
+      { changed: "true", "commit-message": "chore: apply the SDK upgrade with claude" },
+    ],
+    [
+      "a patch but no edit",
+      { patch: true },
+      { changed: "true", "commit-message": "chore: run tailor generate" },
+    ],
+  ] as const)("reports what changed with %s", (_case, options, outputs) => {
+    using tmp = tempDir("codemod-agent-");
+    const { diff } = runAgentJob(tmp.dir, options);
+    expect(diff.failure).toBeUndefined();
+    expect(diff.outputs["tailor-codemod-agent-diff"]).toEqual(outputs);
+  });
+});
+
+describe("tailor-autofix-push job scripts for autofix.ci and securefix", () => {
+  const applyPatch = (root: string, generate: (checkout: string) => void) => {
+    const generated = runGenerateJob("autofix-ci", path.join(root, "generate-job"), { generate });
+    if (generated.diff.failure !== undefined) throw new Error(generated.diff.failure);
+    const checkout = path.join(root, "push-checkout");
+    git(root, "clone", "-q", generated.checkout, checkout);
+    const result = runSteps({
+      workflow: workflowOf("autofix-ci", { codemod: "claude" }),
+      job: "tailor-autofix-push",
+      steps: ["tailor-apply-patch"],
+      cwd: checkout,
+      runnerTemp: generated.runnerTemp,
+    });
+    return { result, checkout };
+  };
+
+  test("leaves the patch in the working tree for the service to commit", () => {
+    using tmp = tempDir("autofix-apply-");
+    const { result, checkout } = applyPatch(tmp.dir, generateChanges);
+    expect(result.failure).toBeUndefined();
+    expect(git(checkout, "diff", "--cached", "--name-only")).toBe("");
+    expect(git(checkout, "diff", "--name-status").split("\n")).toEqual([
+      "M\tkeep.txt",
+      "D\tstale.txt",
+    ]);
+    expect(
+      git(checkout, "ls-files", "-z", "--others", "--exclude-standard")
+        .split("\0")
+        .filter(Boolean)
+        .toSorted(),
+    ).toEqual(["data.bin", "dir with space/ünïcode.txt"]);
+  });
+
+  test("refuses a symbolic link, which could point at a file on the runner", () => {
+    using tmp = tempDir("autofix-apply-");
+    const { result } = applyPatch(tmp.dir, (checkout) =>
+      fs.symlinkSync("/etc/hosts", path.join(checkout, "hosts")),
+    );
+    expect(result.failure).toContain(
+      "::error::tailor upgrade, claude, and tailor generate left hosts",
+    );
+  });
+});
+
 describe("tailor-codemod-base step script", () => {
   test("fetches the base branch's copy of the pull request's lockfile", () => {
     using tmp = tempDir("codemod-base-");
@@ -826,7 +1229,9 @@ const ROOT_PNPM_LOCK = pnpmLock(pnpmImporter(".", "2.5.0"));
  * @param options.upgrade.stdout - Standard output, or a function of the checkout's real path
  * @param options.upgrade.status - Exit status
  * @param options.upgrade.script - Bash script run in the app directory
- * @returns The step result, the checkout, the fake's calls, and the job summary
+ * @param options.headSubject - Subject of the head commit
+ * @param options.context - Values for the `${{ }}` expressions in the step's env
+ * @returns The step result, the checkout, its RUNNER_TEMP, the fake's calls, and the job summary
  */
 function runCodemodStep(
   root: string,
@@ -843,6 +1248,8 @@ function runCodemodStep(
       status?: number;
       script?: string;
     };
+    headSubject?: string;
+    context?: Record<string, string>;
   } = {},
 ) {
   const checkout = path.join(root, "checkout");
@@ -868,7 +1275,7 @@ function runCodemodStep(
   for (const [file, content] of Object.entries(options.files ?? {})) write(file, content);
   git(checkout, "init", "-q");
   git(checkout, "add", "-A");
-  git(checkout, "commit", "-q", "-m", "feature change");
+  git(checkout, "commit", "-q", "-m", options.headSubject ?? "feature change");
 
   const base = path.join(runnerTemp, "tailor-codemod-base", lockfile);
   const baseLock = options.baseLock === undefined ? ROOT_PNPM_LOCK : options.baseLock;
@@ -894,6 +1301,11 @@ function runCodemodStep(
     cwd: checkout,
     runnerTemp,
     outputs: { "tailor-codemod-base": { lockfile, base: baseLock === null ? "" : base } },
+    context: {
+      "github.event.pull_request.head.repo.full_name == github.repository": "true",
+      "github.actor": "renovate[bot]",
+      ...options.context,
+    },
     env: {
       PATH,
       FAKE_DIR: root,
@@ -912,6 +1324,7 @@ function runCodemodStep(
   return {
     result,
     checkout: realCheckout,
+    runnerTemp,
     calls,
     annotations: result.log.split("\n").filter((line) => line.startsWith("::")),
     summary: fs.readFileSync(summaryFile, "utf-8"),
@@ -1430,6 +1843,101 @@ describe("tailor-codemod step script", () => {
     expect(annotations).toContain("::warning::line 1%0Aline 2: 100%25%0D");
   });
 
+  const AGENT_PROMPT = [
+    "You are finishing an upgrade of @tailor-platform/sdk in this repository. Its codemods already rewrote what they could. Finish the migrations below by editing the repository's files.",
+    "",
+    "- Edit only files in this repository, and only to finish these migrations.",
+    "- Do not run commands, commit, push, or open pull requests: the workflow commits your edits.",
+    "- Do not edit files under .github/workflows.",
+    "- Leave code that already follows a migration as it is.",
+    "",
+    "Paths are relative to the repository root.",
+    "",
+    "## @tailor-platform/sdk 2.5.0 → 3.0.0 in apps/a",
+    "",
+    "### v3/rename",
+    "",
+    "- `apps/a/src/a.ts`",
+    "  - line 3: Uses a. `a()`",
+    "- `apps/a/src/b.ts`",
+    "",
+    "```text",
+    "Rename `a` to `b`.",
+    "```",
+    "",
+    "### v3/manual",
+    "",
+    "- All of apps/a",
+    "",
+    "```text",
+    "Check the project.",
+    "```",
+    "",
+  ].join("\n");
+
+  test.each(["renovate[bot]", "octocat"])(
+    "agents: apply the rewrites and hand what is left for review to the agent, for %s",
+    (actor) => {
+      using tmp = tempDir("codemod-step-");
+      const { result, calls, runnerTemp, annotations } = runCodemodStep(tmp.dir, {
+        ...APP_A,
+        codemod: "claude",
+        context: { "github.actor": actor },
+        upgrade: { stdout: upgradeStdout({ llmReviews: [FILE_REVIEW, PROJECT_REVIEW] }) },
+      });
+      expect(result.failure).toBeUndefined();
+      expect(calls).toEqual([["apps/a", "exec tailor upgrade --from 2.5.0 --json"]]);
+      expect(result.outputs["tailor-codemod"]).toEqual({ agent: "true" });
+      expect(annotations.every((line) => line.startsWith("::warning"))).toBe(true);
+      expect(
+        fs.readFileSync(path.join(runnerTemp, "tailor-codemod-agent", "prompt.md"), "utf-8"),
+      ).toBe(AGENT_PROMPT);
+    },
+  );
+
+  test.each([
+    [
+      "the pull request comes from a fork",
+      {
+        context: { "github.event.pull_request.head.repo.full_name == github.repository": "false" },
+      },
+    ],
+    [
+      "only renovate[bot] among bots can start it, not dependabot[bot]",
+      { context: { "github.actor": "dependabot[bot]" } },
+    ],
+    [
+      "the head commit is the workflow's own fix commit",
+      { headSubject: "chore: run tailor generate" },
+    ],
+    [
+      "the head commit is the workflow's own fix commit",
+      { headSubject: "chore: apply the SDK upgrade with claude" },
+    ],
+  ])("agents: start no agent when %s", (reason, overrides) => {
+    using tmp = tempDir("codemod-step-");
+    const { result, runnerTemp, annotations } = runCodemodStep(tmp.dir, {
+      ...APP_A,
+      codemod: "claude",
+      upgrade: { stdout: upgradeStdout({ llmReviews: [PROJECT_REVIEW] }) },
+      ...overrides,
+    });
+    expect(result.failure).toBeUndefined();
+    expect(result.outputs["tailor-codemod"]).toEqual({});
+    expect(annotations).toContain(`::notice::claude does not run: ${reason}.`);
+    expect(fs.existsSync(path.join(runnerTemp, "tailor-codemod-agent"))).toBe(false);
+  });
+
+  test("agents: start no agent when nothing is left for review", () => {
+    using tmp = tempDir("codemod-step-");
+    const { result, annotations } = runCodemodStep(tmp.dir, {
+      codemod: "claude",
+      upgrade: { stdout: upgradeStdout({ warnings: [LEGACY_WARNING] }) },
+    });
+    expect(result.outputs["tailor-codemod"]).toEqual({});
+    expect(annotations).toEqual([`::warning::${LEGACY_WARNING}`]);
+  });
+
   test("keeps backticks in the excerpt and prompt from closing the summary's code", () => {
     using tmp = tempDir("codemod-step-");
     const { summary } = runCodemodStep(tmp.dir, {
@@ -1538,6 +2046,18 @@ describe("setupAutofix", () => {
     );
   });
 
+  test.each([
+    [undefined, "pat"],
+    ["github-token", "github-token"],
+  ] as const)("records copilot with --copilot-auth %s as %s", async (copilotAuth, recorded) => {
+    await setupAutofix(options({ codemod: "copilot", copilotAuth }));
+
+    expect(readLock(repo)?.autofix?.inputs).toMatchObject({
+      codemod: "copilot",
+      copilotAuth: recorded,
+    });
+  });
+
   test("rejects --codemod for a bun repository with only the binary bun.lockb", async () => {
     fs.writeFileSync(path.join(repo, "bun.lockb"), "");
     const bun = { codemod: "warn", packageManager: "bun" } as const;
@@ -1566,6 +2086,10 @@ describe("setupAutofix", () => {
     [
       { provider: "github-app", securefixServerRepository: "securefix-server" },
       /--securefix-server-repository is only used with --provider securefix/,
+    ],
+    [
+      { codemod: "claude", copilotAuth: "pat" },
+      /--copilot-auth is only used with --codemod copilot/,
     ],
   ] as const)("rejects %o before writing anything", async (overrides, message) => {
     await expect(setupAutofix(options(overrides))).rejects.toThrow(message);
@@ -1647,12 +2171,34 @@ describe("setupAutofix", () => {
 });
 
 describe("printAutofixNextSteps", () => {
-  const output = (provider: AutofixProvider) => {
+  const output = (
+    provider: AutofixProvider,
+    codemod: AutofixCodemodParams = { codemod: undefined },
+  ) => {
     using log = vi.spyOn(logger, "log").mockImplementation(() => {});
     using _info = vi.spyOn(logger, "info").mockImplementation(() => {});
-    printAutofixNextSteps({ provider });
+    printAutofixNextSteps({ provider, ...codemod });
     return log.mock.calls.map(([line]) => line).join("\n");
   };
+
+  test.each([
+    [{ codemod: "claude" }, "TAILOR_AUTOFIX_ANTHROPIC_API_KEY"],
+    [{ codemod: "codex" }, "TAILOR_AUTOFIX_OPENAI_API_KEY"],
+    [{ codemod: "copilot", copilotAuth: "pat" }, "TAILOR_AUTOFIX_COPILOT_TOKEN"],
+  ] as const)("agents: point to the secret the agent signs in with (%o)", (codemod, name) => {
+    const text = output("github-token", codemod);
+    expect(text).toMatch(
+      new RegExp(`\\n2\\. Set the ${name} repository secret[\\s\\S]*tailor setup ci env --check`),
+    );
+    expect(text).toContain("only renovate[bot] can start the agent");
+    expect(text).toContain("\n3. Commit the generated files:");
+  });
+
+  test("copilot with --copilot-auth github-token: points to the organization's Copilot policy", () => {
+    const text = output("github-token", { codemod: "copilot", copilotAuth: "github-token" });
+    expect(text).toContain("Copilot CLI billed to the organization");
+    expect(text).not.toContain("tailor setup ci env");
+  });
 
   test("github-token: says the checks of each fix commit wait for approval", () => {
     expect(output("github-token")).toContain('"Approve\n   workflows to run"');

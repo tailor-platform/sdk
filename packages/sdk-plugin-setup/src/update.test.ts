@@ -669,6 +669,49 @@ describe("setupUpdate", () => {
     expect(successSpy).toHaveBeenLastCalledWith(expect.stringMatching(/^Updated 1 workflow\(s\)/));
   });
 
+  test("keeps the agent and its Copilot auth", async () => {
+    writeAppConfig("apps/api");
+    await setupAutofix(
+      autofixSetupOptions(testDir, {
+        dir: "apps/api",
+        codemod: "copilot",
+        copilotAuth: "github-token",
+      }),
+    );
+    const lock = readLock(testDir);
+    if (!lock?.autofix) throw new Error("Expected an autofix entry.");
+    writeLock(testDir, {
+      ...lock,
+      autofix: { ...lock.autofix, templateVersion: TEMPLATE_VERSION - 1 },
+    });
+    using _successSpy = vi.spyOn(logger, "success").mockImplementation(() => {});
+
+    await setupUpdate({ force: false, outputDir: testDir, ...loaders });
+
+    expect(readLock(testDir)?.autofix?.inputs).toMatchObject({
+      codemod: "copilot",
+      copilotAuth: "github-token",
+    });
+    expect(fs.readFileSync(path.join(testDir, AUTOFIX_WORKFLOW_FILE), "utf-8")).toContain(
+      "copilot-requests: write",
+    );
+  });
+
+  test("refuses a Copilot auth it does not know", async () => {
+    writeAppConfig("apps/api");
+    await setupAutofix(autofixSetupOptions(testDir, { dir: "apps/api", codemod: "copilot" }));
+    const lock = readLock(testDir);
+    if (!lock?.autofix) throw new Error("Expected an autofix entry.");
+    writeLock(testDir, {
+      ...lock,
+      autofix: { ...lock.autofix, inputs: { ...lock.autofix.inputs, copilotAuth: "oauth" } },
+    });
+
+    await expect(setupUpdate({ force: false, outputDir: testDir, ...loaders })).rejects.toThrow(
+      /\[autofix\] \.github\/tailor\.lock records the unsupported Copilot auth "oauth"\. Re-run `tailor setup ci autofix` with --copilot-auth\./,
+    );
+  });
+
   test("refuses an autofix codemod mode it does not know", async () => {
     writeAppConfig("apps/api");
     await setupAutofix(autofixSetupOptions(testDir, { dir: "apps/api" }));
@@ -676,11 +719,11 @@ describe("setupUpdate", () => {
     if (!lock?.autofix) throw new Error("Expected an autofix entry.");
     writeLock(testDir, {
       ...lock,
-      autofix: { ...lock.autofix, inputs: { ...lock.autofix.inputs, codemod: "claude" } },
+      autofix: { ...lock.autofix, inputs: { ...lock.autofix.inputs, codemod: "gemini" } },
     });
 
     await expect(setupUpdate({ force: false, outputDir: testDir, ...loaders })).rejects.toThrow(
-      /\[autofix\] \.github\/tailor\.lock records the unsupported codemod mode "claude"\. Re-run `tailor setup ci autofix` with --codemod\./,
+      /\[autofix\] \.github\/tailor\.lock records the unsupported codemod mode "gemini"\. Re-run `tailor setup ci autofix` with --codemod\./,
     );
   });
 

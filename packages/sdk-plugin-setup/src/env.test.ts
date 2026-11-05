@@ -16,7 +16,15 @@ import {
   renderedTemplates,
   type WorkflowTemplate,
 } from "./template-fingerprint";
-import { AUTOFIX_PROVIDERS, renderBranchWorkflow, type AutofixProvider } from "./templates";
+import {
+  AUTOFIX_CODEMODS,
+  AUTOFIX_PROVIDERS,
+  COPILOT_AUTHS,
+  renderBranchWorkflow,
+  type AutofixCodemod,
+  type AutofixProvider,
+  type CopilotAuth,
+} from "./templates";
 import { autofixLockEntry, renderAutofixFor } from "./test-helpers/autofix";
 import { envTarget as target } from "./test-helpers/env-target";
 import { tempDir } from "./test-helpers/temp-dir";
@@ -107,12 +115,43 @@ const withAutofix = (provider: AutofixProvider, ...targets: LockTarget[]): LockF
 });
 
 describe("autofixRequirements matches the secrets/vars the rendered autofix workflow references", () => {
-  test.each(AUTOFIX_PROVIDERS)("%s", (provider) => {
-    expect(referencedNames(renderAutofixFor(provider).content)).toEqual(
-      autofixRequirements(provider)
+  const variants = AUTOFIX_PROVIDERS.flatMap((provider) =>
+    AUTOFIX_CODEMODS.flatMap((codemod) =>
+      (codemod === "copilot" ? COPILOT_AUTHS : [undefined]).map(
+        (
+          copilotAuth,
+        ): { provider: AutofixProvider; codemod: AutofixCodemod; copilotAuth?: CopilotAuth } => ({
+          provider,
+          codemod,
+          copilotAuth,
+        }),
+      ),
+    ),
+  );
+  test.each(variants)("$provider, codemod $codemod, copilot auth $copilotAuth", (inputs) => {
+    expect(referencedNames(renderAutofixFor(inputs.provider, inputs).content)).toEqual(
+      autofixRequirements(inputs)
         .map((r) => `${r.type} ${r.name}`)
         .toSorted(),
     );
+  });
+
+  test.each([
+    ["claude", undefined, "TAILOR_AUTOFIX_ANTHROPIC_API_KEY"],
+    ["codex", undefined, "TAILOR_AUTOFIX_OPENAI_API_KEY"],
+    ["copilot", "pat", "TAILOR_AUTOFIX_COPILOT_TOKEN"],
+  ] as const)("codemod %s with Copilot auth %s needs %s", (codemod, copilotAuth, name) => {
+    expect(
+      autofixRequirements({ provider: "github-app", codemod, copilotAuth }).map((r) => [
+        r.type,
+        r.name,
+        r.required,
+      ]),
+    ).toEqual([
+      ["variable", "TAILOR_AUTOFIX_APP_CLIENT_ID", true],
+      ["secret", "TAILOR_AUTOFIX_APP_PRIVATE_KEY", true],
+      ["secret", name, true],
+    ]);
   });
 });
 
