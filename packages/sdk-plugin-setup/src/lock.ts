@@ -131,6 +131,8 @@ export type LockAutofix = ManagedWorkflow & {
     packageManagerAutoDetected: boolean;
     /** For the `securefix` provider: the repository that runs the securefix server workflow. */
     securefixServerRepository?: string;
+    /** `--codemod`, recorded when passed. */
+    codemod?: string;
   };
 };
 

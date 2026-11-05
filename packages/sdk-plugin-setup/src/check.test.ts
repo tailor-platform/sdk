@@ -14,7 +14,7 @@ import {
 import { setupTarget, type BranchSetupOptions } from "./generate";
 import { LOCK_VERSION, type LockAutofix, type LockTarget, hashContent, writeLock } from "./lock";
 import { AUTOFIX_WORKFLOW_FILE, TEMPLATE_VERSION } from "./templates";
-import { autofixLockEntry } from "./test-helpers/autofix";
+import { autofixLockEntry, autofixSetupOptions } from "./test-helpers/autofix";
 import type { logger as Logger } from "@tailor-platform/sdk/cli";
 
 const baseTarget = (overrides: Partial<LockTarget> = {}): LockTarget => ({
@@ -926,7 +926,7 @@ describe("checkGitHub (integration)", () => {
     });
 
     test("keeps a managed autofix workflow out of legacy lock removal suggestions", async () => {
-      await setupAutofix({ provider: "github-token", dir: ".", force: false, outputDir: testDir });
+      await setupAutofix(autofixSetupOptions(testDir));
       writeLegacyLock(JSON.stringify({ version: 1, targets: [{ file: AUTOFIX_WORKFLOW_FILE }] }));
       using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
 
@@ -941,7 +941,7 @@ describe("checkGitHub (integration)", () => {
     });
 
     test("audits the autofix workflow, even when the lock records no target", async () => {
-      await setupAutofix({ provider: "github-token", dir: ".", force: false, outputDir: testDir });
+      await setupAutofix(autofixSetupOptions(testDir));
       using successSpy = vi.spyOn(logger, "success").mockImplementation(() => {});
       using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
 

@@ -17,16 +17,44 @@ jobs:
     concurrency:
       group: tailor-autofix-${{ github.event.pull_request.number }}
       cancel-in-progress: true
-    # __PATCH_OUTPUTS_START__
-    outputs:
-      changed: ${{ steps.tailor-autofix-diff.outputs.changed }}
-    # __PATCH_OUTPUTS_END__
+    # __AUTOFIX_OUTPUTS__
     steps:
       - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
+      # __CODEMOD_BASE_START__
+      - id: tailor-codemod-base
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          for lockfile in __CODEMOD_LOCKFILES__; do
+            if [ -f "$lockfile" ]; then
+              break
+            fi
+            lockfile=
+          done
+          if [ -z "$lockfile" ]; then
+            echo "::error::No __CODEMOD_LOCKFILES_TEXT__ at the repository root. The codemod step reads the SDK version of the base branch from it."
+            exit 1
+          fi
+          echo "lockfile=$lockfile" >> "$GITHUB_OUTPUT"
+          export GH_HOST="${GITHUB_SERVER_URL#*://}"
+          mkdir -p "$RUNNER_TEMP/tailor-codemod-base"
+          base="$RUNNER_TEMP/tailor-codemod-base/$lockfile"
+          if gh api -H "Accept: application/vnd.github.raw+json" "repos/$REPOSITORY/contents/$lockfile?ref=$BASE_SHA" > "$base" 2> "$RUNNER_TEMP/tailor-codemod-base.log"; then
+            echo "base=$base" >> "$GITHUB_OUTPUT"
+          elif grep -q "(HTTP 404)" "$RUNNER_TEMP/tailor-codemod-base.log"; then
+            rm "$base"
+            echo "base=" >> "$GITHUB_OUTPUT"
+          else
+            cat "$RUNNER_TEMP/tailor-codemod-base.log" >&2
+            exit 1
+          fi
+      # __CODEMOD_BASE_END__
       - id: tailor-setup
         uses: tailor-platform/actions/setup@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
         with:
@@ -41,6 +69,337 @@ jobs:
           git add -A
           echo "tree=$(git write-tree)" >> "$GITHUB_OUTPUT"
           git reset -q
+      # __CODEMOD_START__
+      - id: tailor-codemod
+        env:
+          CODEMOD: __CODEMOD__
+          APP_DIRS: __CODEMOD_DIRS__
+          LOCKFILE: ${{ steps.tailor-codemod-base.outputs.lockfile }}
+          BASE_LOCKFILE: ${{ steps.tailor-codemod-base.outputs.base }}
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const { execFileSync, spawnSync } = require("node:child_process");
+
+          const SDK = "@tailor-platform/sdk";
+          const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+          const LOCAL = /^(?:workspace|link|portal|file):/;
+          const AUTOFIX_MIN_SDK_VERSION = "2.37.0";
+          const [command, ...prefix] = "__TAILOR_CLI__".split(" ");
+          const mode = process.env.CODEMOD;
+          const lockfile = process.env.LOCKFILE;
+          const headLock = fs.readFileSync(lockfile, "utf-8");
+          const baseLock = process.env.BASE_LOCKFILE
+            ? fs.readFileSync(process.env.BASE_LOCKFILE, "utf-8")
+            : undefined;
+
+          const escapeData = (value) =>
+            String(value).replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
+          const escapeProperty = (value) =>
+            escapeData(value).replaceAll(":", "%3A").replaceAll(",", "%2C");
+
+          function annotate(level, message, properties = {}) {
+            const list = Object.entries(properties)
+              .filter(([, value]) => value !== undefined)
+              .map(([key, value]) => `${key}=${escapeProperty(value)}`)
+              .join(",");
+            console.log(`::${level}${list ? ` ${list}` : ""}::${escapeData(message)}`);
+          }
+
+          function fail(message) {
+            annotate("error", message);
+            process.exit(1);
+          }
+
+          const appOf = (dir) => (dir === "." ? "the root app" : dir);
+
+          // Node resolves a package from the app directory up to the repository root.
+          function ancestors(dir) {
+            const dirs = [dir];
+            while (dirs.at(-1) !== ".") dirs.push(path.posix.dirname(dirs.at(-1)));
+            return dirs;
+          }
+
+          function installedVersion(dir) {
+            for (const candidate of ancestors(dir)) {
+              const file = path.join(candidate, "node_modules", SDK, "package.json");
+              if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, "utf-8")).version;
+            }
+          }
+
+          function pnpmDependency(lines) {
+            let inDependencies = false;
+            let inSdk = false;
+            for (const line of lines) {
+              const text = line.trim();
+              const depth = line.length - line.trimStart().length;
+              if (text === "") continue;
+              if (depth === 4) {
+                inDependencies = /^(?:dev|optional)?[dD]ependencies:$/.test(text);
+                inSdk = false;
+              } else if (inDependencies && depth === 6) {
+                inSdk = /^['"]@tailor-platform\/sdk['"]:$/.test(text);
+              } else if (inSdk && depth === 8 && text.startsWith("version: ")) {
+                return text.slice("version: ".length).replace(/\(.*$/, "");
+              }
+            }
+          }
+
+          // pnpm writes the lockfile of its own version, when pinned, as an earlier document.
+          function pnpmVersion(lock, dir) {
+            const lines = lock.split(/^---$/m).at(-1).split(/\r?\n/);
+            const importers = new Map();
+            const start = lines.indexOf("importers:");
+            let block;
+            for (const line of start === -1 ? [] : lines.slice(start + 1)) {
+              if (/^\S/.test(line)) break;
+              const key = /^ {2}(\S.*):$/.exec(line);
+              if (key) {
+                block = [];
+                importers.set(key[1].replace(/^'(.*)'$/, "$1"), block);
+              } else {
+                block?.push(line);
+              }
+            }
+            for (const candidate of ancestors(dir)) {
+              const importer = importers.get(candidate);
+              const version = importer && pnpmDependency(importer);
+              if (version) return version;
+            }
+          }
+
+          function npmVersion(lock, dir) {
+            const { packages = {} } = JSON.parse(lock);
+            for (const candidate of ancestors(dir)) {
+              const entry = packages[path.posix.join(candidate, "node_modules", SDK)];
+              if (entry) return entry.link ? `link:${entry.resolved}` : entry.version;
+            }
+          }
+
+          function yarnVersions(lock) {
+            const versions = new Set();
+            let local;
+            let inSdk = false;
+            for (const line of lock.split(/\r?\n/)) {
+              if (/^[^\s#]/.test(line)) {
+                const ranges = line
+                  .split(/,\s*/)
+                  .map((spec) => spec.replace(/^"|"?:?$/g, ""))
+                  .filter((spec) => spec.startsWith(`${SDK}@`))
+                  .map((spec) => spec.slice(SDK.length + 1));
+                local ??= ranges.find((range) => LOCAL.test(range));
+                inSdk = ranges.some((range) => !LOCAL.test(range));
+              } else if (inSdk) {
+                const entry = /^ {2}version:? "?([^"\s]+)"?$/.exec(line);
+                if (entry) versions.add(entry[1]);
+              }
+            }
+            return { versions, local };
+          }
+
+          // yarn.lock does not record which workspace uses which version.
+          function yarnVersion(lock, dir) {
+            const { versions: found, local } = yarnVersions(lock);
+            const versions = [...found];
+            if (versions.length === 0) return local;
+            if (versions.length === 1) return versions[0];
+            const head = yarnVersions(headLock).versions;
+            if (head.size === versions.length && versions.every((version) => head.has(version))) {
+              return installedVersion(dir);
+            }
+            fail(
+              `yarn.lock of the base branch has ${SDK} ${versions.join(", ")}, so the codemod step ` +
+                `cannot tell which version ${appOf(dir)} upgrades from. Run tailor upgrade --from <version> ` +
+                "yourself.",
+            );
+          }
+
+          function bunVersion(lock, dir) {
+            const { workspaces = {}, packages = {} } = JSON.parse(
+              lock.replace(/,(\s*[}\]])/g, "$1"),
+            );
+            for (const candidate of ancestors(dir)) {
+              const owner = candidate === "." ? "" : workspaces[candidate]?.name;
+              const entry = owner === undefined ? undefined : packages[owner ? `${owner}/${SDK}` : SDK];
+              if (entry) return String(entry[0]).slice(SDK.length + 1);
+            }
+          }
+
+          const VERSION_READERS = {
+            "pnpm-lock.yaml": pnpmVersion,
+            "npm-shrinkwrap.json": npmVersion,
+            "package-lock.json": npmVersion,
+            "yarn.lock": yarnVersion,
+            "bun.lock": bunVersion,
+          };
+
+          function lockVersion(lock, dir, owner) {
+            try {
+              return VERSION_READERS[lockfile](lock, dir);
+            } catch (error) {
+              fail(`Could not read ${lockfile} of ${owner}: ${error.message}`);
+            }
+          }
+
+          function upgradeResult(stdout) {
+            for (const line of stdout.split("\n").reverse()) {
+              if (!line.startsWith("{")) continue;
+              let output;
+              try {
+                output = JSON.parse(line);
+              } catch {
+                continue;
+              }
+              if (["filesModified", "llmReviews", "warnings"].every((key) => Array.isArray(output[key]))) {
+                return output;
+              }
+            }
+          }
+
+          function fenceFor(text, min) {
+            const runs = [...String(text).matchAll(/`+/g)].map(([run]) => run.length);
+            return "`".repeat(Math.max(min - 1, ...runs) + 1);
+          }
+          function code(text) {
+            const fence = fenceFor(text, 1);
+            const pad = /^`|`$/.test(text) ? " " : "";
+            return `${fence}${pad}${text}${pad}${fence}`;
+          }
+
+          function report(dir, from, to, output) {
+            const app = appOf(dir);
+            const level = mode === "error" ? "error" : "warning";
+            const rerun = `tailor upgrade --from ${from}`;
+            const inRepo = (file) => path.posix.join(dir, file);
+            const files = output.filesModified.map((file) => path.relative(process.cwd(), file));
+            const commits = mode === "deterministic";
+            // GitHub refuses a fix commit that changes a workflow file.
+            const applied = commits ? files.filter((file) => !file.startsWith(".github/workflows/")) : [];
+            const pending = files.filter((file) => !applied.includes(file));
+            if (commits && pending.length > 0) execFileSync("git", ["checkout", "-q", "--", ...pending]);
+            const reviews = output.llmReviews;
+            const summary = [`### ${SDK} ${from} → ${to} in ${app}`, ""];
+
+            const found = [
+              ...(pending.length > 0 ? [`${pending.length} file(s) for ${rerun} to rewrite`] : []),
+              ...(reviews.length > 0 ? [`${reviews.length} codemod(s) to review`] : []),
+            ];
+            if (found.length > 0) {
+              annotate(
+                level,
+                `${SDK} ${from} → ${to} in ${app}: ${found.join(" and ")}. The job summary lists them.`,
+              );
+            }
+            if (applied.length > 0) {
+              summary.push(`${code(rerun)} rewrote:`, "", ...applied.map((file) => `- ${code(file)}`), "");
+            }
+            if (pending.length > 0) {
+              summary.push(
+                `Run ${code(rerun)} in ${code(dir)} and commit what it rewrites:`,
+                "",
+                ...pending.map((file) => `- ${code(file)}`),
+                "",
+              );
+            }
+            for (const file of pending) {
+              annotate(
+                level,
+                commits
+                  ? `${rerun} rewrites this workflow file, which the fix commit cannot change. Run it and commit the file yourself.`
+                  : `${rerun} rewrites this file.`,
+                { file, title: "Codemod not applied" },
+              );
+            }
+            for (const review of reviews) {
+              const title = `Review needed: ${review.codemodId}`;
+              const findings = review.findings ?? [];
+              summary.push(`**${title}**`, "");
+              for (const file of review.files) {
+                summary.push(`- ${code(inRepo(file))}`);
+                const inFile = findings.filter((finding) => finding.file === file);
+                for (const finding of inFile) {
+                  annotate(level, finding.message, { file: inRepo(file), line: finding.line, title });
+                  summary.push(`  - line ${finding.line}: ${finding.message} ${code(finding.excerpt)}`);
+                }
+                if (inFile.length === 0) {
+                  annotate(level, `The ${review.codemodId} codemod could not migrate this file on its own.`, {
+                    file: inRepo(file),
+                    title,
+                  });
+                }
+              }
+              if (review.files.length === 0) {
+                annotate(level, `Review ${app} for the ${review.codemodId} migration.`, { title });
+                summary.push(`- All of ${app}`);
+              }
+              const prompt = review.prompt.trim();
+              const fence = fenceFor(prompt, 3);
+              summary.push("", "<details><summary>Migration prompt</summary>", "", `${fence}text`, prompt, fence, "", "</details>", "");
+            }
+            if (output.warnings.length > 0) summary.push("Warnings:", "");
+            for (const warning of output.warnings) {
+              const text = dir === "." ? warning : `${dir}/${warning}`;
+              annotate("warning", text);
+              summary.push(`- ${text}`);
+            }
+            if (files.length === 0 && reviews.length === 0 && output.warnings.length === 0) {
+              summary.push("No codemod applies.");
+            }
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summary.join("\n")}\n\n`);
+            return mode === "error" && (pending.length > 0 || reviews.length > 0);
+          }
+
+          let pending = false;
+          for (const dir of JSON.parse(process.env.APP_DIRS)) {
+            const app = appOf(dir);
+            const to = installedVersion(dir);
+            if (to === undefined) fail(`${SDK} is not installed for ${app}.`);
+            const head = lockVersion(headLock, dir, "the pull request");
+            if (head === undefined) fail(`${lockfile} does not list a version of ${SDK} for ${app}.`);
+            const from =
+              baseLock === undefined
+                ? AUTOFIX_MIN_SDK_VERSION
+                : lockVersion(baseLock, dir, "the base branch");
+            if (from === undefined) {
+              annotate("notice", `The base branch has no ${SDK} for ${app}, so no codemod runs there.`);
+              continue;
+            }
+            if (from === head || from === to) {
+              if (LOCAL.test(from)) {
+                annotate(
+                  "notice",
+                  `${SDK} for ${app} is ${from} on both branches, not a version, so no codemod runs there.`,
+                );
+              }
+              continue;
+            }
+            if (!VERSION.test(from)) {
+              fail(`The base branch has ${SDK} ${from} for ${app}, which tailor upgrade cannot start from.`);
+            }
+            if (baseLock === undefined) {
+              annotate(
+                "notice",
+                `The base branch has no ${lockfile}, so ${app} upgrades from ${SDK} ${from}, the oldest version tailor setup ci autofix supports.`,
+              );
+            }
+            const args = ["upgrade", "--from", from, "--json"];
+            if (mode !== "deterministic") args.push("--dry-run");
+            const result = spawnSync(command, [...prefix, ...args], {
+              cwd: dir,
+              encoding: "utf-8",
+              stdio: ["ignore", "pipe", "inherit"],
+              maxBuffer: 1024 ** 3,
+            });
+            if (result.status !== 0) fail(`tailor upgrade --from ${from} failed for ${app}.`);
+            const output =
+              upgradeResult(result.stdout) ??
+              fail(`tailor upgrade --from ${from} printed no result for ${app}.`);
+            if (report(dir, from, to, output)) pending = true;
+          }
+          if (pending) fs.appendFileSync(process.env.GITHUB_OUTPUT, "pending=true\n");
+          NODE
+      # __CODEMOD_END__
       # __GENERATE_START__
       - id: tailor-generate
         run: __TAILOR_CLI__ generate
@@ -61,7 +420,7 @@ jobs:
           fi
           git --no-pager diff --stat "$BASELINE_TREE" "$tree"
           if [ "$(git log -1 --format=%s)" = "$COMMIT_MESSAGE" ]; then
-            echo "::error::tailor generate changed files again right after its own fix commit. Run it twice locally and check that the second run changes nothing."
+            echo "::error::__RERUN_ERROR__"
             exit 1
           fi
           git diff --binary "$BASELINE_TREE" "$tree" > "$RUNNER_TEMP/tailor-autofix.patch"
@@ -158,7 +517,7 @@ jobs:
               jq -cn --arg path "$file" --rawfile contents "$RUNNER_TEMP/tailor-autofix-contents" \
                 '{addition: {path: $path, contents: $contents}}' >> "$changes"
             else
-              echo "::error::tailor generate left $file with mode $mode; only regular files can be committed."
+              echo "::error::__FIX_COMMANDS__ left $file with mode $mode; only regular files can be committed."
               exit 1
             fi
           done < <(git diff --cached --raw -z --no-renames --no-abbrev)
@@ -183,3 +542,17 @@ jobs:
           fi
           exit 1
   # __PUSH_JOB_END__
+  # __CODEMOD_RESULT_JOB_START__
+  tailor-codemod-result:
+    needs: tailor-autofix
+    if: always() && (needs.tailor-autofix.result == 'failure' || needs.tailor-autofix.result == 'cancelled' || needs.tailor-autofix.outputs.codemod-pending == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - id: tailor-codemod-result
+        run: |
+          echo "::error::The tailor-autofix job failed or was cancelled, or the SDK upgrade leaves codemods to apply or review. The log and summary of the tailor-autofix job say which."
+          exit 1
+  # __CODEMOD_RESULT_JOB_END__

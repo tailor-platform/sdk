@@ -10,7 +10,13 @@ import {
   type LockInputs,
   type LockTarget,
 } from "./lock";
-import { isPackageManager, type PackageManager, type PreviewRequirement } from "./templates";
+import {
+  isAutofixCodemod,
+  isPackageManager,
+  type AutofixCodemod,
+  type PackageManager,
+  type PreviewRequirement,
+} from "./templates";
 
 type UpdateCommon = { force: boolean; outputDir: string };
 
@@ -32,6 +38,17 @@ function recordedPackageManagerUnlessDetected(
     );
   }
   return inputs.packageManager;
+}
+
+function recordedCodemod(inputs: LockAutofix["inputs"]): AutofixCodemod | undefined {
+  const { codemod } = inputs;
+  if (codemod !== undefined && !isAutofixCodemod(codemod)) {
+    throw new Error(
+      `.github/tailor.lock records the unsupported codemod mode ${JSON.stringify(codemod)}. ` +
+        "Re-run `tailor setup ci autofix` with --codemod.",
+    );
+  }
+  return codemod;
 }
 
 /**
@@ -111,6 +128,7 @@ function planAutofixUpdate(autofix: LockAutofix, common: UpdateCommon): AutofixS
   return {
     provider,
     securefixServerRepository,
+    codemod: recordedCodemod(autofix.inputs),
     dir: dirs,
     packageManager: recordedPackageManagerUnlessDetected(autofix.inputs),
     ...common,

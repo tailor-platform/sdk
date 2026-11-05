@@ -13,7 +13,12 @@ import { setupEnv } from "./env";
 import { checkEnv } from "./env-check";
 import { PREVIEW_NAME_MAX_LENGTH, printTargetNextSteps, setupTarget } from "./generate";
 import { setupRenovate } from "./renovate";
-import { AUTOFIX_PROVIDERS, PACKAGE_MANAGERS, PREVIEW_REQUIREMENTS } from "./templates";
+import {
+  AUTOFIX_CODEMODS,
+  AUTOFIX_PROVIDERS,
+  PACKAGE_MANAGERS,
+  PREVIEW_REQUIREMENTS,
+} from "./templates";
 import { setupUpdate } from "./update";
 
 const seedArgs = {
@@ -273,7 +278,7 @@ const previewCommand = defineAppCommand({
 const autofixCommand = defineAppCommand({
   name: "autofix",
   description:
-    "Generate a workflow that runs `tailor generate` on each pull request and commits what it changes to the pull request branch.",
+    "Generate a workflow that runs `tailor generate` on each pull request and commits what it changes to the pull request branch, and with --codemod checks or applies the codemods of an SDK upgrade.",
   args: z.strictObject({
     provider: arg(z.enum(AUTOFIX_PROVIDERS).default("github-token"), {
       description:
@@ -282,6 +287,10 @@ const autofixCommand = defineAppCommand({
     "securefix-server-repository": arg(z.string().min(1).optional(), {
       description:
         "Name of the repository, under the same owner, that runs the securefix server workflow (required with --provider securefix)",
+    }),
+    codemod: arg(z.enum(AUTOFIX_CODEMODS).optional(), {
+      description:
+        "What to do when a pull request upgrades @tailor-platform/sdk: `warn` (annotate what the upgrade's codemods would change), `error` (fail the check on it), or `deterministic` (commit what the codemods rewrite and warn about what they leave for review). Without it, the workflow runs no codemod",
     }),
     dir: arg(z.array(z.string().min(1)).default(["."]), {
       alias: "d",
@@ -299,6 +308,7 @@ const autofixCommand = defineAppCommand({
     const result = await setupAutofix({
       provider: args.provider,
       securefixServerRepository: args["securefix-server-repository"],
+      codemod: args.codemod,
       dir: args.dir,
       packageManager: args["package-manager"],
       force: args.force,

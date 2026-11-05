@@ -252,6 +252,25 @@ export function renderedTemplates(): RenderedTemplate[] {
       `${provider}-multi-dir`,
       renderAutofixFor(provider, { dirs: apps.map((app) => app.dir) }),
     );
+    add(
+      "autofix",
+      `${provider}-deterministic`,
+      renderAutofixFor(provider, { codemod: "deterministic" }),
+    );
+  }
+  for (const codemod of ["warn", "error"] as const) {
+    add("autofix", `github-token-${codemod}`, renderAutofixFor("github-token", { codemod }));
+  }
+  for (const packageManager of PACKAGE_MANAGERS) {
+    add(
+      "autofix",
+      `github-token-deterministic-multi-dir-${packageManager}`,
+      renderAutofixFor("github-token", {
+        codemod: "deterministic",
+        dirs: apps.map((app) => app.dir),
+        packageManager,
+      }),
+    );
   }
   return out;
 }

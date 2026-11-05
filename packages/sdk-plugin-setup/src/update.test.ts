@@ -7,6 +7,7 @@ import { checkGitHub } from "./check";
 import { setupTarget, type SetupTargetOptions } from "./generate";
 import { LOCK_VERSION, readLock, writeLock, type LockInputs, type LockTarget } from "./lock";
 import { AUTOFIX_WORKFLOW_FILE, TEMPLATE_VERSION } from "./templates";
+import { autofixSetupOptions } from "./test-helpers/autofix";
 import { tempDir } from "./test-helpers/temp-dir";
 import { planUpdate, setupUpdate } from "./update";
 
@@ -634,13 +635,14 @@ describe("setupUpdate", () => {
 
   test("regenerates the autofix workflow, even when the lock records no target", async () => {
     writeAppConfig("apps/api");
-    await setupAutofix({
-      provider: "github-app",
-      dir: "apps/api",
-      packageManager: "yarn",
-      force: false,
-      outputDir: testDir,
-    });
+    await setupAutofix(
+      autofixSetupOptions(testDir, {
+        provider: "github-app",
+        codemod: "deterministic",
+        dir: "apps/api",
+        packageManager: "yarn",
+      }),
+    );
     const lock = readLock(testDir);
     if (!lock?.autofix) throw new Error("Expected an autofix entry.");
     writeLock(testDir, {
@@ -654,22 +656,37 @@ describe("setupUpdate", () => {
 
     expect(readLock(testDir)?.autofix).toMatchObject({
       templateVersion: TEMPLATE_VERSION,
-      inputs: { provider: "github-app", dirs: ["apps/api"], packageManager: "yarn" },
+      inputs: {
+        provider: "github-app",
+        codemod: "deterministic",
+        dirs: ["apps/api"],
+        packageManager: "yarn",
+      },
     });
-    expect(fs.readFileSync(path.join(testDir, AUTOFIX_WORKFLOW_FILE), "utf-8")).toContain(
-      "working-directory: apps/api",
-    );
+    const content = fs.readFileSync(path.join(testDir, AUTOFIX_WORKFLOW_FILE), "utf-8");
+    expect(content).toContain("working-directory: apps/api");
+    expect(content).toContain("- id: tailor-codemod\n");
     expect(successSpy).toHaveBeenLastCalledWith(expect.stringMatching(/^Updated 1 workflow\(s\)/));
+  });
+
+  test("refuses an autofix codemod mode it does not know", async () => {
+    writeAppConfig("apps/api");
+    await setupAutofix(autofixSetupOptions(testDir, { dir: "apps/api" }));
+    const lock = readLock(testDir);
+    if (!lock?.autofix) throw new Error("Expected an autofix entry.");
+    writeLock(testDir, {
+      ...lock,
+      autofix: { ...lock.autofix, inputs: { ...lock.autofix.inputs, codemod: "claude" } },
+    });
+
+    await expect(setupUpdate({ force: false, outputDir: testDir, ...loaders })).rejects.toThrow(
+      /\[autofix\] \.github\/tailor\.lock records the unsupported codemod mode "claude"\. Re-run `tailor setup ci autofix` with --codemod\./,
+    );
   });
 
   test("lists the autofix workflow when it cannot be updated", async () => {
     await generateMonorepo();
-    await setupAutofix({
-      provider: "github-token",
-      dir: "apps/api",
-      force: false,
-      outputDir: testDir,
-    });
+    await setupAutofix(autofixSetupOptions(testDir, { dir: "apps/api" }));
     fs.rmSync(path.join(testDir, "apps/api/tailor.config.ts"));
 
     await expect(setupUpdate({ force: false, outputDir: testDir, ...loaders })).rejects.toThrow(
