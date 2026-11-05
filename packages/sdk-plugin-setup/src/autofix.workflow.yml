@@ -85,6 +85,7 @@ jobs:
           const SDK = "@tailor-platform/sdk";
           const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
           const LOCAL = /^(?:workspace|link|portal|file):/;
+          const AUTOFIX_MIN_SDK_VERSION = "2.37.0";
           const [command, ...prefix] = "__TAILOR_CLI__".split(" ");
           const mode = process.env.CODEMOD;
           const lockfile = process.env.LOCKFILE;
@@ -356,7 +357,10 @@ jobs:
             if (to === undefined) fail(`${SDK} is not installed for ${app}.`);
             const head = lockVersion(headLock, dir, "the pull request");
             if (head === undefined) fail(`${lockfile} does not list a version of ${SDK} for ${app}.`);
-            const from = baseLock === undefined ? undefined : lockVersion(baseLock, dir, "the base branch");
+            const from =
+              baseLock === undefined
+                ? AUTOFIX_MIN_SDK_VERSION
+                : lockVersion(baseLock, dir, "the base branch");
             if (from === undefined) {
               annotate("notice", `The base branch has no ${SDK} for ${app}, so no codemod runs there.`);
               continue;
@@ -372,6 +376,12 @@ jobs:
             }
             if (!VERSION.test(from)) {
               fail(`The base branch has ${SDK} ${from} for ${app}, which tailor upgrade cannot start from.`);
+            }
+            if (baseLock === undefined) {
+              annotate(
+                "notice",
+                `The base branch has no ${lockfile}, so ${app} upgrades from ${SDK} ${from}, the oldest version tailor setup ci autofix supports.`,
+              );
             }
             const args = ["upgrade", "--from", from, "--json"];
             if (mode !== "deterministic") args.push("--dry-run");

@@ -1088,16 +1088,11 @@ describe("tailor-codemod step script", () => {
     expect(calls).toEqual([]);
   });
 
-  test.each([
-    ["has no lockfile", null],
-    [
-      "has no SDK",
-      "lockfileVersion: '9.0'\n\nimporters:\n\n  .:\n    dependencies:\n      zod:\n        specifier: ^4.0.0\n        version: 4.0.0\n",
-    ],
-  ])("notes that no codemod runs when the base branch %s", (_case, baseLock) => {
+  test("notes that no codemod runs when the base branch has no SDK", () => {
     using tmp = tempDir("codemod-step-");
     const { result, calls, annotations } = runCodemodStep(tmp.dir, {
-      baseLock,
+      baseLock:
+        "lockfileVersion: '9.0'\n\nimporters:\n\n  .:\n    dependencies:\n      zod:\n        specifier: ^4.0.0\n        version: 4.0.0\n",
       headLock: ROOT_PNPM_LOCK,
     });
     expect(result.failure).toBeUndefined();
@@ -1105,6 +1100,21 @@ describe("tailor-codemod step script", () => {
     expect(annotations).toEqual([
       "::notice::The base branch has no @tailor-platform/sdk for the root app, so no codemod runs there.",
     ]);
+  });
+
+  test("error: upgrades from the oldest SDK that tailor setup ci autofix supports when the base branch has no such lockfile", () => {
+    using tmp = tempDir("codemod-step-");
+    const { result, calls, annotations } = runCodemodStep(tmp.dir, {
+      codemod: "error",
+      baseLock: null,
+      upgrade: { stdout: upgradeStdout({ llmReviews: [PROJECT_REVIEW] }) },
+    });
+    expect(result.failure).toBeUndefined();
+    expect(calls).toEqual([[".", "exec tailor upgrade --from 2.37.0 --json --dry-run"]]);
+    expect(result.outputs["tailor-codemod"]).toEqual({ pending: "true" });
+    expect(annotations[0]).toBe(
+      "::notice::The base branch has no pnpm-lock.yaml, so the root app upgrades from @tailor-platform/sdk 2.37.0, the oldest version tailor setup ci autofix supports.",
+    );
   });
 
   test("notes the app the pull request adds the SDK to, and upgrades the others", () => {

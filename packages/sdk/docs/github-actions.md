@@ -436,9 +436,12 @@ tailor setup ci autofix --codemod deterministic  # commit what they rewrite
 
 - **Which upgrade:** for each `--dir`, the workflow upgrades from the SDK
   version that the lockfile at the repository root resolves on the pull
-  request's base branch to the version the pull request installs. A pull
-  request that keeps the version, or keeps the SDK linked from a workspace
-  (such as with `workspace:*`), runs no codemod.
+  request's base branch to the version the pull request installs. When the
+  base branch has no lockfile of that name, such as when the pull request
+  switches package managers, it upgrades from 2.37.0, the oldest version
+  `tailor setup ci autofix` supports. A pull request that keeps the version,
+  or keeps the SDK linked from a workspace (such as with `workspace:*`), runs
+  no codemod.
 - **Reports:** the files left for you get annotations, and the job summary
   lists every file, with the migration prompt of each change left for review.
   Hand the prompt to an AI coding assistant, or follow it yourself.
