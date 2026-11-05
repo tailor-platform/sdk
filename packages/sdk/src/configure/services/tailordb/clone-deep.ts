@@ -24,6 +24,9 @@ function clone<T>(value: T, seen: WeakMap<object, unknown>): T {
   if (value instanceof Date) {
     return new Date(value.getTime()) as T;
   }
+  if (value instanceof Number || value instanceof String || value instanceof Boolean) {
+    return Object.setPrototypeOf(Object(value.valueOf()), Object.getPrototypeOf(value)) as T;
+  }
   if (value instanceof RegExp) {
     const copy = new RegExp(value.source, value.flags);
     copy.lastIndex = value.lastIndex;

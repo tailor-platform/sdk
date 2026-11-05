@@ -129,6 +129,19 @@ describe("cloneDeep", () => {
     });
   });
 
+  describe("boxed primitives", () => {
+    test.each([
+      ["Number", new Number(3), 3],
+      ["String", new String("x"), "x"],
+      ["Boolean", new Boolean(false), false],
+    ])("copies a %s object into a new object with the same value", (_name, source, primitive) => {
+      const copy = cloneDeep(source);
+      expect(copy).not.toBe(source);
+      expect(copy.valueOf()).toBe(primitive);
+      expect(Object.getPrototypeOf(copy)).toBe(Object.getPrototypeOf(source));
+    });
+  });
+
   describe("unusual objects", () => {
     test("keeps holes in sparse arrays", () => {
       const sparse: number[] = [];
