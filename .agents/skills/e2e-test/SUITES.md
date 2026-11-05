@@ -86,6 +86,13 @@ attempted after success, failure, HUP, INT, or TERM:
   /bin/bash .agents/skills/e2e-test/scripts/run-sdk-e2e.sh
 ```
 
+With a saved default location and no stored IDs, run the wrapper without the loader. It stops with
+status 64 when neither IDs nor a saved default are available:
+
+```sh
+/bin/bash .agents/skills/e2e-test/scripts/run-sdk-e2e.sh
+```
+
 The wrapper runs `pnpm run test:e2e` in `packages/sdk`, deletes only valid workspace IDs whose names
 start with its exact `e2e-ws-<run-id>-` namespace, and obtains a fresh workspace list afterward. It
 tries every matching deletion even when one fails. The cleanup result overrides the test result when

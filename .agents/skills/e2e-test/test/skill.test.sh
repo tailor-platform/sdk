@@ -222,4 +222,30 @@ if kill -0 "$signal_child_pid" 2>/dev/null; then
 fi
 [[ ! -e "$signal_completion_marker" ]] || fail "test descendant completed after the signal"
 
+run_runner_without_ids() {
+  PATH="$fake_bin:$PATH" \
+    E2E_FAKE_NODE="$node_path" \
+    E2E_FAKE_CLI="$fake_cli" \
+    E2E_FAKE_STATE="$state_file" \
+    E2E_DELETE_LOG="$delete_log" \
+    E2E_TEST_MARKER="$test_marker" \
+    TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
+    /bin/bash -c 'unset TAILOR_PLATFORM_ORGANIZATION_ID TAILOR_PLATFORM_FOLDER_ID; exec /bin/bash "$0"' "$runner"
+}
+
+printf '%s\n' '[]' >"$state_file"
+: >"$delete_log"
+rm -f "$test_marker"
+E2E_FAKE_DEFAULT_LOCATION_STATUS=0 run_runner_without_ids >/dev/null 2>&1 ||
+  fail "runner rejected a run without IDs although a default location is saved"
+[[ $(<"$test_marker") == "$run_id" ]] || fail "runner did not start the suite with the saved default location"
+
+rm -f "$test_marker"
+set +e
+E2E_FAKE_DEFAULT_LOCATION_STATUS=1 run_runner_without_ids >/dev/null 2>&1
+missing_location_status=$?
+set -e
+[[ $missing_location_status -eq 64 && ! -e "$test_marker" ]] ||
+  fail "runner started the suite without IDs and without a saved default location"
+
 echo "e2e-test skill checks passed"
