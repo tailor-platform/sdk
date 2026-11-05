@@ -99,7 +99,7 @@ describe("renderAutofixWorkflow", () => {
   );
 
   test.each(AUTOFIX_PROVIDERS)(
-    "%s, codemod error: fails in a job of its own, so the generate job still hands off its fix",
+    "%s, codemod error: fails in a job of its own, which also fails when the generate job fails or is cancelled",
     (provider) => {
       const workflow = workflowOf(provider, { codemod: "error" });
       expect(workflow.jobs["tailor-autofix"]?.outputs?.["codemod-pending"]).toBe(
@@ -107,7 +107,9 @@ describe("renderAutofixWorkflow", () => {
       );
       const result = workflow.jobs["tailor-codemod-result"];
       expect(result?.needs).toBe("tailor-autofix");
-      expect(result?.if).toBe("needs.tailor-autofix.outputs.codemod-pending == 'true'");
+      expect(result?.if).toBe(
+        "always() && (needs.tailor-autofix.result == 'failure' || needs.tailor-autofix.result == 'cancelled' || needs.tailor-autofix.outputs.codemod-pending == 'true')",
+      );
       expect(result?.permissions).toEqual({ contents: "read" });
       expect(result?.steps.map((step) => step.id)).toEqual(["tailor-codemod-result"]);
       expect(result?.steps[0]?.run).toMatch(/^echo "::error::[^"]+"\nexit 1\n$/);

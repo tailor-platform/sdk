@@ -443,8 +443,9 @@ tailor setup ci autofix --codemod deterministic  # commit what they rewrite
   Hand the prompt to an AI coding assistant, or follow it yourself.
 - **Required check:** with `error`, require the `tailor-codemod-result` check
   to block the merge. The workflow still commits what `tailor generate`
-  changes, and the job is skipped, which counts as passing, when nothing is
-  left.
+  changes. `tailor-codemod-result` also fails when the `tailor-autofix` job
+  fails or is cancelled, and is skipped, which counts as passing, when that
+  job succeeds with nothing left.
 - **Reviews keep matching:** a change left for review is found by the code it
   touches, and some codemods ask for a review of the whole app, so a review
   can still be reported after you finish the migration. With `error`, such a

@@ -523,7 +523,7 @@ jobs:
   # __CODEMOD_RESULT_JOB_START__
   tailor-codemod-result:
     needs: tailor-autofix
-    if: needs.tailor-autofix.outputs.codemod-pending == 'true'
+    if: always() && (needs.tailor-autofix.result == 'failure' || needs.tailor-autofix.result == 'cancelled' || needs.tailor-autofix.outputs.codemod-pending == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -531,6 +531,6 @@ jobs:
     steps:
       - id: tailor-codemod-result
         run: |
-          echo "::error::The SDK upgrade leaves codemods to apply or review. The tailor-codemod step of the tailor-autofix job and its summary list them."
+          echo "::error::The tailor-autofix job failed or was cancelled, or the SDK upgrade leaves codemods to apply or review. The log and summary of the tailor-autofix job say which."
           exit 1
   # __CODEMOD_RESULT_JOB_END__
