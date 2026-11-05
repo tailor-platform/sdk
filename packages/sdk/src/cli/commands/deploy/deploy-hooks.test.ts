@@ -21,6 +21,8 @@ const mocks = vi.hoisted(() => ({
   listAuthOAuth2Clients: vi.fn(),
   fetchMissingDependentApps: vi.fn(),
   planTailorDB: vi.fn(),
+  dropCrossDeploymentManagedDeletes: vi.fn(),
+  assertInvokersSurviveDeploy: vi.fn(),
 }));
 vi.mock(import("./deployment-target"), async (original) => ({
   ...(await original()),
@@ -54,6 +56,17 @@ vi.mock(import("./apply-phases"), async (original) => ({
   preflightAllTailorDB: async () => {},
   applyPrerequisiteResources: mocks.prerequisite,
   applyRemainingResources: mocks.apply,
+}));
+vi.mock(import("./managed-resources"), async (original) => {
+  const actual = await original();
+  mocks.dropCrossDeploymentManagedDeletes.mockImplementation(
+    actual.dropCrossDeploymentManagedDeletes,
+  );
+  return { ...actual, dropCrossDeploymentManagedDeletes: mocks.dropCrossDeploymentManagedDeletes };
+});
+vi.mock(import("./invoker-validation"), async (original) => ({
+  ...(await original()),
+  assertInvokersSurviveDeploy: mocks.assertInvokersSurviveDeploy,
 }));
 vi.mock(import("./function-registry"), async (original) => ({
   ...(await original()),
@@ -160,6 +173,17 @@ test("runs a hook once after remaining resources are applied even when the plan 
         staticWebsites: { web: expect.objectContaining({ name: "web", url: "https://web" }) },
       }),
     }),
+  );
+});
+test("checks invokers after dropping the deletes another config still claims", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  await deploy({ dryRun: true, noValidate: true });
+  expect(mocks.assertInvokersSurviveDeploy).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ workspaceId: "ws", deployments: expect.any(Array) }),
+  );
+  expect(mocks.dropCrossDeploymentManagedDeletes).toHaveBeenCalledOnce();
+  expect(mocks.dropCrossDeploymentManagedDeletes.mock.invocationCallOrder[0]).toBeLessThan(
+    mocks.assertInvokersSurviveDeploy.mock.invocationCallOrder[0]!,
   );
 });
 test("lists the pending hook during dry-run without executing it", async () => {

@@ -1005,7 +1005,7 @@ async function deployInternal(
         previousDeployments: reuse?.previousDeployments,
       });
       dropCrossDeploymentManagedDeletes(deployments);
-      assertInvokersSurviveDeploy(deployments);
+      await assertInvokersSurviveDeploy({ client: metadataClient, workspaceId, deployments });
       assertNoSingleRunTransferHandoff(deployments);
       return { planTargets, metadataClient, runInputs, deployments };
     };
