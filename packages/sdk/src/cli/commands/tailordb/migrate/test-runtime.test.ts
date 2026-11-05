@@ -5,12 +5,12 @@ import { CloneOperationStatus } from "@tailor-platform/tailor-proto/application_
 import * as path from "pathe";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { verifyRemoteSchema } from "#/cli/commands/tailordb/migrate/schema-checks";
-import { computeSourceScriptHash } from "#/parser/service/tailordb/type-script";
 import { getNamespacesWithMigrations } from "./config";
 import { normalizeSchemaSnapshot } from "./snapshot";
 import {
   assertCloneTargetRegion,
   assertSourceBaselineFresh,
+  assertSourceMatchesCheckpoints,
   createMigrationTestBaselineSnapshots,
   deleteExistingUserProfileConfig,
   assertTargetMatchesLocation,
@@ -21,9 +21,8 @@ import {
   waitForCloneApplicationData,
 } from "./test-runtime";
 import type { OperatorClient } from "#/cli/shared/client";
-import type { LoadedConfig } from "#/cli/shared/config-loader";
-import type { RemoteMigrationState } from "./remote-state";
 import type { PreparedMigrationTest } from "./test-types";
+import type { RemoteSchemaVerificationResult } from "./types";
 
 vi.mock("./config", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
@@ -434,6 +433,7 @@ describe("migration test runtime", () => {
         config: { path: "/project/tailor.config.ts" },
         application: { tailorDBServices: services, authService: { config: { name: "auth-ns" } } },
       },
+      options: {},
     } as unknown as Parameters<typeof assertSourceBaselineFresh>[0];
   }
 
@@ -738,19 +738,38 @@ describe("migration test runtime", () => {
     });
   });
 
-  function unlabeledBaselineCase(metadata: unknown, remoteTypes: unknown[] = []) {
+  const auditLogDrift = {
+    tableName: "AuditLog",
+    kind: "type_missing_remote",
+    details: "Table 'AuditLog' exists in snapshot but not in remote",
+  } as const;
+
+  const sourceContext = {
+    workspaceId: "source-workspace",
+    profile: "staging",
+    configPath: path.join(process.cwd(), "tailor.config.ts"),
+  };
+
+  function sourceCheck(
+    overrides: Partial<RemoteSchemaVerificationResult> = {},
+  ): RemoteSchemaVerificationResult {
+    return {
+      namespace: "main",
+      remoteMigrationNumber: 0,
+      drifts: [],
+      hasDrift: false,
+      ...overrides,
+    };
+  }
+
+  function unlabeledBaselineCase(check: RemoteSchemaVerificationResult, metadata: unknown) {
     vi.mocked(getNamespacesWithMigrations).mockReturnValue([
-      {
-        namespace: "main",
-        migrationsDir: migrationsDirWithInitialSchema(emptySnapshot("main")),
-      },
+      { namespace: "main", migrationsDir: "/project/migrations/main" },
     ]);
-    vi.mocked(verifyRemoteSchema).mockResolvedValue([
-      { namespace: "main", remoteMigrationNumber: 0, drifts: [], hasDrift: false },
-    ]);
-    const client = Object.assign(remoteClient(remoteTypes), {
+    vi.mocked(verifyRemoteSchema).mockResolvedValue([check]);
+    const client = {
       getMetadata: vi.fn().mockResolvedValue({ metadata }),
-    });
+    } as unknown as OperatorClient;
     const prepared = preparedMigrationTest({
       baselines: new Map([
         ["main", { migrationNumber: 0, snapshot: emptySnapshot("main"), historyId: null }],
@@ -760,184 +779,132 @@ describe("migration test runtime", () => {
   }
 
   test("accepts a source baseline numbered 0 while the unlabeled namespace still matches 0000", async () => {
-    await expect(unlabeledBaselineCase({ labels: {} })).resolves.toBeUndefined();
+    await expect(
+      unlabeledBaselineCase(sourceCheck({ checkpointUnset: true }), { labels: {} }),
+    ).resolves.toBeUndefined();
   });
 
   test("rejects a numbered 0 baseline whose unlabeled source schema changed after preparation", async () => {
     await expect(
-      unlabeledBaselineCase({ labels: {} }, [{ name: "AuditLog", schema: { fields: {} } }]),
-    ).rejects.toMatchObject({
-      code: "MIGRATION_TEST_SOURCE_INVALID",
-      message: expect.not.stringContaining("AuditLog"),
-      details: expect.stringContaining("AuditLog"),
-    });
+      unlabeledBaselineCase(
+        sourceCheck({ checkpointUnset: true, hasDrift: true, drifts: [auditLogDrift] }),
+        { labels: {} },
+      ),
+    ).rejects.toMatchObject({ code: "MIGRATION_TEST_SOURCE_CHANGED" });
   });
 
   test("rejects a numbered 0 baseline whose source metadata disappeared after preparation", async () => {
-    await expect(unlabeledBaselineCase(undefined)).rejects.toMatchObject({
-      code: "MIGRATION_TEST_SOURCE_CHECKPOINT_MISSING",
-    });
-  });
-
-  function unlabeledState(overrides: Partial<RemoteMigrationState> = {}): RemoteMigrationState {
-    return {
-      metadataExists: true,
-      number: null,
-      historyId: null,
-      historyIdInvalid: false,
-      inProgress: null,
-      inProgressInvalid: false,
-      maintenanceModeCheckpoint: null,
-      ...overrides,
-    };
-  }
-
-  function remoteClient(types: unknown[] = []) {
-    return {
-      listTailorDBTypes: vi.fn().mockResolvedValue({ tailordbTypes: types, nextPageToken: "" }),
-      listTailorDBGQLPermissions: vi.fn().mockResolvedValue({ permissions: [], nextPageToken: "" }),
-    } as unknown as OperatorClient;
-  }
-
-  function migrationsDirWithInitialSchema(snapshot: ReturnType<typeof emptySnapshot>) {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "migration-test-unlabeled-"));
-    temporaryDirectories.push(dir);
-    fs.mkdirSync(path.join(dir, "0000"));
-    fs.writeFileSync(path.join(dir, "0000", "schema.json"), JSON.stringify(snapshot));
-    return dir;
-  }
-
-  test("treats an unlabeled source as 0 when 0000 holds field defaults that the remote does not carry", async () => {
-    const initial = normalizeSchemaSnapshot({
-      version: 1,
-      namespace: "main",
-      createdAt: "2026-08-05T00:00:00.000Z",
-      tables: {
-        Item: {
-          name: "Item",
-          pluralForm: "Items",
-          fields: { name: { type: "string", required: true, default: "unnamed" } },
-        },
-      },
-    });
-    const migrationsDir = migrationsDirWithInitialSchema(initial);
-    const scriptHash = computeSourceScriptHash(initial.tables.Item!.fields);
-    const remoteItem = {
-      name: "Item",
-      schema: {
-        typeHook: { create: { expr: `_value // @sdk-source-hash:${scriptHash}` } },
-        fields: {
-          name: {
-            type: "string",
-            required: true,
-            array: false,
-            index: false,
-            unique: false,
-            foreignKey: false,
-            description: "",
-            allowedValues: [],
-            validate: [],
-            fields: {},
-          },
-        },
-      },
-    };
-
     await expect(
-      resolveSourceMigrationNumber(
-        remoteClient([remoteItem]),
-        "source",
-        { namespace: "main", migrationsDir },
-        unlabeledState(),
-        {} as LoadedConfig,
-        [],
-      ),
-    ).resolves.toBe(0);
-  });
-
-  test("queries the configured namespace even when the 0000 snapshot records another one", async () => {
-    const migrationsDir = migrationsDirWithInitialSchema(emptySnapshot("copied-from-elsewhere"));
-    const client = remoteClient();
-
-    await expect(
-      resolveSourceMigrationNumber(
-        client,
-        "source",
-        { namespace: "main", migrationsDir },
-        unlabeledState(),
-        {} as LoadedConfig,
-        [],
-      ),
-    ).resolves.toBe(0);
-    expect(client.listTailorDBTypes).toHaveBeenCalledWith(
-      expect.objectContaining({ namespaceName: "main" }),
-    );
-  });
-
-  test("returns the labeled migration number as is", async () => {
-    await expect(
-      resolveSourceMigrationNumber(
-        remoteClient(),
-        "source",
-        { namespace: "main", migrationsDir: "/unused" },
-        unlabeledState({ number: 3 }),
-        {} as LoadedConfig,
-        [],
-      ),
-    ).resolves.toBe(3);
-  });
-
-  test("treats an unlabeled source that matches the 0000 snapshot as migration 0", async () => {
-    const migrationsDir = migrationsDirWithInitialSchema(emptySnapshot("main"));
-
-    await expect(
-      resolveSourceMigrationNumber(
-        remoteClient(),
-        "source",
-        { namespace: "main", migrationsDir },
-        unlabeledState(),
-        {} as LoadedConfig,
-        [],
-      ),
-    ).resolves.toBe(0);
-  });
-
-  test("rejects an unlabeled source whose schema differs from the 0000 snapshot", async () => {
-    const migrationsDir = migrationsDirWithInitialSchema(
-      normalizeSchemaSnapshot({
-        version: 1,
-        namespace: "main",
-        createdAt: "2026-08-05T00:00:00.000Z",
-        tables: { AuditLog: { name: "AuditLog", pluralForm: "auditLogs", fields: {} } },
-      }),
-    );
-
-    await expect(
-      resolveSourceMigrationNumber(
-        remoteClient(),
-        "source",
-        { namespace: "main", migrationsDir },
-        unlabeledState(),
-        {} as LoadedConfig,
-        [],
-      ),
-    ).rejects.toThrow("differs from the initial migration snapshot");
-  });
-
-  test("rejects a source namespace that was never deployed", async () => {
-    await expect(
-      resolveSourceMigrationNumber(
-        remoteClient(),
-        "source",
-        { namespace: "main", migrationsDir: "/unused" },
-        unlabeledState({ metadataExists: false }),
-        {} as LoadedConfig,
-        [],
-      ),
+      unlabeledBaselineCase(sourceCheck({ skipped: "not_deployed" }), undefined),
     ).rejects.toMatchObject({
       code: "MIGRATION_TEST_SOURCE_CHECKPOINT_MISSING",
-      message: expect.stringContaining("has not been deployed"),
     });
+  });
+
+  test("rejects an unlabeled source whose schema differs from the 0000 snapshot", () => {
+    expect(() =>
+      assertSourceMatchesCheckpoints(
+        [sourceCheck({ checkpointUnset: true, hasDrift: true, drifts: [auditLogDrift] })],
+        sourceContext,
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: "MIGRATION_TEST_SOURCE_INVALID",
+        message: expect.stringContaining("differs from the initial migration snapshot"),
+        details: expect.stringContaining("AuditLog"),
+      }),
+    );
+  });
+
+  test("rejects a labeled source whose schema differs from its checkpoint", () => {
+    const source = { ...sourceContext, configPath: path.join(process.cwd(), "source.config.ts") };
+    expect(() =>
+      assertSourceMatchesCheckpoints(
+        [sourceCheck({ remoteMigrationNumber: 2, hasDrift: true, drifts: [auditLogDrift] })],
+        source,
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: "MIGRATION_TEST_SOURCE_INVALID",
+        message: expect.stringContaining("does not match its migration checkpoint"),
+        details: expect.stringContaining("AuditLog"),
+        suggestion: `Run \`tailor tailordb migration validate --namespace main --config=source.config.ts --workspace-id=${source.workspaceId} --profile=${source.profile}\` to check the migration history and source schema, or \`tailor tailordb migration status --namespace main --config=source.config.ts --workspace-id=${source.workspaceId} --profile=${source.profile}\` to inspect the source workspace's checkpoint.`,
+      }),
+    );
+  });
+
+  test("rejects a source whose checkpoint is not in the local migration history", () => {
+    expect(() =>
+      assertSourceMatchesCheckpoints(
+        [sourceCheck({ remoteMigrationNumber: 7, checkpointMissingLocal: true })],
+        sourceContext,
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: "MIGRATION_TEST_SOURCE_INVALID",
+        message: expect.stringContaining("does not match its migration checkpoint"),
+        suggestion: `Pull the latest migration files if this checkout is behind. Otherwise run \`tailor tailordb migration status --namespace main --workspace-id=${sourceContext.workspaceId} --profile=${sourceContext.profile}\` to compare the source workspace's checkpoint and migration history with the local ones.`,
+      }),
+    );
+  });
+
+  test("rejects a source with a pending checkpoint repair", () => {
+    expect(() =>
+      assertSourceMatchesCheckpoints(
+        [
+          sourceCheck({
+            remoteMigrationNumber: 5,
+            checkpointRepair: { from: 5, to: 0, fromHistoryId: null, toHistoryId: "hcurrent" },
+          }),
+        ],
+        sourceContext,
+      ),
+    ).toThrow(expect.objectContaining({ code: "MIGRATION_TEST_SOURCE_REPAIR_PENDING" }));
+  });
+
+  test("rejects a source with tables its checkpoint's migration removed that a deploy has not deleted", () => {
+    expect(() =>
+      assertSourceMatchesCheckpoints(
+        [sourceCheck({ remoteMigrationNumber: 2, unfinishedRemovals: ["Legacy"] })],
+        sourceContext,
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: "MIGRATION_TEST_SOURCE_CLEANUP_PENDING",
+        message: expect.stringContaining("Legacy"),
+        suggestion: "Deploy to the source workspace first.",
+      }),
+    );
+  });
+
+  test("accepts sources that match their checkpoints", () => {
+    expect(() =>
+      assertSourceMatchesCheckpoints(
+        [
+          sourceCheck({ checkpointUnset: true }),
+          sourceCheck({ namespace: "other", remoteMigrationNumber: 3 }),
+          sourceCheck({ namespace: "cleaned", remoteMigrationNumber: 2, unfinishedRemovals: [] }),
+        ],
+        sourceContext,
+      ),
+    ).not.toThrow();
+  });
+
+  test("returns the labeled migration number as is", () => {
+    expect(resolveSourceMigrationNumber(sourceCheck({ remoteMigrationNumber: 3 }))).toBe(3);
+  });
+
+  test("treats an unlabeled source that matches the 0000 snapshot as migration 0", () => {
+    expect(resolveSourceMigrationNumber(sourceCheck({ checkpointUnset: true }))).toBe(0);
+  });
+
+  test("rejects a source namespace that was never deployed", () => {
+    expect(() => resolveSourceMigrationNumber(sourceCheck({ skipped: "not_deployed" }))).toThrow(
+      expect.objectContaining({
+        code: "MIGRATION_TEST_SOURCE_CHECKPOINT_MISSING",
+        message: expect.stringContaining("has not been deployed"),
+      }),
+    );
   });
 
   test("deletes a retained target's existing user profile config", async () => {

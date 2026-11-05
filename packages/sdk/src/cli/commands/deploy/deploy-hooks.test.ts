@@ -270,25 +270,112 @@ test("does not fetch hook context when no deploy hook is registered", async () =
   expect(mocks.getStaticWebsite).not.toHaveBeenCalled();
 });
 
-test("runs the original plugin once after the URL rebuild has been applied", async () => {
-  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+function referenceWebsiteUrlFromEnv(onPrerequisite?: () => void) {
   mocks.target.config = {
     ...mocks.target.config,
     staticWebsites: [defineStaticWebSite("web", {})],
   };
   mocks.target.application = { ...mocks.target.application, env: { website: "web:url" } };
-  const hook = vi.fn(() => {
-    expect(mocks.apply).toHaveBeenCalledOnce();
-  });
-  register(hook);
   mocks.prerequisite.mockImplementationOnce(async () => {
     mocks.target = {
       ...mocks.target,
       application: { ...mocks.target.application, env: { website: "https://web" } },
     };
+    onPrerequisite?.();
   });
+}
+
+test("runs the original plugin once after the URL rebuild has been applied", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  referenceWebsiteUrlFromEnv();
+  const hook = vi.fn(() => {
+    expect(mocks.apply).toHaveBeenCalledOnce();
+  });
+  register(hook);
   await deploy({ yes: true, noValidate: true });
   expect(hook).toHaveBeenCalledOnce();
+});
+
+test("applies a renamed application's cleanup delete from the plan the URL rebuild makes", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log", "newline");
+  mocks.results.tailorDB.conflicts.push({
+    resourceType: "tailordb.service",
+    resourceLabel: "TailorDB service",
+    resourceName: "db",
+    currentOwner: "old-app",
+  });
+  referenceWebsiteUrlFromEnv(() => {
+    mocks.results = { ...mocks.results, app: emptyPlanResults().app };
+  });
+
+  await deploy({ yes: true, noValidate: true });
+
+  const [, , applied] = mocks.apply.mock.calls[0]!;
+  expect(applied[0].app.deletes.map((del: { name: string }) => del.name)).toEqual(["old-app"]);
+});
+
+function planPrintedAt(): number | undefined {
+  const { calls, invocationCallOrder } = vi.mocked(logger.log).mock;
+  const index = calls.findIndex(([message]) => String(message).includes("Plan: "));
+  return index === -1 ? undefined : invocationCallOrder[index];
+}
+
+test("prints the plan before asking to confirm a table deletion that is then declined", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log", "newline");
+  using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(false);
+  mocks.results.tailorDB.changeSet.type.deletes.push({ name: "Order", request: {} });
+
+  await expect(deploy({ noValidate: true })).rejects.toMatchObject({ code: "DEPLOY_CANCELLED" });
+
+  expect(planPrintedAt()).toBeLessThan(confirm.mock.invocationCallOrder[0]!);
+  expect(mocks.prerequisite).not.toHaveBeenCalled();
+});
+
+test("confirms a deletion against the printed plan before applying what the URL rebuild waits for", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log", "newline");
+  using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(true);
+  referenceWebsiteUrlFromEnv();
+  mocks.results.tailorDB.changeSet.type.deletes.push({ name: "Order", request: {} });
+
+  await deploy({ noValidate: true });
+
+  expect(confirm).toHaveBeenCalledOnce();
+  expect(planPrintedAt()).toBeLessThan(confirm.mock.invocationCallOrder[0]!);
+  expect(confirm.mock.invocationCallOrder[0]).toBeLessThan(
+    mocks.prerequisite.mock.invocationCallOrder[0]!,
+  );
+});
+
+test("asks again only about what the URL rebuild's plan adds", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log", "newline");
+  using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(true);
+  mocks.results.tailorDB.changeSet.type.deletes.push({ name: "Order", request: {} });
+  referenceWebsiteUrlFromEnv(() => {
+    mocks.results = {
+      ...mocks.results,
+      functionRegistry: {
+        ...mocks.results.functionRegistry,
+        unmanaged: [
+          {
+            resourceType: "function_registry",
+            resourceLabel: "Function",
+            resourceName: "legacy",
+          },
+        ],
+      },
+    };
+  });
+
+  await deploy({ noValidate: true });
+
+  expect(confirm.mock.calls.map(([options]) => options.message)).toEqual([
+    "Are you sure you want to delete these resources?",
+    'Allow tailor to manage these resources for "app"?',
+  ]);
+  expect(confirm.mock.invocationCallOrder[1]).toBeGreaterThan(
+    mocks.prerequisite.mock.invocationCallOrder[0]!,
+  );
+  expect(mocks.apply).toHaveBeenCalledOnce();
 });
 
 test("does not execute hooks after resource application fails", async () => {

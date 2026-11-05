@@ -10,11 +10,20 @@ import { CLIError, errorSummary, isCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { getNamespacesWithMigrations, migrationConfigNotFoundError } from "./config";
+import { migrationCommandContext, type MigrationCommandContext } from "./hints";
 import {
   fetchRemoteMigrationState,
+  formatInProgressMigrationAction,
+  inProgressMigrationActions,
+  type InProgressMigrationAction,
   isStaleMigrationInProgress,
   matchesLocalMigrationHistory,
 } from "./remote-state";
+import {
+  locateRemoteCheckpoint,
+  missingCheckpointRecoveryHints,
+  type RemoteCheckpointLocation,
+} from "./schema-checks";
 import {
   assertValidMigrationFiles,
   getMigrationFiles,
@@ -22,6 +31,7 @@ import {
   loadSnapshot,
   formatMigrationNumber,
   MIGRATION_FILE_VERSION_UNSUPPORTED,
+  type RebaselineMarker,
 } from "./snapshot";
 
 interface StatusOptions {
@@ -52,6 +62,8 @@ interface MigrationStatusInfo {
    * a `main` run whose outcome `migration resolve` settles before the next deploy.
    */
   inProgressMigrationRun?: "steps" | "main";
+  /** Commands that continue or settle the in-progress migration. */
+  inProgressMigrationActions?: InProgressMigrationAction[];
 }
 
 interface MigrationStatusFailure {
@@ -64,6 +76,27 @@ type MigrationStatusRow = MigrationStatusInfo | MigrationStatusFailure;
 
 function isStatusFailure(row: MigrationStatusRow): row is MigrationStatusFailure {
   return row.status === "error";
+}
+
+function formatCheckpointRecovery(
+  location: RemoteCheckpointLocation,
+  namespace: string,
+  commandContext: MigrationCommandContext,
+): string {
+  if (location.kind !== "outside") return "";
+  const hints = missingCheckpointRecoveryHints(
+    [
+      {
+        namespace,
+        remoteMigrationNumber: location.number,
+        localLatestMigration: location.localLatestMigration,
+        historyIdMismatch: location.historyIdMismatch,
+        ...(location.rebaselinePending ? { rebaselinePending: location.rebaselinePending } : {}),
+      },
+    ],
+    commandContext,
+  );
+  return hints.map((hint) => `\n${hint}`).join("");
 }
 
 async function collectMigrationStatuses(options: StatusOptions): Promise<MigrationStatusRow[]> {
@@ -92,22 +125,22 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
     {
       migrationFiles: ReturnType<typeof getMigrationFiles>;
       descriptions: Map<number, string>;
-      historyId: string | null;
+      rebaseline: RebaselineMarker | undefined;
     }
   >();
   const localFailures = new Map<string, string>();
 
   for (const { namespace, migrationsDir } of targetNamespaces) {
     try {
-      assertValidMigrationFiles(migrationsDir, namespace);
+      assertValidMigrationFiles(migrationsDir, namespace, config.path);
       const migrationFiles = getMigrationFiles(migrationsDir);
       const descriptions = new Map<number, string>();
-      let historyId: string | null = null;
+      let rebaseline: RebaselineMarker | undefined;
       for (const file of migrationFiles) {
         if (file.type === "schema") {
           const snapshot = loadSnapshot(file.path);
           if (file.number === 0) {
-            historyId = snapshot.rebaseline?.historyId ?? null;
+            rebaseline = snapshot.rebaseline;
           }
           continue;
         }
@@ -119,7 +152,7 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
           // A malformed optional description must not hide migration status.
         }
       }
-      localStates.set(namespace, { migrationFiles, descriptions, historyId });
+      localStates.set(namespace, { migrationFiles, descriptions, rebaseline });
     } catch (error) {
       localFailures.set(namespace, errorSummary(error));
     }
@@ -137,10 +170,15 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
     profile: options.profile,
     workspaceId: options.workspaceId,
   });
+  const commandContext = migrationCommandContext({
+    configPath: options.configPath,
+    workspaceId,
+    profile: options.profile,
+  });
 
   const rows: MigrationStatusRow[] = [];
 
-  for (const { namespace } of targetNamespaces) {
+  for (const { namespace, migrationsDir } of targetNamespaces) {
     if (localFailures.has(namespace)) {
       rows.push({
         status: "error",
@@ -158,7 +196,8 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
       });
       continue;
     }
-    const { migrationFiles, descriptions, historyId: localHistoryId } = localState;
+    const { migrationFiles, descriptions, rebaseline } = localState;
+    const localHistoryId = rebaseline?.historyId ?? null;
 
     const trn = resourceTrn(workspaceId, "tailordb", namespace);
     let remoteState;
@@ -173,12 +212,17 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
       continue;
     }
     const currentMigration = remoteState.number ?? 0;
+    const checkpointRecovery = formatCheckpointRecovery(
+      locateRemoteCheckpoint(remoteState, migrationsDir, rebaseline),
+      namespace,
+      commandContext,
+    );
 
     if (remoteState.historyIdInvalid) {
       rows.push({
         status: "error",
         namespace,
-        error: "Remote migration history ID is invalid.",
+        error: "Remote migration history ID is invalid." + checkpointRecovery,
       });
       continue;
     }
@@ -197,7 +241,8 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
         namespace,
         error:
           `Remote migration history ID ${remoteState.historyId ?? "<unset>"} does not match ` +
-          `local migration history ID ${localHistoryId ?? "<unset>"}.`,
+          `local migration history ID ${localHistoryId ?? "<unset>"}.` +
+          checkpointRecovery,
       });
       continue;
     }
@@ -213,7 +258,8 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
         namespace,
         error:
           `Remote migration checkpoint ${formatMigrationNumber(currentMigration)} is ahead of ` +
-          `the latest local migration ${formatMigrationNumber(latestLocalMigration)}.`,
+          `the latest local migration ${formatMigrationNumber(latestLocalMigration)}.` +
+          checkpointRecovery,
       });
       continue;
     }
@@ -237,6 +283,11 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
             inProgressMigration: inProgress.number,
             inProgressMigrationLabel: formatMigrationNumber(inProgress.number),
             inProgressMigrationRun: inProgress.kind,
+            inProgressMigrationActions: inProgressMigrationActions({
+              ...commandContext,
+              state: remoteState,
+              namespace,
+            }),
           }
         : {}),
     });
@@ -257,9 +308,12 @@ function printMigrationStatuses(rows: MigrationStatusRow[]): void {
     if (row.inProgressMigrationLabel) {
       logger.log(
         row.inProgressMigrationRun === "main"
-          ? `  In progress: ${styles.bold(row.inProgressMigrationLabel)} (the outcome of its run is not settled; settle it with 'tailor tailordb migration resolve')`
-          : `  In progress: ${styles.bold(row.inProgressMigrationLabel)} (partially applied; the next deploy resumes it)`,
+          ? `  In progress: ${styles.bold(row.inProgressMigrationLabel)} (the outcome of its run is not settled)`
+          : `  In progress: ${styles.bold(row.inProgressMigrationLabel)} (partially applied)`,
       );
+      for (const action of row.inProgressMigrationActions ?? []) {
+        logger.log(`    ${formatInProgressMigrationAction(action)}`);
+      }
     }
 
     if (row.pendingMigrations.length > 0) {

@@ -13,9 +13,12 @@ import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { resolveCommand } from "./resolve";
 import {
   parsedType,
+  remoteType,
+  restrictedRemoteType,
   snapshotType,
   writeDiff,
   writeInitialSchema,
+  writeRebaselineMarker,
 } from "./test-helpers/schema-fixtures";
 
 const state = vi.hoisted(() => ({
@@ -97,17 +100,6 @@ function remoteLabels(labels: Record<string, string>): void {
 }
 
 const LOCAL_HISTORY_ID = "h0123456789abcdef0123456789abcdef";
-
-function rebaselineLocalHistory(migrationsDir: string): void {
-  const file = path.join(migrationsDir, "0000", "schema.json");
-  const snapshot = JSON.parse(fs.readFileSync(file, "utf8"));
-  snapshot.rebaseline = {
-    historyId: LOCAL_HISTORY_ID,
-    replacedHistoryId: null,
-    replacedLatestMigration: 0,
-  };
-  fs.writeFileSync(file, JSON.stringify(snapshot));
-}
 
 describe("tailordb migration resolve", () => {
   aroundEach(async (runTest) => {
@@ -203,10 +195,22 @@ describe("tailordb migration resolve", () => {
   test("refuses when no migration is in progress", async () => {
     remoteLabels({ "sdk-migration": "m0002" });
 
-    const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+    const result = await runCommand(resolveCommand, [
+      "--rollback",
+      "--yes",
+      "--config",
+      "custom.config.ts",
+      "--profile",
+      "staging",
+    ]);
 
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/No migration is in progress/);
+    expect(result.error).toMatchObject({
+      suggestion: expect.stringContaining(
+        "`tailor tailordb migration status --namespace tailordb --config=custom.config.ts --workspace-id=12345678-1234-4abc-8def-123456789012 --profile=staging`",
+      ),
+    });
     expectNothingWritten();
   });
 
@@ -443,7 +447,7 @@ describe("tailordb migration resolve", () => {
   test.each(["--rollback", "--complete"])(
     "%s works when the workspace has neither a checkpoint nor a history ID yet",
     async (flag) => {
-      rebaselineLocalHistory(state.migrationsDir);
+      writeRebaselineMarker(state.migrationsDir, LOCAL_HISTORY_ID);
       remoteLabels({ "sdk-migration-in-progress": "m0001" });
 
       const result = await runCommand(resolveCommand, [flag, "--yes"]);
@@ -458,7 +462,7 @@ describe("tailordb migration resolve", () => {
   );
 
   test("refuses a rebaselined checkout when the workspace has a checkpoint but no history ID", async () => {
-    rebaselineLocalHistory(state.migrationsDir);
+    writeRebaselineMarker(state.migrationsDir, LOCAL_HISTORY_ID);
     remoteLabels({ "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002" });
 
     const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
@@ -587,13 +591,22 @@ describe("tailordb migration resolve", () => {
       },
     );
 
-    test("warns that the outcome could not be confirmed", async () => {
+    test("warns that the outcome could not be confirmed, naming how to check it on the workspace and profile this run used", async () => {
       state.readMigrationRunStatus.mockResolvedValue("unknown");
 
-      const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+      const result = await runCommand(resolveCommand, [
+        "--rollback",
+        "--yes",
+        "--profile",
+        "staging",
+      ]);
 
       expect(result.success).toBe(true);
-      expect(state.stderr.join("")).toMatch(/could not be confirmed/);
+      const output = state.stderr.join("");
+      expect(output).toMatch(/could not be confirmed/);
+      expect(output).toMatch(
+        /`tailor workflow executions --workflow-name \S+ --workspace-id=12345678-1234-4abc-8def-123456789012 --profile=staging`/,
+      );
     });
 
     test("refuses before asking for confirmation while the run is still running", async () => {
@@ -650,6 +663,202 @@ describe("tailordb migration resolve", () => {
 
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/cancelled/);
+    expectNothingWritten();
+  });
+
+  describe("a migration a deploy left in its Pre-phase without recording it", () => {
+    /**
+     * Leave `Comment`, which migration 0002 adds, as an interrupted Pre-phase of 0002 created it.
+     * @param labels - Namespace labels besides the checkpoint at 0001
+     */
+    function leftInPrePhaseOf0002(labels: Record<string, string> = {}): void {
+      remoteLabels({ "sdk-migration": "m0001", ...labels });
+      state.listTailorDBTypes.mockResolvedValue({
+        tailordbTypes: [
+          remoteType("User", ["id", "name"]),
+          remoteType("Post", ["id", "name"]),
+          restrictedRemoteType("Comment", ["id", "name"]),
+        ],
+        nextPageToken: "",
+      });
+    }
+
+    test("--rollback returns the namespace to the checkpoint and reports the interrupted migration", async () => {
+      using _json = jsonMode();
+      using stdout = captureStdout();
+      leftInPrePhaseOf0002();
+
+      const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(JSON.parse(stdout.output)).toMatchObject({
+        resolution: "rollback",
+        migrationNumber: 2,
+        checkpoint: 1,
+        interrupted: true,
+        tables: { created: [], deleted: ["Comment"] },
+      });
+      expect(state.removeMigrationWorkflowResources).toHaveBeenCalledWith(
+        expect.anything(),
+        "12345678-1234-4abc-8def-123456789012",
+        "tailordb",
+        2,
+      );
+    });
+
+    test("--rollback says no deploy recorded the migration and asks to check that none is running", async () => {
+      leftInPrePhaseOf0002();
+
+      await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+      const output = state.stderr.join("");
+      expect(output).toMatch(/Interrupted: 0002 \(not recorded as in progress\)/);
+      expect(output).toMatch(/make sure no deploy to this workspace is running/);
+      expect(output).toMatch(/runs again from the start/);
+    });
+
+    test("--rollback removes the record of a maintenance mode a deploy left in place", async () => {
+      leftInPrePhaseOf0002({ "sdk-maintenance-mode": "m0001" });
+
+      const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(state.setMetadata).toHaveBeenCalledWith(
+        expect.objectContaining({ labels: { "sdk-migration": "m0001", "sdk-name": "my-app" } }),
+      );
+    });
+
+    test("--rollback also removes the temporary resources of an in-progress record the checkpoint covers", async () => {
+      leftInPrePhaseOf0002({ "sdk-migration-in-progress": "m0001" });
+
+      const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(state.removeMigrationWorkflowResources.mock.calls.map((call) => call[3])).toEqual([
+        2, 1,
+      ]);
+    });
+
+    test("--rollback explains how to go on when records without a value reject the update", async () => {
+      leftInPrePhaseOf0002();
+      state.updateTailorDBType.mockRejectedValue(
+        new ConnectError(
+          'field "code" cannot be updated from non-required to required when records exist',
+          Code.FailedPrecondition,
+        ),
+      );
+
+      const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+      expect(result.success).toBe(false);
+      const output = state.stderr.join("");
+      expect(output).toMatch(/Fill in those records first/);
+      expect(output).not.toMatch(/stays in progress/);
+    });
+
+    test("--complete refuses, because no migration is in progress", async () => {
+      leftInPrePhaseOf0002();
+
+      const result = await runCommand(resolveCommand, ["--complete", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_NO_IN_PROGRESS" });
+      expectNothingWritten();
+    });
+  });
+
+  describe("a maintenance mode a deploy recorded at the checkpoint", () => {
+    test("--rollback lifts it when every table has the checkpoint's schema", async () => {
+      using _json = jsonMode();
+      using stdout = captureStdout();
+      remoteLabels({ "sdk-migration": "m0001", "sdk-maintenance-mode": "m0001" });
+      state.listTailorDBTypes.mockResolvedValue({
+        tailordbTypes: [
+          restrictedRemoteType("User", ["id", "name"]),
+          restrictedRemoteType("Post", ["id", "name"]),
+        ],
+        nextPageToken: "",
+      });
+
+      const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(JSON.parse(stdout.output)).toMatchObject({
+        migrationNumber: 2,
+        checkpoint: 1,
+        interrupted: true,
+        tables: { created: [], updated: ["User", "Post"], deleted: [] },
+      });
+      expect(state.setMetadata).toHaveBeenCalledWith(
+        expect.objectContaining({ labels: { "sdk-migration": "m0001", "sdk-name": "my-app" } }),
+      );
+    });
+
+    test("--rollback refuses when a table has neither the checkpoint's nor the pre-migration schema", async () => {
+      remoteLabels({ "sdk-migration": "m0001", "sdk-maintenance-mode": "m0001" });
+      state.listTailorDBTypes.mockResolvedValue({
+        tailordbTypes: [
+          restrictedRemoteType("User", ["id", "name", "email"]),
+          restrictedRemoteType("Post", ["id", "name"]),
+        ],
+        nextPageToken: "",
+      });
+
+      const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_NO_IN_PROGRESS" });
+      expectNothingWritten();
+    });
+
+    test("--rollback refuses when the namespace records a history ID but no checkpoint", async () => {
+      writeRebaselineMarker(state.migrationsDir, LOCAL_HISTORY_ID);
+      remoteLabels({ "sdk-migration-history": LOCAL_HISTORY_ID, "sdk-maintenance-mode": "m0000" });
+      state.listTailorDBTypes.mockResolvedValue({
+        tailordbTypes: [
+          restrictedRemoteType("User", ["id", "name"]),
+          restrictedRemoteType("Post", ["id", "name"]),
+        ],
+        nextPageToken: "",
+      });
+
+      const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_NO_IN_PROGRESS" });
+      expectNothingWritten();
+    });
+
+    test("--rollback refuses when no local migration follows the checkpoint", async () => {
+      remoteLabels({ "sdk-migration": "m0002", "sdk-maintenance-mode": "m0002" });
+      state.listTailorDBTypes.mockResolvedValue({
+        tailordbTypes: [
+          restrictedRemoteType("User", ["id", "name"]),
+          restrictedRemoteType("Post", ["id", "name"]),
+          restrictedRemoteType("Comment", ["id", "name"]),
+        ],
+        nextPageToken: "",
+      });
+
+      const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_NO_IN_PROGRESS" });
+      expectNothingWritten();
+    });
+  });
+
+  test("--rollback refuses when the tables match the checkpoint and no migration is in progress", async () => {
+    remoteLabels({ "sdk-migration": "m0001" });
+    state.listTailorDBTypes.mockResolvedValue({
+      tailordbTypes: [remoteType("User", ["id", "name"]), remoteType("Post", ["id", "name"])],
+      nextPageToken: "",
+    });
+
+    const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_NO_IN_PROGRESS" });
     expectNothingWritten();
   });
 });

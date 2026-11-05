@@ -107,7 +107,7 @@ export function validateRelationConfig(
     ? processRelationMetadata(
         keyField.rawRelation,
         { ...context, tableName: targetTable, fieldName: key },
-        keyField.metadata.array,
+        keyField.metadata,
       ).unique
     : keyField.metadata.unique;
   if (key !== "id" && !keyIsUnique) {
@@ -121,20 +121,20 @@ export function validateRelationConfig(
  * Process raw relation config and compute derived metadata values.
  * @param rawRelation - Raw relation configuration
  * @param context - Context information for the relation
- * @param isArrayField - Whether the target field is an array field
+ * @param field - Modifiers set on the field that declares the relation
  * @returns Computed relation metadata to apply to field config
  */
 export function processRelationMetadata(
   rawRelation: RawRelationConfig,
   context: RelationProcessingContext,
-  isArrayField: boolean = false,
+  field: Pick<OperatorFieldConfig, "array" | "unique">,
 ): ProcessedRelationMetadata {
-  const isUnique = relationTypes[rawRelation.type] === "1-1";
+  const isUnique = relationTypes[rawRelation.type] === "1-1" || field.unique === true;
   const { table: targetTypeName, key } = relationTarget(rawRelation, context);
 
   // Index and unique are not supported on array fields
-  const shouldSetIndex = !isArrayField;
-  const shouldSetUnique = !isArrayField && isUnique;
+  const shouldSetIndex = !field.array;
+  const shouldSetUnique = !field.array && isUnique;
 
   return {
     index: shouldSetIndex,
@@ -201,8 +201,8 @@ export function applyRelationMetadataToFieldConfig(
 
 /**
  * Resolve the relations declared on the inner fields of an object field into foreign keys.
- * An inner field gets only the foreign key: no index, no unique constraint, and no forward or
- * backward relationship.
+ * The relation adds only the foreign key to an inner field: no index, no unique constraint, and no
+ * forward or backward relationship. The inner field keeps its own `unique` and `index`.
  * @param fieldConfig - Object field configuration
  * @param context - Context information of the object field
  * @returns Field config whose inner fields carry the foreign keys
@@ -220,7 +220,7 @@ export function applyNestedRelationMetadata(
       const { foreignKey, foreignKeyType, foreignKeyField } = processRelationMetadata(
         inner.rawRelation,
         innerContext,
-        inner.array,
+        { array: inner.array },
       );
       return [name, { ...inner, foreignKey, foreignKeyType, foreignKeyField }];
     }),

@@ -38,20 +38,35 @@ interface JobInfo {
  */
 class WorkflowJobDetectionError extends Error {}
 
-function isExecJobFunctionCallee(node: unknown): boolean {
-  if (!node || typeof node !== "object") return false;
+function getWorkflowExecJobFunctionRoot(node: unknown): ASTNode | undefined {
+  if (!node || typeof node !== "object") return undefined;
   const callee = node as ASTNode;
-  if (callee.type !== "MemberExpression") return false;
+  if (callee.type !== "MemberExpression") return undefined;
   const property = callee.property as ASTNode | undefined;
-  if (property?.type !== "Identifier" || property.name !== "execJobFunction") return false;
+  if (property?.type !== "Identifier" || property.name !== "execJobFunction") return undefined;
   const object = callee.object as ASTNode | undefined;
-  if (object?.type !== "MemberExpression") return false;
+  if (object?.type !== "MemberExpression") return undefined;
   const workflowProperty = object.property as ASTNode | undefined;
   if (workflowProperty?.type !== "Identifier" || workflowProperty.name !== "workflow") {
-    return false;
+    return undefined;
   }
-  const root = object.object as ASTNode | undefined;
-  return root?.type === "Identifier" && root.name === "tailor";
+  return object.object as ASTNode | undefined;
+}
+
+function isTailorIdentifier(node: ASTNode | undefined): boolean {
+  return node?.type === "Identifier" && node.name === "tailor";
+}
+
+function isGlobalThisTailor(node: ASTNode | undefined): boolean {
+  if (node?.type !== "MemberExpression" || node.computed) return false;
+  const object = node.object as ASTNode | undefined;
+  const property = node.property as ASTNode | undefined;
+  return (
+    object?.type === "Identifier" &&
+    object.name === "globalThis" &&
+    property?.type === "Identifier" &&
+    property.name === "tailor"
+  );
 }
 
 function extractStaticStringValue(node: unknown): string | undefined {
@@ -100,7 +115,7 @@ function isDirectExecJobFunctionCallee(
   node: unknown,
   runtimeWorkflowBindings: ReadonlySet<string>,
 ): boolean {
-  if (isExecJobFunctionCallee(node)) return true;
+  if (isTailorIdentifier(getWorkflowExecJobFunctionRoot(node))) return true;
   if (!node || typeof node !== "object") return false;
   const callee = node as ASTNode;
   if (callee.type !== "MemberExpression") return false;
@@ -172,7 +187,8 @@ function buildDirectExecJobFunctionErrorMessage(
 
 /**
  * Find the job names a bundled job's code calls `execJobFunction` on, by
- * looking for `tailor.workflow.execJobFunction(<name>, ...)` calls with a
+ * looking for `tailor.workflow.execJobFunction(<name>, ...)` and
+ * `globalThis.tailor.workflow.execJobFunction(<name>, ...)` calls with a
  * static string name.
  * @param code - Bundled job code
  * @returns Target job names referenced with a statically known name
@@ -189,10 +205,13 @@ export function collectExecJobFunctionTargets(code: string): string[] {
 
   function walk(node: ASTNode | null | undefined): void {
     if (!node || typeof node !== "object") return;
-    if (node.type === "CallExpression" && isExecJobFunctionCallee(node.callee)) {
-      const args = node.arguments as unknown[] | undefined;
-      const target = extractStaticStringValue(args?.[0]);
-      if (target !== undefined) targets.push(target);
+    if (node.type === "CallExpression") {
+      const root = getWorkflowExecJobFunctionRoot(node.callee);
+      if (isTailorIdentifier(root) || isGlobalThisTailor(root)) {
+        const args = node.arguments as unknown[] | undefined;
+        const target = extractStaticStringValue(args?.[0]);
+        if (target !== undefined) targets.push(target);
+      }
     }
     for (const key of Object.keys(node)) {
       const child = node[key];

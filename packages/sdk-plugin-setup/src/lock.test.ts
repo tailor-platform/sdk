@@ -2,7 +2,17 @@ import * as fs from "node:fs";
 import { TAILOR_LOCK_VERSION } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test } from "vitest";
-import { findTarget, hashContent, LOCK_VERSION, readLock, writeLock, type LockFile } from "./lock";
+import {
+  findTarget,
+  hashContent,
+  LOCK_VERSION,
+  planEnvironmentCollisions,
+  readLock,
+  writeLock,
+  type LockFile,
+  type LockInputs,
+} from "./lock";
+import { envTarget } from "./test-helpers/env-target";
 
 function makeLock(): LockFile {
   return {
@@ -164,6 +174,33 @@ describe("readLock / writeLock", () => {
     fs.mkdirSync(path.join(testDir, ".github"), { recursive: true });
     fs.writeFileSync(path.join(testDir, ".github/tailor.lock"), content());
     expect(() => readLock(testDir)).toThrow(error);
+  });
+});
+
+describe("planEnvironmentCollisions", () => {
+  const split = (workspaceName: string, environment: string, inputs: Partial<LockInputs> = {}) =>
+    envTarget("branch", workspaceName, environment, { splitPlanEnvironment: true, ...inputs });
+
+  test("reports another target's environment that matches a plan environment, ignoring case", () => {
+    expect(
+      planEnvironmentCollisions([split("my-app", "stg"), envTarget("tag", "other", "Stg-Plan")]),
+    ).toEqual([
+      'GitHub Environment "stg-plan" is used by both branch my-app (plan) and tag other, so ' +
+        "the plan job, which runs pull request code, signs in with the machine user set there " +
+        "for tag other. Give one of them another environment.",
+    ]);
+  });
+
+  test("reports a migration test environment that matches a plan environment", () => {
+    expect(
+      planEnvironmentCollisions([
+        split("my-app", "stg", { migrationTest: true, migrationTestEnvironment: "stg-plan" }),
+      ]),
+    ).toEqual([expect.stringContaining("and branch my-app (migration test), so")]);
+  });
+
+  test("leaves plan environments derived from the same deploy environment alone", () => {
+    expect(planEnvironmentCollisions([split("my-app", "stg"), split("other", "STG")])).toEqual([]);
   });
 });
 

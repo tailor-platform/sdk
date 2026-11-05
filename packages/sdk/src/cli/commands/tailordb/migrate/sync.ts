@@ -21,6 +21,7 @@ import {
   type NamespaceWithMigrations,
 } from "./config";
 import { formatMigrationDiff, hasChanges } from "./diff-calculator";
+import { migrationCommandContext } from "./hints";
 import { parseMigrationNumberArg } from "./migration-number";
 import {
   assertLocalMigrationHistory,
@@ -182,10 +183,9 @@ type SyncResult = {
  * mutation, verifies that the migration history reproduces the current local
  * table definitions (see {@link assertMigrationsReproduceLocalTypes}).
  *
- * Intended for recovering from drift introduced by `deploy --no-schema-check`
- * runs against an older revision: instead of having to `git checkout` that
- * revision and re-deploy, the operator can sync the remote back to a known
- * snapshot version directly.
+ * Intended for recovering from drift introduced by `deploy --no-schema-check`,
+ * and for moving a checkpoint that `deploy` refuses as not in the local
+ * migration history back to that history on purpose.
  * @param options - Command options
  * @returns What the sync sent to the remote, and whether it changed anything
  */
@@ -200,7 +200,7 @@ async function sync(options: SyncOptions): Promise<SyncResult> {
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
   const target = selectTargetNamespace(namespacesWithMigrations, options.namespace);
 
-  assertValidMigrationFiles(target.migrationsDir, target.namespace);
+  assertValidMigrationFiles(target.migrationsDir, target.namespace, config.path);
 
   const latest = assertMigrationNumberExists(target.migrationsDir, targetVersion);
 
@@ -222,7 +222,15 @@ async function sync(options: SyncOptions): Promise<SyncResult> {
 
   const trn = resourceTrn(workspaceId, "tailordb", target.namespace);
   const currentState = await fetchRemoteMigrationState(client, trn);
-  assertNoMigrationInProgress(currentState, target.namespace);
+  assertNoMigrationInProgress(
+    currentState,
+    target.namespace,
+    migrationCommandContext({
+      configPath: options.configPath,
+      workspaceId,
+      profile: options.profile,
+    }),
+  );
   const historyId = snapshot.rebaseline?.historyId;
   const historyOverwrite = assertLocalMigrationHistory({
     state: currentState,
@@ -366,7 +374,7 @@ async function sync(options: SyncOptions): Promise<SyncResult> {
 export const syncCommand = defineAppCommand({
   name: "sync",
   description:
-    "Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).",
+    "Sync remote TailorDB schema and checkpoint to a local migration snapshot to recover from schema drift or a checkpoint outside the local history.",
   notes: `The command refuses to run when the namespace records a migration history ID other than the local one, or one that cannot be read, unless the namespace has neither a checkpoint nor a history ID yet. \`--force\` overwrites the tables and that history ID with those of the local history, and still asks for confirmation unless \`--yes\` is given.`,
   args: z.strictObject({
     ...deploymentArgs,

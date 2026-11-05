@@ -1,6 +1,6 @@
 import { arg } from "@politty/zod";
 import { z } from "zod";
-import { confirmationArgs } from "#/cli/shared/args";
+import { confirmationArgs, SKIP_CONFIRMATION_SUGGESTION } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken } from "#/cli/shared/context";
@@ -62,6 +62,7 @@ export const restoreCommand = defineAppCommand({
     if (!args.yes) {
       const confirmation = await prompt.text({
         message: `Are you sure you want to restore workspace "${workspaceId}"? (yes/no):`,
+        suggestion: SKIP_CONFIRMATION_SUGGESTION,
       });
       if (confirmation !== "yes") {
         throw CLIError({

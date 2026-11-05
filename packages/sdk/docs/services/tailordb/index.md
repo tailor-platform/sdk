@@ -226,7 +226,9 @@ const user = db.table("User", {
 });
 ```
 
-A relation can also be set on a field inside `db.object()`. The inner field gets the foreign key constraint only: no index, no unique constraint, and no forward or backward relationship, as with `type: "keyOnly"`.
+A `keyOnly` relation does not make the field unique; add `.unique()` to the field to make it unique.
+
+A relation can also be set on a field inside `db.object()`, where it adds only the foreign key constraint to the inner field, and `.unique()` and `.index()` set on that field work as described in [Index / Unique](#index--unique).
 
 ```typescript
 const order = db.table("Order", {
@@ -243,7 +245,7 @@ const order = db.table("Order", {
 });
 ```
 
-A relation inside `db.object()` that points at its own table is not yet handled by `tailor seed apply` or by the data copy a table rename generates. Both write rows in batches, and the platform rejects a row whose parent is in the same or a later batch.
+A relation inside `db.object()` can point at its own table, for example `links.parentID` on `Node`. `tailor seed apply` inserts a row before the rows that point at it, in whatever order the seed data lists them, and follows every element of an array. This needs a unique `id` on every row, and a reference must match the referenced value exactly, including letter case. Otherwise the rows can be inserted in the order the file lists them. The data copy that a table rename generates inserts such references as null and restores them once every row exists.
 
 Create relations against different fields using `toward.key`:
 
@@ -477,6 +479,8 @@ db.string().serial({
 });
 ```
 
+`format` holds exactly one of `%d` (decimal), `%o` (octal), `%x` (lowercase hexadecimal), or `%X` (uppercase hexadecimal), optionally with a width: `%5d` pads with spaces and `%05d` with zeros, to at least 5 characters. Write a literal `%` as `%%`. The format is at most 32 characters.
+
 A serial field cannot be used inside a `db.object()` field.
 
 > **Preview:** The `gapless` option is a preview feature. Its behavior and configuration may change before general availability.
@@ -571,7 +575,7 @@ db.table("User", {
 - When not specified, `deploy` sets it from the executors taking part in the same run: `true` while one of them uses this table with `recordCreatedTrigger`, `recordUpdatedTrigger`, or `recordDeletedTrigger`, and `false` once none does. Removing the last such trigger turns publishing back off on the next `deploy`
 - When explicitly set to `false` while an executor taking part in the same run uses this table, `deploy` fails
 - An executor declared with `disabled: true` never runs, so it does not count as using the table
-- While a `deploy` applies pending migrations with [maintenance mode](./migration.md#maintenance-mode) on, every table in the migrating namespace is restricted: the GraphQL create, update, and delete operations and bulk upsert are disabled, and the table's `read` setting is not switched off for the migration (a table the migration creates uses its configured setting), so nothing writes an intermediate schema and readable tables are not shut down. Record event publishing is also switched off so a migration script's writes do not reach executors from the previous deploy. With `maintenanceMode: false`, these restrictions are not applied. After success, the configured settings take effect. If a later migration fails, settings from the last confirmed checkpoint are restored; an uncommitted migration restores existing tables' prior settings and leaves its newly created tables restricted until a successful retry. A table that already refuses create, update, delete, and bulk upsert and publishes no record events is left as it is. Restoration is skipped if the checkpoint number or migration history changed concurrently, or if checkpoint ownership cannot be verified; the deploy then reports the namespace whose tables stay restricted and points to `tailor tailordb migration status --namespace <namespace>`. When a failed migration or a failed restoration leaves tables restricted, the deploy lists their names, and deploying again releases them once the migration completes. A table that a failed rollback could not delete or revert is the exception: the deploy also lists it, but the next deploy stops with remote schema drift until you delete or repair that table by hand. A table left behind by a failed post-checkpoint deletion also remains read-only for manual recovery, and the deploy does not list it by name
+- While a `deploy` applies pending migrations with [maintenance mode](./migration.md#maintenance-mode) on, every table in the migrating namespace is restricted: the GraphQL create, update, and delete operations and bulk upsert are disabled, and the table's `read` setting is not switched off for the migration (a table the migration creates uses its configured setting), so nothing writes an intermediate schema and readable tables are not shut down. Record event publishing is also switched off so a migration script's writes do not reach executors from the previous deploy. With `maintenanceMode: false`, these restrictions are not applied. After success, the configured settings take effect. If a later migration fails, settings from the last confirmed checkpoint are restored; an uncommitted migration restores existing tables' prior settings and leaves its newly created tables restricted until a successful retry. A table that already refuses create, update, delete, and bulk upsert and publishes no record events is left as it is. Restoration is skipped if the checkpoint number or migration history changed concurrently, or if checkpoint ownership cannot be verified; the deploy then reports the namespace whose tables stay restricted and points to `tailor tailordb migration status --namespace <namespace>`. When a failed migration or a failed restoration leaves tables restricted, the deploy lists their names, and deploying again releases them once the migration completes. A table that a failed rollback could not delete or revert is also listed: when it still has the migration's pre-migration schema, deploying again runs the migration again; otherwise the next deploy stops with remote schema drift until you delete or repair that table by hand. A table left behind by a failed post-checkpoint deletion also remains read-only, and the deploy does not list it by name; the next deploy deletes it
 
 **Use cases:**
 

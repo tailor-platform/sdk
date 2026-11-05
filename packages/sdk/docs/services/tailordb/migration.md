@@ -58,13 +58,20 @@ If you already have a deployed workspace whose schema matches your local table d
 
 1. Add the `migration` block to `tailor.config.ts`.
 2. Run `tailor tailordb migration generate` to create `0000/schema.json` from current local tables.
-3. Run `tailor deploy`. Because remote schema already matches, no script runs; only the migration label is set.
+3. Run `tailor deploy`. It first checks that the deployed tables match `0000`. Because they do, no script runs; only the migration label is set.
 
-If your local tables and remote schema have **diverged**, reconcile them before introducing migrations — either update local tables to match remote, or accept that the first non-`0000` migration will reflect that gap.
+Until a deploy sets the migration label, `tailor deploy` and `tailor tailordb migration validate` compare the deployed tables with `0000`. When they differ, `tailor deploy` stops with [remote schema drift](#remote-schema-drift-detected) and `migration validate` fails, for example when a table was edited in the console, or when a local change had not been deployed before you generated `0000`. Run `tailor tailordb migration validate` before the first deploy to check, and reconcile the difference before deploying:
+
+- To keep the deployed tables, update your local tables to match them, then recreate `0000` with `tailor tailordb migration generate --init`. `--init` deletes every migration of the namespace, so do this only while no workspace has been deployed with these migrations.
+- To replace the deployed tables with `0000`, run `tailor tailordb migration sync 0000`. Tables and fields that `0000` does not have are deleted together with their data.
+
+If an earlier deploy stopped after creating only some of the tables, the next deploy reports the missing tables as drift; `tailor tailordb migration sync 0000` creates them.
 
 ### Resetting
 
 `tailor tailordb migration generate --init` deletes the existing `migrations/` directory of every namespace with migrations configured and creates `0000` from the current local tables. Add `--namespace <name>` to reset only that namespace and leave the others untouched. Use it only before the project is deployed. For a deployed migration history, use [`migration rebaseline`](#re-baselining-a-deployed-migration-history), which verifies the history and connected workspace before replacing any files.
+
+Declining the `--init` confirmation leaves existing migrations in place and fails with `MIGRATION_GENERATE_CANCELLED`.
 
 ## Migration Workflow
 
@@ -121,6 +128,10 @@ A typical change cycle:
    tailor deploy
    ```
    The pre-migration phase relaxes the new field to optional, the script runs and populates values, then the post-migration phase enforces `required: true`.
+
+When you decline a namespace's breaking-change confirmation, `migration generate` skips that namespace, continues generating migrations for the others, and exits successfully with a `Skipped: <namespaces>` summary. Declining every namespace also succeeds without writing migrations. Check the summary before deploying if you intended to generate every namespace.
+
+JSON output includes `skippedNamespaces` alongside `migrations`. It is always an empty array in actual `--json` runs because JSON mode does not prompt. Programmatic callers of `migrateGenerate()` receive a `MigrateGenerateResult` and can inspect `skippedNamespaces` before continuing.
 
 ### Warnings and optional migration scripts
 
@@ -226,9 +237,9 @@ tailor tailordb migration generate --rename "User:Person"
 tailor tailordb migration generate --drop "User"
 ```
 
-Two tables qualify as a rename pair only when copying every row preserves the data: every field must keep its name, type, array-ness, required/unique constraints, foreign key target, and decimal scale; enum fields may gain values but not lose them; indexes must match. A self-referential foreign key is compared against the new table name and must be optional. Tables with serial fields (their values cannot be written by a script) or file fields (file contents are not copied) are never candidates. Name-derived and data-independent settings — `pluralForm`, description, table settings, permissions, hooks, and validations — may differ.
+Two tables qualify as a rename pair only when copying every row preserves the data: every field must keep its name, type, array-ness, required/unique constraints, foreign key target, and decimal scale; enum fields may gain values but not lose them; indexes must match. A self-referential foreign key, including one on a field inside a nested field, is compared against the new table name and must be optional. A table is also not a candidate when a self-referential foreign key points at another column of the table that is itself a self-referential foreign key, or when a nested field holding a self-referential foreign key is covered by a unique constraint. Tables with serial fields (their values cannot be written by a script) or file fields (file contents are not copied) are never candidates. Name-derived and data-independent settings — `pluralForm`, description, table settings, permissions, hooks, and validations — may differ.
 
-A confirmed rename is recorded as a single `table_renamed` change and treated as **breaking** for two reasons: existing records must be copied by the migration script, and the table's GraphQL API names (derived from the table name and `pluralForm`) change, which breaks API clients. The generated `migrate.ts` copies every row from the old table into the new one in id-ordered batches, preserving ids so stored foreign key references stay valid, and the generated `db.ts` exposes both the old table (readable) and the new table (writable). Self-referential foreign keys are inserted as null and backfilled after every row exists, so a reference to a row in a later batch cannot fail the copy.
+A confirmed rename is recorded as a single `table_renamed` change and treated as **breaking** for two reasons: existing records must be copied by the migration script, and the table's GraphQL API names (derived from the table name and `pluralForm`) change, which breaks API clients. The generated `migrate.ts` copies every row from the old table into the new one in id-ordered batches, preserving ids so stored foreign key references stay valid, and the generated `db.ts` exposes both the old table (readable) and the new table (writable). Self-referential foreign keys, including those on fields inside nested fields, are inserted as null and backfilled after every row exists, so a reference to a row in a later batch cannot fail the copy.
 
 Two caveats apply to the copy. The old table is not write-protected: rows written to it after the script's transaction commits — and before post-migration cleanup drops it — are not carried over, so pause writers to the renamed table for the duration of the deploy. And platform-managed record metadata (creation/update timestamps and actors) cannot be written by the script, so the new table's records carry the migration run's metadata instead of the original values.
 
@@ -439,8 +450,9 @@ Because steps commit separately, a failure does not undo the steps that already 
 - Fix the failing step and run `tailor deploy` again. The deploy resumes the migration: completed steps do not run again, and the failed step and the steps after it run with the updated script. A completed step is treated like an applied migration — editing it afterwards does not run it again.
 - If the steps changed since the earlier run, or that run is no longer available, every step runs again from the beginning. See [Editing steps of a migration in progress](#editing-steps-of-a-migration-in-progress).
 - If every step completed but the post-migration schema changes fail (for example, a field the migration makes required still has empty values), the migration also stays in progress with its pre-migration schema, and the next deploy retries those schema changes without running the steps again.
+- If the deploy stops during or after the post-migration schema changes but before it records the migration as applied, for example because the process was killed or recording the checkpoint failed, the migration also stays in progress, with each table in either its pre-migration or its post-migration schema. The next deploy resumes it: it applies the pre-migration schema again, so a field the migration makes required is optional until the post-migration schema changes are applied again. Completed steps do not run again unless you add, remove, or rename a step, change the order the steps run in, or the earlier run is no longer available (see [Editing steps of a migration in progress](#editing-steps-of-a-migration-in-progress)).
 - To run a completed step again (because it had a bug, or to fix rows the post-migration schema changes reject), change the steps: rename that step and update the `dependsOn` lists that name it, or add a step that fixes the rows. Every step then runs again from the beginning, so this relies on every step being safe to run again; to keep the other completed steps from running again, skip them as described below.
-- While a migration is in progress, `migration set`, `migration sync`, and `migration rebaseline` refuse to run, and `migration test` refuses to use that workspace as its source. Finish a multi-step migration left in progress with `tailor deploy` first, or settle it with `migration resolve`. A migration whose script run a deploy could not confirm is not finished by a later deploy, so settle that one with `migration resolve` (see [Settling a migration that stays in progress](#settling-a-migration-that-stays-in-progress)). The one exception to these refusals is `migration set <N>` with the in-progress migration's own number: it marks that migration as completed and clears its in-progress record. Use it only when the migration's schema changes are already applied, for example after the deploy reported that the checkpoint write could not be confirmed.
+- Finish a multi-step migration left in progress with `tailor deploy`, or settle it with `migration resolve`. Until then, the commands listed in [Settling a migration that stays in progress](#settling-a-migration-that-stays-in-progress) refuse to run.
 
 #### Editing steps of a migration in progress
 
@@ -462,6 +474,7 @@ tailor deploy --migration-skip-steps main-db/backfillUser,main-db/backfillInvoic
 - A skipped step is reported as completed and is not run. Only steps that succeeded in the migration's earlier run can be skipped, so a step you renamed cannot be.
 - The option applies to the migration an earlier deploy left in progress. Deploy fails before changing anything when an entry names a step that did not succeed, a step the migration does not define, a namespace without a migration in progress, or a namespace that no deployed config defines. It also fails when the earlier run's step results cannot be read, because then it cannot confirm which steps succeeded; deploy again to retry.
 - It takes effect for the deploy you pass it to. If that run fails, the next `tailor deploy` resumes it as usual, and the skipped steps stay completed without passing the option again.
+- To check the entries before deploying, pass the same option to `tailor tailordb migration validate`. It reports the entries that deploy would reject for the namespaces of the config it validates.
 
 Write every step so that running it again is safe: besides the cases above, a step can run a second time when a deploy is interrupted right after it commits. Use `where` clauses that skip rows a step already migrated, as in the example. Rows written while a migration is in progress are not seen by steps that already completed. [Maintenance mode](#maintenance-mode) blocks GraphQL writes but not the writes your resolvers, executors, or workflows make through Kysely, and without it GraphQL clients can write too, so stop such writers until the migration finishes or write steps that tolerate them.
 
@@ -482,9 +495,11 @@ export const steps = {
 - Steps that already completed stay committed. Their changes to existing fields remain in the database, and nothing is recorded as in progress, so the next deploy runs every step again from the beginning. Every step must be safe to run again, or a rolled-back run applies those changes twice. Do not rely on data a step wrote to a field or table that the rollback removed.
 - If `tailor deploy` cannot tell whether a step ran, or the migration's workflow execution may still be running (for example the connection to it was lost), it does not roll anything back even with `"rollback"`: the migration stays in progress as described for a `main` script below. A migration an earlier deploy left in progress is rolled back only when its earlier run is confirmed to have ended, so a failure before that run is inspected, such as a schema error while applying the Pre-phase, keeps it in progress.
 - If the in-progress record cannot be cleared, `tailor deploy` does not roll the schema back. It logs a warning and keeps the migration in progress with its tables in maintenance mode, because a record that outlives a rollback would make the next deploy resume against a schema its completed steps no longer match. Deploy again to resume it as described above, or roll it back without deploying with `tailor tailordb migration resolve --rollback`.
-- If the schema or GraphQL permission of some tables cannot be rolled back, `tailor deploy` still fails with the step's original error. It also warns `Migration <namespace>/<N> was not rolled back completely` and lists the tables that need manual repair, and separately the tables whose GraphQL permission could not be set back. Check them in the workspace and repair them by hand; deploying again does not release them.
+- If the schema or GraphQL permission of some tables cannot be rolled back, `tailor deploy` still fails with the step's original error. It also warns `Migration <namespace>/<N> was not rolled back completely` and lists the tables that need manual repair, and separately the tables whose GraphQL permission could not be set back. A table that still has the migration's pre-migration schema does not stop the next deploy, which runs every step again (see [Failure Recovery](#failure-recovery)). Otherwise the next deploy stops with remote schema drift, so check the tables in the workspace and repair them by hand.
 
 ### Settling a migration that stays in progress
+
+While a migration is in progress, `migration sync` and `migration rebaseline` refuse to run, and `migration test` refuses to use that workspace as its source. `tailor tailordb migration status` reports the migration as in progress and lists the commands that get it out of that state: `tailor deploy` to resume a multi-step migration, and `tailor tailordb migration resolve` to roll it back or complete it. For a migration whose script run a deploy could not confirm, it lists only `resolve`, because a deploy does not resume that migration.
 
 A deploy resumes a multi-step migration left in progress. When you do not want it to — you abandoned the migration, or you repaired the data by hand — settle the migration with `tailor tailordb migration resolve`. Pass exactly one of two options:
 
@@ -492,6 +507,8 @@ A deploy resumes a multi-step migration left in progress. When you do not want i
 - `--complete` sends the schema of the failed migration itself, clears the in-progress record, and moves the checkpoint to that migration, without running its `migrate.ts` again. Repair the data first, for example with `tailor query`, and make sure no record lacks a value for a field the migration makes required: the update is rejected while such a record exists, and the migration stays in progress.
 
 Tables that the failed migration removes are deleted with their data under `--complete`. The command refuses to run while an execution of the failed migration is still running; wait for it to finish first. Both options take the namespace's tables out of [maintenance mode](#maintenance-mode) and remove the temporary resources of the failed run. The command shows what it will change and asks for confirmation (`--yes` skips it). As with `migration sync`, the local migration history must reproduce the current table definitions, so settle the migration before you change the tables. If sending the schema stops partway, run the same command again.
+
+`--rollback` also accepts a migration that no deploy recorded as in progress, but whose pre-migration schema or maintenance mode a deploy left in place: the deploy stopped before it recorded the migration, or failed to roll it back or to end maintenance mode (see [Maintenance mode](#maintenance-mode)). The command runs only when every table of the namespace has the schema of the checkpoint or the migration's pre-migration schema. With maintenance mode on, a table that has the pre-migration schema must also be in maintenance mode. If only maintenance mode is left, the command runs only when a local migration follows the checkpoint. A deploy that is still running looks the same until it records the migration, so make sure none is running. `--complete` refuses such a migration.
 
 The same command settles a migration whose script run a deploy could not confirm (see [Failure Recovery](#failure-recovery)). A deploy does not resume such a migration; it stops until this command settles it. The command reads how that run ended and shows it before asking for confirmation. Pass `--complete` when the run succeeded, and `--rollback` when it failed, was canceled, or did not start; `--rollback` deletes the tables and fields the migration introduced together with the data the script wrote to them, and the next deploy runs the script again. The command warns when the option you passed does not fit how the run ended, or when it cannot read the run.
 
@@ -645,7 +662,7 @@ Some changes are still rejected and need a temporary field you add yourself — 
 
 The command performs the following sequence:
 
-1. Reads each migration-enabled namespace's `sdk-migration` checkpoint from the source workspace and reconstructs that exact snapshot from local migration history. A deployed namespace that has no checkpoint is treated as migration 0, as `tailor deploy` does, but only when its schema matches the `0000` snapshot; otherwise the command fails and lists the differences. A namespace that was never deployed also fails.
+1. Reads each migration-enabled namespace's `sdk-migration` checkpoint from the source workspace and reconstructs that exact snapshot from local migration history. A deployed namespace that has no checkpoint is treated as migration 0 when its schema matches the `0000` snapshot, as `tailor deploy` does; otherwise the command fails and lists the differences. A namespace that was never deployed, or has no tables yet, also fails.
 2. Creates a temporary workspace in the same region as the source, unless `--target-workspace-id` names an existing throwaway workspace. By default it is created in the source's organization and folder. `--organization-id` places it at the root of that organization, and `--folder-id` places it in that folder (together with `--organization-id` when the folder is in another organization or the source is not in an organization). With `--target-workspace-id`, the given values must match where that workspace already is.
 3. Deploys the checkpoint snapshots and writes their checkpoint labels.
 4. Loads fixture data or clones source records.
@@ -758,11 +775,13 @@ Maintenance mode restricts GraphQL writes and record events only. Resolvers, exe
 
 **When a deploy stops early:**
 
-- If a migration fails, the tables leave maintenance mode before the error is reported: they return to the settings of the last checkpoint that completed. A migration that did not reach its checkpoint returns existing tables to their previous settings and drops the tables it created (see [Failure Recovery](#failure-recovery)). A created table that the rollback cannot drop stays in maintenance mode, and the deploy names it for manual repair. The settings are not restored if the checkpoint number or migration history changed concurrently, or if checkpoint ownership cannot be verified. A table left behind by a failed post-checkpoint deletion also stays in maintenance mode for manual recovery.
+- If a migration fails, the tables leave maintenance mode before the error is reported: they return to the settings of the last checkpoint that completed. A migration that did not reach its checkpoint returns existing tables to their previous settings and drops the tables it created (see [Failure Recovery](#failure-recovery)). A created table that the rollback cannot drop stays in maintenance mode, and the deploy names it; deploying again runs the migration again. The settings are not restored if the checkpoint number or migration history changed concurrently, or if checkpoint ownership cannot be verified. A table left behind by a failed post-checkpoint deletion stays in maintenance mode until the next deploy deletes it (see [Failure Recovery](#failure-recovery)).
+- With `--no-schema-check`, if a local table definition that the migrations do not include cannot be applied after they complete, the existing tables leave maintenance mode with the definitions of the last migration before the error is reported (see [Schema verification](#schema-verification)).
 - A [multi-step migration](#splitting-a-migration-into-steps) left in progress keeps its tables in maintenance mode until a deploy completes it.
 - A migration whose script run a deploy could not confirm keeps its tables in maintenance mode until you settle it with `tailor tailordb migration resolve` (see [Failure Recovery](#failure-recovery)).
 - With `"deploy"`, if a later part of the deploy fails, the tables leave maintenance mode before the error is reported. When the deploy ends maintenance mode, it leaves the tables of a namespace unchanged if that namespace's checkpoint number or migration history changed concurrently, or if checkpoint ownership cannot be verified, and reports it.
-- If the deploy process is interrupted after a namespace's migrations completed but before maintenance mode ended, that namespace's tables stay in maintenance mode until a later `tailor deploy` releases them when it applies its TailorDB changes, before it replaces resolvers and executors. A namespace whose migrations had not all completed is not released this way: the next deploy resumes a multi-step migration left in progress, stops at a migration whose script was running until you settle it, and otherwise reports remote schema drift (see [Failure Recovery](#failure-recovery)), except when an earlier checkpoint of the interrupted deploy recorded the maintenance mode. Every migration checkpoint of a namespace records it, so with pending migrations `0001` and `0002`, a deploy interrupted right after the checkpoint of `0001` does not report drift: the next deploy keeps the tables in maintenance mode while it applies `0002` and releases them afterwards (with `"deploy"`, after the whole deploy).
+- If the deploy process is interrupted after a namespace's migrations completed but before maintenance mode ended, that namespace's tables stay in maintenance mode until a later `tailor deploy` releases them when it applies its TailorDB changes, before it replaces resolvers and executors. A namespace whose migrations had not all completed is not released this way: the next deploy resumes a multi-step migration left in progress, and stops at a migration whose script was running until you settle it. Every migration checkpoint of a namespace records the maintenance mode, so with pending migrations `0001` and `0002`, a deploy interrupted right after the checkpoint of `0001` leaves the tables in maintenance mode; the next deploy keeps them there while it applies `0002` and releases them afterwards (with `"deploy"`, after the whole deploy).
+- A deploy interrupted before it recorded a migration as in progress (for example, right after the migration's pre-migration schema changes reached some or all of its tables) leaves no record of that migration. The next deploy accepts tables that have the schema of the checkpoint or the migration's pre-migration schema, and runs the migration again from the start. To return the tables to the checkpoint without deploying, run `tailor tailordb migration resolve --rollback` (see [Settling a migration that stays in progress](#settling-a-migration-that-stays-in-progress)).
 
 #### Keeping maintenance mode short
 
@@ -775,17 +794,17 @@ Maintenance mode lasts for the whole migration job, including the time the platf
 
 When [maintenance mode](#maintenance-mode) is on, `tailor deploy` reports how long the migrating namespaces' tables were restricted, split into phases. With `"deploy"`, the window also includes the remaining deployment changes and ends when their restrictions are lifted. No maintenance report is emitted with `maintenanceMode: false`.
 
-| Phase              | Covers                                                                                   |
-| ------------------ | ---------------------------------------------------------------------------------------- |
-| `restrict`         | Putting the tables into maintenance mode                                                 |
-| `pre-migration`    | Pre-migration schema changes                                                             |
-| `job setup`        | Bundling `migrate.ts` and registering it as a job                                        |
-| `waiting to start` | Time when the platform has accepted the job but none of its code runs yet                |
-| `running`          | Time when the script runs                                                                |
-| `job cleanup`      | Collecting the script's logs and removing its job, unless its steps run as separate jobs |
-| `post-migration`   | Post-migration schema changes, the checkpoint update, and cleanup                        |
-| `remaining deploy` | With `"deploy"`, applying the remaining deployment changes while tables stay restricted  |
-| `restore`          | Taking the tables out of maintenance mode                                                |
+| Phase              | Covers                                                                                                                             |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `restrict`         | Putting the tables into maintenance mode                                                                                           |
+| `pre-migration`    | Pre-migration schema changes                                                                                                       |
+| `job setup`        | Bundling `migrate.ts` and registering it as a job                                                                                  |
+| `waiting to start` | Time when the platform has accepted the job but none of its code runs yet                                                          |
+| `running`          | Time when the script runs                                                                                                          |
+| `job cleanup`      | Collecting the script's logs and removing its job, unless its steps run as separate jobs                                           |
+| `post-migration`   | Post-migration schema changes, the checkpoint update, cleanup, and [local definitions](#schema-verification) no migration includes |
+| `remaining deploy` | With `"deploy"`, applying the remaining deployment changes while tables stay restricted                                            |
+| `restore`          | Taking the tables out of maintenance mode                                                                                          |
 
 Phases that repeat across several migrations are added up. The report is printed only after the migrations succeed and the tables leave maintenance mode; when a migration fails, deploy reports the error instead (see [Failure Recovery](#failure-recovery)). When deploy resumes a migration that an earlier deploy left in progress, the tables were already in maintenance mode before it started, and the report covers only this deploy. A job can be reported as started on the platform well before its code runs, so deploy tells waiting from running by a line every job of a migration logs before your script: `[tailor-sdk] migration script started`. You may see that line in function execution logs; deploy leaves it out of the logs it prints. A script that exports [`steps`](#splitting-a-migration-into-steps) waits for each step's job to start, and that time counts as `waiting to start` too. Time when deploy cannot tell whether the script is running — because the run or a running job's logs could not be read, or because an older SDK version started the run and it never logs the line — is reported as `waiting to start or running` instead.
 
@@ -796,7 +815,7 @@ Deploy checks the run every few seconds, so a boundary between `waiting to start
 Before running migrations, `apply` performs two checks:
 
 1. **Local schema check** — your current table definitions must match the latest snapshot in `migrations/`. If they don't, you forgot to run `migration generate`.
-2. **Remote schema check** — the deployed schema is reconstructed from migration history; the actual remote schema must match. Drift here means someone applied a different set of migrations or edited the schema out-of-band.
+2. **Remote schema check** — the deployed schema is reconstructed from migration history; the actual remote schema must match. Drift here means someone applied a different set of migrations or edited the schema out-of-band. A namespace that has tables but no migration label yet must match `0000` (see [Adding migrations to an existing project](#adding-migrations-to-an-existing-project)). When no migration is recorded as in progress, a table may also have the pre-migration schema of the next migration, which an interrupted or failed deploy left; the deploy then runs that migration again from the start (see [Maintenance mode](#maintenance-mode)). With maintenance mode on, such a table must be in maintenance mode.
 
 On drift you'll see something like:
 
@@ -809,7 +828,7 @@ Namespace: tailordb
     - Field 'email': required: remote=false, expected=true
 ```
 
-The error also points you at `migration status`, `migration generate`, `migration sync`, and `migration set` — see [Remote schema drift detected](#remote-schema-drift-detected) for which one applies.
+The error also points you at `migration status`, `migration generate`, and `migration sync` — see [Remote schema drift detected](#remote-schema-drift-detected) for which one applies.
 
 To run the same checks without deploying — plus migration file integrity (numbering, parseable contents, a `migrate.ts` or a recorded `--no-script` acknowledgment for every migration that requires a script, and no `TODO()` call left in a `migrate.ts`):
 
@@ -826,6 +845,10 @@ To bypass both checks during deploy (not recommended outside of recovery scenari
 ```bash
 tailor deploy --no-schema-check
 ```
+
+With pending migrations, each migration still applies its own table definitions in its [phases](#per-migration-phases), so `migrate.ts` sees the schema it was written for. Local table definitions that differ from the last pending migration are applied after every pending migration has completed, and the deploy lists those tables. With [maintenance mode](#maintenance-mode) on, existing tables stay in it until their local definitions are applied. If one of them cannot be applied, for example a unique constraint on a field whose records hold duplicate values, the deploy fails with `MIGRATION_LOCAL_DEFINITIONS_FAILED`: the migrations stay applied, tables already created for their local definitions remain, and the existing tables keep the definitions of the last migration and leave maintenance mode.
+
+`--no-schema-check` does not bypass the check that the remote migration checkpoint is in the local migration history. See ["Remote migration checkpoint is not in the local migration history" error](#remote-migration-checkpoint-is-not-in-the-local-migration-history-error).
 
 ### Example output
 
@@ -859,34 +882,15 @@ tailor tailordb migration rebaseline --namespace tailordb
 
 The command validates the migration files, verifies that replaying the latest migration exactly reproduces the local table definitions, and checks that the connected workspace is at that latest migration with no schema drift. After confirmation, it replaces the local history with the reconstructed baseline, records a new migration history ID in both `0000/schema.json` and remote metadata, and resets the connected workspace's `sdk-migration` label to `0000`. Use `--yes` only after arranging the same operational preconditions in non-interactive automation.
 
+When the connected workspace records another migration history ID, or one that cannot be read, the command refuses to run. Run it from a checkout of the migration history deployed to that workspace. To replace the workspace's history with the local one on purpose, first run `tailor tailordb migration sync <N> --force` with the latest local migration as `<N>`, which rewrites the workspace's tables to that migration, removing the fields it does not have and deleting the tables it does not have together with their data (see [`migration sync` Semantics](#migration-sync-semantics)). When the workspace's tables differ from the latest migration, the command also refuses to run; see [Remote schema drift detected](#remote-schema-drift-detected), where `tailor tailordb migration sync <N>` rewrites the tables to the latest migration.
+
 Commit the resulting `migrations/` change before generating any new migrations. For another environment still carrying the exact checkpoint and history ID that the new baseline replaced, the next `tailor deploy` checks whether its remote schema exactly matches the new `0000`. If it does, deploy offers to reset the checkpoint to `0000` and move the environment to the new history ID before applying any later local migrations. A markerless history is eligible only for the first rebaseline, at the exact migration recorded as replaced. Any other checkpoint or history ID is rejected without changing remote metadata, even if its schema happens to match the baseline.
 
 Partial squashing is not supported: re-baselining always replaces the full history for one namespace.
 
-## `migration set` Semantics
-
-`tailor tailordb migration set <N>` updates the `sdk-migration` label on the deployed namespace's metadata. **It does not modify any data or schema.** It only changes which migrations the next `apply` will consider pending. The command also records the migration history ID of the local baseline on the namespace.
-
-The command refuses to run when the namespace records a migration history ID other than the local one, or one that cannot be read, unless the namespace has neither a checkpoint nor a history ID yet. Run it from a checkout of the migration history deployed to the workspace. To write the local history over another one on purpose, for example after `migration rebaseline` re-baselined the local history but could not update the workspace, pass `--force`: the command shows the history ID it replaces, records the local history ID or, when the local history has none, removes the namespace's one, and still asks for confirmation unless you pass `--yes`.
-
-The migration number is validated before anything is sent to the remote: it must be a 4-digit value (e.g. `0001`) or a bare integer (e.g. `1`) within 0–9999, and must exist in the working tree's migration history, which is itself validated (a gapped history is rejected). `0` is always accepted as the baseline (even when no migrations directory exists yet), provided the history passes validation.
-
-| Movement                         | Effect on next `apply`                                                    | Effect on data                                                |
-| -------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Forward (e.g., `0001` → `0003`)  | Migrations `0002` and `0003` are skipped — they will not run.             | None.                                                         |
-| Backward (e.g., `0003` → `0001`) | Migrations `0002` and `0003` become pending and will re-execute on apply. | None directly — but the re-executed scripts may rewrite data. |
-
-Use cases:
-
-- **Recovery from drift** — you investigated, manually fixed the remote, and want the SDK's bookkeeping to reflect reality.
-- **Re-running a faulty migration** in a development workspace — set backward, fix `migrate.ts`, apply.
-- **Skipping a migration** that you know was already applied out-of-band.
-
-`migration set` does not perform a true rollback. To undo a schema/data change in production, write a new forward migration that reverses it (see [Rollback Strategy](#rollback-strategy)).
-
 ## `migration sync` Semantics
 
-`tailor tailordb migration sync <N>` reconstructs the schema snapshot at migration `N` from the working tree's migration history and **overwrites the remote schema to match it**, then sets the `sdk-migration` label to `N` and records the migration history ID of the local baseline. Unlike `migration set`, it changes the remote schema as well as the bookkeeping. Like `set`, it never runs `migrate.ts` scripts itself — it only changes what the next `apply` considers pending:
+`tailor tailordb migration sync <N>` reconstructs the schema snapshot at migration `N` from the working tree's migration history and **overwrites the remote schema to match it**, then sets the `sdk-migration` label to `N` and records the migration history ID of the local baseline. It never runs `migrate.ts` scripts itself — it only changes what the next `apply` considers pending:
 
 | Movement                         | Effect on next `apply`                                                                    | Effect on data                                                                                              |
 | -------------------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
@@ -895,11 +899,16 @@ Use cases:
 
 Before anything is sent to the remote, `sync` verifies that replaying the full migration history reproduces the current local table definitions. If it does not — because migration files were edited and no longer match, or because a schema change has not been recorded with `migration generate` yet — the command fails without touching the remote. This means a rewritten migration history is validated before it can overwrite the deployed schema.
 
-Like `set`, `sync` refuses to run when the namespace records another migration history ID, or one that cannot be read, before it reads or changes any table. With `--force`, it overwrites both the tables and the history ID with those of the local history, and still asks for confirmation unless you pass `--yes`.
+`sync` refuses to run when the namespace records another migration history ID, or one that cannot be read, before it reads or changes any table, unless the namespace has neither a checkpoint nor a history ID yet. Run it from a checkout of the migration history deployed to the workspace. To write the local history over another one on purpose, for example after `migration rebaseline` re-baselined the local history but could not update the workspace, pass `--force`: it overwrites the tables with those of the local history and replaces the history ID with the local one, or removes it when the local history has none, and still asks for confirmation unless you pass `--yes`.
 
 Because syncing backward causes already-applied scripts to re-execute on the next deploy, **write `migrate.ts` scripts to be idempotent** (see [Performance and Large Tables](#performance-and-large-tables) for resumable `where` clauses).
 
-The main use case is recovering from drift after a `deploy --no-schema-check` from an older revision: instead of checking out that revision, run `migration sync <N>` to restore the remote to a known snapshot, then `tailor deploy` to apply the remaining migrations from the working tree.
+The main use cases are:
+
+- Recovering from drift after a `deploy --no-schema-check`, which deploys the local table definitions without checking them against the migration snapshots: run `migration sync <N>` to restore the remote to a known snapshot, then `tailor deploy` to apply the remaining migrations from the working tree.
+- Moving a checkpoint that `tailor deploy` reports as not in the local migration history back to that history on purpose (see ["Remote migration checkpoint is not in the local migration history" error](#remote-migration-checkpoint-is-not-in-the-local-migration-history-error)).
+- Recording that the tables already match migration `N`, for example after you fixed them by hand or applied a migration outside the migration history. `sync <N>` sends the same table definitions again, so only the checkpoint changes, although its confirmation still lists the tables as updated.
+- Re-running a faulty migration in a development workspace (see [Rollback Strategy](#rollback-strategy)).
 
 ## Team Workflow and CI/CD
 
@@ -925,7 +934,7 @@ When your branch and main each generated the same number, merging or rebasing st
 ### CI / CD
 
 - For non-interactive environments, pass `--yes` to `migration generate` and `--yes` to `apply`. `apply` runs migrations automatically when the `migrations/` directory is configured.
-- Run `tailor tailordb migration validate` in CI to catch uncommitted migrations, broken migration files, unreviewed generated normalization logic, and remote schema drift before deploying. It exits with a non-zero code when validation fails and supports `--json`. Add `--strict` to also require an explicit acknowledgment (a `migrate.ts` or a recorded `--no-script` reason) for every pending migration that can drop data, so destructive changes cannot merge unnoticed.
+- Run `tailor tailordb migration validate` in CI to catch, before deploying, uncommitted migrations, broken migration files, unreviewed generated normalization logic, remote schema drift, and pending migration scripts that `tailor deploy` could not run. It exits with a non-zero code when validation fails and supports `--json`. Add `--strict` to also require an explicit acknowledgment (a `migrate.ts` or a recorded `--no-script` reason) for every pending migration that can drop data, so destructive changes cannot merge unnoticed.
 - `tailor tailordb migration status` validates the layout and file-format compatibility of the full local history, compares its history ID with the deployed namespace, and shows applied and pending migrations for a human-readable comparison. Its exit code is non-zero on invalid or incompatible files, migration history mismatches, a remote checkpoint ahead of the latest local migration, and remote read errors, so check the output.
 - Avoid running migrations in parallel against the same workspace — there is no locking. Serialize deploys per environment.
 
@@ -941,13 +950,13 @@ A script that exports `steps` follows different rules once one of its steps has 
 - **The pre-migration schema changes are rolled back** to the prior checkpoint: tables that already existed are restored to their previous shape and GraphQL permissions, and tables the migration newly introduced are dropped. The workspace is left at its prior checkpoint and prior schema — not half-applied.
 - The whole `apply` aborts and the checkpoint label is not bumped. Subsequent migrations in the same run do not execute.
 
-The rollback is best-effort per table; if reverting a table fails, a warning is logged and the original migration error is still reported. The next deploy then stops with remote schema drift on that table. Run `tailor tailordb migration validate` to see which tables differ, return the namespace to its checkpoint with `tailor tailordb migration sync <N>`, where `<N>` is the checkpoint `tailor tailordb migration status` reports, and deploy again. `sync` deletes the tables and fields that are not in that migration's snapshot, together with any rows the failed migration wrote to them; the next deploy runs the failed migration again.
+The rollback is best-effort per table; if reverting a table fails, a warning is logged and the original migration error is still reported. A table left with the migration's pre-migration schema does not stop the next deploy, which runs the failed migration again from the start. This happens, for example, when the script wrote records without a value for a field the migration makes required: the platform refuses to make the field required again while such records exist. `tailor tailordb migration resolve --rollback` returns such tables to the checkpoint without deploying, once those records have a value. A table left in any other shape makes the next deploy stop with remote schema drift on that table. Run `tailor tailordb migration validate` to see which tables differ, return the namespace to its checkpoint with `tailor tailordb migration sync <N>`, where `<N>` is the checkpoint `tailor tailordb migration status` reports, and deploy again. `sync` deletes the tables and fields that are not in that migration's snapshot, together with any rows the failed migration wrote to them; the next deploy runs the failed migration again.
 
-If `tailor deploy` cannot tell whether a `main` script ran, for example because the connection dropped while it started or waited for the script, it does not roll anything back: the pre-migration schema changes stay, the namespace's tables stay in [maintenance mode](#maintenance-mode) if it is on, the migration stays recorded as in progress, and the deploy reports that it could not confirm the outcome. The same holds when the deploy process stops while the script runs. Until you settle the migration, `tailor deploy` stops before changing anything, including the other namespaces and resources of the application, and reports how the run stands, even with `--no-schema-check`; `migration sync` and `migration rebaseline` refuse to run, and `tailor tailordb migration status` reports the migration as in progress. Run `tailor workflow executions --workflow-name <name>` with the workflow name the error reports until the execution has finished. If it succeeded, run `tailor tailordb migration resolve --complete`, which applies the migration's schema without running the script again; otherwise run `tailor tailordb migration resolve --rollback`, and the next deploy runs the script again. See [Settling a migration that stays in progress](#settling-a-migration-that-stays-in-progress). `migration set <N>` with the migration's own number also marks it as completed, but it does not check the run or apply the schema, so use it only when the run succeeded and the post-migration schema is already in place.
+If `tailor deploy` cannot tell whether a `main` script ran, for example because the connection dropped while it started or waited for the script, it does not roll anything back: the pre-migration schema changes stay, the namespace's tables stay in [maintenance mode](#maintenance-mode) if it is on, the migration stays recorded as in progress, and the deploy reports that it could not confirm the outcome. The same holds when the deploy process stops while the script runs. Until you settle the migration, `tailor deploy` stops before changing anything, including the other namespaces and resources of the application, and reports how the run stands, even with `--no-schema-check`. Run `tailor workflow executions --workflow-name <name>` with the workflow name the error reports until the execution has finished. If it succeeded, run `tailor tailordb migration resolve --complete`, which applies the migration's schema without running the script again; otherwise run `tailor tailordb migration resolve --rollback`, and the next deploy runs the script again. See [Settling a migration that stays in progress](#settling-a-migration-that-stays-in-progress), which also lists the commands that refuse to run until then.
 
 If the post-migration schema changes fail after a `main` script succeeded and the deploy cannot clear the in-progress record, it keeps the pre-migration schema instead of rolling it back, so the data the script wrote stays. Settle the migration as above: `--complete` once the data meets the migration's schema, or `--rollback`.
 
-`migration sync` refuses to run while a migration is in progress. When a steps migration's post-migration schema changes fail and the deploy cannot return its tables to the pre-migration schema, it logs a warning, and the next deploy stops with remote schema drift on those tables. Run `tailor tailordb migration validate` from a checkout of the deployed migration history. If the only issue it reports is that drift, run `tailor deploy --no-schema-check`: the deploy applies the pre-migration schema again, skips the completed steps unless the steps changed, and retries the post-migration schema changes. `--no-schema-check` skips the schema checks of every namespace, so do not use it while `validate` reports any other issue.
+When a steps migration's post-migration schema changes fail and the deploy cannot return its tables to the pre-migration schema, it logs a warning. The next deploy accepts each table in either the pre-migration or the post-migration schema: it applies the pre-migration schema again, skips the completed steps unless the steps changed, and retries the post-migration schema changes.
 
 After a failure:
 
@@ -957,11 +966,13 @@ After a failure:
 
 If a migration **succeeds in script** but its reversible **post-migration schema update** fails (rare; usually a constraint violation the script should have prevented), the SDK makes the same best-effort restoration to the prior-checkpoint schema. The script's committed data changes remain, so write migration scripts to tolerate re-execution.
 
-Before a migration's script starts, `tailor deploy` checks that the namespace's checkpoint and migration history are still the ones it read before applying, or the checkpoint it committed itself. If another deploy or `tailor tailordb migration set` changed them in the meantime, or the deploy cannot read them, the script does not start and the migration is not recorded as in progress: the deploy handles the pre-migration schema as for a script that failed before it ran, and fails with `MIGRATION_CHECKPOINT_CONFLICT` (`MIGRATION_CHECKPOINT_UNVERIFIED` when it cannot read them). Run `tailor tailordb migration status` to see the checkpoint. Wait for the other deploy to finish, or, when no other deploy is running, return the namespace to the checkpoint the error names with `tailor tailordb migration sync <N>`, which also lifts the maintenance mode the deploy left in place, and deploy again.
+Before a migration's script starts, `tailor deploy` checks that the namespace's checkpoint and migration history are still the ones it read before applying, or the checkpoint it committed itself. If another deploy or a `tailor tailordb migration` command changed them in the meantime, or the deploy cannot read them, the script does not start and the migration is not recorded as in progress: the deploy handles the pre-migration schema as for a script that failed before it ran, and fails with `MIGRATION_CHECKPOINT_CONFLICT` (`MIGRATION_CHECKPOINT_UNVERIFIED` when it cannot read them). Run `tailor tailordb migration status` to see the checkpoint. Wait for the other deploy to finish, or, when no other deploy is running, return the namespace to the checkpoint the error names with `tailor tailordb migration sync <N>`, which also lifts the maintenance mode the deploy left in place, and deploy again. If the error says the checkpoint changed in a different migration history, or with a migration history label that cannot be read, `sync` also needs `--force`, which replaces the workspace's migration history ID with the local one. Pass it only when the local migration history should replace the deployed one; otherwise deploy from a checkout of the migration history deployed to the workspace.
 
-The checkpoint is advanced only after the reversible post-migration schema updates succeed. If the checkpoint write reports an error, the SDK reads it back: a matching value is treated as committed. Any other observed value leaves the post-migration schema unchanged rather than risk rolling back a concurrent deployment; a value beyond the current migration confirms a concurrent deploy, while an older or missing value means the checkpoint must be repaired before retrying. If read-back also fails, the SDK likewise leaves the post-migration schema unchanged; verify the remote checkpoint before retrying.
+The checkpoint is advanced only after the reversible post-migration schema updates succeed. If the checkpoint write reports an error, the SDK reads it back: a matching value is treated as committed. Any other observed value leaves the post-migration schema unchanged rather than risk rolling back a concurrent deployment; a value beyond the current migration confirms a concurrent deploy, while an older or missing value means the checkpoint must be repaired before retrying, unless the value is the previous checkpoint and the multi-step migration is still recorded as in progress, which the next deploy resumes. If read-back also fails, the SDK likewise leaves the post-migration schema unchanged; verify the remote checkpoint before retrying.
 
-Removed tables are deleted only after the checkpoint is committed. If that cleanup fails, the checkpoint remains at the new migration and the SDK fails closed: the leftover table is reported as remote schema drift on the next deploy. Remove the leftover GQL permission and table manually, verify the remote schema, and then retry. The SDK does not automatically ignore or delete a same-named remote table because it cannot distinguish failed cleanup from a table recreated after cleanup completed.
+Removed tables are deleted only after the checkpoint is committed. The deploy records with the checkpoint that these deletions are still to run, and clears the record once they finish. If that cleanup fails or the deploy is interrupted, the checkpoint remains at the new migration, and the next deploy finishes the cleanup: it lists the tables that migration removed among the tables to delete, and deletes them and their GQL permissions with their data before it runs any pending migration. `tailor tailordb migration validate` reports them as tables the next deploy deletes. To delete them without deploying, run `tailor tailordb migration sync <N>` with the committed migration as `<N>` (when the cleanup fails, the deploy error's suggestion names the command). A same-named remote table is still reported as remote schema drift when no unfinished cleanup is recorded, for example a table created again after the cleanup completed or one left by an SDK version that did not record the cleanup, and when a later migration adds the table back; delete it with `migration sync <N>` or by hand, and then deploy again. A deploy with `--no-schema-check` does not finish the cleanup of a namespace that has pending migrations, and once those migrations commit, the leftover tables are reported as drift as well.
+
+With `--no-schema-check`, local table definitions that the pending migrations do not include are applied after every migration has committed (see [Schema verification](#schema-verification)). If one of them cannot be applied, the deploy fails with `MIGRATION_LOCAL_DEFINITIONS_FAILED`: the migrations stay committed, the existing tables go back to the definitions of the last migration, and tables already created for their local definitions remain. Fix the cause and deploy again. When existing records refuse the definition, for example a unique constraint on a field whose records hold duplicate values, run `tailor tailordb migration generate` to add the change in a migration whose script updates those records, then deploy again; the error's suggestion names the command.
 
 ## Rollback Strategy
 
@@ -971,7 +982,7 @@ There is no automatic down-migration. To roll back a schema/data change in produ
 2. `migration generate --name "rollback 0005 email"` produces `0006` with a removal diff.
 3. Apply.
 
-In **development workspaces**, a quicker option is to fix `0005/migrate.ts` in place, run `migration set <previous>` to re-mark it pending, and apply. Do not do this on production — it confuses migration history across environments.
+In **development workspaces**, a quicker option is to fix `0005/migrate.ts` in place, run `migration sync <previous>` to return the tables to the previous migration and re-mark `0005` pending, and apply. `sync` removes the fields `0005` added and deletes the tables it added together with their data, and stops before moving the checkpoint when existing rows have no value for a field the previous migration requires. Do not do this on production — it confuses migration history across environments.
 
 ## Machine User and Permissions
 
@@ -982,7 +993,7 @@ Migration scripts execute server-side under a machine user identity. The CLI sel
 
 The selected user must be defined in `auth.machineUsers`. The CLI logs the selected user before running scripts (`Using machine user: ...`).
 
-When a pending migration has a `migrate.ts`, `tailor deploy` checks while planning that auth is configured, that a machine user is selected and defined in `auth.machineUsers`, and that each script can be bundled. A failure stops the deploy before anything is applied, and `tailor deploy --dry-run` reports it too.
+When a pending migration has a `migrate.ts`, `tailor deploy` checks while planning that auth is configured, that a machine user is selected and defined in `auth.machineUsers`, and that each script can be bundled. A failure stops the deploy before anything is applied, and `tailor deploy --dry-run` reports it too. `tailor tailordb migration validate` runs the same checks for the migrations that are pending in the workspace it validates.
 
 **Permissions required**
 
@@ -997,10 +1008,16 @@ If you see `No machine user available for migration execution`, either:
 
 If your project defines multiple TailorDB namespaces (`db: { ns1: { ... }, ns2: { ... } }`), each has its own `migrations/` directory and its own migration label. During `apply`:
 
-- Migrations are grouped by namespace and executed namespace by namespace.
-- Within a namespace, migrations run sequentially in number order.
-- There is no cross-namespace ordering guarantee. Do not write a migration in `ns1` that depends on data produced by a migration in `ns2` running first.
+- Pending migrations run one namespace at a time, in alphabetical order of the namespace names, and within a namespace in migration number order. With pending migrations in `inventory` and `billing`, every one of `billing` runs before any of `inventory`.
+- With [maintenance mode](#maintenance-mode) on, every namespace of the config that has pending migrations enters maintenance mode before the first migration runs, and they leave it together: after the last migration with `"migration"`, and after the whole deploy with `"deploy"`. [Maintenance mode](#maintenance-mode) describes the exceptions when a deploy stops early.
+- The order follows the namespace names, not dependencies between namespaces. Do not write a migration in `ns1` that depends on data produced by a migration in `ns2` running first.
 - Each namespace can specify its own `migration.machineUser`.
+
+### Several configs in one deploy
+
+When one deploy applies several configs (see [Multiple Config Deploys](../../cli/application.md#deploy)), it applies each kind of resource for every config, in the order the configs are listed, before it moves on to the next kind. For `tailor deploy --config supplier.ts,buyer.ts`, the secrets, static websites, AI gateways, IdPs, auth services and machine users, and function registries of both configs are applied first. Then the TailorDB changes and migrations of `supplier` are applied, then those of `buyer`, then the resolvers of `supplier` and `buyer`, and so on through the applications, executors, and workflows. Each config's `maintenanceMode` covers only its own namespaces, so with `"deploy"` in `supplier`, its tables stay in maintenance mode while the migrations of `buyer` run.
+
+If a migration of `buyer` fails, the deploy stops there and leaves `supplier` in this state: its migrations have completed and its checkpoint has advanced, its tables are out of maintenance mode even with `"deploy"`, and nothing after TailorDB has been applied, including its resolvers, executors, and workflows. Its tables therefore have the new schema while the resolvers and executors of the previous deploy still use them. When you fix the migration of `buyer` and deploy both configs again, `supplier` has no pending migrations, and the deploy applies the rest of its changes. If the migration of `buyer` must first be settled with `tailor tailordb migration resolve` (see [Failure Recovery](#failure-recovery)), every deploy of the two configs stops before changing anything until then.
 
 ## Performance and Large Tables
 
@@ -1183,19 +1200,19 @@ For genuinely different schemas across environments, prefer separate workspaces 
 
 ### Remote schema drift detected
 
-**Cause:** Remote schema doesn't match what the migration history says it should be.
+**Cause:** Remote schema doesn't match what the migration history says it should be. When `tailor deploy` shows `Remote migration: <unset>`, or `migration validate` shows `no checkpoint yet`, the namespace has no migration label yet and its tables differ from `0000`; see [Adding migrations to an existing project](#adding-migrations-to-an-existing-project) instead of the steps below.
 
 **Resolution:**
 
 1. `tailor tailordb migration status` to see local vs remote.
 2. Compare with teammates — has someone applied different migrations?
-3. If remote was changed manually, decide whether to update local migrations to match or to use `migration set <N>` to align bookkeeping.
+3. If remote was changed manually, decide whether to update the local tables to match and run `migration generate`, or to return the remote to a snapshot as in the next step.
 4. To force the remote schema back to a known snapshot, use `migration sync <N>` (see [`migration sync` Semantics](#migration-sync-semantics)). If the drift follows a failed deploy that warned it could not restore a table's schema, see [Failure Recovery](#failure-recovery) instead.
-5. As a last resort in non-production environments, `--no-schema-check` skips both checks. Do not use this as a routine workaround.
+5. As a last resort in non-production environments, `--no-schema-check` skips both checks. Do not use this as a routine workaround. It does not skip the checkpoint check described next.
 
 ### "Remote migration checkpoint is not in the local migration history" error
 
-**Cause:** The deployed namespace's checkpoint refers to a migration number, or a migration history ID, that the local `migrations/` directory no longer has a record of. This is a different code path from schema drift above: it fires before any schema comparison, because the CLI cannot even locate the remote's recorded position in the local history.
+**Cause:** The deployed namespace's checkpoint refers to a migration number, or a migration history ID, that the local `migrations/` directory no longer has a record of. This is a different code path from schema drift above: it fires before any schema comparison, because the CLI cannot even locate the remote's recorded position in the local history. `tailor deploy` stops with this error even with `--no-schema-check`, so a deploy from an outdated checkout never moves the checkpoint back or overwrites the tables with an older schema.
 
 One specific cause is a `migration rebaseline` run on a different environment while this one had not yet caught up to the latest pre-rebaseline migration. `migration rebaseline` requires every other environment to already be at the latest migration (see [Re-baselining a deployed migration history](#re-baselining-a-deployed-migration-history)), but the CLI only verifies the one workspace it runs against. If this environment was behind, the error message names the migration this environment must reach (the migration every environment was required to be at before the rebaseline) alongside the migration it is actually at.
 
@@ -1205,7 +1222,13 @@ One specific cause is a `migration rebaseline` run on a different environment wh
 2. Deploy this environment against that restored history until its checkpoint reaches the migration named in the error, running any `migrate.ts` scripts it still needs.
 3. Switch back to the current (rebaselined) migration files and deploy again. The remote schema now matches the new baseline, so this deploy offers the automatic checkpoint reset to `0000` under the new history ID.
 
-**Resolution (any other cause):** Run `tailor tailordb migration status` to compare local and remote, or pull the latest migration files if your checkout is stale.
+**Resolution (any other cause):** Run `tailor tailordb migration status` to compare local and remote, and pull the latest migration files if your checkout is stale. To move the checkpoint back to the local migration history on purpose, run `tailor tailordb migration sync <N>` with the latest local migration as `<N>` (the error suggests the command). It also rewrites the tables to snapshot `<N>`, removing the fields that snapshot does not have and deleting the tables it does not have together with their data. When the namespace records another migration history ID, or one that cannot be read, the command also needs `--force`, which replaces that history ID with the local one, or removes it when the local history has none (see [`migration sync` Semantics](#migration-sync-semantics)). Pass `--force` only when the local migration history should replace the deployed one; otherwise work from a checkout of the migration history deployed to the workspace. Then deploy again.
+
+### `MIGRATION_FILES_INVALID` error
+
+**Cause:** The `migrations/` directory of a namespace does not form a valid history: a migration number is missing, `0000` has no `schema.json` or has a `diff.json`, or a later migration has a `schema.json` or no `diff.json`. A deleted directory or a merge that kept only part of a migration is a common cause. `tailor deploy` and the `tailor tailordb migration` commands that read the history report this error, listing every problem.
+
+**Resolution:** Follow the suggestion for each problem in the error. Otherwise restore the migration files from version control. If no workspace has been deployed with these migrations, you can instead recreate `0000` from the local tables with `tailor tailordb migration generate --init --namespace <name>`, which deletes every migration of the namespace.
 
 ### "Invalid schema snapshot" or "Invalid migration diff" error
 
@@ -1225,13 +1248,13 @@ One specific cause is a `migration rebaseline` run on a different environment wh
 
 ### "No machine user available for migration execution"
 
-**Cause:** Neither `migration.machineUser` is set nor are there any machine users in `auth.machineUsers`. `tailor deploy` reports this while planning, including with `--dry-run`, before anything is applied.
+**Cause:** Neither `migration.machineUser` is set nor are there any machine users in `auth.machineUsers`. `tailor deploy` reports this while planning, including with `--dry-run`, before anything is applied, and `tailor tailordb migration validate` reports it too.
 
 **Resolution:** Add a machine user to `auth.machineUsers`, then run `tailor deploy` again. The deploy creates the machine user before it runs the migration scripts.
 
 ### "Machine user for migration execution is not defined in auth"
 
-**Cause:** `migration.machineUser`, or `--machine-user` of `tailor tailordb migration test`, names a machine user that is not in `auth.machineUsers`. `tailor deploy` reports this while planning, including with `--dry-run`, before anything is applied.
+**Cause:** `migration.machineUser`, or `--machine-user` of `tailor tailordb migration test`, names a machine user that is not in `auth.machineUsers`. `tailor deploy` reports this while planning, including with `--dry-run`, before anything is applied, and `tailor tailordb migration validate` reports it too.
 
 **Resolution:** Either add the machine user to `auth.machineUsers`, or name one that is defined there.
 

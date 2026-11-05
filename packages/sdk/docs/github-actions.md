@@ -1,11 +1,12 @@
 ---
-description: "Generate GitHub Actions deploy workflows and Renovate configuration for your app with tailor setup, including approval gates, secrets, monorepos, and rollback."
+description: "Generate GitHub Actions deploy workflows, a workflow that commits generated files to pull requests, and Renovate configuration for your app with tailor setup, including approval gates, secrets, monorepos, and rollback."
 ---
 
 # GitHub Actions Integration (Beta)
 
 `tailor setup` generates GitHub repository automation for your Tailor Platform
-application, including deploy workflows and Renovate configuration.
+application, including deploy workflows, a workflow that commits generated
+files to pull requests, and Renovate configuration.
 
 > **Beta:** This command is under active development. CLI flags, the generated
 > workflow, and the `.github/tailor.lock` schema may change before general
@@ -172,8 +173,8 @@ and file blobs are not copied.
 
 Two setups are supported:
 
-- **Source is the plan/deploy workspace (default).** The job uses the same GitHub
-  Environment as the plan and deploy jobs, so it reads the same
+- **Source is the deploy workspace (default).** The job uses the same GitHub
+  Environment as the deploy job, so it reads the same
   `TAILOR_PLATFORM_WORKSPACE_ID` variable and machine-user secrets. Nothing
   extra to configure. If that workspace holds too little data to be a useful
   test, point the job at a workspace that does with the next setup.
@@ -202,6 +203,51 @@ the source workspace holds production data.
 
 Fork pull requests cannot read secrets, so the job is skipped for them.
 `--migration-test` is not available together with several `--dir` values.
+
+#### Running the plan job in its own environment
+
+The plan job runs on pull requests, and a pull request from a branch of the same
+repository can change the workflow it runs, so its code can read every secret
+and variable of the environment the plan job enters. When plan and deploy share
+one environment, that includes the deploy machine user. Pass
+`--split-plan-environment` on a branch target to run the plan job in an
+environment of its own:
+
+```bash
+tailor setup ci branch --name my-app-stg --split-plan-environment
+```
+
+The plan job then enters an environment named after the deploy environment with
+`-plan` appended (`my-app-stg-plan` here). The deploy job, and the migration test job unless you
+pass `--migration-test-environment`, stay in the deploy environment. Set these
+on the plan environment:
+
+- `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID` and
+  `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` of a machine user of its own. The
+  plan only reads, so a viewer role on the organization or folder that holds the
+  workspace is enough. Set them on the plan environment itself: otherwise the job
+  reads the ones set on the repository or organization, and
+  `tailor setup ci env --check` reports them as missing.
+- `TAILOR_PLATFORM_WORKSPACE_ID`, the same workspace the deploy environment
+  deploys to.
+
+Keep the deploy machine user off the plan environment. `tailor setup ci env`
+lists what each of the two environments needs.
+
+The flag alone does not keep the deploy credentials from a pull request, which
+can point the plan job back at the deploy environment. Under **Settings →
+Environments**, limit the deploy environment's **Deployment branches and tags**
+to the target branch, so that GitHub refuses a pull request job in it. With that
+limit in place:
+
+- The migration test job also runs on pull requests, so give it its own
+  environment with `--migration-test-environment` (see
+  [Choosing the source workspace](#choosing-the-source-workspace)).
+- The jobs of a preview target run on pull requests too, so pass
+  `setup ci preview` an `--environment` other than the limited one.
+
+`setup update` keeps the flag, but re-running `setup ci branch` does not carry it
+over: pass it each time, or the plan job moves back into the deploy environment.
 
 ### Tag target (recommended for production)
 
@@ -258,6 +304,35 @@ that workspace when the pull request is closed:
 tailor setup ci preview --name my-app --region asia-northeast
 ```
 
+It writes two workflows. `tailor-my-app-preview.yml` deploys the pull request
+when it is opened or pushed to, and `tailor-my-app-preview-cleanup.yml` deletes
+the workspace when the pull request is closed. The cleanup workflow starts on
+`pull_request_target`, which GitHub also triggers for a pull request with merge
+conflicts, where workflows on `pull_request` do not start. A
+`pull_request_target` workflow can read the repository's secrets whoever opened
+the pull request, so GitHub runs it from the default branch: the workflow file
+and the code it checks out are the default branch's, never the pull request's.
+Therefore:
+
+- The cleanup workflow runs only once it is on the default branch, and it
+  installs dependencies and runs `tailor` from the default branch's checkout.
+  If the preview target deploys pull requests into another branch
+  (`--branch`), commit the cleanup workflow, the lockfile, and the app's
+  `tailor.config.ts` to the default branch too.
+- If the target's GitHub Environment restricts which branches can deploy,
+  allow the default branch: GitHub checks the cleanup job against it, and the
+  deploy job against the pull request's merge ref.
+
+When `tailor setup update` regenerates a preview workflow generated before the
+cleanup workflow existed, it moves the `tailor-preview-cleanup` job into the
+cleanup workflow, together with the steps and settings you added to it, and
+copies the top-level `env`, `defaults`, and `concurrency` of the preview
+workflow into the cleanup workflow. Your steps then run from the default branch
+as described above. A job of yours in the preview workflow that runs when the
+pull request is closed no longer runs, because that workflow no longer starts
+then; move it into the cleanup workflow. `setup` warns about each job of yours
+in the preview workflow whose `if` contains an `== 'closed'` comparison.
+
 Fork pull requests are skipped. Every other pull request gets a preview, draft
 pull requests included. `--require` narrows that to one of:
 
@@ -272,6 +347,73 @@ When `tailor setup update` regenerates a preview target generated before
 second now also deploys a labeled draft. To deploy drafts as well, run
 `tailor setup ci preview` again without `--require`.
 
+## Committing generated files to pull requests
+
+Each deploy workflow checks that the files `tailor generate` writes, such as
+seed data and enum constants, are committed, and fails when they are out of
+date. To have CI commit them instead, generate the autofix workflow:
+
+```bash
+tailor setup ci autofix                                  # commit with the workflow token
+tailor setup ci autofix --provider github-app            # commit with your GitHub App
+tailor setup ci autofix --dir apps/erp --dir apps/users  # run tailor generate in each app
+```
+
+It writes `.github/workflows/tailor-autofix.yml`, which runs `tailor generate`
+on every pull request and, when that changes files, commits them to the pull
+request branch as `chore: run tailor generate`. Only the changes
+`tailor generate` makes are committed: files that earlier steps leave in the
+checkout, such as an `.npmrc`, are not. The deploy workflows keep their check,
+which fails on the commit that needed the fix and passes on the fix commit.
+
+`--provider` chooses what makes the commit:
+
+| Provider                 | Commits as                                                                        | Checks on the fix commit                                                                      | Setup                                                                                                                                                                                                                                            |
+| ------------------------ | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `github-token` (default) | `github-actions[bot]`, with the workflow token                                    | Wait until someone with write access selects **Approve workflows to run** on the pull request | None                                                                                                                                                                                                                                             |
+| `github-app`             | Your GitHub App                                                                   | Run automatically                                                                             | Create a GitHub App with the Contents read and write permission, install it on the repository, and set `TAILOR_AUTOFIX_APP_CLIENT_ID` and `TAILOR_AUTOFIX_APP_PRIVATE_KEY` (see [Setting secrets and variables](#setting-secrets-and-variables)) |
+| `autofix-ci`             | The [autofix.ci](https://autofix.ci) GitHub App                                   | Run automatically                                                                             | Install the autofix.ci App on the repository                                                                                                                                                                                                     |
+| `securefix`              | Your [securefix](https://github.com/csm-actions/securefix-action) server workflow | Run automatically                                                                             | Set up the securefix server repository and its GitHub Apps, pass the server repository's name with `--securefix-server-repository`, and set the client App's `TAILOR_AUTOFIX_APP_CLIENT_ID` and `TAILOR_AUTOFIX_APP_PRIVATE_KEY`                 |
+
+GitHub does not start workflows on its own for a commit pushed with the workflow
+token, so with `github-token` the pull request shows that its workflows are
+awaiting approval after each fix commit. Use another provider to have them run
+right away.
+
+- **Fork and Dependabot pull requests** get no write token or secrets, so the
+  autofix workflow skips them, except with `autofix-ci`, whose App commits to
+  fork pull requests. Their authors run `tailor generate` and commit the result
+  as before.
+- **A branch that moved on:** if someone pushes to the branch while the
+  workflow runs, it does not commit; the run for the new commit regenerates the
+  files.
+- **Output that keeps changing:** if `tailor generate` changes files again
+  right after the fix commit, the workflow fails instead of committing again.
+  Check that running it twice in a row changes nothing.
+- **Approval rules:** the fix commit becomes the most recent push to the pull
+  request, and a bot pushed it. A branch protection rule that requires the most
+  recent push to be approved by someone other than its pusher is then satisfied
+  by an approval from anyone else, including whoever pushed the commit before
+  it.
+- **Renovate** stops updating a pull request that has commits from someone
+  else. Add the fix commits' author email to `gitIgnoredAuthors` in your
+  Renovate configuration, such as
+  `41898282+github-actions[bot]@users.noreply.github.com` for `github-token`.
+- **Secrets:** with `github-app`, every workflow in the repository can read the
+  App's private key, which can write to the repository. Give the App only the
+  Contents permission and install it only where it commits. `securefix` keeps
+  the key that writes in the server repository instead.
+- **Dependabot** stops rebasing a pull request that has commits from someone
+  else, which happens when `autofix-ci` commits to one of its pull requests.
+- With `autofix-ci` and `securefix`, the workflow is named `autofix.ci` and
+  `securefix`, the names those services accept requests from by default. With
+  `autofix-ci`, it also gives git its read-only token after `tailor generate`
+  finishes, because autofix.ci fetches the pull request head itself.
+- GitHub Enterprise Server is not supported.
+
+To stop committing, delete the workflow with
+`tailor setup delete .github/workflows/tailor-autofix.yml`.
+
 ## Targeting a workspace
 
 The generated `plan` and `deploy` jobs target a workspace by **id**, read from
@@ -281,7 +423,9 @@ environment before the first deploy.
 
 Because the variable is scoped to a GitHub Environment, both the `plan` and
 `deploy` jobs declare `environment:` so the value resolves. When you omit
-`--environment`, the environment name defaults to the workspace name.
+`--environment`, the environment name defaults to the workspace name. With
+`--split-plan-environment`, set the variable on the plan environment as well (see
+[Running the plan job in its own environment](#running-the-plan-job-in-its-own-environment)).
 
 1. Provision the workspace (once per environment) and obtain its id. For now
    this is a manual step:
@@ -306,8 +450,9 @@ provisioned yet instead of running a dry-run.
 
 If the target environment has required reviewers, that approval gate applies to
 the `plan` job as well as `deploy`, because `plan` must enter the environment to
-read the variable. (A token-based read that lets `plan` run without entering the
-environment is planned.)
+read the variable, unless a branch target runs `plan` in its own environment with
+`--split-plan-environment`. (A token-based read that lets `plan` run without
+entering the environment is planned.)
 
 ## Package manager
 
@@ -349,6 +494,12 @@ that require authentication, configure the credentials in your own step.
 See [Customizing the generated workflow](#customizing-the-generated-workflow)
 for what you can edit.
 
+### `.github/workflows/tailor-autofix.yml`
+
+The workflow `setup ci autofix` generates (see
+[Committing generated files to pull requests](#committing-generated-files-to-pull-requests)).
+You can customize it the same way.
+
 ### Customizing the generated workflow
 
 The SDK owns the jobs and steps whose `id` starts with `tailor-`, and the
@@ -363,9 +514,9 @@ Everything else is yours, and re-running `setup` keeps it:
   (such as `playwright install`) _after_ it. A job of your own can depend on a
   managed job with `needs: tailor-deploy`.
 - **Your own top-level keys**, such as a workflow-level `env:` or `defaults:`.
-- **The top-level `concurrency:` of a preview workflow.** The SDK writes a
-  default, and re-running `setup` keeps your edits to it. If you delete it,
-  re-running `setup` adds the default back.
+- **The top-level `concurrency:` of the preview and cleanup workflows.** The
+  SDK writes a default, and re-running `setup` keeps your edits to it. If you
+  delete it, re-running `setup` adds the default back.
 - **Runtime settings of managed jobs:** `runs-on`, `timeout-minutes`,
   `container`, and `env`. If every managed job that re-running `setup` keeps
   uses the same `runs-on` you set, such as self-hosted runners, a managed job
@@ -407,9 +558,9 @@ A job that runs `tailor` against the workspace needs the machine-user
 (the `--environment` value, or the workspace name when omitted) as above. A job
 that only uses `app-url`, such as end-to-end tests, does not.
 
-The job is skipped whenever `tailor-preview-deploy` is skipped: when a pull
-request is closed, for fork pull requests, for draft pull requests with
-`--require ready`, and for unlabeled ones with `--require label`.
+The job is skipped whenever `tailor-preview-deploy` is skipped: for fork pull
+requests, for draft pull requests with `--require ready`, and for unlabeled
+ones with `--require label`.
 
 A preview workspace expires 7 days (`ttl: 7d` on `tailor-preview-deploy`) after
 the last push to its pull request. When a pull request is closed,
@@ -422,13 +573,32 @@ open; the next push creates a fresh one. Change `ttl` to keep previews longer or
 shorter. Workflows generated before this was added get these settings the next
 time you run `tailor setup update`.
 
-Each new preview workflow run for a pull request, such as after a push or when
-the pull request is closed, cancels the run still in progress for it, including
-your jobs, so they do not keep running against a workspace that the new run
-may redeploy or delete. Events on a pull request that stays closed, such as a
-label added after merging, do not cancel anything. A job with `if: always()`
-still runs when its run is cancelled, and the new run waits for it to finish;
-use `if: ${{ !cancelled() }}` instead so it stops with the run.
+A preview workspace last deployed before `ttl` was added to its workflow records
+no expiry, so this sweep never deletes it. To find such leftovers, list the
+preview workspaces created more than 7 days ago:
+
+```bash
+tailor workspace prune --name 'my-app-pr-[0-9]+' --older-than 7d \
+  --folder-id <folder id> --limit 0 --dry-run
+```
+
+Pass `--organization-root <organization id>` instead of `--folder-id` when
+`TAILOR_PLATFORM_FOLDER_ID` is unset. The list can include the previews of pull
+requests that are still open: keep each of them with
+`--exclude my-app-pr-<number>`, then run the command again without `--dry-run`.
+
+Each new preview workflow run for a pull request, such as after a push, cancels
+the run still in progress for it, including your jobs, so they do not keep
+running against a workspace that the new run may redeploy. Closing the pull
+request cancels it too, because the cleanup workflow runs in the same
+concurrency group. If you change the group in one of the two workflows, change
+it in the other, and build it only from values that are the same in both, such
+as `github.event.pull_request.number`: `github.ref`, `github.workflow`, and
+`github.event_name` differ between them, and `github.ref` is the default branch
+for every pull request in the cleanup workflow. Events on a pull request that
+stays closed, such as a label added after merging, do not cancel anything. A job with `if: always()` still
+runs when its run is cancelled, and the new run waits for it to finish; use
+`if: ${{ !cancelled() }}` instead so it stops with the run.
 
 Likewise, the `tailor-deploy` job of a branch or tag workflow exposes the
 deployed workspace as the outputs `workspace-id` and `app-url` to a job with
@@ -454,7 +624,9 @@ job back. To start over from a clean template, delete the file and re-run
 When a template update removes a managed job that contains steps of yours, or
 a job of yours `needs` a removed job, `setup` stops and names them. Move those
 steps into a job of your own (or update the `needs`) and re-run. `--force` drops
-steps left inside a removed job.
+steps left inside a removed job. The `tailor-preview-cleanup` job, which moved
+into its own workflow, keeps your steps instead (see
+[Preview target](#preview-target-per-pull-request-workspace)).
 
 `setup check` reports a job or step of yours whose `id` starts with `tailor-`,
 and re-running `setup` stops on it, naming the id. Rename it; `--force` does
@@ -488,7 +660,6 @@ tailor-preview-result:
   name: tailor-preview-result (my-app)
   needs:
     - tailor-preview-deploy
-    - tailor-preview-cleanup
     - seed
     - e2e
 ```
@@ -586,14 +757,21 @@ keeps them alongside that environment's `TAILOR_PLATFORM_WORKSPACE_ID`
 variable. You can also set the client secret as a repository-level secret and the
 client ID as a repository-level variable if every target shares one machine user,
 but then any workflow on any branch can read them, so the environment's
-protection rules no longer guard your deploys.
+protection rules no longer guard your deploys, and `tailor setup ci env --check`
+warns about the client secret (see
+[Checking what is registered](#checking-what-is-registered)). To share one machine
+user and keep that protection, set the same client secret on each environment
+instead. The plan environment of `--split-plan-environment` is the exception: give
+it a machine user of its own (see
+[Running the plan job in its own environment](#running-the-plan-job-in-its-own-environment)).
 
 ### Setting secrets and variables
 
 `tailor setup ci env` reads `.github/tailor.lock` and prints, for every GitHub
 Environment the generated workflows use, the commands that create the
 environment (only when it does not exist yet) and set its secrets and
-variables. It is read-only, so re-run it whenever you add a target. When the
+variables, followed by the repository secrets and variables the autofix
+workflow needs. It is read-only, so re-run it whenever you add a target. When the
 `origin` remote points at github.com, the output names that repository;
 otherwise it names the repository `gh repo view` reports for the current
 directory, with its host on GitHub Enterprise Server. Either way the commands
@@ -622,6 +800,22 @@ The list follows what each generated workflow actually reads:
 | `TAILOR_SLACK_BOT_TOKEN`                             | secret   | branch, tag                         | no       | Bot User OAuth Token (`xoxb-...`) of a Slack app with the `chat:write` scope                                                                                                                                                                                                                                                                                                               |
 | `TAILOR_SLACK_CHANNEL_ID`                            | variable | branch, tag                         | no       | Channel ID (`C...`) from the channel details in Slack; invite the bot to the channel                                                                                                                                                                                                                                                                                                       |
 | `TAILOR_SLACK_USER_MAPPING`                          | variable | branch, tag                         | no       | JSON object mapping GitHub usernames to Slack member IDs (for example `{"alice":"U0123456"}`) so notifications mention the actor; read only after you uncomment the `user-mapping` input of the `tailor-notify` step                                                                                                                                                                       |
+| `TAILOR_AUTOFIX_APP_CLIENT_ID`                       | variable | autofix (`github-app`, `securefix`) | yes      | Client ID of the GitHub App that commits for the autofix workflow (with `securefix`, the securefix client App), from the App's settings page                                                                                                                                                                                                                                               |
+| `TAILOR_AUTOFIX_APP_PRIVATE_KEY`                     | secret   | autofix (`github-app`, `securefix`) | yes      | Private key of the same App, generated on its settings page; pass the `.pem` file on standard input (`gh secret set TAILOR_AUTOFIX_APP_PRIVATE_KEY < key.pem`)                                                                                                                                                                                                                             |
+
+The autofix workflow uses no GitHub Environment, so its two entries are set on
+the repository; the output lists them under the repository instead of an
+environment.
+
+A branch target generated with `--split-plan-environment` reads from two
+environments. The plan environment needs its own
+`TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID` and
+`TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET`, for which a viewer role is enough,
+and `TAILOR_PLATFORM_WORKSPACE_ID`; of the optional entries, only the plan job's
+`TAILOR_PLATFORM_FAIL_ON_DRIFT` and `SEED_USER_PASSWORD` apply to it. A manual dry
+run reads `SEED_USER_PASSWORD` from there, and pull requests can read it too, like
+everything on that environment. The deploy environment needs the rest, without
+`TAILOR_PLATFORM_FAIL_ON_DRIFT`.
 
 See [Account management](https://docs.tailor.tech/administration/account-management)
 for how organizations, folders, workspaces, and machine users relate.
@@ -651,15 +845,32 @@ to manage those settings in Terraform instead.
 ### Checking what is registered
 
 `tailor setup ci env --check` reads GitHub with `gh` and reports, for each
-environment, which of these entries are registered. It fails when a required
+environment and for the repository entries of the autofix workflow, which of
+these entries are registered. It fails when a required
 entry is missing, reports missing optional entries without failing, and prints
-the `gh` commands that set only the missing entries, with where each value comes
-from. It changes nothing, and it checks names only, since GitHub never returns
-secret values.
+the `gh` commands that set the missing entries, with where each value comes
+from, and that move the client secret onto its environment (see below). It
+changes nothing, and it checks names only, since GitHub never returns secret
+values.
 
 - An entry set on the repository, or on the organization and shared with the
   repository, counts as registered, because the workflow reads it from there when
   the environment does not set it. The report says where each entry was found.
+- `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` set on the repository or the
+  organization is reported with ⚠, even when the environment also sets it: any
+  workflow on any branch can read it there, so the environment's protection rules
+  do not guard it. The check still passes. The printed commands set it on the
+  environment, with the value you set on the repository or organization, and list
+  a commented-out `gh secret delete` for the repository copy: run it once every
+  environment and workflow that reads that secret has its own. An organization
+  owner has to stop sharing an organization secret with the repository. The
+  warning stops once the client secret is set only on the environments; when
+  every target shares one machine user, set the same client secret on each of
+  them.
+- On the plan environment of `--split-plan-environment`, the machine user's
+  client ID and client secret count only when set on that environment, since
+  the plan job would otherwise sign in as the machine user set on the repository
+  or organization.
 - An entry registered as the other kind, such as `TAILOR_PLATFORM_WORKSPACE_ID`
   set as a secret, is reported as missing, because the workflow does not read it.
   `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID` set as a secret still counts, with a
@@ -669,8 +880,8 @@ secret values.
   answers 404 for a private repository the account cannot see, so the check
   reports that as an access problem, not as missing entries.
 
-`--environment` narrows the check the same way. `--check` cannot be combined with
-`--format terraform`.
+`--environment` narrows the check the same way, leaving out the repository
+entries. `--check` cannot be combined with `--format terraform`.
 
 ## GitHub Environments (approval gate)
 
@@ -691,7 +902,10 @@ environment-scoped secrets there.
 
 Required reviewers gate the `plan` job as well, because `plan` must enter the
 environment to read `TAILOR_PLATFORM_WORKSPACE_ID`. (A token-based read that
-lets `plan` run without entering the environment is planned.)
+lets `plan` run without entering the environment is planned.) On a branch target,
+`--split-plan-environment` moves `plan` into an environment of its own, whose
+settings then apply to it instead (see
+[Running the plan job in its own environment](#running-the-plan-job-in-its-own-environment)).
 
 ## Manual runs and dry-run
 
@@ -726,7 +940,11 @@ can deploy, configure **Deployment branches and tags** on the target's GitHub
 Environment and keep the machine-user secrets on that environment. Because the
 plan job also enters the environment, allow `refs/pull/*/merge` as well so pull
 request plans keep running, and note that dry runs from other branches are then
-rejected too.
+rejected too. On a branch target, `--split-plan-environment` moves the plan job,
+dry runs included, into an environment of its own instead, so the deploy
+environment can allow the target branch alone once the migration test job, if
+any, has its own environment as well (see
+[Running the plan job in its own environment](#running-the-plan-job-in-its-own-environment)).
 
 ## Seeding the workspace after deploy
 
@@ -965,6 +1183,7 @@ server and its runners first:
   the pinned versions: update them with `actions-sync`, or, with GitHub
   Connect, delete them from the server's `actions` organization (see GitHub's
   [Using the latest version of the official bundled actions](https://docs.github.com/en/enterprise-server@latest/admin/managing-github-actions-for-your-enterprise/managing-access-to-actions-from-githubcom/using-the-latest-version-of-the-official-bundled-actions)).
+- **Autofix workflow:** `tailor setup ci autofix` is not supported.
 - **Environment settings:** sign `gh` in to the server
   (`gh auth login --hostname <host>`) before you run `tailor setup ci env` in a
   clone of the repository, so that the `gh` commands it prints and its Terraform
@@ -1031,24 +1250,30 @@ writing anything. It reports when a workflow file is missing or its SDK-managed
 parts were edited by hand, a job or step of yours uses the reserved `tailor-`
 prefix, a newer template is available, `tailor.config.ts` is no longer under the recorded
 `--dir`, or the repository default branch no longer matches a branch target's
-trigger. It exits non-zero when it finds drift, so you can run it in CI. Each
+trigger. It audits the autofix workflow the same way, along with each app
+directory it runs `tailor generate` in. It also reports a `.github/tailor-sdk.lock` left by an older setup,
+with the files it generated that `.github/tailor.lock` does not track, since
+the workflows among them still run, and prints the `git rm` command that
+removes them.
+It exits non-zero when it finds drift, so you can run it in CI. Each
 finding names a stable rule key for future suppression. Run
 [`tailor setup update`](#updating-the-generated-workflow) to regenerate the
-targets it reports.
+workflows it reports.
 
 Workflows generated by `setup ci branch`, `setup ci tag`, and `setup ci preview`
 self-audit: each contains a `tailor-drift-check` step that
 runs the check in CI. Preview workflows run it alongside each preview deploy,
 so pull requests that deploy no preview (drafts with `--require ready`, fork
-PRs, and unlabeled PRs with `--require label`) skip the check. A single run audits every target
+PRs, and unlabeled PRs with `--require label`) skip the check. A single run audits every workflow
 recorded in `.github/tailor.lock`.
 
 Drift findings are advisory by default. Set the repository variable
 `TAILOR_PLATFORM_FAIL_ON_DRIFT` to `true` to make unsuppressed findings fail
 the job. Execution and configuration errors fail regardless of this variable.
 
-`check` compares only the generated files, `.github/tailor.lock`, and the
-config; it does not read the GitHub Environment secrets and variables, so it
+`check` compares only the generated files, `.github/tailor.lock` (and a
+leftover `.github/tailor-sdk.lock`), and the config; it does not read the
+GitHub Environment secrets and variables, so it
 runs the same on your own machine and in CI. Run `tailor setup ci env` to list
 what each environment needs.
 
@@ -1072,10 +1297,10 @@ are detected again, and the parts that follow your config — the migration drif
 check, seed validation, and ERD preview namespaces — are derived from the
 current `tailor.config.ts`.
 
-A target that cannot be regenerated, for example because you edited a managed
+A workflow that cannot be regenerated, for example because you edited a managed
 part, does not stop the others: `update` regenerates the rest, then lists the
-targets it could not update and exits non-zero. Revert the edit, or run
-`tailor setup update --force` to reset the managed parts of every target.
+workflows it could not update and exits non-zero. Revert the edit, or run
+`tailor setup update --force` to reset the managed parts of every workflow.
 
 To change a flag for one target, re-run its `setup ci` subcommand with the new
 flags. `.github/tailor.lock` records them, and later updates reuse them.

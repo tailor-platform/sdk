@@ -10,12 +10,7 @@ import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { aroundAll, describe, expect, test } from "vitest";
-import {
-  renderBranchWorkflow,
-  renderPreviewWorkflow,
-  renderTagWorkflow,
-  type PackageManager,
-} from "./templates";
+import { renderedTemplates } from "./template-fingerprint";
 import { tempDir } from "./test-helpers/temp-dir";
 
 function isZizmorAvailable(): boolean {
@@ -52,12 +47,6 @@ aroundAll(async (runSuite) => {
   await runSuite();
 });
 
-const COMMON = {
-  workspaceName: "my-app",
-  environment: "my-app",
-};
-
-const ALL_PM: PackageManager[] = ["pnpm", "yarn", "npm", "bun"];
 const REPO_ROOT = path.resolve(process.cwd(), "../..");
 const ERD_SCHEMA_WORKFLOW = path.join(REPO_ROOT, ".github/workflows/erd-schema.yml");
 
@@ -182,183 +171,9 @@ describe("repository ERD schema workflow", () => {
   });
 });
 
-describe.skipIf(!zizmorAvailable)("zizmor audit of renderBranchWorkflow", () => {
-  const cases = [
-    ...ALL_PM.map((pm) => ({
-      name: `branch / ${pm} / minimal`,
-      fileName: `branch-${pm}`,
-      params: { packageManager: pm },
-    })),
-    {
-      name: "branch / pnpm / with workingDirectory",
-      fileName: "branch-pnpm-dir",
-      params: { packageManager: "pnpm" as const, workingDirectory: "apps/backend" },
-    },
-    {
-      name: "branch / pnpm / with explicit environment",
-      fileName: "branch-pnpm-env",
-      params: { packageManager: "pnpm" as const, environment: "production" },
-    },
-    {
-      name: "branch / pnpm / with ERD preview",
-      fileName: "branch-pnpm-erd-preview",
-      params: {
-        packageManager: "pnpm" as const,
-        erdPreview: { namespaces: ["tailordb", "analyticsdb"] },
-      },
-    },
-    {
-      name: "branch / pnpm / with ERD preview on GitHub Enterprise Server",
-      fileName: "branch-pnpm-erd-preview-ghes",
-      params: {
-        packageManager: "pnpm" as const,
-        erdPreview: { namespaces: ["tailordb", "analyticsdb"] },
-        ghes: true,
-      },
-    },
-    {
-      name: "branch / npm / with seed validation + workingDirectory + environment",
-      fileName: "branch-npm-dir-env",
-      params: {
-        branch: "develop",
-        packageManager: "npm" as const,
-        seedValidate: true,
-        workingDirectory: "apps/api",
-        environment: "staging",
-        seed: { datasets: ["preview"] },
-      },
-    },
-    {
-      name: "branch / pnpm / with restricted dispatch",
-      fileName: "branch-pnpm-restrict",
-      params: { packageManager: "pnpm" as const, restrictDispatch: true },
-    },
-    ...ALL_PM.map((pm) => ({
-      name: `branch / ${pm} / with migration test`,
-      fileName: `branch-${pm}-migration-test`,
-      params: {
-        packageManager: pm,
-        migrationDriftCheck: true,
-        migrationTest: { label: "tailor:migration-test" },
-      },
-    })),
-    {
-      name: "branch / pnpm / with migration test in a dedicated environment and ERD preview",
-      fileName: "branch-pnpm-migration-test-dedicated",
-      params: {
-        packageManager: "pnpm" as const,
-        workingDirectory: "apps/backend",
-        erdPreview: { namespaces: ["tailordb"] },
-        migrationTest: {
-          label: "tailor:migration-test",
-          environment: "prod-source",
-        },
-      },
-    },
-  ];
-
-  test.each(cases)("$name has no zizmor findings", ({ fileName, params }) => {
-    const { content } = renderBranchWorkflow({
-      ...COMMON,
-      branch: "main",
-      erdPreview: null,
-      ...params,
-    });
-    const { ok, output } = writeAndAudit(fileName, content);
-    expect(ok, `zizmor findings:\n${output}`).toBe(true);
-  });
-});
-
-describe.skipIf(!zizmorAvailable)("zizmor audit of renderTagWorkflow", () => {
-  const cases = [
-    ...ALL_PM.map((pm) => ({
-      name: `tag / ${pm} / no guard / minimal`,
-      fileName: `tag-${pm}-noguard`,
-      params: { tagPattern: "v*", packageManager: pm },
-    })),
-    ...ALL_PM.map((pm) => ({
-      name: `tag / ${pm} / with branch guard`,
-      fileName: `tag-${pm}-guard`,
-      params: { tagPattern: "v*", packageManager: pm, branch: "main" },
-    })),
-    {
-      name: "tag / pnpm / with guard + seed validation + workingDirectory + environment",
-      fileName: "tag-pnpm-guard-dir-env",
-      params: {
-        tagPattern: "release-*",
-        packageManager: "pnpm" as const,
-        branch: "main",
-        seedValidate: true,
-        workingDirectory: "apps/backend",
-        environment: "production",
-        seed: { datasets: [] },
-      },
-    },
-    {
-      name: "tag / pnpm / with branch guard / restricted dispatch",
-      fileName: "tag-pnpm-guard-restrict",
-      params: {
-        tagPattern: "v*",
-        packageManager: "pnpm" as const,
-        branch: "main",
-        restrictDispatch: true,
-      },
-    },
-    {
-      name: "tag / pnpm / no guard / restricted dispatch",
-      fileName: "tag-pnpm-noguard-restrict",
-      params: { tagPattern: "v*", packageManager: "pnpm" as const, restrictDispatch: true },
-    },
-    {
-      name: "tag / bun / no guard / with explicit environment",
-      fileName: "tag-bun-noguard-env",
-      params: { tagPattern: "v*", packageManager: "bun" as const, environment: "production" },
-    },
-  ];
-
-  test.each(cases)("$name has no zizmor findings", ({ fileName, params }) => {
-    const { content } = renderTagWorkflow({ ...COMMON, ...params });
-    const { ok, output } = writeAndAudit(fileName, content);
-    expect(ok, `zizmor findings:\n${output}`).toBe(true);
-  });
-});
-
-describe.skipIf(!zizmorAvailable)("zizmor audit of renderPreviewWorkflow", () => {
-  const PREVIEW_COMMON = {
-    ...COMMON,
-    branch: "main",
-    region: "us-west",
-    packageManager: "pnpm" as PackageManager,
-  };
-
-  test.each([
-    { name: "preview / pnpm / all PRs", fileName: "preview-pnpm-all", params: {} },
-    {
-      name: "preview / pnpm / label-triggered",
-      fileName: "preview-pnpm-label",
-      params: { require: "label" as const },
-    },
-    {
-      name: "preview / pnpm / ready PRs only",
-      fileName: "preview-pnpm-ready",
-      params: { require: "ready" as const },
-    },
-    {
-      name: "preview / pnpm / with workingDirectory",
-      fileName: "preview-pnpm-dir",
-      params: { workingDirectory: "apps/backend" },
-    },
-    {
-      name: "preview / pnpm / with seeding",
-      fileName: "preview-pnpm-seed",
-      params: { workingDirectory: "apps/backend", seed: { datasets: ["preview"] } },
-    },
-  ])("$name has no zizmor findings", ({ fileName, params }) => {
-    const { content } = renderPreviewWorkflow({
-      ...PREVIEW_COMMON,
-      ...params,
-    });
-    const { ok, output } = writeAndAudit(fileName, content);
+describe.skipIf(!zizmorAvailable)("zizmor audit of the rendered templates", () => {
+  test.each(renderedTemplates())("$name has no zizmor findings", ({ name, content }) => {
+    const { ok, output } = writeAndAudit(name.replaceAll("/", "-"), content);
     expect(ok, `zizmor findings:\n${output}`).toBe(true);
   });
 });

@@ -3,8 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { runCommand } from "@politty/zod";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { z } from "zod";
-import { commonArgs } from "#/cli/shared/args";
+import { runCliCommand } from "#/cli/shared/test-helpers/run-cli-command";
 import {
   runMigrationTest,
   testCommand,
@@ -165,6 +164,23 @@ describe("tailordb migration test", () => {
     );
   });
 
+  test("rejects an excessive --keep-ttl before creating a workspace", async () => {
+    const dependencies = createDependencies([]);
+    mocks.dependencies = dependencies;
+
+    const result = await runCommand(testCommand, [
+      "--data",
+      "seed",
+      "--keep",
+      "--keep-ttl",
+      "50000000d",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("TTL must be less than 50,000,000 days");
+    expect(dependencies.createWorkspace).not.toHaveBeenCalled();
+  });
+
   describe("organization and folder from an --env-file", () => {
     const organizationId = "aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaaa";
     const folderId = "bbbbbbbb-2222-4bbb-8bbb-bbbbbbbbbbbb";
@@ -182,26 +198,35 @@ describe("tailordb migration test", () => {
       }
     });
 
-    test("passes the IDs loaded by --env-file to the preparation step", async () => {
+    test.each([
+      { ids: [organizationId, folderId], expected: { organizationId, folderId } },
+      { ids: ["", ""], expected: { organizationId: undefined, folderId: undefined } },
+    ])("passes the IDs $ids loaded by --env-file to the preparation step", async (row) => {
       const directory = fs.mkdtempSync(path.join(os.tmpdir(), "migration-test-env-"));
       directories.push(directory);
       const envFile = path.join(directory, "location.env");
+      const [organization, folder] = row.ids;
       fs.writeFileSync(
         envFile,
-        `TAILOR_PLATFORM_ORGANIZATION_ID=${organizationId}\nTAILOR_PLATFORM_FOLDER_ID=${folderId}\n`,
+        `TAILOR_PLATFORM_ORGANIZATION_ID=${organization}\nTAILOR_PLATFORM_FOLDER_ID=${folder}\n`,
       );
       const dependencies = createDependencies([]);
       mocks.dependencies = dependencies;
 
-      const result = await runCommand(testCommand, ["--env-file", envFile], {
-        // strip unknown keys
-        globalArgs: z.object(commonArgs),
-      });
+      const result = await runCliCommand(testCommand, ["--env-file", envFile]);
 
       expect(result.success).toBe(true);
-      expect(dependencies.prepare).toHaveBeenCalledWith(
-        expect.objectContaining({ organizationId, folderId }),
-      );
+      expect(dependencies.prepare).toHaveBeenCalledWith(expect.objectContaining(row.expected));
+    });
+
+    test.each(["not-a-uuid", ""])("rejects --organization-id %j", async (value) => {
+      const dependencies = createDependencies([]);
+      mocks.dependencies = dependencies;
+
+      const result = await runCliCommand(testCommand, ["--organization-id", value]);
+
+      expect(result.success).toBe(false);
+      expect(dependencies.prepare).not.toHaveBeenCalled();
     });
   });
 

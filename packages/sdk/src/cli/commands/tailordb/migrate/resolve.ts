@@ -9,7 +9,7 @@ import {
 } from "#/cli/commands/deploy/tailordb/migration";
 import {
   assertNoActiveMigrationExecution,
-  migrationWorkflowResourceName,
+  formatMigrationExecutionsHint,
   readMigrationRunStatus,
   retryCommandActiveError,
   settlingResolution,
@@ -28,6 +28,11 @@ import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { getNamespacesWithMigrations, selectTargetNamespace } from "./config";
 import {
+  formatNamespaceMigrationHint,
+  migrationCommandContext,
+  type MigrationCommandContext,
+} from "./hints";
+import {
   fetchRemoteMigrationState,
   isStaleMigrationInProgress,
   matchesLocalMigrationHistory,
@@ -35,10 +40,12 @@ import {
   type MigrationResolution,
   type RemoteMigrationState,
 } from "./remote-state";
+import { verifyRemoteSchema } from "./schema-checks";
 import {
   assertMigrationNumberExists,
   assertValidMigrationFiles,
   formatMigrationNumber,
+  getLatestMigrationNumber,
   reconstructSnapshotFromMigrations,
 } from "./snapshot";
 import { applySnapshotPlan, planSnapshotApply } from "./snapshot-apply";
@@ -61,6 +68,8 @@ type ResolveResult = {
   resolution: MigrationResolution;
   migrationNumber: number;
   checkpoint: number;
+  /** Set when no migration was recorded as in progress, but a deploy left the Pre-phase or maintenance mode of this one in place. */
+  interrupted?: true;
   /** How the recorded `main` run stood; absent for a migration whose steps partly committed. */
   runStatus?: MigrationRunStatus;
   tables: { created: string[]; updated: string[]; deleted: string[] };
@@ -100,6 +109,8 @@ type MainRunResolution = {
   migrationNumber: number;
   resolution: MigrationResolution;
   runStatus: MigrationRunStatus;
+  /** Config and workspace selection of this run, kept in the command it suggests */
+  commandContext: MigrationCommandContext;
 };
 
 /**
@@ -108,7 +119,7 @@ type MainRunResolution = {
  * @param params - The run and how it is settled
  */
 function warnMainRunResolution(params: MainRunResolution): void {
-  const { namespace, migrationNumber, resolution, runStatus } = params;
+  const { namespace, migrationNumber, resolution, runStatus, commandContext } = params;
   const label = formatMigrationNumber(migrationNumber);
   const fitting = settlingResolution(runStatus);
   if (resolution === "rollback") {
@@ -135,7 +146,7 @@ function warnMainRunResolution(params: MainRunResolution): void {
   if (runStatus === "unknown") {
     logger.warn(
       `Whether the run of migration ${label} succeeded could not be confirmed. ` +
-        `Check it with 'tailor workflow executions --workflow-name ${migrationWorkflowResourceName(namespace, migrationNumber)}' before you continue.`,
+        `Check it with ${formatMigrationExecutionsHint(namespace, migrationNumber, commandContext)} before you continue.`,
     );
   }
 }
@@ -162,11 +173,21 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
   );
   const { namespace } = target;
 
-  assertValidMigrationFiles(target.migrationsDir, namespace);
+  assertValidMigrationFiles(target.migrationsDir, namespace, loaded.config.path);
 
   const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options.profile,
     workspaceId: options.workspaceId,
+  });
+  const commandContext = migrationCommandContext({
+    configPath: options.configPath,
+    workspaceId,
+    profile: options.profile,
+  });
+  const statusHint = formatNamespaceMigrationHint({
+    ...commandContext,
+    subcommand: ["status"],
+    namespace,
   });
 
   const state = await fetchRemoteMigrationState(
@@ -177,26 +198,42 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
     throw CLIError({
       code: "MIGRATION_RESOLVE_RECORD_UNREADABLE",
       message: `Namespace "${namespace}" records a partially applied migration that cannot be read.`,
-      suggestion: `Run 'tailor tailordb migration status --namespace ${namespace}' to inspect the migration state.`,
+      suggestion: `Run ${statusHint} to inspect the migration state.`,
     });
   }
-  if (!state.inProgress || isStaleMigrationInProgress(state)) {
+  const currentCheckpoint = state.number ?? 0;
+  const nextMigrationNumber = currentCheckpoint + 1;
+  const staleRecord = isStaleMigrationInProgress(state) ? state.inProgress : null;
+  const record = staleRecord ? null : state.inProgress;
+  const verification =
+    !record && options.resolution === "rollback"
+      ? (
+          await verifyRemoteSchema(client, workspaceId, [target], loaded.config, [], {
+            acceptInterruptedMigration: true,
+          })
+        )[0]
+      : undefined;
+  const interrupted =
+    verification !== undefined &&
+    (verification.interruptedMigration === nextMigrationNumber ||
+      (verification.leftInMaintenanceMode &&
+        !verification.hasDrift &&
+        getLatestMigrationNumber(target.migrationsDir) >= nextMigrationNumber));
+  if (!record && !interrupted) {
     throw CLIError({
       code: "MIGRATION_RESOLVE_NO_IN_PROGRESS",
       message: `No migration is in progress for namespace "${namespace}".`,
-      suggestion: `Run 'tailor tailordb migration status --namespace ${namespace}' to check the migration state.`,
+      suggestion: `Run ${statusHint} to check the migration state.`,
     });
   }
 
-  const currentCheckpoint = state.number ?? 0;
-  const nextMigrationNumber = currentCheckpoint + 1;
-  if (state.inProgress.number !== nextMigrationNumber) {
+  if (record && record.number !== nextMigrationNumber) {
     throw CLIError({
       code: "MIGRATION_RESOLVE_RECORD_INVALID",
-      message: `Namespace "${namespace}" records migration ${formatMigrationNumber(state.inProgress.number)} as in progress, but its checkpoint is ${formatMigrationNumber(currentCheckpoint)}; the next migration to run would be ${formatMigrationNumber(nextMigrationNumber)}.`,
+      message: `Namespace "${namespace}" records migration ${formatMigrationNumber(record.number)} as in progress, but its checkpoint is ${formatMigrationNumber(currentCheckpoint)}; the next migration to run would be ${formatMigrationNumber(nextMigrationNumber)}.`,
       details:
         "The checkpoint or the in-progress record changed after the deploy that started the migration wrote it.",
-      suggestion: `Run 'tailor tailordb migration status --namespace ${namespace}' to compare the checkpoint with the in-progress migration, and restore the changed label before resolving.`,
+      suggestion: `Run ${statusHint} to compare the checkpoint with the in-progress migration, and restore the changed label before resolving.`,
     });
   }
 
@@ -213,16 +250,16 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
     });
   }
 
-  const migrationNumber = state.inProgress.number;
+  const migrationNumber = nextMigrationNumber;
   const migrationLabel = formatMigrationNumber(migrationNumber);
   const runStatus =
-    state.inProgress.kind === "main"
-      ? await readMigrationRunStatus(client, workspaceId, namespace, state.inProgress)
+    record?.kind === "main"
+      ? await readMigrationRunStatus(client, workspaceId, namespace, record)
       : undefined;
   if (runStatus === "running") {
     throw retryCommandActiveError(
       `The run of migration ${namespace}/${migrationLabel} is still running.`,
-      state.inProgress.executionId,
+      record?.executionId,
     );
   }
   const checkpoint = options.resolution === "rollback" ? migrationNumber - 1 : migrationNumber;
@@ -241,7 +278,11 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
 
   logger.newline();
   logger.info(`Namespace: ${styles.bold(namespace)}`);
-  logger.log(`  In progress: ${styles.bold(migrationLabel)}`);
+  logger.log(
+    interrupted
+      ? `  Interrupted: ${styles.bold(migrationLabel)} (not recorded as in progress)`
+      : `  In progress: ${styles.bold(migrationLabel)}`,
+  );
   if (runStatus) logger.log(`  Run: ${styles.bold(runStatus)}`);
   logger.log(
     `  Resolution: ${styles.bold(options.resolution)} (schema of migration ${styles.bold(formatMigrationNumber(checkpoint))})`,
@@ -260,7 +301,17 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
       migrationNumber,
       resolution: options.resolution,
       runStatus,
+      commandContext,
     });
+  } else if (interrupted) {
+    logger.warn(
+      `No deploy recorded migration ${migrationLabel} as in progress, but its pre-migration schema or maintenance mode is still in place. ` +
+        "A deploy that is still running looks the same until it records the migration, so make sure no deploy to this workspace is running.",
+    );
+    logger.warn(
+      `Rolling back does not undo data changes a script of migration ${migrationLabel} may already have made. ` +
+        `When migration ${migrationLabel} is deployed again, it runs again from the start.`,
+    );
   } else if (options.resolution === "rollback") {
     logger.warn(
       `Rolling back does not undo the data changes made by steps of migration ${migrationLabel} that already completed. ` +
@@ -294,7 +345,7 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
   } catch (error) {
     handleOptionalToRequiredError(error, [
       `The schema of migration ${migrationLabel} marks a field as required, but records still have no value for it.`,
-      "Fill in those records first (for example with 'tailor query'), then run the command again; the migration stays in progress until the update goes through.",
+      `Fill in those records first (for example with 'tailor query'), then run the command again${interrupted ? "." : "; the migration stays in progress until the update goes through."}`,
     ]);
   }
 
@@ -311,6 +362,9 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
   );
 
   await removeRunResources(client, workspaceId, namespace, migrationNumber);
+  if (staleRecord) {
+    await removeRunResources(client, workspaceId, namespace, staleRecord.number);
+  }
 
   logger.success(
     `Resolved migration ${styles.bold(formatMigrationNumber(migrationNumber))} of namespace ${styles.bold(namespace)} (${options.resolution}); the checkpoint is ${styles.bold(formatMigrationNumber(checkpoint))}.`,
@@ -330,6 +384,7 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
     resolution: options.resolution,
     migrationNumber,
     checkpoint,
+    ...(interrupted ? { interrupted } : {}),
     ...(runStatus ? { runStatus } : {}),
     tables: { created: creates, updated: updates, deleted: deletes },
     gqlPermissions: {
@@ -343,12 +398,14 @@ export const resolveCommand = defineAppCommand({
   name: "resolve",
   description:
     "Settle a migration that a failed deploy left partially applied, or whose run a deploy could not confirm.",
-  notes: `Use this after a deploy failed partway through a migration whose \`migrate.ts\` exports \`steps\`, or after a deploy could not confirm whether the script of a migration ran (\`MIGRATION_OUTCOME_UNKNOWN\`). The migration stays in progress: when \`maintenanceMode\` is on in your config, the tables of its namespace stay in maintenance mode, and \`sync\` and \`rebaseline\` are refused, while \`set\` accepts only the number of the in-progress migration. A deploy stops before changing anything while a run it could not confirm is not settled.
+  notes: `Use this after a deploy failed partway through a migration whose \`migrate.ts\` exports \`steps\`, or after a deploy could not confirm whether the script of a migration ran (\`MIGRATION_OUTCOME_UNKNOWN\`). The migration stays in progress: when \`maintenanceMode\` is on in your config, the tables of its namespace stay in maintenance mode, and the other migration commands that move the checkpoint are refused. A deploy stops before changing anything while a run it could not confirm is not settled.
 
 - \`--rollback\` sends the schema of the migration before the failed one. The next deploy runs the failed migration again, from its first step for a script that exports \`steps\`. Data changes the script already made are not undone.
 - \`--complete\` sends the schema of the failed migration itself and records it as completed, without running its \`migrate.ts\` again. Fix the data first (for example with \`tailor query\`), and make sure no record lacks a value for a field that becomes required.
 
 For a run that a deploy could not confirm, the command reads how the run ended and shows it before asking for confirmation: use \`--complete\` when it succeeded, and \`--rollback\` when it failed, was canceled, or did not start. It refuses while the run is still running, and warns when the option you chose does not fit how the run ended.
+
+\`--rollback\` also settles a migration that no deploy recorded as in progress, but whose pre-migration schema or maintenance mode a deploy left in place, for example because the deploy stopped before recording it. See "Settling a migration that stays in progress" in the TailorDB Migrations guide for when it runs.
 
 Both options remove the in-progress record, take the tables out of maintenance mode, and remove the temporary resources of the failed run, so \`deploy\` and the other migration commands work again. As with \`tailordb migration sync\`, the local migration history must reproduce the current table definitions. If sending the schema stops partway, run the command again.`,
   args: z.strictObject({
