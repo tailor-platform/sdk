@@ -10,7 +10,8 @@
  *
  * Prerequisites:
  * - Authentication via TAILOR_PLATFORM_TOKEN env var or `tailor login`
- * - TAILOR_PLATFORM_ORGANIZATION_ID environment variable must be set
+ * - TAILOR_PLATFORM_ORGANIZATION_ID environment variable must be set, unless logged in with
+ *   `tailor login` and a default organization is saved with `tailor user update`
  * - packages/sdk must be built (dist/cli/main.mjs must exist)
  *
  * Note: Tests are executed sequentially and share a single workspace.
@@ -34,11 +35,12 @@ import { loadAccessToken } from "../src/cli/shared/context";
 import { executeScript, type ScriptExecutionResult } from "../src/cli/shared/script-executor";
 import { CLI_BUDGET_MS, cliTestTimeout, runCli } from "./cli";
 import {
+  WORKSPACE_CREATION_ALLOWANCE_MS,
   resolveE2ERunId,
+  resolveE2EWorkspaceLocation,
   resolveE2EWorkspaceRegion,
   trackTempDir,
   trackWorkspace,
-  WORKSPACE_CREATION_ALLOWANCE_MS,
 } from "./globalSetup";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -162,8 +164,7 @@ describe("E2E: function run", { concurrent: false }, () => {
         workspaceName: testWorkspaceName,
         workspaceRegion: region,
         deleteProtection: false,
-        organizationId: process.env.TAILOR_PLATFORM_ORGANIZATION_ID,
-        folderId: process.env.TAILOR_PLATFORM_FOLDER_ID,
+        ...(await resolveE2EWorkspaceLocation()),
       });
       workspaceId = createResp.workspace!.id;
       console.log(`Workspace created: ${workspaceId}`);
