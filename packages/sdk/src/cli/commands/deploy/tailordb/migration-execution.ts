@@ -270,7 +270,7 @@ function buildSnapshotTypeManifest(
  * @param promises - Promises (or already-resolved values) to await
  * @returns {Promise<void>} Resolves once all settle; rejects with the first failure
  */
-async function awaitAllSettledOrThrow(
+export async function awaitAllSettledOrThrow(
   promises: ReadonlyArray<Promise<unknown> | undefined>,
 ): Promise<void> {
   const results = await Promise.allSettled(

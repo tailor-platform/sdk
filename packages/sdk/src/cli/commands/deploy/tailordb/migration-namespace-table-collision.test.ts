@@ -11,6 +11,9 @@ import * as migrationModule from "./migration";
 import {
   createMockClient as createBaseMockClient,
   createPlanResult,
+  DELETED_ONCE_AFTER_CHECKPOINT,
+  deleteOrders,
+  deletionOf,
   gqlPermissionDeletion,
   mkPendingMigration as createPendingMigration,
   mockPendingMigrations,
@@ -175,53 +178,11 @@ function typeCreateCount(client: OperatorClient, namespace: string, tableName: s
   return typeWritesOf(vi.mocked(client.createTailorDBType).mock, namespace, tableName).length;
 }
 
-function deleteOrders(client: OperatorClient, namespace: string, tableName: string) {
-  const ordersOf = (
-    mock: { calls: unknown[][]; invocationCallOrder: number[] },
-    matches: (request: Record<string, unknown>) => boolean,
-  ) =>
-    mock.calls.flatMap((call, index) =>
-      matches(call[0] as Record<string, unknown>) ? [mock.invocationCallOrder[index]!] : [],
-    );
-  return {
-    table: ordersOf(
-      vi.mocked(client.deleteTailorDBType).mock,
-      (request) => request.namespaceName === namespace && request.tailordbTypeName === tableName,
-    ),
-    permission: ordersOf(
-      vi.mocked(client.deleteTailorDBGQLPermission).mock,
-      (request) => request.namespaceName === namespace && request.typeName === tableName,
-    ),
-  };
-}
-
 function checkpointOrder(namespace: string, number: number) {
   const mocked = vi.mocked(migrationModule.updateMigrationLabel);
   const index = mocked.mock.calls.findIndex((call) => call[2] === namespace && call[3] === number);
   return index === -1 ? undefined : mocked.mock.invocationCallOrder[index];
 }
-
-function deletionOf(
-  client: OperatorClient,
-  namespace: string,
-  tableName: string,
-  checkpoint: number | undefined,
-) {
-  const { table, permission } = deleteOrders(client, namespace, tableName);
-  return {
-    tableDeletes: table.length,
-    permissionDeletes: permission.length,
-    afterCheckpoint: checkpoint !== undefined && permission.every((order) => order > checkpoint),
-    permissionFirst: table.every((tableOrder) => permission.every((order) => order < tableOrder)),
-  };
-}
-
-const DELETED_ONCE_AFTER_CHECKPOINT = {
-  tableDeletes: 1,
-  permissionDeletes: 1,
-  afterCheckpoint: true,
-  permissionFirst: true,
-};
 
 function writtenMetadataTrns(client: OperatorClient) {
   return vi.mocked(client.setMetadata).mock.calls.map((call) => call[0].trn);

@@ -63,6 +63,7 @@ import {
 import {
   applyMigrationRestrictions,
   acceptsMigrationWrites,
+  awaitAllSettledOrThrow,
   captureMigrationRestrictionState,
   deletedResources,
   deletePlannedTables,
@@ -917,7 +918,9 @@ async function applyWithMigrations(
   const maintenance = held ? undefined : finishMaintenance(flow);
 
   await applyDeferredGqlPermissions(flow, deferredGqlPermissionKeys);
-  await applyRemainingDeletions(flow);
+  await applyRemainingDeletions(client, changeSet, (del) =>
+    excludeFromRestoration(restoration, del),
+  );
 
   // Write table metadata, which the migration phases above do not.
   // Tables inside migrating namespaces only exist once their phases have run,
@@ -2143,28 +2146,49 @@ function isDeleted(
   return deleted.has(`${del.request.namespaceName}/${del.name}`);
 }
 
-async function applyRemainingDeletions(flow: MigrationFlow): Promise<void> {
-  const { client, changeSet } = flow;
-  // Delete remaining GQL permissions that weren't deleted with their tables
-  const remainingGqlPermissionDeletes = changeSet.gqlPermission.deletes.filter(
-    (del) => !isDeleted(deletedResources.gqlPermissions, del),
-  );
-  if (remainingGqlPermissionDeletes.length > 0) {
-    await Promise.all(
-      remainingGqlPermissionDeletes.map((del) => client.deleteTailorDBGQLPermission(del.request)),
-    );
-  }
+type TableDeletion = TailorDBChangeSet["type"]["deletes"][number];
 
-  // Delete tables outside the migrating namespaces (their GQL
-  // permissions were just removed above; migration postPhases never see them)
+/**
+ * Delete the planned GraphQL permissions and tables that no migration has deleted.
+ * @param client - Operator client instance
+ * @param changeSet - TailorDB change set
+ * @param onTableDeleted - Called once each table is deleted
+ */
+async function applyRemainingDeletions(
+  client: OperatorClient,
+  changeSet: TailorDBChangeSet,
+  onTableDeleted: (del: TableDeletion) => void,
+): Promise<void> {
   await Promise.all(
+    changeSet.gqlPermission.deletes
+      .filter((del) => !isDeleted(deletedResources.gqlPermissions, del))
+      .map((del) => client.deleteTailorDBGQLPermission(del.request)),
+  );
+  await awaitAllSettledOrThrow(
     changeSet.type.deletes
-      .filter(
-        (del) =>
-          isOutsideMigrations(flow, del.request.namespaceName) &&
-          !isDeleted(deletedResources.types, del),
-      )
-      .map((del) => client.deleteTailorDBType(del.request)),
+      .filter((del) => !isDeleted(deletedResources.types, del))
+      .map(async (del) => {
+        await client.deleteTailorDBType(del.request);
+        onTableDeleted(del);
+      }),
+  );
+}
+
+/**
+ * Keep a deleted table out of the restore, which a held release runs after the deletion.
+ * @param restoration - What the tables return to, updated in place
+ * @param del - Deletion of the table
+ */
+function excludeFromRestoration(restoration: RestorationState, del: TableDeletion): void {
+  const namespaceName = assertDefined(
+    del.request.namespaceName,
+    "every planned table deletion names its namespace",
+  );
+  const settings = restoration.settings.get(namespaceName);
+  if (!settings?.has(del.name)) return;
+  restoration.settings.set(
+    namespaceName,
+    new Map([...settings].filter(([tableName]) => tableName !== del.name)),
   );
 }
 
@@ -2204,18 +2228,7 @@ async function applyWithoutMigrations(
     ),
   ]);
 
-  // Delete resources (only when no migrations occurred)
-  // Migrations already handle deletions in post-migration phase
-  await Promise.all(
-    changeSet.gqlPermission.deletes
-      .filter((del) => !isDeleted(deletedResources.gqlPermissions, del))
-      .map((del) => client.deleteTailorDBGQLPermission(del.request)),
-  );
-  await Promise.all(
-    changeSet.type.deletes
-      .filter((del) => !isDeleted(deletedResources.types, del))
-      .map((del) => client.deleteTailorDBType(del.request)),
-  );
+  await applyRemainingDeletions(client, changeSet, () => {});
 }
 
 /**
