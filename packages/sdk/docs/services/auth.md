@@ -26,6 +26,7 @@ Configure Auth service using `defineAuth()`:
 
 - **One auth per application**: Each application can have exactly one Auth service
 - **Configuration location**: Define in `tailor.config.ts` using `defineAuth()` and reference directly in the config's `auth` field
+- **Referencing another app's auth**: When another app in the same repository defines the auth, reference it with `asExternal()`. See [Referencing another app's Auth with `asExternal()`](../configuration.md#referencing-another-apps-auth-with-asexternal)
 - **`userProfile` and `machineUserAttributes` are mutually exclusive**: Specifying both fails at deploy/generate time with ``Specify either `userProfile` or `machineUserAttributes`, not both.``
 
 ```typescript

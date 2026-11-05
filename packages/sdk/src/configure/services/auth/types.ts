@@ -350,7 +350,6 @@ export type DefinedAuth<Name extends string, Config> = Config & {
 export type AuthExternalConfig = {
   name: string;
   external: true;
-  machineUsers?: Readonly<Record<string, unknown>>;
 };
 
 /** Reference to another app's auth returned by `asExternal()` of a `defineAuth` result. */

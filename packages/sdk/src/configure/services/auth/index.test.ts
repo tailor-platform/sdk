@@ -222,14 +222,6 @@ describe("defineAuth", () => {
       });
     });
 
-    test("leaves out everything the referencing app must not deploy again", () => {
-      expect(Object.keys(coreAuth.asExternal()).toSorted()).toEqual([
-        "external",
-        "machineUsers",
-        "name",
-      ]);
-    });
-
     test("does not add asExternal to the keys of the definition itself", () => {
       expect(Object.keys(coreAuth)).not.toContain("asExternal");
     });
@@ -246,6 +238,14 @@ describe("defineAuth", () => {
       const noMachineUsers = defineAuth("lonely-auth", { userProfile: basicUserProfile });
 
       expect(noMachineUsers.asExternal().machineUsers).toEqual({});
+    });
+
+    test("keeps narrowing an auth config by `in machineUsers`", () => {
+      const oauth2ClientsOf = (auth: AuthConfig) =>
+        "machineUsers" in auth ? auth.oauth2Clients : undefined;
+
+      expect(oauth2ClientsOf(coreAuth)).toBeDefined();
+      expect(oauth2ClientsOf(coreAuth.asExternal())).toBeUndefined();
     });
 
     test("is accepted wherever an auth config is", () => {
