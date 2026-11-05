@@ -1,7 +1,12 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { describe, expect, test } from "vitest";
-import { fingerprintOf, renderedTemplatesFingerprint } from "./template-fingerprint";
+import { parse } from "yaml";
+import {
+  fingerprintOf,
+  renderedTemplates,
+  renderedTemplatesFingerprint,
+} from "./template-fingerprint";
 import {
   readTemplateVersionState,
   resolvePendingTemplateVersion,
@@ -27,6 +32,29 @@ describe("fingerprintOf", () => {
     expect(fingerprintOf([result("a", ["tailor-plan"])])).not.toBe(
       fingerprintOf([result("a", ["tailor-plan", "tailor-deploy"])]),
     );
+  });
+});
+
+describe("renderedTemplates", () => {
+  test("renders every workflow template in the package", () => {
+    const templates = fs
+      .readdirSync(import.meta.dirname)
+      .filter((file) => file.endsWith(".workflow.yml"))
+      .map((file) => file.slice(0, -".workflow.yml".length));
+
+    expect(new Set(renderedTemplates().map((rendered) => rendered.template))).toEqual(
+      new Set(templates),
+    );
+  });
+
+  test("names each render uniquely", () => {
+    const names = renderedTemplates().map((rendered) => rendered.name);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  test.each(renderedTemplates())("$name fills every placeholder and parses", ({ content }) => {
+    expect(content).not.toMatch(/__[A-Z_]+__/);
+    expect(() => parse(content)).not.toThrow();
   });
 });
 

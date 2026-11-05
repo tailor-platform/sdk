@@ -775,21 +775,85 @@ describe("platform environment variables", () => {
   aroundEach(async (runTest) => {
     await runTest();
     vi.unstubAllEnvs();
+    vi.resetModules();
   });
 
-  test("uses legacy platform env vars when renamed vars are absent", () => {
+  async function importFreshClient() {
+    vi.resetModules();
+    const { logger } = await import("./logger");
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    return { client: await import("./client"), warnSpy };
+  }
+
+  test("uses legacy platform env vars when renamed vars are absent, warning once per name", async () => {
     vi.stubEnv("PLATFORM_URL", "https://api.legacy.tailor.tech");
     vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", "legacy-client");
+    const { client, warnSpy } = await importFreshClient();
 
-    expect(getPlatformBaseUrl()).toBe("https://api.legacy.tailor.tech");
-    expect(getOAuth2ClientId()).toBe("legacy-client");
-    expect(getEffectivePlatformConfig()).toEqual({
+    expect(client.getPlatformBaseUrl()).toBe("https://api.legacy.tailor.tech");
+    expect(client.getOAuth2ClientId()).toBe("legacy-client");
+    expect(client.getEffectivePlatformConfig()).toEqual({
       platformUrl: "https://api.legacy.tailor.tech",
       oauth2ClientId: "legacy-client",
     });
+    expect(warnSpy.mock.calls).toEqual([
+      ["PLATFORM_URL is deprecated. Please use TAILOR_PLATFORM_URL instead."],
+      [
+        "PLATFORM_OAUTH2_CLIENT_ID is deprecated. Please use TAILOR_PLATFORM_OAUTH2_CLIENT_ID instead.",
+      ],
+    ]);
   });
 
-  test("prefers renamed platform env vars over legacy env vars", () => {
+  test.each([
+    {
+      name: "uses the default platform when neither name is set",
+      env: {},
+      platformUrl: "https://api.tailor.tech",
+      warnings: [],
+    },
+    {
+      name: "uses the renamed var without warning",
+      env: { TAILOR_PLATFORM_URL: "https://api.dev.tailor.tech" },
+      platformUrl: "https://api.dev.tailor.tech",
+      warnings: [],
+    },
+    {
+      name: "treats an empty renamed var as unset",
+      env: { TAILOR_PLATFORM_URL: "", PLATFORM_URL: "https://api.legacy.tailor.tech" },
+      platformUrl: "https://api.legacy.tailor.tech",
+      warnings: [["PLATFORM_URL is deprecated. Please use TAILOR_PLATFORM_URL instead."]],
+    },
+    {
+      name: "treats empty vars as unset without warning",
+      env: { TAILOR_PLATFORM_URL: "", PLATFORM_URL: "" },
+      platformUrl: "https://api.tailor.tech",
+      warnings: [],
+    },
+  ])("$name", async ({ env, platformUrl, warnings }) => {
+    for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
+    const { client, warnSpy } = await importFreshClient();
+
+    expect(client.getPlatformBaseUrl()).toBe(platformUrl);
+    expect(warnSpy.mock.calls).toEqual(warnings);
+  });
+
+  test("does not warn when the profile supplies the platform settings", async () => {
+    vi.stubEnv("PLATFORM_URL", "https://api.legacy.tailor.tech");
+    vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", "legacy-client");
+    const { client, warnSpy } = await importFreshClient();
+    const profile = {
+      platformUrl: "https://api.profile.tailor.tech",
+      oauth2ClientId: "profile-client",
+    };
+
+    expect(client.getPlatformBaseUrl(profile)).toBe("https://api.profile.tailor.tech");
+    expect(client.getOAuth2ClientId(profile)).toBe("profile-client");
+    expect(client.getEffectivePlatformConfig(profile)).toEqual(profile);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test("prefers renamed platform env vars over legacy env vars without warning", () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     vi.stubEnv("PLATFORM_URL", "https://api.legacy.tailor.tech");
     vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", "legacy-client");
     vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
@@ -801,6 +865,7 @@ describe("platform environment variables", () => {
       platformUrl: "https://api.dev.tailor.tech",
       oauth2ClientId: "dev-client",
     });
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -1129,6 +1194,50 @@ describe("retryInterceptor", () => {
     },
   );
 
+  /**
+   * Build the error connect-node raises for a connection reset.
+   * @param message - Message Node gives the underlying `ECONNRESET`
+   * @returns The reset wrapped as connect-node wraps it
+   */
+  function connectionReset(message: string) {
+    return ConnectError.from(
+      Object.assign(new Error(message), { code: "ECONNRESET" }),
+      Code.Aborted,
+    );
+  }
+
+  const preHandshakeDisconnect = () =>
+    connectionReset(
+      "Client network socket disconnected before secure TLS connection was established",
+    );
+
+  test.each([
+    OperatorService.method.cloneApplicationData,
+    OperatorService.method.createWorkspace,
+    OperatorService.method.startWorkflow,
+    OperatorService.method.updateTailorDBType,
+  ])("retries $name when the connection closed before the TLS handshake", async (method) => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(preHandshakeDisconnect())
+      .mockResolvedValueOnce(okResponse);
+
+    const res = await settle(retryInterceptor()(next)(makeUnaryReq(method)));
+
+    expect(res).toBe(okResponse);
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  test("does not retry CreateWorkspace on a connection reset that may follow the request", async () => {
+    const reset = connectionReset("read ECONNRESET");
+    const next = vi.fn().mockRejectedValueOnce(reset).mockResolvedValueOnce(okResponse);
+
+    await expect(
+      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createWorkspace))),
+    ).rejects.toBe(reset);
+    expect(next).toHaveBeenCalledOnce();
+  });
+
   test("treats AlreadyExists after a retry as success for Create methods", async () => {
     // #1350: prior attempt landed server-side but came back Unavailable; the
     // identical retry then hits already_exists on the _file metadata table.
@@ -1194,6 +1303,35 @@ describe("retryInterceptor", () => {
     ).rejects.toThrow("duplicated key not allowed");
     expect(vi.mocked(reportCrash)).toHaveBeenCalledTimes(1);
     expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  test("routes an AlreadyExists that follows only pre-handshake disconnects to error tracking, then surfaces it", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(preHandshakeDisconnect())
+      .mockRejectedValueOnce(new ConnectError("duplicated key not allowed", Code.AlreadyExists));
+
+    await expect(
+      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType))),
+    ).rejects.toThrow("duplicated key not allowed");
+    expect(vi.mocked(reportCrash)).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  test("swallows an AlreadyExists when an attempt before a pre-handshake disconnect may have committed", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
+      .mockRejectedValueOnce(preHandshakeDisconnect())
+      .mockRejectedValueOnce(new ConnectError("duplicated key not allowed", Code.AlreadyExists));
+
+    const res = await settle(
+      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType)),
+    );
+
+    expect(res.stream).toBe(false);
+    expect(vi.mocked(reportCrash)).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledTimes(3);
   });
 
   test("swallows a post-retry AlreadyExists without routing to error tracking", async () => {
@@ -1384,6 +1522,25 @@ describe("errorHandlingInterceptor", () => {
         identifiers: { id: "workspace-id" },
       },
     });
+  });
+
+  test("keeps the error details of a failed RPC", async () => {
+    const detail = { type: "google.rpc.PreconditionFailure", value: new Uint8Array([10, 0]) };
+    const original = Object.assign(new ConnectError("refused", Code.FailedPrecondition), {
+      details: [detail],
+    });
+    const req = {
+      stream: false,
+      service: OperatorService,
+      method: OperatorService.method.updateTailorDBType,
+      header: new Headers(),
+      message: { workspaceId: "workspace-id", namespaceName: "db" },
+    } as unknown as UnaryRequest;
+    const error = await errorHandlingInterceptor()(vi.fn().mockRejectedValue(original))(req).catch(
+      (error: unknown) => error,
+    );
+    expect(error).toBeInstanceOf(ConnectError);
+    expect(error).toMatchObject({ code: Code.FailedPrecondition, details: [detail] });
   });
 
   test.each([

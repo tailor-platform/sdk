@@ -37,7 +37,12 @@ import { workspaceCommand } from "./commands/workspace";
 import { initCrashReporting } from "./crashreport";
 import { printNotificationBanner, startNotificationLookup } from "./notification-banner/index";
 import { queryCommand } from "./query";
-import { commonArgs, globalArgsApplied, resolveEarlyFailure } from "./shared/args";
+import {
+  commonArgs,
+  globalArgsApplied,
+  loadEnvFilesFromArgv,
+  resolveEarlyFailure,
+} from "./shared/args";
 import { getErrorDiagnostics } from "./shared/error-diagnostics";
 import { serializeError } from "./shared/error-json";
 import { isCLIError, typeOnlyImportHint } from "./shared/errors";
@@ -49,10 +54,7 @@ import { registerTsHook } from "./shared/register-ts-hook";
 
 await registerTsHook(new URL("./ts-hook.mjs", import.meta.url));
 
-// Runs before globalArgs effects load --env-file, so env file overrides for
-// TAILOR_CRASH_REPORTS_* are not available for early startup failures.
-// This is intentional: we want crash reporting active before argument parsing,
-// and env files require parsing to be complete. Shell-level env vars still work.
+// Runs before `setup` loads --env-file, so env-file TAILOR_CRASH_REPORTS_* values miss startup failures.
 initCrashReporting();
 
 const packageJson = await readPackageJson();
@@ -147,8 +149,10 @@ void runMain(mainCommand, {
   agentHelp,
   setup: ({ agent }) => {
     setJsonDefaultAgent(agent?.id);
-    // Best-effort unread-notification lookup for the post-command banner. It runs
-    // alongside the command; cleanup prints it, waiting at most 150 ms for an answer.
+    loadEnvFilesFromArgv(process.argv.slice(2));
+    // Best-effort unread-notification lookup for the post-command banner, started after the
+    // env files so it sees their values. It runs alongside the command; cleanup prints it,
+    // waiting at most 150 ms for an answer.
     startNotificationLookup(process.argv.slice(2));
   },
   // CLI plugin dispatch: an unknown subcommand at any level execs the external

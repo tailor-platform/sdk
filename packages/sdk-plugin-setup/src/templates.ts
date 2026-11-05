@@ -1,12 +1,18 @@
+import autofixTemplate from "./autofix.workflow.yml";
 import branchTemplate from "./branch.workflow.yml";
+import previewCleanupTemplate from "./preview-cleanup.workflow.yml";
 import previewTemplate from "./preview.workflow.yml";
 import tagTemplate from "./tag.workflow.yml";
 
-// Only the release PR changes RELEASED_TEMPLATE_VERSION and the fingerprint below; a PR that
-// changes the generated templates sets TEMPLATE_CHANGED_SINCE_RELEASE to true instead.
-// Released template fingerprint: 65fef953eac654ad98514cedca78053db6c64d7a05187bf9ed8ce37b98b05cdc
-const RELEASED_TEMPLATE_VERSION = 22;
-const TEMPLATE_CHANGED_SINCE_RELEASE = false;
+// The release PR updates RELEASED_TEMPLATE_VERSION and the fingerprint below. A PR that
+// changes the generated templates sets TEMPLATE_CHANGED_SINCE_RELEASE to true instead. A PR that
+// only adds renders to renderedTemplates() re-records the fingerprint while the flag stays false.
+// Released template fingerprint: c64cf3888d990eba0d5067e0009cb59b61c088a4a5995e62674b43f7f7ca8a0b
+const RELEASED_TEMPLATE_VERSION = 23;
+const TEMPLATE_CHANGED_SINCE_RELEASE = true;
+export const ACTIONS_SHA = "77effc033b3cb5fa7660b38571fbeb8361d121e8";
+export const ACTIONS_VERSION = "v2.8.0";
+
 /** Template schema version, tracked per target in the lock file. */
 export const TEMPLATE_VERSION =
   RELEASED_TEMPLATE_VERSION + (TEMPLATE_CHANGED_SINCE_RELEASE ? 1 : 0);
@@ -68,11 +74,25 @@ export type RenderMigrationTestParams = {
   label: string;
   /**
    * Dedicated GitHub Environment holding the source workspace in
-   * `TAILOR_PLATFORM_MIGRATION_TEST_SOURCE_WORKSPACE_ID`; omit to use the plan/deploy
+   * `TAILOR_PLATFORM_MIGRATION_TEST_SOURCE_WORKSPACE_ID`; omit to use the deploy
    * environment and its `TAILOR_PLATFORM_WORKSPACE_ID`.
    */
   environment?: string;
 };
+
+/**
+ * GitHub Environment the plan job of a branch target runs in apart from the deploy job.
+ * @param target - Deploy environment and whether the plan environment is split
+ * @param target.environment - GitHub Environment of the deploy job
+ * @param target.splitPlanEnvironment - Whether the plan job runs in its own environment
+ * @returns `<environment>-plan`, or undefined when the plan job shares the deploy environment
+ */
+export function planEnvironmentOf(target: {
+  environment: string;
+  splitPlanEnvironment?: boolean;
+}): string | undefined {
+  return target.splitPlanEnvironment ? `${target.environment}-plan` : undefined;
+}
 
 export type RenderBranchParams = {
   workspaceName: string;
@@ -82,8 +102,13 @@ export type RenderBranchParams = {
   apps?: RenderApp[];
   /** Extra `paths` filter patterns beyond the app directories. */
   extraPaths?: string[];
-  /** GitHub Environment for the plan/deploy jobs; defaults to the workspace name. */
+  /**
+   * GitHub Environment for the deploy job, and for the plan job unless `splitPlanEnvironment`;
+   * defaults to the workspace name.
+   */
   environment: string;
+  /** Run the plan job in {@link planEnvironmentOf} instead of `environment` (default: false). */
+  splitPlanEnvironment?: boolean;
   packageManager: PackageManager;
   /** Include the seed-validate step in the plan job (default: false). */
   seedValidate?: boolean;
@@ -197,18 +222,19 @@ export function appSlug(dir: string): string {
 
 const ALL_ZERO_SHA = "0000000000000000000000000000000000000000";
 
-export type WorkflowKind = "branch" | "tag" | "preview";
+export type WorkflowKind = "branch" | "tag" | "preview" | "preview-cleanup";
 
 const WORKFLOW_FILE_SUFFIX: Record<WorkflowKind, string> = {
   branch: "",
   tag: "-tag",
   preview: "-preview",
+  "preview-cleanup": "-preview-cleanup",
 };
 
 /**
- * Path of the workflow a target generates. The kind is part of the name so a branch, tag, and
+ * Path of a workflow a target generates. The kind is part of the name so a branch, tag, and
  * preview workflow can share a workspace name.
- * @param kind - Target kind
+ * @param kind - Workflow kind: a target kind, or `preview-cleanup` for a preview target's cleanup
  * @param workspaceName - Workspace name the workflow is generated for
  * @returns Workflow file path relative to the repository root
  */
@@ -403,7 +429,7 @@ function applyCommon(
     out,
     "CONFIG_ENV",
     apps
-      ? `env:\n  TAILOR_PLATFORM_SDK_CONFIG_PATH: ${apps.map((app) => configPathOf(app.dir)).join(",")}`
+      ? `env:\n  TAILOR_CONFIG_PATH: ${apps.map((app) => configPathOf(app.dir)).join(",")}`
       : undefined,
   );
   out = line(
@@ -530,6 +556,7 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
   }
 
   out = applyCommon(out, params).replaceAll("__BRANCH__", () => branch);
+  out = out.replace("__PLAN_ENVIRONMENT__", () => planEnvironmentOf(params) ?? params.environment);
 
   if (migrationTest) {
     const migrationTestValues: Record<string, string> = {
@@ -682,11 +709,9 @@ export function renderTagWorkflow(params: RenderTagParams): RenderResult {
 }
 
 /**
- * Render the preview workflow (PR open/sync/close triggers).
- *
- * The deploy job runs on opened/synchronize/reopened events, plus ready_for_review
- * when `ready` is required; the cleanup job runs on the closed event.  Both jobs
- * run in the same workflow so PR number context is always available.
+ * Render the preview workflow (PR open/sync triggers). The deploy job runs on
+ * opened/synchronize/reopened events, plus ready_for_review when `ready` is required;
+ * {@link renderPreviewCleanupWorkflow} deletes the workspace when the PR closes.
  * @param params - Workspace and rendering configuration
  * @returns Rendered YAML and the list of managed job/step ids
  */
@@ -705,7 +730,6 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
     "synchronize",
     "reopened",
     ...(requireReady ? ["ready_for_review"] : []),
-    "closed",
   ];
   out = line(out, "PR_TYPES", `types: [${types.join(", ")}]`);
 
@@ -714,7 +738,6 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
     ...(requireLabel
       ? ["contains(github.event.pull_request.labels.*.name, 'tailor:preview')"]
       : []),
-    "github.event.action != 'closed'",
     ...(requireReady ? ["!github.event.pull_request.draft"] : []),
     "!github.event.pull_request.head.repo.fork",
   ];
@@ -726,15 +749,6 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
   out = line(out, "CHANGES_JOB", patterns ? changesJob(patterns) : undefined);
   out = line(out, "DEPLOY_IF", gateOnChanges(deployIf, patterns));
   out = line(out, "CHANGES_GUARD", changesGuard(patterns));
-
-  // Cleanup always runs on closed regardless of current labels: the label may have been
-  // removed after a preview deploy, and the cleanup action is a no-op when no workspace exists.
-  // Fork PRs also need guarding since cleanup requires secrets/vars.
-  out = line(
-    out,
-    "CLEANUP_IF",
-    `if: |-\n  github.event.action == 'closed' &&\n  !github.event.pull_request.head.repo.fork`,
-  );
 
   out = applyCommon(out, params)
     .replaceAll("__BRANCH__", () => branch)
@@ -752,15 +766,156 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
     "tailor-preview-deploy/tailor-preview-deploy",
     ...seedIds("tailor-preview-deploy", seed),
     "tailor-preview-deploy/tailor-preview-comment",
-    "tailor-preview-cleanup",
-    "tailor-preview-cleanup/tailor-checkout",
-    "tailor-preview-cleanup/tailor-setup",
-    "tailor-preview-cleanup/tailor-install",
-    "tailor-preview-cleanup/tailor-preview-cleanup",
   ];
 
   return appendResultJob({ content: out, generatedIds }, "tailor-preview-result");
 }
 
-export const ACTIONS_SHA = "26a3cae341adecfaf0e6c81bd969de09c72dad55";
-export const ACTIONS_VERSION = "v2.7.0";
+export type RenderPreviewCleanupParams = Pick<
+  RenderPreviewParams,
+  "workspaceName" | "branch" | "workingDirectory" | "apps" | "environment" | "packageManager"
+>;
+
+/**
+ * Render the workflow that deletes a pull request's preview workspace when the pull request
+ * closes. It starts on `pull_request_target`, which closing a pull request with merge
+ * conflicts still triggers, unlike the preview workflow's `pull_request`.
+ * @param params - Workspace and rendering configuration
+ * @returns Rendered YAML and the list of managed job/step ids
+ */
+export function renderPreviewCleanupWorkflow(params: RenderPreviewCleanupParams): RenderResult {
+  const content = applyCommon(previewCleanupTemplate, params).replaceAll(
+    "__BRANCH__",
+    () => params.branch,
+  );
+  return {
+    content,
+    generatedIds: [
+      "tailor-preview-cleanup",
+      "tailor-preview-cleanup/tailor-checkout",
+      "tailor-preview-cleanup/tailor-setup",
+      "tailor-preview-cleanup/tailor-install",
+      "tailor-preview-cleanup/tailor-preview-cleanup",
+    ],
+  };
+}
+
+export const AUTOFIX_PROVIDERS = ["github-token", "autofix-ci", "securefix", "github-app"] as const;
+
+/** What commits the regenerated files to the pull request branch. */
+export type AutofixProvider = (typeof AUTOFIX_PROVIDERS)[number];
+
+export const AUTOFIX_WORKFLOW_FILE = ".github/workflows/tailor-autofix.yml";
+
+const AUTOFIX_COMMIT_MESSAGE = "chore: run tailor generate";
+
+// autofix.ci and a default securefix server accept requests only from workflows of these names.
+const AUTOFIX_WORKFLOW_NAMES: Record<AutofixProvider, string> = {
+  "github-token": "Tailor Autofix",
+  "autofix-ci": "autofix.ci",
+  securefix: "securefix",
+  "github-app": "Tailor Autofix",
+};
+
+/** A provider, with the settings it needs. */
+export type AutofixProviderParams =
+  | { provider: Exclude<AutofixProvider, "securefix"> }
+  | {
+      provider: "securefix";
+      /** Name of the repository, under the same owner, that runs the securefix server workflow. */
+      securefixServerRepository: string;
+    };
+
+export type RenderAutofixParams = AutofixProviderParams & {
+  /** App directories relative to the repository root; `tailor generate` runs in each. */
+  dirs: readonly string[];
+  packageManager: PackageManager;
+};
+
+function perAppGenerateSteps(dirs: readonly string[]): string {
+  return dirs
+    .flatMap((dir) => [
+      `- id: tailor-generate-${appSlug(dir)}`,
+      `  run: __TAILOR_CLI__ generate`,
+      ...(dir === "." ? [] : [`  working-directory: ${dir}`]),
+    ])
+    .join("\n");
+}
+
+/**
+ * Render the workflow that commits the files `tailor generate` changes to the pull request.
+ * @param params - Provider, app directories, and package manager
+ * @returns Rendered YAML and the list of managed job/step ids
+ */
+export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult {
+  const { provider, dirs, packageManager } = params;
+  const multi = dirs.length > 1;
+  const hasPushJob = provider === "github-token" || provider === "github-app";
+  const workingDirectory = !multi && dirs[0] !== "." ? dirs[0] : undefined;
+
+  let out = line(autofixTemplate, "HEADER", HEADER);
+  out = line(
+    out,
+    "AUTOFIX_IF",
+    provider === "autofix-ci"
+      ? undefined
+      : "if: |-\n  github.event.pull_request.head.repo.full_name == github.repository &&\n  github.actor != 'dependabot[bot]'",
+  );
+  out = block(out, "GENERATE", !multi);
+  out = line(out, "PER_APP_GENERATE", multi ? perAppGenerateSteps(dirs) : undefined);
+  out = line(
+    out,
+    "WORKING_DIRECTORY",
+    workingDirectory ? `working-directory: ${workingDirectory}` : undefined,
+  );
+  out = block(out, "PATCH_OUTPUTS", hasPushJob);
+  out = block(out, "RESTORE_PATCH", !hasPushJob);
+  out = block(out, "UPLOAD_PATCH", hasPushJob);
+  out = block(out, "PUSH_JOB", hasPushJob);
+  out = block(out, "APP_TOKEN", provider === "github-app");
+  out = block(out, "AUTOFIX_CI", provider === "autofix-ci");
+  out = block(out, "SECUREFIX", provider === "securefix");
+  out = out
+    .replaceAll("__WORKFLOW_NAME__", AUTOFIX_WORKFLOW_NAMES[provider])
+    .replaceAll("__PUSH_CONTENTS_PERMISSION__", provider === "github-token" ? "write" : "read")
+    .replaceAll(
+      "__PUSH_TOKEN__",
+      provider === "github-app"
+        ? "${{ steps.tailor-app-token.outputs.token }}"
+        : "${{ github.token }}",
+    )
+    .replaceAll("__COMMIT_MESSAGE__", AUTOFIX_COMMIT_MESSAGE)
+    .replaceAll("__PACKAGE_MANAGER__", packageManager)
+    .replaceAll("__TAILOR_CLI__", TAILOR_CLI_COMMANDS[packageManager]);
+  if (params.provider === "securefix") {
+    out = out.replaceAll("__SECUREFIX_SERVER_REPOSITORY__", () => params.securefixServerRepository);
+  }
+
+  const generatedIds = [
+    "tailor-autofix",
+    "tailor-autofix/tailor-checkout",
+    "tailor-autofix/tailor-setup",
+    "tailor-autofix/tailor-install",
+    "tailor-autofix/tailor-autofix-baseline",
+    ...(multi
+      ? dirs.map((dir) => `tailor-autofix/tailor-generate-${appSlug(dir)}`)
+      : ["tailor-autofix/tailor-generate"]),
+    "tailor-autofix/tailor-autofix-diff",
+  ];
+  if (hasPushJob) {
+    generatedIds.push(
+      "tailor-autofix/tailor-upload-patch",
+      "tailor-autofix-push",
+      ...(provider === "github-app" ? ["tailor-autofix-push/tailor-app-token"] : []),
+      "tailor-autofix-push/tailor-checkout",
+      "tailor-autofix-push/tailor-download-patch",
+      "tailor-autofix-push/tailor-commit",
+    );
+  } else if (provider === "autofix-ci") {
+    generatedIds.push("tailor-autofix/tailor-autofix-ci-auth", "tailor-autofix/tailor-autofix-ci");
+  } else {
+    generatedIds.push("tailor-autofix/tailor-securefix");
+  }
+
+  return { content: out, generatedIds };
+}

@@ -53,7 +53,7 @@ export function templateVersionDrift(params: {
   const { changedSinceRelease, releasedFingerprint, currentHash } = params;
   const rendersAsReleased = currentHash === releasedFingerprint;
   if (!changedSinceRelease && !rendersAsReleased) {
-    return "The generated templates changed since the last release. Set `const TEMPLATE_CHANGED_SINCE_RELEASE = true;` in templates.ts so the next release bumps TEMPLATE_VERSION.";
+    return "The rendered template fingerprint changed since the last release. If the generated templates changed, set `const TEMPLATE_CHANGED_SINCE_RELEASE = true;` in templates.ts so the next release bumps TEMPLATE_VERSION. If you only added renders to `renderedTemplates()` without changing the generated templates, re-record the released fingerprint in templates.ts and keep `const TEMPLATE_CHANGED_SINCE_RELEASE = false;`.";
   }
   if (changedSinceRelease && rendersAsReleased) {
     return "The generated templates render exactly as last released. Set `const TEMPLATE_CHANGED_SINCE_RELEASE = false;` in templates.ts so the next release does not bump TEMPLATE_VERSION.";

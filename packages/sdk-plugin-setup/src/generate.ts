@@ -17,11 +17,14 @@ import { detectDefaultBranch, type GitRunner } from "./git";
 import {
   findTarget,
   LOCK_VERSION,
+  planEnvironmentCollisions,
   readLock,
+  targetWorkflows,
   writeLock,
   type LockFile,
   type LockInputs,
   type LockTarget,
+  type ManagedWorkflow,
   type TargetKind,
 } from "./lock";
 import {
@@ -35,6 +38,8 @@ import {
   isManagedHash,
   ManagedMergeError,
   mergeUserContent,
+  moveJob,
+  userJobsCheckingClosed,
 } from "./managed";
 import {
   defaultLoadSeedSettings,
@@ -45,7 +50,9 @@ import {
 import {
   appSlug,
   isPackageManager,
+  planEnvironmentOf,
   renderBranchWorkflow,
+  renderPreviewCleanupWorkflow,
   renderPreviewWorkflow,
   renderTagWorkflow,
   TEMPLATE_VERSION,
@@ -100,6 +107,8 @@ export type BranchSetupOptions = CommonSetupOptions & {
   migrationTestLabel?: string;
   /** Dedicated GitHub Environment holding the migration test's source workspace. */
   migrationTestEnvironment?: string;
+  /** Run the plan job in its own `<environment>-plan` GitHub Environment. */
+  splitPlanEnvironment?: boolean;
 };
 
 type TagSetupOptions = CommonSetupOptions & {
@@ -375,7 +384,7 @@ function escapesRoot(rel: string): boolean {
  * @param dir - App directory relative to the repo root
  * @returns Absolute path to tailor.config.ts
  */
-function resolveConfigPath(outputDir: string, dir: string): string {
+export function resolveConfigPath(outputDir: string, dir: string): string {
   const appDir = path.resolve(outputDir, dir);
   const rel = path.relative(outputDir, appDir);
   if (path.isAbsolute(dir) || escapesRoot(rel)) {
@@ -412,14 +421,19 @@ type Resolved = {
   render: RenderResult;
   inputs: LockInputs;
   file: string;
+  /** For `preview` kind: the workflow that deletes the workspace of a closed pull request. */
+  cleanup?: { file: string; render: RenderResult };
   configPaths: string[];
 };
 
-// Normalize before any filesystem use and before embedding into workflow
-// YAML (paths filters / working-directory): POSIX separators, collapse
-// duplicate slashes, drop a leading "./" and trailing "/" so values like
-// "./apps/backend/" produce a clean "apps/backend".
-function normalizeDir(dir: string): string {
+/**
+ * Normalize a `--dir` value before any filesystem use and before embedding it into workflow
+ * YAML (paths filters / working-directory): POSIX separators, no duplicate slashes, and no
+ * leading "./" or trailing "/", so "./apps/backend/" becomes "apps/backend".
+ * @param dir - App directory as given
+ * @returns The normalized directory, or "." for the repository root
+ */
+export function normalizeDir(dir: string): string {
   const normalized =
     path.normalize(dir.replaceAll("\\", "/")).replace(/^\.\//, "").replace(/\/$/, "") || ".";
   validateDir(normalized);
@@ -507,6 +521,30 @@ export function detectPackageManager(outputDir: string): PackageManager | undefi
   return isPackageManager(declared) ? declared : undefined;
 }
 
+/**
+ * Take the package manager given with `--package-manager`, or detect it from the repository root.
+ * @param outputDir - Repository root
+ * @param packageManager - Package manager given with `--package-manager`, if any
+ * @returns The package manager the workflow uses
+ */
+export function resolvePackageManager(
+  outputDir: string,
+  packageManager: PackageManager | undefined,
+): PackageManager {
+  const resolved = packageManager ?? detectPackageManager(outputDir);
+  if (resolved === undefined) {
+    throw new Error(
+      "Could not detect the package manager: the repository root has no lockfile " +
+        `(${LOCKFILES.map(([file]) => file).join(", ")}), and its package.json declares no ` +
+        "supported one in packageManager or devEngines.packageManager. Commit the lockfile at " +
+        "the repository root, where the generated workflow installs dependencies, or declare " +
+        "packageManager in package.json. To generate the workflow before the lockfile exists, " +
+        "pass --package-manager to `tailor setup ci`.",
+    );
+  }
+  return resolved;
+}
+
 function rootDeclaresSdk(outputDir: string): boolean {
   const manifest = readRootManifest(outputDir);
   if (manifest === undefined) return false;
@@ -529,6 +567,14 @@ function assertMultiDirTarget(options: SetupTargetOptions, dirs: readonly string
         "repository root, so the tailor CLI must resolve there.",
     );
   }
+  assertDistinctAppSlugs(dirs);
+}
+
+/**
+ * Reject app directories whose per-app step ids would collide.
+ * @param dirs - Normalized app directories
+ */
+export function assertDistinctAppSlugs(dirs: readonly string[]): void {
   const bySlug = new Map<string, string>();
   for (const dir of dirs) {
     const other = bySlug.get(appSlug(dir));
@@ -597,17 +643,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
   const configPath = configPaths[0] ?? resolveConfigPath(options.outputDir, dir);
   await assertSeedable(options, configPath, multi);
 
-  const packageManager = options.packageManager ?? detectPackageManager(options.outputDir);
-  if (packageManager === undefined) {
-    throw new Error(
-      "Could not detect the package manager: the repository root has no lockfile " +
-        `(${LOCKFILES.map(([file]) => file).join(", ")}), and its package.json declares no ` +
-        "supported one in packageManager or devEngines.packageManager. Commit the lockfile at " +
-        "the repository root, where the generated workflow installs dependencies, or declare " +
-        "packageManager in package.json. To generate the workflow before the lockfile exists, " +
-        "pass --package-manager to `tailor setup ci`.",
-    );
-  }
+  const packageManager = resolvePackageManager(options.outputDir, options.packageManager);
 
   const loadName = options.loadConfigName ?? defaultLoadConfigName;
   const workspaceName = options.workspaceName ?? (await loadName(configPath));
@@ -625,6 +661,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
   // --environment is omitted it defaults to the workspace name.
   const environment = options.environment ?? workspaceName;
   validateEnvironment(environment);
+  const file = workflowFilePath(kind, workspaceName);
 
   if (kind === "tag") {
     validateTagPattern(options.tagPattern);
@@ -633,6 +670,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
   let branch: string | null = null;
   let branchAutoDetected = false;
   let render: RenderResult;
+  let cleanup: Resolved["cleanup"];
   let erdNamespaces: string[] = [];
   let hasMigrations = false;
   let hasSeeds = false;
@@ -698,6 +736,18 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       hasSeeds = await loadHasSeeds(configPath);
     }
     migrationTest = resolveMigrationTest(options, { multi, hasMigrations });
+    if (
+      options.splitPlanEnvironment &&
+      migrationTest &&
+      (migrationTest.environment ?? environment).toLowerCase() === environment.toLowerCase()
+    ) {
+      logger.warn(
+        `${file}: the migration test job, which runs pull request code, stays in the deploy ` +
+          `environment "${environment}" under --split-plan-environment. Re-run ` +
+          "`tailor setup ci branch` with --migration-test-environment set to an environment " +
+          "of its own.",
+      );
+    }
     render = renderBranchWorkflow({
       workspaceName,
       branch,
@@ -713,6 +763,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       migrationTest,
       restrictDispatch: options.restrictDispatch ?? false,
       seed: options.seed,
+      splitPlanEnvironment: options.splitPlanEnvironment ?? false,
     });
   } else if (kind === "tag") {
     branch = options.branch ?? null;
@@ -755,9 +806,18 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       require: options.require,
       seed: options.seed,
     });
+    cleanup = {
+      file: workflowFilePath("preview-cleanup", workspaceName),
+      render: renderPreviewCleanupWorkflow({
+        workspaceName,
+        branch,
+        workingDirectory,
+        apps,
+        environment,
+        packageManager,
+      }),
+    };
   }
-
-  const file = workflowFilePath(kind, workspaceName);
 
   const inputs: LockInputs = {
     branch,
@@ -775,6 +835,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     migrationTest: migrationTest ? true : undefined,
     migrationTestLabel: migrationTest?.label,
     migrationTestEnvironment: migrationTest?.environment,
+    splitPlanEnvironment: kind === "branch" && options.splitPlanEnvironment ? true : undefined,
     apps:
       apps && appErdNamespaces.size > 0
         ? apps.map((app) => ({ ...app, erdNamespaces: appErdNamespaces.get(app.dir) ?? [] }))
@@ -797,11 +858,12 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     render,
     inputs,
     file,
+    cleanup,
     configPaths,
   };
 }
 
-type Decision =
+export type Decision =
   | { action: "create" }
   | { action: "restore" }
   | { action: "adopt" }
@@ -818,7 +880,7 @@ type Decision =
  * @returns The reconciliation action
  */
 export function decideAction(obj: {
-  existing: LockTarget | undefined;
+  existing: ManagedWorkflow | undefined;
   fileExists: boolean;
   currentContent: string | null;
   force: boolean;
@@ -874,10 +936,10 @@ export function decideAction(obj: {
  * @param obj.render - Fresh template render
  * @returns Content to write and the lock hash for it
  */
-function reconcileContent(obj: {
+export function reconcileContent(obj: {
   file: string;
   decision: Decision;
-  existing: LockTarget | undefined;
+  existing: ManagedWorkflow | undefined;
   currentContent: string | null;
   render: RenderResult;
 }): { content: string; contentHash: string; managedHashes: Record<string, string> } {
@@ -887,24 +949,31 @@ function reconcileContent(obj: {
   if (decision.action !== "regenerate" || !existing || currentContent === null) {
     return { content: render.content, contentHash, managedHashes };
   }
-  try {
-    const merged = mergeUserContent({
+  const merged = mergeInFile(file, () =>
+    mergeUserContent({
       current: currentContent,
       rendered: render.content,
       previousIds: existing.generatedIds,
       renderedIds: render.generatedIds,
       force: decision.force,
-    });
-    if (merged.dropped.length > 0) {
-      logger.warn(
-        `${file}: dropped your steps ${merged.dropped.join(", ")} because the SDK no longer ` +
-          "generates the job that contained them.",
-      );
-    }
-    return { content: merged.content, contentHash, managedHashes };
+    }),
+  );
+  if (merged.dropped.length > 0) {
+    logger.warn(
+      `${file}: dropped your steps ${merged.dropped.join(", ")} because the SDK no longer ` +
+        "generates the job that contained them.",
+    );
+  }
+  return { content: merged.content, contentHash, managedHashes };
+}
+
+function mergeInFile<T>(file: string, merge: () => T): T {
+  try {
+    return merge();
   } catch (error) {
-    if (error instanceof ManagedMergeError)
+    if (error instanceof ManagedMergeError) {
       throw new Error(`${file}: ${error.message}`, { cause: error });
+    }
     throw error;
   }
 }
@@ -915,41 +984,63 @@ function reconcileContent(obj: {
  * @param obj.lock - Existing lock file, or null
  * @param obj.kind - Target kind being generated
  * @param obj.workspaceName - Workspace name being generated
- * @param obj.file - Target file path
+ * @param obj.files - File paths the target generates
  */
 function assertNoKindCollision(obj: {
   lock: LockFile | null;
   kind: TargetKind;
   workspaceName: string;
-  file: string;
+  files: readonly string[];
 }): void {
-  const { lock, kind, workspaceName, file } = obj;
-  const collision = lock?.targets.find(
-    (t) => t.file === file && !(t.kind === kind && t.workspaceName === workspaceName),
-  );
-  if (collision) {
+  const { lock, kind, workspaceName, files } = obj;
+  for (const target of lock?.targets ?? []) {
+    if (target.kind === kind && target.workspaceName === workspaceName) continue;
+    const file = targetWorkflows(target)
+      .map((workflow) => workflow.file)
+      .find((owned) => files.includes(owned));
+    if (file !== undefined) {
+      throw new Error(
+        `A ${target.kind} target already owns ${file}, which conflicts with this ${kind} target. ` +
+          "Pass a different name with --name to generate a separate workflow.",
+      );
+    }
+  }
+  const autofixFile = lock?.autofix?.file;
+  if (autofixFile !== undefined && files.includes(autofixFile)) {
     throw new Error(
-      `A ${collision.kind} target already owns ${file}, which conflicts with this ${kind} target. ` +
+      `The autofix workflow already owns ${autofixFile}, which conflicts with this ${kind} target. ` +
         "Pass a different name with --name to generate a separate workflow.",
     );
   }
 }
 
-function printEnvironmentStep(environment: string): void {
+/**
+ * Report a workflow file written as `decision` decided.
+ * @param decision - Reconciliation action the file was written under
+ * @param file - Repository-relative file path
+ */
+export function logWritten(decision: Decision, file: string): void {
+  if (decision.action === "restore") {
+    logger.success(`Regenerated ${styles.path(file)} (was missing on disk)`);
+  } else if (decision.action === "regenerate" || decision.action === "adopt") {
+    logger.success(`Regenerated ${styles.path(file)}`);
+  } else {
+    logger.success(`Generated ${styles.path(file)}`);
+  }
+}
+
+function printEnvironmentStep(environments: readonly string[]): void {
+  const names = environments.map((environment) => `"${environment}"`).join(" and ");
+  const flags = environments.map((environment) => `--environment ${environment}`).join(" ");
   logger.log(
-    `1. Set the secrets and variables the "${environment}" environment needs. ` +
+    `1. Set the secrets and variables the ${names} ` +
+      `${environments.length === 1 ? "environment needs" : "environments need"}. ` +
       "This lists them and where each value comes from (drop --environment to list every " +
       "environment in .github/tailor.lock):",
   );
-  logger.log(
-    `   tailor setup ci env --environment ${environment}                       # gh commands`,
-  );
-  logger.log(
-    `   tailor setup ci env --environment ${environment} --format terraform    # or Terraform`,
-  );
-  logger.log(
-    `   tailor setup ci env --environment ${environment} --check               # then what is still missing`,
-  );
+  logger.log(`   tailor setup ci env ${flags}                       # gh commands`);
+  logger.log(`   tailor setup ci env ${flags} --format terraform    # or Terraform`);
+  logger.log(`   tailor setup ci env ${flags} --check               # then what is still missing`);
 }
 
 export type SetupTargetResult = {
@@ -958,6 +1049,8 @@ export type SetupTargetResult = {
   file: string;
   /** Resolved GitHub Environment name. */
   environment: string;
+  /** GitHub Environment of the plan job, when it runs apart from `environment`. */
+  planEnvironment?: string;
   /** Whether the app id was moved out of tailor.config.ts. */
   configEdited: boolean;
 };
@@ -967,12 +1060,14 @@ export type SetupTargetResult = {
  * @param result - What {@link setupTarget} generated
  */
 export function printTargetNextSteps(result: SetupTargetResult): void {
-  const { environment, configEdited } = result;
+  const { environment, planEnvironment, configEdited } = result;
 
   logger.newline();
   logger.info("Next steps:");
   logger.newline();
-  printEnvironmentStep(environment);
+  printEnvironmentStep(
+    planEnvironment === undefined ? [environment] : [environment, planEnvironment],
+  );
 
   logger.newline();
   logger.log("2. Commit the generated files:");
@@ -981,6 +1076,93 @@ export function printTargetNextSteps(result: SetupTargetResult): void {
   if (configEdited) {
     logger.log(`   - tailor.config.ts (app id moved to ${TAILOR_LOCK_FILENAME})`);
   }
+}
+
+type PlannedFile = {
+  file: string;
+  existing: ManagedWorkflow | undefined;
+  currentContent: string | null;
+  decision: Decision;
+  render: RenderResult;
+  /** The workflow a job of this file moved out of, when it did. */
+  movedFrom?: string;
+};
+
+const PREVIEW_CLEANUP_JOB = "tailor-preview-cleanup";
+
+/**
+ * Plan a preview target whose preview workflow still holds the cleanup job, as generated before
+ * that job moved into its own workflow: the job moves into the cleanup workflow, so the steps
+ * and settings of yours in it go along instead of being dropped.
+ * @param obj - Plans to adjust
+ * @param obj.existing - The preview target's lock entry, if any
+ * @param obj.main - Plan of the preview workflow
+ * @param obj.cleanup - Plan of the cleanup workflow
+ * @param obj.force - Whether --force was passed
+ * @returns The plans to reconcile
+ */
+function withMovedCleanupJob(obj: {
+  existing: LockTarget | undefined;
+  main: PlannedFile;
+  cleanup: PlannedFile;
+  force: boolean;
+}): { main: PlannedFile; cleanup: PlannedFile } {
+  const { existing, main, cleanup, force } = obj;
+  if (
+    !existing ||
+    existing.cleanup ||
+    !existing.generatedIds.includes(PREVIEW_CLEANUP_JOB) ||
+    main.decision.action !== "regenerate" ||
+    main.currentContent === null
+  ) {
+    return { main, cleanup };
+  }
+  const from = main.currentContent;
+  const moved = mergeInFile(main.file, () =>
+    moveJob({
+      from,
+      into: cleanup.render.content,
+      jobId: PREVIEW_CLEANUP_JOB,
+      topLevelKeys: ["env", "defaults", "concurrency"],
+    }),
+  );
+  if (!moved) return { main, cleanup };
+  const movedIds = existing.generatedIds.filter(
+    (id) => id === PREVIEW_CLEANUP_JOB || id.startsWith(`${PREVIEW_CLEANUP_JOB}/`),
+  );
+  return {
+    main: { ...main, currentContent: moved.from },
+    cleanup: {
+      ...cleanup,
+      existing: {
+        file: cleanup.file,
+        templateVersion: existing.templateVersion,
+        generatedIds: movedIds,
+        contentHash: computeManagedHash(moved.into, movedIds),
+      },
+      currentContent: moved.into,
+      decision: { action: "regenerate", force },
+      movedFrom: main.file,
+    },
+  };
+}
+
+function planFile(obj: {
+  outputDir: string;
+  file: string;
+  existing: ManagedWorkflow | undefined;
+  render: RenderResult;
+  force: boolean;
+}): PlannedFile {
+  const { file, existing, render, force } = obj;
+  const absFile = path.join(obj.outputDir, file);
+  const fileExists = fs.existsSync(absFile);
+  const currentContent = fileExists ? fs.readFileSync(absFile, "utf-8") : null;
+  const decision = decideAction({ existing, fileExists, currentContent, force });
+  if (decision.action === "conflict") {
+    throw new Error(`${file}: ${decision.reason}`);
+  }
+  return { file, existing, currentContent, decision, render };
 }
 
 /**
@@ -992,13 +1174,12 @@ export async function setupTarget(options: SetupTargetOptions): Promise<SetupTar
   const resolved = await resolve(options);
 
   const lock = readLock(options.outputDir);
-  const absFile = path.join(options.outputDir, resolved.file);
 
   assertNoKindCollision({
     lock,
     kind: resolved.kind,
     workspaceName: resolved.workspaceName,
-    file: resolved.file,
+    files: resolved.cleanup ? [resolved.file, resolved.cleanup.file] : [resolved.file],
   });
 
   const existing = findTarget(lock, resolved.kind, resolved.workspaceName);
@@ -1009,13 +1190,24 @@ export async function setupTarget(options: SetupTargetOptions): Promise<SetupTar
       existing: existing !== undefined,
     });
   }
-  const fileExists = fs.existsSync(absFile);
-  const currentContent = fileExists ? fs.readFileSync(absFile, "utf-8") : null;
-
-  const decision = decideAction({ existing, fileExists, currentContent, force: options.force });
-
-  if (decision.action === "conflict") {
-    throw new Error(`${resolved.file}: ${decision.reason}`);
+  const { outputDir, force } = options;
+  let mainPlan = planFile({
+    outputDir,
+    file: resolved.file,
+    existing,
+    render: resolved.render,
+    force,
+  });
+  let cleanupPlan =
+    resolved.cleanup &&
+    planFile({ outputDir, ...resolved.cleanup, existing: existing?.cleanup, force });
+  if (cleanupPlan) {
+    ({ main: mainPlan, cleanup: cleanupPlan } = withMovedCleanupJob({
+      existing,
+      main: mainPlan,
+      cleanup: cleanupPlan,
+      force,
+    }));
   }
 
   // deploy resolves the app id against the nearest lock above the config, so
@@ -1049,16 +1241,14 @@ export async function setupTarget(options: SetupTargetOptions): Promise<SetupTar
     mode: "write",
   });
 
-  const { content, contentHash, managedHashes } = reconcileContent({
-    file: resolved.file,
-    decision,
-    existing,
-    currentContent,
-    render: resolved.render,
-  });
-
-  fs.mkdirSync(path.dirname(absFile), { recursive: true });
-  fs.writeFileSync(absFile, content, "utf-8");
+  const main = { ...mainPlan, ...reconcileContent(mainPlan) };
+  const cleanup = cleanupPlan && { ...cleanupPlan, ...reconcileContent(cleanupPlan) };
+  const written = cleanup ? [main, cleanup] : [main];
+  for (const { file, content } of written) {
+    const absFile = path.join(outputDir, file);
+    fs.mkdirSync(path.dirname(absFile), { recursive: true });
+    fs.writeFileSync(absFile, content, "utf-8");
+  }
 
   const newTarget: LockTarget = {
     kind: resolved.kind,
@@ -1066,9 +1256,18 @@ export async function setupTarget(options: SetupTargetOptions): Promise<SetupTar
     file: resolved.file,
     templateVersion: TEMPLATE_VERSION,
     inputs: resolved.inputs,
-    generatedIds: resolved.render.generatedIds,
-    contentHash,
-    managedHashes,
+    generatedIds: main.render.generatedIds,
+    contentHash: main.contentHash,
+    managedHashes: main.managedHashes,
+    ...(cleanup && {
+      cleanup: {
+        file: cleanup.file,
+        templateVersion: TEMPLATE_VERSION,
+        generatedIds: cleanup.render.generatedIds,
+        contentHash: cleanup.contentHash,
+        managedHashes: cleanup.managedHashes,
+      },
+    }),
   };
 
   // Replace in place to keep the lock diff minimal when re-running setup for
@@ -1089,19 +1288,34 @@ export async function setupTarget(options: SetupTargetOptions): Promise<SetupTar
     appIds: appIdPlan.appIds,
   });
   const { configEdited } = await removeAdoptedConfigIds(appIdPlan);
+  const knownCollisions = new Set(planEnvironmentCollisions(lock?.targets ?? []));
 
-  if (decision.action === "restore") {
-    logger.success(`Regenerated ${styles.path(resolved.file)} (was missing on disk)`);
-  } else if (decision.action === "regenerate" || decision.action === "adopt") {
-    logger.success(`Regenerated ${styles.path(resolved.file)}`);
-  } else {
-    logger.success(`Generated ${styles.path(resolved.file)}`);
+  for (const { decision, file, movedFrom } of written) {
+    if (movedFrom === undefined) {
+      logWritten(decision, file);
+    } else {
+      logger.success(
+        `Generated ${styles.path(file)} with the ${PREVIEW_CLEANUP_JOB} job moved from ${styles.path(movedFrom)}`,
+      );
+    }
+  }
+  if (cleanup) {
+    for (const jobId of userJobsCheckingClosed(main.content)) {
+      logger.warn(
+        `${main.file}: your job "${jobId}" checks for a closed pull request, which no longer ` +
+          `starts this workflow. Move it into ${cleanup.file}.`,
+      );
+    }
+  }
+  for (const collision of planEnvironmentCollisions(targets)) {
+    if (!knownCollisions.has(collision)) logger.warn(collision);
   }
 
   return {
     kind: resolved.kind,
     file: resolved.file,
     environment: resolved.environment,
+    planEnvironment: planEnvironmentOf(resolved.inputs),
     configEdited,
   };
 }

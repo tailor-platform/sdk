@@ -287,6 +287,32 @@ describe("withSecretsStateLock", () => {
     await expect(pending).resolves.toBe("done");
   });
 
+  test("names the lock directory when another holder keeps the lock past the timeout", async () => {
+    const lockPath = lockPathFor(scopeA);
+    mkdirSync(lockPath, { recursive: true });
+    writeFileSync(
+      path.join(lockPath, "owner.json"),
+      JSON.stringify({ pid: 12345, token: "other" }),
+    );
+    const refreshedLater = new Date(Date.now() + 60 * 60 * 1000);
+    utimesSync(lockPath, refreshedLater, refreshedLater);
+
+    vi.useFakeTimers();
+    try {
+      const pending = withSecretsStateLock(scopeA, async () => "acquired");
+      const settled = pending.catch((error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 200);
+
+      expect(await settled).toMatchObject({
+        code: "DEPLOY_LOCK_TIMEOUT",
+        suggestion: expect.stringContaining(lockPath),
+        context: { lockPath },
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test("release leaves a lock taken over by another process", async () => {
     const lockPath = lockPathFor(scopeA);
     await withSecretsStateLock(scopeA, async () => {

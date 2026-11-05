@@ -15,28 +15,30 @@ const packageJson = JSON.parse(
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-const sdkSourceAliases = Object.entries(packageJson.exports).map(([exportName, target]) => {
-  const publicImport =
-    exportName === "." ? "@tailor-platform/sdk" : `@tailor-platform/sdk/${exportName.slice(2)}`;
-  const distImport = target.import ?? target.default;
+const sdkSourceAliases = Object.entries(packageJson.exports)
+  .filter(([, target]) => target.import ?? target.default)
+  .map(([exportName, target]) => {
+    const publicImport =
+      exportName === "." ? "@tailor-platform/sdk" : `@tailor-platform/sdk/${exportName.slice(2)}`;
+    const distImport = target.import ?? target.default;
 
-  if (!distImport?.startsWith("./dist/") || !distImport.endsWith(".mjs")) {
-    throw new Error(
-      `Unsupported @tailor-platform/sdk export ${exportName}: expected ./dist/*.mjs import target`,
-    );
-  }
+    if (!distImport?.startsWith("./dist/") || !distImport.endsWith(".mjs")) {
+      throw new Error(
+        `Unsupported @tailor-platform/sdk export ${exportName}: expected ./dist/*.mjs import target`,
+      );
+    }
 
-  return {
-    find: new RegExp(`^${escapeRegExp(publicImport)}$`),
-    replacement: path.resolve(
-      import.meta.dirname,
-      distImport
-        .replace(/^\.\//, "")
-        .replace(/^dist\//, "src/")
-        .replace(/\.mjs$/, ".ts"),
-    ),
-  };
-});
+    return {
+      find: new RegExp(`^${escapeRegExp(publicImport)}$`),
+      replacement: path.resolve(
+        import.meta.dirname,
+        distImport
+          .replace(/^\.\//, "")
+          .replace(/^dist\//, "src/")
+          .replace(/\.mjs$/, ".ts"),
+      ),
+    };
+  });
 
 // E2e files whose measured V8 coverage contribution justifies running them in
 // the coverage CI job ("e2e-coverage" project below): deploy.test.ts calls

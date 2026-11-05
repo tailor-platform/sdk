@@ -2,7 +2,16 @@ import { logger } from "@tailor-platform/sdk/cli";
 import { validateEnvironment, validateWorkspaceName } from "./generate";
 import { type GhRunner, viewRepository } from "./gh";
 import { detectRepository, type GitRunner, type Repository } from "./git";
-import { type LockFile, readLock, type TargetKind } from "./lock";
+import {
+  AUTOFIX_LABEL,
+  type JobEnvironment,
+  type LockFile,
+  planEnvironmentCollisions,
+  readManagedLock,
+  targetJobEnvironments,
+  type TargetKind,
+} from "./lock";
+import type { AutofixProvider } from "./templates";
 
 export type EnvRequirement = {
   name: string;
@@ -12,11 +21,14 @@ export type EnvRequirement = {
   description: string;
   /** Where the value comes from. */
   howTo: string;
+  /** Counts only when set on the environment itself, not inherited from the repository or organization. */
+  environmentOnly?: boolean;
 };
 
 export type EnvironmentRequirements = {
-  environment: string;
-  /** Lock targets using this environment, as `<kind> <workspaceName>`. */
+  /** GitHub Environment, or null for the secrets and variables of the repository itself. */
+  environment: string | null;
+  /** Workflows using these, as `<kind> <workspaceName>` for a target or `autofix`. */
   targets: string[];
   requirements: EnvRequirement[];
 };
@@ -47,12 +59,35 @@ const CLIENT_SECRET: EnvRequirement = {
   description: "Client secret of the same platform machine user",
   howTo: `${MACHINE_USER_HOW_TO}; use its client secret`,
 };
+/** Secrets that belong on the environment, since its protection rules do not guard them elsewhere. */
+export const ENVIRONMENT_PREFERRED_SECRETS: ReadonlySet<string> = new Set([CLIENT_SECRET.name]);
+
 const WORKSPACE_ID: EnvRequirement = {
   name: "TAILOR_PLATFORM_WORKSPACE_ID",
   type: "variable",
   required: true,
   description: "ID of the workspace this environment deploys to",
   howTo: "the id printed by `tailor workspace create`, or listed by `tailor workspace list`",
+};
+const DEPLOY_CLIENT_ID: EnvRequirement = {
+  ...CLIENT_ID,
+  description:
+    "Client ID of the platform machine user that CI signs in as for deploy; it needs an editor " +
+    "or admin role on the organization or folder that holds the workspace",
+};
+const PLAN_CLIENT_ID: EnvRequirement = {
+  ...CLIENT_ID,
+  description:
+    "Client ID of the platform machine user that the plan job signs in as; a viewer role on the " +
+    "organization or folder that holds the workspace is enough. Pull requests run this job with " +
+    "their own code, so do not use the deploy machine user here",
+  environmentOnly: true,
+};
+const PLAN_CLIENT_SECRET: EnvRequirement = { ...CLIENT_SECRET, environmentOnly: true };
+const PLAN_WORKSPACE_ID: EnvRequirement = {
+  ...WORKSPACE_ID,
+  description:
+    "ID of the workspace the plan job compares against: the one the deploy job deploys to",
 };
 const MIGRATION_TEST_CLIENT_ID: EnvRequirement = {
   ...CLIENT_ID,
@@ -155,6 +190,77 @@ const REQUIREMENTS: Record<TargetKind, EnvRequirement[]> = {
   ],
 };
 
+const SPLIT_DEPLOY_REQUIREMENTS = [
+  DEPLOY_CLIENT_ID,
+  CLIENT_SECRET,
+  WORKSPACE_ID,
+  SLACK_BOT_TOKEN,
+  SLACK_CHANNEL_ID,
+  SEED_USER_PASSWORD,
+  SLACK_USER_MAPPING,
+];
+
+const PLAN_REQUIREMENTS = [
+  PLAN_CLIENT_ID,
+  PLAN_CLIENT_SECRET,
+  PLAN_WORKSPACE_ID,
+  FAIL_ON_DRIFT,
+  SEED_USER_PASSWORD,
+];
+/** Plan environment variants, which a deploy job's entry replaces when it shares the environment. */
+const PLAN_VARIANTS: ReadonlySet<EnvRequirement> = new Set(
+  PLAN_REQUIREMENTS.filter((requirement) => !DEPLOY_REQUIREMENTS.includes(requirement)),
+);
+
+const AUTOFIX_APP_CLIENT_ID: EnvRequirement = {
+  name: "TAILOR_AUTOFIX_APP_CLIENT_ID",
+  type: "variable",
+  required: true,
+  description:
+    "Client ID of the GitHub App that commits the files `tailor generate` changes to pull " +
+    "requests; it needs the Contents read and write permission",
+  howTo:
+    "create a GitHub App with that permission, install it on this repository, and copy the " +
+    "Client ID from the App's settings page",
+};
+const AUTOFIX_APP_PRIVATE_KEY: EnvRequirement = {
+  name: "TAILOR_AUTOFIX_APP_PRIVATE_KEY",
+  type: "secret",
+  required: true,
+  description: "Private key of the same GitHub App",
+  howTo:
+    "generate a private key on the App's settings page, and pass the downloaded .pem file " +
+    "on standard input (`gh secret set ... < key.pem`)",
+};
+
+const AUTOFIX_REQUIREMENTS: Record<AutofixProvider, EnvRequirement[]> = {
+  "github-token": [],
+  "autofix-ci": [],
+  securefix: [
+    {
+      ...AUTOFIX_APP_CLIENT_ID,
+      description:
+        "Client ID of the securefix client GitHub App, which asks the securefix server " +
+        "repository to commit the files `tailor generate` changes; it needs the Issues read " +
+        "and write permission",
+      howTo:
+        "the client App from https://github.com/csm-actions/securefix-action, installed on " +
+        "this repository and the server repository; copy the Client ID from its settings page",
+    },
+    { ...AUTOFIX_APP_PRIVATE_KEY, description: "Private key of the same securefix client App" },
+  ],
+  "github-app": [AUTOFIX_APP_CLIENT_ID, AUTOFIX_APP_PRIVATE_KEY],
+};
+
+/**
+ * Repository secrets and variables the autofix workflow of the given provider reads.
+ * @param provider - Autofix provider
+ * @returns Requirements in display order
+ */
+export function autofixRequirements(provider: AutofixProvider): EnvRequirement[] {
+  return AUTOFIX_REQUIREMENTS[provider];
+}
+
 /**
  * Secrets and variables a generated workflow of the given kind reads from its GitHub Environment.
  * @param kind - Target kind
@@ -165,9 +271,10 @@ export function targetRequirements(kind: TargetKind): EnvRequirement[] {
 }
 
 /**
- * Group the secrets and variables every lock target needs by GitHub Environment.
+ * Group the secrets and variables every lock target needs by GitHub Environment, followed by the
+ * repository ones the autofix workflow needs.
  * @param lock - Lock file
- * @returns One entry per environment, in lock order
+ * @returns One entry per environment, in lock order, then the repository entry if any
  */
 export function collectEnvironmentRequirements(lock: LockFile): EnvironmentRequirements[] {
   const byEnvironment = new Map<string, EnvironmentRequirements>();
@@ -185,60 +292,87 @@ export function collectEnvironmentRequirements(lock: LockFile): EnvironmentRequi
     entry.targets.push(targetLabel);
     for (const requirement of requirements) {
       const existing = entry.requirements.findIndex((r) => r.name === requirement.name);
-      if (existing === -1) {
+      const current = entry.requirements[existing];
+      if (current === undefined) {
         entry.requirements.push(requirement);
-      } else if (requirement.required && !entry.requirements[existing]?.required) {
+      } else if (
+        (requirement.required && !current.required) ||
+        (PLAN_VARIANTS.has(current) && !PLAN_VARIANTS.has(requirement))
+      ) {
         entry.requirements[existing] = requirement;
       }
     }
   };
   for (const target of lock.targets) {
-    const { environment, migrationTest, migrationTestEnvironment } = target.inputs;
-    validateEnvironment(environment);
     validateWorkspaceName(target.workspaceName);
-    const label = `${target.kind} ${target.workspaceName}`;
-    add(environment, label, targetRequirements(target.kind));
-    if (target.kind === "branch" && migrationTest && migrationTestEnvironment !== undefined) {
-      validateEnvironment(migrationTestEnvironment);
-      add(migrationTestEnvironment, `${label} (migration test)`, [
-        MIGRATION_TEST_CLIENT_ID,
-        CLIENT_SECRET,
-        MIGRATION_TEST_SOURCE_WORKSPACE_ID,
-      ]);
+    const jobs = targetJobEnvironments(target);
+    const split = jobs.some(({ job }) => job === "plan");
+    const requirementsOf = {
+      deploy: split ? SPLIT_DEPLOY_REQUIREMENTS : targetRequirements(target.kind),
+      plan: PLAN_REQUIREMENTS,
+      migrationTest: [MIGRATION_TEST_CLIENT_ID, CLIENT_SECRET, MIGRATION_TEST_SOURCE_WORKSPACE_ID],
+    } satisfies Record<JobEnvironment["job"], readonly EnvRequirement[]>;
+    for (const { job, environment, label } of jobs) {
+      validateEnvironment(environment);
+      add(environment, label, requirementsOf[job]);
     }
   }
   for (const entry of byEnvironment.values()) {
     entry.requirements.sort((a, b) => Number(b.required) - Number(a.required));
   }
-  return [...byEnvironment.values()];
+  const repository = lock.autofix ? autofixRequirements(lock.autofix.inputs.provider) : [];
+  return [
+    ...byEnvironment.values(),
+    ...(repository.length > 0
+      ? [{ environment: null, targets: [AUTOFIX_LABEL], requirements: repository }]
+      : []),
+  ];
 }
 
 /**
- * Render `gh` commands that create each missing environment and set its secrets and variables.
+ * Heading of a requirement group in generated commands and reports.
+ * @param group - Requirements of an environment or of the repository
+ * @returns `Environment "<name>" (<workflows>)` or `Repository secrets and variables (<workflows>)`
+ */
+export function describeGroup(group: EnvironmentRequirements): string {
+  const subject =
+    group.environment === null
+      ? "Repository secrets and variables"
+      : `Environment "${group.environment}"`;
+  return `${subject} (${group.targets.join(", ")})`;
+}
+
+/**
+ * Render `gh` commands that create each missing environment and set its secrets and variables,
+ * followed by commented-out commands that delete the given repository secrets.
  * @param environments - Requirements grouped by environment; `exists: true` skips creating it
  * @param repository - Target repository; when null, gh resolves it from the current directory
+ * @param repositorySecretsToDelete - Repository secrets to delete once the environments hold them
  * @returns Shell script text
  */
 export function renderGhCommands(
   environments: (EnvironmentRequirements & { exists?: boolean })[],
   repository: Repository | null = null,
+  repositorySecretsToDelete: string[] = [],
 ): string {
   const repoPath = repository ? `${repository.owner}/${repository.name}` : "{owner}/{repo}";
   const hostPrefix = repository?.host ? `${repository.host}/` : "";
   const repoFlag = repository ? ` --repo=${hostPrefix}${repoPath}` : "";
   const ghApi = repository?.host ? `gh api --hostname ${repository.host}` : "gh api";
-  const blocks = environments.map(({ environment, targets, requirements, exists }) => {
-    const endpoint = `"repos/${repoPath}/environments/${encodeURIComponent(environment)}"`;
-    const lines = [`# Environment "${environment}" (${targets.join(", ")})`];
-    if (exists !== true) {
+  const blocks = environments.map((group) => {
+    const { environment, requirements, exists } = group;
+    const lines = [`# ${describeGroup(group)}`];
+    if (environment !== null && exists !== true) {
+      const endpoint = `"repos/${repoPath}/environments/${encodeURIComponent(environment)}"`;
       lines.push(
         // PUT also rewrites an existing environment and needs admin access, so only create a missing
         // one. The status is compared as text so the expected 404 exit does not fail under pipefail.
         `if [ "$(${ghApi} -i ${endpoint} 2>/dev/null | head -n 1 | cut -d " " -f 2)" = 404 ]; then ${ghApi} -X PUT ${endpoint} --silent; fi`,
       );
     }
+    const envFlag = environment === null ? "" : ` --env=${environment}`;
     for (const { required, type, name, description, howTo } of requirements) {
-      const command = `gh ${type} set ${name} --env=${environment}${repoFlag}`;
+      const command = `gh ${type} set ${name}${envFlag}${repoFlag}`;
       lines.push(
         required ? `# ${description}` : `# Optional: ${description}`,
         `#   How to get: ${howTo}`,
@@ -247,6 +381,15 @@ export function renderGhCommands(
     }
     return lines.join("\n");
   });
+  if (repositorySecretsToDelete.length > 0) {
+    blocks.push(
+      [
+        "# Repository secrets that any workflow on any branch can read. Delete each once every",
+        "# environment and workflow that reads it has its own; GitHub cannot restore a deleted secret.",
+        ...repositorySecretsToDelete.map((name) => `# gh secret delete ${name}${repoFlag}`),
+      ].join("\n"),
+    );
+  }
   const header = [
     "# Run these one at a time: each `gh ... set` prompts for its value.",
     ...(repository
@@ -257,24 +400,29 @@ export function renderGhCommands(
   return `${[header, ...blocks].join("\n\n")}\n`;
 }
 
-function terraformLabel(value: string): string {
+function terraformLabel(environment: string | null): string {
+  if (environment === null) return "repository";
   // Hyphens are valid in HCL but not in the shell names of TF_VAR_ environment variables.
-  const label = value.replace(/[^A-Za-z0-9_]/g, "_");
+  const label = environment.replace(/[^A-Za-z0-9_]/g, "_");
   return /^[A-Za-z_]/.test(label) ? label : `_${label}`;
 }
 
 function assertUniqueLabels(environments: EnvironmentRequirements[]): void {
-  const seen = new Map<string, string>();
+  const seen = new Map<string, string | null>();
   for (const { environment } of environments) {
     const label = terraformLabel(environment);
-    const other = seen.get(label);
-    if (other !== undefined) {
-      throw new Error(
-        `Environments "${other}" and "${environment}" map to the same Terraform name "${label}". ` +
-          "Rename one of them to generate Terraform.",
-      );
+    if (!seen.has(label)) {
+      seen.set(label, environment);
+      continue;
     }
-    seen.set(label, environment);
+    const other = seen.get(label) ?? null;
+    throw new Error(
+      other === null || environment === null
+        ? `Environment "${other ?? environment}" maps to the Terraform name "${label}" of the ` +
+            "repository secrets and variables. Rename the environment to generate Terraform."
+        : `Environments "${other}" and "${environment}" map to the same Terraform name ` +
+            `"${label}". Rename one of them to generate Terraform.`,
+    );
   }
 }
 
@@ -336,16 +484,20 @@ function terraformUsage(
     "#    (gh) instead and remove their resources from this file.",
     "# 4. Import each environment and variable that already exists in the repository",
     "#    (creating an existing variable fails; secrets are simply overwritten):",
-    ...environments.map(
-      ({ environment }) =>
-        `#   terraform import github_repository_environment.${terraformLabel(environment)} ${repoName}:${environment}`,
+    ...environments.flatMap(({ environment }) =>
+      environment === null
+        ? []
+        : [
+            `#   terraform import github_repository_environment.${terraformLabel(environment)} ${repoName}:${environment}`,
+          ],
     ),
     ...inputs
       .filter((input) => input.type === "variable")
       .map((input) => {
-        const address = `github_actions_environment_variable.${input.label}`;
+        const address = `${resourceType(input.environment, input.type)}.${input.label}`;
         const target = input.required ? address : `'${address}[0]'`;
-        return `#   terraform import ${target} ${repoName}:${input.environment}:${input.name}`;
+        const id = input.environment === null ? "" : `${input.environment}:`;
+        return `#   terraform import ${target} ${repoName}:${id}${input.name}`;
       }),
     "# 5. Apply:",
     "#   terraform init && terraform plan && terraform apply",
@@ -355,8 +507,13 @@ function terraformUsage(
   ].join("\n");
 }
 
-function terraformRequirement(envLabel: string, requirement: EnvRequirement): string[] {
+function resourceType(environment: string | null, type: EnvRequirement["type"]): string {
+  return environment === null ? `github_actions_${type}` : `github_actions_environment_${type}`;
+}
+
+function terraformRequirement(environment: string | null, requirement: EnvRequirement): string[] {
   const { name, type, required, description, howTo } = requirement;
+  const envLabel = terraformLabel(environment);
   const label = requirementLabel(envLabel, name);
   const input = `var.${label}`;
   const sensitive = type === "secret";
@@ -370,10 +527,13 @@ function terraformRequirement(envLabel: string, requirement: EnvRequirement): st
       !required && ["default", "null"],
       sensitive && ["sensitive", "true"],
     ]);
-  const resource = hclBlock(`resource "github_actions_environment_${type}" "${label}"`, [
+  const resource = hclBlock(`resource "${resourceType(environment, type)}" "${label}"`, [
     !required && ["count", `${supplied} ? 1 : 0`],
     ["repository", "var.repository"],
-    ["environment", `github_repository_environment.${envLabel}.environment`],
+    environment !== null && [
+      "environment",
+      `github_repository_environment.${envLabel}.environment`,
+    ],
     [`${type}_name`, JSON.stringify(name)],
     [sensitive ? "plaintext_value" : "value", input],
   ]);
@@ -409,26 +569,30 @@ export function renderTerraform(
       repository !== null && ["default", JSON.stringify(repository.name)],
     ]),
   ];
-  for (const { environment, targets, requirements } of environments) {
-    const envLabel = terraformLabel(environment);
+  for (const group of environments) {
+    const { environment, requirements } = group;
     blocks.push(
       [
-        `# Environment "${environment}" (${targets.join(", ")})`,
-        hclBlock(
-          `resource "github_repository_environment" "${envLabel}"`,
-          [
-            ["repository", "var.repository"],
-            ["environment", JSON.stringify(environment)],
-          ],
-          [
-            "# Remove to manage the protection settings here as well.",
-            "lifecycle {",
-            "  ignore_changes = [reviewers, wait_timer, deployment_branch_policy, prevent_self_review, can_admins_bypass]",
-            "}",
-          ],
-        ),
+        `# ${describeGroup(group)}`,
+        ...(environment === null
+          ? []
+          : [
+              hclBlock(
+                `resource "github_repository_environment" "${terraformLabel(environment)}"`,
+                [
+                  ["repository", "var.repository"],
+                  ["environment", JSON.stringify(environment)],
+                ],
+                [
+                  "# Remove to manage the protection settings here as well.",
+                  "lifecycle {",
+                  "  ignore_changes = [reviewers, wait_timer, deployment_branch_policy, prevent_self_review, can_admins_bypass]",
+                  "}",
+                ],
+              ),
+            ]),
       ].join("\n"),
-      ...requirements.flatMap((requirement) => terraformRequirement(envLabel, requirement)),
+      ...requirements.flatMap((requirement) => terraformRequirement(environment, requirement)),
     );
   }
   return `${blocks.join("\n\n")}\n`;
@@ -441,13 +605,20 @@ function selectEnvironments(
   names: string[],
 ): EnvironmentRequirements[] {
   if (names.length === 0) return environments;
-  const byName = new Map(environments.map((entry) => [entry.environment.toLowerCase(), entry]));
+  const byName = new Map(
+    environments.flatMap((entry) =>
+      entry.environment === null ? [] : [[entry.environment.toLowerCase(), entry] as const],
+    ),
+  );
+  const known = [...byName.values()].map((entry) => entry.environment);
   const selected = names.map((name) => {
     const entry = byName.get(name.toLowerCase());
     if (!entry) {
       throw new Error(
         `No generated workflow uses the environment "${name}". ` +
-          `Environments in .github/tailor.lock: ${environments.map((e) => e.environment).join(", ")}.`,
+          (known.length > 0
+            ? `Environments in .github/tailor.lock: ${known.join(", ")}.`
+            : "The workflows in .github/tailor.lock use no GitHub Environment."),
       );
     }
     return entry;
@@ -456,7 +627,8 @@ function selectEnvironments(
 }
 
 /**
- * Read the lock and group the requirements of its targets by GitHub Environment.
+ * Read the lock and group the requirements of its targets by GitHub Environment, warning about
+ * each split plan environment another job also runs in.
  * @param outputDir - Repository root where `.github` lives
  * @param names - Only these environments; all when empty
  * @returns One entry per selected environment, in lock order
@@ -465,14 +637,12 @@ export function loadEnvironmentRequirements(
   outputDir: string,
   names: string[] = [],
 ): EnvironmentRequirements[] {
-  const lock = readLock(outputDir);
-  if (!lock || lock.targets.length === 0) {
-    throw new Error(
-      "No managed workflows found (.github/tailor.lock is missing or empty). " +
-        "Run `tailor setup ci branch` (or another setup subcommand) first.",
-    );
+  const lock = readManagedLock(outputDir);
+  const environments = collectEnvironmentRequirements(lock);
+  for (const collision of planEnvironmentCollisions(lock.targets)) {
+    logger.warn(collision);
   }
-  return selectEnvironments(collectEnvironmentRequirements(lock), names);
+  return selectEnvironments(environments, names);
 }
 
 /**

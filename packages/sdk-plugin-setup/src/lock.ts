@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import { type AppIds, parseAppIds, TAILOR_LOCK_FILENAME } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
+import { planEnvironmentOf, type AutofixProvider } from "./templates";
 
 /**
  * Highest lock schema version this plugin understands. Pinned here rather than
@@ -81,6 +82,8 @@ export type LockInputs = {
   migrationTestLabel?: string;
   /** For branch targets with a migration test: its dedicated GitHub Environment, if any. */
   migrationTestEnvironment?: string;
+  /** For branch targets: whether the plan job runs in its own `<environment>-plan` environment. */
+  splitPlanEnvironment?: boolean;
   /** Whether tailor-migration-drift-check was generated (config had namespaces with migrations). */
   migrationDriftCheck?: boolean;
   /** Whether tailor-seed-validate was generated (config used seedPlugin). */
@@ -91,13 +94,11 @@ export type LockInputs = {
   seed?: { datasets: string[] };
 };
 
-export type LockTarget = {
-  kind: TargetKind;
-  workspaceName: string;
+/** A generated workflow file, as the lock records it. */
+export type ManagedWorkflow = {
   /** outputDir-relative, posix-separated path to the generated workflow file. */
   file: string;
   templateVersion: number;
-  inputs: LockInputs;
   /** Managed job/step ids: jobs as `<job>`, steps as `<job>/<step>`. */
   generatedIds: string[];
   /** Per-part hashes of the SDK-managed parts, used to name what a hand edit changed. */
@@ -109,12 +110,116 @@ export type LockTarget = {
   contentHash: string;
 };
 
+export type LockTarget = ManagedWorkflow & {
+  kind: TargetKind;
+  workspaceName: string;
+  inputs: LockInputs;
+  /**
+   * For `preview` kind: the workflow that deletes a pull request's workspace when the pull
+   * request closes. Absent in entries written before it was split out of the preview workflow.
+   */
+  cleanup?: ManagedWorkflow;
+};
+
+export type LockAutofix = ManagedWorkflow & {
+  inputs: {
+    provider: AutofixProvider;
+    /** App directories `tailor generate` runs in. */
+    dirs: string[];
+    packageManager: string;
+    /** False when `packageManager` was set with `--package-manager`. */
+    packageManagerAutoDetected: boolean;
+    /** For the `securefix` provider: the repository that runs the securefix server workflow. */
+    securefixServerRepository?: string;
+  };
+};
+
+/** How reports and `setup ci env` name the autofix workflow. */
+export const AUTOFIX_LABEL = "autofix";
+
 export type LockFile = {
   version: number;
   targets: LockTarget[];
+  /** The `setup ci autofix` workflow, kept out of `targets`, whose kinds older plugins switch on. */
+  autofix?: LockAutofix;
   /** App ids keyed by repository-relative config path. Absent in version 1 locks. */
   appIds?: AppIds;
 };
+
+/**
+ * List the workflows of one target: its own, then its cleanup workflow when it records one.
+ * @param target - Lock target
+ * @returns The target's workflows
+ */
+export function targetWorkflows(target: LockTarget): ManagedWorkflow[] {
+  return target.cleanup ? [target, target.cleanup] : [target];
+}
+
+/**
+ * List every workflow the lock records: each target's workflows, then the autofix workflow.
+ * @param lock - Lock file
+ * @returns The recorded workflows
+ */
+export function managedWorkflows(lock: LockFile): ManagedWorkflow[] {
+  const targets = lock.targets.flatMap(targetWorkflows);
+  return lock.autofix ? [...targets, lock.autofix] : targets;
+}
+
+export type JobEnvironment = {
+  job: "deploy" | "plan" | "migrationTest";
+  environment: string;
+  /** `<kind> <workspaceName>`, followed by ` (plan)` or ` (migration test)` for those jobs. */
+  label: string;
+};
+
+/**
+ * List the GitHub Environments the jobs of a target run in: its own environment, then the split
+ * plan environment and the dedicated migration test environment when it has them.
+ * @param target - Lock target
+ * @returns The target's job environments
+ */
+export function targetJobEnvironments(target: LockTarget): JobEnvironment[] {
+  const label = `${target.kind} ${target.workspaceName}`;
+  const { environment, migrationTest, migrationTestEnvironment } = target.inputs;
+  const jobs: JobEnvironment[] = [{ job: "deploy", environment, label }];
+  const planEnvironment = target.kind === "branch" ? planEnvironmentOf(target.inputs) : undefined;
+  if (planEnvironment !== undefined) {
+    jobs.push({ job: "plan", environment: planEnvironment, label: `${label} (plan)` });
+  }
+  if (target.kind === "branch" && migrationTest && migrationTestEnvironment !== undefined) {
+    jobs.push({
+      job: "migrationTest",
+      environment: migrationTestEnvironment,
+      label: `${label} (migration test)`,
+    });
+  }
+  return jobs;
+}
+
+/**
+ * Describe each job environment of the lock that matches a split plan environment, ignoring case.
+ * @param targets - Lock targets
+ * @returns One warning per plan environment and other job sharing it
+ */
+export function planEnvironmentCollisions(targets: readonly LockTarget[]): string[] {
+  const jobs = targets.flatMap(targetJobEnvironments);
+  return jobs
+    .filter(({ job }) => job === "plan")
+    .flatMap((plan) =>
+      jobs
+        .filter(
+          (other) =>
+            other.job !== "plan" &&
+            other.environment.toLowerCase() === plan.environment.toLowerCase(),
+        )
+        .map(
+          (other) =>
+            `GitHub Environment "${plan.environment}" is used by both ${plan.label} and ` +
+            `${other.label}, so the plan job, which runs pull request code, signs in with the ` +
+            `machine user set there for ${other.label}. Give one of them another environment.`,
+        ),
+    );
+}
 
 /**
  * Compute the lock content hash for a rendered workflow file.
@@ -189,6 +294,22 @@ export function readLock(outputDir: string): LockFile | null {
   }
   if (parsed.appIds !== undefined) parseAppIds(parsed.appIds);
   return parsed;
+}
+
+/**
+ * Read the lock, refusing one that records no generated workflow.
+ * @param outputDir - Repository root where `.github` lives
+ * @returns Parsed lock file with at least one workflow
+ */
+export function readManagedLock(outputDir: string): LockFile {
+  const lock = readLock(outputDir);
+  if (!lock || managedWorkflows(lock).length === 0) {
+    throw new Error(
+      "No managed workflows found (.github/tailor.lock is missing or empty). " +
+        "Run `tailor setup ci branch` (or another setup subcommand) first.",
+    );
+  }
+  return lock;
 }
 
 /**

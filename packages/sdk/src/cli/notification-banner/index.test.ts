@@ -474,7 +474,7 @@ describe("notification banner", () => {
     expect(fs.existsSync(stateFile())).toBe(false);
   });
 
-  test("drops the banner when the env file turned it off or changed the login", async () => {
+  test("drops the banner when the environment turned it off or changed the login after it started", async () => {
     resolved([warning("a", "x")]);
     using stderr = captureStderr();
     for (const [name, value] of [
@@ -486,7 +486,6 @@ describe("notification banner", () => {
       resetNotificationLookupForTests();
       startNotificationLookup(["workspace", "list"], { configDir: tmp.dir });
       await lookupSettledForTests();
-      // --env-file is loaded after setup, so the change shows up only by cleanup.
       vi.stubEnv(name, value);
       await printNotificationBanner({});
       vi.unstubAllEnvs();
@@ -495,7 +494,7 @@ describe("notification banner", () => {
     expect(stderr.text()).toBe("");
   });
 
-  test("still prints when the env file changed only settings the login does not depend on", async () => {
+  test("still prints when only settings the login does not depend on changed", async () => {
     resolved([warning("a", "Region degraded")]);
     using stderr = captureStderr();
     startNotificationLookup(["workspace", "list"], { configDir: tmp.dir });
@@ -509,7 +508,7 @@ describe("notification banner", () => {
     expect(stderr.text()).toContain("Region degraded");
   });
 
-  test("does not wait for a lookup the env file made stale", async () => {
+  test("does not wait for a lookup the environment made stale", async () => {
     let signal: AbortSignal | undefined;
     mockLookup(
       vi.fn().mockImplementation((_req, options: { signal: AbortSignal }) => {

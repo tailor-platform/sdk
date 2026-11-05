@@ -28,6 +28,15 @@ export type SerialConfig<T extends "string" | "integer" = "string" | "integer"> 
     gapless?: boolean;
   } & (T extends "string"
     ? {
+        /**
+         * printf-style text that the sequence number is written into. It holds
+         * exactly one of `%d` (decimal), `%o` (octal), `%x` (lowercase
+         * hexadecimal), or `%X` (uppercase hexadecimal), optionally with a
+         * width: `%5d` pads with spaces and `%05d` with zeros, to at least 5
+         * characters. Write a literal `%` as `%%`. The format is at most 32
+         * characters.
+         * @example db.string().serial({ start: 1, format: "INV-%05d" }) // INV-00001, INV-00002, ...
+         */
         format?: string;
       }
     : object)

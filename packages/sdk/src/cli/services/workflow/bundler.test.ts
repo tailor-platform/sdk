@@ -135,6 +135,57 @@ export const ${exportName} = createWorkflowJob({
     },
   );
 
+  test("runs a job exported as tailor that starts another job", async () => {
+    const tmpDir = makeTempDir("job-exported-as-tailor-start-test-");
+    const sourceFile = path.join(tmpDir, "workflow.ts");
+    fs.writeFileSync(
+      sourceFile,
+      `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+
+export const tailor = createWorkflowJob({
+  name: "main-job",
+  body: async (input) => await other.start(input),
+});
+
+export const other = createWorkflowJob({
+  name: "other-job",
+  body: async (input) => input,
+});
+`,
+    );
+    const execJobFunction = vi.fn((name: string, args: unknown) => ({ name, args }));
+    vi.stubGlobal("tailor", {
+      context: { getInvoker: () => null },
+      workflow: { execJobFunction },
+    });
+
+    try {
+      const result = await bundleWorkflowJobs({
+        allJobs: [
+          { name: "main-job", exportName: "tailor", sourceFile },
+          { name: "other-job", exportName: "other", sourceFile },
+        ],
+        mainJobNames: ["main-job"],
+        startContext: await buildStartContext({ files: [sourceFile] }),
+        baseDir: tmpDir,
+        inlineSourcemap: true,
+      });
+      const code = assertDefined(result.bundledCode.get("main-job"), "job missing");
+      const moduleUrl = `data:text/javascript;base64,${Buffer.from(code).toString("base64")}`;
+      const module = (await import(moduleUrl)) as { main: (input: unknown) => Promise<unknown> };
+
+      await expect(module.main({ a: 1 })).resolves.toEqual({
+        name: "other-job",
+        args: { a: 1 },
+      });
+      expect(execJobFunction).toHaveBeenCalledExactlyOnceWith("other-job", { a: 1 });
+    } finally {
+      vi.unstubAllGlobals();
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   test("reuses a prior call's usedJobNames/mainJobDeps instead of re-detecting reachability", async () => {
     const tmpDir = makeTempDir("reuse-used-jobs-test-");
     const sourceFile = path.join(tmpDir, "workflow.ts");
@@ -1248,7 +1299,7 @@ export default createWorkflow({
     test("strips platform-bundle-only symbols from cross-file default import", async () => {
       const result = await buildBundleFixture({ ext: "ts", importPath: "./simple" });
 
-      // The platform bundle must fold away the TAILOR_PLATFORM_BUNDLE gate and
+      // The platform bundle must fold away the __TAILOR_PLATFORM_BUNDLE gate and
       // tree-shake every test-only symbol; otherwise an unsubstituted process.env.*
       // reaches the Platform Web runtime (no `process`) and crashes.
       for (const code of result.bundledCode.values()) {
@@ -1280,11 +1331,23 @@ export default createWorkflow({
       expect(() => collectExecJobFunctionTargets("this is not valid js &&&")).toThrow(/parse/i);
     });
 
-    test("finds a statically-named execJobFunction target", () => {
-      expect(
-        collectExecJobFunctionTargets("tailor.workflow.execJobFunction(`step-a`, void 0)"),
-      ).toEqual(["step-a"]);
-    });
+    test.each(["tailor", "globalThis.tailor"])(
+      "finds a statically-named execJobFunction target on %s.workflow",
+      (root) => {
+        expect(
+          collectExecJobFunctionTargets(`${root}.workflow.execJobFunction(\`step-a\`, void 0)`),
+        ).toEqual(["step-a"]);
+      },
+    );
+
+    test.each(["foo.tailor", "globalThis[tailor]"])(
+      "ignores execJobFunction on %s.workflow",
+      (root) => {
+        expect(collectExecJobFunctionTargets(`${root}.workflow.execJobFunction("step-a")`)).toEqual(
+          [],
+        );
+      },
+    );
   });
 
   describe("validateBundledDependencies", () => {
@@ -1295,7 +1358,7 @@ export default createWorkflow({
 
     test("does not throw when every target is bundled", () => {
       const bundledCode = new Map([
-        ["main-job", "tailor.workflow.execJobFunction(`step-a`, void 0)"],
+        ["main-job", "globalThis.tailor.workflow.execJobFunction(`step-a`, void 0)"],
       ]);
       expect(() => validateBundledDependencies(bundledCode, ["main-job", "step-a"])).not.toThrow();
     });

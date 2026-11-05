@@ -21,7 +21,7 @@ import {
   type PlatformClientConfig,
 } from "./client";
 import { type ConfigLockOptions, isConfigLockTimeout, withConfigLock } from "./config-lock";
-import { CLIError, formatCommandHint } from "./errors";
+import { CLIError, formatCommandHint, profileNotFoundError } from "./errors";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
 import { tightenSecretFilePermissions, writeSecretFile } from "./secret-file";
@@ -671,7 +671,7 @@ export async function tryLoadWorkspaceId(
     const profileEntry = pfConfig.profiles[profile];
     const wsId = profileEntry?.workspace_id;
     if (!wsId) {
-      throw new Error(`Profile "${profile}" not found`);
+      throw profileNotFoundError(profile);
     }
     return validateUUID(wsId, `profile "${profile}"`);
   }
@@ -718,7 +718,7 @@ export async function loadMachineUserName(
   const entry = pfConfig.profiles[profile];
   if (!entry) {
     if (explicit) return explicit;
-    throw new Error(`Profile "${profile}" not found`);
+    throw profileNotFoundError(profile);
   }
 
   if (entry.machine_user && entry.machine_user_override === "deny") {
@@ -802,7 +802,7 @@ export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
   const pfConfig = await readPlatformConfig();
   const profileEntry = profile ? pfConfig.profiles[profile] : undefined;
   if (profile && !profileEntry) {
-    throw new Error(`Profile "${profile}" not found`);
+    throw profileNotFoundError(profile);
   }
   const user = profileEntry?.user ?? pfConfig.current_user;
   if (!user) {
@@ -862,7 +862,7 @@ export async function loadAuthStatus(opts?: LoadAccessTokenOptions): Promise<Aut
   const config = await readPlatformConfig();
   const profileEntry = profile ? config.profiles[profile] : undefined;
   if (profile && !profileEntry) {
-    throw new Error(`Profile "${profile}" not found`);
+    throw profileNotFoundError(profile);
   }
 
   const platformConfig = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
@@ -970,7 +970,7 @@ export async function loadPlatformClientConfig(
     if (opts?.allowMissingProfile) {
       return undefined;
     }
-    throw new Error(`Profile "${profile}" not found`);
+    throw profileNotFoundError(profile);
   }
   return platformConfigFromProfile(profileEntry);
 }

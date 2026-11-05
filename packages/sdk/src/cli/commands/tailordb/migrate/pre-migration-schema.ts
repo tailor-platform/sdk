@@ -582,11 +582,43 @@ export function buildPreMigrationSnapshot(
     }
     tables[table.name] = adjusted;
   }
+  return includeTablesDeletedAfterCheckpoint({ ...target, tables }, diff);
+}
 
-  for (const change of diff.changes) {
-    if (change.kind === "table_removed" || change.kind === "table_renamed") {
-      tables[change.before.name] = change.before;
+type DeletedTable = { name: string; before: TailorDBSnapshotType };
+
+function tablesDeletedAfterCheckpoint(diff: MigrationDiff): DeletedTable[] {
+  return diff.changes.flatMap((change): DeletedTable[] => {
+    if (change.kind === "table_removed") return [{ name: change.tableName, before: change.before }];
+    if (change.kind === "table_renamed") {
+      return [{ name: change.previousTableName, before: change.before }];
     }
-  }
-  return { ...target, tables };
+    return [];
+  });
+}
+
+/**
+ * Name the tables a migration removes, or renames away, which a deploy deletes only after the
+ * migration's checkpoint is committed.
+ * @param diff - The migration's diff
+ * @returns Names of those tables
+ */
+export function getTablesDeletedAfterCheckpoint(diff: MigrationDiff): Set<string> {
+  return new Set(tablesDeletedAfterCheckpoint(diff).map((table) => table.name));
+}
+
+/**
+ * Add the tables {@link getTablesDeletedAfterCheckpoint} names to a schema of the migration, as
+ * they were before it, since they stay until its checkpoint is committed.
+ * @param snapshot - Schema of the migration
+ * @param diff - The migration's diff
+ * @returns The schema with those tables added
+ */
+export function includeTablesDeletedAfterCheckpoint(
+  snapshot: SchemaSnapshot,
+  diff: MigrationDiff,
+): SchemaSnapshot {
+  const tables = copySnapshotRecord(snapshot.tables);
+  for (const { name, before } of tablesDeletedAfterCheckpoint(diff)) tables[name] = before;
+  return { ...snapshot, tables };
 }

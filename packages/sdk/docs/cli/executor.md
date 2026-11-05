@@ -6,6 +6,8 @@ description: "List and inspect executors, view executor jobs, and trigger execut
 
 Commands for managing executors and executor jobs.
 
+In the human-readable output of `executor jobs --logs` and `executor trigger --logs`, `[PLATFORM]` marks log lines the Platform added. See [`function logs`](./function.md#function-logs) for the `source` that `--json` reports for each log entry.
+
 ## executor
 
 Manage executors

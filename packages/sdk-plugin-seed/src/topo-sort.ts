@@ -28,6 +28,14 @@ export function topologicalSort(types: string[], deps: Record<string, string[]>)
   return result;
 }
 
+function referencedValues(value: unknown, path: readonly string[]): unknown[] {
+  if (Array.isArray(value)) return value.flatMap((item) => referencedValues(item, path));
+  const [head, ...rest] = path;
+  if (head === undefined) return value === null || value === undefined ? [] : [value];
+  if (value === null || typeof value !== "object") return [];
+  return referencedValues((value as Record<string, unknown>)[head], rest);
+}
+
 /**
  * Order a self-referencing table's full record set so a row referenced by
  * another row is always sorted before it.
@@ -53,8 +61,12 @@ export function topologicalSort(types: string[], deps: Record<string, string[]>)
  * `fieldKeys` names the field each self-reference field is keyed to (default
  * `"id"`), so edges are resolved by matching against the right value instead
  * of assuming every self-reference points at `id`.
+ *
+ * A field inside a nested field is named by its dotted path (`links.parentID`),
+ * and a row can then reference several rows: the path descends into every
+ * element of a nested array.
  * @param records - All records for a single self-referencing table
- * @param fields - The table's own self-referencing field names
+ * @param fields - The table's own self-referencing field names, or dotted paths for fields inside nested fields
  * @param fieldKeys - The field each self-reference field is keyed to, keyed by field name (defaults to `"id"`)
  * @returns Records reordered so parents precede their children
  */
@@ -92,13 +104,13 @@ export function sortRecordsBySelfReference(
   for (const record of records) {
     const id = record.id;
     for (const field of fields) {
-      const refValue = record[field];
-      if (refValue === null || refValue === undefined) continue;
       const targetKey = fieldKeys[field] ?? "id";
-      const parentId = idsByKeyValue.get(targetKey)?.get(refValue);
-      if (parentId === undefined || parentId === id) continue;
-      inDegree.set(id, (inDegree.get(id) ?? 0) + 1);
-      dependents.get(parentId)?.push(id);
+      for (const refValue of referencedValues(record, field.split("."))) {
+        const parentId = idsByKeyValue.get(targetKey)?.get(refValue);
+        if (parentId === undefined || parentId === id) continue;
+        inDegree.set(id, (inDegree.get(id) ?? 0) + 1);
+        dependents.get(parentId)?.push(id);
+      }
     }
   }
 

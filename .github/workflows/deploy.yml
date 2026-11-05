@@ -81,10 +81,20 @@ jobs:
       - name: Create workspace
         if: runner.os != 'Windows'
         working-directory: example
-        run: pnpm --silent tailor workspace create --name "sdk-ci-${RUN_ID}-${SLUG}" --region asia-northeast --ttl 24h --json > workspace.json
+        run: |
+          status=0
+          pnpm --silent tailor workspace create --name "sdk-ci-${RUN_ID}-${SLUG}" --region asia-northeast --ttl "$TTL" --json > workspace.json || status=$?
+          if [ "$status" -ne 0 ]; then
+            jq -e '.ttl.state == "unconfirmed"' workspace.json > /dev/null 2>&1 || exit "$status"
+            workspace_id=$(jq -r '.id' workspace.json)
+            echo "::warning::workspace create could not confirm the expiry of ${workspace_id}; recording it again"
+            pnpm --silent tailor workspace ttl set --workspace-id "$workspace_id" --ttl "$TTL" ||
+              echo "::warning::Could not record the expiry of ${workspace_id} (the Destroy workspace step still deletes it)"
+          fi
         env:
           RUN_ID: ${{ github.run_id }}
           SLUG: ${{ matrix.slug }}
+          TTL: 24h
           TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
           TAILOR_PLATFORM_FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
 

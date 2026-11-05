@@ -1,0 +1,5 @@
+---
+"@tailor-platform/sdk": patch
+---
+
+`.unique()` on a field with a `keyOnly` relation is now kept. Before, the relation silently dropped it, so the field was deployed without a unique constraint, and a relation that used the field as its `toward.key` failed with `which must be unique`. The PGlite schema that `kyselyTypePlugin` and the migration `db.pglite.ts` generate, and the seed schema that `seedPlugin` generates, now declare the constraint too. After upgrading, a deployed table with such a field gains the unique constraint on its next `tailor deploy`; if stored rows hold duplicate values for the field, that deploy fails until the duplicate rows are updated to distinct values or deleted. In a namespace with `migration.directory`, `tailor deploy` stops with `MIGRATION_SCHEMA_CHECK_FAILED` until `tailor tailordb migration generate` creates the migration, and until the `TODO()` in its `migrate.ts`, which sets a new value on each duplicate row, is replaced. The new value must also be a key that exists in the referenced table.

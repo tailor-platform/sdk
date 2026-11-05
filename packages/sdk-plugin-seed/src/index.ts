@@ -5,6 +5,7 @@ import {
   annotateTerminalError,
   serializeError,
   createCommonArgs,
+  loadEnvFilesFromArgv,
   logger,
   defineCommand,
   runMain,
@@ -41,11 +42,15 @@ const mainCommand = defineCommand({
   },
 });
 
+// -v matches the generated seed runner this plugin replaces
+// Mirrored in KNOWN_PLUGIN_COMMON_ARGS_OPTIONS (packages/sdk/src/cli/shared/plugin.ts)
+const commonArgsOptions = { verboseAlias: "v" };
+
 void runMain(mainCommand, {
   version: packageJson.version ?? "0.0.0",
-  // -v matches the generated seed runner this plugin replaces
-  globalArgs: z.strictObject(createCommonArgs({ verboseAlias: "v" })),
+  globalArgs: z.strictObject(createCommonArgs(commonArgsOptions)),
   displayErrors: false,
+  setup: () => loadEnvFilesFromArgv(process.argv.slice(2), commonArgsOptions),
   cleanup: ({ error }) => {
     if (!error) return;
     if (logger.jsonMode) {
