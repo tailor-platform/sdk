@@ -1,6 +1,6 @@
 type TypedArrayConstructor = { from(source: ArrayLike<unknown>): ArrayBufferView };
 
-export function clonePlain<T>(value: T): T {
+export function cloneDeep<T>(value: T): T {
   return clone(value, new WeakMap());
 }
 
@@ -59,8 +59,24 @@ function clone<T>(value: T, seen: WeakMap<object, unknown>): T {
 
   const copy = Object.create(Object.getPrototypeOf(value));
   seen.set(value, copy);
-  for (const key of Object.keys(value)) {
-    const cloned = clone((value as Record<string, unknown>)[key], seen);
+  if (value instanceof Error) {
+    for (const key of ["message", "stack", "cause"] as const) {
+      if (Object.hasOwn(value, key)) {
+        Object.defineProperty(copy, key, {
+          value: clone(value[key], seen),
+          configurable: true,
+          enumerable: false,
+          writable: true,
+        });
+      }
+    }
+  }
+  const keys: (string | symbol)[] = Object.keys(value);
+  for (const symbol of Object.getOwnPropertySymbols(value)) {
+    if (Object.prototype.propertyIsEnumerable.call(value, symbol)) keys.push(symbol);
+  }
+  for (const key of keys) {
+    const cloned = clone((value as Record<string | symbol, unknown>)[key], seen);
     if (key === "__proto__") {
       Object.defineProperty(copy, key, {
         value: cloned,
