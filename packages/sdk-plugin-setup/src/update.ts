@@ -40,9 +40,9 @@ function recordedPackageManagerUnlessDetected(
   return inputs.packageManager;
 }
 
-function recordedCodemod(inputs: LockAutofix["inputs"]): AutofixCodemod {
-  const { codemod = "off" } = inputs;
-  if (!isAutofixCodemod(codemod)) {
+function recordedCodemod(inputs: LockAutofix["inputs"]): AutofixCodemod | undefined {
+  const { codemod } = inputs;
+  if (codemod !== undefined && !isAutofixCodemod(codemod)) {
     throw new Error(
       `.github/tailor.lock records the unsupported codemod mode ${JSON.stringify(codemod)}. ` +
         "Re-run `tailor setup ci autofix` with --codemod.",

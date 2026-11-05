@@ -27,8 +27,8 @@ export type AutofixSetupOptions = {
   provider: AutofixProvider;
   /** For the `securefix` provider: the repository that runs the securefix server workflow. */
   securefixServerRepository?: string;
-  /** What the workflow does with the codemods of an SDK upgrade in a pull request. */
-  codemod: AutofixCodemod;
+  /** What the workflow does with the codemods of an SDK upgrade; none when undefined. */
+  codemod: AutofixCodemod | undefined;
   /** App directory, or several; `tailor generate` runs in each. */
   dir: string | readonly string[];
   /** Package manager the workflow uses; detected from the repository root when omitted. */
@@ -95,7 +95,7 @@ export async function setupAutofix(options: AutofixSetupOptions): Promise<Autofi
   for (const dir of dirs) resolveConfigPath(outputDir, dir);
   const providerParams = resolveProvider(options);
   const packageManager = resolvePackageManager(outputDir, options.packageManager);
-  if (codemod !== "off") assertCodemodLockfile(outputDir, packageManager);
+  if (codemod) assertCodemodLockfile(outputDir, packageManager);
   const render = renderAutofixWorkflow({ ...providerParams, dirs, packageManager, codemod });
 
   const lock = readLock(outputDir);
@@ -137,7 +137,7 @@ export async function setupAutofix(options: AutofixSetupOptions): Promise<Autofi
         dirs,
         packageManager,
         packageManagerAutoDetected: options.packageManager === undefined,
-        ...(codemod === "off" ? {} : { codemod }),
+        ...(codemod ? { codemod } : {}),
       },
       generatedIds: render.generatedIds,
       contentHash,

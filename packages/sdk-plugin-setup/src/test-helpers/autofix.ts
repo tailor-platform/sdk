@@ -16,7 +16,7 @@ const SECUREFIX_SERVER_REPOSITORY = "securefix-server";
  * Renders the autofix workflow of a provider, with a server repository for securefix.
  * @param provider - Autofix provider
  * @param options - App directories, package manager, and codemod mode, defaulting to the root
- *   app, pnpm, and `off`
+ *   app, pnpm, and no codemod
  * @param options.dirs - App directories
  * @param options.packageManager - Package manager
  * @param options.codemod - Codemod mode
@@ -33,7 +33,7 @@ export function renderAutofixFor(
   const common = {
     dirs: ["."],
     packageManager: "pnpm" as const,
-    codemod: "off" as const,
+    codemod: undefined,
     ...options,
   };
   return provider === "securefix"
@@ -86,7 +86,7 @@ export function autofixSetupOptions(
 ): AutofixSetupOptions {
   return {
     provider: "github-token",
-    codemod: "off",
+    codemod: undefined,
     dir: ".",
     force: false,
     outputDir,

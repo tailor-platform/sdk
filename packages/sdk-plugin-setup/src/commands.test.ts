@@ -431,7 +431,7 @@ describe("setup ci autofix", () => {
     expect(setupAutofix).toHaveBeenCalledWith({
       provider: "github-token",
       securefixServerRepository: undefined,
-      codemod: "off",
+      codemod: undefined,
       dir: ["."],
       packageManager: undefined,
       force: false,
@@ -474,7 +474,8 @@ describe("setup ci autofix", () => {
   test.each([
     ["--provider", "bot"],
     ["--codemod", "claude"],
-  ])("rejects an unknown %s", async (flag, value) => {
+    ["--codemod", "off"],
+  ])("rejects %s %s", async (flag, value) => {
     const result = await runCommand(setupCommand, ["ci", "autofix", flag, value]);
 
     expect(result.success).toBe(false);

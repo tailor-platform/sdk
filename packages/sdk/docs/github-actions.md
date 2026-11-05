@@ -420,7 +420,8 @@ To stop committing, delete the workflow with
 
 A pull request that upgrades `@tailor-platform/sdk`, such as one from Renovate,
 may need the codemods that [`tailor upgrade`](./cli/upgrade.md) runs. Pass
-`--codemod` to have the autofix workflow handle them:
+`--codemod` to have the autofix workflow handle them; without it, the
+workflow runs only `tailor generate`:
 
 ```bash
 tailor setup ci autofix --codemod error          # fail the pull request until they are applied
@@ -429,7 +430,6 @@ tailor setup ci autofix --codemod deterministic  # commit what they rewrite
 
 | `--codemod`     | On a pull request that upgrades the SDK                                                                                  | Check fails |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------- |
-| `off` (default) | Runs only `tailor generate`                                                                                              | No          |
 | `warn`          | Runs `tailor upgrade --dry-run` and reports the files it would rewrite and the changes it leaves for review, as warnings | No          |
 | `error`         | Reports the same as errors, and fails the `tailor-codemod-result` job                                                    | Yes         |
 | `deterministic` | Commits what `tailor upgrade` rewrites together with what `tailor generate` changes, and reports the rest as warnings    | No          |

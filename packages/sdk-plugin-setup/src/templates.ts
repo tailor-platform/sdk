@@ -830,7 +830,7 @@ export const AUTOFIX_PROVIDERS = ["github-token", "autofix-ci", "securefix", "gi
 /** What commits the regenerated files to the pull request branch. */
 export type AutofixProvider = (typeof AUTOFIX_PROVIDERS)[number];
 
-export const AUTOFIX_CODEMODS = ["off", "warn", "error", "deterministic"] as const;
+export const AUTOFIX_CODEMODS = ["warn", "error", "deterministic"] as const;
 
 /** What the autofix workflow does with the codemods of an SDK upgrade in a pull request. */
 export type AutofixCodemod = (typeof AUTOFIX_CODEMODS)[number];
@@ -848,7 +848,10 @@ export const AUTOFIX_WORKFLOW_FILE = ".github/workflows/tailor-autofix.yml";
 
 const AUTOFIX_COMMIT_MESSAGE = "chore: run tailor generate";
 
-function fixCommandTexts(codemod: AutofixCodemod): { commands: string; rerunError: string } {
+function fixCommandTexts(codemod: AutofixCodemod | undefined): {
+  commands: string;
+  rerunError: string;
+} {
   return codemod === "deterministic"
     ? {
         commands: "tailor upgrade and tailor generate",
@@ -883,7 +886,8 @@ export type RenderAutofixParams = AutofixProviderParams & {
   /** App directories relative to the repository root; `tailor generate` runs in each. */
   dirs: readonly string[];
   packageManager: PackageManager;
-  codemod: AutofixCodemod;
+  /** `--codemod`; the workflow runs no codemod without it. */
+  codemod: AutofixCodemod | undefined;
 };
 
 function perAppGenerateSteps(dirs: readonly string[]): string {
@@ -906,7 +910,7 @@ export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult
   const multi = dirs.length > 1;
   const hasPushJob = provider === "github-token" || provider === "github-app";
   const workingDirectory = !multi && dirs[0] !== "." ? dirs[0] : undefined;
-  const runsCodemods = codemod !== "off";
+  const runsCodemods = codemod !== undefined;
   const { commands, rerunError } = fixCommandTexts(codemod);
   const lockfiles = codemodLockfiles(packageManager);
 
@@ -957,7 +961,7 @@ export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult
     .replaceAll("__COMMIT_MESSAGE__", AUTOFIX_COMMIT_MESSAGE)
     .replaceAll("__FIX_COMMANDS__", commands)
     .replaceAll("__RERUN_ERROR__", rerunError)
-    .replaceAll("__CODEMOD__", codemod)
+    .replaceAll("__CODEMOD__", codemod ?? "")
     .replaceAll("__CODEMOD_DIRS__", () => JSON.stringify(JSON.stringify(dirs)))
     .replaceAll("__CODEMOD_LOCKFILES__", lockfiles.join(" "))
     .replaceAll("__CODEMOD_LOCKFILES_TEXT__", lockfiles.join(" or "))

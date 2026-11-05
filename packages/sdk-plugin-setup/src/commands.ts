@@ -288,9 +288,9 @@ const autofixCommand = defineAppCommand({
       description:
         "Name of the repository, under the same owner, that runs the securefix server workflow (required with --provider securefix)",
     }),
-    codemod: arg(z.enum(AUTOFIX_CODEMODS).default("off"), {
+    codemod: arg(z.enum(AUTOFIX_CODEMODS).optional(), {
       description:
-        "What to do when a pull request upgrades @tailor-platform/sdk: `off`, `warn` (annotate what the upgrade's codemods would change), `error` (fail the check on it), or `deterministic` (commit what the codemods rewrite and warn about what they leave for review)",
+        "What to do when a pull request upgrades @tailor-platform/sdk: `warn` (annotate what the upgrade's codemods would change), `error` (fail the check on it), or `deterministic` (commit what the codemods rewrite and warn about what they leave for review). Without it, the workflow runs no codemod",
     }),
     dir: arg(z.array(z.string().min(1)).default(["."]), {
       alias: "d",

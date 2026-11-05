@@ -50,12 +50,12 @@ const stepOf = (workflow: Workflow, job: string, id: string): Step => {
 
 const SERVICE_PROVIDERS = ["autofix-ci", "securefix"] as const;
 
-const CODEMODS_ON = AUTOFIX_CODEMODS.filter((codemod) => codemod !== "off");
+const CODEMOD_OPTIONS = [undefined, ...AUTOFIX_CODEMODS];
 
 describe("renderAutofixWorkflow", () => {
   test.each(
     AUTOFIX_PROVIDERS.flatMap((provider) =>
-      AUTOFIX_CODEMODS.map((codemod) => [provider, codemod] as const),
+      CODEMOD_OPTIONS.map((codemod) => [provider, codemod] as const),
     ),
   )(
     "%s, codemod %s: lists exactly the jobs and steps it generates as managed",
@@ -72,7 +72,7 @@ describe("renderAutofixWorkflow", () => {
     },
   );
 
-  test.each(CODEMODS_ON)(
+  test.each(AUTOFIX_CODEMODS)(
     "codemod %s: fetches the base lockfile before the project's code runs, and runs the codemods before tailor generate",
     (codemod) => {
       const ids = (dirs: string[]) =>
@@ -125,7 +125,7 @@ describe("renderAutofixWorkflow", () => {
     },
   );
 
-  test.each(AUTOFIX_PROVIDERS)("%s, codemod off: adds no codemod step", (provider) => {
+  test.each(AUTOFIX_PROVIDERS)("%s, without --codemod: adds no codemod step", (provider) => {
     const { content, generatedIds } = render(provider);
     expect(generatedIds.filter((id) => id.includes("codemod"))).toEqual([]);
     expect(content).not.toContain("tailor upgrade");
@@ -287,15 +287,15 @@ describe("renderAutofixWorkflow", () => {
   });
 
   test("deterministic: names tailor upgrade in the loop guard, keeping the fix commit's message", () => {
-    const diff = (codemod: AutofixCodemod) =>
+    const diff = (codemod: AutofixCodemod | undefined) =>
       stepOf(workflowOf("github-token", { codemod }), "tailor-autofix", "tailor-autofix-diff");
-    for (const codemod of AUTOFIX_CODEMODS) {
+    for (const codemod of CODEMOD_OPTIONS) {
       expect(diff(codemod).env?.COMMIT_MESSAGE).toBe("chore: run tailor generate");
     }
     expect(diff("deterministic").run).toContain(
       "::error::tailor upgrade and tailor generate changed files again",
     );
-    for (const codemod of ["off", "warn", "error"] as const) {
+    for (const codemod of [undefined, "warn", "error"] as const) {
       expect(diff(codemod).run).toContain("::error::tailor generate changed files again");
     }
   });
@@ -829,7 +829,7 @@ const ROOT_PNPM_LOCK = pnpmLock(pnpmImporter(".", "2.5.0"));
 function runCodemodStep(
   root: string,
   options: {
-    codemod?: Exclude<AutofixCodemod, "off">;
+    codemod?: AutofixCodemod;
     dirs?: string[];
     lockfile?: string;
     headLock?: string;
@@ -1474,7 +1474,7 @@ describe("setupAutofix", () => {
     );
     expect(fs.existsSync(path.join(repo, ".github"))).toBe(false);
 
-    await setupAutofix(options({ ...bun, codemod: "off" }));
+    await setupAutofix(options({ ...bun, codemod: undefined }));
     fs.writeFileSync(path.join(repo, "bun.lock"), "{}");
     await setupAutofix(options(bun));
     expect(readLock(repo)?.autofix?.inputs.codemod).toBe("warn");
