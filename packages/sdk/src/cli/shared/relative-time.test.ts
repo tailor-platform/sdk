@@ -1,5 +1,5 @@
 import { formatDistanceStrict } from "date-fns";
-import { describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { formatRelativeTime } from "./relative-time";
 
 const SECOND = 1000;
@@ -59,37 +59,49 @@ describe("formatRelativeTime", () => {
     expect(formatRelativeTime(new Date(Date.now() - 5 * MINUTE))).toBe("5 minutes ago");
   });
 
-  describe("matches date-fns formatDistanceToNowStrict output", () => {
-    const offsets: number[] = [];
-    for (const unit of [SECOND, MINUTE, HOUR, DAY]) {
-      for (const k of [0.4, 0.5, 0.99, 1, 1.49, 1.5, 2, 7, 23, 29, 30, 31, 59, 60, 61]) {
-        offsets.push(Math.round(unit * k));
-      }
-    }
-    for (const days of [28, 29, 30, 31, 45, 59, 60, 180, 364, 365, 366, 400, 547, 548, 730, 3650]) {
-      offsets.push(days * DAY, days * DAY - 1, days * DAY + 1);
-    }
+  describe.each(["UTC", "America/New_York", "Europe/London", "Asia/Tokyo"])(
+    "matches date-fns formatDistanceToNowStrict output in %s",
+    (timeZone) => {
+      beforeEach(() => {
+        vi.stubEnv("TZ", timeZone);
+      });
+      afterEach(() => {
+        vi.unstubAllEnvs();
+      });
 
-    const references = [
-      now,
-      new Date("2026-03-08T09:30:00.000Z"),
-      new Date("2026-03-29T00:30:00.000Z"),
-      new Date("2026-11-01T06:30:00.000Z"),
-      new Date("2026-10-25T00:30:00.000Z"),
-    ];
-
-    test.each(references.map((r) => [r.toISOString(), r] as const))(
-      "reference %s (past and future offsets)",
-      (_label, reference) => {
-        for (const ms of offsets) {
-          for (const sign of [-1, 1]) {
-            const date = new Date(reference.getTime() + sign * ms);
-            expect(formatRelativeTime(date, reference), `${sign * ms} ms`).toBe(
-              formatDistanceStrict(date, reference, { addSuffix: true }),
-            );
-          }
+      const offsets: number[] = [];
+      for (const unit of [SECOND, MINUTE, HOUR, DAY]) {
+        for (const k of [0.4, 0.5, 0.99, 1, 1.49, 1.5, 2, 7, 23, 29, 30, 31, 59, 60, 61]) {
+          offsets.push(Math.round(unit * k));
         }
-      },
-    );
-  });
+      }
+      for (const days of [
+        28, 29, 30, 31, 45, 59, 60, 180, 364, 365, 366, 400, 547, 548, 730, 3650,
+      ]) {
+        offsets.push(days * DAY, days * DAY - 1, days * DAY + 1);
+      }
+
+      const references = [
+        now,
+        new Date("2026-03-08T09:30:00.000Z"),
+        new Date("2026-03-29T00:30:00.000Z"),
+        new Date("2026-11-01T06:30:00.000Z"),
+        new Date("2026-10-25T00:30:00.000Z"),
+      ];
+
+      test.each(references.map((r) => [r.toISOString(), r] as const))(
+        "reference %s (past and future offsets)",
+        (_label, reference) => {
+          for (const ms of offsets) {
+            for (const sign of [-1, 1]) {
+              const date = new Date(reference.getTime() + sign * ms);
+              expect(formatRelativeTime(date, reference), `${sign * ms} ms`).toBe(
+                formatDistanceStrict(date, reference, { addSuffix: true }),
+              );
+            }
+          }
+        },
+      );
+    },
+  );
 });
