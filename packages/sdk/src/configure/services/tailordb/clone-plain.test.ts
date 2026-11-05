@@ -26,6 +26,21 @@ describe("clonePlain", () => {
     expect(copy.default.getTime()).toBe(date.getTime());
   });
 
+  test("keeps the prototype of class instances so inherited members survive", () => {
+    class Config {
+      own = { nested: 1 };
+      get inherited() {
+        return "from-prototype";
+      }
+    }
+    const source = new Config();
+    const copy = clonePlain(source);
+    expect(copy).toBeInstanceOf(Config);
+    expect(copy.inherited).toBe("from-prototype");
+    expect(copy.own).not.toBe(source.own);
+    expect(copy.own).toEqual({ nested: 1 });
+  });
+
   test.each([
     ["primitives", 1],
     ["null", null],

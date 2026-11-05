@@ -6,7 +6,11 @@ export function clonePlain<T>(value: T): T {
     return new Date(value.getTime()) as T;
   }
   if (typeof value === "object" && value !== null) {
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, clonePlain(v)])) as T;
+    const copy = Object.create(Object.getPrototypeOf(value));
+    for (const [k, v] of Object.entries(value)) {
+      copy[k] = clonePlain(v);
+    }
+    return copy;
   }
   return value;
 }
