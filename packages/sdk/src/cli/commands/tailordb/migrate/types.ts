@@ -35,13 +35,12 @@ export const MIGRATION_LABEL_KEY = "sdk-migration";
 export const MIGRATION_HISTORY_LABEL_KEY = "sdk-migration-history";
 
 /**
- * Label key naming the migration an earlier deploy left in progress: one whose
- * steps have partly committed, so the next deploy resumes it instead of
- * treating the schema as drift, or one whose `main` run has started and has
- * not been settled. It only names the migration right after the checkpoint,
- * which counts as 0000 when unset; keep it that way by committing the
- * checkpoint after every migration and removing this label with every
- * checkpoint write.
+ * Label key naming the migration an earlier deploy left in progress: one that
+ * runs as steps, which the next deploy resumes instead of treating the schema
+ * as drift, or one whose `main` run has started and has not been settled. It
+ * only names the migration right after the checkpoint, which counts as 0000
+ * when unset; keep it that way by committing the checkpoint after every
+ * migration and removing this label with every checkpoint write.
  */
 export const MIGRATION_IN_PROGRESS_LABEL_KEY = "sdk-migration-in-progress";
 
@@ -57,6 +56,14 @@ export const MIGRATION_EXECUTION_LABEL_KEY = "sdk-migration-execution";
  * tables instead of treating their settings as drift.
  */
 export const MAINTENANCE_MODE_LABEL_KEY = "sdk-maintenance-mode";
+
+/**
+ * Label key naming the checkpoint whose migration's table deletions have not
+ * finished, so the next deploy deletes the tables that migration removed
+ * instead of treating them as drift. Write it with the checkpoint and remove it
+ * with every other checkpoint write.
+ */
+export const MIGRATION_CLEANUP_LABEL_KEY = "sdk-migration-cleanup";
 
 /** Valid migration history ID syntax for metadata label values. */
 export const MIGRATION_HISTORY_ID_PATTERN = /^[a-z][a-z0-9_-]{0,62}$/;
@@ -266,10 +273,7 @@ export interface SchemaDrift {
 /**
  * Reason why remote schema verification was skipped for a namespace
  */
-export type RemoteSchemaVerificationSkipReason =
-  | "not_deployed"
-  | "no_migration_label"
-  | "no_snapshot";
+export type RemoteSchemaVerificationSkipReason = "not_deployed" | "no_snapshot";
 
 export interface MigrationCheckpointRepair {
   namespace: string;
@@ -304,12 +308,30 @@ export interface RemoteSchemaVerificationResult {
    * before `migration rebaseline` ran, rather than a generic history mismatch.
    */
   rebaselinePending?: RebaselinePendingInfo;
+  /** Set alongside `checkpointMissingLocal`: the latest local migration, or `null` when the local history has none */
+  localLatestMigration?: number | null;
+  /** Set alongside `checkpointMissingLocal`: whether the namespace records another migration history ID, or one that cannot be read */
+  historyIdMismatch?: boolean;
   /** Safe checkpoint reset offered after the remote schema matched the local baseline */
   checkpointRepair?: Omit<MigrationCheckpointRepair, "namespace">;
+  /** Set when the namespace has tables but no migration checkpoint, so it was verified as checkpoint 0 */
+  checkpointUnset?: true;
   /** Migration the namespace records as left in progress */
   migrationInProgress?: MigrationInProgress;
   /** Set when the namespace records a migration left in progress that cannot be read */
   migrationInProgressInvalid?: true;
-  /** Set when verification could not run (no remote migration label, or no snapshot at the remote migration number) */
+  /**
+   * Set when the caller accepts them and the namespace records that the deletions of its checkpoint's
+   * migration did not finish: the tables that migration removed that remain, left out of `drifts`
+   */
+  unfinishedRemovals?: string[];
+  /**
+   * Migration whose Pre-phase schema or maintenance mode a deploy left in place without
+   * recording it as in progress; set only when the verification was asked to accept that
+   */
+  interruptedMigration?: number;
+  /** Set when the namespace records its maintenance mode at the checkpoint, so tables in maintenance mode were compared without the settings it overrides */
+  leftInMaintenanceMode?: true;
+  /** Set when verification could not run (namespace not deployed, or no snapshot at the remote migration number) */
   skipped?: RemoteSchemaVerificationSkipReason;
 }

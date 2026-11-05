@@ -4,6 +4,7 @@ import {
   FunctionExecution_Status,
   FunctionLogEntrySchema,
   FunctionLogSeverity,
+  FunctionLogSource,
 } from "@tailor-platform/tailor-proto/function_resource_pb";
 import { describe, expect, test } from "vitest";
 import {
@@ -71,7 +72,19 @@ describe("toFunctionLogEntryInfo", () => {
       message: "hello",
       severity: "WARNING",
       timestamp: at,
+      source: "UNSPECIFIED",
     });
+  });
+
+  test.each([
+    [FunctionLogSource.USER, "USER"],
+    [FunctionLogSource.PLATFORM, "PLATFORM"],
+    [FunctionLogSource.UNSPECIFIED, "UNSPECIFIED"],
+    [99 as FunctionLogSource, "UNSPECIFIED"],
+  ])("maps source %s to %s", (source, expected) => {
+    const entry = create(FunctionLogEntrySchema, { message: "hello", source });
+
+    expect(toFunctionLogEntryInfo(entry).source).toBe(expected);
   });
 
   test("uses null when the timestamp is absent", () => {
@@ -85,7 +98,7 @@ describe("toFunctionLogEntryInfo", () => {
 });
 
 describe("formatFunctionLogLines", () => {
-  const entry = { message: "structured", severity: "INFO", timestamp: null };
+  const entry = { message: "structured", severity: "INFO", timestamp: null, source: "USER" };
 
   test("renders one line per structured entry", () => {
     const lines = formatFunctionLogLines([entry]);
@@ -120,14 +133,33 @@ describe("formatFunctionLogEntry", () => {
       message: "boom",
       severity: "ERROR",
       timestamp: new Date("2026-09-05T01:02:03.456Z"),
+      source: "USER",
     });
 
     expect(stripAnsi(line)).toBe("2026-09-05T01:02:03.456Z [ERROR] boom");
   });
 
   test("renders N/A when the timestamp is unknown", () => {
-    const line = formatFunctionLogEntry({ message: "boom", severity: "LOG", timestamp: null });
+    const line = formatFunctionLogEntry({
+      message: "boom",
+      severity: "LOG",
+      timestamp: null,
+      source: "USER",
+    });
 
     expect(stripAnsi(line)).toBe("N/A [LOG] boom");
+  });
+
+  test("marks every line of a multi-line message the Platform wrote", () => {
+    const line = formatFunctionLogEntry({
+      message: "runs close to the limit\nmove long work elsewhere",
+      severity: "WARNING",
+      timestamp: null,
+      source: "PLATFORM",
+    });
+
+    expect(stripAnsi(line)).toBe(
+      "N/A [WARNING] [PLATFORM] runs close to the limit\n[PLATFORM] move long work elsewhere",
+    );
   });
 });

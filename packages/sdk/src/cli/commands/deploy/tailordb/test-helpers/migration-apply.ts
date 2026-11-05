@@ -20,7 +20,10 @@ import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { TailorDBChangeSet, TailorDBPlanResult } from "../plan";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { TailorDBType_FieldConfigSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
+import type {
+  TailorDBType_FieldConfigSchema,
+  TailorDBTypeSchema,
+} from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 const WORKSPACE_ID = "test-workspace";
 const NAMESPACE = "test-ns";
@@ -71,6 +74,7 @@ export function mockPendingMigrations(
           inProgress: null,
           inProgressInvalid: false,
           maintenanceModeCheckpoint: null,
+          cleanupCheckpoint: null,
         });
       }
       return migrations;
@@ -86,6 +90,13 @@ export function createRemoteCheckpoint(initialNumber: number | null) {
     historyId: null as string | null,
     maintenanceMode: null as string | null,
     maintenanceModeChanges: [] as Array<string | null>,
+    cleanup: null as string | null,
+    cleanupChanges: [] as Array<string | null>,
+  };
+  const setCleanup = (cleanup: string | null) => {
+    if (cleanup === state.cleanup) return;
+    state.cleanup = cleanup;
+    state.cleanupChanges.push(cleanup);
   };
   const record: typeof updateMigrationLabel = async (
     _client,
@@ -94,6 +105,7 @@ export function createRemoteCheckpoint(initialNumber: number | null) {
     number,
     historyId,
     recordMaintenanceMode,
+    recordCleanup,
   ) => {
     state.number = number;
     state.historyId = historyId ?? null;
@@ -101,6 +113,7 @@ export function createRemoteCheckpoint(initialNumber: number | null) {
       state.maintenanceMode = sanitizeMigrationLabel(number);
       state.maintenanceModeChanges.push(state.maintenanceMode);
     }
+    setCleanup(recordCleanup ? sanitizeMigrationLabel(number) : null);
     return true;
   };
   return {
@@ -126,6 +139,7 @@ export function createRemoteCheckpoint(initialNumber: number | null) {
               }),
               ...(state.historyId && { "sdk-migration-history": state.historyId }),
               ...(state.maintenanceMode && { "sdk-maintenance-mode": state.maintenanceMode }),
+              ...(state.cleanup && { "sdk-migration-cleanup": state.cleanup }),
             },
           },
         })),
@@ -138,11 +152,37 @@ export function createRemoteCheckpoint(initialNumber: number | null) {
             state.maintenanceMode = maintenanceMode;
             state.maintenanceModeChanges.push(maintenanceMode);
           }
+          if (request.trn === namespaceTrn(NAMESPACE)) {
+            setCleanup(request.labels["sdk-migration-cleanup"] ?? null);
+          }
           return {};
         }),
         ...overrides,
       }),
   };
+}
+
+/**
+ * List every table definition the client created or updated, in call order.
+ * @param client - Mocked operator client
+ * @returns Table name and written definition of each write
+ */
+export function tailordbTypeWrites(client: OperatorClient) {
+  const writes: Array<{
+    order: number;
+    name: string;
+    tailordbType: MessageInitShape<typeof TailorDBTypeSchema>;
+  }> = [];
+  for (const fn of [client.createTailorDBType, client.updateTailorDBType]) {
+    const mock = vi.mocked(fn);
+    mock.mock.calls.forEach((call, index) => {
+      const tailordbType = call[0].tailordbType;
+      const order = mock.mock.invocationCallOrder[index];
+      if (tailordbType?.name === undefined || order === undefined) return;
+      writes.push({ order, name: tailordbType.name, tailordbType });
+    });
+  }
+  return writes.toSorted((a, b) => a.order - b.order);
 }
 
 export const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
@@ -156,6 +196,8 @@ interface PlanResultOptions {
   gqlPermission?: ChangeEntries<TailorDBChangeSet["gqlPermission"]>;
   application?: Partial<Application>;
   context?: Partial<TailorDBPlanResult["context"]>;
+  /** Local table definitions of the test namespace, as the plan reads them from the config. */
+  local?: TailorDBSnapshotType[];
 }
 
 function changeGroup(entries: ChangeEntries<TailorDBChangeSet[keyof TailorDBChangeSet]> = {}) {
@@ -167,6 +209,14 @@ function changeGroup(entries: ChangeEntries<TailorDBChangeSet[keyof TailorDBChan
   };
 }
 
+/**
+ * Build a plan result for tests that mock the pending migrations. It skips the schema checks, so a
+ * test that needs the remote schema verification before the apply belongs with the
+ * "applyTailorDB migration label reconciliation" tests in `index.test.ts`, which read real
+ * migration files.
+ * @param options - Planned changes and context overrides
+ * @returns Plan result for `applyTailorDB`
+ */
 export function createPlanResult(options: PlanResultOptions = {}): TailorDBPlanResult {
   const namespacesWithMigrations: NamespaceWithMigrations[] = options.context
     ?.namespacesWithMigrations ?? [{ namespace: NAMESPACE, migrationsDir: MIGRATIONS_DIR }];
@@ -183,7 +233,15 @@ export function createPlanResult(options: PlanResultOptions = {}): TailorDBPlanR
         authService: { config: { name: "auth", machineUsers: { migrator: {} } } },
         ...options.application,
       },
-      tailorDBInputs: [],
+      tailorDBInputs: options.local
+        ? [
+            {
+              namespace: NAMESPACE,
+              config: {},
+              types: Object.fromEntries(options.local.map((type) => [type.name, type])),
+            },
+          ]
+        : [],
       executorUsedTables: new Set<string>(),
       config: mockConfig,
       noSchemaCheck: true,

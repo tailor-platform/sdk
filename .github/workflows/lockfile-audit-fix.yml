@@ -53,7 +53,7 @@ jobs:
 
       - name: Audit and fix lockfile
         id: audit_fix
-        uses: tailor-platform/actions/lockfile-audit-fix@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
+        uses: tailor-platform/actions/lockfile-audit-fix@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
 
       - name: Add changeset
         if: steps.audit_fix.outputs.changed == 'true' && steps.audit_fix.outputs.runtime-deps-changed == 'true'
@@ -72,7 +72,7 @@ jobs:
       # the pull request page.
       - name: Create or update pull request
         if: steps.audit_fix.outputs.changed == 'true'
-        uses: tailor-platform/actions/create-signed-pr@26a3cae341adecfaf0e6c81bd969de09c72dad55 # v2.7.0
+        uses: tailor-platform/actions/create-signed-pr@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
         with:
           token: ${{ github.token }}
           branch: chore/lockfile-audit-fix

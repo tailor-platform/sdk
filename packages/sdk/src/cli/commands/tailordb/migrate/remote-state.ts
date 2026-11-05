@@ -1,8 +1,14 @@
 import { getOrNull, type OperatorClient } from "#/cli/shared/client";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, type CLIErrorNextAction, formatCommandHint } from "#/cli/shared/errors";
+import {
+  migrationContextArgs,
+  namespaceMigrationArgs,
+  type MigrationCommandContext,
+} from "./hints";
 import { formatMigrationNumber } from "./migration-number";
 import {
   MAINTENANCE_MODE_LABEL_KEY,
+  MIGRATION_CLEANUP_LABEL_KEY,
   MIGRATION_EXECUTION_LABEL_KEY,
   MIGRATION_HISTORY_LABEL_KEY,
   MIGRATION_IN_PROGRESS_LABEL_KEY,
@@ -24,6 +30,8 @@ export interface RemoteMigrationState {
   inProgressInvalid: boolean;
   /** Checkpoint whose tables a deploy left in maintenance mode after committing it. */
   maintenanceModeCheckpoint: number | null;
+  /** Checkpoint whose migration's table deletions a deploy did not finish. */
+  cleanupCheckpoint: number | null;
 }
 
 function parseInProgress(labels: Record<string, string>): {
@@ -75,11 +83,13 @@ export async function fetchRemoteMigrationState(
       inProgress: null,
       inProgressInvalid: false,
       maintenanceModeCheckpoint: null,
+      cleanupCheckpoint: null,
     };
   }
 
   const migrationLabel = metadata.labels[MIGRATION_LABEL_KEY];
   const maintenanceModeLabel = metadata.labels[MAINTENANCE_MODE_LABEL_KEY];
+  const cleanupLabel = metadata.labels[MIGRATION_CLEANUP_LABEL_KEY];
   const historyLabel = metadata.labels[MIGRATION_HISTORY_LABEL_KEY];
   const historyId = historyLabel ? parseMigrationHistoryId(historyLabel) : null;
   return {
@@ -91,6 +101,7 @@ export async function fetchRemoteMigrationState(
     maintenanceModeCheckpoint: maintenanceModeLabel
       ? parseMigrationLabelNumber(maintenanceModeLabel)
       : null,
+    cleanupCheckpoint: cleanupLabel ? parseMigrationLabelNumber(cleanupLabel) : null,
   };
 }
 
@@ -98,15 +109,13 @@ export async function fetchRemoteMigrationState(
 export type ExpectedMigrationCheckpoint = {
   number: number | null;
   historyId: string | null;
-  /** Set when the deploy read a history label it could not parse. */
-  historyIdInvalid?: boolean;
 };
 
 /**
  * Whether the namespace still has the checkpoint and history ID a deploy expects.
  * @param remoteState - Remote migration state of the namespace
  * @param expectedCheckpoint - Checkpoint the deploy expects
- * @returns False when either changed, or the history label cannot be read when the deploy read one it could
+ * @returns False when either changed, or the history label cannot be read
  */
 export function isCheckpointStillOwned(
   remoteState: RemoteMigrationState,
@@ -114,7 +123,7 @@ export function isCheckpointStillOwned(
 ): boolean {
   return (
     remoteState.number === expectedCheckpoint.number &&
-    remoteState.historyIdInvalid === (expectedCheckpoint.historyIdInvalid ?? false) &&
+    !remoteState.historyIdInvalid &&
     remoteState.historyId === expectedCheckpoint.historyId
   );
 }
@@ -139,7 +148,7 @@ export function matchesLocalMigrationHistory(
  * @param state - Remote migration state of the namespace
  * @returns The history ID, `<invalid>`, or `<unset>`
  */
-export function describeMigrationHistoryId(
+function describeMigrationHistoryId(
   state: Pick<RemoteMigrationState, "historyId" | "historyIdInvalid">,
 ): string {
   return state.historyIdInvalid ? "<invalid>" : (state.historyId ?? "<unset>");
@@ -226,36 +235,132 @@ export type MigrationResolution = "rollback" | "complete";
  * Arguments of the `tailor` command that settles a namespace's migration left in progress.
  * @param resolution - How to settle it
  * @param namespace - TailorDB namespace
+ * @param context - Config and workspace selection of the current run
  * @returns Command arguments
  */
-export function migrationResolveArgs(resolution: MigrationResolution, namespace: string): string[] {
-  return ["tailordb", "migration", "resolve", `--${resolution}`, "--namespace", namespace];
+export function migrationResolveArgs(
+  resolution: MigrationResolution,
+  namespace: string,
+  context: MigrationCommandContext,
+): string[] {
+  return namespaceMigrationArgs({
+    ...context,
+    subcommand: ["resolve", `--${resolution}`],
+    namespace,
+  });
 }
 
 /**
- * Quote the command that settles a namespace's migration left in progress, for an error suggestion.
+ * Render the command that settles a namespace's migration left in progress, for an error suggestion.
  * @param resolution - How to settle it
  * @param namespace - TailorDB namespace
- * @returns The quoted command
+ * @param context - Config and workspace selection of the current run
+ * @returns The command, as rendered by `formatCommandHint`
  */
 export function formatMigrationResolveHint(
   resolution: MigrationResolution,
   namespace: string,
+  context: MigrationCommandContext,
 ): string {
-  return `'tailor ${migrationResolveArgs(resolution, namespace).join(" ")}'`;
+  return formatCommandHint({
+    command: "tailor",
+    args: migrationResolveArgs(resolution, namespace, context),
+  });
 }
 
 /**
  * Describe how to settle a `main` run whose outcome an earlier deploy did not settle.
  * @param namespace - TailorDB namespace
+ * @param context - Config and workspace selection of the current run
  * @returns Both commands, each with the outcome it applies to
  */
-export function describeMainRunSettlement(namespace: string): string {
+export function describeMainRunSettlement(
+  namespace: string,
+  context: MigrationCommandContext,
+): string {
   return (
-    `Settle it with ${formatMigrationResolveHint("complete", namespace)} if its run succeeded, ` +
-    `or with ${formatMigrationResolveHint("rollback", namespace)} otherwise; ` +
+    `Settle it with ${formatMigrationResolveHint("complete", namespace, context)} if its run succeeded, ` +
+    `or with ${formatMigrationResolveHint("rollback", namespace, context)} otherwise; ` +
     "the command shows the outcome of the run before it changes anything."
   );
+}
+
+/** A command that continues or settles a migration left in progress, and what it does. */
+export type InProgressMigrationAction = CLIErrorNextAction & {
+  action: "resume" | MigrationResolution;
+  description: string;
+};
+
+type InProgressMigrationActionsParams = MigrationCommandContext & {
+  state: Pick<RemoteMigrationState, "number" | "inProgress">;
+  namespace: string;
+};
+
+/**
+ * List the commands that continue or settle the migration a namespace records as in progress:
+ * a deploy resumes one whose steps partly committed, and `migration resolve` rolls it back or
+ * completes it.
+ * @param params - Migration state, namespace, and the invocation context to keep in each command
+ * @returns The commands, or none when no migration is in progress or the record does not follow
+ *   the checkpoint, which both commands refuse
+ */
+export function inProgressMigrationActions(
+  params: InProgressMigrationActionsParams,
+): InProgressMigrationAction[] {
+  const { state, namespace, ...context } = params;
+  const record = state.inProgress;
+  if (!record || record.number !== (state.number ?? 0) + 1) return [];
+  const label = formatMigrationNumber(record.number);
+  const previousLabel = formatMigrationNumber(record.number - 1);
+  const settleAction = (resolution: MigrationResolution, description: string) => ({
+    action: resolution,
+    description,
+    command: "tailor",
+    args: migrationResolveArgs(resolution, namespace, context),
+  });
+  if (record.kind === "main") {
+    return [
+      settleAction(
+        "complete",
+        `applies the schema of migration ${label} without running its script again; use it when the run succeeded`,
+      ),
+      settleAction(
+        "rollback",
+        `returns to the schema of migration ${previousLabel}, and the next deploy runs its script again; use it when the run did not succeed`,
+      ),
+    ];
+  }
+  return [
+    {
+      action: "resume",
+      description: "steps that already completed do not run again",
+      command: "tailor",
+      args: ["deploy", ...migrationContextArgs(context)],
+    },
+    settleAction(
+      "rollback",
+      `returns to the schema of migration ${previousLabel}, and the next deploy runs every step again`,
+    ),
+    settleAction(
+      "complete",
+      `applies the schema of migration ${label} without running its script again`,
+    ),
+  ];
+}
+
+const IN_PROGRESS_ACTION_LABELS: Record<InProgressMigrationAction["action"], string> = {
+  resume: "Resume",
+  rollback: "Roll back",
+  complete: "Complete",
+};
+
+/**
+ * Format a command that continues or settles a migration left in progress as one line.
+ * @param action - The command and what it does
+ * @returns The line
+ */
+export function formatInProgressMigrationAction(action: InProgressMigrationAction): string {
+  return `${IN_PROGRESS_ACTION_LABELS[action.action]}: ${formatCommandHint(action)} (${action.description})`;
 }
 
 /**
@@ -265,12 +370,18 @@ export function describeMainRunSettlement(namespace: string): string {
  * can settle consistently.
  * @param state - Remote migration state of the namespace
  * @param namespace - TailorDB namespace
+ * @param context - Config and workspace selection of the current run
  */
-export function assertNoMigrationInProgress(state: RemoteMigrationState, namespace: string): void {
+export function assertNoMigrationInProgress(
+  state: RemoteMigrationState,
+  namespace: string,
+  context: MigrationCommandContext,
+): void {
   if (!state.inProgress && !state.inProgressInvalid) return;
   const migrationLabel = state.inProgress
     ? `${namespace}/${formatMigrationNumber(state.inProgress.number)}`
     : undefined;
+  const actions = inProgressMigrationActions({ ...context, state, namespace });
   throw CLIError({
     code: "MIGRATION_IN_PROGRESS",
     message: !state.inProgress
@@ -279,8 +390,13 @@ export function assertNoMigrationInProgress(state: RemoteMigrationState, namespa
         ? `The outcome of the run of migration ${migrationLabel} that an earlier deploy started is not settled.`
         : `Migration ${migrationLabel} is partially applied by an earlier deploy.`,
     suggestion:
-      state.inProgress?.kind === "main"
-        ? describeMainRunSettlement(namespace)
-        : "Finish the migration with a deploy first; steps that already completed do not run again.",
+      actions.length > 0
+        ? [
+            "Continue or settle the migration first with one of these commands:",
+            ...actions.map((action) => `- ${formatInProgressMigrationAction(action)}`),
+          ].join("\n")
+        : state.inProgress?.kind === "main"
+          ? describeMainRunSettlement(namespace, context)
+          : "Finish the migration with a deploy first; steps that already completed do not run again.",
   });
 }

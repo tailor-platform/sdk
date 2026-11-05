@@ -351,6 +351,10 @@ describe("relations written in the table definition", { timeout: 30_000 }, () =>
   const order = db.table("Order", {
     ownerID: db.uuid().relation({ type: "n-1", toward: { table: owner } }),
     ownerIDs: db.uuid({ array: true }).relation({ type: "keyOnly", toward: { table: owner } }),
+    approverID: db
+      .uuid({ optional: true })
+      .unique()
+      .relation({ type: "keyOnly", toward: { table: owner } }),
     info: db.object({
       reviewerID: db
         .uuid({ optional: true })
@@ -362,16 +366,21 @@ describe("relations written in the table definition", { timeout: 30_000 }, () =>
     ),
   });
 
+  const ddl = generateSchemaDDL(toDDLTables(parsed({ Owner: owner, Order: order })));
   let pglite: PGlite;
 
   aroundEach(async (runTest) => {
     pglite = new PGlite();
     try {
-      await pglite.exec(generateSchemaDDL(toDDLTables(parsed({ Owner: owner, Order: order }))));
+      await pglite.exec(ddl);
       await runTest();
     } finally {
       await pglite.close();
     }
+  });
+
+  test("declares UNIQUE on a keyOnly relation field with .unique()", () => {
+    expect(ddl).toContain('"approverID" uuid UNIQUE');
   });
 
   test("rejects a row pointing at a missing parent, in every position a relation can be written", async () => {

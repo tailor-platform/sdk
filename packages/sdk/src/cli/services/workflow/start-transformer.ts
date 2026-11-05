@@ -60,6 +60,8 @@ export function hasStartCall(code: string): boolean {
 
 const NORMALIZER_IDENTIFIER = "__tailor_normalizeStartOptions";
 
+const WORKFLOW_RUNTIME_EXPR = "globalThis.tailor.workflow";
+
 /**
  * Build the source text of the injected normalizer helper.
  *
@@ -283,10 +285,10 @@ export function transformStartCalls(
           optionsPart = `, ${call.optionsText}`;
         }
       }
-      transformedCall = `tailor.workflow.startWorkflow(${JSON.stringify(call.targetName)}, ${call.argsText || "undefined"}${optionsPart})`;
+      transformedCall = `${WORKFLOW_RUNTIME_EXPR}.startWorkflow(${JSON.stringify(call.targetName)}, ${call.argsText || "undefined"}${optionsPart})`;
     } else {
       const optionsPart = call.optionsText !== undefined ? `, ${call.optionsText}` : "";
-      transformedCall = `tailor.workflow.execJobFunction(${JSON.stringify(call.targetName)}, ${call.argsText || "undefined"}${optionsPart})`;
+      transformedCall = `${WORKFLOW_RUNTIME_EXPR}.execJobFunction(${JSON.stringify(call.targetName)}, ${call.argsText || "undefined"}${optionsPart})`;
     }
     replacements.push({
       start: call.callRange.start,

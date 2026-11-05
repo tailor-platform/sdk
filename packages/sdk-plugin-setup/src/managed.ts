@@ -30,6 +30,8 @@ export const ENVIRONMENT_EDITABLE_JOBS: readonly string[] = [
   "tailor-erd-preview-comment",
   "tailor-result",
   "tailor-preview-result",
+  "tailor-autofix",
+  "tailor-autofix-push",
 ];
 
 // Users add their own jobs to the `needs` of these jobs; the `tailor-` entries stay managed.
@@ -58,6 +60,8 @@ const RETIRED_IDS: Record<string, string> = {
 };
 
 const STRINGIFY_OPTIONS = { lineWidth: 0, flowCollectionPadding: false } as const;
+
+const CLOSED_ACTION_CHECK = /==\s*'closed'|'closed'\s*==/;
 
 /** Raised when a file cannot be parsed or merged without losing user content. */
 export class ManagedMergeError extends Error {
@@ -662,6 +666,84 @@ export function mergeUserContent(params: {
     throw mergeFailed("");
   }
   return { content, dropped: ctx.dropped };
+}
+
+/**
+ * Move a job from one workflow into another: it leaves `from` and replaces the job of the same
+ * id in `into`, which also takes the given top-level keys of `from` that the job ran under.
+ * Aliases are resolved, since their anchors stay in `from`.
+ * @param params - Move inputs
+ * @param params.from - Content of the workflow the job leaves
+ * @param params.into - Content of the workflow the job moves into
+ * @param params.jobId - Id of the job
+ * @param params.topLevelKeys - Top-level keys of `from` that `into` takes too, replacing its own
+ * @returns Both contents after the move, or undefined when `from` has no such job
+ */
+export function moveJob(params: {
+  from: string;
+  into: string;
+  jobId: string;
+  topLevelKeys: readonly string[];
+}): { from: string; into: string } | undefined {
+  const { jobId } = params;
+  const fromDoc = parse(params.from, "The file");
+  const intoDoc = parse(params.into, "The rendered template");
+  const fromRoot = fromDoc.contents;
+  const intoRoot = intoDoc.contents;
+  if (!isMap(fromRoot) || !isMap(intoRoot)) {
+    throw new ManagedMergeError("The file is not a YAML mapping.");
+  }
+  const fromJobs = mapAt(fromRoot, "jobs");
+  if (!fromJobs?.has(jobId)) return undefined;
+  const fromPlain = toPlain(fromDoc, "The file");
+  const job = plainJob(fromPlain, jobId);
+  if (!job) {
+    throw new ManagedMergeError(`The job "${jobId}" is not a mapping, so it cannot be moved.`);
+  }
+  const intoJobs = mapAt(intoRoot, "jobs");
+  if (!intoJobs?.has(jobId)) {
+    throw new Error(`The rendered template has no job "${jobId}" to move into.`);
+  }
+  const createOptions = { aliasDuplicateObjects: false };
+  intoJobs.set(jobId, intoDoc.createNode(job, createOptions));
+  const carried: Pair[] = [];
+  for (const key of params.topLevelKeys) {
+    if (!isPlainObject(fromPlain) || !Object.hasOwn(fromPlain, key)) continue;
+    if (intoRoot.has(key)) {
+      intoRoot.set(key, intoDoc.createNode(fromPlain[key], createOptions));
+    } else {
+      carried.push(intoDoc.createPair(key, fromPlain[key], createOptions));
+    }
+  }
+  intoRoot.items.splice(
+    intoRoot.items.findIndex((pair) => keyOf(pair) === "jobs"),
+    0,
+    ...carried,
+  );
+  fromJobs.delete(jobId);
+  return {
+    from: fromDoc.toString(STRINGIFY_OPTIONS),
+    into: intoDoc.toString(STRINGIFY_OPTIONS),
+  };
+}
+
+/**
+ * Ids of the jobs of yours whose `if` checks for a closed pull request.
+ * @param content - Workflow content
+ * @returns Job ids in file order
+ */
+export function userJobsCheckingClosed(content: string): string[] {
+  const jobs = readMapping(content)["jobs"];
+  if (!isPlainObject(jobs)) return [];
+  return Object.entries(jobs)
+    .filter(
+      ([jobId, job]) =>
+        !jobId.startsWith(RESERVED_PREFIX) &&
+        isPlainObject(job) &&
+        typeof job["if"] === "string" &&
+        CLOSED_ACTION_CHECK.test(job["if"]),
+    )
+    .map(([jobId]) => jobId);
 }
 
 /**

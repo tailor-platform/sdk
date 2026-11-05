@@ -125,25 +125,6 @@ export function getPreMigrationTargetTableNames(migration: PendingMigration): Se
 }
 
 /**
- * Get the set of table names to be deleted by a migration. A renamed table's
- * old name is included: the old table survives the Pre-phase and the script
- * (which copies its rows into the new table), then is dropped here.
- * @param {PendingMigration} migration - Pending migration
- * @returns {Set<string>} Set of table names to delete
- */
-export function getDeletedTableNames(migration: PendingMigration): Set<string> {
-  const tableNames = new Set<string>();
-  for (const change of migration.diff.changes) {
-    if (change.kind === "table_removed") {
-      tableNames.add(change.tableName);
-    } else if (change.kind === "table_renamed") {
-      tableNames.add(change.previousTableName);
-    }
-  }
-  return tableNames;
-}
-
-/**
  * Key a table by its namespace, since table names are only unique within one.
  * @param namespaceName - Namespace of the table
  * @param tableName - Table name
@@ -723,7 +704,7 @@ const RESTRICTED_TABLES_RECOVERY =
   "Deploy again: once it finishes, the deploy writes the tables' configured settings back.";
 
 export const ROLLBACK_LEFTOVER_RECOVERY =
-  "Check these tables in the workspace and delete or repair them by hand. A deploy that finds a table the migration history does not know stops with remote schema drift, so deploying again does not release them.";
+  "Deploy again to run the migration again: a table left with the migration's pre-migration schema does not stop it. If that deploy stops with remote schema drift on these tables, check them in the workspace and delete or repair them by hand.";
 
 interface LeftRestrictedOptions {
   /** How the tables are released. */
@@ -926,14 +907,16 @@ export async function applyMigrationRestrictions(
 /**
  * Restore normal event publishing and GraphQL operations after migrations.
  *
- * Uses the latest schema that completed its post-phase in each namespace. If a
- * later migration fails, this avoids applying schema changes that never settled.
+ * Uses the latest schema that settled in each namespace: that of the last migration
+ * that completed its post-phase, with, under --no-schema-check, the local definitions
+ * applied after every migration committed. If a later migration fails, this avoids
+ * applying schema changes that never settled.
  *
  * Callers must run this even when the migration loop throws because a committed
  * checkpoint drops its migration from the next run's pending set.
  * @param client - Operator client instance
  * @param snapshots - Latest schema that settled in each migrating namespace
- * @param settingsToRestore - Settings for the latest confirmed checkpoint, including exact active settings for snapshot-external tables
+ * @param settingsToRestore - Settings of the latest schema that settled, including exact active settings for snapshot-external tables
  * @param tailorDBInputs - TailorDB deploy inputs for the run
  * @param executorUsedTables - Tables an enabled executor subscribes to
  * @param workspaceId - Target workspace ID
@@ -1007,33 +990,37 @@ function describeUnrestored(unrestored: readonly RestrictedTables[]): string {
     .join("; ");
 }
 
-export async function executeSingleMigrationPostPhaseDeletions(
+/**
+ * Delete the tables that have a planned deletion, each with its GraphQL permission first, and record them in {@link deletedResources}.
+ * @param client - Operator client instance
+ * @param changeSet - Planned TailorDB changes
+ * @param namespace - Namespace of the tables
+ * @param tableNames - Tables to delete; those without a planned deletion are skipped
+ */
+export async function deletePlannedTables(
   client: OperatorClient,
   changeSet: TailorDBChangeSet,
-  migration: PendingMigration,
+  namespace: string,
+  tableNames: ReadonlySet<string>,
 ): Promise<void> {
-  const deletedTableNames = getDeletedTableNames(migration);
-  if (deletedTableNames.size > 0) {
-    const tableKey = (tableName: string) => namespacedTableKey(migration.namespace, tableName);
-    const gqlPermissionsToDelete = entriesOfNamespace(
-      changeSet.gqlPermission.deletes,
-      migration.namespace,
-    ).filter(
-      (del) =>
-        deletedTableNames.has(del.name) && !deletedResources.gqlPermissions.has(tableKey(del.name)),
-    );
-    for (const del of gqlPermissionsToDelete) {
-      await client.deleteTailorDBGQLPermission(del.request);
-      deletedResources.gqlPermissions.add(tableKey(del.name));
-    }
+  const tableKey = (tableName: string) => namespacedTableKey(namespace, tableName);
+  const gqlPermissionsToDelete = entriesOfNamespace(
+    changeSet.gqlPermission.deletes,
+    namespace,
+  ).filter(
+    (del) => tableNames.has(del.name) && !deletedResources.gqlPermissions.has(tableKey(del.name)),
+  );
+  for (const del of gqlPermissionsToDelete) {
+    await client.deleteTailorDBGQLPermission(del.request);
+    deletedResources.gqlPermissions.add(tableKey(del.name));
+  }
 
-    const typesToDelete = entriesOfNamespace(changeSet.type.deletes, migration.namespace).filter(
-      (del) => deletedTableNames.has(del.name) && !deletedResources.types.has(tableKey(del.name)),
-    );
-    for (const del of typesToDelete) {
-      await client.deleteTailorDBType(del.request);
-      deletedResources.types.add(tableKey(del.name));
-    }
+  const typesToDelete = entriesOfNamespace(changeSet.type.deletes, namespace).filter(
+    (del) => tableNames.has(del.name) && !deletedResources.types.has(tableKey(del.name)),
+  );
+  for (const del of typesToDelete) {
+    await client.deleteTailorDBType(del.request);
+    deletedResources.types.add(tableKey(del.name));
   }
 }
 

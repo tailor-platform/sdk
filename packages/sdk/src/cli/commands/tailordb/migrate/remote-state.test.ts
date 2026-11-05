@@ -93,6 +93,17 @@ describe("fetchRemoteMigrationState", () => {
     expect(state.maintenanceModeCheckpoint).toBe(checkpoint);
   });
 
+  test.each([
+    ["m0002", 2],
+    ["two", null],
+  ])("reads the checkpoint of unfinished table deletions %s", async (label, checkpoint) => {
+    const state = await fetchRemoteMigrationState(
+      clientWithLabels({ "sdk-migration": "m0002", "sdk-migration-cleanup": label }),
+      "trn",
+    );
+    expect(state.cleanupCheckpoint).toBe(checkpoint);
+  });
+
   test("reports nothing in progress for a namespace that was never deployed", async () => {
     const state = await fetchRemoteMigrationState(clientWithLabels(undefined), "trn");
     expect(state).toMatchObject({
@@ -100,42 +111,74 @@ describe("fetchRemoteMigrationState", () => {
       inProgress: null,
       inProgressInvalid: false,
       maintenanceModeCheckpoint: null,
+      cleanupCheckpoint: null,
     });
   });
 });
 
 describe("assertNoMigrationInProgress", () => {
-  const state = (inProgress: MigrationInProgress): RemoteMigrationState => ({
+  const state = (inProgress: MigrationInProgress, number = 2): RemoteMigrationState => ({
     metadataExists: true,
-    number: 2,
+    number,
     historyId: null,
     historyIdInvalid: false,
     inProgress,
     inProgressInvalid: false,
     maintenanceModeCheckpoint: null,
+    cleanupCheckpoint: null,
   });
 
-  test("asks to finish a migration whose steps partly committed with a deploy", () => {
+  test("names a deploy and both ways to settle a migration whose steps partly committed", () => {
     expect(() =>
-      assertNoMigrationInProgress(state({ number: 3, kind: "steps" }), "tailordb"),
+      assertNoMigrationInProgress(state({ number: 3, kind: "steps" }), "tailordb", {}),
     ).toThrow(
       expect.objectContaining({
         code: "MIGRATION_IN_PROGRESS",
-        suggestion: expect.stringContaining("Finish the migration with a deploy"),
+        suggestion: expect.toSatisfy(
+          (suggestion: string) =>
+            suggestion.includes("`tailor deploy`") &&
+            suggestion.includes(
+              "`tailor tailordb migration resolve --rollback --namespace tailordb`",
+            ) &&
+            suggestion.includes(
+              "`tailor tailordb migration resolve --complete --namespace tailordb`",
+            ),
+        ),
       }),
     );
   });
 
-  test("asks to settle a `main` run whose outcome is not settled with migration resolve", () => {
+  test("names both ways to settle a `main` run whose outcome is not settled, keeping the run's config, workspace, and profile", () => {
     expect(() =>
-      assertNoMigrationInProgress(state({ number: 3, kind: "main" }), "tailordb"),
+      assertNoMigrationInProgress(state({ number: 3, kind: "main" }), "tailordb", {
+        configPath: "custom.config.ts",
+        contextArgs: ["--workspace-id=ws-1", "--profile=staging"],
+      }),
     ).toThrow(
       expect.objectContaining({
         code: "MIGRATION_IN_PROGRESS",
         message: expect.stringContaining("tailordb/0003"),
-        suggestion: expect.stringContaining(
-          "'tailor tailordb migration resolve --complete --namespace tailordb'",
+        suggestion: expect.toSatisfy(
+          (suggestion: string) =>
+            !suggestion.includes("`tailor deploy") &&
+            suggestion.includes(
+              "`tailor tailordb migration resolve --rollback --namespace tailordb --config=custom.config.ts --workspace-id=ws-1 --profile=staging`",
+            ) &&
+            suggestion.includes(
+              "`tailor tailordb migration resolve --complete --namespace tailordb --config=custom.config.ts --workspace-id=ws-1 --profile=staging`",
+            ),
         ),
+      }),
+    );
+  });
+
+  test("does not name migration resolve for a record the checkpoint already covers", () => {
+    expect(() =>
+      assertNoMigrationInProgress(state({ number: 3, kind: "steps" }, 3), "tailordb", {}),
+    ).toThrow(
+      expect.objectContaining({
+        code: "MIGRATION_IN_PROGRESS",
+        suggestion: expect.not.stringContaining("migration resolve"),
       }),
     );
   });
@@ -150,6 +193,7 @@ describe("isStaleMigrationInProgress", () => {
     inProgress: inProgress === null ? null : { number: inProgress, kind: "steps" },
     inProgressInvalid: false,
     maintenanceModeCheckpoint: null,
+    cleanupCheckpoint: null,
   });
 
   test.each([
@@ -176,6 +220,7 @@ describe("matchesLocalMigrationHistory", () => {
     inProgress: null,
     inProgressInvalid: false,
     maintenanceModeCheckpoint: null,
+    cleanupCheckpoint: null,
   });
 
   test.each([

@@ -555,6 +555,35 @@ describe("applyRemainingResources with a held maintenance mode", () => {
     expect(mocks.recomposeApplication).not.toHaveBeenCalled();
   });
 
+  test("lifts it and applies nothing after TailorDB when a later config's migration fails", async () => {
+    mocks.calls.length = 0;
+    mocks.applyTailorDB.mockImplementation(
+      async (_client, result, phase, options?: HoldOptions) => {
+        const name = (result as { marker: string }).marker;
+        mocks.calls.push(`tailordb:${name}:${String(phase)}`);
+        if (name === "buyer-tailordb") throw new Error("buyer migration failed");
+        options?.holdMaintenanceMode?.(async () => {
+          mocks.calls.push(`release:${name}`);
+        });
+      },
+    );
+
+    await expect(
+      applyRemainingResources({} as never, "workspace-id", [
+        deployment("supplier"),
+        deployment("buyer"),
+      ]),
+    ).rejects.toThrow("buyer migration failed");
+
+    expect(mocks.calls).toEqual([
+      "function:supplier-function:create-update",
+      "function:buyer-function:create-update",
+      "tailordb:supplier-tailordb:create-update",
+      "tailordb:buyer-tailordb:create-update",
+      "release:supplier-tailordb",
+    ]);
+  });
+
   test("keeps the later failure when lifting it fails too", async () => {
     mocks.calls.length = 0;
     holdMaintenanceMode(async () => {
