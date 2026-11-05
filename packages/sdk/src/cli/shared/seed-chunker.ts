@@ -32,8 +32,8 @@ export type ChunkSeedDataOptions = {
   data: SeedData;
   /** Ordered list of type names (dependency order) */
   order: string[];
-  /** Byte size of script code sent in the same message as the data (default: 0) */
-  codeByteSize?: number;
+  /** Byte size of script code sent in the same message as the data (0 when it is sent apart) */
+  codeByteSize: number;
   /** Maximum message size in bytes (default: 3.5MB) */
   maxMessageSize?: number;
 };
@@ -59,7 +59,7 @@ const METADATA_OVERHEAD = 1024;
  * @returns Array of seed chunks
  */
 export function chunkSeedData(options: ChunkSeedDataOptions): SeedChunk[] {
-  const { data, order, codeByteSize = 0, maxMessageSize = DEFAULT_MAX_MESSAGE_SIZE } = options;
+  const { data, order, codeByteSize, maxMessageSize = DEFAULT_MAX_MESSAGE_SIZE } = options;
 
   const argBudget = maxMessageSize - codeByteSize - METADATA_OVERHEAD;
   if (argBudget <= 0) {

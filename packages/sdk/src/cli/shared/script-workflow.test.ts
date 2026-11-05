@@ -30,6 +30,8 @@ interface MockClientOptions {
   leftoverWorkflowId?: string;
   /** Executions of the leftover workflow, newest first. */
   leftoverExecutions?: { id: string; status: WorkflowExecution_Status }[];
+  /** Machine user lookup result: found (default), answered empty, or rejected as not found. */
+  machineUser?: "found" | "empty" | "not-found";
 }
 
 function createMockClient(options: MockClientOptions = {}) {
@@ -39,6 +41,13 @@ function createMockClient(options: MockClientOptions = {}) {
     return Promise.resolve(value);
   };
   const client = {
+    getAuthMachineUser: vi.fn(() => {
+      calls.push("getAuthMachineUser");
+      if (options.machineUser === "not-found") {
+        return Promise.reject(new ConnectError("not found", Code.NotFound));
+      }
+      return Promise.resolve({ machineUser: options.machineUser === "empty" ? undefined : {} });
+    }),
     getWorkflowByName: vi.fn(() => {
       calls.push("getWorkflowByName");
       if (options.leftoverWorkflowId === undefined) {
@@ -170,6 +179,59 @@ describe("withScriptWorkflow", () => {
     expect(mocks.deleteWorkflow).toHaveBeenCalledWith({ workspaceId: "ws", workflowId: "wf-1" });
     expect(calls.at(-1)).toBe("deleteFunctionRegistry");
   });
+
+  test.each(["empty", "not-found"] as const)(
+    "stops before registering anything when the machine user lookup is %s",
+    async (machineUser) => {
+      const { client, mocks } = createMockClient({ machineUser });
+
+      const run = withScriptWorkflow({ ...baseOptions, client }, (run) => run({}));
+
+      await expect(run).rejects.toMatchObject({
+        code: "MACHINE_USER_NOT_FOUND",
+        message: expect.stringContaining("seeder"),
+      });
+      expect(mocks.createFunctionRegistry).not.toHaveBeenCalled();
+      expect(mocks.startWorkflow).not.toHaveBeenCalled();
+    },
+  );
+
+  test("looks the machine user up in the invoker's auth namespace", async () => {
+    const { client, mocks } = createMockClient();
+
+    await withScriptWorkflow({ ...baseOptions, client }, (run) => run({}));
+
+    expect(mocks.getAuthMachineUser).toHaveBeenCalledWith({
+      workspaceId: "ws",
+      authNamespace: "auth",
+      name: "seeder",
+    });
+  });
+
+  test("rethrows an error of the machine user lookup other than not found", async () => {
+    const { client, mocks } = createMockClient();
+    mocks.getAuthMachineUser.mockRejectedValue(new ConnectError("denied", Code.PermissionDenied));
+
+    const run = withScriptWorkflow({ ...baseOptions, client }, (run) => run({}));
+
+    await expect(run).rejects.toThrow("denied");
+  });
+
+  test.each([
+    [WorkflowExecution_Status.SUCCESS, "unknown whether the script's changes were applied"],
+    [WorkflowExecution_Status.FAILED, "Script execution failed with unknown error"],
+  ])(
+    "reports the outcome of a %s workflow whose job execution the platform has no record of",
+    async (status, error) => {
+      const { client, mocks } = createMockClient({ status });
+      mocks.getFunctionExecution.mockRejectedValue(new ConnectError("not found", Code.NotFound));
+
+      const outcome = await withScriptWorkflow({ ...baseOptions, client }, (run) => run({}));
+
+      expect(outcome).toMatchObject({ success: false, error: expect.stringContaining(error) });
+      expect(mocks.getFunctionExecution).toHaveBeenCalledTimes(1);
+    },
+  );
 
   test("reads the job's outcome again after a transient error", async () => {
     const { client, mocks } = createMockClient({ result: '{"success":true}' });

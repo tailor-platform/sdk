@@ -211,9 +211,6 @@ async function reclaimLeftovers(
   });
 }
 
-const findMigrationWorkflowId = findTemporaryWorkflowId;
-const listMigrationExecutions = listTemporaryWorkflowExecutions;
-
 interface CreateMigrationWorkflowParams {
   client: OperatorClient;
   workspaceId: string;
@@ -304,7 +301,9 @@ export async function executeMigrationAsWorkflow(
       created,
     );
     executionIdsBeforeStart = new Set(
-      (await listMigrationExecutions(client, workspaceId, name)).map((execution) => execution.id),
+      (await listTemporaryWorkflowExecutions(client, workspaceId, name)).map(
+        (execution) => execution.id,
+      ),
     );
   } catch (error) {
     await teardown(client, workspaceId, name, created.workflowId);
@@ -393,7 +392,7 @@ async function findStartedExecution(
   for (let attempt = 1; attempt <= START_LOOKUP_ATTEMPTS; attempt++) {
     if (attempt > 1) await new Promise((resolve) => setTimeout(resolve, pollInterval));
     try {
-      const started = (await listMigrationExecutions(client, workspaceId, name)).find(
+      const started = (await listTemporaryWorkflowExecutions(client, workspaceId, name)).find(
         (execution) => !executionIdsBeforeStart.has(execution.id),
       );
       if (started) return started;
@@ -975,7 +974,7 @@ async function assertNoActiveExecution(
 ): Promise<void> {
   let executions: WorkflowExecution[];
   try {
-    executions = await listMigrationExecutions(client, workspaceId, name);
+    executions = await listTemporaryWorkflowExecutions(client, workspaceId, name);
   } catch (error) {
     throw errors.lookupFailed?.(error) ?? error;
   }
@@ -1035,7 +1034,7 @@ async function findRecordedExecution(
   executionId: string | undefined,
 ): Promise<WorkflowExecution | undefined> {
   if (executionId === undefined) {
-    return (await listMigrationExecutions(client, workspaceId, name))[0];
+    return (await listTemporaryWorkflowExecutions(client, workspaceId, name))[0];
   }
   const response = await getOrNull(() => client.getWorkflowExecution({ workspaceId, executionId }));
   return response?.execution;
@@ -1217,7 +1216,7 @@ export async function executeMigrationStepsAsWorkflow(
       name,
       options.inProgress.executionId,
     );
-    const workflowId = await findMigrationWorkflowId(client, workspaceId, name);
+    const workflowId = await findTemporaryWorkflowId(client, workspaceId, name);
     const planUnchanged =
       workflowId !== undefined && (await readWorkflowPlan(client, workspaceId, name)) === plan;
     if (execution && isExecutionActive(execution)) {

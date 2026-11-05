@@ -30,7 +30,8 @@ import { selectEntities } from "./entities";
 import { parseExecutionResult } from "./execution-result";
 import { assertSeedDataDirectory, loadSeedData } from "./jsonl";
 import { sortRecordsBySelfReference, topologicalSort } from "./topo-sort";
-import { seedWorkflowName } from "./workflow-name";
+import { IDP_SEED_WORKFLOW_KINDS, seedWorkflowName } from "./workflow-name";
+import type { SeedWorkflowKind } from "./workflow-name";
 import type {
   OperatorClient,
   RunScript,
@@ -51,8 +52,8 @@ interface SeedExecutionContext {
 
 interface SeedWorkflowParams {
   execution: SeedExecutionContext;
-  /** What the script seeds, e.g. `tailordb` or `idp-seed`. */
-  kind: string;
+  /** What the script seeds. */
+  kind: SeedWorkflowKind;
   namespace: string;
   description: string;
   code: string;
@@ -82,7 +83,7 @@ function withSeedWorkflow<T>(
         machineUserName: execution.machineUserName,
       },
       appName: execution.appName,
-      leftoverNote: "It is removed by the next `tailor seed apply` for this namespace.",
+      leftoverNote: "It is removed by the next run of the same seed script for this namespace.",
       profile,
     },
     use,
@@ -178,7 +179,7 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
   );
 
   const bundled = await bundleSeedScript(namespace, typesWithData, configDir, buildOptions);
-  const chunks = chunkSeedData({ data, order: sortedTypes });
+  const chunks = chunkSeedData({ data, order: sortedTypes, codeByteSize: 0 });
 
   if (chunks.length === 0) {
     logger.log(styles.dim(`  [${namespace}] No data to seed`));
@@ -674,9 +675,7 @@ export const seedApplyCommand = defineAppCommand({
         names: [
           ...touchedNamespaces.map((namespace) => seedWorkflowName("tailordb", namespace)),
           ...(idpNamespace
-            ? (["idp-seed", "idp-list", "idp-truncate"] as const).map((kind) =>
-                seedWorkflowName(kind, idpNamespace),
-              )
+            ? IDP_SEED_WORKFLOW_KINDS.map((kind) => seedWorkflowName(kind, idpNamespace))
             : []),
         ],
       });

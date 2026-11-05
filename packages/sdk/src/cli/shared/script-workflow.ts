@@ -8,6 +8,7 @@
  * same contract synchronous execution has.
  */
 
+import { Code, ConnectError } from "@connectrpc/connect";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { recoveryContextArgs } from "#/cli/shared/args";
 import { CLIError, formatCommandHint } from "#/cli/shared/errors";
@@ -84,6 +85,7 @@ export async function withScriptWorkflow<T>(
   const { client, workspaceId, name, appName, invoker, leftoverNote, profile } = options;
   const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
 
+  await assertMachineUserExists({ client, workspaceId, invoker });
   await assertNoActiveScriptWorkflow({ client, workspaceId, names: [name], profile });
   await reclaimTemporaryWorkflow({
     client,
@@ -156,6 +158,38 @@ export async function withScriptWorkflow<T>(
       workflowId,
       subject: SUBJECT,
       leftoverNote,
+    });
+  }
+}
+
+interface AssertMachineUserExistsParams {
+  client: OperatorClient;
+  workspaceId: string;
+  invoker: ScriptInvoker;
+}
+
+/**
+ * Fail before anything is registered when the machine user does not exist: the platform accepts the
+ * start anyway and ends the execution before any job runs, which leaves no message naming the cause.
+ * @param params - Machine user the script runs as
+ */
+async function assertMachineUserExists(params: AssertMachineUserExistsParams): Promise<void> {
+  const { client, workspaceId, invoker } = params;
+  const machineUser = await client
+    .getAuthMachineUser({
+      workspaceId,
+      authNamespace: invoker.namespace,
+      name: invoker.machineUserName,
+    })
+    .then((response) => response.machineUser)
+    .catch((error: unknown) => {
+      if (error instanceof ConnectError && error.code === Code.NotFound) return undefined;
+      throw error;
+    });
+  if (!machineUser) {
+    throw CLIError({
+      code: "MACHINE_USER_NOT_FOUND",
+      message: `Machine user ${invoker.machineUserName} not found in the auth namespace ${invoker.namespace}.`,
     });
   }
 }
@@ -238,6 +272,7 @@ async function readOutcome(params: ReadOutcomeParams): Promise<ScriptExecutionRe
       ({ execution: job } = await client.getFunctionExecution({ workspaceId, executionId }));
       break;
     } catch (error) {
+      if (error instanceof ConnectError && error.code === Code.NotFound) break;
       if (attempt === READ_ATTEMPTS || !isRetryableWaitError(error)) throw error;
       await new Promise((resolve) => setTimeout(resolve, pollInterval));
     }

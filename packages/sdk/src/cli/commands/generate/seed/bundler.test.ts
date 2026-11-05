@@ -129,19 +129,19 @@ describe("seed-bundler", () => {
   });
 });
 
-describe("seed script upsert behavior", () => {
-  const loadMain = async (namespace: string, tableNames: string[]) => {
-    const { bundledCode } = await bundleSeedScript(namespace, tableNames);
-    const modulePath = path.join(
-      process.env.TAILOR_BUILD_OUTPUT_DIR as string,
-      `main-${namespace}.mjs`,
-    );
-    fs.writeFileSync(modulePath, bundledCode);
-    return (await import(/* @vite-ignore */ modulePath)) as {
-      main: (input: SeedInput) => Promise<SeedResult>;
-    };
+const loadMain = async (namespace: string, tableNames: string[]) => {
+  const { bundledCode } = await bundleSeedScript(namespace, tableNames);
+  const modulePath = path.join(
+    process.env.TAILOR_BUILD_OUTPUT_DIR as string,
+    `main-${namespace}.mjs`,
+  );
+  fs.writeFileSync(modulePath, bundledCode);
+  return (await import(/* @vite-ignore */ modulePath)) as {
+    main: (input: SeedInput) => Promise<SeedResult>;
   };
+};
 
+describe("seed script upsert behavior", () => {
   aroundEach(async (runTest) => {
     const testDir = path.join(
       TEST_BUNDLER_BASE,
@@ -453,15 +453,6 @@ describe("seed script upsert behavior", () => {
 });
 
 describe("seed script transaction", () => {
-  const loadMain = async () => {
-    const { bundledCode } = await bundleSeedScript("tailordb", ["User", "Order"]);
-    const modulePath = path.join(process.env.TAILOR_BUILD_OUTPUT_DIR as string, "main-tx.mjs");
-    fs.writeFileSync(modulePath, bundledCode);
-    return (await import(/* @vite-ignore */ modulePath)) as {
-      main: (input: SeedInput) => Promise<SeedResult>;
-    };
-  };
-
   const stubRecording = (failOn?: string): string[] => {
     const statements: string[] = [];
     vi.stubGlobal("tailordb", {
@@ -488,6 +479,11 @@ describe("seed script transaction", () => {
     await runTest();
   });
 
+  aroundAll(async (runSuite) => {
+    await runSuite();
+    delete process.env.TAILOR_BUILD_OUTPUT_DIR;
+  });
+
   const input: SeedInput = {
     data: { User: [{ id: "u1" }], Order: [{ id: "o1" }] },
     order: ["User", "Order"],
@@ -496,12 +492,7 @@ describe("seed script transaction", () => {
 
   test("prefixes progress logs with the namespace the script was bundled for", async () => {
     stubRecording();
-    const { bundledCode } = await bundleSeedScript("custom-namespace", ["User"]);
-    const modulePath = path.join(process.env.TAILOR_BUILD_OUTPUT_DIR as string, "main-custom.mjs");
-    fs.writeFileSync(modulePath, bundledCode);
-    const { main } = (await import(/* @vite-ignore */ modulePath)) as {
-      main: (input: SeedInput) => Promise<SeedResult>;
-    };
+    const { main } = await loadMain("custom-namespace", ["User"]);
     using logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
 
     await main({ data: { User: [{ id: "u1" }] }, order: ["User"], selfRefTypes: [] });
@@ -511,7 +502,7 @@ describe("seed script transaction", () => {
 
   test("commits once after every table has been inserted", async () => {
     const statements = stubRecording();
-    const { main } = await loadMain();
+    const { main } = await loadMain("tailordb", ["User", "Order"]);
 
     const result = await main(input);
 
@@ -521,7 +512,7 @@ describe("seed script transaction", () => {
 
   test("rolls back earlier tables and reports the failing table when a later table fails", async () => {
     const statements = stubRecording('"Order"');
-    const { main } = await loadMain();
+    const { main } = await loadMain("tailordb", ["User", "Order"]);
     using _errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     const result = await main(input);

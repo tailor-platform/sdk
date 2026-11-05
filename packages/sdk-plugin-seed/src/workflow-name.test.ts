@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest";
-import { seedWorkflowName } from "./workflow-name";
+import { IDP_SEED_WORKFLOW_KINDS, seedWorkflowName } from "./workflow-name";
 
 const PLATFORM_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
-const KINDS = ["tailordb", "idp-seed", "idp-list", "idp-truncate"];
+const KINDS = ["tailordb", ...IDP_SEED_WORKFLOW_KINDS] as const;
 
 describe("seedWorkflowName", () => {
   test("joins the kind and the namespace when the name fits", () => {
