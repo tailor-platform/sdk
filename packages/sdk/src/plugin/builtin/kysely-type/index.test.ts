@@ -48,10 +48,13 @@ const mockNestedType = db.table("ComplexUser", {
 describe("KyselyTypePlugin integration tests", () => {
   const testDistPath = "/test/dist/kysely-types.ts";
 
+  type PluginOptions = { distPath?: string; pgliteSchemaPath?: string; temporal?: boolean };
+
   function createCtx(
     namespaces: { namespace: string; tables: Record<string, TailorDBType> }[],
     temporal?: boolean,
-  ): TailorDBReadyContext<{ distPath: string; temporal?: boolean }> {
+    pluginConfig: PluginOptions = { distPath: testDistPath, temporal },
+  ): TailorDBReadyContext<PluginOptions> {
     return {
       tailordb: namespaces.map((ns) => ({
         namespace: ns.namespace,
@@ -62,7 +65,7 @@ describe("KyselyTypePlugin integration tests", () => {
       auth: undefined,
       baseDir: "/test",
       configPath: "tailor.config.ts",
-      pluginConfig: { distPath: testDistPath, temporal },
+      pluginConfig,
     };
   }
 
@@ -176,6 +179,29 @@ describe("KyselyTypePlugin integration tests", () => {
       expect(content).toContain("export type Selectable<T extends TableName>");
       expect(content).toContain("export type Updateable<T extends TableName>");
       expect(result.errors).toBeUndefined();
+    });
+
+    test("writes no types file when distPath is omitted, because getDB comes from the SDK", async () => {
+      const tables = { User: parseTailorDBType(toSchemaOutput(mockBasicType)) };
+      const plugin = kyselyTypePlugin({});
+
+      const result = await plugin.onTailorDBReady!(
+        createCtx([{ namespace: "test-namespace", tables }], undefined, {}),
+      );
+
+      expect(result.files).toEqual([]);
+    });
+
+    test("still writes the PGlite schema module when distPath is omitted", async () => {
+      const tables = { User: parseTailorDBType(toSchemaOutput(mockBasicType)) };
+      const pgliteSchemaPath = "/test/dist/pglite-schema.ts";
+      const plugin = kyselyTypePlugin({ pgliteSchemaPath });
+
+      const result = await plugin.onTailorDBReady!(
+        createCtx([{ namespace: "test-namespace", tables }], undefined, { pgliteSchemaPath }),
+      );
+
+      expect(result.files.map((file) => file.path)).toEqual([pgliteSchemaPath]);
     });
 
     test("bakes temporal: true into the generated getDB when configured", async () => {

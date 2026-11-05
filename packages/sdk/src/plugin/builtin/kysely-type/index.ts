@@ -8,7 +8,7 @@ import type { KyselyTypeMetadata, KyselyNamespaceMetadata } from "./types";
 export const KyselyGeneratorID = "@tailor-platform/kysely-type";
 
 type KyselyTypePluginOptions = {
-  distPath: string;
+  distPath?: string;
   pgliteSchemaPath?: string;
   /**
    * When `true`, generated tables map date/datetime fields and top-level time fields to
@@ -29,13 +29,10 @@ declare module "@tailor-platform/sdk/plugin" {
   }
 }
 
-/** Conventional output path used when `kyselyTypePlugin` has no `distPath` configured. */
-export const DEFAULT_KYSELY_TYPES_DIST_PATH = "./generated/tailordb.ts";
-
 /**
  * Plugin that generates Kysely type definitions for TailorDB tables.
  * @param options - Plugin options
- * @param options.distPath - Output file path for generated types
+ * @param options.distPath - Output file path for generated types; omit to import `getDB` from `@tailor-platform/sdk/plugin/kysely-type/db` instead
  * @param options.pgliteSchemaPath - Output file path for the PGlite `CREATE TABLE` script module; omit to skip it
  * @param options.temporal - When `true`, generated tables map date/datetime fields and
  * top-level time fields to their `Temporal.PlainDate`/`Temporal.Instant`/
@@ -55,7 +52,7 @@ export function kyselyTypePlugin(
       ctx: TailorDBReadyContext<KyselyTypePluginOptions>,
     ): Promise<GeneratorResult> {
       const { distPath, pgliteSchemaPath, temporal } = ctx.pluginConfig;
-      if (pgliteSchemaPath && resolve(distPath) === resolve(pgliteSchemaPath)) {
+      if (distPath && pgliteSchemaPath && resolve(distPath) === resolve(pgliteSchemaPath)) {
         throw new Error("distPath and pgliteSchemaPath must resolve to different files.");
       }
 
@@ -79,11 +76,12 @@ export function kyselyTypePlugin(
 
       const files: GeneratorResult["files"] = [];
       if (allNamespaceData.length > 0) {
-        const content = generateUnifiedKyselyTypes(allNamespaceData, temporal);
-        files.push({
-          path: ctx.pluginConfig.distPath,
-          content,
-        });
+        if (distPath) {
+          files.push({
+            path: distPath,
+            content: generateUnifiedKyselyTypes(allNamespaceData, temporal),
+          });
+        }
         if (ctx.pluginConfig.pgliteSchemaPath) {
           files.push({
             path: ctx.pluginConfig.pgliteSchemaPath,

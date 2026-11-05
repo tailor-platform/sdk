@@ -7,6 +7,7 @@ import {
   type UsedUtilityTypes,
 } from "./types";
 import type { TailorDBType } from "#/parser/service/tailordb/types";
+import type { TailorDBNamespaceData } from "#/plugin/types";
 
 type FieldTypeResult = {
   type: string;
@@ -403,4 +404,24 @@ export function generateUnifiedKyselyTypes(
   return (
     [importsSection, namespaceInterface, getDBFunction, utilityTypeExports].join("\n\n") + "\n"
   );
+}
+
+/**
+ * Generate the contents of the unified types file from loaded TailorDB namespaces.
+ * @param namespaces - Each namespace's loaded tables
+ * @param temporal - Whether `kyselyTypePlugin` was configured with `{ temporal: true }`
+ * @returns Generated types file contents
+ */
+export async function generateKyselyTypesSource(
+  namespaces: readonly Pick<TailorDBNamespaceData, "namespace" | "tables">[],
+  temporal: boolean,
+): Promise<string> {
+  const namespaceData: KyselyNamespaceMetadata[] = [];
+  for (const { namespace, tables } of namespaces) {
+    const types = await Promise.all(
+      Object.values(tables).map((table) => processKyselyType(table, temporal)),
+    );
+    if (types.length > 0) namespaceData.push({ namespace, types });
+  }
+  return generateUnifiedKyselyTypes(namespaceData, temporal);
 }

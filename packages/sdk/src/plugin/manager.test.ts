@@ -1,5 +1,7 @@
 import { describe, expect, test } from "vitest";
+import { definePlugins } from "#/configure/config/index";
 import { db } from "#/configure/services/tailordb/index";
+import { KyselyGeneratorID, kyselyTypePlugin } from "#/plugin/builtin/kysely-type/index";
 import { getRawPluginTableName } from "#/plugin/guards";
 import { PluginManager } from "#/plugin/manager";
 import type { Plugin } from "#/plugin/types";
@@ -19,6 +21,21 @@ describe("getRawPluginTableName", () => {
 });
 
 describe("PluginManager", () => {
+  test("getPluginConfig returns the config a registered plugin was created with", () => {
+    const manager = new PluginManager(
+      definePlugins(kyselyTypePlugin({ distPath: "./db.ts", temporal: true })),
+    );
+
+    expect(manager.getPluginConfig(KyselyGeneratorID)).toEqual({
+      distPath: "./db.ts",
+      temporal: true,
+    });
+  });
+
+  test("getPluginConfig returns undefined for a plugin that is not registered", () => {
+    expect(new PluginManager().getPluginConfig(KyselyGeneratorID)).toBeUndefined();
+  });
+
   test("rejects two plugins that share an ID instead of keeping only the last", () => {
     const first: Plugin = { id: "dup", description: "first" };
     const second: Plugin = { id: "dup", description: "second" };

@@ -57,6 +57,7 @@ import { SecretsSchema } from "#/parser/service/secrets/index";
 import { StaticWebsiteSchema } from "#/parser/service/staticwebsite/index";
 import { TailorDBServiceConfigSchema } from "#/parser/service/tailordb/index";
 import { collectWaitPointKeyFailures } from "#/parser/service/workflow/wait-point-key";
+import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
 import { getScopedWaitPoints } from "#/utils/wait-point-registry";
 import type { BundleCache } from "#/cli/cache/bundle-cache";
 import type { BundledScripts } from "#/cli/commands/deploy/function-registry-types";
@@ -109,6 +110,7 @@ interface ReusableBuildState {
   readonly inlineSourcemapDependencySources: boolean | string[];
   readonly inlineSourcemapProjectSources: ProjectSourcesFilter;
   readonly bundleLogLevel: LogLevel;
+  readonly kyselyTemporal: boolean;
 }
 
 /**
@@ -827,6 +829,7 @@ export async function loadApplication(
   const inlineSourcemapProjectSources = projectSourcesOf({ buildOptions, baseDir });
   const bundleLogLevel = resolveBundleLogLevel(buildOptions.logLevel);
   const dateDefault = effectiveDateDefault(config);
+  const kyselyTemporal = pluginManager?.getPluginConfig(KyselyGeneratorID)?.temporal ?? false;
 
   // Collect in-memory bundled scripts
   const bundledScripts: BundledScripts = {
@@ -855,6 +858,7 @@ export async function loadApplication(
       sdkBuilderAnnotationCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault,
+      kyselyTemporal,
     });
     for (const [name, code] of resolverBundles) {
       bundledScripts.resolvers.set(resolverBundleKey(pipeline.namespace, name), code);
@@ -878,6 +882,7 @@ export async function loadApplication(
       sdkBuilderAnnotationCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault,
+      kyselyTemporal,
     });
   }
 
@@ -901,6 +906,7 @@ export async function loadApplication(
       sdkBuilderAnnotationCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault,
+      kyselyTemporal,
     });
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
@@ -942,6 +948,7 @@ export async function loadApplication(
       tsconfigCache,
       sdkBuilderAnnotationCache,
       dateDefault,
+      kyselyTemporal,
     });
   }
 
@@ -996,6 +1003,7 @@ export async function loadApplication(
       inlineSourcemapDependencySources,
       inlineSourcemapProjectSources,
       bundleLogLevel,
+      kyselyTemporal,
     },
   };
 }
@@ -1035,6 +1043,7 @@ async function reloadEnvDependentBundles(params: {
     inlineSourcemapDependencySources,
     inlineSourcemapProjectSources,
     bundleLogLevel,
+    kyselyTemporal,
   } = reusableBuildState;
 
   const env =
@@ -1069,6 +1078,7 @@ async function reloadEnvDependentBundles(params: {
       previousUsedJobs: previous.workflowBuildResult,
       allowedRuntimeGlobals: buildOptionsOf(config).allowedRuntimeGlobals,
       dateDefault: effectiveDateDefault(config),
+      kyselyTemporal,
     });
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
@@ -1091,6 +1101,7 @@ async function reloadEnvDependentBundles(params: {
       tsconfigCache,
       sdkBuilderAnnotationCache,
       dateDefault: effectiveDateDefault(config),
+      kyselyTemporal,
     });
   }
 

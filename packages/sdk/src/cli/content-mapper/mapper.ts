@@ -5,11 +5,17 @@ import { DEFAULT_CONFIG_PATH } from "#/cli/shared/args";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { errorSummary } from "#/cli/shared/errors";
 import { readPackageJson } from "#/cli/shared/package-json";
-import { REGISTRY_FILE_NAME } from "#/cli/shared/tailor-file-extension";
+import { KYSELY_FILE_NAME, REGISTRY_FILE_NAME } from "#/cli/shared/tailor-file-extension";
+import { loadConfigNamespaces } from "#/cli/shared/tailordb-namespaces";
 import { generateTypeDefinitionFromConfig } from "#/cli/shared/type-generator";
 import { beginUserModuleRun } from "#/cli/shared/user-modules";
+import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
+import { generateKyselyTypesSource } from "#/plugin/builtin/kysely-type/type-processor";
+import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { collectLoadedFiles } from "./loaded-files";
 import { initializeResult, type ContentMapperHandlers, type PositionEncoding } from "./protocol";
+import type { LoadedConfig } from "#/cli/shared/config-loader";
+import type { Plugin } from "#/plugin/types";
 
 interface OpenProjectParams {
   configFileName: string;
@@ -25,11 +31,14 @@ interface TransformParams {
 
 interface Project {
   registryTypes?: string;
+  kyselyTypes?: string;
+  kyselyError?: string;
   error?: string;
   identity: string;
   watchedFiles: string[];
 }
 
+const KYSELY_PLUGIN_MISSING = "kyselyTypePlugin is not configured in tailor.config.ts";
 const EMPTY_MODULE = "export {};\n";
 const PROJECT_DIAGNOSTIC_CODE = 2;
 const OPTION_DIAGNOSTIC_CODE = 3;
@@ -48,8 +57,24 @@ function configCandidates(searchFrom: string, foundIn?: string): string[] {
 
 export interface Evaluation {
   registryTypes?: string;
+  kyselyTypes?: string;
+  kyselyError?: string;
   error?: string;
   files: string[];
+}
+
+async function kyselyTypesOf(
+  config: LoadedConfig,
+  plugins: Plugin[],
+): Promise<Pick<Evaluation, "kyselyTypes" | "kyselyError">> {
+  const options = resolvePluginConfig(plugins, KyselyGeneratorID);
+  if (!options) return {};
+  try {
+    const { namespaces } = await loadConfigNamespaces(config, plugins);
+    return { kyselyTypes: await generateKyselyTypesSource(namespaces, options.temporal ?? false) };
+  } catch (error) {
+    return { kyselyError: errorSummary(error) };
+  }
 }
 
 export type EvaluateConfig = (configPath: string) => Promise<Evaluation>;
@@ -65,12 +90,15 @@ export async function evaluateConfigInProcess(configPath: string): Promise<Evalu
     process.chdir(path.dirname(configPath));
     beginUserModuleRun();
     const { outcome, files } = await collectLoadedFiles(async () => {
-      const { config } = await loadConfig(configPath);
-      return generateTypeDefinitionFromConfig(config);
+      const { config, plugins } = await loadConfig(configPath);
+      return {
+        registryTypes: generateTypeDefinitionFromConfig(config),
+        ...(await kyselyTypesOf(config, plugins)),
+      };
     });
     return outcome.status === "rejected"
       ? { error: errorSummary(outcome.reason), files }
-      : { registryTypes: outcome.value, files };
+      : { ...outcome.value, files };
   } finally {
     process.chdir(cwd);
   }
@@ -89,18 +117,35 @@ async function loadProject(
       watchedFiles: configCandidates(searchFrom),
     };
   }
-  const { registryTypes, error, files } = await evaluate(configPath);
+  const { registryTypes, kyselyTypes, kyselyError, error, files } = await evaluate(configPath);
   const watchedFiles = [
     ...new Set([...configCandidates(searchFrom, path.dirname(configPath)), configPath, ...files]),
   ];
+  const keptWatchedFiles = [...new Set([...(previousWatchedFiles ?? []), ...watchedFiles])];
   if (registryTypes === undefined) {
-    return {
-      configPath,
-      error,
-      watchedFiles: [...new Set([...(previousWatchedFiles ?? []), ...watchedFiles])],
-    };
+    return { configPath, error, watchedFiles: keptWatchedFiles };
   }
-  return { configPath, registryTypes, watchedFiles };
+  return {
+    configPath,
+    registryTypes,
+    kyselyTypes,
+    kyselyError,
+    watchedFiles: kyselyError === undefined ? watchedFiles : keptWatchedFiles,
+  };
+}
+
+function typesOf(
+  fileName: string,
+  project: Project | undefined,
+): { text: string; problem?: string } {
+  if (project?.registryTypes === undefined) {
+    return { text: EMPTY_MODULE, problem: project?.error ?? PROJECT_NOT_OPENED };
+  }
+  if (fileName === REGISTRY_FILE_NAME) return { text: project.registryTypes };
+  if (fileName !== KYSELY_FILE_NAME) return { text: EMPTY_MODULE };
+  return project.kyselyTypes === undefined
+    ? { text: EMPTY_MODULE, problem: project.kyselyError ?? KYSELY_PLUGIN_MISSING }
+    : { text: project.kyselyTypes };
 }
 
 /**
@@ -141,6 +186,8 @@ export function createContentMapperHandlers(evaluate: EvaluateConfig): ContentMa
             loaded.configPath ?? null,
             loaded.error ?? null,
             loaded.registryTypes ?? null,
+            loaded.kyselyTypes ?? null,
+            loaded.kyselyError ?? null,
           ]),
         )
         .digest("hex");
@@ -159,24 +206,14 @@ export function createContentMapperHandlers(evaluate: EvaluateConfig): ContentMa
     transform(params) {
       const { fileName, content, projectHandle } = params as TransformParams;
       const project = projects.get(projectHandle);
-      const text =
-        path.basename(fileName) === REGISTRY_FILE_NAME
-          ? (project?.registryTypes ?? EMPTY_MODULE)
-          : EMPTY_MODULE;
+      const { text, problem } = typesOf(path.basename(fileName), project);
       return {
         extension: ".ts",
         text,
         diagnostics:
-          project?.registryTypes === undefined
-            ? [
-                {
-                  messageText: project?.error ?? PROJECT_NOT_OPENED,
-                  start: 0,
-                  length: 0,
-                  code: PROJECT_DIAGNOSTIC_CODE,
-                },
-              ]
-            : [],
+          problem === undefined
+            ? []
+            : [{ messageText: problem, start: 0, length: 0, code: PROJECT_DIAGNOSTIC_CODE }],
         mappings: [
           [
             0,

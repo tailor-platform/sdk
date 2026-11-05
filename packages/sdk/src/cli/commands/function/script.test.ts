@@ -132,6 +132,18 @@ describe("function script", () => {
     expect(fetchRemoteSchemaSnapshot).not.toHaveBeenCalled();
   });
 
+  test("scaffolds a skeleton importing getDB from the SDK when kyselyTypePlugin has no distPath", async () => {
+    using tmp = tempCwd("sdk-function-script-");
+    using _logger = silenceLogger("info", "success", "warn");
+    mockConfig(tmp.dir, { plugins: [{ ...kyselyPluginStub, pluginConfig: {} }] });
+
+    await runCommand(scriptCommand, ["scripts/fix.ts", "--namespace", "tailordb"]);
+
+    const script = fs.readFileSync(path.join(tmp.dir, "scripts/fix.ts"), "utf-8");
+    expect(script).toContain('import { getDB } from "@tailor-platform/sdk/plugin/kysely-type/db";');
+    expect(script).toContain('getDB("tailordb")');
+  });
+
   test("generates db.ts and db.snapshot.json from local definitions without authentication by default", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");

@@ -30,6 +30,28 @@ export function dateDefaultFromConfig(configModule: unknown): EffectiveDateDefau
   );
 }
 
+const KYSELY_TYPE_PLUGIN_ID = "@tailor-platform/kysely-type";
+
+/**
+ * Read the `temporal` option of the kyselyTypePlugin a config module exports in `plugins`.
+ * @param configModule - The imported module namespace
+ * @returns Whether the plugin is configured with `temporal: true`
+ */
+export function kyselyTemporalFromConfig(configModule: unknown): boolean {
+  const plugins =
+    configModule && typeof configModule === "object"
+      ? (configModule as { plugins?: unknown }).plugins
+      : undefined;
+  if (!Array.isArray(plugins)) return false;
+  const plugin = plugins.find(
+    (candidate): candidate is { pluginConfig?: { temporal?: unknown } } =>
+      typeof candidate === "object" &&
+      candidate !== null &&
+      (candidate as { id?: unknown }).id === KYSELY_TYPE_PLUGIN_ID,
+  );
+  return plugin?.pluginConfig?.temporal === true;
+}
+
 type TsHookModule = {
   resolveSync: Parameters<typeof mod.registerHooks>[0]["resolve"];
   loadSync: Parameters<typeof mod.registerHooks>[0]["load"];
@@ -119,4 +141,19 @@ export async function loadDateDefaultFromConfig(configPath: string): Promise<Eff
     return "legacy";
   }
   return dateDefaultFromConfig(configModule);
+}
+
+/**
+ * Load the `temporal` option of the kyselyTypePlugin a `tailor.config.ts` exports, in the Vitest
+ * host process. A config that fails to load reads as `false`: {@link loadDateDefaultFromConfig}
+ * already reports that failure for the same file.
+ * @param configPath - Absolute path to tailor.config.ts
+ * @returns Whether the plugin is configured with `temporal: true`
+ */
+export async function loadKyselyTemporalFromConfig(configPath: string): Promise<boolean> {
+  try {
+    return kyselyTemporalFromConfig(await serialize(() => importLikeCli(configPath)));
+  } catch {
+    return false;
+  }
 }

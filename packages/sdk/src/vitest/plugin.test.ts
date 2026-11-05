@@ -824,6 +824,41 @@ describe("createEnvironmentPlugin", () => {
     ]);
   });
 
+  test("passes the kysely temporal the host read from the config to the root test env", async () => {
+    const plugin = createEnvironmentPlugin(
+      { config: "./tailor.config.ts" },
+      async () => "legacy",
+      async () => true,
+    );
+    const userConfig: any = { root: "/proj", test: { environment: "tailor-runtime" } };
+    await applyConfig(plugin, userConfig);
+
+    expect(userConfig.test.env.__TAILOR_RUNTIME_KYSELY_TEMPORAL).toBe("true");
+  });
+
+  test("seeds each project's own kysely temporal and blanks it on projects that select another environment", async () => {
+    const plugin = createEnvironmentPlugin(
+      { config: "./tailor.config.ts" },
+      async () => "legacy",
+      async (path) => path.includes("/temporal/"),
+    );
+    const userConfig: any = {
+      root: "/proj",
+      test: {
+        projects: [
+          { root: "/proj/temporal", test: { environment: "tailor-runtime", name: "a" } },
+          { root: "/proj/plain", test: { environment: "tailor-runtime", name: "b" } },
+          { test: { environment: "node", name: "c" } },
+        ],
+      },
+    };
+    await applyConfig(plugin, userConfig);
+
+    expect(userConfig.test.projects[0].test.env.__TAILOR_RUNTIME_KYSELY_TEMPORAL).toBe("true");
+    expect(userConfig.test.projects[1].test.env.__TAILOR_RUNTIME_KYSELY_TEMPORAL).toBe("false");
+    expect(userConfig.test.projects[2].test.env.__TAILOR_RUNTIME_KYSELY_TEMPORAL).toBe("");
+  });
+
   test("fails the config phase when the config cannot be read", async () => {
     const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" }, async () => {
       throw new Error("tailor.config.ts not found");
