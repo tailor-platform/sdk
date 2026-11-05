@@ -265,6 +265,34 @@ When using external resources:
 - Destructive operations like `tailordb truncate` (and `tailor seed apply --truncate`) automatically exclude external resources to prevent accidental data loss in shared resources
 - Subscribing an executor to an external resource's events requires the config that owns the resource in the same `deploy`. Publishing is then enabled automatically, and `deploy` records the dependency so a later deploy without that config asks for confirmation instead of silently turning publishing off
 
+#### Referencing another app's Auth with `asExternal()`
+
+When the other app is in the same repository, import its `defineAuth` result and call `asExternal()` instead of writing the name by hand.
+
+```typescript
+// core/auth.ts
+export const auth = defineAuth("core-auth", {
+  machineUsers: { portal: { attributes: { role: "STAFF" } } },
+  // ...
+});
+```
+
+```typescript
+// portal/tailor.config.ts
+import { auth as coreAuth } from "../core/auth";
+
+export default defineConfig({
+  name: "portal",
+  auth: coreAuth.asExternal(),
+});
+```
+
+- The reference follows renames of the Auth service and of its machine users.
+- The machine user names reach the generated `tailor.d.ts`, so a misspelled `invoker` is a type error in the referencing app, including when it is written as an expression such as `flag ? "portal" : "other"`.
+- Only the name and the machine users are taken over. Hooks, OAuth2 clients, and the rest of the definition stay with the app that owns the Auth service, so this project does not deploy them a second time.
+- Put the `defineAuth` call in its own file, as above. Importing the other app's `tailor.config.ts` also runs the rest of that file.
+- An Auth service defined in another repository cannot be imported. Reference it with `{ name: "...", external: true }`; `invoker` then accepts any string.
+
 ### Built-in IdP
 
 Configure the Built-in IdP service using `defineIdp()`. See [IdP](./services/idp.md) for full documentation.

@@ -122,6 +122,24 @@ describe("AI Gateway authNamespace default", () => {
     expect(application.aiGatewayServices[0]?.authNamespace).toBe("shared-auth");
   });
 
+  test("treats an external auth reference carrying machine users as another app's auth", () => {
+    const coreAuth = defineAuth("core-auth", {
+      machineUserAttributes: {},
+      machineUsers: { portal: {} },
+    });
+    const aiGateway = defineAIGateway("my-aigateway", {});
+
+    const config = {
+      ...defineConfig({ name: "portalApp", auth: coreAuth.asExternal(), aiGateways: [aiGateway] }),
+      path: "tailor.config.ts",
+    };
+
+    const application = defineApplication({ config });
+
+    expect(application.authService).toBeUndefined();
+    expect(application.aiGatewayServices[0]?.authNamespace).toBe("core-auth");
+  });
+
   test("keeps an explicit authNamespace even when it differs from the local auth service", () => {
     const auth = defineAuth("my-auth", { machineUserAttributes: {}, machineUsers: {} });
     const aiGateway = defineAIGateway("my-aigateway", { authNamespace: "other-apps-auth" });
