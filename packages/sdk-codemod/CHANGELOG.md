@@ -1,5 +1,11 @@
 # @tailor-platform/sdk-codemod
 
+## 0.10.7
+
+### Patch Changes
+
+- [#2905](https://github.com/tailor-platform/sdk/pull/2905) [`bc3dd45`](https://github.com/tailor-platform/sdk/commit/bc3dd45ccbb67641f9c7636594a4fdcda963dd4e) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @​types/node to v26.6.6
+
 ## 0.10.6
 
 ### Patch Changes
