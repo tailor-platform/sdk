@@ -780,6 +780,10 @@ db.table("User", {
 
 **Warning**: Do not use `unsafeAllowAllTypePermission` or `unsafeAllowAllGqlPermission` in production environments as they effectively disable authorization checks.
 
+## Calling from the Frontend
+
+To read and write records from the frontend with typed functions, import `tailordb.tailor`: the record type comes from your table definition. See [Frontend Client](../../frontend-client.md).
+
 ## Migrations (Beta)
 
 When you change a TailorDB table definition, the SDK can generate a migration that captures the diff and, for breaking changes, runs a data transformation script during `tailor deploy`. See the [TailorDB Migrations guide](./migration.md) for the full workflow, configuration, supported change types, team coordination, and troubleshooting.
