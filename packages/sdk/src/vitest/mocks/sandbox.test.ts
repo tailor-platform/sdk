@@ -77,6 +77,26 @@ describe("mockSandbox", () => {
       expect(second).toBe(first);
     });
 
+    test("getOrCreate without a name raises INVALID_ARGUMENT", async () => {
+      using _sb = mockSandbox();
+
+      await expect(
+        sandboxApi().getOrCreate({ template: "guest" } as unknown as {
+          name: string;
+          template: string;
+        }),
+      ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+    });
+
+    test("destroying a destroyed sandbox is a no-op success", async () => {
+      using _sb = mockSandbox();
+      const box = await sandboxApi().create({ template: "guest" });
+      await box.destroy();
+
+      await expect(box.destroy()).resolves.toBeUndefined();
+      expect(box.status).toBe("DESTROYED");
+    });
+
     test("destroy marks DESTROYED, frees the name and blocks further commands", async () => {
       using _sb = mockSandbox();
       const box = await sandboxApi().create({ template: "guest", name: "dev" });

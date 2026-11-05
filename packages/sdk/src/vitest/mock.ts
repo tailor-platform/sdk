@@ -47,8 +47,8 @@ export {
 } from "./mocks/tailordb";
 export {
   mockSandbox,
-  type ExecHandler,
-  type MockExecOutput,
-  type RecordedExecution,
+  type MockSandboxExecHandler,
+  type MockSandboxExecOutput,
+  type MockSandboxExecution,
 } from "./mocks/sandbox";
 export { mockWorkflow } from "./mocks/workflow";

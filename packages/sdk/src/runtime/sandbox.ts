@@ -270,6 +270,17 @@ export interface Sandbox extends SandboxInfo {
  * Error raised by `tailor.sandbox` calls. `code` is the gRPC code name, for example
  * `NOT_FOUND`, `ABORTED`, `FAILED_PRECONDITION`, or `INVALID_ARGUMENT` for arguments
  * rejected before any request is sent. `name` is `"SandboxError"`.
+ *
+ * The class is reached as `tailor.sandbox.SandboxError`, or `sandbox.SandboxError` from the
+ * wrapper, so it can be used with `instanceof`.
+ * @example
+ * try {
+ *   await sandbox.getByName("dev");
+ * } catch (err) {
+ *   if (err instanceof sandbox.SandboxError && err.code === "NOT_FOUND") {
+ *     // create it instead
+ *   }
+ * }
  */
 export interface SandboxError extends Error {
   /** gRPC code name. */
@@ -286,7 +297,7 @@ export interface SandboxErrorConstructor {
  * runtime injects on `globalThis.tailor.sandbox`.
  *
  * Holds are renewed by the runtime only while the script yields to the event loop.
- * A synchronous CPU loop longer than about a minute lets a hold lapse. Every hold is
+ * A synchronous CPU loop longer than the hold lifetime lets a hold lapse. Every hold is
  * released when the execution ends.
  */
 export interface PlatformSandboxAPI {

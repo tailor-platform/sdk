@@ -28,8 +28,8 @@ class SandboxErrorMock extends Error implements SandboxErrorShape {
   }
 }
 
-/** Output a {@link ExecHandler} returns for one command. */
-export interface MockExecOutput {
+/** Output a {@link MockSandboxExecHandler} returns for one command. */
+export interface MockSandboxExecOutput {
   /** Standard output. Default: empty. */
   stdout?: string | Uint8Array;
   /** Standard error. Default: empty. */
@@ -39,13 +39,13 @@ export interface MockExecOutput {
 }
 
 /** Handler that decides the outcome of every `exec` / `start` call. */
-export type ExecHandler = (
+export type MockSandboxExecHandler = (
   argv: string[],
   opts: ExecOptions | undefined,
-) => MockExecOutput | Promise<MockExecOutput>;
+) => MockSandboxExecOutput | Promise<MockSandboxExecOutput>;
 
 /** One recorded command run, for assertions. */
-export interface RecordedExecution {
+export interface MockSandboxExecution {
   sandboxId: string;
   argv: string[];
   opts?: ExecOptions;
@@ -130,7 +130,8 @@ function streamOf(bytes: Uint8Array): ReadableStream<Uint8Array> {
  * `start` run the handler set with `onExec` (default: exit code 0, empty output).
  * Errors are raised as `SandboxError` with the same codes the platform uses
  * (`NOT_FOUND`, `ALREADY_EXISTS`, `FAILED_PRECONDITION`, `INVALID_ARGUMENT`).
- * The mock does not model holds, so `ABORTED` is never raised.
+ * Holds are not modelled, so `ABORTED` is never raised. `start` runs the handler to completion
+ * before it returns, so a `RUNNING` execution is never observable and `cancel` has no effect.
  *
  * **Beta:** This API may change in future releases.
  * @returns Disposable sandbox mock control object
@@ -152,8 +153,8 @@ export function mockSandbox() {
   const prev = root.sandbox;
 
   const byId = new Map<string, SandboxState>();
-  const recorded: RecordedExecution[] = [];
-  let handler: ExecHandler = () => ({});
+  const recorded: MockSandboxExecution[] = [];
+  let handler: MockSandboxExecHandler = () => ({});
   let counter = 0;
 
   const nextId = (prefix: string): string => `${prefix}-${String(++counter).padStart(4, "0")}`;
@@ -382,6 +383,7 @@ export function mockSandbox() {
         }
       },
       async destroy() {
+        if (sandbox.status === "DESTROYED") return;
         sandbox.status = "DESTROYED";
         state.files.clear();
       },
@@ -447,7 +449,7 @@ export function mockSandbox() {
      * Default: exit code 0 with empty output.
      * @param fn - Handler receiving the command and its options
      */
-    onExec(fn: ExecHandler): void {
+    onExec(fn: MockSandboxExecHandler): void {
       handler = fn;
     },
 
@@ -463,7 +465,7 @@ export function mockSandbox() {
      * Every command run through `exec` / `start`, in order.
      * @returns Recorded executions
      */
-    get executions(): RecordedExecution[] {
+    get executions(): MockSandboxExecution[] {
       return [...recorded];
     },
 

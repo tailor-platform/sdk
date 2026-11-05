@@ -34,6 +34,7 @@ describe("@tailor-platform/sdk/runtime/sandbox", () => {
 
     expect(second.id).toBe(first.id);
     expect(sb.getOrCreate).toHaveBeenCalledTimes(2);
+    expect(sb.getOrCreate.mock.calls[0]).toEqual([{ name: "dev", template: "guest" }]);
   });
 
   test("get delegates with the sandbox id", async () => {
