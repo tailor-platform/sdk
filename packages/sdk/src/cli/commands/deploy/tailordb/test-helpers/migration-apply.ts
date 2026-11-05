@@ -185,6 +185,65 @@ export function tailordbTypeWrites(client: OperatorClient) {
   return writes.toSorted((a, b) => a.order - b.order);
 }
 
+/**
+ * List the call order of each deletion of a table and of its GraphQL permission.
+ * @param client - Mocked operator client
+ * @param namespace - Namespace of the table
+ * @param tableName - Table name
+ * @returns Invocation order of each table deletion and each GraphQL permission deletion
+ */
+export function deleteOrders(client: OperatorClient, namespace: string, tableName: string) {
+  const ordersOf = (
+    mock: { calls: unknown[][]; invocationCallOrder: number[] },
+    matches: (request: Record<string, unknown>) => boolean,
+  ) =>
+    mock.calls.flatMap((call, index) => {
+      const order = mock.invocationCallOrder[index];
+      return order !== undefined && matches(call[0] as Record<string, unknown>) ? [order] : [];
+    });
+  return {
+    table: ordersOf(
+      vi.mocked(client.deleteTailorDBType).mock,
+      (request) => request.namespaceName === namespace && request.tailordbTypeName === tableName,
+    ),
+    permission: ordersOf(
+      vi.mocked(client.deleteTailorDBGQLPermission).mock,
+      (request) => request.namespaceName === namespace && request.typeName === tableName,
+    ),
+  };
+}
+
+/**
+ * Summarize how a table and its GraphQL permission were deleted, to compare with
+ * {@link DELETED_ONCE_AFTER_CHECKPOINT}.
+ * @param client - Mocked operator client
+ * @param namespace - Namespace of the table
+ * @param tableName - Table name
+ * @param checkpoint - Invocation order of the checkpoint update the deletion must follow
+ * @returns Deletion counts and whether they ran in order
+ */
+export function deletionOf(
+  client: OperatorClient,
+  namespace: string,
+  tableName: string,
+  checkpoint: number | undefined,
+) {
+  const { table, permission } = deleteOrders(client, namespace, tableName);
+  return {
+    tableDeletes: table.length,
+    permissionDeletes: permission.length,
+    afterCheckpoint: checkpoint !== undefined && permission.every((order) => order > checkpoint),
+    permissionFirst: table.every((tableOrder) => permission.every((order) => order < tableOrder)),
+  };
+}
+
+export const DELETED_ONCE_AFTER_CHECKPOINT = {
+  tableDeletes: 1,
+  permissionDeletes: 1,
+  afterCheckpoint: true,
+  permissionFirst: true,
+};
+
 export const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
 
 type ChangeEntries<Group extends TailorDBChangeSet[keyof TailorDBChangeSet]> = Partial<

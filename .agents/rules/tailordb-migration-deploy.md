@@ -8,7 +8,7 @@
 4. `verifyRestorationCheckpoints` checks that every checkpoint still belongs to this deploy.
 5. Without a failure, `applyLocalDefinitions` (`--no-schema-check` only) creates the planned tables no earlier step created and writes the local definitions that differ from the last migration.
 6. `keepPartialMigrationsRestricted` drops the tables of a partially applied migration from `restoration`. The restore (`restoreMigrationRestrictions`) then lifts the restrictions: right away through `restoreAfterMigrations`, or, with `maintenanceMode: "deploy"` and no failure, through `releaseHeldMaintenanceMode` after the rest of the deploy, which checks ownership again. A failure is thrown after this step.
-7. `applyDeferredGqlPermissions`; `applyRemainingDeletions`, which deletes the remaining GraphQL permissions everywhere but tables only outside the migrating namespaces; then the metadata labels. With `"deploy"`, these run while the tables are still restricted.
+7. `applyDeferredGqlPermissions`; `applyRemainingDeletions`, which deletes the planned GraphQL permissions and tables that no migration deleted, in every namespace, and drops each deleted table from `restoration.settings`; then the metadata labels. With `"deploy"`, these run while the tables are still restricted.
 
 Keep these invariants:
 
