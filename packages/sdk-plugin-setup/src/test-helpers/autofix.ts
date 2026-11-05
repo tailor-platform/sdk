@@ -4,6 +4,7 @@ import {
   TEMPLATE_VERSION,
   type AutofixCodemod,
   type AutofixProvider,
+  type CopilotAuth,
   type PackageManager,
   type RenderResult,
 } from "../templates";
@@ -20,6 +21,7 @@ const SECUREFIX_SERVER_REPOSITORY = "securefix-server";
  * @param options.dirs - App directories
  * @param options.packageManager - Package manager
  * @param options.codemod - Codemod mode
+ * @param options.copilotAuth - Copilot authentication, for `copilot` (default `pat`)
  * @returns Rendered workflow
  */
 export function renderAutofixFor(
@@ -28,13 +30,15 @@ export function renderAutofixFor(
     dirs?: readonly string[];
     packageManager?: PackageManager;
     codemod?: AutofixCodemod;
+    copilotAuth?: CopilotAuth;
   } = {},
 ): RenderResult {
+  const { codemod, copilotAuth = "pat", ...rest } = options;
   const common = {
     dirs: ["."],
     packageManager: "pnpm" as const,
-    codemod: undefined,
-    ...options,
+    ...rest,
+    ...(codemod === "copilot" ? { codemod, copilotAuth } : { codemod }),
   };
   return provider === "securefix"
     ? renderAutofixWorkflow({

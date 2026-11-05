@@ -1,3 +1,4 @@
+import serviceCommitTemplate from "./autofix-service-commit.yml";
 import autofixTemplate from "./autofix.workflow.yml";
 import branchTemplate from "./branch.workflow.yml";
 import previewCleanupTemplate from "./preview-cleanup.workflow.yml";
@@ -831,10 +832,37 @@ export const AUTOFIX_PROVIDERS = ["github-token", "autofix-ci", "securefix", "gi
 /** What commits the regenerated files to the pull request branch. */
 export type AutofixProvider = (typeof AUTOFIX_PROVIDERS)[number];
 
-export const AUTOFIX_CODEMODS = ["warn", "error", "deterministic"] as const;
+/** AI coding agents `--codemod` can hand the changes the codemods leave for review to. */
+export const AUTOFIX_AGENTS = ["copilot", "claude", "codex"] as const;
+
+export type AutofixAgent = (typeof AUTOFIX_AGENTS)[number];
+
+export const AUTOFIX_CODEMODS = ["warn", "error", "deterministic", ...AUTOFIX_AGENTS] as const;
 
 /** What the autofix workflow does with the codemods of an SDK upgrade in a pull request. */
 export type AutofixCodemod = (typeof AUTOFIX_CODEMODS)[number];
+
+/**
+ * How the Copilot agent authenticates: a fine-grained personal access token in a repository
+ * secret, or the workflow token with the `copilot-requests: write` permission.
+ */
+export const COPILOT_AUTHS = ["pat", "github-token"] as const;
+
+export type CopilotAuth = (typeof COPILOT_AUTHS)[number];
+
+/**
+ * Check whether a value names a supported Copilot authentication.
+ * @param value - Value to check
+ * @returns True when `value` is one of {@link COPILOT_AUTHS}
+ */
+export function isCopilotAuth(value: unknown): value is CopilotAuth {
+  return COPILOT_AUTHS.some((name) => name === value);
+}
+
+/** `--codemod`, with the settings it needs; the workflow runs no codemod when it is undefined. */
+export type AutofixCodemodParams =
+  | { codemod: Exclude<AutofixCodemod, "copilot"> | undefined }
+  | { codemod: "copilot"; copilotAuth: CopilotAuth };
 
 /**
  * Check whether a value names a supported codemod mode.
@@ -849,22 +877,72 @@ export const AUTOFIX_WORKFLOW_FILE = ".github/workflows/tailor-autofix.yml";
 
 const AUTOFIX_COMMIT_MESSAGE = "chore: run tailor generate";
 
+/**
+ * Check whether a codemod mode hands what the codemods leave for review to an AI coding agent.
+ * @param codemod - Codemod mode, or undefined for none
+ * @returns True when `codemod` is one of {@link AUTOFIX_AGENTS}
+ */
+export function isAutofixAgent(codemod: AutofixCodemod | undefined): codemod is AutofixAgent {
+  return AUTOFIX_AGENTS.some((agent) => agent === codemod);
+}
+
+/** The only bot whose runs start an agent, without its `[bot]` suffix: Renovate opens SDK upgrades. */
+export const AGENT_BOT = "renovate";
+
+function agentCommitMessage(agent: AutofixAgent): string {
+  return `chore: apply the SDK upgrade with ${agent}`;
+}
+
+const UPGRADE_RERUN_ERROR =
+  "tailor upgrade and tailor generate changed files again right after their own fix commit. Run them twice locally and check that the second run changes nothing.";
+
 function fixCommandTexts(codemod: AutofixCodemod | undefined): {
   commands: string;
   rerunError: string;
 } {
-  return codemod === "deterministic"
-    ? {
-        commands: "tailor upgrade and tailor generate",
-        rerunError:
-          "tailor upgrade and tailor generate changed files again right after their own fix commit. Run them twice locally and check that the second run changes nothing.",
-      }
-    : {
-        commands: "tailor generate",
-        rerunError:
-          "tailor generate changed files again right after its own fix commit. Run it twice locally and check that the second run changes nothing.",
-      };
+  if (isAutofixAgent(codemod)) {
+    return {
+      commands: `tailor upgrade, ${codemod}, and tailor generate`,
+      rerunError: UPGRADE_RERUN_ERROR,
+    };
+  }
+  if (codemod === "deterministic") {
+    return { commands: "tailor upgrade and tailor generate", rerunError: UPGRADE_RERUN_ERROR };
+  }
+  return {
+    commands: "tailor generate",
+    rerunError:
+      "tailor generate changed files again right after its own fix commit. Run it twice locally and check that the second run changes nothing.",
+  };
 }
+
+type ServiceProvider = "autofix-ci" | "securefix";
+
+function isServiceProvider(provider: AutofixProvider): provider is ServiceProvider {
+  return provider === "autofix-ci" || provider === "securefix";
+}
+
+const SERVICE_COMMIT_STEP_IDS: Record<ServiceProvider, string[]> = {
+  "autofix-ci": ["tailor-autofix-ci-auth", "tailor-autofix-ci"],
+  securefix: ["tailor-securefix"],
+};
+
+function serviceCommitSteps(
+  provider: AutofixProvider,
+  commit: { if?: string; message: string },
+): string | undefined {
+  if (!isServiceProvider(provider)) return undefined;
+  let out = block(serviceCommitTemplate, "AUTOFIX_CI", provider === "autofix-ci");
+  out = block(out, "SECUREFIX", provider === "securefix");
+  out = line(out, "SERVICE_COMMIT_IF", commit.if === undefined ? undefined : `if: ${commit.if}`);
+  return out.replaceAll("__SERVICE_COMMIT_MESSAGE__", () => commit.message).trimEnd();
+}
+
+const AGENT_STEP_IDS: Record<AutofixAgent, string[]> = {
+  claude: ["tailor-claude"],
+  codex: ["tailor-codex"],
+  copilot: ["tailor-setup-node", "tailor-install-copilot", "tailor-copilot"],
+};
 
 // autofix.ci and a default securefix server accept requests only from workflows of these names.
 const AUTOFIX_WORKFLOW_NAMES: Record<AutofixProvider, string> = {
@@ -883,13 +961,12 @@ export type AutofixProviderParams =
       securefixServerRepository: string;
     };
 
-export type RenderAutofixParams = AutofixProviderParams & {
-  /** App directories relative to the repository root; `tailor generate` runs in each. */
-  dirs: readonly string[];
-  packageManager: PackageManager;
-  /** `--codemod`; the workflow runs no codemod without it. */
-  codemod: AutofixCodemod | undefined;
-};
+export type RenderAutofixParams = AutofixProviderParams &
+  AutofixCodemodParams & {
+    /** App directories relative to the repository root; `tailor generate` runs in each. */
+    dirs: readonly string[];
+    packageManager: PackageManager;
+  };
 
 function perAppGenerateSteps(dirs: readonly string[]): string {
   return dirs
@@ -909,11 +986,16 @@ function perAppGenerateSteps(dirs: readonly string[]): string {
 export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult {
   const { provider, dirs, packageManager, codemod } = params;
   const multi = dirs.length > 1;
-  const hasPushJob = provider === "github-token" || provider === "github-app";
+  const agent = isAutofixAgent(codemod) ? codemod : undefined;
+  const commitsWithToken = provider === "github-token" || provider === "github-app";
+  const hasPushJob = commitsWithToken || agent !== undefined;
   const workingDirectory = !multi && dirs[0] !== "." ? dirs[0] : undefined;
   const runsCodemods = codemod !== undefined;
   const { commands, rerunError } = fixCommandTexts(codemod);
   const lockfiles = codemodLockfiles(packageManager);
+  const pushCommitMessage = agent
+    ? `\${{ needs.tailor-codemod-agent.outputs.commit-message || '${AUTOFIX_COMMIT_MESSAGE}' }}`
+    : AUTOFIX_COMMIT_MESSAGE;
 
   let out = line(autofixTemplate, "HEADER", HEADER);
   out = line(
@@ -925,6 +1007,50 @@ export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult
   );
   out = block(out, "CODEMOD_BASE", runsCodemods);
   out = block(out, "CODEMOD", runsCodemods);
+  out = line(
+    out,
+    "CODEMOD_AGENT_ENV",
+    agent
+      ? [
+          `AGENT: ${agent}`,
+          "SAME_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name == github.repository }}",
+          "ACTOR: ${{ github.actor }}",
+          `AGENT_BOT: "${AGENT_BOT}[bot]"`,
+          `COMMIT_MESSAGE: "${AUTOFIX_COMMIT_MESSAGE}"`,
+          `AGENT_COMMIT_MESSAGE: "${agentCommitMessage(agent)}"`,
+        ].join("\n")
+      : undefined,
+  );
+  out = block(out, "CODEMOD_AGENT_PROMPT", agent !== undefined);
+  out = block(out, "CODEMOD_AGENT_JOB", agent !== undefined);
+  for (const name of AUTOFIX_AGENTS) out = block(out, name.toUpperCase(), agent === name);
+  out = line(out, "CLAUDE_PR_CLEANUP", agent === "claude" ? "rm -rf .claude-pr" : undefined);
+  out = line(
+    out,
+    "CLAUDE_RESET_PATHS",
+    agent === "claude"
+      ? [
+          "# claude-code-action resets these to the base branch's versions.",
+          ".claude/* | .husky/* | .mcp.json | .claude.json | .gitmodules | .ripgreprc | CLAUDE.md | CLAUDE.local.md) ;;",
+        ].join("\n")
+      : undefined,
+  );
+  out = line(
+    out,
+    "COPILOT_REQUESTS_PERMISSION",
+    params.codemod === "copilot" && params.copilotAuth === "github-token"
+      ? "copilot-requests: write"
+      : undefined,
+  );
+  out = line(
+    out,
+    "COPILOT_TOKEN",
+    params.codemod === "copilot"
+      ? params.copilotAuth === "pat"
+        ? "COPILOT_GITHUB_TOKEN: ${{ secrets.TAILOR_AUTOFIX_COPILOT_TOKEN }}"
+        : "GITHUB_TOKEN: ${{ github.token }}"
+      : undefined,
+  );
   out = block(out, "CODEMOD_RESULT_JOB", codemod === "error");
   out = block(out, "GENERATE", !multi);
   out = line(out, "PER_APP_GENERATE", multi ? perAppGenerateSteps(dirs) : undefined);
@@ -935,6 +1061,7 @@ export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult
   );
   const outputs = [
     ...(hasPushJob ? ["  changed: ${{ steps.tailor-autofix-diff.outputs.changed }}"] : []),
+    ...(agent ? ["  agent: ${{ steps.tailor-codemod.outputs.agent }}"] : []),
     ...(codemod === "error"
       ? ["  codemod-pending: ${{ steps.tailor-codemod.outputs.pending }}"]
       : []),
@@ -946,12 +1073,37 @@ export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult
   );
   out = block(out, "RESTORE_PATCH", !hasPushJob);
   out = block(out, "UPLOAD_PATCH", hasPushJob);
+  out = line(
+    out,
+    "SERVICE_COMMIT",
+    agent
+      ? undefined
+      : serviceCommitSteps(provider, {
+          if: "steps.tailor-autofix-diff.outputs.changed == 'true'",
+          message: AUTOFIX_COMMIT_MESSAGE,
+        }),
+  );
   out = block(out, "PUSH_JOB", hasPushJob);
   out = block(out, "APP_TOKEN", provider === "github-app");
-  out = block(out, "AUTOFIX_CI", provider === "autofix-ci");
-  out = block(out, "SECUREFIX", provider === "securefix");
+  out = block(out, "COMMIT_GRAPHQL", commitsWithToken);
+  out = block(out, "APPLY_PATCH", !commitsWithToken);
+  out = line(
+    out,
+    "PUSH_SERVICE_COMMIT",
+    agent ? serviceCommitSteps(provider, { message: pushCommitMessage }) : undefined,
+  );
   out = out
     .replaceAll("__WORKFLOW_NAME__", AUTOFIX_WORKFLOW_NAMES[provider])
+    .replaceAll(
+      "__PUSH_NEEDS__",
+      agent ? "[tailor-autofix, tailor-codemod-agent]" : "tailor-autofix",
+    )
+    .replaceAll(
+      "__PUSH_IF__",
+      agent
+        ? "${{ !cancelled() && needs.tailor-autofix.result == 'success' && ((needs.tailor-codemod-agent.result == 'success' && needs.tailor-codemod-agent.outputs.changed == 'true') || (needs.tailor-codemod-agent.result == 'skipped' && needs.tailor-autofix.outputs.changed == 'true')) }}"
+        : "needs.tailor-autofix.outputs.changed == 'true'",
+    )
     .replaceAll("__PUSH_CONTENTS_PERMISSION__", provider === "github-token" ? "write" : "read")
     .replaceAll(
       "__PUSH_TOKEN__",
@@ -959,6 +1111,7 @@ export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult
         ? "${{ steps.tailor-app-token.outputs.token }}"
         : "${{ github.token }}",
     )
+    .replaceAll("__PUSH_COMMIT_MESSAGE__", () => pushCommitMessage)
     .replaceAll("__COMMIT_MESSAGE__", AUTOFIX_COMMIT_MESSAGE)
     .replaceAll("__FIX_COMMANDS__", commands)
     .replaceAll("__RERUN_ERROR__", rerunError)
@@ -968,10 +1121,20 @@ export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult
     .replaceAll("__CODEMOD_LOCKFILES_TEXT__", lockfiles.join(" or "))
     .replaceAll("__PACKAGE_MANAGER__", packageManager)
     .replaceAll("__TAILOR_CLI__", TAILOR_CLI_COMMANDS[packageManager]);
+  if (agent) {
+    out = out
+      .replaceAll("__AGENT_BOT__", AGENT_BOT)
+      .replaceAll("__AGENT_COMMIT_MESSAGE__", agentCommitMessage(agent))
+      .replaceAll("__AGENT__", agent);
+  }
   if (params.provider === "securefix") {
     out = out.replaceAll("__SECUREFIX_SERVER_REPOSITORY__", () => params.securefixServerRepository);
   }
 
+  const serviceIds = (job: string) =>
+    isServiceProvider(provider)
+      ? SERVICE_COMMIT_STEP_IDS[provider].map((id) => `${job}/${id}`)
+      : [];
   const generatedIds = [
     "tailor-autofix",
     "tailor-autofix/tailor-checkout",
@@ -984,13 +1147,22 @@ export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult
       ? dirs.map((dir) => `tailor-autofix/tailor-generate-${appSlug(dir)}`)
       : ["tailor-autofix/tailor-generate"]),
     "tailor-autofix/tailor-autofix-diff",
+    ...(hasPushJob ? ["tailor-autofix/tailor-upload-patch"] : serviceIds("tailor-autofix")),
   ];
-  if (hasPushJob) {
-    generatedIds.push("tailor-autofix/tailor-upload-patch");
-  } else if (provider === "autofix-ci") {
-    generatedIds.push("tailor-autofix/tailor-autofix-ci-auth", "tailor-autofix/tailor-autofix-ci");
-  } else {
-    generatedIds.push("tailor-autofix/tailor-securefix");
+  if (agent) {
+    generatedIds.push(
+      "tailor-autofix/tailor-codemod-agent-prompt",
+      "tailor-codemod-agent",
+      ...[
+        "tailor-checkout",
+        "tailor-download-patch",
+        "tailor-download-prompt",
+        "tailor-codemod-agent-baseline",
+        ...AGENT_STEP_IDS[agent],
+        "tailor-codemod-agent-diff",
+        "tailor-upload-patch",
+      ].map((id) => `tailor-codemod-agent/${id}`),
+    );
   }
   if (hasPushJob) {
     generatedIds.push(
@@ -998,7 +1170,9 @@ export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult
       ...(provider === "github-app" ? ["tailor-autofix-push/tailor-app-token"] : []),
       "tailor-autofix-push/tailor-checkout",
       "tailor-autofix-push/tailor-download-patch",
-      "tailor-autofix-push/tailor-commit",
+      ...(commitsWithToken
+        ? ["tailor-autofix-push/tailor-commit"]
+        : ["tailor-autofix-push/tailor-apply-patch", ...serviceIds("tailor-autofix-push")]),
     );
   }
   if (codemod === "error") {
