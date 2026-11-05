@@ -1,10 +1,41 @@
+import { isDeepStrictEqual } from "node:util";
 import { extractFields, isLazyCommand } from "@politty/zod";
 import { describe, expect, test, vi } from "vitest";
+import { z } from "zod";
 import { mainCommand } from "./main";
+import { commonArgs, configArg, folderArgs, organizationArgs, workspaceArgs } from "./shared/args";
 import { BUILTIN_COMMAND_NAMES } from "./shared/builtin-commands";
 import type { AnyCommand, ExtractedFields, SubCommandValue } from "@politty/zod";
 
 const allowedHybridCommandPaths = new Set(["api"]);
+
+const allowedOptionsWithoutSharedEnv = new Set([
+  "profile create --workspace-id",
+  "profile update --workspace-id",
+  "workspace delete --workspace-id",
+  "workspace restore --workspace-id",
+  "workspace prune --folder-id",
+]);
+
+const collectFields = (extracted: ExtractedFields): ExtractedFields["fields"] => [
+  ...extracted.fields,
+  ...(extracted.variants ?? []).flatMap((variant) => variant.fields),
+  ...(extracted.unionOptions ?? []).flatMap(collectFields),
+];
+
+const sharedOptionEnvs = new Map(
+  extractFields(
+    z.strictObject({
+      ...commonArgs,
+      ...workspaceArgs,
+      ...configArg,
+      ...organizationArgs,
+      ...folderArgs,
+    }),
+  )
+    .fields.filter((field) => field.env !== undefined)
+    .map((field) => [field.cliName, field.env]),
+);
 
 vi.mock("@politty/zod", async () => {
   const actual = await vi.importActual("@politty/zod");
@@ -116,5 +147,31 @@ describe("CLI options", () => {
       (name) => !name.startsWith("__") && name !== "completion",
     );
     expect(new Set(registered)).toEqual(new Set(BUILTIN_COMMAND_NAMES));
+  });
+
+  test("declares the shared environment variable on shared options outside the allowed exceptions", async () => {
+    const mismatches = new Set<string>();
+    const unusedExceptions = new Set(allowedOptionsWithoutSharedEnv);
+    let checked = 0;
+
+    await walkMainCommands((command, path) => {
+      if (!command.args) return;
+
+      for (const field of collectFields(extractFields(command.args))) {
+        if (!sharedOptionEnvs.has(field.cliName)) continue;
+        checked += 1;
+        const option = `${path.join(" ")} --${field.cliName}`;
+        if (isDeepStrictEqual(field.env, sharedOptionEnvs.get(field.cliName))) continue;
+        if (allowedOptionsWithoutSharedEnv.has(option)) {
+          unusedExceptions.delete(option);
+          continue;
+        }
+        mismatches.add(`${option}: ${JSON.stringify(field.env)}`);
+      }
+    });
+
+    expect(checked).toBeGreaterThan(0);
+    expect([...mismatches]).toEqual([]);
+    expect([...unusedExceptions]).toEqual([]);
   });
 });
