@@ -25,4 +25,4 @@ Keep these invariants:
 - **Write order.** Within a step, creates go before updates: an update can add a relation to a table a create adds.
 - **Documented phases.** `flow.timeline` attributes maintenance time to the phases in `migration-timing.ts`. When a step moves between phases, update the phase table under "Time spent in maintenance mode" in `packages/sdk/docs/services/tailordb/migration.md`.
 
-Tests built with `createPlanResult` (`test-helpers/migration-apply.ts`) run under `--no-schema-check` unless they pass `context: { noSchemaCheck: false }`. Without `local`, the namespace has no deploy input, so the restrict and restore steps skip it.
+Tests built with `createPlanResult` (`test-helpers/migration-apply.ts`) run under `--no-schema-check` unless they pass `context: { noSchemaCheck: false }`. Without `local`, the namespace has no deploy input, so the restrict and restore steps skip it. The deploy stops with `DEPLOY_PLAN_STALE` when the pending migrations differ from the plan's, so set the plan's `context.pendingMigrations` to the list `mockPendingMigrations` returns.

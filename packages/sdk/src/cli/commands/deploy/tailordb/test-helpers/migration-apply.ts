@@ -9,6 +9,7 @@ import {
 import { detectPendingMigrations, type updateMigrationLabel } from "../migration";
 import type { NamespaceWithMigrations } from "#/cli/commands/tailordb/migrate/config";
 import type { DiffChange, MigrationDiff } from "#/cli/commands/tailordb/migrate/diff-calculator";
+import type { RemoteMigrationState } from "#/cli/commands/tailordb/migrate/remote-state";
 import type {
   NormalizedSchemaSnapshot,
   SnapshotFieldConfig,
@@ -53,33 +54,40 @@ export function createMockClient(overrides: MockClientOverrides = {}): OperatorC
   } as unknown as OperatorClient;
 }
 
+type MockedRemoteState = Pick<RemoteMigrationState, "number" | "historyId"> &
+  Partial<RemoteMigrationState>;
+
+export type PlannedPendingMigrations = TailorDBPlanResult["context"]["pendingMigrations"];
+
 /**
  * Have the mocked detection find `migrations` pending and read each namespace's checkpoint the way
  * the real detection does, so the deploy expects that checkpoint.
  * @param migrations - Migrations to report as pending
- * @param checkpointOf - Checkpoint and history ID of a namespace when the detection runs
+ * @param remoteStateOf - Checkpoint, history ID, and any other remote state of a namespace when the detection runs
+ * @returns The pending migrations a plan made at this point would record, for `context.pendingMigrations`
  */
 export function mockPendingMigrations(
   migrations: PendingMigration[],
-  checkpointOf: (namespace: string) => { number: number | null; historyId: string | null },
-): void {
+  remoteStateOf: (namespace: string) => MockedRemoteState,
+): PlannedPendingMigrations {
   vi.mocked(detectPendingMigrations).mockImplementation(
     async (_client, _workspaceId, namespaces, _configPath, overrides, remoteStates) => {
       for (const { namespace } of namespaces) {
         if (overrides?.has(namespace)) continue;
         remoteStates?.set(namespace, {
           metadataExists: true,
-          ...checkpointOf(namespace),
           historyIdInvalid: false,
           inProgress: null,
           inProgressInvalid: false,
           maintenanceModeCheckpoint: null,
           cleanupCheckpoint: null,
+          ...remoteStateOf(namespace),
         });
       }
       return migrations;
     },
   );
+  return migrations.map(({ namespace, number }) => ({ namespace, number }));
 }
 
 export type RemoteCheckpoint = ReturnType<typeof createRemoteCheckpoint>;
@@ -122,13 +130,13 @@ export function createRemoteCheckpoint(initialNumber: number | null) {
     /**
      * Has the mocked detection find `migrations` pending on the checkpoint as it stands then.
      * @param migrations - Migrations to report as pending
+     * @returns The pending migrations a plan made at this point would record, for `context.pendingMigrations`
      */
-    mockPending: (migrations: PendingMigration[]): void => {
+    mockPending: (migrations: PendingMigration[]): PlannedPendingMigrations =>
       mockPendingMigrations(migrations, () => ({
         number: state.number,
         historyId: state.historyId,
-      }));
-    },
+      })),
     createMockClient: (overrides: MockClientOverrides = {}): OperatorClient =>
       createMockClient({
         getMetadata: vi.fn(async () => ({
@@ -307,6 +315,7 @@ export function createPlanResult(options: PlanResultOptions = {}): TailorDBPlanR
       checkpointRepairs: [],
       namespacesWithMigrations,
       migrationFileState: captureMigrationFileState(namespacesWithMigrations),
+      pendingMigrations: [],
       ...options.context,
     },
   } as unknown as TailorDBPlanResult;

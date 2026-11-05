@@ -46,7 +46,6 @@ import {
 import {
   analyzeMigrationScript,
   countUnresolvedTodosInFile,
-  ignoredStepsWarning,
   UNRESOLVED_TODO_SUGGESTION,
   usesStepRunner,
 } from "#/cli/commands/tailordb/migrate/script-form";
@@ -284,18 +283,12 @@ export async function detectPendingMigrations(
           suggestion: `Add a script: ${formatMigrationScriptHint(commandOptions)}\nOr record that no script is needed: ${formatMigrationScriptHint({ ...commandOptions, noScript: true })}`,
         });
       }
-      if (diff.scriptSkipped) {
-        const migrationLabel = `${namespace}/${formatMigrationNumber(migrationNumber)}`;
-        if (hasScript) {
-          throw CLIError({
-            code: "MIGRATION_SCRIPT_SKIP_CONFLICT",
-            message: `Migration ${migrationLabel} has both a --no-script skip acknowledgment and migrate.ts.`,
-            suggestion: `Keep the script and clear the stale acknowledgment: ${formatMigrationScriptHint({ migrationNumber, namespace, configPath })}\nOr keep the skip: delete migrate.ts`,
-          });
-        }
-        logger.info(
-          `Migration ${migrationLabel} runs without a script (skip acknowledged at ${diff.scriptSkipped.acknowledgedAt}: ${diff.scriptSkipped.reason})`,
-        );
+      if (diff.scriptSkipped && hasScript) {
+        throw CLIError({
+          code: "MIGRATION_SCRIPT_SKIP_CONFLICT",
+          message: `Migration ${namespace}/${formatMigrationNumber(migrationNumber)} has both a --no-script skip acknowledgment and migrate.ts.`,
+          suggestion: `Keep the script and clear the stale acknowledgment: ${formatMigrationScriptHint({ migrationNumber, namespace, configPath })}\nOr keep the skip: delete migrate.ts`,
+        });
       }
 
       if (hasScript && countUnresolvedTodosInFile(scriptPath) > 0) {
@@ -306,12 +299,7 @@ export async function detectPendingMigrations(
         });
       }
 
-      const pendingMigration = withScriptForm(migration);
-      const { scriptForm } = pendingMigration;
-      if (scriptForm?.kind === "main" && scriptForm.ignoredSteps) {
-        logger.warn(ignoredStepsWarning(`${namespace}/${formatMigrationNumber(migrationNumber)}`));
-      }
-      pendingMigrations.push(pendingMigration);
+      pendingMigrations.push(withScriptForm(migration));
     }
   }
 

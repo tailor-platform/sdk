@@ -117,7 +117,7 @@ describe("migration flow: creates of types predating the pending migrations", ()
       ],
     });
     snapshotState.tablesByVersion = { 0: { Audit: audit }, 1: { Audit: audit, User: user } };
-    checkpoint.mockPending([
+    planResult.context.pendingMigrations = checkpoint.mockPending([
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       mkPendingMigration([{ kind: "table_added", tableName: "User" } as any]),
     ]);
@@ -154,7 +154,7 @@ describe("migration flow: creates of types predating the pending migrations", ()
       Audit: snapshotTable("Audit", { legacy: { type: "string", required: false } }),
     };
     snapshotState.tablesByVersion = { 0: baseline, 1: baseline };
-    checkpoint.mockPending([mkPendingMigration([])]);
+    planResult.context.pendingMigrations = checkpoint.mockPending([mkPendingMigration([])]);
 
     await applyTailorDB(client, planResult, "create-update");
 
@@ -182,7 +182,7 @@ describe("migration flow: creates of types predating the pending migrations", ()
         }),
       },
     };
-    checkpoint.mockPending([
+    planResult.context.pendingMigrations = checkpoint.mockPending([
       mkPendingMigration([]),
       mkPendingMigration(
         [
@@ -218,7 +218,7 @@ describe("migration flow: creates of types predating the pending migrations", ()
         Report: snapshotTable("Report", { name: { type: "string", required: true } }),
       },
     };
-    checkpoint.mockPending([
+    planResult.context.pendingMigrations = checkpoint.mockPending([
       mkPendingMigration([]),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       mkPendingMigration([{ kind: "table_added", tableName: "Report" } as any], {
@@ -247,7 +247,7 @@ describe("migration flow: creates of types predating the pending migrations", ()
       2: { Audit: audit },
       3: { Audit: audit, Draft: draft },
     };
-    checkpoint.mockPending([
+    planResult.context.pendingMigrations = checkpoint.mockPending([
       mkPendingMigration([]),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       mkPendingMigration([{ kind: "table_removed", tableName: "Draft" } as any], {

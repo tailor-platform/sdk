@@ -17,6 +17,7 @@ import {
   gqlPermissionDeletion,
   mkPendingMigration as createPendingMigration,
   mockPendingMigrations,
+  type PlannedPendingMigrations,
   snapshotAt,
   snapshotTable,
   type SnapshotTablesByVersion,
@@ -83,6 +84,7 @@ function createMockPlanResult(options: {
   updates?: TypeEntry[];
   unchanged?: Omit<TypeEntry, "request">[];
   deletes?: DeleteEntry[];
+  pendingMigrations: PlannedPendingMigrations;
 }) {
   const deletes = options.deletes ?? [];
   return createPlanResult({
@@ -98,6 +100,7 @@ function createMockPlanResult(options: {
         namespace,
         migrationsDir: migrationsDirOf(namespace),
       })),
+      pendingMigrations: options.pendingMigrations,
     },
   });
 }
@@ -152,8 +155,8 @@ function createMockClient() {
   });
 }
 
-function mockPending(pending: PendingMigration[]): void {
-  mockPendingMigrations(pending, (namespace) => ({
+function mockPending(pending: PendingMigration[]) {
+  return mockPendingMigrations(pending, (namespace) => ({
     number: state.checkpoints.get(namespace) ?? null,
     historyId: null,
   }));
@@ -252,7 +255,7 @@ describe("migration flow: a table name shared across namespaces", () => {
         [migrationsDirOf(SUB)]: { 0: {}, 1: { Item: snapshotTable("Item", subItem) } },
       };
       for (const namespace of migrating) state.checkpoints.set(namespace, 0);
-      mockPending(pending);
+      const pendingMigrations = mockPending(pending);
       const client = createMockClient();
       const subEntry = typeEntry("Item", { namespace: SUB, fields: subItem });
 
@@ -261,6 +264,7 @@ describe("migration flow: a table name shared across namespaces", () => {
         createMockPlanResult({
           ...(entry === "create" ? { creates: [subEntry] } : { updates: [subEntry] }),
           deletes: [deleteEntry(MAIN, "Item")],
+          pendingMigrations,
         }),
         "create-update",
       );
@@ -286,7 +290,7 @@ describe("migration flow: a table name shared across namespaces", () => {
     };
     state.checkpoints.set(MAIN, 0);
     state.checkpoints.set(SUB, 0);
-    mockPending([
+    const pendingMigrations = mockPending([
       mkPendingMigration(MAIN, 1, [tableRemoved("Legacy")]),
       mkPendingMigration(SUB, 1, [tableRemoved("Legacy")]),
     ]);
@@ -294,7 +298,10 @@ describe("migration flow: a table name shared across namespaces", () => {
 
     await applyTailorDB(
       client,
-      createMockPlanResult({ deletes: [deleteEntry(MAIN, "Legacy"), deleteEntry(SUB, "Legacy")] }),
+      createMockPlanResult({
+        deletes: [deleteEntry(MAIN, "Legacy"), deleteEntry(SUB, "Legacy")],
+        pendingMigrations,
+      }),
       "create-update",
     );
 
@@ -313,7 +320,7 @@ describe("migration flow: a table name shared across namespaces", () => {
       [migrationsDirOf(MAIN)]: { 0: { Legacy: snapshotTable("Legacy", legacy) }, 1: {}, 2: {} },
     };
     state.checkpoints.set(MAIN, 0);
-    mockPending([
+    const pendingMigrations = mockPending([
       mkPendingMigration(MAIN, 1, [tableRemoved("Legacy")], false),
       mkPendingMigration(MAIN, 2, []),
     ]);
@@ -321,7 +328,10 @@ describe("migration flow: a table name shared across namespaces", () => {
 
     await applyTailorDB(
       client,
-      createMockPlanResult({ deletes: [deleteEntry(MAIN, "Legacy"), deleteEntry(SUB, "Legacy")] }),
+      createMockPlanResult({
+        deletes: [deleteEntry(MAIN, "Legacy"), deleteEntry(SUB, "Legacy")],
+        pendingMigrations,
+      }),
       "create-update",
     );
 
@@ -340,13 +350,19 @@ describe("migration flow: a table name shared across namespaces", () => {
       [migrationsDirOf(MAIN)]: { 0: { Legacy: snapshotTable("Legacy", legacy) }, 1: {} },
     };
     state.checkpoints.set(MAIN, 0);
-    mockPending([mkPendingMigration(MAIN, 1, [tableRemoved("Legacy")], false)]);
+    const pendingMigrations = mockPending([
+      mkPendingMigration(MAIN, 1, [tableRemoved("Legacy")], false),
+    ]);
     const client = createMockClient();
     const unchanged = { name: "Legacy", metaRequest: typeMetaRequest("Legacy", SUB) };
 
     await applyTailorDB(
       client,
-      createMockPlanResult({ deletes: [deleteEntry(MAIN, "Legacy")], unchanged: [unchanged] }),
+      createMockPlanResult({
+        deletes: [deleteEntry(MAIN, "Legacy")],
+        unchanged: [unchanged],
+        pendingMigrations,
+      }),
       "create-update",
     );
 

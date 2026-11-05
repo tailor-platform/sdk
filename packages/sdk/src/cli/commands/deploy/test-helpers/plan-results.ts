@@ -50,6 +50,7 @@ export function emptyPlanResults(): PlanResults {
         namespacesWithMigrations: [],
         migrationFileState: {},
         checkpointRepairs: [],
+        pendingMigrations: [],
       },
     },
     staticWebsite: {

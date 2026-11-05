@@ -132,8 +132,8 @@ describe("applyTailorDB: type rename migration flow", () => {
     });
   }
 
-  function setPendingMigrations(migrations: PendingMigration[]): void {
-    checkpoint.mockPending(migrations);
+  function setPendingMigrations(migrations: PendingMigration[]) {
+    return checkpoint.mockPending(migrations);
   }
 
   let checkpoint: RemoteCheckpoint;
@@ -149,7 +149,7 @@ describe("applyTailorDB: type rename migration flow", () => {
   test("creates the new table before the script and drops the old table after the checkpoint", async () => {
     const client = checkpoint.createMockClient();
     const planResult = buildPlanResult();
-    setPendingMigrations([mkTypeRenameMigration(1)]);
+    planResult.context.pendingMigrations = setPendingMigrations([mkTypeRenameMigration(1)]);
 
     const order: string[] = [];
     vi.mocked(client.createTailorDBType).mockImplementation(async (req: unknown) => {
@@ -189,7 +189,7 @@ describe("applyTailorDB: type rename migration flow", () => {
   test("keeps the old type and does not advance the checkpoint when the script fails", async () => {
     const client = checkpoint.createMockClient();
     const planResult = buildPlanResult();
-    setPendingMigrations([mkTypeRenameMigration(1)]);
+    planResult.context.pendingMigrations = setPendingMigrations([mkTypeRenameMigration(1)]);
     vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
       new Error("rpc error: code = Aborted desc = copy failed"),
     );
@@ -210,7 +210,9 @@ describe("applyTailorDB: type rename migration flow", () => {
   test("restores retargeted tables before deleting the new table on rollback", async () => {
     const client = checkpoint.createMockClient();
     const planResult = buildPlanResult({ withOrderUpdate: true });
-    setPendingMigrations([mkTypeRenameMigration(1, { withOrderRetarget: true })]);
+    planResult.context.pendingMigrations = setPendingMigrations([
+      mkTypeRenameMigration(1, { withOrderRetarget: true }),
+    ]);
     vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
       new Error("rpc error: code = Aborted desc = copy failed"),
     );
