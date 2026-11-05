@@ -411,7 +411,11 @@ right away.
   does too: when that account leaves the organization or loses access to the
   repository, the token stops working and the workflow fails. Create it on an
   account kept for automation rather than a person's, and renew it before it
-  expires.
+  expires. `tailor setup ci autofix --provider github-pat` warns about this;
+  prefer `github-app` where you can create a GitHub App. When
+  `TAILOR_AUTOFIX_TOKEN` is a classic token (`ghp_...`), which can write to
+  every repository its owner can, each fix commit's run also shows a warning
+  asking you to replace it with a fine-grained one.
 - **Dependabot** stops rebasing a pull request that has commits from someone
   else, which happens when `autofix-ci` commits to one of its pull requests.
 - With `autofix-ci` and `securefix`, the workflow is named `autofix.ci` and

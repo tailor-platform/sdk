@@ -139,7 +139,10 @@ describe("renderAutofixWorkflow", () => {
       "github-app",
       ["tailor-app-token", "tailor-checkout", "tailor-download-patch", "tailor-commit"],
     ],
-    ["github-pat", ["tailor-checkout", "tailor-download-patch", "tailor-commit"]],
+    [
+      "github-pat",
+      ["tailor-token-check", "tailor-checkout", "tailor-download-patch", "tailor-commit"],
+    ],
   ] as const)(
     "%s: commits from a separate job that installs and runs none of the project's code",
     (provider, steps) => {
@@ -177,6 +180,12 @@ describe("renderAutofixWorkflow", () => {
     expect(stepOf(workflow, "tailor-autofix-push", "tailor-commit").env?.GH_TOKEN).toBe(
       "${{ secrets.TAILOR_AUTOFIX_TOKEN }}",
     );
+  });
+
+  test("github-pat: warns when the token is a classic one, which is not limited to this repository", () => {
+    const run = stepOf(workflowOf("github-pat"), "tailor-autofix-push", "tailor-token-check").run;
+    expect(run).toMatch(/ghp_\*\) echo "::warning::TAILOR_AUTOFIX_TOKEN is a classic/);
+    expect(run).not.toContain("github_pat_");
   });
 
   test.each(SERVICE_PROVIDERS)(
@@ -722,6 +731,7 @@ describe("printAutofixNextSteps", () => {
   const output = (provider: AutofixProvider) => {
     using log = vi.spyOn(logger, "log").mockImplementation(() => {});
     using _info = vi.spyOn(logger, "info").mockImplementation(() => {});
+    using _warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
     printAutofixNextSteps({ provider });
     return log.mock.calls.map(([line]) => line).join("\n");
   };
@@ -740,9 +750,25 @@ describe("printAutofixNextSteps", () => {
     },
   );
 
-  test("github-pat: says to create the token on an account kept for automation", () => {
-    expect(output("github-pat")).toContain("not a person's account");
+  test("github-pat: warns that the commits depend on the token owner's account", () => {
+    using _log = vi.spyOn(logger, "log").mockImplementation(() => {});
+    using _info = vi.spyOn(logger, "info").mockImplementation(() => {});
+    using warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    printAutofixNextSteps({ provider: "github-pat" });
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/fine-grained or classic/));
+    expect(output("github-pat")).toContain("on a GitHub account kept for automation");
   });
+
+  test.each(AUTOFIX_PROVIDERS.filter((provider) => provider !== "github-pat"))(
+    "%s: prints no warning",
+    (provider) => {
+      using _log = vi.spyOn(logger, "log").mockImplementation(() => {});
+      using _info = vi.spyOn(logger, "info").mockImplementation(() => {});
+      using warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      printAutofixNextSteps({ provider });
+      expect(warn).not.toHaveBeenCalled();
+    },
+  );
 
   test("autofix-ci: links the GitHub App to install", () => {
     expect(output("autofix-ci")).toContain("https://github.com/apps/autofix-ci");

@@ -155,9 +155,8 @@ const PROVIDER_STEPS: Record<AutofixProvider, string[]> = {
     ...SECRETS_STEP,
   ],
   "github-pat": [
-    "1. Create a personal access token that can write the repository's contents. Commits are",
-    "   made as the token's owner and stop when that account loses access to the repository,",
-    "   so create it on a GitHub account kept for automation, not a person's account. Set it:",
+    "1. Create a fine-grained personal access token with the Contents read and write",
+    "   permission on this repository, on a GitHub account kept for automation, and set it:",
     ...SECRETS_STEP,
   ],
 };
@@ -167,6 +166,14 @@ const PROVIDER_STEPS: Record<AutofixProvider, string[]> = {
  * @param result - What {@link setupAutofix} generated
  */
 export function printAutofixNextSteps(result: AutofixSetupResult): void {
+  if (result.provider === "github-pat") {
+    logger.newline();
+    logger.warn(
+      "--provider github-pat commits as the owner of a personal access token, fine-grained or " +
+        "classic: the commits stop when that account leaves or loses access to the repository. " +
+        "Prefer --provider github-app, whose commits do not depend on a person's account.",
+    );
+  }
   logger.newline();
   logger.info("Next steps:");
   logger.newline();

@@ -7,7 +7,7 @@ import tagTemplate from "./tag.workflow.yml";
 // The release PR updates RELEASED_TEMPLATE_VERSION and the fingerprint below. A PR that
 // changes the generated templates sets TEMPLATE_CHANGED_SINCE_RELEASE to true instead. A PR that
 // only adds renders to renderedTemplates() re-records the fingerprint while the flag stays false.
-// Released template fingerprint: b87f3721e4a07737f322cb0dac0d2462863c017c259ab0c2b81bae048ad3c3df
+// Released template fingerprint: cf908a9af2af2542ebc4dd7739599cbd4df95ee8c1e8b14d0d1543ead499a79e
 const RELEASED_TEMPLATE_VERSION = 24;
 const TEMPLATE_CHANGED_SINCE_RELEASE = false;
 export const ACTIONS_SHA = "77effc033b3cb5fa7660b38571fbeb8361d121e8";
@@ -887,6 +887,7 @@ export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult
   out = block(out, "UPLOAD_PATCH", hasPushJob);
   out = block(out, "PUSH_JOB", hasPushJob);
   out = block(out, "APP_TOKEN", provider === "github-app");
+  out = block(out, "PAT_CHECK", provider === "github-pat");
   out = block(out, "AUTOFIX_CI", provider === "autofix-ci");
   out = block(out, "SECUREFIX", provider === "securefix");
   out = out
@@ -916,6 +917,7 @@ export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult
       "tailor-autofix/tailor-upload-patch",
       "tailor-autofix-push",
       ...(provider === "github-app" ? ["tailor-autofix-push/tailor-app-token"] : []),
+      ...(provider === "github-pat" ? ["tailor-autofix-push/tailor-token-check"] : []),
       "tailor-autofix-push/tailor-checkout",
       "tailor-autofix-push/tailor-download-patch",
       "tailor-autofix-push/tailor-commit",

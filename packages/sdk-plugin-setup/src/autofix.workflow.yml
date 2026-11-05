@@ -126,6 +126,15 @@ jobs:
           private-key: ${{ secrets.TAILOR_AUTOFIX_APP_PRIVATE_KEY }}
           permission-contents: write
       # __APP_TOKEN_END__
+      # __PAT_CHECK_START__
+      - id: tailor-token-check
+        env:
+          TOKEN: ${{ secrets.TAILOR_AUTOFIX_TOKEN }}
+        run: |
+          case "$TOKEN" in
+            ghp_*) echo "::warning::TAILOR_AUTOFIX_TOKEN is a classic personal access token, which can write to every repository its owner can. Replace it with a fine-grained token limited to the Contents permission of this repository." ;;
+          esac
+      # __PAT_CHECK_END__
       - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
