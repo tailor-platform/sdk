@@ -17,11 +17,12 @@ import { initOperatorClient, isNotFoundError, type OperatorClient } from "../src
 import { loadAccessToken } from "../src/cli/shared/context";
 import { CLI_BUDGET_MS, type CliResult, cliTestTimeout, runCli, tryCli } from "./cli";
 import {
-  resolveE2ERunId,
-  resolveE2EWorkspaceRegion,
-  trackWorkspace,
-  trackTempDir,
   WORKSPACE_CREATION_ALLOWANCE_MS,
+  resolveE2ERunId,
+  resolveE2EWorkspaceLocation,
+  resolveE2EWorkspaceRegion,
+  trackTempDir,
+  trackWorkspace,
 } from "./globalSetup";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -157,8 +158,7 @@ export class MigrationWorkspace {
         workspaceName: this.workspaceName,
         workspaceRegion: region,
         deleteProtection: false,
-        organizationId: process.env.TAILOR_PLATFORM_ORGANIZATION_ID,
-        folderId: process.env.TAILOR_PLATFORM_FOLDER_ID,
+        ...(await resolveE2EWorkspaceLocation()),
       });
       this.workspaceId = createResp.workspace!.id!;
       await trackWorkspace(this.client, this.workspaceId);

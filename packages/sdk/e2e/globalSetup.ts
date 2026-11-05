@@ -5,6 +5,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { resolveWorkspaceCreationLocation } from "../src/cli/commands/workspace/create";
 import { writeWorkspaceExpiry } from "../src/cli/commands/workspace/expiry";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
@@ -60,6 +61,22 @@ export function trackTempDir(tempDir: string): void {
  */
 export function resolveE2ERunId(): string {
   return process.env.TAILOR_PLATFORM_E2E_RUN_ID ?? process.env.GITHUB_RUN_ID ?? "";
+}
+
+/**
+ * Resolve the organization and folder for e2e test workspaces.
+ * Environment variables win; without them the user's defaults from `tailor user update` apply.
+ * @returns Organization and folder IDs, undefined when neither source provides one
+ */
+export async function resolveE2EWorkspaceLocation(): Promise<{
+  organizationId: string | undefined;
+  folderId: string | undefined;
+}> {
+  const { organizationId, folderId } = await resolveWorkspaceCreationLocation({
+    organizationId: process.env.TAILOR_PLATFORM_ORGANIZATION_ID || undefined,
+    folderId: process.env.TAILOR_PLATFORM_FOLDER_ID || undefined,
+  });
+  return { organizationId, folderId };
 }
 
 /**
