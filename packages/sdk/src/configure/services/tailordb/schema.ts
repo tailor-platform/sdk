@@ -1,4 +1,4 @@
-import { cloneDeep } from "es-toolkit";
+import { cloneDeep } from "es-toolkit/object";
 import {
   type AllowedValues,
   type AllowedValuesOutput,
