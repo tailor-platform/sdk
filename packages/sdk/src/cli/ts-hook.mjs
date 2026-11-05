@@ -7,12 +7,12 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { transformSync } from "amaro";
 import { parseJSON5 } from "confbox/json5";
 
-const TS_EXTENSIONS = [".ts", ".mts"];
-const JS_TO_TS = new Map([
+export const TS_EXTENSIONS = [".ts", ".mts"];
+export const JS_TO_TS = new Map([
   [".js", ".ts"],
   [".mjs", ".mts"],
 ]);
-const KNOWN_EXTENSIONS = [".ts", ".tsx", ".mts", ".js", ".mjs", ".json"];
+export const KNOWN_EXTENSIONS = [".ts", ".tsx", ".mts", ".js", ".mjs", ".json"];
 
 // --- tsconfig paths resolution ---
 

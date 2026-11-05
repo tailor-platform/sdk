@@ -405,9 +405,13 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
 /**
  * Generate the contents of the user-defined type definition file for an app config.
  * @param config - Application config with resolved `env` values
+ * @param extracted - Names and attributes already extracted from `config`; extracted here when omitted
  * @returns Generated type definition source
  */
-export function generateTypeDefinitionFromConfig(config: ResolvedEnvAppConfig): string {
+export function generateTypeDefinitionFromConfig(
+  config: ResolvedEnvAppConfig,
+  extracted: ExtractedAttributes = extractAttributesFromConfig(config),
+): string {
   const {
     attributes,
     attributeList,
@@ -417,7 +421,7 @@ export function generateTypeDefinitionFromConfig(config: ResolvedEnvAppConfig): 
     aiGatewayNames,
     authNamespaceNames,
     secretVaultNames,
-  } = extractAttributesFromConfig(config);
+  } = extracted;
   return generateTypeDefinition(
     attributes,
     attributeList,
@@ -461,6 +465,9 @@ interface GenerateUserTypesOptions {
 
 /**
  * Generate user type definitions from the app config and write them to disk.
+ * Writes nothing when `tsconfig.json` enables the content mapper for this config
+ * (unless `TAILOR_DTS_PATH` is set), since TypeScript then reads the definitions
+ * from the config itself; it only warns when an old file remains.
  * @param options - Generation options
  * @returns Promise that resolves when types are generated
  */
@@ -476,6 +483,7 @@ export async function generateUserTypes(options: GenerateUserTypesOptions): Prom
       }
       return;
     }
+    const extracted = extractAttributesFromConfig(config);
     const {
       attributes,
       attributeList,
@@ -485,7 +493,7 @@ export async function generateUserTypes(options: GenerateUserTypesOptions): Prom
       aiGatewayNames,
       authNamespaceNames,
       secretVaultNames,
-    } = extractAttributesFromConfig(config);
+    } = extracted;
     if (!attributes && !attributeList) {
       logger.info("No attributes found in configuration", { mode: "plain" });
     }
@@ -521,7 +529,7 @@ export async function generateUserTypes(options: GenerateUserTypesOptions): Prom
       logger.debug(`Extracted Env: ${JSON.stringify(env)}`);
     }
 
-    const typeDefContent = generateTypeDefinitionFromConfig(config);
+    const typeDefContent = generateTypeDefinitionFromConfig(config, extracted);
     const outputPath = resolveTypeDefinitionPath(configPath);
 
     // Write to file

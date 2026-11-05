@@ -1,9 +1,9 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { REGISTRY_FILE_NAME } from "../src/cli/shared/tailor-file-extension";
 
-const REGISTRY_FILE = "registry.tailor";
-const REGISTRY_IMPORT = `// @ts-ignore\nimport "./${REGISTRY_FILE}";\n`;
+const REGISTRY_IMPORT = `// @ts-ignore\nimport "./${REGISTRY_FILE_NAME}";\n`;
 const REGISTRY_NOTE = [
   "// TypeScript does not read this file. The content mapper in @tailor-platform/sdk derives",
   "// the declarations tailor.d.ts used to hold (Env, Attributes, MachineUserName, ...) from",
@@ -21,7 +21,7 @@ export function addContentMappedRegistry(distDir: string): void {
   const entryTypes = join(configureDir, "index.d.mts");
   const source = readFileSync(entryTypes, "utf8");
 
-  writeFileSync(join(configureDir, REGISTRY_FILE), REGISTRY_NOTE);
+  writeFileSync(join(configureDir, REGISTRY_FILE_NAME), REGISTRY_NOTE);
   if (!source.startsWith(REGISTRY_IMPORT)) {
     writeFileSync(entryTypes, REGISTRY_IMPORT + source);
   }

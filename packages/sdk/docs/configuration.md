@@ -141,7 +141,7 @@ Add the SDK as a content mapper for `.tailor` files in `tsconfig.json`:
 
 Run `tsc` with `--runExternalCode`. TypeScript then runs your `tailor.config.ts` and the files it imports each time it checks the project, the same code `tailor generate` loads; without the flag it reports error TS18068 instead. Enable it only for projects whose code you trust. You do not create or import any `.tailor` file; the SDK ships the one TypeScript reads.
 
-Once this works, `tailor generate` and `tailor deploy` stop writing `tailor.d.ts`, and warn when an old copy remains. Delete it: while the file remains, TypeScript merges it with what it reads from `tailor.config.ts`, so a name you removed from the config (a machine user you deleted, for example) is still accepted.
+Once `tsconfig.json` enables the mapper, `tailor generate` and `tailor deploy` stop writing `tailor.d.ts`, and warn when an old copy remains. They check only that `tsconfig.json` lists the mapper, not that TypeScript runs it, and TypeScript 6.0 and earlier ignore `contentMappers`: with them the names are no longer declared, so `MachineUserName` is any string and a misspelled machine user raises no error. Use TypeScript 7.1 or later wherever the mapper is enabled. Delete the old copy: while the file remains, TypeScript merges it with what it reads from `tailor.config.ts`, so a name you removed from the config (a machine user you deleted, for example) is still accepted.
 
 Every TypeScript project that uses these names must enable the mapper. A project in the same repository that keeps reading `tailor.d.ts` without the mapper is not supported: the commands no longer update the file, so it goes stale.
 

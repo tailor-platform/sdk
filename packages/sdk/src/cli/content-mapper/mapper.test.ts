@@ -3,7 +3,7 @@ import * as path from "pathe";
 import { describe, expect, test } from "vitest";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
-import { createContentMapperHandlers } from "./mapper";
+import { createContentMapperHandlers, evaluateConfigInProcess } from "./mapper";
 
 const REGISTRY_FILE = "/node_modules/@tailor-platform/sdk/dist/configure/registry.tailor";
 
@@ -56,7 +56,7 @@ async function transform(handlers: Handlers, content: string, fileName: string) 
 describe("content mapper", () => {
   test("types registry.tailor with the registries of the project's tailor.config.ts", async () => {
     using p = project();
-    const handlers = createContentMapperHandlers();
+    const handlers = createContentMapperHandlers(evaluateConfigInProcess);
     await handlers.initialize({ positionEncodings: ["utf-16"] });
 
     const opened = await open(handlers, p.tsconfig);
@@ -79,7 +79,7 @@ describe("content mapper", () => {
 
   test("types a .tailor file of any other name as an empty module", async () => {
     using p = project();
-    const handlers = createContentMapperHandlers();
+    const handlers = createContentMapperHandlers(evaluateConfigInProcess);
     await handlers.initialize({ positionEncodings: ["utf-16"] });
     await open(handlers, p.tsconfig);
 
@@ -91,7 +91,7 @@ describe("content mapper", () => {
 
   test("changes its identity and types when the config changes", async () => {
     using p = project();
-    const handlers = createContentMapperHandlers();
+    const handlers = createContentMapperHandlers(evaluateConfigInProcess);
     await handlers.initialize({ positionEncodings: ["utf-16"] });
     const before = await open(handlers, p.tsconfig);
 
@@ -104,7 +104,7 @@ describe("content mapper", () => {
 
   test("reports a config that fails to load on the file and keeps watching it", async () => {
     using p = project();
-    const handlers = createContentMapperHandlers();
+    const handlers = createContentMapperHandlers(evaluateConfigInProcess);
     await handlers.initialize({ positionEncodings: ["utf-16"] });
     await open(handlers, p.tsconfig);
 
@@ -123,7 +123,7 @@ describe("content mapper", () => {
     using p = project();
     const nested = path.join(p.dir, "packages", "app");
     fs.mkdirSync(nested, { recursive: true });
-    const handlers = createContentMapperHandlers();
+    const handlers = createContentMapperHandlers(evaluateConfigInProcess);
     await handlers.initialize({ positionEncodings: ["utf-16"] });
 
     const opened = await open(handlers, path.join(nested, "tsconfig.json"));
@@ -140,7 +140,7 @@ describe("content mapper", () => {
   test("reports a project without tailor.config.ts and watches for one", async () => {
     const dir = makeTempDir("sdk-content-mapper-no-config-");
     try {
-      const handlers = createContentMapperHandlers();
+      const handlers = createContentMapperHandlers(evaluateConfigInProcess);
       await handlers.initialize({ positionEncodings: ["utf-16"] });
       const opened = await open(handlers, path.join(dir, "tsconfig.json"));
       const result = await transform(handlers, "", REGISTRY_FILE);
@@ -164,7 +164,7 @@ describe("content mapper", () => {
 
   test("reports options it does not take", async () => {
     using p = project();
-    const handlers = createContentMapperHandlers();
+    const handlers = createContentMapperHandlers(evaluateConfigInProcess);
     await handlers.initialize({ positionEncodings: ["utf-16"] });
 
     expect((await open(handlers, p.tsconfig, { temporal: true })).optionDiagnostics).toEqual([
@@ -181,7 +181,7 @@ describe("content mapper", () => {
 describe("initialize", () => {
   test("negotiates UTF-16 positions when offered", async () => {
     expect(
-      await createContentMapperHandlers().initialize({
+      await createContentMapperHandlers(evaluateConfigInProcess).initialize({
         positionEncodings: ["utf-8", "utf-16"],
         protocolVersion: 1,
       }),
@@ -190,7 +190,7 @@ describe("initialize", () => {
 
   test("negotiates UTF-8 positions when UTF-16 is not offered", async () => {
     using p = project();
-    const handlers = createContentMapperHandlers();
+    const handlers = createContentMapperHandlers(evaluateConfigInProcess);
     expect(await handlers.initialize({ positionEncodings: ["utf-8"] })).toMatchObject({
       positionEncoding: "utf-8",
     });

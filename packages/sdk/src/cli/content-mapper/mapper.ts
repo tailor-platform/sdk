@@ -5,6 +5,7 @@ import { DEFAULT_CONFIG_PATH } from "#/cli/shared/args";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { errorSummary } from "#/cli/shared/errors";
 import { readPackageJson } from "#/cli/shared/package-json";
+import { REGISTRY_FILE_NAME } from "#/cli/shared/tailor-file-extension";
 import { generateTypeDefinitionFromConfig } from "#/cli/shared/type-generator";
 import { beginUserModuleRun } from "#/cli/shared/user-modules";
 import { collectLoadedFiles } from "./loaded-files";
@@ -29,7 +30,6 @@ interface Project {
   watchedFiles: string[];
 }
 
-const REGISTRY_FILE = "registry.tailor";
 const EMPTY_MODULE = "export {};\n";
 const PROJECT_DIAGNOSTIC_CODE = 2;
 const OPTION_DIAGNOSTIC_CODE = 3;
@@ -106,12 +106,10 @@ async function loadProject(
 /**
  * Create the handlers of the content mapper that types `.tailor` files for
  * TypeScript from the project's `tailor.config.ts`.
- * @param evaluate - Evaluates the config; defaults to evaluating it in this process
+ * @param evaluate - Evaluates the config
  * @returns A handler for each method of the content mapper protocol
  */
-export function createContentMapperHandlers(
-  evaluate: EvaluateConfig = evaluateConfigInProcess,
-): ContentMapperHandlers {
+export function createContentMapperHandlers(evaluate: EvaluateConfig): ContentMapperHandlers {
   let encoding: PositionEncoding = "utf-16";
   const projects = new Map<string, Project>();
   const lastWatchedFiles = new Map<string, string[]>();
@@ -162,7 +160,7 @@ export function createContentMapperHandlers(
       const { fileName, content, projectHandle } = params as TransformParams;
       const project = projects.get(projectHandle);
       const text =
-        path.basename(fileName) === REGISTRY_FILE
+        path.basename(fileName) === REGISTRY_FILE_NAME
           ? (project?.registryTypes ?? EMPTY_MODULE)
           : EMPTY_MODULE;
       return {

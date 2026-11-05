@@ -4,15 +4,9 @@ import { fileURLToPath } from "node:url";
 import { findUpSync } from "find-up-simple";
 import { createPathsMatcher, getTsconfig } from "get-tsconfig";
 import * as path from "pathe";
+import { JS_TO_TS, KNOWN_EXTENSIONS, TS_EXTENSIONS } from "../ts-hook.mjs";
 
 let collecting: Set<string> | undefined;
-
-const TS_EXTENSIONS = [".ts", ".mts"];
-const KNOWN_EXTENSIONS = [".ts", ".tsx", ".mts", ".js", ".mjs", ".json"];
-const JS_TO_TS = [
-  [".js", ".ts"],
-  [".mjs", ".mts"],
-] as const;
 
 function isLocalSpecifier(specifier: string): boolean {
   return specifier.startsWith("./") || specifier.startsWith("../") || specifier.startsWith("/");
@@ -77,9 +71,9 @@ function candidatePaths(target: string): string[] {
       ...TS_EXTENSIONS.map((extension) => path.join(target, `index${extension}`)),
     ];
   }
-  const substituted = JS_TO_TS.filter(([js]) => target.endsWith(js)).map(
-    ([js, ts]) => target.slice(0, -js.length) + ts,
-  );
+  const substituted = [...JS_TO_TS]
+    .filter(([js]) => target.endsWith(js))
+    .map(([js, ts]) => target.slice(0, -js.length) + ts);
   return [target, ...substituted];
 }
 
@@ -115,6 +109,14 @@ export function observeLoadedFiles(): void {
       return nextLoad(url, context);
     },
   });
+}
+
+/**
+ * The project files imported so far while {@link collectLoadedFiles} runs.
+ * @returns Paths of the imported files, empty when no collection is running
+ */
+export function loadedFiles(): string[] {
+  return collecting ? [...collecting] : [];
 }
 
 /**
