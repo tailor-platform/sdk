@@ -277,7 +277,7 @@ const autofixCommand = defineAppCommand({
   args: z.strictObject({
     provider: arg(z.enum(AUTOFIX_PROVIDERS).default("github-token"), {
       description:
-        "What commits the changes: `github-token` (the workflow token; GitHub holds the checks of the fix commit until someone with write access approves them), `github-app` (a GitHub App token, which runs the checks without approval), `autofix-ci` (the autofix.ci GitHub App), or `securefix` (a securefix server repository)",
+        "What commits the changes: `github-token` (the workflow token; GitHub holds the checks of the fix commit until someone with write access approves them), `github-app` (a GitHub App token, which runs the checks without approval), `github-pat` (a personal access token, which also runs them without approval), `autofix-ci` (the autofix.ci GitHub App), or `securefix` (a securefix server repository)",
     }),
     "securefix-server-repository": arg(z.string().min(1).optional(), {
       description:

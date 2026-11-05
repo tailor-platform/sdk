@@ -155,6 +155,14 @@ describe("repository secrets and variables of the autofix workflow", () => {
     expect(group?.requirements[0]?.description).toMatch(/securefix client/);
   });
 
+  test("are the personal access token for github-pat", () => {
+    const [group] = collectEnvironmentRequirements(withAutofix("github-pat"));
+
+    expect(group?.requirements.map((r) => [r.type, r.name, r.required])).toEqual([
+      ["secret", "TAILOR_AUTOFIX_TOKEN", true],
+    ]);
+  });
+
   test("are set on the repository by the gh commands, with no environment", () => {
     const lines = renderGhCommands(
       collectEnvironmentRequirements(withAutofix("github-app")),

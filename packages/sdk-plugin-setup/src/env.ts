@@ -233,6 +233,19 @@ const AUTOFIX_APP_PRIVATE_KEY: EnvRequirement = {
     "on standard input (`gh secret set ... < key.pem`)",
 };
 
+const AUTOFIX_TOKEN: EnvRequirement = {
+  name: "TAILOR_AUTOFIX_TOKEN",
+  type: "secret",
+  required: true,
+  description:
+    "Personal access token that commits the files `tailor generate` changes to pull " +
+    "requests: a fine-grained token with the Contents read and write permission on this " +
+    "repository, or a classic token with the repo scope",
+  howTo:
+    "create the token on a GitHub account kept for automation that can write to this " +
+    "repository, so the commits do not stop when a person leaves",
+};
+
 const AUTOFIX_REQUIREMENTS: Record<AutofixProvider, EnvRequirement[]> = {
   "github-token": [],
   "autofix-ci": [],
@@ -250,6 +263,7 @@ const AUTOFIX_REQUIREMENTS: Record<AutofixProvider, EnvRequirement[]> = {
     { ...AUTOFIX_APP_PRIVATE_KEY, description: "Private key of the same securefix client App" },
   ],
   "github-app": [AUTOFIX_APP_CLIENT_ID, AUTOFIX_APP_PRIVATE_KEY],
+  "github-pat": [AUTOFIX_TOKEN],
 };
 
 /**

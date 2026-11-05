@@ -356,6 +356,7 @@ date. To have CI commit them instead, generate the autofix workflow:
 ```bash
 tailor setup ci autofix                                  # commit with the workflow token
 tailor setup ci autofix --provider github-app            # commit with your GitHub App
+tailor setup ci autofix --provider github-pat            # commit with a personal access token
 tailor setup ci autofix --dir apps/erp --dir apps/users  # run tailor generate in each app
 ```
 
@@ -372,6 +373,7 @@ which fails on the commit that needed the fix and passes on the fix commit.
 | ------------------------ | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `github-token` (default) | `github-actions[bot]`, with the workflow token                                    | Wait until someone with write access selects **Approve workflows to run** on the pull request | None                                                                                                                                                                                                                                             |
 | `github-app`             | Your GitHub App                                                                   | Run automatically                                                                             | Create a GitHub App with the Contents read and write permission, install it on the repository, and set `TAILOR_AUTOFIX_APP_CLIENT_ID` and `TAILOR_AUTOFIX_APP_PRIVATE_KEY` (see [Setting secrets and variables](#setting-secrets-and-variables)) |
+| `github-pat`             | The owner of a personal access token                                              | Run automatically                                                                             | Create a personal access token that can write the repository's contents, on a GitHub account kept for automation, and set `TAILOR_AUTOFIX_TOKEN` (see [Setting secrets and variables](#setting-secrets-and-variables))                           |
 | `autofix-ci`             | The [autofix.ci](https://autofix.ci) GitHub App                                   | Run automatically                                                                             | Install the autofix.ci App on the repository                                                                                                                                                                                                     |
 | `securefix`              | Your [securefix](https://github.com/csm-actions/securefix-action) server workflow | Run automatically                                                                             | Set up the securefix server repository and its GitHub Apps, pass the server repository's name with `--securefix-server-repository`, and set the client App's `TAILOR_AUTOFIX_APP_CLIENT_ID` and `TAILOR_AUTOFIX_APP_PRIVATE_KEY`                 |
 
@@ -401,8 +403,15 @@ right away.
   `41898282+github-actions[bot]@users.noreply.github.com` for `github-token`.
 - **Secrets:** with `github-app`, every workflow in the repository can read the
   App's private key, which can write to the repository. Give the App only the
-  Contents permission and install it only where it commits. `securefix` keeps
-  the key that writes in the server repository instead.
+  Contents permission and install it only where it commits. The same holds for
+  the token of `github-pat`: use a fine-grained token limited to this
+  repository's Contents permission. `securefix` keeps the key that writes in
+  the server repository instead.
+- **Personal access tokens** belong to a GitHub account, and a fine-grained one
+  does too: when that account leaves the organization or loses access to the
+  repository, the token stops working and the workflow fails. Create it on an
+  account kept for automation rather than a person's, and renew it before it
+  expires.
 - **Dependabot** stops rebasing a pull request that has commits from someone
   else, which happens when `autofix-ci` commits to one of its pull requests.
 - With `autofix-ci` and `securefix`, the workflow is named `autofix.ci` and
@@ -802,8 +811,9 @@ The list follows what each generated workflow actually reads:
 | `TAILOR_SLACK_USER_MAPPING`                          | variable | branch, tag                         | no       | JSON object mapping GitHub usernames to Slack member IDs (for example `{"alice":"U0123456"}`) so notifications mention the actor; read only after you uncomment the `user-mapping` input of the `tailor-notify` step                                                                                                                                                                       |
 | `TAILOR_AUTOFIX_APP_CLIENT_ID`                       | variable | autofix (`github-app`, `securefix`) | yes      | Client ID of the GitHub App that commits for the autofix workflow (with `securefix`, the securefix client App), from the App's settings page                                                                                                                                                                                                                                               |
 | `TAILOR_AUTOFIX_APP_PRIVATE_KEY`                     | secret   | autofix (`github-app`, `securefix`) | yes      | Private key of the same App, generated on its settings page; pass the `.pem` file on standard input (`gh secret set TAILOR_AUTOFIX_APP_PRIVATE_KEY < key.pem`)                                                                                                                                                                                                                             |
+| `TAILOR_AUTOFIX_TOKEN`                               | secret   | autofix (`github-pat`)              | yes      | Personal access token that commits for the autofix workflow: a fine-grained token with the Contents read and write permission on the repository, or a classic token with the `repo` scope. Create it on a GitHub account kept for automation                                                                                                                                               |
 
-The autofix workflow uses no GitHub Environment, so its two entries are set on
+The autofix workflow uses no GitHub Environment, so its entries are set on
 the repository; the output lists them under the repository instead of an
 environment.
 

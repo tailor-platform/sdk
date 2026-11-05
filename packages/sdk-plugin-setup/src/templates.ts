@@ -7,7 +7,7 @@ import tagTemplate from "./tag.workflow.yml";
 // The release PR updates RELEASED_TEMPLATE_VERSION and the fingerprint below. A PR that
 // changes the generated templates sets TEMPLATE_CHANGED_SINCE_RELEASE to true instead. A PR that
 // only adds renders to renderedTemplates() re-records the fingerprint while the flag stays false.
-// Released template fingerprint: 376642991ff27b20832da0038fcf637544ec9fb5898ab3f933d35be12f7d6578
+// Released template fingerprint: b87f3721e4a07737f322cb0dac0d2462863c017c259ab0c2b81bae048ad3c3df
 const RELEASED_TEMPLATE_VERSION = 24;
 const TEMPLATE_CHANGED_SINCE_RELEASE = false;
 export const ACTIONS_SHA = "77effc033b3cb5fa7660b38571fbeb8361d121e8";
@@ -800,7 +800,13 @@ export function renderPreviewCleanupWorkflow(params: RenderPreviewCleanupParams)
   };
 }
 
-export const AUTOFIX_PROVIDERS = ["github-token", "autofix-ci", "securefix", "github-app"] as const;
+export const AUTOFIX_PROVIDERS = [
+  "github-token",
+  "autofix-ci",
+  "securefix",
+  "github-app",
+  "github-pat",
+] as const;
 
 /** What commits the regenerated files to the pull request branch. */
 export type AutofixProvider = (typeof AUTOFIX_PROVIDERS)[number];
@@ -815,6 +821,7 @@ const AUTOFIX_WORKFLOW_NAMES: Record<AutofixProvider, string> = {
   "autofix-ci": "autofix.ci",
   securefix: "securefix",
   "github-app": "Tailor Autofix",
+  "github-pat": "Tailor Autofix",
 };
 
 /** A provider, with the settings it needs. */
@@ -831,6 +838,12 @@ export type RenderAutofixParams = AutofixProviderParams & {
   dirs: readonly string[];
   packageManager: PackageManager;
 };
+
+function pushToken(provider: AutofixProvider): string {
+  if (provider === "github-app") return "${{ steps.tailor-app-token.outputs.token }}";
+  if (provider === "github-pat") return "${{ secrets.TAILOR_AUTOFIX_TOKEN }}";
+  return "${{ github.token }}";
+}
 
 function perAppGenerateSteps(dirs: readonly string[]): string {
   return dirs
@@ -850,7 +863,8 @@ function perAppGenerateSteps(dirs: readonly string[]): string {
 export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult {
   const { provider, dirs, packageManager } = params;
   const multi = dirs.length > 1;
-  const hasPushJob = provider === "github-token" || provider === "github-app";
+  const hasPushJob =
+    provider === "github-token" || provider === "github-app" || provider === "github-pat";
   const workingDirectory = !multi && dirs[0] !== "." ? dirs[0] : undefined;
 
   let out = line(autofixTemplate, "HEADER", HEADER);
@@ -878,12 +892,7 @@ export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult
   out = out
     .replaceAll("__WORKFLOW_NAME__", AUTOFIX_WORKFLOW_NAMES[provider])
     .replaceAll("__PUSH_CONTENTS_PERMISSION__", provider === "github-token" ? "write" : "read")
-    .replaceAll(
-      "__PUSH_TOKEN__",
-      provider === "github-app"
-        ? "${{ steps.tailor-app-token.outputs.token }}"
-        : "${{ github.token }}",
-    )
+    .replaceAll("__PUSH_TOKEN__", pushToken(provider))
     .replaceAll("__COMMIT_MESSAGE__", AUTOFIX_COMMIT_MESSAGE)
     .replaceAll("__PACKAGE_MANAGER__", packageManager)
     .replaceAll("__TAILOR_CLI__", TAILOR_CLI_COMMANDS[packageManager]);

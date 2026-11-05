@@ -138,7 +138,7 @@ const PROVIDER_STEPS: Record<AutofixProvider, string[]> = {
     "1. Approve the checks on each fix commit: GitHub holds the pull request workflows of a",
     '   commit that GitHub Actions pushed until someone with write access selects "Approve',
     '   workflows to run" on the pull request. To run them without approval, regenerate with',
-    "   --provider github-app.",
+    "   --provider github-app or --provider github-pat.",
   ],
   "autofix-ci": [
     "1. Install the autofix.ci GitHub App on this repository: https://github.com/apps/autofix-ci",
@@ -152,6 +152,12 @@ const PROVIDER_STEPS: Record<AutofixProvider, string[]> = {
   "github-app": [
     "1. Create a GitHub App with the Contents read and write permission, install it on this",
     "   repository, and set its client ID and private key:",
+    ...SECRETS_STEP,
+  ],
+  "github-pat": [
+    "1. Create a personal access token that can write the repository's contents. Commits are",
+    "   made as the token's owner and stop when that account loses access to the repository,",
+    "   so create it on a GitHub account kept for automation, not a person's account. Set it:",
     ...SECRETS_STEP,
   ],
 };

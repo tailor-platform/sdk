@@ -73,10 +73,11 @@ describe("renderAutofixWorkflow", () => {
       "autofix-ci": "autofix.ci",
       securefix: "securefix",
       "github-app": "Tailor Autofix",
+      "github-pat": "Tailor Autofix",
     });
   });
 
-  test.each(["github-token", "securefix", "github-app"] as const)(
+  test.each(["github-token", "securefix", "github-app", "github-pat"] as const)(
     "%s: skips pull requests from other repositories and Dependabot, which get no write token or secrets",
     (provider) => {
       expect(workflowOf(provider).jobs["tailor-autofix"]?.if).toBe(
@@ -138,6 +139,7 @@ describe("renderAutofixWorkflow", () => {
       "github-app",
       ["tailor-app-token", "tailor-checkout", "tailor-download-patch", "tailor-commit"],
     ],
+    ["github-pat", ["tailor-checkout", "tailor-download-patch", "tailor-commit"]],
   ] as const)(
     "%s: commits from a separate job that installs and runs none of the project's code",
     (provider, steps) => {
@@ -166,6 +168,14 @@ describe("renderAutofixWorkflow", () => {
     });
     expect(stepOf(workflow, "tailor-autofix-push", "tailor-commit").env?.GH_TOKEN).toBe(
       "${{ steps.tailor-app-token.outputs.token }}",
+    );
+  });
+
+  test("github-pat: commits with the personal access token, so the workflow token stays read-only", () => {
+    const workflow = workflowOf("github-pat");
+    expect(workflow.jobs["tailor-autofix-push"]?.permissions).toEqual({ contents: "read" });
+    expect(stepOf(workflow, "tailor-autofix-push", "tailor-commit").env?.GH_TOKEN).toBe(
+      "${{ secrets.TAILOR_AUTOFIX_TOKEN }}",
     );
   });
 
@@ -721,14 +731,18 @@ describe("printAutofixNextSteps", () => {
     expect(output("github-token")).not.toContain("tailor setup ci env");
   });
 
-  test.each(["github-app", "securefix"] as const)(
-    "%s: points to `tailor setup ci env` for the App's client ID and private key",
+  test.each(["github-app", "securefix", "github-pat"] as const)(
+    "%s: points to `tailor setup ci env` for the secrets the workflow reads",
     (provider) => {
       expect(output(provider)).toMatch(
         /tailor setup ci env +#[\s\S]*--format terraform[\s\S]*tailor setup ci env --check/,
       );
     },
   );
+
+  test("github-pat: says to create the token on an account kept for automation", () => {
+    expect(output("github-pat")).toContain("not a person's account");
+  });
 
   test("autofix-ci: links the GitHub App to install", () => {
     expect(output("autofix-ci")).toContain("https://github.com/apps/autofix-ci");
