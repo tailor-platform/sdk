@@ -50,6 +50,7 @@ import {
 import {
   appSlug,
   isPackageManager,
+  LOCKFILES,
   planEnvironmentOf,
   renderBranchWorkflow,
   renderPreviewCleanupWorkflow,
@@ -488,15 +489,6 @@ function devEnginePackageManagerNames(value: unknown): string[] {
     return name === undefined ? [] : [name];
   });
 }
-
-export const LOCKFILES: ReadonlyArray<readonly [file: string, packageManager: PackageManager]> = [
-  ["pnpm-lock.yaml", "pnpm"],
-  ["yarn.lock", "yarn"],
-  ["bun.lock", "bun"],
-  ["bun.lockb", "bun"],
-  ["package-lock.json", "npm"],
-  ["npm-shrinkwrap.json", "npm"],
-];
 
 /**
  * Detect the package manager from the lockfile at the repository root, or else

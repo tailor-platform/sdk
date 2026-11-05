@@ -8,7 +8,6 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import {
   decideAction,
   detectPackageManager,
-  LOCKFILES,
   printTargetNextSteps,
   setupTarget,
   type BranchSetupOptions,
@@ -22,6 +21,7 @@ import {
   ACTIONS_SHA,
   ACTIONS_VERSION,
   AUTOFIX_WORKFLOW_FILE,
+  LOCKFILES,
   TEMPLATE_VERSION,
   renderBranchWorkflow,
   renderPreviewCleanupWorkflow,

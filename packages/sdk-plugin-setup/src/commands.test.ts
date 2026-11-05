@@ -422,7 +422,7 @@ describe("setup ci autofix", () => {
     vi.clearAllMocks();
   });
 
-  test("commits with the workflow token by default, in the current directory's app", async () => {
+  test("commits with the workflow token by default, in the current directory's app, without codemods", async () => {
     const generated = { provider: "github-token" } as const;
     vi.mocked(setupAutofix).mockResolvedValue(generated);
     const result = await runCommand(setupCommand, ["ci", "autofix"]);
@@ -431,6 +431,7 @@ describe("setup ci autofix", () => {
     expect(setupAutofix).toHaveBeenCalledWith({
       provider: "github-token",
       securefixServerRepository: undefined,
+      codemod: "off",
       dir: ["."],
       packageManager: undefined,
       force: false,
@@ -439,7 +440,7 @@ describe("setup ci autofix", () => {
     expect(printAutofixNextSteps).toHaveBeenCalledWith(generated);
   });
 
-  test("passes the provider, app directories, and package manager through", async () => {
+  test("passes the provider, codemod mode, app directories, and package manager through", async () => {
     const result = await runCommand(setupCommand, [
       "ci",
       "autofix",
@@ -447,6 +448,8 @@ describe("setup ci autofix", () => {
       "securefix",
       "--securefix-server-repository",
       "securefix-server",
+      "--codemod",
+      "deterministic",
       "--dir",
       "apps/erp",
       "-d",
@@ -460,6 +463,7 @@ describe("setup ci autofix", () => {
     expect(setupAutofix).toHaveBeenCalledWith({
       provider: "securefix",
       securefixServerRepository: "securefix-server",
+      codemod: "deterministic",
       dir: ["apps/erp", "apps/users"],
       packageManager: "yarn",
       force: true,
@@ -467,8 +471,11 @@ describe("setup ci autofix", () => {
     });
   });
 
-  test("rejects an unknown provider", async () => {
-    const result = await runCommand(setupCommand, ["ci", "autofix", "--provider", "bot"]);
+  test.each([
+    ["--provider", "bot"],
+    ["--codemod", "claude"],
+  ])("rejects an unknown %s", async (flag, value) => {
+    const result = await runCommand(setupCommand, ["ci", "autofix", flag, value]);
 
     expect(result.success).toBe(false);
     expect(setupAutofix).not.toHaveBeenCalled();

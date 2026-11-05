@@ -2,10 +2,12 @@ import {
   AUTOFIX_WORKFLOW_FILE,
   renderAutofixWorkflow,
   TEMPLATE_VERSION,
+  type AutofixCodemod,
   type AutofixProvider,
   type PackageManager,
   type RenderResult,
 } from "../templates";
+import type { AutofixSetupOptions } from "../autofix";
 import type { LockAutofix } from "../lock";
 
 const SECUREFIX_SERVER_REPOSITORY = "securefix-server";
@@ -13,16 +15,27 @@ const SECUREFIX_SERVER_REPOSITORY = "securefix-server";
 /**
  * Renders the autofix workflow of a provider, with a server repository for securefix.
  * @param provider - Autofix provider
- * @param options - App directories and package manager, defaulting to the root app and pnpm
+ * @param options - App directories, package manager, and codemod mode, defaulting to the root
+ *   app, pnpm, and `off`
  * @param options.dirs - App directories
  * @param options.packageManager - Package manager
+ * @param options.codemod - Codemod mode
  * @returns Rendered workflow
  */
 export function renderAutofixFor(
   provider: AutofixProvider,
-  options: { dirs?: readonly string[]; packageManager?: PackageManager } = {},
+  options: {
+    dirs?: readonly string[];
+    packageManager?: PackageManager;
+    codemod?: AutofixCodemod;
+  } = {},
 ): RenderResult {
-  const common = { dirs: ["."], packageManager: "pnpm" as const, ...options };
+  const common = {
+    dirs: ["."],
+    packageManager: "pnpm" as const,
+    codemod: "off" as const,
+    ...options,
+  };
   return provider === "securefix"
     ? renderAutofixWorkflow({
         ...common,
@@ -57,5 +70,26 @@ export function autofixLockEntry(
     },
     generatedIds: [],
     contentHash: "managed-v1:sha256:0",
+  };
+}
+
+/**
+ * Builds `setupAutofix` options for the root app, committing with the workflow token and no
+ * codemods.
+ * @param outputDir - Repository root
+ * @param overrides - Options that differ
+ * @returns Setup options
+ */
+export function autofixSetupOptions(
+  outputDir: string,
+  overrides: Partial<AutofixSetupOptions> = {},
+): AutofixSetupOptions {
+  return {
+    provider: "github-token",
+    codemod: "off",
+    dir: ".",
+    force: false,
+    outputDir,
+    ...overrides,
   };
 }

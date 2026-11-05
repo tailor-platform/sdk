@@ -13,8 +13,11 @@ import {
 import { LOCK_VERSION, readLock, writeLock } from "./lock";
 import {
   AUTOFIX_WORKFLOW_FILE,
+  codemodLockfiles,
+  LOCKFILES,
   renderAutofixWorkflow,
   TEMPLATE_VERSION,
+  type AutofixCodemod,
   type AutofixProvider,
   type AutofixProviderParams,
   type PackageManager,
@@ -24,6 +27,8 @@ export type AutofixSetupOptions = {
   provider: AutofixProvider;
   /** For the `securefix` provider: the repository that runs the securefix server workflow. */
   securefixServerRepository?: string;
+  /** What the workflow does with the codemods of an SDK upgrade in a pull request. */
+  codemod: AutofixCodemod;
   /** App directory, or several; `tailor generate` runs in each. */
   dir: string | readonly string[];
   /** Package manager the workflow uses; detected from the repository root when omitted. */
@@ -62,6 +67,21 @@ function resolveProvider(options: AutofixSetupOptions): AutofixProviderParams {
   return { provider, securefixServerRepository: name };
 }
 
+function assertCodemodLockfile(outputDir: string, packageManager: PackageManager): void {
+  const exists = (file: string) => fs.existsSync(path.join(outputDir, file));
+  const readable = codemodLockfiles(packageManager);
+  const unreadable = LOCKFILES.find(
+    ([file, manager]) => manager === packageManager && !readable.includes(file) && exists(file),
+  );
+  if (unreadable && !readable.some(exists)) {
+    throw new Error(
+      `--codemod reads the SDK version of the base branch from ${readable.join(" or ")}, but the ` +
+        `repository root has only ${unreadable[0]}. Switch to bun.lock with ` +
+        "`bun install --save-text-lockfile`, then re-run.",
+    );
+  }
+}
+
 /**
  * Generate the workflow that commits what `tailor generate` changes to the pull request, and
  * record it in the lock file.
@@ -69,13 +89,14 @@ function resolveProvider(options: AutofixSetupOptions): AutofixProviderParams {
  * @returns What was generated, for {@link printAutofixNextSteps}
  */
 export async function setupAutofix(options: AutofixSetupOptions): Promise<AutofixSetupResult> {
-  const { provider, outputDir, force } = options;
+  const { provider, codemod, outputDir, force } = options;
   const dirs = (typeof options.dir === "string" ? [options.dir] : options.dir).map(normalizeDir);
   assertDistinctAppSlugs(dirs);
   for (const dir of dirs) resolveConfigPath(outputDir, dir);
   const providerParams = resolveProvider(options);
   const packageManager = resolvePackageManager(outputDir, options.packageManager);
-  const render = renderAutofixWorkflow({ ...providerParams, dirs, packageManager });
+  if (codemod !== "off") assertCodemodLockfile(outputDir, packageManager);
+  const render = renderAutofixWorkflow({ ...providerParams, dirs, packageManager, codemod });
 
   const lock = readLock(outputDir);
   const owner = lock?.targets.find((target) => target.file === AUTOFIX_WORKFLOW_FILE);
@@ -116,6 +137,7 @@ export async function setupAutofix(options: AutofixSetupOptions): Promise<Autofi
         dirs,
         packageManager,
         packageManagerAutoDetected: options.packageManager === undefined,
+        ...(codemod === "off" ? {} : { codemod }),
       },
       generatedIds: render.generatedIds,
       contentHash,
