@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { applyDateRepresentation, applyKyselyTemporal } from "./date-representation";
+import { applyDateRepresentation } from "./date-representation";
 
 const GATE = "__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT";
 
@@ -26,29 +26,6 @@ describe("applyDateRepresentation", () => {
     } finally {
       if (previous === undefined) delete process.env[GATE];
       else process.env[GATE] = previous;
-    }
-  });
-});
-
-describe("applyKyselyTemporal", () => {
-  const KYSELY_GATE = "__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL";
-
-  test("makes the SDK's getDB read Temporal values until restored", () => {
-    const previous = process.env[KYSELY_GATE];
-    try {
-      process.env[KYSELY_GATE] = "stale";
-      const restore = applyKyselyTemporal(true);
-      expect(process.env[KYSELY_GATE]).toBe("true");
-      restore();
-      expect(process.env[KYSELY_GATE]).toBe("stale");
-
-      const restoreOff = applyKyselyTemporal(false);
-      expect(process.env[KYSELY_GATE]).toBeUndefined();
-      restoreOff();
-      expect(process.env[KYSELY_GATE]).toBe("stale");
-    } finally {
-      if (previous === undefined) delete process.env[KYSELY_GATE];
-      else process.env[KYSELY_GATE] = previous;
     }
   });
 });

@@ -8,7 +8,7 @@
  */
 import { pathToFileURL } from "node:url";
 import { afterAll, beforeAll } from "vitest";
-import { applyDateDefault, applyKyselyTemporal } from "./date-representation";
+import { applyDateDefault } from "./date-representation";
 import { RUNTIME_FLAG_KEY, mockSecretmanager } from "./mock";
 
 export { applyDateDefault };
@@ -84,16 +84,8 @@ const restoreDateDefault =
     ? applyDateDefault(configuredDateDefault)
     : undefined;
 
-const configuredKyselyTemporal = isTailorRuntime()
-  ? process.env.__TAILOR_RUNTIME_KYSELY_TEMPORAL
-  : undefined;
-const restoreKyselyTemporal =
-  configuredKyselyTemporal === "true" || configuredKyselyTemporal === "false"
-    ? applyKyselyTemporal(configuredKyselyTemporal === "true")
-    : undefined;
 afterAll(() => {
   restoreDateDefault?.();
-  restoreKyselyTemporal?.();
 });
 
 // Load secrets from tailor.config.ts if config path is provided via env var

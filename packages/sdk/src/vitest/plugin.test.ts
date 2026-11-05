@@ -833,7 +833,7 @@ describe("createEnvironmentPlugin", () => {
     const userConfig: any = { root: "/proj", test: { environment: "tailor-runtime" } };
     await applyConfig(plugin, userConfig);
 
-    expect(userConfig.test.env.__TAILOR_RUNTIME_KYSELY_TEMPORAL).toBe("true");
+    expect(userConfig.test.env.__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL).toBe("true");
   });
 
   test("seeds each project's own kysely temporal and blanks it on projects that select another environment", async () => {
@@ -854,9 +854,13 @@ describe("createEnvironmentPlugin", () => {
     };
     await applyConfig(plugin, userConfig);
 
-    expect(userConfig.test.projects[0].test.env.__TAILOR_RUNTIME_KYSELY_TEMPORAL).toBe("true");
-    expect(userConfig.test.projects[1].test.env.__TAILOR_RUNTIME_KYSELY_TEMPORAL).toBe("false");
-    expect(userConfig.test.projects[2].test.env.__TAILOR_RUNTIME_KYSELY_TEMPORAL).toBe("");
+    expect(userConfig.test.projects[0].test.env.__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL).toBe(
+      "true",
+    );
+    expect(userConfig.test.projects[1].test.env.__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL).toBe(
+      "false",
+    );
+    expect(userConfig.test.projects[2].test.env.__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL).toBe("");
   });
 
   test("fails the config phase when the config cannot be read", async () => {

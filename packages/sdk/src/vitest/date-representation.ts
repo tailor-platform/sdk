@@ -2,7 +2,6 @@ import type { DateRepresentationOption } from "#/configure/types/field.types";
 import type { EffectiveDateDefault } from "#/runtime/types";
 
 const DATE_DEFAULT_GATE = "__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT";
-const KYSELY_TEMPORAL_GATE = "__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL";
 
 /**
  * Expose the date default to `t` date fields in this worker, the way the
@@ -20,25 +19,6 @@ export function applyDateDefault(dateDefault: EffectiveDateDefault): () => void 
   return () => {
     if (previous === undefined) delete process.env[DATE_DEFAULT_GATE];
     else process.env[DATE_DEFAULT_GATE] = previous;
-  };
-}
-
-/**
- * Make `getDB` of `@tailor-platform/sdk/plugin/kysely-type/db` read Temporal values in this
- * worker, the way the define plugin folds the plugin's `temporal` option into deployed bundles.
- * @param temporal - Whether `kyselyTypePlugin` is configured with `temporal: true`
- * @returns A function that restores the previous value
- */
-export function applyKyselyTemporal(temporal: boolean): () => void {
-  const previous = process.env[KYSELY_TEMPORAL_GATE];
-  if (temporal) {
-    process.env[KYSELY_TEMPORAL_GATE] = "true";
-  } else {
-    delete process.env[KYSELY_TEMPORAL_GATE];
-  }
-  return () => {
-    if (previous === undefined) delete process.env[KYSELY_TEMPORAL_GATE];
-    else process.env[KYSELY_TEMPORAL_GATE] = previous;
   };
 }
 

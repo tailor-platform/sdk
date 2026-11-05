@@ -327,10 +327,10 @@ const CONFIG_ENV_VAR = "__TAILOR_RUNTIME_CONFIG";
 // restrictions. Empty reads as "no config", like CONFIG_ENV_VAR.
 const DATE_DEFAULT_ENV_VAR = "__TAILOR_RUNTIME_DATE_DEFAULT";
 
-// Carries the `temporal` option of the kysely type plugin the host read from that config, so
-// `getDB` of `@tailor-platform/sdk/plugin/kysely-type/db` reads rows the way a deployed bundle
-// does. Empty reads as "no config".
-const KYSELY_TEMPORAL_ENV_VAR = "__TAILOR_RUNTIME_KYSELY_TEMPORAL";
+// The gate `getDB` of `@tailor-platform/sdk/plugin/kysely-type/db` reads, set from the `temporal`
+// option of the kysely type plugin in that config. It is set here, rather than in setup.ts, so it
+// exists before a user setup file imports `getDB`. Empty reads as "no config".
+const KYSELY_TEMPORAL_ENV_VAR = "__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL";
 
 // An empty value reads as "no config" in setup.ts and, unlike omitting the
 // key, overrides a stale value inherited from the root `test.env`.

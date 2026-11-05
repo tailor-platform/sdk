@@ -127,6 +127,10 @@ describe("KyselyTypePlugin integration tests", () => {
       expect(() => kyselyTypePlugin({ contentMapper: false })).toThrow(/requires either/);
     });
 
+    test("rejects an empty distPath, which would generate no types and enable no content mapper", () => {
+      expect(() => kyselyTypePlugin({ distPath: "" })).toThrow(/distPath must not be empty/);
+    });
+
     test("accepts contentMapper: true alone", () => {
       expect(kyselyTypePlugin({ contentMapper: true }).pluginConfig).toEqual({
         contentMapper: true,

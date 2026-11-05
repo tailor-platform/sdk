@@ -67,6 +67,9 @@ export function kyselyTypePlugin(
   if (distPath !== undefined && contentMapper !== undefined) {
     throw new Error("kyselyTypePlugin accepts either distPath or contentMapper: true, not both.");
   }
+  if (distPath === "") {
+    throw new Error("kyselyTypePlugin distPath must not be empty.");
+  }
   if (distPath === undefined && contentMapper !== true) {
     throw new Error("kyselyTypePlugin requires either distPath or contentMapper: true.");
   }

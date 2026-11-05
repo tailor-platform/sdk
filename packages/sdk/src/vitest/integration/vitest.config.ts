@@ -13,14 +13,14 @@ export default defineConfig({
   test: {
     watch: false,
     environment: resolve(here, "../environment.ts"),
-    setupFiles: [resolve(here, "../setup.ts")],
+    setupFiles: [resolve(here, "fixtures/user-setup-probe.ts"), resolve(here, "../setup.ts")],
     include: ["./**/*.test.ts"],
     root: here,
     // What `tailorRuntime({ config })` sets per project; the plugin is not used here.
     env: {
       __TAILOR_RUNTIME_CONFIG: resolve(here, "fixtures/tailor.config.ts"),
       __TAILOR_RUNTIME_DATE_DEFAULT: "temporal",
-      __TAILOR_RUNTIME_KYSELY_TEMPORAL: "true",
+      __TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL: "true",
     },
   },
 });
