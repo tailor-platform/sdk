@@ -1037,6 +1037,29 @@ export async function fetchAllTolerant<T>(
 }
 
 /**
+ * List every machine user of an auth namespace, treating a namespace that does not exist yet as empty.
+ * @param client - Operator client
+ * @param workspaceId - Workspace to query
+ * @param authNamespace - Auth namespace to list machine users of
+ * @returns Machine users of the namespace
+ */
+export async function listAuthMachineUsersTolerant(
+  client: OperatorClient,
+  workspaceId: string,
+  authNamespace: string,
+) {
+  return await fetchAllTolerant(async (pageToken, pageSize) => {
+    const { machineUsers, nextPageToken } = await client.listAuthMachineUsers({
+      workspaceId,
+      authNamespace,
+      pageToken,
+      pageSize,
+    });
+    return [machineUsers, nextPageToken];
+  });
+}
+
+/**
  * Fetch a single resource, treating NotFound as an absent value.
  * @template T
  * @param fn - Resource getter

@@ -1,5 +1,5 @@
 import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
-import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
+import { listAuthMachineUsersTolerant, type OperatorClient } from "#/cli/shared/client";
 import { CLIError } from "#/cli/shared/errors";
 import type { Application } from "#/cli/services/application";
 import type { AuthInvoker } from "#/types/auth.generated";
@@ -65,15 +65,7 @@ export async function listKnownMachineUsers(
   params: ListKnownMachineUsersParams,
 ): Promise<ReadonlySet<string>> {
   const { client, workspaceId, authNamespace, plannedMachineUsers = [] } = params;
-  const existing = await fetchAllTolerant(async (pageToken, pageSize) => {
-    const { machineUsers, nextPageToken } = await client.listAuthMachineUsers({
-      workspaceId,
-      authNamespace,
-      pageToken,
-      pageSize,
-    });
-    return [machineUsers, nextPageToken];
-  });
+  const existing = await listAuthMachineUsersTolerant(client, workspaceId, authNamespace);
   return new Set([...existing.map((machineUser) => machineUser.name), ...plannedMachineUsers]);
 }
 
