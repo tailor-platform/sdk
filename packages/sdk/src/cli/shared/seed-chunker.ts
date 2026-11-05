@@ -1,8 +1,9 @@
 /**
  * Seed data chunker for splitting large seed data into manageable message sizes.
  *
- * When seed data exceeds the gRPC message size limit, this module splits the data
- * into multiple chunks at type boundaries (or record boundaries for large types).
+ * When seed data exceeds the size one script execution can take as its argument,
+ * this module splits the data into multiple chunks at type boundaries (or record
+ * boundaries for large types).
  */
 
 import { assertDefined } from "#/utils/assert";
@@ -31,20 +32,20 @@ export type ChunkSeedDataOptions = {
   data: SeedData;
   /** Ordered list of type names (dependency order) */
   order: string[];
-  /** Byte size of the bundled seed script code */
+  /** Byte size of script code sent in the same message as the data (0 when it is sent apart) */
   codeByteSize: number;
-  /** Maximum gRPC message size in bytes (default: 3.5MB) */
+  /** Maximum message size in bytes (default: 3.5MB) */
   maxMessageSize?: number;
 };
 
-/** Default maximum message size: 3.5MB (conservative limit for gRPC) */
+/** Default maximum message size: 3.5MB (conservative margin under the 4MB limit of a workflow start argument) */
 export const DEFAULT_MAX_MESSAGE_SIZE = 3.5 * 1024 * 1024;
 
 /** Reserved bytes for message metadata overhead */
 const METADATA_OVERHEAD = 1024;
 
 /**
- * Split seed data into chunks that fit within the gRPC message size limit.
+ * Split seed data into chunks that fit within the message size limit.
  *
  * Algorithm:
  * 1. Calculate the available budget for the arg field (maxMessageSize - codeByteSize - overhead)
@@ -163,6 +164,17 @@ export function chunkSeedData(options: ChunkSeedDataOptions): SeedChunk[] {
   return chunks.map((chunk) => ({ ...chunk, total }));
 }
 
-function byteSize(str: string): number {
-  return new TextEncoder().encode(str).length;
+const ESCAPED_BY_PLATFORM = /[<>&\u2028\u2029]/g;
+
+// The platform decodes the start argument and encodes it again before it checks the size, and the
+// encoding writes these characters as \uXXXX (6 bytes each) instead of as themselves.
+function platformEncoded(json: string): string {
+  return json.replace(
+    ESCAPED_BY_PLATFORM,
+    (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`,
+  );
+}
+
+function byteSize(json: string): number {
+  return new TextEncoder().encode(platformEncoded(json)).length;
 }
