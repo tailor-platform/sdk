@@ -48,6 +48,7 @@ import type {
   UserQuery as IdpUserQuery,
 } from "./idp";
 import type { LogAttributeValue, LogAttributes } from "./logger";
+import type * as SandboxTypes from "./sandbox";
 import type {
   Invoker as WorkflowInvoker,
   StartWorkflowOptions as WorkflowStartWorkflowOptions,
@@ -99,6 +100,23 @@ declare global {
     namespace workflow {
       type Invoker = TailorWorkflowInvoker;
       type StartWorkflowOptions = TailorWorkflowStartWorkflowOptions;
+    }
+
+    namespace sandbox {
+      type Sandbox = SandboxTypes.Sandbox;
+      type SandboxInfo = SandboxTypes.SandboxInfo;
+      type SandboxStatus = SandboxTypes.SandboxStatus;
+      type SandboxError = SandboxTypes.SandboxError;
+      type Execution = SandboxTypes.Execution;
+      type ExecutionInfo = SandboxTypes.ExecutionInfo;
+      type ExecutionStatus = SandboxTypes.ExecutionStatus;
+      type ExecutionPage = SandboxTypes.ExecutionPage;
+      type ExecOptions = SandboxTypes.ExecOptions;
+      type ExecResult = SandboxTypes.ExecResult;
+      type OutputChunk = SandboxTypes.OutputChunk;
+      type FileInfo = SandboxTypes.FileInfo;
+      type CreateSandboxOptions = SandboxTypes.CreateSandboxOptions;
+      type GetOrCreateSandboxOptions = SandboxTypes.GetOrCreateSandboxOptions;
     }
 
     namespace context {

@@ -45,4 +45,10 @@ export {
   type QueryMatch,
   type QueryMatcher,
 } from "./mocks/tailordb";
+export {
+  mockSandbox,
+  type ExecHandler,
+  type MockExecOutput,
+  type RecordedExecution,
+} from "./mocks/sandbox";
 export { mockWorkflow } from "./mocks/workflow";

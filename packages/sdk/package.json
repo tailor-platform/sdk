@@ -132,6 +132,11 @@
       "import": "./dist/runtime/workflow.mjs",
       "default": "./dist/runtime/workflow.mjs"
     },
+    "./runtime/sandbox": {
+      "types": "./dist/runtime/sandbox.d.mts",
+      "import": "./dist/runtime/sandbox.mjs",
+      "default": "./dist/runtime/sandbox.mjs"
+    },
     "./runtime/context": {
       "types": "./dist/runtime/context.d.mts",
       "import": "./dist/runtime/context.mjs",

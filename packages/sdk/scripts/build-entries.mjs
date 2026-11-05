@@ -21,6 +21,7 @@ export const entry = [
   "src/runtime/authconnection.ts",
   "src/runtime/idp.ts",
   "src/runtime/workflow.ts",
+  "src/runtime/sandbox.ts",
   "src/runtime/context.ts",
   "src/runtime/file.ts",
   "src/runtime/aigateway.ts",
