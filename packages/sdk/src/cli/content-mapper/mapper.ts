@@ -46,9 +46,40 @@ function configCandidates(searchFrom: string, foundIn?: string): string[] {
   return candidates;
 }
 
+export interface Evaluation {
+  registryTypes?: string;
+  error?: string;
+  files: string[];
+}
+
+export type EvaluateConfig = (configPath: string) => Promise<Evaluation>;
+
+/**
+ * Evaluate `tailor.config.ts` in this process and collect the project files it imports.
+ * @param configPath - Path of `tailor.config.ts`
+ * @returns The registry types, or the error that stopped the config from loading, and the files imported
+ */
+export async function evaluateConfigInProcess(configPath: string): Promise<Evaluation> {
+  const cwd = process.cwd();
+  try {
+    process.chdir(path.dirname(configPath));
+    beginUserModuleRun();
+    const { outcome, files } = await collectLoadedFiles(async () => {
+      const { config } = await loadConfig(configPath);
+      return generateTypeDefinitionFromConfig(config);
+    });
+    return outcome.status === "rejected"
+      ? { error: errorSummary(outcome.reason), files }
+      : { registryTypes: outcome.value, files };
+  } finally {
+    process.chdir(cwd);
+  }
+}
+
 async function loadProject(
   tsconfigPath: string,
   previousWatchedFiles: string[] | undefined,
+  evaluate: EvaluateConfig,
 ): Promise<Omit<Project, "identity"> & { configPath?: string }> {
   const searchFrom = path.dirname(tsconfigPath);
   const configPath = findUpSync(DEFAULT_CONFIG_PATH, { cwd: searchFrom });
@@ -58,36 +89,29 @@ async function loadProject(
       watchedFiles: configCandidates(searchFrom),
     };
   }
-  const cwd = process.cwd();
-  try {
-    process.chdir(path.dirname(configPath));
-    beginUserModuleRun();
-    const { outcome, files } = await collectLoadedFiles(async () => {
-      const { config } = await loadConfig(configPath);
-      return generateTypeDefinitionFromConfig(config);
-    });
-    const watchedFiles = [
-      ...new Set([...configCandidates(searchFrom, path.dirname(configPath)), configPath, ...files]),
-    ];
-    if (outcome.status === "rejected") {
-      return {
-        configPath,
-        error: errorSummary(outcome.reason),
-        watchedFiles: [...new Set([...(previousWatchedFiles ?? []), ...watchedFiles])],
-      };
-    }
-    return { configPath, registryTypes: outcome.value, watchedFiles };
-  } finally {
-    process.chdir(cwd);
+  const { registryTypes, error, files } = await evaluate(configPath);
+  const watchedFiles = [
+    ...new Set([...configCandidates(searchFrom, path.dirname(configPath)), configPath, ...files]),
+  ];
+  if (registryTypes === undefined) {
+    return {
+      configPath,
+      error,
+      watchedFiles: [...new Set([...(previousWatchedFiles ?? []), ...watchedFiles])],
+    };
   }
+  return { configPath, registryTypes, watchedFiles };
 }
 
 /**
  * Create the handlers of the content mapper that types `.tailor` files for
  * TypeScript from the project's `tailor.config.ts`.
+ * @param evaluate - Evaluates the config; defaults to evaluating it in this process
  * @returns A handler for each method of the content mapper protocol
  */
-export function createContentMapperHandlers(): ContentMapperHandlers {
+export function createContentMapperHandlers(
+  evaluate: EvaluateConfig = evaluateConfigInProcess,
+): ContentMapperHandlers {
   let encoding: PositionEncoding = "utf-16";
   const projects = new Map<string, Project>();
   const lastWatchedFiles = new Map<string, string[]>();
@@ -103,7 +127,11 @@ export function createContentMapperHandlers(): ContentMapperHandlers {
 
     async openProject(params) {
       const { configFileName, projectHandle, options } = params as OpenProjectParams;
-      const loaded = await loadProject(configFileName, lastWatchedFiles.get(configFileName));
+      const loaded = await loadProject(
+        configFileName,
+        lastWatchedFiles.get(configFileName),
+        evaluate,
+      );
       if (loaded.registryTypes !== undefined) {
         lastWatchedFiles.set(configFileName, loaded.watchedFiles);
       }

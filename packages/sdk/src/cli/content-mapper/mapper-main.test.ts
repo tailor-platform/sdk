@@ -246,4 +246,45 @@ describe("content mapper process", () => {
     },
     TIMEOUT_MS,
   );
+
+  test(
+    "types the config from a workspace package's current contents each time the project is opened",
+    async () => {
+      const dir = projectDir();
+      const shared = path.join(dir, "node_modules", "@acme", "shared");
+      fs.mkdirSync(shared, { recursive: true });
+      fs.writeFileSync(
+        path.join(shared, "package.json"),
+        JSON.stringify({ name: "@acme/shared", type: "module", exports: "./index.js" }),
+      );
+      fs.writeFileSync(path.join(shared, "index.js"), 'export const stage = "dev";\n');
+      fs.writeFileSync(
+        path.join(dir, "tailor.config.ts"),
+        `import { defineConfig } from "@tailor-platform/sdk";
+import { stage } from "@acme/shared";
+export default defineConfig({ name: "app", env: { stage } });
+`,
+      );
+      fs.mkdirSync(path.join(dir, "node_modules", "@tailor-platform"), { recursive: true });
+      fs.symlinkSync(
+        fileURLToPath(new URL("../../..", import.meta.url)),
+        path.join(dir, "node_modules", "@tailor-platform", "sdk"),
+      );
+      const mapper = startMapper();
+      const typesOf = async () => {
+        await open(mapper, dir);
+        const result = (await mapper.call("transform", {
+          fileName: REGISTRY_FILE,
+          content: "",
+          projectHandle: "p1",
+        })) as { text: string };
+        return result.text.match(/stage: [^;]+;/)?.[0];
+      };
+
+      expect(await typesOf()).toBe("stage: string;");
+      fs.writeFileSync(path.join(shared, "index.js"), "export const stage = 42;\n");
+      expect(await typesOf()).toBe("stage: number;");
+    },
+    TIMEOUT_MS,
+  );
 });
