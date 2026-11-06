@@ -1,11 +1,13 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
-import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
+import { afterEach, aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import { bundleQueryScript } from "./query-bundler";
+import type { TailordbQueryResult } from "#/runtime/index";
 import type * as pkgTypes from "pkg-types";
 
 type PkgTypesModule = typeof pkgTypes;
+type QueryObjectResult = TailordbQueryResult<Record<string, unknown>>;
 
 vi.mock("pkg-types", async (importOriginal) => {
   const original = await importOriginal<PkgTypesModule>();
@@ -104,6 +106,56 @@ describe("query-bundler", () => {
       expect(sqlEntry).toContain("new tailordb.Client");
       expect(gqlEntry).toContain("fetch(input.endpoint");
       expect(gqlEntry).toContain("GraphQL request failed");
+    });
+  });
+
+  describe("SQL query script", () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    async function runSqlScript(queryResult: QueryObjectResult): Promise<unknown> {
+      vi.stubGlobal("tailordb", {
+        Client: class {
+          async connect() {}
+          async end() {}
+          async queryObject() {
+            return queryResult;
+          }
+        },
+      });
+      const modulePath = path.join(process.env.TAILOR_BUILD_OUTPUT_DIR!, "query-sql.mjs");
+      fs.writeFileSync(modulePath, await bundleQueryScript("sql", __dirname));
+      const { main } = (await import(/* @vite-ignore */ modulePath)) as {
+        main: (input: { namespace: string; queries: string[] }) => Promise<unknown>;
+      };
+      const result = await main({ namespace: "tailordb", queries: ["statement"] });
+      return JSON.parse(JSON.stringify(result));
+    }
+
+    test.each<[string, QueryObjectResult, unknown]>([
+      [
+        "write without RETURNING",
+        { rows: [], command: "UPDATE", rowCount: 3 },
+        { rows: [], rowCount: 3, affectedRows: 3 },
+      ],
+      [
+        "write with RETURNING",
+        { rows: [{ id: "1" }], command: "DELETE", rowCount: 1 },
+        { rows: [{ id: "1" }], rowCount: 1, affectedRows: 1 },
+      ],
+      [
+        "write matching no rows",
+        { rows: [], command: "INSERT", rowCount: 0 },
+        { rows: [], rowCount: 0, affectedRows: 0 },
+      ],
+      [
+        "read",
+        { rows: [{ id: "1" }, { id: "2" }], command: "SELECT", rowCount: 2 },
+        { rows: [{ id: "1" }, { id: "2" }], rowCount: 2 },
+      ],
+    ])("reports the row count of a %s", async (_label, queryResult, expected) => {
+      expect(await runSqlScript(queryResult)).toStrictEqual(expected);
     });
   });
 });
