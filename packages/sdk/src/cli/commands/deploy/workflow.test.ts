@@ -553,14 +553,11 @@ describe("planWorkflow", () => {
         "workflow-1",
         "workflow-2",
       ]);
-      expect(result.changeSet.deletes.find((d) => d.name === "workflow-1")).toHaveProperty(
-        "deletableJobNames",
-        ["child-job-1", "main-job-1"],
-      );
-      expect(result.changeSet.deletes.find((d) => d.name === "workflow-2")).toHaveProperty(
-        "deletableJobNames",
-        ["main-job-2"],
-      );
+      expect(result.jobFunctionDeletes.map((del) => del.jobFunctionName).toSorted()).toEqual([
+        "child-job-1",
+        "main-job-1",
+        "main-job-2",
+      ]);
     });
 
     test("job functions still referenced by retained workflows are not deleted", async () => {
@@ -624,45 +621,50 @@ describe("planWorkflow", () => {
       expect(result.changeSet.deletes).toHaveLength(1);
       expect(result.changeSet.deletes[0]!.name).toBe("removed-workflow");
       expect(result.changeSet.deletes[0]!.usedJobNames).toEqual(["removed-job", "shared-job"]);
-      expect(result.changeSet.deletes[0]!).toHaveProperty("deletableJobNames", ["removed-job"]);
+      expect(result.jobFunctionDeletes).toEqual([{ workspaceId, jobFunctionName: "removed-job" }]);
       expect(result.resourceOwners.has("other-app")).toBe(true);
     });
 
     test("job functions referenced by other owners are not deleted", async () => {
-      const client = createMockClient([
-        {
-          id: "1",
-          name: "removed-workflow",
-          label: appName,
-          resource: {
+      const client = createMockClient(
+        [
+          {
             id: "1",
             name: "removed-workflow",
-            mainJobFunctionName: "shared-job",
-            jobFunctions: {
-              "shared-job": "1",
+            label: appName,
+            resource: {
+              id: "1",
+              name: "removed-workflow",
+              mainJobFunctionName: "shared-job",
+              jobFunctions: {
+                "shared-job": "1",
+              },
             },
           },
-        },
-        {
-          id: "2",
-          name: "other-workflow",
-          label: "other-app",
-          resource: {
+          {
             id: "2",
             name: "other-workflow",
-            mainJobFunctionName: "shared-job",
-            jobFunctions: {
-              "shared-job": "1",
+            label: "other-app",
+            resource: {
+              id: "2",
+              name: "other-workflow",
+              mainJobFunctionName: "shared-job",
+              jobFunctions: {
+                "shared-job": "1",
+              },
             },
           },
+        ],
+        {
+          "shared-job": { label: appName },
         },
-      ]);
+      );
 
       const result = await planWorkflow(client, workspaceId, appName, undefined, {}, {});
 
       expect(result.changeSet.deletes).toHaveLength(1);
       expect(result.changeSet.deletes[0]!.name).toBe("removed-workflow");
-      expect(result.changeSet.deletes[0]!).toHaveProperty("deletableJobNames", []);
+      expect(result.jobFunctionDeletes).toEqual([]);
       expect(result.resourceOwners.has("other-app")).toBe(true);
     });
 
@@ -692,7 +694,7 @@ describe("planWorkflow", () => {
 
       expect(result.changeSet.deletes).toHaveLength(1);
       expect(result.changeSet.deletes[0]!.name).toBe("removed-workflow");
-      expect(result.changeSet.deletes[0]!).toHaveProperty("deletableJobNames", []);
+      expect(result.jobFunctionDeletes).toEqual([]);
     });
   });
 
@@ -1103,7 +1105,6 @@ describe("planWorkflow", () => {
                 workspaceId,
                 workflowId: "workflow-1",
                 usedJobNames: ["removed-job", "shared-job"],
-                deletableJobNames: ["removed-job"],
               },
             ],
             replaces: [],
@@ -1165,14 +1166,12 @@ describe("planWorkflow", () => {
                 workspaceId,
                 workflowId: "workflow-a",
                 usedJobNames: ["job-a"],
-                deletableJobNames: ["job-a"],
               },
               {
                 name: "removed-b",
                 workspaceId,
                 workflowId: "workflow-b",
                 usedJobNames: ["job-b"],
-                deletableJobNames: ["job-b"],
               },
             ],
             replaces: [],
@@ -1449,7 +1448,6 @@ describe("formatWorkflowChangeEntries", () => {
             workspaceId: "ws",
             workflowId: "workflow-1",
             usedJobNames: ["process-order", "send-notification"],
-            deletableJobNames: ["process-order", "send-notification"],
           },
         ],
         replaces: [],
@@ -1484,7 +1482,6 @@ describe("formatWorkflowChangeEntries", () => {
             workspaceId: "ws",
             workflowId: "workflow-1",
             usedJobNames: ["process-order"],
-            deletableJobNames: ["process-order"],
           },
         ],
         replaces: [],
@@ -1525,7 +1522,6 @@ describe("formatWorkflowChangeEntries", () => {
             workspaceId: "ws",
             workflowId: "workflow-1",
             usedJobNames: ["process-order"],
-            deletableJobNames: ["process-order"],
           },
         ],
         replaces: [],
