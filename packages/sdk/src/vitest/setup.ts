@@ -83,10 +83,7 @@ const restoreDateDefault =
   configuredDateDefault === "legacy"
     ? applyDateDefault(configuredDateDefault)
     : undefined;
-
-afterAll(() => {
-  restoreDateDefault?.();
-});
+afterAll(() => restoreDateDefault?.());
 
 // Load secrets from tailor.config.ts if config path is provided via env var
 beforeAll(async () => {

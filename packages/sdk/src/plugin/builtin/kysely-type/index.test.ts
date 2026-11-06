@@ -104,27 +104,19 @@ describe("KyselyTypePlugin integration tests", () => {
   });
 
   describe("option validation", () => {
-    test("rejects options that set neither distPath nor contentMapper", () => {
-      expect(() => kyselyTypePlugin({ temporal: true } as never)).toThrow(
-        "kyselyTypePlugin requires either distPath or contentMapper: true.",
-      );
-    });
-
-    test("rejects options that set both distPath and contentMapper", () => {
-      expect(() => kyselyTypePlugin({ distPath: "./db.ts", contentMapper: true } as never)).toThrow(
-        "kyselyTypePlugin accepts either distPath or contentMapper: true, not both.",
-      );
-    });
-
     test("rejects both options, neither option, and contentMapper: false at the type level", () => {
       // @ts-expect-error distPath and contentMapper are mutually exclusive
       expect(() => kyselyTypePlugin({ distPath: "./db.ts", contentMapper: true })).toThrow(
-        /not both/,
+        "kyselyTypePlugin accepts either distPath or contentMapper: true, not both.",
       );
       // @ts-expect-error one of distPath or contentMapper is required
-      expect(() => kyselyTypePlugin({ temporal: true })).toThrow(/requires either/);
+      expect(() => kyselyTypePlugin({ temporal: true })).toThrow(
+        "kyselyTypePlugin requires either distPath or contentMapper: true.",
+      );
       // @ts-expect-error contentMapper only accepts true
-      expect(() => kyselyTypePlugin({ contentMapper: false })).toThrow(/requires either/);
+      expect(() => kyselyTypePlugin({ contentMapper: false })).toThrow(
+        "kyselyTypePlugin requires either distPath or contentMapper: true.",
+      );
     });
 
     test("rejects an empty distPath, which would generate no types and enable no content mapper", () => {
