@@ -209,18 +209,31 @@ export function createMigrationHistoryId(): string {
 // ============================================================================
 
 /**
+ * Whether the platform refused to make a field required because records have no value for it.
+ * The platform marks that refusal, alone among its failed preconditions, with a
+ * PreconditionFailure detail.
+ * @param {unknown} error - Error to check
+ * @returns {boolean} True for that refusal
+ */
+export function isRequiredFieldNullValuesError(error: unknown): boolean {
+  return (
+    error instanceof ConnectError &&
+    error.code === Code.FailedPrecondition &&
+    error.details.some(
+      (detail) => "type" in detail && detail.type === "google.rpc.PreconditionFailure",
+    )
+  );
+}
+
+/**
  * Handle optional-to-required field change error with helpful message
  * @param {unknown} error - Error to handle
  * @param {string[]} messages - Additional messages to display
  */
 export function handleOptionalToRequiredError(error: unknown, messages: string[]): never {
-  if (
-    error instanceof ConnectError &&
-    error.code === Code.FailedPrecondition &&
-    error.message.includes("cannot be updated from non-required to required when records exist")
-  ) {
+  if (isRequiredFieldNullValuesError(error)) {
     logger.error(
-      "Schema change failed: Cannot change field from optional to required when records exist.",
+      "Schema change failed: Cannot change a field from optional to required while records have no value for it.",
     );
     logger.newline();
     for (const message of messages) {

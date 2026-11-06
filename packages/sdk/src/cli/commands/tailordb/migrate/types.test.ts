@@ -1,4 +1,6 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, expect, test } from "vitest";
+import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
 import {
   isValidMigrationNumber,
   formatMigrationNumber,
@@ -10,12 +12,14 @@ import {
   MIGRATE_FILE_NAME,
   DB_TYPES_FILE_NAME,
 } from "./snapshot";
+import { requiredFieldNullValuesError } from "./test-helpers/platform-errors";
 import {
   sanitizeMigrationLabel,
   parseMigrationLabelNumber,
   executionIdToLabel,
   parseExecutionLabel,
   MAX_LABEL_LENGTH,
+  handleOptionalToRequiredError,
 } from "./types";
 
 describe("migration constants", () => {
@@ -156,5 +160,42 @@ describe("execution labels", () => {
     expect(parseExecutionLabel("e1234")).toBeNull();
     expect(parseExecutionLabel(executionIdToLabel(executionId).slice(1))).toBeNull();
     expect(parseExecutionLabel("e0190F3A27C1E7D4B9A6F1B2C3D4E5F60")).toBeNull();
+  });
+});
+
+describe("handleOptionalToRequiredError", () => {
+  function thrownBy(handle: () => unknown): unknown {
+    try {
+      handle();
+    } catch (error) {
+      return error;
+    }
+    throw new Error("expected the handler to throw");
+  }
+
+  test("explains the refusal when records without a value block making a field required", () => {
+    using stderr = captureStderr();
+    const error = requiredFieldNullValuesError("note");
+
+    const thrown = thrownBy(() => handleOptionalToRequiredError(error, ["Fill in the records."]));
+
+    expect(thrown).toBe(error);
+    expect(stderr.output).toMatch(
+      /Cannot change a field from optional to required while records have no value for it/,
+    );
+    expect(stderr.output).toContain("Fill in the records.");
+  });
+
+  test("adds nothing to a failed precondition without the refusal's detail", () => {
+    using stderr = captureStderr();
+    const error = new ConnectError(
+      requiredFieldNullValuesError("note").rawMessage,
+      Code.FailedPrecondition,
+    );
+
+    const thrown = thrownBy(() => handleOptionalToRequiredError(error, ["Fill in the records."]));
+
+    expect(thrown).toBe(error);
+    expect(stderr.output).toBe("");
   });
 });
