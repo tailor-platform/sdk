@@ -71,7 +71,7 @@ async function kyselyTypesOf(
   const options = resolvePluginConfig(plugins, KyselyGeneratorID);
   if (options?.contentMapper !== true) return {};
   try {
-    const { namespaces } = await loadConfigNamespaces(config, plugins);
+    const { namespaces } = await loadConfigNamespaces(config, plugins, undefined, false);
     return { kyselyTypes: await generateKyselyTypesSource(namespaces, options.temporal ?? false) };
   } catch (error) {
     return { kyselyError: errorSummary(error) };

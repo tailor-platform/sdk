@@ -181,6 +181,7 @@ function defineTailorDB(
   baseDir: string,
   dateDefault: EffectiveDateDefault,
   pluginManager?: PluginManager,
+  precompileScripts?: boolean,
 ): DefineTailorDBResult {
   const tailorDBServices: TailorDBService[] = [];
   const externalTailorDBNamespaces: string[] = [];
@@ -207,6 +208,7 @@ function defineTailorDB(
         pluginManager,
         baseDir,
         dateDefault,
+        precompileScripts,
       });
       tailorDBServices.push(tailorDB);
     }
@@ -514,6 +516,7 @@ function defineServices(
   config: LoadedConfig,
   baseDir: string,
   pluginManager?: PluginManager,
+  precompileTailorDBScripts?: boolean,
 ): DefineServicesResult {
   const tailordbResult = defineTailorDB(
     config.db,
@@ -521,6 +524,7 @@ function defineServices(
     baseDir,
     effectiveDateDefault(config),
     pluginManager,
+    precompileTailorDBScripts,
   );
   const resolverResult = defineResolver(
     config.resolver,
@@ -608,6 +612,8 @@ export interface DefineApplicationParams {
   pluginManager?: PluginManager;
   /** Optional bundle cache for skipping unchanged builds */
   bundleCache?: BundleCache;
+  /** Bundle each TailorDB table's hook and validator scripts while loading. Defaults to `true`; turn it off when only the table definitions are read. */
+  precompileTailorDBScripts?: boolean;
 }
 
 /**
@@ -650,9 +656,9 @@ export interface LoadApplicationParams extends DefineApplicationParams {
  * @returns Configured application instance
  */
 export function defineApplication(params: DefineApplicationParams): Application {
-  const { config, pluginManager } = params;
+  const { config, pluginManager, precompileTailorDBScripts } = params;
   const baseDir = path.dirname(config.path);
-  const services = defineServices(config, baseDir, pluginManager);
+  const services = defineServices(config, baseDir, pluginManager, precompileTailorDBScripts);
   // Plugin executors are not known at define-time; generate/apply flows handle them after table loading.
   const executorService = defineExecutor(config.executor, baseDir, false);
   const workflowService = defineWorkflow(config.workflow, baseDir);
@@ -729,6 +735,7 @@ export async function loadApplication(
     workspaceId,
     expectedLocalStaticWebsiteNames,
     previous,
+    precompileTailorDBScripts,
   } = params;
   const baseDir = path.dirname(config.path);
 
@@ -754,7 +761,7 @@ export async function loadApplication(
     aiGatewayServices,
     secrets,
     ignoreNullishValues,
-  } = defineServices(config, baseDir, pluginManager);
+  } = defineServices(config, baseDir, pluginManager, precompileTailorDBScripts);
 
   // 2. Resolve `name:url` static website placeholders in `env` once, before any
   // bundling or expression generation embeds it into resolver, executor,
