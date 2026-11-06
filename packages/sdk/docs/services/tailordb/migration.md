@@ -670,7 +670,7 @@ The command performs the following sequence:
 6. Optionally runs an assertion script against the migrated data.
 7. Deletes an automatically-created workspace after success or failure.
 
-Right after creating an automatically-created workspace (step 2), the command records a 24-hour expiry on it. If the run is interrupted before step 7 — for example, a CI job is cancelled or reaches its time limit — the command cannot delete the workspace, so it stays. Once the 24 hours have passed, `tailor workspace prune --expired` (with a location option such as `--organization-root`, `--folder-id`, or `--personal`) deletes it. A workspace given with `--target-workspace-id` is not given an expiry. If recording the expiry fails, the command warns and continues the test.
+Right after creating an automatically-created workspace (step 2), the command records a 24-hour expiry on it. If the run is interrupted before step 7 — for example, a CI job is cancelled or reaches its time limit — the command cannot delete the workspace, so it stays. Once the 24 hours have passed, `tailor workspace prune --expired` (with a location option such as `--organization-root` or `--folder-id`) deletes it. A workspace given with `--target-workspace-id` is not given an expiry. If recording the expiry fails, the command warns and continues the test.
 
 Both the pre-migration and final TailorDB schemas come from committed migration snapshots. Ungenerated changes in the current table definitions are not included in the rehearsal.
 
