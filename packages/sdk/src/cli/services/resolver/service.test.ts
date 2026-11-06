@@ -77,6 +77,9 @@ export default resolver;
       ),
       context: { kind: "resolver", file, exportName: "default", issues: [{ path: ["operation"] }] },
     });
+    expect(vi.mocked(logger.error).mock.calls).toEqual([
+      [expect.stringMatching(/Failed to load resolver from .*invalid\.ts/)],
+    ]);
   });
 
   test("rejects two files in the same namespace declaring the same resolver name", async () => {

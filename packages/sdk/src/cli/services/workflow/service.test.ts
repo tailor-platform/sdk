@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import { createWorkflowService } from "./service";
@@ -125,5 +126,8 @@ ${source}`,
       ...expected,
       context: { ...expected.context, file: workflowFile },
     });
+    expect(vi.mocked(logger.error).mock.calls).toEqual([
+      [expect.stringMatching(/Failed to load workflow from.*workflow\.mjs/)],
+    ]);
   });
 });

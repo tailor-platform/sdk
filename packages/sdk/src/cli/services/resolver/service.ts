@@ -70,7 +70,6 @@ export function createResolverService(
     } catch (error) {
       const relativePath = path.relative(process.cwd(), resolverFile);
       logger.error(`Failed to load resolver from ${styles.bold(relativePath)}`);
-      logger.error(String(error));
       throw error;
     }
     return undefined;

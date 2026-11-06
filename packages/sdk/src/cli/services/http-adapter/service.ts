@@ -152,7 +152,6 @@ async function loadAdapterFromFile(filePath: string): Promise<LoadedHttpAdapter 
     logger.error(
       `${styles.error("Failed to load HTTP adapter from")} ${styles.errorBright(relativePath)}`,
     );
-    logger.error(String(error));
     throw error;
   }
 }

@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { aroundEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { createHttpAdapterService } from "./service";
 
@@ -171,6 +172,9 @@ export default adapter;
         issues: [{ path: ["pathPattern"] }],
       },
     });
+    expect(vi.mocked(logger.error).mock.calls).toEqual([
+      [expect.stringMatching(/Failed to load HTTP adapter from.*invalid\.ts/)],
+    ]);
   });
 
   test("reports an adapter name the platform rejects", async () => {
