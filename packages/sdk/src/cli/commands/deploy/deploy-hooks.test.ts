@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   fetchMissingDependentApps: vi.fn(),
   planTailorDB: vi.fn(),
   dropCrossDeploymentManagedDeletes: vi.fn(),
+  scheduleRenamedAppDeletes: vi.fn(),
   assertAuthServicesNotInUse: vi.fn(),
 }));
 vi.mock(import("./deployment-target"), async (original) => ({
@@ -62,7 +63,12 @@ vi.mock(import("./managed-resources"), async (original) => {
   mocks.dropCrossDeploymentManagedDeletes.mockImplementation(
     actual.dropCrossDeploymentManagedDeletes,
   );
-  return { ...actual, dropCrossDeploymentManagedDeletes: mocks.dropCrossDeploymentManagedDeletes };
+  mocks.scheduleRenamedAppDeletes.mockImplementation(actual.scheduleRenamedAppDeletes);
+  return {
+    ...actual,
+    dropCrossDeploymentManagedDeletes: mocks.dropCrossDeploymentManagedDeletes,
+    scheduleRenamedAppDeletes: mocks.scheduleRenamedAppDeletes,
+  };
 });
 vi.mock(import("./auth-service-in-use"), async (original) => ({
   ...(await original()),
@@ -175,14 +181,15 @@ test("runs a hook once after remaining resources are applied even when the plan 
     }),
   );
 });
-test("checks Auth services in use after dropping the deletes another config still claims", async () => {
+test("checks Auth services in use after the plan drops claimed deletes and schedules renamed applications' deletes", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
   await deploy({ dryRun: true, noValidate: true });
   expect(mocks.assertAuthServicesNotInUse).toHaveBeenCalledExactlyOnceWith(expect.any(Array));
-  expect(mocks.dropCrossDeploymentManagedDeletes).toHaveBeenCalledOnce();
-  expect(mocks.dropCrossDeploymentManagedDeletes.mock.invocationCallOrder[0]).toBeLessThan(
-    mocks.assertAuthServicesNotInUse.mock.invocationCallOrder[0]!,
-  );
+  const [checked] = mocks.assertAuthServicesNotInUse.mock.invocationCallOrder;
+  const [dropped] = mocks.dropCrossDeploymentManagedDeletes.mock.invocationCallOrder;
+  const [scheduledBefore] = mocks.scheduleRenamedAppDeletes.mock.invocationCallOrder;
+  expect(dropped).toBeLessThan(checked!);
+  expect(scheduledBefore).toBeLessThan(checked!);
 });
 test("lists the pending hook during dry-run without executing it", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");

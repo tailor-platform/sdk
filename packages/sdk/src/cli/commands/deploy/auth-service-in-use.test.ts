@@ -24,6 +24,12 @@ function referencingExternally(authNamespace: string): ApplicationShape {
   return { name: "portal", config: { auth: { name: authNamespace, external: true } } };
 }
 
+function plannedApplication(name: string) {
+  const results = emptyPlanResults();
+  results.app.unchanged.push({ name } as never);
+  return results;
+}
+
 function withWorkspaceApplications(
   results: PlanResults,
   applications: Array<{ name: string; authNamespace: string }>,
@@ -51,7 +57,7 @@ describe("assertAuthServicesNotInUse", () => {
     expect(() =>
       assertAuthServicesNotInUse([
         deployment({ name: "core" }, ownerDeleting("shared-auth")),
-        deployment(referencingExternally("shared-auth"), emptyPlanResults()),
+        deployment(referencingExternally("shared-auth"), plannedApplication("portal")),
       ]),
     ).toThrow(
       expect.objectContaining({
@@ -66,13 +72,27 @@ describe("assertAuthServicesNotInUse", () => {
       { name: "core", authNamespace: "shared-auth" },
       { name: "portal", authNamespace: "shared-auth" },
     ]);
+    owner.app.updates.push({ name: "core" } as never);
+
+    expect(() =>
+      assertAuthServicesNotInUse([
+        deployment({ name: "core" }, owner),
+        deployment({ name: "portal" }, plannedApplication("portal")),
+      ]),
+    ).not.toThrow();
+  });
+
+  test("rejects an application of the run whose gateway the plan does not rewrite", () => {
+    const owner = withWorkspaceApplications(ownerDeleting("shared-auth"), [
+      { name: "portal", authNamespace: "shared-auth" },
+    ]);
 
     expect(() =>
       assertAuthServicesNotInUse([
         deployment({ name: "core" }, owner),
         deployment({ name: "portal" }, emptyPlanResults()),
       ]),
-    ).not.toThrow();
+    ).toThrow(expect.objectContaining({ code: "AUTH_SERVICE_IN_USE" }));
   });
 
   test("accepts an application that the run deletes", () => {
@@ -99,7 +119,7 @@ describe("assertAuthServicesNotInUse", () => {
     const deployments = [
       deployment({ name: "previous" }, previousOwner),
       deployment({ name: "next" }, nextOwner),
-      deployment(referencingExternally("shared-auth"), emptyPlanResults()),
+      deployment(referencingExternally("shared-auth"), plannedApplication("portal")),
     ];
 
     dropCrossDeploymentManagedDeletes(deployments);

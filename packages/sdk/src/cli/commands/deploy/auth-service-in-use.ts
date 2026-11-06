@@ -8,29 +8,37 @@ function applicationsUsing(
   deployments: ReadonlyArray<PlannedDeployment>,
   deletedNamespaces: ReadonlySet<string>,
 ): ApplicationUse[] {
-  const namesInRun = new Set(deployments.map(({ application }) => application.name));
+  const written = new Set(
+    deployments.flatMap(({ app }) =>
+      [...app.creates, ...app.updates, ...app.unchanged].map((entry) => entry.name),
+    ),
+  );
   const deletedNames = new Set(
     deployments.flatMap(({ app }) => app.deletes.map((entry) => entry.name)),
   );
-  const usesInRun = deployments.flatMap(({ application }) => {
+  const writtenUses = deployments.flatMap(({ application }) => {
     const authNamespace = getApplicationAuthNamespace(application);
-    return authNamespace ? [{ applicationName: application.name, authNamespace }] : [];
+    return written.has(application.name) && authNamespace
+      ? [{ applicationName: application.name, authNamespace }]
+      : [];
   });
-  const usesOutsideRun = deployments
+  const recordedUses = deployments
     .flatMap(({ app }) => app.existingApplications)
-    .filter((existing) => !namesInRun.has(existing.name) && !deletedNames.has(existing.name))
+    .filter((existing) => !written.has(existing.name) && !deletedNames.has(existing.name))
     .map((existing) => ({
       applicationName: existing.name,
       authNamespace: existing.authNamespace,
     }));
-  return [...usesInRun, ...usesOutsideRun].filter((use) =>
+  return [...writtenUses, ...recordedUses].filter((use) =>
     deletedNamespaces.has(use.authNamespace),
   );
 }
 
 /**
  * Reject a deploy run that deletes an Auth service an application still uses.
- * Call it after deletes that another config in the run still claims are dropped.
+ * An application the plan writes counts by the Auth service its config names, any other by the one
+ * the workspace records. Call it after deletes that another config in the run still claims are
+ * dropped and deletes of renamed applications are scheduled.
  * @param deployments - Planned deployments of this run
  */
 export function assertAuthServicesNotInUse(deployments: ReadonlyArray<PlannedDeployment>): void {
