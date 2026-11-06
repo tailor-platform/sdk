@@ -1,5 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import pLimit from "p-limit";
+import { CLIError } from "#/cli/shared/errors";
 import { formatTimestamp } from "#/cli/shared/format";
 import { logger, type FieldTransformer } from "#/cli/shared/logger";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -9,7 +10,7 @@ export interface WorkspaceInfo {
   id: string;
   name: string;
   folderName?: string;
-  organizationId?: string;
+  organizationId: string;
   folderId?: string;
   region: string;
   createdAt: Date | null;
@@ -18,16 +19,21 @@ export interface WorkspaceInfo {
 
 export interface WorkspaceDetails extends WorkspaceInfo {
   deleteProtection: boolean;
-  organizationId: string;
   folderId: string;
 }
 
 export const workspaceInfo = (workspace: Workspace, folderName?: string): WorkspaceInfo => {
+  if (!workspace.organizationId) {
+    throw CLIError({
+      code: "WORKSPACE_ORGANIZATION_MISSING",
+      message: `Workspace ${workspace.id} has no organization.`,
+    });
+  }
   const info = {
     id: workspace.id,
     name: workspace.name,
     region: workspace.region,
-    ...(workspace.organizationId ? { organizationId: workspace.organizationId } : {}),
+    organizationId: workspace.organizationId,
     ...(workspace.folderId ? { folderId: workspace.folderId } : {}),
     createdAt: formatTimestamp(workspace.createTime),
     updatedAt: formatTimestamp(workspace.updateTime),

@@ -30,7 +30,7 @@ describe("getWorkspace", () => {
   ): Awaited<ReturnType<typeof initOperatorClient>> {
     const client = {
       getWorkspace: vi.fn().mockResolvedValue({
-        workspace: { id: workspaceId, name: "ws", region: "us-west" },
+        workspace: { id: workspaceId, name: "ws", region: "us-west", organizationId: "org-1" },
       }),
       getMetadata,
     };
