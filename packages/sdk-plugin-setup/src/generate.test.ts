@@ -1882,6 +1882,7 @@ describe("Tailor Platform action pins", () => {
     expect(new Set(shared.map(([action]) => action))).toEqual(
       new Set([
         "actions/checkout",
+        "actions/setup-node",
         "actions/upload-artifact",
         "tailor-platform/actions/setup",
         "tailor-platform/actions/install",

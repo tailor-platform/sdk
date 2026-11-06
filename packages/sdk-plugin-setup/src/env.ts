@@ -5,6 +5,7 @@ import { detectRepository, type GitRunner, type Repository } from "./git";
 import {
   AUTOFIX_LABEL,
   type JobEnvironment,
+  type LockAutofix,
   type LockFile,
   planEnvironmentCollisions,
   readManagedLock,
@@ -252,13 +253,68 @@ const AUTOFIX_REQUIREMENTS: Record<AutofixProvider, EnvRequirement[]> = {
   "github-app": [AUTOFIX_APP_CLIENT_ID, AUTOFIX_APP_PRIVATE_KEY],
 };
 
+const apiKeyRequirement = (name: string, agent: string, howTo: string): EnvRequirement => ({
+  name,
+  type: "secret",
+  required: true,
+  description:
+    `API key the ${agent} agent of the autofix workflow uses to finish what the codemods of an ` +
+    "SDK upgrade leave for review",
+  howTo,
+});
+
+const ANTHROPIC_API_KEY = apiKeyRequirement(
+  "TAILOR_AUTOFIX_ANTHROPIC_API_KEY",
+  "claude",
+  "create an API key in the Claude Console (https://console.anthropic.com/settings/keys)",
+);
+const OPENAI_API_KEY = apiKeyRequirement(
+  "TAILOR_AUTOFIX_OPENAI_API_KEY",
+  "codex",
+  "create an API key on the OpenAI platform (https://platform.openai.com/api-keys)",
+);
+
+const COPILOT_TOKEN: EnvRequirement = {
+  name: "TAILOR_AUTOFIX_COPILOT_TOKEN",
+  type: "secret",
+  required: true,
+  description:
+    "Fine-grained personal access token the copilot agent of the autofix workflow signs in " +
+    "with to finish what the codemods of an SDK upgrade leave for review",
+  howTo:
+    "create a fine-grained personal access token with the Copilot Requests permission " +
+    "(https://github.com/settings/personal-access-tokens/new), owned by an account with Copilot",
+};
+
 /**
- * Repository secrets and variables the autofix workflow of the given provider reads.
- * @param provider - Autofix provider
+ * Repository secrets the agent of a codemod mode signs in with.
+ * @param inputs - The codemod mode and, for copilot, its authentication
+ * @returns Requirements in display order; none for a mode without an agent
+ */
+export function agentRequirements(
+  inputs: Pick<LockAutofix["inputs"], "codemod" | "copilotAuth">,
+): EnvRequirement[] {
+  switch (inputs.codemod) {
+    case "claude":
+      return [ANTHROPIC_API_KEY];
+    case "codex":
+      return [OPENAI_API_KEY];
+    case "copilot":
+      return inputs.copilotAuth === "github-token" ? [] : [COPILOT_TOKEN];
+    default:
+      return [];
+  }
+}
+
+/**
+ * Repository secrets and variables the autofix workflow reads for its provider and codemod mode.
+ * @param inputs - The autofix workflow's inputs, as the lock records them
  * @returns Requirements in display order
  */
-export function autofixRequirements(provider: AutofixProvider): EnvRequirement[] {
-  return AUTOFIX_REQUIREMENTS[provider];
+export function autofixRequirements(
+  inputs: Pick<LockAutofix["inputs"], "provider" | "codemod" | "copilotAuth">,
+): EnvRequirement[] {
+  return [...AUTOFIX_REQUIREMENTS[inputs.provider], ...agentRequirements(inputs)];
 }
 
 /**
@@ -320,7 +376,7 @@ export function collectEnvironmentRequirements(lock: LockFile): EnvironmentRequi
   for (const entry of byEnvironment.values()) {
     entry.requirements.sort((a, b) => Number(b.required) - Number(a.required));
   }
-  const repository = lock.autofix ? autofixRequirements(lock.autofix.inputs.provider) : [];
+  const repository = lock.autofix ? autofixRequirements(lock.autofix.inputs) : [];
   return [
     ...byEnvironment.values(),
     ...(repository.length > 0

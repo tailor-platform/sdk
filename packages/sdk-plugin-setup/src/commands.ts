@@ -16,6 +16,7 @@ import { setupRenovate } from "./renovate";
 import {
   AUTOFIX_CODEMODS,
   AUTOFIX_PROVIDERS,
+  COPILOT_AUTHS,
   PACKAGE_MANAGERS,
   PREVIEW_REQUIREMENTS,
 } from "./templates";
@@ -290,7 +291,11 @@ const autofixCommand = defineAppCommand({
     }),
     codemod: arg(z.enum(AUTOFIX_CODEMODS).optional(), {
       description:
-        "What to do when a pull request upgrades @tailor-platform/sdk: `warn` (annotate what the upgrade's codemods would change), `error` (fail the check on it), or `deterministic` (commit what the codemods rewrite and warn about what they leave for review). Without it, the workflow runs no codemod",
+        "What to do when a pull request upgrades @tailor-platform/sdk: `warn` (annotate what the upgrade's codemods would change), `error` (fail the check on it), `deterministic` (commit what the codemods rewrite and warn about what they leave for review), or `copilot`, `claude`, or `codex` (as `deterministic`, then have that AI coding agent finish what the codemods leave for review). Without it, the workflow runs no codemod",
+    }),
+    "copilot-auth": arg(z.enum(COPILOT_AUTHS).optional(), {
+      description:
+        "How the `copilot` agent authenticates (only with --codemod copilot): `pat` (default; a fine-grained personal access token with the Copilot Requests permission, in the TAILOR_AUTOFIX_COPILOT_TOKEN repository secret) or `github-token` (the workflow token, which needs Copilot CLI billed to the organization)",
     }),
     dir: arg(z.array(z.string().min(1)).default(["."]), {
       alias: "d",
@@ -309,6 +314,7 @@ const autofixCommand = defineAppCommand({
       provider: args.provider,
       securefixServerRepository: args["securefix-server-repository"],
       codemod: args.codemod,
+      copilotAuth: args["copilot-auth"],
       dir: args.dir,
       packageManager: args["package-manager"],
       force: args.force,
