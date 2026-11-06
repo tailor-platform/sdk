@@ -9,7 +9,7 @@ import tagTemplate from "./tag.workflow.yml";
 // only adds renders to renderedTemplates() re-records the fingerprint while the flag stays false.
 // Released template fingerprint: d8f4f024ae99b9eb3fad413180fa3489edc697298cbd8d3f2172354422ddd326
 const RELEASED_TEMPLATE_VERSION = 24;
-const TEMPLATE_CHANGED_SINCE_RELEASE = false;
+const TEMPLATE_CHANGED_SINCE_RELEASE = true;
 export const ACTIONS_SHA = "77effc033b3cb5fa7660b38571fbeb8361d121e8";
 export const ACTIONS_VERSION = "v2.8.0";
 
@@ -765,6 +765,7 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
       : []),
     ...(requireReady ? ["!github.event.pull_request.draft"] : []),
     "!github.event.pull_request.head.repo.fork",
+    "github.event.pull_request.state == 'open'",
   ];
   const deployIf = `if: |-\n  ${deployConditions.join(" &&\n  ")}`;
   const patterns = changePatterns({
