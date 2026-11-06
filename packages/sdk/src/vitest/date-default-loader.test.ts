@@ -61,7 +61,7 @@ describe("kyselyTemporalFromConfig", () => {
 // The loader runs in the Vitest host, where `import()` is Node's own. Inside a
 // worker vite-node intercepts it, so these cases run the loader in a child
 // Node process to exercise the TypeScript hook and Node's real errors.
-describe("loadDateDefaultFromConfig", { timeout: 60_000 }, () => {
+describe("loadConfigDefaultsFromConfig: date default", { timeout: 60_000 }, () => {
   const here = dirname(fileURLToPath(import.meta.url));
   const loaderPath = resolve(here, "date-default-loader.ts");
   let tmpDir: string;
@@ -77,11 +77,11 @@ describe("loadDateDefaultFromConfig", { timeout: 60_000 }, () => {
   const run = (configPath: string): Outcome =>
     runWithTsHook(
       `
-      const { loadDateDefaultFromConfig } = await import(${JSON.stringify(pathToFileURL(loaderPath).href)});
+      const { loadConfigDefaultsFromConfig } = await import(${JSON.stringify(pathToFileURL(loaderPath).href)});
       const warnings = [];
       console.warn = (...args) => warnings.push(args.join(" "));
       try {
-        const value = await loadDateDefaultFromConfig(${JSON.stringify(configPath)});
+        const { dateDefault: value } = await loadConfigDefaultsFromConfig(${JSON.stringify(configPath)});
         console.log(JSON.stringify({ value, warnings }));
       } catch (error) {
         console.log(JSON.stringify({ error: error instanceof Error ? error.message : String(error), warnings }));
@@ -161,7 +161,7 @@ describe("loadDateDefaultFromConfig", { timeout: 60_000 }, () => {
   });
 });
 
-describe("loadKyselyTemporalFromConfig", { timeout: 60_000 }, () => {
+describe("loadConfigDefaultsFromConfig: kysely temporal", { timeout: 60_000 }, () => {
   const here = dirname(fileURLToPath(import.meta.url));
   const loaderPath = resolve(here, "date-default-loader.ts");
   let tmpDir: string;
@@ -179,8 +179,8 @@ describe("loadKyselyTemporalFromConfig", { timeout: 60_000 }, () => {
     return (
       runWithTsHook(
         `
-        const { loadKyselyTemporalFromConfig } = await import(${JSON.stringify(pathToFileURL(loaderPath).href)});
-        console.log(JSON.stringify({ value: await loadKyselyTemporalFromConfig(${JSON.stringify(configPath)}) }));
+        const { loadConfigDefaultsFromConfig } = await import(${JSON.stringify(pathToFileURL(loaderPath).href)});
+        console.log(JSON.stringify({ value: (await loadConfigDefaultsFromConfig(${JSON.stringify(configPath)})).kyselyTemporal }));
         `,
         here,
       ) as { value: boolean }
@@ -199,7 +199,7 @@ describe("loadKyselyTemporalFromConfig", { timeout: 60_000 }, () => {
     expect(run(`export default { name: "app" };\n`)).toBe(false);
   });
 
-  test("is false for a config that throws while loading, which the date default loader reports", () => {
+  test("is false for a config that throws while loading", () => {
     expect(run(`throw new Error("boom");\n`)).toBe(false);
   });
 });

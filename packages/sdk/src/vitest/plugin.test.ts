@@ -53,7 +53,7 @@ function applyConfig(plugin: ReturnType<typeof createEnvironmentPlugin>, userCon
 }
 
 // The real loader imports the file; these tests only exercise the wiring.
-const legacyLoader = async () => "legacy" as const;
+const legacyLoader = async () => ({ dateDefault: "legacy" as const, kyselyTemporal: false });
 
 describe("createBlockPlugin", () => {
   test("replaces a blocked import with a throwing statement", () => {
@@ -785,10 +785,10 @@ describe("createEnvironmentPlugin", () => {
   });
 
   test("passes the date default the host read from the config to the root test env", async () => {
-    const plugin = createEnvironmentPlugin(
-      { config: "./tailor.config.ts" },
-      async () => "temporal",
-    );
+    const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" }, async () => ({
+      dateDefault: "temporal",
+      kyselyTemporal: false,
+    }));
     const userConfig: any = { root: "/proj", test: { environment: "tailor-runtime" } };
     await applyConfig(plugin, userConfig);
 
@@ -799,7 +799,10 @@ describe("createEnvironmentPlugin", () => {
     const seen: string[] = [];
     const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" }, async (path) => {
       seen.push(path);
-      return path.includes("/temporal/") ? "temporal" : "legacy";
+      return {
+        dateDefault: path.includes("/temporal/") ? "temporal" : "legacy",
+        kyselyTemporal: false,
+      };
     });
     const userConfig: any = {
       root: "/proj",
@@ -825,11 +828,10 @@ describe("createEnvironmentPlugin", () => {
   });
 
   test("passes the kysely temporal the host read from the config to the root test env", async () => {
-    const plugin = createEnvironmentPlugin(
-      { config: "./tailor.config.ts" },
-      async () => "legacy",
-      async () => true,
-    );
+    const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" }, async () => ({
+      dateDefault: "legacy",
+      kyselyTemporal: true,
+    }));
     const userConfig: any = { root: "/proj", test: { environment: "tailor-runtime" } };
     await applyConfig(plugin, userConfig);
 
@@ -837,11 +839,10 @@ describe("createEnvironmentPlugin", () => {
   });
 
   test("seeds each project's own kysely temporal and blanks it on projects that select another environment", async () => {
-    const plugin = createEnvironmentPlugin(
-      { config: "./tailor.config.ts" },
-      async () => "legacy",
-      async (path) => path.includes("/temporal/"),
-    );
+    const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" }, async (path) => ({
+      dateDefault: "legacy",
+      kyselyTemporal: path.includes("/temporal/"),
+    }));
     const userConfig: any = {
       root: "/proj",
       test: {
