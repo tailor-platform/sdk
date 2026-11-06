@@ -5,17 +5,27 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 // Registered programmatically so the CLI can import user .ts files without
 // requiring --experimental-strip-types at process startup.
 import { transformSync } from "amaro";
+import { parseJSON5 } from "confbox/json5";
 
-const TS_EXTENSIONS = [".ts", ".mts"];
-const JS_TO_TS = new Map([
+export const TS_EXTENSIONS = [".ts", ".mts"];
+export const JS_TO_TS = new Map([
   [".js", ".ts"],
   [".mjs", ".mts"],
 ]);
-const KNOWN_EXTENSIONS = [".ts", ".tsx", ".mts", ".js", ".mjs", ".json"];
+export const KNOWN_EXTENSIONS = [".ts", ".tsx", ".mts", ".js", ".mjs", ".json"];
 
 // --- tsconfig paths resolution ---
 
 const tsconfigPathsCache = new Map();
+
+function parseTsconfig(text) {
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+    return parseJSON5(text);
+  }
+}
 
 // Walks the `extends` chain and returns the nearest-defined `baseUrl` (which
 // may come from a different config than the one defining `paths`), the
@@ -42,7 +52,7 @@ function resolveEffectiveConfig(configFilePath, content, visited) {
     const base = resolvePath(baseDir, extendsField);
     const extendsPath = base.endsWith(".json") ? base : base + ".json";
     try {
-      const sub = JSON.parse(readFileSync(extendsPath, { encoding: "utf-8" }));
+      const sub = parseTsconfig(readFileSync(extendsPath, { encoding: "utf-8" }));
       inherited = resolveEffectiveConfig(extendsPath, sub, visited);
     } catch (e) {
       if (e?.code !== "ENOENT" && !(e instanceof SyntaxError)) throw e;
@@ -91,7 +101,7 @@ function loadTsconfigPaths(startDir, cacheGeneration) {
   while (dir !== prev) {
     try {
       const configFilePath = join(dir, "tsconfig.json");
-      const content = JSON.parse(readFileSync(configFilePath, { encoding: "utf-8" }));
+      const content = parseTsconfig(readFileSync(configFilePath, { encoding: "utf-8" }));
       collectPathsInto(paths, configFilePath, content, new Set());
       break;
     } catch (e) {

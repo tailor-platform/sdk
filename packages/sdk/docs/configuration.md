@@ -1,5 +1,5 @@
 ---
-description: "Configure your application in tailor.config.ts, including application settings, services, bundling, auth, static websites, secrets, environment variables, workflows, and plugins."
+description: "Configure your application in tailor.config.ts, including application settings, services, bundling, auth, static websites, secrets, environment variables, workflows, plugins, and type definitions."
 ---
 
 # Configuration
@@ -126,6 +126,26 @@ export default defineConfig({
   maintenanceMode: "migration",
 });
 ```
+
+### Type Definitions Without `tailor generate`
+
+`tailor generate` and `tailor deploy` write `tailor.d.ts`, which declares the names and values your config defines (`Env`, `Attributes`, `MachineUserName`, `IdpName`, and so on) so your code is checked and autocompleted against them. With TypeScript 7.1 or later, TypeScript can read them from `tailor.config.ts` itself, so they are current without running either command.
+
+Add the SDK as a content mapper for `.tailor` files in `tsconfig.json`:
+
+```json
+{
+  "contentMappers": [{ "package": "@tailor-platform/sdk", "extensions": [".tailor"] }]
+}
+```
+
+Run `tsc` with `--runExternalCode`. TypeScript then runs your `tailor.config.ts` and the files it imports each time it checks the project, the same code `tailor generate` loads; without the flag it reports error TS18068 instead. Enable it only for projects whose code you trust. You do not create or import any `.tailor` file; the SDK ships the one TypeScript reads.
+
+Once `tsconfig.json` enables the mapper, `tailor generate` and `tailor deploy` stop writing `tailor.d.ts`, and warn when an old copy remains. They check only that `tsconfig.json` lists the mapper, not that TypeScript runs it, and TypeScript 6.0 and earlier ignore `contentMappers`: with them the names are no longer declared, so `MachineUserName` is any string and a misspelled machine user raises no error. Use TypeScript 7.1 or later wherever the mapper is enabled. Delete the old copy: while the file remains, TypeScript merges it with what it reads from `tailor.config.ts`, so a name you removed from the config (a machine user you deleted, for example) is still accepted.
+
+Every TypeScript project that uses these names must enable the mapper. A project in the same repository that keeps reading `tailor.d.ts` without the mapper is not supported: the commands no longer update the file, so it goes stale.
+
+The commands read the `tsconfig.json` that applies to `tailor.config.ts`: the nearest one that includes the file, following `extends`, so a base config shared by a monorepo's packages works. When a `tsconfig.json` only lists `references`, they use the referenced project that includes `tailor.config.ts`, so put `contentMappers` in that project's tsconfig. The mapper looks for `tailor.config.ts` upward from the directory of that tsconfig, so the commands stop writing `tailor.d.ts` only when that search finds this very file: a tsconfig at a monorepo's root that merely includes `packages/app/tailor.config.ts`, or a config with another name passed to `--config`, does not count, and they keep writing `tailor.d.ts` (put the tsconfig that enables the mapper in the package, next to its config). If you set `TAILOR_DTS_PATH`, they write the file there regardless.
 
 ### Service Configuration
 
