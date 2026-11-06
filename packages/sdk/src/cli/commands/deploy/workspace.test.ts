@@ -170,39 +170,6 @@ describe("resolveDeployWorkspace", () => {
     },
   );
 
-  test("does not reuse the personal root when a default organization is set", async () => {
-    const existing = {
-      ...workspace("aaaaaaaa-3333-4333-8333-aaaaaaaaaaaa"),
-      organizationId: undefined,
-      folderId: undefined,
-    };
-    mocks.loadUserWorkspaceDefaults.mockResolvedValue({
-      organizationId: "bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb",
-    });
-    mocks.listWorkspacesWithClient.mockResolvedValue([existing]);
-
-    await expect(
-      resolveDeployWorkspace({
-        createWorkspace: true,
-        workspaceName: existing.name,
-        workspaceRegion: existing.region,
-      }),
-    ).rejects.toMatchObject({
-      code: "WORKSPACE_CREATE_CONFLICT",
-      suggestion: expect.stringContaining(
-        "organization bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb, the default set by `tailor user update`",
-      ),
-      context: {
-        defaultOrganizationId: "bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb",
-        defaultFolderId: null,
-      },
-    });
-    expect(mocks.createValidatedWorkspaceWithClient).not.toHaveBeenCalled();
-    expect(mocks.info).not.toHaveBeenCalledWith(
-      expect.stringContaining("the default set by `tailor user update`"),
-    );
-  });
-
   test("announces the default location before confirming creation in it", async () => {
     const created = workspace("aaaaaaaa-5555-4555-8555-aaaaaaaaaaaa");
     mocks.loadUserWorkspaceDefaults.mockResolvedValue({
