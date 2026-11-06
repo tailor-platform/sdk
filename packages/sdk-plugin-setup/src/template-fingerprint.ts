@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import * as fs from "node:fs";
+import * as path from "pathe";
 import {
   AUTOFIX_PROVIDERS,
   PACKAGE_MANAGERS,
@@ -26,14 +28,15 @@ export const RENDERED_ENVIRONMENT = "production";
 
 const COMMON = { workspaceName: "my-app", environment: RENDERED_ENVIRONMENT } as const;
 
+/** What the fingerprint hashes of a render. */
+export type FingerprintedRender = Pick<RenderedTemplate, "name" | "content" | "generatedIds">;
+
 /**
  * Fingerprint a set of rendered templates.
  * @param templates - Rendered workflows with their managed ids
  * @returns A hex SHA-256 over every template's name, content, and managed ids
  */
-export function fingerprintOf(
-  templates: readonly Pick<RenderedTemplate, "name" | "content" | "generatedIds">[],
-): string {
+export function fingerprintOf(templates: readonly FingerprintedRender[]): string {
   const hashed = templates.map(({ name, content, generatedIds }) => ({
     name,
     content,
@@ -273,6 +276,34 @@ export function renderedTemplates(): RenderedTemplate[] {
     );
   }
   return out;
+}
+
+/**
+ * Write the renders the fingerprint hashes, so `diff -r` between two dumps shows what changed it:
+ * `<name>.yml` and `<name>.ids` for each render, and `renders.txt` listing them in order.
+ * @param dir - Absolute directory that is missing or empty
+ * @param templates - Renders to write
+ */
+export function writeRenderedTemplates(
+  dir: string,
+  templates: readonly FingerprintedRender[],
+): void {
+  if (!path.isAbsolute(dir)) {
+    throw new Error(
+      `Pass an absolute directory to dump the rendered templates into, not "${dir}".`,
+    );
+  }
+  if (fs.existsSync(dir) && fs.readdirSync(dir).length > 0) {
+    throw new Error(`${dir} is not empty. Dump the rendered templates into a new directory.`);
+  }
+  const lines = (values: readonly string[]) => values.map((value) => `${value}\n`).join("");
+  for (const { name, content, generatedIds } of templates) {
+    const file = path.join(dir, name);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(`${file}.yml`, content);
+    fs.writeFileSync(`${file}.ids`, lines(generatedIds));
+  }
+  fs.writeFileSync(path.join(dir, "renders.txt"), lines(templates.map(({ name }) => name)));
 }
 
 /**
