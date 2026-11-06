@@ -262,6 +262,7 @@ When using external resources:
 - The resource must be deployed and available before referencing it
 - You can combine external resources with locally-defined resources
 - TailorDB table names must remain unique across local and external TailorDB namespaces; `deploy` checks external TailorDB table names before applying changes
+- An Auth service that another application references with `auth: { name: "...", external: true }` cannot be deleted. `deploy` stops with `AUTH_SERVICE_IN_USE` before it applies anything, whether the referencing application is part of the same `deploy` or not. Keep the Auth service in the config that defines it, or move the referencing application to another Auth service in the same `deploy`
 - Destructive operations like `tailordb truncate` (and `tailor seed apply --truncate`) automatically exclude external resources to prevent accidental data loss in shared resources
 - Subscribing an executor to an external resource's events requires the config that owns the resource in the same `deploy`. Publishing is then enabled automatically, and `deploy` records the dependency so a later deploy without that config asks for confirmation instead of silently turning publishing off
 

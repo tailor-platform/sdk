@@ -29,6 +29,7 @@ import {
   type TailorDBMaintenance,
 } from "./apply-phases";
 import { planAuth } from "./auth";
+import { assertAuthServicesNotInUse } from "./auth-service-in-use";
 import { collectHttpAdapterScripts, mergeBundledScripts } from "./bundled-scripts";
 import { type PlanSummary } from "./change-set";
 import {
@@ -1004,6 +1005,8 @@ async function deployInternal(
         previousDeployments: reuse?.previousDeployments,
       });
       dropCrossDeploymentManagedDeletes(deployments);
+      scheduleRenamedAppDeletes(deployments);
+      assertAuthServicesNotInUse(deployments);
       assertNoSingleRunTransferHandoff(deployments);
       return { planTargets, metadataClient, runInputs, deployments };
     };
