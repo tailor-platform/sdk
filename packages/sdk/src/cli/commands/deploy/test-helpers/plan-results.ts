@@ -114,17 +114,14 @@ export function emptyPlanResults(): PlanResults {
       ...emptyOwnership(),
       existingServices: {},
       existingResolvers: new Map(),
-      invokerReferences: [],
     },
-    app: Object.assign(
-      createChangeSet("Applications"),
-      emptyOwnership(),
-    ) as unknown as PlanResults["app"],
+    app: Object.assign(createChangeSet("Applications"), emptyOwnership(), {
+      existingApplications: [],
+    }) as unknown as PlanResults["app"],
     executor: {
       changeSet: createChangeSet("Executors"),
       ...emptyOwnership(),
       existingExecutors: {},
-      invokerReferences: [],
     },
     workflow: {
       changeSet: createChangeSet("Workflows"),

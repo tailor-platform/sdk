@@ -30,12 +30,7 @@ import {
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
-import {
-  listInvokerMachineUsers,
-  normalizeInvoker,
-  trackInvoker,
-  type InvokerReference,
-} from "./invoker";
+import { listInvokerMachineUsers, normalizeInvoker } from "./invoker";
 import {
   buildMetaRequest,
   hasMatchingSdkVersion,
@@ -114,7 +109,6 @@ export async function planExecutor(context: PlanContext, previousExisting?: Exis
   const { client, workspaceId, application, forRemoval } = context;
   const changeSet = createChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor>("Executors");
   const ownership = createOwnershipTracker(application.name, application.id);
-  const invokerReferences: InvokerReference[] = [];
 
   const fetchedExecutors =
     previousExisting ??
@@ -153,13 +147,7 @@ export async function planExecutor(context: PlanContext, previousExisting?: Exis
       appName: application.name,
       appId: application.id,
     });
-    const desiredExecutor = protoExecutor(
-      context,
-      executor,
-      application.env,
-      knownMachineUsers,
-      invokerReferences,
-    );
+    const desiredExecutor = protoExecutor(context, executor, application.env, knownMachineUsers);
     if (existing) {
       const owned = ownership.ownsDesired(existing.allLabels, {
         resourceType: "executor",
@@ -206,7 +194,7 @@ export async function planExecutor(context: PlanContext, previousExisting?: Exis
     }
   });
 
-  return { changeSet, ...ownership.result, existingExecutors: fetchedExecutors, invokerReferences };
+  return { changeSet, ...ownership.result, existingExecutors: fetchedExecutors };
 }
 
 type ExecutorDisplayEntry = GroupedDisplayEntry;
@@ -516,7 +504,6 @@ function protoExecutor(
   executor: Executor,
   env: ApplicationEnv,
   knownMachineUsers: ReadonlySet<string> | undefined,
-  invokerReferences: InvokerReference[],
 ): MessageInitShape<typeof ExecutorExecutorSchema> {
   const { application } = context;
   const appName = application.name;
@@ -654,12 +641,6 @@ function protoExecutor(
 
   const authNamespace = getApplicationAuthNamespace(application);
   const invokerContext = `Executor "${executor.name}"`;
-  const normalizeTargetInvoker = (invoker: Parameters<typeof normalizeInvoker>[0]) =>
-    trackInvoker(
-      invokerReferences,
-      normalizeInvoker(invoker, authNamespace, invokerContext, knownMachineUsers),
-      invokerContext,
-    );
 
   switch (target.kind) {
     case "webhook": {
@@ -714,7 +695,12 @@ function protoExecutor(
                   expr: `(${stringifyFunction(target.variables)})(${argsExpr})`,
                 }
               : undefined,
-            invoker: normalizeTargetInvoker(target.invoker),
+            invoker: normalizeInvoker(
+              target.invoker,
+              authNamespace,
+              invokerContext,
+              knownMachineUsers,
+            ),
           },
         },
       };
@@ -737,7 +723,12 @@ function protoExecutor(
             variables: {
               expr: argsExpr,
             },
-            invoker: normalizeTargetInvoker(target.invoker),
+            invoker: normalizeInvoker(
+              target.invoker,
+              authNamespace,
+              invokerContext,
+              knownMachineUsers,
+            ),
           },
         },
       };
@@ -756,7 +747,12 @@ function protoExecutor(
                   ? { expr: `(${stringifyFunction(target.args)})(${argsExpr})` }
                   : { expr: JSON.stringify(target.args) }
                 : undefined,
-            invoker: normalizeTargetInvoker(target.invoker),
+            invoker: normalizeInvoker(
+              target.invoker,
+              authNamespace,
+              invokerContext,
+              knownMachineUsers,
+            ),
           },
         },
       };

@@ -378,23 +378,6 @@ describe("planPipeline (resolver service level)", () => {
       ).toEqual({ namespace: "external-auth", machineUserName: "portal" });
     });
 
-    test("records the invoker for the check against the whole deploy run", async () => {
-      const result = await planPipeline(
-        buildCtx({
-          client: createMockClient([], {}, {}, ["portal"]),
-          application: createExternalAuthApplication("portal"),
-        }),
-      );
-
-      expect(result.invokerReferences).toEqual([
-        {
-          namespace: "external-auth",
-          machineUserName: "portal",
-          context: 'Resolver "test-resolver"',
-        },
-      ]);
-    });
-
     test("rejects a machine user that exists nowhere in the external auth namespace", async () => {
       await expect(
         planPipeline(

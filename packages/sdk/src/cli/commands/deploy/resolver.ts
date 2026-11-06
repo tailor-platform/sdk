@@ -34,12 +34,7 @@ import {
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
-import {
-  listInvokerMachineUsers,
-  normalizeInvoker,
-  trackInvoker,
-  type InvokerReference,
-} from "./invoker";
+import { listInvokerMachineUsers, normalizeInvoker } from "./invoker";
 import {
   addDependencyRecords,
   buildMetaRequest,
@@ -202,11 +197,7 @@ export async function planPipeline(
         plannedMachineUsers: context.plannedMachineUsers,
       })
     : undefined;
-  const {
-    changeSet: resolverChangeSet,
-    existingResolversByNamespace,
-    invokerReferences,
-  } = await planResolvers(
+  const { changeSet: resolverChangeSet, existingResolversByNamespace } = await planResolvers(
     client,
     workspaceId,
     pipelines,
@@ -236,7 +227,6 @@ export async function planPipeline(
     resourceOwners,
     existingServices,
     existingResolvers: existingResolversByNamespace,
-    invokerReferences,
   };
 }
 
@@ -401,7 +391,6 @@ async function planResolvers(
     UnchangedResolver
   >("Pipeline resolvers");
   const { appName, appId, dependentApps, runAppIds } = records;
-  const invokerReferences: InvokerReference[] = [];
 
   /**
    * Build one resolver's metadata write, carrying the dependency records that
@@ -477,7 +466,6 @@ async function planResolvers(
         env,
         authNamespace,
         knownMachineUsers,
-        invokerReferences,
       );
       const existingResolver = existingResolversMap.get(resolver.name);
       const metaRequest = await resolverMetaRequest(pipeline.namespace, resolver);
@@ -559,7 +547,7 @@ async function planResolvers(
         previousExisting?.get(namespaceName)?.existingResolverDetails ?? new Map(),
     });
   }
-  return { changeSet, existingResolversByNamespace, invokerReferences };
+  return { changeSet, existingResolversByNamespace };
 }
 
 type ResolverDisplayEntry = GroupedDisplayEntry;
@@ -612,9 +600,7 @@ function processResolver(
   env: ApplicationEnv,
   authNamespace: string | undefined,
   knownMachineUsers: ReadonlySet<string> | undefined,
-  invokerReferences: InvokerReference[],
 ): MessageInitShape<typeof PipelineResolverSchema> {
-  const invokerContext = `Resolver "${resolver.name}"`;
   const pipelines: MessageInitShape<typeof PipelineResolver_PipelineSchema>[] = [
     {
       name: "body",
@@ -626,10 +612,11 @@ function processResolver(
         expr: buildResolverOperationHookExpr(env),
       },
       postScript: `args.body`,
-      invoker: trackInvoker(
-        invokerReferences,
-        normalizeInvoker(resolver.invoker, authNamespace, invokerContext, knownMachineUsers),
-        invokerContext,
+      invoker: normalizeInvoker(
+        resolver.invoker,
+        authNamespace,
+        `Resolver "${resolver.name}"`,
+        knownMachineUsers,
       ),
     },
   ];

@@ -632,26 +632,6 @@ describe("planExecutor", () => {
         });
       });
 
-      test("records the invoker for the check against the whole deploy run", async () => {
-        const application = createMockApplication([createInvokerExecutor("batch-user")], {
-          externalAuthName: "external-auth",
-        });
-
-        const result = await planExecutor(
-          buildPlanContext(application, {
-            client: createMockClient([], ["batch-user"]),
-          }),
-        );
-
-        expect(result.invokerReferences).toEqual([
-          {
-            namespace: "external-auth",
-            machineUserName: "batch-user",
-            context: 'Executor "test-executor"',
-          },
-        ]);
-      });
-
       test("rejects a machine user that exists nowhere in the external auth namespace", async () => {
         const application = createMockApplication([createInvokerExecutor("batch-usr")], {
           externalAuthName: "external-auth",

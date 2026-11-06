@@ -29,6 +29,7 @@ import {
   type TailorDBMaintenance,
 } from "./apply-phases";
 import { planAuth } from "./auth";
+import { assertAuthServicesNotInUse } from "./auth-service-in-use";
 import { collectHttpAdapterScripts, mergeBundledScripts } from "./bundled-scripts";
 import { type PlanSummary } from "./change-set";
 import {
@@ -74,7 +75,6 @@ import {
   planFunctionRegistry,
 } from "./function-registry";
 import { planIdP } from "./idp";
-import { assertInvokersSurviveDeploy } from "./invoker-validation";
 import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn, sdkNameLabelKey } from "./label";
 import {
   assertUniqueGlobalResourceNames,
@@ -1005,7 +1005,7 @@ async function deployInternal(
         previousDeployments: reuse?.previousDeployments,
       });
       dropCrossDeploymentManagedDeletes(deployments);
-      await assertInvokersSurviveDeploy({ client: metadataClient, workspaceId, deployments });
+      assertAuthServicesNotInUse(deployments);
       assertNoSingleRunTransferHandoff(deployments);
       return { planTargets, metadataClient, runInputs, deployments };
     };
