@@ -7,6 +7,7 @@ export const entry = [
   "src/kysely/index.ts",
   "src/plugin/index.ts",
   "src/plugin/builtin/kysely-type/index.ts",
+  "src/plugin/builtin/kysely-type/db.ts",
   "src/plugin/builtin/enum-constants/index.ts",
   "src/plugin/builtin/file-utils/index.ts",
   "src/plugin/builtin/seed/index.ts",

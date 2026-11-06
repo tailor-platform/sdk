@@ -74,6 +74,23 @@ describe("createPlatformBundleDefinePlugin date default", () => {
   });
 });
 
+describe("createPlatformBundleDefinePlugin kysely temporal", () => {
+  const code = "read(globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL);";
+
+  test("folds the kysely temporal gate to undefined unless the plugin is configured with temporal", () => {
+    expect(run(code)).toBe("read(undefined);");
+    expect(run(code, createPlatformBundleDefinePlugin(undefined, "legacy", false))).toBe(
+      "read(undefined);",
+    );
+  });
+
+  test("folds the kysely temporal gate to the string true when the plugin is configured with temporal", () => {
+    expect(run(code, createPlatformBundleDefinePlugin(undefined, "legacy", true))).toBe(
+      'read("true");',
+    );
+  });
+});
+
 describe("date default gate in the built runtime", () => {
   // The gate is read by the SDK's own runtime code, which user bundles pull in
   // from dist. If tsdown ever emitted it in a shape the regex does not match,
@@ -92,5 +109,31 @@ describe("date default gate in the built runtime", () => {
     const folded = run(chunk!, createPlatformBundleDefinePlugin(undefined, "temporal"));
     expect(folded).not.toContain("__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT");
     expect(folded).toMatch(/="temporal";return \w+===`temporal`\|\|\w+===`date`\?\w+:`legacy`/);
+  });
+});
+
+describe("kysely temporal gate in the built runtime", () => {
+  // `getDB` of `@tailor-platform/sdk/plugin/kysely-type/db` reads the gate from dist. If tsdown
+  // ever emitted it in a shape the regex does not match, a deployed function would silently
+  // read Date and string values while the project's types say Temporal.
+  test("the built db module reads the gate in the exact shape the plugin folds", () => {
+    const built = readFileSync(
+      join(
+        import.meta.dirname,
+        "..",
+        "..",
+        "..",
+        "dist",
+        "plugin",
+        "builtin",
+        "kysely-type",
+        "db.mjs",
+      ),
+      "utf8",
+    );
+
+    const folded = run(built, createPlatformBundleDefinePlugin(undefined, "legacy", true));
+    expect(folded).not.toContain("__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL");
+    expect(folded).toContain('"true"===`true`');
   });
 });

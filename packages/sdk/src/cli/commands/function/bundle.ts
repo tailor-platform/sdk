@@ -78,6 +78,8 @@ interface BundleForRunOptions {
   defaultPermission?: Resolver["permission"];
   /** Representation applied to `t` date fields that omit `as` */
   dateDefault?: EffectiveDateDefault;
+  /** Whether `kyselyTypePlugin` is configured with `temporal: true`, which the bundled `getDB` follows */
+  kyselyTemporal?: boolean;
 }
 
 interface BundleForRunResult {
@@ -101,6 +103,7 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
     machineUser,
     workspaceId,
     dateDefault = "legacy",
+    kyselyTemporal = false,
   } = options;
   const inlineSourcemap = resolveInlineSourcemap(options.inlineSourcemap);
   const bundleLogLevel = resolveBundleLogLevel(options.logLevel);
@@ -135,6 +138,7 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
           ? resolverDateRepresentations(detected.fields, dateDefault)
           : { date: true, temporal: true },
         dateDefault,
+        kyselyTemporal,
       ),
       createSdkBuilderPurePlugin(),
     ],

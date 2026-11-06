@@ -193,6 +193,45 @@ describe("buildFunctionBundle cache", () => {
   });
 });
 
+describe("buildFunctionBundle kysely temporal", () => {
+  const GATE = "__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL";
+
+  function writeGateFunction(projectDir: string): string {
+    fs.writeFileSync(
+      path.join(projectDir, "gate.ts"),
+      `export const temporal = globalThis.process?.env.${GATE} === "true";\n`,
+    );
+    return writeFunction(
+      projectDir,
+      `import { temporal } from "../gate";\nexport default async () => temporal;\n`,
+    );
+  }
+
+  test("folds the gate a module the function imports reads", async () => {
+    using tmp = tempCwd("sdk-function-bundle-kysely-temporal-");
+    const sourceFile = writeGateFunction(tmp.dir);
+
+    const withTemporal = await bundle(sourceFile, { kyselyTemporal: true });
+    const withoutTemporal = await bundle(sourceFile);
+
+    expect(withTemporal).not.toContain(GATE);
+    expect(withTemporal).toMatch(/=>\s*(?:true|!0)/);
+    expect(withoutTemporal).not.toContain(GATE);
+    expect(withoutTemporal).toMatch(/=>\s*(?:false|!1)/);
+  });
+
+  test("rebuilds a cached bundle when the plugin's temporal option changes", async () => {
+    using tmp = tempCwd("sdk-function-bundle-kysely-temporal-cache-");
+    const sourceFile = writeGateFunction(tmp.dir);
+    const cache = createBundleCache(createCacheStore({ cacheDir: path.join(tmp.dir, ".cache") }));
+
+    const withoutTemporal = await bundle(sourceFile, { cache });
+    const withTemporal = await bundle(sourceFile, { cache, kyselyTemporal: true });
+
+    expect(withTemporal).not.toBe(withoutTemporal);
+  });
+});
+
 describe("buildFunctionBundle inline sourcemaps", () => {
   async function embeddedSourceTexts(
     options: Partial<BuildFunctionBundleOptions>,

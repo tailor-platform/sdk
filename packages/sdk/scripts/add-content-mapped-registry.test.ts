@@ -28,6 +28,14 @@ describe("addContentMappedRegistry", () => {
     expect(registry).toContain("tailor.config.ts");
   });
 
+  test("ships db.tailor next to the kysely type plugin's runtime", () => {
+    addContentMappedRegistry(dist);
+
+    const db = readFileSync(join(dist, "plugin", "builtin", "kysely-type", "db.tailor"), "utf8");
+    expect(db).toMatch(/^\/\/ /);
+    expect(db).toContain("kyselyTypePlugin");
+  });
+
   test("makes the entry types import the .tailor file without failing where no content mapper runs", () => {
     addContentMappedRegistry(dist);
 

@@ -4,7 +4,9 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { aroundAll, describe, expect, test } from "vitest";
 import { runWithTsHook } from "#/cli/shared/test-helpers/ts-hook-child";
-import { dateDefaultFromConfig } from "./date-default-loader";
+import { definePlugins } from "#/configure/config/index";
+import { kyselyTypePlugin } from "#/plugin/builtin/kysely-type/index";
+import { dateDefaultFromConfig, kyselyTemporalFromConfig } from "./date-default-loader";
 
 describe("dateDefaultFromConfig", () => {
   test("reads defaultDateRepresentation from the default export", () => {
@@ -35,10 +37,31 @@ describe("dateDefaultFromConfig", () => {
   });
 });
 
+describe("kyselyTemporalFromConfig", () => {
+  test("reads temporal from the config of the kysely type plugin the config exports", () => {
+    expect(
+      kyselyTemporalFromConfig({
+        plugins: definePlugins(kyselyTypePlugin({ distPath: "./db.ts", temporal: true })),
+      }),
+    ).toBe(true);
+  });
+
+  test("is false when the plugin leaves temporal off or the config does not use the plugin", () => {
+    expect(
+      kyselyTemporalFromConfig({
+        plugins: definePlugins(kyselyTypePlugin({ distPath: "./db.ts" })),
+      }),
+    ).toBe(false);
+    expect(kyselyTemporalFromConfig({ plugins: [{ id: "other", pluginConfig: {} }] })).toBe(false);
+    expect(kyselyTemporalFromConfig({ default: {} })).toBe(false);
+    expect(kyselyTemporalFromConfig(undefined)).toBe(false);
+  });
+});
+
 // The loader runs in the Vitest host, where `import()` is Node's own. Inside a
 // worker vite-node intercepts it, so these cases run the loader in a child
 // Node process to exercise the TypeScript hook and Node's real errors.
-describe("loadDateDefaultFromConfig", { timeout: 60_000 }, () => {
+describe("loadConfigDefaultsFromConfig: date default", { timeout: 60_000 }, () => {
   const here = dirname(fileURLToPath(import.meta.url));
   const loaderPath = resolve(here, "date-default-loader.ts");
   let tmpDir: string;
@@ -54,11 +77,11 @@ describe("loadDateDefaultFromConfig", { timeout: 60_000 }, () => {
   const run = (configPath: string): Outcome =>
     runWithTsHook(
       `
-      const { loadDateDefaultFromConfig } = await import(${JSON.stringify(pathToFileURL(loaderPath).href)});
+      const { loadConfigDefaultsFromConfig } = await import(${JSON.stringify(pathToFileURL(loaderPath).href)});
       const warnings = [];
       console.warn = (...args) => warnings.push(args.join(" "));
       try {
-        const value = await loadDateDefaultFromConfig(${JSON.stringify(configPath)});
+        const { dateDefault: value } = await loadConfigDefaultsFromConfig(${JSON.stringify(configPath)});
         console.log(JSON.stringify({ value, warnings }));
       } catch (error) {
         console.log(JSON.stringify({ error: error instanceof Error ? error.message : String(error), warnings }));
@@ -165,5 +188,48 @@ describe("loadDateDefaultFromConfig", { timeout: 60_000 }, () => {
     expect(outcome.value).toBe("legacy");
     expect(outcome.warnings).toHaveLength(1);
     expect(outcome.warnings[0]).toMatch(/string values.*tailor\.d\.ts.*missing env/s);
+  });
+});
+
+describe("loadConfigDefaultsFromConfig: kysely temporal", { timeout: 60_000 }, () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const loaderPath = resolve(here, "date-default-loader.ts");
+  let tmpDir: string;
+
+  aroundAll(async (runSuite) => {
+    tmpDir = mkdtempSync(join(tmpdir(), "tailor-runtime-kysely-temporal-loader-"));
+    await runSuite();
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  const run = (config: string): boolean => {
+    const dir = mkdtempSync(join(tmpDir, "case-"));
+    const configPath = join(dir, "tailor.config.ts");
+    writeFileSync(configPath, config, "utf8");
+    return (
+      runWithTsHook(
+        `
+        const { loadConfigDefaultsFromConfig } = await import(${JSON.stringify(pathToFileURL(loaderPath).href)});
+        console.log(JSON.stringify({ value: (await loadConfigDefaultsFromConfig(${JSON.stringify(configPath)})).kyselyTemporal }));
+        `,
+        here,
+      ) as { value: boolean }
+    ).value;
+  };
+
+  test("reads temporal from the kysely type plugin the config exports", () => {
+    expect(
+      run(
+        `export default { name: "app" };\nexport const plugins = [{ id: "@tailor-platform/kysely-type", pluginConfig: { distPath: "./db.ts", temporal: true } }];\n`,
+      ),
+    ).toBe(true);
+  });
+
+  test("is false for a config that does not use the plugin", () => {
+    expect(run(`export default { name: "app" };\n`)).toBe(false);
+  });
+
+  test("is false for a config that throws while loading", () => {
+    expect(run(`throw new Error("boom");\n`)).toBe(false);
   });
 });
