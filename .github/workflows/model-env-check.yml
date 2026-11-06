@@ -1,0 +1,41 @@
+name: model-env-check
+on:
+  pull_request:
+    paths: [.github/workflows/model-env-check.yml]
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+jobs:
+  with-env:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ANTHROPIC_MODEL: claude-haiku-5-5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: claude
+        uses: anthropics/claude-code-action@6b6870e649b5ff408753befeaee5fc7989d4e6a9 # v1.0.258
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ github.token }}
+          prompt: Reply with the single word ok.
+          claude_args: --max-turns 1 --disallowedTools Bash,WebFetch,WebSearch,Edit,Write,Read,Glob,Grep
+      - run: jq -r '.[] | select(.type=="system" and .subtype=="init") | "MODEL_USED=" + .model' "${{ steps.claude.outputs.execution_file }}"
+  without-env:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: claude
+        uses: anthropics/claude-code-action@6b6870e649b5ff408753befeaee5fc7989d4e6a9 # v1.0.258
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ github.token }}
+          prompt: Reply with the single word ok.
+          claude_args: --max-turns 1 --disallowedTools Bash,WebFetch,WebSearch,Edit,Write,Read,Glob,Grep
+      - run: jq -r '.[] | select(.type=="system" and .subtype=="init") | "MODEL_USED=" + .model' "${{ steps.claude.outputs.execution_file }}"
