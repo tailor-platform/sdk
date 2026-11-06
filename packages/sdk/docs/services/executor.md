@@ -543,6 +543,8 @@ export default createExecutor({
 
 The webhook URL is public, so verify the signature over the unparsed request body before trusting `body`. `rawBody` is delivered base64-encoded; decode it to the original bytes before computing the signature.
 
+When an executor is triggered manually with [`tailor executor trigger`](../cli/executor.md#executor-trigger) or `triggerExecutor` from `@tailor-platform/sdk/cli`, it receives empty `headers`, even when `--header` is given, and no `rawBody`. To test an executor that reads headers or verifies a signature, send a request to its webhook URL, which [`tailor executor webhook list`](../cli/executor.md#executor-webhook-list) shows.
+
 **With custom response:**
 
 ```typescript
