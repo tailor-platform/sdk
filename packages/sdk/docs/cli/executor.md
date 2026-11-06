@@ -172,16 +172,16 @@ tailor executor trigger [options] <executor-name>
 
 **Options**
 
-| Option                          | Alias | Description                                                                                             | Required | Default | Env                            |
-| ------------------------------- | ----- | ------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                            | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                       | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-| `--data <DATA>`                 | `-d`  | Request body (JSON string)                                                                              | No       | -       | -                              |
-| `--header <HEADER>`             | `-H`  | Ignored, as the executor receives empty headers (format: 'Key: Value', can be specified multiple times) | No       | -       | -                              |
-| `--wait`                        | `-W`  | Wait for job completion and downstream execution (workflow/function) if applicable                      | No       | `false` | -                              |
-| `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m')                                          | No       | `"3s"`  | -                              |
-| `--timeout <TIMEOUT>`           | `-t`  | Maximum time to wait when using --wait (e.g., '30s', '5m')                                              | No       | `"5m"`  | -                              |
-| `--logs`                        | `-l`  | Display function execution logs after completion (requires --wait)                                      | No       | `false` | -                              |
+| Option                          | Alias | Description                                                                                                      | Required | Default | Env                            |
+| ------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                                     | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                                | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--data <DATA>`                 | `-d`  | Request body (JSON string)                                                                                       | No       | -       | -                              |
+| `--header <HEADER>`             | `-H`  | Request header (format: 'Key: Value', can be specified multiple times; a repeated name is delivered as an array) | No       | -       | -                              |
+| `--wait`                        | `-W`  | Wait for job completion and downstream execution (workflow/function) if applicable                               | No       | `false` | -                              |
+| `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m')                                                   | No       | `"3s"`  | -                              |
+| `--timeout <TIMEOUT>`           | `-t`  | Maximum time to wait when using --wait (e.g., '30s', '5m')                                                       | No       | `"5m"`  | -                              |
+| `--logs`                        | `-l`  | Display function execution logs after completion (requires --wait)                                               | No       | `false` | -                              |
 
 **Examples**
 
@@ -195,6 +195,12 @@ $ tailor executor trigger my-executor
 
 ```bash
 $ tailor executor trigger my-executor -d '{"message": "hello"}'
+```
+
+**Trigger with data and headers (a repeated name is delivered as an array)**
+
+```bash
+$ tailor executor trigger my-executor -d '{"message": "hello"}' -H "X-Custom: value" -H "Accept: application/json" -H "Accept: text/html"
 ```
 
 **Trigger and wait for completion**
@@ -267,7 +273,7 @@ Executors with `EVENT` trigger types (such as `recordCreated`, `recordUpdated`, 
 
 The `--data` and `--header` options are accepted only for `INCOMING_WEBHOOK` trigger type.
 
-The executor receives the `--data` JSON as `body`, with empty `headers` and no `rawBody`. `--header` values are not passed to the executor. To test an executor that reads headers or verifies a signature over `rawBody`, send the request to its webhook URL, which `executor webhook list` shows.
+The executor receives the `--data` JSON as `body` and the `--header` values as `headers`, with no `rawBody`. Header names are lower-cased. A header given once reaches the executor as a string, and a header given more than once (names that differ only in letter case are the same header) as an array, as when a request sends it on more than one line. To test an executor that verifies a signature over `rawBody`, send the request to its webhook URL, which `executor webhook list` shows.
 
 **Downstream Execution Tracking**
 

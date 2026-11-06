@@ -503,7 +503,7 @@ Webhook triggers receive HTTP request data:
 ```typescript
 interface WebhookContext<T = unknown> {
   body: T; // Parsed request body
-  headers: Record<string, string>; // Request headers
+  headers: Record<string, string | string[]>; // Request headers, with names in lower case
   method: "POST" | "GET" | "PUT" | "DELETE"; // HTTP method
   rawBody: string; // Raw request body, base64-encoded
 }
@@ -543,7 +543,9 @@ export default createExecutor({
 
 The webhook URL is public, so verify the signature over the unparsed request body before trusting `body`. `rawBody` is delivered base64-encoded; decode it to the original bytes before computing the signature.
 
-When an executor is triggered manually with [`tailor executor trigger`](../cli/executor.md#executor-trigger) or `triggerExecutor` from `@tailor-platform/sdk/cli`, it receives empty `headers`, even when `--header` is given, and no `rawBody`. To test an executor that reads headers or verifies a signature, send a request to its webhook URL, which [`tailor executor webhook list`](../cli/executor.md#executor-webhook-list) shows.
+A header sent on one line is a string, and a header sent on more than one line is an array of strings.
+
+When an executor is triggered manually with [`tailor executor trigger`](../cli/executor.md#executor-trigger) or `triggerExecutor` from `@tailor-platform/sdk/cli`, it receives the headers passed with `--header` or the `headers` option, and no `rawBody`. A header passed once is a string, and a header passed more than once is an array. To test an executor that verifies a signature over `rawBody`, send a request to its webhook URL, which [`tailor executor webhook list`](../cli/executor.md#executor-webhook-list) shows.
 
 **With custom response:**
 

@@ -169,7 +169,7 @@ describe("webhookTrigger", () => {
         body: (args) => {
           expectTypeOf(args).toExtend<{
             body: Record<string, unknown>;
-            headers: Record<string, string>;
+            headers: Record<string, string | string[]>;
             method: "POST" | "GET" | "PUT" | "DELETE";
             rawBody: string;
           }>();
@@ -273,6 +273,24 @@ describe("webhookTrigger response", () => {
       operation: {
         kind: "function",
         body: () => {},
+      },
+    });
+  });
+
+  test("headers are typed as a string or a list of strings when the trigger generic is omitted", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger({
+        response: (args) => {
+          expectTypeOf(args.headers).toEqualTypeOf<Record<string, string | string[]>>();
+          return {};
+        },
+      }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args.headers["accept"]).toEqualTypeOf<string | string[] | undefined>();
+        },
       },
     });
   });

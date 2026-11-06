@@ -496,6 +496,13 @@ export declare type TriggerExecutorRequest = Message<"tailor.v1.TriggerExecutorR
    * @generated from field: google.protobuf.Struct payload = 3;
    */
   payload?: JsonObject;
+
+  /**
+   * headers maps a header name to a string, or to a list of strings for a name sent on more than one line.
+   *
+   * @generated from field: google.protobuf.Struct headers = 4;
+   */
+  headers?: JsonObject;
 };
 
 /**

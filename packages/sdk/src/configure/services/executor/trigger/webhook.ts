@@ -5,8 +5,9 @@ import type { JsonValue } from "#/types/helpers";
 export interface IncomingWebhookArgs<T extends IncomingWebhookRequest> {
   body: T["body"];
   /**
-   * Request headers. Empty when the executor is triggered manually with
-   * `tailor executor trigger` or `triggerExecutor`.
+   * Request headers, with names in lower case. A header sent on one line is a string, and a header
+   * sent on more than one line is an array of strings. When the executor is triggered manually with
+   * `tailor executor trigger` or `triggerExecutor`, these are the headers passed with the trigger.
    */
   headers: T["headers"];
   method: "POST" | "GET" | "PUT" | "DELETE";
@@ -20,7 +21,7 @@ export interface IncomingWebhookArgs<T extends IncomingWebhookRequest> {
 
 export interface IncomingWebhookRequest {
   body: Record<string, unknown>;
-  headers: Record<string, string>;
+  headers: Record<string, string | string[]>;
 }
 
 export interface IncomingWebhookResponseConfig<Args> {
