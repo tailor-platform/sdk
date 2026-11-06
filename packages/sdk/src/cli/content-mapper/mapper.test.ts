@@ -51,6 +51,13 @@ function projectWithOrderTable(): ReturnType<typeof project> {
   return p;
 }
 
+function projectWithoutTables(): ReturnType<typeof project> {
+  const p = project();
+  fs.writeFileSync(p.config, ORDER_TABLE_CONFIG);
+  fs.mkdirSync(path.join(p.dir, "tailordb"));
+  return p;
+}
+
 function ancestors(dir: string): string[] {
   const parent = path.dirname(dir);
   return parent === dir ? [] : [parent, ...ancestors(parent)];
@@ -128,6 +135,21 @@ describe("content mapper", () => {
     });
     expect(result.text).toContain('status: "PAID" | "OPEN";');
     expect(result.text).toContain("createGetDB<Namespace>({ temporal: true })");
+  });
+
+  test("types db.tailor as a module that exports getDB over no namespaces, without a diagnostic, when the project defines no tables yet", async () => {
+    using p = projectWithoutTables();
+    const handlers = createContentMapperHandlers(evaluateConfigInProcess);
+    await handlers.initialize({ positionEncodings: ["utf-16"] });
+    await open(handlers, p.tsconfig);
+
+    const result = await transform(handlers, "", DB_FILE);
+
+    expect(result.text).toContain("export interface Namespace {}");
+    expect(result.text).toContain(
+      "export const getDB = createGetDB<Namespace>({ temporal: true })",
+    );
+    expect(result.diagnostics).toEqual([]);
   });
 
   test("reports db.tailor when tailor.config.ts does not configure kyselyTypePlugin, and still types registry.tailor", async () => {

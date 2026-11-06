@@ -316,10 +316,6 @@ export function generateUnifiedKyselyTypes(
   namespaceData: KyselyNamespaceMetadata[],
   temporal = false,
 ): string {
-  if (namespaceData.length === 0) {
-    return "";
-  }
-
   // Aggregate used utility types from all namespaces
   const globalUsedUtilityTypes = namespaceData
     .flatMap((ns) => ns.types)
@@ -381,7 +377,10 @@ export function generateUnifiedKyselyTypes(
     })
     .join(",\n");
 
-  const namespaceInterface = `export interface Namespace {\n${namespaceInterfaces}\n}`;
+  const namespaceInterface =
+    namespaceData.length === 0
+      ? "export interface Namespace {}"
+      : `export interface Namespace {\n${namespaceInterfaces}\n}`;
 
   const getDBFunction = multiline /* ts */ `
     export const getDB = createGetDB<Namespace>(${temporal ? "{ temporal: true }" : ""});
