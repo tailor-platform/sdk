@@ -307,7 +307,6 @@ export function mockSandbox() {
       ...(opts.name !== undefined && { name: opts.name }),
       template: opts.template,
       status: "RUNNING",
-      kept: opts.name !== undefined,
       createdAt,
       lastActiveAt: createdAt,
       expiresAt: new Date(Date.parse(createdAt) + 24 * 60 * 60 * 1000).toISOString(),

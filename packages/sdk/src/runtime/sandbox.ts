@@ -40,8 +40,6 @@ export interface SandboxInfo {
   template: string;
   /** Current lifecycle status. */
   status: SandboxStatus;
-  /** Whether the sandbox outlives the execution that created it (it has a `name`). */
-  kept: boolean;
   /** When the sandbox was created. */
   createdAt: string;
   /** When the sandbox last ran a command or file operation. */
