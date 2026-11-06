@@ -17,6 +17,8 @@ function snapshotType(name: string): TailorDBSnapshotType {
   return { name, pluralForm: `${name}s`, fields: {} };
 }
 
+const referenceField = { type: "uuid", required: true, index: true, foreignKey: true } as const;
+
 // Helper to create a MigrationDiff
 function createDiff(
   changes: MigrationDiff["changes"],
@@ -181,6 +183,65 @@ describe("diff-calculator", () => {
           },
         ],
         expected: ["~ address: members: -fax, zip → zipCode (renamed)"],
+      },
+      {
+        name: "added foreign key",
+        changes: [
+          {
+            kind: "field_modified",
+            tableName: "Post",
+            fieldName: "ownerId",
+            before: { type: "uuid", required: true },
+            after: {
+              type: "uuid",
+              required: true,
+              index: true,
+              foreignKey: true,
+              foreignKeyType: "User",
+              foreignKeyField: "id",
+            },
+          },
+        ],
+        expected: ["~ ownerId: index: false → true, foreignKey: none → User.id"],
+      },
+      {
+        name: "retargeted foreign key",
+        changes: [
+          {
+            kind: "field_modified",
+            tableName: "Post",
+            fieldName: "ownerId",
+            before: { ...referenceField, foreignKeyType: "User", foreignKeyField: "id" },
+            after: { ...referenceField, foreignKeyType: "Person", foreignKeyField: "id" },
+          },
+        ],
+        expected: ["~ ownerId: foreignKey: User.id → Person.id"],
+      },
+      {
+        name: "foreign key moved to another key",
+        changes: [
+          {
+            kind: "field_modified",
+            tableName: "Post",
+            fieldName: "ownerId",
+            before: { ...referenceField, foreignKeyType: "User" },
+            after: { ...referenceField, foreignKeyType: "User", foreignKeyField: "email" },
+          },
+        ],
+        expected: ["~ ownerId: foreignKey: User.id → User.email"],
+      },
+      {
+        name: "field filled on create",
+        changes: [
+          {
+            kind: "field_modified",
+            tableName: "User",
+            fieldName: "status",
+            before: { type: "string", required: true },
+            after: { type: "string", required: true, optionalOnCreate: true },
+          },
+        ],
+        expected: ["~ status: optionalOnCreate: false → true"],
       },
       {
         name: "modified field without a rendered detail",
