@@ -245,7 +245,6 @@ export function createGenerationManager(params: {
             if (err) {
               const relativePath = path.relative(process.cwd(), file.path);
               logger.error(`Error writing file ${styles.bold(relativePath)}`);
-              logger.error(String(err));
               reject(err);
             } else {
               const relativePath = path.relative(process.cwd(), file.path);
@@ -292,7 +291,6 @@ export function createGenerationManager(params: {
               };
             } catch (error) {
               logger.error(`Error loading tables for TailorDB service ${styles.bold(namespace)}`);
-              logger.error(String(error));
               throw error;
             }
           });
@@ -303,7 +301,6 @@ export function createGenerationManager(params: {
           });
         } catch (error) {
           logger.error("Error validating TailorDB table names");
-          logger.error(String(error));
           throw error;
         }
       });
@@ -369,7 +366,6 @@ export function createGenerationManager(params: {
               logger.error(
                 `Error loading resolvers for Resolver service ${styles.bold(namespace)}`,
               );
-              logger.error(String(error));
               throw error;
             }
           });

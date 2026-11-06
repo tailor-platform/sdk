@@ -237,7 +237,6 @@ async function loadFileContent(filePath: string): Promise<{
     logger.error(
       `${styles.error("Failed to load workflow from")} ${styles.errorBright(relativePath)}`,
     );
-    logger.error(String(error));
     throw error;
   }
 
