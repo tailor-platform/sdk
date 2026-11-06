@@ -35,7 +35,7 @@ describe("triggerExecutor API types", () => {
 
     acceptsOptions({
       executor: incomingWebhookExecutor,
-      payload: { body: { message: "hello" }, headers: { "x-request-id": "req-1" } },
+      payload: { message: "hello" },
     });
   });
 
@@ -49,7 +49,7 @@ describe("triggerExecutor API types", () => {
     acceptsOptions({
       executor: scheduleExecutor,
       // @ts-expect-error - schedule trigger does not accept payload
-      payload: { body: { message: "hello" } },
+      payload: { message: "hello" },
     });
   });
 
@@ -63,7 +63,7 @@ describe("triggerExecutor API types", () => {
 
     acceptsDefaultOptions({
       executor: incomingWebhookExecutor,
-      payload: { body: { message: "hello" }, headers: { "x-request-id": "req-1" } },
+      payload: { message: "hello" },
     });
 
     acceptsDefaultOptions({ executor: scheduleExecutor });
@@ -71,7 +71,7 @@ describe("triggerExecutor API types", () => {
     // @ts-expect-error - payload is not allowed for schedule trigger
     acceptsDefaultOptions({
       executor: scheduleExecutor,
-      payload: { body: { message: "hello" } },
+      payload: { message: "hello" },
     });
   });
 });
