@@ -8,6 +8,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { reconstructSnapshotFromMigrations } from "#/cli/commands/tailordb/migrate/snapshot";
+import { requiredFieldNullValuesError } from "#/cli/commands/tailordb/migrate/test-helpers/platform-errors";
 import { errorToJson } from "#/cli/shared/error-json";
 import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
 import * as migrationModule from "./migration";
@@ -270,9 +271,7 @@ describe("migration flow: local definitions that no pending migration includes",
     ["already_exists", new ConnectError("duplicated key", Code.AlreadyExists)],
     [
       "failed_precondition with a PreconditionFailure detail",
-      Object.assign(new ConnectError("null values", Code.FailedPrecondition), {
-        details: [{ type: "google.rpc.PreconditionFailure", value: new Uint8Array() }],
-      }),
+      requiredFieldNullValuesError("title"),
     ],
   ])(
     "fails after the migrations commit when existing records refuse a local definition (%s)",
