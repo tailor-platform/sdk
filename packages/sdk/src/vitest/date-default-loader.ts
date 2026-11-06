@@ -30,6 +30,14 @@ export function dateDefaultFromConfig(configModule: unknown): EffectiveDateDefau
   );
 }
 
+/** What the Vitest host reads from `tailor.config.ts` for the tailor-runtime environment. */
+export type ConfigDefaults = {
+  /** The representation `t` date fields without `as` follow. */
+  dateDefault: EffectiveDateDefault;
+  /** Whether the kyselyTypePlugin the config exports is configured with `temporal: true`. */
+  kyselyTemporal: boolean;
+};
+
 const KYSELY_TYPE_PLUGIN_ID = "@tailor-platform/kysely-type";
 
 /**
@@ -107,14 +115,6 @@ function isSourceParseError(error: unknown): boolean {
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
-
-/** What the Vitest host reads from `tailor.config.ts` for the tailor-runtime environment. */
-export type ConfigDefaults = {
-  /** The representation `t` date fields without `as` follow. */
-  dateDefault: EffectiveDateDefault;
-  /** Whether the kyselyTypePlugin the config exports is configured with `temporal: true`. */
-  kyselyTemporal: boolean;
-};
 
 /**
  * Load `defaultDateRepresentation` and the kyselyTypePlugin's `temporal` option
