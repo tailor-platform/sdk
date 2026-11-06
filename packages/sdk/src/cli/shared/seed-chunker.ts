@@ -116,42 +116,33 @@ export function chunkSeedData(options: ChunkSeedDataOptions): SeedChunk[] {
       currentOrder = [];
     }
 
+    const emptyBatchByteSize = byteSize(JSON.stringify({ data: { [type]: [] }, order: [type] }));
     let recordBatch: JsonObject[] = [];
+    let batchByteSize = emptyBatchByteSize;
     for (const record of typeRecords) {
-      if (byteSize(JSON.stringify({ data: { [type]: [record] }, order: [type] })) > argBudget) {
-        const singleRecordSize = byteSize(JSON.stringify(record));
+      const recordByteSize = byteSize(JSON.stringify(record));
+      if (emptyBatchByteSize + recordByteSize > argBudget) {
         throw new Error(
-          `A single record in table "${type}" (${singleRecordSize} bytes) exceeds the message size budget ` +
+          `A single record in table "${type}" (${recordByteSize} bytes) exceeds the message size budget ` +
             `(${argBudget} bytes). Consider increasing maxMessageSize or reducing the record size.`,
         );
       }
 
-      const testBatch = [...recordBatch, record];
-      const testData = { ...currentData, [type]: testBatch };
-      const testOrder = currentOrder.includes(type) ? currentOrder : [...currentOrder, type];
-      const testSize = byteSize(JSON.stringify({ data: testData, order: testOrder }));
-
-      if (testSize > argBudget && recordBatch.length > 0) {
-        // Finalize current chunk with accumulated records
-        currentData[type] = recordBatch;
-        if (!currentOrder.includes(type)) {
-          currentOrder.push(type);
-        }
-        chunks.push({ data: currentData, order: currentOrder, index: chunks.length });
-        currentData = {};
-        currentOrder = [];
+      const separatorByteSize = recordBatch.length > 0 ? 1 : 0;
+      if (batchByteSize + separatorByteSize + recordByteSize > argBudget) {
+        chunks.push({ data: { [type]: recordBatch }, order: [type], index: chunks.length });
         recordBatch = [record];
+        batchByteSize = emptyBatchByteSize + recordByteSize;
       } else {
-        recordBatch = testBatch;
+        recordBatch.push(record);
+        batchByteSize += separatorByteSize + recordByteSize;
       }
     }
 
     // Add remaining records
     if (recordBatch.length > 0) {
       currentData[type] = recordBatch;
-      if (!currentOrder.includes(type)) {
-        currentOrder.push(type);
-      }
+      currentOrder.push(type);
     }
   }
 
