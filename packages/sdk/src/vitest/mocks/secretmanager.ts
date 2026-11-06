@@ -34,6 +34,10 @@ const SECRET_STORE = Symbol("tailorSecretStore");
  * restored on dispose, so secrets seeded outside the test survive across
  * `using` scopes while per-test `setSecrets()` overrides stay isolated.
  *
+ * As on the Platform, reading a vault the store does not have rejects with a
+ * `vault not found: <vault>` error, while a missing secret in an existing vault
+ * resolves to `undefined`. Seed an empty vault to test a missing secret.
+ *
  * **Beta:** This API may change in future releases.
  * @param options - Initial Secret Manager fixtures
  * @returns Disposable SecretManager mock control object
@@ -61,15 +65,25 @@ export function mockSecretmanager(options: MockSecretmanagerOptions = {}) {
     holder.store[vault] = { ...holder.store[vault], ...secrets };
   }
 
+  function vaultSecrets(vault: string): Record<string, string> {
+    const secrets = Object.hasOwn(holder.store, vault) ? holder.store[vault] : undefined;
+    if (!secrets) {
+      throw new Error(
+        `code: 'Some requested entity was not found', message: ${JSON.stringify(`vault not found: ${vault}`)}`,
+      );
+    }
+    return secrets;
+  }
+
   async function defaultGetSecret(vault: string, name: string): Promise<string | undefined> {
-    return holder.store[vault]?.[name];
+    return vaultSecrets(vault)[name];
   }
 
   async function defaultGetSecrets<const T extends readonly string[]>(
     vault: string,
     names: T,
   ): Promise<Partial<Record<T[number], string>>> {
-    const vaultData = holder.store[vault] ?? {};
+    const vaultData = vaultSecrets(vault);
     const result: Record<string, string> = {};
     for (const name of names) {
       if (name in vaultData) {
