@@ -483,7 +483,8 @@ describe("mergeUserContent", () => {
         return computeManagedHash(edited.toString(), generatedIds) !== hash;
       };
       const keys = Object.keys(parseDocument(content).toJS() as Record<string, unknown>);
-      return { hashed: keys.filter(isHashed), unhashed: keys.filter((key) => !isHashed(key)) };
+      const hashed = keys.filter(isHashed);
+      return { hashed, unhashed: keys.filter((key) => !hashed.includes(key)) };
     };
 
     test("is only the concurrency of the preview workflows", () => {
