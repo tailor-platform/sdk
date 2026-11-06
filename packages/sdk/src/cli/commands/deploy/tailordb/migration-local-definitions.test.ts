@@ -1,7 +1,8 @@
 /**
  * Under --no-schema-check, each pending migration still writes its own snapshot so its script sees
  * the schema it was written for. Local definitions that differ from the last pending migration are
- * applied once every migration has committed, in the same deploy.
+ * applied once every migration has committed, in the same deploy, and tables the local definitions
+ * no longer have are deleted then even when no migration removes them.
  */
 
 import { Code, ConnectError } from "@connectrpc/connect";
@@ -13,6 +14,9 @@ import * as migrationModule from "./migration";
 import {
   createPlanResult,
   createRemoteCheckpoint,
+  DELETED_ONCE_AFTER_CHECKPOINT,
+  deletionOf,
+  gqlPermissionDeletion,
   mkPendingMigration,
   mockConfig,
   type RemoteCheckpoint,
@@ -20,6 +24,7 @@ import {
   snapshotTable,
   type SnapshotTablesByVersion,
   tailordbTypeWrites,
+  typeDeletion,
   typeEntry,
   typeMetaRequest,
 } from "./test-helpers/migration-apply";
@@ -60,6 +65,7 @@ const localPost = snapshotTable("Post", {
   title: { type: "string", required: true },
   body: { type: "string", required: false },
 });
+const comment = snapshotTable("Comment", { body: { type: "string", required: true } });
 
 const restricted = {
   publishRecordEvents: false,
@@ -85,6 +91,7 @@ describe("migration flow: local definitions that no pending migration includes",
     creates?: string[];
     updates?: string[];
     unchanged?: string[];
+    deletes?: string[];
     maintenanceMode?: LoadedConfig["maintenanceMode"];
   }) {
     return createPlanResult({
@@ -95,6 +102,10 @@ describe("migration flow: local definitions that no pending migration includes",
           name,
           metaRequest: typeMetaRequest(name),
         })),
+        deletes: (options.deletes ?? []).map((name) => typeDeletion(name)),
+      },
+      gqlPermission: {
+        deletes: (options.deletes ?? []).map((name) => gqlPermissionDeletion(name)),
       },
       local: options.local,
       context: {
@@ -107,7 +118,7 @@ describe("migration flow: local definitions that no pending migration includes",
   }
 
   function mockPending(changes: DiffChange[]) {
-    checkpoint.mockPending([mkPendingMigration(changes, { hasScript: false })]);
+    return checkpoint.mockPending([mkPendingMigration(changes, { hasScript: false })]);
   }
 
   const addNickname = {
@@ -122,6 +133,42 @@ describe("migration flow: local definitions that no pending migration includes",
       if (request.tailordbType?.schema?.fields?.body) throw rejection;
       return {} as never;
     });
+  }
+
+  function refuseWritesToDeletedTables(
+    client: OperatorClient,
+    refusedDeletion?: { tableName: string; error: Error },
+  ) {
+    const deleted = new Set<string>();
+    vi.mocked(client.deleteTailorDBType).mockImplementation(async (request) => {
+      const tableName = request.tailordbTypeName ?? "";
+      if (refusedDeletion && tableName === refusedDeletion.tableName) throw refusedDeletion.error;
+      deleted.add(tableName);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      return {} as never;
+    });
+    vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
+      if (deleted.has(request.tailordbType?.name ?? "")) {
+        throw new ConnectError("table not found", Code.NotFound);
+      }
+      return {} as never;
+    });
+  }
+
+  function planTablesDroppedWithoutMigration() {
+    snapshotState.tablesByVersion = {
+      0: { User: user, Post: post, Comment: comment },
+      1: { User: userWithNickname, Post: post, Comment: comment },
+    };
+    const planResult = createMockPlanResult({
+      local: [userWithNickname, post],
+      updates: ["User"],
+      unchanged: ["Post"],
+      deletes: ["Comment", "Archive"],
+      maintenanceMode: "deploy",
+    });
+    planResult.context.pendingMigrations = mockPending([addNickname]);
+    return planResult;
   }
 
   function writesOf(client: OperatorClient, tableName: string) {
@@ -153,12 +200,12 @@ describe("migration flow: local definitions that no pending migration includes",
     async (bucket) => {
       using stderr = captureStderr();
       const client = createMockClient();
-      mockPending([addNickname]);
       const planResult = createMockPlanResult({
         local: [userWithNickname, localPost],
         updates: bucket === "updates" ? ["User", "Post"] : ["User"],
         unchanged: bucket === "unchanged" ? ["Post"] : [],
       });
+      planResult.context.pendingMigrations = mockPending([addNickname]);
 
       await applyTailorDB(client, planResult, "create-update");
 
@@ -178,12 +225,12 @@ describe("migration flow: local definitions that no pending migration includes",
 
   test("applies the local definition unrestricted with maintenance mode off", async () => {
     const client = createMockClient();
-    mockPending([addNickname]);
     const planResult = createMockPlanResult({
       local: [userWithNickname, localPost],
       updates: ["User", "Post"],
       maintenanceMode: false,
     });
+    planResult.context.pendingMigrations = mockPending([addNickname]);
 
     await applyTailorDB(client, planResult, "create-update");
 
@@ -196,12 +243,12 @@ describe("migration flow: local definitions that no pending migration includes",
 
   test('"deploy" keeps the local definition restricted until the held release lifts it', async () => {
     const client = createMockClient();
-    mockPending([addNickname]);
     const planResult = createMockPlanResult({
       local: [userWithNickname, localPost],
       updates: ["User", "Post"],
       maintenanceMode: "deploy",
     });
+    planResult.context.pendingMigrations = mockPending([addNickname]);
 
     const releases: MaintenanceModeRelease[] = [];
     await applyTailorDB(client, planResult, "create-update", {
@@ -232,7 +279,6 @@ describe("migration flow: local definitions that no pending migration includes",
     async (_reason, rejection) => {
       const client = createMockClient();
       rejectLocalPost(client, rejection);
-      mockPending([addNickname]);
       const localUser = snapshotTable("User", {
         name: { type: "string", required: true },
         nickname: { type: "string", required: false },
@@ -242,6 +288,7 @@ describe("migration flow: local definitions that no pending migration includes",
         local: [localUser, localPost],
         updates: ["User", "Post"],
       });
+      planResult.context.pendingMigrations = mockPending([addNickname]);
 
       const error = await applyTailorDB(client, planResult, "create-update").catch(
         (failure: unknown) => failure,
@@ -280,11 +327,11 @@ describe("migration flow: local definitions that no pending migration includes",
     async (_reason, rejection) => {
       const client = createMockClient();
       rejectLocalPost(client, rejection);
-      mockPending([addNickname]);
       const planResult = createMockPlanResult({
         local: [userWithNickname, localPost],
         updates: ["User", "Post"],
       });
+      planResult.context.pendingMigrations = mockPending([addNickname]);
 
       const error = await applyTailorDB(client, planResult, "create-update").catch(
         (failure: unknown) => failure,
@@ -307,13 +354,13 @@ describe("migration flow: local definitions that no pending migration includes",
       }
       return {} as never;
     });
-    mockPending([addNickname]);
     const tag = snapshotTable("Tag", { label: { type: "string", required: true } });
     const planResult = createMockPlanResult({
       local: [userWithNickname, post, tag],
       creates: ["Tag"],
       updates: ["User"],
     });
+    planResult.context.pendingMigrations = mockPending([addNickname]);
 
     const error = await applyTailorDB(client, planResult, "create-update").catch(
       (failure: unknown) => failure,
@@ -330,13 +377,13 @@ describe("migration flow: local definitions that no pending migration includes",
   test("names the tables it already created when a later local definition fails", async () => {
     const client = createMockClient();
     rejectLocalPost(client, new Error("socket hang up"));
-    mockPending([addNickname]);
     const tag = snapshotTable("Tag", { label: { type: "string", required: true } });
     const planResult = createMockPlanResult({
       local: [userWithNickname, localPost, tag],
       creates: ["Tag"],
       updates: ["User", "Post"],
     });
+    planResult.context.pendingMigrations = mockPending([addNickname]);
 
     const error = await applyTailorDB(client, planResult, "create-update").catch(
       (failure: unknown) => failure,
@@ -353,13 +400,13 @@ describe("migration flow: local definitions that no pending migration includes",
 
   test("creates a table absent from every snapshot before updating the tables that may refer to it", async () => {
     const client = createMockClient();
-    mockPending([addNickname]);
     const tag = snapshotTable("Tag", { label: { type: "string", required: true } });
     const planResult = createMockPlanResult({
       local: [userWithNickname, localPost, tag],
       creates: ["Tag"],
       updates: ["User", "Post"],
     });
+    planResult.context.pendingMigrations = mockPending([addNickname]);
 
     await applyTailorDB(client, planResult, "create-update");
 
@@ -382,12 +429,14 @@ describe("migration flow: local definitions that no pending migration includes",
       1: { User: user, Post: post },
     };
     const client = createMockClient(["User", "Post"]);
-    mockPending([{ kind: "table_removed", tableName: "Draft" } as DiffChange]);
     const planResult = createMockPlanResult({
       local: [user, post, draft],
       creates: ["Draft"],
       unchanged: ["User", "Post"],
     });
+    planResult.context.pendingMigrations = mockPending([
+      { kind: "table_removed", tableName: "Draft" } as DiffChange,
+    ]);
 
     await applyTailorDB(client, planResult, "create-update");
 
@@ -407,12 +456,14 @@ describe("migration flow: local definitions that no pending migration includes",
       1: { User: user, Post: post, Order: order },
     };
     const client = createMockClient();
-    mockPending([{ kind: "table_added", tableName: "Order" } as DiffChange]);
     const planResult = createMockPlanResult({
       local: [user, post, localOrder],
       creates: ["Order"],
       unchanged: ["User", "Post"],
     });
+    planResult.context.pendingMigrations = mockPending([
+      { kind: "table_added", tableName: "Order" } as DiffChange,
+    ]);
 
     await applyTailorDB(client, planResult, "create-update");
 
@@ -435,7 +486,12 @@ describe("migration flow: local definitions that no pending migration includes",
       2: { User: user, Post: post },
     };
     const client = createMockClient();
-    checkpoint.mockPending([
+    const planResult = createMockPlanResult({
+      local: [user, post, localTemp],
+      creates: ["Temp"],
+      unchanged: ["User", "Post"],
+    });
+    planResult.context.pendingMigrations = checkpoint.mockPending([
       mkPendingMigration([{ kind: "table_added", tableName: "Temp" } as DiffChange], {
         hasScript: false,
       }),
@@ -444,11 +500,6 @@ describe("migration flow: local definitions that no pending migration includes",
         hasScript: false,
       }),
     ]);
-    const planResult = createMockPlanResult({
-      local: [user, post, localTemp],
-      creates: ["Temp"],
-      unchanged: ["User", "Post"],
-    });
 
     await applyTailorDB(client, planResult, "create-update");
 
@@ -469,11 +520,11 @@ describe("migration flow: local definitions that no pending migration includes",
       checkpoint.state.number = 2;
       return true;
     });
-    mockPending([addNickname]);
     const planResult = createMockPlanResult({
       local: [userWithNickname, localPost],
       updates: ["User", "Post"],
     });
+    planResult.context.pendingMigrations = mockPending([addNickname]);
 
     await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
       /advanced concurrently/,
@@ -484,15 +535,81 @@ describe("migration flow: local definitions that no pending migration includes",
     );
   });
 
+  test("deletes a table the local definitions dropped without a migration once the migrations commit, and a table a migration removes only once", async () => {
+    const draft = snapshotTable("Draft", { name: { type: "string", required: true } });
+    snapshotState.tablesByVersion = {
+      0: { User: user, Post: post, Comment: comment, Draft: draft },
+      1: { User: userWithNickname, Post: post, Comment: comment },
+    };
+    const client = createMockClient(["User", "Post", "Comment", "Draft"]);
+    const planResult = createMockPlanResult({
+      local: [userWithNickname, post],
+      updates: ["User"],
+      unchanged: ["Post"],
+      deletes: ["Comment", "Draft"],
+    });
+    planResult.context.pendingMigrations = mockPending([
+      addNickname,
+      { kind: "table_removed", tableName: "Draft" } as DiffChange,
+    ]);
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    expect(deletionOf(client, "test-ns", "Comment", lastLabelOrder())).toEqual(
+      DELETED_ONCE_AFTER_CHECKPOINT,
+    );
+    expect(deletionOf(client, "test-ns", "Draft", lastLabelOrder())).toEqual(
+      DELETED_ONCE_AFTER_CHECKPOINT,
+    );
+  });
+
+  test('"deploy" deletes the tables the local definitions dropped before the held release, which leaves them alone', async () => {
+    const client = createMockClient(["User", "Post", "Comment", "Archive"]);
+    refuseWritesToDeletedTables(client);
+    const planResult = planTablesDroppedWithoutMigration();
+
+    const releases: MaintenanceModeRelease[] = [];
+    await applyTailorDB(client, planResult, "create-update", {
+      holdMaintenanceMode: (release) => releases.push(release),
+    });
+
+    expect(deletionOf(client, "test-ns", "Comment", lastLabelOrder())).toEqual(
+      DELETED_ONCE_AFTER_CHECKPOINT,
+    );
+    expect(deletionOf(client, "test-ns", "Archive", lastLabelOrder())).toEqual(
+      DELETED_ONCE_AFTER_CHECKPOINT,
+    );
+    await expect(releases[0]?.(client)).resolves.toBeDefined();
+  });
+
+  test('"deploy" reports a failed deletion once the other deletions finish, and the held release lifts the table it left', async () => {
+    const client = createMockClient(["User", "Post", "Comment", "Archive"]);
+    const deletionFailure = new ConnectError("delete refused", Code.Internal);
+    refuseWritesToDeletedTables(client, { tableName: "Comment", error: deletionFailure });
+    const planResult = planTablesDroppedWithoutMigration();
+
+    const releases: MaintenanceModeRelease[] = [];
+    await expect(
+      applyTailorDB(client, planResult, "create-update", {
+        holdMaintenanceMode: (release) => releases.push(release),
+      }),
+    ).rejects.toBe(deletionFailure);
+    await expect(releases[0]?.(client)).resolves.toBeDefined();
+
+    expect(
+      writesOf(client, "Comment").at(-1)?.tailordbType.schema?.settings?.disableGqlOperations,
+    ).toBeUndefined();
+  });
+
   test("writes nothing more when the local definitions match the last pending migration", async () => {
     using stderr = captureStderr();
     const client = createMockClient();
-    mockPending([addNickname]);
     const planResult = createMockPlanResult({
       local: [userWithNickname, post],
       updates: ["User"],
       unchanged: ["Post"],
     });
+    planResult.context.pendingMigrations = mockPending([addNickname]);
 
     await applyTailorDB(client, planResult, "create-update");
 

@@ -22,6 +22,45 @@ const expectSequentialIndices = (chunks: SeedChunk[]) => {
   }
 };
 
+describe("chunkSeedData size accounting", () => {
+  const withSpareBudget = (data: SeedData, order: string[]) => ({
+    data,
+    order,
+    codeByteSize: 0,
+    maxMessageSize: jsonByteSize(data, order) + 1024 + 10,
+  });
+
+  test("splits data whose <, > and & characters grow to 6 bytes each once the platform escapes them", () => {
+    const html = Array.from({ length: 8 }, (_, i) => ({ id: `id-${i}`, body: "<&>".repeat(20) }));
+    const data: SeedData = { Page: html };
+
+    const chunks = chunkSeedData(withSpareBudget(data, ["Page"]));
+
+    expect(chunks.length).toBeGreaterThan(1);
+  });
+
+  test("keeps data of the same raw size in one chunk when it has no characters the platform escapes", () => {
+    const plain = Array.from({ length: 8 }, (_, i) => ({ id: `id-${i}`, body: "abc".repeat(20) }));
+    const data: SeedData = { Page: plain };
+
+    const chunks = chunkSeedData(withSpareBudget(data, ["Page"]));
+
+    expect(chunks).toHaveLength(1);
+  });
+
+  test("splits data whose U+2028 and U+2029 characters grow to 6 bytes each once the platform escapes them", () => {
+    const text = Array.from({ length: 4 }, (_, i) => ({
+      id: `id-${i}`,
+      body: "\u2028\u2029".repeat(100),
+    }));
+    const data: SeedData = { Page: text };
+
+    const chunks = chunkSeedData(withSpareBudget(data, ["Page"]));
+
+    expect(chunks.length).toBeGreaterThan(1);
+  });
+});
+
 describe("chunkSeedData", () => {
   test("returns single chunk when data fits within budget", () => {
     const data: SeedData = {

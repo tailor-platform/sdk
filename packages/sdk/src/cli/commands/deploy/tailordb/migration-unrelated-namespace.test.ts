@@ -82,7 +82,7 @@ describe("migration flow: namespaces without pending migrations", () => {
     const client = checkpoint.createMockClient();
     const planResult = createMockPlanResult();
 
-    checkpoint.mockPending([mkPendingMigration()]);
+    planResult.context.pendingMigrations = checkpoint.mockPending([mkPendingMigration()]);
 
     await applyTailorDB(client, planResult, "create-update");
 
@@ -124,7 +124,7 @@ describe("migration flow: namespaces without pending migrations", () => {
     const client = checkpoint.createMockClient();
     const planResult = createMockPlanResult();
 
-    checkpoint.mockPending([mkPendingMigration()]);
+    planResult.context.pendingMigrations = checkpoint.mockPending([mkPendingMigration()]);
 
     await applyTailorDB(client, planResult, "create-update");
 

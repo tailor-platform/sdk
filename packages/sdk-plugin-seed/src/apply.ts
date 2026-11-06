@@ -1,13 +1,15 @@
 import {
+  assertNoActiveScriptWorkflow,
+  buildOptionsOf,
   bundleSeedScript,
   chunkSeedData,
-  executeScript,
   initOperatorClient,
   loadAccessToken,
   loadSeedContext,
   loadWorkspaceId,
   show,
   truncate,
+  withScriptWorkflow,
   deploymentArgs,
   defineAppCommand,
   logger,
@@ -28,8 +30,12 @@ import { selectEntities } from "./entities";
 import { parseExecutionResult } from "./execution-result";
 import { assertSeedDataDirectory, loadSeedData } from "./jsonl";
 import { sortRecordsBySelfReference, topologicalSort } from "./topo-sort";
+import { IDP_SEED_WORKFLOW_KINDS, seedWorkflowName } from "./workflow-name";
+import type { SeedWorkflowKind } from "./workflow-name";
 import type {
   OperatorClient,
+  RunScript,
+  SeedBundleBuildOptions,
   SeedData,
   SeedIdpUserContext,
   SeedNamespaceConfig,
@@ -40,6 +46,48 @@ interface SeedExecutionContext {
   workspaceId: string;
   authNamespace: string;
   machineUserName: string;
+  appName: string;
+  profile: string | undefined;
+}
+
+interface SeedWorkflowParams {
+  execution: SeedExecutionContext;
+  /** What the script seeds. */
+  kind: SeedWorkflowKind;
+  namespace: string;
+  description: string;
+  code: string;
+}
+
+/**
+ * Run a seed script as a temporary workflow named `tailor-seed-<kind>--<namespace>`.
+ * @param params - Script and the namespace it seeds
+ * @param use - Receives the function that starts the script
+ * @returns What `use` returned
+ */
+function withSeedWorkflow<T>(
+  params: SeedWorkflowParams,
+  use: (run: RunScript) => Promise<T>,
+): Promise<T> {
+  const { execution, kind, namespace, description, code } = params;
+  const { profile } = execution;
+  return withScriptWorkflow(
+    {
+      client: execution.operatorClient,
+      workspaceId: execution.workspaceId,
+      name: seedWorkflowName(kind, namespace),
+      description,
+      code,
+      invoker: {
+        namespace: execution.authNamespace,
+        machineUserName: execution.machineUserName,
+      },
+      appName: execution.appName,
+      leftoverNote: "It is removed by the next run of the same seed script for this namespace.",
+      profile,
+    },
+    use,
+  );
 }
 
 interface NamespaceSeedPlan {
@@ -56,6 +104,7 @@ interface SeedNamespaceParams {
   plan: NamespaceSeedPlan;
   upsert: boolean;
   configDir: string;
+  buildOptions: SeedBundleBuildOptions;
 }
 
 interface NamespaceSeedPlanParams {
@@ -114,7 +163,7 @@ function buildNamespaceSeedPlan(params: NamespaceSeedPlanParams): NamespaceSeedP
 }
 
 async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
-  const { execution, plan, upsert, configDir } = params;
+  const { execution, plan, upsert, configDir, buildOptions } = params;
   const { namespace, sortedTypes, data, selfRefTypes, selfRefFields, selfRefKeys } = plan;
   const processedTotals: Record<string, number> = {};
 
@@ -129,12 +178,8 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
     { mode: "plain" },
   );
 
-  const bundled = await bundleSeedScript(namespace, typesWithData, configDir);
-  const chunks = chunkSeedData({
-    data,
-    order: sortedTypes,
-    codeByteSize: new TextEncoder().encode(bundled.bundledCode).length,
-  });
+  const bundled = await bundleSeedScript(namespace, typesWithData, configDir, buildOptions);
+  const chunks = chunkSeedData({ data, order: sortedTypes, codeByteSize: 0 });
 
   if (chunks.length === 0) {
     logger.log(styles.dim(`  [${namespace}] No data to seed`));
@@ -143,59 +188,59 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
   const logChunkProgress = createChunkProgressLogger(chunks.length);
 
   let success = true;
-  for (const chunk of chunks) {
-    logChunkProgress(chunk.index, chunk.order.join(", "));
-
-    const result = await executeScript({
-      client: execution.operatorClient,
-      workspaceId: execution.workspaceId,
-      name: `seed-${namespace}.ts`,
+  await withSeedWorkflow(
+    {
+      execution,
+      kind: "tailordb",
+      namespace,
+      description: `Temporary function for seeding TailorDB namespace ${namespace}`,
       code: bundled.bundledCode,
-      arg: {
-        data: chunk.data,
-        order: chunk.order,
-        selfRefTypes,
-        selfRefFields,
-        selfRefKeys,
-        upsert,
-      },
-      invoker: {
-        namespace: execution.authNamespace,
-        machineUserName: execution.machineUserName,
-      },
-    });
+    },
+    async (runScript) => {
+      for (const chunk of chunks) {
+        logChunkProgress(chunk.index, chunk.order.join(", "));
 
-    const { success: chunkSuccess, parsed, errors } = parseExecutionResult(result, "    ");
-    const processed = (parsed.processed ?? {}) as Record<
-      string,
-      { inserted: number; updated: number; skipped: number }
-    >;
-    for (const [type, counts] of Object.entries(processed)) {
-      processedTotals[type] = (processedTotals[type] ?? 0) + counts.inserted + counts.updated;
-      const skippedSuffix = counts.skipped > 0 ? `, ${counts.skipped} skipped` : "";
-      const message = upsert
-        ? `${counts.inserted} inserted, ${counts.updated} updated${skippedSuffix}`
-        : `${counts.inserted} rows inserted`;
-      logger.log(styles.success(`    ✓ ${type}: ${message}`));
-    }
-    if (!chunkSuccess) {
-      logger.error(`  Seed failed:\n      ${errors.join("\n      ")}`, {
-        mode: "plain",
-      });
-      success = false;
-    }
-  }
+        const result = await runScript({
+          data: chunk.data,
+          order: chunk.order,
+          selfRefTypes,
+          selfRefFields,
+          selfRefKeys,
+          upsert,
+        });
+
+        const { success: chunkSuccess, parsed, errors } = parseExecutionResult(result, "    ");
+        const processed = (parsed.processed ?? {}) as Record<
+          string,
+          { inserted: number; updated: number; skipped: number }
+        >;
+        for (const [type, counts] of Object.entries(processed)) {
+          processedTotals[type] = (processedTotals[type] ?? 0) + counts.inserted + counts.updated;
+          const skippedSuffix = counts.skipped > 0 ? `, ${counts.skipped} skipped` : "";
+          const message = upsert
+            ? `${counts.inserted} inserted, ${counts.updated} updated${skippedSuffix}`
+            : `${counts.inserted} rows inserted`;
+          logger.log(styles.success(`    ✓ ${type}: ${message}`));
+        }
+        if (!chunkSuccess) {
+          logger.error(`  Seed failed:\n      ${errors.join("\n      ")}`, {
+            mode: "plain",
+          });
+          success = false;
+          break;
+        }
+      }
+    },
+  );
   return { success, processed: processedTotals };
 }
 
 type IdpUserRef = { id: string; name: string };
 
 interface IdpScriptRun {
-  execution: SeedExecutionContext;
-  scriptCode: string;
-  scriptName: string;
-  arg?: {
-    users: SeedData[string] | IdpUserRef[];
+  runScript: RunScript;
+  arg: {
+    users?: SeedData[string] | IdpUserRef[];
     upsert?: boolean;
     offset?: number;
     total?: number;
@@ -207,19 +252,9 @@ interface IdpScriptRun {
 async function runIdpScript(
   params: IdpScriptRun,
 ): Promise<{ success: boolean; parsed: Record<string, unknown>; outcomeUnknown: boolean }> {
-  const { execution, scriptCode, scriptName, arg, indent, reportSuccess } = params;
+  const { runScript, arg, indent, reportSuccess } = params;
 
-  const result = await executeScript({
-    client: execution.operatorClient,
-    workspaceId: execution.workspaceId,
-    name: scriptName,
-    code: scriptCode,
-    ...(arg ? { arg } : {}),
-    invoker: {
-      namespace: execution.authNamespace,
-      machineUserName: execution.machineUserName,
-    },
-  });
+  const result = await runScript(arg);
 
   const { success, parsed, errors, outcomeUnknown } = parseExecutionResult(result, indent);
   reportSuccess?.(parsed);
@@ -233,8 +268,9 @@ async function runIdpScript(
 
 // The generated IdP scripts upsert or delete users one call at a time (about a
 // second or more per row), so each script execution must carry few enough rows
-// to finish within the operator API deadline. Byte-size chunking cannot capture
-// this.
+// to finish well within a workflow job's execution time limit, and to keep the
+// rows an interrupted chunk may have applied few. Byte-size chunking cannot
+// capture this.
 const IDP_USER_CHUNK_SIZE = 25;
 
 function chunkIdpUsers<T>(rows: T[]): T[][] {
@@ -252,6 +288,7 @@ function readCount(result: Record<string, unknown>, key: string): number {
 
 interface SeedIdpUserParams {
   execution: SeedExecutionContext;
+  idpNamespace: string;
   scriptCode: string;
   rows: SeedData[string];
   upsert: boolean;
@@ -281,7 +318,7 @@ async function hookIdpUserRows(
 async function seedIdpUser(
   params: SeedIdpUserParams,
 ): Promise<{ success: boolean; processed: number; transportError?: unknown }> {
-  const { execution, scriptCode, rows, upsert } = params;
+  const { execution, idpNamespace, scriptCode, rows, upsert } = params;
   logger.info("  Seeding _User via tailor.idp.Client...", { mode: "plain" });
 
   if (rows.length === 0) {
@@ -319,37 +356,55 @@ async function seedIdpUser(
       { mode: "plain" },
     );
   };
-  for (const [index, chunk] of chunks.entries()) {
-    logChunkProgress(index, `${chunk.length} rows`);
-    let run: { success: boolean; parsed: Record<string, unknown>; outcomeUnknown: boolean };
-    try {
-      run = await runIdpScript({
+  let interrupted: { transportError?: unknown } | undefined;
+  try {
+    interrupted = await withSeedWorkflow(
+      {
         execution,
-        scriptCode,
-        scriptName: "seed-idp-user.ts",
-        arg: {
-          users: chunk,
-          upsert,
-          offset: index * IDP_USER_CHUNK_SIZE,
-          total: rows.length,
-        },
-        indent: "    ",
-        reportSuccess: reportChunkCounts,
-      });
-    } catch (error) {
-      warnInterruptedChunk();
-      return { success: false, processed: totals.processed, transportError: error };
-    }
-    if (run.outcomeUnknown) {
-      warnInterruptedChunk();
-      return { success: false, processed: totals.processed };
-    }
-    totals.processed += readCount(run.parsed, "processed");
-    totals.created += readCount(run.parsed, "created");
-    totals.updated += readCount(run.parsed, "updated");
-    if (!run.success) {
-      success = false;
-    }
+        kind: "idp-seed",
+        namespace: idpNamespace,
+        description: `Temporary function for seeding IdP namespace ${idpNamespace}`,
+        code: scriptCode,
+      },
+      async (runScript) => {
+        for (const [index, chunk] of chunks.entries()) {
+          logChunkProgress(index, `${chunk.length} rows`);
+          let run: { success: boolean; parsed: Record<string, unknown>; outcomeUnknown: boolean };
+          try {
+            run = await runIdpScript({
+              runScript,
+              arg: {
+                users: chunk,
+                upsert,
+                offset: index * IDP_USER_CHUNK_SIZE,
+                total: rows.length,
+              },
+              indent: "    ",
+              reportSuccess: reportChunkCounts,
+            });
+          } catch (error) {
+            warnInterruptedChunk();
+            return { transportError: error };
+          }
+          if (run.outcomeUnknown) {
+            warnInterruptedChunk();
+            return {};
+          }
+          totals.processed += readCount(run.parsed, "processed");
+          totals.created += readCount(run.parsed, "created");
+          totals.updated += readCount(run.parsed, "updated");
+          if (!run.success) {
+            success = false;
+          }
+        }
+        return undefined;
+      },
+    );
+  } catch (error) {
+    return { success: false, processed: totals.processed, transportError: error };
+  }
+  if (interrupted) {
+    return { success: false, processed: totals.processed, ...interrupted };
   }
   return { success, processed: totals.processed };
 }
@@ -372,7 +427,7 @@ function readListedUsers(parsed: Record<string, unknown>): IdpUserRef[] | undefi
 
 async function truncateIdpUser(
   execution: SeedExecutionContext,
-  scripts: Pick<SeedIdpUserContext, "listScriptCode" | "truncateScriptCode">,
+  scripts: Pick<SeedIdpUserContext, "idpNamespace" | "listScriptCode" | "truncateScriptCode">,
 ): Promise<boolean> {
   logger.info("Truncating _User via tailor.idp.Client...", { mode: "plain" });
 
@@ -384,12 +439,16 @@ async function truncateIdpUser(
     );
   }
 
-  const listed = await runIdpScript({
-    execution,
-    scriptCode: scripts.listScriptCode,
-    scriptName: "list-idp-user.ts",
-    indent: "  ",
-  });
+  const listed = await withSeedWorkflow(
+    {
+      execution,
+      kind: "idp-list",
+      namespace: scripts.idpNamespace,
+      description: `Temporary function for listing the users of IdP namespace ${scripts.idpNamespace}`,
+      code: scripts.listScriptCode,
+    },
+    (runScript) => runIdpScript({ runScript, arg: {}, indent: "  " }),
+  );
   if (!listed.success) {
     return false;
   }
@@ -419,31 +478,42 @@ async function truncateIdpUser(
       { mode: "plain" },
     );
   };
-  for (const [index, chunk] of chunks.entries()) {
-    logChunkProgress(index, `${chunk.length} users`);
-    let run: { success: boolean; parsed: Record<string, unknown>; outcomeUnknown: boolean };
-    try {
-      run = await runIdpScript({
-        execution,
-        scriptCode: scripts.truncateScriptCode,
-        scriptName: "truncate-idp-user.ts",
-        arg: { users: chunk, offset: index * IDP_USER_CHUNK_SIZE, total: users.length },
-        indent: "  ",
-      });
-    } catch (error) {
-      warnInterruptedChunk();
-      throw error;
-    }
-    if (run.outcomeUnknown) {
-      warnInterruptedChunk();
-      return false;
-    }
-    totals.deleted += readCount(run.parsed, "deleted");
-    totals.notFound += readCount(run.parsed, "notFound");
-    if (!run.success) {
-      success = false;
-    }
-  }
+  const completed = await withSeedWorkflow(
+    {
+      execution,
+      kind: "idp-truncate",
+      namespace: scripts.idpNamespace,
+      description: `Temporary function for deleting the users of IdP namespace ${scripts.idpNamespace}`,
+      code: scripts.truncateScriptCode,
+    },
+    async (runScript) => {
+      for (const [index, chunk] of chunks.entries()) {
+        logChunkProgress(index, `${chunk.length} users`);
+        let run: { success: boolean; parsed: Record<string, unknown>; outcomeUnknown: boolean };
+        try {
+          run = await runIdpScript({
+            runScript,
+            arg: { users: chunk, offset: index * IDP_USER_CHUNK_SIZE, total: users.length },
+            indent: "  ",
+          });
+        } catch (error) {
+          warnInterruptedChunk();
+          throw error;
+        }
+        if (run.outcomeUnknown) {
+          warnInterruptedChunk();
+          return false;
+        }
+        totals.deleted += readCount(run.parsed, "deleted");
+        totals.notFound += readCount(run.parsed, "notFound");
+        if (!run.success) {
+          success = false;
+        }
+      }
+      return true;
+    },
+  );
+  if (!completed) return false;
   const notFoundSuffix = totals.notFound > 0 ? `, ${totals.notFound} already deleted` : "";
   const summary = `${totals.deleted} users deleted${notFoundSuffix}`;
   if (success) {
@@ -583,9 +653,33 @@ export const seedApplyCommand = defineAppCommand({
       }),
       authNamespace: appInfo.auth,
       machineUserName,
+      appName: appInfo.name,
+      profile: args.profile,
     };
 
     if (args.truncate) {
+      const shouldTruncateUser =
+        hasIdpUser &&
+        !args["skip-idp"] &&
+        !args.namespace &&
+        (args.entities.length === 0 || (selection.entitiesToProcess ?? []).includes("_User"));
+      const touchedNamespaces =
+        args.entities.length > 0 && !args.namespace
+          ? plans.map((plan) => plan.namespace)
+          : namespacesToProcess;
+      const idpNamespace = shouldTruncateUser ? context.idpUser?.idpNamespace : undefined;
+      await assertNoActiveScriptWorkflow({
+        client: execution.operatorClient,
+        workspaceId: execution.workspaceId,
+        profile: args.profile,
+        names: [
+          ...touchedNamespaces.map((namespace) => seedWorkflowName("tailordb", namespace)),
+          ...(idpNamespace
+            ? IDP_SEED_WORKFLOW_KINDS.map((kind) => seedWorkflowName(kind, idpNamespace))
+            : []),
+        ],
+      });
+
       const confirmed =
         args.yes ||
         (await prompt.confirm({ message: "Are you sure you want to truncate?", default: false }));
@@ -624,11 +718,6 @@ export const seedApplyCommand = defineAppCommand({
         });
       }
 
-      const shouldTruncateUser =
-        hasIdpUser &&
-        !args["skip-idp"] &&
-        !args.namespace &&
-        (args.entities.length === 0 || (selection.entitiesToProcess ?? []).includes("_User"));
       if (shouldTruncateUser && context.idpUser) {
         const truncated = await truncateIdpUser(execution, context.idpUser);
         if (!truncated) {
@@ -654,6 +743,7 @@ export const seedApplyCommand = defineAppCommand({
         plan,
         upsert: args.upsert,
         configDir: path.dirname(context.config.path),
+        buildOptions: buildOptionsOf(context.config),
       });
       for (const [type, count] of Object.entries(seeded.processed)) {
         allProcessed[type] = (allProcessed[type] ?? 0) + count;
@@ -666,6 +756,7 @@ export const seedApplyCommand = defineAppCommand({
     if (shouldSeedUser && context.idpUser) {
       const seeded = await seedIdpUser({
         execution,
+        idpNamespace: context.idpUser.idpNamespace,
         scriptCode: context.idpUser.seedScriptCode,
         rows: idpUserRows,
         upsert: args.upsert,

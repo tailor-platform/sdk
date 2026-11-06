@@ -362,7 +362,8 @@ tailor setup ci autofix --dir apps/erp --dir apps/users  # run tailor generate i
 It writes `.github/workflows/tailor-autofix.yml`, which runs `tailor generate`
 on every pull request and, when that changes files, commits them to the pull
 request branch as `chore: run tailor generate`. Only the changes
-`tailor generate` makes are committed: files that earlier steps leave in the
+`tailor generate` makes, and with `--codemod deterministic` those of
+`tailor upgrade`, are committed: files that earlier steps leave in the
 checkout, such as an `.npmrc`, are not. The deploy workflows keep their check,
 which fails on the commit that needed the fix and passes on the fix commit.
 
@@ -387,9 +388,10 @@ right away.
 - **A branch that moved on:** if someone pushes to the branch while the
   workflow runs, it does not commit; the run for the new commit regenerates the
   files.
-- **Output that keeps changing:** if `tailor generate` changes files again
-  right after the fix commit, the workflow fails instead of committing again.
-  Check that running it twice in a row changes nothing.
+- **Output that keeps changing:** if `tailor generate` (or, with
+  `--codemod deterministic`, `tailor upgrade`) changes files again right after
+  the fix commit, the workflow fails instead of committing again. Check that
+  running it twice in a row changes nothing.
 - **Approval rules:** the fix commit becomes the most recent push to the pull
   request, and a bot pushed it. A branch protection rule that requires the most
   recent push to be approved by someone other than its pusher is then satisfied
@@ -413,6 +415,60 @@ right away.
 
 To stop committing, delete the workflow with
 `tailor setup delete .github/workflows/tailor-autofix.yml`.
+
+### Applying codemods on SDK upgrades
+
+A pull request that upgrades `@tailor-platform/sdk`, such as one from Renovate,
+may need the codemods that [`tailor upgrade`](./cli/upgrade.md) runs. Pass
+`--codemod` to have the autofix workflow handle them; without it, the
+workflow runs only `tailor generate`:
+
+```bash
+tailor setup ci autofix --codemod error          # fail the pull request until they are applied
+tailor setup ci autofix --codemod deterministic  # commit what they rewrite
+```
+
+| `--codemod`     | On a pull request that upgrades the SDK                                                                                  | Check fails |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------- |
+| `warn`          | Runs `tailor upgrade --dry-run` and reports the files it would rewrite and the changes it leaves for review, as warnings | No          |
+| `error`         | Reports the same as errors, and fails the `tailor-codemod-result` job                                                    | Yes         |
+| `deterministic` | Commits what `tailor upgrade` rewrites together with what `tailor generate` changes, and reports the rest as warnings    | No          |
+
+- **Which upgrade:** for each `--dir`, the workflow upgrades from the SDK
+  version that the lockfile at the repository root resolves on the pull
+  request's base branch to the version the pull request installs. When the
+  base branch has no lockfile of that name, such as when the pull request
+  switches package managers, it upgrades from 2.37.0, the oldest version
+  `tailor setup ci autofix` supports. A pull request that keeps the version,
+  or keeps the SDK linked from a workspace (such as with `workspace:*`), runs
+  no codemod.
+- **Reports:** the files left for you get annotations, and the job summary
+  lists every file, with the migration prompt of each change left for review.
+  Hand the prompt to an AI coding assistant, or follow it yourself.
+- **Required check:** with `error`, require the `tailor-codemod-result` check
+  to block the merge. The workflow still commits what `tailor generate`
+  changes. `tailor-codemod-result` also fails when the `tailor-autofix` job
+  fails or is cancelled, and is skipped, which counts as passing, when that
+  job succeeds with nothing left.
+- **Reviews keep matching:** a change left for review is found by the code it
+  touches, and some codemods ask for a review of the whole app, so a review
+  can still be reported after you finish the migration. With `error`, such a
+  pull request keeps failing until the base branch has the new version.
+- **Workflow files:** GitHub refuses a change to `.github/workflows` from the
+  workflow token or from an App without the Workflows permission, so
+  `deterministic` leaves those files out of the fix commit and reports them.
+  Run `tailor upgrade --from <base version>` and commit them yourself.
+- **Warnings** that `tailor upgrade` prints for code that may still need a
+  manual migration stay warnings with every value.
+- **Lockfile:** bun needs the text `bun.lock`, not `bun.lockb`. A `yarn.lock`
+  does not record which app uses which version, so when the base branch has
+  several SDK versions and the pull request changes them, the workflow fails and
+  you run `tailor upgrade` yourself. Yarn 1 leaves workspace packages out of
+  `yarn.lock`, so the workflow also fails for an app that takes the SDK from a
+  workspace there.
+- **Skipped pull requests:** fork and Dependabot pull requests skip the whole
+  workflow (except fork pull requests with `autofix-ci`), so `error` does not
+  check them, and a skipped check counts as passing.
 
 ## Targeting a workspace
 

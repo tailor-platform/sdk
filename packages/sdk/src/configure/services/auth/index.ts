@@ -1,6 +1,5 @@
 import { type TailorDBInstance } from "../tailordb/schema";
 import type {
-  AuthDefinitionBrand,
   AuthServiceInput,
   DefinedAuth,
   UserAttributeListKey,
@@ -149,7 +148,7 @@ export function defineAuth<
   config:
     | UserProfileAuthInput<User, Attributes, AttributeList, MachineUserNames, ConnectionNames>
     | MachineUserOnlyAuthInput<MachineUserNames, MachineUserAttributes, ConnectionNames>,
-) {
+): unknown {
   const result = {
     ...config,
     name,
@@ -160,5 +159,9 @@ export function defineAuth<
     name: string;
   };
 
-  return result as typeof result & AuthDefinitionBrand;
+  Object.defineProperty(result, "asExternal", {
+    value: () => ({ name, external: true, machineUsers: config.machineUsers ?? {} }),
+  });
+
+  return result;
 }

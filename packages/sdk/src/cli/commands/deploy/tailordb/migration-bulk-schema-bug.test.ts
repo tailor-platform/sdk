@@ -88,8 +88,8 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     });
   }
 
-  function setPendingMigrations(migrations: PendingMigration[]): void {
-    checkpoint.mockPending(migrations);
+  function setPendingMigrations(migrations: PendingMigration[]) {
+    return checkpoint.mockPending(migrations);
   }
 
   function mkFieldMigration(
@@ -120,7 +120,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     const client = checkpoint.createMockClient();
     const planResult = createMockPlanResult();
 
-    setPendingMigrations([
+    planResult.context.pendingMigrations = setPendingMigrations([
       mkFieldMigration("field_added", 1, "User", "permissions"),
       mkFieldMigration("field_removed", 5, "User", "roles"),
     ]);
@@ -148,7 +148,9 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     const client = checkpoint.createMockClient();
     const planResult = createMockPlanResult();
 
-    setPendingMigrations([mkFieldMigration("field_added", 1, "SomeOtherType", "foo")]);
+    planResult.context.pendingMigrations = setPendingMigrations([
+      mkFieldMigration("field_added", 1, "SomeOtherType", "foo"),
+    ]);
 
     await applyTailorDB(client, planResult, "create-update");
 
@@ -204,7 +206,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
         after: { type: "string", required: false, array: true },
       },
     ];
-    setPendingMigrations([migration]);
+    planResult.context.pendingMigrations = setPendingMigrations([migration]);
 
     const applyPromise = applyTailorDB(client, planResult, "create-update");
     await firstCreateStartedPromise;

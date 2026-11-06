@@ -108,7 +108,37 @@ describe("loadDateDefaultFromConfig", { timeout: 60_000 }, () => {
     const configPath = fixture("syntax", {
       "tailor.config.ts": `export default { name: "app", defaultDateRepresentation: "temporal"\n`,
     });
-    expect(run(configPath).error).toMatch(/could not parse .*tailor\.config\.ts/);
+    expect(run(configPath).error).toMatch(
+      /could not parse .*[/\\]syntax[/\\]tailor\.config\.ts:1: Expected ','/,
+    );
+  });
+
+  test("a parse diagnostic without a line names its file and message", () => {
+    const configPath = fixture("syntax-without-line", {
+      "tailor.config.ts": `throw { code: "InvalidSyntax", message: "Unexpected token", filename: "/elsewhere/module.ts" };\n`,
+    });
+    expect(run(configPath).error).toBe(
+      "tailor-runtime could not parse /elsewhere/module.ts: Unexpected token",
+    );
+  });
+
+  test("an InvalidSyntax value that is not a parse diagnostic still fails the run, naming the config", () => {
+    const configPath = fixture("syntax-other-shape", {
+      "tailor.config.ts": `throw { code: "InvalidSyntax" };\n`,
+    });
+    expect(run(configPath).error).toMatch(
+      /could not parse .*[/\\]syntax-other-shape[/\\]tailor\.config\.ts: /,
+    );
+  });
+
+  test("a file the config imports that does not parse fails the run, naming that file and line", () => {
+    const configPath = fixture("imported-syntax", {
+      "broken.ts": `export const setting = {\n  a: 1,\n  b:\n`,
+      "tailor.config.ts": `import { setting } from "./broken";\nexport default { name: "app", setting };\n`,
+    });
+    const { error } = run(configPath);
+    expect(error).toMatch(/could not parse .*[/\\]broken\.ts:3: Expression expected/);
+    expect(error).not.toContain("tailor.config.ts");
   });
 
   test("a config that sets an invalid value fails the run", () => {

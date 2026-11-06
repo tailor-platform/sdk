@@ -5,6 +5,7 @@ import {
   createPlanResult,
   createRemoteCheckpoint,
   mkPendingMigration,
+  type PlannedPendingMigrations,
   type RemoteCheckpoint,
   typeEntry,
 } from "./test-helpers/migration-apply";
@@ -38,6 +39,7 @@ vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => ({
 
 describe("applyTailorDB: machine user that runs migration scripts", () => {
   let checkpoint: RemoteCheckpoint;
+  let pendingMigrations: PlannedPendingMigrations;
 
   function buildPlanResult(
     machineUsers: Record<string, object>,
@@ -52,16 +54,17 @@ describe("applyTailorDB: machine user that runs migration scripts", () => {
       application: {
         authService: { config: { name: "auth", machineUsers } },
       } as unknown as Partial<Application>,
-      ...(migrationMachineUserOverride !== undefined && {
-        context: { migrationMachineUserOverride },
-      }),
+      context: {
+        pendingMigrations,
+        ...(migrationMachineUserOverride !== undefined && { migrationMachineUserOverride }),
+      },
     });
   }
 
   beforeEach(() => {
     checkpoint = createRemoteCheckpoint(0);
     vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
-    checkpoint.mockPending([
+    pendingMigrations = checkpoint.mockPending([
       mkPendingMigration([
         { kind: "table_added", tableName: "StockReservation" } as unknown as DiffChange,
       ]),

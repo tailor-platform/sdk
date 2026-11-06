@@ -14,6 +14,7 @@ import { z } from "zod";
 import { resolveResolverDefaultPermissionForFile } from "#/cli/services/resolver/default-permission";
 import {
   commonArgs,
+  configArg,
   resolveMachineUserInputSource,
   flagTokensOf,
   type MachineUserInputSource,
@@ -65,10 +66,7 @@ export const runFunctionCommand = defineAppCommand({
         "Machine user name for authentication. Falls back to the active profile's default machine user.",
       env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
     }),
-    config: arg(z.string().default("tailor.config.ts"), {
-      alias: "c",
-      description: "Path to SDK config file",
-    }),
+    ...configArg,
     "allow-schema-drift": arg(z.boolean().default(false), {
       description: "Run a scaffolded script even when its schema snapshot no longer matches",
     }),

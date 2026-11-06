@@ -1,4 +1,5 @@
 import {
+  buildOptionsOf,
   bundleSeedDumpScript,
   executeScript,
   initOperatorClient,
@@ -310,7 +311,11 @@ export const seedDumpCommand = defineAppCommand({
           mode: "plain",
         });
 
-        const bundled = await bundleSeedDumpScript(namespace, path.dirname(context.config.path));
+        const bundled = await bundleSeedDumpScript(
+          namespace,
+          path.dirname(context.config.path),
+          buildOptionsOf(context.config),
+        );
 
         for (const table of entry.tables) {
           const tmpPath = beginSeedDataWrite(dataDir, table);

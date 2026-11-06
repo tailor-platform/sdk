@@ -42,9 +42,9 @@ tailor generate [options]
 
 **Options**
 
-| Option              | Alias | Description             | Required | Default              |
-| ------------------- | ----- | ----------------------- | -------- | -------------------- |
-| `--config <CONFIG>` | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
+| Option              | Alias | Description                | Required | Default              | Env                  |
+| ------------------- | ----- | -------------------------- | -------- | -------------------- | -------------------- |
+| `--config <CONFIG>` | `-c`  | Path to Tailor config file | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

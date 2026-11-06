@@ -11,9 +11,13 @@ import * as migrationModule from "./migration";
 import {
   createMockClient as createBaseMockClient,
   createPlanResult,
+  DELETED_ONCE_AFTER_CHECKPOINT,
+  deleteOrders,
+  deletionOf,
   gqlPermissionDeletion,
   mkPendingMigration as createPendingMigration,
   mockPendingMigrations,
+  type PlannedPendingMigrations,
   snapshotAt,
   snapshotTable,
   type SnapshotTablesByVersion,
@@ -80,6 +84,7 @@ function createMockPlanResult(options: {
   updates?: TypeEntry[];
   unchanged?: Omit<TypeEntry, "request">[];
   deletes?: DeleteEntry[];
+  pendingMigrations: PlannedPendingMigrations;
 }) {
   const deletes = options.deletes ?? [];
   return createPlanResult({
@@ -95,6 +100,7 @@ function createMockPlanResult(options: {
         namespace,
         migrationsDir: migrationsDirOf(namespace),
       })),
+      pendingMigrations: options.pendingMigrations,
     },
   });
 }
@@ -149,8 +155,8 @@ function createMockClient() {
   });
 }
 
-function mockPending(pending: PendingMigration[]): void {
-  mockPendingMigrations(pending, (namespace) => ({
+function mockPending(pending: PendingMigration[]) {
+  return mockPendingMigrations(pending, (namespace) => ({
     number: state.checkpoints.get(namespace) ?? null,
     historyId: null,
   }));
@@ -175,53 +181,11 @@ function typeCreateCount(client: OperatorClient, namespace: string, tableName: s
   return typeWritesOf(vi.mocked(client.createTailorDBType).mock, namespace, tableName).length;
 }
 
-function deleteOrders(client: OperatorClient, namespace: string, tableName: string) {
-  const ordersOf = (
-    mock: { calls: unknown[][]; invocationCallOrder: number[] },
-    matches: (request: Record<string, unknown>) => boolean,
-  ) =>
-    mock.calls.flatMap((call, index) =>
-      matches(call[0] as Record<string, unknown>) ? [mock.invocationCallOrder[index]!] : [],
-    );
-  return {
-    table: ordersOf(
-      vi.mocked(client.deleteTailorDBType).mock,
-      (request) => request.namespaceName === namespace && request.tailordbTypeName === tableName,
-    ),
-    permission: ordersOf(
-      vi.mocked(client.deleteTailorDBGQLPermission).mock,
-      (request) => request.namespaceName === namespace && request.typeName === tableName,
-    ),
-  };
-}
-
 function checkpointOrder(namespace: string, number: number) {
   const mocked = vi.mocked(migrationModule.updateMigrationLabel);
   const index = mocked.mock.calls.findIndex((call) => call[2] === namespace && call[3] === number);
   return index === -1 ? undefined : mocked.mock.invocationCallOrder[index];
 }
-
-function deletionOf(
-  client: OperatorClient,
-  namespace: string,
-  tableName: string,
-  checkpoint: number | undefined,
-) {
-  const { table, permission } = deleteOrders(client, namespace, tableName);
-  return {
-    tableDeletes: table.length,
-    permissionDeletes: permission.length,
-    afterCheckpoint: checkpoint !== undefined && permission.every((order) => order > checkpoint),
-    permissionFirst: table.every((tableOrder) => permission.every((order) => order < tableOrder)),
-  };
-}
-
-const DELETED_ONCE_AFTER_CHECKPOINT = {
-  tableDeletes: 1,
-  permissionDeletes: 1,
-  afterCheckpoint: true,
-  permissionFirst: true,
-};
 
 function writtenMetadataTrns(client: OperatorClient) {
   return vi.mocked(client.setMetadata).mock.calls.map((call) => call[0].trn);
@@ -291,7 +255,7 @@ describe("migration flow: a table name shared across namespaces", () => {
         [migrationsDirOf(SUB)]: { 0: {}, 1: { Item: snapshotTable("Item", subItem) } },
       };
       for (const namespace of migrating) state.checkpoints.set(namespace, 0);
-      mockPending(pending);
+      const pendingMigrations = mockPending(pending);
       const client = createMockClient();
       const subEntry = typeEntry("Item", { namespace: SUB, fields: subItem });
 
@@ -300,6 +264,7 @@ describe("migration flow: a table name shared across namespaces", () => {
         createMockPlanResult({
           ...(entry === "create" ? { creates: [subEntry] } : { updates: [subEntry] }),
           deletes: [deleteEntry(MAIN, "Item")],
+          pendingMigrations,
         }),
         "create-update",
       );
@@ -325,7 +290,7 @@ describe("migration flow: a table name shared across namespaces", () => {
     };
     state.checkpoints.set(MAIN, 0);
     state.checkpoints.set(SUB, 0);
-    mockPending([
+    const pendingMigrations = mockPending([
       mkPendingMigration(MAIN, 1, [tableRemoved("Legacy")]),
       mkPendingMigration(SUB, 1, [tableRemoved("Legacy")]),
     ]);
@@ -333,7 +298,10 @@ describe("migration flow: a table name shared across namespaces", () => {
 
     await applyTailorDB(
       client,
-      createMockPlanResult({ deletes: [deleteEntry(MAIN, "Legacy"), deleteEntry(SUB, "Legacy")] }),
+      createMockPlanResult({
+        deletes: [deleteEntry(MAIN, "Legacy"), deleteEntry(SUB, "Legacy")],
+        pendingMigrations,
+      }),
       "create-update",
     );
 
@@ -352,7 +320,7 @@ describe("migration flow: a table name shared across namespaces", () => {
       [migrationsDirOf(MAIN)]: { 0: { Legacy: snapshotTable("Legacy", legacy) }, 1: {}, 2: {} },
     };
     state.checkpoints.set(MAIN, 0);
-    mockPending([
+    const pendingMigrations = mockPending([
       mkPendingMigration(MAIN, 1, [tableRemoved("Legacy")], false),
       mkPendingMigration(MAIN, 2, []),
     ]);
@@ -360,7 +328,10 @@ describe("migration flow: a table name shared across namespaces", () => {
 
     await applyTailorDB(
       client,
-      createMockPlanResult({ deletes: [deleteEntry(MAIN, "Legacy"), deleteEntry(SUB, "Legacy")] }),
+      createMockPlanResult({
+        deletes: [deleteEntry(MAIN, "Legacy"), deleteEntry(SUB, "Legacy")],
+        pendingMigrations,
+      }),
       "create-update",
     );
 
@@ -379,13 +350,19 @@ describe("migration flow: a table name shared across namespaces", () => {
       [migrationsDirOf(MAIN)]: { 0: { Legacy: snapshotTable("Legacy", legacy) }, 1: {} },
     };
     state.checkpoints.set(MAIN, 0);
-    mockPending([mkPendingMigration(MAIN, 1, [tableRemoved("Legacy")], false)]);
+    const pendingMigrations = mockPending([
+      mkPendingMigration(MAIN, 1, [tableRemoved("Legacy")], false),
+    ]);
     const client = createMockClient();
     const unchanged = { name: "Legacy", metaRequest: typeMetaRequest("Legacy", SUB) };
 
     await applyTailorDB(
       client,
-      createMockPlanResult({ deletes: [deleteEntry(MAIN, "Legacy")], unchanged: [unchanged] }),
+      createMockPlanResult({
+        deletes: [deleteEntry(MAIN, "Legacy")],
+        unchanged: [unchanged],
+        pendingMigrations,
+      }),
       "create-update",
     );
 

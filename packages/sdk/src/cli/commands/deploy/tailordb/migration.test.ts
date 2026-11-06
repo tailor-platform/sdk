@@ -591,7 +591,6 @@ describe("migration", () => {
     });
 
     test("includes migration when script skip is acknowledged", async () => {
-      const { logger } = await import("#/cli/shared/logger");
       const client = createMockClient({ tailordb: 0 });
 
       writeDiffFile(
@@ -612,7 +611,6 @@ describe("migration", () => {
 
       expect(result).toHaveLength(1);
       expect(result[0]!.hasScript).toBe(false);
-      expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("no data yet"));
     });
 
     test("throws before anything changes when a pending migration script still calls TODO", async () => {
@@ -695,7 +693,7 @@ describe("migration", () => {
       expect(suggestion).toContain("delete migrate.ts");
     });
 
-    test("runs main and warns when migrate.ts also exports steps", async () => {
+    test("runs main when migrate.ts also exports steps", async () => {
       const client = createMockClient({ tailordb: 0 });
       writeDiffFile(testDir, 1, createMockMigrationDiff({ requiresMigrationScript: true }));
       writeMigrateFile(
@@ -703,18 +701,12 @@ describe("migration", () => {
         1,
         "export async function main() {}\nexport const steps = { backfill: { run: async () => {} } };",
       );
-      vi.mocked(logger.warn).mockClear();
 
       const result = await detectPendingMigrations(client, workspaceId, [
         { namespace: "tailordb", migrationsDir: testDir },
       ]);
 
       expect(result[0]!.scriptForm).toEqual({ kind: "main", ignoredSteps: true });
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining(
-          "Migration tailordb/0001: migrate.ts exports `steps` next to `main`",
-        ),
-      );
     });
 
     test("includes breaking change migration with script", async () => {

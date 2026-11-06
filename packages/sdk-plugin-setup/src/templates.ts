@@ -7,9 +7,9 @@ import tagTemplate from "./tag.workflow.yml";
 // The release PR updates RELEASED_TEMPLATE_VERSION and the fingerprint below. A PR that
 // changes the generated templates sets TEMPLATE_CHANGED_SINCE_RELEASE to true instead. A PR that
 // only adds renders to renderedTemplates() re-records the fingerprint while the flag stays false.
-// Released template fingerprint: c64cf3888d990eba0d5067e0009cb59b61c088a4a5995e62674b43f7f7ca8a0b
-const RELEASED_TEMPLATE_VERSION = 23;
-const TEMPLATE_CHANGED_SINCE_RELEASE = true;
+// Released template fingerprint: d8f4f024ae99b9eb3fad413180fa3489edc697298cbd8d3f2172354422ddd326
+const RELEASED_TEMPLATE_VERSION = 24;
+const TEMPLATE_CHANGED_SINCE_RELEASE = false;
 export const ACTIONS_SHA = "77effc033b3cb5fa7660b38571fbeb8361d121e8";
 export const ACTIONS_VERSION = "v2.8.0";
 
@@ -20,6 +20,31 @@ export const TEMPLATE_VERSION =
 export const PACKAGE_MANAGERS = ["pnpm", "yarn", "npm", "bun"] as const;
 
 export type PackageManager = (typeof PACKAGE_MANAGERS)[number];
+
+/**
+ * Lockfiles at the repository root, each with the package manager that writes it. A package
+ * manager reads the first of its own that exists, as npm prefers npm-shrinkwrap.json.
+ */
+export const LOCKFILES: ReadonlyArray<readonly [file: string, packageManager: PackageManager]> = [
+  ["pnpm-lock.yaml", "pnpm"],
+  ["yarn.lock", "yarn"],
+  ["bun.lock", "bun"],
+  ["bun.lockb", "bun"],
+  ["npm-shrinkwrap.json", "npm"],
+  ["package-lock.json", "npm"],
+];
+
+/**
+ * Lockfiles of a package manager that the codemod step reads the base branch's SDK version from:
+ * all of its own but the binary bun.lockb.
+ * @param packageManager - Package manager
+ * @returns Lockfile names, in the order the package manager prefers them
+ */
+export function codemodLockfiles(packageManager: PackageManager): string[] {
+  return LOCKFILES.filter(
+    ([file, manager]) => manager === packageManager && file !== "bun.lockb",
+  ).map(([file]) => file);
+}
 
 /**
  * Check whether a value names a supported package manager.
@@ -805,9 +830,40 @@ export const AUTOFIX_PROVIDERS = ["github-token", "autofix-ci", "securefix", "gi
 /** What commits the regenerated files to the pull request branch. */
 export type AutofixProvider = (typeof AUTOFIX_PROVIDERS)[number];
 
+export const AUTOFIX_CODEMODS = ["warn", "error", "deterministic"] as const;
+
+/** What the autofix workflow does with the codemods of an SDK upgrade in a pull request. */
+export type AutofixCodemod = (typeof AUTOFIX_CODEMODS)[number];
+
+/**
+ * Check whether a value names a supported codemod mode.
+ * @param value - Value to check
+ * @returns True when `value` is one of {@link AUTOFIX_CODEMODS}
+ */
+export function isAutofixCodemod(value: unknown): value is AutofixCodemod {
+  return AUTOFIX_CODEMODS.some((name) => name === value);
+}
+
 export const AUTOFIX_WORKFLOW_FILE = ".github/workflows/tailor-autofix.yml";
 
 const AUTOFIX_COMMIT_MESSAGE = "chore: run tailor generate";
+
+function fixCommandTexts(codemod: AutofixCodemod | undefined): {
+  commands: string;
+  rerunError: string;
+} {
+  return codemod === "deterministic"
+    ? {
+        commands: "tailor upgrade and tailor generate",
+        rerunError:
+          "tailor upgrade and tailor generate changed files again right after their own fix commit. Run them twice locally and check that the second run changes nothing.",
+      }
+    : {
+        commands: "tailor generate",
+        rerunError:
+          "tailor generate changed files again right after its own fix commit. Run it twice locally and check that the second run changes nothing.",
+      };
+}
 
 // autofix.ci and a default securefix server accept requests only from workflows of these names.
 const AUTOFIX_WORKFLOW_NAMES: Record<AutofixProvider, string> = {
@@ -830,6 +886,8 @@ export type RenderAutofixParams = AutofixProviderParams & {
   /** App directories relative to the repository root; `tailor generate` runs in each. */
   dirs: readonly string[];
   packageManager: PackageManager;
+  /** `--codemod`; the workflow runs no codemod without it. */
+  codemod: AutofixCodemod | undefined;
 };
 
 function perAppGenerateSteps(dirs: readonly string[]): string {
@@ -844,14 +902,17 @@ function perAppGenerateSteps(dirs: readonly string[]): string {
 
 /**
  * Render the workflow that commits the files `tailor generate` changes to the pull request.
- * @param params - Provider, app directories, and package manager
+ * @param params - Provider, app directories, package manager, and codemod mode
  * @returns Rendered YAML and the list of managed job/step ids
  */
 export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult {
-  const { provider, dirs, packageManager } = params;
+  const { provider, dirs, packageManager, codemod } = params;
   const multi = dirs.length > 1;
   const hasPushJob = provider === "github-token" || provider === "github-app";
   const workingDirectory = !multi && dirs[0] !== "." ? dirs[0] : undefined;
+  const runsCodemods = codemod !== undefined;
+  const { commands, rerunError } = fixCommandTexts(codemod);
+  const lockfiles = codemodLockfiles(packageManager);
 
   let out = line(autofixTemplate, "HEADER", HEADER);
   out = line(
@@ -861,6 +922,9 @@ export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult
       ? undefined
       : "if: |-\n  github.event.pull_request.head.repo.full_name == github.repository &&\n  github.actor != 'dependabot[bot]'",
   );
+  out = block(out, "CODEMOD_BASE", runsCodemods);
+  out = block(out, "CODEMOD", runsCodemods);
+  out = block(out, "CODEMOD_RESULT_JOB", codemod === "error");
   out = block(out, "GENERATE", !multi);
   out = line(out, "PER_APP_GENERATE", multi ? perAppGenerateSteps(dirs) : undefined);
   out = line(
@@ -868,7 +932,17 @@ export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult
     "WORKING_DIRECTORY",
     workingDirectory ? `working-directory: ${workingDirectory}` : undefined,
   );
-  out = block(out, "PATCH_OUTPUTS", hasPushJob);
+  const outputs = [
+    ...(hasPushJob ? ["  changed: ${{ steps.tailor-autofix-diff.outputs.changed }}"] : []),
+    ...(codemod === "error"
+      ? ["  codemod-pending: ${{ steps.tailor-codemod.outputs.pending }}"]
+      : []),
+  ];
+  out = line(
+    out,
+    "AUTOFIX_OUTPUTS",
+    outputs.length > 0 ? ["outputs:", ...outputs].join("\n") : undefined,
+  );
   out = block(out, "RESTORE_PATCH", !hasPushJob);
   out = block(out, "UPLOAD_PATCH", hasPushJob);
   out = block(out, "PUSH_JOB", hasPushJob);
@@ -885,6 +959,12 @@ export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult
         : "${{ github.token }}",
     )
     .replaceAll("__COMMIT_MESSAGE__", AUTOFIX_COMMIT_MESSAGE)
+    .replaceAll("__FIX_COMMANDS__", commands)
+    .replaceAll("__RERUN_ERROR__", rerunError)
+    .replaceAll("__CODEMOD__", codemod ?? "")
+    .replaceAll("__CODEMOD_DIRS__", () => JSON.stringify(JSON.stringify(dirs)))
+    .replaceAll("__CODEMOD_LOCKFILES__", lockfiles.join(" "))
+    .replaceAll("__CODEMOD_LOCKFILES_TEXT__", lockfiles.join(" or "))
     .replaceAll("__PACKAGE_MANAGER__", packageManager)
     .replaceAll("__TAILOR_CLI__", TAILOR_CLI_COMMANDS[packageManager]);
   if (params.provider === "securefix") {
@@ -894,27 +974,34 @@ export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult
   const generatedIds = [
     "tailor-autofix",
     "tailor-autofix/tailor-checkout",
+    ...(runsCodemods ? ["tailor-autofix/tailor-codemod-base"] : []),
     "tailor-autofix/tailor-setup",
     "tailor-autofix/tailor-install",
     "tailor-autofix/tailor-autofix-baseline",
+    ...(runsCodemods ? ["tailor-autofix/tailor-codemod"] : []),
     ...(multi
       ? dirs.map((dir) => `tailor-autofix/tailor-generate-${appSlug(dir)}`)
       : ["tailor-autofix/tailor-generate"]),
     "tailor-autofix/tailor-autofix-diff",
   ];
   if (hasPushJob) {
+    generatedIds.push("tailor-autofix/tailor-upload-patch");
+  } else if (provider === "autofix-ci") {
+    generatedIds.push("tailor-autofix/tailor-autofix-ci-auth", "tailor-autofix/tailor-autofix-ci");
+  } else {
+    generatedIds.push("tailor-autofix/tailor-securefix");
+  }
+  if (hasPushJob) {
     generatedIds.push(
-      "tailor-autofix/tailor-upload-patch",
       "tailor-autofix-push",
       ...(provider === "github-app" ? ["tailor-autofix-push/tailor-app-token"] : []),
       "tailor-autofix-push/tailor-checkout",
       "tailor-autofix-push/tailor-download-patch",
       "tailor-autofix-push/tailor-commit",
     );
-  } else if (provider === "autofix-ci") {
-    generatedIds.push("tailor-autofix/tailor-autofix-ci-auth", "tailor-autofix/tailor-autofix-ci");
-  } else {
-    generatedIds.push("tailor-autofix/tailor-securefix");
+  }
+  if (codemod === "error") {
+    generatedIds.push("tailor-codemod-result", "tailor-codemod-result/tailor-codemod-result");
   }
 
   return { content: out, generatedIds };

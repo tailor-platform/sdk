@@ -164,6 +164,23 @@ run_runner
 [[ $(<"$test_marker") == "$run_id" ]] || fail "runner did not pass its run ID to the suite"
 [[ $(<"$delete_log") == "$candidate_id" ]] || fail "runner did not clean its exact workspace"
 
+printf '%s\n' '[]' >"$state_file"
+: >"$delete_log"
+rm -f "$test_marker"
+run_id= run_runner >/dev/null 2>&1 || fail "runner rejected its own default run ID"
+[[ $(<"$test_marker") == local-* ]] || fail "runner did not pass its default run ID to the suite"
+
+rm -f "$test_marker"
+set +e
+run_id=test-run-id-25-characters run_runner >/dev/null 2>&1
+long_run_id_status=$?
+set -e
+[[ $long_run_id_status -eq 64 && ! -e "$test_marker" ]] ||
+  fail "runner accepted a run ID that makes e2e workspace names exceed 63 characters"
+
+run_id=test-run-id-24-character run_runner >/dev/null 2>&1 || fail "runner rejected a 24-character run ID"
+[[ $(<"$test_marker") == test-run-id-24-character ]] || fail "runner did not pass a 24-character run ID to the suite"
+
 printf '%s\n' \
   "[{\"id\":\"$candidate_id\",\"name\":\"e2e-ws-$run_id-test-failure\"}]" >"$state_file"
 : >"$delete_log"
@@ -221,5 +238,31 @@ if kill -0 "$signal_child_pid" 2>/dev/null; then
   fail "test descendant survived the forwarded signal"
 fi
 [[ ! -e "$signal_completion_marker" ]] || fail "test descendant completed after the signal"
+
+run_runner_without_ids() {
+  PATH="$fake_bin:$PATH" \
+    E2E_FAKE_NODE="$node_path" \
+    E2E_FAKE_CLI="$fake_cli" \
+    E2E_FAKE_STATE="$state_file" \
+    E2E_DELETE_LOG="$delete_log" \
+    E2E_TEST_MARKER="$test_marker" \
+    TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
+    /bin/bash -c 'unset TAILOR_PLATFORM_ORGANIZATION_ID TAILOR_PLATFORM_FOLDER_ID; exec /bin/bash "$0"' "$runner"
+}
+
+printf '%s\n' '[]' >"$state_file"
+: >"$delete_log"
+rm -f "$test_marker"
+E2E_FAKE_DEFAULT_LOCATION_STATUS=0 run_runner_without_ids >/dev/null 2>&1 ||
+  fail "runner rejected a run without IDs although a default location is saved"
+[[ $(<"$test_marker") == "$run_id" ]] || fail "runner did not start the suite with the saved default location"
+
+rm -f "$test_marker"
+set +e
+E2E_FAKE_DEFAULT_LOCATION_STATUS=1 run_runner_without_ids >/dev/null 2>&1
+missing_location_status=$?
+set -e
+[[ $missing_location_status -eq 64 && ! -e "$test_marker" ]] ||
+  fail "runner started the suite without IDs and without a saved default location"
 
 echo "e2e-test skill checks passed"

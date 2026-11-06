@@ -81,7 +81,7 @@ describe("applyTailorDB: env static website URL resolution for migration scripts
   test("re-resolves an env static website placeholder before executing the migration script", async () => {
     const client = createMockClient();
     const planResult = buildPlanResult({ siteUrl: "my-site:url" });
-    checkpoint.mockPending([mkAddTypeMigration()]);
+    planResult.context.pendingMigrations = checkpoint.mockPending([mkAddTypeMigration()]);
 
     await applyTailorDB(client, planResult, "create-update");
 
@@ -97,7 +97,7 @@ describe("applyTailorDB: env static website URL resolution for migration scripts
   test("leaves env untouched, with no platform lookup, when it holds no placeholder", async () => {
     const client = createMockClient();
     const planResult = buildPlanResult({ plain: "value" });
-    checkpoint.mockPending([mkAddTypeMigration()]);
+    planResult.context.pendingMigrations = checkpoint.mockPending([mkAddTypeMigration()]);
 
     await applyTailorDB(client, planResult, "create-update");
 
