@@ -135,8 +135,7 @@ Specify glob patterns to load service files:
 export default defineConfig({
   db: {
     "my-db": {
-      files: ["db/**/*.ts"],
-      ignores: ["db/**/*.draft.ts"],
+      files: ["db/**/*.ts", "!db/**/*.draft.ts"],
     },
   },
   resolver: {
@@ -154,13 +153,21 @@ export default defineConfig({
 });
 ```
 
-**files**: Glob patterns to match files. Required.
+**files**: Glob patterns to match files. Required. A pattern starting with `!` excludes the files it matches. For each file, the last pattern that matches it decides, so a later pattern can include an excluded file again:
 
-**ignores**: Glob patterns to exclude files. Optional. By default, `**/*.test.ts` and `**/*.spec.ts` are automatically ignored. If you explicitly specify `ignores`, the default patterns will not be applied. Use `ignores: []` to include all files including test files.
+```typescript
+files: ["executors/**/*.ts", "!executors/internal/**", "executors/internal/keep.ts"],
+```
+
+To exclude a directory, match the files in it (`!executors/internal/**`); `!executors/internal` excludes nothing.
+
+Test files (`**/*.test.ts` and `**/*.spec.ts`) are excluded by default.
+
+**ignores** (deprecated): Glob patterns to exclude files. Optional. Write `!` patterns in `files` instead; `ignores` is removed in v3, and `tailor upgrade` moves its patterns into `files`. Specifying `ignores` replaces the default test-file exclusion, so `ignores: []` includes test files. `ignores` and the default test-file exclusion apply after `files`, so no `files` pattern includes the files they exclude. In v3, test files are no longer excluded by default; add `"!**/*.test.ts"` and `"!**/*.spec.ts"` to `files` to keep them out.
 
 **defaultPermission** (resolver namespaces only): Access requirement applied to every resolver in the namespace that declares no `permission` of its own. Optional, and takes the same values as a resolver's own `permission`. See [Namespace-wide default](./services/resolver.md#namespace-wide-default-defaultpermission).
 
-**Pattern resolution**: `files` and `ignores` patterns are resolved relative to the directory of the `tailor.config.ts` file that declares them, not the directory you run the command from. This matters when deploying [multiple configs](./cli/application.md#deploy) together — each config's patterns only match files under its own directory. If a config's _relative_ patterns match nothing under its own directory, the SDK falls back to resolving them from the directory you ran the command from and logs a warning (this fallback doesn't apply to already-absolute patterns, since their resolution can't change). Update such patterns to be relative to the config's own directory — this fallback will be removed in v2.
+**Pattern resolution**: `files` patterns, `!` patterns included, and `ignores` patterns are resolved relative to the directory of the `tailor.config.ts` file that declares them, not the directory you run the command from. This matters when deploying [multiple configs](./cli/application.md#deploy) together — each config's patterns only match files under its own directory. If a config's _relative_ patterns match nothing under its own directory, the SDK falls back to resolving them from the directory you ran the command from and logs a warning (this fallback doesn't apply to already-absolute patterns, since their resolution can't change). Update such patterns to be relative to the config's own directory — this fallback will be removed in v2.
 
 ### Bundling
 
@@ -510,15 +517,14 @@ Configure Workflow service by specifying glob patterns for workflow files:
 ```typescript
 export default defineConfig({
   workflow: {
-    files: ["workflows/**/*.ts"],
-    ignores: ["workflows/**/*.draft.ts"],
+    files: ["workflows/**/*.ts", "!workflows/**/*.draft.ts"],
   },
 });
 ```
 
-**files**: Glob patterns to match workflow files. Required.
+**files**: Glob patterns to match workflow files. Required. A pattern starting with `!` excludes files, and test files are excluded by default; see [Service Configuration](#service-configuration).
 
-**ignores**: Glob patterns to exclude files. Optional.
+**ignores** (deprecated): Glob patterns to exclude files. Optional. Write `!` patterns in `files` instead. Specifying `ignores` replaces the default test-file exclusion; see [Service Configuration](#service-configuration).
 
 ### Workflow Execution Policies
 
