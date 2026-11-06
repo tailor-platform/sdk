@@ -1,9 +1,19 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
+import { precompileTailorDBTypeScripts } from "#/cli/services/tailordb/hooks-validate-bundler";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { createContentMapperHandlers, evaluateConfigInProcess, type Evaluation } from "./mapper";
+import type * as HooksValidateBundler from "#/cli/services/tailordb/hooks-validate-bundler";
+
+vi.mock("#/cli/services/tailordb/hooks-validate-bundler", async (importOriginal) => {
+  const actual = await importOriginal<typeof HooksValidateBundler>();
+  return {
+    ...actual,
+    precompileTailorDBTypeScripts: vi.fn(actual.precompileTailorDBTypeScripts),
+  };
+});
 
 const REGISTRY_FILE = "/node_modules/@tailor-platform/sdk/dist/configure/registry.tailor";
 
@@ -51,6 +61,19 @@ function projectWithOrderTable(): ReturnType<typeof project> {
   return p;
 }
 
+const HOOKED_ORDER_TABLE = `import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+export const order = db
+  .table("Order", { status: db.string().hooks({ create: ({ value }) => value ?? "OPEN" }) })
+  .permission(unsafeAllowAllTypePermission)
+  .gqlPermission(unsafeAllowAllGqlPermission);
+`;
+
+function projectWithHookedOrderTable(): ReturnType<typeof project> {
+  const p = projectWithOrderTable();
+  fs.writeFileSync(path.join(p.dir, "tailordb", "order.ts"), HOOKED_ORDER_TABLE);
+  return p;
+}
+
 function projectWithoutTables(): ReturnType<typeof project> {
   const p = project();
   fs.writeFileSync(p.config, ORDER_TABLE_CONFIG);
@@ -84,6 +107,10 @@ async function transform(handlers: Handlers, content: string, fileName: string) 
 }
 
 describe("content mapper", () => {
+  beforeEach(() => {
+    vi.mocked(precompileTailorDBTypeScripts).mockClear();
+  });
+
   test("types registry.tailor with the registries of the project's tailor.config.ts", async () => {
     using p = project();
     const handlers = createContentMapperHandlers(evaluateConfigInProcess);
@@ -135,6 +162,18 @@ describe("content mapper", () => {
     });
     expect(result.text).toContain('status: "PAID" | "OPEN";');
     expect(result.text).toContain("createGetDB<Namespace>({ temporal: true })");
+  });
+
+  test("types db.tailor without bundling the hook and validator scripts of the tables it reads", async () => {
+    using p = projectWithHookedOrderTable();
+    const handlers = createContentMapperHandlers(evaluateConfigInProcess);
+    await handlers.initialize({ positionEncodings: ["utf-16"] });
+    await open(handlers, p.tsconfig);
+
+    const result = await transform(handlers, "", DB_FILE);
+
+    expect(result.text).toContain("status: Generated<string>;");
+    expect(precompileTailorDBTypeScripts).not.toHaveBeenCalled();
   });
 
   test("types db.tailor as a module that exports getDB over no namespaces, without a diagnostic, when the project defines no tables yet", async () => {
