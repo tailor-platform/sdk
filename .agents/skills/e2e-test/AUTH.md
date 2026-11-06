@@ -8,8 +8,8 @@ Official reference: [Tailor SDK user and login commands](https://docs.tailor.tec
 ## Authentication Order
 
 1. If a trusted caller supplied `TAILOR_PLATFORM_TOKEN`, use it without printing or persisting it.
-2. Otherwise run `pnpm exec tailor workspace list`. A config-backed user access token refreshes
-   automatically while its refresh token remains valid.
+2. Otherwise run `pnpm exec tailor workspace list --limit 1`. A config-backed user access token
+   refreshes automatically while its refresh token remains valid.
 3. If the command reports `Failed to refresh token. Your session may have expired.`, do not assume
    expiry is the only cause; revocation, service errors, and network failures can produce the same
    message. Report the raw error.
