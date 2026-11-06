@@ -214,7 +214,7 @@
     "find-up-simple": "1.0.1",
     "get-east-asian-width": "1.7.0",
     "get-tsconfig": "4.14.3",
-    "globals": "17.13.0",
+    "globals": "17.14.0",
     "inflection": "3.0.2",
     "kysely": "0.29.7",
     "lines-db": "0.18.1",
