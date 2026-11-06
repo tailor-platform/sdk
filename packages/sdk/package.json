@@ -243,7 +243,7 @@
     "@types/mime-types": "3.0.1",
     "@types/node": "26.6.6",
     "@types/semver": "7.8.0",
-    "@vitest/coverage-v8": "5.0.5",
+    "@vitest/coverage-v8": "5.1.0",
     "eslint-plugin-zod": "5.2.2",
     "graphql": "17.0.2",
     "oxfmt": "0.75.0",
@@ -254,7 +254,7 @@
     "tsrs": "0.16.0-ts7.1.0-dev.20260929",
     "tsx": "4.23.15",
     "typescript": "6.0.3",
-    "vitest": "5.0.5",
+    "vitest": "5.1.0",
     "zinfer": "0.5.2"
   },
   "peerDependencies": {
