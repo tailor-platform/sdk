@@ -29,7 +29,10 @@
     "publint": "publint --strict"
   },
   "dependencies": {
+    "@lines-db/studio": "0.16.4",
     "@politty/zod": "0.7.1",
+    "lines-db": "0.19.0",
+    "open": "11.0.4",
     "pathe": "2.0.3",
     "pkg-types": "2.4.0",
     "zod": "4.6.7"
