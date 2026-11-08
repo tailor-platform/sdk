@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, expectTypeOf, test } from "vitest";
 import { db } from "#/configure/services/tailordb/schema";
 import { t } from "#/configure/types/index";
 import { createStandardSchema, createTailorDBHook } from "./index";
@@ -327,6 +327,17 @@ describe("createStandardSchema", () => {
     });
     return createStandardSchema(schemaType, createTailorDBHook(type));
   };
+
+  test("declares the row type so a tool can read the columns of a table without rows", () => {
+    const schema = createStandardSchema(
+      t.object({ id: t.uuid(), name: t.string() }),
+      (data) => data as { id: string; name: string },
+    );
+
+    type Types = (typeof schema)["~standard"]["types"];
+    expectTypeOf<Types["input"]>().toEqualTypeOf<{ id: string; name: string }>();
+    expectTypeOf<Types["output"]>().toEqualTypeOf<{ id: string; name: string }>();
+  });
 
   test("returns a value when the hooked data passes validation (array)", () => {
     const result = buildSchema()["~standard"].validate({
