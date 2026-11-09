@@ -1,3 +1,4 @@
+import * as path from "pathe";
 import {
   arrayElements,
   entryKey,
@@ -29,7 +30,7 @@ function isNegation(element: SgNode): boolean {
 /** Whether a `files` entry can match files outside the config's own directory. */
 function mayEscapeConfigDir(element: SgNode): boolean {
   if (element.kind() !== "string") return true;
-  const pattern = (stringValue(element) ?? "").replace(/^\.\//u, "");
+  const pattern = path.normalize(stringValue(element) ?? "");
   return pattern.startsWith("/") || pattern.startsWith("../") || /^[A-Za-z]:[\\/]/u.test(pattern);
 }
 
@@ -124,7 +125,7 @@ function analyzeService(source: string, service: SgNode, label: string): Analysi
     const missing = DEFAULT_NEGATIONS.filter((pattern) => !trailingNegations.has(pattern)).map(
       (pattern) => `${quote}${pattern}${quote}`,
     );
-    const findings = elements.some(mayEscapeConfigDir)
+    const findings = elements.some((element) => !isNegation(element) && mayEscapeConfigDir(element))
       ? [
           {
             reason: `${label}.files can match files outside this config's directory, where the explicit test-file exclusion does not apply`,

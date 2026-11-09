@@ -83,6 +83,8 @@ describe("ignores -> files negation migration review", () => {
 
   test.each([
     ["a pattern above the config directory", '"../shared/executors/**/*.ts"'],
+    ["a pattern whose `..` leads above the config directory", '"src/../../shared/**/*.ts"'],
+    ["a pattern above the config directory with backslashes", '"..\\\\shared\\\\**\\\\*.ts"'],
     ["an absolute pattern", '"/repo/shared/executors/**/*.ts"'],
     ["a pattern built from a variable", "sharedExecutors"],
   ])("appends the test-file exclusion but flags %s, which it may not cover", (_name, element) => {
@@ -96,5 +98,16 @@ describe("ignores -> files negation migration review", () => {
         message: expect.stringContaining("can match files outside this config's directory"),
       }),
     ]);
+  });
+
+  test.each([
+    ["a pattern whose `..` stays inside the config directory", '"src/../executors/**/*.ts"'],
+    ["a `!` pattern whose `..` leads above it", '"executors/**/*.ts", "!src/../../shared/x.ts"'],
+  ])("does not flag %s", (_name, elements) => {
+    const { findings } = review(
+      `export default defineConfig({\n  executor: { files: [${elements}] },\n});\n`,
+    );
+
+    expect(findings).toEqual([]);
   });
 });
