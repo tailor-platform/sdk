@@ -479,10 +479,11 @@ A field also counts as used when the resolver's `permission` compares it with th
 parameter defaults, such as `({ input, x = input.b }) => …`, count too.
 
 The rule does not report a resolver when it cannot tell which fields `body` reads: `body` passes
-`input` or its whole argument on (to another function, a spread, a rest element, a dynamic key, or
-an `in` check), or reassigns it. Like `valid-resolver-permission`, it also skips a resolver whose
-config, `input`, `body`, or `permission` it cannot read statically, and it does not report a field
-built by a function of your own or imported from another module, which may declare a `validate`.
+`input` or its whole argument on (to another function, a spread, or a rest element), reads it with a
+dynamic key or checks it with `in`, reads a key `input` does not declare, such as `hasOwnProperty`,
+or reassigns it. Like `valid-resolver-permission`, it also skips a resolver whose config, `input`,
+`body`, or `permission` it cannot read statically, and it does not report a field built by a
+function of your own or imported from another module, which may declare a `validate`.
 
 To keep an input that is ignored on purpose, disable the rule on its line:
 

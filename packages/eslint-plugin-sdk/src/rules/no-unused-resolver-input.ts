@@ -96,8 +96,16 @@ function patternProperties(pattern: AstObjectPattern): { key: string; value: Ast
   });
 }
 
-function readInputFields(context: Rule.RuleContext, fn: AstFunction): Set<string> {
+function readInputFields(
+  context: Rule.RuleContext,
+  fn: AstFunction,
+  declared: ReadonlySet<string>,
+): Set<string> {
   const reads = new Set<string>();
+  const read = (key: string) => {
+    if (!declared.has(key)) throw new Undetermined();
+    reads.add(key);
+  };
 
   const references = (binding: AstIdentifier): AstNode[] => {
     const variable = findVariable(context.sourceCode, binding);
@@ -140,14 +148,14 @@ function readInputFields(context: Rule.RuleContext, fn: AstFunction): Set<string
 
   const readInput = (binding: AstNode) => {
     const expressions = followBinding(binding, (pattern) => {
-      for (const { key } of patternProperties(pattern)) reads.add(key);
+      for (const { key } of patternProperties(pattern)) read(key);
     });
     for (const expression of expressions) readInputExpression(expression);
   };
 
   const readInputExpression = (node: AstNode): void => {
     const use = usage(node);
-    if (use.kind === "member") reads.add(use.key);
+    if (use.kind === "member") read(use.key);
     else readInput(use.binding);
   };
 
@@ -191,17 +199,22 @@ function checkResolver(
     permission === null ? new Set<string>() : permissionInputFields(context, permission.value);
   if (compared === null) return;
 
+  const declared = new Map(
+    fields.flatMap((field) => {
+      const name = propertyName(field);
+      return name === null ? [] : [[name, field] as const];
+    }),
+  );
   let reads: Set<string>;
   try {
-    reads = readInputFields(context, fn);
+    reads = readInputFields(context, fn, new Set(declared.keys()));
   } catch (error) {
     if (error instanceof Undetermined) return;
     throw error;
   }
 
-  const declared = new Map(fields.map((field) => [propertyName(field), field]));
   for (const [name, field] of declared) {
-    if (name === null || reads.has(name) || compared.has(name)) continue;
+    if (reads.has(name) || compared.has(name)) continue;
     if (mayValidate(context, imports, field.value)) continue;
     context.report({ node: field, messageId: "unusedInput", data: { field: name } });
   }
