@@ -44,6 +44,11 @@ type DateBuilderArgs<Opt extends FieldOptions & { as?: DateRepresentationOption 
         ]
     : [options?: Opt];
 
+/**
+ * Any field that `t.object()` accepts, including `db.*` fields.
+ * Use it as a generic constraint, such as `<F extends TailorAnyField>` or
+ * `<F extends Record<string, TailorAnyField>>`, so a helper keeps each field's type.
+ */
 export type TailorAnyField = Omit<
   TailorFieldBase<AnyBuilderMethod, AnyBuilderMethod, FieldMetadata, TailorFieldType>,
   "fields"

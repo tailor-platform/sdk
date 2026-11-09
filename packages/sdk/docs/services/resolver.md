@@ -67,6 +67,31 @@ createResolver({
 });
 ```
 
+### Reusable Field Helpers
+
+To share an input or output shape such as pagination across resolvers, write a helper whose generic parameter is constrained by `TailorAnyField`. The constraint accepts any `t.*` or `db.*` field, and the generic parameter lets `createResolver` infer the input and return types of `body` from each field:
+
+```typescript
+import { createResolver, t, type TailorAnyField } from "@tailor-platform/sdk";
+
+function paginated<F extends Record<string, TailorAnyField>>(item: F) {
+  return t.object({
+    items: t.object(item, { array: true }),
+    totalCount: t.int(),
+  });
+}
+
+createResolver({
+  name: "listProducts",
+  operation: "query",
+  body: async () => {
+    const items = await fetchProducts(); // { id: string; name: string }[]
+    return { items, totalCount: items.length };
+  },
+  output: paginated({ id: t.uuid(), name: t.string() }),
+});
+```
+
 ### Date and Time Values
 
 `t.date()` uses `YYYY-MM-DD` strings by default. Use `t.date({ as: "date" })` to work with JavaScript `Date` values in the resolver body and input validators:
