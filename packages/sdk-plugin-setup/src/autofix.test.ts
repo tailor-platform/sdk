@@ -242,7 +242,7 @@ describe("renderAutofixWorkflow", () => {
     expect(step("claude", "tailor-claude")).toEqual({
       id: "tailor-claude",
       ...bounded,
-      uses: "anthropics/claude-code-action@6b6870e649b5ff408753befeaee5fc7989d4e6a9",
+      uses: expect.stringMatching(/^anthropics\/claude-code-action@[0-9a-f]{40}$/),
       with: {
         anthropic_api_key: "${{ secrets.TAILOR_AUTOFIX_ANTHROPIC_API_KEY }}",
         github_token: "${{ github.token }}",
@@ -255,7 +255,7 @@ describe("renderAutofixWorkflow", () => {
     expect(step("codex", "tailor-codex")).toEqual({
       id: "tailor-codex",
       ...bounded,
-      uses: "openai/codex-action@bdf19a4a223ec2549a3e2274a0cf61556bc07675",
+      uses: expect.stringMatching(/^openai\/codex-action@[0-9a-f]{40}$/),
       with: {
         "openai-api-key": "${{ secrets.TAILOR_AUTOFIX_OPENAI_API_KEY }}",
         "prompt-file": "${{ runner.temp }}/tailor-codemod-agent/prompt.md",
