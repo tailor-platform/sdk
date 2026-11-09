@@ -24,6 +24,7 @@ import type { ScriptExecutionResult } from "#/cli/shared/script-executor";
 import type { Jsonifiable } from "type-fest";
 
 const DEBOUNCE_MS = 100;
+const STOP_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
 
 export interface FunctionRunWatchOptions {
   /** Function to run and the context it runs in */
@@ -144,12 +145,11 @@ export async function startFunctionRunWatch(
   const removeTempArgFile = () => {
     if (tempArgDir) fs.rmSync(tempArgDir, { recursive: true, force: true });
   };
-  const onInterrupt = () => {
+  const onStopSignal = () => {
     removeTempArgFile();
     process.exit(0);
   };
-  process.prependListener("SIGINT", onInterrupt);
-  process.prependListener("SIGTERM", onInterrupt);
+  for (const signal of STOP_SIGNALS) process.prependListener(signal, onStopSignal);
 
   let watched = new Set([functionFile, argFile]);
   const ignored = (file: string): boolean =>
@@ -252,8 +252,7 @@ export async function startFunctionRunWatch(
       if (closing) return;
       closing = true;
       clearTimeout(debounceTimer);
-      process.off("SIGINT", onInterrupt);
-      process.off("SIGTERM", onInterrupt);
+      for (const signal of STOP_SIGNALS) process.off(signal, onStopSignal);
       await watcher.close();
       removeTempArgFile();
       resolveClosed();

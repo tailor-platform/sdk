@@ -32,6 +32,8 @@ class FakeWatcher extends EventEmitter {
   readonly close = vi.fn(async () => {});
 }
 
+const STOP_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
+
 const TIMESTAMP = String.raw`\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}`;
 
 const settle = (ms = 200) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -339,7 +341,7 @@ describe("startFunctionRunWatch", () => {
 
   test("removes the temporary argument file and its signal handlers when closed", async () => {
     using stderr = captureStderr();
-    const signalHandlers = process.listeners("SIGINT");
+    const signalHandlers = STOP_SIGNALS.map((signal) => process.listeners(signal));
     const watchHandle = await start();
     await vi.waitFor(() => expect(executeScriptReportingStart).toHaveBeenCalledTimes(1));
     const argFile = argFileFrom(stderr.output);
@@ -348,29 +350,32 @@ describe("startFunctionRunWatch", () => {
 
     expect(fs.existsSync(path.dirname(argFile))).toBe(false);
     expect(watcher.close).toHaveBeenCalledWith();
-    expect(process.listeners("SIGINT")).toEqual(signalHandlers);
+    expect(STOP_SIGNALS.map((signal) => process.listeners(signal))).toEqual(signalHandlers);
   });
 
-  test("removes the temporary argument file and exits with 0 on ^C", async () => {
-    using stderr = captureStderr();
-    const exit = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
-    const signalHandlers = process.listeners("SIGINT");
-    try {
-      await start();
-      await vi.waitFor(() => expect(executeScriptReportingStart).toHaveBeenCalledTimes(1));
-      const onInterrupt = assertDefined(
-        process.listeners("SIGINT").find((listener) => !signalHandlers.includes(listener)),
-        "no SIGINT handler registered",
-      );
+  test.each(STOP_SIGNALS)(
+    "removes the temporary argument file and exits with 0 on %s",
+    async (signal) => {
+      using stderr = captureStderr();
+      const exit = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+      const signalHandlers = process.listeners(signal);
+      try {
+        await start();
+        await vi.waitFor(() => expect(executeScriptReportingStart).toHaveBeenCalledTimes(1));
+        const onStopSignal = assertDefined(
+          process.listeners(signal).find((listener) => !signalHandlers.includes(listener)),
+          `no ${signal} handler registered`,
+        );
 
-      onInterrupt("SIGINT");
+        onStopSignal(signal);
 
-      expect(fs.existsSync(path.dirname(argFileFrom(stderr.output)))).toBe(false);
-      expect(exit).toHaveBeenCalledWith(0);
-    } finally {
-      exit.mockRestore();
-    }
-  });
+        expect(fs.existsSync(path.dirname(argFileFrom(stderr.output)))).toBe(false);
+        expect(exit).toHaveBeenCalledWith(0);
+      } finally {
+        exit.mockRestore();
+      }
+    },
+  );
 
   test("leaves a given --arg-file in place", async () => {
     using stderr = captureStderr();
