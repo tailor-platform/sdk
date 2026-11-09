@@ -1826,7 +1826,7 @@ export const allCodemods: CodemodPackage[] = [
     id: "v3/files-ignores-to-negation",
     name: "Service `ignores` → `!` patterns in `files`",
     description:
-      "The `ignores` option of the `db` and `resolver` namespaces and of `executor`, `workflow`, and `httpAdapter` is removed in v3, together with the implicit exclusion of `**/*.test.ts` and `**/*.spec.ts`. Write exclusions as `!` patterns in `files` instead: for each file, the last `files` pattern that matches it decides. The codemod appends each `ignores` pattern to `files` with a `!`, and appends `!**/*.test.ts` and `!**/*.spec.ts` to a service that had no `ignores` so its test files stay excluded.",
+      "The `ignores` option of the `db` and `resolver` namespaces and of `executor`, `workflow`, and `httpAdapter` is removed in v3, together with the implicit exclusion of `**/*.test.ts` and `**/*.spec.ts`. Write exclusions as `!` patterns in `files` instead: for each file, the last `files` pattern that matches it decides. The codemod appends each `ignores` pattern to `files` with a `!`, and appends `!**/*.test.ts` and `!**/*.spec.ts` to a service that had no `ignores` so its test files stay excluded. A second run cannot tell a service whose `ignores` it removed from one that never had `ignores`, so it also appends those two patterns there and excludes test files the original config loaded: revert the changes of the first run before running `tailor upgrade` again, for example after a codemod failed.",
     since: "0.8.0",
     until: "3.0.0",
     scriptPath: "v3/files-ignores-to-negation/scripts/transform.js",
