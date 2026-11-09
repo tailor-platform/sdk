@@ -1,3 +1,4 @@
+import { escapeRegExp } from "es-toolkit";
 import * as path from "pathe";
 import { isSyntaxDiagnostic } from "#/utils/syntax-diagnostic";
 import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
@@ -174,12 +175,16 @@ export function prefixUserModuleFile(error: unknown, file: string): unknown {
   const relativePath = relativeFile(file);
   if (
     diagnostics.location ||
-    error.message.includes(file) ||
-    error.message.includes(relativePath)
+    namesPath(error.message, file) ||
+    namesPath(error.message, relativePath)
   ) {
     return error;
   }
   return withErrorDiagnostics(withMessage(error, `${relativePath}: ${error.message}`), diagnostics);
+}
+
+function namesPath(message: string, filePath: string): boolean {
+  return new RegExp(`${escapeRegExp(filePath)}(?![\\w-]|\\.[\\w-])`).test(message);
 }
 
 function withMessage(error: Error, message: string): Error {

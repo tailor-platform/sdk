@@ -121,12 +121,24 @@ describe("prefixUserModuleFile", () => {
   });
 
   test.each([
-    ["absolute", `validate in ${path.join(process.cwd(), "tailordb/item.ts")} must be synchronous`],
-    ["relative", "Invalid syntax in tailordb/item.ts:3: Expression expected"],
-  ])("returns an error whose message names the file by its %s path as-is", (_, message) => {
+    ["by its absolute path", `validate in ${file} must be synchronous`],
+    ["by its relative path", "Invalid syntax in tailordb/item.ts:3: Expression expected"],
+    ["at the end of a sentence", "Cannot read tailordb/item.ts."],
+    ["in quotes", 'Cannot read "tailordb/item.ts"'],
+  ])("returns an error whose message names the file %s as-is", (_, message) => {
     const error = new Error(message);
 
     expect(prefixUserModuleFile(error, file)).toBe(error);
+  });
+
+  test.each([
+    ["a longer file name", "Cannot read tailordb/item.ts.bak"],
+    ["a longer extension", "Cannot read tailordb/item.tsx"],
+    ["a longer absolute path", `Cannot read ${file}.bak`],
+  ])("prefixes an error whose message names only %s", (_, message) => {
+    expect(prefixUserModuleFile(new Error(message), file)).toMatchObject({
+      message: `tailordb/item.ts: ${message}`,
+    });
   });
 
   test("returns an error located at another source as-is", () => {
