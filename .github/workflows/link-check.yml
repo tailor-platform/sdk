@@ -34,6 +34,8 @@ jobs:
             --no-progress
             --include-fragments
             --exclude 'mailto:'
+            --index-files README.md,.
+            --remap '^https://github\.com/tailor-platform/sdk/(?:tree|blob)/main/(.+)$ file://${{ github.workspace }}/$1'
             'packages/sdk/docs/**/*.md'
           fail: true
 
