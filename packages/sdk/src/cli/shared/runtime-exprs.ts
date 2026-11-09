@@ -13,6 +13,11 @@
  * `ACTOR_TRANSFORM_EXPR` below come from the same factory so the three stay in
  * sync.
  */
+import {
+  isInputOperand,
+  isSingleCondition,
+  isUserOperand,
+} from "#/parser/service/resolver/permission-operands";
 import { makePrincipalExpr, tailorPrincipalMap } from "#/parser/service/tailordb/index";
 import { hasDateRepresentationFields } from "#/runtime/date";
 import type { ApplicationEnv } from "#/cli/shared/client";
@@ -126,20 +131,17 @@ export function buildResolverOperationHookExpr(env: ApplicationEnv): string {
 
 type ResolverPermissionPolicies = Extract<NonNullable<Resolver["permission"]>, readonly unknown[]>;
 type ResolverPermissionPolicy = ResolverPermissionPolicies[number];
-type ResolverPermissionOperand = string | boolean | { user: string };
+type ResolverPermissionOperand = string | boolean | { user: string } | { input: string };
 type ResolverPermissionCondition = readonly [
   ResolverPermissionOperand,
   "=" | "!=",
   ResolverPermissionOperand,
 ];
 
-function isSingleResolverCondition(
-  conditions: ResolverPermissionPolicy["conditions"],
-): conditions is ResolverPermissionCondition {
-  return conditions.length === 3 && typeof conditions[1] === "string";
-}
-
 function resolverPermissionOperandExpr(operand: ResolverPermissionOperand): string {
+  if (isInputOperand(operand)) {
+    return `context.input?.[${JSON.stringify(operand.input)}]`;
+  }
   if (typeof operand === "object") {
     if (operand.user === "_loggedIn") {
       return `(context.caller !== null)`;
@@ -157,13 +159,20 @@ function resolverPermissionOperandExpr(operand: ResolverPermissionOperand): stri
 // the caller is `null` for anonymous requests, and an attribute key may not
 // be set.
 function isArbitraryAttributeOperand(operand: ResolverPermissionOperand): boolean {
-  return typeof operand === "object" && operand.user !== "_loggedIn";
+  return isUserOperand(operand) && operand.user !== "_loggedIn";
 }
 
 function resolverPermissionConditionExpr(condition: ResolverPermissionCondition): string {
   const [left, operator, right] = condition;
   const leftExpr = resolverPermissionOperandExpr(left);
   const rightExpr = resolverPermissionOperandExpr(right);
+  const jsOperator = operator === "=" ? "===" : "!==";
+
+  // An omitted input and a missing caller ID must never match each other, and
+  // an inherited key such as `constructor` must not count as a provided input.
+  if (isInputOperand(left) || isInputOperand(right)) {
+    return `(typeof ${leftExpr} === "string" && typeof ${rightExpr} === "string" && ${leftExpr} ${jsOperator} ${rightExpr})`;
+  }
 
   if (operator === "!=") {
     // A missing attribute must not satisfy `!=` -- otherwise an
@@ -180,12 +189,11 @@ function resolverPermissionConditionExpr(condition: ResolverPermissionCondition)
     }
   }
 
-  const jsOperator = operator === "=" ? "===" : "!==";
   return `(${leftExpr} ${jsOperator} ${rightExpr})`;
 }
 
 function resolverPermissionPolicyExpr(policy: ResolverPermissionPolicy): string {
-  const conditions = isSingleResolverCondition(policy.conditions)
+  const conditions = isSingleCondition<ResolverPermissionCondition>(policy.conditions)
     ? [policy.conditions]
     : policy.conditions;
   if (conditions.length === 0) {
@@ -212,11 +220,11 @@ function policyEntryExpr(policy: ResolverPermissionPolicy): string {
  * Rejects the call with `TailorErrors` — the only error class the platform
  * turns back into a message the caller can read — when the caller doesn't match
  * `permission`, evaluated against `context.caller` — the original caller,
- * unaffected by `authInvoker`. `permission` is deny-by-default: a caller is
- * granted only by a matching `permit: true` policy, and a matching
- * `permit: false` policy always overrides that grant. The thrown message only
- * includes the description(s) of the policy/policies that actually caused the
- * denial.
+ * unaffected by `authInvoker` — and the unparsed `context.input`.
+ * `permission` is deny-by-default: a caller is granted only by a matching
+ * `permit: true` policy, and a matching `permit: false` policy always
+ * overrides that grant. The thrown message only includes the description(s)
+ * of the policy/policies that actually caused the denial.
  *
  * The schema requires at least one `permit: true` policy (an array of only
  * `permit: false` policies is rejected at build time), so `allowPolicies` is

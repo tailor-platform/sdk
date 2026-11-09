@@ -2,6 +2,7 @@ import { z } from "zod";
 import { AuthInvokerSchema } from "#/parser/service/auth/schema";
 import { TailorFieldSchema } from "#/parser/service/field/schema";
 import { functionSchema } from "../common";
+import { isInputOperand, isSingleCondition, isUserOperand } from "./permission-operands";
 
 export const QueryTypeSchema = z
   .union([z.literal("query"), z.literal("mutation")])
@@ -9,14 +10,14 @@ export const QueryTypeSchema = z
 
 const ResolverPermissionOperandSchema = z.union([
   z.strictObject({ user: z.string() }),
+  z.strictObject({ input: z.string() }),
   z.string(),
   z.boolean(),
 ]);
 
-const ResolverPermissionOperatorSchema = z.union([z.literal("="), z.literal("!=")]);
+type ResolverPermissionOperand = z.infer<typeof ResolverPermissionOperandSchema>;
 
-const isUserOperand = (operand: z.infer<typeof ResolverPermissionOperandSchema>) =>
-  typeof operand === "object";
+const ResolverPermissionOperatorSchema = z.union([z.literal("="), z.literal("!=")]);
 
 // Fixed `user` keys have a known value type; arbitrary user attributes don't
 // (their declared type lives in the configure-layer generic, not here), so
@@ -27,18 +28,15 @@ const KNOWN_USER_OPERAND_TYPES: Record<string, "string" | "boolean"> = {
 };
 
 const operandTypeMismatch = (
-  userOperand: z.infer<typeof ResolverPermissionOperandSchema>,
-  otherOperand: z.infer<typeof ResolverPermissionOperandSchema>,
+  userOperand: ResolverPermissionOperand,
+  otherOperand: ResolverPermissionOperand,
 ) => {
-  if (typeof userOperand !== "object") {
+  if (!isUserOperand(userOperand)) {
     return undefined;
   }
   const expected = KNOWN_USER_OPERAND_TYPES[userOperand.user];
-  if (
-    expected === undefined ||
-    typeof otherOperand === "object" ||
-    typeof otherOperand === expected
-  ) {
+  const otherType = isInputOperand(otherOperand) ? "string" : typeof otherOperand;
+  if (expected === undefined || otherType === "object" || otherType === expected) {
     return undefined;
   }
   return { key: userOperand.user, expected };
@@ -50,12 +48,34 @@ const ResolverPermissionConditionSchema = z
     ResolverPermissionOperatorSchema,
     ResolverPermissionOperandSchema,
   ])
-  .refine(
-    ([left, , right]) => isUserOperand(left) !== isUserOperand(right),
-    "Resolver permission condition must reference a `user` operand on exactly one side " +
-      "(comparing two `user` operands to each other can match on `undefined === undefined`)",
-  )
-  .superRefine(([left, , right], ctx) => {
+  .superRefine(([left, operator, right], ctx) => {
+    const hasUserOperand = isUserOperand(left) || isUserOperand(right);
+    const hasInputOperand = isInputOperand(left) || isInputOperand(right);
+    if (hasInputOperand && !hasUserOperand) {
+      ctx.addIssue({
+        code: "custom",
+        message: "An `input` operand must be compared to a `user` operand",
+      });
+      return;
+    }
+    if (hasInputOperand && operator !== "=") {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "An `input` operand can only be compared with `=`, since a caller can send the same " +
+          "ID spelled differently to pass a `!=` check",
+      });
+      return;
+    }
+    if (isUserOperand(left) === isUserOperand(right)) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "Resolver permission condition must reference a `user` operand on exactly one side " +
+          "(comparing two `user` operands to each other can match on `undefined === undefined`)",
+      });
+      return;
+    }
     for (const mismatch of [operandTypeMismatch(left, right), operandTypeMismatch(right, left)]) {
       if (mismatch) {
         ctx.addIssue({
@@ -67,20 +87,50 @@ const ResolverPermissionConditionSchema = z
   })
   .readonly();
 
-const ResolverPermissionPolicySchema = z.strictObject({
-  conditions: z.union([
-    ResolverPermissionConditionSchema,
-    z
-      .array(ResolverPermissionConditionSchema)
-      .min(1, "Resolver permission policy must have at least one condition")
-      .readonly(),
-  ]),
-  permit: z.boolean(),
-  description: z
-    .string()
-    .optional()
-    .describe("Reason recorded for this policy, used in the access-denied error message"),
-});
+const COMPARABLE_INPUT_FIELD_TYPES = new Set<string>(["string", "uuid", "enum"]);
+
+type ResolverPermissionCondition = z.infer<typeof ResolverPermissionConditionSchema>;
+
+type IndexedCondition = {
+  condition: ResolverPermissionCondition;
+  path: (string | number)[];
+};
+
+const indexedConditions = (
+  conditions: ResolverPermissionCondition | readonly ResolverPermissionCondition[],
+): IndexedCondition[] =>
+  isSingleCondition(conditions)
+    ? [{ condition: conditions, path: ["conditions"] }]
+    : conditions.map((condition, index) => ({ condition, path: ["conditions", index] }));
+
+const ResolverPermissionPolicySchema = z
+  .strictObject({
+    conditions: z.union([
+      ResolverPermissionConditionSchema,
+      z
+        .array(ResolverPermissionConditionSchema)
+        .min(1, "Resolver permission policy must have at least one condition")
+        .readonly(),
+    ]),
+    permit: z.boolean(),
+    description: z
+      .string()
+      .optional()
+      .describe("Reason recorded for this policy, used in the access-denied error message"),
+  })
+  .refine(
+    (policy) =>
+      policy.permit ||
+      !indexedConditions(policy.conditions).some(
+        ({ condition: [left, , right] }) => isInputOperand(left) || isInputOperand(right),
+      ),
+    {
+      message:
+        "An `input` operand can only be used in a `permit: true` policy, since a condition on " +
+        "an omitted input never matches and so would never deny",
+      path: ["conditions"],
+    },
+  );
 
 export const ResolverPermissionSchema = z
   .union([
@@ -99,19 +149,51 @@ export const ResolverPermissionSchema = z
   ])
   .describe(
     "Access requirement for this resolver, evaluated against the original caller " +
-      '(unaffected by `invoker`) before `body` runs. "allowAnonymous" documents that ' +
+      '(unaffected by `invoker`) and the input before `body` runs. "allowAnonymous" documents that ' +
       "anonymous callers are allowed. Omitted (default): unchanged, anonymous callers can " +
       "reach the resolver",
   );
 
-export const ResolverSchema = z.strictObject({
-  operation: QueryTypeSchema.describe("GraphQL operation type (query or mutation)"),
-  name: z.string().describe("Resolver name"),
-  description: z.string().optional().describe("Resolver description"),
-  input: z.record(z.string(), TailorFieldSchema).optional().describe("Input field definitions"),
-  body: functionSchema.describe("Resolver implementation function"),
-  output: TailorFieldSchema.describe("Output field definition"),
-  publishEvents: z.boolean().optional().describe("Enable publishing events from this resolver"),
-  invoker: AuthInvokerSchema.optional().describe("Machine user to execute this resolver as"),
-  permission: ResolverPermissionSchema.optional(),
-});
+export const ResolverSchema = z
+  .strictObject({
+    operation: QueryTypeSchema.describe("GraphQL operation type (query or mutation)"),
+    name: z.string().describe("Resolver name"),
+    description: z.string().optional().describe("Resolver description"),
+    input: z.record(z.string(), TailorFieldSchema).optional().describe("Input field definitions"),
+    body: functionSchema.describe("Resolver implementation function"),
+    output: TailorFieldSchema.describe("Output field definition"),
+    publishEvents: z.boolean().optional().describe("Enable publishing events from this resolver"),
+    invoker: AuthInvokerSchema.optional().describe("Machine user to execute this resolver as"),
+    permission: ResolverPermissionSchema.optional(),
+  })
+  .superRefine((resolver, ctx) => {
+    if (typeof resolver.permission !== "object") {
+      return;
+    }
+    const input = resolver.input ?? {};
+    resolver.permission.forEach((policy, policyIndex) => {
+      for (const { condition, path } of indexedConditions(policy.conditions)) {
+        for (const side of [0, 2] as const) {
+          const operand = condition[side];
+          if (!isInputOperand(operand)) {
+            continue;
+          }
+          const operandPath = ["permission", policyIndex, ...path, side];
+          const field = Object.hasOwn(input, operand.input) ? input[operand.input] : undefined;
+          if (field === undefined) {
+            ctx.addIssue({
+              code: "custom",
+              path: operandPath,
+              message: `\`permission\` references input field \`${operand.input}\`, which \`input\` does not declare`,
+            });
+          } else if (!COMPARABLE_INPUT_FIELD_TYPES.has(field.type) || field.metadata.array) {
+            ctx.addIssue({
+              code: "custom",
+              path: operandPath,
+              message: `\`permission\` compares input field \`${operand.input}\`, but only a string, uuid, or enum field that is not an array can be compared`,
+            });
+          }
+        }
+      }
+    });
+  });

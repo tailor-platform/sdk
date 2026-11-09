@@ -12,7 +12,7 @@ import { stringifyFunction } from "#/parser/service/tailordb/field";
 import type { PluginResolverInfo } from "#/plugin/manager";
 import type { TailorField } from "#/types/field.generated";
 
-const PluginResolverSchema = ResolverSchema.extend({ body: z.string() });
+const PluginResolverSchema = z.strictObject({ ...ResolverSchema.shape, body: z.string() });
 
 /**
  * Generate validated resolver modules for the standard loader and bundler.

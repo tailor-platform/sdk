@@ -2,7 +2,7 @@ import { t, type TailorAnyField, type TailorField } from "#/configure/types/type
 import { brandValue } from "#/utils/brand";
 import type { ResolverPermission } from "#/configure/services/resolver/permission";
 import type { MachineUserName } from "#/configure/types/machine-user";
-import type { TailorEnv, TailorPrincipal } from "#/runtime/types";
+import type { InferredAttributes, TailorEnv, TailorPrincipal } from "#/runtime/types";
 import type { InferFieldsOutput, output } from "#/types/helpers";
 import type { ResolverInput } from "#/types/resolver.generated";
 
@@ -41,7 +41,7 @@ type ResolverReturn<
     output: NormalizedOutput<Output>;
     body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
     invoker?: MachineUserName;
-    permission?: ResolverPermission;
+    permission?: ResolverPermission<InferredAttributes, Input>;
   }>;
 
 /**
@@ -60,7 +60,7 @@ type ResolverReturn<
  * resolver, an error will be thrown during apply.
  *
  * `permission` declares the resolver's access requirement, checked against `context.user` (the
- * original caller, unaffected by `authInvoker`) before `body` runs. Omitted (default):
+ * original caller, unaffected by `authInvoker`) and `input` before `body` runs. Omitted (default):
  * unchanged, anonymous callers can reach the resolver. `"allowAnonymous"`: explicitly documents
  * that anonymous callers are allowed. An array of `{ conditions, permit }` policies (in the same
  * style as TailorDB's `.permission()`) rejects non-matching callers: at least one `permit: true`
@@ -102,7 +102,7 @@ export function createResolver<
       output: Output;
       body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
       invoker?: MachineUserName;
-      permission?: ResolverPermission;
+      permission?: ResolverPermission<InferredAttributes, NoInfer<Input>>;
     }>,
 ): ResolverReturn<Input, Output> {
   // Check if output is already a TailorField using duck typing.
