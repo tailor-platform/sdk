@@ -33,6 +33,11 @@ describe("TailorAnyField", () => {
     wrap({});
   });
 
+  test("a plain TailorAnyField parameter loses the field's output type", () => {
+    const loose = ((field: TailorAnyField) => t.object({ value: field }))(t.string());
+    expectTypeOf<t.infer<typeof loose>["value"]>().toBeAny();
+  });
+
   test("helper results build resolver input and output", () => {
     const page = paginated({ id: t.uuid(), name: t.string() });
     expectTypeOf<t.infer<typeof page>>().toEqualTypeOf<{

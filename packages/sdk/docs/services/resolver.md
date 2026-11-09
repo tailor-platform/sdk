@@ -92,6 +92,8 @@ createResolver({
 });
 ```
 
+Do not use `TailorAnyField` as a plain parameter type (`f: TailorAnyField`); the field's output type becomes `any`.
+
 ### Date and Time Values
 
 `t.date()` uses `YYYY-MM-DD` strings by default. Use `t.date({ as: "date" })` to work with JavaScript `Date` values in the resolver body and input validators:
