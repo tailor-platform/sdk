@@ -476,12 +476,13 @@ export default createResolver({
 
 A field also counts as used when the resolver's `permission` compares it with the caller through an
 `{ input }` operand, or when it, or a field nested in it, declares a `validate`. Reads in `body`'s
-parameter defaults, such as `({ input, x = input.b }) => …`, count too.
+parameter defaults, such as `({ input, x = input.b }) => …`, and through a rest element, such as
+`({ input: { ...args } }) => args.a`, count too.
 
 The rule does not report a resolver when it cannot tell which fields `body` reads: `body` passes
-`input` or its whole argument on (to another function, a spread, or a rest element), reads it with a
-dynamic key or checks it with `in`, reads a key `input` does not declare, such as `hasOwnProperty`,
-or reassigns it. Like `valid-resolver-permission`, it also skips a resolver whose config, `input`,
+`input`, its whole argument, or a rest element taken from either on (to another function or a
+spread), reads it with a dynamic key or checks it with `in`, reads a key `input` does not declare,
+such as `hasOwnProperty`, or reassigns it. Like `valid-resolver-permission`, it also skips a resolver whose config, `input`,
 `body`, or `permission` it cannot read statically, and it does not report a field built by a
 function of your own or imported from another module, which may declare a `validate`.
 

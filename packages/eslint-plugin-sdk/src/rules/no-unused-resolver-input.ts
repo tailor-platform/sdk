@@ -87,13 +87,22 @@ function mayValidate(context: Rule.RuleContext, imports: ImportTracker, field: A
   return visit(field);
 }
 
-function patternProperties(pattern: AstObjectPattern): { key: string; value: AstNode }[] {
-  return pattern.properties.map((property) => {
-    if (property.type !== "Property") throw new Undetermined();
+function patternProperties(pattern: AstObjectPattern): {
+  properties: { key: string; value: AstNode }[];
+  rest: AstNode | null;
+} {
+  const properties: { key: string; value: AstNode }[] = [];
+  let rest: AstNode | null = null;
+  for (const property of pattern.properties) {
+    if (property.type === "RestElement") {
+      rest = property.argument;
+      continue;
+    }
     const key = property.computed ? staticString(property.key) : propertyName(property);
     if (key === null) throw new Undetermined();
-    return { key, value: property.value };
-  });
+    properties.push({ key, value: property.value });
+  }
+  return { properties, rest };
 }
 
 function readInputFields(
@@ -148,7 +157,9 @@ function readInputFields(
 
   const readInput = (binding: AstNode) => {
     const expressions = followBinding(binding, (pattern) => {
-      for (const { key } of patternProperties(pattern)) read(key);
+      const { properties, rest } = patternProperties(pattern);
+      for (const { key } of properties) read(key);
+      if (rest !== null) readInput(rest);
     });
     for (const expression of expressions) readInputExpression(expression);
   };
@@ -161,9 +172,11 @@ function readInputFields(
 
   const readContext = (binding: AstNode) => {
     const expressions = followBinding(binding, (pattern) => {
-      for (const { key, value } of patternProperties(pattern)) {
+      const { properties, rest } = patternProperties(pattern);
+      for (const { key, value } of properties) {
         if (key === "input") readInput(value);
       }
+      if (rest !== null && !properties.some(({ key }) => key === "input")) readContext(rest);
     });
     for (const expression of expressions) {
       const use = usage(expression);

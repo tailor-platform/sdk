@@ -59,6 +59,10 @@ describe("reports input fields body never reads", () => {
       "({ input }) => input!.a",
       "({ input }) => { type T = typeof input.b; return input.a; }",
       "({ input }) => { const read = (input: { b: string }) => input.b; return input.a; }",
+      "({ ...ctx }) => ctx.input.a",
+      "({ input, ...rest }) => save(input.a, rest)",
+      "({ input: { ...args } }) => args.a",
+      "({ input }) => { const { ...args } = input; return args.a; }",
     ].map((body) => ({ code: resolver({ body }), errors: [unused("b")] })),
   });
 });
@@ -100,7 +104,7 @@ describe("leaves bodies whose reads it cannot tell unreported", () => {
       "({ input: { a, ...rest } }) => rest",
       "({ input }) => { const { a, ...rest } = input; return rest; }",
       "({ input: { [key]: value } }) => value",
-      "({ ...ctx }) => ctx.input.a",
+      "({ ...ctx }) => helper(ctx)",
       "([ctx]) => ctx.input.a",
       "(ctx) => helper(ctx)",
       "(ctx) => ctx[key].a",
