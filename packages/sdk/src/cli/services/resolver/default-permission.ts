@@ -79,8 +79,8 @@ export function resolveResolverDefaultPermissionForFile(
     throw new Error(
       `Resolver ${path.relative(process.cwd(), targetFile)} matches more than one resolver ` +
         `namespace: ${owners.map((owner) => `"${owner.namespace}"`).join(", ")}. ` +
-        `Each namespace applies its own \`defaultPermission\`, so narrow the \`files\`/` +
-        `\`ignores\` patterns until exactly one namespace claims this file.`,
+        `Each namespace applies its own \`defaultPermission\`, so narrow the \`files\` ` +
+        `patterns, for example with a \`!\` pattern, until exactly one namespace claims this file.`,
     );
   }
 
