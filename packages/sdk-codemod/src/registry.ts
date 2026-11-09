@@ -1899,6 +1899,39 @@ export const allCodemods: CodemodPackage[] = [
       "conflict).",
     ].join("\n"),
   },
+  {
+    id: "v3/seed-subpath-to-plugin",
+    name: "@tailor-platform/sdk/seed → @tailor-platform/sdk-plugin-seed/schema",
+    description:
+      "The `@tailor-platform/sdk/seed` subpath is removed in v3. Generated seed schema files import `defineSchema` (and `fillIdpUserPassword` for the IdP user) from `@tailor-platform/sdk-plugin-seed/schema` instead: run `tailor generate` again to regenerate them, and change the import path anywhere else. `validateSeedData`, `fillSeedData` and `hookSeedRows` have no replacement import; the `tailor seed validate`, `tailor seed fill` and `tailor seed apply` commands run them.",
+    since: "1.25.0",
+    until: "3.0.0",
+    // No scriptPath: the schema files under the seed data directory are generated, so running
+    // `tailor generate` again rewrites them, and the hand-written imports elsewhere are few.
+    filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
+    sourceStringSuspiciousPatterns: ["@tailor-platform/sdk/seed"],
+    examples: [
+      {
+        before: 'import { defineSchema } from "@tailor-platform/sdk/seed";',
+        after: 'import { defineSchema } from "@tailor-platform/sdk-plugin-seed/schema";',
+      },
+    ],
+    prompt: [
+      "The `@tailor-platform/sdk/seed` subpath is removed in v3.",
+      "",
+      "A `*.schema.ts` file under the seed data directory is generated: do not edit it by hand.",
+      "Run `tailor generate` again, which writes the import from",
+      "`@tailor-platform/sdk-plugin-seed/schema` and needs `@tailor-platform/sdk-plugin-seed`",
+      "installed, as the `tailor seed` commands do.",
+      "",
+      "In any other file, change the import path of `defineSchema`, `fillIdpUserPassword`,",
+      "`ForeignKeyDefinition` and `IndexDefinition` to `@tailor-platform/sdk-plugin-seed/schema`.",
+      "",
+      "`validateSeedData`, `fillSeedData` and `hookSeedRows` have no replacement import. Call",
+      "`tailor seed validate`, `tailor seed fill` or `tailor seed apply` instead, and flag a use",
+      "that needs the function itself for a human.",
+    ].join("\n"),
+  },
 ];
 
 /**
