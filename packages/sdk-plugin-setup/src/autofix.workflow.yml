@@ -76,6 +76,7 @@ jobs:
           APP_DIRS: __CODEMOD_DIRS__
           LOCKFILE: ${{ steps.tailor-codemod-base.outputs.lockfile }}
           BASE_LOCKFILE: ${{ steps.tailor-codemod-base.outputs.base }}
+          # __CODEMOD_AGENT_ENV__
         run: |
           node <<'NODE'
           const fs = require("node:fs");
@@ -88,6 +89,7 @@ jobs:
           const AUTOFIX_MIN_SDK_VERSION = "2.37.0";
           const [command, ...prefix] = "__TAILOR_CLI__".split(" ");
           const mode = process.env.CODEMOD;
+          const dryRun = mode === "warn" || mode === "error";
           const lockfile = process.env.LOCKFILE;
           const headLock = fs.readFileSync(lockfile, "utf-8");
           const baseLock = process.env.BASE_LOCKFILE
@@ -267,13 +269,30 @@ jobs:
             return `${fence}${pad}${text}${pad}${fence}`;
           }
 
+          function reviewItems(dir, review) {
+            if (review.files.length === 0) return [`- All of ${appOf(dir)}`];
+            const findings = review.findings ?? [];
+            return review.files.flatMap((file) => [
+              `- ${code(path.posix.join(dir, file))}`,
+              ...findings
+                .filter((finding) => finding.file === file)
+                .map((finding) => `  - line ${finding.line}: ${finding.message} ${code(finding.excerpt)}`),
+            ]);
+          }
+
+          function promptBlock(review) {
+            const prompt = review.prompt.trim();
+            const fence = fenceFor(prompt, 3);
+            return [`${fence}text`, prompt, fence];
+          }
+
           function report(dir, from, to, output) {
             const app = appOf(dir);
             const level = mode === "error" ? "error" : "warning";
             const rerun = `tailor upgrade --from ${from}`;
             const inRepo = (file) => path.posix.join(dir, file);
             const files = output.filesModified.map((file) => path.relative(process.cwd(), file));
-            const commits = mode === "deterministic";
+            const commits = !dryRun;
             // GitHub refuses a fix commit that changes a workflow file.
             const applied = commits ? files.filter((file) => !file.startsWith(".github/workflows/")) : [];
             const pending = files.filter((file) => !applied.includes(file));
@@ -314,13 +333,10 @@ jobs:
             for (const review of reviews) {
               const title = `Review needed: ${review.codemodId}`;
               const findings = review.findings ?? [];
-              summary.push(`**${title}**`, "");
               for (const file of review.files) {
-                summary.push(`- ${code(inRepo(file))}`);
                 const inFile = findings.filter((finding) => finding.file === file);
                 for (const finding of inFile) {
                   annotate(level, finding.message, { file: inRepo(file), line: finding.line, title });
-                  summary.push(`  - line ${finding.line}: ${finding.message} ${code(finding.excerpt)}`);
                 }
                 if (inFile.length === 0) {
                   annotate(level, `The ${review.codemodId} codemod could not migrate this file on its own.`, {
@@ -331,11 +347,19 @@ jobs:
               }
               if (review.files.length === 0) {
                 annotate(level, `Review ${app} for the ${review.codemodId} migration.`, { title });
-                summary.push(`- All of ${app}`);
               }
-              const prompt = review.prompt.trim();
-              const fence = fenceFor(prompt, 3);
-              summary.push("", "<details><summary>Migration prompt</summary>", "", `${fence}text`, prompt, fence, "", "</details>", "");
+              summary.push(
+                `**${title}**`,
+                "",
+                ...reviewItems(dir, review),
+                "",
+                "<details><summary>Migration prompt</summary>",
+                "",
+                ...promptBlock(review),
+                "",
+                "</details>",
+                "",
+              );
             }
             if (output.warnings.length > 0) summary.push("Warnings:", "");
             for (const warning of output.warnings) {
@@ -350,6 +374,42 @@ jobs:
             return mode === "error" && (pending.length > 0 || reviews.length > 0);
           }
 
+          # __CODEMOD_AGENT_SCRIPT_START__
+          function agentSkipReason() {
+            const { SAME_REPOSITORY, ACTOR, AGENT_BOT, COMMIT_MESSAGE, AGENT_COMMIT_MESSAGE } = process.env;
+            if (SAME_REPOSITORY !== "true") return "the pull request comes from a fork";
+            if (ACTOR.endsWith("[bot]") && ACTOR !== AGENT_BOT) {
+              return `only ${AGENT_BOT} among bots can start it, not ${ACTOR}`;
+            }
+            const subject = execFileSync("git", ["log", "-1", "--format=%s"], { encoding: "utf-8" }).trim();
+            if (subject === COMMIT_MESSAGE || subject === AGENT_COMMIT_MESSAGE) {
+              return "the head commit is the workflow's own fix commit";
+            }
+          }
+
+          function agentPrompt(handoffs) {
+            const lines = [
+              `You are finishing an upgrade of ${SDK} in this repository. Its codemods already rewrote what they could. Finish the migrations below by editing the repository's files.`,
+              "",
+              "- Edit only files in this repository, and only to finish these migrations.",
+              "- Do not run commands, commit, push, or open pull requests: the workflow commits your edits.",
+              "- Do not edit files under .github/workflows.",
+              "- Leave code that already follows a migration as it is.",
+              "",
+              "Paths are relative to the repository root.",
+              "",
+            ];
+            for (const { dir, from, to, reviews } of handoffs) {
+              lines.push(`## ${SDK} ${from} → ${to} in ${appOf(dir)}`, "");
+              for (const review of reviews) {
+                lines.push(`### ${review.codemodId}`, "", ...reviewItems(dir, review), "", ...promptBlock(review), "");
+              }
+            }
+            return lines.join("\n");
+          }
+
+          const handoffs = [];
+          # __CODEMOD_AGENT_SCRIPT_END__
           let pending = false;
           for (const dir of JSON.parse(process.env.APP_DIRS)) {
             const app = appOf(dir);
@@ -384,7 +444,7 @@ jobs:
               );
             }
             const args = ["upgrade", "--from", from, "--json"];
-            if (mode !== "deterministic") args.push("--dry-run");
+            if (dryRun) args.push("--dry-run");
             const result = spawnSync(command, [...prefix, ...args], {
               cwd: dir,
               encoding: "utf-8",
@@ -396,8 +456,25 @@ jobs:
               upgradeResult(result.stdout) ??
               fail(`tailor upgrade --from ${from} printed no result for ${app}.`);
             if (report(dir, from, to, output)) pending = true;
+            # __CODEMOD_AGENT_SCRIPT_START__
+            if (output.llmReviews.length > 0) handoffs.push({ dir, from, to, reviews: output.llmReviews });
+            # __CODEMOD_AGENT_SCRIPT_END__
           }
           if (pending) fs.appendFileSync(process.env.GITHUB_OUTPUT, "pending=true\n");
+          # __CODEMOD_AGENT_SCRIPT_START__
+          const agent = process.env.AGENT;
+          if (agent && handoffs.length > 0) {
+            const reason = agentSkipReason();
+            if (reason) {
+              annotate("notice", `${agent} does not run: ${reason}.`);
+            } else {
+              const prompts = path.join(process.env.RUNNER_TEMP, "tailor-codemod-agent");
+              fs.mkdirSync(prompts, { recursive: true });
+              fs.writeFileSync(path.join(prompts, "prompt.md"), agentPrompt(handoffs));
+              fs.appendFileSync(process.env.GITHUB_OUTPUT, "agent=true\n");
+            }
+          }
+          # __CODEMOD_AGENT_SCRIPT_END__
           NODE
       # __CODEMOD_END__
       # __GENERATE_START__
@@ -441,37 +518,185 @@ jobs:
           if-no-files-found: error
           overwrite: true
       # __UPLOAD_PATCH_END__
-      # __AUTOFIX_CI_START__
-      # autofix.ci fetches the pull request head itself, which a private repository authenticates.
-      - id: tailor-autofix-ci-auth
-        if: steps.tailor-autofix-diff.outputs.changed == 'true'
-        env:
-          TOKEN: ${{ github.token }}
+      # __SERVICE_COMMIT__
+      # __CODEMOD_AGENT_PROMPT_START__
+      - id: tailor-codemod-agent-prompt
+        if: steps.tailor-codemod.outputs.agent == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tailor-codemod-agent-prompt
+          path: ${{ runner.temp }}/tailor-codemod-agent
+          retention-days: 1
+          if-no-files-found: error
+          overwrite: true
+      # __CODEMOD_AGENT_PROMPT_END__
+  # __CODEMOD_AGENT_JOB_START__
+  tailor-codemod-agent:
+    needs: tailor-autofix
+    # The generate job runs the project's code, so its output alone does not decide this.
+    if: |-
+      needs.tailor-autofix.outputs.agent == 'true' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # __COPILOT_REQUESTS_PERMISSION__
+    concurrency:
+      group: tailor-codemod-agent-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    outputs:
+      changed: ${{ steps.tailor-codemod-agent-diff.outputs.changed }}
+      commit-message: ${{ steps.tailor-codemod-agent-diff.outputs.commit-message }}
+    steps:
+      - id: tailor-checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - id: tailor-download-patch
+        if: needs.tailor-autofix.outputs.changed == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: tailor-autofix-patch
+          path: ${{ runner.temp }}
+      - id: tailor-download-prompt
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: tailor-codemod-agent-prompt
+          path: ${{ runner.temp }}/tailor-codemod-agent
+      # The agent can change .git; the diff step puts this copy back before running git.
+      - id: tailor-codemod-agent-baseline
         run: |
-          basic="$(printf 'x-access-token:%s' "$TOKEN" | base64 | tr -d '\n')"
-          echo "::add-mask::$basic"
-          git config --local "http.$GITHUB_SERVER_URL/.extraheader" "AUTHORIZATION: basic $basic"
-      - id: tailor-autofix-ci
-        if: steps.tailor-autofix-diff.outputs.changed == 'true'
-        uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
+          if [ -f "$RUNNER_TEMP/tailor-autofix.patch" ]; then
+            git apply "$RUNNER_TEMP/tailor-autofix.patch"
+          fi
+          git add -A
+          echo "tree=$(git write-tree)" >> "$GITHUB_OUTPUT"
+          git reset -q
+          cp -a .git "$RUNNER_TEMP/tailor-codemod-agent-git"
+      # __CLAUDE_START__
+      - id: tailor-claude
+        continue-on-error: true
+        timeout-minutes: 20
+        uses: anthropics/claude-code-action@6b6870e649b5ff408753befeaee5fc7989d4e6a9 # v1.0.258
+        env:
+          ANTHROPIC_MODEL: ${{ vars.TAILOR_AUTOFIX_CLAUDE_MODEL }}
         with:
-          commit-message: "__COMMIT_MESSAGE__"
-      # __AUTOFIX_CI_END__
-      # __SECUREFIX_START__
-      - id: tailor-securefix
-        if: steps.tailor-autofix-diff.outputs.changed == 'true'
-        uses: csm-actions/securefix-action@6da661e4377faf2d71294c1c09b1c03c161ce7c1 # v0.6.8
+          anthropic_api_key: ${{ secrets.TAILOR_AUTOFIX_ANTHROPIC_API_KEY }}
+          github_token: ${{ github.token }}
+          allowed_bots: __AGENT_BOT__
+          prompt: Follow the instructions in ${{ runner.temp }}/tailor-codemod-agent/prompt.md.
+          claude_args: --add-dir ${{ runner.temp }}/tailor-codemod-agent --allowedTools Edit,Write,Read,Glob,Grep --disallowedTools Bash,WebFetch,WebSearch
+      # __CLAUDE_END__
+      # __CODEX_START__
+      - id: tailor-codex
+        continue-on-error: true
+        timeout-minutes: 20
+        uses: openai/codex-action@bdf19a4a223ec2549a3e2274a0cf61556bc07675 # v1.13
         with:
-          action: client
-          client_id: ${{ vars.TAILOR_AUTOFIX_APP_CLIENT_ID }}
-          app_private_key: ${{ secrets.TAILOR_AUTOFIX_APP_PRIVATE_KEY }}
-          server_repository: __SECUREFIX_SERVER_REPOSITORY__
-          commit_message: "__COMMIT_MESSAGE__"
-      # __SECUREFIX_END__
+          openai-api-key: ${{ secrets.TAILOR_AUTOFIX_OPENAI_API_KEY }}
+          model: ${{ vars.TAILOR_AUTOFIX_CODEX_MODEL }}
+          prompt-file: ${{ runner.temp }}/tailor-codemod-agent/prompt.md
+          permission-profile: ":workspace"
+          codex-version: 0.163.0
+          allow-bot-users: __AGENT_BOT__
+      # __CODEX_END__
+      # __COPILOT_START__
+      - id: tailor-setup-node
+        continue-on-error: true
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      # Copilot CLI is distributed on npm; the version is pinned.
+      - id: tailor-install-copilot
+        continue-on-error: true
+        timeout-minutes: 5
+        run: npm install -g @github/copilot@1.0.102 # zizmor: ignore[adhoc-packages]
+      - id: tailor-copilot
+        continue-on-error: true
+        timeout-minutes: 20
+        env:
+          # __COPILOT_TOKEN__
+          COPILOT_MODEL: ${{ vars.TAILOR_AUTOFIX_COPILOT_MODEL }}
+          COPILOT_AUTO_UPDATE: "false"
+          ACTOR: ${{ github.actor }}
+        # Copilot CLI checks no actor itself, unlike the other agents' actions.
+        run: |
+          if [[ "$ACTOR" == *"[bot]" && "$ACTOR" != "__AGENT_BOT__[bot]" ]]; then
+            echo "::warning::Only __AGENT_BOT__[bot] among bots can start copilot, not $ACTOR."
+            exit 1
+          fi
+          if [ -z "$COPILOT_MODEL" ]; then
+            unset COPILOT_MODEL
+          fi
+          copilot -s --no-ask-user --allow-tool=write --deny-tool=shell --deny-tool=url --disable-builtin-mcps < "$RUNNER_TEMP/tailor-codemod-agent/prompt.md"
+      # __COPILOT_END__
+      - id: tailor-codemod-agent-diff
+        env:
+          AGENT: __AGENT__
+          AGENT_OUTCOME: ${{ steps.tailor-__AGENT__.outcome }}
+          BASELINE_TREE: ${{ steps.tailor-codemod-agent-baseline.outputs.tree }}
+          COMMIT_MESSAGE: "__COMMIT_MESSAGE__"
+          AGENT_COMMIT_MESSAGE: "__AGENT_COMMIT_MESSAGE__"
+        run: |
+          rm -rf .git
+          # __CLAUDE_PR_CLEANUP__
+          cp -a "$RUNNER_TEMP/tailor-codemod-agent-git" .git
+          if [ "$AGENT_OUTCOME" != success ]; then
+            echo "::warning::$AGENT did not finish ($AGENT_OUTCOME), so the fix commit carries only what tailor upgrade and tailor generate changed."
+            git checkout -q -- .
+            git clean -fdq
+            if [ -f "$RUNNER_TEMP/tailor-autofix.patch" ]; then
+              git apply "$RUNNER_TEMP/tailor-autofix.patch"
+            fi
+          else
+            git add -A
+            tree="$(git write-tree)"
+            git reset -q
+            while IFS= read -r -d '' file; do
+              case "$file" in
+                .github/workflows/*)
+                  echo "::warning file=$file::$AGENT changed this workflow file, which the fix commit cannot change, so it is left out." ;;
+                # __CLAUDE_RESET_PATHS__
+                *) continue ;;
+              esac
+              if git cat-file -e "$BASELINE_TREE:$file" 2> /dev/null; then
+                git checkout -q "$BASELINE_TREE" -- "$file"
+              else
+                rm -f -- "$file"
+              fi
+            done < <(git diff --name-only -z --no-renames "$BASELINE_TREE" "$tree")
+          fi
+          git add -A
+          tree="$(git write-tree)"
+          git reset -q
+          if [ "$tree" = "$(git rev-parse 'HEAD^{tree}')" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git --no-pager diff --stat HEAD "$tree"
+          git diff --binary HEAD "$tree" > "$RUNNER_TEMP/tailor-autofix.patch"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          if [ "$tree" = "$BASELINE_TREE" ]; then
+            echo "commit-message=$COMMIT_MESSAGE" >> "$GITHUB_OUTPUT"
+          else
+            echo "commit-message=$AGENT_COMMIT_MESSAGE" >> "$GITHUB_OUTPUT"
+          fi
+      - id: tailor-upload-patch
+        if: steps.tailor-codemod-agent-diff.outputs.changed == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tailor-autofix-patch
+          path: ${{ runner.temp }}/tailor-autofix.patch
+          retention-days: 1
+          if-no-files-found: error
+          overwrite: true
+  # __CODEMOD_AGENT_JOB_END__
   # __PUSH_JOB_START__
   tailor-autofix-push:
-    needs: tailor-autofix
-    if: needs.tailor-autofix.outputs.changed == 'true'
+    needs: __PUSH_NEEDS__
+    if: __PUSH_IF__
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -495,6 +720,7 @@ jobs:
         with:
           name: tailor-autofix-patch
           path: ${{ runner.temp }}
+      # __COMMIT_GRAPHQL_START__
       - id: tailor-commit
         env:
           GH_TOKEN: __PUSH_TOKEN__
@@ -502,7 +728,7 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          COMMIT_MESSAGE: "__COMMIT_MESSAGE__"
+          COMMIT_MESSAGE: "__PUSH_COMMIT_MESSAGE__"
         run: |
           export GH_HOST="${GITHUB_SERVER_URL#*://}"
           git apply --index "$RUNNER_TEMP/tailor-autofix.patch"
@@ -541,6 +767,21 @@ jobs:
             exit 0
           fi
           exit 1
+      # __COMMIT_GRAPHQL_END__
+      # __APPLY_PATCH_START__
+      - id: tailor-apply-patch
+        run: |
+          git apply --index "$RUNNER_TEMP/tailor-autofix.patch"
+          while IFS= read -r -d '' meta && IFS= read -r -d '' file; do
+            read -r _ mode _ _ status <<< "$meta"
+            if [ "$status" != D ] && [ "$mode" != 100644 ] && [ "$mode" != 100755 ]; then
+              echo "::error::__FIX_COMMANDS__ left $file with mode $mode; only regular files can be committed."
+              exit 1
+            fi
+          done < <(git diff --cached --raw -z --no-renames --no-abbrev)
+          git reset -q
+      # __APPLY_PATCH_END__
+      # __PUSH_SERVICE_COMMIT__
   # __PUSH_JOB_END__
   # __CODEMOD_RESULT_JOB_START__
   tailor-codemod-result:
