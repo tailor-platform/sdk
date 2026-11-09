@@ -29,7 +29,6 @@ import {
   type TailorDBMaintenance,
 } from "./apply-phases";
 import { planAuth } from "./auth";
-import { assertAuthServicesNotInUse } from "./auth-service-in-use";
 import { collectHttpAdapterScripts, mergeBundledScripts } from "./bundled-scripts";
 import { type PlanSummary } from "./change-set";
 import {
@@ -88,6 +87,7 @@ import { createMetadataLookupClient } from "./metadata-lookup";
 import { printDeploymentPlans, type PrintDeploymentPlansOptions } from "./plan-report";
 import { planPipeline } from "./resolver";
 import { planSecretManager } from "./secret-manager";
+import { assertServicesNotInUse } from "./services-in-use";
 import { planStaticWebsite } from "./staticwebsite";
 import { planTailorDB } from "./tailordb";
 import {
@@ -1004,7 +1004,7 @@ async function deployInternal(
       });
       dropCrossDeploymentManagedDeletes(deployments);
       scheduleRenamedAppDeletes(deployments);
-      assertAuthServicesNotInUse(deployments);
+      assertServicesNotInUse(deployments, "deploy");
       assertNoSingleRunTransferHandoff(deployments);
       return { planTargets, metadataClient, runInputs, deployments };
     };
