@@ -181,7 +181,7 @@ When multiple configs are provided, `deploy` creates or updates all configured s
 
 Names that identify a resource across the whole workspace, such as application, executor, workflow, and static website names and service namespaces, must be unique across all configs in one deploy. Otherwise, `deploy` fails before planning any changes and lists every duplicate with the config files that define it.
 
-Each config's `files` and `ignores` patterns (see [Service Configuration](../configuration.md#service-configuration)) resolve relative to that config's own directory, not the directory you ran `deploy` from. For example, `apps/buyer/tailor.config.ts` declaring `files: ["db/**/*.ts"]` loads files from `apps/buyer/db/`, independent of where `apps/supplier/tailor.config.ts`'s patterns resolve. If a config's relative patterns match nothing under its own directory, the SDK falls back to the invocation directory and logs a warning (see [Service Configuration](../configuration.md#service-configuration) for details).
+Each config's `files` patterns (see [Service Configuration](../configuration.md#service-configuration)) resolve relative to that config's own directory, not the directory you ran `deploy` from. For example, `apps/buyer/tailor.config.ts` declaring `files: ["db/**/*.ts"]` loads files from `apps/buyer/db/`, independent of where `apps/supplier/tailor.config.ts`'s patterns resolve. If a config's relative patterns match nothing under its own directory, the SDK falls back to the invocation directory and logs a warning (see [Service Configuration](../configuration.md#service-configuration) for details).
 
 **Migration Handling (Beta):**
 

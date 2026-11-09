@@ -30,6 +30,87 @@ describe("loadFilesWithIgnores", () => {
     return dir;
   }
 
+  function writeFiles(dir: string, relativeFiles: string[]): void {
+    for (const relativeFile of relativeFiles) {
+      fs.mkdirSync(path.dirname(path.join(dir, relativeFile)), { recursive: true });
+      fs.writeFileSync(path.join(dir, relativeFile), "export const marker = true;\n");
+    }
+  }
+
+  test("excludes files matched by a pattern starting with !", () => {
+    const baseDir = makeDirWithFile("file-loader-negation-", "src/a.ts");
+    writeFiles(baseDir, ["src/ci-only.ts", "src/a.test.ts"]);
+
+    const files = loadFilesWithIgnores({ files: ["./src/**/*.ts", "!./src/ci-only.ts"] }, baseDir);
+    expect(files).toEqual([path.join(baseDir, "src", "a.ts")]);
+  });
+
+  test("re-includes an excluded file with a later pattern, once", () => {
+    const baseDir = makeDirWithFile("file-loader-reinclude-", "src/a.ts");
+    writeFiles(baseDir, ["src/internal/drop.ts", "src/internal/keep.ts"]);
+
+    const files = loadFilesWithIgnores(
+      { files: ["./src/**/*.ts", "!./src/internal/**", "./src/internal/keep.ts"] },
+      baseDir,
+    );
+    expect(files.toSorted()).toEqual([
+      path.join(baseDir, "src", "a.ts"),
+      path.join(baseDir, "src", "internal", "keep.ts"),
+    ]);
+  });
+
+  test("returns a file matched by several patterns once", () => {
+    const baseDir = makeDirWithFile("file-loader-overlap-", "src/a.ts");
+
+    const files = loadFilesWithIgnores({ files: ["./src/**/*.ts", "./src/a.ts"] }, baseDir);
+    expect(files).toEqual([path.join(baseDir, "src", "a.ts")]);
+  });
+
+  test("does not exclude files matched only by patterns after the ! pattern", () => {
+    const baseDir = makeDirWithFile("file-loader-negation-order-", "src/a.ts");
+
+    const files = loadFilesWithIgnores({ files: ["!./src/a.ts", "./src/**/*.ts"] }, baseDir);
+    expect(files).toEqual([path.join(baseDir, "src", "a.ts")]);
+  });
+
+  test("does not fall back when every non-! pattern is absolute", () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const cwdDir = makeDirWithFile("file-loader-absolute-negation-cwd-", "src/legacy.ts");
+    const emptyBaseDir = makeTempDir("file-loader-absolute-negation-base-");
+    tmpDirs.push(emptyBaseDir);
+    const absolutePattern = path.join(emptyBaseDir, "src", "**", "*.ts");
+
+    const originalCwd = process.cwd();
+    process.chdir(cwdDir);
+    try {
+      const files = loadFilesWithIgnores(
+        { files: [absolutePattern, "!./src/legacy.ts"] },
+        emptyBaseDir,
+      );
+      expect(files).toEqual([]);
+      expect(warnSpy).not.toHaveBeenCalled();
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test("returns nothing without warning when files has only ! patterns", () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const cwdDir = makeDirWithFile("file-loader-only-negation-cwd-", "src/a.ts");
+    const emptyBaseDir = makeTempDir("file-loader-only-negation-base-");
+    tmpDirs.push(emptyBaseDir);
+
+    const originalCwd = process.cwd();
+    process.chdir(cwdDir);
+    try {
+      const files = loadFilesWithIgnores({ files: ["!./src/a.ts"] }, emptyBaseDir);
+      expect(files).toEqual([]);
+      expect(warnSpy).not.toHaveBeenCalled();
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
   test("resolves file patterns relative to baseDir, not process.cwd()", () => {
     const cwdDir = makeDirWithFile("file-loader-cwd-", "src/wrong.ts");
     const targetDir = makeDirWithFile("file-loader-target-", "src/correct.ts");

@@ -276,7 +276,11 @@ const TailorDBMigrationConfigSchema = z.strictObject({
  * Normalizes gqlOperations from alias ("query") to object format.
  */
 export const TailorDBServiceConfigSchema = z.strictObject({
-  files: z.array(z.string()).describe("Glob patterns for TailorDB table definition files"),
+  files: z
+    .array(z.string())
+    .describe(
+      "Glob patterns for TailorDB table definition files. A pattern starting with `!` excludes the files it matches; for each file, the last matching pattern decides.",
+    ),
   ignores: z.array(z.string()).optional().describe("Glob patterns to exclude from table discovery"),
   migration: TailorDBMigrationConfigSchema.optional().describe(
     "Migration configuration\n\n**Beta:** This API may change in future releases.",

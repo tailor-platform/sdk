@@ -70,6 +70,7 @@ import {
 } from "@tailor-platform/tailor-proto/workflow_pb";
 import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
+import { STATIC_WEBSITE_ORIGIN_PLACEHOLDER_PATTERN } from "#/parser/service/common";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { secretCreateRequest, secretUpdateRequest, vaultCreateRequest } from "./secret-manager";
 import { buildWorkflowValidationShape } from "./workflow";
@@ -311,12 +312,8 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     if (!Array.isArray(origins) || origins.length === 0) {
       return item;
     }
-    // Match the parser schema's placeholder shape exactly (a static-website
-    // slug followed by `:url`, no path/query/fragment). A broader regex would
-    // mask schema-rejected inputs that should still surface here as
-    // validation errors.
     const substituted = origins.map((origin) =>
-      typeof origin === "string" && /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]:url$/.test(origin)
+      typeof origin === "string" && STATIC_WEBSITE_ORIGIN_PLACEHOLDER_PATTERN.test(origin)
         ? placeholderOriginReplacement
         : origin,
     );

@@ -188,7 +188,7 @@ importers:
         version: 26.6.6
       eslint-plugin-zod:
         specifier: 5.2.2
-        version: 5.2.2(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.90.0(oxlint-tsgolint@7.0.2005))(zod@4.6.7)
+        version: 5.2.2(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.90.0(oxlint-tsgolint@7.0.2006))(zod@4.6.7)
       knip:
         specifier: 6.44.1
         version: 6.44.1
@@ -203,7 +203,7 @@ importers:
         version: 0.75.0
       oxlint:
         specifier: 1.90.0
-        version: 1.90.0(oxlint-tsgolint@7.0.2005)
+        version: 1.90.0(oxlint-tsgolint@7.0.2006)
       pkg-pr-new:
         specifier: 0.0.93
         version: 0.0.93
@@ -239,8 +239,8 @@ importers:
         specifier: 2.3.0
         version: 2.3.0(@bufbuild/protobuf@2.16.0)(@connectrpc/connect@2.3.0(@bufbuild/protobuf@2.16.0))
       '@electric-sql/pglite':
-        specifier: 0.5.14
-        version: 0.5.14
+        specifier: 0.5.15
+        version: 0.5.15
       '@tailor-platform/sdk-plugin-seed':
         specifier: workspace:^
         version: link:../packages/sdk-plugin-seed
@@ -252,7 +252,7 @@ importers:
         version: 26.6.6
       eslint-plugin-zod:
         specifier: 5.2.2
-        version: 5.2.2(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.90.0(oxlint-tsgolint@7.0.2005))(zod@4.6.7)
+        version: 5.2.2(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.90.0(oxlint-tsgolint@7.0.2006))(zod@4.6.7)
       graphql:
         specifier: 17.0.2
         version: 17.0.2
@@ -267,10 +267,10 @@ importers:
         version: 0.75.0
       oxlint:
         specifier: 1.90.0
-        version: 1.90.0(oxlint-tsgolint@7.0.2005)
+        version: 1.90.0(oxlint-tsgolint@7.0.2006)
       oxlint-tsgolint:
-        specifier: 7.0.2005
-        version: 7.0.2005
+        specifier: 7.0.2006
+        version: 7.0.2006
       tsdown:
         specifier: 0.23.2
         version: 0.23.2(oxc-resolver@11.24.2)(publint@0.3.25)(tsrs@0.16.0-ts7.1.0-dev.20260929)(tsx@4.23.15)(typescript@6.0.3)
@@ -294,13 +294,13 @@ importers:
         version: 26.6.6
       eslint-plugin-zod:
         specifier: 5.2.2
-        version: 5.2.2(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.90.0(oxlint-tsgolint@7.0.2005))(zod@4.6.7)
+        version: 5.2.2(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.90.0(oxlint-tsgolint@7.0.2006))(zod@4.6.7)
       oxlint:
         specifier: 1.90.0
-        version: 1.90.0(oxlint-tsgolint@7.0.2005)
+        version: 1.90.0(oxlint-tsgolint@7.0.2006)
       oxlint-tsgolint:
-        specifier: 7.0.2005
-        version: 7.0.2005
+        specifier: 7.0.2006
+        version: 7.0.2006
       tsx:
         specifier: 4.23.15
         version: 4.23.15
@@ -337,13 +337,13 @@ importers:
         version: 26.6.6
       eslint-plugin-zod:
         specifier: 5.2.2
-        version: 5.2.2(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.90.0(oxlint-tsgolint@7.0.2005))(zod@4.6.7)
+        version: 5.2.2(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.90.0(oxlint-tsgolint@7.0.2006))(zod@4.6.7)
       oxlint:
         specifier: 1.90.0
-        version: 1.90.0(oxlint-tsgolint@7.0.2005)
+        version: 1.90.0(oxlint-tsgolint@7.0.2006)
       oxlint-tsgolint:
-        specifier: 7.0.2005
-        version: 7.0.2005
+        specifier: 7.0.2006
+        version: 7.0.2006
       tsdown:
         specifier: 0.23.2
         version: 0.23.2(oxc-resolver@11.24.2)(publint@0.3.25)(tsrs@0.16.0-ts7.1.0-dev.20260929)(tsx@4.23.15)(typescript@6.0.3)
@@ -370,10 +370,10 @@ importers:
         version: 0.75.0
       oxlint:
         specifier: 1.90.0
-        version: 1.90.0(oxlint-tsgolint@7.0.2005)
+        version: 1.90.0(oxlint-tsgolint@7.0.2006)
       oxlint-tsgolint:
-        specifier: 7.0.2005
-        version: 7.0.2005
+        specifier: 7.0.2006
+        version: 7.0.2006
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -400,10 +400,10 @@ importers:
         version: 0.75.0
       oxlint:
         specifier: 1.90.0
-        version: 1.90.0(oxlint-tsgolint@7.0.2005)
+        version: 1.90.0(oxlint-tsgolint@7.0.2006)
       oxlint-tsgolint:
-        specifier: 7.0.2005
-        version: 7.0.2005
+        specifier: 7.0.2006
+        version: 7.0.2006
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -427,10 +427,10 @@ importers:
         version: 0.75.0
       oxlint:
         specifier: 1.90.0
-        version: 1.90.0(oxlint-tsgolint@7.0.2005)
+        version: 1.90.0(oxlint-tsgolint@7.0.2006)
       oxlint-tsgolint:
-        specifier: 7.0.2005
-        version: 7.0.2005
+        specifier: 7.0.2006
+        version: 7.0.2006
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -451,10 +451,10 @@ importers:
         version: 0.75.0
       oxlint:
         specifier: 1.90.0
-        version: 1.90.0(oxlint-tsgolint@7.0.2005)
+        version: 1.90.0(oxlint-tsgolint@7.0.2006)
       oxlint-tsgolint:
-        specifier: 7.0.2005
-        version: 7.0.2005
+        specifier: 7.0.2006
+        version: 7.0.2006
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -475,10 +475,10 @@ importers:
         version: 0.75.0
       oxlint:
         specifier: 1.90.0
-        version: 1.90.0(oxlint-tsgolint@7.0.2005)
+        version: 1.90.0(oxlint-tsgolint@7.0.2006)
       oxlint-tsgolint:
-        specifier: 7.0.2005
-        version: 7.0.2005
+        specifier: 7.0.2006
+        version: 7.0.2006
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -499,10 +499,10 @@ importers:
         version: 0.75.0
       oxlint:
         specifier: 1.90.0
-        version: 1.90.0(oxlint-tsgolint@7.0.2005)
+        version: 1.90.0(oxlint-tsgolint@7.0.2006)
       oxlint-tsgolint:
-        specifier: 7.0.2005
-        version: 7.0.2005
+        specifier: 7.0.2006
+        version: 7.0.2006
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -526,10 +526,10 @@ importers:
         version: 0.75.0
       oxlint:
         specifier: 1.90.0
-        version: 1.90.0(oxlint-tsgolint@7.0.2005)
+        version: 1.90.0(oxlint-tsgolint@7.0.2006)
       oxlint-tsgolint:
-        specifier: 7.0.2005
-        version: 7.0.2005
+        specifier: 7.0.2006
+        version: 7.0.2006
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -550,10 +550,10 @@ importers:
         version: 0.75.0
       oxlint:
         specifier: 1.90.0
-        version: 1.90.0(oxlint-tsgolint@7.0.2005)
+        version: 1.90.0(oxlint-tsgolint@7.0.2006)
       oxlint-tsgolint:
-        specifier: 7.0.2005
-        version: 7.0.2005
+        specifier: 7.0.2006
+        version: 7.0.2006
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -583,10 +583,10 @@ importers:
         version: 0.75.0
       oxlint:
         specifier: 1.90.0
-        version: 1.90.0(oxlint-tsgolint@7.0.2005)
+        version: 1.90.0(oxlint-tsgolint@7.0.2006)
       oxlint-tsgolint:
-        specifier: 7.0.2005
-        version: 7.0.2005
+        specifier: 7.0.2006
+        version: 7.0.2006
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -611,7 +611,7 @@ importers:
         version: 10.14.0(jiti@2.7.0)(supports-color@7.2.0)
       oxlint:
         specifier: 1.90.0
-        version: 1.90.0(oxlint-tsgolint@7.0.2005)
+        version: 1.90.0(oxlint-tsgolint@7.0.2006)
       tsdown:
         specifier: 0.23.2
         version: 0.23.2(oxc-resolver@11.24.2)(publint@0.3.25)(tsrs@0.16.0-ts7.1.0-dev.20260929)(tsx@4.23.15)(typescript@6.0.3)
@@ -766,8 +766,8 @@ importers:
         specifier: 4.3.0
         version: 4.3.0
       temporal-polyfill:
-        specifier: 1.0.6
-        version: 1.0.6
+        specifier: 1.0.8
+        version: 1.0.8
       temporal-spec:
         specifier: 1.0.1
         version: 1.0.1
@@ -791,8 +791,8 @@ importers:
         specifier: 0.58.0
         version: 0.58.0(supports-color@7.2.0)(tsrs@0.16.0-ts7.1.0-dev.20260929)(typescript@6.0.3)
       '@electric-sql/pglite':
-        specifier: 0.5.14
-        version: 0.5.14
+        specifier: 0.5.15
+        version: 0.5.15
       '@tailor-platform/shared':
         specifier: workspace:^
         version: link:../shared
@@ -813,7 +813,7 @@ importers:
         version: 5.1.0(vitest@5.1.0)
       eslint-plugin-zod:
         specifier: 5.2.2
-        version: 5.2.2(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.90.0(oxlint-tsgolint@7.0.2005))(zod@4.6.7)
+        version: 5.2.2(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.90.0(oxlint-tsgolint@7.0.2006))(zod@4.6.7)
       graphql:
         specifier: 17.0.2
         version: 17.0.2
@@ -822,10 +822,10 @@ importers:
         version: 0.75.0
       oxlint:
         specifier: 1.90.0
-        version: 1.90.0(oxlint-tsgolint@7.0.2005)
+        version: 1.90.0(oxlint-tsgolint@7.0.2006)
       oxlint-tsgolint:
-        specifier: 7.0.2005
-        version: 7.0.2005
+        specifier: 7.0.2006
+        version: 7.0.2006
       sonda:
         specifier: 0.14.0
         version: 0.14.0
@@ -889,13 +889,13 @@ importers:
         version: 7.8.0
       eslint-plugin-zod:
         specifier: 5.2.2
-        version: 5.2.2(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.90.0(oxlint-tsgolint@7.0.2005))(zod@4.6.7)
+        version: 5.2.2(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.90.0(oxlint-tsgolint@7.0.2006))(zod@4.6.7)
       oxlint:
         specifier: 1.90.0
-        version: 1.90.0(oxlint-tsgolint@7.0.2005)
+        version: 1.90.0(oxlint-tsgolint@7.0.2006)
       oxlint-tsgolint:
-        specifier: 7.0.2005
-        version: 7.0.2005
+        specifier: 7.0.2006
+        version: 7.0.2006
       tsdown:
         specifier: 0.23.2
         version: 0.23.2(oxc-resolver@11.24.2)(publint@0.3.25)(tsrs@0.16.0-ts7.1.0-dev.20260929)(tsx@4.23.15)(typescript@6.0.3)
@@ -920,10 +920,10 @@ importers:
         version: 26.6.6
       oxlint:
         specifier: 1.90.0
-        version: 1.90.0(oxlint-tsgolint@7.0.2005)
+        version: 1.90.0(oxlint-tsgolint@7.0.2006)
       oxlint-tsgolint:
-        specifier: 7.0.2005
-        version: 7.0.2005
+        specifier: 7.0.2006
+        version: 7.0.2006
       tsdown:
         specifier: 0.23.2
         version: 0.23.2(oxc-resolver@11.24.2)(publint@0.3.25)(tsrs@0.16.0-ts7.1.0-dev.20260929)(tsx@4.23.15)(typescript@6.0.3)
@@ -957,10 +957,10 @@ importers:
         version: 26.6.6
       oxlint:
         specifier: 1.90.0
-        version: 1.90.0(oxlint-tsgolint@7.0.2005)
+        version: 1.90.0(oxlint-tsgolint@7.0.2006)
       oxlint-tsgolint:
-        specifier: 7.0.2005
-        version: 7.0.2005
+        specifier: 7.0.2006
+        version: 7.0.2006
       tsdown:
         specifier: 0.23.2
         version: 0.23.2(oxc-resolver@11.24.2)(publint@0.3.25)(tsrs@0.16.0-ts7.1.0-dev.20260929)(tsx@4.23.15)(typescript@6.0.3)
@@ -1009,10 +1009,10 @@ importers:
         version: 0.3.2
       oxlint:
         specifier: 1.90.0
-        version: 1.90.0(oxlint-tsgolint@7.0.2005)
+        version: 1.90.0(oxlint-tsgolint@7.0.2006)
       oxlint-tsgolint:
-        specifier: 7.0.2005
-        version: 7.0.2005
+        specifier: 7.0.2006
+        version: 7.0.2006
       tsdown:
         specifier: 0.23.2
         version: 0.23.2(oxc-resolver@11.24.2)(publint@0.3.25)(tsrs@0.16.0-ts7.1.0-dev.20260929)(tsx@4.23.15)(typescript@6.0.3)
@@ -1058,10 +1058,10 @@ importers:
         version: 26.6.6
       oxlint:
         specifier: 1.90.0
-        version: 1.90.0(oxlint-tsgolint@7.0.2005)
+        version: 1.90.0(oxlint-tsgolint@7.0.2006)
       oxlint-tsgolint:
-        specifier: 7.0.2005
-        version: 7.0.2005
+        specifier: 7.0.2006
+        version: 7.0.2006
       tsdown:
         specifier: 0.23.2
         version: 0.23.2(oxc-resolver@11.24.2)(publint@0.3.25)(tsrs@0.16.0-ts7.1.0-dev.20260929)(tsx@4.23.15)(typescript@6.0.3)
@@ -1076,10 +1076,10 @@ importers:
     devDependencies:
       oxlint:
         specifier: 1.90.0
-        version: 1.90.0(oxlint-tsgolint@7.0.2005)
+        version: 1.90.0(oxlint-tsgolint@7.0.2006)
       oxlint-tsgolint:
-        specifier: 7.0.2005
-        version: 7.0.2005
+        specifier: 7.0.2006
+        version: 7.0.2006
       vitest:
         specifier: 5.1.0
         version: 5.1.0(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(vite@8.3.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
@@ -1339,8 +1339,8 @@ packages:
     resolution: {integrity: sha512-Xc3VhU02wqZ1HvHRJUwL09HkZSTvidqY5Ya0NXBSYOxAp+Ln9dcJr9fySI+CkONzP3PekQo9WdzCv0PGER/mOA==}
     engines: {node: '>=14.17.0'}
 
-  '@electric-sql/pglite@0.5.14':
-    resolution: {integrity: sha512-aAQe7iArcFB2w1xtx91l3l9trxhMzD6aZf+WnosSHNhwgp70EJz80Igw/bHnW14fUEFYWPBoQ1sGom8Xc0Jttg==}
+  '@electric-sql/pglite@0.5.15':
+    resolution: {integrity: sha512-ERZWgaRTxueGV4cvL1tfpAOzFCWTXoUtbCBqnf2FhHDVs/so9eAKaanvrwWF9Dntx7BYsmFQujVQ0/B4S8Mmiw==}
 
   '@emnapi/core@1.11.2':
     resolution: {integrity: sha512-TC8MkTuZUtcTSiFeuC0ksCh9QIJ5+F21MvZ4Wn4ORfYaFJ/0dsiudv5tVkejgwZlwQ39jL9WWDe2lz8x0WglOA==}
@@ -2384,33 +2384,33 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@oxlint-tsgolint/darwin-arm64@7.0.2005':
-    resolution: {integrity: sha512-VqDZxcZVjlonNLuuvraVNgDQt+1ndwa4yJo8OqsK4HYh/61ba9IlMStCVfi/aaIqRoDhNbAKC8gdcTrXqnb+Ug==}
+  '@oxlint-tsgolint/darwin-arm64@7.0.2006':
+    resolution: {integrity: sha512-uc0MEHXZUDW23Zmo5X28eSNeSnP17jKnh9GiehpVZqhfy99ks8spyXT5Llar3tjDN7ppnQN0Qd9FK6WNkdD+fQ==}
     cpu: [arm64]
     os: [darwin]
 
-  '@oxlint-tsgolint/darwin-x64@7.0.2005':
-    resolution: {integrity: sha512-4kUfLRNYoVpv0Tm3jPYrvxyfOc/LmdvFC3pKZ4tL6K7lA7K/VS81SAtmxRzbYXYSyb3SBWhwsuX+df4neqzxxA==}
+  '@oxlint-tsgolint/darwin-x64@7.0.2006':
+    resolution: {integrity: sha512-+x1/pa3S3VMC9cif8XKTOCQUuqRT+wu1Ix+FK5svXa2xbXCuE7+4S0SfmuSnK/mk9AI5+xBxZFhILxmCPUZ1hA==}
     cpu: [x64]
     os: [darwin]
 
-  '@oxlint-tsgolint/linux-arm64@7.0.2005':
-    resolution: {integrity: sha512-rhUNcPsBlKvhXtrbhbBUidtRBRdJ8fbEHN9H5Q5N59gby18ruGuDA7KUxl7oRnUzp797uykYQhkBDm+0KpfK/Q==}
+  '@oxlint-tsgolint/linux-arm64@7.0.2006':
+    resolution: {integrity: sha512-90v7HX8m54kHXn5DpjNEN18Fb7xwJMREe/wji3USyAf9pTMv7a3qZ3cPoLViIcIzxPLmkcYZIs1j1H3Z2gbVLA==}
     cpu: [arm64]
     os: [linux]
 
-  '@oxlint-tsgolint/linux-x64@7.0.2005':
-    resolution: {integrity: sha512-tKs9yinDQZOHygM0e8EJnjTU3mzJtdfkOZP6Udu82iLMePUSHOhTJ9zzU/mSd1hQxURI4LTRRiFhfzC+PzwdNA==}
+  '@oxlint-tsgolint/linux-x64@7.0.2006':
+    resolution: {integrity: sha512-/k0wsEqHiA5dWBJYuld3Vecv6bIhKCasxpho/aFkvh870Qox33MuTkKUGWIVm/njAxw7W4pu1a/Xfa3jwuKuPQ==}
     cpu: [x64]
     os: [linux]
 
-  '@oxlint-tsgolint/win32-arm64@7.0.2005':
-    resolution: {integrity: sha512-VYPnu1gjfbSv+ROhuyNfMs382D4zQU2ZRc8Uc3nuEZo1k2kf+1KfTrg4hrlWh73h9GI+dUWyo+DYCQzUBlPwcQ==}
+  '@oxlint-tsgolint/win32-arm64@7.0.2006':
+    resolution: {integrity: sha512-CQT5sqcLZLNZSWLzUUEjQmp74UX8h1agp3ZJ8pfRktHbx6gfBa8a7CjrnRrZ9VXlwnXVkpw7m5KBO6y+S5MQRA==}
     cpu: [arm64]
     os: [win32]
 
-  '@oxlint-tsgolint/win32-x64@7.0.2005':
-    resolution: {integrity: sha512-ekU89cTGy9fpQzuvxIsFHrnoP8XoFjGIRgPEW6eqgY2NYjGy9pwpjF79o04WXRMJFKRrcaVqkZXUUBdLsqpQDw==}
+  '@oxlint-tsgolint/win32-x64@7.0.2006':
+    resolution: {integrity: sha512-VZsGowXcp3vQNkjoGeVCOTf4aGrRpRk6bBJWhefnJVPr6z+dX+LKqqHfwaqnFvg66Q2iJpXqklRW38YO21ee+Q==}
     cpu: [x64]
     os: [win32]
 
@@ -4106,8 +4106,8 @@ packages:
       vite-plus:
         optional: true
 
-  oxlint-tsgolint@7.0.2005:
-    resolution: {integrity: sha512-6ccPGu4u4J9bwYPHXBFPee3RZrX3BboRdU7k14zRDDB1lvN3O7J/vPRFdaEfa1+CWx4xnQQOp4ctoaF66oO0uw==}
+  oxlint-tsgolint@7.0.2006:
+    resolution: {integrity: sha512-5B3UtH71kycPHUC1kFEIffivEAs49SUmkJuHZOZnTY0NPj4legp0bcsCQucuLVNCoJzDucS68P2C4WIhP+LypQ==}
     hasBin: true
 
   oxlint@1.90.0:
@@ -4455,14 +4455,14 @@ packages:
     resolution: {integrity: sha512-uxc/zpqFg6x7C8vOE7lh6Lbda8eEL9zmVm/PLeTPBRhh1xCgdWaQ+J1CUieGpIfm2HdtsUpRv+HshiasBMcc6A==}
     engines: {node: '>=6'}
 
-  temporal-polyfill@1.0.6:
-    resolution: {integrity: sha512-tYyEry1HLGUDbm2356W3iYD0OZdo7rlP7h98Zr/EnjqLZQwTAfcBDUvJnJbfA15v/vQad57hJZScG5O0W2oKEA==}
+  temporal-polyfill@1.0.8:
+    resolution: {integrity: sha512-RCCGa0GddT099XG49ijdD0tDf86L8vfuZun1+JyJiO4Y2NP9PACQsG0OnvNPXwVLisdvhr/zqL2nhKQmXXx08A==}
 
   temporal-spec@1.0.1:
     resolution: {integrity: sha512-wxVoanmDeavXie1vu2JaQ3WIc3JZnWAOYFBsJyATaVsXsycKYUflGsyBmrRSnoCpZJpwPyr38VpgSUlQ8CbFxg==}
 
-  temporal-utils@1.0.3:
-    resolution: {integrity: sha512-9jbTSX3HvkOWvDpNpFzwX/d1mkCrgQgwLmVTOEiuocZGKHsrQJtttGZFmybJ2zYP5zCSZuU5ZyeS8+eOEPABiQ==}
+  temporal-utils@1.0.4:
+    resolution: {integrity: sha512-4mAcgbWlaxe+gn23gk8g0iHxCVGVOhKzSCfF5HM3lfvH8BdT+/pBmH/R/E4CrIse+koUgs8ThkPzCLnui6Fi8w==}
 
   through2@4.0.2:
     resolution: {integrity: sha512-iOqSav00cVxEEICeD7TjLB1sueEL+81Wpzp2bY17uZjZN0pWZPuo4suZ/61VujxmqSGFfgOcNuTZ85QJwNZQpw==}
@@ -5048,7 +5048,7 @@ snapshots:
 
   '@discoveryjs/json-ext@1.1.0': {}
 
-  '@electric-sql/pglite@0.5.14': {}
+  '@electric-sql/pglite@0.5.15': {}
 
   '@emnapi/core@1.11.2':
     dependencies:
@@ -5733,22 +5733,22 @@ snapshots:
   '@oxfmt/binding-win32-x64-msvc@0.75.0':
     optional: true
 
-  '@oxlint-tsgolint/darwin-arm64@7.0.2005':
+  '@oxlint-tsgolint/darwin-arm64@7.0.2006':
     optional: true
 
-  '@oxlint-tsgolint/darwin-x64@7.0.2005':
+  '@oxlint-tsgolint/darwin-x64@7.0.2006':
     optional: true
 
-  '@oxlint-tsgolint/linux-arm64@7.0.2005':
+  '@oxlint-tsgolint/linux-arm64@7.0.2006':
     optional: true
 
-  '@oxlint-tsgolint/linux-x64@7.0.2005':
+  '@oxlint-tsgolint/linux-x64@7.0.2006':
     optional: true
 
-  '@oxlint-tsgolint/win32-arm64@7.0.2005':
+  '@oxlint-tsgolint/win32-arm64@7.0.2006':
     optional: true
 
-  '@oxlint-tsgolint/win32-x64@7.0.2005':
+  '@oxlint-tsgolint/win32-x64@7.0.2006':
     optional: true
 
   '@oxlint/binding-android-arm-eabi@1.90.0':
@@ -6512,13 +6512,13 @@ snapshots:
     optionalDependencies:
       source-map: 0.6.1
 
-  eslint-plugin-zod@5.2.2(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.90.0(oxlint-tsgolint@7.0.2005))(zod@4.6.7):
+  eslint-plugin-zod@5.2.2(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.90.0(oxlint-tsgolint@7.0.2006))(zod@4.6.7):
     dependencies:
       '@eslint-zod/utils': 6.4.0
       '@typescript-eslint/types': 8.72.1
     optionalDependencies:
       eslint: 10.14.0(jiti@2.7.0)(supports-color@7.2.0)
-      oxlint: 1.90.0(oxlint-tsgolint@7.0.2005)
+      oxlint: 1.90.0(oxlint-tsgolint@7.0.2006)
       zod: 4.6.7
 
   eslint-scope@9.1.2:
@@ -7213,16 +7213,16 @@ snapshots:
       '@oxfmt/binding-win32-ia32-msvc': 0.75.0
       '@oxfmt/binding-win32-x64-msvc': 0.75.0
 
-  oxlint-tsgolint@7.0.2005:
+  oxlint-tsgolint@7.0.2006:
     optionalDependencies:
-      '@oxlint-tsgolint/darwin-arm64': 7.0.2005
-      '@oxlint-tsgolint/darwin-x64': 7.0.2005
-      '@oxlint-tsgolint/linux-arm64': 7.0.2005
-      '@oxlint-tsgolint/linux-x64': 7.0.2005
-      '@oxlint-tsgolint/win32-arm64': 7.0.2005
-      '@oxlint-tsgolint/win32-x64': 7.0.2005
+      '@oxlint-tsgolint/darwin-arm64': 7.0.2006
+      '@oxlint-tsgolint/darwin-x64': 7.0.2006
+      '@oxlint-tsgolint/linux-arm64': 7.0.2006
+      '@oxlint-tsgolint/linux-x64': 7.0.2006
+      '@oxlint-tsgolint/win32-arm64': 7.0.2006
+      '@oxlint-tsgolint/win32-x64': 7.0.2006
 
-  oxlint@1.90.0(oxlint-tsgolint@7.0.2005):
+  oxlint@1.90.0(oxlint-tsgolint@7.0.2006):
     optionalDependencies:
       '@oxlint/binding-android-arm-eabi': 1.90.0
       '@oxlint/binding-android-arm64': 1.90.0
@@ -7243,7 +7243,7 @@ snapshots:
       '@oxlint/binding-win32-arm64-msvc': 1.90.0
       '@oxlint/binding-win32-ia32-msvc': 1.90.0
       '@oxlint/binding-win32-x64-msvc': 1.90.0
-      oxlint-tsgolint: 7.0.2005
+      oxlint-tsgolint: 7.0.2006
 
   p-limit@3.1.0:
     dependencies:
@@ -7565,14 +7565,14 @@ snapshots:
 
   tapable@2.3.3: {}
 
-  temporal-polyfill@1.0.6:
+  temporal-polyfill@1.0.8:
     dependencies:
       temporal-spec: 1.0.1
-      temporal-utils: 1.0.3
+      temporal-utils: 1.0.4
 
   temporal-spec@1.0.1: {}
 
-  temporal-utils@1.0.3: {}
+  temporal-utils@1.0.4: {}
 
   through2@4.0.2:
     dependencies:

@@ -152,6 +152,30 @@ describe("resolveSync", () => {
     expect(result).toEqual(resolved);
   });
 
+  test("resolves a tsconfig path alias when the tsconfig has comments and trailing commas", () => {
+    const tsconfig = `{
+  // aliases
+  "compilerOptions": { "paths": { "@/*": ["./*"], }, },
+}`;
+    using _tsconfigRead = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), { encoding: "utf-8" })
+      .thenReturn(tsconfig);
+    const resolved = { url: "file:///alias-jsonc-project/tailordb/user.ts" };
+    const nextResolve = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw notFound("@/tailordb/user");
+      })
+      .mockReturnValueOnce(resolved);
+    const result = resolveSync(
+      "@/tailordb/user",
+      { parentURL: "file:///alias-jsonc-project/tailor.config.ts" },
+      nextResolve,
+    );
+    expect(result).toEqual(resolved);
+  });
+
   test("resolves tsconfig path alias when parentURL has tailorImportNonce query string", () => {
     const tsconfig = JSON.stringify({
       compilerOptions: { baseUrl: ".", paths: { "@/*": ["./*"] } },

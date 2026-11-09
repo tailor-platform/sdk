@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
+import { isContentMapperEnabled } from "#/cli/shared/content-mapper-config";
 import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
 import type { ResolvedEnvAppConfig } from "#/cli/shared/config-loader";
@@ -402,6 +403,40 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
 }
 
 /**
+ * Generate the contents of the user-defined type definition file for an app config.
+ * @param config - Application config with resolved `env` values
+ * @param extracted - Names and attributes already extracted from `config`; extracted here when omitted
+ * @returns Generated type definition source
+ */
+export function generateTypeDefinitionFromConfig(
+  config: ResolvedEnvAppConfig,
+  extracted: ExtractedAttributes = extractAttributesFromConfig(config),
+): string {
+  const {
+    attributes,
+    attributeList,
+    machineUserNames,
+    idpNames,
+    connectionNames,
+    aiGatewayNames,
+    authNamespaceNames,
+    secretVaultNames,
+  } = extracted;
+  return generateTypeDefinition(
+    attributes,
+    attributeList,
+    config.env,
+    machineUserNames,
+    idpNames,
+    connectionNames,
+    aiGatewayNames,
+    authNamespaceNames,
+    secretVaultNames,
+    { appName: config.name, defaultDateRepresentation: config.defaultDateRepresentation },
+  );
+}
+
+/**
  * Resolve the output path for the generated type definition file.
  *
  * When the `TAILOR_DTS_PATH` environment variable is set, the value is
@@ -430,12 +465,25 @@ interface GenerateUserTypesOptions {
 
 /**
  * Generate user type definitions from the app config and write them to disk.
+ * Writes nothing when `tsconfig.json` enables the content mapper for this config
+ * (unless `TAILOR_DTS_PATH` is set), since TypeScript then reads the definitions
+ * from the config itself; it only warns when an old file remains.
  * @param options - Generation options
  * @returns Promise that resolves when types are generated
  */
 export async function generateUserTypes(options: GenerateUserTypesOptions): Promise<void> {
   const { config, configPath } = options;
   try {
+    if (!process.env.TAILOR_DTS_PATH && isContentMapperEnabled(configPath)) {
+      const existing = resolveTypeDefinitionPath(configPath);
+      if (fs.existsSync(existing)) {
+        logger.warn(
+          `${path.relative(process.cwd(), existing)} is no longer updated because tsconfig.json enables the content mapper; delete it, since it keeps names you removed from the config, and enable the content mapper in every tsconfig project that reads it`,
+        );
+      }
+      return;
+    }
+    const extracted = extractAttributesFromConfig(config);
     const {
       attributes,
       attributeList,
@@ -445,7 +493,7 @@ export async function generateUserTypes(options: GenerateUserTypesOptions): Prom
       aiGatewayNames,
       authNamespaceNames,
       secretVaultNames,
-    } = extractAttributesFromConfig(config);
+    } = extracted;
     if (!attributes && !attributeList) {
       logger.info("No attributes found in configuration", { mode: "plain" });
     }
@@ -481,19 +529,7 @@ export async function generateUserTypes(options: GenerateUserTypesOptions): Prom
       logger.debug(`Extracted Env: ${JSON.stringify(env)}`);
     }
 
-    // Generate type definition
-    const typeDefContent = generateTypeDefinition(
-      attributes,
-      attributeList,
-      env,
-      machineUserNames,
-      idpNames,
-      connectionNames,
-      aiGatewayNames,
-      authNamespaceNames,
-      secretVaultNames,
-      { appName: config.name, defaultDateRepresentation: config.defaultDateRepresentation },
-    );
+    const typeDefContent = generateTypeDefinitionFromConfig(config, extracted);
     const outputPath = resolveTypeDefinitionPath(configPath);
 
     // Write to file
