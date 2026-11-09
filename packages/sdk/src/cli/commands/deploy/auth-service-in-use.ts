@@ -49,9 +49,13 @@ export function assertAuthServicesNotInUse(deployments: ReadonlyArray<PlannedDep
   const [use] = applicationsUsing(deployments, deletedNamespaces);
   if (!use) return;
   throw CLIError({
-    code: "AUTH_SERVICE_IN_USE",
+    code: "SERVICE_IN_USE",
     message: `Auth service "${use.authNamespace}" is deleted by this deploy, but application "${use.applicationName}" still uses it.`,
     suggestion: `Keep Auth service "${use.authNamespace}" in the config that defines it, or move application "${use.applicationName}" to another Auth service in the same run.`,
-    context: { authNamespace: use.authNamespace, application: use.applicationName },
+    context: {
+      resourceType: "auth.service",
+      namespace: use.authNamespace,
+      application: use.applicationName,
+    },
   });
 }

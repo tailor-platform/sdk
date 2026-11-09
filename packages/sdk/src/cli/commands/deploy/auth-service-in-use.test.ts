@@ -46,9 +46,13 @@ describe("assertAuthServicesNotInUse", () => {
 
     expect(() => assertAuthServicesNotInUse([deployment({ name: "core" }, owner)])).toThrow(
       expect.objectContaining({
-        code: "AUTH_SERVICE_IN_USE",
+        code: "SERVICE_IN_USE",
         message: expect.stringContaining('application "portal"'),
-        context: expect.objectContaining({ authNamespace: "shared-auth", application: "portal" }),
+        context: expect.objectContaining({
+          resourceType: "auth.service",
+          namespace: "shared-auth",
+          application: "portal",
+        }),
       }),
     );
   });
@@ -61,7 +65,7 @@ describe("assertAuthServicesNotInUse", () => {
       ]),
     ).toThrow(
       expect.objectContaining({
-        code: "AUTH_SERVICE_IN_USE",
+        code: "SERVICE_IN_USE",
         message: expect.stringContaining('application "portal"'),
       }),
     );
@@ -92,7 +96,7 @@ describe("assertAuthServicesNotInUse", () => {
         deployment({ name: "core" }, owner),
         deployment({ name: "portal" }, emptyPlanResults()),
       ]),
-    ).toThrow(expect.objectContaining({ code: "AUTH_SERVICE_IN_USE" }));
+    ).toThrow(expect.objectContaining({ code: "SERVICE_IN_USE" }));
   });
 
   test("accepts an application that the run deletes", () => {
