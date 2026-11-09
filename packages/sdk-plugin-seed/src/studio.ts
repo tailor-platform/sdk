@@ -1,3 +1,4 @@
+import { readdirSync } from "node:fs";
 import {
   loadSeedContext,
   configArg,
@@ -17,6 +18,14 @@ import {
 } from "./datasets";
 import { assertSeedDataDirectory } from "./jsonl";
 import type { DatasetSelection } from "./datasets";
+
+function hasSchemaFiles(dir: string): boolean {
+  return readdirSync(dir).some((name) => name.endsWith(".schema.ts"));
+}
+
+// The CLI's signal handler awaits the command's `cleanup` hook and then exits the process,
+// so a close that only follows the wait for the signal in `run` is never reached.
+let closeRunningStudio: (() => Promise<void>) | undefined;
 
 export const seedStudioCommand = defineAppCommand({
   name: "studio",
@@ -74,10 +83,17 @@ export const seedStudioCommand = defineAppCommand({
     assertSeedDataDirectory(targetPath);
 
     const dataDirs = [...(args["no-base"] ? [] : [targetPath]), ...datasets.dirs];
+    let schemaDir: string | undefined;
+    if (datasets.dirs.length > 0) {
+      schemaDir = targetPath;
+    } else if (args.path && !hasSchemaFiles(targetPath)) {
+      const parent = path.dirname(targetPath);
+      if (hasSchemaFiles(parent)) schemaDir = parent;
+    }
     const { startStudioServer } = await import("@lines-db/studio");
     const studio = await startStudioServer({
       dataDir: dataDirs.length === 1 ? dataDirs[0] : dataDirs,
-      ...(datasets.dirs.length > 0 ? { schemaDir: targetPath } : {}),
+      ...(schemaDir ? { schemaDir } : {}),
       port: args.port,
       writeFilledValues: args["write-filled-values"],
     }).catch((error: unknown) => {
@@ -88,30 +104,39 @@ export const seedStudioCommand = defineAppCommand({
       );
     });
 
-    if (args.json) {
-      logger.out({
-        url: studio.url,
-        dataDir: targetPath,
-        ...(datasets.names.length > 0 ? { datasets: datasets.names } : {}),
-      });
-    }
-    logger.info(`Seed studio is running at ${studio.url}. Press Ctrl+C to stop.`);
-    if (args.open) {
-      try {
-        await open(studio.url);
-      } catch {
-        logger.warn("Failed to open browser automatically. Please open the URL above manually.");
+    let closing: Promise<void> | undefined;
+    closeRunningStudio = () => (closing ??= studio.close());
+    try {
+      if (args.json) {
+        logger.out({
+          url: studio.url,
+          dataDir: targetPath,
+          ...(datasets.names.length > 0 ? { datasets: datasets.names } : {}),
+        });
       }
+      logger.info(`Seed studio is running at ${studio.url}. Press Ctrl+C to stop.`);
+      if (args.open) {
+        try {
+          await open(studio.url);
+        } catch {
+          logger.warn("Failed to open browser automatically. Please open the URL above manually.");
+        }
+      }
+      await new Promise<void>((resolve) => {
+        const stop = () => {
+          process.off("SIGINT", stop);
+          process.off("SIGTERM", stop);
+          resolve();
+        };
+        process.once("SIGINT", stop);
+        process.once("SIGTERM", stop);
+      });
+    } finally {
+      await closeRunningStudio();
+      closeRunningStudio = undefined;
     }
-    await new Promise<void>((resolve) => {
-      const stop = () => {
-        process.off("SIGINT", stop);
-        process.off("SIGTERM", stop);
-        resolve();
-      };
-      process.once("SIGINT", stop);
-      process.once("SIGTERM", stop);
-    });
-    await studio.close();
+  },
+  cleanup: async () => {
+    await closeRunningStudio?.();
   },
 });

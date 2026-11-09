@@ -107,6 +107,28 @@ describe("seedStudioCommand", () => {
     expect(sdk.loadSeedContext).not.toHaveBeenCalled();
   });
 
+  test("checks a dataset opened by path against the schema files of the directory above it", async () => {
+    writeFileSync(path.join(dataDir, "Item.schema.ts"), "export const schema = {};\n");
+
+    const result = await runStudio([cogs]);
+
+    expect(result.exitCode).toBe(0);
+    expect(startStudioServer).toHaveBeenCalledWith(
+      expect.objectContaining({ dataDir: cogs, schemaDir: dataDir }),
+    );
+  });
+
+  test("keeps the schema files next to the given directory when it has its own", async () => {
+    writeFileSync(path.join(dataDir, "Item.schema.ts"), "export const schema = {};\n");
+    writeFileSync(path.join(cogs, "Item.schema.ts"), "export const schema = {};\n");
+
+    await runStudio([cogs]);
+
+    expect(startStudioServer).toHaveBeenCalledWith(
+      expect.not.objectContaining({ schemaDir: expect.anything() }),
+    );
+  });
+
   test("opens the selected datasets together with the base seed data, sharing its schema files", async () => {
     const result = await runStudio(["--dataset", "cogs"]);
 
@@ -138,6 +160,25 @@ describe("seedStudioCommand", () => {
     await runStudio([]);
 
     expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("http://127.0.0.1:4848"));
+    expect(closeStudio).toHaveBeenCalledTimes(1);
+  });
+
+  test("closes the studio from the cleanup hook, which the CLI awaits before exiting on a signal", async () => {
+    startStudioServer.mockResolvedValue({
+      url: "http://127.0.0.1:4848",
+      token: "token",
+      close: closeStudio,
+    });
+    const running = runStudio([]);
+    await vi.waitFor(() =>
+      expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("4848")),
+    );
+
+    await seedStudioCommand.cleanup?.({ args: {} as never });
+    expect(closeStudio).toHaveBeenCalledTimes(1);
+
+    process.emit("SIGTERM");
+    await running;
     expect(closeStudio).toHaveBeenCalledTimes(1);
   });
 
