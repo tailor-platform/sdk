@@ -237,7 +237,7 @@ export const user = db.table("User", {
       id: "failing-namespace-plugin",
       description: "namespace generator that throws",
       importPath: "@example/failing-namespace",
-      onNamespaceLoaded: () => {
+      onTailorDBNamespaceLoaded: () => {
         throw new Error("namespace generation failed");
       },
     };
