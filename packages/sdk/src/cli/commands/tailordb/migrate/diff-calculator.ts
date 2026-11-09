@@ -521,15 +521,16 @@ function formatFieldModification(
     changes.push(`required: ${before.required} → ${after.required}`);
   }
   for (const prop of SNAPSHOT_FIELD_BOOLEAN_PROPS) {
-    if (prop === "foreignKey") {
-      const beforeTarget = formatForeignKeyTarget(before);
-      const afterTarget = formatForeignKeyTarget(after);
-      if (beforeTarget !== afterTarget) {
-        changes.push(`foreignKey: ${beforeTarget} → ${afterTarget}`);
-      }
-    } else if (Boolean(before[prop]) !== Boolean(after[prop])) {
+    if (prop === "foreignKey") continue;
+    if (Boolean(before[prop]) !== Boolean(after[prop])) {
       changes.push(`${prop}: ${before[prop] ?? false} → ${after[prop] ?? false}`);
     }
+  }
+
+  const beforeForeignKeyTarget = formatForeignKeyTarget(before);
+  const afterForeignKeyTarget = formatForeignKeyTarget(after);
+  if (beforeForeignKeyTarget !== afterForeignKeyTarget) {
+    changes.push(`foreignKey: ${beforeForeignKeyTarget} → ${afterForeignKeyTarget}`);
   }
 
   const beforeAllowed = before.allowedValues ?? [];
