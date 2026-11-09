@@ -555,6 +555,22 @@ describe("createResolver", () => {
       expect(permission).toHaveLength(1);
     });
 
+    test("accepts a ResolverPermission variable on a resolver with input", () => {
+      const shared: ResolverPermission = [
+        { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
+      ];
+      const resolver = createResolver({
+        name: "sharedPermission",
+        operation: "query",
+        input: { x: t.string() },
+        output: t.bool(),
+        body: () => true,
+        permission: shared,
+      });
+
+      expect(resolver.permission).toBe(shared);
+    });
+
     test("creates minimal resolver without optional fields", () => {
       const outputType = t.object({ result: t.string() });
 

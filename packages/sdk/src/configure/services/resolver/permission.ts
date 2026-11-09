@@ -34,9 +34,13 @@ type BooleanEqualityCondition<User extends object> =
   | readonly [UserBooleanOperand<User>, EqualityOperator, boolean]
   | readonly [boolean, EqualityOperator, UserBooleanOperand<User>];
 
-type InputEqualityCondition<User extends object, Input> =
-  | readonly [ResolverInputOperand<Input>, "=", UserStringOperand<User>]
-  | readonly [UserStringOperand<User>, "=", ResolverInputOperand<Input>];
+type InputEqualityCondition<User extends object, Input> = [ComparableInputKeys<Input>] extends [
+  never,
+]
+  ? never
+  :
+      | readonly [ResolverInputOperand<Input>, "=", UserStringOperand<User>]
+      | readonly [UserStringOperand<User>, "=", ResolverInputOperand<Input>];
 
 /**
  * A single condition for {@link ResolverPermission}.
