@@ -512,6 +512,36 @@ function formatFieldModification(
   after: SnapshotFieldConfig,
   memberRenames: readonly NestedMemberRename[] = [],
 ): string {
+  const changes = formatOwnFieldConfigChanges(before, after);
+
+  const renamedPaths = new Set(
+    memberRenames.flatMap((rename) => [rename.previousPath.join("."), rename.path.join(".")]),
+  );
+  const members = collectNestedMemberChanges(before, after)
+    .filter((m) => !renamedPaths.has(m.path.join(".")))
+    .map(formatNestedMemberChange);
+  members.push(
+    ...memberRenames.map(
+      (rename) => `${rename.previousPath.join(".")} → ${rename.path.join(".")} (renamed)`,
+    ),
+  );
+  if (members.length > 0) {
+    changes.push(`members: ${members.join(", ")}`);
+  }
+
+  return changes.length > 0 ? changes.join(", ") : "configuration changed";
+}
+
+/**
+ * Format the changes to a field's own configuration, leaving out its nested members
+ * @param {SnapshotFieldConfig} before - Before field configuration
+ * @param {SnapshotFieldConfig} after - After field configuration
+ * @returns {string[]} One entry per changed attribute (may be empty)
+ */
+function formatOwnFieldConfigChanges(
+  before: SnapshotFieldConfig,
+  after: SnapshotFieldConfig,
+): string[] {
   const changes: string[] = [];
 
   if (before.type !== after.type) {
@@ -566,22 +596,19 @@ function formatFieldModification(
     );
   }
 
-  const renamedPaths = new Set(
-    memberRenames.flatMap((rename) => [rename.previousPath.join("."), rename.path.join(".")]),
-  );
-  const members = collectNestedMemberChanges(before, after)
-    .filter((m) => !renamedPaths.has(m.path.join(".")))
-    .map((m) => `${NESTED_MEMBER_CHANGE_MARKERS[m.kind]}${m.path.join(".")}`);
-  members.push(
-    ...memberRenames.map(
-      (rename) => `${rename.previousPath.join(".")} → ${rename.path.join(".")} (renamed)`,
-    ),
-  );
-  if (members.length > 0) {
-    changes.push(`members: ${members.join(", ")}`);
-  }
+  return changes;
+}
 
-  return changes.length > 0 ? changes.join(", ") : "configuration changed";
+/**
+ * Format one member change inside a nested field
+ * @param {NestedMemberChange} change - Member change
+ * @returns {string} Marked member path, followed by a modified member's changes in parentheses when any render
+ */
+function formatNestedMemberChange(change: NestedMemberChange): string {
+  const markedPath = `${NESTED_MEMBER_CHANGE_MARKERS[change.kind]}${change.path.join(".")}`;
+  if (change.kind !== "modified") return markedPath;
+  const details = formatOwnFieldConfigChanges(change.before, change.after);
+  return details.length > 0 ? `${markedPath} (${details.join(", ")})` : markedPath;
 }
 
 /**

@@ -157,7 +157,7 @@ describe("diff-calculator", () => {
             },
           },
         ],
-        expected: ["~ address: members: -zip, +zipCode, ~geo.lat"],
+        expected: ["~ address: members: -zip, +zipCode, ~geo.lat (required: false → true)"],
       },
       {
         name: "renamed nested members",
@@ -183,6 +183,58 @@ describe("diff-calculator", () => {
           },
         ],
         expected: ["~ address: members: -fax, zip → zipCode (renamed)"],
+      },
+      {
+        name: "foreign keys on nested members",
+        changes: [
+          {
+            kind: "field_modified",
+            tableName: "Post",
+            fieldName: "address",
+            before: {
+              type: "nested",
+              required: false,
+              fields: {
+                ownerId: { ...referenceField, foreignKeyType: "User", foreignKeyField: "id" },
+                managerId: { type: "uuid", required: true },
+                reviewerId: { ...referenceField, foreignKeyType: "User", foreignKeyField: "id" },
+              },
+            },
+            after: {
+              type: "nested",
+              required: false,
+              fields: {
+                ownerId: { ...referenceField, foreignKeyType: "Person", foreignKeyField: "id" },
+                managerId: { ...referenceField, foreignKeyType: "User", foreignKeyField: "id" },
+                reviewerId: { type: "uuid", required: true, index: true },
+              },
+            },
+          },
+        ],
+        expected: [
+          "~ address: members: ~ownerId (foreignKey: User.id → Person.id), ~managerId (index: false → true, foreignKey: none → User.id), ~reviewerId (foreignKey: User.id → none)",
+        ],
+      },
+      {
+        name: "nested member without a rendered detail",
+        changes: [
+          {
+            kind: "field_modified",
+            tableName: "User",
+            fieldName: "address",
+            before: {
+              type: "nested",
+              required: false,
+              fields: { zip: { type: "string", required: false } },
+            },
+            after: {
+              type: "nested",
+              required: false,
+              fields: { zip: { type: "string", required: false, description: "Postal code" } },
+            },
+          },
+        ],
+        expected: ["~ address: members: ~zip"],
       },
       {
         name: "added foreign key",
@@ -316,10 +368,10 @@ describe("diff-calculator", () => {
         expected: ["tailordb.User:", "tailordb.Product:"],
       },
     ])("should format $name", ({ changes, expected }) => {
-      const result = formatMigrationDiff(createDiff(changes));
-      for (const substring of expected) {
-        expect(result).toContain(substring);
-      }
+      const lines = formatMigrationDiff(createDiff(changes))
+        .split("\n")
+        .map((line) => line.trim());
+      expect(lines).toEqual(expect.arrayContaining(expected));
     });
   });
 
