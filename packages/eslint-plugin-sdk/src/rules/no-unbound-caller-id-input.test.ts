@@ -1,5 +1,5 @@
 import { describe } from "vitest";
-import { runRuleTests } from "./test-helpers.js";
+import { resolverSource, runRuleTests } from "./test-helpers.js";
 
 const RULE = "no-unbound-caller-id-input";
 const ADMIN_POLICY = '{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }';
@@ -12,14 +12,6 @@ function unboundPolicy(name: string): string {
   return `\`${name}\` looks like the caller's ID but is not compared with the caller in every \`permit: true\` policy of \`permission\`, so a caller can act as another user by sending that user's ID. Take the acting user from \`caller\` in \`body\`, or add \`[{ input: "${name}" }, "=", { user: "id" }]\` to every \`permit: true\` policy.`;
 }
 
-function resolver(
-  input: string,
-  { permission, operation = '"mutation"' }: { permission?: string; operation?: string } = {},
-): string {
-  const permissionOption = permission === undefined ? "" : `, permission: ${permission}`;
-  return `import { createResolver, db, t } from "@tailor-platform/sdk";\nexport default createResolver({ name: "r", operation: ${operation}, input: ${input}, body: () => 1, output: t.int()${permissionOption} });`;
-}
-
 function bound(name: string, user = "id"): string {
   return `{ conditions: [[{ input: "${name}" }, "=", { user: "${user}" }]], permit: true }`;
 }
@@ -27,48 +19,60 @@ function bound(name: string, user = "id"): string {
 describe("reports a caller-ID input that not every permit: true policy binds", () => {
   runRuleTests(RULE, {
     invalid: [
-      { code: resolver("{ approverId: t.uuid() }"), errors: [noPolicy("approverId")] },
       {
-        code: resolver("{ approverId: t.uuid() }", { permission: '"allowAnonymous"' }),
+        code: resolverSource({ input: "{ approverId: t.uuid() }" }),
         errors: [noPolicy("approverId")],
       },
       {
-        code: resolver("{ approverId: t.uuid() }", { permission: `[${ADMIN_POLICY}]` }),
+        code: resolverSource({ input: "{ approverId: t.uuid() }", permission: '"allowAnonymous"' }),
+        errors: [noPolicy("approverId")],
+      },
+      {
+        code: resolverSource({
+          input: "{ approverId: t.uuid() }",
+          permission: `[${ADMIN_POLICY}]`,
+        }),
         errors: [unboundPolicy("approverId")],
       },
       {
-        code: resolver("{ actorId: t.uuid() }", {
+        code: resolverSource({
+          input: "{ actorId: t.uuid() }",
           permission: `[${bound("actorId")}, { conditions: [[{ user: "role" }, "=", "MEMBER"]], permit: true }]`,
         }),
         errors: [unboundPolicy("actorId")],
       },
       {
-        code: resolver("{ approverId: t.uuid() }", {
+        code: resolverSource({
+          input: "{ approverId: t.uuid() }",
           permission:
             '[{ conditions: [[{ input: "approverId" }, "!=", { user: "id" }]], permit: true }]',
         }),
         errors: [unboundPolicy("approverId")],
       },
       {
-        code: resolver("{ approverId: t.uuid() }", {
+        code: resolverSource({
+          input: "{ approverId: t.uuid() }",
           permission: '[{ conditions: [[{ input: "approverId" }, "=", "fixed"]], permit: true }]',
         }),
         errors: [unboundPolicy("approverId")],
       },
       {
-        code: resolver("{ requesterId: t.uuid(), approverId: t.uuid(), note: t.string() }", {
+        code: resolverSource({
+          input: "{ requesterId: t.uuid(), approverId: t.uuid(), note: t.string() }",
           permission: `[${bound("requesterId")}]`,
         }),
         errors: [unboundPolicy("approverId")],
       },
       {
-        code: resolver("{ approverId: t.uuid() }", {
+        code: resolverSource({
+          input: "{ approverId: t.uuid() }",
           permission: `[sharedPolicy, ${ADMIN_POLICY}]`,
         }),
         errors: [unboundPolicy("approverId")],
       },
       {
-        code: resolver("{ approverId: t.uuid() }", {
+        code: resolverSource({
+          input: "{ approverId: t.uuid() }",
           permission: `[...sharedPolicies, ${ADMIN_POLICY}]`,
         }),
         errors: [unboundPolicy("approverId")],
@@ -95,7 +99,9 @@ describe.each([
   "CREATED_BY",
 ])("reports %s", (name) => {
   runRuleTests(RULE, {
-    invalid: [{ code: resolver(`{ ${name}: t.uuid() }`), errors: [noPolicy(name)] }],
+    invalid: [
+      { code: resolverSource({ input: `{ ${name}: t.uuid() }` }), errors: [noPolicy(name)] },
+    ],
   });
 });
 
@@ -103,18 +109,29 @@ describe("reads uuid fields in the forms resolver input accepts", () => {
   runRuleTests(RULE, {
     invalid: [
       {
-        code: resolver('{ approverId: t.uuid({ optional: true }).description("approver") }'),
+        code: resolverSource({
+          input: '{ approverId: t.uuid({ optional: true }).description("approver") }',
+        }),
         errors: [noPolicy("approverId")],
       },
       {
-        code: resolver("{ approverId: t.uuid({ array: false }) }"),
+        code: resolverSource({ input: "{ approverId: t.uuid({ array: false }) }" }),
         errors: [noPolicy("approverId")],
       },
-      { code: resolver("{ approverId: db.uuid() }"), errors: [noPolicy("approverId")] },
-      { code: resolver('{ "approverId": t.uuid() }'), errors: [noPolicy("approverId")] },
-      { code: resolver("{ ...shared, approverId: t.uuid() }"), errors: [noPolicy("approverId")] },
       {
-        code: resolver("{ approverId: t.uuid() satisfies unknown }"),
+        code: resolverSource({ input: "{ approverId: db.uuid() }" }),
+        errors: [noPolicy("approverId")],
+      },
+      {
+        code: resolverSource({ input: '{ "approverId": t.uuid() }' }),
+        errors: [noPolicy("approverId")],
+      },
+      {
+        code: resolverSource({ input: "{ ...shared, approverId: t.uuid() }" }),
+        errors: [noPolicy("approverId")],
+      },
+      {
+        code: resolverSource({ input: "{ approverId: t.uuid() satisfies unknown }" }),
         errors: [noPolicy("approverId")],
       },
       {
@@ -132,20 +149,24 @@ describe("reads uuid fields in the forms resolver input accepts", () => {
 describe("accepts an input every permit: true policy binds to the caller", () => {
   runRuleTests(RULE, {
     valid: [
-      resolver("{ approverId: t.uuid() }", { permission: `[${bound("approverId")}]` }),
-      resolver("{ approverId: t.uuid() }", {
+      resolverSource({ input: "{ approverId: t.uuid() }", permission: `[${bound("approverId")}]` }),
+      resolverSource({
+        input: "{ approverId: t.uuid() }",
         permission:
           '[{ conditions: [[{ user: "employeeId" }, "=", { input: "approverId" }]], permit: true }]',
       }),
-      resolver("{ approverId: t.uuid() }", {
+      resolverSource({
+        input: "{ approverId: t.uuid() }",
         permission:
           '[{ conditions: [{ input: "approverId" }, "=", { user: "id" }], permit: true }]',
       }),
-      resolver("{ approverId: t.uuid() }", {
+      resolverSource({
+        input: "{ approverId: t.uuid() }",
         permission:
           '[{ conditions: [[{ input: "approverId" }, "=", { user: "id" }], [{ user: "role" }, "=", "MEMBER"]], permit: true }]',
       }),
-      resolver("{ approverId: t.uuid() }", {
+      resolverSource({
+        input: "{ approverId: t.uuid() }",
         permission: `[${bound("approverId")}, { conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false }]`,
       }),
     ],
@@ -155,14 +176,17 @@ describe("accepts an input every permit: true policy binds to the caller", () =>
 describe("ignores inputs that are not a mutation's uuid named like the caller's ID", () => {
   runRuleTests(RULE, {
     valid: [
-      resolver("{ approverId: t.uuid() }", { operation: '"query"' }),
-      resolver("{ approverId: t.string() }"),
-      resolver("{ approverId: t.uuid({ array: true }) }"),
-      resolver("{ orderId: t.uuid() }"),
-      resolver("{ userId: t.uuid() }"),
-      resolver("{ lobbyId: t.uuid() }"),
+      resolverSource({ input: "{ approverId: t.uuid() }", operation: "query" }),
+      resolverSource({ input: "{ approverId: t.string() }" }),
+      resolverSource({ input: "{ approverId: t.uuid({ array: true }) }" }),
+      resolverSource({ input: "{ orderId: t.uuid() }" }),
+      resolverSource({ input: "{ userId: t.uuid() }" }),
+      resolverSource({ input: "{ lobbyId: t.uuid() }" }),
       'import { createResolver } from "@tailor-platform/sdk";\nimport { t } from "./fields";\nexport default createResolver({ name: "r", operation: "mutation", input: { approverId: t.uuid() }, body: () => 1, output: t.int() });',
-      'import { createResolver, db, t } from "@tailor-platform/sdk";\nconst user = db.table("User", { name: db.string() });\nexport default createResolver({ name: "r", operation: "mutation", input: { approverId: user.fields.id }, body: () => 1, output: t.int() });',
+      resolverSource({
+        prelude: 'const user = db.table("User", { name: db.string() });',
+        input: "{ approverId: user.fields.id }",
+      }),
     ],
   });
 });
@@ -170,29 +194,34 @@ describe("ignores inputs that are not a mutation's uuid named like the caller's 
 describe("skips values it cannot read statically", () => {
   runRuleTests(RULE, {
     valid: [
-      resolver("{ approverId: t.uuid() }", { operation: "operation" }),
-      resolver("{ approverId: t.uuid() }", { permission: "sharedPermission" }),
-      resolver("{ approverId: t.uuid() }", {
+      resolverSource({ input: "{ approverId: t.uuid() }", operation: { source: "operation" } }),
+      resolverSource({ input: "{ approverId: t.uuid() }", permission: "sharedPermission" }),
+      resolverSource({
+        input: "{ approverId: t.uuid() }",
         permission: '[{ conditions: [[{ user: "role" }, "=", "MEMBER"]], permit: isOpen }]',
       }),
-      resolver("{ approverId: t.uuid() }", {
+      resolverSource({
+        input: "{ approverId: t.uuid() }",
         permission:
           '[{ conditions: [[{ user: "role" }, "=", "MEMBER"], ownApprover], permit: true }]',
       }),
-      resolver("{ approverId: t.uuid() }", {
+      resolverSource({
+        input: "{ approverId: t.uuid() }",
         permission: '[{ conditions: [[approverOperand, "=", { user: "id" }]], permit: true }]',
       }),
-      resolver("{ approverId: t.uuid() }", {
+      resolverSource({
+        input: "{ approverId: t.uuid() }",
         permission:
           '[{ conditions: [[{ input: approverField }, "=", { user: "id" }]], permit: true }]',
       }),
-      resolver("{ approverId: t.uuid() }", {
+      resolverSource({
+        input: "{ approverId: t.uuid() }",
         permission: "[{ conditions: shared, permit: true }]",
       }),
-      resolver("{ approverId: t.uuid(), ...shared }"),
-      resolver('{ ["approverId"]: t.uuid() }'),
-      resolver("{ approverId: t.uuid(options) }"),
-      resolver("{ approverId: t.uuid({ array: isArray }) }"),
+      resolverSource({ input: "{ approverId: t.uuid(), ...shared }" }),
+      resolverSource({ input: '{ ["approverId"]: t.uuid() }' }),
+      resolverSource({ input: "{ approverId: t.uuid(options) }" }),
+      resolverSource({ input: "{ approverId: t.uuid({ array: isArray }) }" }),
       'import { createResolver, t } from "@tailor-platform/sdk";\nexport default createResolver({ ...base, name: "r", operation: "mutation", input: { approverId: t.uuid() }, body: () => 1, output: t.int() });',
     ],
   });
