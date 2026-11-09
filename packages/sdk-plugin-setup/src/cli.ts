@@ -10,19 +10,12 @@ import {
   runMain,
   serializeError,
 } from "@tailor-platform/sdk/cli";
+import { reportPluginError } from "@tailor-platform/shared/plugin-error";
 import * as path from "pathe";
 import { readPackageJSON } from "pkg-types";
 import { z } from "zod";
 import { setupSubCommands } from "./commands";
 import { locatedMessage } from "./error-message";
-
-function formattedText(error: unknown): string | undefined {
-  if (typeof error !== "object" || error === null) return undefined;
-  const format = (error as { format?: unknown }).format;
-  if (typeof format !== "function") return undefined;
-  const formatted: unknown = format.call(error);
-  return typeof formatted === "string" ? formatted : undefined;
-}
 
 const packageRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const packageJson = await readPackageJSON(packageRoot);
@@ -42,21 +35,6 @@ void runMain(mainCommand, {
   setup: () => loadEnvFilesFromArgv(process.argv.slice(2)),
   // Render errors the way the host CLI does: `setup` used to run inside it, so
   // dropping either branch would regress `--json` consumers and CLIError detail.
-  cleanup: ({ error }) => {
-    if (!error) return;
-    const formatted = formattedText(error);
-    if (logger.jsonMode) {
-      logger.log(serializeError(error, { includeStack: logger.verbose }));
-    } else if (formatted !== undefined) {
-      logger.log(formatted);
-    } else if (error instanceof Error) {
-      logger.error(locatedMessage(error));
-    } else {
-      logger.error(`Unknown error: ${String(error)}`);
-    }
-    if (!logger.jsonMode && error instanceof Error && error.stack) {
-      logger.debug(`\nStack trace:\n${error.stack}`);
-    }
-    annotateTerminalError(error, { jsonMode: logger.jsonMode });
-  },
+  cleanup: ({ error }) =>
+    reportPluginError(error, { logger, serializeError, annotateTerminalError, locatedMessage }),
 });

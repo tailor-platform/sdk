@@ -49,7 +49,10 @@ describe("secret create command", () => {
       default: false,
     });
     expect(result.success).toBe(false);
-    expect(result.error).toMatchObject({ code: "SECRET_CREATION_CANCELLED" });
+    expect(result.error).toMatchObject({
+      code: "SECRET_CREATION_CANCELLED",
+      message: "Secret creation cancelled. The vault is still managed by the config.",
+    });
     expect(client.createSecretManagerSecret).not.toHaveBeenCalled();
     expect(releaseVaultOwnership).not.toHaveBeenCalled();
   });

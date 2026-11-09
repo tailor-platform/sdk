@@ -4,9 +4,14 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "#/cli/shared/context";
-import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import {
+  captureStderr,
+  captureStdout,
+  captureStdoutStream,
+} from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { resolveWorkflow } from "./get";
+import { resumeCommand } from "./resume";
 import { startCommand, startWorkflow, startWorkflowByName } from "./start";
 import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
@@ -191,6 +196,120 @@ describe("startWorkflow", () => {
       lastError: null,
     });
   });
+
+  test.each(["start", "resume"] as const)(
+    "%s prints the wait result before reporting failure",
+    async (command) => {
+      using stdout = captureStdout();
+      using _stderr = captureStderr();
+      using _json = jsonMode();
+      getWorkflowExecutionMock.mockResolvedValue({
+        execution: {
+          id: "execution-1",
+          workflowName: "legacy-workflow",
+          status: WorkflowExecution_Status.FAILED,
+          jobExecutions: [],
+        },
+      });
+      const client = await initOperatorClient("mock-token");
+      vi.mocked(initOperatorClient).mockResolvedValue({
+        ...client,
+        resumeWorkflowExecution: vi.fn().mockResolvedValue({ executionId: "execution-1" }),
+      });
+      const result =
+        command === "start"
+          ? await runCommand(startCommand, [
+              "legacy-workflow",
+              "--machine-user",
+              "legacy-user",
+              "--wait",
+            ])
+          : await runCommand(resumeCommand, ["execution-1", "--wait"]);
+      expect(result.success).toBe(false);
+      expect(JSON.parse(stdout.output)).toMatchObject({ id: "execution-1", status: "FAILED" });
+      expect(getWorkflowExecutionMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  test.each(["start", "resume"] as const)(
+    "%s shows refetched status with human logs",
+    async (command) => {
+      using stdout = captureStdoutStream();
+      using _stderr = captureStderr();
+      using _json = jsonMode(false);
+      getWorkflowExecutionMock
+        .mockResolvedValueOnce({
+          execution: {
+            id: "execution-1",
+            workflowName: "legacy-workflow",
+            status: WorkflowExecution_Status.SUCCESS,
+            jobExecutions: [],
+          },
+        })
+        .mockResolvedValue({
+          execution: {
+            id: "execution-1",
+            workflowName: "legacy-workflow",
+            status: WorkflowExecution_Status.FAILED,
+            jobExecutions: [],
+          },
+        });
+      const client = await initOperatorClient("mock-token");
+      vi.mocked(initOperatorClient).mockResolvedValue({
+        ...client,
+        resumeWorkflowExecution: vi.fn().mockResolvedValue({ executionId: "execution-1" }),
+      });
+      const result =
+        command === "start"
+          ? await runCommand(startCommand, [
+              "legacy-workflow",
+              "--machine-user",
+              "legacy-user",
+              "--wait",
+              "--logs",
+            ])
+          : await runCommand(resumeCommand, ["execution-1", "--wait", "--logs"]);
+      expect(result.success).toBe(true);
+      expect(stdout.output).toContain("FAILED");
+    },
+  );
+
+  test.each(["start", "resume"] as const)(
+    "%s includes job details in JSON logs",
+    async (command) => {
+      using stdout = captureStdout();
+      using _stderr = captureStderr();
+      using _json = jsonMode();
+      getWorkflowExecutionMock.mockResolvedValue({
+        execution: {
+          id: "execution-1",
+          workflowName: "legacy-workflow",
+          status: WorkflowExecution_Status.SUCCESS,
+          jobExecutions: [{ id: "job-1", stackedJobName: "main", status: 0, executionId: "" }],
+        },
+      });
+      const client = await initOperatorClient("mock-token");
+      vi.mocked(initOperatorClient).mockResolvedValue({
+        ...client,
+        resumeWorkflowExecution: vi.fn().mockResolvedValue({ executionId: "execution-1" }),
+      });
+      const result =
+        command === "start"
+          ? await runCommand(startCommand, [
+              "legacy-workflow",
+              "--machine-user",
+              "legacy-user",
+              "--wait",
+              "--logs",
+            ])
+          : await runCommand(resumeCommand, ["execution-1", "--wait", "--logs"]);
+      expect(result.success).toBe(true);
+      expect(JSON.parse(stdout.output)).toMatchObject({
+        status: "SUCCESS",
+        jobDetails: [{ id: "job-1", stackedJobName: "main" }],
+      });
+    },
+  );
 
   test("uses machine user from profile default when --machine-user flag is absent", async () => {
     vi.mocked(loadMachineUserName).mockResolvedValue("profile-bot");

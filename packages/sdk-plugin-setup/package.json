@@ -40,6 +40,7 @@
   },
   "devDependencies": {
     "@tailor-platform/sdk": "workspace:^",
+    "@tailor-platform/shared": "workspace:*",
     "@types/node": "26.6.6",
     "confbox": "0.3.2",
     "oxlint": "1.90.0",

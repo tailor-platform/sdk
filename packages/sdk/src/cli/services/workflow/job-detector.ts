@@ -1,5 +1,6 @@
 import { assertDefined } from "#/utils/assert";
-import { type ASTNode, isStringLiteral, isFunctionExpression, findProperty } from "./ast-utils";
+import { isStringLiteral, isFunctionExpression, findProperty } from "./ast-utils";
+import { walkAst } from "./ast-walk";
 import { collectSdkBindings, isSdkFunctionCall } from "./sdk-binding-collector";
 import type { Program, CallExpression } from "@oxc-project/types";
 
@@ -22,9 +23,7 @@ export function findAllJobs(program: Program, _sourceText: string): JobLocation[
   const jobs: JobLocation[] = [];
   const bindings = collectSdkBindings(program, "createWorkflowJob");
 
-  function walk(node: ASTNode | null | undefined, parents: ASTNode[] = []): void {
-    if (!node || typeof node !== "object") return;
-
+  walkAst(program, (node, parents) => {
     // Detect createWorkflowJob(...) calls
     if (isSdkFunctionCall(node, bindings, "createWorkflowJob")) {
       const callExpr = node as unknown as CallExpression;
@@ -78,18 +77,6 @@ export function findAllJobs(program: Program, _sourceText: string): JobLocation[
         }
       }
     }
-
-    const newParents = [...parents, node];
-    for (const key of Object.keys(node)) {
-      const child = node[key];
-      if (Array.isArray(child)) {
-        child.forEach((c: unknown) => walk(c as ASTNode | null, newParents));
-      } else if (child && typeof child === "object") {
-        walk(child as ASTNode, newParents);
-      }
-    }
-  }
-
-  walk(program as unknown as ASTNode);
+  });
   return jobs;
 }

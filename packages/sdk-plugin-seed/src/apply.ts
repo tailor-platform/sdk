@@ -17,6 +17,7 @@ import {
   styles,
   arg,
 } from "@tailor-platform/sdk/cli";
+import { sortBySelfReference as sortRecordsBySelfReference } from "@tailor-platform/shared/seed-order";
 import * as path from "pathe";
 import { z } from "zod";
 import {
@@ -29,7 +30,7 @@ import {
 import { selectEntities } from "./entities";
 import { parseExecutionResult } from "./execution-result";
 import { assertSeedDataDirectory, loadSeedData } from "./jsonl";
-import { sortRecordsBySelfReference, topologicalSort } from "./topo-sort";
+import { topologicalSort } from "./topo-sort";
 import { IDP_SEED_WORKFLOW_KINDS, seedWorkflowName } from "./workflow-name";
 import type { SeedWorkflowKind } from "./workflow-name";
 import type {

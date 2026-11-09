@@ -49,7 +49,10 @@ describe("secret update command", () => {
       default: false,
     });
     expect(result.success).toBe(false);
-    expect(result.error).toMatchObject({ code: "SECRET_UPDATE_CANCELLED" });
+    expect(result.error).toMatchObject({
+      code: "SECRET_UPDATE_CANCELLED",
+      message: "Secret update cancelled. The vault is still managed by the config.",
+    });
     expect(client.updateSecretManagerSecret).not.toHaveBeenCalled();
     expect(releaseVaultOwnership).not.toHaveBeenCalled();
   });

@@ -958,6 +958,9 @@ importers:
       '@tailor-platform/sdk':
         specifier: workspace:^
         version: link:../sdk
+      '@tailor-platform/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@types/node':
         specifier: 26.6.6
         version: 26.6.6
@@ -1007,6 +1010,9 @@ importers:
       '@tailor-platform/sdk':
         specifier: workspace:^
         version: link:../sdk
+      '@tailor-platform/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@types/node':
         specifier: 26.6.6
         version: 26.6.6
@@ -1056,6 +1062,9 @@ importers:
       '@tailor-platform/sdk':
         specifier: workspace:^
         version: link:../sdk
+      '@tailor-platform/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@types/mime-types':
         specifier: 3.0.1
         version: 3.0.1
