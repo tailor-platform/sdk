@@ -6,7 +6,9 @@ const NO_PERMIT =
   "Resolver permission must include at least one `permit: true` policy; a policy list with only `permit: false` policies lets through any caller who does not authenticate.";
 const USER_SIDE =
   "Resolver permission condition must reference a `user` operand on exactly one side (comparing two `user` operands to each other can match on `undefined === undefined`).";
-const OPERAND_VALUE = "A `user` operand must compare to a string or a boolean.";
+const OPERAND_VALUE =
+  "A `user` operand must compare to a string, a boolean, or an `input` operand.";
+const INPUT_SIDE = "An `input` operand must be compared to a `user` operand.";
 
 function resolver(permission: string): string {
   return `import { createResolver } from "@tailor-platform/sdk";\nexport default createResolver({ name: "r", body: () => 1, permission: ${permission} });`;
@@ -89,6 +91,55 @@ describe("rejects operands that are not a user object, string, or boolean", () =
       {
         code: resolver('[{ conditions: [[{ user: "role" }, "=", null]], permit: true }]'),
         errors: [OPERAND_VALUE],
+      },
+    ],
+  });
+});
+
+describe("checks input operands", () => {
+  runRuleTests(RULE, {
+    valid: [
+      resolver('[{ conditions: [[{ input: "employeeId" }, "=", { user: "id" }]], permit: true }]'),
+      resolver(
+        '[{ conditions: [[{ user: "employeeId" }, "=", { input: "requesterId" }]], permit: true }]',
+      ),
+    ],
+    invalid: [
+      {
+        code: resolver('[{ conditions: [[{ input: "employeeId" }, "=", "u1"]], permit: true }]'),
+        errors: [INPUT_SIDE],
+      },
+      {
+        code: resolver(
+          '[{ conditions: [[{ input: "employeeId" }, "=", { input: "managerId" }]], permit: true }]',
+        ),
+        errors: [INPUT_SIDE],
+      },
+      {
+        code: resolver(
+          '[{ conditions: [[{ input: "requesterId" }, "!=", { user: "id" }]], permit: true }]',
+        ),
+        errors: ["An `input` operand can only be compared with `=`."],
+      },
+      {
+        code: resolver(
+          '[{ conditions: [[{ user: "_loggedIn" }, "=", { input: "flag" }]], permit: true }]',
+        ),
+        errors: ["`_loggedIn` must compare to a boolean."],
+      },
+      {
+        code: resolver(
+          '[{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }, { conditions: [[{ input: "employeeId" }, "=", { user: "id" }]], permit: false }]',
+        ),
+        errors: ["An `input` operand can only be used in a `permit: true` policy."],
+      },
+      {
+        code: config(
+          '[{ conditions: [[{ input: "employeeId" }, "=", { user: "id" }]], permit: true }]',
+        ),
+        errors: [
+          "`defaultPermission` cannot use an `input` operand, since a namespace has no input.",
+        ],
       },
     ],
   });

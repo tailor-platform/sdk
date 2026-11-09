@@ -187,7 +187,8 @@ export type ResolverServiceConfig = {
    * Access requirement applied to every resolver in this namespace that
    * declares no `permission` of its own. Takes the same values as a
    * resolver's `permission`, including `"allowAnonymous"` to record that the
-   * namespace is public by design.
+   * namespace is public by design, except that it cannot use an `input`
+   * operand: a namespace has no input to compare.
    *
    * A resolver's own `permission` replaces this default rather than merging
    * with it, so a single resolver opts out with `permission: "allowAnonymous"`.
