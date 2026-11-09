@@ -28,6 +28,7 @@ import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { styles, logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { parseProtoEnumName, protoEnumNames } from "#/cli/shared/proto-enum";
+import { resourceNameSchema } from "#/parser/service/common";
 import { waitArgs } from "./args";
 import { type WorkflowWaitUntil } from "./status";
 import {
@@ -320,19 +321,10 @@ export const executionsCommand = defineAppCommand({
       positional: true,
       description: "Execution ID (if provided, shows details)",
     }),
-    "workflow-name": arg(
-      z
-        .string()
-        .regex(
-          /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/,
-          "Must be 3-63 lowercase alphanumeric characters or hyphens, starting and ending with alphanumeric",
-        )
-        .optional(),
-      {
-        alias: "n",
-        description: "Filter by workflow name (list mode only)",
-      },
-    ),
+    "workflow-name": arg(resourceNameSchema.optional(), {
+      alias: "n",
+      description: "Filter by workflow name (list mode only)",
+    }),
     status: arg(z.string().optional(), {
       alias: "s",
       description: "Filter by status (list mode only)",
