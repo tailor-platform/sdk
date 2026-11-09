@@ -3,13 +3,16 @@ import { runRuleTests } from "./test-helpers.js";
 
 const RULE = "no-plain-tailor-any-field-param";
 const MESSAGE =
-  "A parameter typed with TailorAnyField makes the field's output type any; constrain a type parameter instead, such as <F extends TailorAnyField>(field: F).";
+  "If the field passed to this parameter is used to build another field, such as with t.object(), its output type becomes any. Constrain a type parameter instead, such as <F extends TailorAnyField>(field: F). A helper that only reads the field is also reported, and the same rewrite is harmless.";
 const IMPORT = 'import { t, type TailorAnyField } from "@tailor-platform/sdk";\n';
 
 describe("rejects TailorAnyField in a parameter's type annotation", () => {
   runRuleTests(RULE, {
     invalid: [
       "function wrap(field: TailorAnyField) { return t.object({ value: field }); }",
+      "function description(field: TailorAnyField) { return field.metadata.description; }",
+      "function wrap(fields: Map<string, TailorAnyField>) {}",
+      "async function wrap(field: Promise<TailorAnyField>) {}",
       "const wrap = (field: TailorAnyField) => t.object({ value: field });",
       "const wrap = function (field?: TailorAnyField) {};",
       "function paginated(item: Record<string, TailorAnyField>) {}",

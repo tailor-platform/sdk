@@ -293,9 +293,10 @@ suggestions, which are written for `body` functions. References that reach the g
 
 ### `no-plain-tailor-any-field-param` (warning)
 
-A helper parameter typed with `TailorAnyField` itself, instead of a type parameter constrained by
-it, turns the output type of each field passed to it into `any`, so `t.infer` and resolver `body`
-types stop checking those fields.
+When a helper uses a field passed to a parameter typed with `TailorAnyField` itself to build another
+field, such as with `t.object()`, the passed field's output type becomes `any`, so `t.infer` and
+resolver `body` types stop checking it. A type parameter constrained by `TailorAnyField` keeps the
+field's type.
 
 Incorrect:
 
@@ -314,11 +315,12 @@ function paginated<F extends Record<string, TailorAnyField>>(item: F) {
 ```
 
 The rule reports `TailorAnyField` in a function parameter's type, including inside arrays, unions,
-`Record<...>`, and object types. Callback types, callbacks passed directly to a call such as
+object types, and type arguments such as `Record<...>`, `Map<...>`, or `Promise<...>`. It also
+reports a helper that only reads the field, such as one that returns `field.metadata.description`;
+the same rewrite is harmless there. Callback types, callbacks passed directly to a call such as
 `.map()`, type parameter constraints, and the implementation of an overloaded function are not
-reported. It does not follow type aliases or interfaces, and it
-does not check a function typed through a variable annotation such as
-`const wrap: (field: TailorAnyField) => ...`.
+reported. It does not follow type aliases or interfaces, and it does not check a function typed
+through a variable annotation such as `const wrap: (field: TailorAnyField) => ...`.
 
 ### `valid-execution-policy-definition` (warning)
 

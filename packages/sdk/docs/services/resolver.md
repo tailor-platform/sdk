@@ -92,7 +92,7 @@ createResolver({
 });
 ```
 
-Do not use `TailorAnyField` as a plain parameter type (`f: TailorAnyField`); the field's output type becomes `any`.
+Do not use `TailorAnyField` as a plain parameter type (`f: TailorAnyField`); when the helper builds another field from it, the field's output type becomes `any`.
 
 ### Date and Time Values
 

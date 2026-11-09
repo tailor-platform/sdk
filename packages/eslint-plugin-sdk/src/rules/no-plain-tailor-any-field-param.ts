@@ -120,7 +120,7 @@ const rule = {
     },
     messages: {
       plainParam:
-        "A parameter typed with TailorAnyField makes the field's output type any; constrain a type parameter instead, such as <F extends TailorAnyField>(field: F).",
+        "If the field passed to this parameter is used to build another field, such as with t.object(), its output type becomes any. Constrain a type parameter instead, such as <F extends TailorAnyField>(field: F). A helper that only reads the field is also reported, and the same rewrite is harmless.",
     },
     schema: [],
   },
