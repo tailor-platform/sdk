@@ -2,7 +2,11 @@ import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { importUserModule } from "#/cli/shared/user-modules";
-import { definitionExportError, definitionInvalidError } from "#/cli/shared/validation-errors";
+import {
+  prefixUserModuleFile,
+  definitionExportError,
+  definitionInvalidError,
+} from "#/cli/shared/validation-errors";
 import { type HttpAdapterServiceInput } from "#/configure/config/types";
 import {
   HTTP_METHOD_KEYS,
@@ -152,7 +156,7 @@ async function loadAdapterFromFile(filePath: string): Promise<LoadedHttpAdapter 
     logger.error(
       `${styles.error("Failed to load HTTP adapter from")} ${styles.errorBright(relativePath)}`,
     );
-    throw error;
+    throw prefixUserModuleFile(error, filePath);
   }
 }
 

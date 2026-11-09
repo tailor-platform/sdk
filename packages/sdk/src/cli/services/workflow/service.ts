@@ -2,7 +2,11 @@ import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { importUserModule } from "#/cli/shared/user-modules";
-import { definitionExportError, definitionInvalidError } from "#/cli/shared/validation-errors";
+import {
+  prefixUserModuleFile,
+  definitionExportError,
+  definitionInvalidError,
+} from "#/cli/shared/validation-errors";
 import { WorkflowJobSchema, WorkflowSchema } from "#/parser/service/workflow/index";
 import { isSdkBranded } from "#/utils/brand";
 import type { WorkflowServiceConfig } from "#/configure/config/types";
@@ -237,7 +241,7 @@ async function loadFileContent(filePath: string): Promise<{
     logger.error(
       `${styles.error("Failed to load workflow from")} ${styles.errorBright(relativePath)}`,
     );
-    throw error;
+    throw prefixUserModuleFile(error, filePath);
   }
 
   return { jobs, workflow };

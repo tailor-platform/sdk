@@ -1,7 +1,7 @@
 import * as path from "pathe";
 import { isSyntaxDiagnostic } from "#/utils/syntax-diagnostic";
-import { withErrorDiagnostics } from "./error-diagnostics";
-import { CLIError, internalError } from "./errors";
+import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
+import { CLIError, internalError, isCLIError } from "./errors";
 import { flattenZodIssues, formatIssueList, type FlatIssue } from "./zod-issues";
 import type { AppConfig } from "#/configure/config/types";
 import type { SdkBrandKind } from "#/utils/brand";
@@ -153,6 +153,58 @@ export function invalidDataError(subject: string, error: z.ZodError): Error {
   return internalError(`Invalid ${subject}:\n${formatIssueList(flattenZodIssues(error.issues))}`, {
     cause: error,
   });
+}
+
+const NATIVE_ERROR_CLASSES: readonly ErrorConstructor[] = [
+  EvalError,
+  RangeError,
+  ReferenceError,
+  SyntaxError,
+  TypeError,
+  URIError,
+];
+
+/**
+ * Prefix a failure raised while loading a user module with the module's file.
+ *
+ * A failure that already names its source, by its location or in its message,
+ * is returned as-is. Any other error is rebuilt with the file before its
+ * message and the original as its cause, keeping its native error class or
+ * name, stack, diagnostics, and CLI error fields.
+ * @param error - Value thrown while loading the module
+ * @param file - Absolute path of the module
+ * @returns The failure, naming the file when it is an Error that does not
+ * already name its source
+ */
+export function prefixUserModuleFile(error: unknown, file: string): unknown {
+  if (!(error instanceof Error)) return error;
+  const diagnostics = getErrorDiagnostics(error);
+  const relativePath = relativeFile(file);
+  if (
+    diagnostics.location ||
+    error.message.includes(file) ||
+    error.message.includes(relativePath)
+  ) {
+    return error;
+  }
+  const message = `${relativePath}: ${error.message}`;
+  const ErrorClass =
+    NATIVE_ERROR_CLASSES.find((errorClass) => error instanceof errorClass) ?? Error;
+  const prefixed = isCLIError(error)
+    ? CLIError({
+        code: error.code,
+        message,
+        details: error.details,
+        suggestion: error.suggestion,
+        command: error.command,
+        next: error.next,
+        context: error.context,
+        cause: error,
+      })
+    : new ErrorClass(message, { cause: error });
+  prefixed.name = error.name;
+  if (error.stack !== undefined) prefixed.stack = error.stack;
+  return withErrorDiagnostics(prefixed, diagnostics);
 }
 
 function relativeFile(file: string): string {

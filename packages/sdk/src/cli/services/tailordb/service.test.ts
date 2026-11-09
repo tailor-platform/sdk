@@ -119,7 +119,7 @@ user.name = 1;
     });
 
     using _logger = silenceLogger("error", "log");
-    await expect(service.loadTypes()).rejects.toThrow(/table is broken/);
+    await expect(service.loadTypes()).rejects.toThrow(/(first|second)\.ts: \1 table is broken$/);
     await vi.waitFor(() => {
       expect(vi.mocked(logger.error).mock.calls.toSorted()).toEqual([
         [expect.stringMatching(/Failed to load table from .*first\.ts/)],
