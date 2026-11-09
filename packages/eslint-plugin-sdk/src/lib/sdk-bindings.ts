@@ -103,9 +103,14 @@ export function resolveValue(
   return current;
 }
 
+interface ImportTrackerOptions {
+  typeImports?: boolean;
+}
+
 function createImportTracker(
   context: Rule.RuleContext,
   modules: ReadonlySet<string>,
+  options: ImportTrackerOptions = {},
 ): ImportTracker {
   const named = new Map<string, ImportBinding>();
   const namespaces = new Map<string, AstIdentifier>();
@@ -132,7 +137,7 @@ function createImportTracker(
         }
         if (
           specifier.type !== "ImportSpecifier" ||
-          ("importKind" in specifier && specifier.importKind === "type")
+          (!options.typeImports && "importKind" in specifier && specifier.importKind === "type")
         ) {
           continue;
         }
@@ -165,6 +170,10 @@ function createImportTracker(
 
 export function configureImportTracker(context: Rule.RuleContext): ImportTracker {
   return createImportTracker(context, new Set([SDK_CONFIGURE_MODULE]));
+}
+
+export function configureTypeImportTracker(context: Rule.RuleContext): ImportTracker {
+  return createImportTracker(context, new Set([SDK_CONFIGURE_MODULE]), { typeImports: true });
 }
 
 export function cliImportTracker(context: Rule.RuleContext): ImportTracker {

@@ -34,6 +34,7 @@ export type AstArrayExpression = Extract<EstreeNode, { type: "ArrayExpression" }
 export type AstCallExpression = Extract<EstreeNode, { type: "CallExpression" }>;
 export type AstIdentifier = Extract<EstreeNode, { type: "Identifier" }>;
 export type AstImportDeclaration = Extract<EstreeNode, { type: "ImportDeclaration" }>;
+export type AstMethodDefinition = Extract<EstreeNode, { type: "MethodDefinition" }>;
 export type AstProperty = Extract<EstreeNode, { type: "Property" }>;
 
 const EXPRESSION_WRAPPERS: ReadonlySet<string> = new Set(EXPRESSION_WRAPPER_TYPES);
@@ -197,7 +198,7 @@ export function literalProperty(
   return namedProperty(literalProperties(node), name);
 }
 
-export function propertyName(property: AstProperty): string | null {
+export function propertyName(property: AstProperty | AstMethodDefinition): string | null {
   if (property.computed) return null;
   if (property.key.type === "Identifier") return property.key.name;
   return property.key.type === "Literal" && typeof property.key.value === "string"
