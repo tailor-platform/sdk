@@ -368,7 +368,7 @@ describe("tailordb migration rebaseline", () => {
     expect(result.error).toMatchObject({ code: "REBASELINE_REMOTE_SCHEMA_MISMATCH" });
     const { suggestion } = result.error as CLIError;
     expect(suggestion).toContain(
-      `tailor tailordb migration sync 0001 --namespace tailordb ${formatConfigArg(configPath())} --workspace-id=${workspaceId}`,
+      `tailor tailordb migration sync 0001 --namespace tailordb ${formatConfigArg(configPath())} --workspace-id=${workspaceId}\`, which removes the fields that migration does not have and deletes the tables it does not have together with their data`,
     );
     expect(suggestion).not.toContain("--force");
     expect(migrationDirectories()).toEqual(["0000", "0001"]);

@@ -124,7 +124,7 @@ function warnMainRunResolution(params: MainRunResolution): void {
   const fitting = settlingResolution(runStatus);
   if (resolution === "rollback") {
     logger.warn(
-      `Rolling back does not undo what the script of migration ${label} changed in existing fields, and deletes the tables and fields the migration introduced together with their data. ` +
+      `Rolling back does not undo what the script of migration ${label} changed in existing fields. It removes the fields the migration introduced and deletes the tables it introduced together with their data. ` +
         `When migration ${label} is deployed again, its script runs again, so make sure it is safe to run twice.`,
     );
     if (fitting === "complete") {
