@@ -62,7 +62,7 @@ export default defineConfig({
 });
 ```
 
-Entries are only added or overwritten. An entry removed from the config keeps its last deployed value on the platform, and labels the config does not name are left untouched. Because those retained labels count towards the platform's limit of 20 labels per resource, `deploy` reports the overflow and stops before changing the application when the labels it would leave behind exceed that limit. The labels are written when the application itself is deployed, so a config with no TailorDB, Resolver, IdP, or Auth service has no application to carry them.
+Entries are only added or overwritten. An entry removed from the config keeps its last deployed value on the platform, and labels the config does not name are left untouched. Because those retained labels count towards the platform's limit of 20 labels per resource, `deploy` reports the overflow and stops before changing the application when the labels it would leave behind exceed that limit. The labels are written when the application itself is deployed, so a config without an application (see the end of [Application Settings](#application-settings)) has nothing to carry them.
 
 **Build Options**: `buildOptions` groups the settings that control how resolvers, executors, workflow jobs, and other functions are bundled: `logLevel` (below), `inlineSourcemap` (whether bundled functions embed an inline sourcemap for readable error stack traces; default `true`), `inlineSourcemapDependencySources` and `inlineSourcemapProjectSources` (below), `allowedRuntimeGlobals` (see [Node-only globals](#node-only-globals)), and `treeshake` (see [Removing unused code](#removing-unused-code)). The top-level `logLevel` and `inlineSourcemap` fields still work but are deprecated; `tailor upgrade` moves them into `buildOptions`. Setting the same option both at the top level and in `buildOptions` is rejected.
 
@@ -126,6 +126,8 @@ export default defineConfig({
   maintenanceMode: "migration",
 });
 ```
+
+`deploy` creates the application only when the config defines or references at least one TailorDB namespace, resolver namespace, IdP, or Auth service. A config with none of them has no application, so its CORS, allowed IP addresses, introspection setting, metadata, and HTTP adapters are not deployed. When a config drops the last of them, `deploy` asks for [confirmation](./cli/application.md#deploy) and deletes the application an earlier deploy created, together with any labels other tools added to it. Adding one back recreates the application at the same URL.
 
 ### Type Definitions Without `tailor generate`
 
