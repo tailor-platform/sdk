@@ -706,27 +706,59 @@ describe("scheduleRenamedAppDeletes", () => {
 });
 
 describe("confirmDeploymentPlans", () => {
-  test("names a deleted TailorDB table a table", async () => {
+  const appDelete = (name: string) => ({
+    name,
+    request: { workspaceId: "ws", applicationName: name },
+  });
+
+  test.for([
+    {
+      listed: 'TailorDB table "Order"',
+      addDelete: (results: PlanResults) =>
+        results.tailorDB.changeSet.type.deletes.push({ name: "Order", request: {} }),
+    },
+    {
+      listed: 'Application "my-app"',
+      addDelete: (results: PlanResults) => results.app.deletes.push(appDelete("my-app")),
+    },
+  ])("asks before deleting $listed", async ({ listed, addDelete }) => {
     using _logger = silenceLogger("warn", "success", "newline");
-    const logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+    using logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+    using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(true);
     const results = emptyPlanResults();
-    results.tailorDB.changeSet.type.deletes.push({
-      name: "Order",
-      request: {},
-    });
+    addDelete(results);
 
     await confirmDeploymentPlans({
       deployments: [plannedDeployment("my-app", results)],
-      yes: true,
+      yes: false,
     });
+
+    expect(confirm).toHaveBeenCalledOnce();
 
     const plain = logSpy.mock.calls
       .flat()
       .join("\n")
       .replace(/\[[0-9;]*m/g, "");
-    expect(plain).toContain('TailorDB table "Order"');
-    logSpy.mockRestore();
+    expect(plain).toContain(listed);
   });
+
+  test.for(["creates", "updates", "unchanged"] as const)(
+    "does not ask before deleting the previous name of a renamed application the plan %s",
+    async (kept) => {
+      using _logger = silenceLogger("warn", "log", "success", "newline");
+      using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(false);
+      const results = emptyPlanResults();
+      results.app[kept].push({ name: "new-app" } as never);
+      results.app.deletes.push(appDelete("old-app"));
+
+      await confirmDeploymentPlans({
+        deployments: [plannedDeployment("new-app", results)],
+        yes: false,
+      });
+
+      expect(confirm).not.toHaveBeenCalled();
+    },
+  );
 
   const confirmationWarnings: Array<{
     warning: string;
