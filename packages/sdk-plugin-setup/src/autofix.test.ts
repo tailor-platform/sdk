@@ -164,6 +164,7 @@ describe("renderAutofixWorkflow", () => {
         expect(autofix?.outputs).toEqual({
           changed: "${{ steps.tailor-autofix-diff.outputs.changed }}",
           agent: "${{ steps.tailor-codemod.outputs.agent }}",
+          "rerun-failed": "${{ steps.tailor-autofix-diff.outputs.rerun-failed }}",
         });
         expect(autofix?.steps.slice(-3).map((step) => step.id)).toEqual([
           "tailor-autofix-diff",
@@ -232,6 +233,7 @@ describe("renderAutofixWorkflow", () => {
         "tailor-autofix",
         "tailor-codemod-agent",
         "tailor-autofix-push",
+        "tailor-autofix-comment",
       ]);
       const push = workflow.jobs["tailor-autofix-push"];
       expect(push?.needs).toEqual(["tailor-autofix", "tailor-codemod-agent"]);
@@ -247,6 +249,42 @@ describe("renderAutofixWorkflow", () => {
           commit?.with?.["commit-message"] ??
           commit?.with?.commit_message,
       ).toBe(message);
+    },
+  );
+
+  test.each(AUTOFIX_PROVIDERS)(
+    "%s, agents: comment the loop guard's error on a pull request from the repository, from a job of its own",
+    (provider) => {
+      for (const codemod of AUTOFIX_AGENTS) {
+        const workflow = workflowOf(provider, { codemod });
+        const diff = stepOf(workflow, "tailor-autofix", "tailor-autofix-diff").run;
+        const comment = workflow.jobs["tailor-autofix-comment"];
+        expect(diff).toContain('echo "rerun-failed=true" >> "$GITHUB_OUTPUT"');
+        expect(comment?.needs).toBe("tailor-autofix");
+        expect(comment?.if).toBe(
+          "failure() &&\nneeds.tailor-autofix.outputs.rerun-failed == 'true' &&\ngithub.event.pull_request.head.repo.full_name == github.repository",
+        );
+        expect(comment?.permissions).toEqual({ "pull-requests": "write" });
+        expect(comment?.steps.map((step) => step.id)).toEqual(["tailor-autofix-comment"]);
+        const error = stepOf(workflow, "tailor-autofix-comment", "tailor-autofix-comment").env
+          ?.RERUN_ERROR;
+        expect(error).toContain(codemod);
+        expect(diff).toContain(`echo "::error::${error}"`);
+      }
+    },
+  );
+
+  test.each(AUTOFIX_PROVIDERS)(
+    "%s, without an agent: renders no comment job or the output that starts it",
+    (provider) => {
+      for (const codemod of CODEMOD_OPTIONS.filter((option) => !isAutofixAgent(option))) {
+        const workflow = workflowOf(provider, { codemod });
+        expect(workflow.jobs["tailor-autofix-comment"]).toBeUndefined();
+        expect(workflow.jobs["tailor-autofix"]?.outputs?.["rerun-failed"]).toBeUndefined();
+        expect(stepOf(workflow, "tailor-autofix", "tailor-autofix-diff").run).not.toContain(
+          "rerun-failed",
+        );
+      }
     },
   );
 
@@ -608,6 +646,7 @@ const BINARY = Buffer.from([0x00, 0x01, 0x02, 0xff]);
  * @param provider - Provider whose workflow to run
  * @param root - Scratch directory
  * @param options - How the run goes
+ * @param options.codemod - Codemod mode of the workflow
  * @param options.headSubject - Subject of the head commit
  * @param options.generate - What `tailor generate` does in the checkout
  * @returns The checkout, its RUNNER_TEMP, the head commit, and the diff step's result
@@ -615,7 +654,11 @@ const BINARY = Buffer.from([0x00, 0x01, 0x02, 0xff]);
 function runGenerateJob(
   provider: AutofixProvider,
   root: string,
-  options: { headSubject?: string; generate?: (checkout: string) => void } = {},
+  options: {
+    codemod?: AutofixCodemod;
+    headSubject?: string;
+    generate?: (checkout: string) => void;
+  } = {},
 ) {
   const checkout = path.join(root, "checkout");
   const runnerTemp = path.join(root, "runner-temp");
@@ -628,7 +671,7 @@ function runGenerateJob(
   git(checkout, "commit", "-q", "-m", options.headSubject ?? "feature change");
   fs.writeFileSync(path.join(checkout, ".npmrc"), "//registry.example.com/:_authToken=x\n");
 
-  const workflow = workflowOf(provider);
+  const workflow = workflowOf(provider, { codemod: options.codemod });
   const run = (steps: string[], outputs?: StepOutputs) =>
     runSteps({ workflow, job: "tailor-autofix", steps, cwd: checkout, runnerTemp, outputs });
   const baseline = run(["tailor-autofix-baseline"]);
@@ -674,6 +717,46 @@ describe("tailor-autofix job scripts", () => {
     expect(diff.failure).toContain("::error::");
     expect(fs.existsSync(path.join(runnerTemp, "tailor-autofix.patch"))).toBe(false);
   });
+
+  test.each(AUTOFIX_AGENTS)("%s: commits what changes after the agent's fix commit", (codemod) => {
+    using tmp = tempDir("autofix-diff-");
+    const headSubject = stepOf(
+      workflowOf("github-token", { codemod }),
+      "tailor-autofix",
+      "tailor-codemod",
+    ).env?.AGENT_COMMIT_MESSAGE;
+    expect(headSubject).toEqual(expect.any(String));
+    const { diff, runnerTemp } = runGenerateJob("github-token", tmp.dir, {
+      codemod,
+      headSubject,
+    });
+    expect(diff.failure).toBeUndefined();
+    expect(diff.outputs["tailor-autofix-diff"]).toEqual({ changed: "true" });
+    expect(fs.existsSync(path.join(runnerTemp, "tailor-autofix.patch"))).toBe(true);
+  });
+
+  test.each(AUTOFIX_AGENTS)(
+    "%s: fails, naming the agent, and tells the comment job when changes remain after its own fix commit",
+    (codemod) => {
+      using tmp = tempDir("autofix-diff-");
+      const headSubject = stepOf(
+        workflowOf("github-token", { codemod }),
+        "tailor-autofix",
+        "tailor-autofix-diff",
+      ).env?.COMMIT_MESSAGE;
+      const { diff, runnerTemp } = runGenerateJob("github-token", tmp.dir, {
+        codemod,
+        headSubject,
+      });
+      expect(diff.failure).toMatch(
+        new RegExp(
+          `::error::.*possibly because of what ${codemod} edited in an earlier fix commit`,
+        ),
+      );
+      expect(diff.outputs["tailor-autofix-diff"]).toEqual({ "rerun-failed": "true" });
+      expect(fs.existsSync(path.join(runnerTemp, "tailor-autofix.patch"))).toBe(false);
+    },
+  );
 
   test.each(SERVICE_PROVIDERS)(
     "%s: leaves only the generated changes in the working tree for the service to pick up",
@@ -845,6 +928,95 @@ describe("tailor-autofix-push job scripts", () => {
     using tmp = tempDir("autofix-commit-");
     const { result } = runCommitStep(tmp.dir, { env: { FAKE_GH_FAIL: "forbidden" } });
     expect(result.failure).toContain("forbidden");
+  });
+});
+
+// The pull request's comments, filtered with the --jq filter gh receives; keeps a created body.
+const FAKE_COMMENTS_GH = `#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$FAKE_GH_DIR/calls"
+method=GET
+filter=.
+prev=
+for arg; do
+  case "$prev" in
+    --method) method=$arg ;;
+    --jq) filter=$arg ;;
+    -f) printf '%s' "\${arg#body=}" > "$FAKE_GH_DIR/body" ;;
+  esac
+  prev=$arg
+done
+if [ "$method" = GET ]; then
+  jq -r "$filter" "$FAKE_GH_DIR/comments.json"
+fi
+`;
+
+const HEAD_SHA = "0123456789abcdef0123456789abcdef01234567";
+
+const rerunMarkerOf = (sha: string) => `<!-- tailor-autofix-rerun-failed: ${sha} -->`;
+
+/**
+ * Run the comment job's step against a pull request with the given comments, with a fake gh.
+ * @param root - Scratch directory
+ * @param comments - Comments the pull request already has
+ * @returns The step result, the gh calls, the body of the comment it created, if any, and the
+ *   error the step posts
+ */
+function runCommentStep(root: string, comments: { id: number; body: string }[]) {
+  const runnerTemp = path.join(root, "runner-temp");
+  fs.mkdirSync(runnerTemp);
+  fs.writeFileSync(path.join(root, "comments.json"), JSON.stringify(comments));
+  const workflow = workflowOf("github-token", { codemod: "claude" });
+  const result = runSteps({
+    workflow,
+    job: "tailor-autofix-comment",
+    steps: ["tailor-autofix-comment"],
+    cwd: root,
+    runnerTemp,
+    context: {
+      "github.token": "workflow-token",
+      "github.repository": "acme/widgets",
+      "github.event.pull_request.number": "7",
+      "github.event.pull_request.head.sha": HEAD_SHA,
+      "github.server_url": "https://github.com",
+      "github.run_id": "42",
+    },
+    env: { PATH: fakeCommands(root, { gh: FAKE_COMMENTS_GH }), FAKE_GH_DIR: root },
+  });
+  const bodyFile = path.join(root, "body");
+  return {
+    result,
+    calls: callsOf(root),
+    body: fs.existsSync(bodyFile) ? fs.readFileSync(bodyFile, "utf-8") : undefined,
+    error: stepOf(workflow, "tailor-autofix-comment", "tailor-autofix-comment").env?.RERUN_ERROR,
+  };
+}
+
+describe("tailor-autofix-comment job scripts", () => {
+  test("comments the loop guard's error with a link to the run, though an earlier head has one", () => {
+    using tmp = tempDir("autofix-comment-");
+    const { result, calls, body, error } = runCommentStep(tmp.dir, [
+      {
+        id: 1,
+        body: `${rerunMarkerOf("f".repeat(40))}\nThe autofix run for an earlier head failed.`,
+      },
+    ]);
+    expect(result.failure).toBeUndefined();
+    expect(calls).toContain("api --method POST repos/acme/widgets/issues/7/comments");
+    expect(body).toBe(
+      `${rerunMarkerOf(HEAD_SHA)}\nThe [autofix run](https://github.com/acme/widgets/actions/runs/42) for ${HEAD_SHA} failed: ${error}`,
+    );
+  });
+
+  test("does not comment again when a re-run fails on the same head", () => {
+    using tmp = tempDir("autofix-comment-");
+    const { result, calls, body } = runCommentStep(tmp.dir, [
+      { id: 1, body: "Looks good." },
+      { id: 2, body: `${rerunMarkerOf(HEAD_SHA)}\nThe autofix run failed.` },
+    ]);
+    expect(result.failure).toBeUndefined();
+    expect(calls).toContain("api repos/acme/widgets/issues/7/comments --paginate");
+    expect(calls).not.toContain("POST");
+    expect(body).toBeUndefined();
   });
 });
 
