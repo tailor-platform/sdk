@@ -85,7 +85,7 @@ createResolver({
   name: "listProducts",
   operation: "query",
   body: async () => {
-    const items = await fetchProducts(); // { id: string; name: string }[]
+    const items = await fetchProducts(); // your own data source; returns { id: string; name: string }[]
     return { items, totalCount: items.length };
   },
   output: paginated({ id: t.uuid(), name: t.string() }),
