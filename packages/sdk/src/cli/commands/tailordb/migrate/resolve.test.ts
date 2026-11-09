@@ -562,11 +562,14 @@ describe("tailordb migration resolve", () => {
       });
     });
 
-    test("--rollback warns that the data a succeeded run wrote is lost", async () => {
+    test("--rollback warns what it removes and that --complete keeps what a succeeded run wrote", async () => {
       const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
 
       expect(result.success).toBe(true);
       const output = state.stderr.join("");
+      expect(output).toMatch(
+        /removes the fields the migration introduced and deletes the tables it introduced together with their data/,
+      );
       expect(output).toMatch(/run of migration 0002 succeeded/);
       expect(output).toMatch(/--complete/);
       expect(output).not.toMatch(/from the first step/);

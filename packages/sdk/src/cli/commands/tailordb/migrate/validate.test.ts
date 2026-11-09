@@ -281,7 +281,7 @@ describe("tailordb migration validate", () => {
     });
     const { suggestion } = result.error as CLIError;
     expect(suggestion).toContain(
-      "`tailor tailordb migration sync 0000 --namespace tailordb --workspace-id=12345678-1234-4abc-8def-123456789012 --profile=staging`",
+      "`tailor tailordb migration sync 0000 --namespace tailordb --workspace-id=12345678-1234-4abc-8def-123456789012 --profile=staging` to rewrite them to 0000, which removes the fields that 0000 does not have and deletes the tables it does not have together with their data",
     );
     expect(suggestion).toContain(
       "`tailor tailordb migration generate --init --namespace tailordb`",
