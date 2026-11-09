@@ -747,15 +747,13 @@ async function validateDeploymentPlans(
 }
 
 /**
- * Add renamed-app cleanup deletes to the plan, validate and print it, then
- * ask for the confirmations it needs, so each one is answered with the whole
- * plan in view.
+ * Validate and print the plan, then ask for the confirmations it needs, so
+ * each one is answered with the whole plan in view.
  * @param params - Deployments to review, and how to confirm them
  * @returns Summary of the printed plan
  */
 async function reviewDeploymentPlans(params: ReviewDeploymentPlansParams): Promise<PlanSummary> {
   const { deployments, dryRun, noValidate, pendingDeployedHooks, missingDependentApps } = params;
-  scheduleRenamedAppDeletes(deployments);
   if (noValidate) {
     logger.warn("Client-side validation skipped (--no-validate).");
   } else {
