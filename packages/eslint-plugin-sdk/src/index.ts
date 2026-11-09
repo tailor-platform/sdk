@@ -4,6 +4,7 @@ import noExecuteScriptArgStringify from "./rules/no-execute-script-arg-stringify
 import noJobStartOutsideBody from "./rules/no-job-start-outside-body.js";
 import noNodeBuiltinImports from "./rules/no-node-builtin-imports.js";
 import noNodeOnlyGlobals from "./rules/no-node-only-globals.js";
+import noPlainTailorAnyFieldParam from "./rules/no-plain-tailor-any-field-param.js";
 import noUnconditionalPermit from "./rules/no-unconditional-permit.js";
 import validExecutionPolicyDefinition from "./rules/valid-execution-policy-definition.js";
 import validResolverPermission from "./rules/valid-resolver-permission.js";
@@ -25,6 +26,7 @@ const rules = defineRules({
   "no-job-start-outside-body": noJobStartOutsideBody,
   "no-node-builtin-imports": noNodeBuiltinImports,
   "no-node-only-globals": noNodeOnlyGlobals,
+  "no-plain-tailor-any-field-param": noPlainTailorAnyFieldParam,
   "no-unconditional-permit": noUnconditionalPermit,
   "valid-execution-policy-definition": validExecutionPolicyDefinition,
   "valid-resolver-permission": validResolverPermission,

@@ -21,6 +21,7 @@
     "tailor-sdk/no-job-start-outside-body": "warn",
     "tailor-sdk/no-node-builtin-imports": "warn",
     "tailor-sdk/no-node-only-globals": "warn",
+    "tailor-sdk/no-plain-tailor-any-field-param": "warn",
     "tailor-sdk/no-unconditional-permit": "warn",
     "tailor-sdk/valid-execution-policy-definition": "warn",
     "tailor-sdk/valid-resolver-permission": "warn",
