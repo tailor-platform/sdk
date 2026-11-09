@@ -8,6 +8,7 @@ export type PluginConfigInput = {
   pluginConfig?: unknown;
   tableConfigRequired?: boolean | Function | undefined;
   onTableLoaded?: Function | undefined;
+  onTailorDBNamespaceLoaded?: Function | undefined;
   onNamespaceLoaded?: Function | undefined;
   onTailorDBReady?: Function | undefined;
   onResolverReady?: Function | undefined;
@@ -34,12 +35,19 @@ export type PluginConfig = {
             Record<string, import("#/configure/services/tailordb/types").TailorAnyDBField>
           >)
     | undefined;
+  onTailorDBNamespaceLoaded?:
+    | ((
+        context: import("#/plugin/types").TailorDBNamespaceLoadedContext<unknown>,
+      ) =>
+        | import("#/plugin/types").TailorDBNamespacePluginOutput
+        | Promise<import("#/plugin/types").TailorDBNamespacePluginOutput>)
+    | undefined;
   onNamespaceLoaded?:
     | ((
-        context: import("#/plugin/types").PluginNamespaceProcessContext<unknown>,
+        context: import("#/plugin/types").TailorDBNamespaceLoadedContext<unknown>,
       ) =>
-        | import("#/plugin/types").NamespacePluginOutput
-        | Promise<import("#/plugin/types").NamespacePluginOutput>)
+        | import("#/plugin/types").TailorDBNamespacePluginOutput
+        | Promise<import("#/plugin/types").TailorDBNamespacePluginOutput>)
     | undefined;
   onTailorDBReady?:
     | ((

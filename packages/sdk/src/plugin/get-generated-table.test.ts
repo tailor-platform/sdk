@@ -198,21 +198,14 @@ describe("getGeneratedTable", () => {
   });
 
   describe("namespace plugin", () => {
-    test("onNamespaceLoaded is called only once per namespace during resolution", async () => {
+    const writeNamespacePlugin = (hooks: string) =>
       fs.writeFileSync(
         configPath,
         `export const plugins = [{
   id: "ns-plugin",
   description: "test",
   importPath: "@test/ns-plugin",
-  onNamespaceLoaded({ pluginConfig, namespace }) {
-    globalThis.__testProcessNamespaceCalls.push(namespace);
-    return {
-      tables: {
-        auditLog: { name: "AuditLog", fields: { message: {} } },
-      },
-    };
-  },
+  ${hooks}
 }];
 export default {
   db: {
@@ -221,12 +214,36 @@ export default {
 };
 `,
       );
+    const recordingHook = (name: string) => `${name}({ pluginConfig, namespace }) {
+    globalThis.__testProcessNamespaceCalls.push(namespace);
+    return {
+      tables: {
+        auditLog: { name: "AuditLog", fields: { message: {} } },
+      },
+    };
+  },`;
 
-      globalThis.__testProcessNamespaceCalls = [];
+    test.each(["onTailorDBNamespaceLoaded", "onNamespaceLoaded"])(
+      "%s is called only once per namespace during resolution",
+      async (hookName) => {
+        writeNamespacePlugin(recordingHook(hookName));
+        globalThis.__testProcessNamespaceCalls = [];
 
-      await getGeneratedTable(configPath, "ns-plugin", null, "auditLog");
+        const table = await getGeneratedTable(configPath, "ns-plugin", null, "auditLog");
 
-      expect(globalThis.__testProcessNamespaceCalls).toEqual(["main"]);
+        expect(table.name).toBe("AuditLog");
+        expect(globalThis.__testProcessNamespaceCalls).toEqual(["main"]);
+      },
+    );
+
+    test("rejects a plugin that defines both TailorDB namespace hook names, as the CLI does", async () => {
+      writeNamespacePlugin(
+        recordingHook("onTailorDBNamespaceLoaded") + recordingHook("onNamespaceLoaded"),
+      );
+
+      await expect(getGeneratedTable(configPath, "ns-plugin", null, "auditLog")).rejects.toThrow(
+        `plugin "ns-plugin": 'onNamespaceLoaded' is the deprecated name of 'onTailorDBNamespaceLoaded'. Define only 'onTailorDBNamespaceLoaded'.`,
+      );
     });
   });
 
@@ -293,6 +310,8 @@ export default { db: { main: { files: [] } } };
       'tableConfigRequired: "yes"',
       "tableConfigRequired: null",
       'onTableLoaded() {}, importPath: ""',
+      "onTailorDBNamespaceLoaded() {}",
+      'onTailorDBNamespaceLoaded: 42, importPath: "@test/invalid"',
     ])("rejects invalid plugin options: %s", async (options) => {
       writeConfig(`export const plugins = [{ id: "invalid", description: "test", ${options} }];`);
 

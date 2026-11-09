@@ -1955,6 +1955,68 @@ export const allCodemods: CodemodPackage[] = [
       "conflict).",
     ].join("\n"),
   },
+  {
+    id: "v3/tailordb-namespace-loaded-rename",
+    name: "Plugin hook onNamespaceLoaded → onTailorDBNamespaceLoaded",
+    description:
+      "The plugin hook `onNamespaceLoaded` is renamed to `onTailorDBNamespaceLoaded`, which says that it runs once for each TailorDB namespace, and the types `PluginNamespaceProcessContext` and `NamespacePluginOutput` are renamed to `TailorDBNamespaceLoadedContext` and `TailorDBNamespacePluginOutput`. The old names keep working until they are removed in v3; a plugin that defines both hook names is rejected. In files that import from @tailor-platform/sdk, the codemod renames the hook wherever it appears as a property or method name, and renames the two types imported or re-exported from @tailor-platform/sdk.",
+    since: "1.12.0",
+    until: "3.0.0",
+    scriptPath: "v3/tailordb-namespace-loaded-rename/scripts/transform.js",
+    filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
+    legacyPatterns: [
+      // A shorthand `{ onNamespaceLoaded }` is rewritten to `{ onTailorDBNamespaceLoaded: onNamespaceLoaded }`,
+      // so match the name only where it is a member, not where it is a local binding.
+      /\.onNamespaceLoaded\b/,
+      /(?:^|[{,;])\s*(?:(?:async|static|readonly|public|private|protected)\s+)*onNamespaceLoaded\s*\??\s*[(:=]/m,
+      /[{,]\s*onNamespaceLoaded\s*[,}]/,
+      "PluginNamespaceProcessContext",
+      "NamespacePluginOutput",
+    ],
+    examples: [
+      {
+        before: [
+          'import type { Plugin, PluginNamespaceProcessContext } from "@tailor-platform/sdk";',
+          "",
+          "export const auditLogPlugin: Plugin = {",
+          '  id: "@example/audit-log",',
+          '  description: "Adds an audit log table",',
+          '  importPath: "@example/audit-log",',
+          "  onNamespaceLoaded(context: PluginNamespaceProcessContext) {",
+          "    return { tables: {} };",
+          "  },",
+          "};",
+        ].join("\n"),
+        after: [
+          'import type { Plugin, TailorDBNamespaceLoadedContext } from "@tailor-platform/sdk";',
+          "",
+          "export const auditLogPlugin: Plugin = {",
+          '  id: "@example/audit-log",',
+          '  description: "Adds an audit log table",',
+          '  importPath: "@example/audit-log",',
+          "  onTailorDBNamespaceLoaded(context: TailorDBNamespaceLoadedContext) {",
+          "    return { tables: {} };",
+          "  },",
+          "};",
+        ].join("\n"),
+      },
+    ],
+    prompt: [
+      "In Tailor SDK v3, the plugin hook `onNamespaceLoaded` is removed in favor of",
+      "`onTailorDBNamespaceLoaded`, and the types `PluginNamespaceProcessContext` and",
+      "`NamespacePluginOutput` from `@tailor-platform/sdk` are removed in favor of",
+      "`TailorDBNamespaceLoadedContext` and `TailorDBNamespacePluginOutput`. The hook",
+      "behaves the same under its new name. For each flagged plugin object or class",
+      "that defines both hook names, move the body of `onNamespaceLoaded` into",
+      "`onTailorDBNamespaceLoaded` (or delete it if the two do the same thing) and",
+      "delete `onNamespaceLoaded`; the SDK rejects a plugin that defines both. The",
+      "codemod renames nothing else in such a file, so then rename its remaining",
+      "`onNamespaceLoaded` references too. Also rename any remaining",
+      '`onNamespaceLoaded` property, method, or `Plugin["onNamespaceLoaded"]`',
+      "reference in files that do not import from `@tailor-platform/sdk`, which the",
+      "codemod leaves alone.",
+    ].join("\n"),
+  },
 ];
 
 /**

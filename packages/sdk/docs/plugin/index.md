@@ -126,8 +126,8 @@ Plugins have definition-time, generation-time, and deploy-time hooks. The genera
 tailor generate
 │
 ├─ Load TailorDB tables
-│   ├─ onTableLoaded       ← per table with .plugin() attached
-│   └─ onNamespaceLoaded   ← once per namespace (namespace plugins)
+│   ├─ onTableLoaded             ← per table with .plugin() attached
+│   └─ onTailorDBNamespaceLoaded ← once per TailorDB namespace
 │
 ├─ Resolve Auth
 │
@@ -144,10 +144,10 @@ tailor generate
 
 ### Definition-time hooks
 
-| Hook                | Trigger                              | Can do                                                            |
-| ------------------- | ------------------------------------ | ----------------------------------------------------------------- |
-| `onTableLoaded`     | Each table with `.plugin()` attached | Generate tables, resolvers, executors; extend source table fields |
-| `onNamespaceLoaded` | Once per namespace                   | Generate tables, resolvers, executors                             |
+| Hook                        | Trigger                                  | Can do                                                            |
+| --------------------------- | ---------------------------------------- | ----------------------------------------------------------------- |
+| `onTableLoaded`             | Each table with `.plugin()` attached     | Generate tables, resolvers, executors; extend source table fields |
+| `onTailorDBNamespaceLoaded` | Once per non-external TailorDB namespace | Generate tables, resolvers, executors                             |
 
 These hooks produce TailorDB tables, resolvers, and executors that become part of the application. Requires `importPath` on the plugin.
 
