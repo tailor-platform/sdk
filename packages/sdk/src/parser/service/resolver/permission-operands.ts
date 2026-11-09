@@ -1,17 +1,24 @@
 import type { Resolver } from "#/types/resolver.generated";
 import type { z } from "zod";
 
-type Operand = string | boolean | { user: string } | { input: string };
-type Condition = readonly [Operand, "=" | "!=", Operand];
-type Conditions = Condition | readonly Condition[];
-type Permission = readonly { conditions: Conditions }[] | "allowAnonymous" | undefined;
+export type ResolverPermissionPolicy = Extract<
+  NonNullable<Resolver["permission"]>,
+  readonly unknown[]
+>[number];
+export type ResolverPermissionCondition = Extract<
+  ResolverPermissionPolicy["conditions"],
+  readonly [unknown, unknown, unknown]
+>;
+export type ResolverPermissionOperand = ResolverPermissionCondition[0];
 
 /**
  * Check whether a resolver permission operand refers to the caller.
  * @param operand - A condition operand
  * @returns Whether it is a `{ user }` operand
  */
-export function isUserOperand(operand: Operand): operand is { user: string } {
+export function isUserOperand(
+  operand: ResolverPermissionOperand,
+): operand is Extract<ResolverPermissionOperand, { user: unknown }> {
   return typeof operand === "object" && "user" in operand;
 }
 
@@ -20,7 +27,9 @@ export function isUserOperand(operand: Operand): operand is { user: string } {
  * @param operand - A condition operand
  * @returns Whether it is an `{ input }` operand
  */
-export function isInputOperand(operand: Operand): operand is { input: string } {
+export function isInputOperand(
+  operand: ResolverPermissionOperand,
+): operand is Extract<ResolverPermissionOperand, { input: unknown }> {
   return typeof operand === "object" && "input" in operand;
 }
 
@@ -29,7 +38,7 @@ export function isInputOperand(operand: Operand): operand is { input: string } {
  * @param conditions - A policy's `conditions`
  * @returns Whether `conditions` is one condition tuple
  */
-export function isSingleCondition<C extends Condition>(
+export function isSingleCondition<C extends ResolverPermissionCondition>(
   conditions: C | readonly C[],
 ): conditions is C {
   return conditions.length === 3 && typeof conditions[1] === "string";
@@ -40,7 +49,7 @@ export function isSingleCondition<C extends Condition>(
  * @param permission - A resolver `permission` or namespace `defaultPermission`
  * @returns Names of the input fields its `{ input }` operands reference
  */
-export function permissionInputFields(permission: Permission): Set<string> {
+export function permissionInputFields(permission: Resolver["permission"]): Set<string> {
   if (typeof permission !== "object") {
     return new Set();
   }
@@ -53,7 +62,7 @@ export function permissionInputFields(permission: Permission): Set<string> {
   );
 }
 
-type IndexedCondition<C extends Condition> = {
+type IndexedCondition<C extends ResolverPermissionCondition> = {
   condition: C;
   path: (string | number)[];
 };
@@ -63,7 +72,7 @@ type IndexedCondition<C extends Condition> = {
  * @param conditions - A policy's `conditions`
  * @returns Each condition tuple and its path
  */
-export function indexedConditions<C extends Condition>(
+export function indexedConditions<C extends ResolverPermissionCondition>(
   conditions: C | readonly C[],
 ): IndexedCondition<C>[] {
   return isSingleCondition(conditions)

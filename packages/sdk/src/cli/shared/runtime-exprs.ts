@@ -17,6 +17,9 @@ import {
   isInputOperand,
   isSingleCondition,
   isUserOperand,
+  type ResolverPermissionCondition,
+  type ResolverPermissionOperand,
+  type ResolverPermissionPolicy,
 } from "#/parser/service/resolver/permission-operands";
 import { makePrincipalExpr, tailorPrincipalMap } from "#/parser/service/tailordb/index";
 import { hasDateRepresentationFields } from "#/runtime/date";
@@ -129,15 +132,6 @@ export function buildResolverOperationHookExpr(env: ApplicationEnv): string {
   return `({ ...context.pipeline, input: context.args, caller: ${tailorPrincipalMap}, env: ${JSON.stringify(env)} });`;
 }
 
-type ResolverPermissionPolicies = Extract<NonNullable<Resolver["permission"]>, readonly unknown[]>;
-type ResolverPermissionPolicy = ResolverPermissionPolicies[number];
-type ResolverPermissionOperand = string | boolean | { user: string } | { input: string };
-type ResolverPermissionCondition = readonly [
-  ResolverPermissionOperand,
-  "=" | "!=",
-  ResolverPermissionOperand,
-];
-
 function resolverPermissionOperandExpr(operand: ResolverPermissionOperand): string {
   if (isInputOperand(operand)) {
     return `context.input?.[${JSON.stringify(operand.input)}]`;
@@ -193,9 +187,7 @@ function resolverPermissionConditionExpr(condition: ResolverPermissionCondition)
 }
 
 function resolverPermissionPolicyExpr(policy: ResolverPermissionPolicy): string {
-  const conditions = isSingleCondition<ResolverPermissionCondition>(policy.conditions)
-    ? [policy.conditions]
-    : policy.conditions;
+  const conditions = isSingleCondition(policy.conditions) ? [policy.conditions] : policy.conditions;
   if (conditions.length === 0) {
     throw new Error(
       "Resolver permission policy must have at least one condition, got an empty array.",
