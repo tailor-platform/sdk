@@ -1,5 +1,11 @@
 # @tailor-platform/create-sdk
 
+## 2.39.0
+
+### Patch Changes
+
+- [#2985](https://github.com/tailor-platform/sdk/pull/2985) [`0eb5fee`](https://github.com/tailor-platform/sdk/commit/0eb5fee24ab55bae8a099ba8f8a7fe76a4c1b0dd) Thanks [@dqn](https://github.com/dqn)! - The executor template's `external-webhook` executor now verifies an HMAC-SHA256 signature over the request body before processing it. Until the `signing-secret` secret exists in the `webhook` vault, and for any request whose `x-webhook-signature` header is not the HMAC-SHA256 of the body keyed with that secret, the executor job fails without logging the payload, while the webhook URL still responds with success; `tailor executor jobs external-webhook` lists the failed jobs. The template README shows how to create the secret and send a signed request. Projects scaffolded earlier keep their existing `externalWebhook.ts`; to protect them the same way, verify the signature over the base64-decoded `rawBody` before using `body`.
+
 ## 2.38.0
 
 No changes in this release.

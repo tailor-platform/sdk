@@ -7,8 +7,8 @@ import tagTemplate from "./tag.workflow.yml";
 // The release PR updates RELEASED_TEMPLATE_VERSION and the fingerprint below. When a PR changes
 // the renders, template-fingerprint.test.ts says when to set TEMPLATE_CHANGED_SINCE_RELEASE to
 // true and when to re-record the fingerprint.
-// Released template fingerprint: d8f4f024ae99b9eb3fad413180fa3489edc697298cbd8d3f2172354422ddd326
-const RELEASED_TEMPLATE_VERSION = 24;
+// Released template fingerprint: 667a777f4aed2898cc41a430d69f940c1f0f1a7bc4c200fa97bdc8090a70897f
+const RELEASED_TEMPLATE_VERSION = 25;
 const TEMPLATE_CHANGED_SINCE_RELEASE = true;
 export const ACTIONS_SHA = "77effc033b3cb5fa7660b38571fbeb8361d121e8";
 export const ACTIONS_VERSION = "v2.8.0";

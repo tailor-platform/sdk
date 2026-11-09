@@ -3,6 +3,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { BinaryReader, WireType } from "@bufbuild/protobuf/wire";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { logger } from "#/cli/shared/logger";
 import { formatMigrationNumber } from "./migration-number";
@@ -209,18 +210,61 @@ export function createMigrationHistoryId(): string {
 // ============================================================================
 
 /**
+ * Whether the platform refused to make a field required because records have no value for it.
+ * @param {unknown} error - Error to check
+ * @returns {boolean} True for that refusal
+ */
+export function isRequiredFieldNullValuesError(error: unknown): boolean {
+  return (
+    error instanceof ConnectError &&
+    error.code === Code.FailedPrecondition &&
+    error.details.some(
+      (detail) =>
+        "type" in detail &&
+        detail.type === "google.rpc.PreconditionFailure" &&
+        preconditionViolationTypes(detail.value).includes("REQUIRED_FIELD_HAS_NULL_VALUES"),
+    )
+  );
+}
+
+/**
+ * Violation types of an encoded google.rpc.PreconditionFailure, read from the wire format
+ * (`violations` = 1, `Violation.type` = 1) since the SDK has no generated schema for it.
+ * @param {Uint8Array} value - Encoded PreconditionFailure
+ * @returns {string[]} Type of each violation
+ */
+function preconditionViolationTypes(value: Uint8Array): string[] {
+  return lengthDelimitedFields(value, 1)
+    .flatMap((violation) => lengthDelimitedFields(violation, 1))
+    .map((type) => new TextDecoder().decode(type));
+}
+
+/**
+ * Values of a length-delimited field in an encoded message.
+ * @param {Uint8Array} message - Encoded message
+ * @param {number} fieldNo - Field number
+ * @returns {Uint8Array[]} Value of each occurrence of the field
+ */
+function lengthDelimitedFields(message: Uint8Array, fieldNo: number): Uint8Array[] {
+  const reader = new BinaryReader(message);
+  const values: Uint8Array[] = [];
+  while (reader.pos < reader.len) {
+    const [no, wireType] = reader.tag();
+    if (no === fieldNo && wireType === WireType.LengthDelimited) values.push(reader.bytes());
+    else reader.skip(wireType, no);
+  }
+  return values;
+}
+
+/**
  * Handle optional-to-required field change error with helpful message
  * @param {unknown} error - Error to handle
  * @param {string[]} messages - Additional messages to display
  */
 export function handleOptionalToRequiredError(error: unknown, messages: string[]): never {
-  if (
-    error instanceof ConnectError &&
-    error.code === Code.FailedPrecondition &&
-    error.message.includes("cannot be updated from non-required to required when records exist")
-  ) {
+  if (isRequiredFieldNullValuesError(error)) {
     logger.error(
-      "Schema change failed: Cannot change field from optional to required when records exist.",
+      "Schema change failed: Cannot change a field from optional to required while records have no value for it.",
     );
     logger.newline();
     for (const message of messages) {
