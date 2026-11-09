@@ -1,3 +1,5 @@
+import * as path from "pathe";
+import { getErrorDiagnostics } from "./error-diagnostics";
 import { redactSecrets, styles } from "./logger";
 import { formatShellCommandLines } from "./shell-quote";
 import type { Jsonifiable } from "type-fest";
@@ -82,7 +84,7 @@ function redactAndIndent(text: string): string {
  */
 function formatError(error: CLIError): string {
   const parts: string[] = [
-    styles.error(`Error${error.code ? ` [${error.code}]` : ""}: ${error.message}`),
+    styles.error(`Error${error.code ? ` [${error.code}]` : ""}: ${locatedMessage(error)}`),
   ];
 
   if (error.details) {
@@ -134,6 +136,24 @@ export function CLIError(options: CLIErrorOptions): CLIError {
  */
 export function isCLIError(error: unknown): error is CLIError {
   return error instanceof Error && error.name === "CLIError";
+}
+
+/**
+ * Prefix a failure's message with the source location it points at.
+ *
+ * An error other than a CLIError that brings its own `format()` lays out its
+ * report itself, so its message is returned as-is.
+ * @param error - Failure being rendered
+ * @returns `<file>[:<line>]: <message>`, with the file relative to the working
+ * directory, or the message alone when the failure has no source location
+ */
+export function locatedMessage(error: Error): string {
+  const { location } = getErrorDiagnostics(error);
+  const formatsItself =
+    !isCLIError(error) && typeof (error as { format?: unknown }).format === "function";
+  if (!location || formatsItself) return error.message;
+  const line = location.line === undefined ? "" : `:${location.line}`;
+  return `${path.relative(process.cwd(), location.file)}${line}: ${error.message}`;
 }
 
 /**

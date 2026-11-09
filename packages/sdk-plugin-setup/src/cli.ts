@@ -14,6 +14,7 @@ import * as path from "pathe";
 import { readPackageJSON } from "pkg-types";
 import { z } from "zod";
 import { setupSubCommands } from "./commands";
+import { locatedMessage } from "./error-message";
 
 function hasFormat(error: unknown): error is { format(): string } {
   return (
@@ -48,7 +49,7 @@ void runMain(mainCommand, {
     } else if (hasFormat(error)) {
       logger.log(error.format());
     } else if (error instanceof Error) {
-      logger.error(error.message);
+      logger.error(locatedMessage(error));
     } else {
       logger.error(`Unknown error: ${String(error)}`);
     }

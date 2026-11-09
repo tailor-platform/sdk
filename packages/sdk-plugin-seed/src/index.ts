@@ -3,6 +3,7 @@
 import { fileURLToPath } from "node:url";
 import {
   annotateTerminalError,
+  errorToJson,
   serializeError,
   createCommonArgs,
   loadEnvFilesFromArgv,
@@ -24,6 +25,16 @@ function hasFormat(error: unknown): error is { format(): string } {
     error !== null &&
     typeof (error as { format?: unknown }).format === "function"
   );
+}
+
+/**
+ * Prefix a failure's message with the file it points at, as the host CLI prints it.
+ * @param error - Failure to print
+ * @returns The message of the failure's JSON error envelope
+ */
+function locatedMessage(error: Error): string {
+  const { message } = errorToJson(error).error;
+  return typeof message === "string" ? message : error.message;
 }
 
 const packageRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -58,7 +69,7 @@ void runMain(mainCommand, {
     } else if (hasFormat(error)) {
       logger.log(error.format());
     } else if (error instanceof Error) {
-      logger.error(error.message);
+      logger.error(locatedMessage(error));
     } else {
       logger.error(`Unknown error: ${String(error)}`);
     }

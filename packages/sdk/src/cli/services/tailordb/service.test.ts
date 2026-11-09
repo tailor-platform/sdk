@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { logger } from "#/cli/shared/logger";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import {
@@ -95,7 +96,7 @@ user.name = 1;
     using _logger = silenceLogger("error");
     await expect(service.loadTypes()).rejects.toMatchObject({
       code: "DEFINITION_INVALID",
-      message: expect.stringMatching(/^Invalid TailorDB type `user` in .*user\.ts:\n {2}- name: /),
+      message: expect.stringMatching(/^Invalid TailorDB type `user`:\n {2}- name: /),
       context: {
         kind: "tailordb-type",
         file,
@@ -119,7 +120,12 @@ user.name = 1;
     });
 
     using _logger = silenceLogger("error", "log");
-    await expect(service.loadTypes()).rejects.toThrow(/(first|second)\.ts: \1 table is broken$/);
+    const error = await service.loadTypes().catch((thrown: unknown) => thrown);
+    if (!(error instanceof Error)) throw new Error("expected loadTypes to reject with an Error");
+    expect(error.message).toMatch(/^(first|second) table is broken$/);
+    expect(getErrorDiagnostics(error).location).toEqual({
+      file: error.message.startsWith("first") ? firstFile : secondFile,
+    });
     await vi.waitFor(() => {
       expect(vi.mocked(logger.error).mock.calls.toSorted()).toEqual([
         [expect.stringMatching(/Failed to load table from .*first\.ts/)],

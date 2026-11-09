@@ -2,7 +2,7 @@ import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { importUserModule } from "#/cli/shared/user-modules";
-import { prefixUserModuleFile, definitionInvalidError } from "#/cli/shared/validation-errors";
+import { atUserModule, definitionInvalidError } from "#/cli/shared/validation-errors";
 import { ExecutorSchema } from "#/parser/service/executor/index";
 import { isSdkBranded } from "#/utils/brand";
 import { stripExecutorTriggerArgs } from "./loader";
@@ -79,7 +79,7 @@ export function createExecutorService(params: CreateExecutorServiceParams): Exec
     } catch (error) {
       const relativePath = path.relative(process.cwd(), executorFile);
       logger.error(`Failed to load executor from ${styles.bold(relativePath)}`);
-      throw prefixUserModuleFile(error, executorFile);
+      throw atUserModule(error, executorFile);
     }
     return undefined;
   };

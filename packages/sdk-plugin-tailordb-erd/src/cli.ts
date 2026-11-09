@@ -17,6 +17,7 @@ import { erdDeployCommand } from "./deploy";
 import { erdDiffCommand } from "./diff-command";
 import { erdExportCommand } from "./export";
 import { erdServeCommand } from "./serve";
+import { locatedMessage } from "./utils";
 
 function hasFormat(error: unknown): error is { format(): string } {
   return (
@@ -55,7 +56,7 @@ void runMain(mainCommand, {
     } else if (hasFormat(error)) {
       logger.log(error.format());
     } else if (error instanceof Error) {
-      logger.error(error.message);
+      logger.error(locatedMessage(error));
     } else {
       logger.error(`Unknown error: ${String(error)}`);
     }

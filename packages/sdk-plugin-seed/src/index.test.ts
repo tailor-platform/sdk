@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import * as path from "pathe";
 import { describe, expect, test } from "vitest";
@@ -27,6 +28,13 @@ function parseErrorEnvelope(stderr: string): unknown {
   const envelope = stderr.trim().split(/\r?\n/).at(-1);
   expect(envelope).toBeDefined();
   return JSON.parse(envelope ?? "");
+}
+
+function throwingConfig() {
+  const dir = mkdtempSync(path.join(tmpdir(), "seed-throwing-config-"));
+  const configPath = path.join(dir, "tailor.config.ts");
+  writeFileSync(configPath, 'throw new Error("config is broken");\n');
+  return { configPath, [Symbol.dispose]: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
 describe("seed CLI JSON errors", () => {
@@ -153,6 +161,21 @@ describe("seed CLI JSON errors", () => {
         `✖ Configuration file not found: ${path.resolve(configPath)}`,
         `::error title=Error::Configuration file not found: ${path.resolve(configPath)}`,
       ]);
+    },
+    CLI_TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "puts the file a failure points at before its message",
+    () => {
+      using tmp = throwingConfig();
+
+      const result = runCli(["validate", "--config", tmp.configPath]);
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(
+        `${path.relative(packageRoot, tmp.configPath)}: config is broken`,
+      );
     },
     CLI_TEST_TIMEOUT_MS,
   );

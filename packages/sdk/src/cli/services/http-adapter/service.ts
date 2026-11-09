@@ -3,7 +3,7 @@ import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { importUserModule } from "#/cli/shared/user-modules";
 import {
-  prefixUserModuleFile,
+  atUserModule,
   definitionExportError,
   definitionInvalidError,
 } from "#/cli/shared/validation-errors";
@@ -143,7 +143,7 @@ async function loadAdapterFromFile(filePath: string): Promise<LoadedHttpAdapter 
 
     const adapter = parsed.data;
     const methods = collectMethodKeys(adapter);
-    rejectAsyncHandlers(adapter, methods, filePath);
+    rejectAsyncHandlers(adapter, methods);
 
     return {
       adapter,
@@ -156,7 +156,7 @@ async function loadAdapterFromFile(filePath: string): Promise<LoadedHttpAdapter 
     logger.error(
       `${styles.error("Failed to load HTTP adapter from")} ${styles.errorBright(relativePath)}`,
     );
-    throw prefixUserModuleFile(error, filePath);
+    throw atUserModule(error, filePath);
   }
 }
 
@@ -165,23 +165,19 @@ function collectMethodKeys(adapter: HttpAdapterConfig): HttpMethodKey[] {
   return HTTP_METHOD_KEYS.filter((key) => typeof input[key] === "function");
 }
 
-function rejectAsyncHandlers(
-  adapter: HttpAdapterConfig,
-  methods: HttpMethodKey[],
-  sourceFile: string,
-): void {
+function rejectAsyncHandlers(adapter: HttpAdapterConfig, methods: HttpMethodKey[]): void {
   const input = adapter.input as Partial<Record<HttpMethodKey, unknown>>;
   for (const method of methods) {
     if (isAsyncFunction(input[method])) {
       throw new Error(
-        `HTTP adapter "${adapter.name}" in ${sourceFile} has an async \`input.${method}\` function. ` +
+        `HTTP adapter "${adapter.name}" has an async \`input.${method}\` function. ` +
           `Handlers must be synchronous; async/await is not supported.`,
       );
     }
   }
   if (adapter.output !== undefined && isAsyncFunction(adapter.output)) {
     throw new Error(
-      `HTTP adapter "${adapter.name}" in ${sourceFile} has an async \`output\` function. ` +
+      `HTTP adapter "${adapter.name}" has an async \`output\` function. ` +
         `Handlers must be synchronous; async/await is not supported.`,
     );
   }

@@ -1,8 +1,6 @@
-import { escapeRegExp } from "es-toolkit";
-import * as path from "pathe";
 import { isSyntaxDiagnostic } from "#/utils/syntax-diagnostic";
 import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
-import { CLIError, internalError, isCLIError } from "./errors";
+import { CLIError, internalError } from "./errors";
 import { flattenZodIssues, formatIssueList, type FlatIssue } from "./zod-issues";
 import type { AppConfig } from "#/configure/config/types";
 import type { SdkBrandKind } from "#/utils/brand";
@@ -41,7 +39,7 @@ export function configInvalidError(params: ConfigInvalidErrorParams): CLIError {
   return withErrorDiagnostics(
     CLIError({
       code: "CONFIG_INVALID",
-      message: `Invalid ${subject} in ${relativeFile(file)}:\n${formatIssueList(issues)}`,
+      message: `Invalid ${subject}:\n${formatIssueList(issues)}`,
       context: { file, exportName, ...service, issues },
       cause: error,
     }),
@@ -84,7 +82,7 @@ export function definitionInvalidError(params: DefinitionInvalidErrorParams): CL
   return withErrorDiagnostics(
     CLIError({
       code: "DEFINITION_INVALID",
-      message: `Invalid ${DEFINITION_LABELS[kind]}${exportLabel} in ${relativeFile(file)}:\n${formatIssueList(issues)}`,
+      message: `Invalid ${DEFINITION_LABELS[kind]}${exportLabel}:\n${formatIssueList(issues)}`,
       context: { kind, file, exportName, issues },
       cause: error,
     }),
@@ -100,7 +98,7 @@ export function definitionInvalidError(params: DefinitionInvalidErrorParams): CL
 export function definitionExportError(params: DefinitionErrorParams): CLIError {
   const { kind, file, exportName } = params;
   const label = DEFINITION_LABELS[kind];
-  const subject = `${label.charAt(0).toUpperCase()}${label.slice(1)} in ${relativeFile(file)}`;
+  const subject = `${label.charAt(0).toUpperCase()}${label.slice(1)}`;
   const placement =
     exportName === "default"
       ? {
@@ -131,11 +129,10 @@ export function syntaxInvalidError(thrown: unknown): CLIError | undefined {
   if (!isSyntaxDiagnostic(thrown)) return undefined;
   const { message, filename: file, startLine: line } = thrown;
   const location = line === undefined ? { file } : { file, line };
-  const lineSuffix = line === undefined ? "" : `:${line}`;
   return withErrorDiagnostics(
     CLIError({
       code: "SYNTAX_INVALID",
-      message: `Invalid syntax in ${relativeFile(file)}${lineSuffix}: ${message}`,
+      message: `Invalid syntax: ${message}`,
       context: location,
       cause: thrown,
     }),
@@ -157,77 +154,15 @@ export function invalidDataError(subject: string, error: z.ZodError): Error {
 }
 
 /**
- * Prefix a failure raised while loading a user module with the module's file.
+ * Attribute a failure raised while loading a user module to the module's file.
  *
- * A failure that already names its source, by its location or in its message,
- * is returned as-is. Any other error is copied with the file before its
- * message, keeping its class, stack, cause, diagnostics, and other fields. An
- * error whose class defines getters, which may read state the copy lacks, is
- * instead rebuilt as an Error with its name and the original as its cause.
+ * A failure that already carries a source location, such as a syntax error in a
+ * module the file imports, keeps it.
  * @param error - Value thrown while loading the module
  * @param file - Absolute path of the module
- * @returns The failure, naming the file when it is an Error that does not
- * already name its source
+ * @returns The same value, located at `file` when it is an Error without a location
  */
-export function prefixUserModuleFile(error: unknown, file: string): unknown {
-  if (!(error instanceof Error)) return error;
-  const diagnostics = getErrorDiagnostics(error);
-  const relativePath = relativeFile(file);
-  if (
-    diagnostics.location ||
-    namesPath(error.message, file) ||
-    namesPath(error.message, relativePath)
-  ) {
-    return error;
-  }
-  return withErrorDiagnostics(withMessage(error, `${relativePath}: ${error.message}`), diagnostics);
-}
-
-function namesPath(message: string, filePath: string): boolean {
-  return new RegExp(`${escapeRegExp(filePath)}(?![\\w-]|\\.[\\w-])`).test(message);
-}
-
-function withMessage(error: Error, message: string): Error {
-  const stack = { value: error.stack, writable: true, configurable: true };
-  if (isCLIError(error)) {
-    const copy = CLIError({
-      code: error.code,
-      message,
-      details: error.details,
-      suggestion: error.suggestion,
-      command: error.command,
-      next: error.next,
-      context: error.context,
-      cause: error.cause,
-    });
-    return Object.defineProperty(copy, "stack", stack);
-  }
-  const prototype: object | null = Object.getPrototypeOf(error);
-  if (definesGetters(prototype)) {
-    const rebuilt = new Error(message, { cause: error });
-    rebuilt.name = error.name;
-    return Object.defineProperty(rebuilt, "stack", stack);
-  }
-  const copy: Error = Object.setPrototypeOf(new Error(), prototype);
-  return Object.defineProperties(copy, {
-    ...Object.getOwnPropertyDescriptors(error),
-    message: { value: message, writable: true, configurable: true },
-    stack,
-  });
-}
-
-function definesGetters(prototype: object | null): boolean {
-  for (
-    let current: object | null = prototype;
-    current && current !== Error.prototype;
-    current = Object.getPrototypeOf(current)
-  ) {
-    const descriptors = Object.values(Object.getOwnPropertyDescriptors(current));
-    if (descriptors.some((descriptor) => descriptor.get)) return true;
-  }
-  return false;
-}
-
-function relativeFile(file: string): string {
-  return path.relative(process.cwd(), file);
+export function atUserModule(error: unknown, file: string): unknown {
+  if (!(error instanceof Error) || getErrorDiagnostics(error).location) return error;
+  return withErrorDiagnostics(error, { location: { file } });
 }

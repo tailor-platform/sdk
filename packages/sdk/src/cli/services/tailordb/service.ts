@@ -3,7 +3,7 @@ import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { importUserModule } from "#/cli/shared/user-modules";
-import { prefixUserModuleFile, definitionInvalidError } from "#/cli/shared/validation-errors";
+import { atUserModule, definitionInvalidError } from "#/cli/shared/validation-errors";
 import { flattenZodIssues, formatIssueList } from "#/cli/shared/zod-issues";
 import {
   pickTailorDBTypeSchemaKeys,
@@ -315,7 +315,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     } catch (error) {
       const relativePath = path.relative(process.cwd(), typeFile);
       logger.error(`Failed to load table from ${styles.bold(relativePath)}`);
-      throw prefixUserModuleFile(error, typeFile);
+      throw atUserModule(error, typeFile);
     }
     return loadedTypes;
   };

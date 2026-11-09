@@ -64,7 +64,7 @@ interface EnvSecretFinding {
 interface EnvSecretScanInput {
   /** `env` entries as written in the config, before `{ value, allowSecretReason }` wrappers are resolved. */
   readonly env?: Readonly<Record<string, EnvEntry>>;
-  /** Config file the entries came from, named in the failure so multi-config projects can tell which one. */
+  /** Config file the entries came from; results are cached per config, so a rejection keeps its config's location. */
   readonly configPath?: string;
 }
 
@@ -159,7 +159,6 @@ async function reportEnvSecrets(input: EnvSecretScanInput): Promise<void> {
     return;
   }
 
-  const location = input.configPath ? ` in ${input.configPath}` : "";
   const list = errors
     .map((error) => {
       const matched = error.rule ? `${error.detector}: ${error.rule}` : error.detector;
@@ -169,7 +168,7 @@ async function reportEnvSecrets(input: EnvSecretScanInput): Promise<void> {
     .join("\n");
   const example = errors[0]?.key ?? "KEY";
   throw new Error(
-    `Secret detected in 'env'${location}:\n${list}\n` +
+    `Secret detected in 'env':\n${list}\n` +
       "'env' values are deployed as plaintext and are readable by anyone who can read the application's configuration. " +
       "Define these with defineSecretManager() instead, and read them through Secret Manager at runtime.\n" +
       "If a value is genuinely safe to keep in 'env', allow it where it is defined: " +

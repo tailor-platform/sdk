@@ -193,7 +193,7 @@ describe("service config validation", () => {
       name: "CLIError",
       code: "CONFIG_INVALID",
       message:
-        'Invalid config for Auth service "my-auth" in tailor.config.ts:\n' +
+        'Invalid config for Auth service "my-auth":\n' +
         "  - auth.machineUserAttributes.role.metadata: Invalid input: expected object, received undefined\n" +
         "  - auth.machineUserAttributes.role.fields: Invalid input: expected record, received undefined",
       context: {
@@ -392,7 +392,7 @@ describe("service config validation", () => {
     "reports an invalid $configKey config as CONFIG_INVALID",
     ({ serviceConfig, heading, configKey, name, path }) => {
       const error = defineInvalidApplication(serviceConfig) as Error;
-      const expectedStart = `Invalid config for ${heading} in tailor.config.ts:\n  - ${path.join(".")}: `;
+      const expectedStart = `Invalid config for ${heading}:\n  - ${path.join(".")}: `;
 
       expect(error.message.slice(0, expectedStart.length)).toBe(expectedStart);
       expect(error).toMatchObject({

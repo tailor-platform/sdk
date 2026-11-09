@@ -83,7 +83,7 @@ export default executor;
     using _logger = silenceLogger("error");
     await expect(service.loadExecutors()).rejects.toMatchObject({
       code: "DEFINITION_INVALID",
-      message: expect.stringMatching(/^Invalid executor in .*invalid\.ts:\n {2}- description: /),
+      message: expect.stringMatching(/^Invalid executor:\n {2}- description: /),
       context: {
         kind: "executor",
         file,

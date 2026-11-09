@@ -249,6 +249,13 @@ describe("github-actions", () => {
       expect(describeTerminalError(new Error("plain")).message).toBe("plain");
     });
 
+    test("puts the source location before the message of a plain error", () => {
+      const error = withErrorDiagnostics(new Error("item table is broken"), {
+        location: { file: join(process.cwd(), "tailordb/item.ts") },
+      });
+      expect(describeTerminalError(error).message).toBe("tailordb/item.ts: item table is broken");
+    });
+
     test("uses format() for a plain error carrying one, as seed validate throws", () => {
       const error = new Error("seed data is invalid") as Error & { format: () => string };
       error.format = () => "row 3: name is required\nrow 7: id must be unique";

@@ -3,7 +3,7 @@ import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { importUserModule } from "#/cli/shared/user-modules";
 import {
-  prefixUserModuleFile,
+  atUserModule,
   definitionExportError,
   definitionInvalidError,
 } from "#/cli/shared/validation-errors";
@@ -241,7 +241,7 @@ async function loadFileContent(filePath: string): Promise<{
     logger.error(
       `${styles.error("Failed to load workflow from")} ${styles.errorBright(relativePath)}`,
     );
-    throw prefixUserModuleFile(error, filePath);
+    throw atUserModule(error, filePath);
   }
 
   return { jobs, workflow };

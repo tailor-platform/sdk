@@ -1,5 +1,6 @@
 import { logger } from "@tailor-platform/sdk/cli";
 import { setupAutofix, type AutofixSetupOptions } from "./autofix";
+import { locatedMessage } from "./error-message";
 import { setupTarget, type SetupTargetOptions } from "./generate";
 import {
   AUTOFIX_LABEL,
@@ -162,7 +163,7 @@ function failureSummary(error: unknown): string {
   const labelled = (label: string, value: unknown) =>
     typeof value === "string" && value.length > 0 ? [`${label}: ${value}`] : [];
   return [
-    error.message,
+    locatedMessage(error),
     ...labelled("Details", details),
     ...labelled("Suggestion", suggestion),
   ].join("\n");

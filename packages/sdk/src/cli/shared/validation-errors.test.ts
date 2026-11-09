@@ -1,155 +1,108 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { describe, expect, test } from "vitest";
+import { z } from "zod";
 import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
 import { errorToJson } from "./error-json";
-import { CLIError, isCLIError, typeOnlyImportHint } from "./errors";
-import { prefixUserModuleFile } from "./validation-errors";
+import {
+  atUserModule,
+  configInvalidError,
+  definitionExportError,
+  definitionInvalidError,
+  syntaxInvalidError,
+} from "./validation-errors";
 
-describe("prefixUserModuleFile", () => {
-  const file = path.join(process.cwd(), "tailordb/item.ts");
+describe("error factories", () => {
+  const file = path.join(process.cwd(), "resolvers/add.ts");
+  const { error: zodError } = z.strictObject({ name: z.string() }).safeParse({});
+  if (!zodError) throw new Error("expected a validation error");
 
-  test("prefixes the file to the message, keeping its stack and cause", () => {
-    const cause = new Error("disk is full");
-    const error = new Error("item table is broken", { cause });
-
-    expect(prefixUserModuleFile(error, file)).toMatchObject({
-      name: "Error",
-      message: "tailordb/item.ts: item table is broken",
-      cause,
-      stack: error.stack,
-    });
+  test.each([
+    [
+      "configInvalidError",
+      configInvalidError({
+        file,
+        exportName: "default",
+        subject: "Tailor config",
+        error: zodError,
+      }),
+      "Invalid Tailor config:\n",
+    ],
+    [
+      "definitionInvalidError",
+      definitionInvalidError({ kind: "resolver", file, exportName: "add", error: zodError }),
+      "Invalid resolver `add`:\n",
+    ],
+    [
+      "definitionExportError",
+      definitionExportError({ kind: "resolver", file, exportName: "default" }),
+      "Resolver must not be the default export.",
+    ],
+  ])("%s leaves the file to the error's location", (_, error, message) => {
+    expect(error.message.startsWith(message)).toBe(true);
+    expect(error.message).not.toContain("resolvers/add.ts");
+    expect(getErrorDiagnostics(error).location).toEqual({ file });
   });
 
-  test("keeps the class and fields of an RPC error", () => {
-    const prefixed = prefixUserModuleFile(
-      new ConnectError("token expired", Code.Unauthenticated),
-      file,
-    );
+  test("syntaxInvalidError leaves the file and line to the error's location", () => {
+    const error = syntaxInvalidError({
+      code: "InvalidSyntax",
+      message: "Expression expected",
+      filename: file,
+      startLine: 3,
+    });
 
-    expect(prefixed).toBeInstanceOf(ConnectError);
-    expect(errorToJson(prefixed).error).toMatchObject({
+    expect(error?.message).toBe("Invalid syntax: Expression expected");
+    expect(error && getErrorDiagnostics(error).location).toEqual({ file, line: 3 });
+  });
+});
+
+describe("atUserModule", () => {
+  const file = path.join(process.cwd(), "tailordb/item.ts");
+
+  test("locates an error at the module without changing it", () => {
+    const cause = new Error("disk is full");
+    const error = new Error("item table is broken", { cause });
+    const { stack } = error;
+
+    expect(atUserModule(error, file)).toBe(error);
+    expect(error).toMatchObject({ message: "item table is broken", cause, stack });
+    expect(getErrorDiagnostics(error).location).toEqual({ file });
+  });
+
+  test("keeps the code and the module of an RPC error in its JSON envelope", () => {
+    const error = atUserModule(new ConnectError("token expired", Code.Unauthenticated), file);
+
+    expect(errorToJson(error).error).toMatchObject({
       code: "RPC_UNAUTHENTICATED",
       message: "tailordb/item.ts: [unauthenticated] token expired",
     });
   });
 
-  test("rebuilds an error whose class defines getters as an Error with its name", () => {
-    const error = new DOMException("item could not be cloned.", "DataCloneError");
-
-    const prefixed = prefixUserModuleFile(error, file);
-
-    expect(prefixed).toMatchObject({
-      name: "DataCloneError",
-      message: "tailordb/item.ts: item could not be cloned.",
-      cause: error,
-    });
-    expect(String(prefixed)).toBe("DataCloneError: tailordb/item.ts: item could not be cloned.");
-  });
-
-  test("keeps the native error class", () => {
-    const prefixed = prefixUserModuleFile(new TypeError("x is undefined"), file);
-
-    expect(prefixed).toBeInstanceOf(TypeError);
-    expect(prefixed).toMatchObject({ message: "tailordb/item.ts: x is undefined" });
-  });
-
-  test("keeps the import type hint of a failed import", () => {
-    const error = new SyntaxError(
-      "The requested module './types.ts' does not provide an export named 'Item'",
-    );
-
-    const hint = typeOnlyImportHint(prefixUserModuleFile(error, file));
-
-    expect(hint).toContain("If 'Item' is a type");
-  });
-
-  test("keeps another error class", () => {
-    class ItemError extends Error {
-      override name = "ItemError";
-    }
-
-    const prefixed = prefixUserModuleFile(new ItemError("bad"), file);
-
-    expect(prefixed).toBeInstanceOf(ItemError);
-    expect(prefixed).toMatchObject({ name: "ItemError", message: "tailordb/item.ts: bad" });
-  });
-
-  test("keeps the fields of a CLI error", () => {
-    const cause = new Error("lib is missing");
-    const error = CLIError({
-      code: "UNRESOLVED_IMPORT",
-      message: 'Could not resolve "lib".',
-      details: "details",
-      suggestion: "suggestion",
-      command: "generate",
-      next: { command: "tailor", args: ["generate"] },
-      context: { specifier: "lib" },
-      cause,
-    });
-
-    const prefixed = prefixUserModuleFile(error, file);
-
-    if (!isCLIError(prefixed)) throw new Error("expected a CLI error");
-    expect(prefixed).toMatchObject({
-      code: "UNRESOLVED_IMPORT",
-      message: 'tailordb/item.ts: Could not resolve "lib".',
-      details: "details",
-      suggestion: "suggestion",
-      command: "generate",
-      next: { command: "tailor", args: ["generate"] },
-      context: { specifier: "lib" },
-      cause,
-      stack: error.stack,
-    });
-    expect(prefixed.format()).toContain('tailordb/item.ts: Could not resolve "lib".');
-  });
-
-  test("keeps the diagnostics of the original error", () => {
+  test("keeps the other diagnostics of the error", () => {
     const error = withErrorDiagnostics(new Error("bad"), {
       code: "PLUGIN_FAILED",
       suggestion: "Fix the plugin.",
     });
 
-    const prefixed = prefixUserModuleFile(error, file);
+    atUserModule(error, file);
 
-    if (!(prefixed instanceof Error)) throw new Error("expected an Error");
-    expect(getErrorDiagnostics(prefixed)).toEqual({
+    expect(getErrorDiagnostics(error)).toEqual({
       code: "PLUGIN_FAILED",
       suggestion: "Fix the plugin.",
+      location: { file },
     });
   });
 
-  test.each([
-    ["by its absolute path", `validate in ${file} must be synchronous`],
-    ["by its relative path", "Invalid syntax in tailordb/item.ts:3: Expression expected"],
-    ["at the end of a sentence", "Cannot read tailordb/item.ts."],
-    ["in quotes", 'Cannot read "tailordb/item.ts"'],
-  ])("returns an error whose message names the file %s as-is", (_, message) => {
-    const error = new Error(message);
+  test("keeps the location of an error located at another source", () => {
+    const location = { file: path.join(process.cwd(), "helpers.ts"), line: 2 };
+    const error = withErrorDiagnostics(new Error("bad"), { location });
 
-    expect(prefixUserModuleFile(error, file)).toBe(error);
-  });
-
-  test.each([
-    ["a longer file name", "Cannot read tailordb/item.ts.bak"],
-    ["a longer extension", "Cannot read tailordb/item.tsx"],
-    ["a longer absolute path", `Cannot read ${file}.bak`],
-  ])("prefixes an error whose message names only %s", (_, message) => {
-    expect(prefixUserModuleFile(new Error(message), file)).toMatchObject({
-      message: `tailordb/item.ts: ${message}`,
-    });
-  });
-
-  test("returns an error located at another source as-is", () => {
-    const error = withErrorDiagnostics(new Error("bad"), {
-      location: { file: path.join(process.cwd(), "helpers.ts") },
-    });
-
-    expect(prefixUserModuleFile(error, file)).toBe(error);
+    expect(atUserModule(error, file)).toBe(error);
+    expect(getErrorDiagnostics(error).location).toEqual(location);
   });
 
   test("returns a thrown non-error value as-is", () => {
-    expect(prefixUserModuleFile("broken", file)).toBe("broken");
+    expect(atUserModule("broken", file)).toBe("broken");
   });
 });

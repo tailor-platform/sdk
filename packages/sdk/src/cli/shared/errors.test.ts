@@ -1,6 +1,8 @@
 import { stripVTControlCharacters } from "node:util";
 import { Code, ConnectError } from "@connectrpc/connect";
+import * as path from "pathe";
 import { afterEach, describe, expect, expectTypeOf, test, vi } from "vitest";
+import { withErrorDiagnostics } from "./error-diagnostics";
 import { errorToJson, serializeError } from "./error-json";
 import {
   CLIError,
@@ -8,6 +10,7 @@ import {
   formatCommandHint,
   internalError,
   isCLIError,
+  locatedMessage,
   toError,
   typeOnlyImportHint,
 } from "./errors";
@@ -272,6 +275,48 @@ describe("CLIError formatting", () => {
     const detailsLineIndex = lines.findIndex((line) => line.includes("Details:"));
     expect(lines[detailsLineIndex]).toContain("first line");
     expect(lines[detailsLineIndex + 1]).toMatch(/^\s{2}second line$/);
+  });
+
+  test("puts the source location before the message", () => {
+    const error = withErrorDiagnostics(
+      CLIError({ code: "SYNTAX_INVALID", message: "Invalid syntax: Expression expected" }),
+      { location: { file: path.join(process.cwd(), "tailordb/item.ts"), line: 3 } },
+    );
+
+    expect(stripVTControlCharacters(error.format())).toBe(
+      "Error [SYNTAX_INVALID]: tailordb/item.ts:3: Invalid syntax: Expression expected",
+    );
+  });
+});
+
+describe("locatedMessage", () => {
+  const file = path.join(process.cwd(), "tailordb/item.ts");
+
+  test("returns the message of an error without a source location", () => {
+    expect(locatedMessage(new Error("item table is broken"))).toBe("item table is broken");
+  });
+
+  test("puts the source file before the message", () => {
+    const error = withErrorDiagnostics(new Error("item table is broken"), { location: { file } });
+
+    expect(locatedMessage(error)).toBe("tailordb/item.ts: item table is broken");
+  });
+
+  test("puts the source line after the file", () => {
+    const error = withErrorDiagnostics(new Error("Expression expected"), {
+      location: { file, line: 3 },
+    });
+
+    expect(locatedMessage(error)).toBe("tailordb/item.ts:3: Expression expected");
+  });
+
+  test("leaves the message of an error that formats itself, as seed validate throws", () => {
+    const error = withErrorDiagnostics(
+      Object.assign(new Error("seed data is invalid"), { format: () => "report" }),
+      { location: { file, line: 3 } },
+    );
+
+    expect(locatedMessage(error)).toBe("seed data is invalid");
   });
 });
 

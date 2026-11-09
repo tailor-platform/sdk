@@ -6,7 +6,7 @@ import {
   withErrorDiagnostics,
   type ErrorSourceLocation,
 } from "./error-diagnostics";
-import { isCLIError } from "./errors";
+import { isCLIError, locatedMessage } from "./errors";
 import { plainRedacted } from "./logger";
 import { parseBoolean } from "./parse-boolean";
 
@@ -163,7 +163,7 @@ export function describeTerminalError(
       return { message: formatted, title };
     }
     const suggestion = fallbackSuggestion ? `\nSuggestion: ${fallbackSuggestion}` : "";
-    return { message: `${error.message}${suggestion}`, title };
+    return { message: `${locatedMessage(error)}${suggestion}`, title };
   }
   return { message: `Unknown error: ${String(error)}`, title: "UNKNOWN_ERROR" };
 }
@@ -171,8 +171,9 @@ export function describeTerminalError(
 /**
  * Attach the source location a failure points at.
  *
- * Consumed when the command's failure is annotated; the error is otherwise
- * unchanged, so its message and formatting stay the caller's own.
+ * The command's failure is annotated at it, and the CLI prints it before the
+ * message of an error that does not bring its own `format()`. The error object
+ * itself is unchanged.
  * @param error - Failure to annotate
  * @param location - Absolute file, and the 1-based line when known
  * @returns The same error

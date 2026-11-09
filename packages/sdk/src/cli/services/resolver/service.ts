@@ -2,7 +2,7 @@ import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { importUserModule } from "#/cli/shared/user-modules";
-import { prefixUserModuleFile, definitionInvalidError } from "#/cli/shared/validation-errors";
+import { atUserModule, definitionInvalidError } from "#/cli/shared/validation-errors";
 import { ResolverSchema } from "#/parser/service/resolver/index";
 import { isSdkBranded } from "#/utils/brand";
 import { parseResolverDefaultPermission } from "./default-permission";
@@ -70,7 +70,7 @@ export function createResolverService(
     } catch (error) {
       const relativePath = path.relative(process.cwd(), resolverFile);
       logger.error(`Failed to load resolver from ${styles.bold(relativePath)}`);
-      throw prefixUserModuleFile(error, resolverFile);
+      throw atUserModule(error, resolverFile);
     }
     return undefined;
   };

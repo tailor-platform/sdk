@@ -73,7 +73,7 @@ export default resolver;
     await expect(service.loadResolvers()).rejects.toMatchObject({
       code: "DEFINITION_INVALID",
       message: expect.stringMatching(
-        /^Invalid resolver in .*invalid\.ts:\n {2}- operation: Invalid input: expected "query" \| "mutation"$/,
+        /^Invalid resolver:\n {2}- operation: Invalid input: expected "query" \| "mutation"$/,
       ),
       context: { kind: "resolver", file, exportName: "default", issues: [{ path: ["operation"] }] },
     });

@@ -86,7 +86,7 @@ describe("importUserModule rejections", { timeout: 60_000 }, () => {
     expect(importRejection(file)).toEqual({
       name: "CLIError",
       code: "SYNTAX_INVALID",
-      message: "Invalid syntax in broken.ts:2: Expression expected",
+      message: "Invalid syntax: Expression expected",
       context: { file, line: 2 },
       location: { file, line: 2 },
     });
