@@ -402,7 +402,10 @@ right away.
   `--codemod deterministic` or an agent value, `tailor upgrade`) changes files
   again right after the fix commit, the workflow fails instead of committing
   again. Check that
-  running it twice in a row changes nothing.
+  running it twice in a row changes nothing. With an agent value, the
+  `tailor-autofix-comment` job also posts this error as a pull request comment
+  on a pull request from this repository (see
+  [Handing reviews to an AI coding agent](#handing-reviews-to-an-ai-coding-agent)).
 - **Approval rules:** the fix commit becomes the most recent push to the pull
   request, and a bot pushed it. A branch protection rule that requires the most
   recent push to be approved by someone other than its pusher is then satisfied
@@ -528,6 +531,13 @@ variable (see [Setting secrets and variables](#setting-secrets-and-variables)).
   cancelled, such as when it runs out of its 30 minutes or cannot check out the
   pull request, nothing is committed, not even those changes. Re-run the
   workflow or push again.
+- **Output that keeps changing:** if `tailor upgrade` and `tailor generate`
+  still change files right after the `chore: run tailor generate` commit, the
+  `tailor-autofix` job fails, and its error says the agent's edits in an
+  earlier fix commit may be the cause. On a pull request from this repository,
+  the `tailor-autofix-comment` job, which has write access to pull requests and
+  runs none of the project's code, posts that error with a link to the run as a
+  pull request comment, once per head commit.
 - **Reports:** the warnings list every change that was left for review, as
   with `deterministic`, whether or not the agent finished it. Review the
   agent's edits in the fix commit.

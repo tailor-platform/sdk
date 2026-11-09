@@ -893,8 +893,10 @@ function agentCommitMessage(agent: AutofixAgent): string {
   return `chore: apply the SDK upgrade with ${agent}`;
 }
 
-const UPGRADE_RERUN_ERROR =
-  "tailor upgrade and tailor generate changed files again right after their own fix commit. Run them twice locally and check that the second run changes nothing.";
+function upgradeRerunError(agent?: AutofixAgent): string {
+  const cause = agent ? `, possibly because of what ${agent} edited in an earlier fix commit` : "";
+  return `tailor upgrade and tailor generate changed files again right after their own fix commit${cause}. Run them twice locally and check that the second run changes nothing.`;
+}
 
 function fixCommandTexts(codemod: AutofixCodemod | undefined): {
   commands: string;
@@ -903,11 +905,11 @@ function fixCommandTexts(codemod: AutofixCodemod | undefined): {
   if (isAutofixAgent(codemod)) {
     return {
       commands: `tailor upgrade, ${codemod}, and tailor generate`,
-      rerunError: UPGRADE_RERUN_ERROR,
+      rerunError: upgradeRerunError(codemod),
     };
   }
   if (codemod === "deterministic") {
-    return { commands: "tailor upgrade and tailor generate", rerunError: UPGRADE_RERUN_ERROR };
+    return { commands: "tailor upgrade and tailor generate", rerunError: upgradeRerunError() };
   }
   return {
     commands: "tailor generate",
@@ -1060,9 +1062,20 @@ export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult
     "WORKING_DIRECTORY",
     workingDirectory ? `working-directory: ${workingDirectory}` : undefined,
   );
+  out = line(
+    out,
+    "RERUN_FAILED_OUTPUT",
+    agent ? 'echo "rerun-failed=true" >> "$GITHUB_OUTPUT"' : undefined,
+  );
+  out = block(out, "AUTOFIX_COMMENT_JOB", agent !== undefined);
   const outputs = [
     ...(hasPushJob ? ["  changed: ${{ steps.tailor-autofix-diff.outputs.changed }}"] : []),
-    ...(agent ? ["  agent: ${{ steps.tailor-codemod.outputs.agent }}"] : []),
+    ...(agent
+      ? [
+          "  agent: ${{ steps.tailor-codemod.outputs.agent }}",
+          "  rerun-failed: ${{ steps.tailor-autofix-diff.outputs.rerun-failed }}",
+        ]
+      : []),
     ...(codemod === "error"
       ? ["  codemod-pending: ${{ steps.tailor-codemod.outputs.pending }}"]
       : []),
@@ -1175,6 +1188,9 @@ export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult
         ? ["tailor-autofix-push/tailor-commit"]
         : ["tailor-autofix-push/tailor-apply-patch", ...serviceIds("tailor-autofix-push")]),
     );
+  }
+  if (agent) {
+    generatedIds.push("tailor-autofix-comment", "tailor-autofix-comment/tailor-autofix-comment");
   }
   if (codemod === "error") {
     generatedIds.push("tailor-codemod-result", "tailor-codemod-result/tailor-codemod-result");

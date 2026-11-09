@@ -497,6 +497,7 @@ jobs:
           fi
           git --no-pager diff --stat "$BASELINE_TREE" "$tree"
           if [ "$(git log -1 --format=%s)" = "$COMMIT_MESSAGE" ]; then
+            # __RERUN_FAILED_OUTPUT__
             echo "::error::__RERUN_ERROR__"
             exit 1
           fi
@@ -783,6 +784,39 @@ jobs:
       # __APPLY_PATCH_END__
       # __PUSH_SERVICE_COMMIT__
   # __PUSH_JOB_END__
+  # __AUTOFIX_COMMENT_JOB_START__
+  tailor-autofix-comment:
+    needs: tailor-autofix
+    if: |-
+      failure() &&
+      needs.tailor-autofix.outputs.rerun-failed == 'true' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - id: tailor-autofix-comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_ENTERPRISE_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          MARKER: "<!-- tailor-autofix-rerun-failed: ${{ github.event.pull_request.head.sha }} -->"
+          RERUN_ERROR: "__RERUN_ERROR__"
+        run: |
+          set -euo pipefail
+          export GH_HOST="${GITHUB_SERVER_URL#*://}"
+          existing=$(gh api "repos/$REPOSITORY/issues/$PR_NUMBER/comments" --paginate \
+            --jq 'map(select(.body | contains(env.MARKER))) | .[0].id // empty')
+          if [ -n "$existing" ]; then
+            exit 0
+          fi
+          body="$MARKER"$'\n'"The [autofix run]($RUN_URL) for $HEAD_SHA failed: $RERUN_ERROR"
+          gh api --method POST "repos/$REPOSITORY/issues/$PR_NUMBER/comments" -f body="$body" > /dev/null
+  # __AUTOFIX_COMMENT_JOB_END__
   # __CODEMOD_RESULT_JOB_START__
   tailor-codemod-result:
     needs: tailor-autofix
