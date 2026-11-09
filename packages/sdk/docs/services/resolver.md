@@ -509,6 +509,8 @@ When the ID is stored in a user attribute rather than being the user ID itself, 
 - A condition with an `{ input }` operand matches only when the caller sent that input and the compared `user` value is set, so an omitted optional input never grants access.
 - An `{ input }` operand can only be used in a `permit: true` policy; a `permit: false` policy would let an omitted input through.
 
+`generate` and `deploy` warn about a mutation whose input looks like the acting user's ID, such as `approverId`, `actorId`, `executorId`, or `approvedBy`, since a caller can send another user's ID to act as them. Take the acting user from `caller` in `body` instead, or compare the input with the caller in `permission`, which silences the warning for that input. When the input names another user on purpose, such as the approver an admin assigns, rename it to say so, e.g. `assigneeId`.
+
 `permission` compares input values only. To check that a row the caller names belongs to them, such as a request ID, give the row's TailorDB type a record-level [`.permission()`](tailordb/index.md#permissions) and run `body` without an `invoker`, or look the row up in `body`.
 
 ### Namespace-wide default (`defaultPermission`)

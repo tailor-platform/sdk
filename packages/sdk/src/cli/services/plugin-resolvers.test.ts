@@ -169,6 +169,66 @@ describe("plugin-generated resolvers", () => {
     expect(application.resolverServices[0]!.defaultPermission).toBe("allowAnonymous");
   });
 
+  test("leaves plugin-generated resolvers out of the acting user ID input warning", async () => {
+    fs.writeFileSync(
+      path.join(baseDir, "approve.ts"),
+      `
+      import { createResolver, t } from "@tailor-platform/sdk";
+      export default createResolver({
+        name: "approveRequest",
+        operation: "mutation",
+        input: { approverId: t.string() },
+        body: () => 1,
+        output: t.int(),
+      });
+    `,
+    );
+    const pluginManager = new PluginManager([
+      {
+        id: "approval",
+        description: "Mutation",
+        onNamespaceLoaded: () => ({
+          resolvers: [
+            {
+              name: "approveGenerated",
+              operation: "mutation",
+              inputFields: { approverId: t.string() },
+              outputFields: {},
+              body: "return {};",
+            },
+          ],
+        }),
+      },
+    ]);
+    const config = {
+      ...defineConfig({
+        name: "test-app",
+        db: { main: { files: [] } },
+        resolver: { main: { files: ["./approve.ts"], defaultPermission: "allowAnonymous" } },
+      }),
+      path: path.join(baseDir, "tailor.config.ts"),
+    };
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const log = vi.spyOn(logger, "log").mockImplementation(() => {});
+    const application = defineApplication({ config, pluginManager });
+    const generation = createGenerationManager({ application, config, pluginManager });
+    await generation.generate();
+    const warnings = warn.mock.calls.map(([message]) => String(message));
+    const details = log.mock.calls
+      .map(([message]) => String(message))
+      .filter((message) => message.startsWith("  "));
+    warn.mockRestore();
+    log.mockRestore();
+    expect(Object.keys(generation.services.resolver.main!).toSorted()).toEqual([
+      "approveGenerated",
+      "approveRequest",
+    ]);
+    expect(warnings).toContainEqual(
+      expect.stringMatching(/has mutations whose input looks like the acting user's ID/),
+    );
+    expect(details).toEqual(["  approveRequest: approverId"]);
+  });
+
   test("includes resolver namespaces that only plugins generate into in generation", async () => {
     const pluginManager = new PluginManager([
       {
