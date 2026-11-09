@@ -598,9 +598,9 @@ describe("planApplication", () => {
   });
 
   describe.each([
-    ["forRemoval", planForRemoval],
-    ["a config without subgraphs", planWithoutSubgraphs],
-  ])("ownership check when %s deletes the application (issue #1279)", (_case, plan) => {
+    ["forRemoval", planForRemoval, ["other-app"]],
+    ["a config without subgraphs", planWithoutSubgraphs, []],
+  ])("ownership check when %s deletes the application (issue #1279)", (_case, plan, owners) => {
     test.each([
       ["legacy sdk-name (no sdk-app-id)", undefined, undefined],
       ["matching sdk-app-id", "stable-id", "stable-id"],
@@ -674,18 +674,18 @@ describe("planApplication", () => {
       expect(result.deletes[0]!.name).toBe(appName);
       expect(client.getMetadata).toHaveBeenCalledTimes(1);
     });
-  });
 
-  test("records no other application as a resource owner for a config without subgraphs", async () => {
-    const client = createMockClient([
-      { name: "other-app", label: "other-app", sdkAppId: "other-id" },
-    ]);
-    const application = createMockApplication({ name: appName, id: "stable-id" });
+    test("records another id's app as a resource owner only when removing", async () => {
+      const client = createMockClient([
+        { name: "other-app", label: "other-app", sdkAppId: "other-id" },
+      ]);
+      const application = createMockApplication({ name: appName, id: "stable-id" });
 
-    const result = await planWithoutSubgraphs(client, application);
+      const result = await plan(client, application);
 
-    expect(result.deletes).toHaveLength(0);
-    expect([...result.resourceOwners]).toEqual([]);
+      expect(result.deletes).toHaveLength(0);
+      expect([...result.resourceOwners]).toEqual(owners);
+    });
   });
 
   describe("CORS resolution on first deployment (issue #1030)", () => {
