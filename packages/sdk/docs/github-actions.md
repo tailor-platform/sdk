@@ -524,7 +524,10 @@ variable (see [Setting secrets and variables](#setting-secrets-and-variables)).
   commit.
 - **Failures:** if the agent fails or runs out of its 20 minutes, the fix
   commit carries only what `tailor upgrade` and `tailor generate` changed, and
-  a warning says so.
+  a warning says so. If the `tailor-codemod-agent` job itself fails or is
+  cancelled, such as when it runs out of its 30 minutes or cannot check out the
+  pull request, nothing is committed, not even those changes. Re-run the
+  workflow or push again.
 - **Reports:** the warnings list every change that was left for review, as
   with `deterministic`, whether or not the agent finished it. Review the
   agent's edits in the fix commit.
