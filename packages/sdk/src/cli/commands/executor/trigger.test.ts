@@ -186,7 +186,7 @@ describe("triggerExecutor", () => {
         // @ts-expect-error - the type also rejects a payload for a non-webhook trigger
         payload: { message: "hello" },
       }),
-    ).rejects.toThrow(/only available for 'incomingWebhook' trigger type/);
+    ).rejects.toThrow(/The 'payload' option is only available for 'incomingWebhook' trigger type/);
     expect(triggerExecutorMock).not.toHaveBeenCalled();
   });
 
@@ -200,7 +200,7 @@ describe("triggerExecutor", () => {
         // @ts-expect-error - the type also rejects headers for a non-webhook trigger
         headers: { "x-request-id": "req-1" },
       }),
-    ).rejects.toThrow(/headers .*only available for 'incomingWebhook' trigger type/);
+    ).rejects.toThrow(/The 'headers' option is only available for 'incomingWebhook' trigger type/);
     expect(triggerExecutorMock).not.toHaveBeenCalled();
   });
 

@@ -167,7 +167,7 @@ export async function triggerExecutor<E extends ManualTriggerExecutor>(
       code: "EXECUTOR_TRIGGER_UNSUPPORTED",
       message:
         `Executor '${options.executor.name}' has '${options.executor.trigger.kind}' trigger type. ` +
-        `The ${webhookOnlyOptions.join(" and ")} ${webhookOnlyOptions.length > 1 ? "are" : "is"} only available for 'incomingWebhook' trigger type.`,
+        `The ${webhookOnlyOptions.map((name) => `'${name}'`).join(" and ")} ${webhookOnlyOptions.length > 1 ? "options are" : "option is"} only available for 'incomingWebhook' trigger type.`,
     });
   }
 

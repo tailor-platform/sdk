@@ -109,6 +109,8 @@ type WebhookRequest = {
 incomingWebhookTrigger<WebhookRequest>();
 ```
 
+Name only what you want to change in the type argument. The body type and the type of each header you name are replaced, and the others keep their defaults. For example, `incomingWebhookTrigger<{ headers: { "x-request-id": string[] } }>()` changes only `x-request-id`.
+
 You can customize the HTTP response returned to the webhook caller:
 
 ```typescript
@@ -503,7 +505,7 @@ Webhook triggers receive HTTP request data:
 ```typescript
 interface WebhookContext<T = unknown> {
   body: T; // Parsed request body
-  headers: Record<string, string | string[]>; // Request headers, with names in lower case
+  headers: Record<string, string>; // Request headers, with names in lower case; accept, via and other list headers are string | string[]
   method: "POST" | "GET" | "PUT" | "DELETE"; // HTTP method
   rawBody: string; // Raw request body, base64-encoded
 }
