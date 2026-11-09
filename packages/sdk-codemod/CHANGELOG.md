@@ -1,5 +1,17 @@
 # @tailor-platform/sdk-codemod
 
+## 0.10.8
+
+### Patch Changes
+
+- [#2955](https://github.com/tailor-platform/sdk/pull/2955) [`0e86776`](https://github.com/tailor-platform/sdk/commit/0e867766a8b5daa17927f6018c59281457bfebb9) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​politty/zod to v0.7.1
+
+- [#2964](https://github.com/tailor-platform/sdk/pull/2964) [`a376815`](https://github.com/tailor-platform/sdk/commit/a376815b3b95d9359738439cd1be669d09b9c614) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​ast-grep/napi to v0.51.1
+
+- [#2973](https://github.com/tailor-platform/sdk/pull/2973) [`c0ae913`](https://github.com/tailor-platform/sdk/commit/c0ae913259e1b51c7df799f3c023e4dd4ea567c9) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency semver to v7.8.6
+
+- [#2982](https://github.com/tailor-platform/sdk/pull/2982) [`cd33cdb`](https://github.com/tailor-platform/sdk/commit/cd33cdb901bf2eb4ee57e77ba8d62b134c1064d1) Thanks [@dqn](https://github.com/dqn)! - The v2 migration guide and `tailor upgrade` prompt for the programmatic CLI functions no longer say that `triggerExecutor`'s `payload` is typed from the executor definition. `payload` is accepted only for an executor with an incoming webhook trigger, and its shape is not checked; `startWorkflow`'s `arg` is still typed from the workflow definition.
+
 ## 0.10.7
 
 ### Patch Changes
