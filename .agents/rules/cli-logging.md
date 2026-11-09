@@ -153,3 +153,10 @@ A schema validation failure on user input lists its issues in `message` and carr
 `cli/shared/zod-issues.ts`. Data the SDK or the Platform produced goes through
 `invalidDataError()`, an `internalError()`. `local/no-raw-zod-error` rejects a throwing `.parse()`
 or a rethrown `safeParse` error under `packages/sdk/src/cli`.
+
+A failure that points at a file carries it as its `location` (the `cli/shared/validation-errors.ts`
+factories, `atUserModule()`, `withSourceLocation()`), and its `message` leaves the file out: the
+printers put `<file>[:<line>]: ` before the message through `locatedMessage()`.
+
+The terminal error printer is the `cleanup` in `cli/main.ts`, and the `cleanup` of each CLI plugin
+(`packages/sdk-plugin-{seed,setup,tailordb-erd}`) mirrors it; change them together.
