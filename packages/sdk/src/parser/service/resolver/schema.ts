@@ -2,7 +2,12 @@ import { z } from "zod";
 import { AuthInvokerSchema } from "#/parser/service/auth/schema";
 import { TailorFieldSchema } from "#/parser/service/field/schema";
 import { functionSchema } from "../common";
-import { isInputOperand, isSingleCondition, isUserOperand } from "./permission-operands";
+import {
+  checkPermissionInputs,
+  indexedConditions,
+  isInputOperand,
+  isUserOperand,
+} from "./permission-operands";
 
 export const QueryTypeSchema = z
   .union([z.literal("query"), z.literal("mutation")])
@@ -87,22 +92,6 @@ const ResolverPermissionConditionSchema = z
   })
   .readonly();
 
-const COMPARABLE_INPUT_FIELD_TYPES = new Set<string>(["string", "uuid", "enum"]);
-
-type ResolverPermissionCondition = z.infer<typeof ResolverPermissionConditionSchema>;
-
-type IndexedCondition = {
-  condition: ResolverPermissionCondition;
-  path: (string | number)[];
-};
-
-const indexedConditions = (
-  conditions: ResolverPermissionCondition | readonly ResolverPermissionCondition[],
-): IndexedCondition[] =>
-  isSingleCondition(conditions)
-    ? [{ condition: conditions, path: ["conditions"] }]
-    : conditions.map((condition, index) => ({ condition, path: ["conditions", index] }));
-
 const ResolverPermissionPolicySchema = z
   .strictObject({
     conditions: z.union([
@@ -166,34 +155,4 @@ export const ResolverSchema = z
     invoker: AuthInvokerSchema.optional().describe("Machine user to execute this resolver as"),
     permission: ResolverPermissionSchema.optional(),
   })
-  .superRefine((resolver, ctx) => {
-    if (typeof resolver.permission !== "object") {
-      return;
-    }
-    const input = resolver.input ?? {};
-    resolver.permission.forEach((policy, policyIndex) => {
-      for (const { condition, path } of indexedConditions(policy.conditions)) {
-        for (const side of [0, 2] as const) {
-          const operand = condition[side];
-          if (!isInputOperand(operand)) {
-            continue;
-          }
-          const operandPath = ["permission", policyIndex, ...path, side];
-          const field = Object.hasOwn(input, operand.input) ? input[operand.input] : undefined;
-          if (field === undefined) {
-            ctx.addIssue({
-              code: "custom",
-              path: operandPath,
-              message: `\`permission\` references input field \`${operand.input}\`, which \`input\` does not declare`,
-            });
-          } else if (!COMPARABLE_INPUT_FIELD_TYPES.has(field.type) || field.metadata.array) {
-            ctx.addIssue({
-              code: "custom",
-              path: operandPath,
-              message: `\`permission\` compares input field \`${operand.input}\`, but only a string, uuid, or enum field that is not an array can be compared`,
-            });
-          }
-        }
-      }
-    });
-  });
+  .superRefine(checkPermissionInputs);
