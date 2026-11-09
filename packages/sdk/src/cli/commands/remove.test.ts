@@ -259,6 +259,32 @@ describe("remove command", () => {
     expect(logger.out).toHaveBeenCalledWith(expect.objectContaining({ changed: true }));
   });
 
+  test("stops before listing or deleting anything when another application uses an Auth service it deletes", async () => {
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      listWorkflowJobFunctionExecutionPolicies: vi.fn(async () => ({
+        policies: [],
+        nextPageToken: "",
+      })),
+    } as never);
+    mocks.plans.app.deletes.push({ ...PLANNED_DELETE, name: "my-app" });
+    mocks.plans.app.existingApplications = [
+      { name: "my-app", authNamespace: "shared-auth" },
+      { name: "portal", authNamespace: "shared-auth" },
+    ] as never;
+    mocks.plans.auth.changeSet.service.deletes.push({ ...PLANNED_DELETE, name: "shared-auth" });
+    mocks.plans.auth.changeSet.machineUser.deletes.push({ ...PLANNED_DELETE, name: "admin" });
+
+    const result = await runCommand(removeCommand, ["--yes"]);
+
+    expect(result.error).toMatchObject({
+      code: "SERVICE_IN_USE",
+      message: 'Auth service "shared-auth" cannot be deleted: application "portal" still uses it.',
+      suggestion: expect.stringContaining("then run remove again"),
+    });
+    expect(logger.log).not.toHaveBeenCalledWith(expect.stringContaining("Auth services:"));
+    expect(Object.values(APPLY_BY_PLAN).flatMap((apply) => apply.mock.calls)).toEqual([]);
+  });
+
   test("lists workflow job functions under their own heading", async () => {
     vi.mocked(initOperatorClient).mockResolvedValue({
       listWorkflowJobFunctionExecutionPolicies: vi.fn(async () => ({

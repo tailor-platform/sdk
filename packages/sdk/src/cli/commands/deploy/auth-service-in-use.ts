@@ -2,10 +2,21 @@ import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
 import { CLIError } from "#/cli/shared/errors";
 import type { PlannedDeployment } from "./apply-phases";
 
-type ApplicationUse = { applicationName: string; authNamespace: string };
+type ApplicationUse = { name: string; authNamespace: string };
+
+type AuthServiceDeletePlan = Pick<PlannedDeployment, "application" | "app" | "auth">;
+
+type AuthServiceDeletingCommand = "deploy" | "remove";
+
+const IN_USE_SUGGESTIONS: Record<AuthServiceDeletingCommand, string> = {
+  deploy:
+    "Keep the Auth service in the config that defines it, or move the applications that use it to another Auth service in the same run.",
+  remove:
+    "Remove the applications that use the Auth service, or deploy them without it, then run remove again.",
+};
 
 function applicationsUsing(
-  deployments: ReadonlyArray<PlannedDeployment>,
+  deployments: ReadonlyArray<AuthServiceDeletePlan>,
   deletedNamespaces: ReadonlySet<string>,
 ): ApplicationUse[] {
   const written = new Set(
@@ -19,43 +30,49 @@ function applicationsUsing(
   const writtenUses = deployments.flatMap(({ application }) => {
     const authNamespace = getApplicationAuthNamespace(application);
     return written.has(application.name) && authNamespace
-      ? [{ applicationName: application.name, authNamespace }]
+      ? [{ name: application.name, authNamespace }]
       : [];
   });
-  const recordedUses = deployments
-    .flatMap(({ app }) => app.existingApplications)
-    .filter((existing) => !written.has(existing.name) && !deletedNames.has(existing.name))
-    .map((existing) => ({
-      applicationName: existing.name,
-      authNamespace: existing.authNamespace,
-    }));
+  const recordedNamespaces = new Map(
+    deployments
+      .flatMap(({ app }) => app.existingApplications)
+      .map((existing) => [existing.name, existing.authNamespace]),
+  );
+  const recordedUses = [...recordedNamespaces]
+    .filter(([name]) => !written.has(name) && !deletedNames.has(name))
+    .map(([name, authNamespace]) => ({ name, authNamespace }));
   return [...writtenUses, ...recordedUses].filter((use) =>
     deletedNamespaces.has(use.authNamespace),
   );
 }
 
 /**
- * Reject a deploy run that deletes an Auth service an application still uses.
+ * Reject a run that deletes an Auth service an application still uses.
  * An application the plan writes counts by the Auth service its config names, any other by the one
- * the workspace records. Call it after deletes that another config in the run still claims are
- * dropped and deletes of renamed applications are scheduled.
- * @param deployments - Planned deployments of this run
+ * the workspace records. When the run spans several configs, call it after deletes that another
+ * config in the run still claims are dropped and deletes of renamed applications are scheduled.
+ * @param deployments - Planned deployments of a deploy run, or the plan of a removal
+ * @param command - Command whose run deletes the Auth services
  */
-export function assertAuthServicesNotInUse(deployments: ReadonlyArray<PlannedDeployment>): void {
+export function assertAuthServicesNotInUse(
+  deployments: ReadonlyArray<AuthServiceDeletePlan>,
+  command: AuthServiceDeletingCommand,
+): void {
   const deletedNamespaces = new Set(
     deployments.flatMap(({ auth }) => auth.changeSet.service.deletes.map((entry) => entry.name)),
   );
   if (deletedNamespaces.size === 0) return;
-  const [use] = applicationsUsing(deployments, deletedNamespaces);
-  if (!use) return;
+  const uses = applicationsUsing(deployments, deletedNamespaces);
+  if (uses.length === 0) return;
   throw CLIError({
     code: "SERVICE_IN_USE",
-    message: `Auth service "${use.authNamespace}" is deleted by this deploy, but application "${use.applicationName}" still uses it.`,
-    suggestion: `Keep Auth service "${use.authNamespace}" in the config that defines it, or move application "${use.applicationName}" to another Auth service in the same run.`,
-    context: {
-      resourceType: "auth.service",
-      namespace: use.authNamespace,
-      application: use.applicationName,
-    },
+    message: uses
+      .map(
+        (use) =>
+          `Auth service "${use.authNamespace}" cannot be deleted: application "${use.name}" still uses it.`,
+      )
+      .join("\n"),
+    suggestion: IN_USE_SUGGESTIONS[command],
+    context: { applications: uses },
   });
 }

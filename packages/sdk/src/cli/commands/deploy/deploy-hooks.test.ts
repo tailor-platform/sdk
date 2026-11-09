@@ -184,7 +184,10 @@ test("runs a hook once after remaining resources are applied even when the plan 
 test("checks Auth services in use after the plan drops claimed deletes and schedules renamed applications' deletes", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
   await deploy({ dryRun: true, noValidate: true });
-  expect(mocks.assertAuthServicesNotInUse).toHaveBeenCalledExactlyOnceWith(expect.any(Array));
+  expect(mocks.assertAuthServicesNotInUse).toHaveBeenCalledExactlyOnceWith(
+    expect.any(Array),
+    "deploy",
+  );
   const [checked] = mocks.assertAuthServicesNotInUse.mock.invocationCallOrder;
   const [dropped] = mocks.dropCrossDeploymentManagedDeletes.mock.invocationCallOrder;
   const [scheduledBefore] = mocks.scheduleRenamedAppDeletes.mock.invocationCallOrder;

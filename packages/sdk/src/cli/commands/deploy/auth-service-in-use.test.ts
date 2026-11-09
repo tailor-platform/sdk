@@ -44,25 +44,51 @@ describe("assertAuthServicesNotInUse", () => {
       { name: "portal", authNamespace: "shared-auth" },
     ]);
 
-    expect(() => assertAuthServicesNotInUse([deployment({ name: "core" }, owner)])).toThrow(
+    expect(() =>
+      assertAuthServicesNotInUse([deployment({ name: "core" }, owner)], "deploy"),
+    ).toThrow(
       expect.objectContaining({
         code: "SERVICE_IN_USE",
-        message: expect.stringContaining('application "portal"'),
-        context: expect.objectContaining({
-          resourceType: "auth.service",
-          namespace: "shared-auth",
-          application: "portal",
-        }),
+        message:
+          'Auth service "shared-auth" cannot be deleted: application "portal" still uses it.',
+        suggestion: expect.stringContaining("in the same run"),
+        context: { applications: [{ name: "portal", authNamespace: "shared-auth" }] },
+      }),
+    );
+  });
+
+  test("reports each application that uses a deleted Auth service once", () => {
+    const workspaceApplications = [
+      { name: "portal", authNamespace: "shared-auth" },
+      { name: "admin", authNamespace: "shared-auth" },
+    ];
+    const owner = withWorkspaceApplications(ownerDeleting("shared-auth"), workspaceApplications);
+    const peer = withWorkspaceApplications(emptyPlanResults(), workspaceApplications);
+
+    expect(() =>
+      assertAuthServicesNotInUse(
+        [deployment({ name: "core" }, owner), deployment({ name: "billing" }, peer)],
+        "deploy",
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        message: [
+          'Auth service "shared-auth" cannot be deleted: application "portal" still uses it.',
+          'Auth service "shared-auth" cannot be deleted: application "admin" still uses it.',
+        ].join("\n"),
       }),
     );
   });
 
   test("rejects a deleted Auth service that another config in the run still references", () => {
     expect(() =>
-      assertAuthServicesNotInUse([
-        deployment({ name: "core" }, ownerDeleting("shared-auth")),
-        deployment(referencingExternally("shared-auth"), plannedApplication("portal")),
-      ]),
+      assertAuthServicesNotInUse(
+        [
+          deployment({ name: "core" }, ownerDeleting("shared-auth")),
+          deployment(referencingExternally("shared-auth"), plannedApplication("portal")),
+        ],
+        "deploy",
+      ),
     ).toThrow(
       expect.objectContaining({
         code: "SERVICE_IN_USE",
@@ -79,10 +105,13 @@ describe("assertAuthServicesNotInUse", () => {
     owner.app.updates.push({ name: "core" } as never);
 
     expect(() =>
-      assertAuthServicesNotInUse([
-        deployment({ name: "core" }, owner),
-        deployment({ name: "portal" }, plannedApplication("portal")),
-      ]),
+      assertAuthServicesNotInUse(
+        [
+          deployment({ name: "core" }, owner),
+          deployment({ name: "portal" }, plannedApplication("portal")),
+        ],
+        "deploy",
+      ),
     ).not.toThrow();
   });
 
@@ -92,10 +121,10 @@ describe("assertAuthServicesNotInUse", () => {
     ]);
 
     expect(() =>
-      assertAuthServicesNotInUse([
-        deployment({ name: "core" }, owner),
-        deployment({ name: "portal" }, emptyPlanResults()),
-      ]),
+      assertAuthServicesNotInUse(
+        [deployment({ name: "core" }, owner), deployment({ name: "portal" }, emptyPlanResults())],
+        "deploy",
+      ),
     ).toThrow(expect.objectContaining({ code: "SERVICE_IN_USE" }));
   });
 
@@ -105,7 +134,9 @@ describe("assertAuthServicesNotInUse", () => {
     ]);
     owner.app.deletes.push({ name: "legacy", request: {} });
 
-    expect(() => assertAuthServicesNotInUse([deployment({ name: "core" }, owner)])).not.toThrow();
+    expect(() =>
+      assertAuthServicesNotInUse([deployment({ name: "core" }, owner)], "deploy"),
+    ).not.toThrow();
   });
 
   test("accepts a deleted Auth service that no application uses", () => {
@@ -113,7 +144,9 @@ describe("assertAuthServicesNotInUse", () => {
       { name: "portal", authNamespace: "other-auth" },
     ]);
 
-    expect(() => assertAuthServicesNotInUse([deployment({ name: "core" }, owner)])).not.toThrow();
+    expect(() =>
+      assertAuthServicesNotInUse([deployment({ name: "core" }, owner)], "deploy"),
+    ).not.toThrow();
   });
 
   test("accepts an application that another config in the run defines the Auth service for again", () => {
@@ -128,7 +161,7 @@ describe("assertAuthServicesNotInUse", () => {
 
     dropCrossDeploymentManagedDeletes(deployments);
 
-    expect(() => assertAuthServicesNotInUse(deployments)).not.toThrow();
+    expect(() => assertAuthServicesNotInUse(deployments, "deploy")).not.toThrow();
   });
 
   test("ignores applications when the run deletes no Auth service", () => {
@@ -136,6 +169,8 @@ describe("assertAuthServicesNotInUse", () => {
       { name: "portal", authNamespace: "shared-auth" },
     ]);
 
-    expect(() => assertAuthServicesNotInUse([deployment({ name: "core" }, owner)])).not.toThrow();
+    expect(() =>
+      assertAuthServicesNotInUse([deployment({ name: "core" }, owner)], "deploy"),
+    ).not.toThrow();
   });
 });

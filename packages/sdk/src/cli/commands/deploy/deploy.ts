@@ -1004,7 +1004,7 @@ async function deployInternal(
       });
       dropCrossDeploymentManagedDeletes(deployments);
       scheduleRenamedAppDeletes(deployments);
-      assertAuthServicesNotInUse(deployments);
+      assertAuthServicesNotInUse(deployments, "deploy");
       assertNoSingleRunTransferHandoff(deployments);
       return { planTargets, metadataClient, runInputs, deployments };
     };
