@@ -155,22 +155,14 @@ export function invalidDataError(subject: string, error: z.ZodError): Error {
   });
 }
 
-const NATIVE_ERROR_CLASSES: readonly ErrorConstructor[] = [
-  EvalError,
-  RangeError,
-  ReferenceError,
-  SyntaxError,
-  TypeError,
-  URIError,
-];
-
 /**
  * Prefix a failure raised while loading a user module with the module's file.
  *
  * A failure that already names its source, by its location or in its message,
- * is returned as-is. Any other error is rebuilt with the file before its
- * message and the original as its cause, keeping its native error class or
- * name, stack, diagnostics, and CLI error fields.
+ * is returned as-is. Any other error is copied with the file before its
+ * message, keeping its class, stack, cause, diagnostics, and other fields. An
+ * error whose class defines getters, which may read state the copy lacks, is
+ * instead rebuilt as an Error with its name and the original as its cause.
  * @param error - Value thrown while loading the module
  * @param file - Absolute path of the module
  * @returns The failure, naming the file when it is an Error that does not
@@ -187,24 +179,48 @@ export function prefixUserModuleFile(error: unknown, file: string): unknown {
   ) {
     return error;
   }
-  const message = `${relativePath}: ${error.message}`;
-  const ErrorClass =
-    NATIVE_ERROR_CLASSES.find((errorClass) => error instanceof errorClass) ?? Error;
-  const prefixed = isCLIError(error)
-    ? CLIError({
-        code: error.code,
-        message,
-        details: error.details,
-        suggestion: error.suggestion,
-        command: error.command,
-        next: error.next,
-        context: error.context,
-        cause: error,
-      })
-    : new ErrorClass(message, { cause: error });
-  prefixed.name = error.name;
-  if (error.stack !== undefined) prefixed.stack = error.stack;
-  return withErrorDiagnostics(prefixed, diagnostics);
+  return withErrorDiagnostics(withMessage(error, `${relativePath}: ${error.message}`), diagnostics);
+}
+
+function withMessage(error: Error, message: string): Error {
+  const stack = { value: error.stack, writable: true, configurable: true };
+  if (isCLIError(error)) {
+    const copy = CLIError({
+      code: error.code,
+      message,
+      details: error.details,
+      suggestion: error.suggestion,
+      command: error.command,
+      next: error.next,
+      context: error.context,
+      cause: error.cause,
+    });
+    return Object.defineProperty(copy, "stack", stack);
+  }
+  const prototype: object | null = Object.getPrototypeOf(error);
+  if (definesGetters(prototype)) {
+    const rebuilt = new Error(message, { cause: error });
+    rebuilt.name = error.name;
+    return Object.defineProperty(rebuilt, "stack", stack);
+  }
+  const copy: Error = Object.setPrototypeOf(new Error(), prototype);
+  return Object.defineProperties(copy, {
+    ...Object.getOwnPropertyDescriptors(error),
+    message: { value: message, writable: true, configurable: true },
+    stack,
+  });
+}
+
+function definesGetters(prototype: object | null): boolean {
+  for (
+    let current: object | null = prototype;
+    current && current !== Error.prototype;
+    current = Object.getPrototypeOf(current)
+  ) {
+    const descriptors = Object.values(Object.getOwnPropertyDescriptors(current));
+    if (descriptors.some((descriptor) => descriptor.get)) return true;
+  }
+  return false;
 }
 
 function relativeFile(file: string): string {
