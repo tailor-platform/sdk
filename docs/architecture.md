@@ -2,14 +2,21 @@
 
 ## Overview
 
-The SDK is a monorepo with three packages:
+The SDK is a monorepo with these packages:
 
 ```
 packages/
-├── sdk/           # Main SDK: configuration APIs + CLI
-├── create-sdk/    # Project scaffolding (create-tailor-sdk)
-└── tailor-proto/  # Protocol buffer definitions
-example/           # Development/testing example app
+├── sdk/                      # Main SDK: configuration APIs + CLI
+├── create-sdk/               # Project scaffolding (npm create @tailor-platform/sdk)
+├── eslint-plugin-sdk/        # Lint rules for SDK applications
+├── sdk-codemod/              # Codemod runner for SDK upgrades
+├── sdk-plugin-frontend/      # SDK plugin: builds and uploads frontend assets on deploy
+├── sdk-plugin-seed/          # CLI plugin: tailor seed
+├── sdk-plugin-setup/         # CLI plugin: tailor setup
+├── sdk-plugin-tailordb-erd/  # CLI plugin: tailor tailordb erd
+├── shared/                   # Internal utilities (private; bundled into sdk, eslint-plugin-sdk, and sdk-codemod)
+└── tailor-proto/             # Protocol buffer definitions (private; bundled into sdk)
+example/                      # Development/testing example app
 ```
 
 The main `packages/sdk` has four core modules:
