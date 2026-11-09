@@ -135,6 +135,18 @@ describe("startFunctionRunWatch", () => {
     expect(JSON.parse(fs.readFileSync(argFileFrom(stderr.output), "utf8"))).toEqual({});
   });
 
+  test("seeds the temporary argument file with null and sends it when --arg is null", async () => {
+    using stderr = captureStderr();
+
+    await start({ initialArg: null });
+
+    await vi.waitFor(() => expect(executeScriptReportingStart).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(fs.readFileSync(argFileFrom(stderr.output), "utf8"))).toBeNull();
+    expect(executeScriptReportingStart).toHaveBeenCalledWith(
+      expect.objectContaining({ arg: null }),
+    );
+  });
+
   test("marks each run with --> and <-- lines carrying its execution ID", async () => {
     using stderr = captureStderr();
     await start();

@@ -31,7 +31,7 @@ export interface FunctionRunWatchOptions {
   target: FunctionRunTarget;
   /** Absolute path of the `--arg-file`; a temporary argument file is created when undefined */
   argFile: string | undefined;
-  /** Initial content of the temporary argument file */
+  /** Initial content of the temporary argument file; `{}` when undefined */
   initialArg: Jsonifiable | undefined;
 }
 
@@ -58,7 +58,10 @@ function realpathOrSelf(filePath: string): string {
 function createTempArgFile(initialArg: Jsonifiable | undefined): string {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "tailor-function-run-")));
   const file = path.join(dir, "arg.json");
-  fs.writeFileSync(file, `${JSON.stringify(initialArg ?? {}, null, 2)}\n`);
+  fs.writeFileSync(
+    file,
+    `${JSON.stringify(initialArg === undefined ? {} : initialArg, null, 2)}\n`,
+  );
   return file;
 }
 
