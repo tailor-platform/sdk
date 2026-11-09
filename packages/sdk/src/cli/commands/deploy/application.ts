@@ -1,6 +1,7 @@
 import { type MessageInitShape } from "@bufbuild/protobuf";
 import {
   type Application as ProtoApplication,
+  type Subgraph,
   Subgraph_ServiceType,
   type SubgraphSchema,
 } from "@tailor-platform/tailor-proto/application_resource_pb";
@@ -632,9 +633,14 @@ function buildHttpAdapters(
   });
 }
 
-function protoSubgraph(
+/**
+ * Convert a config subgraph to the subgraph the Platform records for an application.
+ * @param subgraph - Subgraph from the application's config
+ * @returns The subgraph's service type and namespace
+ */
+export function protoSubgraph(
   subgraph: Readonly<{ Type: string; Name: string }>,
-): MessageInitShape<typeof SubgraphSchema> {
+): Pick<Subgraph, "serviceType" | "serviceNamespace"> {
   // TODO(remiposo): Make it type-safe
   let serviceType: Subgraph_ServiceType;
   switch (subgraph.Type) {

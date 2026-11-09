@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => ({
   planTailorDB: vi.fn(),
   dropCrossDeploymentManagedDeletes: vi.fn(),
   scheduleRenamedAppDeletes: vi.fn(),
-  assertAuthServicesNotInUse: vi.fn(),
+  assertServicesNotInUse: vi.fn(),
 }));
 vi.mock(import("./deployment-target"), async (original) => ({
   ...(await original()),
@@ -70,9 +70,9 @@ vi.mock(import("./managed-resources"), async (original) => {
     scheduleRenamedAppDeletes: mocks.scheduleRenamedAppDeletes,
   };
 });
-vi.mock(import("./auth-service-in-use"), async (original) => ({
+vi.mock(import("./services-in-use"), async (original) => ({
   ...(await original()),
-  assertAuthServicesNotInUse: mocks.assertAuthServicesNotInUse,
+  assertServicesNotInUse: mocks.assertServicesNotInUse,
 }));
 vi.mock(import("./function-registry"), async (original) => ({
   ...(await original()),
@@ -181,14 +181,11 @@ test("runs a hook once after remaining resources are applied even when the plan 
     }),
   );
 });
-test("checks Auth services in use after the plan drops claimed deletes and schedules renamed applications' deletes", async () => {
+test("checks services in use after the plan drops claimed deletes and schedules renamed applications' deletes", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
   await deploy({ dryRun: true, noValidate: true });
-  expect(mocks.assertAuthServicesNotInUse).toHaveBeenCalledExactlyOnceWith(
-    expect.any(Array),
-    "deploy",
-  );
-  const [checked] = mocks.assertAuthServicesNotInUse.mock.invocationCallOrder;
+  expect(mocks.assertServicesNotInUse).toHaveBeenCalledExactlyOnceWith(expect.any(Array), "deploy");
+  const [checked] = mocks.assertServicesNotInUse.mock.invocationCallOrder;
   const [dropped] = mocks.dropCrossDeploymentManagedDeletes.mock.invocationCallOrder;
   const [scheduledBefore] = mocks.scheduleRenamedAppDeletes.mock.invocationCallOrder;
   expect(dropped).toBeLessThan(checked!);
