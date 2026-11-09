@@ -505,7 +505,7 @@ Webhook triggers receive HTTP request data:
 ```typescript
 interface WebhookContext<T = unknown> {
   body: T; // Parsed request body
-  headers: Record<string, string>; // Request headers, with names in lower case; accept, via and other list headers are string | string[]
+  headers: IncomingWebhookHeaders; // Request headers, with names in lower case; accept, via and other list headers are string | string[], any other header is a string
   method: "POST" | "GET" | "PUT" | "DELETE"; // HTTP method
   rawBody: string; // Raw request body, base64-encoded
 }

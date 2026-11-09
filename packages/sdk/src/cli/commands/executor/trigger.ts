@@ -104,7 +104,7 @@ export type TriggerExecutorTypedOptions<E extends ManualTriggerExecutor = Manual
         /**
          * Request headers the executor receives as `headers`, keyed by header name.
          * A value is a string, or a list of strings for a name sent on more than one line.
-         * Names are lower-cased, so names that differ only in letter case are the same header.
+         * Unlike `--header`, names are sent as given, and two keys that differ only in letter case are rejected.
          */
         headers?: TriggerHeaders;
       }
