@@ -316,10 +316,10 @@ describe("diff-calculator", () => {
         expected: ["tailordb.User:", "tailordb.Product:"],
       },
     ])("should format $name", ({ changes, expected }) => {
-      const result = formatMigrationDiff(createDiff(changes));
-      for (const substring of expected) {
-        expect(result).toContain(substring);
-      }
+      const lines = formatMigrationDiff(createDiff(changes))
+        .split("\n")
+        .map((line) => line.trim());
+      expect(lines).toEqual(expect.arrayContaining(expected));
     });
   });
 
