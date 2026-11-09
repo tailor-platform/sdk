@@ -509,7 +509,7 @@ describe("tailordb migration resolve", () => {
   });
 
   test("--complete explains how to go on when records without a value reject the update", async () => {
-    state.updateTailorDBType.mockRejectedValue(requiredFieldNullValuesError("code"));
+    state.updateTailorDBType.mockRejectedValue(requiredFieldNullValuesError());
 
     const result = await runCommand(resolveCommand, ["--complete", "--yes"]);
 
@@ -736,7 +736,7 @@ describe("tailordb migration resolve", () => {
 
     test("--rollback explains how to go on when records without a value reject the update", async () => {
       leftInPrePhaseOf0002();
-      state.updateTailorDBType.mockRejectedValue(requiredFieldNullValuesError("code"));
+      state.updateTailorDBType.mockRejectedValue(requiredFieldNullValuesError());
 
       const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
 

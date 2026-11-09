@@ -12,7 +12,10 @@ import {
   MIGRATE_FILE_NAME,
   DB_TYPES_FILE_NAME,
 } from "./snapshot";
-import { requiredFieldNullValuesError } from "./test-helpers/platform-errors";
+import {
+  preconditionFailureError,
+  requiredFieldNullValuesError,
+} from "./test-helpers/platform-errors";
 import {
   sanitizeMigrationLabel,
   parseMigrationLabelNumber,
@@ -175,7 +178,7 @@ describe("handleOptionalToRequiredError", () => {
 
   test("explains the refusal when records without a value block making a field required", () => {
     using stderr = captureStderr();
-    const error = requiredFieldNullValuesError("note");
+    const error = requiredFieldNullValuesError();
 
     const thrown = thrownBy(() => handleOptionalToRequiredError(error, ["Fill in the records."]));
 
@@ -186,12 +189,19 @@ describe("handleOptionalToRequiredError", () => {
     expect(stderr.output).toContain("Fill in the records.");
   });
 
-  test("adds nothing to a failed precondition without the refusal's detail", () => {
+  const refusalMessage = requiredFieldNullValuesError().rawMessage;
+
+  test.each([
+    [
+      "without a PreconditionFailure detail",
+      new ConnectError(refusalMessage, Code.FailedPrecondition),
+    ],
+    [
+      "for another violation type",
+      preconditionFailureError(refusalMessage, "ANOTHER_VIOLATION", "note"),
+    ],
+  ])("adds nothing to a failed precondition %s", (_case, error) => {
     using stderr = captureStderr();
-    const error = new ConnectError(
-      requiredFieldNullValuesError("note").rawMessage,
-      Code.FailedPrecondition,
-    );
 
     const thrown = thrownBy(() => handleOptionalToRequiredError(error, ["Fill in the records."]));
 
