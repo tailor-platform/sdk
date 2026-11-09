@@ -32,7 +32,10 @@ import {
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { generateTailorDBTypeManifestFromSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
-import { handleOptionalToRequiredError } from "#/cli/commands/tailordb/migrate/types";
+import {
+  handleOptionalToRequiredError,
+  isRequiredFieldNullValuesError,
+} from "#/cli/commands/tailordb/migrate/types";
 import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError, toError } from "#/cli/shared/errors";
@@ -1985,19 +1988,14 @@ function collectLocalDefinitionWrites(flow: MigrationFlow): LocalDefinitionWrite
 
 /**
  * Whether existing records refused a table update. The platform reports a unique index over
- * duplicated values as AlreadyExists, and marks a required field over null values, alone among
- * its FailedPrecondition refusals, with a PreconditionFailure detail.
+ * duplicated values as AlreadyExists.
  * @param error - Failure of the update
  * @returns True when the records refused it
  */
 function isRefusedByRecords(error: unknown): boolean {
-  if (!(error instanceof ConnectError)) return false;
-  if (error.code === Code.AlreadyExists) return true;
   return (
-    error.code === Code.FailedPrecondition &&
-    error.details.some(
-      (detail) => "type" in detail && detail.type === "google.rpc.PreconditionFailure",
-    )
+    (error instanceof ConnectError && error.code === Code.AlreadyExists) ||
+    isRequiredFieldNullValuesError(error)
   );
 }
 

@@ -1,6 +1,5 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
-import { Code, ConnectError } from "@connectrpc/connect";
 import { runCommand } from "@politty/zod";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
@@ -11,6 +10,7 @@ import { prompt } from "#/cli/shared/prompt";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { resolveCommand } from "./resolve";
+import { requiredFieldNullValuesError } from "./test-helpers/platform-errors";
 import {
   parsedType,
   remoteType,
@@ -509,12 +509,7 @@ describe("tailordb migration resolve", () => {
   });
 
   test("--complete explains how to go on when records without a value reject the update", async () => {
-    state.updateTailorDBType.mockRejectedValue(
-      new ConnectError(
-        'field "code" cannot be updated from non-required to required when records exist',
-        Code.FailedPrecondition,
-      ),
-    );
+    state.updateTailorDBType.mockRejectedValue(requiredFieldNullValuesError());
 
     const result = await runCommand(resolveCommand, ["--complete", "--yes"]);
 
@@ -741,12 +736,7 @@ describe("tailordb migration resolve", () => {
 
     test("--rollback explains how to go on when records without a value reject the update", async () => {
       leftInPrePhaseOf0002();
-      state.updateTailorDBType.mockRejectedValue(
-        new ConnectError(
-          'field "code" cannot be updated from non-required to required when records exist',
-          Code.FailedPrecondition,
-        ),
-      );
+      state.updateTailorDBType.mockRejectedValue(requiredFieldNullValuesError());
 
       const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
 
