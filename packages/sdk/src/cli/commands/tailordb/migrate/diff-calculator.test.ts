@@ -231,6 +231,19 @@ describe("diff-calculator", () => {
         expected: ["~ ownerId: foreignKey: User.id → User.email"],
       },
       {
+        name: "removed foreign key",
+        changes: [
+          {
+            kind: "field_modified",
+            tableName: "Post",
+            fieldName: "ownerId",
+            before: { ...referenceField, foreignKeyType: "User", foreignKeyField: "id" },
+            after: { type: "uuid", required: true, index: true },
+          },
+        ],
+        expected: ["~ ownerId: foreignKey: User.id → none"],
+      },
+      {
         name: "field filled on create",
         changes: [
           {
