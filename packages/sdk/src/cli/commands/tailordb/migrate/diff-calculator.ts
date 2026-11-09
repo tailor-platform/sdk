@@ -6,13 +6,14 @@
  */
 
 import { collectNestedMemberChanges, type NestedMemberChange } from "./nested-members";
-import type {
-  SnapshotFieldConfig,
-  SnapshotGqlPermission,
-  SnapshotIndexConfig,
-  SnapshotRecordPermission,
-  SnapshotRelationship,
-  TailorDBSnapshotType,
+import {
+  SNAPSHOT_FIELD_BOOLEAN_PROPS,
+  type SnapshotFieldConfig,
+  type SnapshotGqlPermission,
+  type SnapshotIndexConfig,
+  type SnapshotRecordPermission,
+  type SnapshotRelationship,
+  type TailorDBSnapshotType,
 } from "./snapshot-types";
 
 // ============================================================================
@@ -519,17 +520,17 @@ function formatFieldModification(
   if (before.required !== after.required) {
     changes.push(`required: ${before.required} → ${after.required}`);
   }
-  if (Boolean(before.array) !== Boolean(after.array)) {
-    changes.push(`array: ${before.array ?? false} → ${after.array ?? false}`);
+  for (const prop of SNAPSHOT_FIELD_BOOLEAN_PROPS) {
+    if (prop === "foreignKey") continue;
+    if (Boolean(before[prop]) !== Boolean(after[prop])) {
+      changes.push(`${prop}: ${before[prop] ?? false} → ${after[prop] ?? false}`);
+    }
   }
-  if (Boolean(before.index) !== Boolean(after.index)) {
-    changes.push(`index: ${before.index ?? false} → ${after.index ?? false}`);
-  }
-  if (Boolean(before.unique) !== Boolean(after.unique)) {
-    changes.push(`unique: ${before.unique ?? false} → ${after.unique ?? false}`);
-  }
-  if (Boolean(before.vector) !== Boolean(after.vector)) {
-    changes.push(`vector: ${before.vector ?? false} → ${after.vector ?? false}`);
+
+  const beforeForeignKeyTarget = formatForeignKeyTarget(before);
+  const afterForeignKeyTarget = formatForeignKeyTarget(after);
+  if (beforeForeignKeyTarget !== afterForeignKeyTarget) {
+    changes.push(`foreignKey: ${beforeForeignKeyTarget} → ${afterForeignKeyTarget}`);
   }
 
   const beforeAllowed = before.allowedValues ?? [];
@@ -581,6 +582,15 @@ function formatFieldModification(
   }
 
   return changes.length > 0 ? changes.join(", ") : "configuration changed";
+}
+
+/**
+ * Format the table and key a field references
+ * @param {SnapshotFieldConfig} field - Field configuration
+ * @returns {string} `<table>.<key>`, or `none` when the field has no foreign key
+ */
+function formatForeignKeyTarget(field: SnapshotFieldConfig): string {
+  return field.foreignKeyType ? `${field.foreignKeyType}.${field.foreignKeyField ?? "id"}` : "none";
 }
 
 const NESTED_MEMBER_CHANGE_MARKERS: Record<NestedMemberChange["kind"], string> = {
