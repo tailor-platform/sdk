@@ -19,6 +19,8 @@ const warnedFallbacks = new Set<string>();
 
 /**
  * Load files matching the given patterns, excluding files that match ignore patterns.
+ * A `files` entry starting with `!` excludes the files it matches; for each file, the last
+ * `files` entry that matches it decides. Each file is returned once.
  * By default, test files (*.test.ts, *.spec.ts) are excluded unless ignores is explicitly specified.
  * @param config - Configuration with files patterns and optional ignores patterns
  * @param baseDir - Directory relative patterns are resolved against
@@ -30,8 +32,10 @@ export function loadFilesWithIgnores(config: FileLoadConfig, baseDir: string): s
   }
 
   const resolved = resolveFiles(config, baseDir);
-  const allPatternsAbsolute = config.files.every((pattern) => path.isAbsolute(pattern));
-  if (resolved.matchedAnyPattern || baseDir === process.cwd() || allPatternsAbsolute) {
+  const allPositivePatternsAbsolute = config.files
+    .filter((pattern) => !pattern.startsWith("!"))
+    .every((pattern) => path.isAbsolute(pattern));
+  if (resolved.matchedAnyPattern || baseDir === process.cwd() || allPositivePatternsAbsolute) {
     return resolved.files;
   }
 
@@ -40,8 +44,8 @@ export function loadFilesWithIgnores(config: FileLoadConfig, baseDir: string): s
   // triggers when baseDir's patterns matched nothing at all (not merely
   // "matched, but every hit got filtered out by ignores") — otherwise this
   // fallback would reintroduce the same cross-app file bleed this baseDir
-  // resolution is meant to prevent. Also skipped when every pattern is
-  // already absolute, since baseDir can't change an absolute pattern's
+  // resolution is meant to prevent. Also skipped when every non-`!` pattern
+  // is already absolute, since baseDir can't change an absolute pattern's
   // resolution — re-running against cwd would just repeat the same glob.
   // Remove this fallback in v2, once such configs are expected to have
   // migrated.
@@ -59,7 +63,7 @@ export function loadFilesWithIgnores(config: FileLoadConfig, baseDir: string): s
 
 interface ResolvedFiles {
   files: string[];
-  /** Whether any `files` pattern matched anything under baseDir, before ignore filtering. */
+  /** Whether any non-`!` `files` pattern matched anything under baseDir, before any exclusion. */
   matchedAnyPattern: boolean;
 }
 
@@ -75,29 +79,56 @@ function resolveFiles(config: FileLoadConfig, baseDir: string): ResolvedFiles {
     ? ignorePatterns
     : ignorePatterns.map((ignorePattern) => path.resolve(baseDir, ignorePattern));
 
-  const files: string[] = [];
+  const rules = config.files.map((pattern) => parseFilePattern(pattern, baseDir));
+  // Map insertion order keeps each file at the position its first match produced.
+  const lastPositiveRuleIndex = new Map<string, number>();
   let matchedAnyPattern = false;
-  for (const pattern of config.files) {
-    const absolutePattern = path.resolve(baseDir, pattern);
+  rules.forEach((rule, ruleIndex) => {
+    if (rule.negated) return;
     try {
-      const matchedFiles = fs.globSync(absolutePattern);
+      const matchedFiles = fs.globSync(rule.absolutePattern);
       if (matchedFiles.length > 0) {
         matchedAnyPattern = true;
       }
-      // Filter out ignored files
-      const filteredFiles = matchedFiles.filter(
-        (file) =>
-          !resolvedIgnorePatterns.some((ignorePattern) => path.matchesGlob(file, ignorePattern)),
-      );
-      files.push(...filteredFiles);
+      for (const file of matchedFiles) {
+        lastPositiveRuleIndex.set(file, ruleIndex);
+      }
     } catch (error) {
       // A glob failure means we don't know whether baseDir has matching
       // files, not that it has none — treat it as a match so it can't
       // trigger the v1 compatibility fallback below.
       matchedAnyPattern = true;
-      logger.warn(`Failed to glob pattern "${pattern}": ${String(error)}`);
+      logger.warn(`Failed to glob pattern "${rule.pattern}": ${String(error)}`);
     }
-  }
+  });
+
+  const files = [...lastPositiveRuleIndex]
+    .filter(
+      ([file, ruleIndex]) =>
+        !rules
+          .slice(ruleIndex + 1)
+          .some((rule) => rule.negated && path.matchesGlob(file, rule.absolutePattern)),
+    )
+    .map(([file]) => file)
+    .filter(
+      (file) =>
+        !resolvedIgnorePatterns.some((ignorePattern) => path.matchesGlob(file, ignorePattern)),
+    );
 
   return { files, matchedAnyPattern };
+}
+
+interface FilePatternRule {
+  /** The `files` entry as written. */
+  pattern: string;
+  /** Whether the entry starts with `!` and excludes the files it matches. */
+  negated: boolean;
+  /** The entry without its `!`, resolved against baseDir. */
+  absolutePattern: string;
+}
+
+function parseFilePattern(pattern: string, baseDir: string): FilePatternRule {
+  const negated = pattern.startsWith("!");
+  const glob = negated ? pattern.slice(1) : pattern;
+  return { pattern, negated, absolutePattern: path.resolve(baseDir, glob) };
 }

@@ -223,7 +223,9 @@ async function rebaseline(options: RebaselineOptions): Promise<RebaselineResult>
     formatNamespaceMigrationHint({ ...commandContext, subcommand, namespace: target.namespace });
   const syncBaselineSuggestion = `Run ${migrationHint(["sync", formatMigrationNumber(0), "--force"])}`;
   const latestLabel = formatMigrationNumber(latestMigration);
-  const adoptLocalHistory = `run ${migrationHint(["sync", latestLabel, "--force"])}, which removes the fields that migration does not have and deletes the tables it does not have together with their data, then run this command again.`;
+  const syncToLatestSuggestion = (...flags: string[]): string =>
+    `run ${migrationHint(["sync", latestLabel, ...flags])}, which removes the fields that migration does not have and deletes the tables it does not have together with their data, then run this command again.`;
+  const adoptLocalHistory = syncToLatestSuggestion("--force");
   const rerunSuggestion = "Run the command again.";
   const deploySuggestion = `after resolving the connection error, deploy with schema checks enabled by running ${formatCommandHint(
     { command: "tailor", args: ["deploy", ...migrationContextArgs(commandContext)] },
@@ -296,7 +298,7 @@ async function rebaseline(options: RebaselineOptions): Promise<RebaselineResult>
           phase === "confirmation"
             ? rerunSuggestion
             : `Run ${migrationHint(["status"])} to compare the workspace with the local migration history. ` +
-              `To rewrite the workspace's tables to the latest migration, run ${migrationHint(["sync", latestLabel])}, which deletes the tables and fields that migration does not have together with their data, then run this command again.`,
+              `To rewrite the workspace's tables to the latest migration, ${syncToLatestSuggestion()}`,
       });
     }
   };

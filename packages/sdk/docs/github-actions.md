@@ -372,9 +372,9 @@ tailor setup ci autofix --dir apps/erp --dir apps/users  # run tailor generate i
 It writes `.github/workflows/tailor-autofix.yml`, which runs `tailor generate`
 on every pull request and, when that changes files, commits them to the pull
 request branch as `chore: run tailor generate`. Only the changes
-`tailor generate` makes, and with `--codemod deterministic` those of
-`tailor upgrade`, are committed: files that earlier steps leave in the
-checkout, such as an `.npmrc`, are not. The deploy workflows keep their check,
+`tailor generate` makes, and with `--codemod deterministic` or an agent value
+those of `tailor upgrade` and the agent, are committed: files that earlier
+steps leave in the checkout, such as an `.npmrc`, are not. The deploy workflows keep their check,
 which fails on the commit that needed the fix and passes on the fix commit.
 
 `--provider` chooses what makes the commit:
@@ -399,9 +399,13 @@ right away.
   workflow runs, it does not commit; the run for the new commit regenerates the
   files.
 - **Output that keeps changing:** if `tailor generate` (or, with
-  `--codemod deterministic`, `tailor upgrade`) changes files again right after
-  the fix commit, the workflow fails instead of committing again. Check that
-  running it twice in a row changes nothing.
+  `--codemod deterministic` or an agent value, `tailor upgrade`) changes files
+  again right after the fix commit, the workflow fails instead of committing
+  again. Check that
+  running it twice in a row changes nothing. With an agent value, the
+  `tailor-autofix-comment` job also posts this error as a pull request comment
+  on a pull request from this repository (see
+  [Handing reviews to an AI coding agent](#handing-reviews-to-an-ai-coding-agent)).
 - **Approval rules:** the fix commit becomes the most recent push to the pull
   request, and a bot pushed it. A branch protection rule that requires the most
   recent push to be approved by someone other than its pusher is then satisfied
@@ -436,13 +440,15 @@ workflow runs only `tailor generate`:
 ```bash
 tailor setup ci autofix --codemod error          # fail the pull request until they are applied
 tailor setup ci autofix --codemod deterministic  # commit what they rewrite
+tailor setup ci autofix --codemod claude         # also have Claude finish what they leave for review
 ```
 
-| `--codemod`     | On a pull request that upgrades the SDK                                                                                  | Check fails |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------- |
-| `warn`          | Runs `tailor upgrade --dry-run` and reports the files it would rewrite and the changes it leaves for review, as warnings | No          |
-| `error`         | Reports the same as errors, and fails the `tailor-codemod-result` job                                                    | Yes         |
-| `deterministic` | Commits what `tailor upgrade` rewrites together with what `tailor generate` changes, and reports the rest as warnings    | No          |
+| `--codemod`                  | On a pull request that upgrades the SDK                                                                                                                                                    | Check fails |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------- |
+| `warn`                       | Runs `tailor upgrade --dry-run` and reports the files it would rewrite and the changes it leaves for review, as warnings                                                                   | No          |
+| `error`                      | Reports the same as errors, and fails the `tailor-codemod-result` job                                                                                                                      | Yes         |
+| `deterministic`              | Commits what `tailor upgrade` rewrites together with what `tailor generate` changes, and reports the rest as warnings                                                                      | No          |
+| `copilot`, `claude`, `codex` | As `deterministic`, then hands what is left for review to that AI coding agent and commits its edits (see [Handing reviews to an AI coding agent](#handing-reviews-to-an-ai-coding-agent)) | No          |
 
 - **Which upgrade:** for each `--dir`, the workflow upgrades from the SDK
   version that the lockfile at the repository root resolves on the pull
@@ -479,6 +485,65 @@ tailor setup ci autofix --codemod deterministic  # commit what they rewrite
 - **Skipped pull requests:** fork and Dependabot pull requests skip the whole
   workflow (except fork pull requests with `autofix-ci`), so `error` does not
   check them, and a skipped check counts as passing.
+
+#### Handing reviews to an AI coding agent
+
+With `copilot`, `claude`, or `codex`, a job of its own, `tailor-codemod-agent`,
+gives what the codemods leave for review to that agent, with the migration
+prompts, and the fix commit carries the agent's edits. The job checks out the
+pull request and applies the rewrites, but installs and runs none of the
+project's code, so a dependency the pull request brings in cannot reach the
+agent's credentials.
+
+| `--codemod` | Agent                                                                                            | Repository secret                                                                                                                                                                                                                                                                                   |
+| ----------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `claude`    | [Claude Code](https://github.com/anthropics/claude-code-action)                                  | `TAILOR_AUTOFIX_ANTHROPIC_API_KEY`: an Anthropic API key                                                                                                                                                                                                                                            |
+| `codex`     | [Codex](https://github.com/openai/codex-action)                                                  | `TAILOR_AUTOFIX_OPENAI_API_KEY`: an OpenAI API key                                                                                                                                                                                                                                                  |
+| `copilot`   | [Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli-in-actions) | With `--copilot-auth pat` (default), `TAILOR_AUTOFIX_COPILOT_TOKEN`: a fine-grained personal access token with the Copilot Requests permission. With `--copilot-auth github-token`, none: the workflow token signs in, which needs the organization to allow Copilot CLI billed to the organization |
+
+To choose the agent's model, set the `TAILOR_AUTOFIX_CLAUDE_MODEL`,
+`TAILOR_AUTOFIX_CODEX_MODEL`, or `TAILOR_AUTOFIX_COPILOT_MODEL` repository
+variable to a model name the agent accepts with `--model`. When it is unset,
+the agent uses its default model.
+
+`tailor setup ci env` prints the commands to set the secret, if any, and the
+variable (see [Setting secrets and variables](#setting-secrets-and-variables)).
+
+- **When the agent runs:** whenever `tailor upgrade` leaves changes for review,
+  on a pull request from this repository, so on every push to such a pull
+  request while they remain; each run is billed by the agent's provider. It
+  does not run on fork pull requests, when the head commit is one of the
+  workflow's own fix commits, or for a bot other than `renovate[bot]`, which
+  the job reports in a notice or a warning.
+- **What it may change:** the agent edits files, and neither commits nor
+  pushes. Claude and Copilot run no commands; Codex runs them only in a sandbox
+  without network access. The fix commit leaves out the agent's edits to
+  `.github/workflows`, which it reports, and, with `claude`, the configuration
+  files such as `.claude/` and `CLAUDE.md` that claude-code-action resets to the
+  base branch's versions.
+- **Commits:** a fix commit that carries the agent's edits is named
+  `chore: apply the SDK upgrade with <agent>`. When those edits change what
+  `tailor generate` writes, the next run adds a `chore: run tailor generate`
+  commit.
+- **Failures:** if the agent fails or runs out of its 20 minutes, the fix
+  commit carries only what `tailor upgrade` and `tailor generate` changed, and
+  a warning says so. If the `tailor-codemod-agent` job itself fails or is
+  cancelled, such as when it runs out of its 30 minutes or cannot check out the
+  pull request, nothing is committed, not even those changes. Re-run the
+  workflow or push again.
+- **Output that keeps changing:** if `tailor upgrade` and `tailor generate`
+  still change files right after the `chore: run tailor generate` commit, the
+  `tailor-autofix` job fails, and its error says the agent's edits in an
+  earlier fix commit may be the cause. On a pull request from this repository,
+  the `tailor-autofix-comment` job, which has write access to pull requests and
+  runs none of the project's code, posts that error with a link to the run as a
+  pull request comment, once per head commit.
+- **Reports:** the warnings list every change that was left for review, as
+  with `deterministic`, whether or not the agent finished it. Review the
+  agent's edits in the fix commit.
+- **Copilot:** GitHub warns that running Copilot CLI from a workflow step
+  gives it broad access to the workflow environment. The job keeps it to
+  editing files, without its shell, URL, and GitHub tools.
 
 ## Targeting a workspace
 
@@ -853,22 +918,28 @@ tailor setup ci env --check                  # check what is registered in GitHu
 
 The list follows what each generated workflow actually reads:
 
-| Name                                                 | Kind     | Targets                             | Required | Where the value comes from                                                                                                                                                                                                                                                                                                                                                                 |
-| ---------------------------------------------------- | -------- | ----------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`             | variable | all                                 | yes      | Client ID of the platform machine user CI signs in as (an existing secret of the same name still works as a deprecated fallback); it needs an editor or admin role on the organization or folder that holds the workspace. An organization or folder admin creates one in the Tailor Console and grants it a role; without the required permission you cannot view or create machine users |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET`         | secret   | all                                 | yes      | Client secret of the same platform machine user                                                                                                                                                                                                                                                                                                                                            |
-| `TAILOR_PLATFORM_WORKSPACE_ID`                       | variable | branch, tag                         | yes      | `id` printed by `tailor workspace create`, or listed by `tailor workspace list`                                                                                                                                                                                                                                                                                                            |
-| `TAILOR_PLATFORM_MIGRATION_TEST_SOURCE_WORKSPACE_ID` | variable | branch (migration test environment) | yes      | ID of the workspace the migration test starts from, set on the environment passed to `--migration-test-environment`; it is only read to build the temporary workspace. Needs the machine user's editor or admin role on that workspace's organization or folder                                                                                                                            |
-| `TAILOR_PLATFORM_ORGANIZATION_ID`                    | variable | preview                             | yes      | Organization to create the per-PR workspaces in (a machine user cannot create a workspace without one): `organizationId` listed by `tailor organization list`                                                                                                                                                                                                                              |
-| `TAILOR_PLATFORM_FOLDER_ID`                          | variable | preview                             | no       | Folder to create the per-PR workspaces in: `id` listed by `tailor organization folder list -o <organization id>`. When unset they go directly under the organization, which needs the machine user's role on the organization itself                                                                                                                                                       |
-| `TAILOR_PLATFORM_FAIL_ON_DRIFT`                      | variable | all                                 | no       | `true` to fail the drift check when it finds drift                                                                                                                                                                                                                                                                                                                                         |
-| `TAILOR_SLACK_BOT_TOKEN`                             | secret   | branch, tag                         | no       | Bot User OAuth Token (`xoxb-...`) of a Slack app with the `chat:write` scope                                                                                                                                                                                                                                                                                                               |
-| `TAILOR_SLACK_CHANNEL_ID`                            | variable | branch, tag                         | no       | Channel ID (`C...`) from the channel details in Slack; invite the bot to the channel                                                                                                                                                                                                                                                                                                       |
-| `TAILOR_SLACK_USER_MAPPING`                          | variable | branch, tag                         | no       | JSON object mapping GitHub usernames to Slack member IDs (for example `{"alice":"U0123456"}`) so notifications mention the actor; read only after you uncomment the `user-mapping` input of the `tailor-notify` step                                                                                                                                                                       |
-| `TAILOR_AUTOFIX_APP_CLIENT_ID`                       | variable | autofix (`github-app`, `securefix`) | yes      | Client ID of the GitHub App that commits for the autofix workflow (with `securefix`, the securefix client App), from the App's settings page                                                                                                                                                                                                                                               |
-| `TAILOR_AUTOFIX_APP_PRIVATE_KEY`                     | secret   | autofix (`github-app`, `securefix`) | yes      | Private key of the same App, generated on its settings page; pass the `.pem` file on standard input (`gh secret set TAILOR_AUTOFIX_APP_PRIVATE_KEY < key.pem`)                                                                                                                                                                                                                             |
+| Name                                                 | Kind     | Targets                                             | Required | Where the value comes from                                                                                                                                                                                                                                                                                                                                                                 |
+| ---------------------------------------------------- | -------- | --------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`             | variable | all                                                 | yes      | Client ID of the platform machine user CI signs in as (an existing secret of the same name still works as a deprecated fallback); it needs an editor or admin role on the organization or folder that holds the workspace. An organization or folder admin creates one in the Tailor Console and grants it a role; without the required permission you cannot view or create machine users |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET`         | secret   | all                                                 | yes      | Client secret of the same platform machine user                                                                                                                                                                                                                                                                                                                                            |
+| `TAILOR_PLATFORM_WORKSPACE_ID`                       | variable | branch, tag                                         | yes      | `id` printed by `tailor workspace create`, or listed by `tailor workspace list`                                                                                                                                                                                                                                                                                                            |
+| `TAILOR_PLATFORM_MIGRATION_TEST_SOURCE_WORKSPACE_ID` | variable | branch (migration test environment)                 | yes      | ID of the workspace the migration test starts from, set on the environment passed to `--migration-test-environment`; it is only read to build the temporary workspace. Needs the machine user's editor or admin role on that workspace's organization or folder                                                                                                                            |
+| `TAILOR_PLATFORM_ORGANIZATION_ID`                    | variable | preview                                             | yes      | Organization to create the per-PR workspaces in (a machine user cannot create a workspace without one): `organizationId` listed by `tailor organization list`                                                                                                                                                                                                                              |
+| `TAILOR_PLATFORM_FOLDER_ID`                          | variable | preview                                             | no       | Folder to create the per-PR workspaces in: `id` listed by `tailor organization folder list -o <organization id>`. When unset they go directly under the organization, which needs the machine user's role on the organization itself                                                                                                                                                       |
+| `TAILOR_PLATFORM_FAIL_ON_DRIFT`                      | variable | all                                                 | no       | `true` to fail the drift check when it finds drift                                                                                                                                                                                                                                                                                                                                         |
+| `TAILOR_SLACK_BOT_TOKEN`                             | secret   | branch, tag                                         | no       | Bot User OAuth Token (`xoxb-...`) of a Slack app with the `chat:write` scope                                                                                                                                                                                                                                                                                                               |
+| `TAILOR_SLACK_CHANNEL_ID`                            | variable | branch, tag                                         | no       | Channel ID (`C...`) from the channel details in Slack; invite the bot to the channel                                                                                                                                                                                                                                                                                                       |
+| `TAILOR_SLACK_USER_MAPPING`                          | variable | branch, tag                                         | no       | JSON object mapping GitHub usernames to Slack member IDs (for example `{"alice":"U0123456"}`) so notifications mention the actor; read only after you uncomment the `user-mapping` input of the `tailor-notify` step                                                                                                                                                                       |
+| `TAILOR_AUTOFIX_APP_CLIENT_ID`                       | variable | autofix (`github-app`, `securefix`)                 | yes      | Client ID of the GitHub App that commits for the autofix workflow (with `securefix`, the securefix client App), from the App's settings page                                                                                                                                                                                                                                               |
+| `TAILOR_AUTOFIX_APP_PRIVATE_KEY`                     | secret   | autofix (`github-app`, `securefix`)                 | yes      | Private key of the same App, generated on its settings page; pass the `.pem` file on standard input (`gh secret set TAILOR_AUTOFIX_APP_PRIVATE_KEY < key.pem`)                                                                                                                                                                                                                             |
+| `TAILOR_AUTOFIX_ANTHROPIC_API_KEY`                   | secret   | autofix (`--codemod claude`)                        | yes      | API key the claude agent uses, created in the Claude Console                                                                                                                                                                                                                                                                                                                               |
+| `TAILOR_AUTOFIX_OPENAI_API_KEY`                      | secret   | autofix (`--codemod codex`)                         | yes      | API key the codex agent uses, created on the OpenAI platform                                                                                                                                                                                                                                                                                                                               |
+| `TAILOR_AUTOFIX_COPILOT_TOKEN`                       | secret   | autofix (`--codemod copilot`, `--copilot-auth pat`) | yes      | Fine-grained personal access token with the Copilot Requests permission, owned by an account with Copilot                                                                                                                                                                                                                                                                                  |
+| `TAILOR_AUTOFIX_CLAUDE_MODEL`                        | variable | autofix (`--codemod claude`)                        | no       | Model the claude agent uses: a model name Claude Code accepts with `--model`. When unset, the agent uses its default model                                                                                                                                                                                                                                                                 |
+| `TAILOR_AUTOFIX_CODEX_MODEL`                         | variable | autofix (`--codemod codex`)                         | no       | Model the codex agent uses: a model name Codex accepts with `--model`. When unset, the agent uses its default model                                                                                                                                                                                                                                                                        |
+| `TAILOR_AUTOFIX_COPILOT_MODEL`                       | variable | autofix (`--codemod copilot`)                       | no       | Model the copilot agent uses: a model name Copilot CLI accepts with `--model`. When unset, the agent uses its default model                                                                                                                                                                                                                                                                |
 
-The autofix workflow uses no GitHub Environment, so its two entries are set on
+The autofix workflow uses no GitHub Environment, so its entries are set on
 the repository; the output lists them under the repository instead of an
 environment.
 

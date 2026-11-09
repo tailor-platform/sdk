@@ -195,14 +195,22 @@ export interface PluginTableProcessContext<TableConfig = unknown, PluginConfig =
 }
 
 /**
- * Context passed to plugin's onNamespaceLoaded hook.
+ * Context passed to plugin's onTailorDBNamespaceLoaded hook.
  *
  * **Beta:** This API may change in future releases.
  */
-export interface PluginNamespaceProcessContext<PluginConfig = unknown> {
+export interface TailorDBNamespaceLoadedContext<PluginConfig = unknown> {
   pluginConfig: PluginConfig;
+  /** TailorDB namespace the hook runs for, and where the returned tables are created */
   namespace: string;
 }
+
+/**
+ * **Beta:** This API may change in future releases.
+ * @deprecated since NEXT_RELEASE — use {@link TailorDBNamespaceLoadedContext} instead. codemod: v3/tailordb-namespace-loaded-rename
+ */
+export type PluginNamespaceProcessContext<PluginConfig = unknown> =
+  TailorDBNamespaceLoadedContext<PluginConfig>;
 
 /**
  * Interface representing a TailorDB table for plugin output.
@@ -343,7 +351,13 @@ export interface TablePluginOutput<
 }
 
 /** **Beta:** This API may change in future releases. */
-export type NamespacePluginOutput = PluginOutput;
+export type TailorDBNamespacePluginOutput = PluginOutput;
+
+/**
+ * **Beta:** This API may change in future releases.
+ * @deprecated since NEXT_RELEASE — use {@link TailorDBNamespacePluginOutput} instead. codemod: v3/tailordb-namespace-loaded-rename
+ */
+export type NamespacePluginOutput = TailorDBNamespacePluginOutput;
 
 /**
  * Plugin interface that all plugins must implement.
@@ -368,9 +382,17 @@ export interface Plugin<
     context: PluginTableProcessContext<TableConfig, PluginConfig>,
   ): TablePluginOutput<FieldExtension> | Promise<TablePluginOutput<FieldExtension>>;
 
+  /** Runs once for each TailorDB namespace in the config, except external ones. */
+  onTailorDBNamespaceLoaded?(
+    context: TailorDBNamespaceLoadedContext<PluginConfig>,
+  ): TailorDBNamespacePluginOutput | Promise<TailorDBNamespacePluginOutput>;
+
+  /**
+   * @deprecated since NEXT_RELEASE — use {@link Plugin.onTailorDBNamespaceLoaded} instead. Defining both is an error. codemod: v3/tailordb-namespace-loaded-rename
+   */
   onNamespaceLoaded?(
-    context: PluginNamespaceProcessContext<PluginConfig>,
-  ): NamespacePluginOutput | Promise<NamespacePluginOutput>;
+    context: TailorDBNamespaceLoadedContext<PluginConfig>,
+  ): TailorDBNamespacePluginOutput | Promise<TailorDBNamespacePluginOutput>;
 
   onTailorDBReady?(
     context: TailorDBReadyContext<PluginConfig>,

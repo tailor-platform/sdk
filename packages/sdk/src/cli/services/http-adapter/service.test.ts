@@ -173,6 +173,35 @@ export default adapter;
     });
   });
 
+  test("reports an adapter name the platform rejects", async () => {
+    const file = writeAdapter(
+      "invalid-name.ts",
+      `
+import { createHttpAdapter } from "@tailor-platform/sdk";
+export default createHttpAdapter({
+  name: "My_Adapter",
+  pathPattern: "/x",
+  input: { get: () => ({ query: "{}" }) },
+});
+`,
+    );
+
+    const service = createHttpAdapterService({ config: { files: [file] }, baseDir: process.cwd() });
+    using _logger = silenceLogger("error");
+    await expect(service.loadAdapters()).rejects.toMatchObject({
+      code: "DEFINITION_INVALID",
+      context: {
+        issues: [
+          {
+            path: ["name"],
+            message:
+              "must be 3-63 lowercase letters, digits, or hyphens, starting and ending with a letter or digit",
+          },
+        ],
+      },
+    });
+  });
+
   test("rejects plain objects that mimic the adapter shape without createHttpAdapter", async () => {
     const file = writeAdapter(
       "unbranded.ts",

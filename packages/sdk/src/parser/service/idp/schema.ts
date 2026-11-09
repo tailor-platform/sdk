@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { resourceNameSchema } from "#/parser/service/common";
+import {
+  resourceNameSchema,
+  STATIC_WEBSITE_ORIGIN_PLACEHOLDER_PATTERN,
+} from "#/parser/service/common";
 import {
   ALL_EMAIL_DOMAINS,
   allowedEmailDomainPattern,
@@ -70,14 +73,7 @@ export const IdPGqlOperationsSchema = z
 
 export const IdPLangSchema = z.enum(["en", "ja"]).describe("IdP UI language");
 
-// Origins are either a literal http(s) origin (scheme + host + optional port,
-// no path/query/fragment) or a static-website `<name>:url` placeholder that
-// the CLI resolves to a real origin at apply time. The placeholder branch
-// uses the same slug rule as the platform's static-website name validator so
-// typos like `https://app.example.com:url` are rejected instead of being
-// silently interpreted as a website name at apply time.
-const allowedReturnOriginPattern =
-  /^(https?:\/\/[a-zA-Z0-9.-]+(:[0-9]+)?|[a-z0-9][a-z0-9-]{1,61}[a-z0-9]:url)$/;
+const httpOriginPattern = /^https?:\/\/[a-zA-Z0-9.-]+(:[0-9]+)?$/;
 
 export const IdPUserAuthPolicySchema = z
   .strictObject({
@@ -158,8 +154,10 @@ export const IdPUserAuthPolicySchema = z
       .array(
         z
           .string()
-          .regex(
-            allowedReturnOriginPattern,
+          .refine(
+            (origin) =>
+              httpOriginPattern.test(origin) ||
+              STATIC_WEBSITE_ORIGIN_PLACEHOLDER_PATTERN.test(origin),
             'must be an http(s) origin like "https://app.example.com" (scheme + host + optional port, no path/query/fragment) or a static-website placeholder like "<name>:url"',
           ),
       )

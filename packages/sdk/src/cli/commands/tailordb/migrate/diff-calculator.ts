@@ -6,13 +6,14 @@
  */
 
 import { collectNestedMemberChanges, type NestedMemberChange } from "./nested-members";
-import type {
-  SnapshotFieldConfig,
-  SnapshotGqlPermission,
-  SnapshotIndexConfig,
-  SnapshotRecordPermission,
-  SnapshotRelationship,
-  TailorDBSnapshotType,
+import {
+  SNAPSHOT_FIELD_BOOLEAN_PROPS,
+  type SnapshotFieldConfig,
+  type SnapshotGqlPermission,
+  type SnapshotIndexConfig,
+  type SnapshotRecordPermission,
+  type SnapshotRelationship,
+  type TailorDBSnapshotType,
 } from "./snapshot-types";
 
 // ============================================================================
@@ -511,6 +512,36 @@ function formatFieldModification(
   after: SnapshotFieldConfig,
   memberRenames: readonly NestedMemberRename[] = [],
 ): string {
+  const changes = formatOwnFieldConfigChanges(before, after);
+
+  const renamedPaths = new Set(
+    memberRenames.flatMap((rename) => [rename.previousPath.join("."), rename.path.join(".")]),
+  );
+  const members = collectNestedMemberChanges(before, after)
+    .filter((m) => !renamedPaths.has(m.path.join(".")))
+    .map(formatNestedMemberChange);
+  members.push(
+    ...memberRenames.map(
+      (rename) => `${rename.previousPath.join(".")} → ${rename.path.join(".")} (renamed)`,
+    ),
+  );
+  if (members.length > 0) {
+    changes.push(`members: ${members.join(", ")}`);
+  }
+
+  return changes.length > 0 ? changes.join(", ") : "configuration changed";
+}
+
+/**
+ * Format the changes to a field's own configuration, leaving out its nested members
+ * @param {SnapshotFieldConfig} before - Before field configuration
+ * @param {SnapshotFieldConfig} after - After field configuration
+ * @returns {string[]} One entry per changed attribute (may be empty)
+ */
+function formatOwnFieldConfigChanges(
+  before: SnapshotFieldConfig,
+  after: SnapshotFieldConfig,
+): string[] {
   const changes: string[] = [];
 
   if (before.type !== after.type) {
@@ -519,17 +550,17 @@ function formatFieldModification(
   if (before.required !== after.required) {
     changes.push(`required: ${before.required} → ${after.required}`);
   }
-  if (Boolean(before.array) !== Boolean(after.array)) {
-    changes.push(`array: ${before.array ?? false} → ${after.array ?? false}`);
+  for (const prop of SNAPSHOT_FIELD_BOOLEAN_PROPS) {
+    if (prop === "foreignKey") continue;
+    if (Boolean(before[prop]) !== Boolean(after[prop])) {
+      changes.push(`${prop}: ${before[prop] ?? false} → ${after[prop] ?? false}`);
+    }
   }
-  if (Boolean(before.index) !== Boolean(after.index)) {
-    changes.push(`index: ${before.index ?? false} → ${after.index ?? false}`);
-  }
-  if (Boolean(before.unique) !== Boolean(after.unique)) {
-    changes.push(`unique: ${before.unique ?? false} → ${after.unique ?? false}`);
-  }
-  if (Boolean(before.vector) !== Boolean(after.vector)) {
-    changes.push(`vector: ${before.vector ?? false} → ${after.vector ?? false}`);
+
+  const beforeForeignKeyTarget = formatForeignKeyTarget(before);
+  const afterForeignKeyTarget = formatForeignKeyTarget(after);
+  if (beforeForeignKeyTarget !== afterForeignKeyTarget) {
+    changes.push(`foreignKey: ${beforeForeignKeyTarget} → ${afterForeignKeyTarget}`);
   }
 
   const beforeAllowed = before.allowedValues ?? [];
@@ -565,22 +596,28 @@ function formatFieldModification(
     );
   }
 
-  const renamedPaths = new Set(
-    memberRenames.flatMap((rename) => [rename.previousPath.join("."), rename.path.join(".")]),
-  );
-  const members = collectNestedMemberChanges(before, after)
-    .filter((m) => !renamedPaths.has(m.path.join(".")))
-    .map((m) => `${NESTED_MEMBER_CHANGE_MARKERS[m.kind]}${m.path.join(".")}`);
-  members.push(
-    ...memberRenames.map(
-      (rename) => `${rename.previousPath.join(".")} → ${rename.path.join(".")} (renamed)`,
-    ),
-  );
-  if (members.length > 0) {
-    changes.push(`members: ${members.join(", ")}`);
-  }
+  return changes;
+}
 
-  return changes.length > 0 ? changes.join(", ") : "configuration changed";
+/**
+ * Format one member change inside a nested field
+ * @param {NestedMemberChange} change - Member change
+ * @returns {string} Marked member path, followed by a modified member's changes in parentheses when any render
+ */
+function formatNestedMemberChange(change: NestedMemberChange): string {
+  const markedPath = `${NESTED_MEMBER_CHANGE_MARKERS[change.kind]}${change.path.join(".")}`;
+  if (change.kind !== "modified") return markedPath;
+  const details = formatOwnFieldConfigChanges(change.before, change.after);
+  return details.length > 0 ? `${markedPath} (${details.join(", ")})` : markedPath;
+}
+
+/**
+ * Format the table and key a field references
+ * @param {SnapshotFieldConfig} field - Field configuration
+ * @returns {string} `<table>.<key>`, or `none` when the field has no foreign key
+ */
+function formatForeignKeyTarget(field: SnapshotFieldConfig): string {
+  return field.foreignKeyType ? `${field.foreignKeyType}.${field.foreignKeyField ?? "id"}` : "none";
 }
 
 const NESTED_MEMBER_CHANGE_MARKERS: Record<NestedMemberChange["kind"], string> = {

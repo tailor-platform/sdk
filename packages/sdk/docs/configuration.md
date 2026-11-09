@@ -1,5 +1,5 @@
 ---
-description: "Configure your application in tailor.config.ts, including application settings, services, bundling, auth, static websites, secrets, environment variables, workflows, and plugins."
+description: "Configure your application in tailor.config.ts, including application settings, services, bundling, auth, static websites, secrets, environment variables, workflows, plugins, and type definitions."
 ---
 
 # Configuration
@@ -127,6 +127,26 @@ export default defineConfig({
 });
 ```
 
+### Type Definitions Without `tailor generate`
+
+`tailor generate` and `tailor deploy` write `tailor.d.ts`, which declares the names and values your config defines (`Env`, `Attributes`, `MachineUserName`, `IdpName`, and so on) so your code is checked and autocompleted against them. With TypeScript 7.1 or later, TypeScript can read them from `tailor.config.ts` itself, so they are current without running either command.
+
+Add the SDK as a content mapper for `.tailor` files in `tsconfig.json`:
+
+```json
+{
+  "contentMappers": [{ "package": "@tailor-platform/sdk", "extensions": [".tailor"] }]
+}
+```
+
+Run `tsc` with `--runExternalCode`. TypeScript then runs your `tailor.config.ts` and the files it imports each time it checks the project, the same code `tailor generate` loads; without the flag it reports error TS18068 instead. Enable it only for projects whose code you trust. You do not create or import any `.tailor` file; the SDK ships the one TypeScript reads.
+
+Once `tsconfig.json` enables the mapper, `tailor generate` and `tailor deploy` stop writing `tailor.d.ts`, and warn when an old copy remains. They check only that `tsconfig.json` lists the mapper, not that TypeScript runs it, and TypeScript 6.0 and earlier ignore `contentMappers`: with them the names are no longer declared, so `MachineUserName` is any string and a misspelled machine user raises no error. Use TypeScript 7.1 or later wherever the mapper is enabled. Delete the old copy: while the file remains, TypeScript merges it with what it reads from `tailor.config.ts`, so a name you removed from the config (a machine user you deleted, for example) is still accepted.
+
+Every TypeScript project that uses these names must enable the mapper. A project in the same repository that keeps reading `tailor.d.ts` without the mapper is not supported: the commands no longer update the file, so it goes stale.
+
+The commands read the `tsconfig.json` that applies to `tailor.config.ts`: the nearest one that includes the file, following `extends`, so a base config shared by a monorepo's packages works. When a `tsconfig.json` only lists `references`, they use the referenced project that includes `tailor.config.ts`, so put `contentMappers` in that project's tsconfig. The mapper looks for `tailor.config.ts` upward from the directory of that tsconfig, so the commands stop writing `tailor.d.ts` only when that search finds this very file: a tsconfig at a monorepo's root that merely includes `packages/app/tailor.config.ts`, or a config with another name passed to `--config`, does not count, and they keep writing `tailor.d.ts` (put the tsconfig that enables the mapper in the package, next to its config). If you set `TAILOR_DTS_PATH`, they write the file there regardless.
+
 ### Service Configuration
 
 Specify glob patterns to load service files:
@@ -135,8 +155,7 @@ Specify glob patterns to load service files:
 export default defineConfig({
   db: {
     "my-db": {
-      files: ["db/**/*.ts"],
-      ignores: ["db/**/*.draft.ts"],
+      files: ["db/**/*.ts", "!db/**/*.draft.ts"],
     },
   },
   resolver: {
@@ -154,13 +173,21 @@ export default defineConfig({
 });
 ```
 
-**files**: Glob patterns to match files. Required.
+**files**: Glob patterns to match files. Required. A pattern starting with `!` excludes the files it matches. For each file, the last pattern that matches it decides, so a later pattern can include an excluded file again:
 
-**ignores**: Glob patterns to exclude files. Optional. By default, `**/*.test.ts` and `**/*.spec.ts` are automatically ignored. If you explicitly specify `ignores`, the default patterns will not be applied. Use `ignores: []` to include all files including test files.
+```typescript
+files: ["executors/**/*.ts", "!executors/internal/**", "executors/internal/keep.ts"],
+```
+
+To exclude a directory, match the files in it (`!executors/internal/**`); `!executors/internal` excludes nothing.
+
+Test files (`**/*.test.ts` and `**/*.spec.ts`) are excluded by default.
+
+**ignores** (deprecated): Glob patterns to exclude files. Optional. Write `!` patterns in `files` instead; `ignores` is removed in v3, and `tailor upgrade` moves its patterns into `files`. Specifying `ignores` replaces the default test-file exclusion, so `ignores: []` includes test files. `ignores` and the default test-file exclusion apply after `files`, so no `files` pattern includes the files they exclude. In v3, test files are no longer excluded by default; add `"!**/*.test.ts"` and `"!**/*.spec.ts"` to `files` to keep them out.
 
 **defaultPermission** (resolver namespaces only): Access requirement applied to every resolver in the namespace that declares no `permission` of its own. Optional, and takes the same values as a resolver's own `permission`. See [Namespace-wide default](./services/resolver.md#namespace-wide-default-defaultpermission).
 
-**Pattern resolution**: `files` and `ignores` patterns are resolved relative to the directory of the `tailor.config.ts` file that declares them, not the directory you run the command from. This matters when deploying [multiple configs](./cli/application.md#deploy) together — each config's patterns only match files under its own directory. If a config's _relative_ patterns match nothing under its own directory, the SDK falls back to resolving them from the directory you ran the command from and logs a warning (this fallback doesn't apply to already-absolute patterns, since their resolution can't change). Update such patterns to be relative to the config's own directory — this fallback will be removed in v2.
+**Pattern resolution**: `files` patterns, `!` patterns included, and `ignores` patterns are resolved relative to the directory of the `tailor.config.ts` file that declares them, not the directory you run the command from. This matters when deploying [multiple configs](./cli/application.md#deploy) together — each config's patterns only match files under its own directory. If a config's _relative_ patterns match nothing under its own directory, the SDK falls back to resolving them from the directory you ran the command from and logs a warning (this fallback doesn't apply to already-absolute patterns, since their resolution can't change). Update such patterns to be relative to the config's own directory — this fallback will be removed in v2.
 
 ### Bundling
 
@@ -262,6 +289,7 @@ When using external resources:
 - The resource must be deployed and available before referencing it
 - You can combine external resources with locally-defined resources
 - TailorDB table names must remain unique across local and external TailorDB namespaces; `deploy` checks external TailorDB table names before applying changes
+- A TailorDB namespace, resolver namespace, or Auth service that another application references as external cannot be deleted. `deploy` and `remove` both stop with `SERVICE_IN_USE` before changing anything and list every application that still uses it, including applications the `deploy` does not include. For `deploy`, keep the resource in the config that defines it, or deploy the referencing applications without it, first or in the same `deploy`. For `remove`, first remove the referencing applications or deploy them without it
 - Destructive operations like `tailordb truncate` (and `tailor seed apply --truncate`) automatically exclude external resources to prevent accidental data loss in shared resources
 - Subscribing an executor to an external resource's events requires the config that owns the resource in the same `deploy`. Publishing is then enabled automatically, and `deploy` records the dependency so a later deploy without that config asks for confirmation instead of silently turning publishing off
 
@@ -510,15 +538,14 @@ Configure Workflow service by specifying glob patterns for workflow files:
 ```typescript
 export default defineConfig({
   workflow: {
-    files: ["workflows/**/*.ts"],
-    ignores: ["workflows/**/*.draft.ts"],
+    files: ["workflows/**/*.ts", "!workflows/**/*.draft.ts"],
   },
 });
 ```
 
-**files**: Glob patterns to match workflow files. Required.
+**files**: Glob patterns to match workflow files. Required. A pattern starting with `!` excludes files, and test files are excluded by default; see [Service Configuration](#service-configuration).
 
-**ignores**: Glob patterns to exclude files. Optional.
+**ignores** (deprecated): Glob patterns to exclude files. Optional. Write `!` patterns in `files` instead. Specifying `ignores` replaces the default test-file exclusion; see [Service Configuration](#service-configuration).
 
 ### Workflow Execution Policies
 

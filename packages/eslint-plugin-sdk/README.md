@@ -30,6 +30,7 @@ Add the plugin and its rules to `.oxlintrc.json`:
     "tailor-sdk/no-job-start-outside-body": "warn",
     "tailor-sdk/no-node-builtin-imports": "warn",
     "tailor-sdk/no-node-only-globals": "warn",
+    "tailor-sdk/no-plain-tailor-any-field-param": "warn",
     "tailor-sdk/no-unconditional-permit": "warn",
     "tailor-sdk/valid-execution-policy-definition": "warn",
     "tailor-sdk/valid-resolver-permission": "warn",
@@ -289,6 +290,37 @@ scripts, and tests are left alone, and so are helper modules imported by a funct
 still checks the bundled output. In a file that only defines HTTP adapters the messages omit the
 suggestions, which are written for `body` functions. References that reach the global through
 `globalThis.process`, and references guarded by `typeof process !== "undefined"`, are not reported.
+
+### `no-plain-tailor-any-field-param` (warning)
+
+When a helper uses a field passed to a parameter typed with `TailorAnyField` itself to build another
+field, such as with `t.object()`, the passed field's output type becomes `any`, so `t.infer` and
+resolver `body` types stop checking it. A type parameter constrained by `TailorAnyField` keeps the
+field's type.
+
+Incorrect:
+
+```ts
+function paginated(item: Record<string, TailorAnyField>) {
+  return t.object({ items: t.object(item, { array: true }), totalCount: t.int() });
+}
+```
+
+Correct:
+
+```ts
+function paginated<F extends Record<string, TailorAnyField>>(item: F) {
+  return t.object({ items: t.object(item, { array: true }), totalCount: t.int() });
+}
+```
+
+The rule reports `TailorAnyField` in a function parameter's type, including inside arrays, unions,
+object types, and type arguments such as `Record<...>`, `Map<...>`, or `Promise<...>`. It also
+reports a helper that only reads the field, such as one that returns `field.metadata.description`;
+the same rewrite is harmless there. Callback types, callbacks passed directly to a call such as
+`.map()`, type parameter constraints, and the implementation of an overloaded function are not
+reported. It does not follow type aliases or interfaces, and it does not check a function typed
+through a variable annotation such as `const wrap: (field: TailorAnyField) => ...`.
 
 ### `valid-execution-policy-definition` (warning)
 

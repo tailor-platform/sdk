@@ -340,7 +340,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
             return undefined;
           }
 
-          const typeFiles = [...new Set(loadFilesWithIgnores(config, baseDir))];
+          const typeFiles = loadFilesWithIgnores(config, baseDir);
 
           const tsconfig = await resolveTSConfigWithFallback(baseDir);
 

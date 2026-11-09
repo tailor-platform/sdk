@@ -888,7 +888,7 @@ export function unsetCheckpointDriftHints(
         namespace,
         configPath: context.configPath,
       });
-      return `Namespace "${namespace}" has no migration checkpoint yet, so its tables must match migration 0000. Run ${syncCommand} to rewrite them to 0000, which deletes the tables and fields that 0000 does not have together with their data. To keep the tables instead, update the local tables to match them and recreate 0000 with ${generateCommand}, which deletes every migration of the namespace, so only while no workspace has been deployed with them.`;
+      return `Namespace "${namespace}" has no migration checkpoint yet, so its tables must match migration 0000. Run ${syncCommand} to rewrite them to 0000, which removes the fields that 0000 does not have and deletes the tables it does not have together with their data. To keep the tables instead, update the local tables to match them and recreate 0000 with ${generateCommand}, which deletes every migration of the namespace, so only while no workspace has been deployed with them.`;
     });
 }
 
