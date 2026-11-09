@@ -286,39 +286,6 @@ jobs:
             return [`${fence}text`, prompt, fence];
           }
 
-          function agentSkipReason() {
-            const { SAME_REPOSITORY, ACTOR, AGENT_BOT, COMMIT_MESSAGE, AGENT_COMMIT_MESSAGE } = process.env;
-            if (SAME_REPOSITORY !== "true") return "the pull request comes from a fork";
-            if (ACTOR.endsWith("[bot]") && ACTOR !== AGENT_BOT) {
-              return `only ${AGENT_BOT} among bots can start it, not ${ACTOR}`;
-            }
-            const subject = execFileSync("git", ["log", "-1", "--format=%s"], { encoding: "utf-8" }).trim();
-            if (subject === COMMIT_MESSAGE || subject === AGENT_COMMIT_MESSAGE) {
-              return "the head commit is the workflow's own fix commit";
-            }
-          }
-
-          function agentPrompt(handoffs) {
-            const lines = [
-              `You are finishing an upgrade of ${SDK} in this repository. Its codemods already rewrote what they could. Finish the migrations below by editing the repository's files.`,
-              "",
-              "- Edit only files in this repository, and only to finish these migrations.",
-              "- Do not run commands, commit, push, or open pull requests: the workflow commits your edits.",
-              "- Do not edit files under .github/workflows.",
-              "- Leave code that already follows a migration as it is.",
-              "",
-              "Paths are relative to the repository root.",
-              "",
-            ];
-            for (const { dir, from, to, reviews } of handoffs) {
-              lines.push(`## ${SDK} ${from} → ${to} in ${appOf(dir)}`, "");
-              for (const review of reviews) {
-                lines.push(`### ${review.codemodId}`, "", ...reviewItems(dir, review), "", ...promptBlock(review), "");
-              }
-            }
-            return lines.join("\n");
-          }
-
           function report(dir, from, to, output) {
             const app = appOf(dir);
             const level = mode === "error" ? "error" : "warning";
@@ -407,8 +374,43 @@ jobs:
             return mode === "error" && (pending.length > 0 || reviews.length > 0);
           }
 
-          let pending = false;
+          # __CODEMOD_AGENT_SCRIPT_START__
+          function agentSkipReason() {
+            const { SAME_REPOSITORY, ACTOR, AGENT_BOT, COMMIT_MESSAGE, AGENT_COMMIT_MESSAGE } = process.env;
+            if (SAME_REPOSITORY !== "true") return "the pull request comes from a fork";
+            if (ACTOR.endsWith("[bot]") && ACTOR !== AGENT_BOT) {
+              return `only ${AGENT_BOT} among bots can start it, not ${ACTOR}`;
+            }
+            const subject = execFileSync("git", ["log", "-1", "--format=%s"], { encoding: "utf-8" }).trim();
+            if (subject === COMMIT_MESSAGE || subject === AGENT_COMMIT_MESSAGE) {
+              return "the head commit is the workflow's own fix commit";
+            }
+          }
+
+          function agentPrompt(handoffs) {
+            const lines = [
+              `You are finishing an upgrade of ${SDK} in this repository. Its codemods already rewrote what they could. Finish the migrations below by editing the repository's files.`,
+              "",
+              "- Edit only files in this repository, and only to finish these migrations.",
+              "- Do not run commands, commit, push, or open pull requests: the workflow commits your edits.",
+              "- Do not edit files under .github/workflows.",
+              "- Leave code that already follows a migration as it is.",
+              "",
+              "Paths are relative to the repository root.",
+              "",
+            ];
+            for (const { dir, from, to, reviews } of handoffs) {
+              lines.push(`## ${SDK} ${from} → ${to} in ${appOf(dir)}`, "");
+              for (const review of reviews) {
+                lines.push(`### ${review.codemodId}`, "", ...reviewItems(dir, review), "", ...promptBlock(review), "");
+              }
+            }
+            return lines.join("\n");
+          }
+
           const handoffs = [];
+          # __CODEMOD_AGENT_SCRIPT_END__
+          let pending = false;
           for (const dir of JSON.parse(process.env.APP_DIRS)) {
             const app = appOf(dir);
             const to = installedVersion(dir);
@@ -454,9 +456,12 @@ jobs:
               upgradeResult(result.stdout) ??
               fail(`tailor upgrade --from ${from} printed no result for ${app}.`);
             if (report(dir, from, to, output)) pending = true;
+            # __CODEMOD_AGENT_SCRIPT_START__
             if (output.llmReviews.length > 0) handoffs.push({ dir, from, to, reviews: output.llmReviews });
+            # __CODEMOD_AGENT_SCRIPT_END__
           }
           if (pending) fs.appendFileSync(process.env.GITHUB_OUTPUT, "pending=true\n");
+          # __CODEMOD_AGENT_SCRIPT_START__
           const agent = process.env.AGENT;
           if (agent && handoffs.length > 0) {
             const reason = agentSkipReason();
@@ -469,6 +474,7 @@ jobs:
               fs.appendFileSync(process.env.GITHUB_OUTPUT, "agent=true\n");
             }
           }
+          # __CODEMOD_AGENT_SCRIPT_END__
           NODE
       # __CODEMOD_END__
       # __GENERATE_START__

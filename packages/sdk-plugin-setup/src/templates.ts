@@ -212,7 +212,7 @@ function block(content: string, name: string, keep: boolean): string {
     return content.replace(new RegExp(`^ *# __${name}_(?:START|END)__\\n`, "gm"), "");
   }
   return content.replace(
-    new RegExp(`^ *# __${name}_START__\\n[\\s\\S]*?^ *# __${name}_END__\\n`, "m"),
+    new RegExp(`^ *# __${name}_START__\\n[\\s\\S]*?^ *# __${name}_END__\\n`, "gm"),
     "",
   );
 }
@@ -1007,6 +1007,7 @@ export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult
   );
   out = block(out, "CODEMOD_BASE", runsCodemods);
   out = block(out, "CODEMOD", runsCodemods);
+  out = block(out, "CODEMOD_AGENT_SCRIPT", agent !== undefined);
   out = line(
     out,
     "CODEMOD_AGENT_ENV",

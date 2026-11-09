@@ -12,6 +12,7 @@ import {
   AUTOFIX_CODEMODS,
   AUTOFIX_PROVIDERS,
   AUTOFIX_WORKFLOW_FILE,
+  isAutofixAgent,
   TEMPLATE_VERSION,
   type AutofixAgent,
   type AutofixCodemod,
@@ -130,6 +131,20 @@ describe("renderAutofixWorkflow", () => {
         const workflow = workflowOf(provider, { codemod });
         expect(workflow.jobs["tailor-codemod-result"]).toBeUndefined();
         expect(workflow.jobs["tailor-autofix"]?.outputs?.["codemod-pending"]).toBeUndefined();
+      }
+    },
+  );
+
+  test.each(AUTOFIX_CODEMODS)(
+    "codemod %s: carries the agent's code only with an agent",
+    (codemod) => {
+      const script = stepOf(
+        workflowOf("github-token", { codemod }),
+        "tailor-autofix",
+        "tailor-codemod",
+      ).run;
+      for (const code of ["agentSkipReason", "agentPrompt", "handoffs", "process.env.AGENT"]) {
+        expect(script?.includes(code)).toBe(isAutofixAgent(codemod));
       }
     },
   );
