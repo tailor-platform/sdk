@@ -6,7 +6,6 @@ import { definitionInvalidError } from "#/cli/shared/validation-errors";
 import { ResolverSchema } from "#/parser/service/resolver/index";
 import { isSdkBranded } from "#/utils/brand";
 import { parseResolverDefaultPermission } from "./default-permission";
-import { warnActingUserIdInputs } from "./input-warnings";
 import { generatePluginResolverFiles } from "./plugin-resolvers";
 import type { ResolverServiceConfig } from "#/configure/config/types";
 import type { PluginManager } from "#/plugin/manager";
@@ -113,11 +112,6 @@ export function createResolverService(
       await Promise.all(resolverFiles.map((resolverFile) => loadResolverForFile(resolverFile)));
       assertUniqueResolverNames(resolvers, namespace);
       warnUndeclaredPermissions({ namespace, defaultPermission, resolvers });
-      const generated = new Set(generatedFiles);
-      const userResolvers = Object.entries(resolvers)
-        .filter(([file]) => !generated.has(file))
-        .map(([, resolver]) => resolver);
-      warnActingUserIdInputs({ namespace, resolvers: userResolvers });
       loaded = true;
     },
   };
