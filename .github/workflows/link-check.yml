@@ -34,7 +34,7 @@ jobs:
             --no-progress
             --include-fragments
             --exclude 'mailto:'
-            packages/sdk/docs/**/*.md
+            'packages/sdk/docs/**/*.md'
           fail: true
 
       # docs.tailor.tech only serves packages/sdk/docs/, so relative links that
