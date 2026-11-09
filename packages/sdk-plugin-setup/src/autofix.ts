@@ -203,7 +203,7 @@ const PROVIDER_STEPS: Record<AutofixProvider, string[]> = {
 function agentSteps(result: AutofixSetupResult): string[] | undefined {
   if (!isAutofixAgent(result.codemod)) return undefined;
   const bots = `   Among bots, only ${AGENT_BOT}[bot] can start the agent.`;
-  const [secret] = agentRequirements(result);
+  const secret = agentRequirements(result).find((requirement) => requirement.type === "secret");
   if (!secret) {
     return [
       '2. Allow "Copilot CLI billed to the organization" in the Copilot policies of the',

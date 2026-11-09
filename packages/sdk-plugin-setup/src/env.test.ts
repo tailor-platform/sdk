@@ -137,22 +137,27 @@ describe("autofixRequirements matches the secrets/vars the rendered autofix work
   });
 
   test.each([
-    ["claude", undefined, "TAILOR_AUTOFIX_ANTHROPIC_API_KEY"],
-    ["codex", undefined, "TAILOR_AUTOFIX_OPENAI_API_KEY"],
-    ["copilot", "pat", "TAILOR_AUTOFIX_COPILOT_TOKEN"],
-  ] as const)("codemod %s with Copilot auth %s needs %s", (codemod, copilotAuth, name) => {
-    expect(
-      autofixRequirements({ provider: "github-app", codemod, copilotAuth }).map((r) => [
-        r.type,
-        r.name,
-        r.required,
-      ]),
-    ).toEqual([
-      ["variable", "TAILOR_AUTOFIX_APP_CLIENT_ID", true],
-      ["secret", "TAILOR_AUTOFIX_APP_PRIVATE_KEY", true],
-      ["secret", name, true],
-    ]);
-  });
+    ["claude", undefined, ["TAILOR_AUTOFIX_ANTHROPIC_API_KEY"], "TAILOR_AUTOFIX_CLAUDE_MODEL"],
+    ["codex", undefined, ["TAILOR_AUTOFIX_OPENAI_API_KEY"], "TAILOR_AUTOFIX_CODEX_MODEL"],
+    ["copilot", "pat", ["TAILOR_AUTOFIX_COPILOT_TOKEN"], "TAILOR_AUTOFIX_COPILOT_MODEL"],
+    ["copilot", "github-token", [], "TAILOR_AUTOFIX_COPILOT_MODEL"],
+  ] as const)(
+    "codemod %s with Copilot auth %s needs %j, and takes the model from the optional %s",
+    (codemod, copilotAuth, secrets, model) => {
+      expect(
+        autofixRequirements({ provider: "github-app", codemod, copilotAuth }).map((r) => [
+          r.type,
+          r.name,
+          r.required,
+        ]),
+      ).toEqual([
+        ["variable", "TAILOR_AUTOFIX_APP_CLIENT_ID", true],
+        ["secret", "TAILOR_AUTOFIX_APP_PRIVATE_KEY", true],
+        ...secrets.map((name) => ["secret", name, true]),
+        ["variable", model, false],
+      ]);
+    },
+  );
 });
 
 describe("repository secrets and variables of the autofix workflow", () => {

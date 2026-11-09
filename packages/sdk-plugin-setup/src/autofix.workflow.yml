@@ -580,6 +580,8 @@ jobs:
         continue-on-error: true
         timeout-minutes: 20
         uses: anthropics/claude-code-action@6b6870e649b5ff408753befeaee5fc7989d4e6a9 # v1.0.258
+        env:
+          ANTHROPIC_MODEL: ${{ vars.TAILOR_AUTOFIX_CLAUDE_MODEL }}
         with:
           anthropic_api_key: ${{ secrets.TAILOR_AUTOFIX_ANTHROPIC_API_KEY }}
           github_token: ${{ github.token }}
@@ -594,6 +596,7 @@ jobs:
         uses: openai/codex-action@bdf19a4a223ec2549a3e2274a0cf61556bc07675 # v1.13
         with:
           openai-api-key: ${{ secrets.TAILOR_AUTOFIX_OPENAI_API_KEY }}
+          model: ${{ vars.TAILOR_AUTOFIX_CODEX_MODEL }}
           prompt-file: ${{ runner.temp }}/tailor-codemod-agent/prompt.md
           permission-profile: ":workspace"
           codex-version: 0.163.0
@@ -615,6 +618,7 @@ jobs:
         timeout-minutes: 20
         env:
           # __COPILOT_TOKEN__
+          COPILOT_MODEL: ${{ vars.TAILOR_AUTOFIX_COPILOT_MODEL }}
           COPILOT_AUTO_UPDATE: "false"
           ACTOR: ${{ github.actor }}
         # Copilot CLI checks no actor itself, unlike the other agents' actions.
@@ -622,6 +626,9 @@ jobs:
           if [[ "$ACTOR" == *"[bot]" && "$ACTOR" != "__AGENT_BOT__[bot]" ]]; then
             echo "::warning::Only __AGENT_BOT__[bot] among bots can start copilot, not $ACTOR."
             exit 1
+          fi
+          if [ -z "$COPILOT_MODEL" ]; then
+            unset COPILOT_MODEL
           fi
           copilot -s --no-ask-user --allow-tool=write --deny-tool=shell --deny-tool=url --disable-builtin-mcps < "$RUNNER_TEMP/tailor-codemod-agent/prompt.md"
       # __COPILOT_END__

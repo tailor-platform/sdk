@@ -286,8 +286,32 @@ const COPILOT_TOKEN: EnvRequirement = {
     "(https://github.com/settings/personal-access-tokens/new), owned by an account with Copilot",
 };
 
+const modelRequirement = (name: string, agent: string, howTo: string): EnvRequirement => ({
+  name,
+  type: "variable",
+  required: false,
+  description: `Model the ${agent} agent of the autofix workflow uses; when unset, the agent uses its default model`,
+  howTo,
+});
+
+const CLAUDE_MODEL = modelRequirement(
+  "TAILOR_AUTOFIX_CLAUDE_MODEL",
+  "claude",
+  "a model name Claude Code accepts with --model",
+);
+const CODEX_MODEL = modelRequirement(
+  "TAILOR_AUTOFIX_CODEX_MODEL",
+  "codex",
+  "a model name Codex accepts with --model",
+);
+const COPILOT_MODEL = modelRequirement(
+  "TAILOR_AUTOFIX_COPILOT_MODEL",
+  "copilot",
+  "a model name Copilot CLI accepts with --model",
+);
+
 /**
- * Repository secrets the agent of a codemod mode signs in with.
+ * Repository secrets the agent of a codemod mode signs in with, and the variable that picks its model.
  * @param inputs - The codemod mode and, for copilot, its authentication
  * @returns Requirements in display order; none for a mode without an agent
  */
@@ -296,11 +320,13 @@ export function agentRequirements(
 ): EnvRequirement[] {
   switch (inputs.codemod) {
     case "claude":
-      return [ANTHROPIC_API_KEY];
+      return [ANTHROPIC_API_KEY, CLAUDE_MODEL];
     case "codex":
-      return [OPENAI_API_KEY];
+      return [OPENAI_API_KEY, CODEX_MODEL];
     case "copilot":
-      return inputs.copilotAuth === "github-token" ? [] : [COPILOT_TOKEN];
+      return inputs.copilotAuth === "github-token"
+        ? [COPILOT_MODEL]
+        : [COPILOT_TOKEN, COPILOT_MODEL];
     default:
       return [];
   }

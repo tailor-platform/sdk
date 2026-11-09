@@ -250,7 +250,7 @@ describe("renderAutofixWorkflow", () => {
     },
   );
 
-  test("agents: run each agent with its secret, only the tools it needs, and Renovate as the only bot", () => {
+  test("agents: run each agent with its secret, the model its repository variable names, only the tools it needs, and Renovate as the only bot", () => {
     const step = (codemod: AutofixAgent, id: string, copilotAuth?: CopilotAuth) =>
       stepOf(workflowOf("github-token", { codemod, copilotAuth }), "tailor-codemod-agent", id);
     const bounded = { "continue-on-error": true, "timeout-minutes": 20 };
@@ -258,6 +258,7 @@ describe("renderAutofixWorkflow", () => {
       id: "tailor-claude",
       ...bounded,
       uses: expect.stringMatching(/^anthropics\/claude-code-action@[0-9a-f]{40}$/),
+      env: { ANTHROPIC_MODEL: "${{ vars.TAILOR_AUTOFIX_CLAUDE_MODEL }}" },
       with: {
         anthropic_api_key: "${{ secrets.TAILOR_AUTOFIX_ANTHROPIC_API_KEY }}",
         github_token: "${{ github.token }}",
@@ -273,6 +274,7 @@ describe("renderAutofixWorkflow", () => {
       uses: expect.stringMatching(/^openai\/codex-action@[0-9a-f]{40}$/),
       with: {
         "openai-api-key": "${{ secrets.TAILOR_AUTOFIX_OPENAI_API_KEY }}",
+        model: "${{ vars.TAILOR_AUTOFIX_CODEX_MODEL }}",
         "prompt-file": "${{ runner.temp }}/tailor-codemod-agent/prompt.md",
         "permission-profile": ":workspace",
         "codex-version": "0.163.0",
@@ -293,11 +295,13 @@ describe("renderAutofixWorkflow", () => {
     );
     expect(copilot("pat").env).toEqual({
       COPILOT_GITHUB_TOKEN: "${{ secrets.TAILOR_AUTOFIX_COPILOT_TOKEN }}",
+      COPILOT_MODEL: "${{ vars.TAILOR_AUTOFIX_COPILOT_MODEL }}",
       COPILOT_AUTO_UPDATE: "false",
       ACTOR: "${{ github.actor }}",
     });
     expect(copilot("github-token").env).toEqual({
       GITHUB_TOKEN: "${{ github.token }}",
+      COPILOT_MODEL: "${{ vars.TAILOR_AUTOFIX_COPILOT_MODEL }}",
       COPILOT_AUTO_UPDATE: "false",
       ACTOR: "${{ github.actor }}",
     });
@@ -981,12 +985,13 @@ function agentEdits(checkout: string): void {
 }
 
 describe("tailor-codemod-agent job scripts", () => {
-  const runCopilot = (root: string, actor: string) => {
+  const runCopilot = (root: string, actor: string, model = "") => {
     const runnerTemp = path.join(root, "runner-temp");
     fs.mkdirSync(path.join(runnerTemp, "tailor-codemod-agent"), { recursive: true });
     fs.writeFileSync(path.join(runnerTemp, "tailor-codemod-agent", "prompt.md"), "Migrate.\n");
+    const modelFile = path.join(root, "model");
     const PATH = fakeCommands(root, {
-      copilot: `#!/usr/bin/env bash\ncat > "${path.join(root, "calls")}"\n`,
+      copilot: `#!/usr/bin/env bash\ncat > "${path.join(root, "calls")}"\nprintf '%s' "\${COPILOT_MODEL-unset}" > "${modelFile}"\n`,
     });
     const result = runSteps({
       workflow: workflowOf("github-token", { codemod: "copilot" }),
@@ -994,10 +999,14 @@ describe("tailor-codemod-agent job scripts", () => {
       steps: ["tailor-copilot"],
       cwd: root,
       runnerTemp,
-      context: { "secrets.TAILOR_AUTOFIX_COPILOT_TOKEN": "token", "github.actor": actor },
+      context: {
+        "secrets.TAILOR_AUTOFIX_COPILOT_TOKEN": "token",
+        "vars.TAILOR_AUTOFIX_COPILOT_MODEL": model,
+        "github.actor": actor,
+      },
       env: { PATH },
     });
-    return { result, prompt: callsOf(root) };
+    return { result, prompt: callsOf(root), model: () => fs.readFileSync(modelFile, "utf-8") };
   };
 
   test.each(["renovate[bot]", "octocat"])("copilot: reads the prompt for %s", (actor) => {
@@ -1005,6 +1014,16 @@ describe("tailor-codemod-agent job scripts", () => {
     const { result, prompt } = runCopilot(tmp.dir, actor);
     expect(result.failure).toBeUndefined();
     expect(prompt).toBe("Migrate.\n");
+  });
+
+  test.each([
+    ["gpt-5.5", "gpt-5.5"],
+    ["", "unset"],
+  ])("copilot: takes the model %j from the repository variable", (variable, model) => {
+    using tmp = tempDir("codemod-copilot-");
+    const result = runCopilot(tmp.dir, "octocat", variable);
+    expect(result.result.failure).toBeUndefined();
+    expect(result.model()).toBe(model);
   });
 
   test("copilot: does not start for a bot other than Renovate", () => {
