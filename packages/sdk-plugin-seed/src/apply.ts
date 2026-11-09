@@ -298,7 +298,7 @@ async function hookIdpUserRows(
   schemaDir: string,
   rows: SeedData[string] | undefined,
 ): Promise<SeedData[string]> {
-  const { hookSeedRows } = await import("@tailor-platform/sdk/seed");
+  const { hookSeedRows } = await import("./seed-data");
   const source = rows ?? [];
   const hooked = (await hookSeedRows({
     schemaDir,

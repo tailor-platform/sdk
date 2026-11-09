@@ -40,7 +40,7 @@ export const seedFillCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
-    const { fillSeedData } = await import("@tailor-platform/sdk/seed");
+    const { fillSeedData } = await import("./seed-data");
 
     const fields = args.fields
       .split(",")
