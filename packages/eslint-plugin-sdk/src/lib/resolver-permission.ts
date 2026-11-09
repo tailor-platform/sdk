@@ -69,3 +69,40 @@ export function policyPermit(
 ): boolean | null {
   return staticBoolean(resolveValue(context, literalProperty(policy, "permit")?.value));
 }
+
+/**
+ * The input fields a resolver `permission` compares with the caller; null when any part of it
+ * cannot be read statically.
+ */
+export function permissionInputFields(
+  context: Rule.RuleContext,
+  node: AstNode,
+): Set<string> | null {
+  const value = resolveValue(context, node);
+  if (staticString(value) === "allowAnonymous") return new Set();
+  const policies = literalElements(value);
+  if (policies === null) return null;
+  const fields = new Set<string>();
+  for (const element of policies) {
+    const policy = resolveValue(context, element);
+    if (literalProperties(policy) === null) return null;
+    const property = literalProperty(policy, "conditions");
+    if (property === null) continue;
+    const conditions = resolveValue(context, property.value);
+    const elements = literalElements(conditions);
+    if (conditions === null || conditions === undefined || elements === null) return null;
+    const { tuples, complete } = conditionTuples(context, conditions, elements);
+    if (!complete) return null;
+    for (const tuple of tuples) {
+      for (const side of [tuple.elements[0], tuple.elements[2]]) {
+        const sideOperand = side === undefined ? undefined : operand(context, side);
+        if (sideOperand?.kind === "unknown") return null;
+        if (sideOperand?.kind === "input") {
+          if (sideOperand.field === null) return null;
+          fields.add(sideOperand.field);
+        }
+      }
+    }
+  }
+  return fields;
+}

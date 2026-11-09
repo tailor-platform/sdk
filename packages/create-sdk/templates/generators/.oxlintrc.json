@@ -24,6 +24,7 @@
     "tailor-sdk/no-plain-tailor-any-field-param": "warn",
     "tailor-sdk/no-unbound-caller-id-input": "warn",
     "tailor-sdk/no-unconditional-permit": "warn",
+    "tailor-sdk/no-unused-resolver-input": "warn",
     "tailor-sdk/valid-execution-policy-definition": "warn",
     "tailor-sdk/valid-resolver-permission": "warn",
     "tailor-sdk/valid-workflow-exports": "warn",

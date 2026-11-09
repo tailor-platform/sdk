@@ -33,6 +33,7 @@ Add the plugin and its rules to `.oxlintrc.json`:
     "tailor-sdk/no-plain-tailor-any-field-param": "warn",
     "tailor-sdk/no-unbound-caller-id-input": "warn",
     "tailor-sdk/no-unconditional-permit": "warn",
+    "tailor-sdk/no-unused-resolver-input": "warn",
     "tailor-sdk/valid-execution-policy-definition": "warn",
     "tailor-sdk/valid-resolver-permission": "warn",
     "tailor-sdk/valid-workflow-exports": "warn",
@@ -42,8 +43,8 @@ Add the plugin and its rules to `.oxlintrc.json`:
 }
 ```
 
-Oxlint JavaScript plugins are currently alpha. These rules use syntax and import binding analysis
-only; they do not require type-aware custom rule support.
+Oxlint JavaScript plugins are currently alpha. These rules use syntax, import binding, and scope
+analysis only; they do not require type-aware custom rule support.
 
 ## ESLint
 
@@ -443,3 +444,52 @@ cannot read the resolver's options, `operation`, `input`, or the field's options
 computed or a spread follows it in `input`, or when the rule cannot read whether a `permit: true`
 policy compares it. An input is still reported when one `permit: true` policy the rule can read does
 not compare it, even if other policies cannot be read.
+
+### `no-unused-resolver-input` (warning)
+
+A resolver `input` field that `body` never reads still appears in the GraphQL schema, so a caller may
+expect it to take effect. The rule reports such a field on its declaration.
+
+Incorrect:
+
+```ts
+export default createResolver({
+  name: "updateNote",
+  operation: "mutation",
+  input: { noteId: t.string(), note: t.string(), draft: t.bool() },
+  body: ({ input }) => saveNote(input.noteId, input.note),
+  output: t.bool(),
+});
+```
+
+Correct:
+
+```ts
+export default createResolver({
+  name: "updateNote",
+  operation: "mutation",
+  input: { noteId: t.string(), note: t.string() },
+  body: ({ input }) => saveNote(input.noteId, input.note),
+  output: t.bool(),
+});
+```
+
+A field also counts as used when the resolver's `permission` compares it with the caller through an
+`{ input }` operand, or when it, or a field nested in it, declares a `validate`. Reads in `body`'s
+parameter defaults, such as `({ input, x = input.b }) => …`, count too.
+
+The rule does not report a resolver when it cannot tell which fields `body` reads: `body` passes
+`input` or its whole argument on (to another function, a spread, a rest element, a dynamic key, or
+an `in` check), or reassigns it. Like `valid-resolver-permission`, it also skips a resolver whose
+config, `input`, `body`, or `permission` it cannot read statically, and it does not report a field
+built by a function of your own or imported from another module, which may declare a `validate`.
+
+To keep an input that is ignored on purpose, disable the rule on its line:
+
+```ts
+input: {
+  noteId: t.string(),
+  // eslint-disable-next-line tailor-sdk/no-unused-resolver-input -- kept for older clients
+  draft: t.bool(),
+},
+```

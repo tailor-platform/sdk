@@ -30,7 +30,7 @@ export interface ImportTracker {
   isNamespace(node: AstNode | null | undefined): boolean;
 }
 
-function findVariable(sourceCode: SourceCode, node: AstIdentifier): Scope.Variable | null {
+export function findVariable(sourceCode: SourceCode, node: AstIdentifier): Scope.Variable | null {
   let scope: Scope.Scope | null = sourceCode.getScope(node);
   while (scope !== null) {
     const variable = scope.set.get(node.name);

@@ -32,6 +32,10 @@ interface OptionalMemberExpressionNode {
 export type AstNode = EstreeNode | ExpressionWrapperNode | OptionalMemberExpressionNode;
 export type AstArrayExpression = Extract<EstreeNode, { type: "ArrayExpression" }>;
 export type AstCallExpression = Extract<EstreeNode, { type: "CallExpression" }>;
+export type AstFunctionExpression = Extract<
+  EstreeNode,
+  { type: "ArrowFunctionExpression" | "FunctionExpression" }
+>;
 export type AstIdentifier = Extract<EstreeNode, { type: "Identifier" }>;
 export type AstImportDeclaration = Extract<EstreeNode, { type: "ImportDeclaration" }>;
 export type AstMethodDefinition = Extract<EstreeNode, { type: "MethodDefinition" }>;
@@ -50,6 +54,22 @@ export function unwrapExpression(node: AstNode | null | undefined): AstNode | nu
     current = (current as ExpressionWrapperNode).expression;
   }
   return current;
+}
+
+/** The outermost wrapper around an expression, whose parent uses the expression's value. */
+export function outermostWrapper(node: AstNode): AstNode {
+  let current = node;
+  for (let parent = parentOf(current); parent !== null; parent = parentOf(current)) {
+    if (parent.type !== "ChainExpression" && !EXPRESSION_WRAPPERS.has(parent.type)) break;
+    current = parent;
+  }
+  return current;
+}
+
+export function isFunctionExpression(
+  node: AstNode | null | undefined,
+): node is AstFunctionExpression {
+  return node?.type === "ArrowFunctionExpression" || node?.type === "FunctionExpression";
 }
 
 function nodeType(node: AstNode | null | undefined): string | undefined {
