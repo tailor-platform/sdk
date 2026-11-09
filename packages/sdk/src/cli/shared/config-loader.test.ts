@@ -169,6 +169,35 @@ describe("loadConfig", () => {
     });
   });
 
+  test("rejects a plugin that defines both TailorDB namespace hook names", async () => {
+    const configPath = writeConfig(`
+      export default { name: "test-app" };
+      export const plugins = [{
+        id: "both",
+        description: "Defines both names",
+        importPath: "@example/both",
+        onTailorDBNamespaceLoaded: () => ({}),
+        onNamespaceLoaded: () => ({}),
+      }];
+    `);
+
+    const error = await rejectionOf(loadConfig(configPath));
+
+    expect(error).toMatchObject({
+      code: "CONFIG_INVALID",
+      context: {
+        exportName: "plugins",
+        issues: [
+          {
+            path: [0, "onNamespaceLoaded"],
+            message:
+              "'onNamespaceLoaded' is the deprecated name of 'onTailorDBNamespaceLoaded'. Define only 'onTailorDBNamespaceLoaded'.",
+          },
+        ],
+      },
+    });
+  });
+
   test("rejects a module without a default export, pointing at the config file", async () => {
     const configPath = writeConfig(`export const name = "test-app";`);
 

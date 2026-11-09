@@ -176,7 +176,7 @@ export const user = db.table("User", {
       id: "namespace-plugin",
       description: "namespace generator",
       importPath: "@example/namespace",
-      onNamespaceLoaded: () => ({
+      onTailorDBNamespaceLoaded: () => ({
         tables: {
           auditLog: db
             .table("AuditLog", {
@@ -207,7 +207,7 @@ export const user = db.table("User", {
       id: "namespace-plugin",
       description: "namespace generator",
       importPath: "@example/namespace",
-      onNamespaceLoaded: () => ({
+      onTailorDBNamespaceLoaded: () => ({
         tables: {
           auditLog: db.table("AuditLogNoPermission", {
             message: db.string(),
@@ -235,7 +235,7 @@ export const user = db.table("User", {
       id: "namespace-plugin",
       description: "namespace generator",
       importPath: "@example/namespace",
-      onNamespaceLoaded: () => ({
+      onTailorDBNamespaceLoaded: () => ({
         tables: {
           auditLog: db
             .table("BadAuditLog", {
@@ -339,7 +339,7 @@ export const user = db.table("User", {
       id: "namespace-plugin",
       description: "namespace generator",
       importPath: "@example/namespace",
-      onNamespaceLoaded: () => ({
+      onTailorDBNamespaceLoaded: () => ({
         tables: {
           auditLog: null as unknown as ReturnType<typeof db.table>,
         },
@@ -399,7 +399,7 @@ export const user = db.table("User", {
       id: "clone-plugin",
       description: "returns a spread copy of a builder table",
       importPath: "@example/clone",
-      onNamespaceLoaded: () => ({
+      onTailorDBNamespaceLoaded: () => ({
         tables: {
           auditLog: {
             ...db

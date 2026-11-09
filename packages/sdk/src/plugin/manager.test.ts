@@ -31,7 +31,7 @@ describe("PluginManager", () => {
       id: "namespace-plugin",
       description: "namespace generator",
       importPath: "@example/namespace",
-      onNamespaceLoaded: () => ({
+      onTailorDBNamespaceLoaded: () => ({
         tables: {
           auditLog: db.table("AuditLog", {
             message: db.string(),
@@ -55,12 +55,49 @@ describe("PluginManager", () => {
     });
   });
 
+  test("still runs a plugin written with the deprecated onNamespaceLoaded", async () => {
+    const plugin: Plugin = {
+      id: "legacy-namespace-plugin",
+      description: "namespace generator",
+      importPath: "@example/legacy-namespace",
+      // oxlint-disable-next-line typescript/no-deprecated -- Plugins written before the rename keep working.
+      onNamespaceLoaded: ({ namespace }) => ({
+        tables: { auditLog: db.table(`AuditLog_${namespace}`, { message: db.string() }) },
+      }),
+    };
+
+    const manager = new PluginManager([plugin]);
+    await manager.processNamespacePlugins("main");
+
+    expect(manager.getPluginGeneratedTables().map((info) => info.table.name)).toEqual([
+      "AuditLog_main",
+    ]);
+  });
+
+  test("calls a method-style namespace hook with the plugin as `this`", async () => {
+    const plugin = {
+      id: "method-plugin",
+      description: "namespace generator",
+      importPath: "@example/method",
+      pluginConfig: { tableName: "Setting" },
+      onTailorDBNamespaceLoaded() {
+        return { tables: { setting: db.table(this.pluginConfig?.tableName ?? "Unset", {}) } };
+      },
+    } satisfies Plugin<unknown, { tableName: string }>;
+
+    const manager = new PluginManager([plugin]);
+    const [result] = await manager.processNamespacePlugins("main");
+
+    expect(result?.result.success).toBe(true);
+    expect(manager.getPluginGeneratedTables().map((info) => info.table.name)).toEqual(["Setting"]);
+  });
+
   test("dedupes namespace plugin-generated outputs across namespaces", async () => {
     const plugin: Plugin = {
       id: "namespace-plugin",
       description: "namespace generator",
       importPath: "@example/namespace",
-      onNamespaceLoaded: () => ({
+      onTailorDBNamespaceLoaded: () => ({
         tables: {
           auditLog: db.table("AuditLog", {
             message: db.string(),
