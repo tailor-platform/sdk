@@ -171,6 +171,8 @@ tailor function run [options] <file>
 | `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                              | No       | -                    | `TAILOR_PLATFORM_PROFILE`           |
 | `--name <NAME>`                 | `-n`  | Workflow job name to run (matches the `name` field of createWorkflowJob)                       | No       | -                    | -                                   |
 | `--arg <ARG>`                   | `-a`  | JSON argument to pass to the function                                                          | No       | -                    | -                                   |
+| `--arg-file <ARG_FILE>`         | -     | Path to a JSON file holding the argument to pass to the function                               | No       | -                    | -                                   |
+| `--watch`                       | -     | Run the function again each time the file, a file it imports, or the argument file changes     | No       | `false`              | -                                   |
 | `--machine-user <MACHINE_USER>` | `-m`  | Machine user name for authentication. Falls back to the active profile's default machine user. | No       | -                    | `TAILOR_PLATFORM_MACHINE_USER_NAME` |
 | `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                                                     | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`                |
 | `--allow-schema-drift`          | -     | Run a scaffolded script even when its schema snapshot no longer matches                        | No       | `false`              | -                                   |
@@ -183,6 +185,18 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 ```bash
 $ tailor function run resolvers/add.ts --arg '{"a":1,"b":2}'
+```
+
+**Run a resolver with input arguments read from a JSON file**
+
+```bash
+$ tailor function run resolvers/add.ts --arg-file args/add.json
+```
+
+**Run a resolver again on every save, with its argument in a temporary file**
+
+```bash
+$ tailor function run resolvers/add.ts --watch
 ```
 
 **Run a specific workflow job by name**
@@ -203,6 +217,14 @@ You can pass either a source file (`.ts`) or a pre-bundled file (`.js`).
 When a `.js` file is provided, detection and bundling are skipped and the file is executed as-is.
 
 A script scaffolded by `function script` with a generated `db.ts` is checked against its `db.snapshot.json` before execution and refused on schema drift; pass `--allow-schema-drift` to run it anyway. The check compares table and field structure; hook and validator code changes are not detected.
+
+`--arg-file` reads the argument from a JSON file instead of `--arg`; the two cannot be combined.
+
+`--watch` runs the function, then runs it again each time you save the function file, a project file it imports, or the argument file. Without `--arg-file`, it creates a temporary argument file holding `--arg` (or `{}`), prints its path, and deletes it when you stop the command with Ctrl+C; edit that file to run the function with a new argument. An `--arg-file` must exist when the command starts, and its content is read on every run.
+
+Each run prints a `-->` line when the Platform accepts it and a `<--` line with `[OK]` or `[FAILED]` when it finishes, followed by its logs and result. Both lines carry the execution ID, which `function logs` accepts. When reading the argument file, loading or bundling the function, or the request to the Platform fails, the command prints an `[ERROR]` line and keeps watching. Until the function loads and bundles again, adding a file anywhere in the project also starts a run, so a file that an import names can be created after the import. A save during a run starts one more run after it finishes. With `--json`, each run writes one JSON object per line to stdout, including its `executionId`, and each failure writes an error object to stderr.
+
+Changes to `tailor.config.ts`, `tsconfig.json`, `package.json`, env files, and installed packages are not picked up; restart the command after changing them.
 
 `test-run` is a deprecated alias of this command and will be removed in v3.
 

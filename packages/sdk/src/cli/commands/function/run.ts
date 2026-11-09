@@ -6,12 +6,9 @@
  */
 
 import * as fs from "node:fs";
-import { create } from "@bufbuild/protobuf";
 import { arg, extractFields } from "@politty/zod";
-import { AuthInvokerSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import * as path from "pathe";
 import { z } from "zod";
-import { resolveResolverDefaultPermissionForFile } from "#/cli/services/resolver/default-permission";
 import {
   commonArgs,
   configArg,
@@ -20,26 +17,32 @@ import {
   type MachineUserInputSource,
   workspaceArgs,
 } from "#/cli/shared/args";
-import { buildOptionsOf, projectSourcesOf } from "#/cli/shared/build-options";
 import { type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadMachineUserName } from "#/cli/shared/context";
-import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
-import { executeScript } from "#/cli/shared/script-executor";
-import { formatErrorWithSourcemap } from "#/cli/shared/stack-trace";
 import { assertDefined } from "#/utils/assert";
-import { bundleForRun, type ResolvedMachineUser } from "./bundle";
-import { detectFunctionType } from "./detect";
+import { type ResolvedMachineUser } from "./bundle";
+import {
+  argFileNotFoundError,
+  argumentToSend,
+  executeFunction,
+  executionRecord,
+  type FunctionArg,
+  type FunctionRunTarget,
+  parseArgOption,
+  prepareFunction,
+  printExecutionDetails,
+  readFunctionArgFile,
+} from "./run-function";
 import {
   SCRIPT_SNAPSHOT_FILE_NAME,
   loadScriptSchemaSnapshot,
   verifyScriptSchemaSnapshot,
 } from "./script-scaffold";
-import type { Jsonifiable } from "type-fest";
 
 export const runFunctionCommand = defineAppCommand({
   name: "run",
@@ -60,6 +63,13 @@ export const runFunctionCommand = defineAppCommand({
       alias: "a",
       description: "JSON argument to pass to the function",
     }),
+    "arg-file": arg(z.string().optional(), {
+      description: "Path to a JSON file holding the argument to pass to the function",
+    }),
+    watch: arg(z.boolean().default(false), {
+      description:
+        "Run the function again each time the file, a file it imports, or the argument file changes",
+    }),
     "machine-user": arg(z.string().optional(), {
       alias: "m",
       description:
@@ -76,6 +86,14 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
 
 A script scaffolded by \`function script\` with a generated \`db.ts\` is checked against its \`db.snapshot.json\` before execution and refused on schema drift; pass \`--allow-schema-drift\` to run it anyway. The check compares table and field structure; hook and validator code changes are not detected.
 
+\`--arg-file\` reads the argument from a JSON file instead of \`--arg\`; the two cannot be combined.
+
+\`--watch\` runs the function, then runs it again each time you save the function file, a project file it imports, or the argument file. Without \`--arg-file\`, it creates a temporary argument file holding \`--arg\` (or \`{}\`), prints its path, and deletes it when you stop the command with Ctrl+C; edit that file to run the function with a new argument. An \`--arg-file\` must exist when the command starts, and its content is read on every run.
+
+Each run prints a \`-->\` line when the Platform accepts it and a \`<--\` line with \`[OK]\` or \`[FAILED]\` when it finishes, followed by its logs and result. Both lines carry the execution ID, which \`function logs\` accepts. When reading the argument file, loading or bundling the function, or the request to the Platform fails, the command prints an \`[ERROR]\` line and keeps watching. Until the function loads and bundles again, adding a file anywhere in the project also starts a run, so a file that an import names can be created after the import. A save during a run starts one more run after it finishes. With \`--json\`, each run writes one JSON object per line to stdout, including its \`executionId\`, and each failure writes an error object to stderr.
+
+Changes to \`tailor.config.ts\`, \`tsconfig.json\`, \`package.json\`, env files, and installed packages are not picked up; restart the command after changing them.
+
 \`test-run\` is a deprecated alias of this command and will be removed in v3.
 
 > [!WARNING]
@@ -85,6 +103,14 @@ A script scaffolded by \`function script\` with a generated \`db.ts\` is checked
     {
       cmd: 'resolvers/add.ts --arg \'{"a":1,"b":2}\'',
       desc: "Run a resolver with input arguments",
+    },
+    {
+      cmd: "resolvers/add.ts --arg-file args/add.json",
+      desc: "Run a resolver with input arguments read from a JSON file",
+    },
+    {
+      cmd: "resolvers/add.ts --watch",
+      desc: "Run a resolver again on every save, with its argument in a temporary file",
     },
     {
       cmd: "workflows/sample.ts --name validate-order",
@@ -109,6 +135,11 @@ A script scaffolded by \`function script\` with a generated \`db.ts\` is checked
     if (!fs.existsSync(filePath)) {
       throw CLIError({ code: "FILE_NOT_FOUND", message: `File not found: ${filePath}` });
     }
+    const { arg: functionArg, argFile } = resolveArgOptions({
+      arg: args.arg,
+      argFile: args["arg-file"],
+      watch: args.watch,
+    });
 
     // 2. Load config (required)
     const { config } = await loadConfig(args.config);
@@ -135,11 +166,8 @@ A script scaffolded by \`function script\` with a generated \`db.ts\` is checked
       authConfig: config.auth,
     });
 
-    // 4. Resolve bundled code and script name
-    const relativePath = path.relative(process.cwd(), filePath);
-    const isPreBundled = filePath.endsWith(".js");
-
-    if (!isPreBundled) {
+    // 4. Check a scaffolded script's schema snapshot
+    if (!filePath.endsWith(".js")) {
       if (args["allow-schema-drift"]) {
         if (fs.existsSync(path.join(path.dirname(filePath), SCRIPT_SNAPSHOT_FILE_NAME))) {
           logger.warn("Skipping the schema snapshot check (--allow-schema-drift).");
@@ -160,139 +188,44 @@ A script scaffolded by \`function script\` with a generated \`db.ts\` is checked
         }
       }
     }
-    let bundledCode: string;
-    let scriptName: string;
-    let functionType: string | undefined;
-    let functionName: string | undefined;
 
-    if (isPreBundled) {
-      // Pre-bundled .js file
-      scriptName = path.basename(filePath);
-      bundledCode = fs.readFileSync(filePath, "utf-8");
-      logger.info(`Using pre-bundled script ${styles.bold(scriptName)}`);
-    } else {
-      // Source file: detect type and bundle
-      logger.info(`Detecting function type from ${styles.path(relativePath)}`);
-
-      const detected = await detectFunctionType({
-        filePath,
-        jobName: args.name,
-      });
-
-      functionType = detected.type;
-      functionName = detected.name;
-      logger.info(`Detected: ${styles.bold(detected.type)} ${styles.info(`"${detected.name}"`)}`);
-
-      if (detected.type === "resolver" && args.arg && !detected.hasInput) {
-        logger.warn(
-          '--arg is ignored because this resolver has no input schema. Define "input" in your resolver to use --arg.',
-        );
-        args.arg = undefined;
-      }
-
-      logger.info("Bundling...");
-      const buildOptions = buildOptionsOf(config);
-      const baseDir = path.dirname(config.path);
-      ({ bundledCode, scriptName } = await bundleForRun({
-        detected,
-        sourceFile: filePath,
-        baseDir,
-        defaultPermission:
-          detected.type === "resolver"
-            ? resolveResolverDefaultPermissionForFile({
-                config: config.resolver,
-                filePath,
-                baseDir,
-              })
-            : undefined,
-        env: config.env ?? {},
-        inlineSourcemap: buildOptions.inlineSourcemap,
-        inlineSourcemapDependencySources: buildOptions.inlineSourcemapDependencySources,
-        inlineSourcemapProjectSources: projectSourcesOf({ buildOptions, baseDir }),
-        logLevel: buildOptions.logLevel,
-        treeshake: buildOptions.treeshake,
-        dateDefault: effectiveDateDefault(config),
-        machineUser,
-        workspaceId,
-      }));
-      logger.info(`Bundled as ${styles.bold(scriptName)}`);
-    }
-
-    // 5. Execute the bundled script
-    const invoker = create(AuthInvokerSchema, {
-      namespace: authNamespace,
-      machineUserName: machineUser.name,
-    });
-
-    logger.info(`Executing on workspace ${styles.dim(workspaceId)}...`);
-
-    let parsedArg: Jsonifiable | undefined;
-    if (args.arg !== undefined) {
-      try {
-        parsedArg = JSON.parse(args.arg);
-      } catch (error) {
-        throw CLIError({
-          code: "FUNCTION_ARG_INVALID",
-          message: `Invalid --arg JSON: ${error instanceof Error ? error.message : error}`,
-          command: "function run",
-          cause: error,
-        });
-      }
-    }
-
-    const result = await executeScript({
+    const target: FunctionRunTarget = {
+      filePath,
+      jobName: args.name,
+      config,
       client,
       workspaceId,
-      name: scriptName,
-      code: bundledCode,
-      arg: parsedArg,
-      invoker,
-    });
+      authNamespace,
+      machineUser,
+    };
 
-    // 7. Display result
-    if (jsonOutput) {
-      logger.out({
-        success: result.success,
-        scriptName,
-        functionType,
-        functionName,
-        logs: result.logs,
-        result: result.result,
-        error: result.error,
+    if (args.watch) {
+      const { startFunctionRunWatch } = await import("./watch");
+      const watch = await startFunctionRunWatch({
+        target,
+        argFile,
+        initialArg: functionArg?.value,
       });
+      await watch.closed;
+      return;
+    }
+
+    // 5. Bundle and execute
+    const prepared = await prepareFunction({ target, progress: (message) => logger.info(message) });
+    const argValue = argumentToSend(prepared, functionArg);
+    logger.info(`Executing on workspace ${styles.dim(workspaceId)}...`);
+    const result = await executeFunction({ target, prepared, arg: argValue });
+
+    // 6. Display result
+    if (jsonOutput) {
+      logger.out(executionRecord(prepared, result));
     } else {
       if (result.success) {
         logger.success("Execution succeeded");
       } else {
         logger.error("Execution failed");
       }
-
-      if (result.logs.trim()) {
-        logger.log(styles.bold("\nLogs:"));
-        for (const line of result.logs.split("\n")) {
-          logger.log(`  ${line}`);
-        }
-      }
-
-      if (result.result && result.success) {
-        logger.log(styles.bold("\nResult:"));
-        try {
-          const parsed = JSON.parse(result.result);
-          logger.log(`  ${JSON.stringify(parsed, null, 2).split("\n").join("\n  ")}`);
-        } catch {
-          logger.log(`  ${result.result}`);
-        }
-      }
-
-      if (result.error && !result.success) {
-        logger.log(styles.bold("\nError:"));
-        const formatted = formatErrorWithSourcemap(result.error, bundledCode, process.cwd());
-        if (formatted) {
-          logger.log(formatted);
-        } else {
-          logger.log(`  ${styles.error(result.error)}`);
-        }
-      }
+      printExecutionDetails(prepared, result);
     }
 
     if (!result.success) {
@@ -334,6 +267,52 @@ function invokedViaTestRunAlias(argv: readonly string[]): boolean {
     if (!token.includes("=") && valueTakingGlobalFlags.has(token)) i++;
   }
   return names[0] === "function" && names[1] === "test-run";
+}
+
+interface ArgOptions {
+  /** `--arg` value */
+  arg: string | undefined;
+  /** `--arg-file` value */
+  argFile: string | undefined;
+  /** Whether `--watch` is set, which reads the argument file on every run instead */
+  watch: boolean;
+}
+
+interface ResolvedArgOptions {
+  /** Argument parsed from `--arg`, or from `--arg-file` outside watch mode */
+  arg: FunctionArg | undefined;
+  /** Absolute path of `--arg-file` */
+  argFile: string | undefined;
+}
+
+/**
+ * Validate `--arg` and `--arg-file` before anything contacts the Platform.
+ * @param options - Raw option values
+ * @returns The parsed argument and the argument file's absolute path
+ */
+function resolveArgOptions(options: ArgOptions): ResolvedArgOptions {
+  if (options.arg !== undefined && options.argFile !== undefined) {
+    throw CLIError({
+      code: "FUNCTION_RUN_OPTIONS_CONFLICT",
+      message: "Options --arg and --arg-file are mutually exclusive.",
+      suggestion: "Pass the argument with only one of them.",
+      command: "function run",
+    });
+  }
+  if (options.arg !== undefined) {
+    return { arg: parseArgOption(options.arg), argFile: undefined };
+  }
+  if (options.argFile === undefined) {
+    return { arg: undefined, argFile: undefined };
+  }
+  const argFile = path.resolve(options.argFile);
+  if (!options.watch) {
+    return { arg: readFunctionArgFile(argFile), argFile };
+  }
+  if (!fs.existsSync(argFile)) {
+    throw argFileNotFoundError(argFile);
+  }
+  return { arg: undefined, argFile };
 }
 
 /**
