@@ -939,6 +939,9 @@ importers:
       '@politty/zod':
         specifier: 0.7.1
         version: 0.7.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(zod@4.6.7)
+      lines-db:
+        specifier: 0.18.1
+        version: 0.18.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(typescript@6.0.3)
       pathe:
         specifier: 2.0.3
         version: 2.0.3
