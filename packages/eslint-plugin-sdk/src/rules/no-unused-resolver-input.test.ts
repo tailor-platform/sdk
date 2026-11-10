@@ -1,5 +1,5 @@
 import { describe } from "vitest";
-import { runRuleTests } from "./test-helpers.js";
+import { type ResolverFixture, resolverSource, runRuleTests } from "./test-helpers.js";
 
 const RULE = "no-unused-resolver-input";
 
@@ -7,30 +7,8 @@ function unused(field: string): string {
   return `Input field \`${field}\` is never read by \`body\`, so a caller may expect it to take effect. Read it in \`body\`, or remove it from \`input\`.`;
 }
 
-function resolver({
-  input = "{ a: t.string(), b: t.string() }",
-  body,
-  permission,
-  prelude = "",
-}: {
-  input?: string;
-  body: string;
-  permission?: string;
-  prelude?: string;
-}): string {
-  const bodyProperty = /^(async )?body\(/.test(body) ? body : `body: ${body}`;
-  return [
-    'import { createResolver, t } from "@tailor-platform/sdk";',
-    prelude,
-    "export default createResolver({",
-    '  name: "r",',
-    '  operation: "mutation",',
-    `  input: ${input},`,
-    ...(permission === undefined ? [] : [`  permission: ${permission},`]),
-    `  ${bodyProperty},`,
-    "  output: t.int(),",
-    "});",
-  ].join("\n");
+function resolver(fixture: ResolverFixture): string {
+  return resolverSource({ input: "{ a: t.string(), b: t.string() }", ...fixture });
 }
 
 describe("reports input fields body never reads", () => {
