@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { logger, styles } from "./logger";
+import { configIssuesError } from "./validation-errors";
 import type { EnvEntry, EnvValue } from "#/configure/config/types";
 
 const AWS_RULE_ID = "@secretlint/secretlint-rule-aws";
@@ -43,10 +44,10 @@ const TOKEN_LIKE_VALUE = /^[A-Za-z0-9+/=_.-]+$/;
  */
 const scans = new Map<string, Promise<void>>();
 
-interface EnvSecretFinding {
+interface ProviderFinding {
   /** `env` key holding the value. */
   readonly key: string;
-  /** Short name of what matched, e.g. `slack`, `aws`, `high-entropy`. */
+  /** Short name of what matched, e.g. `slack`, `aws`. */
   readonly detector: string;
   /**
    * Which of the detector's patterns matched, e.g. `AWSAccountID`. A detector
@@ -54,18 +55,32 @@ interface EnvSecretFinding {
    * an access key id and a secret access key — and knowing which one fired is
    * what tells the reader whether the value is actually sensitive.
    */
-  readonly rule?: string;
+  readonly rule: string;
   /** Where the matched pattern is documented. */
   readonly docsUrl?: string;
-  /** `error` for provider-specific matches, `warning` for the entropy heuristic. */
-  readonly severity: "error" | "warning";
+  /** A provider-specific match fails the command. */
+  readonly severity: "error";
 }
+
+interface EntropyFinding {
+  /** `env` key holding the value. */
+  readonly key: string;
+  /** The heuristic matches no named pattern, so it has neither a rule nor documentation. */
+  readonly detector: typeof HIGH_ENTROPY_DETECTOR;
+  /** A value that only looks randomly generated is reported without failing the command. */
+  readonly severity: "warning";
+}
+
+type EnvSecretFinding = ProviderFinding | EntropyFinding;
 
 interface EnvSecretScanInput {
   /** `env` entries as written in the config, before `{ value, allowSecretReason }` wrappers are resolved. */
   readonly env?: Readonly<Record<string, EnvEntry>>;
+}
+
+interface EnvSecretAssertInput extends EnvSecretScanInput {
   /** Config file the entries came from; results are cached per config, so a rejection keeps its config's location. */
-  readonly configPath?: string;
+  readonly configPath: string;
 }
 
 type ScannedEntry = readonly [key: string, value: EnvValue];
@@ -102,7 +117,7 @@ export async function scanEnvForSecrets(input: EnvSecretScanInput): Promise<EnvS
     return [];
   }
 
-  const findings = await scanWithProviderRules(entries);
+  const findings: EnvSecretFinding[] = await scanWithProviderRules(entries);
   const alreadyFound = new Set(findings.map((finding) => finding.key));
 
   for (const [key, value] of entries) {
@@ -120,13 +135,13 @@ export async function scanEnvForSecrets(input: EnvSecretScanInput): Promise<EnvS
  *
  * Warnings are logged and do not fail the command. Repeated calls for the same
  * entries reuse the first result.
- * @param input - `env` entries as written in the config
+ * @param input - `env` entries as written in the config, and the config they came from
  * @returns Promise that resolves when the entries carry no credential
- * @throws When a value is identified as a credential
+ * @throws CLIError coded `CONFIG_INVALID` when a value is identified as a credential
  */
-export async function assertEnvHasNoSecrets(input: EnvSecretScanInput): Promise<void> {
+export async function assertEnvHasNoSecrets(input: EnvSecretAssertInput): Promise<void> {
   const key = createHash("sha256")
-    .update(JSON.stringify([input.configPath ?? "", input.env ?? {}]))
+    .update(JSON.stringify([input.configPath, input.env ?? {}]))
     .digest("hex");
   const pending = scans.get(key);
   if (pending) {
@@ -140,10 +155,10 @@ export async function assertEnvHasNoSecrets(input: EnvSecretScanInput): Promise<
 
 /**
  * Log warnings and throw on credentials found in `env`.
- * @param input - `env` entries as written in the config
- * @throws When a value is identified as a credential
+ * @param input - `env` entries as written in the config, and the config they came from
+ * @throws CLIError coded `CONFIG_INVALID` when a value is identified as a credential
  */
-async function reportEnvSecrets(input: EnvSecretScanInput): Promise<void> {
+async function reportEnvSecrets(input: EnvSecretAssertInput): Promise<void> {
   const findings = await scanEnvForSecrets(input);
 
   for (const finding of findings) {
@@ -155,25 +170,29 @@ async function reportEnvSecrets(input: EnvSecretScanInput): Promise<void> {
   }
 
   const errors = findings.filter((finding) => finding.severity === "error");
-  if (errors.length === 0) {
+  const [first] = errors;
+  if (!first) {
     return;
   }
 
-  const list = errors
-    .map((error) => {
-      const matched = error.rule ? `${error.detector}: ${error.rule}` : error.detector;
-      const reference = error.docsUrl ? `\n    ${error.docsUrl}` : "";
-      return `  - env.${error.key} (matched ${matched})${reference}`;
-    })
-    .join("\n");
-  const example = errors[0]?.key ?? "KEY";
-  throw new Error(
-    `Secret detected in 'env':\n${list}\n` +
-      "'env' values are deployed as plaintext and are readable by anyone who can read the application's configuration. " +
+  throw configIssuesError({
+    file: input.configPath,
+    exportName: "default",
+    subject: "Tailor config",
+    issues: errors.map((error) => {
+      const reference = error.docsUrl ? ` See ${error.docsUrl}` : "";
+      return {
+        path: ["env", error.key],
+        message: `Secret detected (matched ${error.detector}: ${error.rule}).${reference}`,
+      };
+    }),
+    details:
+      "'env' values are deployed as plaintext and are readable by anyone who can read the application's configuration.",
+    suggestion:
       "Define these with defineSecretManager() instead, and read them through Secret Manager at runtime.\n" +
       "If a value is genuinely safe to keep in 'env', allow it where it is defined: " +
-      `${example}: { value: ..., allowSecretReason: "<why this is safe>" }`,
-  );
+      `${first.key}: { value: ..., allowSecretReason: "<why this is safe>" }`,
+  });
 }
 
 /**
@@ -188,7 +207,7 @@ async function reportEnvSecrets(input: EnvSecretScanInput): Promise<void> {
  */
 async function scanWithProviderRules(
   entries: ReadonlyArray<ScannedEntry>,
-): Promise<EnvSecretFinding[]> {
+): Promise<ProviderFinding[]> {
   const [{ lintSource }, { rules }] = await Promise.all([
     import("@secretlint/core"),
     import("@secretlint/secretlint-rule-preset-recommend"),
@@ -224,7 +243,7 @@ async function scanWithProviderRules(
     },
   });
 
-  const findings: EnvSecretFinding[] = [];
+  const findings: ProviderFinding[] = [];
   const seen = new Set<string>();
   for (const message of result.messages) {
     const entry = ranges.find(

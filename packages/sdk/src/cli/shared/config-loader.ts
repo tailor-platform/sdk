@@ -87,11 +87,7 @@ export async function loadConfig(
   }
 
   const appConfig = configModule.default as AppConfig;
-  try {
-    await assertEnvHasNoSecrets({ env: appConfig.env, configPath: resolvedPath });
-  } catch (error) {
-    throw error instanceof Error ? atConfigFile(error, resolvedPath) : error;
-  }
+  await assertEnvHasNoSecrets({ env: appConfig.env, configPath: resolvedPath });
   const env = appConfig.env
     ? Object.fromEntries(
         Object.entries(appConfig.env).map(([key, entry]) => [key, resolveEnvValue(entry)]),

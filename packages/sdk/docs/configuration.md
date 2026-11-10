@@ -505,9 +505,11 @@ export async function main(trx: Transaction, { env }: MigrationContext): Promise
 `env` values are deployed as plaintext, so loading a config fails when one of them looks like a credential:
 
 ```
-✖ tailor.config.ts: Secret detected in 'env':
-  - env.SLACK_BOT_TOKEN (matched slack: SLACK_TOKEN)
-    https://github.com/secretlint/secretlint/blob/master/packages/%40secretlint/secretlint-rule-slack/README.md#SLACK_TOKEN
+Error [CONFIG_INVALID]: tailor.config.ts: Invalid Tailor config:
+  - env.SLACK_BOT_TOKEN: Secret detected (matched slack: SLACK_TOKEN). See https://github.com/secretlint/secretlint/blob/master/packages/%40secretlint/secretlint-rule-slack/README.md#SLACK_TOKEN
+  Details: 'env' values are deployed as plaintext and are readable by anyone who can read the application's configuration.
+  Suggestion: Define these with defineSecretManager() instead, and read them through Secret Manager at runtime.
+  If a value is genuinely safe to keep in 'env', allow it where it is defined: SLACK_BOT_TOKEN: { value: ..., allowSecretReason: "<why this is safe>" }
 ```
 
 Each finding names the pattern that matched and links to its description, so a value flagged as an AWS account id is distinguishable from one flagged as an AWS secret access key.
