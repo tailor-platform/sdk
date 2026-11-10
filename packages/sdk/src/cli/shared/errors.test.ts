@@ -455,4 +455,27 @@ describe("errorSummary", () => {
     expect(errorSummary(new Error("plain"))).toBe("plain");
     expect(errorSummary("text")).toBe("text");
   });
+
+  test("puts the source location before the message of a CLI error", () => {
+    const error = withErrorDiagnostics(
+      CLIError({
+        code: "SYNTAX_INVALID",
+        message: "Invalid syntax: Expression expected",
+        suggestion: "Fix the expression.",
+      }),
+      { location: { file: path.join(process.cwd(), "tailordb/item.ts"), line: 3 } },
+    );
+
+    expect(errorSummary(error)).toBe(
+      "tailordb/item.ts:3: Invalid syntax: Expression expected\nFix the expression.",
+    );
+  });
+
+  test("puts the source location before the message of a plain error", () => {
+    const error = withErrorDiagnostics(new Error("item table is broken"), {
+      location: { file: path.join(process.cwd(), "tailordb/item.ts") },
+    });
+
+    expect(errorSummary(error)).toBe("tailordb/item.ts: item table is broken");
+  });
 });

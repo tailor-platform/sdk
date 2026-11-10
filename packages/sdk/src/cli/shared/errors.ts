@@ -160,13 +160,14 @@ export function locatedMessage(error: Error): string {
  * Summarize a failure as plain text for reports that carry a single error string.
  * CLI errors contribute their details and suggestion so the remediation survives.
  * @param error - Failure to summarize
- * @returns Message followed by any details and suggestion, one per line
+ * @returns Message, after the source location the failure points at, followed by
+ * any details and suggestion, one per line
  */
 export function errorSummary(error: unknown): string {
   if (isCLIError(error)) {
-    return [error.message, error.details, error.suggestion].filter(Boolean).join("\n");
+    return [locatedMessage(error), error.details, error.suggestion].filter(Boolean).join("\n");
   }
-  return error instanceof Error ? error.message : String(error);
+  return error instanceof Error ? locatedMessage(error) : String(error);
 }
 
 /**
