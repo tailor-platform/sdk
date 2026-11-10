@@ -1498,11 +1498,11 @@ describe("formatExecutorChangeEntries", () => {
   });
 
   test.each([
-    { name: "keeps", functionForced: true, expected: true },
-    { name: "drops", functionForced: false, expected: false },
+    { name: "keeps", functionUpdated: false, expected: true, labels: ["executor"] },
+    { name: "drops", functionUpdated: true, expected: false, labels: ["executor", "function"] },
   ])(
-    "$name the forced marker when the grouped function update is forced: $functionForced",
-    ({ functionForced, expected }) => {
+    "$name the forced marker when the grouped function is updated: $functionUpdated",
+    ({ functionUpdated, expected, labels }) => {
       const entries = formatExecutorChangeEntries(
         {
           creates: [],
@@ -1520,45 +1520,17 @@ describe("formatExecutorChangeEntries", () => {
         { "user-created": { name: "user-created", targetType: 3 } },
         {
           creates: [],
-          updates: [
-            {
-              name: "executor--user-created",
-              ...(functionForced && { forcedBySdkVersion: true }),
-            },
-          ],
+          updates: functionUpdated ? [{ name: "executor--user-created" }] : [],
           deletes: [],
           replaces: [],
         },
       );
 
       expect(entries).toHaveLength(1);
-      expect(entries[0]?.labels).toEqual(["executor", "function"]);
+      expect(entries[0]?.labels).toEqual(labels);
       expect(entries[0]?.forcedBySdkVersion).toBe(expected ? true : undefined);
     },
   );
-
-  test("keeps the forced marker on an ungrouped function registry update", () => {
-    const entries = formatExecutorChangeEntries(
-      { creates: [], updates: [], deletes: [], replaces: [] },
-      {},
-      {
-        creates: [],
-        updates: [{ name: "executor--user-created", forcedBySdkVersion: true }],
-        deletes: [],
-        replaces: [],
-      },
-    );
-
-    expect(entries).toEqual([
-      {
-        action: "update",
-        symbol: symbols.update,
-        name: "user-created",
-        labels: ["function"],
-        forcedBySdkVersion: true,
-      },
-    ]);
-  });
 
   test("groups function executor deletes with related function registry deletes", () => {
     const entries = formatExecutorChangeEntries(

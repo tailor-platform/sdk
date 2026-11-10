@@ -150,6 +150,7 @@ describe("summarizePlanResults", () => {
       delete: 1,
       replace: 0,
       forcedBySdkVersion: 0,
+      labelRefreshes: 0,
     });
   });
 
@@ -166,6 +167,7 @@ describe("summarizePlanResults", () => {
       delete: 0,
       replace: 0,
       forcedBySdkVersion: 0,
+      labelRefreshes: 0,
     });
   });
 
@@ -181,6 +183,7 @@ describe("summarizePlanResults", () => {
       delete: 0,
       replace: 0,
       forcedBySdkVersion: 0,
+      labelRefreshes: 0,
     });
   });
 
@@ -205,6 +208,26 @@ describe("summarizePlanResults", () => {
       delete: 0,
       replace: 0,
       forcedBySdkVersion: 0,
+      labelRefreshes: 0,
+    });
+  });
+
+  test("counts function labels refreshed without re-uploading the script", () => {
+    const results = emptyPlanResults();
+    results.functionRegistry.metadataUpdates.push(
+      { name: "resolver--ns--add", metaRequest: { trn: "trn:a", labels: {} } },
+      { name: "executor--user-created", metaRequest: { trn: "trn:b", labels: {} } },
+    );
+
+    const summary = summarizePlanResults(results, [], []);
+
+    expect(summary).toEqual({
+      create: 0,
+      update: 0,
+      delete: 0,
+      replace: 0,
+      forcedBySdkVersion: 0,
+      labelRefreshes: 2,
     });
   });
 
@@ -231,6 +254,7 @@ describe("summarizePlanResults", () => {
       delete: 0,
       replace: 0,
       forcedBySdkVersion: 3,
+      labelRefreshes: 0,
     });
   });
 });
@@ -1209,7 +1233,7 @@ describe("printPlanResults", () => {
       summary: { update: number; forcedBySdkVersion: number };
       changes: Array<Record<string, unknown>>;
     };
-    expect(payload.summary).toMatchObject({ update: 2, forcedBySdkVersion: 1 });
+    expect(payload.summary).toMatchObject({ update: 2, forcedBySdkVersion: 1, labelRefreshes: 0 });
     expect(payload.changes).toContainEqual({
       action: "update",
       name: "tailordb",
@@ -1317,7 +1341,7 @@ describe("printPlanResults", () => {
         expect.objectContaining({ name: "my-client", forcedBySdkVersion: true }),
       ]),
     );
-    expect(payload.summary).toMatchObject({ update: 2, forcedBySdkVersion: 2 });
+    expect(payload.summary).toMatchObject({ update: 2, forcedBySdkVersion: 2, labelRefreshes: 0 });
   });
 
   test("does not emit JSON for apply --json; still prints plan to stderr", () => {
@@ -1389,8 +1413,8 @@ describe("printDeploymentPlans", () => {
     const payload = outSpy.mock.calls[0]?.[0] as {
       summary: { update: number; forcedBySdkVersion: number };
     };
-    expect(summary).toMatchObject({ update: 2, forcedBySdkVersion: 2 });
-    expect(payload.summary).toMatchObject({ update: 2, forcedBySdkVersion: 2 });
+    expect(summary).toMatchObject({ update: 2, forcedBySdkVersion: 2, labelRefreshes: 0 });
+    expect(payload.summary).toMatchObject({ update: 2, forcedBySdkVersion: 2, labelRefreshes: 0 });
 
     outSpy.mockRestore();
   });
