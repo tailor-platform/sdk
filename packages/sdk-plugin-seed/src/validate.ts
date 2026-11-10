@@ -44,7 +44,7 @@ export const seedValidateCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
-    const { validateSeedData } = await import("@tailor-platform/sdk/seed");
+    const { validateSeedData } = await import("./seed-data");
 
     assertDatasetSelection(args.dataset, args["all-datasets"]);
     if (args.path && (args.dataset.length > 0 || args["all-datasets"] || args["no-base"])) {

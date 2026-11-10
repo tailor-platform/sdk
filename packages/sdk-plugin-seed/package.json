@@ -18,6 +18,12 @@
     "README.md"
   ],
   "type": "module",
+  "exports": {
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "default": "./dist/schema.js"
+    }
+  },
   "scripts": {
     "build": "tsdown && politty generate-shim --entry ../dist/index.js",
     "lint": "oxlint --type-aware .",
@@ -30,6 +36,7 @@
   },
   "dependencies": {
     "@politty/zod": "0.7.2",
+    "lines-db": "0.18.1",
     "pathe": "2.0.3",
     "pkg-types": "2.4.0",
     "zod": "4.6.7"

@@ -1,3 +1,4 @@
+// oxlint-disable typescript/no-deprecated -- Verify the deprecated seed subpath still works until it is removed.
 import { describe, expect, test } from "vitest";
 import { fillIdpUserPassword } from "./idp-user-password";
 

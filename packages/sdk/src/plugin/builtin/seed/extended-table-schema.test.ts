@@ -5,7 +5,12 @@ import * as path from "pathe";
 import { aroundEach, describe, expect, test } from "vitest";
 import { _clearCacheForTesting } from "#/plugin/get-generated-table";
 import { generateLinesDbSchemaFile } from "./lines-db-processor";
+import { SEED_SCHEMA_MODULE } from "./schema-module";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
+
+// The seed plugin depends on the SDK, so the SDK cannot depend on it back: the schema file takes
+// defineSchema from lines-db, which the plugin entry re-exports.
+const linesDbUrl = import.meta.resolve("lines-db");
 
 // Generates the seed schema file for a table a plugin extends, the way
 // `tailor generate` does, and validates rows through it.
@@ -58,7 +63,7 @@ export default {
           indexes: [],
         },
         { typeImportPath: "../../tailordb/order.mjs", configImportPath: "../../tailor.config.mjs" },
-      ),
+      ).replace(SEED_SCHEMA_MODULE, linesDbUrl),
     );
     const loaded = (await import(pathToFileURL(schemaPath).href)) as {
       schema: StandardSchemaV1;
