@@ -5,8 +5,13 @@ import {
   literalProperties,
   literalProperty,
   staticString,
-  unwrapExpression,
 } from "../lib/ast.js";
+import {
+  type ConditionTuple,
+  conditionTuples,
+  operand,
+  policyPermit,
+} from "../lib/resolver-permission.js";
 import { configureImportTracker, resolveValue } from "../lib/sdk-bindings.js";
 import type { Rule } from "eslint";
 
@@ -17,54 +22,9 @@ const KNOWN_USER_OPERAND_TYPES: Record<string, "string" | "boolean"> = {
   id: "string",
 };
 
-const OPERATORS = new Set(["=", "!="]);
-
-type Operand =
-  | { kind: "user"; key: string | null }
-  | { kind: "string" | "boolean" | "input" | "invalid" }
-  | { kind: "unknown" };
-
-function operand(context: Rule.RuleContext, node: AstNode): Operand {
-  const value = unwrapExpression(resolveValue(context, node));
-  if (value?.type === "Literal" && typeof value.value === "string") return { kind: "string" };
-  if (value?.type === "Literal" && typeof value.value === "boolean") return { kind: "boolean" };
-  if (value?.type === "Literal") return { kind: "invalid" };
-  if (literalProperties(value) === null) return { kind: "unknown" };
-  if (literalProperty(value, "input") !== null) return { kind: "input" };
-  const user = literalProperty(value, "user");
-  if (user === null) return { kind: "invalid" };
-  return { kind: "user", key: staticString(resolveValue(context, user.value)) };
-}
-
-type ConditionTuple = { node: AstNode; elements: readonly AstNode[] };
-
-function conditionTuples(
-  context: Rule.RuleContext,
-  value: AstNode,
-  elements: readonly AstNode[],
-): ConditionTuple[] {
-  if (isConditionTuple(context, elements)) return [{ node: value, elements }];
-  return elements.flatMap((element) => {
-    const tuple = resolveValue(context, element);
-    const tupleElements = literalElements(tuple);
-    return tuple && tupleElements !== null && isConditionTuple(context, tupleElements)
-      ? [{ node: tuple, elements: tupleElements }]
-      : [];
-  });
-}
-
 function hasInputOperand(context: Rule.RuleContext, tuple: ConditionTuple): boolean {
   return [tuple.elements[0], tuple.elements[2]].some(
     (side) => side !== undefined && operand(context, side).kind === "input",
-  );
-}
-
-function isConditionTuple(context: Rule.RuleContext, elements: readonly AstNode[]): boolean {
-  const operator = elements[1];
-  return (
-    elements.length === 3 &&
-    operator !== undefined &&
-    OPERATORS.has(staticString(resolveValue(context, operator)) ?? "")
   );
 }
 
@@ -111,7 +71,7 @@ function checkConditions(context: Rule.RuleContext, node: AstNode): ConditionTup
     context.report({ node: value, messageId: "emptyConditions" });
     return [];
   }
-  const tuples = conditionTuples(context, value, elements);
+  const { tuples } = conditionTuples(context, value, elements);
   for (const tuple of tuples) checkCondition(context, tuple);
   return tuples;
 }
@@ -135,11 +95,7 @@ function checkPermission(context: Rule.RuleContext, node: AstNode, scope: Permis
       permitKnown = false;
       continue;
     }
-    const permit = unwrapExpression(
-      resolveValue(context, literalProperty(policy, "permit")?.value),
-    );
-    const permitValue =
-      permit?.type === "Literal" && typeof permit.value === "boolean" ? permit.value : null;
+    const permitValue = policyPermit(context, policy);
     if (permitValue === null) {
       permitKnown = false;
     } else {

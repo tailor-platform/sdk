@@ -158,6 +158,11 @@ export function staticString(node: AstNode | null | undefined): string | null {
   return null;
 }
 
+export function staticBoolean(node: AstNode | null | undefined): boolean | null {
+  const value = unwrapExpression(node);
+  return value?.type === "Literal" && typeof value.value === "boolean" ? value.value : null;
+}
+
 /** The object's properties when every one is a plain, non-computed property; null otherwise. */
 export function literalProperties(node: AstNode | null | undefined): AstProperty[] | null {
   const value = unwrapExpression(node);

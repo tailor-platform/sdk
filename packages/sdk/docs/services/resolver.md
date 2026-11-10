@@ -509,6 +509,8 @@ When the ID is stored in a user attribute rather than being the user ID itself, 
 - A condition with an `{ input }` operand matches only when the caller sent that input and the compared `user` value is set, so an omitted optional input never grants access.
 - An `{ input }` operand can only be used in a `permit: true` policy; a `permit: false` policy would let an omitted input through.
 
+The [`no-unbound-caller-id-input`](https://github.com/tailor-platform/sdk/tree/main/packages/eslint-plugin-sdk#no-unbound-caller-id-input-warning) lint rule reports a mutation's `t.uuid()` or `db.uuid()` input named like the caller's ID, such as `approverId` or `createdBy`, unless `permission` compares it with the caller in every `permit: true` policy.
+
 `permission` compares input values only. To check that a row the caller names belongs to them, such as a request ID, give the row's TailorDB type a record-level [`.permission()`](tailordb/index.md#permissions) and run `body` without an `invoker`, or look the row up in `body`.
 
 ### Namespace-wide default (`defaultPermission`)
