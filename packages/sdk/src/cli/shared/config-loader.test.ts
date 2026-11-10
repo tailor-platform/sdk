@@ -215,7 +215,7 @@ describe("loadConfig", () => {
 
     const error = await rejectionOf(loadConfig(configPath));
 
-    expect(error.message).toMatch(/env\.SLACK_BOT_TOKEN \(matched slack: SLACK_TOKEN\)/);
+    expect(error).toMatchObject({ code: "CONFIG_INVALID", context: { file: configPath } });
     expect(error.message).not.toContain(configPath);
     expect(getErrorDiagnostics(error).location).toEqual({ file: configPath });
   });
