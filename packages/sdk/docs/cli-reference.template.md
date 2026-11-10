@@ -175,8 +175,7 @@ read them:
 - `MIGRATION_CHECKPOINT_UNVERIFIED`: the deploy could not read a namespace's checkpoint to confirm
   that it had not changed.
 - `MIGRATION_FAILED`: a migration's script failed, and the deploy rolled the migration back to the
-  previous checkpoint. `error.context.namespace` and `error.context.migrationNumber` name the
-  migration.
+  previous checkpoint.
 - `MIGRATION_ROLLED_BACK`: a migration whose `migrate.ts` exports `steps` and
   `onFailure = "rollback"` failed, and the deploy rolled it back to the previous checkpoint.
 - `MIGRATION_PARTIALLY_APPLIED`: a migration stopped partway and stays in progress: a `steps`
@@ -189,6 +188,10 @@ read them:
 - `MIGRATION_RESTORE_FAILED`: the settings of some tables, such as their maintenance mode, could not
   be restored after the migrations. When a migration had already failed, the deploy reports that
   failure instead and puts this error in its `error.context.restoration`.
+
+`MIGRATION_FAILED`, `MIGRATION_ROLLED_BACK`, `MIGRATION_PARTIALLY_APPLIED`, and
+`MIGRATION_OUTCOME_UNKNOWN` name the migration in `error.context.namespace` and
+`error.context.migrationNumber`, unless the error carries `error.context.restoration`.
 
 `tailor tailordb migration` commands:
 
