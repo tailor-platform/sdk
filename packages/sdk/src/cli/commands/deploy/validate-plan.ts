@@ -71,6 +71,7 @@ import {
 import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { STATIC_WEBSITE_ORIGIN_PLACEHOLDER_PATTERN } from "#/parser/service/common";
+import { ALL_EMAIL_DOMAINS, hasImplicitAllEmailDomains } from "#/parser/service/idp/email-domains";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { secretCreateRequest, secretUpdateRequest, vaultCreateRequest } from "./secret-manager";
 import { buildWorkflowValidationShape } from "./workflow";
@@ -158,6 +159,9 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
  * placeholders; IdP `allowedReturnOrigins` instead substitutes placeholder entries
  * with a dummy origin so the per-item regex and the cross-field `enable_mfa requires
  * ≥1 origin` rule still get exercised on the rest of the payload.
+ * An IdP service create or update whose `userAuthPolicy.allowedEmailDomains` is empty without
+ * `useNonEmailIdentifier` is checked by hand: the platform rejects it for an omitted
+ * `userAuthPolicy` as well, and a rule on the policy message never runs for an omitted policy.
  * Workflow jobFunctions map excluded: versions are registered at apply time (registerJobFunctions)
  * and the map field carries no min_items constraint. Job names are validated separately via
  * CreateWorkflowJobFunctionRequestSchema using usedJobNames from the workflow change set.
@@ -335,6 +339,22 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     "IdP service",
     (idp.changeSet.service.updates as HasRequest[]).map(substituteIdpReturnOrigins),
   );
+  for (const [action, items] of [
+    ["create", idp.changeSet.service.creates],
+    ["update", idp.changeSet.service.updates],
+  ] as const) {
+    for (const item of items) {
+      if (hasImplicitAllEmailDomains(item.request.userAuthPolicy)) {
+        violations.push({
+          kind: "IdP service",
+          name: item.name,
+          action,
+          fieldPath: "userAuthPolicy.allowedEmailDomains",
+          message: `must be set unless useNonEmailIdentifier is true; use ["${ALL_EMAIL_DOMAINS}"] to allow every email domain, or list the domains you accept`,
+        });
+      }
+    }
+  }
 
   // Validate Secret Manager vault/secret names derived from IdP client creates and updates.
   // The client name itself may be valid while the derived vault/secret name exceeds 63 chars.

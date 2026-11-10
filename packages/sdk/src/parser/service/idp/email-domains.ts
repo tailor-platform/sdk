@@ -38,12 +38,12 @@ type EmailDomainPolicy = {
  * Whether a policy leaves the accepted email domains implicit.
  *
  * The platform rejects creating or updating a namespace whose
- * `allowedEmailDomains` is empty or omitted, so the CLI warns about such
- * policies before the deploy reaches that rejection. Namespaces with
+ * `allowedEmailDomains` is empty or omitted, so deploy warns about such
+ * policies and refuses to create or update a namespace with one. Namespaces with
  * `useNonEmailIdentifier` never reach domain validation and cannot set the
  * field at all, so they are not affected.
- * @param policy - The IdP user auth policy from user config
- * @returns Whether the CLI should warn about an implicit all-domains state
+ * @param policy - The IdP user auth policy
+ * @returns Whether the policy leaves the accepted email domains implicit
  */
 export function hasImplicitAllEmailDomains(policy: EmailDomainPolicy | undefined): boolean {
   if (policy?.useNonEmailIdentifier === true) {
