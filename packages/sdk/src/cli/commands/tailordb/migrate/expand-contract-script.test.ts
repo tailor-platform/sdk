@@ -4,6 +4,8 @@ import * as path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 import { writeDbTypesFile } from "./db-types-generator";
 import { countUnresolvedTodos } from "./script-form";
+import { buildExpandDiff, buildIntermediateSnapshot } from "./snapshot-comparison";
+import { normalizeSchemaSnapshot } from "./snapshot-normalization";
 import { generateMigrationScript } from "./template-generator";
 import { createMockMigrationDiff } from "./test-helpers/migration-diff";
 import { snapshotField, snapshotType } from "./test-helpers/schema-fixtures";
@@ -232,18 +234,19 @@ describe("db.ts for an expand migration", () => {
         User: { ...snapshotType("User"), fields: { price: plan.before } },
       },
     };
+    const previous = normalizeSchemaSnapshot(snapshot);
     const filePath = await writeDbTypesFile(
       snapshot,
       migrationsDir,
       1,
-      createMockMigrationDiff({ changes: [] }),
+      buildExpandDiff(previous, buildIntermediateSnapshot(previous, [plan]), [plan]),
       [plan],
     );
     return fs.readFileSync(filePath, "utf8");
   }
 
   test("declares the temporary field the conversion script writes", async () => {
-    expect(await generate()).toMatch(/priceMigrate: [^;]+;/);
+    expect(await generate()).toContain("    priceMigrate: string | null;");
   });
 
   test("keeps the original field readable and nullable so the script can clear it", async () => {
