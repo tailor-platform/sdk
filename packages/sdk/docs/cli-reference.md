@@ -182,7 +182,8 @@ read them:
 - `MIGRATION_CHECKPOINT_UNVERIFIED`: the deploy could not read a namespace's checkpoint to confirm
   that it had not changed.
 - `MIGRATION_FAILED`: a migration's script failed, and the deploy rolled the migration back to the
-  previous checkpoint.
+  previous checkpoint. `error.context.namespace` and `error.context.migrationNumber` name the
+  migration.
 - `MIGRATION_ROLLED_BACK`: a migration whose `migrate.ts` exports `steps` and
   `onFailure = "rollback"` failed, and the deploy rolled it back to the previous checkpoint.
 - `MIGRATION_PARTIALLY_APPLIED`: a migration stopped partway and stays in progress: a `steps`
