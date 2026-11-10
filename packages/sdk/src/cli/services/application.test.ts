@@ -355,6 +355,20 @@ describe("service config validation", () => {
     },
     {
       serviceConfig: {
+        resolver: {
+          main: {
+            files: [],
+            defaultPermission: [{ conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false }],
+          },
+        },
+      },
+      heading: 'resolver namespace "main"',
+      configKey: "resolver",
+      name: "main",
+      path: ["resolver", "main", "defaultPermission"],
+    },
+    {
+      serviceConfig: {
         idp: [
           defineIdp("other-idp", { clients: ["default"] }),
           { ...defineIdp("my-idp", { clients: ["default"] }), clients: "default" },

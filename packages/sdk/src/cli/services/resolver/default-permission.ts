@@ -1,42 +1,45 @@
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
+import { configInvalidError } from "#/cli/shared/validation-errors";
 import { ResolverPermissionSchema } from "#/parser/service/resolver/index";
-import { permissionInputFields } from "#/parser/service/resolver/permission-operands";
+import { checkDefaultPermissionInputs } from "#/parser/service/resolver/permission-operands";
 import type { ResolverServiceConfig, ResolverServiceInput } from "#/configure/config/types";
 import type { Resolver } from "#/types/resolver.generated";
+
+const ResolverDefaultPermissionSchema = ResolverPermissionSchema.superRefine(
+  checkDefaultPermissionInputs,
+);
 
 type ParseParams = {
   namespace: string;
   config: ResolverServiceConfig;
+  configPath: string;
 };
 
 /**
  * Validate a resolver namespace's `defaultPermission` with the same schema as
  * a resolver's own `permission`, so an invalid policy fails the build instead
  * of compiling into a guard that lets everyone through.
- * @param params - The namespace name and its resolver service config
+ * @param params - The namespace name, its resolver service config, and the config file declaring it
  * @returns The validated default, or `undefined` when the namespace declares none
  */
 export function parseResolverDefaultPermission(
   params: ParseParams,
 ): Resolver["permission"] | undefined {
-  const { namespace, config } = params;
+  const { namespace, config, configPath } = params;
   if (config.defaultPermission === undefined) {
     return undefined;
   }
-  const result = ResolverPermissionSchema.safeParse(config.defaultPermission);
+  const result = ResolverDefaultPermissionSchema.safeParse(config.defaultPermission);
   if (!result.success) {
-    throw new Error(
-      `Invalid \`defaultPermission\` for resolver namespace "${namespace}": ` +
-        result.error.issues.map((issue) => issue.message).join("; "),
-    );
-  }
-  if (permissionInputFields(result.data).size > 0) {
-    throw new Error(
-      `Invalid \`defaultPermission\` for resolver namespace "${namespace}": ` +
-        "`defaultPermission` cannot use an `input` operand, since a namespace has no input; " +
-        "declare it in each resolver's own `permission`",
-    );
+    throw configInvalidError({
+      file: configPath,
+      exportName: "default",
+      subject: `config for resolver namespace "${namespace}"`,
+      error: result.error,
+      pathPrefix: ["resolver", namespace, "defaultPermission"],
+      service: { configKey: "resolver", name: namespace },
+    });
   }
   return result.data;
 }
@@ -45,6 +48,7 @@ type ResolveForFileParams = {
   config: ResolverServiceInput | undefined;
   filePath: string;
   baseDir: string;
+  configPath: string;
 };
 
 /**
@@ -58,13 +62,13 @@ type ResolveForFileParams = {
  * `deploy` then bundles that resolver once per namespace, each with its own
  * default. Picking one here would make the test run agree with only one of
  * the deployed copies, so an ambiguous file is rejected instead.
- * @param params - The config's resolver section, the resolver file, and the config's own directory
+ * @param params - The config's resolver section, the resolver file, and the config's own directory and path
  * @returns The owning namespace's validated default, or `undefined` when no namespace claims the file
  */
 export function resolveResolverDefaultPermissionForFile(
   params: ResolveForFileParams,
 ): Resolver["permission"] | undefined {
-  const { config, filePath, baseDir } = params;
+  const { config, filePath, baseDir, configPath } = params;
   if (!config) {
     return undefined;
   }
@@ -93,5 +97,5 @@ export function resolveResolverDefaultPermissionForFile(
   }
 
   const [owner] = owners;
-  return owner ? parseResolverDefaultPermission(owner) : undefined;
+  return owner ? parseResolverDefaultPermission({ ...owner, configPath }) : undefined;
 }

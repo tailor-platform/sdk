@@ -7,9 +7,11 @@ import type { ResolverServiceConfig, ResolverServiceInput } from "#/configure/co
 
 describe("resolveResolverDefaultPermissionForFile", () => {
   let baseDir: string;
+  let configPath: string;
 
   aroundEach(async (runTest) => {
     baseDir = makeTempDir("sdk-default-permission-");
+    configPath = path.join(baseDir, "tailor.config.ts");
     fs.mkdirSync(path.join(baseDir, "main"), { recursive: true });
     fs.mkdirSync(path.join(baseDir, "public"), { recursive: true });
     fs.writeFileSync(path.join(baseDir, "main", "guarded.ts"), "export default {};\n");
@@ -36,6 +38,7 @@ describe("resolveResolverDefaultPermissionForFile", () => {
         config: config(),
         filePath: path.join(baseDir, "main", "guarded.ts"),
         baseDir,
+        configPath,
       }),
     ).toEqual(loggedIn);
 
@@ -44,6 +47,7 @@ describe("resolveResolverDefaultPermissionForFile", () => {
         config: config(),
         filePath: path.join(baseDir, "public", "open.ts"),
         baseDir,
+        configPath,
       }),
     ).toBe("allowAnonymous");
   });
@@ -59,6 +63,7 @@ describe("resolveResolverDefaultPermissionForFile", () => {
         config: overlapping,
         filePath: path.join(baseDir, "main", "guarded.ts"),
         baseDir,
+        configPath,
       }),
     ).toThrow(/matches more than one resolver namespace: "main", "everything"/);
   });
@@ -71,6 +76,7 @@ describe("resolveResolverDefaultPermissionForFile", () => {
         config: config(),
         filePath: path.join(baseDir, "loose.ts"),
         baseDir,
+        configPath,
       }),
     ).toBeUndefined();
   });
@@ -81,7 +87,85 @@ describe("resolveResolverDefaultPermissionForFile", () => {
         config: undefined,
         filePath: path.join(baseDir, "main", "guarded.ts"),
         baseDir,
+        configPath,
       }),
     ).toBeUndefined();
+  });
+
+  function rejection(defaultPermission: unknown): unknown {
+    try {
+      resolveResolverDefaultPermissionForFile({
+        config: { main: { files: ["./main/*.ts"], defaultPermission: defaultPermission as never } },
+        filePath: path.join(baseDir, "main", "guarded.ts"),
+        baseDir,
+        configPath,
+      });
+    } catch (error) {
+      return error;
+    }
+    throw new Error("expected resolveResolverDefaultPermissionForFile to throw");
+  }
+
+  test("reports an invalid default as CONFIG_INVALID at the config file", () => {
+    const error = rejection([{ conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false }]);
+
+    expect(error).toMatchObject({
+      code: "CONFIG_INVALID",
+      message: expect.stringMatching(
+        /^Invalid config for resolver namespace "main":\n {2}- resolver\.main\.defaultPermission: Resolver permission must include at least one `permit: true` policy/,
+      ),
+      context: {
+        file: configPath,
+        exportName: "default",
+        configKey: "resolver",
+        name: "main",
+        issues: [{ path: ["resolver", "main", "defaultPermission"] }],
+      },
+    });
+  });
+
+  test("reports each `input` operand of a default with its path", () => {
+    const error = rejection([
+      {
+        conditions: [
+          [{ input: "ownerId" }, "=", { user: "id" }],
+          [{ user: "id" }, "=", { input: "reviewerId" }],
+        ],
+        permit: true,
+      },
+      { conditions: [{ input: "ownerId" }, "=", { user: "id" }], permit: true },
+    ]);
+
+    const message =
+      "`defaultPermission` cannot use an `input` operand, since a namespace has no input; " +
+      "declare it in each resolver's own `permission`";
+    const prefix = ["resolver", "main", "defaultPermission"];
+    expect(error).toMatchObject({
+      code: "CONFIG_INVALID",
+      context: {
+        issues: [
+          { path: [...prefix, 0, "conditions", 0, 0], message },
+          { path: [...prefix, 0, "conditions", 1, 2], message },
+          { path: [...prefix, 1, "conditions", 0], message },
+        ],
+      },
+    });
+  });
+
+  test("reports an `input` operand together with the default's other issues", () => {
+    const error = rejection([
+      { conditions: [[{ input: "ownerId" }, "=", { user: "id" }]], permit: false },
+    ]);
+
+    const prefix = ["resolver", "main", "defaultPermission"];
+    expect(error).toMatchObject({
+      context: {
+        issues: [
+          { path: [...prefix, 0, "conditions"] },
+          { path: prefix },
+          { path: [...prefix, 0, "conditions", 0, 0] },
+        ],
+      },
+    });
   });
 });
