@@ -54,6 +54,7 @@ describe("summarizeChangeSets", () => {
       delete: 1,
       replace: 2,
       forcedBySdkVersion: 0,
+      labelRefreshes: 0,
     });
   });
 
@@ -71,6 +72,7 @@ describe("summarizeChangeSets", () => {
       delete: 0,
       replace: 0,
       forcedBySdkVersion: 2,
+      labelRefreshes: 0,
     });
   });
 });
@@ -78,19 +80,53 @@ describe("summarizeChangeSets", () => {
 describe("formatPlanSummary", () => {
   test("omits replace count when there are no replacements", () => {
     expect(
-      formatPlanSummary({ create: 1, update: 2, delete: 0, replace: 0, forcedBySdkVersion: 0 }),
+      formatPlanSummary({
+        create: 1,
+        update: 2,
+        delete: 0,
+        replace: 0,
+        forcedBySdkVersion: 0,
+        labelRefreshes: 0,
+      }),
     ).toBe("Plan: 1 to create, 2 to update, 0 to delete");
   });
 
   test("includes replace count when replacements exist", () => {
     expect(
-      formatPlanSummary({ create: 1, update: 2, delete: 0, replace: 3, forcedBySdkVersion: 0 }),
+      formatPlanSummary({
+        create: 1,
+        update: 2,
+        delete: 0,
+        replace: 3,
+        forcedBySdkVersion: 0,
+        labelRefreshes: 0,
+      }),
     ).toBe("Plan: 1 to create, 2 to update, 0 to delete, 3 to replace");
   });
 
   test("breaks out updates forced by the SDK version", () => {
     expect(
-      formatPlanSummary({ create: 0, update: 12, delete: 0, replace: 0, forcedBySdkVersion: 11 }),
+      formatPlanSummary({
+        create: 0,
+        update: 12,
+        delete: 0,
+        replace: 0,
+        forcedBySdkVersion: 11,
+        labelRefreshes: 0,
+      }),
     ).toBe("Plan: 0 to create, 12 to update (11 forced by SDK version), 0 to delete");
+  });
+
+  test("includes the label refresh count when function labels are refreshed", () => {
+    expect(
+      formatPlanSummary({
+        create: 0,
+        update: 0,
+        delete: 0,
+        replace: 0,
+        forcedBySdkVersion: 0,
+        labelRefreshes: 22,
+      }),
+    ).toBe("Plan: 0 to create, 0 to update, 0 to delete, 22 function labels to refresh");
   });
 });
