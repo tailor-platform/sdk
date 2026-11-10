@@ -33,6 +33,29 @@ vi.mock("./get", () => ({
   resolveWorkflow: vi.fn(),
 }));
 
+function executionResponse(status: WorkflowExecution_Status, jobExecutions: unknown[] = []) {
+  return {
+    execution: {
+      id: "execution-1",
+      workflowName: "legacy-workflow",
+      status,
+      jobExecutions,
+    } as unknown as WorkflowExecution,
+  };
+}
+
+function runWaitCommand(command: "start" | "resume", ...flags: string[]) {
+  return command === "start"
+    ? runCommand(startCommand, [
+        "legacy-workflow",
+        "--machine-user",
+        "legacy-user",
+        "--wait",
+        ...flags,
+      ])
+    : runCommand(resumeCommand, ["execution-1", "--wait", ...flags]);
+}
+
 describe("startWorkflow", () => {
   let getApplicationMock: ReturnType<typeof vi.fn>;
   let getWorkflowExecutionMock: ReturnType<typeof vi.fn>;
@@ -56,19 +79,15 @@ describe("startWorkflow", () => {
     startWorkflowMock = vi.fn().mockResolvedValue({
       executionId: "execution-1",
     });
-    getWorkflowExecutionMock = vi.fn().mockResolvedValue({
-      execution: {
-        id: "execution-1",
-        workflowName: "legacy-workflow",
-        status: WorkflowExecution_Status.SUCCESS,
-        jobExecutions: [],
-      } as unknown as WorkflowExecution,
-    });
+    getWorkflowExecutionMock = vi
+      .fn()
+      .mockResolvedValue(executionResponse(WorkflowExecution_Status.SUCCESS));
 
     vi.mocked(initOperatorClient).mockResolvedValue({
       getApplication: getApplicationMock,
       getWorkflowExecution: getWorkflowExecutionMock,
       startWorkflow: startWorkflowMock,
+      resumeWorkflowExecution: vi.fn().mockResolvedValue({ executionId: "execution-1" }),
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
 
     vi.mocked(resolveWorkflow).mockImplementation(async (_client, _workspaceId, workflowName) => {
@@ -173,18 +192,7 @@ describe("startWorkflow", () => {
     using _stderr = captureStderr();
     using _json = jsonMode();
 
-    await runCommand(startCommand, [
-      "legacy-workflow",
-      "--machine-user",
-      "legacy-user",
-      "--wait",
-      "--until",
-      "success",
-      "--timeout",
-      "1s",
-      "--interval",
-      "1ms",
-    ]);
+    await runWaitCommand("start", "--until", "success", "--timeout", "1s", "--interval", "1ms");
 
     expect(JSON.parse(stdout.output)).toMatchObject({
       id: "execution-1",
@@ -203,28 +211,10 @@ describe("startWorkflow", () => {
       using stdout = captureStdout();
       using _stderr = captureStderr();
       using _json = jsonMode();
-      getWorkflowExecutionMock.mockResolvedValue({
-        execution: {
-          id: "execution-1",
-          workflowName: "legacy-workflow",
-          status: WorkflowExecution_Status.FAILED,
-          jobExecutions: [],
-        },
-      });
-      const client = await initOperatorClient("mock-token");
-      vi.mocked(initOperatorClient).mockResolvedValue({
-        ...client,
-        resumeWorkflowExecution: vi.fn().mockResolvedValue({ executionId: "execution-1" }),
-      });
-      const result =
-        command === "start"
-          ? await runCommand(startCommand, [
-              "legacy-workflow",
-              "--machine-user",
-              "legacy-user",
-              "--wait",
-            ])
-          : await runCommand(resumeCommand, ["execution-1", "--wait"]);
+      getWorkflowExecutionMock.mockResolvedValue(
+        executionResponse(WorkflowExecution_Status.FAILED),
+      );
+      const result = await runWaitCommand(command);
       expect(result.success).toBe(false);
       expect(JSON.parse(stdout.output)).toMatchObject({ id: "execution-1", status: "FAILED" });
       expect(getWorkflowExecutionMock).toHaveBeenCalledTimes(1);
@@ -238,37 +228,9 @@ describe("startWorkflow", () => {
       using _stderr = captureStderr();
       using _json = jsonMode(false);
       getWorkflowExecutionMock
-        .mockResolvedValueOnce({
-          execution: {
-            id: "execution-1",
-            workflowName: "legacy-workflow",
-            status: WorkflowExecution_Status.SUCCESS,
-            jobExecutions: [],
-          },
-        })
-        .mockResolvedValue({
-          execution: {
-            id: "execution-1",
-            workflowName: "legacy-workflow",
-            status: WorkflowExecution_Status.FAILED,
-            jobExecutions: [],
-          },
-        });
-      const client = await initOperatorClient("mock-token");
-      vi.mocked(initOperatorClient).mockResolvedValue({
-        ...client,
-        resumeWorkflowExecution: vi.fn().mockResolvedValue({ executionId: "execution-1" }),
-      });
-      const result =
-        command === "start"
-          ? await runCommand(startCommand, [
-              "legacy-workflow",
-              "--machine-user",
-              "legacy-user",
-              "--wait",
-              "--logs",
-            ])
-          : await runCommand(resumeCommand, ["execution-1", "--wait", "--logs"]);
+        .mockResolvedValueOnce(executionResponse(WorkflowExecution_Status.SUCCESS))
+        .mockResolvedValue(executionResponse(WorkflowExecution_Status.FAILED));
+      const result = await runWaitCommand(command, "--logs");
       expect(result.success).toBe(true);
       expect(stdout.output).toContain("FAILED");
     },
@@ -280,29 +242,12 @@ describe("startWorkflow", () => {
       using stdout = captureStdout();
       using _stderr = captureStderr();
       using _json = jsonMode();
-      getWorkflowExecutionMock.mockResolvedValue({
-        execution: {
-          id: "execution-1",
-          workflowName: "legacy-workflow",
-          status: WorkflowExecution_Status.SUCCESS,
-          jobExecutions: [{ id: "job-1", stackedJobName: "main", status: 0, executionId: "" }],
-        },
-      });
-      const client = await initOperatorClient("mock-token");
-      vi.mocked(initOperatorClient).mockResolvedValue({
-        ...client,
-        resumeWorkflowExecution: vi.fn().mockResolvedValue({ executionId: "execution-1" }),
-      });
-      const result =
-        command === "start"
-          ? await runCommand(startCommand, [
-              "legacy-workflow",
-              "--machine-user",
-              "legacy-user",
-              "--wait",
-              "--logs",
-            ])
-          : await runCommand(resumeCommand, ["execution-1", "--wait", "--logs"]);
+      getWorkflowExecutionMock.mockResolvedValue(
+        executionResponse(WorkflowExecution_Status.SUCCESS, [
+          { id: "job-1", stackedJobName: "main", status: 0, executionId: "" },
+        ]),
+      );
+      const result = await runWaitCommand(command, "--logs");
       expect(result.success).toBe(true);
       expect(JSON.parse(stdout.output)).toMatchObject({
         status: "SUCCESS",

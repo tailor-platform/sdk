@@ -84,7 +84,7 @@ describe("secret create command", () => {
     expect(releaseVaultOwnership).toHaveBeenCalledTimes(1);
   });
 
-  test("prints the secret and vault under JSON output", async () => {
+  test("skips the confirmation with --yes and prints the secret and vault under JSON output", async () => {
     const client = { createSecretManagerSecret: vi.fn().mockResolvedValue({}) };
     vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
       client,
@@ -104,6 +104,7 @@ describe("secret create command", () => {
     ]);
 
     expect(result.success).toBe(true);
+    expect(prompt.confirm).not.toHaveBeenCalled();
     expect(JSON.parse(stdout.output)).toEqual({
       changed: true,
       workspaceId: "workspace-1",

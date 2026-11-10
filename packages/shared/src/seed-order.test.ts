@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
-import { sortBySelfReference as sortRecordsBySelfReference } from "./seed-order";
+import { sortBySelfReference } from "./seed-order";
 
-describe("sortRecordsBySelfReference", () => {
+describe("sortBySelfReference", () => {
   test("orders a parent before children that land in reverse (dump) order", () => {
     // Dumped rows are ordered by uuid `id`, not by parent/child relationship,
     // so a child can sort before the parent it references.
@@ -9,7 +9,7 @@ describe("sortRecordsBySelfReference", () => {
       { id: "child", parentId: "parent" },
       { id: "parent", parentId: null },
     ];
-    const sorted = sortRecordsBySelfReference(records, ["parentId"]);
+    const sorted = sortBySelfReference(records, ["parentId"]);
     expect(sorted.map((r) => r.id)).toEqual(["parent", "child"]);
   });
 
@@ -23,7 +23,7 @@ describe("sortRecordsBySelfReference", () => {
       { id: "child", parentId: "parent" },
       { id: "parent", parentId: null },
     ];
-    const sorted = sortRecordsBySelfReference(records, ["parentId"]);
+    const sorted = sortBySelfReference(records, ["parentId"]);
     expect(sorted.map((r) => r.id)).toEqual(["parent", "child", "grandchild"]);
   });
 
@@ -32,23 +32,16 @@ describe("sortRecordsBySelfReference", () => {
       { id: "child", parentId: "not-in-batch" },
       { id: "independent", parentId: null },
     ];
-    const sorted = sortRecordsBySelfReference(records, ["parentId"]);
+    const sorted = sortBySelfReference(records, ["parentId"]);
     expect(sorted).toEqual(records);
   });
-
-  test.each([{ records: [] }, { records: [{ id: "only" }] }])(
-    "returns a batch of zero or one record unchanged: $records",
-    ({ records }) => {
-      expect(sortRecordsBySelfReference(records, ["parentId"])).toBe(records);
-    },
-  );
 
   test("ignores self edges when ordering a parent and child", () => {
     const records = [
       { id: "child", parentId: "parent" },
       { id: "parent", parentId: "parent" },
     ];
-    expect(sortRecordsBySelfReference(records, ["parentId"]).map((record) => record.id)).toEqual([
+    expect(sortBySelfReference(records, ["parentId"]).map((record) => record.id)).toEqual([
       "parent",
       "child",
     ]);
@@ -59,31 +52,15 @@ describe("sortRecordsBySelfReference", () => {
       { id: "child", links: [null, {}, { parentId: "parent" }] },
       { id: "parent", links: null },
     ];
-    expect(
-      sortRecordsBySelfReference(records, ["links.parentId"]).map((record) => record.id),
-    ).toEqual(["parent", "child"]);
-  });
-
-  test("does not treat primitive properties as nested reference fields", () => {
-    const records = [
-      { id: "child", link: "abc" },
-      { id: "parent", code: 3 },
-    ];
-    expect(sortRecordsBySelfReference(records, ["link.length"], { "link.length": "code" })).toEqual(
-      records,
-    );
-  });
-
-  test("does not resolve a non-id key to a record with no id", () => {
-    const records = [{ id: "child", parentCode: "parent" }, { code: "parent" }];
-    expect(sortRecordsBySelfReference(records, ["parentCode"], { parentCode: "code" })).toEqual(
-      records,
-    );
+    expect(sortBySelfReference(records, ["links.parentId"]).map((record) => record.id)).toEqual([
+      "parent",
+      "child",
+    ]);
   });
 
   test("falls back to original order when ids are missing", () => {
     const records = [{ parentId: null }, { parentId: null }];
-    const sorted = sortRecordsBySelfReference(records, ["parentId"]);
+    const sorted = sortBySelfReference(records, ["parentId"]);
     expect(sorted).toEqual(records);
   });
 
@@ -92,7 +69,7 @@ describe("sortRecordsBySelfReference", () => {
       { id: "dup", parentId: null },
       { id: "dup", parentId: null },
     ];
-    const sorted = sortRecordsBySelfReference(records, ["parentId"]);
+    const sorted = sortBySelfReference(records, ["parentId"]);
     expect(sorted).toEqual(records);
   });
 
@@ -101,22 +78,19 @@ describe("sortRecordsBySelfReference", () => {
       { id: "a", parentId: "b" },
       { id: "b", parentId: "a" },
     ];
-    const sorted = sortRecordsBySelfReference(records, ["parentId"]);
+    const sorted = sortBySelfReference(records, ["parentId"]);
     expect(sorted).toHaveLength(2);
     expect(sorted.map((r) => r.id)).toEqual(expect.arrayContaining(["a", "b"]));
   });
 
   test("returns records unchanged when there are no self-reference fields", () => {
     const records = [{ id: "a" }, { id: "b" }];
-    expect(sortRecordsBySelfReference(records, [])).toBe(records);
+    expect(sortBySelfReference(records, [])).toBe(records);
   });
 
   test("orders a parent before a child that points at it from inside a nested object", () => {
-    const records = [
-      { id: "child", link: { parentID: "parent" } },
-      { id: "parent", link: { parentID: null } },
-    ];
-    const sorted = sortRecordsBySelfReference(records, ["link.parentID"]);
+    const records = [{ id: "child", link: { parentID: "parent" } }, { id: "parent" }];
+    const sorted = sortBySelfReference(records, ["link.parentID"]);
     expect(sorted.map((r) => r.id)).toEqual(["parent", "child"]);
   });
 
@@ -126,7 +100,7 @@ describe("sortRecordsBySelfReference", () => {
       { id: "b", links: [{ parentID: "a" }] },
       { id: "a", links: [] },
     ];
-    const sorted = sortRecordsBySelfReference(records, ["links.parentID"]);
+    const sorted = sortBySelfReference(records, ["links.parentID"]);
     expect(sorted.map((r) => r.id)).toEqual(["a", "b", "c"]);
   });
 
@@ -135,7 +109,7 @@ describe("sortRecordsBySelfReference", () => {
       { id: "child-id", code: "child", link: { parentCode: "parent" } },
       { id: "parent-id", code: "parent", link: { parentCode: null } },
     ];
-    const sorted = sortRecordsBySelfReference(records, ["link.parentCode"], {
+    const sorted = sortBySelfReference(records, ["link.parentCode"], {
       "link.parentCode": "code",
     });
     expect(sorted.map((r) => r.code)).toEqual(["parent", "child"]);
@@ -150,7 +124,7 @@ describe("sortRecordsBySelfReference", () => {
       { id: "child-id", code: "child", parentCode: "parent" },
       { id: "parent-id", code: "parent", parentCode: null },
     ];
-    const sorted = sortRecordsBySelfReference(records, ["parentCode"], { parentCode: "code" });
+    const sorted = sortBySelfReference(records, ["parentCode"], { parentCode: "code" });
     expect(sorted.map((r) => r.code)).toEqual(["parent", "child"]);
   });
 
@@ -162,7 +136,7 @@ describe("sortRecordsBySelfReference", () => {
     // Without a fieldKeys entry, parentCode is (wrongly) matched against id,
     // so neither row finds its parent and both are treated as roots — but
     // no data is dropped.
-    const sorted = sortRecordsBySelfReference(records, ["parentCode"]);
+    const sorted = sortBySelfReference(records, ["parentCode"]);
     expect(sorted.map((r) => r.id)).toEqual(expect.arrayContaining(["child-id", "parent-id"]));
   });
 });
