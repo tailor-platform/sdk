@@ -13,6 +13,7 @@ const idp = defineIdp("main-idp", {
     delete: [{ conditions: [[{ user: "role" }, "=", "admin"]], permit: true }],
     sendPasswordResetEmail: [{ conditions: [[{ user: "role" }, "=", "admin"]], permit: true }],
   },
+  userAuthPolicy: { allowedEmailDomains: ["*"] },
 });
 
 export default defineConfig({

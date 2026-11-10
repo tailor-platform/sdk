@@ -9,8 +9,8 @@ name: "Deploy Drift Check"
 #
 # The target list intentionally covers config-shape diversity rather than
 # every template: example configures everything explicitly, so drift caused by
-# the platform filling defaults for OMITTED sections (e.g. IdP userAuthPolicy)
-# only reproduces on minimal configs like these.
+# the platform filling defaults for OMITTED fields (e.g. the IdP userAuthPolicy
+# password lengths) only reproduces on minimal configs like these.
 #
 # Targets run as a serial loop in a single job, not a matrix: it keeps the
 # platform load at one ephemeral workspace at a time and pays the
