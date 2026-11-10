@@ -492,7 +492,6 @@ export default createResolver({
   operation: "mutation",
   input: { employeeId: t.string(), date: t.string() },
   permission: [
-    // the caller's own attendance only...
     { conditions: [[{ input: "employeeId" }, "=", { user: "id" }]], permit: true },
     // ...unless the caller is an admin
     { conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true },

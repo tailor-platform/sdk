@@ -1,4 +1,4 @@
-import { isPlainObject } from "es-toolkit";
+import { isPlainObject } from "es-toolkit/predicate";
 import { createChangeSet } from "../change-set";
 import type { PlanResults } from "../apply-phases";
 
