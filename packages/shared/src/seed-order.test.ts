@@ -28,9 +28,57 @@ describe("sortRecordsBySelfReference", () => {
   });
 
   test("ignores a reference to an id outside the batch", () => {
-    const records = [{ id: "child", parentId: "not-in-batch" }];
+    const records = [
+      { id: "child", parentId: "not-in-batch" },
+      { id: "independent", parentId: null },
+    ];
     const sorted = sortRecordsBySelfReference(records, ["parentId"]);
     expect(sorted).toEqual(records);
+  });
+
+  test.each([{ records: [] }, { records: [{ id: "only" }] }])(
+    "returns a batch of zero or one record unchanged: $records",
+    ({ records }) => {
+      expect(sortRecordsBySelfReference(records, ["parentId"])).toBe(records);
+    },
+  );
+
+  test("ignores self edges when ordering a parent and child", () => {
+    const records = [
+      { id: "child", parentId: "parent" },
+      { id: "parent", parentId: "parent" },
+    ];
+    expect(sortRecordsBySelfReference(records, ["parentId"]).map((record) => record.id)).toEqual([
+      "parent",
+      "child",
+    ]);
+  });
+
+  test("ignores nullable nested values while resolving the other references", () => {
+    const records = [
+      { id: "child", links: [null, {}, { parentId: "parent" }] },
+      { id: "parent", links: null },
+    ];
+    expect(
+      sortRecordsBySelfReference(records, ["links.parentId"]).map((record) => record.id),
+    ).toEqual(["parent", "child"]);
+  });
+
+  test("does not treat primitive properties as nested reference fields", () => {
+    const records = [
+      { id: "child", link: "abc" },
+      { id: "parent", code: 3 },
+    ];
+    expect(sortRecordsBySelfReference(records, ["link.length"], { "link.length": "code" })).toEqual(
+      records,
+    );
+  });
+
+  test("does not resolve a non-id key to a record with no id", () => {
+    const records = [{ id: "child", parentCode: "parent" }, { code: "parent" }];
+    expect(sortRecordsBySelfReference(records, ["parentCode"], { parentCode: "code" })).toEqual(
+      records,
+    );
   });
 
   test("falls back to original order when ids are missing", () => {

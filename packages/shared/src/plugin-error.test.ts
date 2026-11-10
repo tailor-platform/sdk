@@ -55,6 +55,22 @@ describe("plugin errors", () => {
     expect(target.lines).toEqual([expected]);
   });
 
+  test.each([
+    [Object.assign(new Error("failed"), { stack: undefined }), "failed"],
+    [{ format: (): string => "formatted", stack: "not an Error stack" }, "formatted"],
+    [
+      Object.assign(() => {}, {
+        format: (): string => "formatted",
+        toString: (): string => "callable",
+      }),
+      "Unknown error: callable",
+    ],
+  ])("only prints a real Error stack in verbose mode: %s", (error, expected) => {
+    const target = output(false, true);
+    reportPluginError(error, target);
+    expect(target.lines).toEqual([expected]);
+  });
+
   test("does not report successful cleanup", () => {
     const target = output();
     reportPluginError(undefined, target);
