@@ -781,7 +781,6 @@ describe("planWorkflow", () => {
         sdkVersion?: string;
         mainJobFunctionName?: string;
         unchangedJobFunctions?: ReadonlySet<string>;
-        forcedJobFunctions?: ReadonlySet<string>;
         publishExecutionEvents?: boolean;
       }) {
         const jobFunctionLabels = Object.fromEntries(
@@ -826,22 +825,13 @@ describe("planWorkflow", () => {
                 jobPublishEvents: new Map(),
               },
           undefined,
-          options.forcedJobFunctions,
         );
       }
 
       test.each([
         {
-          name: "its sdk-version differs and its job functions are forced too",
-          options: { sdkVersion: "v0-9-0", forcedJobFunctions: new Set(jobNames) },
-        },
-        {
           name: "its sdk-version differs and its job functions are unchanged",
           options: { sdkVersion: "v0-9-0", unchangedJobFunctions: new Set(jobNames) },
-        },
-        {
-          name: "only its job functions are forced",
-          options: { forcedJobFunctions: new Set(jobNames) },
         },
       ])("marks a workflow whose definition matches when $name", async ({ options }) => {
         const result = await planSampleWorkflow(options);
@@ -869,7 +859,7 @@ describe("planWorkflow", () => {
         },
         {
           name: "one of its job functions changed",
-          options: { sdkVersion: "v0-9-0", forcedJobFunctions: new Set(jobNames.slice(1)) },
+          options: { sdkVersion: "v0-9-0", unchangedJobFunctions: new Set(jobNames.slice(1)) },
         },
       ])("does not mark a workflow update when $name", async ({ options }) => {
         const result = await planSampleWorkflow(options);
