@@ -400,7 +400,7 @@ describe("visible same-run namespaces", () => {
     expect(result.has("peer-idp")).toBe(true);
   });
 
-  test("ignores same-run IdPs that the current app does not reference", () => {
+  test("collects IdPs owned by peer configs even when the current app declares none", () => {
     const current = {
       idpServices: [],
       subgraphs: [],
@@ -412,7 +412,7 @@ describe("visible same-run namespaces", () => {
 
     const result = collectVisibleIdpNames(current, [current, peer]);
 
-    expect(result.has("peer-idp")).toBe(false);
+    expect(result.has("peer-idp")).toBe(true);
   });
 });
 
