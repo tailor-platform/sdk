@@ -1,5 +1,13 @@
 # @tailor-platform/eslint-plugin-sdk
 
+## 0.4.0
+
+### Minor Changes
+
+- [#3017](https://github.com/tailor-platform/sdk/pull/3017) [`df8f3e4`](https://github.com/tailor-platform/sdk/commit/df8f3e439b93878c48ffaf6076cf8a1e03deff27) Thanks [@dqn](https://github.com/dqn)! - Add a lint rule (`no-plain-tailor-any-field-param`) that flags a helper parameter typed with `TailorAnyField` itself, such as `field: TailorAnyField` or `fields: Record<string, TailorAnyField>`. When the helper uses a field passed to it to build another field, such as with `t.object()`, that field's output type becomes `any`; constrain a type parameter instead, such as `<F extends TailorAnyField>(field: F)`. Enabled in newly scaffolded projects.
+
+- [#3014](https://github.com/tailor-platform/sdk/pull/3014) [`3af9d37`](https://github.com/tailor-platform/sdk/commit/3af9d37c2d7d34a53fa00a9771e0c0ca1cbb37fc) Thanks [@dqn](https://github.com/dqn)! - `valid-resolver-permission` accepts `{ input: "<field>" }` operands compared with a `user` operand using `=`, and reports one compared with anything else or with `!=`, used in a `permit: false` policy, or used in `defaultPermission`.
+
 ## 0.3.2
 
 ### Patch Changes

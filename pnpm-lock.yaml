@@ -165,7 +165,7 @@ settings:
 overrides:
   brace-expansion@>=5.0.5 <5.0.8: 5.0.12
   esbuild@>=0.17.0 <0.28.1: 0.28.2
-  glob@>=9.0.0 <=14.0.1: 14.0.3
+  glob@>=9.0.0 <=14.0.1: 14.0.4
   minimatch@<11.0.1: 11.0.4
 
 packageExtensionsChecksum: sha256-366VrvjFdE9dy97BTVh0uNx88UlDPie1VVU5Ft1WOd4=
@@ -254,11 +254,11 @@ importers:
         specifier: 5.2.2
         version: 5.2.2(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.90.0(oxlint-tsgolint@7.0.2006))(zod@4.6.7)
       graphql:
-        specifier: 17.0.2
-        version: 17.0.2
+        specifier: 17.1.0
+        version: 17.1.0
       graphql-request:
         specifier: 7.4.0
-        version: 7.4.0(graphql@17.0.2)
+        version: 7.4.0(graphql@17.1.0)
       multiline-ts:
         specifier: 4.0.1
         version: 4.0.1
@@ -317,8 +317,8 @@ importers:
         specifier: 1.8.1
         version: 1.8.1
       '@politty/zod':
-        specifier: 0.7.1
-        version: 0.7.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(zod@4.6.7)
+        specifier: 0.7.2
+        version: 0.7.2(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(zod@4.6.7)
       execa:
         specifier: 10.2.1
         version: 10.2.1
@@ -573,11 +573,11 @@ importers:
         specifier: 26.6.6
         version: 26.6.6
       graphql:
-        specifier: 17.0.2
-        version: 17.0.2
+        specifier: 17.1.0
+        version: 17.1.0
       graphql-request:
         specifier: 7.4.0
-        version: 7.4.0(graphql@17.0.2)
+        version: 7.4.0(graphql@17.1.0)
       oxfmt:
         specifier: 0.75.0
         version: 0.75.0
@@ -626,7 +626,7 @@ importers:
     dependencies:
       '@0no-co/graphql.web':
         specifier: 1.3.4
-        version: 1.3.4(graphql@17.0.2)
+        version: 1.3.4(graphql@17.1.0)
       '@badgateway/oauth2-client':
         specifier: 3.3.1
         version: 3.3.1
@@ -685,8 +685,8 @@ importers:
         specifier: 0.157.0
         version: 0.157.0
       '@politty/zod':
-        specifier: 0.7.1
-        version: 0.7.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(zod@4.6.7)
+        specifier: 0.7.2
+        version: 0.7.2(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(zod@4.6.7)
       '@secretlint/core':
         specifier: 13.1.0
         version: 13.1.0(supports-color@7.2.0)
@@ -705,6 +705,9 @@ importers:
       amaro:
         specifier: 1.3.0
         version: 1.3.0
+      chokidar:
+        specifier: 5.0.0
+        version: 5.0.0
       confbox:
         specifier: 0.3.2
         version: 0.3.2
@@ -815,8 +818,8 @@ importers:
         specifier: 5.2.2
         version: 5.2.2(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.90.0(oxlint-tsgolint@7.0.2006))(zod@4.6.7)
       graphql:
-        specifier: 17.0.2
-        version: 17.0.2
+        specifier: 17.1.0
+        version: 17.1.0
       oxfmt:
         specifier: 0.75.0
         version: 0.75.0
@@ -845,8 +848,8 @@ importers:
         specifier: 5.1.0
         version: 5.1.0(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(vite@8.3.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       zinfer:
-        specifier: 0.5.2
-        version: 0.5.2(typescript@7.1.0-beta)(zod@4.6.7)
+        specifier: 0.5.3
+        version: 0.5.3(typescript@7.1.0-beta)(zod@4.6.7)
 
   packages/sdk-codemod:
     dependencies:
@@ -854,8 +857,8 @@ importers:
         specifier: 0.51.1
         version: 0.51.1
       '@politty/zod':
-        specifier: 0.7.1
-        version: 0.7.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(zod@4.6.7)
+        specifier: 0.7.2
+        version: 0.7.2(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(zod@4.6.7)
       diff:
         specifier: 9.0.0
         version: 9.0.0
@@ -937,8 +940,8 @@ importers:
   packages/sdk-plugin-seed:
     dependencies:
       '@politty/zod':
-        specifier: 0.7.1
-        version: 0.7.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(zod@4.6.7)
+        specifier: 0.7.2
+        version: 0.7.2(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(zod@4.6.7)
       lines-db:
         specifier: 0.18.1
         version: 0.18.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(typescript@6.0.3)
@@ -980,8 +983,8 @@ importers:
         specifier: 0.2.2
         version: 0.2.2
       '@politty/zod':
-        specifier: 0.7.1
-        version: 0.7.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(zod@4.6.7)
+        specifier: 0.7.2
+        version: 0.7.2(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(zod@4.6.7)
       json5:
         specifier: 2.2.3
         version: 2.2.3
@@ -1029,8 +1032,8 @@ importers:
   packages/sdk-plugin-tailordb-erd:
     dependencies:
       '@politty/zod':
-        specifier: 0.7.1
-        version: 0.7.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(zod@4.6.7)
+        specifier: 0.7.2
+        version: 0.7.2(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(zod@4.6.7)
       chokidar:
         specifier: 5.0.0
         version: 5.0.0
@@ -1719,8 +1722,8 @@ packages:
       '@types/node':
         optional: true
 
-  '@isaacs/nonrecursive-glob-match@1.0.3':
-    resolution: {integrity: sha512-SI7kyKHq4XXDRozw+r9GlRZkia1ZkFrpLW98r2IC2Bpr8YkFGE3fvjzmxCG0x78A++69HmDNrDvSMYBZmHGpKA==}
+  '@isaacs/nonrecursive-glob-match@1.1.0':
+    resolution: {integrity: sha512-GPm/Dbvk5RLmhRnxXIa7nTpK0xtl4E0wj0MslsuNiJ1FIROU+2+9lgUC/dgF7Ey4QCWhfEsgxilMRMCdHPfDfw==}
 
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
@@ -2557,8 +2560,8 @@ packages:
       '@inquirer/prompts':
         optional: true
 
-  '@politty/zod@0.7.1':
-    resolution: {integrity: sha512-Kd6f4jTDX+retvHY/LlMSLAc1st6IAbQfjUAl+J4SEMuNr4uFH87Zl8A7nM1K5v6ei8HRXEOaedifVWiqNRJsQ==}
+  '@politty/zod@0.7.2':
+    resolution: {integrity: sha512-1V+Vmtoo9yU2AsS62ONRgRwmEYqjfBgIrXFoWN29HudziIeRpUkLJ0atGmdx8YMgBfADapxY+uMtn7YOYirFJg==}
     engines: {node: '>=20.12.0 <21.0.0 || >=21.7.0'}
     hasBin: true
     peerDependencies:
@@ -3609,8 +3612,8 @@ packages:
     resolution: {integrity: sha512-XxwI8EOhVQgWp6iDL+3b0r86f4d6AX6zSU55HfB4ydCEuXLXc5FcYeOu+nnGftS4TEju/11rt4KJPTMgbfmv4A==}
     engines: {node: '>=10.13.0'}
 
-  glob@14.0.3:
-    resolution: {integrity: sha512-A1vjIwC3qpdCso45Iw127gnp7sPhqgY8lUQhDrArIs+GbmfaaVPFuoyy7WyLT9EPZCRZ7j7aLdwUhQmHWesEow==}
+  glob@14.0.4:
+    resolution: {integrity: sha512-mMiwNKoJZ4HAIRVJxotO6LsNRReA30gQwP9E2/p94tfLv+jygCNpKDjhhSL6OLY6LE371EZm5EAf7RpYuUqlsw==}
     engines: {node: 18 || 20 || >=22}
 
   globals@17.14.0:
@@ -3630,9 +3633,9 @@ packages:
     peerDependencies:
       graphql: 14 - 16
 
-  graphql@17.0.2:
-    resolution: {integrity: sha512-FRWbddMxfkjiB7z+aQDWIR+E34xo9I8c9mtK2RPv8PmMzKRvrdsreHL/Ui/TmwHJfhHChEtsFPyMHKI+xuarQQ==}
-    engines: {node: ^22.0.0 || ^24.0.0 || ^25.0.0 || >=26.0.0}
+  graphql@17.1.0:
+    resolution: {integrity: sha512-JKCOa7rSQNrket/JFhuua86hljUO+IIpyUHfKxlKD6FEfbrLX8jc1FDrA0KPKI+s8OspBCF/5npYccAICHXPpQ==}
+    engines: {node: ^22.0.0 || ^24.0.0 || >=26.0.0}
 
   has-flag@4.0.0:
     resolution: {integrity: sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ==}
@@ -4005,6 +4008,10 @@ packages:
 
   minimatch@11.0.4:
     resolution: {integrity: sha512-/UJ1dEoVQTjPNDh6SGlUo+ueLMmoHTas4q+8yaAR/5t6nLAIiBDJtoYUh20IYleix7ehiQkgczb84PE3uzHkxg==}
+    engines: {node: 20 || >=22}
+
+  minimatch@11.0.5:
+    resolution: {integrity: sha512-snPlVppFcYWfLLFQGhDxUyBcHNtMlWmn3jtj7pEaO+DP8pqL0IvAzXhMYmn1z9ASNtgmwLBdFxSf4tMUB0OTKA==}
     engines: {node: 20 || >=22}
 
   minimist@1.2.8:
@@ -4776,8 +4783,8 @@ packages:
       '@yuku-toolchain/wasm':
         optional: true
 
-  zinfer@0.5.2:
-    resolution: {integrity: sha512-87aqzlMrvKjJpaJaMSOgCy4wVyVcethJWiaP77/Vqm+mcUortnCgTI0/bd2BN6e+i9R7I43HuJCqL6ClfyHL3Q==}
+  zinfer@0.5.3:
+    resolution: {integrity: sha512-B4ivM0+v9Cb66T3b86C0LU/x2VY/nlBkFRN/asaRWm2PsRQFTp0Mi1K9KVydnYZTDnHBuyA/vMFsvLcyLfQPiQ==}
     hasBin: true
     peerDependencies:
       typescript: '>=5.0.0'
@@ -4788,9 +4795,9 @@ packages:
 
 snapshots:
 
-  '@0no-co/graphql.web@1.3.4(graphql@17.0.2)':
+  '@0no-co/graphql.web@1.3.4(graphql@17.1.0)':
     optionalDependencies:
-      graphql: 17.0.2
+      graphql: 17.1.0
 
   '@ark/attest@0.58.0(supports-color@7.2.0)(tsrs@0.16.0-ts7.1.0-dev.20260929)(typescript@6.0.3)':
     dependencies:
@@ -5196,9 +5203,9 @@ snapshots:
       '@eslint/core': 1.2.1
       levn: 0.4.1
 
-  '@graphql-typed-document-node/core@3.2.0(graphql@17.0.2)':
+  '@graphql-typed-document-node/core@3.2.0(graphql@17.1.0)':
     dependencies:
-      graphql: 17.0.2
+      graphql: 17.1.0
 
   '@humanfs/core@0.19.2':
     dependencies:
@@ -5335,7 +5342,7 @@ snapshots:
     optionalDependencies:
       '@types/node': 26.6.6
 
-  '@isaacs/nonrecursive-glob-match@1.0.3': {}
+  '@isaacs/nonrecursive-glob-match@1.1.0': {}
 
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:
@@ -5821,7 +5828,7 @@ snapshots:
       '@clack/prompts': 1.8.1
       '@inquirer/prompts': 8.7.5(@types/node@26.6.6)
 
-  '@politty/zod@0.7.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(zod@4.6.7)':
+  '@politty/zod@0.7.2(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(zod@4.6.7)':
     dependencies:
       yaml: 2.9.1
       zod: 4.6.7
@@ -6718,9 +6725,9 @@ snapshots:
     dependencies:
       is-glob: 4.0.3
 
-  glob@14.0.3:
+  glob@14.0.4:
     dependencies:
-      minimatch: 11.0.4
+      minimatch: 11.0.5
       minipass: 7.1.3
       path-scurry: 3.0.0
 
@@ -6732,12 +6739,12 @@ snapshots:
 
   graceful-fs@4.2.11: {}
 
-  graphql-request@7.4.0(graphql@17.0.2):
+  graphql-request@7.4.0(graphql@17.1.0):
     dependencies:
-      '@graphql-typed-document-node/core': 3.2.0(graphql@17.0.2)
-      graphql: 17.0.2
+      '@graphql-typed-document-node/core': 3.2.0(graphql@17.1.0)
+      graphql: 17.1.0
 
-  graphql@17.0.2: {}
+  graphql@17.1.0: {}
 
   has-flag@4.0.0: {}
 
@@ -7038,7 +7045,12 @@ snapshots:
 
   minimatch@11.0.4:
     dependencies:
-      '@isaacs/nonrecursive-glob-match': 1.0.3
+      '@isaacs/nonrecursive-glob-match': 1.1.0
+      brace-expansion: 5.0.12
+
+  minimatch@11.0.5:
+    dependencies:
+      '@isaacs/nonrecursive-glob-match': 1.1.0
       brace-expansion: 5.0.12
 
   minimist@1.2.8: {}
@@ -7819,10 +7831,10 @@ snapshots:
       '@yuku-toolchain/win32-arm64': 0.25.0
       '@yuku-toolchain/win32-x64': 0.25.0
 
-  zinfer@0.5.2(typescript@7.1.0-beta)(zod@4.6.7):
+  zinfer@0.5.3(typescript@7.1.0-beta)(zod@4.6.7):
     dependencies:
       commander: 15.0.0
-      glob: 14.0.3
+      glob: 14.0.4
       jiti: 2.7.0
       pathe: 2.0.3
       typescript: 7.1.0-beta

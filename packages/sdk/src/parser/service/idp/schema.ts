@@ -135,7 +135,7 @@ export const IdPUserAuthPolicySchema = z
       })
       .optional()
       .describe(
-        `Restrict registration to these email domains. A lone ${ALL_EMAIL_DOMAINS} entry allows every domain`,
+        `Restrict registration to these email domains. Required unless useNonEmailIdentifier is true. A lone ${ALL_EMAIL_DOMAINS} entry allows every domain`,
       ),
     allowGoogleOauth: z.boolean().optional().describe("Enable Google OAuth login"),
     allowMicrosoftOauth: z.boolean().optional().describe("Enable Microsoft OAuth login"),

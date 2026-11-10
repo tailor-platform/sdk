@@ -1,5 +1,37 @@
 # @tailor-platform/sdk-codemod
 
+## 0.11.0
+
+### Minor Changes
+
+- [#2986](https://github.com/tailor-platform/sdk/pull/2986) [`57fa11a`](https://github.com/tailor-platform/sdk/commit/57fa11afc854a359caa7ae7457dcc3eb06c59432) Thanks [@dqn](https://github.com/dqn)! - `files` in `db`, `resolver`, `executor`, `workflow`, and `httpAdapter` now treats a pattern starting with `!` as an exclusion: for each file, the last `files` pattern that matches it decides. Before, such a pattern matched nothing and excluded nothing, so a config that already lists `!` patterns now leaves those files out, and the next deploy removes the resources they defined. A file that several `files` patterns match is now loaded once.
+  
+  `ignores` is deprecated and will be removed in v3, together with the default exclusion of `**/*.test.ts` and `**/*.spec.ts`. `tailor upgrade` runs the `v3/files-ignores-to-negation` codemod, which moves `ignores` into `files` as `!` patterns and adds `"!**/*.test.ts"` and `"!**/*.spec.ts"` to services without `ignores`.
+  
+  ```ts
+  export default defineConfig({
+    name: "my-app",
+    executor: {
+      files: ["executors/**/*.ts", "!executors/ci-only.ts"],
+    },
+  });
+  ```
+
+- [#3025](https://github.com/tailor-platform/sdk/pull/3025) [`ee30e41`](https://github.com/tailor-platform/sdk/commit/ee30e41a37cbb38f0b3764e6cbe068eb8a51f59e) Thanks [@dqn](https://github.com/dqn)! - The plugin hook `onNamespaceLoaded` is renamed to `onTailorDBNamespaceLoaded`, which says that it runs once for each TailorDB namespace in the config (except external ones). Its context and output types are renamed to `TailorDBNamespaceLoadedContext` and `TailorDBNamespacePluginOutput`.
+  
+  `onNamespaceLoaded`, `PluginNamespaceProcessContext`, and `NamespacePluginOutput` are deprecated and will be removed in v3; plugins that use them keep working until then. A plugin that defines both `onNamespaceLoaded` and `onTailorDBNamespaceLoaded` is rejected when the config loads. `tailor upgrade` runs the `v3/tailordb-namespace-loaded-rename` codemod, which renames the hook and the two types.
+  
+  ```ts
+  export const auditLogPlugin: Plugin = {
+    id: "@example/audit-log",
+    description: "Adds an audit log table",
+    importPath: "@example/audit-log",
+    onTailorDBNamespaceLoaded({ namespace }) {
+      return { tables: { auditLog: db.table(`AuditLog_${namespace}`, { message: db.string() }) } };
+    },
+  };
+  ```
+
 ## 0.10.8
 
 ### Patch Changes

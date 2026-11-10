@@ -253,6 +253,7 @@ After printing the plan, `deploy` asks for confirmation before applying when the
 - Resources owned by another application, or tagged with a different application id
 - Existing resources that `tailor` does not manage yet
 - Deletion of TailorDB tables, static websites, AI gateways, OAuth2 clients (including a client type change), Auth connections, Secret Manager vaults, or Secret Manager secrets
+- Deletion of the application of a config that no longer defines or references any TailorDB namespace, resolver namespace, IdP, or Auth service (see [Application Settings](../configuration.md#application-settings))
 
 Declining cancels the deploy. When the plan includes none of these, `deploy` applies it without asking.
 

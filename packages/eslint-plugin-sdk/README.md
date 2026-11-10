@@ -368,8 +368,11 @@ retryPolicy: { maxRetries: 3, initialBackoff: "1s", maxBackoff: "30s", backoffMu
 
 A literal resolver `permission` (or a namespace `defaultPermission` in `defineConfig`) must contain
 at least one policy with `permit: true`, every policy at least one condition, and every condition
-exactly one `{ user }` operand compared to a string or a boolean. `_loggedIn` must compare to a
-boolean and `id` to a string.
+exactly one `{ user }` operand compared to a string, a boolean, or an `{ input }` operand. `_loggedIn`
+must compare to a boolean and `id` to a string or an `{ input }` operand. An `{ input }` operand is
+compared with `=` and may appear only in a `permit: true` policy of a resolver's own `permission`, never in
+`defaultPermission`. Whether the `{ input }` operand names a declared string, uuid, or enum input
+field is left to the type checker and the build.
 
 Incorrect:
 

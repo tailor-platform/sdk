@@ -359,7 +359,7 @@ type TailorDBExternalConfig = { external: true };
 type TailorDBOwnServiceConfigInput = Omit<TailorDBServiceConfigInput, "ignores"> & {
   /**
    * Glob patterns to exclude from table discovery.
-   * @deprecated since NEXT_RELEASE — write `!`-prefixed patterns in `files` instead. codemod: v3/files-ignores-to-negation
+   * @deprecated since 2.40.0 — write `!`-prefixed patterns in `files` instead. codemod: v3/files-ignores-to-negation
    */
   ignores?: TailorDBServiceConfigInput["ignores"];
 };

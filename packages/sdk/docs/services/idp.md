@@ -38,6 +38,7 @@ const idp = defineIdp("my-idp", {
     delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     sendPasswordResetEmail: [{ conditions: [], permit: false }],
   },
+  userAuthPolicy: { allowedEmailDomains: ["*"] },
 });
 
 // You can define multiple IdPs
@@ -50,6 +51,7 @@ const anotherIdp = defineIdp("another-idp", {
     delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     sendPasswordResetEmail: [{ conditions: [], permit: false }],
   },
+  userAuthPolicy: { allowedEmailDomains: ["*"] },
 });
 
 export default defineConfig({
@@ -137,13 +139,14 @@ Client names must be 3 to 63 lowercase letters, digits, or hyphens, starting and
 
 ### userAuthPolicy
 
-User authentication policy. Controls password requirements, the identifier used for login, allowed email domains, and social login providers. Every field is optional. The boolean options default to disabled, and the password length fields default to a minimum of 6 and a maximum of 4096.
+User authentication policy. Controls password requirements, the identifier used for login, allowed email domains, and social login providers. Every field is optional except `allowedEmailDomains`, which is required unless `useNonEmailIdentifier` is `true`. The boolean options default to disabled, and the password length fields default to a minimum of 6 and a maximum of 4096.
 
 ```typescript
 defineIdp("my-idp", {
   clients: ["my-client"],
   userAuthPolicy: {
     useNonEmailIdentifier: false,
+    allowedEmailDomains: ["*"],
     allowSelfPasswordReset: true,
     passwordRequireUppercase: true,
     passwordRequireLowercase: true,
@@ -174,9 +177,9 @@ defineIdp("my-idp", {
 
 **Email domains and social login:**
 
-- `allowedEmailDomains` - Restrict registration to these email domains. Each entry is a hostname (`example.com`), matched exactly and case-insensitively, so `example.com` does not cover `sub.example.com`. Up to 100 entries.
+- `allowedEmailDomains` - Restrict registration to these email domains. Required unless `useNonEmailIdentifier` is `true`. Each entry is a hostname (`example.com`), matched exactly and case-insensitively, so `example.com` does not cover `sub.example.com`. Up to 100 entries.
   - A lone `"*"` entry allows every email domain. It cannot be combined with any other entry, and it is the only way to enable `allowGoogleOauth` or `allowMicrosoftOauth` without enumerating domains.
-  - An empty list (the default) also allows every domain today, but that meaning is going away: a future release requires the all-domains state to be spelled out. `tailor deploy` warns while both forms still work, so set `["*"]` to keep allowing every domain, or list the domains you accept.
+  - `tailor deploy` fails to create or update an IdP whose list is empty or omitted, unless `useNonEmailIdentifier` is `true`. An IdP deployed earlier with an empty list keeps working, but deploy fails once it updates that IdP, which happens whenever its configuration changes and on the first deploy after the SDK version changes. Set `["*"]` to keep allowing every domain, or list the domains you accept.
 - `allowGoogleOauth` - Enable the "Sign in with Google" button. Default `false`.
 - `allowMicrosoftOauth` - Enable the "Sign in with Microsoft" button. Default `false`.
 
@@ -190,6 +193,7 @@ const website = defineStaticWebSite("my-frontend", { description: "App frontend"
 defineIdp("my-idp", {
   clients: ["my-client"],
   userAuthPolicy: {
+    allowedEmailDomains: ["*"],
     enableMfa: true,
     requireMfa: false,
     allowedReturnOrigins: [website.url, "https://admin.example.com"],
@@ -368,6 +372,7 @@ const idp = defineIdp("my-idp", {
     delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     sendPasswordResetEmail: [{ conditions: [], permit: false }],
   },
+  userAuthPolicy: { allowedEmailDomains: ["*"] },
 });
 
 const auth = defineAuth("my-auth", {

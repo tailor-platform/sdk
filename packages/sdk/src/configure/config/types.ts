@@ -161,7 +161,7 @@ export type EnvEntry = EnvValue | AllowedSecretEnvValue;
 export type ExecutorServiceConfig = {
   /** Glob patterns for executor files. A pattern starting with `!` excludes the files it matches; for each file, the last matching pattern decides. */
   files: string[];
-  /** @deprecated since NEXT_RELEASE — write `!`-prefixed patterns in `files` instead. codemod: v3/files-ignores-to-negation */
+  /** @deprecated since 2.40.0 — write `!`-prefixed patterns in `files` instead. codemod: v3/files-ignores-to-negation */
   ignores?: string[];
 };
 export type ExecutorServiceInput = ExecutorServiceConfig;
@@ -170,7 +170,7 @@ export type ExecutorServiceInput = ExecutorServiceConfig;
 export type HttpAdapterServiceInput = {
   /** Glob patterns for HTTP adapter files. A pattern starting with `!` excludes the files it matches; for each file, the last matching pattern decides. */
   files: string[];
-  /** @deprecated since NEXT_RELEASE — write `!`-prefixed patterns in `files` instead. codemod: v3/files-ignores-to-negation */
+  /** @deprecated since 2.40.0 — write `!`-prefixed patterns in `files` instead. codemod: v3/files-ignores-to-negation */
   ignores?: string[];
 };
 
@@ -181,13 +181,14 @@ export type ResolverServiceConfig = {
    * file, the last matching pattern decides.
    */
   files: string[];
-  /** @deprecated since NEXT_RELEASE — write `!`-prefixed patterns in `files` instead. codemod: v3/files-ignores-to-negation */
+  /** @deprecated since 2.40.0 — write `!`-prefixed patterns in `files` instead. codemod: v3/files-ignores-to-negation */
   ignores?: string[];
   /**
    * Access requirement applied to every resolver in this namespace that
    * declares no `permission` of its own. Takes the same values as a
    * resolver's `permission`, including `"allowAnonymous"` to record that the
-   * namespace is public by design.
+   * namespace is public by design, except that it cannot use an `input`
+   * operand: a namespace has no input to compare.
    *
    * A resolver's own `permission` replaces this default rather than merging
    * with it, so a single resolver opts out with `permission: "allowAnonymous"`.
@@ -207,7 +208,7 @@ export type WorkflowServiceConfig = {
    */
   files: string[];
   job_files?: string[];
-  /** @deprecated since NEXT_RELEASE — write `!`-prefixed patterns in `files` instead. codemod: v3/files-ignores-to-negation */
+  /** @deprecated since 2.40.0 — write `!`-prefixed patterns in `files` instead. codemod: v3/files-ignores-to-negation */
   ignores?: string[];
   job_ignores?: string[];
   /** Workspace-level execution policies for workflow job functions. */

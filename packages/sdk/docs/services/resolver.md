@@ -445,11 +445,13 @@ export default createResolver({
 });
 ```
 
-`permission` uses the same `conditions`/`permit` notation as TailorDB's `.permission()` — an array of policies, restricted to `user` operands (a resolver has no associated record to compare against) with equality (`=`/`!=`) comparisons:
+`permission` uses the same `conditions`/`permit` notation as TailorDB's `.permission()` — an array of policies whose conditions compare a `user` operand (a resolver has no associated record to compare against) with equality (`=`/`!=`):
 
 - `{ user: "_loggedIn" }` — whether the caller is authenticated
 - `{ user: "id" }` — the caller's user ID
 - `{ user: "someAttribute" }` — any string or boolean attribute enabled in `auth.userProfile.attributes` (or `auth.machineUserAttributes` for machine users); array attributes aren't supported, since conditions only compare against a single string/boolean value
+
+The other side of each condition is a string, a boolean, or an `{ input }` operand (see [Binding an input to the caller](#binding-an-input-to-the-caller)).
 
 Multiple conditions within the same policy's `conditions` array are combined with AND. `permit` is required, with no implicit default. At least one `permit: true` policy is required: `permission` is an allow-list, denied by default and granted only by a matching `permit: true` policy. This lets you express different eligibility paths, e.g. allowing machine-user callers unconditionally while gating regular users behind a role check:
 
@@ -478,6 +480,37 @@ Besides a policy array, `permission` also accepts:
 
 This check is based on `context.user`, the original caller, so it still applies even when `authInvoker` swaps in a machine user for database access.
 
+### Binding an input to the caller
+
+A caller can send any value for any input, not only the values your UI sends. When an input names whose data the resolver acts on, such as an employee ID, compare it with the caller in `permission` using an `{ input: "<field>" }` operand, so a caller cannot act on someone else's data by sending another ID:
+
+```typescript
+export default createResolver({
+  name: "cancelAttendance",
+  operation: "mutation",
+  input: { employeeId: t.string(), date: t.string() },
+  permission: [
+    // the caller's own attendance only...
+    { conditions: [[{ input: "employeeId" }, "=", { user: "id" }]], permit: true },
+    // ...unless the caller is an admin
+    { conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true },
+  ],
+  output: t.bool(),
+  body: async ({ input }) => {
+    // input.employeeId is the caller's own ID here, or the caller is an admin
+    return cancelAttendance(input.employeeId, input.date);
+  },
+});
+```
+
+When the ID is stored in a user attribute rather than being the user ID itself, compare with that attribute instead, e.g. `[{ input: "employeeId" }, "=", { user: "employeeId" }]`.
+
+- An `{ input }` operand names a top-level input field declared as a non-array `t.string()`, `t.uuid()`, or `t.enum()`, and is compared with a `user` operand using `=`. `!=` is not supported, since a caller could send the same ID spelled differently, such as an uppercase UUID, to pass it.
+- A condition with an `{ input }` operand matches only when the caller sent that input and the compared `user` value is set, so an omitted optional input never grants access.
+- An `{ input }` operand can only be used in a `permit: true` policy; a `permit: false` policy would let an omitted input through.
+
+`permission` compares input values only. To check that a row the caller names belongs to them, such as a request ID, give the row's TailorDB type a record-level [`.permission()`](tailordb/index.md#permissions) and run `body` without an `invoker`, or look the row up in `body`.
+
 ### Namespace-wide default (`defaultPermission`)
 
 Declaring `permission` on every resolver is the only way to close a whole namespace, and one file that forgets it is enough to leave an opening. Declare `defaultPermission` on the resolver namespace in your config instead, and it applies to every resolver in that namespace:
@@ -494,7 +527,7 @@ export default defineConfig({
 });
 ```
 
-`defaultPermission` takes the same values as a resolver's own `permission`, including `"allowAnonymous"` — use that to record that a namespace is public by design rather than by oversight.
+`defaultPermission` takes the same values as a resolver's own `permission`, including `"allowAnonymous"` — use that to record that a namespace is public by design rather than by oversight. It cannot use an `{ input }` operand, since a namespace has no input.
 
 A resolver's own `permission` **replaces** the namespace default rather than adding to it, so a single resolver opts out of a namespace-wide requirement explicitly:
 
