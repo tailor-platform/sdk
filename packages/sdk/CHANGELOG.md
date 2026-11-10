@@ -1,5 +1,75 @@
 # @tailor-platform/sdk
 
+## 2.40.0
+
+### Minor Changes
+
+- [#2986](https://github.com/tailor-platform/sdk/pull/2986) [`57fa11a`](https://github.com/tailor-platform/sdk/commit/57fa11afc854a359caa7ae7457dcc3eb06c59432) Thanks [@dqn](https://github.com/dqn)! - `files` in `db`, `resolver`, `executor`, `workflow`, and `httpAdapter` now treats a pattern starting with `!` as an exclusion: for each file, the last `files` pattern that matches it decides. Before, such a pattern matched nothing and excluded nothing, so a config that already lists `!` patterns now leaves those files out, and the next deploy removes the resources they defined. A file that several `files` patterns match is now loaded once.
+  
+  `ignores` is deprecated and will be removed in v3, together with the default exclusion of `**/*.test.ts` and `**/*.spec.ts`. `tailor upgrade` runs the `v3/files-ignores-to-negation` codemod, which moves `ignores` into `files` as `!` patterns and adds `"!**/*.test.ts"` and `"!**/*.spec.ts"` to services without `ignores`.
+  
+  ```ts
+  export default defineConfig({
+    name: "my-app",
+    executor: {
+      files: ["executors/**/*.ts", "!executors/ci-only.ts"],
+    },
+  });
+  ```
+
+- [#3025](https://github.com/tailor-platform/sdk/pull/3025) [`ee30e41`](https://github.com/tailor-platform/sdk/commit/ee30e41a37cbb38f0b3764e6cbe068eb8a51f59e) Thanks [@dqn](https://github.com/dqn)! - The plugin hook `onNamespaceLoaded` is renamed to `onTailorDBNamespaceLoaded`, which says that it runs once for each TailorDB namespace in the config (except external ones). Its context and output types are renamed to `TailorDBNamespaceLoadedContext` and `TailorDBNamespacePluginOutput`.
+  
+  `onNamespaceLoaded`, `PluginNamespaceProcessContext`, and `NamespacePluginOutput` are deprecated and will be removed in v3; plugins that use them keep working until then. A plugin that defines both `onNamespaceLoaded` and `onTailorDBNamespaceLoaded` is rejected when the config loads. `tailor upgrade` runs the `v3/tailordb-namespace-loaded-rename` codemod, which renames the hook and the two types.
+  
+  ```ts
+  export const auditLogPlugin: Plugin = {
+    id: "@example/audit-log",
+    description: "Adds an audit log table",
+    importPath: "@example/audit-log",
+    onTailorDBNamespaceLoaded({ namespace }) {
+      return { tables: { auditLog: db.table(`AuditLog_${namespace}`, { message: db.string() }) } };
+    },
+  };
+  ```
+
+- [#3014](https://github.com/tailor-platform/sdk/pull/3014) [`3af9d37`](https://github.com/tailor-platform/sdk/commit/3af9d37c2d7d34a53fa00a9771e0c0ca1cbb37fc) Thanks [@dqn](https://github.com/dqn)! - A resolver's `permission` can now compare an input with the caller through an `{ input: "<field>" }` operand, e.g. `[{ input: "employeeId" }, "=", { user: "id" }]`, so a caller cannot act on another user's data by sending their ID. The operand names a top-level non-array `t.string()`, `t.uuid()`, or `t.enum()` input field, is compared with `=`, can only be used in a `permit: true` policy, and never matches when the input is omitted. `defaultPermission` cannot use it.
+
+- [#3028](https://github.com/tailor-platform/sdk/pull/3028) [`3093df4`](https://github.com/tailor-platform/sdk/commit/3093df45fbc56709f92f1cde67e4b426f835f651) Thanks [@dqn](https://github.com/dqn)! - Add `--watch` to `tailor function run`: it runs the function again each time you save the function file, a project file it imports, or the argument file, without deploying, and prints each run as `-->` / `<--` lines tagged with the execution ID. Add `--arg-file` to read the argument from a JSON file; without it, `--watch` creates a temporary argument file and prints its path. `--arg` is now validated before anything contacts the Platform, so invalid JSON fails even for a resolver without input.
+
+- [#2943](https://github.com/tailor-platform/sdk/pull/2943) [`fd6655b`](https://github.com/tailor-platform/sdk/commit/fd6655b26dce07cbe1ee40c2870b2e2f4f9d10fa) Thanks [@toiroakr](https://github.com/toiroakr)! - With TypeScript 7.1 or later, add the SDK as a content mapper for `.tailor` files in tsconfig.json and TypeScript reads `Env`, `Attributes`, `MachineUserName`, `IdpName`, and the other names your `tailor.config.ts` defines directly from the config, so you no longer need `tailor.d.ts`. When the `tsconfig.json` that applies to `tailor.config.ts` enables the mapper, `tailor generate` and `tailor deploy` stop writing `tailor.d.ts` and warn if an old copy remains.
+
+- [#3017](https://github.com/tailor-platform/sdk/pull/3017) [`06e8d17`](https://github.com/tailor-platform/sdk/commit/06e8d1795c9809dd274518974b7c8723542bcacc) Thanks [@dqn](https://github.com/dqn)! - Export the `TailorAnyField` type so helpers that build `t.object()` inputs or outputs can accept any `t.*` or `db.*` field and keep its type.
+
+- [#2991](https://github.com/tailor-platform/sdk/pull/2991) [`5bc1ffd`](https://github.com/tailor-platform/sdk/commit/5bc1ffd1db47db107d4e9d0637e5b3320b85c9c2) Thanks [@dqn](https://github.com/dqn)! - **Breaking change (beta)**: `mockSecretmanager` now makes `getSecret()` and `getSecrets()` reject with a `vault not found: <vault>` error for a vault it was not given, as they do on the Platform, instead of resolving `undefined` or `{}`. A missing secret in an existing vault still resolves to `undefined` and is omitted from `getSecrets()`. A test that reads a vault it never seeded now fails; seed the vault with `mockSecretmanager({ secrets: { "<vault>": { ... } } })`, or with `{}` to test a missing secret. `tailorRuntime({ config })` seeds only the vaults declared in `defineSecretManager()`, so also seed vaults created with `tailor secret vault create` and the vaults `tailor deploy` creates for IdP clients. `setSecrets()` replaces and `reset()` clears config-loaded vaults too, so a test that calls them and then reads a config vault now fails; use `setSecret()` or `mergeSecrets()` to add values while keeping those vaults.
+
+### Patch Changes
+
+- [#3027](https://github.com/tailor-platform/sdk/pull/3027) [`20b75aa`](https://github.com/tailor-platform/sdk/commit/20b75aada7f5454b25a61966d854cf8b9ba26288) Thanks [@dqn](https://github.com/dqn)! - `tailor deploy` now deletes the application of a config that no longer defines or references any TailorDB namespace, resolver namespace, IdP, or Auth service. Before, the application kept the services it was last deployed with, so it kept serving them, and a deploy that dropped one of those services deleted its tables or resolvers and then failed with `... is used by applications`. A config already in that state deletes its leftover application on the next deploy. `deploy` asks for confirmation before deleting it, so a non-interactive run needs `--yes`.
+
+- [#2994](https://github.com/tailor-platform/sdk/pull/2994) [`60bc80b`](https://github.com/tailor-platform/sdk/commit/60bc80b9ea214478f8f5fefc451e68fa5511c2ff) Thanks [@dqn](https://github.com/dqn)! - TailorDB migration diffs, and the schema drift details `tailor function run` reports, now show foreign key changes on existing fields, such as `~ ownerId: foreignKey: User.id → Person.id`, instead of omitting them or printing `configuration changed`. In the schema drift details, a default value or create hook added to or removed from a field now shows as `optionalOnCreate: false → true` or `optionalOnCreate: true → false`.
+
+- [#3011](https://github.com/tailor-platform/sdk/pull/3011) [`5fcc3ce`](https://github.com/tailor-platform/sdk/commit/5fcc3ce946198e1d5792dab7b5e86b4334e2cd44) Thanks [@dqn](https://github.com/dqn)! - Fix the "Event Payloads" section of the executor guide: it names the exported `*Args` trigger args types instead of interfaces the SDK does not export, no longer lists a `scheduledTime` field that `ScheduleArgs` does not have, and its resolver-executed examples narrow on `success` so they type-check.
+
+- [#3012](https://github.com/tailor-platform/sdk/pull/3012) [`ade7982`](https://github.com/tailor-platform/sdk/commit/ade7982120c1af2d6862cdcf932172d6f95bc138) Thanks [@dqn](https://github.com/dqn)! - Report an invalid Secret Manager vault or secret name, HTTP adapter `name`, AI Gateway `authNamespace`, or `tailor workflow executions --workflow-name` value with the same message as OAuth2 and IdP client names: "must be 3-63 lowercase letters, digits, or hyphens, starting and ending with a letter or digit". Secret Manager names previously reported only the regular expression they failed to match.
+
+- [#3024](https://github.com/tailor-platform/sdk/pull/3024) [`7a8bd33`](https://github.com/tailor-platform/sdk/commit/7a8bd33d7fae1ace5e9ea1160b0c9dc54fe9bee0) Thanks [@dqn](https://github.com/dqn)! - Stop saying that removed fields lose their data in the `tailor tailordb migration resolve --rollback` warning and in the suggestions from `tailor deploy` and `tailor tailordb migration validate` (namespace without a migration checkpoint) and `tailor tailordb migration rebaseline` (workspace tables that differ from the latest migration). They now say the fields are removed and only the deleted tables lose their data. The TailorDB migration guide also notes that a field removed by `tailor tailordb migration sync` may come back with its earlier values when a migration adds it again.
+
+- [#2993](https://github.com/tailor-platform/sdk/pull/2993) [`9634c2b`](https://github.com/tailor-platform/sdk/commit/9634c2b84c055a35fd4f48ff0c8e3cb4846841e0) Thanks [@dqn](https://github.com/dqn)! - Internal refactoring: remove an unused field from how `tailor deploy` plans workflow deletions. No user-facing behavior change.
+
+- [#2971](https://github.com/tailor-platform/sdk/pull/2971) [`fbaf9b7`](https://github.com/tailor-platform/sdk/commit/fbaf9b7e669ba4a6ba4818683b045cd6d7dc2e78) Thanks [@toiroakr](https://github.com/toiroakr)! - `tailor deploy` now stops with `SERVICE_IN_USE` before it applies anything when the deploy would delete an Auth service that an application still references as `external`. Before, such a deploy deleted the Auth service's machine users and then failed on the Auth service itself, because the Platform refuses to delete an Auth service another application uses, which left the workspace half applied. This covers applications in the same deploy and applications that the deploy does not include. Keep the Auth service in the config that defines it, or move the referencing application to another Auth service in the same deploy.
+
+- [#3023](https://github.com/tailor-platform/sdk/pull/3023) [`1a201fa`](https://github.com/tailor-platform/sdk/commit/1a201fa6ea19412028ba35fae1857d1d3bc4e74d) Thanks [@dqn](https://github.com/dqn)! - `tailor remove` now also stops with `SERVICE_IN_USE` before it deletes anything when another application still references an Auth service it would delete, and both `tailor deploy` and `tailor remove` stop the same way for a TailorDB namespace or resolver namespace that another application references as `external`. The error lists every application that uses each service. Before, they deleted the namespace's tables (with their data) or resolvers, or the Auth service's machine users, and then failed on the namespace or Auth service itself, because the Platform refuses to delete one that another application uses, which left the workspace half applied. Keep the resource in the config that defines it, or first remove the referencing applications or deploy them without it.
+
+- [#3009](https://github.com/tailor-platform/sdk/pull/3009) [`52dafad`](https://github.com/tailor-platform/sdk/commit/52dafad190d73a7fe3db202c70d272c74fb53e1b) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency temporal-polyfill to v1.0.8
+
+- [#3022](https://github.com/tailor-platform/sdk/pull/3022) [`1684419`](https://github.com/tailor-platform/sdk/commit/1684419a37dc30b1721856f69839f408b5dea60d) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency graphql to v17.1.0
+
+- [#2976](https://github.com/tailor-platform/sdk/pull/2976) [`c24496d`](https://github.com/tailor-platform/sdk/commit/c24496dd38b57cad0a5fc2d5e176f798919cc807) Thanks [@dqn](https://github.com/dqn)! - Add `copilot`, `claude`, and `codex` to `tailor setup ci autofix --codemod`. Each works as `deterministic`, then hands what the codemods leave for review, with their migration prompts, to that AI coding agent in a job of its own, `tailor-codemod-agent`, which installs and runs none of the project's code. The fix commit carries the agent's edits as `chore: apply the SDK upgrade with <agent>`, leaving out `.github/workflows` and, with `claude`, the configuration files claude-code-action resets; if the agent fails, it carries only the codemods' rewrites. The agent runs on each push to a pull request from the repository while changes for review remain, except right after the workflow's own fix commit and for bots other than `renovate[bot]`; the warnings keep listing every change that was left for review. Claude and Codex read an API key from the `TAILOR_AUTOFIX_ANTHROPIC_API_KEY` or `TAILOR_AUTOFIX_OPENAI_API_KEY` repository secret. Copilot reads a fine-grained personal access token from `TAILOR_AUTOFIX_COPILOT_TOKEN`, or, with `--copilot-auth github-token`, signs in with the workflow token. The optional `TAILOR_AUTOFIX_CLAUDE_MODEL`, `TAILOR_AUTOFIX_CODEX_MODEL`, or `TAILOR_AUTOFIX_COPILOT_MODEL` repository variable picks the agent's model. `tailor setup ci env` lists the secret, if any, and the variable, and `tailor setup update` keeps both flags. With `autofix-ci` and `securefix`, an agent value moves the service's commit into the `tailor-autofix-push` job. When `tailor upgrade` and `tailor generate` still change files right after the workflow's own fix commit, the error says the agent's edits may be the cause, and on a pull request from the repository a `tailor-autofix-comment` job, with `pull-requests: write`, posts it as a pull request comment.
+
+- [#2989](https://github.com/tailor-platform/sdk/pull/2989) [`b6fedd2`](https://github.com/tailor-platform/sdk/commit/b6fedd2cbbcb6595511a34b3372e976083212628) Thanks [@dqn](https://github.com/dqn)! - Fix `tailor deploy`, `tailor tailordb migration resolve`, and `tailor tailordb migration sync` not explaining how to proceed when records with no value for a field block changing it from optional to required.
+
+- [#3026](https://github.com/tailor-platform/sdk/pull/3026) [`fc25c9f`](https://github.com/tailor-platform/sdk/commit/fc25c9f7718ff771107212ef2933760dc7d3014e) Thanks [@dqn](https://github.com/dqn)! - TailorDB migration diffs, and the schema drift details `tailor function run` reports, now show the same change details for a modified nested member as for a top-level field, such as `~ address: members: ~zip (required: false → true)`, instead of only its path.
+
 ## 2.39.0
 
 ### Minor Changes

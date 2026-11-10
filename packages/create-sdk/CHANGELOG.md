@@ -1,5 +1,11 @@
 # @tailor-platform/create-sdk
 
+## 2.40.0
+
+### Minor Changes
+
+- [#3017](https://github.com/tailor-platform/sdk/pull/3017) [`df8f3e4`](https://github.com/tailor-platform/sdk/commit/df8f3e439b93878c48ffaf6076cf8a1e03deff27) Thanks [@dqn](https://github.com/dqn)! - Add a lint rule (`no-plain-tailor-any-field-param`) that flags a helper parameter typed with `TailorAnyField` itself, such as `field: TailorAnyField` or `fields: Record<string, TailorAnyField>`. When the helper uses a field passed to it to build another field, such as with `t.object()`, that field's output type becomes `any`; constrain a type parameter instead, such as `<F extends TailorAnyField>(field: F)`. Enabled in newly scaffolded projects.
+
 ## 2.39.0
 
 ### Patch Changes
