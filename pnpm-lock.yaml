@@ -848,8 +848,8 @@ importers:
         specifier: 5.1.0
         version: 5.1.0(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(vite@8.3.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       zinfer:
-        specifier: 0.5.2
-        version: 0.5.2(typescript@7.1.0-beta)(zod@4.6.7)
+        specifier: 0.5.3
+        version: 0.5.3(typescript@7.1.0-beta)(zod@4.6.7)
 
   packages/sdk-codemod:
     dependencies:
@@ -4780,8 +4780,8 @@ packages:
       '@yuku-toolchain/wasm':
         optional: true
 
-  zinfer@0.5.2:
-    resolution: {integrity: sha512-87aqzlMrvKjJpaJaMSOgCy4wVyVcethJWiaP77/Vqm+mcUortnCgTI0/bd2BN6e+i9R7I43HuJCqL6ClfyHL3Q==}
+  zinfer@0.5.3:
+    resolution: {integrity: sha512-B4ivM0+v9Cb66T3b86C0LU/x2VY/nlBkFRN/asaRWm2PsRQFTp0Mi1K9KVydnYZTDnHBuyA/vMFsvLcyLfQPiQ==}
     hasBin: true
     peerDependencies:
       typescript: '>=5.0.0'
@@ -7828,7 +7828,7 @@ snapshots:
       '@yuku-toolchain/win32-arm64': 0.25.0
       '@yuku-toolchain/win32-x64': 0.25.0
 
-  zinfer@0.5.2(typescript@7.1.0-beta)(zod@4.6.7):
+  zinfer@0.5.3(typescript@7.1.0-beta)(zod@4.6.7):
     dependencies:
       commander: 15.0.0
       glob: 14.0.4
