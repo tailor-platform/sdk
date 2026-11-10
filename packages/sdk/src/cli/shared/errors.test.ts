@@ -2,6 +2,7 @@ import { stripVTControlCharacters } from "node:util";
 import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { afterEach, describe, expect, expectTypeOf, test, vi } from "vitest";
+import { z } from "zod";
 import { withErrorDiagnostics } from "./error-diagnostics";
 import { errorToJson, serializeError } from "./error-json";
 import {
@@ -317,6 +318,14 @@ describe("locatedMessage", () => {
     );
 
     expect(locatedMessage(error)).toBe("seed data is invalid");
+  });
+
+  test("puts the source file before the message of a ZodError, whose format() does not return a string", () => {
+    const { error: zodError } = z.string().safeParse(1);
+    if (!zodError) throw new Error("expected a validation error");
+    const error = withErrorDiagnostics(zodError, { location: { file } });
+
+    expect(locatedMessage(error)).toBe(`tailordb/item.ts: ${zodError.message}`);
   });
 });
 

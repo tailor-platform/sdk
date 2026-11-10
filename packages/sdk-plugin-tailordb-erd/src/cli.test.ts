@@ -29,10 +29,10 @@ function parseErrorEnvelope(stderr: string): unknown {
   return JSON.parse(envelope ?? "");
 }
 
-function throwingConfig() {
+function throwingConfig(thrown = 'new Error("config is broken")') {
   const dir = mkdtempSync(path.join(tmpdir(), "erd-throwing-config-"));
   const configPath = path.join(dir, "tailor.config.ts");
-  writeFileSync(configPath, 'throw new Error("config is broken");\n');
+  writeFileSync(configPath, `throw ${thrown};\n`);
   return { configPath, [Symbol.dispose]: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
@@ -98,6 +98,38 @@ describe("tailordb-erd CLI JSON errors", () => {
       expect(result.stderr).toContain(
         `${path.relative(packageRoot, tmp.configPath)}: config is broken`,
       );
+    },
+    CLI_TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "puts the file before the message of a failure whose format() does not return a string",
+    () => {
+      using tmp = throwingConfig(
+        'Object.assign(new Error("config is broken"), { format: () => ({ _errors: [] }) })',
+      );
+
+      const result = runCli(["export", "--config", tmp.configPath]);
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(
+        `✖ ${path.relative(packageRoot, tmp.configPath)}: config is broken`,
+      );
+    },
+    CLI_TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "prints a self-formatted failure's report unchanged",
+    () => {
+      using tmp = throwingConfig(
+        'Object.assign(new Error("config is broken"), { format: () => "custom report" })',
+      );
+
+      const result = runCli(["export", "--config", tmp.configPath]);
+
+      expect(result.status).toBe(1);
+      expect(result.stderr.trim().split(/\r?\n/).at(-1)).toBe("custom report");
     },
     CLI_TEST_TIMEOUT_MS,
   );

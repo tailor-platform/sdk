@@ -139,19 +139,32 @@ export function isCLIError(error: unknown): error is CLIError {
 }
 
 /**
+ * Read the report an error other than a CLIError lays out itself, as the seed
+ * plugin's validate error does.
+ * @param error - Failure being rendered
+ * @returns The string its own `format()` returns, or undefined when it has no
+ * `format()` or its `format()` returns something else, as a ZodError's does
+ */
+export function formattedReport(error: Error): string | undefined {
+  if (isCLIError(error)) return undefined;
+  const format = (error as { format?: unknown }).format;
+  if (typeof format !== "function") return undefined;
+  const formatted: unknown = format.call(error);
+  return typeof formatted === "string" ? formatted : undefined;
+}
+
+/**
  * Prefix a failure's message with the source location it points at.
  *
- * An error other than a CLIError that brings its own `format()` lays out its
- * report itself, so its message is returned as-is.
+ * An error with a report of its own (see `formattedReport`) lays that report
+ * out itself, so its message is returned as-is.
  * @param error - Failure being rendered
  * @returns `<file>[:<line>]: <message>`, with the file relative to the working
  * directory, or the message alone when the failure has no source location
  */
 export function locatedMessage(error: Error): string {
   const { location } = getErrorDiagnostics(error);
-  const formatsItself =
-    !isCLIError(error) && typeof (error as { format?: unknown }).format === "function";
-  if (!location || formatsItself) return error.message;
+  if (!location || formattedReport(error) !== undefined) return error.message;
   const line = location.line === undefined ? "" : `:${location.line}`;
   return `${path.relative(process.cwd(), location.file)}${line}: ${error.message}`;
 }

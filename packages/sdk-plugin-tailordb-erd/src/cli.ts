@@ -19,12 +19,12 @@ import { erdExportCommand } from "./export";
 import { erdServeCommand } from "./serve";
 import { locatedMessage } from "./utils";
 
-function hasFormat(error: unknown): error is { format(): string } {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    typeof (error as { format?: unknown }).format === "function"
-  );
+function formattedText(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null) return undefined;
+  const format = (error as { format?: unknown }).format;
+  if (typeof format !== "function") return undefined;
+  const formatted: unknown = format.call(error);
+  return typeof formatted === "string" ? formatted : undefined;
 }
 
 const packageRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -51,10 +51,11 @@ void runMain(mainCommand, {
   // Render errors like the host CLI does: a JSON envelope under --json, the CLIError format otherwise.
   cleanup: ({ error }) => {
     if (!error) return;
+    const formatted = formattedText(error);
     if (logger.jsonMode) {
       logger.log(serializeError(error, { includeStack: logger.verbose }));
-    } else if (hasFormat(error)) {
-      logger.log(error.format());
+    } else if (formatted !== undefined) {
+      logger.log(formatted);
     } else if (error instanceof Error) {
       logger.error(locatedMessage(error));
     } else {

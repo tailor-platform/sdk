@@ -264,11 +264,12 @@ describe("github-actions", () => {
       expect(title).toBe("Error");
     });
 
-    test("falls back to the message when format() does not return a string", () => {
-      const error = Object.assign(new Error("fallback message"), {
-        format: () => ({ _errors: [] }),
-      });
-      expect(describeTerminalError(error).message).toBe("fallback message");
+    test("falls back to the located message when format() does not return a string", () => {
+      const error = withErrorDiagnostics(
+        Object.assign(new Error("fallback message"), { format: () => ({ _errors: [] }) }),
+        { location: { file: join(process.cwd(), "tailordb/item.ts") } },
+      );
+      expect(describeTerminalError(error).message).toBe("tailordb/item.ts: fallback message");
     });
 
     test("handles a thrown non-error value", () => {

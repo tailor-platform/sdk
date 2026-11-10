@@ -16,12 +16,12 @@ import { z } from "zod";
 import { setupSubCommands } from "./commands";
 import { locatedMessage } from "./error-message";
 
-function hasFormat(error: unknown): error is { format(): string } {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    typeof (error as { format?: unknown }).format === "function"
-  );
+function formattedText(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null) return undefined;
+  const format = (error as { format?: unknown }).format;
+  if (typeof format !== "function") return undefined;
+  const formatted: unknown = format.call(error);
+  return typeof formatted === "string" ? formatted : undefined;
 }
 
 const packageRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -44,10 +44,11 @@ void runMain(mainCommand, {
   // dropping either branch would regress `--json` consumers and CLIError detail.
   cleanup: ({ error }) => {
     if (!error) return;
+    const formatted = formattedText(error);
     if (logger.jsonMode) {
       logger.log(serializeError(error, { includeStack: logger.verbose }));
-    } else if (hasFormat(error)) {
-      logger.log(error.format());
+    } else if (formatted !== undefined) {
+      logger.log(formatted);
     } else if (error instanceof Error) {
       logger.error(locatedMessage(error));
     } else {
