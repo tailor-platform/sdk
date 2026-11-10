@@ -661,6 +661,18 @@ describe("query", () => {
 
       expect(info).toEqual([[expected]]);
     });
+
+    test("prints the rows to stdout and the row count to stderr", async () => {
+      const result = await runSqlCommand(
+        'SELECT * FROM "User";',
+        '{"rows":[{"id":"1"},{"id":"2"}],"rowCount":2}',
+      );
+
+      expect(result).toEqual({
+        out: [[[{ id: "1" }, { id: "2" }], { showNull: true }]],
+        info: [["rows: 2"]],
+      });
+    });
   });
 });
 

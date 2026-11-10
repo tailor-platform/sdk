@@ -882,7 +882,7 @@ function printSingleSqlResult(
   }
 
   logger.out(execResult.rows, { showNull: true });
-  logger.out(`rows: ${execResult.rowCount}`);
+  logger.info(`rows: ${execResult.rowCount}`);
 }
 
 function splitSqlStatements(query: string): string[] {
