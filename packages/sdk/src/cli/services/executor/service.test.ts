@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { aroundEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { createExecutorService } from "./service";
 
@@ -82,7 +83,7 @@ export default executor;
     using _logger = silenceLogger("error");
     await expect(service.loadExecutors()).rejects.toMatchObject({
       code: "DEFINITION_INVALID",
-      message: expect.stringMatching(/^Invalid executor in .*invalid\.ts:\n {2}- description: /),
+      message: expect.stringMatching(/^Invalid executor:\n {2}- description: /),
       context: {
         kind: "executor",
         file,
@@ -90,6 +91,9 @@ export default executor;
         issues: [{ path: ["description"] }],
       },
     });
+    expect(vi.mocked(logger.error).mock.calls).toEqual([
+      [expect.stringMatching(/Failed to load executor from .*invalid\.ts/)],
+    ]);
   });
 
   test("rejects two files declaring the same executor name", async () => {

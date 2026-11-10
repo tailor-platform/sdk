@@ -1,6 +1,5 @@
-import * as path from "pathe";
 import { isSyntaxDiagnostic } from "#/utils/syntax-diagnostic";
-import { withErrorDiagnostics } from "./error-diagnostics";
+import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
 import { CLIError, internalError } from "./errors";
 import { flattenZodIssues, formatIssueList, type FlatIssue } from "./zod-issues";
 import type { AppConfig } from "#/configure/config/types";
@@ -40,7 +39,7 @@ export function configInvalidError(params: ConfigInvalidErrorParams): CLIError {
   return withErrorDiagnostics(
     CLIError({
       code: "CONFIG_INVALID",
-      message: `Invalid ${subject} in ${relativeFile(file)}:\n${formatIssueList(issues)}`,
+      message: `Invalid ${subject}:\n${formatIssueList(issues)}`,
       context: { file, exportName, ...service, issues },
       cause: error,
     }),
@@ -83,7 +82,7 @@ export function definitionInvalidError(params: DefinitionInvalidErrorParams): CL
   return withErrorDiagnostics(
     CLIError({
       code: "DEFINITION_INVALID",
-      message: `Invalid ${DEFINITION_LABELS[kind]}${exportLabel} in ${relativeFile(file)}:\n${formatIssueList(issues)}`,
+      message: `Invalid ${DEFINITION_LABELS[kind]}${exportLabel}:\n${formatIssueList(issues)}`,
       context: { kind, file, exportName, issues },
       cause: error,
     }),
@@ -99,7 +98,7 @@ export function definitionInvalidError(params: DefinitionInvalidErrorParams): CL
 export function definitionExportError(params: DefinitionErrorParams): CLIError {
   const { kind, file, exportName } = params;
   const label = DEFINITION_LABELS[kind];
-  const subject = `${label.charAt(0).toUpperCase()}${label.slice(1)} in ${relativeFile(file)}`;
+  const subject = `${label.charAt(0).toUpperCase()}${label.slice(1)}`;
   const placement =
     exportName === "default"
       ? {
@@ -130,11 +129,10 @@ export function syntaxInvalidError(thrown: unknown): CLIError | undefined {
   if (!isSyntaxDiagnostic(thrown)) return undefined;
   const { message, filename: file, startLine: line } = thrown;
   const location = line === undefined ? { file } : { file, line };
-  const lineSuffix = line === undefined ? "" : `:${line}`;
   return withErrorDiagnostics(
     CLIError({
       code: "SYNTAX_INVALID",
-      message: `Invalid syntax in ${relativeFile(file)}${lineSuffix}: ${message}`,
+      message: `Invalid syntax: ${message}`,
       context: location,
       cause: thrown,
     }),
@@ -155,6 +153,16 @@ export function invalidDataError(subject: string, error: z.ZodError): Error {
   });
 }
 
-function relativeFile(file: string): string {
-  return path.relative(process.cwd(), file);
+/**
+ * Attribute a failure raised while loading a user module to the module's file.
+ *
+ * A failure that already carries a source location, such as a syntax error in a
+ * module the file imports, keeps it.
+ * @param error - Value thrown while loading the module
+ * @param file - Absolute path of the module
+ * @returns The same value, located at `file` when it is an Error without a location
+ */
+export function atUserModule(error: unknown, file: string): unknown {
+  if (!(error instanceof Error) || getErrorDiagnostics(error).location) return error;
+  return withErrorDiagnostics(error, { location: { file } });
 }

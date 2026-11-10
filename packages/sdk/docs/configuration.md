@@ -505,7 +505,7 @@ export async function main(trx: Transaction, { env }: MigrationContext): Promise
 `env` values are deployed as plaintext, so loading a config fails when one of them looks like a credential:
 
 ```
-✖ Secret detected in 'env' in /path/to/tailor.config.ts:
+✖ tailor.config.ts: Secret detected in 'env':
   - env.SLACK_BOT_TOKEN (matched slack: SLACK_TOKEN)
     https://github.com/secretlint/secretlint/blob/master/packages/%40secretlint/secretlint-rule-slack/README.md#SLACK_TOKEN
 ```

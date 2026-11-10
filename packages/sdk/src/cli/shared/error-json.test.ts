@@ -1,3 +1,5 @@
+import { Code, ConnectError } from "@connectrpc/connect";
+import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
 import { withErrorDiagnostics } from "./error-diagnostics";
 import { errorToJson, serializeError } from "./error-json";
@@ -78,15 +80,49 @@ describe("serializeError", () => {
 });
 
 describe("errorToJson", () => {
-  test("keeps a source location out of the JSON envelope", () => {
+  const file = path.join(process.cwd(), "tailordb/item.ts");
+
+  test("puts a source location before the message instead of in its own field", () => {
     const error = withErrorDiagnostics(new Error("boom"), {
       code: "SEED_INVALID",
-      location: { file: "/abs/data.jsonl", line: 4 },
+      location: { file, line: 4 },
     });
     const { error: envelope } = errorToJson(error);
     expect(envelope.code).toBe("SEED_INVALID");
+    expect(envelope.message).toBe("tailordb/item.ts:4: boom");
     expect(envelope).not.toHaveProperty("location");
-    expect(JSON.stringify(envelope)).not.toContain("/abs/data.jsonl");
+  });
+
+  test.each([
+    ["a CLI error", CLIError({ code: "DEFINITION_INVALID", message: "boom" }), "boom"],
+    [
+      "an RPC error",
+      new ConnectError("token expired", Code.Unauthenticated),
+      "[unauthenticated] token expired",
+    ],
+  ])("puts a source location before the message of %s", (_, error, message) => {
+    withErrorDiagnostics(error, { location: { file } });
+
+    expect(errorToJson(error).error.message).toBe(`tailordb/item.ts: ${message}`);
+  });
+
+  test("puts a source location before the message of a cause", () => {
+    const error = withErrorDiagnostics(new Error("generation failed"), {
+      causes: { load: withErrorDiagnostics(new Error("boom"), { location: { file } }) },
+    });
+
+    expect(errorToJson(error).error.context).toEqual({
+      load: { code: "UNEXPECTED_ERROR", message: "tailordb/item.ts: boom" },
+    });
+  });
+
+  test("leaves the message of an error that formats itself, as seed validate throws", () => {
+    const error = withErrorDiagnostics(
+      Object.assign(new Error("seed data is invalid"), { format: () => "report" }),
+      { location: { file, line: 4 } },
+    );
+
+    expect(errorToJson(error).error.message).toBe("seed data is invalid");
   });
 
   test("still carries the diagnostics that belong in the envelope", () => {

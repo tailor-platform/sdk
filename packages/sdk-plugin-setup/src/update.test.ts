@@ -1,5 +1,5 @@
 import * as fs from "node:fs";
-import { logger } from "@tailor-platform/sdk/cli";
+import { logger, withSourceLocation } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { setupAutofix } from "./autofix";
@@ -504,6 +504,24 @@ describe("setupUpdate", () => {
     await expect(setupUpdate({ force: false, outputDir: testDir, ...loaders })).rejects.toThrow(
       /\[tag api\] Could not detect the package manager/,
     );
+  });
+
+  test("lists a target's failure prefixed with the file it points at", async () => {
+    writeAppConfig("apps/api");
+    await generate({ kind: "branch", workspaceName: "api", dir: "apps/api", erdPreview: false });
+    ageLock();
+    const configPath = path.join(testDir, "apps/api/tailor.config.ts");
+
+    await expect(
+      setupUpdate({
+        force: false,
+        outputDir: testDir,
+        ...loaders,
+        loadHasMigrations: async () => {
+          throw withSourceLocation(new Error("config is broken"), { file: configPath });
+        },
+      }),
+    ).rejects.toThrow(`[branch api] ${path.relative(process.cwd(), configPath)}: config is broken`);
   });
 
   test("keeps going past a hand-edited target and lists it as not updated", async () => {

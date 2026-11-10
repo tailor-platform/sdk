@@ -6,7 +6,7 @@ import {
   withErrorDiagnostics,
   type ErrorSourceLocation,
 } from "./error-diagnostics";
-import { isCLIError } from "./errors";
+import { formattedReport, isCLIError, locatedMessage } from "./errors";
 import { plainRedacted } from "./logger";
 import { parseBoolean } from "./parse-boolean";
 
@@ -130,13 +130,6 @@ export function formatAnnotation(
   return `::${level}${propertyList}::${escapeData(plainRedacted(message))}\n`;
 }
 
-function formattedMessage(error: Error): string | undefined {
-  const format = (error as { format?: unknown }).format;
-  if (typeof format !== "function") return undefined;
-  const formatted: unknown = format.call(error);
-  return typeof formatted === "string" ? formatted : undefined;
-}
-
 /**
  * Build the annotation body and title for a terminal CLI failure.
  *
@@ -158,12 +151,12 @@ export function describeTerminalError(
     // Commands outside this package (the seed plugin's validate report) throw a
     // plain Error carrying its own `format()`, which holds the whole report.
     const title = getErrorDiagnostics(error).code ?? (error.name || "Error");
-    const formatted = formattedMessage(error);
+    const formatted = formattedReport(error);
     if (formatted !== undefined) {
       return { message: formatted, title };
     }
     const suggestion = fallbackSuggestion ? `\nSuggestion: ${fallbackSuggestion}` : "";
-    return { message: `${error.message}${suggestion}`, title };
+    return { message: `${locatedMessage(error)}${suggestion}`, title };
   }
   return { message: `Unknown error: ${String(error)}`, title: "UNKNOWN_ERROR" };
 }
@@ -171,8 +164,9 @@ export function describeTerminalError(
 /**
  * Attach the source location a failure points at.
  *
- * Consumed when the command's failure is annotated; the error is otherwise
- * unchanged, so its message and formatting stay the caller's own.
+ * The command's failure is annotated at it, and the CLI prints it before the
+ * error's message, unless the error is one the SDK did not create and has a
+ * `format()` that returns a string. The error object itself is unchanged.
  * @param error - Failure to annotate
  * @param location - Absolute file, and the 1-based line when known
  * @returns The same error
