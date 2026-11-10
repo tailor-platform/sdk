@@ -81,7 +81,7 @@ SDK users don't need to know about this change. Their code works exactly the sam
 - Test additions or improvements
 - Dependency updates (unless they change user-facing behavior)
 
-A change only to documentation a package publishes is `patch`. Docs that come with another change, such as a new feature, take that change's level.
+A change only to documentation a package publishes is `patch`. Docs that come with another change, such as a new feature, take that change's level when both are in the same package; when they are in different packages, the changeset lists both, the docs' package at `patch`.
 
 ## Common Mistakes
 
