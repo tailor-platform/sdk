@@ -92,10 +92,10 @@ describe("resolveResolverDefaultPermissionForFile", () => {
     ).toBeUndefined();
   });
 
-  function rejection(defaultPermission: unknown): unknown {
+  function rejection(defaultPermission: ResolverServiceConfig["defaultPermission"]): unknown {
     try {
       resolveResolverDefaultPermissionForFile({
-        config: { main: { files: ["./main/*.ts"], defaultPermission: defaultPermission as never } },
+        config: { main: { files: ["./main/*.ts"], defaultPermission } },
         filePath: path.join(baseDir, "main", "guarded.ts"),
         baseDir,
         configPath,
@@ -107,7 +107,7 @@ describe("resolveResolverDefaultPermissionForFile", () => {
   }
 
   test("reports an invalid default as CONFIG_INVALID at the config file", () => {
-    const error = rejection([{ conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false }]);
+    const error = rejection([{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: false }]);
 
     expect(error).toMatchObject({
       code: "CONFIG_INVALID",
@@ -134,7 +134,7 @@ describe("resolveResolverDefaultPermissionForFile", () => {
         permit: true,
       },
       { conditions: [{ input: "ownerId" }, "=", { user: "id" }], permit: true },
-    ]);
+    ] as never);
 
     const message =
       "`defaultPermission` cannot use an `input` operand, since a namespace has no input; " +
@@ -155,7 +155,7 @@ describe("resolveResolverDefaultPermissionForFile", () => {
   test("reports an `input` operand together with the default's other issues", () => {
     const error = rejection([
       { conditions: [[{ input: "ownerId" }, "=", { user: "id" }]], permit: false },
-    ]);
+    ] as never);
 
     const prefix = ["resolver", "main", "defaultPermission"];
     expect(error).toMatchObject({
