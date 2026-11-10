@@ -1675,7 +1675,11 @@ describe("migration", () => {
             [createMockMigration({ number: 3 })],
             checkpoints,
           ),
-        ).rejects.toMatchObject({ code: "MIGRATION_FAILED", message: "boom" });
+        ).rejects.toMatchObject({
+          code: "MIGRATION_FAILED",
+          message: "Migration tailordb/0003 failed: boom",
+          context: { namespace: "tailordb", migrationNumber: 3 },
+        });
         expect(store.labels()).not.toHaveProperty(MIGRATION_IN_PROGRESS_LABEL_KEY);
         expect(store.labels()).not.toHaveProperty(MIGRATION_EXECUTION_LABEL_KEY);
         expect(removeMigrationWorkflowResourcesMock).toHaveBeenCalledWith(
@@ -1684,6 +1688,25 @@ describe("migration", () => {
           "tailordb",
           3,
         );
+      });
+
+      test("names the migration when the failed run reports no error", async () => {
+        const store = createMetadataStore({});
+        executeMigrationAsWorkflowMock.mockImplementationOnce(
+          runThat(() => ({ success: false, logs: "" })),
+        );
+
+        await expect(
+          executeMigrations(
+            { ...createMockContext(), client: store.client },
+            [createMockMigration({ number: 3 })],
+            checkpoints,
+          ),
+        ).rejects.toMatchObject({
+          code: "MIGRATION_FAILED",
+          message: "Migration tailordb/0003 failed",
+          context: { namespace: "tailordb", migrationNumber: 3 },
+        });
       });
 
       test("clears the record when the run fails before it starts", async () => {
