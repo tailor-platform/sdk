@@ -37,6 +37,39 @@ export default {
     expect(service.workflows).toEqual({});
   });
 
+  test("rejects two exports declaring the same job name", async () => {
+    using tmp = tempCwd("sdk-workflow-service-");
+    const source = (exportName: string) => `const brand = (value, kind) =>
+  Object.defineProperty(value, Symbol.for("tailor-platform/sdk"), { value: kind });
+export const ${exportName} = brand({ name: "sync", start: () => {}, body: () => {} }, "workflow-job");
+`;
+    const fileA = path.join(tmp.dir, "a.mjs");
+    const fileB = path.join(tmp.dir, "b.mjs");
+    fs.writeFileSync(fileA, source("syncJob"));
+    fs.writeFileSync(fileB, source("retryJob"));
+
+    const service = createWorkflowService({
+      config: { files: ["a.mjs", "b.mjs"] },
+      baseDir: tmp.dir,
+    });
+
+    await expect(service.loadWorkflows()).rejects.toMatchObject({
+      code: "DEFINITION_NAME_DUPLICATE",
+      context: {
+        kind: "workflow-job",
+        duplicates: [
+          {
+            name: "sync",
+            definitions: [
+              { file: fileA, exportName: "syncJob" },
+              { file: fileB, exportName: "retryJob" },
+            ],
+          },
+        ],
+      },
+    });
+  });
+
   test.each([
     {
       case: "a default-exported workflow that fails validation",

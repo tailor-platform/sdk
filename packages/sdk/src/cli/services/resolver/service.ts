@@ -2,7 +2,11 @@ import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { importUserModule } from "#/cli/shared/user-modules";
-import { atUserModule, definitionInvalidError } from "#/cli/shared/validation-errors";
+import {
+  assertUniqueDefinitionNames,
+  atUserModule,
+  definitionInvalidError,
+} from "#/cli/shared/validation-errors";
 import { ResolverSchema } from "#/parser/service/resolver/index";
 import { isSdkBranded } from "#/utils/brand";
 import { parseResolverDefaultPermission } from "./default-permission";
@@ -109,7 +113,15 @@ export function createResolverService(
       }
 
       await Promise.all(resolverFiles.map((resolverFile) => loadResolverForFile(resolverFile)));
-      assertUniqueResolverNames(resolvers, namespace);
+      assertUniqueDefinitionNames({
+        kind: "resolver",
+        namespace,
+        definitions: Object.entries(resolvers).map(([file, resolver]) => ({
+          name: resolver.name,
+          file,
+          exportName: "default",
+        })),
+      });
       warnUndeclaredPermissions({ namespace, defaultPermission, resolvers });
       loaded = true;
     },
@@ -152,28 +164,4 @@ function warnUndeclaredPermissions(params: WarnUndeclaredPermissionsParams): voi
   // Sorted because resolvers load concurrently, so their record order varies per run.
   const names = undeclared.map((resolver) => resolver.name).toSorted();
   logger.debug(`  Resolvers without \`permission\`: ${names.join(", ")}`);
-}
-
-/**
- * Assert that every loaded resolver in a namespace has a unique name.
- * Resolvers are stored by source file, so two files declaring the same
- * `name` would otherwise silently share a single bundle cache entry.
- * @param resolvers - Loaded resolvers keyed by source file
- * @param namespace - The namespace the resolvers belong to
- */
-function assertUniqueResolverNames(resolvers: Record<string, Resolver>, namespace: string): void {
-  const seenNames = new Map<string, string>();
-  for (const [file, resolver] of Object.entries(resolvers)) {
-    const relativePath = path.relative(process.cwd(), file);
-    const existing = seenNames.get(resolver.name);
-    if (existing) {
-      throw new Error(
-        `Duplicate resolver name "${resolver.name}" found in namespace "${namespace}":\n` +
-          `  - ${existing}\n` +
-          `  - ${relativePath}\n` +
-          `Each resolver must have a unique name within a namespace.`,
-      );
-    }
-    seenNames.set(resolver.name, relativePath);
-  }
 }

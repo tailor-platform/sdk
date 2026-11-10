@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test } from "vitest";
+import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { resolveResolverDefaultPermissionForFile } from "./default-permission";
 import type { ResolverServiceConfig, ResolverServiceInput } from "#/configure/config/types";
@@ -58,14 +59,28 @@ describe("resolveResolverDefaultPermissionForFile", () => {
       everything: { files: ["./**/*.ts"], defaultPermission: "allowAnonymous" },
     };
 
-    expect(() =>
+    const resolverFile = path.join(baseDir, "main", "guarded.ts");
+    let error: unknown;
+    try {
       resolveResolverDefaultPermissionForFile({
         config: overlapping,
-        filePath: path.join(baseDir, "main", "guarded.ts"),
+        filePath: resolverFile,
         baseDir,
         configPath,
-      }),
-    ).toThrow(/matches more than one resolver namespace: "main", "everything"/);
+      });
+    } catch (thrown) {
+      error = thrown;
+    }
+
+    expect(error).toMatchObject({
+      code: "RESOLVER_NAMESPACE_AMBIGUOUS",
+      message: expect.stringMatching(
+        /^Resolver .*guarded\.ts matches more than one resolver namespace: "main", "everything"$/,
+      ),
+      suggestion: expect.stringContaining("Narrow the `files` patterns"),
+      context: { file: configPath, resolverFile, namespaces: ["main", "everything"] },
+    });
+    expect(getErrorDiagnostics(error as Error).location).toEqual({ file: configPath });
   });
 
   test("returns undefined when no namespace claims the file", () => {

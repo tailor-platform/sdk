@@ -100,9 +100,22 @@ export default resolver;
       process.cwd(),
     );
 
-    await expect(service.loadResolvers()).rejects.toThrow(
-      /Duplicate resolver name "duplicate" found in namespace "ns"/,
-    );
+    await expect(service.loadResolvers()).rejects.toMatchObject({
+      code: "DEFINITION_NAME_DUPLICATE",
+      context: {
+        kind: "resolver",
+        namespace: "ns",
+        duplicates: [
+          {
+            name: "duplicate",
+            definitions: [
+              { file: fileA, exportName: "default" },
+              { file: fileB, exportName: "default" },
+            ],
+          },
+        ],
+      },
+    });
   });
 
   test("does not reload after a load that yielded no resolvers", async () => {
