@@ -330,10 +330,11 @@ async function sync(options: SyncOptions): Promise<SyncResult> {
       plan,
     });
   } catch (error) {
-    handleOptionalToRequiredError(error, [
-      "The target snapshot marks a field as required, but existing remote records have no value for it.",
-      "Populate those records first (e.g. with a migration script applied via 'tailor deploy'), then re-run the sync.",
-    ]);
+    handleOptionalToRequiredError(
+      error,
+      "The target snapshot marks a field as required, but existing remote records have no value for it. " +
+        "Fill in those records first (for example with a migration script applied via `tailor deploy`), then run the sync again.",
+    );
   }
 
   const labelChanged = await updateMigrationLabel(
