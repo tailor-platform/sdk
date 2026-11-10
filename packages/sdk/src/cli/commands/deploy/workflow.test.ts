@@ -1352,21 +1352,14 @@ describe("formatWorkflowChangeEntries", () => {
   });
 
   test.each([
-    { name: "a forced update", functionChanges: { updates: [{ forced: true }] }, expected: true },
-    {
-      name: "an unforced update",
-      functionChanges: { updates: [{ forced: false }] },
-      expected: false,
-    },
+    { name: "no update", functionChanges: {}, expected: true },
+    { name: "an update", functionChanges: { updates: [{}] }, expected: false },
     { name: "a create on its own line", functionChanges: { creates: [{}] }, expected: true },
   ])(
     "keeps a forced workflow update's marker: $expected, when its job function has $name",
     ({ functionChanges, expected }) => {
-      const functionItems = (items: ReadonlyArray<{ forced?: boolean }> | undefined) =>
-        (items ?? []).map(({ forced }) => ({
-          name: "workflow--process-order",
-          ...(forced && { forcedBySdkVersion: true as const }),
-        }));
+      const functionItems = (items: ReadonlyArray<object> | undefined) =>
+        (items ?? []).map(() => ({ name: "workflow--process-order" }));
       const entries = formatWorkflowChangeEntries(
         {
           creates: [],
