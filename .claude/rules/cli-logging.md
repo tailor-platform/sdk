@@ -156,8 +156,9 @@ A schema validation failure on user input lists its issues in `message` and carr
 `context.issues`: `parseOptions()` does this for options (`OPTIONS_INVALID`), and
 `cli/shared/validation-errors.ts` for a config file (`CONFIG_INVALID`) or an SDK definition
 (`DEFINITION_INVALID`); build other cases from `flattenZodIssues()` and `formatIssueList()` in
-`cli/shared/zod-issues.ts`. A config value that a check other than its schema rejects, such as a
-credential in `env`, is reported the same way through `configIssuesError()`. Data the SDK or the
+`cli/shared/zod-issues.ts`. A config rejection that is not a single schema failure, such as a
+credential in `env`, a missing default export, or the issues collected across `plugins` items, is
+reported the same way through `configIssuesError()`. Data the SDK or the
 Platform produced goes through `invalidDataError()`, an `internalError()`.
 `local/no-raw-zod-error` rejects a throwing `.parse()` or a rethrown `safeParse` error under
 `packages/sdk/src/cli`.
