@@ -111,7 +111,7 @@ When multiple configs are provided, `deploy` creates or updates all configured s
 
 Names that identify a resource across the whole workspace, such as application, executor, workflow, and static website names and service namespaces, must be unique across all configs in one deploy. Otherwise, `deploy` fails before planning any changes and lists every duplicate with the config files that define it.
 
-Each config's `files` and `ignores` patterns (see [Service Configuration](../configuration.md#service-configuration)) resolve relative to that config's own directory, not the directory you ran `deploy` from. For example, `apps/buyer/tailor.config.ts` declaring `files: ["db/**/*.ts"]` loads files from `apps/buyer/db/`, independent of where `apps/supplier/tailor.config.ts`'s patterns resolve. If a config's relative patterns match nothing under its own directory, the SDK falls back to the invocation directory and logs a warning (see [Service Configuration](../configuration.md#service-configuration) for details).
+Each config's `files` patterns (see [Service Configuration](../configuration.md#service-configuration)) resolve relative to that config's own directory, not the directory you ran `deploy` from. For example, `apps/buyer/tailor.config.ts` declaring `files: ["db/**/*.ts"]` loads files from `apps/buyer/db/`, independent of where `apps/supplier/tailor.config.ts`'s patterns resolve. If a config's relative patterns match nothing under its own directory, the SDK falls back to the invocation directory and logs a warning (see [Service Configuration](../configuration.md#service-configuration) for details).
 
 **Migration Handling (Beta):**
 
@@ -183,6 +183,7 @@ After printing the plan, `deploy` asks for confirmation before applying when the
 - Resources owned by another application, or tagged with a different application id
 - Existing resources that `tailor` does not manage yet
 - Deletion of TailorDB tables, static websites, AI gateways, OAuth2 clients (including a client type change), Auth connections, Secret Manager vaults, or Secret Manager secrets
+- Deletion of the application of a config that no longer defines or references any TailorDB namespace, resolver namespace, IdP, or Auth service (see [Application Settings](../configuration.md#application-settings))
 
 Declining cancels the deploy. When the plan includes none of these, `deploy` applies it without asking.
 

@@ -46,14 +46,12 @@ export interface PruneCriteria {
   olderThanMs?: number;
   /**
    * Organizations whose workspaces outside any folder are in scope.
-   * Together with `folderIds` and `personal`, each is a location; a workspace
+   * Together with `folderIds`, each is a location; a workspace
    * in any of them is in scope, and no location at all leaves the scope open.
    */
   organizationRoots: readonly string[];
   /** Folders whose workspaces are in scope. */
   folderIds: readonly string[];
-  /** Whether workspaces belonging to no organization and no folder are in scope. */
-  personal: boolean;
   /** Exact names kept even when they match. */
   exclude: ReadonlySet<string>;
 }
@@ -79,20 +77,16 @@ function matchesName(workspace: Workspace, criteria: PruneCriteria): boolean {
 }
 
 function hasLocation(criteria: PruneCriteria): boolean {
-  return (
-    criteria.organizationRoots.length > 0 || criteria.folderIds.length > 0 || criteria.personal
-  );
+  return criteria.organizationRoots.length > 0 || criteria.folderIds.length > 0;
 }
 
-// A workspace lives in exactly one location: a folder, an organization's root
-// outside any folder, or nowhere (personal). It is in scope when that location
-// was asked for, or when no location was asked for at all.
+// A workspace lives in exactly one location: a folder, or an organization's root
+// outside any folder. It is in scope when that location was asked for, or when no
+// location was asked for at all.
 function matchesScope(workspace: Workspace, criteria: PruneCriteria): boolean {
   if (!hasLocation(criteria)) return true;
   if (workspace.folderId) return criteria.folderIds.includes(workspace.folderId);
-  if (workspace.organizationId)
-    return criteria.organizationRoots.includes(workspace.organizationId);
-  return criteria.personal;
+  return criteria.organizationRoots.includes(workspace.organizationId);
 }
 
 /**
@@ -285,7 +279,7 @@ const KEPT_REASONS: {
 ];
 
 const UNSCOPED_SWEEP_SUGGESTION =
-  "Specify --organization-root, --folder-id, or --personal on the command line. The default organization/folder set by `tailor user update` is not used by prune.";
+  "Specify --organization-root or --folder-id on the command line. The default organization/folder set by `tailor user update` is not used by prune.";
 
 export const pruneCommand = defineAppCommand({
   name: "prune",
@@ -296,7 +290,7 @@ export const pruneCommand = defineAppCommand({
 
     With --expired the workspaces select themselves instead: each one is deleted only once the --ttl expiry it recorded at creation has passed, so callers need no --name or --older-than. A workspace that records no expiry is never deleted this way, and neither is one whose recorded expiry cannot be read. Because that expiry is recorded on the workspace rather than derived from its name, anything able to write the workspace's metadata can bring its deletion forward -- and writing a workspace's metadata is a lesser permission than deleting it. --expired therefore requires at least one location, and --name still applies on top.
 
-    Every workspace lives in exactly one location, and the location options name them explicitly: --organization-root selects the workspaces directly under an organization and none inside its folders, --folder-id selects the workspaces in one folder, and --personal selects the workspaces belonging to no organization and no folder. Each option can be given more than once, they combine as a union, and none of them is read from the environment or from the default organization/folder set by \`user update\` -- a sweep covers exactly the locations spelled out on the command line. Selecting --personal is a deliberate choice to accept, for every organization-less workspace visible to this login, the expiry that anyone able to write a workspace's metadata may have recorded. Without any location option, a --name / --older-than sweep considers every visible workspace.
+    Every workspace lives in exactly one location, and the location options name them explicitly: --organization-root selects the workspaces directly under an organization and none inside its folders, and --folder-id selects the workspaces in one folder. Each option can be given more than once, they combine as a union, and none of them is read from the environment or from the default organization/folder set by \`user update\` -- a sweep covers exactly the locations spelled out on the command line. Without any location option, a --name / --older-than sweep considers every visible workspace.
 
     Without a location option, prune warns before listing workspaces that every workspace visible to this login is a candidate for the name and age filters, even with --yes or --dry-run. The default organization/folder set by \`tailor user update\` is not used.
 
@@ -317,7 +311,7 @@ export const pruneCommand = defineAppCommand({
     }),
     expired: arg(z.boolean().default(false), {
       description:
-        "Select workspaces whose own --ttl expiry has passed, instead of by name and age. Requires --organization-root, --folder-id, or --personal",
+        "Select workspaces whose own --ttl expiry has passed, instead of by name and age. Requires --organization-root or --folder-id",
     }),
     "organization-root": arg(locationIdsArg(), {
       placeholder: "ORGANIZATION_ID",
@@ -326,9 +320,6 @@ export const pruneCommand = defineAppCommand({
     }),
     "folder-id": arg(locationIdsArg(), {
       description: "Consider the workspaces in this folder (repeatable)",
-    }),
-    personal: arg(z.boolean().default(false), {
-      description: "Consider the workspaces belonging to no organization and no folder",
     }),
     exclude: arg(z.array(z.string().min(1)).optional(), {
       description: "Keep a workspace with this exact name even when it matches (repeatable)",
@@ -395,13 +386,12 @@ export const pruneCommand = defineAppCommand({
       ...(olderThanMs === undefined ? {} : { olderThanMs }),
       organizationRoots,
       folderIds,
-      personal: args.personal,
       exclude: new Set(args.exclude ?? []),
     };
     if (args.expired && !hasLocation(criteria)) {
       throw CLIError({
         code: "UNSCOPED_EXPIRED",
-        message: "--expired requires --organization-root, --folder-id, or --personal.",
+        message: "--expired requires --organization-root or --folder-id.",
         suggestion: UNSCOPED_SWEEP_SUGGESTION,
         details:
           "The expiry lives on the workspace, and writing a workspace's metadata is a lesser permission than deleting it, so an unscoped sweep would delete on behalf of anyone able to write that metadata.",
@@ -410,10 +400,10 @@ export const pruneCommand = defineAppCommand({
     if (olderThanMs === 0 && !hasLocation(criteria)) {
       throw CLIError({
         code: "UNSCOPED_ZERO_AGE",
-        message: "--older-than 0s requires --organization-root, --folder-id, or --personal.",
+        message: "--older-than 0s requires --organization-root or --folder-id.",
         suggestion: UNSCOPED_SWEEP_SUGGESTION,
         details:
-          "Without an age check the name filter is the only guard, so the sweep must name the organization roots, folders, or personal workspaces it covers.",
+          "Without an age check the name filter is the only guard, so the sweep must name the organization roots or folders it covers.",
       });
     }
 

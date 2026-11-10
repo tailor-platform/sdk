@@ -83,6 +83,38 @@ const expandExpressions = (template: string, github: unknown): string =>
     ),
   );
 
+// Evaluates a generated job's `if:` for a pull request run, mapping the GitHub
+// expression syntax used by the templates onto JavaScript.
+const runsOnPullRequest = (
+  job: { if?: string } | undefined,
+  changes: { result: "success" | "failure" | "cancelled"; relevant: string },
+  pullRequest: { state?: "open" | "closed"; labels?: string[] } = {},
+): boolean => {
+  const expression = String(job?.if)
+    .replaceAll("needs.tailor-changes.", "changes.")
+    .replaceAll("inputs['dry-run']", "false")
+    .replaceAll("labels.*.name", "labels");
+  return Boolean(
+    vm.runInNewContext(expression, {
+      cancelled: () => changes.result === "cancelled",
+      contains: (items: unknown[], item: unknown) => items.includes(item),
+      changes: { result: changes.result, outputs: { relevant: changes.relevant } },
+      github: {
+        event_name: "pull_request",
+        event: {
+          action: "opened",
+          pull_request: {
+            state: pullRequest.state ?? "open",
+            draft: false,
+            head: { repo: { fork: false } },
+            labels: pullRequest.labels ?? [],
+          },
+        },
+      },
+    }),
+  );
+};
+
 describe("detectPackageManager", () => {
   const testDir = path.join(
     "/tmp",
@@ -1011,30 +1043,6 @@ describe("change detection", () => {
     [job?.needs].flat().includes("tailor-changes") &&
     String(job?.if).includes("needs.tailor-changes.outputs.relevant == 'true'");
 
-  // Evaluates the generated `if:` for a pull request run, mapping the GitHub
-  // expression syntax used by the templates onto JavaScript.
-  const runsOnPullRequest = (
-    job: Job | undefined,
-    changes: { result: "success" | "failure" | "cancelled"; relevant: string },
-  ): boolean => {
-    const expression = String(job?.if)
-      .replaceAll("needs.tailor-changes.", "changes.")
-      .replaceAll("inputs['dry-run']", "false");
-    return Boolean(
-      vm.runInNewContext(expression, {
-        cancelled: () => changes.result === "cancelled",
-        changes: { result: changes.result, outputs: { relevant: changes.relevant } },
-        github: {
-          event_name: "pull_request",
-          event: {
-            action: "opened",
-            pull_request: { draft: false, head: { repo: { fork: false } }, labels: [] },
-          },
-        },
-      }),
-    );
-  };
-
   test("fails every gated job when change detection fails, so a required check blocks merging", () => {
     const branch = renderBranchWorkflow({
       ...branchBase,
@@ -1374,6 +1382,27 @@ describe("renderPreviewWorkflow", () => {
       expect(workflow.on.pull_request.types).not.toContain("closed");
       expect(Object.keys(workflow.jobs)).not.toContain("tailor-preview-cleanup");
       expect(generatedIds.filter((id) => id.startsWith("tailor-preview-cleanup"))).toEqual([]);
+    },
+  );
+
+  test.each([undefined, "ready", "label"] as const)(
+    "skips the deploy for an event on a closed pull request (require: %s)",
+    (require) => {
+      const { content } = renderPreviewWorkflow({
+        ...previewBase,
+        workingDirectory: "apps/a",
+        require,
+      });
+      const deploy = (parseYAML(content) as GeneratedWorkflow).jobs["tailor-preview-deploy"];
+      const deploysWhen = (state: "open" | "closed") =>
+        runsOnPullRequest(
+          deploy,
+          { result: "success", relevant: "true" },
+          { state, labels: ["tailor:preview"] },
+        );
+
+      expect(deploysWhen("open")).toBe(true);
+      expect(deploysWhen("closed")).toBe(false);
     },
   );
 
@@ -1882,6 +1911,7 @@ describe("Tailor Platform action pins", () => {
     expect(new Set(shared.map(([action]) => action))).toEqual(
       new Set([
         "actions/checkout",
+        "actions/setup-node",
         "actions/upload-artifact",
         "tailor-platform/actions/setup",
         "tailor-platform/actions/install",

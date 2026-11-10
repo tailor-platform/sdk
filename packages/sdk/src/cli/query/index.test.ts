@@ -1,4 +1,7 @@
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { logger } from "../shared/logger";
+import { jsonMode } from "../shared/test-helpers/json-mode";
+import { runCliCommand } from "../shared/test-helpers/run-cli-command";
 import {
   getReplHistoryPath,
   query,
@@ -600,6 +603,76 @@ describe("query", () => {
         query: 'select * from "User";',
       }),
     ).rejects.toThrow("Machine user is required");
+  });
+
+  describe("SQL result output", () => {
+    async function runSqlCommand(sql: string, scriptResult: string, ...extraArgs: string[]) {
+      const { executeScript } = await import("../shared/script-executor");
+      vi.mocked(executeScript).mockResolvedValue({ success: true, logs: "", result: scriptResult });
+      using outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+      using infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
+      const result = await runCliCommand(queryCommand, [
+        "--engine",
+        "sql",
+        "-q",
+        sql,
+        ...extraArgs,
+      ]);
+      expect(result.success).toBe(true);
+      return { out: outSpy.mock.calls, info: infoSpy.mock.calls };
+    }
+
+    test.each([
+      [
+        "affected rows of a write",
+        'DELETE FROM "User";',
+        '{"rows":[],"rowCount":3,"affectedRows":3}',
+        { results: [], rowCount: 3, affectedRows: 3 },
+      ],
+      [
+        "empty result of a read",
+        'SELECT * FROM "User";',
+        '{"rows":[],"rowCount":0}',
+        { results: [], rowCount: 0 },
+      ],
+      [
+        "each statement's result",
+        'DELETE FROM "User"; SELECT 1 AS n;',
+        '[{"rows":[],"rowCount":2,"affectedRows":2},{"rows":[{"n":1}],"rowCount":1}]',
+        [
+          { results: [], rowCount: 2, affectedRows: 2 },
+          { results: [{ n: 1 }], rowCount: 1 },
+        ],
+      ],
+    ])("prints %s as JSON", async (_label, sql, scriptResult, expected) => {
+      using _json = jsonMode();
+      const { out } = await runSqlCommand(sql, scriptResult, "--json");
+
+      expect(out).toEqual([[expected]]);
+    });
+
+    test.each([
+      ["3 rows affected.", 'DELETE FROM "User";', '{"rows":[],"rowCount":3,"affectedRows":3}'],
+      ["1 row affected.", 'DELETE FROM "User";', '{"rows":[],"rowCount":1,"affectedRows":1}'],
+      ["0 rows affected.", 'DELETE FROM "User";', '{"rows":[],"rowCount":0,"affectedRows":0}'],
+      ["No rows returned.", 'SELECT * FROM "User";', '{"rows":[],"rowCount":0}'],
+    ])("prints %s for a statement that returns no rows", async (expected, sql, scriptResult) => {
+      const { info } = await runSqlCommand(sql, scriptResult);
+
+      expect(info).toEqual([[expected]]);
+    });
+
+    test("prints the rows to stdout and the row count to stderr", async () => {
+      const result = await runSqlCommand(
+        'SELECT * FROM "User";',
+        '{"rows":[{"id":"1"},{"id":"2"}],"rowCount":2}',
+      );
+
+      expect(result).toEqual({
+        out: [[[{ id: "1" }, { id: "2" }], { showNull: true }]],
+        info: [["rows: 2"]],
+      });
+    });
   });
 });
 

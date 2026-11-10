@@ -295,7 +295,6 @@ type DeleteWorkflow = {
   workspaceId: string;
   workflowId: string;
   usedJobNames: string[];
-  deletableJobNames: string[];
 };
 
 type DeleteWorkflowJobFunction = {
@@ -677,7 +676,6 @@ export async function planWorkflow(
     }
   }
 
-  const deleteWorkflows: DeleteWorkflow[] = [];
   Object.values(existingWorkflows).forEach((existing) => {
     if (!existing) {
       return;
@@ -685,12 +683,11 @@ export async function planWorkflow(
     const owned = ownership.ownsRemaining(existing.allLabels);
     const usedJobNames = getExistingWorkflowJobNames(existing.resource);
     if (owned) {
-      deleteWorkflows.push({
+      changeSet.deletes.push({
         name: existing.resource.name,
         workspaceId,
         workflowId: existing.resource.id,
         usedJobNames,
-        deletableJobNames: [],
       });
     } else {
       usedJobNames.forEach((jobName) => retainedWorkflowJobNames.add(jobName));
@@ -704,16 +701,6 @@ export async function planWorkflow(
     existingJobFunctionNames: [...existingJobFunctions.keys()],
     retainedWorkflowJobNames,
   });
-  const deletableJobNames = new Set(jobFunctionDeletes.map((del) => del.jobFunctionName));
-
-  for (const del of deleteWorkflows) {
-    changeSet.deletes.push({
-      ...del,
-      deletableJobNames: del.usedJobNames.filter(
-        (jobName) => !retainedWorkflowJobNames.has(jobName) && deletableJobNames.has(jobName),
-      ),
-    });
-  }
 
   return {
     changeSet,

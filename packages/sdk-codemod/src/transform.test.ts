@@ -585,4 +585,12 @@ export function read(plugins: unknown) { return generators; }
   test("v3/define-config-build-options transforms correctly", async () => {
     await expect(runFixtureCases("v3/define-config-build-options")).resolves.toBeUndefined();
   });
+
+  test("v3/files-ignores-to-negation transforms correctly", async () => {
+    await expect(runFixtureCases("v3/files-ignores-to-negation")).resolves.toBeUndefined();
+  });
+
+  test("v3/tailordb-namespace-loaded-rename transforms correctly", async () => {
+    await expect(runFixtureCases("v3/tailordb-namespace-loaded-rename")).resolves.toBeUndefined();
+  });
 });

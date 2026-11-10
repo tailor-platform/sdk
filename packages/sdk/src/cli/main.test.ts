@@ -112,6 +112,19 @@ describe.concurrent("CLI error verbosity", () => {
   );
 });
 
+describe.concurrent("CLI error source location", () => {
+  test("puts the file a plain error points at before its message", async () => {
+    expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
+    using tmp = tempDir("cli-error-location-");
+    writeFileSync(path.join(tmp.dir, "tailor.config.ts"), 'throw new Error("config is broken");\n');
+
+    const result = await runCli(["generate"], tmp.dir);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("tailor.config.ts: config is broken");
+  }, 20_000);
+});
+
 describe.concurrent("env files", () => {
   test("loads every repeated flag before validating options", async () => {
     expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);

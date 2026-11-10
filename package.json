@@ -22,6 +22,7 @@
     "codemod:resolve-pending": "tsx packages/sdk-codemod/scripts/resolve-pending-boundaries.ts",
     "deprecations:resolve-pending": "tsx packages/sdk-codemod/scripts/resolve-pending-deprecations.ts",
     "setup:template-version:resolve-pending": "TEMPLATE_VERSION_RELEASE=1 pnpm --filter @tailor-platform/sdk-plugin-setup exec vitest run src/template-fingerprint.test.ts",
+    "setup:templates:dump": ": \"${TEMPLATES_DUMP_DIR:?set TEMPLATES_DUMP_DIR to an absolute directory}\" && pnpm --filter @tailor-platform/sdk-plugin-setup exec vitest run src/template-dump.test.ts",
     "check": "pnpm run generate && pnpm run format && pnpm run \"/^check:/\"",
     "check:agent-rules": "pnpm run agent:rules:check",
     "check:codemod-docs": "pnpm run codemod:docs:check",
@@ -70,5 +71,5 @@
   "engines": {
     "node": ">= 22.18.0"
   },
-  "packageManager": "pnpm@12.16.1"
+  "packageManager": "pnpm@12.18.0"
 }

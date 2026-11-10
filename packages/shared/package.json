@@ -8,6 +8,7 @@
   "exports": {
     "./color": "./src/color.ts",
     "./node-builtins": "./src/node-builtins.ts",
+    "./resource-name": "./src/resource-name.ts",
     "./workflow-policy": "./src/workflow-policy.ts"
   },
   "scripts": {
@@ -19,7 +20,7 @@
   },
   "devDependencies": {
     "oxlint": "1.90.0",
-    "oxlint-tsgolint": "7.0.2005",
-    "vitest": "5.0.5"
+    "oxlint-tsgolint": "7.0.2006",
+    "vitest": "5.1.0"
   }
 }

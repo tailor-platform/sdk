@@ -8,6 +8,7 @@ import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   waitForExecution,
   executeScript,
+  executeScriptReportingStart,
   DEFAULT_POLL_INTERVAL,
   type ScriptExecutionOptions,
 } from "./script-executor";
@@ -221,6 +222,24 @@ describe("executeScript", () => {
       arg: '{"input":"value"}',
       invoker: mockAuthInvoker,
     });
+  });
+
+  test("reports the execution ID once the script is accepted, before waiting for it", async () => {
+    const client = createExecScriptMockClient(execution(FunctionExecution_Status.SUCCESS, "", ""));
+    const onStart = vi.fn(() => {
+      expect(client.getFunctionExecution).not.toHaveBeenCalled();
+    });
+
+    await executeScriptReportingStart({
+      client,
+      workspaceId: "workspace-1",
+      name: "test-script.js",
+      code: "code",
+      invoker: mockAuthInvoker,
+      onStart,
+    });
+
+    expect(onStart).toHaveBeenCalledExactlyOnceWith("exec-123");
   });
 
   test("executes script with default empty arg", async () => {

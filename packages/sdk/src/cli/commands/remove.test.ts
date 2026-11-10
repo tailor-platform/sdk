@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { runCommand } from "@politty/zod";
+import { Subgraph_ServiceType } from "@tailor-platform/tailor-proto/application_resource_pb";
 import * as path from "pathe";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
@@ -257,6 +258,50 @@ describe("remove command", () => {
     expect(logger.log).toHaveBeenCalledWith(expect.stringContaining(`- ${PLANNED_DELETE.name}`));
     expect(APPLY_BY_PLAN[kind].mock.calls.flat()).toContain(mocks.plans[kind]);
     expect(logger.out).toHaveBeenCalledWith(expect.objectContaining({ changed: true }));
+  });
+
+  test("stops before listing or deleting anything when another application uses a service it deletes", async () => {
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      listWorkflowJobFunctionExecutionPolicies: vi.fn(async () => ({
+        policies: [],
+        nextPageToken: "",
+      })),
+    } as never);
+    mocks.plans.app.deletes.push({ ...PLANNED_DELETE, name: "my-app" });
+    mocks.plans.app.existingApplications = [
+      {
+        name: "my-app",
+        authNamespace: "shared-auth",
+        subgraphs: [{ serviceType: Subgraph_ServiceType.TAILORDB, serviceNamespace: "main" }],
+      },
+      {
+        name: "portal",
+        authNamespace: "shared-auth",
+        subgraphs: [
+          { serviceType: Subgraph_ServiceType.PIPELINE, serviceNamespace: "my-resolvers" },
+        ],
+      },
+    ] as never;
+    mocks.plans.auth.changeSet.service.deletes.push({ ...PLANNED_DELETE, name: "shared-auth" });
+    mocks.plans.auth.changeSet.machineUser.deletes.push({ ...PLANNED_DELETE, name: "admin" });
+    mocks.plans.tailorDB.changeSet.service.deletes.push({ ...PLANNED_DELETE, name: "main" });
+    mocks.plans.pipeline.changeSet.service.deletes.push({
+      ...PLANNED_DELETE,
+      name: "my-resolvers",
+    });
+
+    const result = await runCommand(removeCommand, ["--yes"]);
+
+    expect(result.error).toMatchObject({
+      code: "SERVICE_IN_USE",
+      message: [
+        'Auth service "shared-auth" cannot be deleted: application "portal" still uses it.',
+        'Resolver namespace "my-resolvers" cannot be deleted: application "portal" still uses it.',
+      ].join("\n"),
+      suggestion: expect.stringContaining("then run remove again"),
+    });
+    expect(logger.log).not.toHaveBeenCalledWith(expect.stringContaining("Auth services:"));
+    expect(Object.values(APPLY_BY_PLAN).flatMap((apply) => apply.mock.calls)).toEqual([]);
   });
 
   test("lists workflow job functions under their own heading", async () => {

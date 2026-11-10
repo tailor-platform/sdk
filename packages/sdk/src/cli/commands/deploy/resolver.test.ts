@@ -77,8 +77,13 @@ function createMockClient(
   existingServices: Array<{ name: string; label?: string; sdkVersion?: string }>,
   existingResolvers: Record<string, Array<Record<string, unknown>>> = {},
   resolverDetails: Record<string, Record<string, unknown>> = {},
+  workspaceMachineUsers: string[] = [],
 ): OperatorClient {
   return {
+    listAuthMachineUsers: vi.fn().mockResolvedValue({
+      machineUsers: workspaceMachineUsers.map((name) => ({ name })),
+      nextPageToken: "",
+    }),
     listPipelineServices: vi.fn().mockResolvedValue({
       pipelineServices: existingServices.map((s) => ({
         namespace: { name: s.name },
@@ -334,6 +339,80 @@ describe("planPipeline (resolver service level)", () => {
         result.changeSet.resolver.creates[0]!.request.pipelineResolver?.pipelines?.[0]
           ?.operationHook?.expr;
       expect(hookExpr).toContain('"SITE_URL":"my-site:url"');
+    });
+  });
+
+  describe("string invoker", () => {
+    function createPipelineWithInvoker(invoker: string): ResolverService {
+      return {
+        namespace: "my-resolver",
+        config: {},
+        resolvers: {
+          "test-resolver": {
+            name: "test-resolver",
+            operation: "query",
+            output: { type: "string", metadata: {} },
+            invoker,
+          },
+        },
+        loadResolvers: vi.fn().mockResolvedValue(undefined),
+      } as unknown as ResolverService;
+    }
+
+    function createExternalAuthApplication(invoker: string): Application {
+      return createMockApplication([createPipelineWithInvoker(invoker)], {
+        config: { auth: { name: "external-auth", external: true } },
+      });
+    }
+
+    test("expands to the external auth namespace when the machine user exists in the workspace", async () => {
+      const result = await planPipeline(
+        buildCtx({
+          client: createMockClient([], {}, {}, ["portal"]),
+          application: createExternalAuthApplication("portal"),
+        }),
+      );
+
+      expect(
+        result.changeSet.resolver.creates[0]!.request.pipelineResolver?.pipelines?.[0]?.invoker,
+      ).toEqual({ namespace: "external-auth", machineUserName: "portal" });
+    });
+
+    test("rejects a machine user that exists nowhere in the external auth namespace", async () => {
+      await expect(
+        planPipeline(
+          buildCtx({
+            client: createMockClient([], {}, {}, ["portal"]),
+            application: createExternalAuthApplication("portl"),
+          }),
+        ),
+      ).rejects.toMatchObject({
+        code: "INVOKER_MACHINE_USER_NOT_FOUND",
+        message: expect.stringContaining('Resolver "test-resolver"'),
+      });
+    });
+
+    test("rejects a machine user that the run removes from the auth config but the workspace still has", async () => {
+      await expect(
+        planPipeline(
+          buildCtx({
+            client: createMockClient([], {}, {}, ["legacy", "portal"]),
+            application: createExternalAuthApplication("legacy"),
+            plannedMachineUsers: new Map([["external-auth", new Set(["portal"])]]),
+          }),
+        ),
+      ).rejects.toMatchObject({ code: "INVOKER_MACHINE_USER_NOT_FOUND" });
+    });
+
+    test("accepts a machine user that another config in the same deploy creates", async () => {
+      const result = await planPipeline(
+        buildCtx({
+          application: createExternalAuthApplication("portal"),
+          plannedMachineUsers: new Map([["external-auth", new Set(["portal"])]]),
+        }),
+      );
+
+      expect(result.changeSet.resolver.creates).toHaveLength(1);
     });
   });
 
@@ -682,10 +761,11 @@ describe("processResolver invoker mapping", () => {
   async function planWithResolverService(
     resolverService: ResolverService,
     extraApplicationFields: Record<string, unknown> = {},
+    plannedMachineUsers?: ReadonlyMap<string, ReadonlySet<string>>,
   ) {
     const client = createMockClient([{ name: "test-ns", label: appName }]);
     const application = createMockApplication([resolverService], extraApplicationFields);
-    return planPipeline(buildCtx({ client, application }));
+    return planPipeline(buildCtx({ client, application, plannedMachineUsers }));
   }
 
   test("invoker is mapped to proto invoker field", async () => {
@@ -709,9 +789,11 @@ describe("processResolver invoker mapping", () => {
   test("string invoker is normalized using the configured auth service name", async () => {
     const resolverService = createResolverServiceWithAuthInvoker("batch-user");
 
-    const result = await planWithResolverService(resolverService, {
-      authService: { config: { name: "my-auth" } },
-    });
+    const result = await planWithResolverService(
+      resolverService,
+      { authService: { config: { name: "my-auth" } } },
+      new Map([["my-auth", new Set(["batch-user"])]]),
+    );
 
     const resolverCreate = result.changeSet.resolver.creates[0];
     expect(resolverCreate).toBeDefined();

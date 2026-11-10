@@ -5,10 +5,10 @@ import { AppConfigSchema } from "#/parser/app-config/schema";
 import { PluginConfigSchema } from "#/parser/plugin-config/index";
 import { loadConfigPath } from "./context";
 import { assertEnvHasNoSecrets, resolveEnvValue } from "./env-secret-scan";
-import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
+import { withErrorDiagnostics } from "./error-diagnostics";
 import { installCliTailordbStub } from "./mock";
 import { currentImportNonce, IMPORT_NONCE_PARAM } from "./user-modules";
-import { configInvalidError, syntaxInvalidError } from "./validation-errors";
+import { atUserModule, configInvalidError, syntaxInvalidError } from "./validation-errors";
 import type { AppConfig, EnvValue } from "#/configure/config/types";
 import type { Plugin } from "#/plugin/types";
 
@@ -104,7 +104,7 @@ export async function loadConfig(
     if (!Array.isArray(pluginsExport)) {
       throw atConfigFile(
         new Error(
-          `Invalid \`plugins\` export in ${resolvedPath}: expected an array returned by definePlugins(), got ${typeof pluginsExport}`,
+          `Invalid \`plugins\` export: expected an array returned by definePlugins(), got ${typeof pluginsExport}`,
         ),
         resolvedPath,
       );
@@ -124,7 +124,7 @@ export async function loadConfig(
       if (seenIds.has(result.data.id)) {
         throw atConfigFile(
           new Error(
-            `Duplicate plugin ID "${result.data.id}" detected in ${resolvedPath}. Each plugin must have a unique ID.`,
+            `Duplicate plugin ID "${result.data.id}" detected. Each plugin must have a unique ID.`,
           ),
           resolvedPath,
         );
@@ -161,14 +161,11 @@ function atConfigFile<T extends Error>(error: T, resolvedPath: string): T {
  * Unparsable source names the file it was found in, which is the imported
  * module rather than the config when the config imports it. Anything else is
  * attributed to the config file, the one location loading it establishes, and
- * a failure that already names its own source keeps it.
+ * a failure that already carries a source location keeps it.
  * @param error - Value thrown while importing the config
  * @param resolvedPath - Absolute path to the config file
  * @returns An Error carrying the source location the failure points at
  */
 export function atConfigSource(error: unknown, resolvedPath: string): unknown {
-  const syntaxError = syntaxInvalidError(error);
-  if (syntaxError) return syntaxError;
-  if (!(error instanceof Error)) return error;
-  return getErrorDiagnostics(error).location ? error : atConfigFile(error, resolvedPath);
+  return syntaxInvalidError(error) ?? atUserModule(error, resolvedPath);
 }

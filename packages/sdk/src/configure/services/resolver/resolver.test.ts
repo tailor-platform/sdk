@@ -504,6 +504,73 @@ describe("createResolver", () => {
       expect(permission).toBe("allowAnonymous");
     });
 
+    test("creates resolver whose permission binds an input field to the caller", () => {
+      const resolver = createResolver({
+        name: "cancelAttendance",
+        operation: "mutation",
+        input: {
+          employeeId: t.string(),
+          requestId: t.uuid({ optional: true }),
+          kind: t.enum(["IN", "OUT"]),
+          count: t.int(),
+          tags: t.string({ array: true }),
+        },
+        output: t.bool(),
+        body: (context) => {
+          expectTypeOf(context.input.employeeId).toEqualTypeOf<string>();
+          return true;
+        },
+        permission: [
+          { conditions: [[{ input: "employeeId" }, "=", { user: "id" }]], permit: true },
+          { conditions: [[{ user: "id" }, "=", { input: "requestId" }]], permit: true },
+          { conditions: [[{ input: "kind" }, "=", { user: "id" }]], permit: true },
+          // @ts-expect-error -- `employeId` is not an input field
+          { conditions: [[{ input: "employeId" }, "=", { user: "id" }]], permit: true },
+          // @ts-expect-error -- an integer field cannot be compared
+          { conditions: [[{ input: "count" }, "=", { user: "id" }]], permit: true },
+          // @ts-expect-error -- an array field cannot be compared
+          { conditions: [[{ input: "tags" }, "=", { user: "id" }]], permit: true },
+          // @ts-expect-error -- `_loggedIn` is a boolean
+          { conditions: [[{ input: "employeeId" }, "=", { user: "_loggedIn" }]], permit: true },
+          // @ts-expect-error -- an input operand must be compared to a `user` operand
+          { conditions: [[{ input: "employeeId" }, "=", "u1"]], permit: true },
+          // @ts-expect-error -- an input operand can only be compared with `=`
+          { conditions: [[{ input: "employeeId" }, "!=", { user: "id" }]], permit: true },
+          // @ts-expect-error -- an input operand is only allowed in a `permit: true` policy
+          { conditions: [[{ input: "employeeId" }, "=", { user: "id" }]], permit: false },
+        ],
+      });
+
+      expect(resolver.permission?.[0]).toEqual({
+        conditions: [[{ input: "employeeId" }, "=", { user: "id" }]],
+        permit: true,
+      });
+    });
+
+    test("ResolverPermission without an input type rejects input operands", () => {
+      const permission: ResolverPermission = [
+        // @ts-expect-error -- no input to reference
+        { conditions: [[{ input: "employeeId" }, "=", { user: "id" }]], permit: true },
+      ];
+      expect(permission).toHaveLength(1);
+    });
+
+    test("accepts a ResolverPermission variable on a resolver with input", () => {
+      const shared: ResolverPermission = [
+        { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
+      ];
+      const resolver = createResolver({
+        name: "sharedPermission",
+        operation: "query",
+        input: { x: t.string() },
+        output: t.bool(),
+        body: () => true,
+        permission: shared,
+      });
+
+      expect(resolver.permission).toBe(shared);
+    });
+
     test("creates minimal resolver without optional fields", () => {
       const outputType = t.object({ result: t.string() });
 
@@ -628,6 +695,7 @@ describe("createResolver", () => {
         input: { id: t.string() },
         output: t.object({ result: t.string() }),
         body: (context) => ({ result: context.input.id }),
+        permission: [{ conditions: [[{ input: "id" }, "=", { user: "id" }]], permit: true }],
       });
 
       expectTypeOf(resolver).toExtend<ResolverInput>();

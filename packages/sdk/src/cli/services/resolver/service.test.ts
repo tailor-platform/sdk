@@ -73,10 +73,13 @@ export default resolver;
     await expect(service.loadResolvers()).rejects.toMatchObject({
       code: "DEFINITION_INVALID",
       message: expect.stringMatching(
-        /^Invalid resolver in .*invalid\.ts:\n {2}- operation: Invalid input: expected "query" \| "mutation"$/,
+        /^Invalid resolver:\n {2}- operation: Invalid input: expected "query" \| "mutation"$/,
       ),
       context: { kind: "resolver", file, exportName: "default", issues: [{ path: ["operation"] }] },
     });
+    expect(vi.mocked(logger.error).mock.calls).toEqual([
+      [expect.stringMatching(/Failed to load resolver from .*invalid\.ts/)],
+    ]);
   });
 
   test("rejects two files in the same namespace declaring the same resolver name", async () => {
@@ -138,6 +141,106 @@ export default resolver;
         process.cwd(),
       ),
     ).toThrow(/Invalid `defaultPermission` for resolver namespace "ns".*permit: true/s);
+  });
+
+  test("rejects a defaultPermission that references input, naming the namespace", () => {
+    expect(() =>
+      createResolverService(
+        "ns",
+        {
+          files: [],
+          defaultPermission: [
+            { conditions: [[{ input: "employeeId" }, "=", { user: "id" }]], permit: true },
+          ] as never,
+        },
+        process.cwd(),
+      ),
+    ).toThrow(
+      'Invalid `defaultPermission` for resolver namespace "ns": `defaultPermission` cannot use an `input` operand, since a namespace has no input; declare it in each resolver\'s own `permission`',
+    );
+  });
+
+  test.each([
+    [
+      "an input operand compared to a string",
+      '[{ conditions: [[{ input: "employeeId" }, "=", "u1"]], permit: true }]',
+      ["permission", 0, "conditions", 0],
+      "An `input` operand must be compared to a `user` operand",
+    ],
+    [
+      "an input operand compared with !=",
+      '[{ conditions: [[{ input: "employeeId" }, "!=", { user: "id" }]], permit: true }]',
+      ["permission", 0, "conditions", 0],
+      "An `input` operand can only be compared with `=`, since a caller can send the same ID spelled differently to pass a `!=` check",
+    ],
+    [
+      "an input operand in a permit: false policy",
+      '[{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }, { conditions: [[{ input: "employeeId" }, "=", { user: "id" }]], permit: false }]',
+      ["permission", 1, "conditions"],
+      "An `input` operand can only be used in a `permit: true` policy, since a condition on an omitted input never matches and so would never deny",
+    ],
+    [
+      "an input operand naming an integer field",
+      '[{ conditions: [[{ input: "count" }, "=", { user: "id" }]], permit: true }]',
+      ["permission", 0, "conditions", 0, 0],
+      "`permission` compares input field `count`, but only a string, uuid, or enum field that is not an array can be compared",
+    ],
+  ])("reports %s as DEFINITION_INVALID", async (_, permission, path, message) => {
+    const file = writeResolver(
+      "invalid-input-operand.ts",
+      `
+import { createResolver, t } from "@tailor-platform/sdk";
+export default createResolver({
+  name: "invalidInputOperand",
+  operation: "mutation",
+  input: { employeeId: t.string(), count: t.int() },
+  permission: ${permission},
+  body: () => 1,
+  output: t.int(),
+});
+`,
+    );
+
+    const service = createResolverService("ns", { files: [file] }, process.cwd());
+    using _logger = silenceLogger("error");
+    await expect(service.loadResolvers()).rejects.toMatchObject({
+      code: "DEFINITION_INVALID",
+      context: { issues: [{ path, message }] },
+    });
+  });
+
+  test("reports a permission input operand that names no declared input as DEFINITION_INVALID", async () => {
+    const file = writeResolver(
+      "unknown-input.ts",
+      `
+import { createResolver, t } from "@tailor-platform/sdk";
+export default createResolver({
+  name: "unknownInput",
+  operation: "mutation",
+  input: { employeeId: t.string() },
+  permission: [{ conditions: [[{ input: "employeId" }, "=", { user: "id" }]], permit: true }],
+  body: () => 1,
+  output: t.int(),
+});
+`,
+    );
+
+    const service = createResolverService("ns", { files: [file] }, process.cwd());
+    using _logger = silenceLogger("error");
+    await expect(service.loadResolvers()).rejects.toMatchObject({
+      code: "DEFINITION_INVALID",
+      context: {
+        kind: "resolver",
+        file,
+        issues: [
+          {
+            path: ["permission", 0, "conditions", 0, 0],
+            message:
+              "`permission` references input field `employeId`, which `input` does not declare",
+          },
+        ],
+      },
+    });
   });
 
   describe("undeclared permission warning", () => {

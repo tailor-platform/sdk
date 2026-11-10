@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk-plugin-seed",
-  "version": "0.7.3",
+  "version": "0.8.0",
   "description": "Tailor CLI plugin providing the `tailor seed` commands (TailorDB and IdP seed data)",
   "license": "MIT",
   "repository": {
@@ -18,6 +18,12 @@
     "README.md"
   ],
   "type": "module",
+  "exports": {
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "default": "./dist/schema.js"
+    }
+  },
   "scripts": {
     "build": "tsdown && politty generate-shim --entry ../dist/index.js",
     "lint": "oxlint --type-aware .",
@@ -29,7 +35,8 @@
     "publint": "publint --strict"
   },
   "dependencies": {
-    "@politty/zod": "0.6.3",
+    "@politty/zod": "0.7.2",
+    "lines-db": "0.18.1",
     "pathe": "2.0.3",
     "pkg-types": "2.4.0",
     "zod": "4.6.7"
@@ -38,10 +45,10 @@
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "26.6.6",
     "oxlint": "1.90.0",
-    "oxlint-tsgolint": "7.0.2005",
+    "oxlint-tsgolint": "7.0.2006",
     "tsdown": "0.23.2",
     "typescript": "6.0.3",
-    "vitest": "5.0.5"
+    "vitest": "5.1.0"
   },
   "peerDependencies": {
     "@tailor-platform/sdk": "workspace:^"

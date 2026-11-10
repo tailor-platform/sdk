@@ -1106,7 +1106,7 @@ export type TailorDBTypeRaw = {
 };
 
 export type TailorDBServiceConfigInput = {
-  /** Glob patterns for TailorDB table definition files */
+  /** Glob patterns for TailorDB table definition files. A pattern starting with `!` excludes the files it matches; for each file, the last matching pattern decides. */
   files: string[];
   /** Glob patterns to exclude from table discovery */
   ignores?: string[] | undefined;
@@ -1140,7 +1140,7 @@ export type TailorDBServiceConfigInput = {
 };
 
 export type TailorDBServiceConfig = {
-  /** Glob patterns for TailorDB table definition files */
+  /** Glob patterns for TailorDB table definition files. A pattern starting with `!` excludes the files it matches; for each file, the last matching pattern decides. */
   files: string[];
   /** Glob patterns to exclude from table discovery */
   ignores?: string[] | undefined;

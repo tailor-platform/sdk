@@ -1,5 +1,6 @@
 import { logger } from "@tailor-platform/sdk/cli";
 import { setupAutofix, type AutofixSetupOptions } from "./autofix";
+import { locatedMessage } from "./error-message";
 import { setupTarget, type SetupTargetOptions } from "./generate";
 import {
   AUTOFIX_LABEL,
@@ -12,8 +13,8 @@ import {
 } from "./lock";
 import {
   isAutofixCodemod,
+  isCopilotAuth,
   isPackageManager,
-  type AutofixCodemod,
   type PackageManager,
   type PreviewRequirement,
 } from "./templates";
@@ -40,15 +41,23 @@ function recordedPackageManagerUnlessDetected(
   return inputs.packageManager;
 }
 
-function recordedCodemod(inputs: LockAutofix["inputs"]): AutofixCodemod | undefined {
-  const { codemod } = inputs;
+function recordedCodemod(
+  inputs: LockAutofix["inputs"],
+): Pick<AutofixSetupOptions, "codemod" | "copilotAuth"> {
+  const { codemod, copilotAuth } = inputs;
   if (codemod !== undefined && !isAutofixCodemod(codemod)) {
     throw new Error(
       `.github/tailor.lock records the unsupported codemod mode ${JSON.stringify(codemod)}. ` +
         "Re-run `tailor setup ci autofix` with --codemod.",
     );
   }
-  return codemod;
+  if (copilotAuth !== undefined && !isCopilotAuth(copilotAuth)) {
+    throw new Error(
+      `.github/tailor.lock records the unsupported Copilot auth ${JSON.stringify(copilotAuth)}. ` +
+        "Re-run `tailor setup ci autofix` with --copilot-auth.",
+    );
+  }
+  return { codemod, copilotAuth };
 }
 
 /**
@@ -128,7 +137,7 @@ function planAutofixUpdate(autofix: LockAutofix, common: UpdateCommon): AutofixS
   return {
     provider,
     securefixServerRepository,
-    codemod: recordedCodemod(autofix.inputs),
+    ...recordedCodemod(autofix.inputs),
     dir: dirs,
     packageManager: recordedPackageManagerUnlessDetected(autofix.inputs),
     ...common,
@@ -154,7 +163,7 @@ function failureSummary(error: unknown): string {
   const labelled = (label: string, value: unknown) =>
     typeof value === "string" && value.length > 0 ? [`${label}: ${value}`] : [];
   return [
-    error.message,
+    locatedMessage(error),
     ...labelled("Details", details),
     ...labelled("Suggestion", suggestion),
   ].join("\n");

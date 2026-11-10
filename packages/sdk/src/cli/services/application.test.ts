@@ -193,7 +193,7 @@ describe("service config validation", () => {
       name: "CLIError",
       code: "CONFIG_INVALID",
       message:
-        'Invalid config for Auth service "my-auth" in tailor.config.ts:\n' +
+        'Invalid config for Auth service "my-auth":\n' +
         "  - auth.machineUserAttributes.role.metadata: Invalid input: expected object, received undefined\n" +
         "  - auth.machineUserAttributes.role.fields: Invalid input: expected record, received undefined",
       context: {
@@ -216,20 +216,43 @@ describe("service config validation", () => {
     expect(getErrorDiagnostics(error as Error).location).toEqual({ file: "tailor.config.ts" });
   });
 
-  test("names an OAuth2 client whose name the platform rejects", () => {
-    const error = defineInvalidApplication({
-      auth: defineAuth("my-auth", {
-        machineUserAttributes: {},
-        oauth2Clients: { c1: { redirectURIs: ["https://example.com/callback"] } },
-      }),
-    });
+  test.each([
+    {
+      label: "an OAuth2 client name",
+      serviceConfig: {
+        auth: defineAuth("my-auth", {
+          machineUserAttributes: {},
+          oauth2Clients: { c1: { redirectURIs: ["https://example.com/callback"] } },
+        }),
+      },
+      path: ["auth", "oauth2Clients", "c1"],
+    },
+    {
+      label: "a secret manager vault name",
+      serviceConfig: { secrets: defineSecretManager({ My_Vault: { key: "value" } }) },
+      path: ["secrets", "vaults", "My_Vault"],
+    },
+    {
+      label: "a secret manager secret name",
+      serviceConfig: { secrets: defineSecretManager({ "my-vault": { My_Key: "value" } }) },
+      path: ["secrets", "vaults", "my-vault", "My_Key"],
+    },
+    {
+      label: "an AI Gateway authNamespace",
+      serviceConfig: {
+        aiGateways: [defineAIGateway("my-gateway", { authNamespace: "My_Auth" })],
+      },
+      path: ["aiGateways", 0, "authNamespace"],
+    },
+  ])("names $label the platform rejects", ({ serviceConfig, path }) => {
+    const error = defineInvalidApplication(serviceConfig);
 
     expect(error).toMatchObject({
       code: "CONFIG_INVALID",
       context: {
         issues: [
           {
-            path: ["auth", "oauth2Clients", "c1"],
+            path,
             message:
               "must be 3-63 lowercase letters, digits, or hyphens, starting and ending with a letter or digit",
           },
@@ -369,7 +392,7 @@ describe("service config validation", () => {
     "reports an invalid $configKey config as CONFIG_INVALID",
     ({ serviceConfig, heading, configKey, name, path }) => {
       const error = defineInvalidApplication(serviceConfig) as Error;
-      const expectedStart = `Invalid config for ${heading} in tailor.config.ts:\n  - ${path.join(".")}: `;
+      const expectedStart = `Invalid config for ${heading}:\n  - ${path.join(".")}: `;
 
       expect(error.message.slice(0, expectedStart.length)).toBe(expectedStart);
       expect(error).toMatchObject({

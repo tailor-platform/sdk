@@ -32,8 +32,13 @@ interface OptionalMemberExpressionNode {
 export type AstNode = EstreeNode | ExpressionWrapperNode | OptionalMemberExpressionNode;
 export type AstArrayExpression = Extract<EstreeNode, { type: "ArrayExpression" }>;
 export type AstCallExpression = Extract<EstreeNode, { type: "CallExpression" }>;
+export type AstFunctionExpression = Extract<
+  EstreeNode,
+  { type: "ArrowFunctionExpression" | "FunctionExpression" }
+>;
 export type AstIdentifier = Extract<EstreeNode, { type: "Identifier" }>;
 export type AstImportDeclaration = Extract<EstreeNode, { type: "ImportDeclaration" }>;
+export type AstMethodDefinition = Extract<EstreeNode, { type: "MethodDefinition" }>;
 export type AstProperty = Extract<EstreeNode, { type: "Property" }>;
 
 const EXPRESSION_WRAPPERS: ReadonlySet<string> = new Set(EXPRESSION_WRAPPER_TYPES);
@@ -49,6 +54,22 @@ export function unwrapExpression(node: AstNode | null | undefined): AstNode | nu
     current = (current as ExpressionWrapperNode).expression;
   }
   return current;
+}
+
+/** The outermost wrapper around an expression, whose parent uses the expression's value. */
+export function outermostWrapper(node: AstNode): AstNode {
+  let current = node;
+  for (let parent = parentOf(current); parent !== null; parent = parentOf(current)) {
+    if (parent.type !== "ChainExpression" && !EXPRESSION_WRAPPERS.has(parent.type)) break;
+    current = parent;
+  }
+  return current;
+}
+
+export function isFunctionExpression(
+  node: AstNode | null | undefined,
+): node is AstFunctionExpression {
+  return node?.type === "ArrowFunctionExpression" || node?.type === "FunctionExpression";
 }
 
 function nodeType(node: AstNode | null | undefined): string | undefined {
@@ -157,6 +178,11 @@ export function staticString(node: AstNode | null | undefined): string | null {
   return null;
 }
 
+export function staticBoolean(node: AstNode | null | undefined): boolean | null {
+  const value = unwrapExpression(node);
+  return value?.type === "Literal" && typeof value.value === "boolean" ? value.value : null;
+}
+
 /** The object's properties when every one is a plain, non-computed property; null otherwise. */
 export function literalProperties(node: AstNode | null | undefined): AstProperty[] | null {
   const value = unwrapExpression(node);
@@ -197,7 +223,7 @@ export function literalProperty(
   return namedProperty(literalProperties(node), name);
 }
 
-export function propertyName(property: AstProperty): string | null {
+export function propertyName(property: AstProperty | AstMethodDefinition): string | null {
   if (property.computed) return null;
   if (property.key.type === "Identifier") return property.key.name;
   return property.key.type === "Literal" && typeof property.key.value === "string"

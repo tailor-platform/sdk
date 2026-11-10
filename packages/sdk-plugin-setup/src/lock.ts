@@ -133,6 +133,8 @@ export type LockAutofix = ManagedWorkflow & {
     securefixServerRepository?: string;
     /** `--codemod`, recorded when passed. */
     codemod?: string;
+    /** For `--codemod copilot`: `--copilot-auth`. */
+    copilotAuth?: string;
   };
 };
 

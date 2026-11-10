@@ -416,6 +416,21 @@ const invalidCases: Case<RegExp>[] = [
     },
     expected: /3 validation error\(s\) found in 3 resource\(s\)/,
   },
+  {
+    name: "(l4) IdP service with allowedReturnOrigins :url placeholder using an invalid slug is rejected",
+    mutate: (input) => {
+      input.idp.changeSet.service.creates.push({
+        name: "my-idp",
+        request: {
+          workspaceId: WS_ID,
+          namespaceName: "my-idp",
+          userAuthPolicy: { enableMfa: true, allowedReturnOrigins: ["My_Frontend:url"] },
+        },
+        metaRequest: METADATA,
+      });
+    },
+    expected: /1 validation error\(s\) found in 1 resource\(s\)/,
+  },
 ];
 
 describe("validatePlan", () => {

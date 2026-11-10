@@ -15,6 +15,7 @@ import { defineConfig } from "#/configure/config/index";
 import { t } from "#/configure/types/type";
 import { PluginManager } from "#/plugin/manager";
 import { defineApplication, loadApplication } from "./application";
+import { PluginResolverSchema } from "./resolver/plugin-resolvers";
 import type { OperatorClient } from "#/cli/shared/client";
 
 describe("plugin-generated resolvers", () => {
@@ -54,7 +55,7 @@ describe("plugin-generated resolvers", () => {
         {
           id: "greeting",
           description: "Generate a greeting query",
-          onNamespaceLoaded: () => ({
+          onTailorDBNamespaceLoaded: () => ({
             resolvers: [
               {
                 name: "greet",
@@ -173,7 +174,7 @@ describe("plugin-generated resolvers", () => {
       {
         id: "greeting",
         description: "Query",
-        onNamespaceLoaded: () => ({
+        onTailorDBNamespaceLoaded: () => ({
           resolvers: [{ name: "greet", operation: "query", outputFields: {}, body: "return {};" }],
         }),
       },
@@ -198,7 +199,7 @@ describe("plugin-generated resolvers", () => {
       {
         id: "greeting",
         description: "Query",
-        onNamespaceLoaded: () => ({
+        onTailorDBNamespaceLoaded: () => ({
           resolvers: [{ name: "greet", operation: "query", outputFields: {}, body: "return {};" }],
         }),
       },
@@ -218,7 +219,7 @@ describe("plugin-generated resolvers", () => {
         {
           id: "greeting",
           description: "Query",
-          onNamespaceLoaded: () => ({
+          onTailorDBNamespaceLoaded: () => ({
             resolvers: [
               { name: "greet", operation: "query", outputFields: {}, body: "return {};" },
             ],
@@ -247,7 +248,7 @@ describe("plugin-generated resolvers", () => {
       {
         id: "greeting",
         description: "Query",
-        onNamespaceLoaded: () => ({
+        onTailorDBNamespaceLoaded: () => ({
           resolvers: [{ name: "greet", operation: "query", outputFields: {}, body: "return {};" }],
         }),
       },
@@ -310,7 +311,7 @@ describe("plugin-generated resolvers", () => {
       {
         id: "greeting",
         description: "Query",
-        onNamespaceLoaded: () => ({ resolvers: [resolver] }),
+        onTailorDBNamespaceLoaded: () => ({ resolvers: [resolver] }),
       },
     ]);
     await loadApplication({ config, pluginManager: firstManager });
@@ -328,7 +329,7 @@ describe("plugin-generated resolvers", () => {
       {
         id: "dates",
         description: "Date query",
-        onNamespaceLoaded: () => ({
+        onTailorDBNamespaceLoaded: () => ({
           resolvers: [
             {
               name: "day",
@@ -385,7 +386,7 @@ describe("plugin-generated resolvers", () => {
       {
         id: "closure",
         description: "Captured validator",
-        onNamespaceLoaded: () => ({
+        onTailorDBNamespaceLoaded: () => ({
           resolvers: [
             {
               name: "greet",
@@ -416,7 +417,7 @@ describe("plugin-generated resolvers", () => {
       {
         id: "queries",
         description: "Namespace query",
-        onNamespaceLoaded: ({ namespace }) => ({
+        onTailorDBNamespaceLoaded: ({ namespace }) => ({
           resolvers: [
             {
               name: "namespace",
@@ -450,7 +451,7 @@ describe("plugin-generated resolvers", () => {
       {
         id: "queries",
         description: "First application",
-        onNamespaceLoaded: () => ({
+        onTailorDBNamespaceLoaded: () => ({
           resolvers: [
             {
               name: "value",
@@ -466,7 +467,7 @@ describe("plugin-generated resolvers", () => {
       {
         id: "queries",
         description: "Second application",
-        onNamespaceLoaded: () => ({
+        onTailorDBNamespaceLoaded: () => ({
           resolvers: [
             {
               name: "value",
@@ -503,7 +504,7 @@ describe("plugin-generated resolvers", () => {
         {
           id: "greeting",
           description: "Query",
-          onNamespaceLoaded: () => ({
+          onTailorDBNamespaceLoaded: () => ({
             resolvers: [
               { name: "greet", operation: "query", outputFields: {}, body: "return {};" },
             ],
@@ -551,7 +552,7 @@ describe("plugin-generated resolvers", () => {
         {
           id: "broken",
           description: "Invalid query",
-          onNamespaceLoaded: () => ({
+          onTailorDBNamespaceLoaded: () => ({
             resolvers: [
               {
                 name: "brokenQuery",
@@ -598,7 +599,7 @@ describe("plugin-generated resolvers", () => {
         {
           id: "queries",
           description: "Duplicate query",
-          onNamespaceLoaded: () => ({
+          onTailorDBNamespaceLoaded: () => ({
             resolvers: source === "generated" ? [definition, definition] : [definition],
           }),
         },
@@ -624,7 +625,7 @@ describe("plugin-generated resolvers", () => {
       {
         id: "queries",
         description: "Query",
-        onNamespaceLoaded: () => ({
+        onTailorDBNamespaceLoaded: () => ({
           resolvers: [
             {
               name: "query",
@@ -655,5 +656,20 @@ describe("plugin-generated resolvers", () => {
     await expect(
       createGenerationManager({ application, config, pluginManager }).generate(),
     ).rejects.toMatchObject({ code: "PLUGIN_RESOLVER_NAMESPACE_EXTERNAL" });
+  });
+});
+
+describe("PluginResolverSchema", () => {
+  test("rejects an input operand naming an undeclared input field", () => {
+    const result = PluginResolverSchema.safeParse({
+      operation: "query",
+      name: "getUser",
+      body: "return true;",
+      output: { type: "boolean", fields: {}, metadata: {} },
+      permission: [{ conditions: [[{ input: "ghost" }, "=", { user: "id" }]], permit: true }],
+    });
+    expect(result.error?.issues.map((issue) => issue.message)).toContain(
+      "`permission` references input field `ghost`, which `input` does not declare",
+    );
   });
 });

@@ -249,8 +249,8 @@ export async function addMigrationScriptFiles(
     }
   }
 
-  // The schema state immediately before this migration types db.ts and shapes
-  // db.pglite.ts. Resolved before anything is written so a broken history
+  // db.ts and db.pglite.ts are built from the schema state immediately before
+  // this migration. Resolved before anything is written so a broken history
   // leaves no half-created migration behind.
   const needsPreviousSnapshot = !migrateExists || (withTest && !fs.existsSync(pgliteSchemaPath));
   const previousSnapshot = needsPreviousSnapshot

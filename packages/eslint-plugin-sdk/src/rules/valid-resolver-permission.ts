@@ -5,8 +5,13 @@ import {
   literalProperties,
   literalProperty,
   staticString,
-  unwrapExpression,
 } from "../lib/ast.js";
+import {
+  type ConditionTuple,
+  conditionTuples,
+  operand,
+  policyPermit,
+} from "../lib/resolver-permission.js";
 import { configureImportTracker, resolveValue } from "../lib/sdk-bindings.js";
 import type { Rule } from "eslint";
 
@@ -17,84 +22,63 @@ const KNOWN_USER_OPERAND_TYPES: Record<string, "string" | "boolean"> = {
   id: "string",
 };
 
-const OPERATORS = new Set(["=", "!="]);
-
-type Operand =
-  | { kind: "user"; key: string | null }
-  | { kind: "string" | "boolean" | "invalid" }
-  | { kind: "unknown" };
-
-function operand(context: Rule.RuleContext, node: AstNode): Operand {
-  const value = unwrapExpression(resolveValue(context, node));
-  if (value?.type === "Literal" && typeof value.value === "string") return { kind: "string" };
-  if (value?.type === "Literal" && typeof value.value === "boolean") return { kind: "boolean" };
-  if (value?.type === "Literal") return { kind: "invalid" };
-  if (literalProperties(value) === null) return { kind: "unknown" };
-  const user = literalProperty(value, "user");
-  if (user === null) return { kind: "invalid" };
-  return { kind: "user", key: staticString(resolveValue(context, user.value)) };
-}
-
-function isConditionTuple(context: Rule.RuleContext, elements: readonly AstNode[]): boolean {
-  const operator = elements[1];
-  return (
-    elements.length === 3 &&
-    operator !== undefined &&
-    OPERATORS.has(staticString(resolveValue(context, operator)) ?? "")
+function hasInputOperand(context: Rule.RuleContext, tuple: ConditionTuple): boolean {
+  return [tuple.elements[0], tuple.elements[2]].some(
+    (side) => side !== undefined && operand(context, side).kind === "input",
   );
 }
 
-function checkCondition(
-  context: Rule.RuleContext,
-  tuple: AstNode,
-  elements: readonly AstNode[],
-): void {
-  const [left, , right] = elements;
-  if (left === undefined || right === undefined) return;
+function checkCondition(context: Rule.RuleContext, tuple: ConditionTuple): void {
+  const [left, operator, right] = tuple.elements;
+  if (left === undefined || operator === undefined || right === undefined) return;
   const operands = [operand(context, left), operand(context, right)];
   if (operands.some((entry) => entry.kind === "unknown")) return;
   const user = operands.find((entry) => entry.kind === "user");
   const other = operands.find((entry) => entry.kind !== "user");
+  const hasInput = operands.some((entry) => entry.kind === "input");
+  if (user === undefined && hasInput) {
+    context.report({ node: tuple.node, messageId: "inputOperandSide" });
+    return;
+  }
+  if (hasInput && staticString(resolveValue(context, operator)) !== "=") {
+    context.report({ node: tuple.node, messageId: "inputOperandOperator" });
+    return;
+  }
   if (user?.kind !== "user" || other === undefined) {
-    context.report({ node: tuple, messageId: "userOperandSide" });
+    context.report({ node: tuple.node, messageId: "userOperandSide" });
     return;
   }
   if (other.kind === "invalid") {
-    context.report({ node: tuple, messageId: "operandValue" });
+    context.report({ node: tuple.node, messageId: "operandValue" });
     return;
   }
   const expected = user.key === null ? undefined : KNOWN_USER_OPERAND_TYPES[user.key];
-  if (expected !== undefined && other.kind !== expected) {
+  const otherType = other.kind === "input" ? "string" : other.kind;
+  if (expected !== undefined && otherType !== expected) {
     context.report({
-      node: tuple,
+      node: tuple.node,
       messageId: "operandType",
       data: { key: user.key ?? "", expected },
     });
   }
 }
 
-function checkConditions(context: Rule.RuleContext, node: AstNode): void {
+function checkConditions(context: Rule.RuleContext, node: AstNode): ConditionTuple[] {
   const value = resolveValue(context, node);
   const elements = literalElements(value);
-  if (value === null || value === undefined || elements === null) return;
-  if (isConditionTuple(context, elements)) {
-    checkCondition(context, value, elements);
-    return;
-  }
+  if (value === null || value === undefined || elements === null) return [];
   if (elements.length === 0) {
     context.report({ node: value, messageId: "emptyConditions" });
-    return;
+    return [];
   }
-  for (const element of elements) {
-    const tuple = resolveValue(context, element);
-    const tupleElements = literalElements(tuple);
-    if (tuple && tupleElements !== null && isConditionTuple(context, tupleElements)) {
-      checkCondition(context, tuple, tupleElements);
-    }
-  }
+  const { tuples } = conditionTuples(context, value, elements);
+  for (const tuple of tuples) checkCondition(context, tuple);
+  return tuples;
 }
 
-function checkPermission(context: Rule.RuleContext, node: AstNode): void {
+type PermissionScope = "resolver" | "namespace";
+
+function checkPermission(context: Rule.RuleContext, node: AstNode, scope: PermissionScope): void {
   const value = resolveValue(context, node);
   if (value === null || value === undefined || staticString(value) === "allowAnonymous") return;
   const policies = literalElements(value);
@@ -111,16 +95,22 @@ function checkPermission(context: Rule.RuleContext, node: AstNode): void {
       permitKnown = false;
       continue;
     }
-    const permit = unwrapExpression(
-      resolveValue(context, literalProperty(policy, "permit")?.value),
-    );
-    if (permit?.type === "Literal" && typeof permit.value === "boolean") {
-      permits ||= permit.value;
-    } else {
+    const permitValue = policyPermit(context, policy);
+    if (permitValue === null) {
       permitKnown = false;
+    } else {
+      permits ||= permitValue;
     }
     const conditions = literalProperty(policy, "conditions");
-    if (conditions !== null) checkConditions(context, conditions.value);
+    if (conditions === null) continue;
+    const tuples = checkConditions(context, conditions.value);
+    if (tuples.some((tuple) => hasInputOperand(context, tuple))) {
+      if (scope === "namespace") {
+        context.report({ node: conditions.value, messageId: "inputOperandInDefault" });
+      } else if (permitValue === false) {
+        context.report({ node: conditions.value, messageId: "inputOperandInDeny" });
+      }
+    }
   }
   if (permitKnown && !permits) context.report({ node: value, messageId: "noPermitPolicy" });
 }
@@ -150,7 +140,12 @@ const rule = {
       userOperandSide:
         "Resolver permission condition must reference a `user` operand on exactly one side (comparing two `user` operands to each other can match on `undefined === undefined`).",
       operandType: "`{{key}}` must compare to a {{expected}}.",
-      operandValue: "A `user` operand must compare to a string or a boolean.",
+      operandValue: "A `user` operand must compare to a string, a boolean, or an `input` operand.",
+      inputOperandSide: "An `input` operand must be compared to a `user` operand.",
+      inputOperandOperator: "An `input` operand can only be compared with `=`.",
+      inputOperandInDeny: "An `input` operand can only be used in a `permit: true` policy.",
+      inputOperandInDefault:
+        "`defaultPermission` cannot use an `input` operand, since a namespace has no input.",
     },
     schema: [],
   },
@@ -169,10 +164,10 @@ const rule = {
               resolveValue(context, call.arguments[0]),
               "permission",
             );
-            if (permission !== null) checkPermission(context, permission.value);
+            if (permission !== null) checkPermission(context, permission.value, "resolver");
           } else if (name === "defineConfig") {
             for (const permission of defaultPermissions(context, call)) {
-              checkPermission(context, permission);
+              checkPermission(context, permission, "namespace");
             }
           }
         }

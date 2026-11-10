@@ -32,24 +32,24 @@
   },
   "devDependencies": {
     "@bufbuild/protobuf": "2.16.0",
-    "@connectrpc/connect": "2.2.0",
-    "@connectrpc/connect-node": "2.2.0",
-    "@electric-sql/pglite": "0.5.14",
+    "@connectrpc/connect": "2.3.0",
+    "@connectrpc/connect-node": "2.3.0",
+    "@electric-sql/pglite": "0.5.15",
     "@tailor-platform/sdk-plugin-seed": "workspace:^",
     "@tailor-platform/sdk-plugin-tailordb-erd": "workspace:^",
     "@types/node": "26.6.6",
     "eslint-plugin-zod": "5.2.2",
-    "graphql": "17.0.2",
+    "graphql": "17.1.0",
     "graphql-request": "7.4.0",
     "multiline-ts": "4.0.1",
     "oxfmt": "0.75.0",
     "oxlint": "1.90.0",
-    "oxlint-tsgolint": "7.0.2005",
+    "oxlint-tsgolint": "7.0.2006",
     "tsdown": "0.23.2",
     "tsrs": "0.16.0-ts7.1.0-dev.20260929",
     "tsx": "4.23.15",
     "typescript": "6.0.3",
-    "vitest": "5.0.5"
+    "vitest": "5.1.0"
   },
   "engines": {
     "node": ">= 22.18.0"

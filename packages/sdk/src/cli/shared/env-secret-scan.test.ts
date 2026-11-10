@@ -218,7 +218,7 @@ describe("assertEnvHasNoSecrets", () => {
     expect(warnSpy.mock.calls[0]?.[0]).toContain("env.LEGACY_TOKEN");
   });
 
-  test("names the config the entries came from", async () => {
+  test("leaves the config the entries came from to the caller", async () => {
     const error = await captureFailure(
       assertEnvHasNoSecrets({
         env: { SLACK_BOT_TOKEN: SLACK_TOKEN },
@@ -226,7 +226,7 @@ describe("assertEnvHasNoSecrets", () => {
       }),
     );
 
-    expect(error.message).toContain("Secret detected in 'env' in /project/tailor.config.ts");
+    expect(error.message).toMatch(/^Secret detected in 'env':\n/);
   });
 
   test("warns once when the same entries are scanned repeatedly", async () => {

@@ -354,7 +354,7 @@ export default function(input) {
 
       expect(outcome).toEqual({
         code: "SYNTAX_INVALID",
-        message: "Invalid syntax in broken.ts:1: Expression expected",
+        message: "Invalid syntax: Expression expected",
       });
     });
   });

@@ -110,6 +110,7 @@ Demonstrates executor triggers with supporting infrastructure.
 **Includes:**
 
 - Record created, updated, and deleted, resolver executed, schedule, and incoming webhook triggers
+- Incoming webhook signature verification with a signing secret from Secret Manager
 - IdP user created, updated, and deleted triggers
 - Auth access token issued, refreshed, and revoked triggers
 - `function` and `workflow` operation kinds

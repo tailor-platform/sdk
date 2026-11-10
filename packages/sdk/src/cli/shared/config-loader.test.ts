@@ -113,6 +113,7 @@ describe("loadConfig", () => {
       const error = await rejectionOf(loadConfig(configPath));
 
       expect(error.message).toMatch(message);
+      expect(error.message).not.toContain("tailor.config");
       expect(getErrorDiagnostics(error).location).toEqual({ file: configPath });
     },
   );
@@ -124,7 +125,7 @@ describe("loadConfig", () => {
 
     expect(error).toMatchObject({
       code: "CONFIG_INVALID",
-      message: `Invalid Tailor config in ${path.relative(process.cwd(), configPath)}:\n  - name: 'name' must be a non-empty string.`,
+      message: `Invalid Tailor config:\n  - name: 'name' must be a non-empty string.`,
       context: {
         file: configPath,
         exportName: "default",
@@ -160,11 +161,40 @@ describe("loadConfig", () => {
 
     expect(error).toMatchObject({
       code: "CONFIG_INVALID",
-      message: `Invalid \`plugins\` export in ${path.relative(process.cwd(), configPath)}:\n  - 1: Invalid input: expected object, received null`,
+      message: `Invalid \`plugins\` export:\n  - 1: Invalid input: expected object, received null`,
       context: {
         file: configPath,
         exportName: "plugins",
         issues: [{ path: [1], message: "Invalid input: expected object, received null" }],
+      },
+    });
+  });
+
+  test("rejects a plugin that defines both TailorDB namespace hook names", async () => {
+    const configPath = writeConfig(`
+      export default { name: "test-app" };
+      export const plugins = [{
+        id: "both",
+        description: "Defines both names",
+        importPath: "@example/both",
+        onTailorDBNamespaceLoaded: () => ({}),
+        onNamespaceLoaded: () => ({}),
+      }];
+    `);
+
+    const error = await rejectionOf(loadConfig(configPath));
+
+    expect(error).toMatchObject({
+      code: "CONFIG_INVALID",
+      context: {
+        exportName: "plugins",
+        issues: [
+          {
+            path: [0, "onNamespaceLoaded"],
+            message:
+              "'onNamespaceLoaded' is the deprecated name of 'onTailorDBNamespaceLoaded'. Define only 'onTailorDBNamespaceLoaded'.",
+          },
+        ],
       },
     });
   });
@@ -178,7 +208,7 @@ describe("loadConfig", () => {
     expect(getErrorDiagnostics(error).location).toEqual({ file: configPath });
   });
 
-  test("rejects a credential in env, naming the config it came from", async () => {
+  test("rejects a credential in env, pointing at the config it came from", async () => {
     const configPath = writeConfig(
       `export default { name: "test-app", env: { SLACK_BOT_TOKEN: ${JSON.stringify(SLACK_TOKEN)} } };`,
     );
@@ -186,7 +216,7 @@ describe("loadConfig", () => {
     const error = await rejectionOf(loadConfig(configPath));
 
     expect(error.message).toMatch(/env\.SLACK_BOT_TOKEN \(matched slack: SLACK_TOKEN\)/);
-    expect(error.message).toContain(configPath);
+    expect(error.message).not.toContain(configPath);
     expect(getErrorDiagnostics(error).location).toEqual({ file: configPath });
   });
 
@@ -261,7 +291,7 @@ describe("atConfigSource", () => {
     expect(result).toMatchObject({
       name: "CLIError",
       code: "SYNTAX_INVALID",
-      message: `Invalid syntax in ${path.relative(process.cwd(), "/repo/tailordb/User.ts")}:4: Unexpected token \`=\`. Expected an identifier`,
+      message: `Invalid syntax: Unexpected token \`=\`. Expected an identifier`,
       context: { file: "/repo/tailordb/User.ts", line: 4 },
       cause: syntaxDiagnostic,
     });
@@ -310,7 +340,7 @@ describe("atConfigSource", () => {
     const result = atConfigSource(withoutLine, "/repo/tailor.config.ts");
 
     expect(result).toMatchObject({
-      message: `Invalid syntax in ${path.relative(process.cwd(), "/repo/tailordb/User.ts")}: Unexpected token \`=\`. Expected an identifier`,
+      message: `Invalid syntax: Unexpected token \`=\`. Expected an identifier`,
     });
     expect((result as { context?: unknown }).context).toEqual({ file: "/repo/tailordb/User.ts" });
     expect(getErrorDiagnostics(result as Error).location).toEqual({

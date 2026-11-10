@@ -1,6 +1,7 @@
 import { type MessageInitShape } from "@bufbuild/protobuf";
 import {
   type Application as ProtoApplication,
+  type Subgraph,
   Subgraph_ServiceType,
   type SubgraphSchema,
 } from "@tailor-platform/tailor-proto/application_resource_pb";
@@ -305,18 +306,16 @@ export async function planApplication(
       return [applications, nextPageToken];
     }));
 
-  if (forRemoval) {
-    // A same-named app in a shared workspace may belong to another user, so
-    // never delete by name alone. Without an id only the same-name app can be
-    // ours; with an id, scan all apps to also clean up renamed-away ones.
-    const candidates = application.id
-      ? existingApplications
-      : existingApplications.filter((app) => app.name === application.name);
+  const ownedByConfig = (labels: Record<string, string> | undefined) =>
+    isOwnedByApp(labels, application.name, application.id);
+  const scheduleOwnedAppDeletes = async (
+    candidates: ReadonlyArray<ProtoApplication>,
+    owns: (labels: Record<string, string> | undefined) => boolean,
+  ) => {
     const owned = await Promise.all(
-      candidates.map(async (app) => {
-        const labels = await fetchAppLabels(client, workspaceId, app.name);
-        return ownership.ownsRemaining(labels) ? app.name : null;
-      }),
+      candidates.map(async (app) =>
+        owns(await fetchAppLabels(client, workspaceId, app.name)) ? app.name : null,
+      ),
     );
     for (const name of owned) {
       if (name) {
@@ -329,15 +328,21 @@ export async function planApplication(
         });
       }
     }
-    return Object.assign(changeSet, ownership.result, {
-      existingApplications,
-      existingLabels: undefined,
-    });
-  }
+  };
 
-  // Skip application create/update when there are no subgraphs
-  // (e.g. deploying only static web hosting)
-  if (application.subgraphs.length === 0) {
+  // The platform rejects an application without subgraphs, so a config with
+  // none (e.g. only static web hosting) is planned like a removal.
+  if (forRemoval || application.subgraphs.length === 0) {
+    // A same-named app in a shared workspace may belong to another user, so
+    // never delete by name alone. Without an id only the same-name app can be
+    // ours; with an id, scan all apps to also clean up renamed-away ones.
+    const candidates = application.id
+      ? existingApplications
+      : existingApplications.filter((app) => app.name === application.name);
+    // A deploy must not record other apps as owners: that blocks renamed-app cleanup.
+    await scheduleOwnedAppDeletes(candidates, (labels) =>
+      forRemoval ? ownership.ownsRemaining(labels) : ownedByConfig(labels),
+    );
     return Object.assign(changeSet, ownership.result, {
       existingApplications,
       existingLabels: undefined,
@@ -425,24 +430,10 @@ export async function planApplication(
   // Detect renames: other apps owned by our id should be deleted before
   // creating/updating the current name (so the old name is freed up).
   if (application.id) {
-    const otherApps = existingApplications.filter((app) => app.name !== application.name);
-    const renamedAway = await Promise.all(
-      otherApps.map(async (app) => {
-        const labels = await fetchAppLabels(client, workspaceId, app.name);
-        return isOwnedByApp(labels, application.name, application.id) ? app.name : null;
-      }),
+    await scheduleOwnedAppDeletes(
+      existingApplications.filter((app) => app.name !== application.name),
+      ownedByConfig,
     );
-    for (const name of renamedAway) {
-      if (name) {
-        changeSet.deletes.push({
-          name,
-          request: {
-            workspaceId,
-            applicationName: name,
-          },
-        });
-      }
-    }
   }
 
   if (existing) {
@@ -632,9 +623,14 @@ function buildHttpAdapters(
   });
 }
 
-function protoSubgraph(
+/**
+ * Convert a config subgraph to the subgraph the Platform records for an application.
+ * @param subgraph - Subgraph from the application's config
+ * @returns The subgraph's service type and namespace
+ */
+export function protoSubgraph(
   subgraph: Readonly<{ Type: string; Name: string }>,
-): MessageInitShape<typeof SubgraphSchema> {
+): Pick<Subgraph, "serviceType" | "serviceNamespace"> {
   // TODO(remiposo): Make it type-safe
   let serviceType: Subgraph_ServiceType;
   switch (subgraph.Type) {

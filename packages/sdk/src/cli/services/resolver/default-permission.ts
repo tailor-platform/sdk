@@ -1,6 +1,7 @@
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { ResolverPermissionSchema } from "#/parser/service/resolver/index";
+import { permissionInputFields } from "#/parser/service/resolver/permission-operands";
 import type { ResolverServiceConfig, ResolverServiceInput } from "#/configure/config/types";
 import type { Resolver } from "#/types/resolver.generated";
 
@@ -28,6 +29,13 @@ export function parseResolverDefaultPermission(
     throw new Error(
       `Invalid \`defaultPermission\` for resolver namespace "${namespace}": ` +
         result.error.issues.map((issue) => issue.message).join("; "),
+    );
+  }
+  if (permissionInputFields(result.data).size > 0) {
+    throw new Error(
+      `Invalid \`defaultPermission\` for resolver namespace "${namespace}": ` +
+        "`defaultPermission` cannot use an `input` operand, since a namespace has no input; " +
+        "declare it in each resolver's own `permission`",
     );
   }
   return result.data;
@@ -79,8 +87,8 @@ export function resolveResolverDefaultPermissionForFile(
     throw new Error(
       `Resolver ${path.relative(process.cwd(), targetFile)} matches more than one resolver ` +
         `namespace: ${owners.map((owner) => `"${owner.namespace}"`).join(", ")}. ` +
-        `Each namespace applies its own \`defaultPermission\`, so narrow the \`files\`/` +
-        `\`ignores\` patterns until exactly one namespace claims this file.`,
+        `Each namespace applies its own \`defaultPermission\`, so narrow the \`files\` ` +
+        `patterns, for example with a \`!\` pattern, until exactly one namespace claims this file.`,
     );
   }
 
