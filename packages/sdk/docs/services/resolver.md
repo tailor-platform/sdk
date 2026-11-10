@@ -310,7 +310,7 @@ Define actual resolver logic in the `body` function. Function arguments include:
 - `invoker` - The principal running this function; equals `caller` by default, or the machine user configured through the resolver `invoker` option. `null` for anonymous calls.
 - `env` - Environment variables declared in `tailor.config.ts`
 
-An `input` field that `body` never reads still appears in the GraphQL schema, so a caller may expect it to take effect. The [`no-unused-resolver-input`](https://github.com/tailor-platform/sdk/tree/main/packages/eslint-plugin-sdk#rules) lint rule reports such a field; a field that `permission` compares with the caller, or that declares a `validate`, counts as used.
+An `input` field that `body` never reads still appears in the GraphQL schema, so a caller may expect it to take effect. The [`no-unused-resolver-input`](https://github.com/tailor-platform/sdk/tree/main/packages/eslint-plugin-sdk#no-unused-resolver-input-warning) lint rule reports such a field; a field that `permission` compares with the caller, or that declares a `validate`, counts as used.
 
 ### Using Kysely for Database Access
 
