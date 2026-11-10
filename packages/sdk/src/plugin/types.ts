@@ -207,7 +207,7 @@ export interface TailorDBNamespaceLoadedContext<PluginConfig = unknown> {
 
 /**
  * **Beta:** This API may change in future releases.
- * @deprecated since NEXT_RELEASE — use {@link TailorDBNamespaceLoadedContext} instead. codemod: v3/tailordb-namespace-loaded-rename
+ * @deprecated since 2.40.0 — use {@link TailorDBNamespaceLoadedContext} instead. codemod: v3/tailordb-namespace-loaded-rename
  */
 export type PluginNamespaceProcessContext<PluginConfig = unknown> =
   TailorDBNamespaceLoadedContext<PluginConfig>;
@@ -355,7 +355,7 @@ export type TailorDBNamespacePluginOutput = PluginOutput;
 
 /**
  * **Beta:** This API may change in future releases.
- * @deprecated since NEXT_RELEASE — use {@link TailorDBNamespacePluginOutput} instead. codemod: v3/tailordb-namespace-loaded-rename
+ * @deprecated since 2.40.0 — use {@link TailorDBNamespacePluginOutput} instead. codemod: v3/tailordb-namespace-loaded-rename
  */
 export type NamespacePluginOutput = TailorDBNamespacePluginOutput;
 
@@ -388,7 +388,7 @@ export interface Plugin<
   ): TailorDBNamespacePluginOutput | Promise<TailorDBNamespacePluginOutput>;
 
   /**
-   * @deprecated since NEXT_RELEASE — use {@link Plugin.onTailorDBNamespaceLoaded} instead. Defining both is an error. codemod: v3/tailordb-namespace-loaded-rename
+   * @deprecated since 2.40.0 — use {@link Plugin.onTailorDBNamespaceLoaded} instead. Defining both is an error. codemod: v3/tailordb-namespace-loaded-rename
    */
   onNamespaceLoaded?(
     context: TailorDBNamespaceLoadedContext<PluginConfig>,

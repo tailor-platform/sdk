@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/eslint-plugin-sdk",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "Lint rules for Tailor Platform SDK applications",
   "license": "MIT",
   "repository": {
