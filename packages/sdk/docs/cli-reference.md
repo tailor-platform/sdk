@@ -95,6 +95,13 @@ the next step opens login help so you can reuse the original browser or machine-
 connection failures include guidance in `error.suggestion`; API failures also identify the operation
 and affected resources in `error.context`.
 
+A table update that makes a field required while records have no value for it fails with
+`TAILORDB_REQUIRED_FIELD_HAS_NULL_VALUES` in `tailor deploy`, `tailor tailordb migration sync`, and
+`tailor tailordb migration resolve`, and `error.suggestion` says how to proceed. When a deploy
+reports that failure as `MIGRATION_ROLLED_BACK` or `MIGRATION_PARTIALLY_APPLIED` instead (see
+[Migration Error Codes](#migration-error-codes-beta)), the `error.suggestion` of that error ends
+with the same advice.
+
 If deployment fails and saving recovery metadata also fails, `DEPLOY_METADATA_RECOVERY_FAILED`
 includes separate `error.context.apply` and `error.context.recovery` errors, each retaining its code
 and available recovery information. Inspect the current resource state before retrying: some writes

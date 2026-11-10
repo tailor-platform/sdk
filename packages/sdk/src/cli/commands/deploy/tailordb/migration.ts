@@ -933,6 +933,18 @@ function partiallyAppliedError(
 }
 
 /**
+ * Recovery advice attached to the failure that a rollback error replaces. A CLI error's advice
+ * is left out: the rollback error says how to go on from the state it leaves.
+ * @param cause - The failure that triggered the rollback
+ * @returns The advice to keep, if any
+ */
+function causeSuggestion(cause: unknown): string | undefined {
+  return cause instanceof Error && !isCLIError(cause)
+    ? getErrorDiagnostics(cause).suggestion
+    : undefined;
+}
+
+/**
  * The failure of a migration that asked to be rolled back and was.
  * @param migration - Migration whose schema changes were rolled back
  * @param cause - The failure that triggered the rollback
@@ -941,10 +953,7 @@ function partiallyAppliedError(
 export function rolledBackError(migration: PendingMigration, cause: unknown): Error {
   const { namespace } = migration;
   const checkpoint = formatMigrationNumber(migration.number - 1);
-  const causeHint =
-    cause instanceof Error && !isCLIError(cause)
-      ? getErrorDiagnostics(cause).suggestion
-      : undefined;
+  const causeHint = causeSuggestion(cause);
   return CLIError({
     code: "MIGRATION_ROLLED_BACK",
     message: cause instanceof Error ? cause.message : String(cause),
@@ -996,7 +1005,12 @@ export function rollbackSkippedError(
   return CLIError({
     code: "MIGRATION_PARTIALLY_APPLIED",
     message: cause instanceof Error ? cause.message : String(cause),
-    suggestion: withMaintenanceModeNote(next, namespace, maintenanceMode, "Until then"),
+    suggestion: [
+      withMaintenanceModeNote(next, namespace, maintenanceMode, "Until then"),
+      causeSuggestion(cause),
+    ]
+      .filter(Boolean)
+      .join(" "),
     context: {
       namespace,
       migrationNumber: migration.number,

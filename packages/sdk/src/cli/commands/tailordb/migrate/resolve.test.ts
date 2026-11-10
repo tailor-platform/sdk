@@ -5,6 +5,7 @@ import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
+import { errorToJson } from "#/cli/shared/error-json";
 import { CLIError } from "#/cli/shared/errors";
 import { prompt } from "#/cli/shared/prompt";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
@@ -514,7 +515,10 @@ describe("tailordb migration resolve", () => {
     const result = await runCommand(resolveCommand, ["--complete", "--yes"]);
 
     expect(result.success).toBe(false);
-    expect(state.stderr.join("")).toMatch(/run the command again.*stays in progress/s);
+    expect(errorToJson(result.error).error).toMatchObject({
+      code: "TAILORDB_REQUIRED_FIELD_HAS_NULL_VALUES",
+      suggestion: expect.stringMatching(/run the command again.*stays in progress/s),
+    });
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
 
@@ -744,9 +748,9 @@ describe("tailordb migration resolve", () => {
       const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
 
       expect(result.success).toBe(false);
-      const output = state.stderr.join("");
-      expect(output).toMatch(/Fill in those records first/);
-      expect(output).not.toMatch(/stays in progress/);
+      const { suggestion } = errorToJson(result.error).error;
+      expect(suggestion).toMatch(/Fill in those records first/);
+      expect(suggestion).not.toMatch(/stays in progress/);
     });
 
     test("--complete refuses, because no migration is in progress", async () => {

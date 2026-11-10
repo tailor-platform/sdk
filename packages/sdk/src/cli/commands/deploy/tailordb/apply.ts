@@ -7,6 +7,7 @@ import {
 import { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-state";
 import {
   formatNamespaceMigrationHint,
+  migrationCommandArgs,
   migrationCommandContext,
   type MigrationCommandContext,
 } from "#/cli/commands/tailordb/migrate/hints";
@@ -38,7 +39,7 @@ import {
 } from "#/cli/commands/tailordb/migrate/types";
 import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
-import { CLIError, toError } from "#/cli/shared/errors";
+import { CLIError, formatCommandHint, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { withSpan } from "#/cli/telemetry/index";
 import { assertDefined } from "#/utils/assert";
@@ -743,7 +744,7 @@ async function applyCreateUpdate(
       holdMaintenanceMode: maintenanceMode === "deploy" ? options.holdMaintenanceMode : undefined,
     });
   } else {
-    await applyWithoutMigrations(client, changeSet);
+    await applyWithoutMigrations(client, changeSet, migrationContext);
   }
 
   // Skip when pending migrations ran: each already bumped the label, and
@@ -766,10 +767,16 @@ async function applyCreateUpdate(
   return maintenance;
 }
 
-const OPTIONAL_TO_REQUIRED_SUGGESTIONS = [
-  "Run 'tailor tailordb migration generate' to create migration files.",
-  "Migration scripts allow you to handle existing data before applying the schema change.",
-];
+function optionalToRequiredSuggestion(context: TailorDBPlanResult["context"]): string {
+  const generateCommand = formatCommandHint({
+    command: "tailor",
+    args: migrationCommandArgs(["generate"], { configPath: context.config.path }),
+  });
+  return (
+    "Fill in those records first, for example with `tailor query`, then deploy again. " +
+    `For a namespace with \`migration\` configured, run ${generateCommand} instead to fill them in with a migration script during the deploy.`
+  );
+}
 
 interface MigrationApplyInput {
   client: OperatorClient;
@@ -1138,7 +1145,7 @@ async function applyChangesBeforeMigrations(flow: MigrationFlow): Promise<Set<st
       await client.updateTailorDBType(update.request);
     }
   } catch (error) {
-    handleOptionalToRequiredError(error, OPTIONAL_TO_REQUIRED_SUGGESTIONS);
+    handleOptionalToRequiredError(error, optionalToRequiredSuggestion(migrationContext));
   }
   await Promise.all([
     ...changeSet.gqlPermission.creates
@@ -2220,6 +2227,7 @@ function excludeFromRestoration(restoration: RestorationState, del: TableDeletio
 async function applyWithoutMigrations(
   client: OperatorClient,
   changeSet: TailorDBChangeSet,
+  migrationContext: TailorDBPlanResult["context"],
 ): Promise<void> {
   await executeServicesCreation(client, changeSet);
 
@@ -2240,7 +2248,7 @@ async function applyWithoutMigrations(
       ),
     );
   } catch (error) {
-    handleOptionalToRequiredError(error, OPTIONAL_TO_REQUIRED_SUGGESTIONS);
+    handleOptionalToRequiredError(error, optionalToRequiredSuggestion(migrationContext));
   }
 
   // GQLPermissions

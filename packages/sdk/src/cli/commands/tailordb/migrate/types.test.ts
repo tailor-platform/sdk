@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, expect, test } from "vitest";
-import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
+import { errorToJson } from "#/cli/shared/error-json";
 import {
   isValidMigrationNumber,
   formatMigrationNumber,
@@ -176,17 +176,16 @@ describe("handleOptionalToRequiredError", () => {
     throw new Error("expected the handler to throw");
   }
 
-  test("explains the refusal when records without a value block making a field required", () => {
-    using stderr = captureStderr();
+  test("carries a code and the remediation when records without a value block making a field required", () => {
     const error = requiredFieldNullValuesError();
 
-    const thrown = thrownBy(() => handleOptionalToRequiredError(error, ["Fill in the records."]));
+    const thrown = thrownBy(() => handleOptionalToRequiredError(error, "Fill in the records."));
 
     expect(thrown).toBe(error);
-    expect(stderr.output).toMatch(
-      /Cannot change a field from optional to required while records have no value for it/,
-    );
-    expect(stderr.output).toContain("Fill in the records.");
+    expect(errorToJson(thrown).error).toMatchObject({
+      code: "TAILORDB_REQUIRED_FIELD_HAS_NULL_VALUES",
+      suggestion: "Fill in the records.",
+    });
   });
 
   const refusalMessage = requiredFieldNullValuesError().rawMessage;
@@ -201,11 +200,12 @@ describe("handleOptionalToRequiredError", () => {
       preconditionFailureError(refusalMessage, "ANOTHER_VIOLATION", "note"),
     ],
   ])("adds nothing to a failed precondition %s", (_case, error) => {
-    using stderr = captureStderr();
-
-    const thrown = thrownBy(() => handleOptionalToRequiredError(error, ["Fill in the records."]));
+    const thrown = thrownBy(() => handleOptionalToRequiredError(error, "Fill in the records."));
 
     expect(thrown).toBe(error);
-    expect(stderr.output).toBe("");
+    expect(errorToJson(thrown).error).toEqual({
+      code: "RPC_FAILED_PRECONDITION",
+      message: error.message,
+    });
   });
 });

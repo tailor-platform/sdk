@@ -5,7 +5,7 @@
 import { randomUUID } from "node:crypto";
 import { BinaryReader, WireType } from "@bufbuild/protobuf/wire";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { logger } from "#/cli/shared/logger";
+import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { formatMigrationNumber } from "./migration-number";
 import type { MigrationDiff } from "./diff-calculator";
 import type { MigrationScriptForm } from "./script-form";
@@ -214,7 +214,7 @@ export function createMigrationHistoryId(): string {
  * @param {unknown} error - Error to check
  * @returns {boolean} True for that refusal
  */
-export function isRequiredFieldNullValuesError(error: unknown): boolean {
+export function isRequiredFieldNullValuesError(error: unknown): error is ConnectError {
   return (
     error instanceof ConnectError &&
     error.code === Code.FailedPrecondition &&
@@ -257,19 +257,14 @@ function lengthDelimitedFields(message: Uint8Array, fieldNo: number): Uint8Array
 }
 
 /**
- * Handle optional-to-required field change error with helpful message
- * @param {unknown} error - Error to handle
- * @param {string[]} messages - Additional messages to display
+ * Rethrow a failed table write. When it is the refusal of a newly required field, the error
+ * gets a code and how to proceed.
+ * @param {unknown} error - Failure of the table write
+ * @param {string} suggestion - How to proceed after that refusal
  */
-export function handleOptionalToRequiredError(error: unknown, messages: string[]): never {
+export function handleOptionalToRequiredError(error: unknown, suggestion: string): never {
   if (isRequiredFieldNullValuesError(error)) {
-    logger.error(
-      "Schema change failed: Cannot change a field from optional to required while records have no value for it.",
-    );
-    logger.newline();
-    for (const message of messages) {
-      logger.info(message);
-    }
+    withErrorDiagnostics(error, { code: "TAILORDB_REQUIRED_FIELD_HAS_NULL_VALUES", suggestion });
   }
   throw error;
 }
