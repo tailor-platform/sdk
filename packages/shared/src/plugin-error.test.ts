@@ -16,6 +16,7 @@ function output(jsonMode = false, verbose = false) {
         if (verbose) lines.push(message);
       },
     },
+    locatedMessage: (error: Error) => error.message,
     serializeError: (_error: unknown, options: { includeStack: boolean }) =>
       JSON.stringify({
         error: { message: "failed", ...(options.includeStack && { stack: "trace" }) },
@@ -28,8 +29,15 @@ function output(jsonMode = false, verbose = false) {
 describe("plugin errors", () => {
   test("keeps verbose JSON on one line and passes its mode to annotations", () => {
     const target = output(true, true);
-    const error = new Error("failed");
+    const formatted: string[] = [];
+    const error = Object.assign(new Error("failed"), {
+      format(this: Error) {
+        formatted.push(this.message);
+        return "custom report";
+      },
+    });
     reportPluginError(error, target);
+    expect(formatted).toEqual(["failed"]);
     expect(target.lines).toEqual(['{"error":{"message":"failed","stack":"trace"}}']);
     expect(target.annotations).toEqual([{ error, jsonMode: true }]);
   });
@@ -37,7 +45,9 @@ describe("plugin errors", () => {
   test("keeps formatted details and a verbose stack for human output", () => {
     const target = output(false, true);
     const error = Object.assign(new Error("failed"), {
-      format: () => "failed: details",
+      format(this: Error) {
+        return `${this.message}: details`;
+      },
       stack: "trace",
     });
     reportPluginError(error, target);
@@ -69,6 +79,13 @@ describe("plugin errors", () => {
     const target = output(false, true);
     reportPluginError(error, target);
     expect(target.lines).toEqual([expected]);
+  });
+
+  test("falls back to the located message when format returns a non-string", () => {
+    const target = { ...output(), locatedMessage: () => "config.ts: failed" };
+    const error = Object.assign(new Error("failed"), { format: () => ({ _errors: [] }) });
+    reportPluginError(error, target);
+    expect(target.lines).toEqual(["config.ts: failed"]);
   });
 
   test("does not report successful cleanup", () => {
