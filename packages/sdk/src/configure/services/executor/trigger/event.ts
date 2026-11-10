@@ -1,7 +1,7 @@
 import type { ResolverConfig } from "#/configure/services/resolver/resolver";
 import type { TailorDBType } from "#/configure/services/tailordb/schema";
 import type { Workflow } from "#/configure/services/workflow/workflow";
-import type { IdpName } from "#/configure/types/idp-name";
+import type { IdpNameRegistry } from "#/configure/types/idp-name";
 import type { TailorEnv, TailorPrincipal } from "#/runtime/types";
 import type {
   TailorDBTrigger as ParserTailorDBTrigger,
@@ -12,6 +12,7 @@ import type {
   WorkflowJobExecutionTrigger as ParserWorkflowJobExecutionTrigger,
 } from "#/types/executor.generated";
 import type { output, SerializeDates } from "#/types/helpers";
+import type { IdpUserTargetFor, IdpUserTriggerOptionsFor } from "./idp-user-target.types";
 
 interface EventArgs {
   workspaceId: string;
@@ -409,31 +410,7 @@ export type IdpUserTrigger<Args> = ParserIdpUserTrigger & {
   __args: Args;
 };
 
-type IdpUserTarget =
-  | {
-      /**
-       * IdP namespace name to subscribe to. Required when the project defines
-       * multiple IdPs; optional when a single IdP exists. Must match an IdP the
-       * config declares in `defineConfig({ idp: [...] })`, or one owned by another
-       * config deployed in the same run.
-       */
-      idp?: IdpName;
-      external?: false;
-    }
-  | {
-      /**
-       * Name of an IdP that this config does not declare and another config
-       * deployed in the same run owns.
-       */
-      idp: IdpName | (string & Record<never, never>);
-      /**
-       * Marks `idp` as owned by another config, so the name is not checked
-       * against the generated `IdpName` type.
-       */
-      external: true;
-    };
-
-type IdpUserSingleTriggerOptions = IdpUserTarget;
+type IdpUserSingleTriggerOptions = IdpUserTargetFor<IdpNameRegistry>;
 
 /**
  * Create a trigger that fires when an IdP user is created.
@@ -489,7 +466,10 @@ export function idpUserDeletedTrigger(
   };
 }
 
-type IdpUserTriggerOptions<K extends IdpUserEventKind[]> = { events: K } & IdpUserTarget;
+type IdpUserTriggerOptions<K extends IdpUserEventKind[]> = IdpUserTriggerOptionsFor<
+  K,
+  IdpNameRegistry
+>;
 
 /**
  * Create a trigger that fires on multiple IdP user event types.
