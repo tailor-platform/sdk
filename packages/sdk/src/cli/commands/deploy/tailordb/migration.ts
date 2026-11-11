@@ -1390,7 +1390,11 @@ export async function executeMigrations(
         }
         throw (
           result.failure ??
-          CLIError({ code: "MIGRATION_FAILED", message: result.error ?? "Migration failed" })
+          CLIError({
+            code: "MIGRATION_FAILED",
+            message: `Migration ${migrationLabel} failed${result.error ? `: ${result.error}` : ""}`,
+            context: { namespace: migration.namespace, migrationNumber: migration.number },
+          })
         );
       }
     }
