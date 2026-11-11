@@ -1,28 +1,36 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
-const STEP_NAME = "Mark pending template change";
+const MARK_STEP = "Mark pending template change";
+const CHANGESET_STEP = "Create changeset file";
 const TEMPLATES = "packages/sdk-plugin-setup/src/templates.ts";
 const AUTOFIX_TEMPLATE = "packages/sdk-plugin-setup/src/autofix.workflow.yml";
+const SETUP_PLUGIN = "@tailor-platform/sdk-plugin-setup";
+const SANITIZER = ".github/scripts/neutralize-mentions.mjs";
 
-function stepScript() {
-  const lines = readFileSync(
-    new URL("../.github/workflows/securefix.yml", import.meta.url),
-    "utf8",
-  ).split("\n");
-  const start = lines.indexOf(`      - name: ${STEP_NAME}`);
-  if (start < 0) throw new Error(`step "${STEP_NAME}" not found in securefix.yml`);
-  const run = lines.indexOf("        run: |", start);
-  if (run < 0) throw new Error(`step "${STEP_NAME}" has no run block`);
-  const body = [];
-  for (const line of lines.slice(run + 1)) {
-    if (line.trim() !== "" && !line.startsWith("          ")) break;
-    body.push(line.slice(10));
-  }
-  return body.join("\n");
+const repoFile = (path) => new URL(`../${path}`, import.meta.url);
+const workflowLines = () =>
+  readFileSync(repoFile(".github/workflows/securefix.yml"), "utf8").split("\n");
+
+function stepLines(name) {
+  const lines = workflowLines();
+  const start = lines.indexOf(`      - name: ${name}`);
+  if (start < 0) throw new Error(`step "${name}" not found in securefix.yml`);
+  const end = lines.findIndex((line, i) => i > start && /^( {6}- name:|\S| {0,4}\S)/.test(line));
+  return lines.slice(start, end < 0 ? undefined : end);
+}
+
+function stepScript(name) {
+  const block = stepLines(name);
+  const run = block.indexOf("        run: |");
+  if (run < 0) throw new Error(`step "${name}" has no run block`);
+  return block
+    .slice(run + 1)
+    .map((line) => line.slice(10))
+    .join("\n");
 }
 
 function git(cwd, ...args) {
@@ -50,14 +58,25 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
+function tempRoot() {
+  const root = mkdtempSync(join(tmpdir(), "securefix-template-"));
+  roots.push(root);
+  return root;
+}
+
 function templatesSource(flag) {
   return `const RELEASED_TEMPLATE_VERSION = 26;\nconst TEMPLATE_CHANGED_SINCE_RELEASE = ${flag};\n`;
 }
 
 // A pull request branch checked out from a clone of `main`, like the regenerate job's checkout.
-function pullRequestBranch({ flag = "false", templates, changed, baseAdvancesTemplate = false }) {
-  const root = mkdtempSync(join(tmpdir(), "securefix-template-"));
-  roots.push(root);
+function pullRequestBranch({
+  flag = "false",
+  templates,
+  changed,
+  baseAdvancesTemplate = false,
+  baseFlag,
+}) {
+  const root = tempRoot();
   const origin = join(root, "origin");
   const work = join(root, "work");
   mkdirSync(origin);
@@ -78,6 +97,11 @@ function pullRequestBranch({ flag = "false", templates, changed, baseAdvancesTem
   git(work, "commit", "--quiet", "-m", "bump");
   if (baseAdvancesTemplate) {
     write(origin, AUTOFIX_TEMPLATE, "uses: owner/action@cccc # v1.0.2\n");
+  }
+  if (baseFlag !== undefined) {
+    write(origin, TEMPLATES, templatesSource(baseFlag));
+  }
+  if (baseAdvancesTemplate || baseFlag !== undefined) {
     git(origin, "add", "--all");
     git(origin, "commit", "--quiet", "-m", "base moves on");
   }
@@ -85,12 +109,18 @@ function pullRequestBranch({ flag = "false", templates, changed, baseAdvancesTem
 }
 
 function runStep(work) {
-  const result = spawnSync("bash", ["-c", stepScript()], {
+  const outputFile = join(work, "..", "github-output");
+  writeFileSync(outputFile, "");
+  const result = spawnSync("bash", ["-c", stepScript(MARK_STEP)], {
     cwd: work,
     encoding: "utf8",
-    env: { ...process.env, BASE_REF: "main" },
+    env: { ...process.env, BASE_REF: "main", GITHUB_OUTPUT: outputFile },
   });
-  return { status: result.status, output: result.stdout + result.stderr };
+  return {
+    status: result.status,
+    output: result.stdout + result.stderr,
+    changed: /^changed=(.*)$/m.exec(readFileSync(outputFile, "utf8"))?.[1],
+  };
 }
 
 const flagLine = (work) =>
@@ -134,5 +164,98 @@ describe("securefix: mark pending template change", { timeout: 60_000 }, () => {
     const result = runStep(work);
     expect(result.status).not.toBe(0);
     expect(result.output).toContain("TEMPLATE_CHANGED_SINCE_RELEASE");
+  });
+
+  test("reports a template change whether or not the flag was already set", () => {
+    expect(runStep(pullRequestBranch({ changed: AUTOFIX_TEMPLATE })).changed).toBe("true");
+    expect(runStep(pullRequestBranch({ flag: "true", changed: AUTOFIX_TEMPLATE })).changed).toBe(
+      "true",
+    );
+  });
+
+  test("reports no template change when only other files changed", () => {
+    const work = pullRequestBranch({ changed: "packages/sdk-plugin-setup/src/other.ts" });
+    expect(runStep(work).changed).toBe("false");
+  });
+
+  test("fails when the base released the pending flag after the branch was cut", () => {
+    const work = pullRequestBranch({ flag: "true", changed: AUTOFIX_TEMPLATE, baseFlag: "false" });
+    const result = runStep(work);
+    expect(result.status).not.toBe(0);
+    expect(result.output).toContain("behind");
+  });
+
+  test("passes when the base set the same flag after the branch was cut", () => {
+    const work = pullRequestBranch({ flag: "false", changed: AUTOFIX_TEMPLATE, baseFlag: "true" });
+    expect(runStep(work).status).toBe(0);
+    expect(flagLine(work)).toBe("const TEMPLATE_CHANGED_SINCE_RELEASE = true;");
+  });
+});
+
+function runChangesetStep({ names, templateChanged }) {
+  const root = tempRoot();
+  mkdirSync(join(root, ".changeset"));
+  mkdirSync(join(root, ".github/scripts"), { recursive: true });
+  copyFileSync(repoFile(SANITIZER), join(root, SANITIZER));
+  const result = spawnSync("bash", ["-c", stepScript(CHANGESET_STEP)], {
+    cwd: root,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      PR_TITLE: "chore(deps): update dependency example/action to v1.0.1",
+      PR_NUMBER: "7",
+      NAMES: names,
+      TEMPLATE_CHANGED: templateChanged,
+      BASE_REF: "main",
+    },
+  });
+  if (result.status !== 0) throw new Error(result.stderr);
+  const frontmatter = readFileSync(join(root, ".changeset/renovate-7.md"), "utf8")
+    .split("---")[1]
+    .trim();
+  return frontmatter === "" ? [] : frontmatter.split("\n");
+}
+
+describe("securefix: changeset for a setup template change", { timeout: 60_000 }, () => {
+  test("releases the setup plugin when only a template changed", () => {
+    expect(runChangesetStep({ names: "", templateChanged: "true" })).toEqual([
+      `"${SETUP_PLUGIN}": patch`,
+    ]);
+  });
+
+  test("keeps the runtime dependency packages and adds the setup plugin", () => {
+    const lines = runChangesetStep({ names: "@other/pkg", templateChanged: "true" });
+    expect(lines).toEqual([`"@other/pkg": patch`, `"${SETUP_PLUGIN}": patch`]);
+  });
+
+  test("lists the setup plugin once when a runtime dependency change names it too", () => {
+    const lines = runChangesetStep({ names: SETUP_PLUGIN, templateChanged: "true" });
+    expect(lines).toEqual([`"${SETUP_PLUGIN}": patch`]);
+  });
+
+  test("does not add the setup plugin when no template changed", () => {
+    expect(runChangesetStep({ names: "@other/pkg", templateChanged: "false" })).toEqual([
+      `"@other/pkg": patch`,
+    ]);
+  });
+});
+
+describe("securefix: template change reaches the changeset decision", () => {
+  const output = (name) => stepLines(name).join("\n");
+
+  test("the mark step exposes its result under the id the later steps read", () => {
+    expect(output(MARK_STEP)).toContain("id: template");
+  });
+
+  test("creating a changeset also happens for a template-only change", () => {
+    expect(output(CHANGESET_STEP)).toContain("steps.template.outputs.changed == 'true'");
+    expect(output(CHANGESET_STEP)).toContain(
+      "TEMPLATE_CHANGED: ${{ steps.template.outputs.changed }}",
+    );
+  });
+
+  test("the skip-changeset label is not added for a template change", () => {
+    const line = workflowLines().find((l) => l.startsWith("      skip-changeset:"));
+    expect(line).toContain("steps.template.outputs.changed != 'true'");
   });
 });

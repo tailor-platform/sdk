@@ -85,7 +85,7 @@ jobs:
       contents: read # checkout the PR head
     outputs:
       changed: ${{ steps.patch.outputs.changed }}
-      skip-changeset: ${{ steps.existing.outputs.found == 'false' && steps.changeset_check.outputs.has-runtime-changes != 'true' }}
+      skip-changeset: ${{ steps.existing.outputs.found == 'false' && steps.changeset_check.outputs.has-runtime-changes != 'true' && steps.template.outputs.changed != 'true' }}
     steps:
       - name: Checkout PR head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -125,6 +125,7 @@ jobs:
         run: pnpm run format
 
       - name: Mark pending template change
+        id: template
         if: needs.plan.outputs.renovate == 'true'
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
@@ -133,9 +134,17 @@ jobs:
           git fetch --no-tags --quiet origin "$BASE_REF"
           BASE_SHA=$(git merge-base "origin/${BASE_REF}" HEAD)
           if git diff --quiet "$BASE_SHA" HEAD -- 'packages/sdk-plugin-setup/src/*.yml'; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
           FILE=packages/sdk-plugin-setup/src/templates.ts
+          FLAG='const TEMPLATE_CHANGED_SINCE_RELEASE = '
+          if git show "${BASE_SHA}:${FILE}" | grep -xF "${FLAG}true;" > /dev/null &&
+            git show "origin/${BASE_REF}:${FILE}" | grep -xF "${FLAG}false;" > /dev/null; then
+            echo "::error::origin/${BASE_REF} released the pending template change after this branch was cut. The branch is behind it: rebase onto origin/${BASE_REF} and run again"
+            exit 1
+          fi
           sed -i.bak 's/^const TEMPLATE_CHANGED_SINCE_RELEASE = false;$/const TEMPLATE_CHANGED_SINCE_RELEASE = true;/' "$FILE"
           rm -f "$FILE.bak"
           grep -q '^const TEMPLATE_CHANGED_SINCE_RELEASE = true;$' "$FILE" || {
@@ -186,11 +195,12 @@ jobs:
           before-lockfile: /tmp/renovate-base-lock.yaml
 
       - name: Create changeset file
-        if: steps.existing.outputs.found == 'false' && steps.changeset_check.outputs.has-runtime-changes == 'true'
+        if: steps.existing.outputs.found == 'false' && (steps.changeset_check.outputs.has-runtime-changes == 'true' || steps.template.outputs.changed == 'true')
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           NAMES: ${{ steps.changeset_check.outputs.changed-names }}
+          TEMPLATE_CHANGED: ${{ steps.template.outputs.changed }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
           set -eo pipefail
@@ -208,6 +218,10 @@ jobs:
             git show "origin/${BASE_REF}:.github/scripts/neutralize-mentions.mjs" > "$SANITIZER"
           fi
           SAFE_TITLE=$(printf '%s' "${PR_TITLE}" | node "$SANITIZER")
+
+          if [ "$TEMPLATE_CHANGED" = "true" ]; then
+            NAMES=$(printf '%s\n%s\n' "$NAMES" "@tailor-platform/sdk-plugin-setup" | sort -u)
+          fi
 
           {
             echo "---"
