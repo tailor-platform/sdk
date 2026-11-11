@@ -17,7 +17,7 @@ import {
   styles,
   arg,
 } from "@tailor-platform/sdk/cli";
-import { sortBySelfReference as sortRecordsBySelfReference } from "@tailor-platform/shared/seed-order";
+import { sortBySelfReference } from "@tailor-platform/shared/seed-order";
 import * as path from "pathe";
 import { z } from "zod";
 import {
@@ -150,7 +150,7 @@ function buildNamespaceSeedPlan(params: NamespaceSeedPlanParams): NamespaceSeedP
     const fields = selfRefFields[type];
     const records = data[type];
     if (records && fields && fields.length > 0) {
-      data[type] = sortRecordsBySelfReference(records, fields, selfRefKeys[type]);
+      data[type] = sortBySelfReference(records, fields, selfRefKeys[type]);
     }
   }
   return {
