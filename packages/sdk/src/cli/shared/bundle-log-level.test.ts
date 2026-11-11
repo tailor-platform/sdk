@@ -9,6 +9,7 @@ import {
   normalizeBundleLogLevel,
   resolveBundleLogLevel,
 } from "./bundle-log-level";
+import { isCLIError } from "./errors";
 import { composeFunctionTreeshakeOptions } from "./function-treeshake";
 
 // Use a file:// URL rather than fileURLToPath: a raw Windows path (backslashes
@@ -33,10 +34,9 @@ describe("bundle-log-level", () => {
     } catch (thrown) {
       error = thrown;
     }
+    expect(isCLIError(error)).toBe(false);
     expect(error).toMatchObject({
-      code: "LOG_LEVEL_INVALID",
-      message: 'Invalid logLevel "OFF".',
-      suggestion: "Use one of: DEBUG, INFO, WARN, ERROR, SILENT",
+      message: 'Invalid logLevel "OFF". Expected one of: DEBUG, INFO, WARN, ERROR, SILENT.',
     });
   });
 
