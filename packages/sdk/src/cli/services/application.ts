@@ -320,12 +320,14 @@ function defineIdp(config: readonly IdPConfig[] | undefined, configPath: string)
 
   assertUniqueDefinitionNames({
     kind: "idp",
-    definitions: config.map(({ name }, index) => ({
-      name,
-      file: configPath,
-      exportName: "default",
-      path: ["idp", index],
-    })),
+    definitions: config
+      .map(({ name }, index) => ({
+        name,
+        file: configPath,
+        exportName: "default",
+        path: ["idp", index],
+      }))
+      .filter((definition) => typeof definition.name === "string"),
   });
   config.forEach((idpConfig, index) => {
     const name = idpConfig.name;
@@ -423,12 +425,14 @@ function defineStaticWebsites(
   const staticWebsiteServices: StaticWebsite[] = [];
   assertUniqueDefinitionNames({
     kind: "staticwebsite",
-    definitions: (websites ?? []).map(({ name }, index) => ({
-      name,
-      file: configPath,
-      exportName: "default",
-      path: ["staticWebsites", index],
-    })),
+    definitions: (websites ?? [])
+      .map(({ name }, index) => ({
+        name,
+        file: configPath,
+        exportName: "default",
+        path: ["staticWebsites", index],
+      }))
+      .filter((definition) => typeof definition.name === "string"),
   });
 
   (websites ?? []).forEach((config, index) => {
@@ -452,12 +456,14 @@ function defineAIGateways(
   const aiGatewayServices: AIGateway[] = [];
   assertUniqueDefinitionNames({
     kind: "aigateway",
-    definitions: (gateways ?? []).map(({ name }, index) => ({
-      name,
-      file: configPath,
-      exportName: "default",
-      path: ["aiGateways", index],
-    })),
+    definitions: (gateways ?? [])
+      .map(({ name }, index) => ({
+        name,
+        file: configPath,
+        exportName: "default",
+        path: ["aiGateways", index],
+      }))
+      .filter((definition) => typeof definition.name === "string"),
   });
 
   (gateways ?? []).forEach((config, index) => {
