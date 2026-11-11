@@ -124,6 +124,25 @@ jobs:
         if: needs.plan.outputs.renovate == 'true'
         run: pnpm run format
 
+      - name: Mark pending template change
+        if: needs.plan.outputs.renovate == 'true'
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -eo pipefail
+          git fetch --no-tags --quiet origin "$BASE_REF"
+          BASE_SHA=$(git merge-base "origin/${BASE_REF}" HEAD)
+          if git diff --quiet "$BASE_SHA" HEAD -- 'packages/sdk-plugin-setup/src/*.yml'; then
+            exit 0
+          fi
+          FILE=packages/sdk-plugin-setup/src/templates.ts
+          sed -i.bak 's/^const TEMPLATE_CHANGED_SINCE_RELEASE = false;$/const TEMPLATE_CHANGED_SINCE_RELEASE = true;/' "$FILE"
+          rm -f "$FILE.bak"
+          grep -q '^const TEMPLATE_CHANGED_SINCE_RELEASE = true;$' "$FILE" || {
+            echo "::error::TEMPLATE_CHANGED_SINCE_RELEASE is not set in $FILE"
+            exit 1
+          }
+
       - name: Sync skills to root
         if: needs.plan.outputs.skills == 'true'
         run: bash .github/scripts/sync-skills.sh
