@@ -122,7 +122,7 @@ function checkSinglePolicy(context: Rule.RuleContext, call: AstCallExpression): 
   if (options !== null) checkPolicy(context, { value: name, node: nameNode }, options);
 }
 
-const rule = {
+const rule: Rule.RuleModule = {
   meta: {
     type: "problem",
     docs: {
@@ -151,6 +151,6 @@ const rule = {
       },
     };
   },
-} satisfies Rule.RuleModule;
+};
 
 export default rule;

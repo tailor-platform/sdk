@@ -83,7 +83,7 @@ function isRuntimeGlobalReference(context: Rule.RuleContext, node: AstIdentifier
   );
 }
 
-const rule = {
+const rule: Rule.RuleModule = {
   meta: {
     type: "problem",
     docs: {
@@ -123,6 +123,6 @@ const rule = {
       },
     };
   },
-} satisfies Rule.RuleModule;
+};
 
 export default rule;

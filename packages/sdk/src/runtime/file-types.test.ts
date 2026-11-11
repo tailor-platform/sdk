@@ -1,7 +1,10 @@
 import path from "node:path";
-import ts from "typescript";
+import { ScriptTarget } from "typescript/ast";
+import { createFileSystemLayer } from "typescript/fs";
+import { ModuleKind, ModuleResolutionKind } from "typescript/sync";
 import { expect, test } from "vitest";
 import { generateUnifiedFileUtils } from "#/plugin/builtin/file-utils/generate-file-utils";
+import { createTypeChecker, flattenDiagnosticText } from "#/utils/test-helpers/type-check";
 
 test("upload deprecates only calls whose string encoding may be omitted", () => {
   const consumerPath = path.join(import.meta.dirname, "file-upload-consumer.ts");
@@ -45,49 +48,41 @@ uploadFile("Doc", "missing", "id", bytes);
   const generated = generateUnifiedFileUtils([
     { namespace: "ns", types: [{ name: "Doc", fileFields: ["blob"] }] },
   ]).replaceAll("@tailor-platform/sdk/runtime/file", "./file");
-  const files = new Map([
-    [consumerPath, source],
-    [generatedPath, generated],
-  ]);
-  const options: ts.CompilerOptions = {
-    strict: true,
-    noEmit: true,
-    target: ts.ScriptTarget.ESNext,
-    module: ts.ModuleKind.ESNext,
-    moduleResolution: ts.ModuleResolutionKind.Bundler,
-    types: [],
-  };
-  const host: ts.LanguageServiceHost = {
-    getScriptFileNames: () => [...files.keys()],
-    getScriptVersion: () => "0",
-    getScriptSnapshot: (name) => {
-      const text = files.get(name) ?? ts.sys.readFile(name);
-      return text === undefined ? undefined : ts.ScriptSnapshot.fromString(text);
-    },
-    getCurrentDirectory: () => import.meta.dirname,
-    getCompilationSettings: () => options,
-    getDefaultLibFileName: ts.getDefaultLibFilePath,
-    fileExists: (name) => files.has(name) || ts.sys.fileExists(name),
-    readFile: (name) => files.get(name) ?? ts.sys.readFile(name),
-  };
-  const service = ts.createLanguageService(host);
+  const checker = createTypeChecker();
   try {
-    for (const name of [...files.keys(), path.join(import.meta.dirname, "file.ts")]) {
-      const errors = service.getSemanticDiagnostics(name);
-      expect(
-        errors.map((error) => ts.flattenDiagnosticMessageText(error.messageText, "\n")),
-      ).toEqual([]);
+    using snapshot = checker.api.createSnapshot({
+      createPrograms: [
+        {
+          rootFiles: [consumerPath, generatedPath],
+          compilerOptions: {
+            strict: true,
+            noEmit: true,
+            target: ScriptTarget.ESNext,
+            module: ModuleKind.ESNext,
+            moduleResolution: ModuleResolutionKind.Bundler,
+            types: [],
+          },
+        },
+      ],
+      fileSystem: createFileSystemLayer([
+        [consumerPath, source],
+        [generatedPath, generated],
+      ]),
+    });
+    const [program] = snapshot.operation.createdPrograms;
+    for (const name of [consumerPath, generatedPath, path.join(import.meta.dirname, "file.ts")]) {
+      const errors = program.getSemanticDiagnostics(name);
+      expect(errors.map((error) => flattenDiagnosticText(error, "\n"))).toEqual([]);
     }
-    const sourceFile = service.getProgram()!.getSourceFile(consumerPath)!;
-    const deprecatedLines = service
+    const deprecatedLines = program
       .getSuggestionDiagnostics(consumerPath)
       .filter((diagnostic) => diagnostic.reportsDeprecated)
-      .map((diagnostic) => sourceFile.getLineAndCharacterOfPosition(diagnostic.start).line);
+      .map((diagnostic) => diagnostic.startPosition!.line);
     const expectedLines = source
       .split("\n")
       .flatMap((line, index) => (line.endsWith("// deprecated") ? [index] : []));
     expect(deprecatedLines).toEqual(expectedLines);
   } finally {
-    service.dispose();
+    checker.close();
   }
 });

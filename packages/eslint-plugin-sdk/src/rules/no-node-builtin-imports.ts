@@ -27,7 +27,7 @@ function isTypeOnlyDeclaration(node: { specifiers: readonly object[] }): boolean
   );
 }
 
-const rule = {
+const rule: Rule.RuleModule = {
   meta: {
     type: "problem",
     docs: {
@@ -77,6 +77,6 @@ const rule = {
       },
     };
   },
-} satisfies Rule.RuleModule;
+};
 
 export default rule;

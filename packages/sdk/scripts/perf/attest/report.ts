@@ -1,4 +1,16 @@
-import ts from "typescript";
+import {
+  isArrayLiteralExpression,
+  isArrowFunction,
+  isBlock,
+  isCallExpression,
+  isIdentifier,
+  isNumericLiteral,
+  isPropertyAccessExpression,
+  isStringLiteral,
+  type Node,
+  type SourceFile,
+} from "typescript/ast";
+import { API } from "typescript/sync";
 
 export type BenchResult = {
   name: string;
@@ -12,54 +24,68 @@ const dedent = (text: string, indent: number): string =>
     .map((line, index) => (index === 0 ? line : line.slice(Math.min(indent, line.search(/\S|$/)))))
     .join("\n");
 
-export const extractBenchSources = (source: string): Record<string, string> => {
-  const file = ts.createSourceFile("bench.ts", source, ts.ScriptTarget.Latest, true);
+const parseBench = <T>(source: string, extract: (file: SourceFile) => T): T => {
+  const api = new API();
+  try {
+    using retained = api.createSourceFile("bench.ts", source);
+    return extract(retained.sourceFile);
+  } finally {
+    api.close();
+  }
+};
+
+export const extractBenchSources = (source: string): Record<string, string> =>
+  parseBench(source, (file) => collectBenchSources(file, source));
+
+const collectBenchSources = (file: SourceFile, source: string): Record<string, string> => {
   const sources: Record<string, string> = {};
-  const visit = (node: ts.Node): void => {
+  const visit = (node: Node): void => {
     if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
+      isCallExpression(node) &&
+      isIdentifier(node.expression) &&
       node.expression.text === "bench"
     ) {
       const [title, callback] = node.arguments;
-      if (title && ts.isStringLiteral(title) && callback && ts.isArrowFunction(callback)) {
+      if (title && isStringLiteral(title) && callback && isArrowFunction(callback)) {
         const body = callback.body;
-        const first = ts.isBlock(body) ? body.statements.at(0) : undefined;
-        const last = ts.isBlock(body) ? body.statements.at(-1) : undefined;
+        const first = isBlock(body) ? body.statements.at(0) : undefined;
+        const last = isBlock(body) ? body.statements.at(-1) : undefined;
         if (first && last) {
           const indent = file.getLineAndCharacterOfPosition(first.getStart(file)).character;
           sources[title.text] = dedent(source.slice(first.getStart(file), last.end), indent);
-        } else if (!ts.isBlock(body)) {
+        } else if (!isBlock(body)) {
           sources[title.text] = body.getText(file);
         }
       }
     }
-    ts.forEachChild(node, visit);
+    node.forEachChild(visit);
   };
   visit(file);
   return sources;
 };
 
-export const extractBaselines = (source: string): Record<string, number> => {
-  const file = ts.createSourceFile("bench.ts", source, ts.ScriptTarget.Latest, true);
+export const extractBaselines = (source: string): Record<string, number> =>
+  parseBench(source, collectBaselines);
+
+const collectBaselines = (file: SourceFile): Record<string, number> => {
   const baselines: Record<string, number> = {};
-  const visit = (node: ts.Node): void => {
+  const visit = (node: Node): void => {
     if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
+      isCallExpression(node) &&
+      isPropertyAccessExpression(node.expression) &&
       node.expression.name.text === "types" &&
-      ts.isCallExpression(node.expression.expression) &&
-      ts.isIdentifier(node.expression.expression.expression) &&
+      isCallExpression(node.expression.expression) &&
+      isIdentifier(node.expression.expression.expression) &&
       node.expression.expression.expression.text === "bench"
     ) {
       const [title] = node.expression.expression.arguments;
       const [snapshot] = node.arguments;
-      const count = snapshot && ts.isArrayLiteralExpression(snapshot) && snapshot.elements[0];
-      if (title && ts.isStringLiteral(title) && count && ts.isNumericLiteral(count)) {
+      const count = snapshot && isArrayLiteralExpression(snapshot) && snapshot.elements[0];
+      if (title && isStringLiteral(title) && count && isNumericLiteral(count)) {
         baselines[title.text] = Number(count.text);
       }
     }
-    ts.forEachChild(node, visit);
+    node.forEachChild(visit);
   };
   visit(file);
   return baselines;

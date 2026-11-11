@@ -2,7 +2,7 @@ import { type AstCallExpression, objectProperty, staticString } from "../lib/ast
 import { configureImportTracker, resolveValue } from "../lib/sdk-bindings.js";
 import type { Rule } from "eslint";
 
-const rule = {
+const rule: Rule.RuleModule = {
   meta: {
     type: "problem",
     docs: {
@@ -33,6 +33,6 @@ const rule = {
       },
     };
   },
-} satisfies Rule.RuleModule;
+};
 
 export default rule;

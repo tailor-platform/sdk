@@ -1,14 +1,18 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import ts from "typescript";
+import { ScriptTarget } from "typescript/ast";
+import { ModuleKind, ModuleResolutionKind } from "typescript/sync";
 import { afterAll, describe, expect, test } from "vitest";
+import { createTypeChecker, flattenDiagnosticText } from "#/utils/test-helpers/type-check";
 
 const SDK_SRC = join(import.meta.dirname, "..", "..");
 
 const tempDirs: string[] = [];
+const checker = createTypeChecker();
 
 afterAll(() => {
+  checker.close();
   for (const dir of tempDirs) {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -49,28 +53,23 @@ function diagnosticsFor(apps: App[], probe: string): string[] {
   writeFileSync(probeFile, probe);
   rootNames.push(resolverFile, probeFile);
 
-  const program = ts.createProgram({
-    rootNames,
-    options: {
+  return checker
+    .diagnostics(rootNames, {
       strict: true,
       skipLibCheck: true,
       noEmit: true,
-      target: ts.ScriptTarget.ES2022,
-      module: ts.ModuleKind.ESNext,
-      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      target: ScriptTarget.ES2022,
+      module: ModuleKind.ESNext,
+      moduleResolution: ModuleResolutionKind.Bundler,
       paths: {
         "@tailor-platform/sdk": [join(SDK_SRC, "configure", "index.ts")],
         "@tailor-platform/sdk/runtime": [join(SDK_SRC, "runtime", "index.ts")],
       },
-    },
-  });
-
-  return ts
-    .getPreEmitDiagnostics(program)
-    .filter((diagnostic) => diagnostic.file && diagnostic.file.fileName.startsWith(dir))
+    })
+    .filter((diagnostic) => diagnostic.fileName?.startsWith(dir))
     .map(
       (diagnostic) =>
-        `${diagnostic.file?.fileName.slice(dir.length + 1)}: TS${diagnostic.code} ${ts.flattenDiagnosticMessageText(diagnostic.messageText, " ")}`,
+        `${diagnostic.fileName?.slice(dir.length + 1)}: TS${diagnostic.code} ${flattenDiagnosticText(diagnostic, " ")}`,
     );
 }
 
@@ -104,7 +103,7 @@ declare const day: output<typeof field>;
 export const asString: string = day;
 `;
 
-// Each case compiles the SDK entry through ts.createProgram, which takes seconds under load.
+// Each case compiles the SDK entry through the TypeScript API, which takes seconds under load.
 describe("DateRepresentationRegistry through the public package entry", { timeout: 60_000 }, () => {
   test("one app set to temporal types t.date() as Temporal.PlainDate", () => {
     const diagnostics = diagnosticsFor(

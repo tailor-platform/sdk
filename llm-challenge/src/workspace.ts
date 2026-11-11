@@ -142,7 +142,7 @@ async function ensureWorkspacePackage(worktreePath: string): Promise<void> {
     ...(isObject(packageJson.devDependencies) ? packageJson.devDependencies : {}),
     "@types/node": "24.12.4",
     tsx: "4.21.1",
-    typescript: "6.0.3",
+    typescript: "7.1.0-dev.20261107.1",
   };
   await fs.writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 }
