@@ -33,8 +33,7 @@ export async function serveJsonRpc(
       const header = buffer.subarray(0, headerEnd).toString("ascii");
       const length = /Content-Length:\s*(\d+)/i.exec(header)?.[1];
       if (length === undefined) {
-        const { internalError } = await import("#/cli/shared/errors");
-        throw internalError(`Malformed JSON-RPC header: ${header}`);
+        throw new Error(`Malformed JSON-RPC header: ${header}`);
       }
       const bodyStart = headerEnd + HEADER_END.length;
       const bodyEnd = bodyStart + Number(length);
