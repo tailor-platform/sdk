@@ -73,6 +73,12 @@ guaranteed to contain an error object. A failure that points at a file starts it
 envelope and in plain output, with the file's path relative to the working directory and, when
 known, the line: `tailordb/order.ts:3: Invalid syntax: Expression expected`.
 
+`DEFINITION_NAME_DUPLICATE` reports names shared by multiple resolvers in one namespace, executors,
+workflow jobs, HTTP adapters, IdPs, static websites, or AI Gateways. `error.context.kind` identifies
+the kind, and `error.context.duplicates` lists each duplicated name and its definitions, including
+`file` and `exportName`. For IdPs, static websites, and AI Gateways, each definition also has a
+`path` array identifying the config entry, such as `["staticWebsites", 2]`.
+
 The exit code separates a mistyped command from a failed one without parsing output: `0` on success,
 `2` when the CLI rejects the command line itself, such as an unknown option or subcommand, an
 unexpected argument, or an option value that fails validation (including one set through its
@@ -101,6 +107,14 @@ If deployment fails and saving recovery metadata also fails, `DEPLOY_METADATA_RE
 includes separate `error.context.apply` and `error.context.recovery` errors, each retaining its code
 and available recovery information. Inspect the current resource state before retrying: some writes
 may have completed. `--verbose --json` additionally includes stack traces for both causes.
+
+When `tailor deploy` finds values the Tailor Platform would reject, it stops before applying
+anything and reports `DEPLOY_VALIDATION_FAILED`. `error.context.issues` lists every rejected
+value across all configs in the run, each with its `application`, `resourceType`, `name`,
+`action`, `fieldPath`, and `message`. `resourceType` is a resource type id such as `idp.client`,
+`action` is `create`, `update`, or `replace`, and `fieldPath` is a dotted field path in the
+request sent to the Platform, such as `tailordb_type.name`. The IdP email-domain check instead
+uses the config field path `userAuthPolicy.allowedEmailDomains`.
 
 Generation hook failures use `PLUGIN_GENERATION_FAILED`. The error includes the failed hook
 and each failing plugin's ID and error in `error.context.failures`; successful plugins are

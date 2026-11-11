@@ -77,12 +77,42 @@ import { secretCreateRequest, secretUpdateRequest, vaultCreateRequest } from "./
 import { buildWorkflowValidationShape } from "./workflow";
 import { toPlatformExecutionPolicyKey } from "./workflow-execution-policy";
 import type { PlanResults } from "./apply-phases";
+import type { ManagedResourceType } from "./managed-resource-type";
 
-/** Plan results passed to validatePlan. */
-export type ValidatePlanInput = PlanResults;
+const RESOURCE_LABELS = {
+  "tailordb.service": "TailorDB service",
+  "tailordb.type": "TailorDB table",
+  staticwebsite: "StaticWebsite",
+  "staticwebsite.custom_domain": "StaticWebsite custom domain",
+  "staticwebsite.custom_domain_transfer": "StaticWebsite custom domain transfer",
+  aigateway: "AIGateway",
+  "idp.service": "IdP service",
+  "idp.client": "IdP client secret",
+  "auth.service": "Auth service",
+  "auth.idp_config": "Auth IDP config",
+  "auth.user_profile_config": "Auth user profile config",
+  "auth.tenant_config": "Auth tenant config",
+  "auth.machine_user": "Auth machine user",
+  "auth.hook": "Auth hook",
+  "auth.scim": "Auth SCIM config",
+  "auth.scim_resource": "Auth SCIM resource",
+  "auth.oauth2_client": "OAuth2 client",
+  "pipeline.service": "Pipeline service",
+  "pipeline.resolver": "Resolver",
+  executor: "Executor",
+  workflow: "Workflow",
+  workflow_job_function: "Workflow job function",
+  workflow_job_function_execution_policy: "Workflow execution policy",
+  "secret.vault": "Secret Manager vault",
+  "secret.secret": "Secret Manager secret",
+  application: "Application",
+  "auth.connection": "Auth connection",
+} as const satisfies Partial<Record<ManagedResourceType, string>>;
+
+type ValidatedResourceType = keyof typeof RESOURCE_LABELS;
 
 type ViolationEntry = {
-  kind: string;
+  resourceType: ValidatedResourceType;
   name: string;
   action: "create" | "update" | "replace";
   fieldPath: string;
@@ -94,8 +124,9 @@ type HasCreateRequest = { name: string; createRequest: unknown };
 type HasUpdateRequest = { name: string; updateRequest: unknown };
 
 type ValidateItemsParams<Desc extends DescMessage> = {
+  application: string;
   schema: Desc;
-  kind: string;
+  resourceType: ValidatedResourceType;
   action: "create" | "update" | "replace";
   items: ReadonlyArray<HasRequest | HasCreateRequest | HasUpdateRequest>;
   requestKey: "request" | "createRequest" | "updateRequest";
@@ -119,7 +150,7 @@ function validatorFor(schema: DescMessage): Validator {
 }
 
 function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Desc>): void {
-  const { schema, kind, action, items, requestKey, violations } = params;
+  const { application, schema, resourceType, action, items, requestKey, violations } = params;
   if (items.length === 0) {
     return;
   }
@@ -131,7 +162,7 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
     if (result.kind === "invalid") {
       for (const v of result.violations) {
         violations.push({
-          kind,
+          resourceType,
           name: item.name,
           action,
           fieldPath: v.field.length > 0 ? pathToString(v.field) : "(message)",
@@ -140,7 +171,9 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
       }
     } else if (result.kind === "error") {
       // Evaluator failures must not block deploys; the platform stays the authoritative validator.
-      logger.warn(`Could not validate ${kind} "${item.name}" (${action}): ${result.error.message}`);
+      logger.warn(
+        `Application "${application}": Could not validate ${RESOURCE_LABELS[resourceType]} "${item.name}" (${action}): ${result.error.message}`,
+      );
     }
   }
 }
@@ -149,8 +182,8 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
  * Validate all plan-time create/update requests against buf.validate constraints embedded in the
  * generated proto descriptors.
  *
- * Collections not validated: idp client, tailorDB gqlPermission, functionRegistry — no
- * buf.validate annotations.
+ * Collections not validated: idp client (only its derived secret names are), tailorDB
+ * gqlPermission, functionRegistry — no buf.validate annotations.
  * Application cors, AIGateway cors, and IdP userAuthPolicy.allowedReturnOrigins receive
  * special handling: static-website URL placeholders are resolved at apply time, so the
  * relevant origin/URL constraints would false-positive on `<name>:url` entries
@@ -165,9 +198,11 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
  * auth idpConfig.config (provider oneof) is absent at plan time for BuiltInIdP but carries no
  * required constraint — the request is validated as-is from the changeset.
  *
- * @param input - Plan results from the plan phase
+ * @param application - Application the plan belongs to
+ * @param results - Plan results of one deployment
+ * @returns Violations found in the deployment's requests
  */
-export async function validatePlan(input: ValidatePlanInput): Promise<void> {
+function collectViolations(application: string, results: PlanResults): ViolationEntry[] {
   const {
     tailorDB,
     staticWebsite,
@@ -180,18 +215,19 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     workflow,
     workflowExecutionPolicy,
     secretManager,
-  } = input;
+  } = results;
 
   const violations: ViolationEntry[] = [];
 
   function creates<Desc extends DescMessage>(
     schema: Desc,
-    kind: string,
+    resourceType: ValidatedResourceType,
     items: ReadonlyArray<HasRequest>,
   ): void {
     validateItems({
+      application,
       schema,
-      kind,
+      resourceType,
       action: "create",
       items,
       requestKey: "request",
@@ -201,12 +237,13 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
 
   function updates<Desc extends DescMessage>(
     schema: Desc,
-    kind: string,
+    resourceType: ValidatedResourceType,
     items: ReadonlyArray<HasRequest>,
   ): void {
     validateItems({
+      application,
       schema,
-      kind,
+      resourceType,
       action: "update",
       items,
       requestKey: "request",
@@ -216,12 +253,13 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
 
   function replaces<Desc extends DescMessage>(
     schema: Desc,
-    kind: string,
+    resourceType: ValidatedResourceType,
     items: ReadonlyArray<HasCreateRequest>,
   ): void {
     validateItems({
+      application,
       schema,
-      kind,
+      resourceType,
       action: "replace",
       items,
       requestKey: "createRequest",
@@ -231,12 +269,13 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
 
   function inPlaceReplaces<Desc extends DescMessage>(
     schema: Desc,
-    kind: string,
+    resourceType: ValidatedResourceType,
     items: ReadonlyArray<HasUpdateRequest>,
   ): void {
     validateItems({
+      application,
       schema,
-      kind,
+      resourceType,
       action: "replace",
       items,
       requestKey: "updateRequest",
@@ -247,46 +286,46 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
   // TailorDB service creates (UpdateService has no request field — only metaRequest)
   creates(
     CreateTailorDBServiceRequestSchema,
-    "TailorDB service",
+    "tailordb.service",
     tailorDB.changeSet.service.creates as HasRequest[],
   );
 
   creates(
     CreateTailorDBTypeRequestSchema,
-    "TailorDB table",
+    "tailordb.type",
     tailorDB.changeSet.type.creates as HasRequest[],
   );
   updates(
     UpdateTailorDBTypeRequestSchema,
-    "TailorDB table",
+    "tailordb.type",
     tailorDB.changeSet.type.updates as HasRequest[],
   );
 
   creates(
     CreateStaticWebsiteRequestSchema,
-    "StaticWebsite",
+    "staticwebsite",
     staticWebsite.changeSet.creates as HasRequest[],
   );
   updates(
     UpdateStaticWebsiteRequestSchema,
-    "StaticWebsite",
+    "staticwebsite",
     staticWebsite.changeSet.updates as HasRequest[],
   );
   creates(
     AddCustomDomainRequestSchema,
-    "StaticWebsite custom domain",
+    "staticwebsite.custom_domain",
     staticWebsite.customDomainChangeSet.creates as HasRequest[],
   );
   creates(
     RequestCustomDomainTransferRequestSchema,
-    "StaticWebsite custom domain transfer",
+    "staticwebsite.custom_domain_transfer",
     staticWebsite.customDomainTransferChangeSet.creates as HasRequest[],
   );
 
   // cors is excluded: static-website URL placeholders are resolved at apply time.
   creates(
     CreateAIGatewayRequestSchema,
-    "AIGateway",
+    "aigateway",
     (aiGateway.changeSet.creates as HasRequest[]).map((item) => ({
       name: item.name,
       request: { ...(item.request as Record<string, unknown>), cors: undefined },
@@ -294,7 +333,7 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
   );
   updates(
     UpdateAIGatewayRequestSchema,
-    "AIGateway",
+    "aigateway",
     (aiGateway.changeSet.updates as HasRequest[]).map((item) => ({
       name: item.name,
       request: { ...(item.request as Record<string, unknown>), cors: undefined },
@@ -328,12 +367,12 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
   };
   creates(
     CreateIdPServiceRequestSchema,
-    "IdP service",
+    "idp.service",
     (idp.changeSet.service.creates as HasRequest[]).map(substituteIdpReturnOrigins),
   );
   updates(
     UpdateIdPServiceRequestSchema,
-    "IdP service",
+    "idp.service",
     (idp.changeSet.service.updates as HasRequest[]).map(substituteIdpReturnOrigins),
   );
   for (const [action, items] of [
@@ -343,7 +382,7 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     for (const item of items) {
       if (hasImplicitAllEmailDomains(item.request.userAuthPolicy)) {
         violations.push({
-          kind: "IdP service",
+          resourceType: "idp.service",
           name: item.name,
           action,
           fieldPath: "userAuthPolicy.allowedEmailDomains",
@@ -369,7 +408,7 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
   ];
   creates(
     CreateSecretManagerVaultRequestSchema,
-    "IdP client secret",
+    "idp.client",
     idpClientVaultItems.map((item) => ({
       name: item.clientName,
       request: {
@@ -380,7 +419,7 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
   );
   creates(
     CreateSecretManagerSecretRequestSchema,
-    "IdP client secret",
+    "idp.client",
     idpClientVaultItems.map((item) => ({
       name: item.clientName,
       request: {
@@ -393,143 +432,143 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
 
   creates(
     CreateAuthServiceRequestSchema,
-    "Auth service",
+    "auth.service",
     auth.changeSet.service.creates as HasRequest[],
   );
   updates(
     UpdateAuthServiceRequestSchema,
-    "Auth service",
+    "auth.service",
     auth.changeSet.service.updates as HasRequest[],
   );
 
   creates(
     CreateAuthIDPConfigRequestSchema,
-    "Auth IDP config",
+    "auth.idp_config",
     auth.changeSet.idpConfig.creates as HasRequest[],
   );
   updates(
     UpdateAuthIDPConfigRequestSchema,
-    "Auth IDP config",
+    "auth.idp_config",
     auth.changeSet.idpConfig.updates as HasRequest[],
   );
 
   creates(
     CreateUserProfileConfigRequestSchema,
-    "Auth user profile config",
+    "auth.user_profile_config",
     auth.changeSet.userProfileConfig.creates as HasRequest[],
   );
   updates(
     UpdateUserProfileConfigRequestSchema,
-    "Auth user profile config",
+    "auth.user_profile_config",
     auth.changeSet.userProfileConfig.updates as HasRequest[],
   );
 
   creates(
     CreateTenantConfigRequestSchema,
-    "Auth tenant config",
+    "auth.tenant_config",
     auth.changeSet.tenantConfig.creates as HasRequest[],
   );
   updates(
     UpdateTenantConfigRequestSchema,
-    "Auth tenant config",
+    "auth.tenant_config",
     auth.changeSet.tenantConfig.updates as HasRequest[],
   );
 
   creates(
     CreateAuthMachineUserRequestSchema,
-    "Auth machine user",
+    "auth.machine_user",
     auth.changeSet.machineUser.creates as HasRequest[],
   );
   updates(
     UpdateAuthMachineUserRequestSchema,
-    "Auth machine user",
+    "auth.machine_user",
     auth.changeSet.machineUser.updates as HasRequest[],
   );
 
   creates(
     CreateAuthHookRequestSchema,
-    "Auth hook",
+    "auth.hook",
     auth.changeSet.authHook.creates as HasRequest[],
   );
   updates(
     UpdateAuthHookRequestSchema,
-    "Auth hook",
+    "auth.hook",
     auth.changeSet.authHook.updates as HasRequest[],
   );
 
   creates(
     CreateAuthSCIMConfigRequestSchema,
-    "Auth SCIM config",
+    "auth.scim",
     auth.changeSet.scim.creates as HasRequest[],
   );
   updates(
     UpdateAuthSCIMConfigRequestSchema,
-    "Auth SCIM config",
+    "auth.scim",
     auth.changeSet.scim.updates as HasRequest[],
   );
 
   creates(
     CreateAuthSCIMResourceRequestSchema,
-    "Auth SCIM resource",
+    "auth.scim_resource",
     auth.changeSet.scimResource.creates as HasRequest[],
   );
   updates(
     UpdateAuthSCIMResourceRequestSchema,
-    "Auth SCIM resource",
+    "auth.scim_resource",
     auth.changeSet.scimResource.updates as HasRequest[],
   );
 
   creates(
     CreateAuthOAuth2ClientRequestSchema,
-    "OAuth2 client",
+    "auth.oauth2_client",
     auth.changeSet.oauth2Client.creates as HasRequest[],
   );
   updates(
     UpdateAuthOAuth2ClientRequestSchema,
-    "OAuth2 client",
+    "auth.oauth2_client",
     auth.changeSet.oauth2Client.updates as HasRequest[],
   );
   replaces(
     CreateAuthOAuth2ClientRequestSchema,
-    "OAuth2 client",
+    "auth.oauth2_client",
     auth.changeSet.oauth2Client.replaces as HasCreateRequest[],
   );
 
   creates(
     CreatePipelineServiceRequestSchema,
-    "Pipeline service",
+    "pipeline.service",
     pipeline.changeSet.service.creates as HasRequest[],
   );
   updates(
     UpdatePipelineServiceRequestSchema,
-    "Pipeline service",
+    "pipeline.service",
     pipeline.changeSet.service.updates as HasRequest[],
   );
   creates(
     CreatePipelineResolverRequestSchema,
-    "Resolver",
+    "pipeline.resolver",
     pipeline.changeSet.resolver.creates as HasRequest[],
   );
   updates(
     UpdatePipelineResolverRequestSchema,
-    "Resolver",
+    "pipeline.resolver",
     pipeline.changeSet.resolver.updates as HasRequest[],
   );
 
   creates(
     CreateExecutorExecutorRequestSchema,
-    "Executor",
+    "executor",
     executor.changeSet.creates as HasRequest[],
   );
   updates(
     UpdateExecutorExecutorRequestSchema,
-    "Executor",
+    "executor",
     executor.changeSet.updates as HasRequest[],
   );
 
   creates(
     CreateWorkflowRequestSchema,
-    "Workflow",
+    "workflow",
     workflow.changeSet.creates.map((item) => ({
       name: item.name,
       request: buildWorkflowValidationShape(item.workspaceId, item.workflow),
@@ -537,7 +576,7 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
   );
   updates(
     UpdateWorkflowRequestSchema,
-    "Workflow",
+    "workflow",
     workflow.changeSet.updates.map((item) => ({
       name: item.name,
       request: buildWorkflowValidationShape(item.workspaceId, item.workflow),
@@ -559,7 +598,7 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     }
     creates(
       CreateWorkflowJobFunctionRequestSchema,
-      "Workflow job function",
+      "workflow_job_function",
       [...allJobNames].map((jobName) => ({
         name: jobName,
         request: {
@@ -573,7 +612,7 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
 
   creates(
     CreateWorkflowJobFunctionExecutionPolicyRequestSchema,
-    "Workflow execution policy",
+    "workflow_job_function_execution_policy",
     // Replaces re-create the resource after deleting it (execution_policy_key is
     // immutable), so their Create-shaped request must clear validation too.
     [
@@ -595,7 +634,7 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
   );
   updates(
     UpdateWorkflowJobFunctionExecutionPolicyRequestSchema,
-    "Workflow execution policy",
+    "workflow_job_function_execution_policy",
     workflowExecutionPolicy.changeSet.updates.map((item) => ({
       name: item.name,
       request: {
@@ -612,7 +651,7 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
 
   creates(
     CreateSecretManagerVaultRequestSchema,
-    "Secret Manager vault",
+    "secret.vault",
     secretManager.vaultChangeSet.creates.map((item) => ({
       name: item.name,
       request: vaultCreateRequest(item),
@@ -620,7 +659,7 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
   );
   creates(
     CreateSecretManagerSecretRequestSchema,
-    "Secret Manager secret",
+    "secret.secret",
     secretManager.secretChangeSet.creates.map((item) => ({
       name: item.name,
       request: secretCreateRequest(item),
@@ -628,7 +667,7 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
   );
   updates(
     UpdateSecretManagerSecretRequestSchema,
-    "Secret Manager secret",
+    "secret.secret",
     secretManager.secretChangeSet.updates.map((item) => ({
       name: item.name,
       request: secretUpdateRequest(item),
@@ -638,7 +677,7 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
   // cors is excluded: static-website URL placeholders are resolved at apply time.
   creates(
     CreateApplicationRequestSchema,
-    "Application",
+    "application",
     app.creates.map((item) => ({
       name: item.name,
       request: { ...item.request, cors: undefined },
@@ -646,7 +685,7 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
   );
   updates(
     UpdateApplicationRequestSchema,
-    "Application",
+    "application",
     [...app.updates, ...app.unchanged].map((item) => ({
       name: item.name,
       request: { ...item.request, cors: undefined },
@@ -655,32 +694,62 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
 
   creates(
     CreateAuthConnectionRequestSchema,
-    "Auth connection",
+    "auth.connection",
     auth.changeSet.connection.creates as HasRequest[],
   );
   inPlaceReplaces(
     UpdateAuthConnectionRequestSchema,
-    "Auth connection",
+    "auth.connection",
     auth.changeSet.connection.replaces as HasUpdateRequest[],
   );
 
+  return violations;
+}
+
+/** A deployment's plan results, with the application they belong to. */
+export type PlanToValidate = {
+  application: string;
+  results: PlanResults;
+};
+
+/**
+ * Validate the planned requests of every deployment before any of them is applied.
+ * @param plans - Plan results of each deployment in the run
+ */
+export async function validatePlans(plans: ReadonlyArray<PlanToValidate>): Promise<void> {
+  const violations = plans.flatMap((plan) =>
+    collectViolations(plan.application, plan.results).map((v) => ({
+      application: plan.application,
+      ...v,
+    })),
+  );
   if (violations.length === 0) {
     return;
   }
 
-  const resourceNames = new Set(violations.map((v) => `${v.kind}:${v.name}`));
-  logger.error(
-    `Pre-flight validation found ${violations.length} violation(s) across ${resourceNames.size} resource(s):`,
+  const resourceKeys = new Set(
+    violations.map((v) => JSON.stringify([v.application, v.resourceType, v.name])),
   );
+  logger.error(
+    `Pre-flight validation found ${violations.length} violation(s) across ${resourceKeys.size} resource(s):`,
+  );
+  const grouped = plans.length > 1;
+  const indent = grouped ? "    " : "  ";
+  let headedApplication: string | undefined;
   for (const v of violations) {
+    if (grouped && v.application !== headedApplication) {
+      headedApplication = v.application;
+      logger.log(`  Application ${styles.info(`"${headedApplication}"`)}:`);
+    }
     logger.log(
-      `  ${styles.resourceType(v.kind)} ${styles.resourceName(v.name)} ` +
+      `${indent}${styles.resourceType(RESOURCE_LABELS[v.resourceType])} ${styles.resourceName(v.name)} ` +
         `(${v.action}) — ${styles.bold(v.fieldPath)}: ${v.message}`,
     );
   }
 
   throw CLIError({
     code: "DEPLOY_VALIDATION_FAILED",
-    message: `${violations.length} validation error(s) found in ${resourceNames.size} resource(s)`,
+    message: `${violations.length} validation error(s) found in ${resourceKeys.size} resource(s)`,
+    context: { issues: violations },
   });
 }

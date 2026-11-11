@@ -150,6 +150,13 @@ export function definitionExportError(params: DefinitionErrorParams): CLIError {
   );
 }
 
+const DUPLICATE_NAME_LABELS = {
+  ...DEFINITION_LABELS,
+  idp: "IdP",
+  staticwebsite: "static website",
+  aigateway: "AI Gateway",
+} as const;
+
 interface NamedDefinition {
   /** Name the definition declares. */
   name: string;
@@ -159,9 +166,13 @@ interface NamedDefinition {
   exportName?: string;
   /** Where the definition comes from when its file does not say, such as its namespace or the plugin that generated it. */
   source?: string;
+  /** Path within the exported config, when the definition is a config entry. */
+  path?: FlatIssue["path"];
 }
 
-export interface UniqueDefinitionNamesParams extends Pick<DefinitionErrorParams, "kind"> {
+export interface UniqueDefinitionNamesParams {
+  /** Kind of definition whose names must be unique. */
+  kind: keyof typeof DUPLICATE_NAME_LABELS;
   /** Namespace the names must be unique in, when the kind has one. */
   namespace?: string;
   /** What the names must be unique across when that spans namespaces, such as "all TailorDB namespaces in the application". */
@@ -175,13 +186,14 @@ function compareCodePoints(a = "", b = ""): number {
 }
 
 function definitionLine(definition: Omit<NamedDefinition, "name">): string {
-  const { file, exportName, source } = definition;
+  const { file, exportName, source, path: configPath } = definition;
   const notes = [
     exportName === undefined || exportName === "default" ? undefined : `export: ${exportName}`,
     source,
   ].filter((note) => note !== undefined);
-  if (file === undefined) return `  - ${notes.join(", ") || "unknown source"}`;
-  return `  - ${path.relative(process.cwd(), file)}${notes.length > 0 ? ` (${notes.join(", ")})` : ""}`;
+  const pathLabel = configPath === undefined ? "" : ` (path: ${configPath.join(".")})`;
+  if (file === undefined) return `  - ${notes.join(", ") || "unknown source"}${pathLabel}`;
+  return `  - ${path.relative(process.cwd(), file)}${notes.length > 0 ? ` (${notes.join(", ")})` : ""}${pathLabel}`;
 }
 
 function uniqueNameSuggestion(label: string, params: UniqueDefinitionNamesParams): string {
@@ -209,15 +221,16 @@ export function assertUniqueDefinitionNames(params: UniqueDefinitionNamesParams)
     .filter(([, sameName]) => sameName.length > 1)
     .map(([name, sameName]) => ({
       name,
-      definitions: sameName.map(({ file, exportName, source }) => ({
+      definitions: sameName.map(({ file, exportName, source, path }) => ({
         file,
         exportName,
         ...(source === undefined ? {} : { source }),
+        ...(path === undefined ? {} : { path }),
       })),
     }));
   if (duplicates.length === 0) return;
 
-  const label = DEFINITION_LABELS[kind];
+  const label = DUPLICATE_NAME_LABELS[kind];
   const scope = namespace === undefined ? "" : ` in namespace "${namespace}"`;
   throw CLIError({
     code: "DEFINITION_NAME_DUPLICATE",
