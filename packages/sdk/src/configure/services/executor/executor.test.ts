@@ -341,6 +341,20 @@ describe("webhookTrigger response", () => {
     });
   });
 
+  test("a broad headers type keeps the array alternative for every header", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{ headers: Record<string, string | string[]> }>(),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args.headers["x-request-id"]).toEqualTypeOf<string | string[] | undefined>();
+          expectTypeOf(args.headers["accept"]).toEqualTypeOf<string | string[] | undefined>();
+        },
+      },
+    });
+  });
+
   test("body can be specified without headers and headers keep their defaults", () => {
     createExecutor({
       name: "test",

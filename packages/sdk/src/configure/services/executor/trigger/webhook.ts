@@ -69,9 +69,11 @@ export interface IncomingWebhookRequestOverrides {
   headers?: Record<string, string | string[]>;
 }
 
-type OverrideHeaders<H> = { [K in keyof H]: H[K] } & {
-  [K in Exclude<ListHeaderName, keyof H>]?: string | string[];
-} & Record<string, string>;
+type OverrideHeaders<H> = string extends keyof H
+  ? H
+  : { [K in keyof H]: H[K] } & {
+      [K in Exclude<ListHeaderName, keyof H>]?: string | string[];
+    } & Record<string, string>;
 
 type ResolveIncomingWebhookRequest<T extends IncomingWebhookRequestOverrides> = {
   body: T extends { body: infer B extends Record<string, unknown> } ? B : Record<string, unknown>;
