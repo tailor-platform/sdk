@@ -159,9 +159,6 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
  * placeholders; IdP `allowedReturnOrigins` instead substitutes placeholder entries
  * with a dummy origin so the per-item regex and the cross-field `enable_mfa requires
  * ≥1 origin` rule still get exercised on the rest of the payload.
- * An IdP service create or update whose `userAuthPolicy.allowedEmailDomains` is empty without
- * `useNonEmailIdentifier` is checked by hand: the platform rejects it for an omitted
- * `userAuthPolicy` as well, and a rule on the policy message never runs for an omitted policy.
  * Workflow jobFunctions map excluded: versions are registered at apply time (registerJobFunctions)
  * and the map field carries no min_items constraint. Job names are validated separately via
  * CreateWorkflowJobFunctionRequestSchema using usedJobNames from the workflow change set.
