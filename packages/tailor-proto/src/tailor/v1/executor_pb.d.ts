@@ -499,6 +499,9 @@ export declare type TriggerExecutorRequest = Message<"tailor.v1.TriggerExecutorR
 
   /**
    * headers maps a header name to a string, or to a list of strings for a name sent on more than one line.
+   * Names that the edge sets or strips, that describe the connection, or that carry trace context
+   * (such as tailor-*, x-forwarded-*, host and traceparent) are rejected.
+   * The names and values together can be up to 64 KiB.
    *
    * @generated from field: google.protobuf.Struct headers = 4;
    */
