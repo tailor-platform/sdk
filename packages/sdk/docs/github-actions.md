@@ -1394,7 +1394,7 @@ with the files it generated that `.github/tailor.lock` does not track, since
 the workflows among them still run, and prints the `git rm` command that
 removes them.
 It exits non-zero when it finds drift, so you can run it in CI. Each
-finding names a stable rule key for future suppression. Run
+finding ends with its rule key, as `(ignore key: <rule>)`. Run
 [`tailor setup update`](#updating-the-generated-workflow) to regenerate the
 workflows it reports.
 
@@ -1408,6 +1408,27 @@ run audits every workflow recorded in `.github/tailor.lock`.
 Drift findings are advisory by default. Set the repository variable
 `TAILOR_PLATFORM_FAIL_ON_DRIFT` to `true` to make unsuppressed findings fail
 the job. Execution and configuration errors fail regardless of this variable.
+
+To keep an intentional deviation, list its rule key in the `ignore` input of
+the `tailor-drift-check` step, separating several keys with commas on one
+line:
+
+```yaml
+- id: tailor-drift-check
+  with:
+    # ...
+    ignore: default-branch,template-version
+```
+
+The step then logs those findings without a warning and does not count them
+toward `TAILOR_PLATFORM_FAIL_ON_DRIFT`; the step summary still lists them
+and counts them as suppressed. A key suppresses that rule for every workflow
+the run audits, and a key that matches no rule is accepted without an error,
+so copy it from the finding. Set `ignore` in each workflow that has the step,
+since each one runs its own check. Re-running `setup` keeps the input (see
+[Customizing the generated workflow](#customizing-the-generated-workflow)).
+`ignore` applies only to this step: `tailor setup check` run locally still
+reports every finding.
 
 `check` compares only the generated files, `.github/tailor.lock` (and a
 leftover `.github/tailor-sdk.lock`), and the config; it does not read the

@@ -32,7 +32,7 @@ const DRIFT_COUNT_MARKER = "TAILOR_SETUP_CHECK_DRIFT_COUNT";
 const LEGACY_LOCK_FILENAME = ".github/tailor-sdk.lock";
 
 /**
- * Stable drift rule keys. These are part of the public contract: a future
+ * Stable drift rule keys. These are part of the public contract: the
  * `ignore` input on the workflow drift-check step suppresses findings by key.
  */
 type DriftRule =
