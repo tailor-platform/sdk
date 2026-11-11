@@ -23,7 +23,6 @@ import { CLIError } from "#/cli/shared/errors";
 import { formatKeyValueTable } from "#/cli/shared/format";
 import {
   colorizeFunctionExecutionStatus,
-  formatFunctionLogEntry,
   formatFunctionLogLines,
   functionExecutionStatusToString,
   type FunctionLogEntryInfo,
@@ -374,8 +373,11 @@ async function followFunctionExecution(
         if (printedEntries === 0) {
           logger.log(styles.bold("\nLogs:"));
         }
-        for (const entry of execution.logEntries.slice(printedEntries)) {
-          logger.log(`  ${formatFunctionLogEntry(toFunctionLogEntryInfo(entry))}`);
+        const lines = formatFunctionLogLines(
+          execution.logEntries.slice(printedEntries).map(toFunctionLogEntryInfo),
+        );
+        for (const line of lines) {
+          logger.log(`  ${line}`);
         }
         printedEntries = execution.logEntries.length;
       }

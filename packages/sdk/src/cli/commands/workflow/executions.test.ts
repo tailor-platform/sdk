@@ -233,10 +233,10 @@ describe("printExecutionWithLogs", () => {
       jobDetails: [
         {
           ...job,
-          logs: "step 1",
+          logs: "step 1\n\n    continued\n",
           logEntries: [
             {
-              message: "step 1",
+              message: "step 1\n\n    continued\n",
               severity: "INFO",
               timestamp: new Date("2026-09-05T00:00:00Z"),
               source: "USER",
@@ -247,7 +247,9 @@ describe("printExecutionWithLogs", () => {
     });
 
     const plain = stripAnsi(stderr.output);
-    expect(plain).toContain("2026-09-05T00:00:00.000Z [INFO] step 1");
+    expect(plain).toContain(
+      "    2026-09-05T00:00:00.000Z [INFO] step 1\n    \n        continued\n    \n",
+    );
     expect(plain.match(/step 1/g)).toHaveLength(1);
   });
 
@@ -259,7 +261,7 @@ describe("printExecutionWithLogs", () => {
       jobDetails: [
         {
           ...job,
-          logs: "step 1\nruns close to the limit",
+          logs: "step 1\nruns close to the limit\nmove long work elsewhere",
           logEntries: [
             {
               message: "step 1",
@@ -268,7 +270,7 @@ describe("printExecutionWithLogs", () => {
               source: "USER",
             },
             {
-              message: "runs close to the limit",
+              message: "runs close to the limit\nmove long work elsewhere",
               severity: "WARNING",
               timestamp: new Date("2026-09-05T00:00:01Z"),
               source: "PLATFORM",
@@ -281,7 +283,7 @@ describe("printExecutionWithLogs", () => {
     const plain = stripAnsi(stderr.output);
     expect(plain).toContain("2026-09-05T00:00:00.000Z [INFO] step 1\n");
     expect(plain).toContain(
-      "2026-09-05T00:00:01.000Z [WARNING] [PLATFORM] runs close to the limit",
+      "    2026-09-05T00:00:01.000Z [WARNING] [PLATFORM] runs close to the limit\n    [PLATFORM] move long work elsewhere\n",
     );
   });
 });
