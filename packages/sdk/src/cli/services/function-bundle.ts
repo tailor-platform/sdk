@@ -55,6 +55,8 @@ export interface FunctionBundleSettings {
   sdkBuilderAnnotationCache?: SdkBuilderAnnotationCache;
   /** Representation applied to `t` date fields that omit `as` */
   dateDefault?: EffectiveDateDefault;
+  /** Whether `kyselyTypePlugin` is configured with `temporal: true`, which the bundled `getDB` follows */
+  kyselyTemporal?: boolean;
 }
 
 interface RuntimeGlobalsCheck {
@@ -118,6 +120,7 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
     tsconfigCache,
     sdkBuilderAnnotationCache,
     dateDefault = "legacy",
+    kyselyTemporal = false,
   } = options;
 
   const absoluteSourcePath = path.resolve(sourceFile);
@@ -128,7 +131,12 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
     // source file, so a cached bundle would otherwise survive a change to them.
     // Encoded as a tuple rather than joined, so no separator has to be a
     // character no value can contain.
-    extraContext: JSON.stringify([serializeStartContext(startContext), entrySource, dateDefault]),
+    extraContext: JSON.stringify([
+      serializeStartContext(startContext),
+      entrySource,
+      dateDefault,
+      kyselyTemporal,
+    ]),
     tsconfig,
     inlineSourcemap,
     inlineSourcemapDependencySources,
@@ -160,7 +168,7 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
       }
       plugins.push(
         createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
-        createPlatformBundleDefinePlugin(dateRepresentations, dateDefault),
+        createPlatformBundleDefinePlugin(dateRepresentations, dateDefault, kyselyTemporal),
         createSdkBuilderPurePlugin(sdkBuilderAnnotationCache),
         ...cachePlugins,
       );

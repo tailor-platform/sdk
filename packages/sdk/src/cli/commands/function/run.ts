@@ -24,6 +24,8 @@ import { loadMachineUserName } from "#/cli/shared/context";
 import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
+import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
+import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { assertDefined } from "#/utils/assert";
 import { type ResolvedMachineUser } from "./bundle";
 import {
@@ -142,7 +144,7 @@ Changes to \`tailor.config.ts\`, \`tsconfig.json\`, \`package.json\`, env files,
     });
 
     // 2. Load config (required)
-    const { config } = await loadConfig(args.config);
+    const { config, plugins } = await loadConfig(args.config);
 
     // 3. Resolve auth, workspace, and machine user info (needed before bundling)
     const authNamespace = resolveAuthNamespace(config.auth);
@@ -193,6 +195,7 @@ Changes to \`tailor.config.ts\`, \`tsconfig.json\`, \`package.json\`, env files,
       filePath,
       jobName: args.name,
       config,
+      kyselyTemporal: resolvePluginConfig(plugins, KyselyGeneratorID)?.temporal ?? false,
       client,
       workspaceId,
       authNamespace,

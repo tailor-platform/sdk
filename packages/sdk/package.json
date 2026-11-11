@@ -62,6 +62,11 @@
       "import": "./dist/plugin/builtin/kysely-type/index.mjs",
       "default": "./dist/plugin/builtin/kysely-type/index.mjs"
     },
+    "./plugin/kysely-type/db": {
+      "types": "./dist/plugin/builtin/kysely-type/db.tailor",
+      "import": "./dist/plugin/builtin/kysely-type/db.mjs",
+      "default": "./dist/plugin/builtin/kysely-type/db.mjs"
+    },
     "./plugin/enum-constants": {
       "types": "./dist/plugin/builtin/enum-constants/index.d.mts",
       "import": "./dist/plugin/builtin/enum-constants/index.mjs",

@@ -9,6 +9,9 @@ import { loadMachineUserName } from "#/cli/shared/context";
 import { executeScriptReportingStart } from "#/cli/shared/script-executor";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { definePlugins } from "#/configure/config/index";
+import { kyselyTypePlugin } from "#/plugin/builtin/kysely-type/index";
+import { bundleForRun } from "./bundle";
 import { detectFunctionType } from "./detect";
 import { runFunctionCommand } from "./run";
 import { loadScriptSchemaSnapshot, verifyScriptSchemaSnapshot } from "./script-scaffold";
@@ -85,6 +88,7 @@ describe("function run --json", () => {
           },
         },
       },
+      plugins: [],
     } as unknown as Awaited<ReturnType<typeof loadConfig>>);
     getAuthMachineUserMock = vi.fn().mockResolvedValue({
       machineUser: {
@@ -223,6 +227,21 @@ describe("function run --json", () => {
 
     expect(JSON.parse(stdout.output)).toMatchObject({ success: true });
     expect(stderr.output).toContain("`tailor function test-run` is deprecated");
+  });
+
+  test("bundles the script with the temporal option of the config's kyselyTypePlugin", async () => {
+    const loaded = await loadConfig();
+    vi.mocked(loadConfig).mockResolvedValueOnce({
+      ...loaded,
+      plugins: definePlugins(kyselyTypePlugin({ distPath: "./db.ts", temporal: true })),
+    });
+    using _stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    await runCommand(runFunctionCommand, [tsScriptPath, "--machine-user", "admin"]);
+
+    expect(bundleForRun).toHaveBeenCalledWith(expect.objectContaining({ kyselyTemporal: true }));
   });
 
   test("verifies the schema snapshot of a scaffolded script before executing", async () => {
