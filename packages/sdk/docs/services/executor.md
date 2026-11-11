@@ -109,6 +109,8 @@ type WebhookRequest = {
 incomingWebhookTrigger<WebhookRequest>();
 ```
 
+Name only what you want to change in the type argument. The body type and the type of each header you name are replaced, and the others keep their defaults. For example, `incomingWebhookTrigger<{ headers: { "x-request-id": string[] } }>()` types `x-request-id` as `string[]`. Because one header is an array, the headers you do not name may then be arrays as well.
+
 You can customize the HTTP response returned to the webhook caller:
 
 ```typescript
@@ -452,7 +454,7 @@ export default createExecutor({
 
 ### Incoming Webhook Payload
 
-`IncomingWebhookArgs` types `body` and `headers` from the type argument of `incomingWebhookTrigger()`.
+`IncomingWebhookArgs` types `body` and `headers` from the type argument of `incomingWebhookTrigger()`. Header names are in lower case. `accept`, `via` and the other headers a client may send on several lines are `string | string[]`; any other header is a `string`.
 
 **Usage Example:**
 
@@ -488,7 +490,9 @@ export default createExecutor({
 
 The webhook URL is public, so verify the signature over the unparsed request body before trusting `body`. `rawBody` is delivered base64-encoded; decode it to the original bytes before computing the signature.
 
-When an executor is triggered manually with [`tailor executor trigger`](../cli/executor.md#executor-trigger) or `triggerExecutor` from `@tailor-platform/sdk/cli`, it receives empty `headers`, even when `--header` is given, and no `rawBody`. To test an executor that reads headers or verifies a signature, send a request to its webhook URL, which [`tailor executor webhook list`](../cli/executor.md#executor-webhook-list) shows.
+A header sent on one line is a string, and a header sent on more than one line is an array of strings.
+
+When an executor is triggered manually with [`tailor executor trigger`](../cli/executor.md#executor-trigger) or `triggerExecutor` from `@tailor-platform/sdk/cli`, it receives the headers passed with `--header` or the `headers` option, and no `rawBody`. A header passed once is a string, and a header passed more than once is an array. To test an executor that verifies a signature over `rawBody`, send a request to its webhook URL, which [`tailor executor webhook list`](../cli/executor.md#executor-webhook-list) shows.
 
 **With custom response:**
 

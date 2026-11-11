@@ -39,6 +39,35 @@ describe("triggerExecutor API types", () => {
     });
   });
 
+  test("allows headers for incomingWebhook executors, as a string or a list of strings", () => {
+    const acceptsOptions = (
+      _options: TriggerExecutorTypedOptions<typeof incomingWebhookExecutor>,
+    ): void => {};
+
+    acceptsOptions({
+      executor: incomingWebhookExecutor,
+      headers: { "x-request-id": "req-1", accept: ["application/json", "text/html"] },
+    });
+
+    acceptsOptions({
+      executor: incomingWebhookExecutor,
+      // @ts-expect-error - a header value is a string or a list of strings
+      headers: { "x-request-id": 1 },
+    });
+  });
+
+  test("disallows headers for schedule executors", () => {
+    const acceptsOptions = (
+      _options: TriggerExecutorTypedOptions<typeof scheduleExecutor>,
+    ): void => {};
+
+    acceptsOptions({
+      executor: scheduleExecutor,
+      // @ts-expect-error - schedule trigger does not accept headers
+      headers: { "x-request-id": "req-1" },
+    });
+  });
+
   test("disallows payload for schedule executors", () => {
     const acceptsOptions = (
       _options: TriggerExecutorTypedOptions<typeof scheduleExecutor>,
