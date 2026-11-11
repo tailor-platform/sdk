@@ -234,6 +234,24 @@ jobs:
             printf '%s\n' "${SAFE_TITLE}"
           } > "$FILENAME"
 
+      - name: Add the setup plugin to the existing changeset
+        if: steps.existing.outputs.found == 'true' && steps.template.outputs.changed == 'true'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -eo pipefail
+          FILENAME=".changeset/renovate-${PR_NUMBER}.md"
+          PLUGIN='"@tailor-platform/sdk-plugin-setup":'
+          if grep -qF "$PLUGIN" "$FILENAME"; then
+            exit 0
+          fi
+          awk -v line="$PLUGIN patch" 'NR == 1 && $0 == "---" { print; print line; next } { print }' "$FILENAME" > "$FILENAME.tmp"
+          mv "$FILENAME.tmp" "$FILENAME"
+          grep -qF "$PLUGIN" "$FILENAME" || {
+            echo "::error::$FILENAME has no front matter to list $PLUGIN in"
+            exit 1
+          }
+
       - name: Build the patch
         id: patch
         run: |

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, test } from "vitest";
 
 const MARK_STEP = "Mark pending template change";
 const CHANGESET_STEP = "Create changeset file";
+const EXISTING_CHANGESET_STEP = "Add the setup plugin to the existing changeset";
 const TEMPLATES = "packages/sdk-plugin-setup/src/templates.ts";
 const AUTOFIX_TEMPLATE = "packages/sdk-plugin-setup/src/autofix.workflow.yml";
 const SETUP_PLUGIN = "@tailor-platform/sdk-plugin-setup";
@@ -240,8 +241,56 @@ describe("securefix: changeset for a setup template change", { timeout: 60_000 }
   });
 });
 
+function runExistingChangesetStep(content) {
+  const root = tempRoot();
+  mkdirSync(join(root, ".changeset"));
+  const file = join(root, ".changeset/renovate-7.md");
+  writeFileSync(file, content);
+  const result = spawnSync("bash", ["-c", stepScript(EXISTING_CHANGESET_STEP)], {
+    cwd: root,
+    encoding: "utf8",
+    env: { ...process.env, PR_NUMBER: "7" },
+  });
+  return {
+    status: result.status,
+    output: result.stdout + result.stderr,
+    content: readFileSync(file, "utf8"),
+  };
+}
+
+describe("securefix: setup plugin in a changeset that already exists", { timeout: 60_000 }, () => {
+  const existing = '---\n"@other/pkg": patch\n---\n\nchore(deps): update dependency other\n';
+
+  test("adds the setup plugin and keeps the rest of the changeset", () => {
+    const result = runExistingChangesetStep(existing);
+    expect(result.status).toBe(0);
+    expect(result.content).toBe(
+      `---\n"${SETUP_PLUGIN}": patch\n"@other/pkg": patch\n---\n\nchore(deps): update dependency other\n`,
+    );
+  });
+
+  test("leaves a changeset that already lists the setup plugin untouched", () => {
+    const listed = `---\n"${SETUP_PLUGIN}": minor\n---\n\nchore(deps): update\n`;
+    const result = runExistingChangesetStep(listed);
+    expect(result.status).toBe(0);
+    expect(result.content).toBe(listed);
+  });
+
+  test("fails instead of silently doing nothing when the changeset has no front matter", () => {
+    const result = runExistingChangesetStep("chore(deps): update\n");
+    expect(result.status).not.toBe(0);
+    expect(result.output).toContain(SETUP_PLUGIN);
+  });
+});
+
 describe("securefix: template change reaches the changeset decision", () => {
   const output = (name) => stepLines(name).join("\n");
+
+  test("an existing changeset is amended only for a template change", () => {
+    expect(output(EXISTING_CHANGESET_STEP)).toContain(
+      "steps.existing.outputs.found == 'true' && steps.template.outputs.changed == 'true'",
+    );
+  });
 
   test("the mark step exposes its result under the id the later steps read", () => {
     expect(output(MARK_STEP)).toContain("id: template");
