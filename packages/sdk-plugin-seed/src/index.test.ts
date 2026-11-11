@@ -53,8 +53,7 @@ describe("seed CLI JSON errors", () => {
         error: {
           code: "CONFIG_NOT_FOUND",
           message: `Configuration file not found: ${path.resolve(configPath)}`,
-          suggestion:
-            "Run the command from the app directory, or pass the config file with --config.",
+          suggestion: "Check the path given with --config or TAILOR_CONFIG_PATH.",
           context: { file: path.resolve(configPath) },
         },
       });
