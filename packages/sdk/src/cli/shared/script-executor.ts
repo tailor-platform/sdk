@@ -5,6 +5,7 @@
  */
 
 import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
+import { CLIError } from "#/cli/shared/errors";
 import {
   isFunctionExecutionTerminalStatus,
   joinFunctionLogMessages,
@@ -105,7 +106,11 @@ export async function waitForExecution(
     });
 
     if (!execution) {
-      throw new Error(`Execution '${executionId}' not found.`);
+      throw CLIError({
+        code: "FUNCTION_EXECUTION_NOT_FOUND",
+        message: `Execution '${executionId}' not found.`,
+        context: { executionId },
+      });
     }
 
     // Check for terminal states

@@ -9,7 +9,7 @@ import {
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { createPrompt } from "@toiroakr/read-multiline";
 import * as path from "pathe";
-import { parse as parseSql } from "pgsql-ast-parser";
+import { parse as parseSql, type Statement } from "pgsql-ast-parser";
 import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
 import { assertDefined } from "#/utils/assert";
@@ -21,13 +21,13 @@ import { extractAllNamespaces } from "../shared/config";
 import { loadConfig, type LoadedConfig } from "../shared/config-loader";
 import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "../shared/context";
 import { getEditorCommand, openInEditor } from "../shared/editor";
-import { isCLIError } from "../shared/errors";
+import { CLIError, internalError, isCLIError } from "../shared/errors";
 import { logger } from "../shared/logger";
 import { parseBoolean } from "../shared/parse-boolean";
 import { parseOptions } from "../shared/parse-options";
 import { executeScript } from "../shared/script-executor";
 import { resolveTableNamespaces } from "../shared/tailordb-namespace";
-import { mapQueryExecutionError } from "./errors";
+import { mapQueryExecutionError, sqlParseError } from "./errors";
 import { isGraphQLInputComplete } from "./graphql-repl";
 import { isSqlInputComplete } from "./sql-repl";
 import {
@@ -103,7 +103,10 @@ async function getNamespaceFromSqlQuery(
   namespaces: string[],
 ): Promise<string> {
   if (namespaces.length === 0) {
-    throw new Error("No namespaces found in configuration.");
+    throw CLIError({
+      code: "TAILORDB_NAMESPACE_NOT_CONFIGURED",
+      message: "No TailorDB namespace is defined in the config.",
+    });
   }
 
   if (namespaces.length === 1) {
@@ -112,9 +115,12 @@ async function getNamespaceFromSqlQuery(
 
   const tableNames = extractTableNamesFromSql(query);
   if (tableNames.length === 0) {
-    throw new Error(
-      `Could not infer namespace from query. Detected namespaces: ${namespaces.join(", ")}.`,
-    );
+    throw CLIError({
+      code: "QUERY_NAMESPACE_UNRESOLVED",
+      message: `Could not infer namespace from query. Detected namespaces: ${namespaces.join(", ")}.`,
+      suggestion: "Reference a TailorDB table in the query; its namespace is resolved from it.",
+      context: { namespaces },
+    });
   }
 
   const tableNamespaceMap = await resolveTableNamespaces({
@@ -126,7 +132,12 @@ async function getNamespaceFromSqlQuery(
 
   const notFoundTables = tableNames.filter((tableName) => !tableNamespaceMap.has(tableName));
   if (notFoundTables.length > 0) {
-    throw new Error(`Could not find namespace for tables in query: ${notFoundTables.join(", ")}.`);
+    throw CLIError({
+      code: "QUERY_NAMESPACE_UNRESOLVED",
+      message: `Could not find namespace for tables in query: ${notFoundTables.join(", ")}.`,
+      suggestion: `Check the table names against the types deployed in namespaces: ${namespaces.join(", ")}.`,
+      context: { tables: notFoundTables, namespaces },
+    });
   }
 
   const namespacesFromTables = new Set(tableNamespaceMap.values());
@@ -134,9 +145,12 @@ async function getNamespaceFromSqlQuery(
     return assertDefined([...namespacesFromTables][0], "namespace from types missing");
   }
 
-  throw new Error(
-    `Query references tables from multiple namespaces: ${[...namespacesFromTables].join(", ")}.`,
-  );
+  throw CLIError({
+    code: "QUERY_NAMESPACE_AMBIGUOUS",
+    message: `Query references tables from multiple namespaces: ${[...namespacesFromTables].join(", ")}.`,
+    suggestion: "Query the tables of one namespace at a time.",
+    context: { namespaces: [...namespacesFromTables] },
+  });
 }
 
 async function loadOptions(options: QueryBaseOptions) {
@@ -148,9 +162,12 @@ async function loadOptions(options: QueryBaseOptions) {
     profile: validated.profile,
   });
   if (!machineUser) {
-    throw new Error(
-      "Machine user is required. Specify --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor profile update <profile> --machine-user <name>'.",
-    );
+    throw CLIError({
+      code: "MACHINE_USER_REQUIRED",
+      message: "Machine user is required.",
+      suggestion:
+        "Specify --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor profile update <profile> --machine-user <name>'.",
+    });
   }
 
   const accessToken = await loadAccessToken({
@@ -169,7 +186,10 @@ async function loadOptions(options: QueryBaseOptions) {
   });
 
   if (!application?.authNamespace) {
-    throw new Error(`Application ${config.name} does not have an auth configuration.`);
+    throw CLIError({
+      code: "AUTH_CONFIG_REQUIRED",
+      message: `Application ${config.name} does not have an auth configuration.`,
+    });
   }
 
   const { machineUser: machineUserResource } = await client.getAuthMachineUser({
@@ -179,7 +199,10 @@ async function loadOptions(options: QueryBaseOptions) {
   });
 
   if (!machineUserResource) {
-    throw new Error(`Machine user ${machineUser} not found.`);
+    throw CLIError({
+      code: "MACHINE_USER_NOT_FOUND",
+      message: `Machine user ${machineUser} not found.`,
+    });
   }
 
   return {
@@ -191,6 +214,21 @@ async function loadOptions(options: QueryBaseOptions) {
     machineUserResource,
     namespaces,
   };
+}
+
+function queryExecutionFailedError(reason: string | undefined): CLIError {
+  return CLIError({
+    code: "QUERY_EXECUTION_FAILED",
+    message: reason ?? "Query execution failed.",
+  });
+}
+
+function queryInputRequiredError(): CLIError {
+  return CLIError({
+    code: "QUERY_INPUT_REQUIRED",
+    message: "Non-interactive terminals are not supported.",
+    suggestion: "Pass -q/--query or -f/--file to run a query.",
+  });
 }
 
 async function sqlQuery(
@@ -217,7 +255,7 @@ async function sqlQuery(
   });
 
   if (!executed.success) {
-    throw new Error(executed.error);
+    throw queryExecutionFailedError(executed.error);
   }
 
   return {
@@ -259,7 +297,7 @@ async function gqlQuery(
   });
 
   if (!executed.success) {
-    throw new Error(executed.error);
+    throw queryExecutionFailedError(executed.error);
   }
 
   return {
@@ -321,9 +359,7 @@ export async function resolveQueryCommandInput(args: {
 
 async function resolveEditedQueryInput(engine: QueryEngine): Promise<QueryCommandInput> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    throw new Error(
-      "Non-interactive terminals are not supported. Pass -q/--query or -f/--file to run a query.",
-    );
+    throw queryInputRequiredError();
   }
 
   const editor = getEditorCommand();
@@ -338,10 +374,14 @@ async function resolveEditedQueryInput(engine: QueryEngine): Promise<QueryComman
     try {
       await openInEditor(filePath, editor);
     } catch (error) {
-      throw new Error(
-        `Failed to open query editor "${editor}": ${error instanceof Error ? error.message : String(error)}`,
-        { cause: error },
-      );
+      if (isCLIError(error)) {
+        throw error;
+      }
+      throw CLIError({
+        code: "EDITOR_FAILED",
+        message: `Failed to open query editor "${editor}": ${error instanceof Error ? error.message : String(error)}`,
+        cause: error,
+      });
     }
 
     const editedQuery = await fs.readFile(filePath, "utf-8");
@@ -405,7 +445,7 @@ async function prepareQueryExecutor(
             query: queryString,
           });
         default:
-          throw new Error(`Unsupported query engine: ${engine satisfies never}`);
+          throw internalError(`Unsupported query engine: ${engine satisfies never}`);
       }
     } catch (error) {
       throw mapQueryExecutionError({
@@ -498,9 +538,7 @@ async function runRepl(
   },
 ): Promise<void> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    throw new Error(
-      "Non-interactive terminals are not supported. Pass -q/--query or -f/--file to run a query.",
-    );
+    throw queryInputRequiredError();
   }
 
   const execute = await prepareQueryExecutor(options);
@@ -626,7 +664,7 @@ async function querySql(options: QuerySharedOptions): Promise<SQLQueryDispatchRe
   });
 
   if (result.engine !== "sql") {
-    throw new Error(`Expected sql engine result but got: ${result.engine}`);
+    throw internalError(`Expected sql engine result but got: ${result.engine}`);
   }
 
   return result;
@@ -644,7 +682,7 @@ async function queryGql(options: QuerySharedOptions): Promise<GQLQueryDispatchRe
   });
 
   if (result.engine !== "gql") {
-    throw new Error(`Expected gql engine result but got: ${result.engine}`);
+    throw internalError(`Expected gql engine result but got: ${result.engine}`);
   }
 
   return result;
@@ -885,8 +923,16 @@ function printSingleSqlResult(
   logger.info(`rows: ${execResult.rowCount}`);
 }
 
+function parseSqlStatements(query: string): Statement[] {
+  try {
+    return parseSql(query, { locationTracking: true });
+  } catch (error) {
+    throw sqlParseError(error);
+  }
+}
+
 function splitSqlStatements(query: string): string[] {
-  const statements = parseSql(query, { locationTracking: true });
+  const statements = parseSqlStatements(query);
   // Extract original SQL text using AST location info instead of re-serializing
   // to preserve the user's original casing and syntax.
   // _location.end is unreliable for INSERT/UPDATE statements (https://github.com/oguimbal/pgsql-ast-parser/issues/135),

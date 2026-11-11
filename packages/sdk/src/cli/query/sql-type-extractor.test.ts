@@ -11,13 +11,26 @@ describe("extractTableNamesFromSql", () => {
   test("throws with helpful message when parser cannot parse query", () => {
     const sql = "select from";
 
-    expect(() => extractTableNamesFromSql(sql)).toThrow(/SQL parse error:/);
+    expect(() => extractTableNamesFromSql(sql)).toThrow(
+      expect.objectContaining({
+        code: "invalid_sql",
+        message: expect.stringMatching(/^SQL parse error: /),
+        cause: expect.any(Error),
+      }),
+    );
   });
 
   test("throws with suggestion to quote reserved keywords", () => {
     const sql = "SELECT * FROM User";
 
-    expect(() => extractTableNamesFromSql(sql)).toThrow(/wrap it in double quotes/);
+    expect(() => extractTableNamesFromSql(sql)).toThrow(
+      expect.objectContaining({
+        code: "invalid_sql",
+        message: expect.not.stringContaining("double quotes"),
+        suggestion:
+          'If your table name is a reserved keyword (e.g. User), wrap it in double quotes: SELECT * FROM "User"',
+      }),
+    );
   });
 
   test("does not throw for parseable non-DML statements", () => {

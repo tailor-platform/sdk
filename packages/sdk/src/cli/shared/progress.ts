@@ -27,16 +27,20 @@ export function createProgress(label: string, total: number) {
  * @template T
  * @param p - Promise to await
  * @param ms - Timeout in milliseconds
- * @param message - Error message on timeout
+ * @param timeoutError - Builds the error to reject with on timeout
  * @returns Result of the original promise if it completes in time
  */
-export async function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> {
+export async function withTimeout<T>(
+  p: Promise<T>,
+  ms: number,
+  timeoutError: () => Error,
+): Promise<T> {
   const timeoutController = new AbortController();
   try {
     return await Promise.race([
       p,
       setTimeout(ms, undefined, { signal: timeoutController.signal }).then(() => {
-        throw new Error(message);
+        throw timeoutError();
       }),
     ]);
   } finally {

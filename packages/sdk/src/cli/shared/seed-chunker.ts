@@ -7,6 +7,7 @@
  */
 
 import { assertDefined } from "#/utils/assert";
+import { CLIError } from "./errors";
 import type { JsonObject } from "type-fest";
 
 /**
@@ -63,10 +64,12 @@ export function chunkSeedData(options: ChunkSeedDataOptions): SeedChunk[] {
 
   const argBudget = maxMessageSize - codeByteSize - METADATA_OVERHEAD;
   if (argBudget <= 0) {
-    throw new Error(
-      `Code size (${codeByteSize} bytes) exceeds the message size limit (${maxMessageSize} bytes). ` +
-        `No space left for seed data.`,
-    );
+    throw CLIError({
+      code: "SEED_MESSAGE_SIZE_EXCEEDED",
+      message: `Code size (${codeByteSize} bytes) exceeds the message size limit (${maxMessageSize} bytes).`,
+      details: "No space left for seed data.",
+      context: { codeByteSize, maxMessageSize },
+    });
   }
 
   // Filter to tables that have data
@@ -122,10 +125,12 @@ export function chunkSeedData(options: ChunkSeedDataOptions): SeedChunk[] {
     for (const record of typeRecords) {
       const recordByteSize = byteSize(JSON.stringify(record));
       if (emptyBatchByteSize + recordByteSize > argBudget) {
-        throw new Error(
-          `A single record in table "${type}" (${recordByteSize} bytes) exceeds the message size budget ` +
-            `(${argBudget} bytes). Consider increasing maxMessageSize or reducing the record size.`,
-        );
+        throw CLIError({
+          code: "SEED_MESSAGE_SIZE_EXCEEDED",
+          message: `A single record in table "${type}" (${recordByteSize} bytes) exceeds the message size budget (${argBudget} bytes).`,
+          suggestion: "Increase maxMessageSize or reduce the record size.",
+          context: { type, recordByteSize, argBudget },
+        });
       }
 
       const separatorByteSize = recordBatch.length > 0 ? 1 : 0;

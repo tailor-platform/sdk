@@ -1,3 +1,4 @@
+import { internalError } from "#/cli/shared/errors";
 import { assertDefined } from "#/utils/assert";
 import type {
   Expression,
@@ -259,7 +260,7 @@ export function applyReplacements(source: string, replacements: Replacement[]): 
     const current = assertDefined(sorted[i], `replacement missing at index ${i}`);
     const previous = assertDefined(sorted[i + 1], `replacement missing at index ${i + 1}`);
     if (previous.end > current.start) {
-      throw new Error(
+      throw internalError(
         `applyReplacements: overlapping replacement ranges ` +
           `[${previous.start}, ${previous.end}) and [${current.start}, ${current.end})`,
       );

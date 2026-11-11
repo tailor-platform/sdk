@@ -51,9 +51,19 @@ describe("chunkSeedData size accounting", () => {
   );
 
   test("rejects a record whose chunk is one byte over the budget, reporting the record's size", () => {
-    expect(() => chunkSeedData(withArgBudget({ T: records }, ["T"], batchByteSize(1) - 1))).toThrow(
-      `A single record in table "T" (80 bytes)`,
-    );
+    const argBudget = batchByteSize(1) - 1;
+    let error: unknown;
+    try {
+      chunkSeedData(withArgBudget({ T: records }, ["T"], argBudget));
+    } catch (thrown) {
+      error = thrown;
+    }
+    expect(error).toMatchObject({
+      code: "SEED_MESSAGE_SIZE_EXCEEDED",
+      message: `A single record in table "T" (80 bytes) exceeds the message size budget (${argBudget} bytes).`,
+      suggestion: "Increase maxMessageSize or reduce the record size.",
+      context: { type: "T", recordByteSize: 80, argBudget },
+    });
   });
 
   test("splits data whose <, > and & characters grow to 6 bytes each once the platform escapes them", () => {
@@ -208,14 +218,23 @@ describe("chunkSeedData", () => {
   });
 
   test("throws error when codeByteSize exceeds maxMessageSize", () => {
-    expect(() =>
+    let error: unknown;
+    try {
       chunkSeedData({
         data: { User: [{ id: "1" }] },
         order: ["User"],
         codeByteSize: 4_000_000,
         maxMessageSize: 3_500_000,
-      }),
-    ).toThrow("Code size (4000000 bytes) exceeds the message size limit (3500000 bytes)");
+      });
+    } catch (thrown) {
+      error = thrown;
+    }
+    expect(error).toMatchObject({
+      code: "SEED_MESSAGE_SIZE_EXCEEDED",
+      message: "Code size (4000000 bytes) exceeds the message size limit (3500000 bytes).",
+      details: "No space left for seed data.",
+      context: { codeByteSize: 4_000_000, maxMessageSize: 3_500_000 },
+    });
   });
 
   test("uses default maxMessageSize when not specified", () => {

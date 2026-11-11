@@ -407,9 +407,10 @@ describe("plugin-generated resolvers", () => {
       ...defineConfig({ name: "test-app", db: { main: { files: [] } } }),
       path: path.join(baseDir, "tailor.config.ts"),
     };
-    await expect(loadApplication({ config, pluginManager })).rejects.toThrow(
-      /plugin "closure".*self-contained.*allowedValue/s,
-    );
+    await expect(loadApplication({ config, pluginManager })).rejects.toMatchObject({
+      code: "PLUGIN_RESOLVER_INVALID",
+      message: expect.stringMatching(/plugin "closure".*self-contained.*allowedValue/s),
+    });
   });
 
   test("keeps the same resolver name separate across namespaces", async () => {

@@ -87,8 +87,8 @@ describe.concurrent("CLI error verbosity", () => {
         true,
       );
       using tmp = tempDir("cli-error-verbosity-");
-      const config = path.join(tmp.dir, "missing.config.ts");
-      expect(existsSync(config)).toBe(false);
+      const config = path.join(tmp.dir, "tailor.config.ts");
+      writeFileSync(config, 'throw new Error("config is broken");\n');
 
       const result = await runCli(
         ["generate", "--json", "--config", config, ...args],
@@ -101,11 +101,9 @@ describe.concurrent("CLI error verbosity", () => {
       const envelope = JSON.parse(result.stderr);
       expect(envelope.error).toMatchObject({
         code: "UNEXPECTED_ERROR",
-        message: `Configuration file not found: ${config}`,
+        message: "tailor.config.ts: config is broken",
       });
-      expect(
-        envelope.error.stack?.includes(`Error: Configuration file not found: ${config}`) ?? false,
-      ).toBe(stack);
+      expect(envelope.error.stack?.includes("Error: config is broken") ?? false).toBe(stack);
       expect(Object.hasOwn(envelope.error, "stack")).toBe(stack);
     },
     20_000,
@@ -156,7 +154,10 @@ describe.concurrent("env files", () => {
 
     expect(result.status).toBe(1);
     const envelope = JSON.parse(result.stderr.trim().split("\n").at(-1) ?? "");
-    expect(envelope.error.message).toBe("Configuration file not found: from-env-file.config.ts");
+    expect(envelope.error).toMatchObject({
+      code: "CONFIG_NOT_FOUND",
+      message: "Configuration file not found: from-env-file.config.ts",
+    });
   }, 20_000);
 
   test("reports a missing --env-file as an argument error", async () => {
@@ -169,6 +170,7 @@ describe.concurrent("env files", () => {
     expect(JSON.parse(result.stderr).error).toMatchObject({
       code: "INVALID_ARGUMENTS",
       message: expect.stringMatching(/^Environment file not found: \/.*\/missing\.env$/),
+      context: { file: expect.stringMatching(/\/missing\.env$/) },
     });
   }, 20_000);
 });

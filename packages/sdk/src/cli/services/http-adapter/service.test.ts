@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { logger } from "#/cli/shared/logger";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { createHttpAdapterService } from "./service";
@@ -150,9 +151,36 @@ export default createHttpAdapter({
     );
 
     const service = createHttpAdapterService({ config: { files: [file] }, baseDir: process.cwd() });
-    await expect(service.loadAdapters()).rejects.toThrow(
-      /^HTTP adapter "async-input" has an async `input\.get` function\./,
+    const rejection = await service.loadAdapters().catch((error: unknown) => error);
+    expect(rejection).toMatchObject({
+      code: "HTTP_ADAPTER_ASYNC_UNSUPPORTED",
+      message: 'HTTP adapter "async-input" has an async `input.get` function.',
+      suggestion: "Make the handler synchronous; async/await is not supported.",
+      context: { name: "async-input", handler: "input.get" },
+    });
+    expect(getErrorDiagnostics(rejection as Error).location).toEqual({ file });
+  });
+
+  test("rejects files whose output handler is async", async () => {
+    const file = writeAdapter(
+      "async-output.ts",
+      `
+import { createHttpAdapter } from "@tailor-platform/sdk";
+export default createHttpAdapter({
+  name: "async-output",
+  pathPattern: "/x",
+  input: { get: () => ({ query: "{}" }) },
+  output: async () => ({ status: 200 }),
+});
+`,
     );
+
+    const service = createHttpAdapterService({ config: { files: [file] }, baseDir: process.cwd() });
+    await expect(service.loadAdapters()).rejects.toMatchObject({
+      code: "HTTP_ADAPTER_ASYNC_UNSUPPORTED",
+      message: 'HTTP adapter "async-output" has an async `output` function.',
+      context: { name: "async-output", handler: "output" },
+    });
   });
 
   test("rejects files where the adapter is only a named export", async () => {

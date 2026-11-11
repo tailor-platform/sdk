@@ -51,6 +51,9 @@ import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@
 export const user = db.table("User", {
   name: db.string(),
 }).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
+export const order = db.table("Order", {
+  name: db.string(),
+}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
 `,
     );
     const accountFile = writeTypeFile(
@@ -58,6 +61,9 @@ export const user = db.table("User", {
       `
 import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 export const account = db.table("User", {
+  email: db.string(),
+}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
+export const purchase = db.table("Order", {
   email: db.string(),
 }).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
 `,
@@ -70,9 +76,33 @@ export const account = db.table("User", {
     });
 
     using _logger = silenceLogger("error", "log");
-    await expect(service.loadTypes()).rejects.toThrow(
-      /Duplicate TailorDB table name "User" detected in TailorDB service "main"/,
-    );
+    await expect(service.loadTypes()).rejects.toMatchObject({
+      code: "DEFINITION_NAME_DUPLICATE",
+      message: expect.stringMatching(
+        /^Duplicate TailorDB type name "Order" found in namespace "main":\n.*account\.ts \(export: purchase\)\n.*user\.ts \(export: order\)\nDuplicate TailorDB type name "User" found in namespace "main":\n.*account\.ts \(export: account\)\n.*user\.ts \(export: user\)$/,
+      ),
+      suggestion: "Give each TailorDB type a unique name within its namespace.",
+      context: {
+        kind: "tailordb-type",
+        namespace: "main",
+        duplicates: [
+          {
+            name: "Order",
+            definitions: [
+              { file: accountFile, exportName: "purchase" },
+              { file: userFile, exportName: "order" },
+            ],
+          },
+          {
+            name: "User",
+            definitions: [
+              { file: accountFile, exportName: "account" },
+              { file: userFile, exportName: "user" },
+            ],
+          },
+        ],
+      },
+    });
   });
 
   test("reports a table that fails validation as DEFINITION_INVALID, naming its export", async () => {
@@ -250,9 +280,11 @@ export const user = db.table("User", {
 
     using _logger = silenceLogger("error", "log");
     await service.loadTypes();
-    await expect(service.processNamespacePlugins()).rejects.toThrow(
-      /failing-namespace-plugin.*namespace generation failed/,
-    );
+    await expect(service.processNamespacePlugins()).rejects.toMatchObject({
+      code: "PLUGIN_NAMESPACE_HOOK_FAILED",
+      message: expect.stringMatching(/failing-namespace-plugin.*namespace generation failed/),
+      context: { pluginId: "failing-namespace-plugin", namespace: "main" },
+    });
     expect(logger.error).not.toHaveBeenCalled();
   });
 
@@ -279,9 +311,18 @@ export const user = db.table("User", {
 
     using _logger = silenceLogger("error", "log");
     await service.loadTypes();
-    await expect(service.processNamespacePlugins()).rejects.toThrow(
-      /TailorDB table "AuditLogNoPermission".* has no \.permission\(\) configured/,
-    );
+    await expect(service.processNamespacePlugins()).rejects.toMatchObject({
+      code: "TAILORDB_PERMISSION_INVALID",
+      message: expect.stringMatching(
+        /TailorDB table "AuditLogNoPermission".* has no \.permission\(\) configured/,
+      ),
+      context: {
+        namespace: "main",
+        errors: expect.arrayContaining([
+          expect.stringContaining('TailorDB table "AuditLogNoPermission"'),
+        ]),
+      },
+    });
   });
 
   test("rejects a namespace plugin-generated table that fails schema validation", async () => {
@@ -310,9 +351,16 @@ export const user = db.table("User", {
 
     using _logger = silenceLogger("error", "log");
     await service.loadTypes();
-    await expect(service.processNamespacePlugins()).rejects.toThrow(
-      /TailorDB table "BadAuditLog".*generated as "auditLog" by plugin "namespace-plugin".*failed schema validation/s,
-    );
+    await expect(service.processNamespacePlugins()).rejects.toMatchObject({
+      code: "PLUGIN_TABLE_INVALID",
+      message: expect.stringMatching(
+        /TailorDB table "BadAuditLog".*generated as "auditLog" by plugin "namespace-plugin".*failed schema validation/s,
+      ),
+      context: {
+        namespace: "main",
+        issues: [expect.objectContaining({ path: expect.any(Array) })],
+      },
+    });
   });
 
   test("rejects an attachment plugin-generated table that fails schema validation", async () => {

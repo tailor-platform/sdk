@@ -7,7 +7,7 @@ import { logger } from "#/cli/shared/logger";
 import { withTimeout } from "#/cli/shared/progress";
 import { withSpan } from "#/cli/telemetry/index";
 import { assertDefined } from "#/utils/assert";
-import { deployStaticWebsite } from "../staticwebsite/deploy";
+import { deployStaticWebsite, staticWebsiteDeployTimeoutError } from "../staticwebsite/deploy";
 import { execPluginCommand } from "./plugin-exec";
 import type { DeployedApplication, DeployedOAuth2Client, Plugin } from "#/plugin/types";
 import type { JsonValue } from "#/types/helpers";
@@ -177,7 +177,7 @@ async function publishStaticWebsite(
   return withTimeout(
     deployStaticWebsite(client, workspaceId, name, resolved, !logger.jsonMode),
     10 * 60_000,
-    "Deployment timed out after 10 minutes.",
+    staticWebsiteDeployTimeoutError,
   );
 }
 

@@ -133,9 +133,10 @@ function serializeValue(value: unknown): string {
     const code = `(${stringifyFunction(value)})`;
     const references = findUndefinedReferences(code, { includeGuardedReferences: true });
     if (references.size > 0) {
-      throw new Error(
-        `Field functions must be self-contained; unresolved references: ${[...references].join(", ")}.`,
-      );
+      throw CLIError({
+        code: "PLUGIN_RESOLVER_INVALID",
+        message: `Field functions must be self-contained; unresolved references: ${[...references].join(", ")}.`,
+      });
     }
     return code;
   }
@@ -148,6 +149,9 @@ function serializeValue(value: unknown): string {
       .join(",")}}`;
   }
   if (typeof value === "symbol")
-    throw new Error("Plugin resolver fields contain an unsupported value.");
+    throw CLIError({
+      code: "PLUGIN_RESOLVER_INVALID",
+      message: "Plugin resolver fields contain an unsupported value.",
+    });
   return JSON.stringify(value);
 }

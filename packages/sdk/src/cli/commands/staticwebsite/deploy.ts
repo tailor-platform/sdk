@@ -207,7 +207,12 @@ async function uploadSingleFile(
     uploadWithLogging(),
     // 2 minutes per file
     2 * 60_000,
-    `Upload timed out for "${filePath}"`,
+    () =>
+      CLIError({
+        code: "STATIC_WEBSITE_UPLOAD_TIMEOUT",
+        message: `Upload timed out for "${filePath}"`,
+        context: { file: filePath },
+      }),
   );
 }
 
@@ -215,6 +220,17 @@ async function uploadSingleFile(
  * Log skipped files after a deployment, including reasons for skipping.
  * @param skippedFiles - List of skipped file descriptions
  */
+/**
+ * Create the error for a static website deployment that outlasts its 10-minute limit.
+ * @returns CLIError coded `STATIC_WEBSITE_DEPLOY_TIMEOUT`
+ */
+export function staticWebsiteDeployTimeoutError(): CLIError {
+  return CLIError({
+    code: "STATIC_WEBSITE_DEPLOY_TIMEOUT",
+    message: "Deployment timed out after 10 minutes.",
+  });
+}
+
 function logSkippedFiles(skippedFiles: string[]) {
   if (skippedFiles.length === 0) {
     return;
@@ -268,7 +284,7 @@ export const deployCommand = defineAppCommand({
       deployStaticWebsite(client, workspaceId, name, dir, !args.json),
       // 10 minutes
       10 * 60_000,
-      "Deployment timed out after 10 minutes.",
+      staticWebsiteDeployTimeoutError,
     );
 
     if (args.json) {

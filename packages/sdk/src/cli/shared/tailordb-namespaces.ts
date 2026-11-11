@@ -1,6 +1,7 @@
 import { defineApplication, type Application } from "#/cli/services/application";
 import { PluginManager } from "#/plugin/manager";
 import { loadConfig, type LoadedConfig } from "./config-loader";
+import { CLIError } from "./errors";
 import { generateUserTypes } from "./type-generator";
 import type { Plugin, TailorDBNamespaceData } from "#/plugin/types";
 
@@ -73,12 +74,15 @@ export async function loadApplicationNamespaces(
 
   if (namespaceFilter && services.length !== namespaceFilter.size) {
     const found = new Set(services.map((db) => db.namespace));
-    const missing = [...namespaceFilter].filter((ns) => !found.has(ns)).join(", ");
-    const available = application.tailorDBServices.map((db) => db.namespace).join(", ");
-    throw new Error(
-      `TailorDB namespace "${missing}" not found in local config.db.` +
-        (available ? ` Available owned namespaces: ${available}` : ""),
-    );
+    const missing = [...namespaceFilter].filter((ns) => !found.has(ns));
+    const available = application.tailorDBServices.map((db) => db.namespace);
+    throw CLIError({
+      code: "TAILORDB_NAMESPACE_NOT_FOUND",
+      message:
+        `TailorDB namespace "${missing.join(", ")}" not found in local config.db.` +
+        (available.length > 0 ? ` Available owned namespaces: ${available.join(", ")}` : ""),
+      context: { namespaces: missing, available },
+    });
   }
 
   const namespaces: TailorDBNamespaceData[] = [];

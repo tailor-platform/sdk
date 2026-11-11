@@ -57,6 +57,7 @@ function jsonModeRemedy(source: JsonModeSource): string {
  * `TAILOR_JSON_OUTPUT` or a detected AI coding agent leaves nothing in the
  * command line to explain the refusal.
  */
+// oxlint-disable-next-line local/no-plain-error -- error-json maps this class to INTERACTIVE_PROMPT_REQUIRED
 export class CIPromptError extends Error {
   constructor(message?: string) {
     const reason =

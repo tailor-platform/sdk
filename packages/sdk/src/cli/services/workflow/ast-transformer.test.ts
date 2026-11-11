@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { logger } from "#/cli/shared/logger";
 import {
   normalizeFilePath,
@@ -10,6 +11,7 @@ import {
   type StartTarget,
 } from "#/cli/shared/start-context";
 import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
+import { createHookFailures } from "../hook-failures";
 import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import {
@@ -1165,6 +1167,15 @@ export async function run() {
   });
 
   describe("undetectable workflow-file imports", () => {
+    function thrownBy(run: () => unknown): Error {
+      try {
+        run();
+      } catch (error) {
+        return error as Error;
+      }
+      throw new Error("expected a throw");
+    }
+
     const callerFile = path.resolve("src/resolvers/run.ts");
     const syncFile = path.resolve("src/workflow/sync.ts");
     const context: StartContext = {
@@ -1189,11 +1200,18 @@ export async function run() {
 }
 `;
 
-      expect(() => transformStartCallsWithContext(source, context, callerFile)).toThrow(
-        "syncWorkflow.start() in " +
-          callerFile +
-          ' cannot be rewritten: "../workflow/sync" is a workflow file, but its export "syncWorkflow" is not a workflow or job the build can detect.',
-      );
+      const thrown = thrownBy(() => transformStartCallsWithContext(source, context, callerFile));
+      expect(thrown).toMatchObject({
+        code: "WORKFLOW_START_TARGET_UNDETECTABLE",
+        message:
+          'syncWorkflow.start() cannot be rewritten: "../workflow/sync" is a workflow file, but its export "syncWorkflow" is not a workflow or job the build can detect.',
+        context: {
+          file: callerFile,
+          importSource: "../workflow/sync",
+          importedName: "syncWorkflow",
+        },
+      });
+      expect(getErrorDiagnostics(thrown).location).toEqual({ file: callerFile });
     });
 
     test("transforms .start() on a detectable export reached through a namespace import", () => {
@@ -1219,11 +1237,13 @@ export async function run() {
 }
 `;
 
-      expect(() => transformStartCallsWithContext(source, context, callerFile)).toThrow(
-        "sync.default.start() in " +
-          callerFile +
-          ' cannot be rewritten: "../workflow/sync" is a workflow file, but its default export is not a workflow or job the build can detect.',
-      );
+      expect(
+        thrownBy(() => transformStartCallsWithContext(source, context, callerFile)),
+      ).toMatchObject({
+        code: "WORKFLOW_START_TARGET_UNDETECTABLE",
+        message:
+          'sync.default.start() cannot be rewritten: "../workflow/sync" is a workflow file, but its default export is not a workflow or job the build can detect.',
+      });
     });
 
     test("does not throw when the undetectable import is shadowed by a local binding", () => {
@@ -1484,11 +1504,13 @@ describe("AST Transformer - hasStartCall", () => {
 
 describe("AST Transformer - createStartTransformPlugin", () => {
   test("returns undefined when the start context has no workflow bindings", () => {
-    expect(createStartTransformPlugin({ modules: new Map() })).toBeUndefined();
+    expect(
+      createStartTransformPlugin({ modules: new Map() }, createHookFailures()),
+    ).toBeUndefined();
   });
 
   test("returns undefined when no start context is provided", () => {
-    expect(createStartTransformPlugin(undefined)).toBeUndefined();
+    expect(createStartTransformPlugin(undefined, createHookFailures())).toBeUndefined();
   });
 
   test("returns a plugin when the start context has workflow bindings", () => {
@@ -1503,6 +1525,6 @@ describe("AST Transformer - createStartTransformPlugin", () => {
       ],
     ]);
 
-    expect(createStartTransformPlugin({ modules })).toBeDefined();
+    expect(createStartTransformPlugin({ modules }, createHookFailures())).toBeDefined();
   });
 });
