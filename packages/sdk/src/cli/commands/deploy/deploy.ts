@@ -69,7 +69,7 @@ import {
 import { planExecutor } from "./executor";
 import {
   collectFunctionEntries,
-  collectWorkflowJobStates,
+  collectUnchangedWorkflowJobs,
   filterBundledWorkflowJobs,
   planFunctionRegistry,
 } from "./function-registry";
@@ -87,6 +87,7 @@ import { createMetadataLookupClient } from "./metadata-lookup";
 import { printDeploymentPlans, type PrintDeploymentPlansOptions } from "./plan-report";
 import { planPipeline } from "./resolver";
 import { planSecretManager } from "./secret-manager";
+import { assertServicesNotInUse } from "./services-in-use";
 import { planStaticWebsite } from "./staticwebsite";
 import { planTailorDB } from "./tailordb";
 import {
@@ -272,7 +273,10 @@ export async function shouldForceApplyAll(
 
 type DeployRunPlanInputs = Pick<
   PlanContext,
-  "expectedLocalStaticWebsiteNames" | "externalAuthIdpConfigNames" | "runAppIds"
+  | "expectedLocalStaticWebsiteNames"
+  | "externalAuthIdpConfigNames"
+  | "plannedMachineUsers"
+  | "runAppIds"
 > & {
   /** Every event subscription in the run, resolved to its declaring config. */
   eventSubscriptions: ReadonlyArray<EventSubscription>;
@@ -429,6 +433,25 @@ export function collectExternalAuthIdpConfigNames(
   return idpConfigNames;
 }
 
+export function collectPlannedMachineUsers(
+  targets: ReadonlyArray<BuiltDeploymentTarget>,
+): ReadonlyMap<string, ReadonlySet<string>> {
+  const machineUsers = new Map<string, Set<string>>();
+  for (const target of targets) {
+    const authService = target.application.authService;
+    if (!authService) {
+      continue;
+    }
+    const { name } = authService.config;
+    const names = machineUsers.get(name) ?? new Set<string>();
+    for (const machineUserName of Object.keys(authService.config.machineUsers ?? {})) {
+      names.add(machineUserName);
+    }
+    machineUsers.set(name, names);
+  }
+  return machineUsers;
+}
+
 function collectDeployRunPlanInputs(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
   writes: boolean,
@@ -442,6 +465,7 @@ function collectDeployRunPlanInputs(
     ),
     expectedLocalStaticWebsiteNames: collectExpectedLocalStaticWebsiteNames(targets),
     externalAuthIdpConfigNames: collectExternalAuthIdpConfigNames(targets),
+    plannedMachineUsers: collectPlannedMachineUsers(targets),
   };
 }
 
@@ -534,7 +558,7 @@ async function planDeploymentTarget(
         previous?.functionRegistry.existingMap,
       ),
     );
-    const workflowJobStates = collectWorkflowJobStates(functionRegistry.changeSet);
+    const unchangedWorkflowJobs = collectUnchangedWorkflowJobs(functionRegistry.changeSet);
     const [
       tailorDB,
       staticWebsite,
@@ -587,7 +611,7 @@ async function planDeploymentTarget(
           application.id,
           workflowService?.workflows ?? {},
           workflowBuildResult?.mainJobDeps ?? {},
-          workflowJobStates.unchanged,
+          unchangedWorkflowJobs,
           {
             ...subscribedWorkflows(owned),
             jobPublishEvents: collectWorkflowJobPublishEvents(target),
@@ -598,7 +622,6 @@ async function planDeploymentTarget(
             existingJobFunctions: previous.workflow.existingJobFunctions,
             existingWorkflows: previous.workflow.existingWorkflows,
           },
-          workflowJobStates.forcedBySdkVersion,
         ),
       ),
       skip?.has("workflowExecutionPolicy") && previous
@@ -723,15 +746,13 @@ async function validateDeploymentPlans(
 }
 
 /**
- * Add renamed-app cleanup deletes to the plan, validate and print it, then
- * ask for the confirmations it needs, so each one is answered with the whole
- * plan in view.
+ * Validate and print the plan, then ask for the confirmations it needs, so
+ * each one is answered with the whole plan in view.
  * @param params - Deployments to review, and how to confirm them
  * @returns Summary of the printed plan
  */
 async function reviewDeploymentPlans(params: ReviewDeploymentPlansParams): Promise<PlanSummary> {
   const { deployments, dryRun, noValidate, pendingDeployedHooks, missingDependentApps } = params;
-  scheduleRenamedAppDeletes(deployments);
   if (noValidate) {
     logger.warn("Client-side validation skipped (--no-validate).");
   } else {
@@ -981,6 +1002,8 @@ async function deployInternal(
         previousDeployments: reuse?.previousDeployments,
       });
       dropCrossDeploymentManagedDeletes(deployments);
+      scheduleRenamedAppDeletes(deployments);
+      assertServicesNotInUse(deployments, "deploy");
       assertNoSingleRunTransferHandoff(deployments);
       return { planTargets, metadataClient, runInputs, deployments };
     };

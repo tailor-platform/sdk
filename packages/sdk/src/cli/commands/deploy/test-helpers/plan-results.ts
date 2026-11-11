@@ -1,4 +1,4 @@
-import { isPlainObject } from "es-toolkit";
+import { isPlainObject } from "es-toolkit/predicate";
 import { createChangeSet } from "../change-set";
 import type { PlanResults } from "../apply-phases";
 
@@ -18,6 +18,31 @@ function emptyOwnership() {
   return { conflicts: [], unmanaged: [], resourceOwners: new Set<string>() };
 }
 
+type TailorDBPlanResultContext = PlanResults["tailorDB"]["context"];
+
+/**
+ * Build the context of a TailorDB plan result.
+ * @param overrides - Fields that differ from a plan without tables or migrations
+ * @returns TailorDB plan result context
+ */
+export function tailorDBPlanResultContext(
+  overrides: Partial<TailorDBPlanResultContext> = {},
+): TailorDBPlanResultContext {
+  return {
+    workspaceId: "ws",
+    application: {} as TailorDBPlanResultContext["application"],
+    tailorDBInputs: [],
+    executorUsedTables: new Set<string>(),
+    config: {} as TailorDBPlanResultContext["config"],
+    noSchemaCheck: false,
+    namespacesWithMigrations: [],
+    migrationFileState: {},
+    checkpointRepairs: [],
+    pendingMigrations: [],
+    ...overrides,
+  };
+}
+
 /**
  * Build plan results that plan no change.
  * @returns Plan results with every change set empty
@@ -26,6 +51,7 @@ export function emptyPlanResults(): PlanResults {
   return {
     functionRegistry: {
       changeSet: createChangeSet("Function registry"),
+      metadataUpdates: [],
       workflowJobChanges: emptyFunctionChanges(),
       resolverFunctionChanges: emptyFunctionChanges(),
       executorFunctionChanges: emptyFunctionChanges(),
@@ -40,17 +66,7 @@ export function emptyPlanResults(): PlanResults {
         gqlPermission: createChangeSet("TailorDB gqlPermissions"),
       },
       ...emptyOwnership(),
-      context: {
-        workspaceId: "ws",
-        application: {} as PlanResults["tailorDB"]["context"]["application"],
-        tailorDBInputs: [],
-        executorUsedTables: new Set<string>(),
-        config: {} as PlanResults["tailorDB"]["context"]["config"],
-        noSchemaCheck: false,
-        namespacesWithMigrations: [],
-        migrationFileState: {},
-        checkpointRepairs: [],
-      },
+      context: tailorDBPlanResultContext(),
     },
     staticWebsite: {
       changeSet: createChangeSet("StaticWebsites"),
@@ -100,10 +116,9 @@ export function emptyPlanResults(): PlanResults {
       existingServices: {},
       existingResolvers: new Map(),
     },
-    app: Object.assign(
-      createChangeSet("Applications"),
-      emptyOwnership(),
-    ) as unknown as PlanResults["app"],
+    app: Object.assign(createChangeSet("Applications"), emptyOwnership(), {
+      existingApplications: [],
+    }) as unknown as PlanResults["app"],
     executor: {
       changeSet: createChangeSet("Executors"),
       ...emptyOwnership(),

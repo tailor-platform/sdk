@@ -5,15 +5,27 @@
  */
 
 import * as fs from "node:fs";
+import { sortBySelfReference } from "@tailor-platform/shared/seed-order";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { createBundleLog } from "#/cli/shared/bundle-log";
 import { getDistDir } from "#/cli/shared/dist-dir";
+import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { chunkCodeWithSourcemap } from "#/cli/shared/sourcemap-sources";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
+import type { BuildOptions } from "#/configure/config/types";
+
+/**
+ * Bundling options of the config that apply to a seed script.
+ */
+export type SeedBundleBuildOptions = Pick<
+  BuildOptions,
+  "inlineSourcemap" | "inlineSourcemapDependencySources"
+>;
 
 export type SeedBundleResult = {
   namespace: string;
@@ -62,127 +74,13 @@ function generateSeedScriptContent(namespace: string): string {
       });
     }
 
-    /**
-     * The values a self-reference field holds in a record. A dotted \`path\`
-     * (\`links.parentID\`) descends into nested objects, and into every
-     * element where a nested field is an array, so one row can reference
-     * several rows.
-     */
-    function referencedValues(value: unknown, path: string[]): unknown[] {
-      if (Array.isArray(value)) return value.flatMap((item) => referencedValues(item, path));
-      const [head, ...rest] = path;
-      if (head === undefined) return value === null || value === undefined ? [] : [value];
-      if (value === null || typeof value !== "object") return [];
-      return referencedValues((value as Record<string, unknown>)[head], rest);
-    }
+    ${sortBySelfReference.toString()}
 
-    /**
-     * Order records of a self-referencing table so a row referenced by
-     * another row in the same batch is always inserted first.
-     *
-     * Dumped seed data is ordered by id (a UUID), which has no relationship
-     * to parent/child order, so a naive one-by-one insert in file order can
-     * insert a child before the parent it points to. This does a Kahn
-     * topological sort over the in-batch rows using \`fields\` (the table's
-     * own self-referencing field names) as the edges; a row referencing a
-     * parent outside the batch (already applied, or null) has no edge to
-     * resolve. Rows that form a cycle (which a real hierarchy should never
-     * produce) are appended in their original order rather than dropped, so
-     * a run never silently loses data.
-     *
-     * \`record.id\` is used as the map key for the row itself, so it must be
-     * present and unique across the batch. If any id is missing (allowed
-     * when not using \`--upsert\`) or duplicated, the map would collapse
-     * distinct rows onto the same key and silently drop them from the
-     * result; fall back to the original file order instead.
-     *
-     * A self-reference field does not always hold the parent's \`id\` — a
-     * relation's \`toward.key\` (or a \`keyOnly\` relation's \`foreignKeyField\`)
-     * can target a different unique field, e.g. \`parentCode -> Category.code\`.
-     * \`fieldKeys\` names the field each self-reference field is keyed to
-     * (default \`"id"\`), so edges resolve against the right value instead of
-     * assuming every self-reference points at \`id\`.
-     */
-    function sortBySelfReference(
-      records: Record<string, unknown>[],
-      fields: string[],
-      fieldKeys: Record<string, string> = {},
-    ): Record<string, unknown>[] {
-      if (fields.length === 0 || records.length <= 1) return records;
-
-      const byId = new Map<unknown, Record<string, unknown>>();
-      for (const record of records) byId.set(record.id, record);
-      if (byId.size !== records.length) return records;
-
-      const idsByKeyValue = new Map<string, Map<unknown, unknown>>();
-      for (const field of fields) {
-        const targetKey = fieldKeys[field] ?? "id";
-        if (idsByKeyValue.has(targetKey)) continue;
-        const map = new Map<unknown, unknown>();
-        for (const record of records) {
-          const keyValue = targetKey === "id" ? record.id : record[targetKey];
-          if (keyValue !== null && keyValue !== undefined) map.set(keyValue, record.id);
-        }
-        idsByKeyValue.set(targetKey, map);
-      }
-
-      const inDegree = new Map<unknown, number>();
-      const dependents = new Map<unknown, unknown[]>();
-      for (const record of records) {
-        inDegree.set(record.id, 0);
-        dependents.set(record.id, []);
-      }
-      for (const record of records) {
-        const id = record.id;
-        for (const field of fields) {
-          const targetKey = fieldKeys[field] ?? "id";
-          for (const refValue of referencedValues(record, field.split("."))) {
-            const parentId = idsByKeyValue.get(targetKey)?.get(refValue);
-            if (parentId === undefined || parentId === id) continue;
-            inDegree.set(id, (inDegree.get(id) ?? 0) + 1);
-            dependents.get(parentId)?.push(id);
-          }
-        }
-      }
-
-      const queue: unknown[] = [];
-      for (const record of records) {
-        if ((inDegree.get(record.id) ?? 0) === 0) queue.push(record.id);
-      }
-
-      const seen = new Set<unknown>();
-      const orderedIds: unknown[] = [];
-      // A head index is used instead of \`queue.shift()\`, which would
-      // reindex the remaining array on every dequeue and make this Kahn
-      // traversal O(n²) over a large batch.
-      let head = 0;
-      while (head < queue.length) {
-        const id = queue[head++];
-        if (seen.has(id)) continue;
-        seen.add(id);
-        orderedIds.push(id);
-        for (const dependentId of dependents.get(id) ?? []) {
-          const remaining = (inDegree.get(dependentId) ?? 0) - 1;
-          inDegree.set(dependentId, remaining);
-          if (remaining === 0) queue.push(dependentId);
-        }
-      }
-      for (const record of records) {
-        if (!seen.has(record.id)) orderedIds.push(record.id);
-      }
-
-      return orderedIds
-        .map((id) => byId.get(id))
-        .filter((record): record is Record<string, unknown> => record !== undefined);
-    }
-
-    export async function main(input: SeedInput): Promise<SeedResult> {
-      const db = getDB("${namespace}");
-      const processed: Record<
-        string,
-        { inserted: number; updated: number; skipped: number }
-      > = {};
-      const errors: string[] = [];
+    async function seedTables(
+      db: ReturnType<typeof getDB>,
+      input: SeedInput,
+    ): Promise<SeedResult["processed"]> {
+      const processed: SeedResult["processed"] = {};
       const BATCH_SIZE = ${String(BATCH_SIZE)};
       const upsert = input.upsert === true;
 
@@ -265,16 +163,24 @@ function generateSeedScriptContent(namespace: string): string {
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          errors.push(\`\${tableName}: \${message}\`);
           console.error(\`[${namespace}] \${tableName}: failed - \${message}\`);
+          throw new Error(\`\${tableName}: \${message}\`, { cause: error });
         }
       }
 
-      return {
-        success: errors.length === 0,
-        processed,
-        errors,
-      };
+      return processed;
+    }
+
+    export async function main(input: SeedInput): Promise<SeedResult> {
+      try {
+        const processed = await getDB("${namespace}")
+          .transaction()
+          .execute((db) => seedTables(db, input));
+        return { success: true, processed, errors: [] };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { success: false, processed: {}, errors: [message] };
+      }
     }
   `;
 }
@@ -355,17 +261,20 @@ function generateSeedDumpScriptContent(namespace: string): string {
  * @param namespace - TailorDB namespace
  * @param tableNames - List of table names to include in the seed
  * @param baseDir - Directory whose dependencies and tsconfig the generated entry uses
+ * @param buildOptions - Sourcemap options of the config
  * @returns Bundled seed script result
  */
 export async function bundleSeedScript(
   namespace: string,
   tableNames: string[],
   baseDir: string = process.cwd(),
+  buildOptions: SeedBundleBuildOptions = {},
 ): Promise<SeedBundleResult> {
   const bundledCode = await bundleGeneratedEntry({
     entryFileName: `seed_${namespace}.entry.ts`,
     entryContent: generateSeedScriptContent(namespace),
     baseDir,
+    buildOptions,
   });
 
   return {
@@ -383,16 +292,19 @@ export async function bundleSeedScript(
  * a keyset cursor instead of holding it all in one message.
  * @param namespace - TailorDB namespace
  * @param baseDir - Directory whose dependencies and tsconfig the generated entry uses
+ * @param buildOptions - Sourcemap options of the config
  * @returns Bundled seed dump script result
  */
 export async function bundleSeedDumpScript(
   namespace: string,
   baseDir: string = process.cwd(),
+  buildOptions: SeedBundleBuildOptions = {},
 ): Promise<SeedDumpBundleResult> {
   const bundledCode = await bundleGeneratedEntry({
     entryFileName: `seed_dump_${namespace}.entry.ts`,
     entryContent: generateSeedDumpScriptContent(namespace),
     baseDir,
+    buildOptions,
   });
 
   return { namespace, bundledCode };
@@ -405,6 +317,8 @@ interface BundleGeneratedEntryParams {
   entryContent: string;
   /** Directory whose dependencies and tsconfig the generated entry uses */
   baseDir: string;
+  /** Sourcemap options of the config */
+  buildOptions: SeedBundleBuildOptions;
 }
 
 /**
@@ -413,7 +327,8 @@ interface BundleGeneratedEntryParams {
  * @returns Bundled script code
  */
 async function bundleGeneratedEntry(params: BundleGeneratedEntryParams): Promise<string> {
-  const { entryFileName, entryContent, baseDir } = params;
+  const { entryFileName, entryContent, baseDir, buildOptions } = params;
+  const inlineSourcemap = resolveInlineSourcemap(buildOptions.inlineSourcemap);
 
   // Output directory in .tailor (relative to project root)
   const outputDir = path.resolve(getDistDir(), "seed");
@@ -441,8 +356,8 @@ async function bundleGeneratedEntry(params: BundleGeneratedEntryParams): Promise
     write: false,
     output: {
       format: "esm",
-      sourcemap: false,
-      minify: false,
+      sourcemap: inlineSourcemap,
+      minify: inlineSourcemap ? { mangle: { keepNames: true } } : true,
       codeSplitting: false,
       globals: {
         tailordb: "tailordb",
@@ -462,5 +377,9 @@ async function bundleGeneratedEntry(params: BundleGeneratedEntryParams): Promise
   } as rolldown.BuildOptions);
   bundleLog.assertAllResolved();
 
-  return result.output[0].code;
+  return chunkCodeWithSourcemap({
+    chunk: result.output[0],
+    inlineSourcemap,
+    dependencySources: buildOptions.inlineSourcemapDependencySources ?? false,
+  });
 }

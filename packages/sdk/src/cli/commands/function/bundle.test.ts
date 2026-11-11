@@ -254,6 +254,30 @@ export function main() {
     });
   });
 
+  test("lists the project files it read, leaving out the generated entry and installed packages", async () => {
+    const libDir = path.join(testDir, "node_modules", "function-watch-lib");
+    fs.mkdirSync(libDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(libDir, "package.json"),
+      JSON.stringify({ name: "function-watch-lib", type: "module", main: "index.js" }),
+    );
+    fs.writeFileSync(path.join(libDir, "index.js"), "export const libValue = () => 'LIB';\n");
+    fs.writeFileSync(path.join(testDir, "helper.ts"), "export const helper = () => 'HELPER';\n");
+
+    const result = await bundle(
+      "uses-helper.ts",
+      `import { helper } from "./helper";\n` +
+        `import { libValue } from "function-watch-lib";\n` +
+        `export function main() { return helper() + libValue(); }\n`,
+      { type: "plain", name: "uses-helper", namedMain: true },
+    );
+
+    expect(result.sourceFiles.toSorted()).toEqual([
+      path.join(testDir, "helper.ts"),
+      path.join(testDir, "uses-helper.ts"),
+    ]);
+  });
+
   describe("resolver", () => {
     test("resolves generated imports from the configured project directory", async () => {
       const root = makeTempDir("function-bundler-cross-project-");

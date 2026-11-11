@@ -87,6 +87,8 @@ interface BundleForRunResult {
   bundledCode: string;
   /** Name used for the script */
   scriptName: string;
+  /** Absolute paths of the project files bundled into the script, excluding installed packages */
+  sourceFiles: string[];
 }
 
 /**
@@ -171,15 +173,19 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
   } as rolldown.BuildOptions);
   bundleLog.assertAllResolved();
 
+  const chunk = buildResult.output[0];
   const bundledCode = chunkCodeWithSourcemap({
-    chunk: buildResult.output[0],
+    chunk,
     inlineSourcemap,
     dependencySources: options.inlineSourcemapDependencySources ?? false,
     projectSources: options.inlineSourcemapProjectSources,
     sourcesDir: process.cwd(),
   });
+  const sourceFiles = chunk.moduleIds
+    .map((id) => path.normalize(id))
+    .filter((id) => path.isAbsolute(id) && id !== entryPath && !id.includes("/node_modules/"));
 
-  return { bundledCode, scriptName };
+  return { bundledCode, scriptName, sourceFiles };
 }
 
 type GenerateEntryOptions = {

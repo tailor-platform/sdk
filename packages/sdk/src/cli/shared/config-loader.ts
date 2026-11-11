@@ -5,10 +5,15 @@ import { AppConfigSchema } from "#/parser/app-config/schema";
 import { PluginConfigSchema } from "#/parser/plugin-config/index";
 import { loadConfigPath } from "./context";
 import { assertEnvHasNoSecrets, resolveEnvValue } from "./env-secret-scan";
-import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
 import { installCliTailordbStub } from "./mock";
 import { currentImportNonce, IMPORT_NONCE_PARAM } from "./user-modules";
-import { configInvalidError, syntaxInvalidError } from "./validation-errors";
+import {
+  atUserModule,
+  configInvalidError,
+  configIssuesError,
+  syntaxInvalidError,
+} from "./validation-errors";
+import { flattenZodIssues, type FlatIssue } from "./zod-issues";
 import type { AppConfig, EnvValue } from "#/configure/config/types";
 import type { Plugin } from "#/plugin/types";
 
@@ -70,10 +75,13 @@ export async function loadConfig(
     !("default" in configModule) ||
     !configModule.default
   ) {
-    throw atConfigFile(
-      new Error("Invalid Tailor config module: default export not found"),
-      resolvedPath,
-    );
+    throw configIssuesError({
+      file: resolvedPath,
+      exportName: "default",
+      subject: "Tailor config",
+      issues: [{ path: [], message: "default export not found" }],
+      suggestion: "Export the config as the default export: export default defineConfig({ ... })",
+    });
   }
 
   const validated = AppConfigSchema.safeParse(configModule.default);
@@ -87,11 +95,7 @@ export async function loadConfig(
   }
 
   const appConfig = configModule.default as AppConfig;
-  try {
-    await assertEnvHasNoSecrets({ env: appConfig.env, configPath: resolvedPath });
-  } catch (error) {
-    throw error instanceof Error ? atConfigFile(error, resolvedPath) : error;
-  }
+  await assertEnvHasNoSecrets({ env: appConfig.env, configPath: resolvedPath });
   const env = appConfig.env
     ? Object.fromEntries(
         Object.entries(appConfig.env).map(([key, entry]) => [key, resolveEnvValue(entry)]),
@@ -101,37 +105,46 @@ export async function loadConfig(
   const allPlugins: Plugin[] = [];
   if (Object.hasOwn(configModule, "plugins")) {
     const pluginsExport = (configModule as Record<string, unknown>).plugins;
+    const pluginsTarget = {
+      file: resolvedPath,
+      exportName: "plugins",
+      subject: "`plugins` export",
+    } as const;
     if (!Array.isArray(pluginsExport)) {
-      throw atConfigFile(
-        new Error(
-          `Invalid \`plugins\` export in ${resolvedPath}: expected an array returned by definePlugins(), got ${typeof pluginsExport}`,
-        ),
-        resolvedPath,
-      );
+      throw configIssuesError({
+        ...pluginsTarget,
+        issues: [
+          {
+            path: [],
+            message: `expected an array returned by definePlugins(), got ${pluginsExport === null ? "null" : typeof pluginsExport}`,
+          },
+        ],
+      });
     }
+    const issues: FlatIssue[] = [];
     const seenIds = new Set<string>();
+    let hasDuplicateId = false;
     for (const [index, item] of pluginsExport.entries()) {
       const result = PluginConfigSchema.safeParse(item);
       if (!result.success) {
-        throw configInvalidError({
-          file: resolvedPath,
-          exportName: "plugins",
-          subject: "`plugins` export",
-          error: result.error,
-          pathPrefix: [index],
-        });
+        issues.push(...flattenZodIssues(result.error.issues, [index]));
+        continue;
       }
       if (seenIds.has(result.data.id)) {
-        throw atConfigFile(
-          new Error(
-            `Duplicate plugin ID "${result.data.id}" detected in ${resolvedPath}. Each plugin must have a unique ID.`,
-          ),
-          resolvedPath,
-        );
+        issues.push({ path: [index, "id"], message: `Duplicate plugin ID "${result.data.id}"` });
+        hasDuplicateId = true;
+        continue;
       }
       seenIds.add(result.data.id);
       // Not result.data: parsing copies into a plain object, dropping a class plugin's methods and private state.
       allPlugins.push(item as Plugin);
+    }
+    if (issues.length > 0) {
+      throw configIssuesError({
+        ...pluginsTarget,
+        issues,
+        suggestion: hasDuplicateId ? "Give each plugin a unique ID." : undefined,
+      });
     }
   }
 
@@ -146,29 +159,16 @@ export async function loadConfig(
 }
 
 /**
- * Point a config rejection at the file it came from.
- * @param error - Failure raised while loading the config
- * @param resolvedPath - Absolute path to the config file
- * @returns The same error, carrying the config file as its source location
- */
-function atConfigFile<T extends Error>(error: T, resolvedPath: string): T {
-  return withErrorDiagnostics(error, { location: { file: resolvedPath } });
-}
-
-/**
  * Point a failure raised while importing the config at the source it came from.
  *
  * Unparsable source names the file it was found in, which is the imported
  * module rather than the config when the config imports it. Anything else is
  * attributed to the config file, the one location loading it establishes, and
- * a failure that already names its own source keeps it.
+ * a failure that already carries a source location keeps it.
  * @param error - Value thrown while importing the config
  * @param resolvedPath - Absolute path to the config file
  * @returns An Error carrying the source location the failure points at
  */
 export function atConfigSource(error: unknown, resolvedPath: string): unknown {
-  const syntaxError = syntaxInvalidError(error);
-  if (syntaxError) return syntaxError;
-  if (!(error instanceof Error)) return error;
-  return getErrorDiagnostics(error).location ? error : atConfigFile(error, resolvedPath);
+  return syntaxInvalidError(error) ?? atUserModule(error, resolvedPath);
 }

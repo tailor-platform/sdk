@@ -214,7 +214,6 @@ The generated columns follow the Kysely types, not TailorDB's storage: `text` fo
 What the script cannot reproduce:
 
 - Hooks, validations, and permissions do not run. A required field whose value only its own field-level create hook supplies is created nullable, so inserts that omit it succeed; give it a `.default()` if the test reads it back. A field filled by a table-level hook stays `NOT NULL`, as its Kysely type still requires it on insert.
-- Serial formats are reproduced for a single `%d`, `%x`, or `%X` specifier with an optional zero-padded width; an octal `%o` format fails generation with an error naming the field.
 - `gapless` is not reproduced: the numbers come from a sequence, so an insert that fails still uses up its number.
 - A date or datetime inside a nested object reads back as a string from `jsonb`, not a `Date`, or a `Temporal.PlainDate` or `Temporal.Instant` under `kyselyTypePlugin({ temporal: true })`, although the platform returns those types.
 - A `.unique()` date, datetime, or time inside a nested object compares the stored text, so two spellings of the same instant (`2026-01-01T00:00:00Z` and `2026-01-01T01:00:00+01:00`) are both accepted, although the platform rejects the second. Use one spelling in tests.
@@ -296,6 +295,8 @@ test("reads secrets from vault", async () => {
   expect(sm.calls).toEqual([{ method: "getSecret", vault: "my-vault", name: "API_KEY" }]);
 });
 ```
+
+As on the Platform, reading a vault the mock does not have rejects with a `vault not found: <vault>` error, while a missing secret in an existing vault resolves to `undefined`. Seed every vault your code reads that is not [loaded from config](#loading-secrets-from-config), and seed an empty vault (`{ "my-vault": {} }`) to test a missing secret. `setSecrets()` replaces and `reset()` clears every vault, including config-loaded ones, so use `setSecret()` or `mergeSecrets()` to add values while keeping them.
 
 ### AuthConnection Mock
 
@@ -451,7 +452,7 @@ export default defineConfig({
 });
 ```
 
-This makes `tailor.secretmanager.getSecret("vault", "key")` return the values defined in your config. You can still override with `mockSecretmanager({ secrets: ... })` in individual tests: a per-test overlay applies only within that test, and the config-loaded secrets remain available to every other test.
+This makes `tailor.secretmanager.getSecret("vault", "key")` return the values defined in your config. You can still override with `mockSecretmanager({ secrets: ... })` in individual tests: a per-test overlay applies only within that test, and the config-loaded secrets remain available to every other test. If the config fails to load, no vault is loaded, so reading one rejects with `vault not found`.
 
 The same `config` option applies the config's [`defaultDateRepresentation`](./configuration.md#application-settings) to tests: with `"temporal"`, `t.date()`, `t.datetime()`, and `t.time()` fields that omit `as` parse to Temporal values in test files and in the modules they import, as they do in deployed functions, and with `"date"` they parse to `Date` values. The config is read once when Vitest starts, in the Vitest process itself rather than under the `tailor-runtime` restrictions, so restart Vitest after changing the setting. A config file that is missing or does not parse fails the run, as does a value other than `"temporal"` or `"date"`. A config that throws while loading, for example on an environment variable only the deploy environment sets, prints a warning and keeps string values for that run, as the secrets loader already tolerates; the warning notes that tests then disagree with `tailor.d.ts` if the config sets `"temporal"` or `"date"`. Tests that call `resolver.body()` directly bypass the SDK's input conversion and must pass values in the representation the body expects. To apply a representation in a test file regardless of the config, for example in a plain Vitest setup or for a [migration test](./services/tailordb/migration.md#testing-migrations-locally) pinned to the value it was generated under, call `applyDateRepresentation` from `@tailor-platform/sdk/vitest` with `"temporal"`, `"date"`, or `"string"` (the representation of a project that leaves the setting unset); it returns a function that restores the previous representation. The helper only selects the representation: parsing such a field needs `Temporal`, which the `tailor-runtime` environment installs when Node.js lacks it, so outside that environment the test must provide a Temporal implementation itself.
 

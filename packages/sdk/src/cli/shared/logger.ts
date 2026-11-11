@@ -1,9 +1,9 @@
 import { formatWithOptions, stripVTControlCharacters, type InspectOptions } from "node:util";
 import { color, renderFor } from "@tailor-platform/shared/color";
-import { formatDistanceToNowStrict } from "date-fns";
 import { isCI } from "std-env";
 import { renderTable } from "./ascii-table";
 import { parseBoolean } from "./parse-boolean";
+import { formatRelativeTime } from "./relative-time";
 
 /** Environment variable selecting JSON as the default output for every command. */
 export const JSON_OUTPUT_ENV_VAR = "TAILOR_JSON_OUTPUT";
@@ -355,6 +355,39 @@ export function plainRedacted(text: string): string {
   return renderWithRedaction(text, stripVTControlCharacters);
 }
 
+// C0 controls other than tab and newline, DEL, C1 controls, and the Unicode line and paragraph
+// separators. Tab and newline are handled as whitespace below so they become a single space.
+// The control characters are the point of this expression.
+// oxlint-disable-next-line no-control-regex
+const TERMINAL_CONTROL_CHARACTERS = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u2028\u2029]/g;
+
+/**
+ * Makes text that came from a remote source safe to print on a terminal: strips ANSI escape and
+ * OSC sequences and every control character, and collapses whitespace runs into one space.
+ * Use it on server-provided free text (titles, bodies) before it reaches `logger`.
+ * @param text - Text received from a remote source
+ * @returns Single-line text with no terminal escapes or control characters
+ */
+export function sanitizeTerminalText(text: string): string {
+  return stripVTControlCharacters(text)
+    .replace(TERMINAL_CONTROL_CHARACTERS, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Makes multi-line text that came from a remote source safe to print on a terminal: strips ANSI
+ * escape and OSC sequences and every control character except tab and newline, and normalizes
+ * CRLF to LF. Line structure and indentation are kept, so Markdown bodies stay readable.
+ * @param text - Text received from a remote source
+ * @returns The text with no terminal escapes or control characters, newlines kept
+ */
+export function sanitizeTerminalBlock(text: string): string {
+  return stripVTControlCharacters(text)
+    .replace(/\r\n?/g, "\n")
+    .replace(TERMINAL_CONTROL_CHARACTERS, "");
+}
+
 /**
  * Reset the registered-secret redaction state. Used for testing.
  *
@@ -583,7 +616,7 @@ export const logger = {
       if (options?.showNull && value === null) return "NULL";
       if (value === null || value === undefined) return "N/A";
       if (value instanceof Date) {
-        return formatDistanceToNowStrict(value, { addSuffix: true });
+        return formatRelativeTime(value);
       }
       if (typeof value === "object") {
         return pretty ? JSON.stringify(value, null, 2) : JSON.stringify(value);

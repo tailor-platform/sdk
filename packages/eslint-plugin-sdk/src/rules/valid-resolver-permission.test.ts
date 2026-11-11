@@ -1,16 +1,14 @@
 import { describe } from "vitest";
-import { runRuleTests } from "./test-helpers.js";
+import { resolverSource, runRuleTests } from "./test-helpers.js";
 
 const RULE = "valid-resolver-permission";
 const NO_PERMIT =
   "Resolver permission must include at least one `permit: true` policy; a policy list with only `permit: false` policies lets through any caller who does not authenticate.";
 const USER_SIDE =
   "Resolver permission condition must reference a `user` operand on exactly one side (comparing two `user` operands to each other can match on `undefined === undefined`).";
-const OPERAND_VALUE = "A `user` operand must compare to a string or a boolean.";
-
-function resolver(permission: string): string {
-  return `import { createResolver } from "@tailor-platform/sdk";\nexport default createResolver({ name: "r", body: () => 1, permission: ${permission} });`;
-}
+const OPERAND_VALUE =
+  "A `user` operand must compare to a string, a boolean, or an `input` operand.";
+const INPUT_SIDE = "An `input` operand must be compared to a `user` operand.";
 
 function config(defaultPermission: string): string {
   return `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "app", resolver: { main: { files: ["./src/resolver/*.ts"], defaultPermission: ${defaultPermission} } } });`;
@@ -20,11 +18,13 @@ describe("rejects permission arrays without a permit: true policy", () => {
   runRuleTests(RULE, {
     invalid: [
       {
-        code: resolver('[{ conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false }]'),
+        code: resolverSource({
+          permission: '[{ conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false }]',
+        }),
         errors: [NO_PERMIT],
       },
       {
-        code: resolver("[]"),
+        code: resolverSource({ permission: "[]" }),
         errors: ["Resolver permission must have at least one policy."],
       },
       {
@@ -39,21 +39,25 @@ describe("rejects conditions that compare user operands to each other or to noth
   runRuleTests(RULE, {
     invalid: [
       {
-        code: resolver(
-          '[{ conditions: [[{ user: "role" }, "=", { user: "team" }]], permit: true }]',
-        ),
+        code: resolverSource({
+          permission: '[{ conditions: [[{ user: "role" }, "=", { user: "team" }]], permit: true }]',
+        }),
         errors: [USER_SIDE],
       },
       {
-        code: resolver('[{ conditions: [["ADMIN", "=", "ADMIN"]], permit: true }]'),
+        code: resolverSource({
+          permission: '[{ conditions: [["ADMIN", "=", "ADMIN"]], permit: true }]',
+        }),
         errors: [USER_SIDE],
       },
       {
-        code: resolver('[{ conditions: [{ user: "role" }, "=", { user: "team" }], permit: true }]'),
+        code: resolverSource({
+          permission: '[{ conditions: [{ user: "role" }, "=", { user: "team" }], permit: true }]',
+        }),
         errors: [USER_SIDE],
       },
       {
-        code: resolver("[{ conditions: [], permit: true }]"),
+        code: resolverSource({ permission: "[{ conditions: [], permit: true }]" }),
         errors: ["Resolver permission policy must have at least one condition."],
       },
     ],
@@ -64,11 +68,15 @@ describe("rejects known user operands compared to the wrong literal type", () =>
   runRuleTests(RULE, {
     invalid: [
       {
-        code: resolver('[{ conditions: [[{ user: "_loggedIn" }, "=", "true"]], permit: true }]'),
+        code: resolverSource({
+          permission: '[{ conditions: [[{ user: "_loggedIn" }, "=", "true"]], permit: true }]',
+        }),
         errors: ["`_loggedIn` must compare to a boolean."],
       },
       {
-        code: resolver('[{ conditions: [[true, "=", { user: "id" }]], permit: true }]'),
+        code: resolverSource({
+          permission: '[{ conditions: [[true, "=", { user: "id" }]], permit: true }]',
+        }),
         errors: ["`id` must compare to a string."],
       },
     ],
@@ -79,16 +87,81 @@ describe("rejects operands that are not a user object, string, or boolean", () =
   runRuleTests(RULE, {
     invalid: [
       {
-        code: resolver('[{ conditions: [[{ user: "id" }, "=", 5]], permit: true }]'),
+        code: resolverSource({
+          permission: '[{ conditions: [[{ user: "id" }, "=", 5]], permit: true }]',
+        }),
         errors: [OPERAND_VALUE],
       },
       {
-        code: resolver('[{ conditions: [[{ user: "role" }, "=", 5]], permit: true }]'),
+        code: resolverSource({
+          permission: '[{ conditions: [[{ user: "role" }, "=", 5]], permit: true }]',
+        }),
         errors: [OPERAND_VALUE],
       },
       {
-        code: resolver('[{ conditions: [[{ user: "role" }, "=", null]], permit: true }]'),
+        code: resolverSource({
+          permission: '[{ conditions: [[{ user: "role" }, "=", null]], permit: true }]',
+        }),
         errors: [OPERAND_VALUE],
+      },
+    ],
+  });
+});
+
+describe("checks input operands", () => {
+  runRuleTests(RULE, {
+    valid: [
+      resolverSource({
+        permission:
+          '[{ conditions: [[{ input: "employeeId" }, "=", { user: "id" }]], permit: true }]',
+      }),
+      resolverSource({
+        permission:
+          '[{ conditions: [[{ user: "employeeId" }, "=", { input: "requesterId" }]], permit: true }]',
+      }),
+    ],
+    invalid: [
+      {
+        code: resolverSource({
+          permission: '[{ conditions: [[{ input: "employeeId" }, "=", "u1"]], permit: true }]',
+        }),
+        errors: [INPUT_SIDE],
+      },
+      {
+        code: resolverSource({
+          permission:
+            '[{ conditions: [[{ input: "employeeId" }, "=", { input: "managerId" }]], permit: true }]',
+        }),
+        errors: [INPUT_SIDE],
+      },
+      {
+        code: resolverSource({
+          permission:
+            '[{ conditions: [[{ input: "requesterId" }, "!=", { user: "id" }]], permit: true }]',
+        }),
+        errors: ["An `input` operand can only be compared with `=`."],
+      },
+      {
+        code: resolverSource({
+          permission:
+            '[{ conditions: [[{ user: "_loggedIn" }, "=", { input: "flag" }]], permit: true }]',
+        }),
+        errors: ["`_loggedIn` must compare to a boolean."],
+      },
+      {
+        code: resolverSource({
+          permission:
+            '[{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }, { conditions: [[{ input: "employeeId" }, "=", { user: "id" }]], permit: false }]',
+        }),
+        errors: ["An `input` operand can only be used in a `permit: true` policy."],
+      },
+      {
+        code: config(
+          '[{ conditions: [[{ input: "employeeId" }, "=", { user: "id" }]], permit: true }]',
+        ),
+        errors: [
+          "`defaultPermission` cannot use an `input` operand, since a namespace has no input.",
+        ],
       },
     ],
   });
@@ -97,13 +170,20 @@ describe("rejects operands that are not a user object, string, or boolean", () =
 describe("accepts valid permissions", () => {
   runRuleTests(RULE, {
     valid: [
-      resolver('[{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }]'),
-      resolver(
-        '[{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }, { conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false, description: "banned" }]',
-      ),
-      resolver('[{ conditions: [{ user: "role" }, "=", "ADMIN"], permit: true }]'),
-      resolver('[{ conditions: [["ADMIN", "!=", { user: "role" }]], permit: true }]'),
-      resolver('"allowAnonymous"'),
+      resolverSource({
+        permission: '[{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }]',
+      }),
+      resolverSource({
+        permission:
+          '[{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }, { conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false, description: "banned" }]',
+      }),
+      resolverSource({
+        permission: '[{ conditions: [{ user: "role" }, "=", "ADMIN"], permit: true }]',
+      }),
+      resolverSource({
+        permission: '[{ conditions: [["ADMIN", "!=", { user: "role" }]], permit: true }]',
+      }),
+      resolverSource({ permission: '"allowAnonymous"' }),
       config('[{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }]'),
       config('"allowAnonymous"'),
     ],
@@ -133,13 +213,20 @@ describe("skips a permission a later spread can override", () => {
 describe("skips values it cannot resolve statically", () => {
   runRuleTests(RULE, {
     valid: [
-      resolver("buildPermission()"),
-      resolver('[{ conditions: [[{ user: "role" }, "=", "BANNED"]], permit: allow }]'),
-      resolver(
-        '[...sharedPolicies, { conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false }]',
-      ),
-      resolver('[{ conditions: [[{ user: "role" }, "=", expected]], permit: true }]'),
-      resolver('[{ conditions: [[operand, "=", { user: "role" }]], permit: true }]'),
+      resolverSource({ permission: "buildPermission()" }),
+      resolverSource({
+        permission: '[{ conditions: [[{ user: "role" }, "=", "BANNED"]], permit: allow }]',
+      }),
+      resolverSource({
+        permission:
+          '[...sharedPolicies, { conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false }]',
+      }),
+      resolverSource({
+        permission: '[{ conditions: [[{ user: "role" }, "=", expected]], permit: true }]',
+      }),
+      resolverSource({
+        permission: '[{ conditions: [[operand, "=", { user: "role" }]], permit: true }]',
+      }),
     ],
   });
 });

@@ -25,13 +25,13 @@ vi.mock("@tailor-platform/sdk/cli", async (importOriginal) => ({
   logger,
 }));
 
-// The data dir lives outside the workspace, so its schema files import the
-// SDK by resolved URL instead of by package name.
-const seedUrl = import.meta.resolve("@tailor-platform/sdk/seed");
+// The data dir lives outside the workspace, so its schema files import
+// lines-db by resolved URL instead of by package name.
+const linesDbUrl = import.meta.resolve("lines-db");
 
 function schemaSource(foreignKeys: object[] = []): string {
   return `
-import { defineSchema } from "${seedUrl}";
+import { defineSchema } from "${linesDbUrl}";
 
 export const schema = defineSchema(
   {

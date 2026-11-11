@@ -70,6 +70,8 @@ import {
 } from "@tailor-platform/tailor-proto/workflow_pb";
 import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
+import { STATIC_WEBSITE_ORIGIN_PLACEHOLDER_PATTERN } from "#/parser/service/common";
+import { ALL_EMAIL_DOMAINS, hasImplicitAllEmailDomains } from "#/parser/service/idp/email-domains";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { secretCreateRequest, secretUpdateRequest, vaultCreateRequest } from "./secret-manager";
 import { buildWorkflowValidationShape } from "./workflow";
@@ -311,12 +313,8 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     if (!Array.isArray(origins) || origins.length === 0) {
       return item;
     }
-    // Match the parser schema's placeholder shape exactly (a static-website
-    // slug followed by `:url`, no path/query/fragment). A broader regex would
-    // mask schema-rejected inputs that should still surface here as
-    // validation errors.
     const substituted = origins.map((origin) =>
-      typeof origin === "string" && /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]:url$/.test(origin)
+      typeof origin === "string" && STATIC_WEBSITE_ORIGIN_PLACEHOLDER_PATTERN.test(origin)
         ? placeholderOriginReplacement
         : origin,
     );
@@ -338,6 +336,22 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     "IdP service",
     (idp.changeSet.service.updates as HasRequest[]).map(substituteIdpReturnOrigins),
   );
+  for (const [action, items] of [
+    ["create", idp.changeSet.service.creates],
+    ["update", idp.changeSet.service.updates],
+  ] as const) {
+    for (const item of items) {
+      if (hasImplicitAllEmailDomains(item.request.userAuthPolicy)) {
+        violations.push({
+          kind: "IdP service",
+          name: item.name,
+          action,
+          fieldPath: "userAuthPolicy.allowedEmailDomains",
+          message: `must be set unless useNonEmailIdentifier is true; use ["${ALL_EMAIL_DOMAINS}"] to allow every email domain, or list the domains you accept`,
+        });
+      }
+    }
+  }
 
   // Validate Secret Manager vault/secret names derived from IdP client creates and updates.
   // The client name itself may be valid while the derived vault/secret name exceeds 63 chars.

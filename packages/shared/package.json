@@ -8,7 +8,10 @@
   "exports": {
     "./color": "./src/color.ts",
     "./node-builtins": "./src/node-builtins.ts",
-    "./workflow-policy": "./src/workflow-policy.ts"
+    "./resource-name": "./src/resource-name.ts",
+    "./workflow-policy": "./src/workflow-policy.ts",
+    "./plugin-error": "./src/plugin-error.ts",
+    "./seed-order": "./src/seed-order.ts"
   },
   "scripts": {
     "lint": "oxlint --type-aware .",
@@ -19,7 +22,7 @@
   },
   "devDependencies": {
     "oxlint": "1.90.0",
-    "oxlint-tsgolint": "7.0.2005",
-    "vitest": "5.0.5"
+    "oxlint-tsgolint": "7.0.2006",
+    "vitest": "5.1.0"
   }
 }

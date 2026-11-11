@@ -23,6 +23,7 @@ import {
 import { type AuthService } from "#/cli/services/auth/service";
 import {
   fetchAllTolerant,
+  listAuthMachineUsersTolerant,
   getOrNull,
   resolveStaticWebsiteUrls,
   type OperatorClient,
@@ -1066,21 +1067,13 @@ async function planMachineUsers(
     "Auth machineUsers",
   );
 
-  const fetchMachineUsers = (authNamespace: string) => {
-    return fetchAllTolerant(async (pageToken, maxPageSize) => {
-      const { machineUsers, nextPageToken } = await client.listAuthMachineUsers({
-        workspaceId,
-        authNamespace,
-        pageToken,
-        pageSize: maxPageSize,
-      });
-      return [machineUsers, nextPageToken];
-    });
-  };
-
   for (const auth of auths) {
     const { config } = auth;
-    const existingMachineUsers = await fetchMachineUsers(config.name);
+    const existingMachineUsers = await listAuthMachineUsersTolerant(
+      client,
+      workspaceId,
+      config.name,
+    );
     const existingMap = new Map<string, (typeof existingMachineUsers)[number]>();
     existingMachineUsers.forEach((machineUser) => {
       existingMap.set(machineUser.name, machineUser);
@@ -1142,7 +1135,11 @@ async function planMachineUsers(
   }
 
   for (const namespaceName of deletedServices) {
-    const existingMachineUsers = await fetchMachineUsers(namespaceName);
+    const existingMachineUsers = await listAuthMachineUsersTolerant(
+      client,
+      workspaceId,
+      namespaceName,
+    );
     existingMachineUsers.forEach((machineUser) => {
       logger.registerSecret(machineUser.clientSecret);
       changeSet.deletes.push({

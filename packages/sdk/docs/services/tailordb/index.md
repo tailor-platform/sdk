@@ -479,6 +479,8 @@ db.string().serial({
 });
 ```
 
+`format` holds exactly one of `%d` (decimal), `%o` (octal), `%x` (lowercase hexadecimal), or `%X` (uppercase hexadecimal), optionally with a width: `%5d` pads with spaces and `%05d` with zeros, to at least 5 characters. Write a literal `%` as `%%`. The format is at most 32 characters.
+
 A serial field cannot be used inside a `db.object()` field.
 
 > **Preview:** The `gapless` option is a preview feature. Its behavior and configuration may change before general availability.

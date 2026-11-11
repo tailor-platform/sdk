@@ -15,6 +15,8 @@ npm install -D @tailor-platform/sdk-plugin-seed@next
 
 The Tailor CLI discovers the plugin automatically from `node_modules/.bin` (or your `PATH`). Run `tailor plugin list` to confirm it resolves.
 
+The `seed/data/*.schema.ts` files `tailor generate` writes import `defineSchema` from `@tailor-platform/sdk-plugin-seed/schema`, so a project that uses `seedPlugin` needs this package, and it should be updated at the same time as `@tailor-platform/sdk`.
+
 ## Usage
 
 ```bash

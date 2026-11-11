@@ -1,5 +1,6 @@
 import { logger } from "@tailor-platform/sdk/cli";
 import { setupAutofix, type AutofixSetupOptions } from "./autofix";
+import { locatedMessage } from "./error-message";
 import { setupTarget, type SetupTargetOptions } from "./generate";
 import {
   AUTOFIX_LABEL,
@@ -10,7 +11,13 @@ import {
   type LockInputs,
   type LockTarget,
 } from "./lock";
-import { isPackageManager, type PackageManager, type PreviewRequirement } from "./templates";
+import {
+  isAutofixCodemod,
+  isCopilotAuth,
+  isPackageManager,
+  type PackageManager,
+  type PreviewRequirement,
+} from "./templates";
 
 type UpdateCommon = { force: boolean; outputDir: string };
 
@@ -32,6 +39,25 @@ function recordedPackageManagerUnlessDetected(
     );
   }
   return inputs.packageManager;
+}
+
+function recordedCodemod(
+  inputs: LockAutofix["inputs"],
+): Pick<AutofixSetupOptions, "codemod" | "copilotAuth"> {
+  const { codemod, copilotAuth } = inputs;
+  if (codemod !== undefined && !isAutofixCodemod(codemod)) {
+    throw new Error(
+      `.github/tailor.lock records the unsupported codemod mode ${JSON.stringify(codemod)}. ` +
+        "Re-run `tailor setup ci autofix` with --codemod.",
+    );
+  }
+  if (copilotAuth !== undefined && !isCopilotAuth(copilotAuth)) {
+    throw new Error(
+      `.github/tailor.lock records the unsupported Copilot auth ${JSON.stringify(copilotAuth)}. ` +
+        "Re-run `tailor setup ci autofix` with --copilot-auth.",
+    );
+  }
+  return { codemod, copilotAuth };
 }
 
 /**
@@ -74,6 +100,7 @@ export function planUpdate(target: LockTarget, common: UpdateCommon): SetupTarge
         migrationTest: inputs.migrationTest,
         migrationTestLabel: inputs.migrationTestLabel,
         migrationTestEnvironment: inputs.migrationTestEnvironment,
+        splitPlanEnvironment: inputs.splitPlanEnvironment,
         restrictDispatch: inputs.restrictDispatch ?? false,
       };
     case "tag":
@@ -110,6 +137,7 @@ function planAutofixUpdate(autofix: LockAutofix, common: UpdateCommon): AutofixS
   return {
     provider,
     securefixServerRepository,
+    ...recordedCodemod(autofix.inputs),
     dir: dirs,
     packageManager: recordedPackageManagerUnlessDetected(autofix.inputs),
     ...common,
@@ -135,7 +163,7 @@ function failureSummary(error: unknown): string {
   const labelled = (label: string, value: unknown) =>
     typeof value === "string" && value.length > 0 ? [`${label}: ${value}`] : [];
   return [
-    error.message,
+    locatedMessage(error),
     ...labelled("Details", details),
     ...labelled("Suggestion", suggestion),
   ].join("\n");

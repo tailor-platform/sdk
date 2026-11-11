@@ -67,6 +67,25 @@ const bindingsMap = (
   );
 
 describe("precompileTailorDBTypeScripts", () => {
+  test("names the table of an async validator, leaving its file to the loader", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-async-validate-"));
+    const sourceFile = join(tempDir, "type.ts");
+    writeFileSync(sourceFile, "");
+    const type = {
+      name: "Order",
+      fields: {},
+      metadata: { typeValidate: async () => [] },
+    } as unknown as TailorDBTypeRaw;
+
+    try {
+      await expect(precompileTailorDBTypeScripts(type, sourceFile, undefined)).rejects.toThrow(
+        /^typeValidate in table "Order" must be synchronous/,
+      );
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   test("bundles captured declarations with TypeScript syntax", async () => {
     const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-typescript-entry-"));
     const sourceFile = join(tempDir, "type.ts");

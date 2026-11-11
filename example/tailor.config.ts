@@ -46,6 +46,7 @@ const idp = defineIdp("my-idp", {
   },
   userAuthPolicy: {
     useNonEmailIdentifier: false,
+    allowedEmailDomains: ["*"],
     allowSelfPasswordReset: true,
     passwordRequireUppercase: true,
     passwordRequireLowercase: true,

@@ -69,7 +69,9 @@ remediation exists, the envelope also includes
 `error.suggestion`, `error.help` (the `--help` invocation for the failing command), `error.next` (a
 runnable command), or `error.context`. `UNEXPECTED_ERROR` marks failures without a dedicated code,
 including SDK-internal errors. Diagnostic lines may precede the error envelope, and stdout is not
-guaranteed to contain an error object.
+guaranteed to contain an error object. A failure that points at a file starts its message, in the
+envelope and in plain output, with the file's path relative to the working directory and, when
+known, the line: `tailordb/order.ts:3: Invalid syntax: Expression expected`.
 
 The exit code separates a mistyped command from a failed one without parsing output: `0` on success,
 `2` when the CLI rejects the command line itself, such as an unknown option or subcommand, an
@@ -87,6 +89,13 @@ command is running. Login recovery preserves the selected profile. For saved ide
 the next step opens login help so you can reuse the original browser or machine-user login method. Permission and
 connection failures include guidance in `error.suggestion`; API failures also identify the operation
 and affected resources in `error.context`.
+
+A table update that makes a field required while records have no value for it fails with
+`TAILORDB_REQUIRED_FIELD_HAS_NULL_VALUES` in `tailor deploy`, `tailor tailordb migration sync`, and
+`tailor tailordb migration resolve`, and `error.suggestion` says how to proceed. When a deploy
+reports that failure as `MIGRATION_ROLLED_BACK` or `MIGRATION_PARTIALLY_APPLIED` instead (see
+[Migration Error Codes](#migration-error-codes-beta)), the `error.suggestion` of that error ends
+with the same advice.
 
 If deployment fails and saving recovery metadata also fails, `DEPLOY_METADATA_RECOVERY_FAILED`
 includes separate `error.context.apply` and `error.context.recovery` errors, each retaining its code
@@ -179,6 +188,10 @@ read them:
 - `MIGRATION_RESTORE_FAILED`: the settings of some tables, such as their maintenance mode, could not
   be restored after the migrations. When a migration had already failed, the deploy reports that
   failure instead and puts this error in its `error.context.restoration`.
+
+`MIGRATION_FAILED`, `MIGRATION_ROLLED_BACK`, `MIGRATION_PARTIALLY_APPLIED`, and
+`MIGRATION_OUTCOME_UNKNOWN` name the migration in `error.context.namespace` and
+`error.context.migrationNumber`, unless the error carries `error.context.restoration`.
 
 `tailor tailordb migration` commands:
 
@@ -302,12 +315,12 @@ is unchanged. Workflows that already echo their own `::error::` around the CLI k
 those messages describe the workflow's own checks, which can fail even when the CLI succeeds.
 
 When the failure has a known source, the annotation carries it: `seed validate` reports the
-offending JSONL file and line, including a line that is not valid JSON, and a rejected config
-reports its file. A `.ts` or `.mts` file that cannot be parsed — the config, a TailorDB type,
-resolver, executor, workflow, or HTTP adapter file, the file passed to `function run`, or a file one
-of them imports — reports that file and the line it failed on. Locations are written relative to
-`GITHUB_WORKSPACE`; a file outside it is annotated without a location rather than with a path the
-runner cannot resolve.
+offending JSONL file and line, including a line that is not valid JSON, and a rejected config or a
+TailorDB type, resolver, executor, workflow, or HTTP adapter file that fails to load reports its
+file. A `.ts` or `.mts` file that cannot be parsed — one of those files, the file passed to
+`function run`, or a file one of them imports — reports that file and the line it failed on.
+Locations are written relative to `GITHUB_WORKSPACE`; a file outside it is annotated without a
+location rather than with a path the runner cannot resolve.
 
 For a JSONL file containing a blank line, the annotation's line and the line printed in the report
 text differ: the annotation counts every line in the file, while the printed line counts only the
@@ -348,27 +361,28 @@ tailor deploy --env-file .env --env-file .env.production
 
 You can use environment variables to configure workspace and authentication:
 
-| Variable                                     | Description                                                                                           |
-| -------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `TAILOR_PLATFORM_WORKSPACE_ID`               | Workspace ID for deployment commands                                                                  |
-| `TAILOR_PLATFORM_ORGANIZATION_ID`            | Organization ID for organization commands                                                             |
-| `TAILOR_PLATFORM_FOLDER_ID`                  | Folder ID for folder commands                                                                         |
-| `TAILOR_PLATFORM_TOKEN`                      | Authentication token (alternative to `login`)                                                         |
-| `TAILOR_PLATFORM_PROFILE`                    | Workspace profile name                                                                                |
-| `TAILOR_CONFIG_PATH`                         | Path to Tailor config file                                                                            |
-| `TAILOR_DTS_PATH`                            | Output path for generated `tailor.d.ts` type definition file                                          |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | Client ID for `login --machine-user`                                                                  |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Client secret for `login --machine-user`                                                              |
-| `TAILOR_PLATFORM_MACHINE_USER_NAME`          | Default machine user name for `query`, `workflow start`, `function run`, `machineuser token`          |
-| `TAILOR_PLATFORM_URL`                        | Platform API base URL. Saved into profiles created with `profile create --platform-url`               |
-| `TAILOR_PLATFORM_OAUTH2_CLIENT_ID`           | OAuth2 client ID for user login. Saved into profiles created with `profile create --oauth2-client-id` |
-| `TAILOR_PLATFORM_CONSOLE_URL`                | Console base URL. Saved into profiles created with `profile create --console-url`                     |
-| `TAILOR_BUNDLE_CONCURRENCY`                  | Max concurrent bundle workers for `deploy` (resolvers/executors/workflows). Defaults to CPU count     |
-| `TAILOR_APPLY_CONCURRENCY`                   | Max concurrent platform RPCs during `apply`/`deploy`. Defaults to 16                                  |
-| `VISUAL` / `EDITOR`                          | Preferred editor for commands that open files (e.g., `vim`, `code`, `nano`)                           |
-| `TAILOR_GITHUB_ACTIONS_ANNOTATIONS`          | GitHub Actions failure annotations: `on` (default) or `off`                                           |
-| `TAILOR_CRASH_REPORTS_LOCAL`                 | Local crash log writing: `on` (default) or `off`                                                      |
-| `TAILOR_CRASH_REPORTS_REMOTE`                | Automatic crash report submission: `off` (default) or `on`                                            |
+| Variable                                     | Description                                                                                                      |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `TAILOR_PLATFORM_WORKSPACE_ID`               | Workspace ID for deployment commands                                                                             |
+| `TAILOR_PLATFORM_ORGANIZATION_ID`            | Organization ID for organization commands                                                                        |
+| `TAILOR_PLATFORM_FOLDER_ID`                  | Folder ID for folder commands                                                                                    |
+| `TAILOR_PLATFORM_TOKEN`                      | Authentication token (alternative to `login`)                                                                    |
+| `TAILOR_PLATFORM_PROFILE`                    | Workspace profile name                                                                                           |
+| `TAILOR_CONFIG_PATH`                         | Path to Tailor config file                                                                                       |
+| `TAILOR_DTS_PATH`                            | Output path for generated `tailor.d.ts` type definition file                                                     |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | Client ID for `login --machine-user`                                                                             |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Client secret for `login --machine-user`                                                                         |
+| `TAILOR_PLATFORM_MACHINE_USER_NAME`          | Default machine user name for `query`, `workflow start`, `function run`, `machineuser token`                     |
+| `TAILOR_PLATFORM_URL`                        | Platform API base URL. Saved into profiles created with `profile create --platform-url`                          |
+| `TAILOR_PLATFORM_OAUTH2_CLIENT_ID`           | OAuth2 client ID for user login. Saved into profiles created with `profile create --oauth2-client-id`            |
+| `TAILOR_PLATFORM_CONSOLE_URL`                | Console base URL. Saved into profiles created with `profile create --console-url`                                |
+| `TAILOR_BUNDLE_CONCURRENCY`                  | Max concurrent bundle workers for `deploy` (resolvers/executors/workflows). Defaults to CPU count                |
+| `TAILOR_APPLY_CONCURRENCY`                   | Max concurrent platform RPCs during `apply`/`deploy`. Defaults to 16                                             |
+| `VISUAL` / `EDITOR`                          | Preferred editor for commands that open files (e.g., `vim`, `code`, `nano`)                                      |
+| `TAILOR_GITHUB_ACTIONS_ANNOTATIONS`          | GitHub Actions failure annotations: `on` (default) or `off`                                                      |
+| `TAILOR_CRASH_REPORTS_LOCAL`                 | Local crash log writing: `on` (default) or `off`                                                                 |
+| `TAILOR_CRASH_REPORTS_REMOTE`                | Automatic crash report submission: `off` (default) or `on`                                                       |
+| `TAILOR_NOTIFICATION_BANNER`                 | Unread WARNING/CRITICAL notifications listed after a command in an interactive terminal: `on` (default) or `off` |
 
 ### Authentication Token Priority
 

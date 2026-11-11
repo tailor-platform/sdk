@@ -1,5 +1,5 @@
 import * as fs from "node:fs";
-import { logger } from "@tailor-platform/sdk/cli";
+import { logger, withSourceLocation } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { setupAutofix } from "./autofix";
@@ -7,6 +7,7 @@ import { checkGitHub } from "./check";
 import { setupTarget, type SetupTargetOptions } from "./generate";
 import { LOCK_VERSION, readLock, writeLock, type LockInputs, type LockTarget } from "./lock";
 import { AUTOFIX_WORKFLOW_FILE, TEMPLATE_VERSION } from "./templates";
+import { autofixSetupOptions } from "./test-helpers/autofix";
 import { tempDir } from "./test-helpers/temp-dir";
 import { planUpdate, setupUpdate } from "./update";
 
@@ -50,6 +51,12 @@ describe("planUpdate", () => {
       migrationTestLabel: "run-migration-test",
       migrationTestEnvironment: "prod-source",
     });
+  });
+
+  test("branch: keeps the plan job in its own environment when the lock records it", () => {
+    const plan = planUpdate(lockTarget("branch", "my-app", { splitPlanEnvironment: true }), common);
+
+    expect(plan).toMatchObject({ kind: "branch", splitPlanEnvironment: true });
   });
 
   test("branch: regenerates with the recorded name, dir, environment, branch and flags", () => {
@@ -499,6 +506,24 @@ describe("setupUpdate", () => {
     );
   });
 
+  test("lists a target's failure prefixed with the file it points at", async () => {
+    writeAppConfig("apps/api");
+    await generate({ kind: "branch", workspaceName: "api", dir: "apps/api", erdPreview: false });
+    ageLock();
+    const configPath = path.join(testDir, "apps/api/tailor.config.ts");
+
+    await expect(
+      setupUpdate({
+        force: false,
+        outputDir: testDir,
+        ...loaders,
+        loadHasMigrations: async () => {
+          throw withSourceLocation(new Error("config is broken"), { file: configPath });
+        },
+      }),
+    ).rejects.toThrow(`[branch api] ${path.relative(process.cwd(), configPath)}: config is broken`);
+  });
+
   test("keeps going past a hand-edited target and lists it as not updated", async () => {
     await generateMonorepo();
     ageLock();
@@ -628,13 +653,14 @@ describe("setupUpdate", () => {
 
   test("regenerates the autofix workflow, even when the lock records no target", async () => {
     writeAppConfig("apps/api");
-    await setupAutofix({
-      provider: "github-app",
-      dir: "apps/api",
-      packageManager: "yarn",
-      force: false,
-      outputDir: testDir,
-    });
+    await setupAutofix(
+      autofixSetupOptions(testDir, {
+        provider: "github-app",
+        codemod: "deterministic",
+        dir: "apps/api",
+        packageManager: "yarn",
+      }),
+    );
     const lock = readLock(testDir);
     if (!lock?.autofix) throw new Error("Expected an autofix entry.");
     writeLock(testDir, {
@@ -648,22 +674,80 @@ describe("setupUpdate", () => {
 
     expect(readLock(testDir)?.autofix).toMatchObject({
       templateVersion: TEMPLATE_VERSION,
-      inputs: { provider: "github-app", dirs: ["apps/api"], packageManager: "yarn" },
+      inputs: {
+        provider: "github-app",
+        codemod: "deterministic",
+        dirs: ["apps/api"],
+        packageManager: "yarn",
+      },
+    });
+    const content = fs.readFileSync(path.join(testDir, AUTOFIX_WORKFLOW_FILE), "utf-8");
+    expect(content).toContain("working-directory: apps/api");
+    expect(content).toContain("- id: tailor-codemod\n");
+    expect(successSpy).toHaveBeenLastCalledWith(expect.stringMatching(/^Updated 1 workflow\(s\)/));
+  });
+
+  test("keeps the agent and its Copilot auth", async () => {
+    writeAppConfig("apps/api");
+    await setupAutofix(
+      autofixSetupOptions(testDir, {
+        dir: "apps/api",
+        codemod: "copilot",
+        copilotAuth: "github-token",
+      }),
+    );
+    const lock = readLock(testDir);
+    if (!lock?.autofix) throw new Error("Expected an autofix entry.");
+    writeLock(testDir, {
+      ...lock,
+      autofix: { ...lock.autofix, templateVersion: TEMPLATE_VERSION - 1 },
+    });
+    using _successSpy = vi.spyOn(logger, "success").mockImplementation(() => {});
+
+    await setupUpdate({ force: false, outputDir: testDir, ...loaders });
+
+    expect(readLock(testDir)?.autofix?.inputs).toMatchObject({
+      codemod: "copilot",
+      copilotAuth: "github-token",
     });
     expect(fs.readFileSync(path.join(testDir, AUTOFIX_WORKFLOW_FILE), "utf-8")).toContain(
-      "working-directory: apps/api",
+      "copilot-requests: write",
     );
-    expect(successSpy).toHaveBeenLastCalledWith(expect.stringMatching(/^Updated 1 workflow\(s\)/));
+  });
+
+  test("refuses a Copilot auth it does not know", async () => {
+    writeAppConfig("apps/api");
+    await setupAutofix(autofixSetupOptions(testDir, { dir: "apps/api", codemod: "copilot" }));
+    const lock = readLock(testDir);
+    if (!lock?.autofix) throw new Error("Expected an autofix entry.");
+    writeLock(testDir, {
+      ...lock,
+      autofix: { ...lock.autofix, inputs: { ...lock.autofix.inputs, copilotAuth: "oauth" } },
+    });
+
+    await expect(setupUpdate({ force: false, outputDir: testDir, ...loaders })).rejects.toThrow(
+      /\[autofix\] \.github\/tailor\.lock records the unsupported Copilot auth "oauth"\. Re-run `tailor setup ci autofix` with --copilot-auth\./,
+    );
+  });
+
+  test("refuses an autofix codemod mode it does not know", async () => {
+    writeAppConfig("apps/api");
+    await setupAutofix(autofixSetupOptions(testDir, { dir: "apps/api" }));
+    const lock = readLock(testDir);
+    if (!lock?.autofix) throw new Error("Expected an autofix entry.");
+    writeLock(testDir, {
+      ...lock,
+      autofix: { ...lock.autofix, inputs: { ...lock.autofix.inputs, codemod: "gemini" } },
+    });
+
+    await expect(setupUpdate({ force: false, outputDir: testDir, ...loaders })).rejects.toThrow(
+      /\[autofix\] \.github\/tailor\.lock records the unsupported codemod mode "gemini"\. Re-run `tailor setup ci autofix` with --codemod\./,
+    );
   });
 
   test("lists the autofix workflow when it cannot be updated", async () => {
     await generateMonorepo();
-    await setupAutofix({
-      provider: "github-token",
-      dir: "apps/api",
-      force: false,
-      outputDir: testDir,
-    });
+    await setupAutofix(autofixSetupOptions(testDir, { dir: "apps/api" }));
     fs.rmSync(path.join(testDir, "apps/api/tailor.config.ts"));
 
     await expect(setupUpdate({ force: false, outputDir: testDir, ...loaders })).rejects.toThrow(

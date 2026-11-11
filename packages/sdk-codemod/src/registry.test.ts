@@ -102,6 +102,35 @@ describe("getApplicableCodemods", () => {
     ).toBe(true);
   });
 
+  test("warns about onNamespaceLoaded left as a member name, not about a local of that name", () => {
+    const codemod = getApplicableCodemods("2.39.0", "3.0.0").find(
+      (entry) => entry.id === "v3/tailordb-namespace-loaded-rename",
+    );
+    const patterns = (codemod?.legacyPatterns ?? []).filter(
+      (pattern): pattern is RegExp => pattern instanceof RegExp,
+    );
+    const warns = (line: string) => patterns.some((pattern) => pattern.test(line));
+
+    const unmigrated = [
+      "  onNamespaceLoaded(context) {",
+      "  async onNamespaceLoaded() {",
+      "  onNamespaceLoaded?(context: Context): Output;",
+      "  onNamespaceLoaded = () => ({});",
+      'const plugin = { id: "a", onNamespaceLoaded: () => ({}) };',
+      "const output = plugin.onNamespaceLoaded?.(context);",
+      "export const plugin = { onNamespaceLoaded };",
+      "const { onNamespaceLoaded } = plugin;",
+    ];
+    const migrated = [
+      'const onNamespaceLoaded: Plugin["onTailorDBNamespaceLoaded"] = () => ({});',
+      "export const plugin = { onTailorDBNamespaceLoaded: onNamespaceLoaded };",
+      "const { onTailorDBNamespaceLoaded: onNamespaceLoaded } = plugin;",
+    ];
+
+    expect(unmigrated.filter((line) => !warns(line))).toEqual([]);
+    expect(migrated.filter(warns)).toEqual([]);
+  });
+
   test("flags aliased and reassigned secrets accessors for review, not just the direct call", () => {
     const codemod = getApplicableCodemods("1.25.0", "3.0.0").find(
       (entry) => entry.id === "v3/secrets-get-to-secretmanager",

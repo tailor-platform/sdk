@@ -2,9 +2,9 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "@politty/zod";
 import { ExecutorTriggerType } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { z } from "zod";
-import { durationArg, parseDuration, workspaceArgs } from "#/cli/shared/args";
+import { durationArg, parseDuration, recoveryContextArgs, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, formatCommandHint } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertWritable } from "#/cli/shared/readonly-guard";
@@ -83,7 +83,10 @@ interface TriggerExecutorByNameOptions {
 
 export type TriggerExecutorTypedOptions<E extends ManualTriggerExecutor = ManualTriggerExecutor> =
   E extends ManualTriggerExecutor<IncomingWebhookTrigger>
-    ? TriggerExecutorBaseOptions<E> & { payload?: JsonObject }
+    ? TriggerExecutorBaseOptions<E> & {
+        /** JSON object the executor receives as `body`. */
+        payload?: JsonObject;
+      }
     : TriggerExecutorBaseOptions<E> & { payload?: never };
 
 export interface TriggerExecutorResult {
@@ -156,7 +159,9 @@ export const triggerCommand = defineAppCommand({
   notes: `Only executors with \`INCOMING_WEBHOOK\` or \`SCHEDULE\` trigger types can be triggered manually.
 Executors with \`EVENT\` trigger types (such as \`recordCreated\`, \`recordUpdated\`, \`recordDeleted\`) cannot be triggered manually.
 
-The \`--data\` and \`--header\` options are only available for \`INCOMING_WEBHOOK\` trigger type.
+The \`--data\` and \`--header\` options are accepted only for \`INCOMING_WEBHOOK\` trigger type.
+
+The executor receives the \`--data\` JSON as \`body\`, with empty \`headers\` and no \`rawBody\`. \`--header\` values are not passed to the executor. To test an executor that reads headers or verifies a signature over \`rawBody\`, send the request to its webhook URL, which \`executor webhook list\` shows.
 
 **Downstream Execution Tracking**
 
@@ -172,10 +177,6 @@ The \`--logs\` option displays logs from the downstream execution when available
     {
       cmd: 'my-executor -d \'{"message": "hello"}\'',
       desc: "Trigger with data",
-    },
-    {
-      cmd: 'my-executor -d \'{"message": "hello"}\' -H "X-Custom: value" -H "X-Another: value2"',
-      desc: "Trigger with data and headers",
     },
     { cmd: "my-executor -W", desc: "Trigger and wait for completion" },
     { cmd: "my-executor -W -l", desc: "Trigger, wait, and show logs" },
@@ -193,7 +194,8 @@ The \`--logs\` option displays logs from the downstream execution when available
     header: arg(headerArg.array().optional(), {
       alias: "H",
       overrideBuiltinAlias: true,
-      description: "Request header (format: 'Key: Value', can be specified multiple times)",
+      description:
+        "Ignored, as the executor receives empty headers (format: 'Key: Value', can be specified multiple times)",
     }),
     wait: arg(z.boolean().default(false), {
       alias: "W",
@@ -255,27 +257,25 @@ The \`--logs\` option displays logs from the downstream execution when available
       });
     }
 
-    let payload: JsonObject | undefined;
-
-    // Build payload if data or headers are provided
-    const body: JsonObject | undefined = args.data;
-    const headers: Record<string, string> = {};
     if (args.header) {
-      for (const h of args.header) {
-        headers[h.key] = h.value;
-      }
-    }
-
-    if (body !== undefined || Object.keys(headers).length > 0) {
-      payload = {
-        body: body ?? {},
-        headers,
+      const webhookListCommand = {
+        command: "tailor",
+        args: [
+          "executor",
+          "webhook",
+          "list",
+          ...recoveryContextArgs({ profile: args.profile, workspaceId: args["workspace-id"] }),
+        ],
       };
+      logger.warn(
+        "--header values are not passed to the executor, which receives empty headers. " +
+          `Remove --header, or if the executor needs headers, send the request to its webhook URL (${formatCommandHint(webhookListCommand)} lists it).`,
+      );
     }
 
     const result = await triggerExecutorByName({
       executorName: args.executorName,
-      payload,
+      payload: args.data,
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });

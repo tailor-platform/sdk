@@ -15,17 +15,25 @@ fi
 repo_root=$(git -C "$script_dir" rev-parse --show-toplevel) || exit 1
 cd "$repo_root/packages/sdk" || exit 1
 
-for required_id in TAILOR_PLATFORM_ORGANIZATION_ID TAILOR_PLATFORM_FOLDER_ID; do
-  id_value=${!required_id:-}
-  if [[ ! "$id_value" =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]]; then
-    echo "$required_id must contain a UUID." >&2
+if [[ -z ${TAILOR_PLATFORM_ORGANIZATION_ID:-} && -z ${TAILOR_PLATFORM_FOLDER_ID:-} ]]; then
+  if ! env -u TAILOR_PLATFORM_PROFILE pnpm exec tsx -e "import { loadUserWorkspaceDefaults } from './src/cli/shared/context'; loadUserWorkspaceDefaults().then((d) => process.exit(d ? 0 : 1))"; then
+    echo "Set TAILOR_PLATFORM_ORGANIZATION_ID and TAILOR_PLATFORM_FOLDER_ID, or save a default location with \`tailor user update\`. Saved defaults are not used while TAILOR_PLATFORM_TOKEN is set." >&2
     exit 64
   fi
-done
+else
+  for required_id in TAILOR_PLATFORM_ORGANIZATION_ID TAILOR_PLATFORM_FOLDER_ID; do
+    id_value=${!required_id:-}
+    if [[ ! "$id_value" =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]]; then
+      echo "$required_id must contain a UUID." >&2
+      exit 64
+    fi
+  done
+fi
 
-run_id=${TAILOR_PLATFORM_E2E_RUN_ID:-"local-$(date +%s)-$$-$RANDOM"}
-if [[ ${#run_id} -lt 8 || ${#run_id} -gt 40 || ! "$run_id" =~ ^[a-z0-9-]+$ ]]; then
-  echo "TAILOR_PLATFORM_E2E_RUN_ID must be 8-40 lowercase letters, digits, or hyphens." >&2
+run_id=${TAILOR_PLATFORM_E2E_RUN_ID:-"local-$(date +%s)-$$"}
+# Keeps e2e-ws-<run-id>-<base36 ms>-basic-migration-target within the Platform's 63-character workspace_name limit.
+if [[ ${#run_id} -lt 8 || ${#run_id} -gt 24 || ! "$run_id" =~ ^[a-z0-9-]+$ ]]; then
+  echo "TAILOR_PLATFORM_E2E_RUN_ID must be 8-24 lowercase letters, digits, or hyphens." >&2
   exit 64
 fi
 export TAILOR_PLATFORM_E2E_RUN_ID="$run_id"

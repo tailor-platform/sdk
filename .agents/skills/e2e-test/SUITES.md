@@ -29,7 +29,7 @@ profile, run both checks with the same `TAILOR_PLATFORM_PROFILE` instead of the 
 
 If the workspace is missing or no longer hosts the application:
 
-1. Verify login with `pnpm exec tailor workspace list`.
+1. Verify login with `pnpm exec tailor workspace list --limit 1`.
 2. Resolve existing organization and folder IDs only when they are not saved:
    ```sh
    pnpm exec tailor organization list
@@ -65,9 +65,12 @@ approval before applying destructive or ownership-conflicting changes, then reru
 ## `packages/sdk/e2e`
 
 This suite creates disposable workspaces and uses `TAILOR_PLATFORM_ORGANIZATION_ID` and
-`TAILOR_PLATFORM_FOLDER_ID`; it does not reuse `TAILOR_PLATFORM_WORKSPACE_ID`.
+`TAILOR_PLATFORM_FOLDER_ID`; it does not reuse `TAILOR_PLATFORM_WORKSPACE_ID`. When neither variable
+is set and the run authenticates through `tailor login` (not `TAILOR_PLATFORM_TOKEN`), the suite
+creates workspaces in the default organization and folder saved with `tailor user update`.
 
-If either ID is missing, discover an existing value and save it to `ids.local.env` with mode `0600`:
+If either ID is missing and no such default is saved, discover an existing value and save it to
+`ids.local.env` with mode `0600`:
 
 ```sh
 pnpm exec tailor organization list
@@ -81,6 +84,13 @@ attempted after success, failure, HUP, INT, or TERM:
 /bin/bash .agents/skills/e2e-test/scripts/with-e2e-ids.sh \
   .agents/skills/e2e-test/ids.local.env -- \
   /bin/bash .agents/skills/e2e-test/scripts/run-sdk-e2e.sh
+```
+
+With a saved default location and no stored IDs, run the wrapper without the loader. It stops with
+status 64 when neither IDs nor a saved default are available:
+
+```sh
+/bin/bash .agents/skills/e2e-test/scripts/run-sdk-e2e.sh
 ```
 
 The wrapper runs `pnpm run test:e2e` in `packages/sdk`, deletes only valid workspace IDs whose names

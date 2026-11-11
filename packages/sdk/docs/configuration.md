@@ -62,7 +62,7 @@ export default defineConfig({
 });
 ```
 
-Entries are only added or overwritten. An entry removed from the config keeps its last deployed value on the platform, and labels the config does not name are left untouched. Because those retained labels count towards the platform's limit of 20 labels per resource, `deploy` reports the overflow and stops before changing the application when the labels it would leave behind exceed that limit. The labels are written when the application itself is deployed, so a config with no TailorDB, Resolver, IdP, or Auth service has no application to carry them.
+Entries are only added or overwritten. An entry removed from the config keeps its last deployed value on the platform, and labels the config does not name are left untouched. Because those retained labels count towards the platform's limit of 20 labels per resource, `deploy` reports the overflow and stops before changing the application when the labels it would leave behind exceed that limit. The labels are written when the application itself is deployed, so a config without an application (see the end of [Application Settings](#application-settings)) has nothing to carry them.
 
 **Build Options**: `buildOptions` groups the settings that control how resolvers, executors, workflow jobs, and other functions are bundled: `logLevel` (below), `inlineSourcemap` (whether bundled functions embed an inline sourcemap for readable error stack traces; default `true`), `inlineSourcemapDependencySources` and `inlineSourcemapProjectSources` (below), `allowedRuntimeGlobals` (see [Node-only globals](#node-only-globals)), and `treeshake` (see [Removing unused code](#removing-unused-code)). The top-level `logLevel` and `inlineSourcemap` fields still work but are deprecated; `tailor upgrade` moves them into `buildOptions`. Setting the same option both at the top level and in `buildOptions` is rejected.
 
@@ -127,6 +127,8 @@ export default defineConfig({
 });
 ```
 
+`deploy` creates the application only when the config defines or references at least one TailorDB namespace, resolver namespace, IdP, or Auth service. A config with none of them has no application, so its CORS, allowed IP addresses, introspection setting, metadata, and HTTP adapters are not deployed. When a config drops the last of them, `deploy` asks for [confirmation](./cli/application.md#deploy) and deletes the application an earlier deploy created, together with any labels other tools added to it. Adding one back recreates the application at the same URL.
+
 ### Type Definitions Without `tailor generate`
 
 `tailor generate` and `tailor deploy` write `tailor.d.ts`, which declares the names and values your config defines (`Env`, `Attributes`, `MachineUserName`, `IdpName`, and so on) so your code is checked and autocompleted against them. With TypeScript 7.1 or later, TypeScript can read them from `tailor.config.ts` itself, so they are current without running either command.
@@ -155,8 +157,7 @@ Specify glob patterns to load service files:
 export default defineConfig({
   db: {
     "my-db": {
-      files: ["db/**/*.ts"],
-      ignores: ["db/**/*.draft.ts"],
+      files: ["db/**/*.ts", "!db/**/*.draft.ts"],
     },
   },
   resolver: {
@@ -174,13 +175,21 @@ export default defineConfig({
 });
 ```
 
-**files**: Glob patterns to match files. Required.
+**files**: Glob patterns to match files. Required. A pattern starting with `!` excludes the files it matches. For each file, the last pattern that matches it decides, so a later pattern can include an excluded file again:
 
-**ignores**: Glob patterns to exclude files. Optional. By default, `**/*.test.ts` and `**/*.spec.ts` are automatically ignored. If you explicitly specify `ignores`, the default patterns will not be applied. Use `ignores: []` to include all files including test files.
+```typescript
+files: ["executors/**/*.ts", "!executors/internal/**", "executors/internal/keep.ts"],
+```
 
-**defaultPermission** (resolver namespaces only): Access requirement applied to every resolver in the namespace that declares no `permission` of its own. Optional, and takes the same values as a resolver's own `permission`. See [Namespace-wide default](./services/resolver.md#namespace-wide-default-defaultpermission).
+To exclude a directory, match the files in it (`!executors/internal/**`); `!executors/internal` excludes nothing.
 
-**Pattern resolution**: `files` and `ignores` patterns are resolved relative to the directory of the `tailor.config.ts` file that declares them, not the directory you run the command from. This matters when deploying [multiple configs](./cli/application.md#deploy) together — each config's patterns only match files under its own directory. If a config's _relative_ patterns match nothing under its own directory, the SDK falls back to resolving them from the directory you ran the command from and logs a warning (this fallback doesn't apply to already-absolute patterns, since their resolution can't change). Update such patterns to be relative to the config's own directory — this fallback will be removed in v2.
+Test files (`**/*.test.ts` and `**/*.spec.ts`) are excluded by default.
+
+**ignores** (deprecated): Glob patterns to exclude files. Optional. Write `!` patterns in `files` instead; `ignores` is removed in v3, and `tailor upgrade` moves its patterns into `files`. Specifying `ignores` replaces the default test-file exclusion, so `ignores: []` includes test files. `ignores` and the default test-file exclusion apply after `files`, so no `files` pattern includes the files they exclude. In v3, test files are no longer excluded by default; add `"!**/*.test.ts"` and `"!**/*.spec.ts"` to `files` to keep them out.
+
+**defaultPermission** (resolver namespaces only): Access requirement applied to every resolver in the namespace that declares no `permission` of its own. Optional, and takes the same values as a resolver's own `permission`, except that it cannot use an `input` operand. See [Namespace-wide default](./services/resolver.md#namespace-wide-default-defaultpermission).
+
+**Pattern resolution**: `files` patterns, `!` patterns included, and `ignores` patterns are resolved relative to the directory of the `tailor.config.ts` file that declares them, not the directory you run the command from. This matters when deploying [multiple configs](./cli/application.md#deploy) together — each config's patterns only match files under its own directory. If a config's _relative_ patterns match nothing under its own directory, the SDK falls back to resolving them from the directory you ran the command from and logs a warning (this fallback doesn't apply to already-absolute patterns, since their resolution can't change). Update such patterns to be relative to the config's own directory — this fallback will be removed in v2.
 
 ### Bundling
 
@@ -282,8 +291,37 @@ When using external resources:
 - The resource must be deployed and available before referencing it
 - You can combine external resources with locally-defined resources
 - TailorDB table names must remain unique across local and external TailorDB namespaces; `deploy` checks external TailorDB table names before applying changes
+- A TailorDB namespace, resolver namespace, or Auth service that another application references as external cannot be deleted. `deploy` and `remove` both stop with `SERVICE_IN_USE` before changing anything and list every application that still uses it, including applications the `deploy` does not include. For `deploy`, keep the resource in the config that defines it, or deploy the referencing applications without it, first or in the same `deploy`. For `remove`, first remove the referencing applications or deploy them without it
 - Destructive operations like `tailordb truncate` (and `tailor seed apply --truncate`) automatically exclude external resources to prevent accidental data loss in shared resources
 - Subscribing an executor to an external resource's events requires the config that owns the resource in the same `deploy`. Publishing is then enabled automatically, and `deploy` records the dependency so a later deploy without that config asks for confirmation instead of silently turning publishing off
+
+#### Referencing another app's Auth with `asExternal()`
+
+When the other app is in the same repository, import its `defineAuth` result and call `asExternal()` instead of writing the name by hand.
+
+```typescript
+// core/auth.ts
+export const auth = defineAuth("core-auth", {
+  machineUsers: { portal: { attributes: { role: "STAFF" } } },
+  // ...
+});
+```
+
+```typescript
+// portal/tailor.config.ts
+import { auth as coreAuth } from "../core/auth";
+
+export default defineConfig({
+  name: "portal",
+  auth: coreAuth.asExternal(),
+});
+```
+
+- The reference follows renames of the Auth service and of its machine users.
+- The machine user names reach the generated `tailor.d.ts`, so a misspelled `invoker` is a type error in the referencing app, including when it is written as an expression such as `flag ? "portal" : "other"`.
+- Only the name and the machine users are taken over. Hooks, OAuth2 clients, and the rest of the definition stay with the app that owns the Auth service, so this project does not deploy them a second time.
+- Put the `defineAuth` call in its own file, as above. Importing the other app's `tailor.config.ts` also runs the rest of that file.
+- An Auth service defined in another repository cannot be imported. Reference it with `{ name: "...", external: true }`; `invoker` then accepts any string.
 
 ### Built-in IdP
 
@@ -301,6 +339,7 @@ const idp = defineIdp("my-idp", {
     delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     sendPasswordResetEmail: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
   },
+  userAuthPolicy: { allowedEmailDomains: ["*"] },
 });
 
 export default defineConfig({
@@ -466,9 +505,11 @@ export async function main(trx: Transaction, { env }: MigrationContext): Promise
 `env` values are deployed as plaintext, so loading a config fails when one of them looks like a credential:
 
 ```
-✖ Secret detected in 'env' in /path/to/tailor.config.ts:
-  - env.SLACK_BOT_TOKEN (matched slack: SLACK_TOKEN)
-    https://github.com/secretlint/secretlint/blob/master/packages/%40secretlint/secretlint-rule-slack/README.md#SLACK_TOKEN
+Error [CONFIG_INVALID]: tailor.config.ts: Invalid Tailor config:
+  - env.SLACK_BOT_TOKEN: Secret detected (matched slack: SLACK_TOKEN). See https://github.com/secretlint/secretlint/blob/master/packages/%40secretlint/secretlint-rule-slack/README.md#SLACK_TOKEN
+  Details: 'env' values are deployed as plaintext and are readable by anyone who can read the application's configuration.
+  Suggestion: Define these with defineSecretManager() instead, and read them through Secret Manager at runtime.
+  If a value is genuinely safe to keep in 'env', allow it where it is defined: SLACK_BOT_TOKEN: { value: ..., allowSecretReason: "<why this is safe>" }
 ```
 
 Each finding names the pattern that matched and links to its description, so a value flagged as an AWS account id is distinguishable from one flagged as an AWS secret access key.
@@ -502,15 +543,14 @@ Configure Workflow service by specifying glob patterns for workflow files:
 ```typescript
 export default defineConfig({
   workflow: {
-    files: ["workflows/**/*.ts"],
-    ignores: ["workflows/**/*.draft.ts"],
+    files: ["workflows/**/*.ts", "!workflows/**/*.draft.ts"],
   },
 });
 ```
 
-**files**: Glob patterns to match workflow files. Required.
+**files**: Glob patterns to match workflow files. Required. A pattern starting with `!` excludes files, and test files are excluded by default; see [Service Configuration](#service-configuration).
 
-**ignores**: Glob patterns to exclude files. Optional.
+**ignores** (deprecated): Glob patterns to exclude files. Optional. Write `!` patterns in `files` instead. Specifying `ignores` replaces the default test-file exclusion; see [Service Configuration](#service-configuration).
 
 ### Workflow Execution Policies
 

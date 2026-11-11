@@ -39,6 +39,7 @@ function makeOutput(overrides: Partial<RunOutput> = {}): RunOutput {
     filesModified: [],
     warnings: [],
     errors: [],
+    llmReviews: [],
     ...overrides,
   };
 }
@@ -132,6 +133,27 @@ describe("upgrade service", () => {
     const { logger } = await import("#/cli/shared/logger");
     const infoCalls = vi.mocked(logger.info).mock.calls.map((c) => c[0]);
     expect(infoCalls.some((c) => c.includes("1 applied"))).toBe(true);
+  });
+
+  test("should keep the changes left for review in the result it prints", async () => {
+    const upgrade = await setupUpgrade("2.0.0");
+    const { spawnSync } = await import("node:child_process");
+    const llmReviews = [
+      {
+        codemodId: "v2/example",
+        prompt: "Migrate the example.",
+        files: ["src/a.ts"],
+        findings: [{ file: "src/a.ts", line: 3, message: "Uses the example.", excerpt: "a()" }],
+      },
+    ];
+    vi.mocked(spawnSync).mockReturnValue(
+      makeSpawnSyncResult({ stdout: JSON.stringify(makeOutput({ llmReviews })) }),
+    );
+
+    await upgrade({ from: "1.33.0", dryRun: true, path: "/test" });
+
+    const { logger } = await import("#/cli/shared/logger");
+    expect(logger.out).toHaveBeenCalledWith(expect.objectContaining({ llmReviews }));
   });
 
   test("should throw CLIError when sdk-codemod returns errors", async () => {

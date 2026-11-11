@@ -48,22 +48,88 @@ describe("triggerExecutor", () => {
     await runTest();
   });
 
+  function mockIncomingWebhookClient(
+    overrides: {
+      [K in keyof Awaited<ReturnType<typeof initOperatorClient>>]?: ReturnType<typeof vi.fn>;
+    } = {},
+  ) {
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      getExecutorExecutor: vi.fn().mockResolvedValue({
+        executor: {
+          triggerType: ExecutorTriggerType.INCOMING_WEBHOOK,
+          targetType: ExecutorTargetType.WEBHOOK,
+        },
+      }),
+      triggerExecutor: triggerExecutorMock,
+      ...overrides,
+    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+  }
+
   test("triggers a webhook executor by definition and forwards the payload", async () => {
     const result = await triggerExecutor({
       executor: {
         name: "my-executor",
         trigger: { kind: "incomingWebhook" },
       },
-      payload: { body: { message: "hello" } },
+      payload: { message: "hello" },
     });
 
     expect(result).toEqual({ jobId: "job-1" });
     expect(triggerExecutorMock).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
       executorName: "my-executor",
-      payload: { body: { message: "hello" } },
+      payload: { message: "hello" },
     });
   });
+
+  test("trigger command sends --data as the payload unchanged without a --header warning", async () => {
+    using stderr = captureStderr();
+    mockIncomingWebhookClient();
+
+    const result = await runCommand(triggerCommand, [
+      "my-executor",
+      "--data",
+      '{"email":"a@example.com"}',
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(triggerExecutorMock).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      executorName: "my-executor",
+      payload: { email: "a@example.com" },
+    });
+    expect(stderr.output).not.toContain("--header");
+  });
+
+  test.each([
+    {
+      name: "with --data",
+      dataArgs: ["--data", '{"email":"a@example.com"}'],
+      payload: { email: "a@example.com" },
+    },
+    { name: "without --data", dataArgs: [], payload: undefined },
+  ])(
+    "trigger command warns that --header is not passed to the executor ($name)",
+    async ({ dataArgs, payload }) => {
+      using stderr = captureStderr();
+      mockIncomingWebhookClient();
+
+      const result = await runCommand(triggerCommand, [
+        "my-executor",
+        ...dataArgs,
+        "--header",
+        "X-Test: v1",
+      ]);
+
+      expect(result.success).toBe(true);
+      expect(triggerExecutorMock).toHaveBeenCalledWith({
+        workspaceId: "workspace-1",
+        executorName: "my-executor",
+        payload,
+      });
+      expect(stderr.output).toContain("--header values are not passed to the executor");
+    },
+  );
 
   test("rejects a payload for an executor whose trigger is not an incoming webhook", async () => {
     await expect(
@@ -73,7 +139,7 @@ describe("triggerExecutor", () => {
           trigger: { kind: "schedule", cron: "0 * * * *", timezone: "UTC" },
         },
         // @ts-expect-error - the type also rejects a payload for a non-webhook trigger
-        payload: { body: { message: "hello" } },
+        payload: { message: "hello" },
       }),
     ).rejects.toThrow(/only available for 'incomingWebhook' trigger type/);
     expect(triggerExecutorMock).not.toHaveBeenCalled();
@@ -84,14 +150,7 @@ describe("triggerExecutor", () => {
     using _stderr = captureStderr();
     using _json = jsonMode();
 
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      getExecutorExecutor: vi.fn().mockResolvedValue({
-        executor: {
-          triggerType: ExecutorTriggerType.INCOMING_WEBHOOK,
-          targetType: ExecutorTargetType.WEBHOOK,
-        },
-      }),
-      triggerExecutor: triggerExecutorMock,
+    mockIncomingWebhookClient({
       getExecutorJob: vi.fn().mockResolvedValue({
         job: {
           id: "job-1",
@@ -103,7 +162,7 @@ describe("triggerExecutor", () => {
         attempts: [],
         nextPageToken: "",
       }),
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    });
 
     await runCommand(triggerCommand, [
       "my-executor",

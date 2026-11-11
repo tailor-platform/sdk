@@ -107,8 +107,13 @@ describe("planExecutor", () => {
       resource?: Record<string, unknown>;
       sdkVersion?: string;
     }>,
+    workspaceMachineUsers: string[] = [],
   ): OperatorClient {
     return {
+      listAuthMachineUsers: vi.fn().mockResolvedValue({
+        machineUsers: workspaceMachineUsers.map((name) => ({ name })),
+        nextPageToken: "",
+      }),
       listExecutorExecutors: vi.fn().mockResolvedValue({
         executors: existingExecutors.map((e) => e.resource ?? { name: e.name }),
         nextPageToken: "",
@@ -148,6 +153,7 @@ describe("planExecutor", () => {
       resolverNames?: Record<string, string>;
       idpNames?: ReadonlyArray<string>;
       authName?: string;
+      authMachineUsers?: ReadonlyArray<string>;
       externalAuthName?: string;
     },
   ): Application {
@@ -175,7 +181,16 @@ describe("planExecutor", () => {
       tailorDBServices,
       resolverServices,
       idpServices,
-      authService: options?.authName ? { config: { name: options.authName } } : undefined,
+      authService: options?.authName
+        ? {
+            config: {
+              name: options.authName,
+              machineUsers: Object.fromEntries(
+                (options.authMachineUsers ?? []).map((name) => [name, {}]),
+              ),
+            },
+          }
+        : undefined,
       config: options?.externalAuthName
         ? { auth: { name: options.externalAuthName, external: true } }
         : {},
@@ -582,43 +597,99 @@ describe("planExecutor", () => {
       expect(variablesExpr).toContain("error: args.failed?.error");
     });
 
-    test("string invoker uses external auth config name", async () => {
-      const client = createMockClient([]);
-      const executor: Executor = {
-        name: "test-executor",
-        description: "Executor test-executor",
-        disabled: false,
-        trigger: {
-          kind: "schedule",
-          timezone: "UTC",
-          cron: "0 * * * *",
-        },
-        operation: {
-          kind: "function",
-          body: () => {},
-          invoker: "batch-user",
-        },
-      };
-      const application = createMockApplication([executor], {
-        externalAuthName: "external-auth",
-      });
+    describe("string invoker", () => {
+      function createInvokerExecutor(invoker: string): Executor {
+        return {
+          name: "test-executor",
+          description: "Executor test-executor",
+          disabled: false,
+          trigger: { kind: "schedule", timezone: "UTC", cron: "0 * * * *" },
+          operation: { kind: "function", body: () => {}, invoker },
+        };
+      }
 
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      });
-
-      const create = result.changeSet.creates[0]!;
-      const targetConfig = create.request.executor?.targetConfig?.config as {
+      type FunctionTarget = {
         case: "function";
         value: { invoker: { namespace: string; machineUserName: string } };
       };
-      expect(targetConfig.value.invoker).toEqual({
-        namespace: "external-auth",
-        machineUserName: "batch-user",
+
+      test("uses external auth config name when the machine user exists in the workspace", async () => {
+        const application = createMockApplication([createInvokerExecutor("batch-user")], {
+          externalAuthName: "external-auth",
+        });
+
+        const result = await planExecutor(
+          buildPlanContext(application, {
+            client: createMockClient([], ["batch-user"]),
+          }),
+        );
+
+        const targetConfig = result.changeSet.creates[0]!.request.executor?.targetConfig
+          ?.config as FunctionTarget;
+        expect(targetConfig.value.invoker).toEqual({
+          namespace: "external-auth",
+          machineUserName: "batch-user",
+        });
+      });
+
+      test("rejects a machine user that exists nowhere in the external auth namespace", async () => {
+        const application = createMockApplication([createInvokerExecutor("batch-usr")], {
+          externalAuthName: "external-auth",
+        });
+
+        await expect(
+          planExecutor(
+            buildPlanContext(application, {
+              client: createMockClient([], ["batch-user"]),
+            }),
+          ),
+        ).rejects.toMatchObject({
+          code: "INVOKER_MACHINE_USER_NOT_FOUND",
+          message: expect.stringContaining('Executor "test-executor"'),
+        });
+      });
+
+      test("accepts a machine user that another config in the same deploy creates", async () => {
+        const application = createMockApplication([createInvokerExecutor("batch-user")], {
+          externalAuthName: "external-auth",
+        });
+
+        const result = await planExecutor(
+          buildPlanContext(application, {
+            plannedMachineUsers: new Map([["external-auth", new Set(["batch-user"])]]),
+          }),
+        );
+
+        expect(result.changeSet.creates).toHaveLength(1);
+      });
+
+      test("accepts a machine user declared in the own auth config before it exists in the workspace", async () => {
+        const application = createMockApplication([createInvokerExecutor("batch-user")], {
+          authName: "my-auth",
+        });
+
+        const result = await planExecutor(
+          buildPlanContext(application, {
+            plannedMachineUsers: new Map([["my-auth", new Set(["batch-user"])]]),
+          }),
+        );
+
+        expect(result.changeSet.creates).toHaveLength(1);
+      });
+
+      test("rejects a machine user that the run removes from the auth config but the workspace still has", async () => {
+        const application = createMockApplication([createInvokerExecutor("legacy")], {
+          authName: "my-auth",
+        });
+
+        await expect(
+          planExecutor(
+            buildPlanContext(application, {
+              client: createMockClient([], ["legacy", "admin"]),
+              plannedMachineUsers: new Map([["my-auth", new Set(["admin"])]]),
+            }),
+          ),
+        ).rejects.toMatchObject({ code: "INVOKER_MACHINE_USER_NOT_FOUND" });
       });
     });
   });
@@ -1427,11 +1498,11 @@ describe("formatExecutorChangeEntries", () => {
   });
 
   test.each([
-    { name: "keeps", functionForced: true, expected: true },
-    { name: "drops", functionForced: false, expected: false },
+    { name: "keeps", functionUpdated: false, expected: true, labels: ["executor"] },
+    { name: "drops", functionUpdated: true, expected: false, labels: ["executor", "function"] },
   ])(
-    "$name the forced marker when the grouped function update is forced: $functionForced",
-    ({ functionForced, expected }) => {
+    "$name the forced marker when the grouped function is updated: $functionUpdated",
+    ({ functionUpdated, expected, labels }) => {
       const entries = formatExecutorChangeEntries(
         {
           creates: [],
@@ -1449,45 +1520,17 @@ describe("formatExecutorChangeEntries", () => {
         { "user-created": { name: "user-created", targetType: 3 } },
         {
           creates: [],
-          updates: [
-            {
-              name: "executor--user-created",
-              ...(functionForced && { forcedBySdkVersion: true }),
-            },
-          ],
+          updates: functionUpdated ? [{ name: "executor--user-created" }] : [],
           deletes: [],
           replaces: [],
         },
       );
 
       expect(entries).toHaveLength(1);
-      expect(entries[0]?.labels).toEqual(["executor", "function"]);
+      expect(entries[0]?.labels).toEqual(labels);
       expect(entries[0]?.forcedBySdkVersion).toBe(expected ? true : undefined);
     },
   );
-
-  test("keeps the forced marker on an ungrouped function registry update", () => {
-    const entries = formatExecutorChangeEntries(
-      { creates: [], updates: [], deletes: [], replaces: [] },
-      {},
-      {
-        creates: [],
-        updates: [{ name: "executor--user-created", forcedBySdkVersion: true }],
-        deletes: [],
-        replaces: [],
-      },
-    );
-
-    expect(entries).toEqual([
-      {
-        action: "update",
-        symbol: symbols.update,
-        name: "user-created",
-        labels: ["function"],
-        forcedBySdkVersion: true,
-      },
-    ]);
-  });
 
   test("groups function executor deletes with related function registry deletes", () => {
     const entries = formatExecutorChangeEntries(

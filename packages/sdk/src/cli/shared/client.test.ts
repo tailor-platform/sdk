@@ -608,8 +608,13 @@ describe("access token renewal in the operator client", () => {
     vi.clearAllMocks();
   });
 
-  async function callThroughClient(token: string, server: Next, stream = false) {
-    await initOperatorClient(token);
+  async function callThroughClient(
+    token: string,
+    server: Next,
+    stream = false,
+    options?: { renewToken?: boolean },
+  ) {
+    await initOperatorClient(token, undefined, options);
     const connectNode = await import("@connectrpc/connect-node");
     const interceptors = vi.mocked(connectNode.createConnectTransport).mock.calls.at(-1)?.[0]
       .interceptors as Array<(next: Next) => Next>;
@@ -685,6 +690,19 @@ describe("access token renewal in the operator client", () => {
       code: Code.Unauthenticated,
       rawMessage: expect.stringContaining("invalid token"),
     });
+  });
+
+  test("never renews when asked not to, even for a token that has a source", async () => {
+    const source = sourceOf("renewed-6", "replacement-6");
+    registerAccessTokenSource("issued-6", source);
+    const server = vi.fn<Next>().mockRejectedValue(unauthenticated());
+
+    await expect(
+      callThroughClient("issued-6", server, false, { renewToken: false }),
+    ).rejects.toMatchObject({ code: Code.Unauthenticated });
+    expect(sent).toEqual(["Bearer issued-6"]);
+    expect(source.current).not.toHaveBeenCalled();
+    expect(source.replaceRejected).not.toHaveBeenCalled();
   });
 
   test("does not replay a streaming request", async () => {
@@ -1176,6 +1194,50 @@ describe("retryInterceptor", () => {
     },
   );
 
+  /**
+   * Build the error connect-node raises for a connection reset.
+   * @param message - Message Node gives the underlying `ECONNRESET`
+   * @returns The reset wrapped as connect-node wraps it
+   */
+  function connectionReset(message: string) {
+    return ConnectError.from(
+      Object.assign(new Error(message), { code: "ECONNRESET" }),
+      Code.Aborted,
+    );
+  }
+
+  const preHandshakeDisconnect = () =>
+    connectionReset(
+      "Client network socket disconnected before secure TLS connection was established",
+    );
+
+  test.each([
+    OperatorService.method.cloneApplicationData,
+    OperatorService.method.createWorkspace,
+    OperatorService.method.startWorkflow,
+    OperatorService.method.updateTailorDBType,
+  ])("retries $name when the connection closed before the TLS handshake", async (method) => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(preHandshakeDisconnect())
+      .mockResolvedValueOnce(okResponse);
+
+    const res = await settle(retryInterceptor()(next)(makeUnaryReq(method)));
+
+    expect(res).toBe(okResponse);
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  test("does not retry CreateWorkspace on a connection reset that may follow the request", async () => {
+    const reset = connectionReset("read ECONNRESET");
+    const next = vi.fn().mockRejectedValueOnce(reset).mockResolvedValueOnce(okResponse);
+
+    await expect(
+      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createWorkspace))),
+    ).rejects.toBe(reset);
+    expect(next).toHaveBeenCalledOnce();
+  });
+
   test("treats AlreadyExists after a retry as success for Create methods", async () => {
     // #1350: prior attempt landed server-side but came back Unavailable; the
     // identical retry then hits already_exists on the _file metadata table.
@@ -1241,6 +1303,35 @@ describe("retryInterceptor", () => {
     ).rejects.toThrow("duplicated key not allowed");
     expect(vi.mocked(reportCrash)).toHaveBeenCalledTimes(1);
     expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  test("routes an AlreadyExists that follows only pre-handshake disconnects to error tracking, then surfaces it", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(preHandshakeDisconnect())
+      .mockRejectedValueOnce(new ConnectError("duplicated key not allowed", Code.AlreadyExists));
+
+    await expect(
+      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType))),
+    ).rejects.toThrow("duplicated key not allowed");
+    expect(vi.mocked(reportCrash)).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  test("swallows an AlreadyExists when an attempt before a pre-handshake disconnect may have committed", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
+      .mockRejectedValueOnce(preHandshakeDisconnect())
+      .mockRejectedValueOnce(new ConnectError("duplicated key not allowed", Code.AlreadyExists));
+
+    const res = await settle(
+      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType)),
+    );
+
+    expect(res.stream).toBe(false);
+    expect(vi.mocked(reportCrash)).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledTimes(3);
   });
 
   test("swallows a post-retry AlreadyExists without routing to error tracking", async () => {

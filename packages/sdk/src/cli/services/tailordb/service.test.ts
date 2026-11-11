@@ -1,6 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { aroundEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
+import { logger } from "#/cli/shared/logger";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import {
   db,
@@ -108,13 +110,41 @@ user.name = 1;
     using _logger = silenceLogger("error");
     await expect(service.loadTypes()).rejects.toMatchObject({
       code: "DEFINITION_INVALID",
-      message: expect.stringMatching(/^Invalid TailorDB type `user` in .*user\.ts:\n {2}- name: /),
+      message: expect.stringMatching(/^Invalid TailorDB type `user`:\n {2}- name: /),
       context: {
         kind: "tailordb-type",
         file,
         exportName: "user",
         issues: [{ path: ["name"] }, { path: ["metadata", "name"] }],
       },
+    });
+    expect(vi.mocked(logger.error).mock.calls).toEqual([
+      [expect.stringMatching(/Failed to load table from .*user\.ts/)],
+    ]);
+  });
+
+  test("names every table file that fails to load", async () => {
+    const firstFile = writeTypeFile("first.ts", `throw new Error("first table is broken");\n`);
+    const secondFile = writeTypeFile("second.ts", `throw new Error("second table is broken");\n`);
+
+    const service = createTailorDBService({
+      namespace: "main",
+      config: { files: [firstFile, secondFile] },
+      baseDir: process.cwd(),
+    });
+
+    using _logger = silenceLogger("error", "log");
+    const error = await service.loadTypes().catch((thrown: unknown) => thrown);
+    if (!(error instanceof Error)) throw new Error("expected loadTypes to reject with an Error");
+    expect(error.message).toMatch(/^(first|second) table is broken$/);
+    expect(getErrorDiagnostics(error).location).toEqual({
+      file: error.message.startsWith("first") ? firstFile : secondFile,
+    });
+    await vi.waitFor(() => {
+      expect(vi.mocked(logger.error).mock.calls.toSorted()).toEqual([
+        [expect.stringMatching(/Failed to load table from .*first\.ts/)],
+        [expect.stringMatching(/Failed to load table from .*second\.ts/)],
+      ]);
     });
   });
 
@@ -227,7 +257,7 @@ export const user = db.table("User", {
       id: "namespace-plugin",
       description: "namespace generator",
       importPath: "@example/namespace",
-      onNamespaceLoaded: () => ({
+      onTailorDBNamespaceLoaded: () => ({
         tables: {
           auditLog: db
             .table("AuditLog", {
@@ -253,12 +283,36 @@ export const user = db.table("User", {
     expect(Object.hasOwn(service.types, "AuditLog")).toBe(true);
   });
 
+  test("leaves a failing namespace plugin's error to the caller", async () => {
+    const plugin: Plugin = {
+      id: "failing-namespace-plugin",
+      description: "namespace generator that throws",
+      importPath: "@example/failing-namespace",
+      onTailorDBNamespaceLoaded: () => {
+        throw new Error("namespace generation failed");
+      },
+    };
+    const service = createTailorDBService({
+      namespace: "main",
+      config: { files: [] },
+      pluginManager: new PluginManager([plugin]),
+      baseDir: process.cwd(),
+    });
+
+    using _logger = silenceLogger("error", "log");
+    await service.loadTypes();
+    await expect(service.processNamespacePlugins()).rejects.toThrow(
+      /failing-namespace-plugin.*namespace generation failed/,
+    );
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
   test("rejects a namespace plugin-generated type with no .permission() configured", async () => {
     const plugin: Plugin = {
       id: "namespace-plugin",
       description: "namespace generator",
       importPath: "@example/namespace",
-      onNamespaceLoaded: () => ({
+      onTailorDBNamespaceLoaded: () => ({
         tables: {
           auditLog: db.table("AuditLogNoPermission", {
             message: db.string(),
@@ -286,7 +340,7 @@ export const user = db.table("User", {
       id: "namespace-plugin",
       description: "namespace generator",
       importPath: "@example/namespace",
-      onNamespaceLoaded: () => ({
+      onTailorDBNamespaceLoaded: () => ({
         tables: {
           auditLog: db
             .table("BadAuditLog", {
@@ -390,7 +444,7 @@ export const user = db.table("User", {
       id: "namespace-plugin",
       description: "namespace generator",
       importPath: "@example/namespace",
-      onNamespaceLoaded: () => ({
+      onTailorDBNamespaceLoaded: () => ({
         tables: {
           auditLog: null as unknown as ReturnType<typeof db.table>,
         },
@@ -450,7 +504,7 @@ export const user = db.table("User", {
       id: "clone-plugin",
       description: "returns a spread copy of a builder table",
       importPath: "@example/clone",
-      onNamespaceLoaded: () => ({
+      onTailorDBNamespaceLoaded: () => ({
         tables: {
           auditLog: {
             ...db

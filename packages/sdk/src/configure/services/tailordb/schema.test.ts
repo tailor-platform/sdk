@@ -1673,6 +1673,19 @@ describe("TailorDBType does not mutate shared fields", () => {
 });
 
 describe("TailorDBField clone tests", () => {
+  test("keeps a class-based hook defined on the prototype when a modifier is chained", () => {
+    class Hooks {
+      get create() {
+        return () => "from-prototype";
+      }
+    }
+    const field = db
+      .string()
+      .hooks(new Hooks() as never)
+      .description("label");
+    expect((field.metadata.hooks as { create?: () => string }).create?.()).toBe("from-prototype");
+  });
+
   test("clones field with same metadata", () => {
     const original = db.string().description("test description").index();
     const cloned = original.clone();

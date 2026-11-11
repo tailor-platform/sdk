@@ -124,7 +124,7 @@ function warnMainRunResolution(params: MainRunResolution): void {
   const fitting = settlingResolution(runStatus);
   if (resolution === "rollback") {
     logger.warn(
-      `Rolling back does not undo what the script of migration ${label} changed in existing fields, and deletes the tables and fields the migration introduced together with their data. ` +
+      `Rolling back does not undo what the script of migration ${label} changed in existing fields. It removes the fields the migration introduced and deletes the tables it introduced together with their data. ` +
         `When migration ${label} is deployed again, its script runs again, so make sure it is safe to run twice.`,
     );
     if (fitting === "complete") {
@@ -343,10 +343,11 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
   try {
     await applySnapshotPlan({ client, workspaceId, namespace, snapshot, manifestOptions, plan });
   } catch (error) {
-    handleOptionalToRequiredError(error, [
-      `The schema of migration ${migrationLabel} marks a field as required, but records still have no value for it.`,
-      `Fill in those records first (for example with 'tailor query'), then run the command again${interrupted ? "." : "; the migration stays in progress until the update goes through."}`,
-    ]);
+    handleOptionalToRequiredError(
+      error,
+      `The schema of migration ${migrationLabel} marks a field as required, but records still have no value for it. ` +
+        `Fill in those records first (for example with \`tailor query\`), then run the command again${interrupted ? "." : "; the migration stays in progress until the update goes through."}`,
+    );
   }
 
   if (state.maintenanceModeCheckpoint !== null) {

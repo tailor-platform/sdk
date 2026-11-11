@@ -1,6 +1,7 @@
 import { create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
+import { runCommand } from "@politty/zod";
 import {
   FunctionExecution_Status,
   FunctionExecutionSchema,
@@ -16,7 +17,7 @@ import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
 import { stripAnsi } from "#/cli/shared/test-helpers/strip-ansi";
-import { getWorkflowExecution, printExecutionWithLogs } from "./executions";
+import { executionsCommand, getWorkflowExecution, printExecutionWithLogs } from "./executions";
 import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 vi.mock("#/cli/shared/context", () => ({
@@ -281,6 +282,17 @@ describe("printExecutionWithLogs", () => {
     expect(plain).toContain("2026-09-05T00:00:00.000Z [INFO] step 1\n");
     expect(plain).toContain(
       "2026-09-05T00:00:01.000Z [WARNING] [PLATFORM] runs close to the limit",
+    );
+  });
+});
+
+describe("executionsCommand", () => {
+  test("rejects a workflow name the platform rejects", async () => {
+    const result = await runCommand(executionsCommand, ["--workflow-name", "My_Workflow"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain(
+      "must be 3-63 lowercase letters, digits, or hyphens, starting and ending with a letter or digit",
     );
   });
 });

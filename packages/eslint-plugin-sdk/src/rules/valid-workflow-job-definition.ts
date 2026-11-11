@@ -1,14 +1,10 @@
-import { type AstCallExpression, type AstNode } from "../lib/ast.js";
+import { type AstCallExpression, type AstNode, isFunctionExpression } from "../lib/ast.js";
 import { configureImportTracker } from "../lib/sdk-bindings.js";
 import { workflowJobDefinition } from "../lib/workflow.js";
 import type { Rule } from "eslint";
 
 function isStringLiteral(node: AstNode | null | undefined): boolean {
   return node?.type === "Literal" && typeof node.value === "string";
-}
-
-function isFunctionExpression(node: AstNode | null | undefined): boolean {
-  return node?.type === "ArrowFunctionExpression" || node?.type === "FunctionExpression";
 }
 
 const rule = {

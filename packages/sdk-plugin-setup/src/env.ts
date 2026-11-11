@@ -2,7 +2,16 @@ import { logger } from "@tailor-platform/sdk/cli";
 import { validateEnvironment, validateWorkspaceName } from "./generate";
 import { type GhRunner, viewRepository } from "./gh";
 import { detectRepository, type GitRunner, type Repository } from "./git";
-import { AUTOFIX_LABEL, type LockFile, readManagedLock, type TargetKind } from "./lock";
+import {
+  AUTOFIX_LABEL,
+  type JobEnvironment,
+  type LockAutofix,
+  type LockFile,
+  planEnvironmentCollisions,
+  readManagedLock,
+  targetJobEnvironments,
+  type TargetKind,
+} from "./lock";
 import type { AutofixProvider } from "./templates";
 
 export type EnvRequirement = {
@@ -13,6 +22,8 @@ export type EnvRequirement = {
   description: string;
   /** Where the value comes from. */
   howTo: string;
+  /** Counts only when set on the environment itself, not inherited from the repository or organization. */
+  environmentOnly?: boolean;
 };
 
 export type EnvironmentRequirements = {
@@ -58,6 +69,26 @@ const WORKSPACE_ID: EnvRequirement = {
   required: true,
   description: "ID of the workspace this environment deploys to",
   howTo: "the id printed by `tailor workspace create`, or listed by `tailor workspace list`",
+};
+const DEPLOY_CLIENT_ID: EnvRequirement = {
+  ...CLIENT_ID,
+  description:
+    "Client ID of the platform machine user that CI signs in as for deploy; it needs an editor " +
+    "or admin role on the organization or folder that holds the workspace",
+};
+const PLAN_CLIENT_ID: EnvRequirement = {
+  ...CLIENT_ID,
+  description:
+    "Client ID of the platform machine user that the plan job signs in as; a viewer role on the " +
+    "organization or folder that holds the workspace is enough. Pull requests run this job with " +
+    "their own code, so do not use the deploy machine user here",
+  environmentOnly: true,
+};
+const PLAN_CLIENT_SECRET: EnvRequirement = { ...CLIENT_SECRET, environmentOnly: true };
+const PLAN_WORKSPACE_ID: EnvRequirement = {
+  ...WORKSPACE_ID,
+  description:
+    "ID of the workspace the plan job compares against: the one the deploy job deploys to",
 };
 const MIGRATION_TEST_CLIENT_ID: EnvRequirement = {
   ...CLIENT_ID,
@@ -160,6 +191,28 @@ const REQUIREMENTS: Record<TargetKind, EnvRequirement[]> = {
   ],
 };
 
+const SPLIT_DEPLOY_REQUIREMENTS = [
+  DEPLOY_CLIENT_ID,
+  CLIENT_SECRET,
+  WORKSPACE_ID,
+  SLACK_BOT_TOKEN,
+  SLACK_CHANNEL_ID,
+  SEED_USER_PASSWORD,
+  SLACK_USER_MAPPING,
+];
+
+const PLAN_REQUIREMENTS = [
+  PLAN_CLIENT_ID,
+  PLAN_CLIENT_SECRET,
+  PLAN_WORKSPACE_ID,
+  FAIL_ON_DRIFT,
+  SEED_USER_PASSWORD,
+];
+/** Plan environment variants, which a deploy job's entry replaces when it shares the environment. */
+const PLAN_VARIANTS: ReadonlySet<EnvRequirement> = new Set(
+  PLAN_REQUIREMENTS.filter((requirement) => !DEPLOY_REQUIREMENTS.includes(requirement)),
+);
+
 const AUTOFIX_APP_CLIENT_ID: EnvRequirement = {
   name: "TAILOR_AUTOFIX_APP_CLIENT_ID",
   type: "variable",
@@ -200,13 +253,94 @@ const AUTOFIX_REQUIREMENTS: Record<AutofixProvider, EnvRequirement[]> = {
   "github-app": [AUTOFIX_APP_CLIENT_ID, AUTOFIX_APP_PRIVATE_KEY],
 };
 
+const apiKeyRequirement = (name: string, agent: string, howTo: string): EnvRequirement => ({
+  name,
+  type: "secret",
+  required: true,
+  description:
+    `API key the ${agent} agent of the autofix workflow uses to finish what the codemods of an ` +
+    "SDK upgrade leave for review",
+  howTo,
+});
+
+const ANTHROPIC_API_KEY = apiKeyRequirement(
+  "TAILOR_AUTOFIX_ANTHROPIC_API_KEY",
+  "claude",
+  "create an API key in the Claude Console (https://console.anthropic.com/settings/keys)",
+);
+const OPENAI_API_KEY = apiKeyRequirement(
+  "TAILOR_AUTOFIX_OPENAI_API_KEY",
+  "codex",
+  "create an API key on the OpenAI platform (https://platform.openai.com/api-keys)",
+);
+
+const COPILOT_TOKEN: EnvRequirement = {
+  name: "TAILOR_AUTOFIX_COPILOT_TOKEN",
+  type: "secret",
+  required: true,
+  description:
+    "Fine-grained personal access token the copilot agent of the autofix workflow signs in " +
+    "with to finish what the codemods of an SDK upgrade leave for review",
+  howTo:
+    "create a fine-grained personal access token with the Copilot Requests permission " +
+    "(https://github.com/settings/personal-access-tokens/new), owned by an account with Copilot",
+};
+
+const modelRequirement = (name: string, agent: string, howTo: string): EnvRequirement => ({
+  name,
+  type: "variable",
+  required: false,
+  description: `Model the ${agent} agent of the autofix workflow uses; when unset, the agent uses its default model`,
+  howTo,
+});
+
+const CLAUDE_MODEL = modelRequirement(
+  "TAILOR_AUTOFIX_CLAUDE_MODEL",
+  "claude",
+  "a model name Claude Code accepts with --model",
+);
+const CODEX_MODEL = modelRequirement(
+  "TAILOR_AUTOFIX_CODEX_MODEL",
+  "codex",
+  "a model name Codex accepts with --model",
+);
+const COPILOT_MODEL = modelRequirement(
+  "TAILOR_AUTOFIX_COPILOT_MODEL",
+  "copilot",
+  "a model name Copilot CLI accepts with --model",
+);
+
 /**
- * Repository secrets and variables the autofix workflow of the given provider reads.
- * @param provider - Autofix provider
+ * Repository secrets the agent of a codemod mode signs in with, and the variable that picks its model.
+ * @param inputs - The codemod mode and, for copilot, its authentication
+ * @returns Requirements in display order; none for a mode without an agent
+ */
+export function agentRequirements(
+  inputs: Pick<LockAutofix["inputs"], "codemod" | "copilotAuth">,
+): EnvRequirement[] {
+  switch (inputs.codemod) {
+    case "claude":
+      return [ANTHROPIC_API_KEY, CLAUDE_MODEL];
+    case "codex":
+      return [OPENAI_API_KEY, CODEX_MODEL];
+    case "copilot":
+      return inputs.copilotAuth === "github-token"
+        ? [COPILOT_MODEL]
+        : [COPILOT_TOKEN, COPILOT_MODEL];
+    default:
+      return [];
+  }
+}
+
+/**
+ * Repository secrets and variables the autofix workflow reads for its provider and codemod mode.
+ * @param inputs - The autofix workflow's inputs, as the lock records them
  * @returns Requirements in display order
  */
-export function autofixRequirements(provider: AutofixProvider): EnvRequirement[] {
-  return AUTOFIX_REQUIREMENTS[provider];
+export function autofixRequirements(
+  inputs: Pick<LockAutofix["inputs"], "provider" | "codemod" | "copilotAuth">,
+): EnvRequirement[] {
+  return [...AUTOFIX_REQUIREMENTS[inputs.provider], ...agentRequirements(inputs)];
 }
 
 /**
@@ -240,32 +374,35 @@ export function collectEnvironmentRequirements(lock: LockFile): EnvironmentRequi
     entry.targets.push(targetLabel);
     for (const requirement of requirements) {
       const existing = entry.requirements.findIndex((r) => r.name === requirement.name);
-      if (existing === -1) {
+      const current = entry.requirements[existing];
+      if (current === undefined) {
         entry.requirements.push(requirement);
-      } else if (requirement.required && !entry.requirements[existing]?.required) {
+      } else if (
+        (requirement.required && !current.required) ||
+        (PLAN_VARIANTS.has(current) && !PLAN_VARIANTS.has(requirement))
+      ) {
         entry.requirements[existing] = requirement;
       }
     }
   };
   for (const target of lock.targets) {
-    const { environment, migrationTest, migrationTestEnvironment } = target.inputs;
-    validateEnvironment(environment);
     validateWorkspaceName(target.workspaceName);
-    const label = `${target.kind} ${target.workspaceName}`;
-    add(environment, label, targetRequirements(target.kind));
-    if (target.kind === "branch" && migrationTest && migrationTestEnvironment !== undefined) {
-      validateEnvironment(migrationTestEnvironment);
-      add(migrationTestEnvironment, `${label} (migration test)`, [
-        MIGRATION_TEST_CLIENT_ID,
-        CLIENT_SECRET,
-        MIGRATION_TEST_SOURCE_WORKSPACE_ID,
-      ]);
+    const jobs = targetJobEnvironments(target);
+    const split = jobs.some(({ job }) => job === "plan");
+    const requirementsOf = {
+      deploy: split ? SPLIT_DEPLOY_REQUIREMENTS : targetRequirements(target.kind),
+      plan: PLAN_REQUIREMENTS,
+      migrationTest: [MIGRATION_TEST_CLIENT_ID, CLIENT_SECRET, MIGRATION_TEST_SOURCE_WORKSPACE_ID],
+    } satisfies Record<JobEnvironment["job"], readonly EnvRequirement[]>;
+    for (const { job, environment, label } of jobs) {
+      validateEnvironment(environment);
+      add(environment, label, requirementsOf[job]);
     }
   }
   for (const entry of byEnvironment.values()) {
     entry.requirements.sort((a, b) => Number(b.required) - Number(a.required));
   }
-  const repository = lock.autofix ? autofixRequirements(lock.autofix.inputs.provider) : [];
+  const repository = lock.autofix ? autofixRequirements(lock.autofix.inputs) : [];
   return [
     ...byEnvironment.values(),
     ...(repository.length > 0
@@ -572,7 +709,8 @@ function selectEnvironments(
 }
 
 /**
- * Read the lock and group the requirements of its targets by GitHub Environment.
+ * Read the lock and group the requirements of its targets by GitHub Environment, warning about
+ * each split plan environment another job also runs in.
  * @param outputDir - Repository root where `.github` lives
  * @param names - Only these environments; all when empty
  * @returns One entry per selected environment, in lock order
@@ -581,7 +719,12 @@ export function loadEnvironmentRequirements(
   outputDir: string,
   names: string[] = [],
 ): EnvironmentRequirements[] {
-  return selectEnvironments(collectEnvironmentRequirements(readManagedLock(outputDir)), names);
+  const lock = readManagedLock(outputDir);
+  const environments = collectEnvironmentRequirements(lock);
+  for (const collision of planEnvironmentCollisions(lock.targets)) {
+    logger.warn(collision);
+  }
+  return selectEnvironments(environments, names);
 }
 
 /**

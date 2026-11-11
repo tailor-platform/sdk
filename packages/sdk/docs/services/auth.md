@@ -26,6 +26,7 @@ Configure Auth service using `defineAuth()`:
 
 - **One auth per application**: Each application can have exactly one Auth service
 - **Configuration location**: Define in `tailor.config.ts` using `defineAuth()` and reference directly in the config's `auth` field
+- **Referencing another app's auth**: When another app in the same repository defines the auth, reference it with `asExternal()`. See [Referencing another app's Auth with `asExternal()`](../configuration.md#referencing-another-apps-auth-with-asexternal)
 - **`userProfile` and `machineUserAttributes` are mutually exclusive**: Specifying both fails at deploy/generate time with ``Specify either `userProfile` or `machineUserAttributes`, not both.``
 
 ```typescript
@@ -313,6 +314,10 @@ export default createResolver({
 ```
 
 Type narrowing is provided by the generated `tailor.d.ts` (the `MachineUserNameRegistry` interface). Run `tailor generate` (or `deploy`) after defining new machine users to refresh it.
+
+`tailor deploy` checks the string `invoker` of every resolver and executor against the machine users of the Auth service it resolves to, and stops with `INVOKER_MACHINE_USER_NOT_FOUND` when the name does not exist. The `invoker` passed to `workflow.start()` is not checked at deploy time. When a config deployed in the same run defines the Auth service, the machine users it lists are the ones checked, because deploy removes the machine users it no longer lists. When the Auth service is only referenced as external, the machine users that exist in the workspace are checked.
+
+When the Auth service is an external one (`auth: { name: "...", external: true }`), the machine users are not in your config, so `tailor.d.ts` cannot narrow the invoker type and any string passes type checking. For resolvers and executors, the deploy-time check is what catches a misspelled name in that case.
 
 ## OAuth 2.0 Clients
 

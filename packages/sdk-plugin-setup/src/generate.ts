@@ -17,6 +17,7 @@ import { detectDefaultBranch, type GitRunner } from "./git";
 import {
   findTarget,
   LOCK_VERSION,
+  planEnvironmentCollisions,
   readLock,
   targetWorkflows,
   writeLock,
@@ -49,6 +50,8 @@ import {
 import {
   appSlug,
   isPackageManager,
+  LOCKFILES,
+  planEnvironmentOf,
   renderBranchWorkflow,
   renderPreviewCleanupWorkflow,
   renderPreviewWorkflow,
@@ -105,6 +108,8 @@ export type BranchSetupOptions = CommonSetupOptions & {
   migrationTestLabel?: string;
   /** Dedicated GitHub Environment holding the migration test's source workspace. */
   migrationTestEnvironment?: string;
+  /** Run the plan job in its own `<environment>-plan` GitHub Environment. */
+  splitPlanEnvironment?: boolean;
 };
 
 type TagSetupOptions = CommonSetupOptions & {
@@ -485,15 +490,6 @@ function devEnginePackageManagerNames(value: unknown): string[] {
   });
 }
 
-export const LOCKFILES: ReadonlyArray<readonly [file: string, packageManager: PackageManager]> = [
-  ["pnpm-lock.yaml", "pnpm"],
-  ["yarn.lock", "yarn"],
-  ["bun.lock", "bun"],
-  ["bun.lockb", "bun"],
-  ["package-lock.json", "npm"],
-  ["npm-shrinkwrap.json", "npm"],
-];
-
 /**
  * Detect the package manager from the lockfile at the repository root, or else
  * from the `packageManager` or `devEngines.packageManager` field of its package.json.
@@ -657,6 +653,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
   // --environment is omitted it defaults to the workspace name.
   const environment = options.environment ?? workspaceName;
   validateEnvironment(environment);
+  const file = workflowFilePath(kind, workspaceName);
 
   if (kind === "tag") {
     validateTagPattern(options.tagPattern);
@@ -731,6 +728,18 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       hasSeeds = await loadHasSeeds(configPath);
     }
     migrationTest = resolveMigrationTest(options, { multi, hasMigrations });
+    if (
+      options.splitPlanEnvironment &&
+      migrationTest &&
+      (migrationTest.environment ?? environment).toLowerCase() === environment.toLowerCase()
+    ) {
+      logger.warn(
+        `${file}: the migration test job, which runs pull request code, stays in the deploy ` +
+          `environment "${environment}" under --split-plan-environment. Re-run ` +
+          "`tailor setup ci branch` with --migration-test-environment set to an environment " +
+          "of its own.",
+      );
+    }
     render = renderBranchWorkflow({
       workspaceName,
       branch,
@@ -746,6 +755,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       migrationTest,
       restrictDispatch: options.restrictDispatch ?? false,
       seed: options.seed,
+      splitPlanEnvironment: options.splitPlanEnvironment ?? false,
     });
   } else if (kind === "tag") {
     branch = options.branch ?? null;
@@ -801,8 +811,6 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     };
   }
 
-  const file = workflowFilePath(kind, workspaceName);
-
   const inputs: LockInputs = {
     branch,
     branchAutoDetected: kind === "branch" || kind === "preview" ? branchAutoDetected : undefined,
@@ -819,6 +827,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     migrationTest: migrationTest ? true : undefined,
     migrationTestLabel: migrationTest?.label,
     migrationTestEnvironment: migrationTest?.environment,
+    splitPlanEnvironment: kind === "branch" && options.splitPlanEnvironment ? true : undefined,
     apps:
       apps && appErdNamespaces.size > 0
         ? apps.map((app) => ({ ...app, erdNamespaces: appErdNamespaces.get(app.dir) ?? [] }))
@@ -1012,21 +1021,18 @@ export function logWritten(decision: Decision, file: string): void {
   }
 }
 
-function printEnvironmentStep(environment: string): void {
+function printEnvironmentStep(environments: readonly string[]): void {
+  const names = environments.map((environment) => `"${environment}"`).join(" and ");
+  const flags = environments.map((environment) => `--environment ${environment}`).join(" ");
   logger.log(
-    `1. Set the secrets and variables the "${environment}" environment needs. ` +
+    `1. Set the secrets and variables the ${names} ` +
+      `${environments.length === 1 ? "environment needs" : "environments need"}. ` +
       "This lists them and where each value comes from (drop --environment to list every " +
       "environment in .github/tailor.lock):",
   );
-  logger.log(
-    `   tailor setup ci env --environment ${environment}                       # gh commands`,
-  );
-  logger.log(
-    `   tailor setup ci env --environment ${environment} --format terraform    # or Terraform`,
-  );
-  logger.log(
-    `   tailor setup ci env --environment ${environment} --check               # then what is still missing`,
-  );
+  logger.log(`   tailor setup ci env ${flags}                       # gh commands`);
+  logger.log(`   tailor setup ci env ${flags} --format terraform    # or Terraform`);
+  logger.log(`   tailor setup ci env ${flags} --check               # then what is still missing`);
 }
 
 export type SetupTargetResult = {
@@ -1035,6 +1041,8 @@ export type SetupTargetResult = {
   file: string;
   /** Resolved GitHub Environment name. */
   environment: string;
+  /** GitHub Environment of the plan job, when it runs apart from `environment`. */
+  planEnvironment?: string;
   /** Whether the app id was moved out of tailor.config.ts. */
   configEdited: boolean;
 };
@@ -1044,12 +1052,14 @@ export type SetupTargetResult = {
  * @param result - What {@link setupTarget} generated
  */
 export function printTargetNextSteps(result: SetupTargetResult): void {
-  const { environment, configEdited } = result;
+  const { environment, planEnvironment, configEdited } = result;
 
   logger.newline();
   logger.info("Next steps:");
   logger.newline();
-  printEnvironmentStep(environment);
+  printEnvironmentStep(
+    planEnvironment === undefined ? [environment] : [environment, planEnvironment],
+  );
 
   logger.newline();
   logger.log("2. Commit the generated files:");
@@ -1270,6 +1280,7 @@ export async function setupTarget(options: SetupTargetOptions): Promise<SetupTar
     appIds: appIdPlan.appIds,
   });
   const { configEdited } = await removeAdoptedConfigIds(appIdPlan);
+  const knownCollisions = new Set(planEnvironmentCollisions(lock?.targets ?? []));
 
   for (const { decision, file, movedFrom } of written) {
     if (movedFrom === undefined) {
@@ -1288,11 +1299,15 @@ export async function setupTarget(options: SetupTargetOptions): Promise<SetupTar
       );
     }
   }
+  for (const collision of planEnvironmentCollisions(targets)) {
+    if (!knownCollisions.has(collision)) logger.warn(collision);
+  }
 
   return {
     kind: resolved.kind,
     file: resolved.file,
     environment: resolved.environment,
+    planEnvironment: planEnvironmentOf(resolved.inputs),
     configEdited,
   };
 }

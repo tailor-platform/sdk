@@ -288,6 +288,86 @@ describe("checkEnv", () => {
     },
   );
 
+  describe("on the plan environment of a split branch target", () => {
+    const PLAN_HEADING = 'Environment "stg-plan" (branch my-app (plan))';
+    const MISSING_ON_ENVIRONMENT =
+      "missing on the environment, which needs its own rather than the one set on the repository";
+    const splitTarget = () =>
+      setup(target("branch", "my-app", "stg", { splitPlanEnvironment: true }));
+    const after = (text: string, heading: string) => {
+      const lines = text.split("\n");
+      expect(lines).toContain(heading);
+      return lines.slice(lines.indexOf(heading));
+    };
+
+    test("counts the machine user only when set on that environment", () => {
+      using tmp = splitTarget();
+      using output = captureOutput();
+      const gh = fakeGh({
+        secrets: [CLIENT_SECRET],
+        variables: [CLIENT_ID],
+        environments: {
+          stg: { variables: [WORKSPACE_ID] },
+          "stg-plan": { variables: [WORKSPACE_ID] },
+        },
+      });
+
+      expect(() => checkEnv({ outputDir: tmp.dir, gitRunner: origin, ghRunner: gh })).toThrow(
+        /2 required secrets or variables are missing/,
+      );
+      const [deployReport, planReport] = output.stderr().split(PLAN_HEADING);
+      expect(deployReport).toContain(`✔ ${CLIENT_ID} (variable, set on the repository)`);
+      expect(planReport).toContain(
+        `✖ ${CLIENT_ID} (variable, set on the repository): ${MISSING_ON_ENVIRONMENT}`,
+      );
+      expect(planReport).toContain(
+        `✖ ${CLIENT_SECRET} (secret, set on the repository): ${MISSING_ON_ENVIRONMENT}`,
+      );
+      const planCommands = after(output.stdout(), `# ${PLAN_HEADING}`);
+      expect(planCommands).toContain(`gh variable set ${CLIENT_ID} --env=stg-plan --repo=acme/app`);
+      expect(planCommands).toContain(
+        `gh secret set ${CLIENT_SECRET} --env=stg-plan --repo=acme/app`,
+      );
+      expect(planCommands).not.toContain(howToReuse("repository"));
+    });
+
+    test("does not count a client ID the workflow would read from a repository secret", () => {
+      using tmp = splitTarget();
+      using output = captureOutput();
+      const gh = fakeGh({
+        secrets: [CLIENT_ID],
+        environments: {
+          stg: { secrets: [CLIENT_SECRET], variables: [CLIENT_ID, WORKSPACE_ID] },
+          "stg-plan": { secrets: [CLIENT_SECRET], variables: [WORKSPACE_ID] },
+        },
+      });
+
+      expect(() => checkEnv({ outputDir: tmp.dir, gitRunner: origin, ghRunner: gh })).toThrow(
+        /1 required secret or variable is missing/,
+      );
+      expect(output.stderr().split(PLAN_HEADING)[1]).toContain(
+        `✖ ${CLIENT_ID} (variable): ${MISSING_ON_ENVIRONMENT}`,
+      );
+    });
+
+    test("passes when the machine user is set on that environment", () => {
+      using tmp = splitTarget();
+      using output = captureOutput();
+      const gh = fakeGh({
+        environments: {
+          stg: { secrets: [CLIENT_SECRET], variables: [CLIENT_ID, WORKSPACE_ID] },
+          "stg-plan": { secrets: [CLIENT_SECRET], variables: [CLIENT_ID, WORKSPACE_ID] },
+        },
+      });
+
+      checkEnv({ outputDir: tmp.dir, gitRunner: origin, ghRunner: gh });
+
+      const planReport = after(output.stderr(), PLAN_HEADING);
+      expect(planReport).toContain(`  ✔ ${CLIENT_ID} (variable)`);
+      expect(planReport).toContain(`  ✔ ${CLIENT_SECRET} (secret)`);
+    });
+  });
+
   test("moves a repository client secret to every environment reading it, deleting it once", () => {
     using tmp = setup(target("branch", "my-app", "stg"), target("tag", "my-app", "production"));
     using output = captureOutput();
