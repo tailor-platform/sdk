@@ -55,7 +55,7 @@ function templatesSource(flag) {
 }
 
 // A pull request branch checked out from a clone of `main`, like the regenerate job's checkout.
-function pullRequestBranch({ flag = "false", templates, changed }) {
+function pullRequestBranch({ flag = "false", templates, changed, baseAdvancesTemplate = false }) {
   const root = mkdtempSync(join(tmpdir(), "securefix-template-"));
   roots.push(root);
   const origin = join(root, "origin");
@@ -76,6 +76,11 @@ function pullRequestBranch({ flag = "false", templates, changed }) {
   );
   git(work, "add", "--all");
   git(work, "commit", "--quiet", "-m", "bump");
+  if (baseAdvancesTemplate) {
+    write(origin, AUTOFIX_TEMPLATE, "uses: owner/action@cccc # v1.0.2\n");
+    git(origin, "add", "--all");
+    git(origin, "commit", "--quiet", "-m", "base moves on");
+  }
   return work;
 }
 
@@ -93,7 +98,7 @@ const flagLine = (work) =>
     .split("\n")
     .find((line) => line.startsWith("const TEMPLATE_CHANGED_SINCE_RELEASE"));
 
-describe("securefix: mark pending template change", () => {
+describe("securefix: mark pending template change", { timeout: 60_000 }, () => {
   test("sets the flag when a Renovate pull request changes a setup workflow template", () => {
     const work = pullRequestBranch({ changed: AUTOFIX_TEMPLATE });
     expect(runStep(work).status).toBe(0);
@@ -108,6 +113,15 @@ describe("securefix: mark pending template change", () => {
 
   test("leaves the flag alone when no setup workflow template changed", () => {
     const work = pullRequestBranch({ changed: "packages/sdk-plugin-setup/src/other.ts" });
+    expect(runStep(work).status).toBe(0);
+    expect(flagLine(work)).toBe("const TEMPLATE_CHANGED_SINCE_RELEASE = false;");
+  });
+
+  test("ignores a template change that reached the base after the branch was cut", () => {
+    const work = pullRequestBranch({
+      changed: "packages/sdk-plugin-setup/src/other.ts",
+      baseAdvancesTemplate: true,
+    });
     expect(runStep(work).status).toBe(0);
     expect(flagLine(work)).toBe("const TEMPLATE_CHANGED_SINCE_RELEASE = false;");
   });
