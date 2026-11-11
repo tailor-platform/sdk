@@ -62,7 +62,8 @@ export interface IncomingWebhookRequest {
 /**
  * Type argument of `incomingWebhookTrigger`. Name only what you want to override: `body` replaces
  * the body type, and each header in `headers` replaces the type of that header. Everything that is
- * not named keeps its default type.
+ * not named keeps its default type, except that when a named header is an array, the headers that
+ * are not named may also be arrays.
  */
 export interface IncomingWebhookRequestOverrides {
   body?: Record<string, unknown>;
@@ -73,7 +74,7 @@ type OverrideHeaders<H> = string extends keyof H
   ? H
   : { [K in keyof H]: H[K] } & {
       [K in Exclude<ListHeaderName, keyof H>]?: string | string[];
-    } & Record<string, string>;
+    } & Record<string, string | NonNullable<H[keyof H]>>;
 
 type ResolveIncomingWebhookRequest<T extends IncomingWebhookRequestOverrides> = {
   body: T extends { body: infer B extends Record<string, unknown> } ? B : Record<string, unknown>;

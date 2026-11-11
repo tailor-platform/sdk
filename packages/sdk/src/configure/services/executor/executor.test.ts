@@ -325,7 +325,7 @@ describe("webhookTrigger response", () => {
     });
   });
 
-  test("a header named in the trigger generic overrides its default type and the other headers keep theirs", () => {
+  test("a header named in the trigger generic overrides its default type, and the others may also be arrays when an override is an array", () => {
     createExecutor({
       name: "test",
       trigger: incomingWebhookTrigger<{ headers: { "x-request-id": string[]; accept: string } }>(),
@@ -335,6 +335,27 @@ describe("webhookTrigger response", () => {
           expectTypeOf(args.headers["x-request-id"]).toEqualTypeOf<string[]>();
           expectTypeOf(args.headers.accept).toEqualTypeOf<string>();
           expectTypeOf(args.headers["via"]).toEqualTypeOf<string | string[] | undefined>();
+          expectTypeOf(args.headers["authorization"]).toEqualTypeOf<
+            string | string[] | undefined
+          >();
+        },
+      },
+    });
+  });
+
+  test("a complete headers object can be built when a header is overridden with an array", () => {
+    const trigger = incomingWebhookTrigger<{ headers: { "x-request-id": string[] } }>();
+    const headers: typeof trigger.__args.headers = { "x-request-id": ["a", "b"] };
+    expectTypeOf(headers["x-request-id"]).toEqualTypeOf<string[]>();
+  });
+
+  test("headers that are not named stay strings when no override is an array", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{ headers: { "x-custom": string } }>(),
+      operation: {
+        kind: "function",
+        body: (args) => {
           expectTypeOf(args.headers["authorization"]).toEqualTypeOf<string | undefined>();
         },
       },

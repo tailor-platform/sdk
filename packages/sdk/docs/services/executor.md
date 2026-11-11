@@ -109,7 +109,7 @@ type WebhookRequest = {
 incomingWebhookTrigger<WebhookRequest>();
 ```
 
-Name only what you want to change in the type argument. The body type and the type of each header you name are replaced, and the others keep their defaults. For example, `incomingWebhookTrigger<{ headers: { "x-request-id": string[] } }>()` changes only `x-request-id`.
+Name only what you want to change in the type argument. The body type and the type of each header you name are replaced, and the others keep their defaults. For example, `incomingWebhookTrigger<{ headers: { "x-request-id": string[] } }>()` types `x-request-id` as `string[]`. Because one header is an array, the headers you do not name may then be arrays as well.
 
 You can customize the HTTP response returned to the webhook caller:
 
