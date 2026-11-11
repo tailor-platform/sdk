@@ -94,7 +94,7 @@ async function loadAndCacheConfig(configPath: string): Promise<ConfigCache | nul
     const pluginsExport: unknown = configModule.plugins;
     if (!Array.isArray(pluginsExport)) {
       throw new Error(
-        `Invalid \`plugins\` export in "${resolvedPath}": expected an array returned by definePlugins(), got ${typeof pluginsExport}`,
+        `Invalid \`plugins\` export in "${resolvedPath}": expected an array returned by definePlugins(), got ${pluginsExport === null ? "null" : typeof pluginsExport}`,
       );
     }
     for (const item of pluginsExport) {

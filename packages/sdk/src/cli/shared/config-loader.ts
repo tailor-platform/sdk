@@ -116,7 +116,7 @@ export async function loadConfig(
         issues: [
           {
             path: [],
-            message: `expected an array returned by definePlugins(), got ${typeof pluginsExport}`,
+            message: `expected an array returned by definePlugins(), got ${pluginsExport === null ? "null" : typeof pluginsExport}`,
           },
         ],
       });

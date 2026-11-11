@@ -99,6 +99,12 @@ describe("loadConfig", () => {
       undefined,
     ],
     [
+      "is null",
+      "null",
+      [{ path: [], message: "expected an array returned by definePlugins(), got null" }],
+      undefined,
+    ],
+    [
       "contains an invalid item",
       `[{ id: "valid", description: "Valid item" }, null]`,
       [{ path: [1], message: "Invalid input: expected object, received null" }],
