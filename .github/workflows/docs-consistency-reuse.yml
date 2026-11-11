@@ -1,0 +1,38 @@
+name: Docs Consistency Reuse Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/scripts/docs-consistency-reuse.mjs
+      - .github/scripts/docs-consistency-reuse.test.mjs
+      - .github/workflows/docs-consistency-check.yml
+      - .github/workflows/docs-consistency-reuse.yml
+  pull_request:
+    paths:
+      - .github/scripts/docs-consistency-reuse.mjs
+      - .github/scripts/docs-consistency-reuse.test.mjs
+      - .github/workflows/docs-consistency-check.yml
+      - .github/workflows/docs-consistency-reuse.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  test:
+    name: Test docs-consistency-reuse
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run tests
+        run: node --test .github/scripts/docs-consistency-reuse.test.mjs

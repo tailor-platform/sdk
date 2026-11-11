@@ -35,6 +35,8 @@ workflows:
     '.github/workflows/docs-consistency-check.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'anthropics/claude-code-action@4fa93a88de49bbef68b10eb15aabedf28ca0e1ed'
+    '.github/workflows/docs-consistency-reuse.yml':
+        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     '.github/workflows/erd-schema.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e'
