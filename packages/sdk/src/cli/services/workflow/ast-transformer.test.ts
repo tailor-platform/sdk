@@ -62,7 +62,7 @@ function transformStartCalls(
   }
 
   const context: StartContext = { modules, authNamespace };
-  return transformStartCallsWithContext(source, context, currentFilePath);
+  return transformStartCallsWithContext(source, context, currentFilePath).toString();
 }
 
 function transformWorkflowJobSource(
@@ -77,7 +77,7 @@ function transformWorkflowJobSource(
     targetJobName,
     targetJobExportName,
     otherJobExportNames,
-  );
+  ).toString();
   return transformStartCalls(stripped, new Map(), jobNameMap);
 }
 
@@ -574,7 +574,7 @@ const mainJob = createWorkflowJob({
   body: async () => "main"
 });
 `;
-      const result = transformWorkflowSource(source, "main-job");
+      const result = transformWorkflowSource(source, "main-job").toString();
 
       expect(result).toContain("body: () => {}");
       expect(result).not.toContain("nestedJob.start");
@@ -590,7 +590,7 @@ const simpleJob = createWorkflowJob({
   body: () => "simple"
 });
 `;
-      const result = transformWorkflowSource(source, "simple-job");
+      const result = transformWorkflowSource(source, "simple-job").toString();
 
       // no changes
       expect(result).toContain('"simple"');
@@ -609,7 +609,7 @@ export const mainJob = createWorkflowJob({
 });
 `;
 
-      const result = transformWorkflowSource(source, "main-job", "mainJob", ["step"]);
+      const result = transformWorkflowSource(source, "main-job", "mainJob", ["step"]).toString();
 
       expect(result).toContain('const step = { start: async () => "local" }');
       expect(result).toContain("step.start()");
@@ -638,7 +638,7 @@ export default createWorkflow({
 });
 `;
       // When bundling check-inventory job
-      const result = transformWorkflowSource(source, "check-inventory");
+      const result = transformWorkflowSource(source, "check-inventory").toString();
 
       // check-inventory should remain
       expect(result).toContain("check-inventory");
@@ -668,7 +668,7 @@ const workflow = createWorkflow({
 
 export default workflow;
 `;
-      const result = transformWorkflowSource(source, "main-job");
+      const result = transformWorkflowSource(source, "main-job").toString();
 
       // mainJob should remain
       expect(result).toContain("main-job");
@@ -699,7 +699,7 @@ export default createWorkflow({
 `;
       // "caller-job" is the target job being bundled, but it does NOT exist
       // in this file. This file is a dependency imported by the caller.
-      const result = transformWorkflowSource(source, "caller-job");
+      const result = transformWorkflowSource(source, "caller-job").toString();
 
       // The default export must be preserved so that the importing file
       // can resolve `import simpleWorkflow from "./simple"`
@@ -1211,7 +1211,7 @@ export async function run() {
 }
 `;
 
-      expect(transformStartCallsWithContext(source, context, callerFile)).toContain(
+      expect(transformStartCallsWithContext(source, context, callerFile).toString()).toContain(
         'tailor.workflow.execJobFunction("sync-step", { id: 1 })',
       );
     });
@@ -1241,7 +1241,7 @@ export async function run(syncWorkflow: { start(input: unknown): Promise<string>
 }
 `;
 
-      expect(transformStartCallsWithContext(source, context, callerFile)).toContain(
+      expect(transformStartCallsWithContext(source, context, callerFile).toString()).toContain(
         "syncWorkflow.start({ id: 1 })",
       );
     });
@@ -1284,7 +1284,7 @@ export async function run(syncWorkflow: { start(input: unknown): Promise<string>
     ])("does not throw when the undetectable import is shadowed in %s", (_, body) => {
       const source = `import { syncWorkflow } from "../workflow/sync";\n\n${body}\n`;
 
-      expect(transformStartCallsWithContext(source, context, callerFile)).toContain(
+      expect(transformStartCallsWithContext(source, context, callerFile).toString()).toContain(
         "syncWorkflow.start({ id: 1 })",
       );
     });
@@ -1298,7 +1298,7 @@ export async function run(sync: { default: { start(input: unknown): Promise<stri
 }
 `;
 
-      expect(transformStartCallsWithContext(source, context, callerFile)).toContain(
+      expect(transformStartCallsWithContext(source, context, callerFile).toString()).toContain(
         "sync.default.start({ id: 1 })",
       );
     });
