@@ -156,7 +156,7 @@ export default createHttpAdapter({
       code: "HTTP_ADAPTER_ASYNC_UNSUPPORTED",
       message: 'HTTP adapter "async-input" has an async `input.get` function.',
       suggestion: "Make the handler synchronous; async/await is not supported.",
-      context: { name: "async-input", handler: "input.get" },
+      context: { name: "async-input", kind: "input.get" },
     });
     expect(getErrorDiagnostics(rejection as Error).location).toEqual({ file });
   });
@@ -179,7 +179,7 @@ export default createHttpAdapter({
     await expect(service.loadAdapters()).rejects.toMatchObject({
       code: "HTTP_ADAPTER_ASYNC_UNSUPPORTED",
       message: 'HTTP adapter "async-output" has an async `output` function.',
-      context: { name: "async-output", handler: "output" },
+      context: { name: "async-output", kind: "output" },
     });
   });
 

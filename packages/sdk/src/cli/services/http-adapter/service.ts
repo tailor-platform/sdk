@@ -177,7 +177,7 @@ function asyncHandlerError(name: string, handler: string): CLIError {
     code: "HTTP_ADAPTER_ASYNC_UNSUPPORTED",
     message: `HTTP adapter "${name}" has an async \`${handler}\` function.`,
     suggestion: "Make the handler synchronous; async/await is not supported.",
-    context: { name, handler },
+    context: { name, kind: handler },
   });
 }
 
