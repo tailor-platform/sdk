@@ -45,10 +45,11 @@ describe("workflow template e2e globalSetup", () => {
     const { setup, teardown } = await loadGlobalSetup();
 
     await expect(setup(project() as never)).rejects.toBe(deployError);
-    await teardown();
-
     expect(sdk.deleteWorkspace).toHaveBeenCalledTimes(1);
     expect(sdk.deleteWorkspace).toHaveBeenCalledWith({ workspaceId: "ws-1" });
+
+    await teardown();
+    expect(sdk.deleteWorkspace).toHaveBeenCalledTimes(1);
   });
 
   test("deletes the created workspace when a step after deploy fails", async () => {
