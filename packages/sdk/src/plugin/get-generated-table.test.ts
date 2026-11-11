@@ -5,6 +5,7 @@ import * as path from "pathe";
 import { aroundEach, describe, expect, expectTypeOf, test } from "vitest";
 import { db } from "#/configure/services/tailordb/index";
 import { _clearCacheForTesting } from "./get-generated-table";
+import { invalidPluginsExports } from "./test-helpers/invalid-plugins-exports";
 import { getExtendedTable, getGeneratedTable } from "./index";
 import type { TailorAnyDBType } from "#/configure/services/tailordb/types";
 
@@ -235,16 +236,6 @@ export default {
         expect(globalThis.__testProcessNamespaceCalls).toEqual(["main"]);
       },
     );
-
-    test("rejects a plugin that defines both TailorDB namespace hook names, as the CLI does", async () => {
-      writeNamespacePlugin(
-        recordingHook("onTailorDBNamespaceLoaded") + recordingHook("onNamespaceLoaded"),
-      );
-
-      await expect(getGeneratedTable(configPath, "ns-plugin", null, "auditLog")).rejects.toThrow(
-        `plugin "ns-plugin": 'onNamespaceLoaded' is the deprecated name of 'onTailorDBNamespaceLoaded'. Define only 'onTailorDBNamespaceLoaded'.`,
-      );
-    });
   });
 
   describe("table-attached plugin", () => {
@@ -306,20 +297,6 @@ export default { db: { main: { files: [] } } };
 `,
       );
 
-    test.each([
-      'tableConfigRequired: "yes"',
-      "tableConfigRequired: null",
-      'onTableLoaded() {}, importPath: ""',
-      "onTailorDBNamespaceLoaded() {}",
-      'onTailorDBNamespaceLoaded: 42, importPath: "@test/invalid"',
-    ])("rejects invalid plugin options: %s", async (options) => {
-      writeConfig(`export const plugins = [{ id: "invalid", description: "test", ${options} }];`);
-
-      await expect(getGeneratedTable(configPath, "invalid", null, "auditLog")).rejects.toThrow(
-        /Invalid `plugins` export/,
-      );
-    });
-
     test("ignores array exports under any name other than `plugins`", async () => {
       writeConfig(`export const plugins2 = [{ id: "ignored", description: "test" }];
 export const generators = [{ id: "also-ignored", description: "test" }];`);
@@ -329,36 +306,16 @@ export const generators = [{ id: "also-ignored", description: "test" }];`);
       );
     });
 
-    test.each([
-      [
-        "is not an array",
-        `{ id: "not-an-array", description: "test" }`,
-        /Invalid `plugins` export/,
-      ],
-      ["is explicitly undefined", "undefined", /Invalid `plugins` export/],
-      ["is null", "null", /got null/],
-      [
-        "contains an array decorated with plugin properties",
-        `[Object.assign([], { id: "array", description: "test" })]`,
-        /Invalid `plugins` export/,
-      ],
-      [
-        "contains an invalid item",
-        `[{ id: "valid", description: "test" }, { no: "shape" }]`,
-        /Invalid `plugins` export/,
-      ],
-      [
-        "repeats a plugin ID",
-        `[{ id: "dup", description: "first" }, { id: "dup", description: "second" }]`,
-        /Duplicate plugin ID "dup"/,
-      ],
-    ])("rejects a `plugins` export that %s", async (_case, pluginsExport, message) => {
-      writeConfig(`export const plugins = ${pluginsExport};`);
+    test.each(invalidPluginsExports)(
+      "rejects a `plugins` export that $name",
+      async ({ pluginsExport, message }) => {
+        writeConfig(`export const plugins = ${pluginsExport};`);
 
-      await expect(getGeneratedTable(configPath, "anything", null, "auditLog")).rejects.toThrow(
-        message,
-      );
-    });
+        await expect(getGeneratedTable(configPath, "anything", null, "auditLog")).rejects.toThrow(
+          message,
+        );
+      },
+    );
   });
 
   test("returns a placeholder when the config is unavailable", async () => {
