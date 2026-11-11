@@ -148,50 +148,50 @@ user.name = 1;
     });
   });
 
-  test("allows type names that match Object prototype properties", async () => {
-    const typeFile = writeTypeFile(
-      "object-prototype.ts",
-      `
+  test.each(["item", "toString", "__proto__"])(
+    "reports invalid table name %s with its definition file and export",
+    async (name) => {
+      const file = writeTypeFile(
+        "item.ts",
+        `
 import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
-export const objectPrototype = db.table("toString", {
-  value: db.string(),
+export const item = db.table(${JSON.stringify(name)}, {
+  title: db.string(),
 }).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
 `,
-    );
+      );
 
-    const service = createTailorDBService({
-      namespace: "main",
-      config: { files: [typeFile] },
-      baseDir: process.cwd(),
-    });
+      const service = createTailorDBService({
+        namespace: "main",
+        config: { files: [file] },
+        baseDir: process.cwd(),
+      });
 
-    using _logger = silenceLogger("error", "log");
-    const types = await service.loadTypes();
-    expect(Object.hasOwn(types ?? {}, "toString")).toBe(true);
-  });
-
-  test("allows __proto__ as a type name", async () => {
-    const typeFile = writeTypeFile(
-      "proto.ts",
-      `
-import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
-export const proto = db.table("__proto__", {
-  value: db.string(),
-}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
-`,
-    );
-
-    const service = createTailorDBService({
-      namespace: "main",
-      config: { files: [typeFile] },
-      baseDir: process.cwd(),
-    });
-
-    using _logger = silenceLogger("error", "log");
-    const types = await service.loadTypes();
-    expect(Object.hasOwn(types ?? {}, "__proto__")).toBe(true);
-    expect(Object.hasOwn(service.typeSourceInfo, "__proto__")).toBe(true);
-  });
+      using _logger = silenceLogger("error");
+      const error = await service.loadTypes().catch((thrown: unknown) => thrown);
+      if (!(error instanceof Error)) throw new Error("expected loadTypes to reject with an Error");
+      expect(error).toMatchObject({
+        code: "DEFINITION_INVALID",
+        message: expect.stringContaining("Invalid TailorDB type `item`"),
+        context: {
+          kind: "tailordb-type",
+          file,
+          exportName: "item",
+          issues: [
+            {
+              path: ["name"],
+              message: "must be 1-63 ASCII letters or digits, starting with an uppercase letter",
+            },
+            {
+              path: ["metadata", "name"],
+              message: "must be 1-63 ASCII letters or digits, starting with an uppercase letter",
+            },
+          ],
+        },
+      });
+      expect(getErrorDiagnostics(error).location).toEqual({ file });
+    },
+  );
 
   const HOOKED_TYPE = `
 import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";

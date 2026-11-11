@@ -91,7 +91,7 @@ import { softDeletePlugin } from "./plugins/soft-delete";
 export const plugins = definePlugins(
   // Custom plugin with global config (factory function)
   softDeletePlugin({
-    archiveTablePrefix: "Deleted_",
+    archiveTablePrefix: "Deleted",
     defaultRetentionDays: 90,
   }),
 );
@@ -101,7 +101,7 @@ export const plugins = definePlugins(
 
 Plugins can generate:
 
-- **Tables**: Additional TailorDB tables (e.g., `CustomerHistory`, `Deleted_Customer`)
+- **Tables**: Additional TailorDB tables (e.g., `CustomerHistory`, `DeletedCustomer`)
 - **Resolvers**: Queries and mutations
 - **Executors**: Event handlers triggered by record changes
 - **Field Extensions**: Additional fields added to the source table
