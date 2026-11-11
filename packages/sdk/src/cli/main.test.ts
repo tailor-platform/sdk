@@ -157,6 +157,7 @@ describe.concurrent("env files", () => {
     expect(envelope.error).toMatchObject({
       code: "CONFIG_NOT_FOUND",
       message: "Configuration file not found: from-env-file.config.ts",
+      suggestion: "Check the path given with --config or TAILOR_CONFIG_PATH.",
     });
   }, 20_000);
 

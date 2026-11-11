@@ -43,7 +43,7 @@ describe("loadConfig", () => {
     expect(error).toMatchObject({
       code: "CONFIG_NOT_FOUND",
       message: `Configuration file not found: ${configPath}`,
-      suggestion: expect.stringContaining("--config"),
+      suggestion: "Check the path given with --config or TAILOR_CONFIG_PATH.",
       context: { file: configPath },
     });
     expect(getErrorDiagnostics(error).location).toBeUndefined();

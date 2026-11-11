@@ -65,7 +65,7 @@ export async function loadConfig(
     throw CLIError({
       code: "CONFIG_NOT_FOUND",
       message: `Configuration file not found: ${foundPath}`,
-      suggestion: CONFIG_NOT_FOUND_SUGGESTION,
+      suggestion: "Check the path given with --config or TAILOR_CONFIG_PATH.",
       context: { file: resolvedPath },
     });
   }
