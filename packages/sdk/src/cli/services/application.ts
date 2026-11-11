@@ -223,11 +223,12 @@ function pluginResolverSource(
   config: LoadedConfig,
   pluginManager: PluginManager | undefined,
 ): PluginResolverSource | undefined {
-  return pluginManager && { pluginManager, appName: config.name, configPath: config.path };
+  return pluginManager && { pluginManager, appName: config.name };
 }
 
 function defineResolver(
   config: ResolverServiceInput | undefined,
+  configPath: string,
   baseDir: string,
   plugins: PluginResolverSource | undefined,
 ): DefineResolverResult {
@@ -240,7 +241,13 @@ function defineResolver(
 
   for (const [namespace, serviceConfig] of Object.entries(config)) {
     if (!("external" in serviceConfig)) {
-      const resolverService = createResolverService(namespace, serviceConfig, baseDir, plugins);
+      const resolverService = createResolverService(
+        namespace,
+        serviceConfig,
+        configPath,
+        baseDir,
+        plugins,
+      );
       resolverServices.push(resolverService);
     }
     subgraphs.push({ Type: "pipeline", Name: namespace });
@@ -278,6 +285,7 @@ export function definePluginResolverServices(
       createResolverService(
         namespace,
         { files: [] },
+        config.path,
         baseDir,
         pluginResolverSource(config, pluginManager),
       ),
@@ -522,6 +530,7 @@ function defineServices(
   );
   const resolverResult = defineResolver(
     config.resolver,
+    config.path,
     baseDir,
     pluginResolverSource(config, pluginManager),
   );

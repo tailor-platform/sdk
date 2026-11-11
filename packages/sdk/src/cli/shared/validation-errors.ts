@@ -1,3 +1,4 @@
+import * as path from "pathe";
 import { isSyntaxDiagnostic } from "#/utils/syntax-diagnostic";
 import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
 import { CLIError, internalError } from "./errors";
@@ -147,6 +148,61 @@ export function definitionExportError(params: DefinitionErrorParams): CLIError {
     }),
     { location: { file } },
   );
+}
+
+interface NamedDefinition extends Omit<DefinitionErrorParams, "kind"> {
+  /** Name the definition declares. */
+  name: string;
+}
+
+export interface UniqueDefinitionNamesParams extends Pick<DefinitionErrorParams, "kind"> {
+  /** Namespace the names must be unique in, when the kind has one. */
+  namespace?: string;
+  /** Loaded definitions to check. */
+  definitions: readonly NamedDefinition[];
+}
+
+function compareCodePoints(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * Assert that no two loaded definitions of a kind declare the same name.
+ * @param params - Loaded definitions and what scopes their names
+ * @throws CLIError coded `DEFINITION_NAME_DUPLICATE`, listing every definition of each duplicated name
+ */
+export function assertUniqueDefinitionNames(params: UniqueDefinitionNamesParams): void {
+  const { kind, namespace, definitions } = params;
+  const sorted = definitions.toSorted(
+    (a, b) =>
+      compareCodePoints(a.name, b.name) ||
+      compareCodePoints(a.file, b.file) ||
+      compareCodePoints(a.exportName, b.exportName),
+  );
+  const duplicates = [...Map.groupBy(sorted, (definition) => definition.name)]
+    .filter(([, sameName]) => sameName.length > 1)
+    .map(([name, sameName]) => ({
+      name,
+      definitions: sameName.map(({ file, exportName }) => ({ file, exportName })),
+    }));
+  if (duplicates.length === 0) return;
+
+  const label = DEFINITION_LABELS[kind];
+  const scope = namespace === undefined ? "" : ` in namespace "${namespace}"`;
+  throw CLIError({
+    code: "DEFINITION_NAME_DUPLICATE",
+    message: duplicates
+      .flatMap((duplicate) => [
+        `Duplicate ${label} name "${duplicate.name}" found${scope}:`,
+        ...duplicate.definitions.map(({ file, exportName }) => {
+          const exportLabel = exportName === "default" ? "" : ` (export: ${exportName})`;
+          return `  - ${path.relative(process.cwd(), file)}${exportLabel}`;
+        }),
+      ])
+      .join("\n"),
+    suggestion: `Give each ${label} a unique name${namespace === undefined ? "" : " within its namespace"}.`,
+    context: { kind, namespace, duplicates },
+  });
 }
 
 /**
