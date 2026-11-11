@@ -220,6 +220,11 @@ describe("migration test machine users", () => {
     };
     const prepared = await app.dependencies.prepare(options);
 
+    expect(prepared.assertion).toEqual({
+      namespace: "tailordb",
+      invoker: { namespace: "auth", machineUserName: row.assertionUser },
+    });
+
     await app.dependencies.seedData({
       prepared,
       targetWorkspaceId: "target",
@@ -230,7 +235,7 @@ describe("migration test machine users", () => {
       prepared,
       targetWorkspaceId: "target",
       assertionPath: app.assertionPath,
-      machineUser: row.machineUser,
+      assertion: prepared.assertion!,
     });
 
     expect(app.client.execScript).toHaveBeenCalledWith(
@@ -243,6 +248,33 @@ describe("migration test machine users", () => {
       expect.objectContaining({
         name: "migration-test-assert-tailordb.ts",
         invoker: { namespace: "auth", machineUserName: row.assertionUser },
+      }),
+    );
+  });
+
+  test("executes the assertion supplied by the caller", async () => {
+    using tmp = tempDir("migration-test-machine-user-");
+    const app = fixture(tmp.dir);
+    const prepared = await app.dependencies.prepare({
+      ...app.options,
+      assertionPath: app.assertionPath,
+    });
+    const assertion = {
+      namespace: "audit",
+      invoker: { namespace: "other-auth", machineUserName: "migrator" },
+    };
+
+    await app.dependencies.runAssertion({
+      prepared,
+      targetWorkspaceId: "target",
+      assertionPath: app.assertionPath,
+      assertion,
+    });
+
+    expect(app.client.execScript).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "migration-test-assert-audit.ts",
+        invoker: assertion.invoker,
       }),
     );
   });

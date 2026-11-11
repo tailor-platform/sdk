@@ -33,7 +33,7 @@ import { loadAccessToken, loadPlatformClientConfig, loadWorkspaceId } from "#/cl
 import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
-import { executeScript, type ScriptInvoker } from "#/cli/shared/script-executor";
+import { executeScript } from "#/cli/shared/script-executor";
 import { chunkSeedData, type SeedData } from "#/cli/shared/seed-chunker";
 import { loadSeedContext, type SeedContext } from "#/cli/shared/seed-context";
 import { loadApplicationNamespaces } from "#/cli/shared/tailordb-namespaces";
@@ -61,6 +61,7 @@ import type {
   MigrationTestDependencies,
   MigrationTestOptions,
   PreparedMigrationTest,
+  PreparedAssertion,
 } from "./test-types";
 import type { PendingMigration, RemoteSchemaVerificationResult } from "./types";
 import type { JsonObject, JsonValue } from "type-fest";
@@ -75,12 +76,6 @@ interface RuntimeState {
   options: MigrationTestOptions;
   seeds: PreparedSeed[];
   seedMachineUsers?: MigrationMachineUsers;
-  assertion?: PreparedAssertion;
-}
-
-interface PreparedAssertion {
-  namespace: string;
-  invoker: ScriptInvoker;
 }
 
 interface PreparedSeed {
@@ -939,6 +934,7 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
   }
 
   const prepared: PreparedMigrationTest = {
+    assertion,
     sourceWorkspaceId,
     sourceApplicationName: loaded.config.name,
     temporaryWorkspace: {
@@ -955,7 +951,7 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
       : {}),
   };
   return {
-    state: { client, loaded, options, seeds, seedMachineUsers, assertion },
+    state: { client, loaded, options, seeds, seedMachineUsers },
     prepared,
   };
 }
@@ -1118,9 +1114,8 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
         machineUser,
       );
     },
-    runAssertion: async ({ targetWorkspaceId, assertionPath }) => {
+    runAssertion: async ({ targetWorkspaceId, assertionPath, assertion }) => {
       const state = stateOrThrow(runtimeState);
-      const assertion = assertDefined(state.assertion, "assertion missing after preparation");
       const { namespace } = assertion;
       const bundled = await bundleMigrationScript(
         assertionPath,

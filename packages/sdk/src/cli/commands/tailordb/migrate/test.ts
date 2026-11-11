@@ -13,7 +13,6 @@ import {
   assertCloneTargetRegion,
   assertTargetWorkspaceDiffers,
   createMigrationTestDependencies,
-  resolveAssertionNamespace,
 } from "./test-runtime";
 import type {
   MigrationTestDependencies,
@@ -80,9 +79,6 @@ export async function runMigrationTest(
 
   const prepared = await dependencies.prepare(options);
   assertTargetWorkspaceDiffers(prepared.sourceWorkspaceId, options.targetWorkspaceId);
-  if (options.assertionPath) {
-    resolveAssertionNamespace(prepared.pendingNamespaces, options.assertionNamespace);
-  }
   if (options.data === "clone" && options.targetWorkspaceId) {
     const target = assertDefined(
       prepared.designatedTarget,
@@ -147,9 +143,9 @@ export async function runMigrationTest(
     await dependencies.deployMigrations(scriptTarget);
     if (options.assertionPath) {
       await dependencies.runAssertion({
-        ...scriptTarget,
+        ...target,
         assertionPath: options.assertionPath,
-        assertionNamespace: options.assertionNamespace,
+        assertion: assertDefined(prepared.assertion, "assertion missing after preparation"),
       });
     }
   } catch (error) {

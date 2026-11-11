@@ -33,6 +33,7 @@ const prepared: PreparedMigrationTest = {
   targetSnapshots: new Map(),
   baselineSnapshots: new Map(),
   pendingNamespaces: ["tailordb"],
+  assertion: { namespace: "tailordb", invoker: { namespace: "auth", machineUserName: "admin" } },
 };
 
 function createDependencies(events: string[]): MigrationTestDependencies {
@@ -86,6 +87,12 @@ describe("tailordb migration test", () => {
       dependencies,
     );
 
+    expect(dependencies.runAssertion).toHaveBeenCalledWith({
+      prepared,
+      targetWorkspaceId: "44444444-4444-4444-8444-444444444444",
+      assertionPath: "./assert-migration.ts",
+      assertion: prepared.assertion,
+    });
     expect(events).toEqual([
       "prepare",
       "create",
@@ -321,17 +328,17 @@ describe("tailordb migration test", () => {
     expect(dependencies.deployBaseline).not.toHaveBeenCalled();
   });
 
-  test("rejects ambiguous assertion options before creating a workspace", async () => {
+  test("stops before creating a workspace when preparation fails", async () => {
     const events: string[] = [];
     const dependencies = createDependencies(events);
     vi.mocked(dependencies.prepare).mockImplementationOnce(async () => {
       events.push("prepare");
-      return { ...prepared, pendingNamespaces: ["primary", "analytics"] };
+      throw new Error("preparation failed");
     });
 
     await expect(
       runMigrationTest({ data: "seed", assertionPath: "./assert.ts" }, dependencies),
-    ).rejects.toThrow(/--assert-namespace/);
+    ).rejects.toThrow("preparation failed");
 
     expect(events).toEqual(["prepare"]);
     expect(dependencies.createWorkspace).not.toHaveBeenCalled();
