@@ -382,7 +382,7 @@ function collectViolations(application: string, results: PlanResults): Violation
     for (const item of items) {
       if (hasImplicitAllEmailDomains(item.request.userAuthPolicy)) {
         violations.push({
-          kind: "IdP service",
+          resourceType: "idp.service",
           name: item.name,
           action,
           fieldPath: "userAuthPolicy.allowedEmailDomains",

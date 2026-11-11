@@ -539,9 +539,31 @@ describe("validatePlans", () => {
     });
     input.idp.changeSet.service.unchanged.push({ name: "unchanged-idp" });
 
-    await expect(validatePlan(input)).rejects.toThrow(
-      /2 validation error\(s\) found in 2 resource\(s\)/,
+    const error = await validatePlans([{ application: "my-app", results: input }]).catch(
+      (error: unknown) => error,
     );
+    expect(error).toMatchObject({
+      code: "DEPLOY_VALIDATION_FAILED",
+      message: "2 validation error(s) found in 2 resource(s)",
+      context: {
+        issues: [
+          {
+            application: "my-app",
+            resourceType: "idp.service",
+            name: "new-idp",
+            action: "create",
+            fieldPath: "userAuthPolicy.allowedEmailDomains",
+          },
+          {
+            application: "my-app",
+            resourceType: "idp.service",
+            name: "existing-idp",
+            action: "update",
+            fieldPath: "userAuthPolicy.allowedEmailDomains",
+          },
+        ],
+      },
+    });
 
     const reason =
       'userAuthPolicy.allowedEmailDomains: must be set unless useNonEmailIdentifier is true; use ["*"] to allow every email domain, or list the domains you accept';
