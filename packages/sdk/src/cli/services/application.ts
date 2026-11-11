@@ -57,6 +57,7 @@ import { SecretsSchema } from "#/parser/service/secrets/index";
 import { StaticWebsiteSchema } from "#/parser/service/staticwebsite/index";
 import { TailorDBServiceConfigSchema } from "#/parser/service/tailordb/index";
 import { collectWaitPointKeyFailures } from "#/parser/service/workflow/wait-point-key";
+import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
 import { getScopedWaitPoints } from "#/utils/wait-point-registry";
 import type { BundleCache } from "#/cli/cache/bundle-cache";
 import type { BundledScripts } from "#/cli/commands/deploy/function-registry-types";
@@ -109,6 +110,7 @@ interface ReusableBuildState {
   readonly inlineSourcemapDependencySources: boolean | string[];
   readonly inlineSourcemapProjectSources: ProjectSourcesFilter;
   readonly bundleLogLevel: LogLevel;
+  readonly kyselyTemporal: boolean;
 }
 
 /**
@@ -179,6 +181,7 @@ function defineTailorDB(
   baseDir: string,
   dateDefault: EffectiveDateDefault,
   pluginManager?: PluginManager,
+  precompileScripts?: boolean,
 ): DefineTailorDBResult {
   const tailorDBServices: TailorDBService[] = [];
   const externalTailorDBNamespaces: string[] = [];
@@ -205,6 +208,7 @@ function defineTailorDB(
         pluginManager,
         baseDir,
         dateDefault,
+        precompileScripts,
       });
       tailorDBServices.push(tailorDB);
     }
@@ -520,6 +524,7 @@ function defineServices(
   config: LoadedConfig,
   baseDir: string,
   pluginManager?: PluginManager,
+  precompileTailorDBScripts?: boolean,
 ): DefineServicesResult {
   const tailordbResult = defineTailorDB(
     config.db,
@@ -527,6 +532,7 @@ function defineServices(
     baseDir,
     effectiveDateDefault(config),
     pluginManager,
+    precompileTailorDBScripts,
   );
   const resolverResult = defineResolver(
     config.resolver,
@@ -615,6 +621,8 @@ export interface DefineApplicationParams {
   pluginManager?: PluginManager;
   /** Optional bundle cache for skipping unchanged builds */
   bundleCache?: BundleCache;
+  /** Bundle each TailorDB table's hook and validator scripts while loading. Defaults to `true`; turn it off when only the table definitions are read. */
+  precompileTailorDBScripts?: boolean;
 }
 
 /**
@@ -657,9 +665,9 @@ export interface LoadApplicationParams extends DefineApplicationParams {
  * @returns Configured application instance
  */
 export function defineApplication(params: DefineApplicationParams): Application {
-  const { config, pluginManager } = params;
+  const { config, pluginManager, precompileTailorDBScripts } = params;
   const baseDir = path.dirname(config.path);
-  const services = defineServices(config, baseDir, pluginManager);
+  const services = defineServices(config, baseDir, pluginManager, precompileTailorDBScripts);
   // Plugin executors are not known at define-time; generate/apply flows handle them after table loading.
   const executorService = defineExecutor(config.executor, baseDir, false);
   const workflowService = defineWorkflow(config.workflow, baseDir);
@@ -736,6 +744,7 @@ export async function loadApplication(
     workspaceId,
     expectedLocalStaticWebsiteNames,
     previous,
+    precompileTailorDBScripts,
   } = params;
   const baseDir = path.dirname(config.path);
 
@@ -761,7 +770,7 @@ export async function loadApplication(
     aiGatewayServices,
     secrets,
     ignoreNullishValues,
-  } = defineServices(config, baseDir, pluginManager);
+  } = defineServices(config, baseDir, pluginManager, precompileTailorDBScripts);
 
   // 2. Resolve `name:url` static website placeholders in `env` once, before any
   // bundling or expression generation embeds it into resolver, executor,
@@ -836,6 +845,7 @@ export async function loadApplication(
   const inlineSourcemapProjectSources = projectSourcesOf({ buildOptions, baseDir });
   const bundleLogLevel = resolveBundleLogLevel(buildOptions.logLevel);
   const dateDefault = effectiveDateDefault(config);
+  const kyselyTemporal = pluginManager?.getPluginConfig(KyselyGeneratorID)?.temporal ?? false;
 
   // Collect in-memory bundled scripts
   const bundledScripts: BundledScripts = {
@@ -864,6 +874,7 @@ export async function loadApplication(
       sdkBuilderAnnotationCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault,
+      kyselyTemporal,
     });
     for (const [name, code] of resolverBundles) {
       bundledScripts.resolvers.set(resolverBundleKey(pipeline.namespace, name), code);
@@ -887,6 +898,7 @@ export async function loadApplication(
       sdkBuilderAnnotationCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault,
+      kyselyTemporal,
     });
   }
 
@@ -910,6 +922,7 @@ export async function loadApplication(
       sdkBuilderAnnotationCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault,
+      kyselyTemporal,
     });
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
@@ -951,6 +964,7 @@ export async function loadApplication(
       tsconfigCache,
       sdkBuilderAnnotationCache,
       dateDefault,
+      kyselyTemporal,
     });
   }
 
@@ -1005,6 +1019,7 @@ export async function loadApplication(
       inlineSourcemapDependencySources,
       inlineSourcemapProjectSources,
       bundleLogLevel,
+      kyselyTemporal,
     },
   };
 }
@@ -1044,6 +1059,7 @@ async function reloadEnvDependentBundles(params: {
     inlineSourcemapDependencySources,
     inlineSourcemapProjectSources,
     bundleLogLevel,
+    kyselyTemporal,
   } = reusableBuildState;
 
   const env =
@@ -1078,6 +1094,7 @@ async function reloadEnvDependentBundles(params: {
       previousUsedJobs: previous.workflowBuildResult,
       allowedRuntimeGlobals: buildOptionsOf(config).allowedRuntimeGlobals,
       dateDefault: effectiveDateDefault(config),
+      kyselyTemporal,
     });
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
@@ -1100,6 +1117,7 @@ async function reloadEnvDependentBundles(params: {
       tsconfigCache,
       sdkBuilderAnnotationCache,
       dateDefault: effectiveDateDefault(config),
+      kyselyTemporal,
     });
   }
 

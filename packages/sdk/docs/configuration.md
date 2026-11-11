@@ -143,7 +143,7 @@ Add the SDK as a content mapper for `.tailor` files in `tsconfig.json`:
 
 Run `tsc` with `--runExternalCode`. TypeScript then runs your `tailor.config.ts` and the files it imports each time it checks the project, the same code `tailor generate` loads; without the flag it reports error TS18068 instead. Enable it only for projects whose code you trust. You do not create or import any `.tailor` file; the SDK ships the one TypeScript reads.
 
-Once `tsconfig.json` enables the mapper, `tailor generate` and `tailor deploy` stop writing `tailor.d.ts`, and warn when an old copy remains. They check only that `tsconfig.json` lists the mapper, not that TypeScript runs it, and TypeScript 6.0 and earlier ignore `contentMappers`: with them the names are no longer declared, so `MachineUserName` is any string and a misspelled machine user raises no error. Use TypeScript 7.1 or later wherever the mapper is enabled. Delete the old copy: while the file remains, TypeScript merges it with what it reads from `tailor.config.ts`, so a name you removed from the config (a machine user you deleted, for example) is still accepted.
+Once `tsconfig.json` enables the mapper, `tailor generate` and `tailor deploy` stop writing `tailor.d.ts`, and warn when an old copy remains. They check only that `tsconfig.json` lists the mapper, not that TypeScript runs it, and TypeScript 6.0 and earlier ignore `contentMappers`: with them the names are no longer declared, so `MachineUserName` is any string and a misspelled machine user raises no error. Use TypeScript 7.1 or later wherever the mapper is enabled; 7.1 is in beta, so install it with `npm i -D typescript@beta`. Delete the old copy: while the file remains, TypeScript merges it with what it reads from `tailor.config.ts`, so a name you removed from the config (a machine user you deleted, for example) is still accepted.
 
 Every TypeScript project that uses these names must enable the mapper. A project in the same repository that keeps reading `tailor.d.ts` without the mapper is not supported: the commands no longer update the file, so it goes stale.
 
@@ -505,9 +505,11 @@ export async function main(trx: Transaction, { env }: MigrationContext): Promise
 `env` values are deployed as plaintext, so loading a config fails when one of them looks like a credential:
 
 ```
-✖ tailor.config.ts: Secret detected in 'env':
-  - env.SLACK_BOT_TOKEN (matched slack: SLACK_TOKEN)
-    https://github.com/secretlint/secretlint/blob/master/packages/%40secretlint/secretlint-rule-slack/README.md#SLACK_TOKEN
+Error [CONFIG_INVALID]: tailor.config.ts: Invalid Tailor config:
+  - env.SLACK_BOT_TOKEN: Secret detected (matched slack: SLACK_TOKEN). See https://github.com/secretlint/secretlint/blob/master/packages/%40secretlint/secretlint-rule-slack/README.md#SLACK_TOKEN
+  Details: 'env' values are deployed as plaintext and are readable by anyone who can read the application's configuration.
+  Suggestion: Define these with defineSecretManager() instead, and read them through Secret Manager at runtime.
+  If a value is genuinely safe to keep in 'env', allow it where it is defined: SLACK_BOT_TOKEN: { value: ..., allowSecretReason: "<why this is safe>" }
 ```
 
 Each finding names the pattern that matched and links to its description, so a value flagged as an AWS account id is distinguishable from one flagged as an AWS secret access key.
@@ -590,3 +592,17 @@ export const plugins = definePlugins(
   enumConstantsPlugin({ distPath: "./generated/enums.ts" }),
 );
 ```
+
+`kyselyTypePlugin` requires either `distPath` or `contentMapper: true`, and accepts only one of them. With `contentMapper: true`, `tailor generate` writes no types file, and you import `getDB()` from the SDK instead:
+
+```typescript
+kyselyTypePlugin({ contentMapper: true });
+```
+
+```typescript
+import { getDB } from "@tailor-platform/sdk/plugin/kysely-type/db";
+```
+
+TypeScript 7.1 or later derives the types of that `getDB()` from your TailorDB definitions and the plugin options, `temporal` included, when the SDK is enabled as a content mapper for `.tailor` files as described in [Type Definitions Without `tailor generate`](#type-definitions-without-tailor-generate). Without the mapper, no types are available for it; use `distPath` instead of `contentMapper: true` so `tailor generate` writes the types file, and import `getDB()` from that file.
+
+The types follow edits to your TailorDB definition files and to the plugin options. A definition file added while TypeScript is running is not picked up, whether you only create it or also open it in the editor: restart the TypeScript server in your editor, or the `tsc --watch` process. A single `tsc` run always reads the current files.

@@ -169,7 +169,7 @@ describe("webhookTrigger", () => {
         body: (args) => {
           expectTypeOf(args).toExtend<{
             body: Record<string, unknown>;
-            headers: Record<string, string>;
+            headers: Record<string, string | string[]>;
             method: "POST" | "GET" | "PUT" | "DELETE";
             rawBody: string;
           }>();
@@ -273,6 +273,133 @@ describe("webhookTrigger response", () => {
       operation: {
         kind: "function",
         body: () => {},
+      },
+    });
+  });
+
+  test("a header that can be sent on several lines is typed as a string or a list when the trigger generic is omitted", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger({
+        response: (args) => {
+          expectTypeOf(args.headers["accept"]).toEqualTypeOf<string | string[] | undefined>();
+          return {};
+        },
+      }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args.headers["accept"]).toEqualTypeOf<string | string[] | undefined>();
+          expectTypeOf(args.headers["x-forwarded-for"]).toEqualTypeOf<
+            string | string[] | undefined
+          >();
+        },
+      },
+    });
+  });
+
+  test("any other header is typed as a string when the trigger generic is omitted", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args.headers["x-request-id"]).toEqualTypeOf<string | undefined>();
+          expectTypeOf(args.headers["authorization"]).toEqualTypeOf<string | undefined>();
+        },
+      },
+    });
+  });
+
+  test("headers can be passed to a parameter typed Record<string, string> when the trigger generic is omitted", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args.headers).toExtend<Record<string, string>>();
+        },
+      },
+    });
+  });
+
+  test("a header named in the trigger generic overrides its default type, and the others may also be arrays when an override is an array", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{ headers: { "x-request-id": string[]; accept: string } }>(),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args.headers["x-request-id"]).toEqualTypeOf<string[]>();
+          expectTypeOf(args.headers.accept).toEqualTypeOf<string>();
+          expectTypeOf(args.headers["via"]).toEqualTypeOf<string | string[] | undefined>();
+          expectTypeOf(args.headers["authorization"]).toEqualTypeOf<
+            string | string[] | undefined
+          >();
+        },
+      },
+    });
+  });
+
+  test("a complete headers object can be built when a header is overridden with an array", () => {
+    const trigger = incomingWebhookTrigger<{ headers: { "x-request-id": string[] } }>();
+    const headers: typeof trigger.__args.headers = { "x-request-id": ["a", "b"] };
+    expectTypeOf(headers["x-request-id"]).toEqualTypeOf<string[]>();
+  });
+
+  test("headers that are not named stay strings when no override is an array", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{ headers: { "x-custom": string } }>(),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args.headers["authorization"]).toEqualTypeOf<string | undefined>();
+        },
+      },
+    });
+  });
+
+  test("a broad headers type keeps the array alternative for every header", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{ headers: Record<string, string | string[]> }>(),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args.headers["x-request-id"]).toEqualTypeOf<string | string[] | undefined>();
+          expectTypeOf(args.headers["accept"]).toEqualTypeOf<string | string[] | undefined>();
+        },
+      },
+    });
+  });
+
+  test("body can be specified without headers and headers keep their defaults", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{ body: { id: string } }>(),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args.body).toEqualTypeOf<{ id: string }>();
+          expectTypeOf(args.headers["accept"]).toEqualTypeOf<string | string[] | undefined>();
+        },
+      },
+    });
+  });
+
+  test("headers can be specified without body and body keeps its default", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{ headers: { "x-custom": string } }>(),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args.body).toEqualTypeOf<Record<string, unknown>>();
+          expectTypeOf(args.headers["x-custom"]).toEqualTypeOf<string>();
+        },
       },
     });
   });

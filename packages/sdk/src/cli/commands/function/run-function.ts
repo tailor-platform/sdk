@@ -26,6 +26,7 @@ export interface FunctionRunTarget {
   jobName: string | undefined;
   /** Loaded application config */
   config: LoadedConfig;
+  kyselyTemporal?: boolean;
   /** Operator client */
   client: OperatorClient;
   /** Workspace the function runs in */
@@ -198,6 +199,7 @@ export async function prepareFunction(options: PrepareFunctionOptions): Promise<
     logLevel: buildOptions.logLevel,
     treeshake: buildOptions.treeshake,
     dateDefault: effectiveDateDefault(config),
+    kyselyTemporal: target.kyselyTemporal ?? false,
     machineUser: target.machineUser,
     workspaceId: target.workspaceId,
   });

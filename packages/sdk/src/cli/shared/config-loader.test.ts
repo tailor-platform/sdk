@@ -89,22 +89,36 @@ describe("loadConfig", () => {
     [
       "is not an array",
       `{ id: "not-an-array", description: "Invalid" }`,
-      /Invalid `plugins` export/,
+      [{ path: [], message: "expected an array returned by definePlugins(), got object" }],
+      undefined,
     ],
-    ["is explicitly undefined", "undefined", /Invalid `plugins` export/],
+    [
+      "is explicitly undefined",
+      "undefined",
+      [{ path: [], message: "expected an array returned by definePlugins(), got undefined" }],
+      undefined,
+    ],
+    [
+      "is null",
+      "null",
+      [{ path: [], message: "expected an array returned by definePlugins(), got null" }],
+      undefined,
+    ],
     [
       "contains an invalid item",
       `[{ id: "valid", description: "Valid item" }, null]`,
-      /Invalid `plugins` export/,
+      [{ path: [1], message: "Invalid input: expected object, received null" }],
+      undefined,
     ],
     [
       "repeats a plugin ID",
       `[{ id: "dup", description: "First" }, { id: "dup", description: "Second" }]`,
-      /Duplicate plugin ID "dup"/,
+      [{ path: [1, "id"], message: 'Duplicate plugin ID "dup"' }],
+      "Give each plugin a unique ID.",
     ],
   ])(
-    "rejects a `plugins` export that %s, pointing at the config file",
-    async (_case, pluginsExport, message) => {
+    "reports a `plugins` export that %s as CONFIG_INVALID, pointing at the config file",
+    async (_case, pluginsExport, issues, suggestion) => {
       const configPath = writeConfig(`
         export default { name: "test-app" };
         export const plugins = ${pluginsExport};
@@ -112,11 +126,39 @@ describe("loadConfig", () => {
 
       const error = await rejectionOf(loadConfig(configPath));
 
-      expect(error.message).toMatch(message);
+      expect(error).toMatchObject({
+        code: "CONFIG_INVALID",
+        context: { file: configPath, exportName: "plugins", issues },
+      });
+      expect(error).toHaveProperty("suggestion", suggestion);
+      expect(error.message).toMatch(/^Invalid `plugins` export:\n/);
       expect(error.message).not.toContain("tailor.config");
       expect(getErrorDiagnostics(error).location).toEqual({ file: configPath });
     },
   );
+
+  test("reports every rejected `plugins` item together", async () => {
+    const configPath = writeConfig(`
+      export default { name: "test-app" };
+      export const plugins = [
+        { id: "dup", description: "First" },
+        null,
+        { id: "dup", description: "Second" },
+      ];
+    `);
+
+    const error = await rejectionOf(loadConfig(configPath));
+
+    expect(error).toMatchObject({
+      code: "CONFIG_INVALID",
+      context: {
+        issues: [
+          { path: [1], message: "Invalid input: expected object, received null" },
+          { path: [2, "id"], message: 'Duplicate plugin ID "dup"' },
+        ],
+      },
+    });
+  });
 
   test("reports an invalid default export as CONFIG_INVALID", async () => {
     const configPath = writeConfig(`export default { name: "" };`);
@@ -199,12 +241,21 @@ describe("loadConfig", () => {
     });
   });
 
-  test("rejects a module without a default export, pointing at the config file", async () => {
+  test("reports a module without a default export as CONFIG_INVALID, pointing at the config file", async () => {
     const configPath = writeConfig(`export const name = "test-app";`);
 
     const error = await rejectionOf(loadConfig(configPath));
 
-    expect(error.message).toContain("Invalid Tailor config module: default export not found");
+    expect(error).toMatchObject({
+      code: "CONFIG_INVALID",
+      message: "Invalid Tailor config:\n  - (root): default export not found",
+      suggestion: "Export the config as the default export: export default defineConfig({ ... })",
+      context: {
+        file: configPath,
+        exportName: "default",
+        issues: [{ path: [], message: "default export not found" }],
+      },
+    });
     expect(getErrorDiagnostics(error).location).toEqual({ file: configPath });
   });
 
@@ -215,7 +266,7 @@ describe("loadConfig", () => {
 
     const error = await rejectionOf(loadConfig(configPath));
 
-    expect(error.message).toMatch(/env\.SLACK_BOT_TOKEN \(matched slack: SLACK_TOKEN\)/);
+    expect(error).toMatchObject({ code: "CONFIG_INVALID", context: { file: configPath } });
     expect(error.message).not.toContain(configPath);
     expect(getErrorDiagnostics(error).location).toEqual({ file: configPath });
   });

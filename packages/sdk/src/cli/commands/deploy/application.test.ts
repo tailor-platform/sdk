@@ -333,7 +333,7 @@ describe("planApplication", () => {
 
       const result = await planWithoutSubgraphs(
         client,
-        createMockApplication({ metadata: { "erp-kit-version": "v1-2-3" } }),
+        createMockApplication({ metadata: { "app-version": "v1-2-3" } }),
       );
 
       expect(result.creates).toHaveLength(0);

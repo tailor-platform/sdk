@@ -14,35 +14,65 @@ interface ConfigServiceRef {
   name?: string;
 }
 
-export interface ConfigInvalidErrorParams {
+interface ConfigErrorTarget {
   /** Config file that failed validation. */
   file: string;
   /** Config module export that failed validation. */
   exportName: "default" | "plugins";
   /** What failed, as it reads after "Invalid", such as `Tailor config`. */
   subject: string;
-  /** Validation error of the failing value. */
-  error: z.ZodError;
-  /** Path of the failing value within `exportName`. */
-  pathPrefix?: FlatIssue["path"];
   /** The service that failed, when a single service config failed. */
   service?: ConfigServiceRef;
 }
 
+export interface ConfigInvalidErrorParams extends ConfigErrorTarget {
+  /** Validation error of the failing value. */
+  error: z.ZodError;
+  /** Path of the failing value within `exportName`. */
+  pathPrefix?: FlatIssue["path"];
+}
+
+export interface ConfigIssuesErrorParams extends ConfigErrorTarget {
+  /** What is wrong, one entry per offending value, with paths within `exportName`. */
+  issues: readonly FlatIssue[];
+  /** Why the values are rejected. */
+  details?: string;
+  /** How to fix the values. */
+  suggestion?: string;
+  /** Failure the issues were derived from. */
+  cause?: unknown;
+}
+
 /**
- * Create the error for a config file that failed validation.
+ * Create the error for a config file that failed schema validation.
  * @param params - Failed config and its validation error
  * @returns CLIError coded `CONFIG_INVALID`, located at the config file
  */
 export function configInvalidError(params: ConfigInvalidErrorParams): CLIError {
-  const { file, exportName, subject, error, pathPrefix, service } = params;
-  const issues = flattenZodIssues(error.issues, pathPrefix);
+  const { error, pathPrefix, ...target } = params;
+  return configIssuesError({
+    ...target,
+    issues: flattenZodIssues(error.issues, pathPrefix),
+    cause: error,
+  });
+}
+
+/**
+ * Create the error for a config file from issues the caller collected, such as values a check
+ * other than its schema rejected.
+ * @param params - Failed config and the issues found in it
+ * @returns CLIError coded `CONFIG_INVALID`, located at the config file
+ */
+export function configIssuesError(params: ConfigIssuesErrorParams): CLIError {
+  const { file, exportName, subject, service, issues, details, suggestion, cause } = params;
   return withErrorDiagnostics(
     CLIError({
       code: "CONFIG_INVALID",
       message: `Invalid ${subject}:\n${formatIssueList(issues)}`,
+      details,
+      suggestion,
       context: { file, exportName, ...service, issues },
-      cause: error,
+      cause,
     }),
     { location: { file } },
   );

@@ -4,7 +4,7 @@ import {
   AuthOAuth2Client_GrantType,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { describe, expect, test, vi } from "vitest";
-import { logger } from "#/cli/shared/logger";
+import { logger, plainRedacted } from "#/cli/shared/logger";
 import { emptyPlanResults } from "./test-helpers/plan-results";
 import { validatePlan, type ValidatePlanInput } from "./validate-plan";
 
@@ -120,7 +120,26 @@ const validCases: Case<undefined>[] = [
         request: {
           workspaceId: WS_ID,
           namespaceName: "my-idp",
-          userAuthPolicy: { enableMfa: true, allowedReturnOrigins: ["my-frontend:url"] },
+          userAuthPolicy: {
+            allowedEmailDomains: ["*"],
+            enableMfa: true,
+            allowedReturnOrigins: ["my-frontend:url"],
+          },
+        },
+        metaRequest: METADATA,
+      });
+    },
+    expected: undefined,
+  },
+  {
+    name: "(l5) IdP service with a non-email identifier and no allowedEmailDomains passes",
+    mutate: (input) => {
+      input.idp.changeSet.service.creates.push({
+        name: "my-idp",
+        request: {
+          workspaceId: WS_ID,
+          namespaceName: "my-idp",
+          userAuthPolicy: { useNonEmailIdentifier: true },
         },
         metaRequest: METADATA,
       });
@@ -424,7 +443,56 @@ const invalidCases: Case<RegExp>[] = [
         request: {
           workspaceId: WS_ID,
           namespaceName: "my-idp",
-          userAuthPolicy: { enableMfa: true, allowedReturnOrigins: ["My_Frontend:url"] },
+          userAuthPolicy: {
+            allowedEmailDomains: ["*"],
+            enableMfa: true,
+            allowedReturnOrigins: ["My_Frontend:url"],
+          },
+        },
+        metaRequest: METADATA,
+      });
+    },
+    expected: /1 validation error\(s\) found in 1 resource\(s\)/,
+  },
+  {
+    name: "(l6) IdP service create with an empty allowedEmailDomains is rejected once",
+    mutate: (input) => {
+      input.idp.changeSet.service.creates.push({
+        name: "my-idp",
+        request: {
+          workspaceId: WS_ID,
+          namespaceName: "my-idp",
+          userAuthPolicy: { allowedEmailDomains: [] },
+        },
+        metaRequest: METADATA,
+      });
+    },
+    expected: /1 validation error\(s\) found in 1 resource\(s\)/,
+  },
+  {
+    name: "(l7) IdP service update with an empty allowedEmailDomains is rejected",
+    mutate: (input) => {
+      input.idp.changeSet.service.updates.push({
+        name: "my-idp",
+        request: {
+          workspaceId: WS_ID,
+          namespaceName: "my-idp",
+          userAuthPolicy: { allowedEmailDomains: [] },
+        },
+        metaRequest: METADATA,
+      });
+    },
+    expected: /1 validation error\(s\) found in 1 resource\(s\)/,
+  },
+  {
+    name: "(l8) IdP service create whose userAuthPolicy omits allowedEmailDomains is rejected",
+    mutate: (input) => {
+      input.idp.changeSet.service.creates.push({
+        name: "my-idp",
+        request: {
+          workspaceId: WS_ID,
+          namespaceName: "my-idp",
+          userAuthPolicy: { passwordMinLength: 8 },
         },
         metaRequest: METADATA,
       });
@@ -444,6 +512,34 @@ describe("validatePlan", () => {
     const input = emptyPlanResults();
     mutate(input);
     await expect(validatePlan(input)).rejects.toThrow(expected);
+  });
+
+  test("names the IdP services that leave allowedEmailDomains empty and how each is applied", async () => {
+    using _errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
+    using logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+    const input = emptyPlanResults();
+    input.idp.changeSet.service.creates.push({
+      name: "new-idp",
+      request: { workspaceId: WS_ID, namespaceName: "new-idp" },
+      metaRequest: METADATA,
+    });
+    input.idp.changeSet.service.updates.push({
+      name: "existing-idp",
+      request: { workspaceId: WS_ID, namespaceName: "existing-idp" },
+      metaRequest: METADATA,
+    });
+    input.idp.changeSet.service.unchanged.push({ name: "unchanged-idp" });
+
+    await expect(validatePlan(input)).rejects.toThrow(
+      /2 validation error\(s\) found in 2 resource\(s\)/,
+    );
+
+    const reason =
+      'userAuthPolicy.allowedEmailDomains: must be set unless useNonEmailIdentifier is true; use ["*"] to allow every email domain, or list the domains you accept';
+    expect(logSpy.mock.calls.map(([line]) => plainRedacted(line).trim())).toEqual([
+      `IdP service new-idp (create) — ${reason}`,
+      `IdP service existing-idp (update) — ${reason}`,
+    ]);
   });
 
   test("evaluates message-level CEL rules instead of warning that they could not run", async () => {

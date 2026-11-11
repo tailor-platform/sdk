@@ -189,6 +189,10 @@ read them:
   be restored after the migrations. When a migration had already failed, the deploy reports that
   failure instead and puts this error in its `error.context.restoration`.
 
+`MIGRATION_FAILED`, `MIGRATION_ROLLED_BACK`, `MIGRATION_PARTIALLY_APPLIED`, and
+`MIGRATION_OUTCOME_UNKNOWN` name the migration in `error.context.namespace` and
+`error.context.migrationNumber`, unless the error carries `error.context.restoration`.
+
 `tailor tailordb migration` commands:
 
 - `MIGRATION_CONFIG_NOT_FOUND`: no TailorDB namespace in the config has `migration` configured.

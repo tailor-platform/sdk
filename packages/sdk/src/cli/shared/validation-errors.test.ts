@@ -8,6 +8,7 @@ import {
   assertUniqueDefinitionNames,
   atUserModule,
   configInvalidError,
+  configIssuesError,
   definitionExportError,
   definitionInvalidError,
   syntaxInvalidError,
@@ -42,6 +43,27 @@ describe("error factories", () => {
   ])("%s leaves the file to the error's location", (_, error, message) => {
     expect(error.message.startsWith(message)).toBe(true);
     expect(error.message).not.toContain("resolvers/add.ts");
+    expect(getErrorDiagnostics(error).location).toEqual({ file });
+  });
+
+  test("configIssuesError reports issues that did not come from a schema", () => {
+    const issues = [{ path: ["env", "API_KEY"], message: "Secret detected." }];
+    const error = configIssuesError({
+      file,
+      exportName: "default",
+      subject: "Tailor config",
+      issues,
+      details: "Why it is rejected.",
+      suggestion: "How to fix it.",
+    });
+
+    expect(error.message).toBe("Invalid Tailor config:\n  - env.API_KEY: Secret detected.");
+    expect(error).toMatchObject({
+      code: "CONFIG_INVALID",
+      details: "Why it is rejected.",
+      suggestion: "How to fix it.",
+      context: { file, exportName: "default", issues },
+    });
     expect(getErrorDiagnostics(error).location).toEqual({ file });
   });
 

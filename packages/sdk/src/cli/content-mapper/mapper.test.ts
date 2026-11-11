@@ -1,9 +1,19 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
+import { precompileTailorDBTypeScripts } from "#/cli/services/tailordb/hooks-validate-bundler";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
-import { createContentMapperHandlers, evaluateConfigInProcess } from "./mapper";
+import { createContentMapperHandlers, evaluateConfigInProcess, type Evaluation } from "./mapper";
+import type * as HooksValidateBundler from "#/cli/services/tailordb/hooks-validate-bundler";
+
+vi.mock("#/cli/services/tailordb/hooks-validate-bundler", async (importOriginal) => {
+  const actual = await importOriginal<typeof HooksValidateBundler>();
+  return {
+    ...actual,
+    precompileTailorDBTypeScripts: vi.fn(actual.precompileTailorDBTypeScripts),
+  };
+});
 
 const REGISTRY_FILE = "/node_modules/@tailor-platform/sdk/dist/configure/registry.tailor";
 
@@ -26,6 +36,49 @@ function project(): Disposable & { dir: string; config: string; tsconfig: string
       fs.rmSync(dir, { recursive: true, force: true });
     },
   };
+}
+
+const DB_FILE = "/node_modules/@tailor-platform/sdk/dist/plugin/builtin/kysely-type/db.tailor";
+
+const ORDER_TABLE_CONFIG = `import { defineConfig, definePlugins } from "@tailor-platform/sdk";
+import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
+export default defineConfig({ name: "app", db: { main: { files: ["./tailordb/*.ts"] } } });
+export const plugins = definePlugins(kyselyTypePlugin({ contentMapper: true, temporal: true }));
+`;
+
+const ORDER_TABLE = `import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+export const order = db
+  .table("Order", { status: db.enum(["PAID", "OPEN"]) })
+  .permission(unsafeAllowAllTypePermission)
+  .gqlPermission(unsafeAllowAllGqlPermission);
+`;
+
+function projectWithOrderTable(): ReturnType<typeof project> {
+  const p = project();
+  fs.writeFileSync(p.config, ORDER_TABLE_CONFIG);
+  fs.mkdirSync(path.join(p.dir, "tailordb"));
+  fs.writeFileSync(path.join(p.dir, "tailordb", "order.ts"), ORDER_TABLE);
+  return p;
+}
+
+const HOOKED_ORDER_TABLE = `import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+export const order = db
+  .table("Order", { status: db.string().hooks({ create: ({ value }) => value ?? "OPEN" }) })
+  .permission(unsafeAllowAllTypePermission)
+  .gqlPermission(unsafeAllowAllGqlPermission);
+`;
+
+function projectWithHookedOrderTable(): ReturnType<typeof project> {
+  const p = projectWithOrderTable();
+  fs.writeFileSync(path.join(p.dir, "tailordb", "order.ts"), HOOKED_ORDER_TABLE);
+  return p;
+}
+
+function projectWithoutTables(): ReturnType<typeof project> {
+  const p = project();
+  fs.writeFileSync(p.config, ORDER_TABLE_CONFIG);
+  fs.mkdirSync(path.join(p.dir, "tailordb"));
+  return p;
 }
 
 function ancestors(dir: string): string[] {
@@ -54,6 +107,10 @@ async function transform(handlers: Handlers, content: string, fileName: string) 
 }
 
 describe("content mapper", () => {
+  beforeEach(() => {
+    vi.mocked(precompileTailorDBTypeScripts).mockClear();
+  });
+
   test("types registry.tailor with the registries of the project's tailor.config.ts", async () => {
     using p = project();
     const handlers = createContentMapperHandlers(evaluateConfigInProcess);
@@ -87,6 +144,144 @@ describe("content mapper", () => {
 
     expect(result.text).toBe("export {};\n");
     expect(result.diagnostics).toEqual([]);
+  });
+
+  test("types db.tailor with the Kysely types of the project's TailorDB definitions", async () => {
+    using p = projectWithOrderTable();
+    const handlers = createContentMapperHandlers(evaluateConfigInProcess);
+    await handlers.initialize({ positionEncodings: ["utf-16"] });
+    await open(handlers, p.tsconfig);
+
+    const result = await transform(handlers, "// note\n", DB_FILE);
+
+    expect(result).toEqual({
+      extension: ".ts",
+      text: expect.stringContaining("export interface Namespace"),
+      diagnostics: [],
+      mappings: [[0, result.text.length, 0, "// note\n".length, 1, 24]],
+    });
+    expect(result.text).toContain('status: "PAID" | "OPEN";');
+    expect(result.text).toContain("createGetDB<Namespace>({ temporal: true })");
+  });
+
+  test("types db.tailor without bundling the hook and validator scripts of the tables it reads", async () => {
+    using p = projectWithHookedOrderTable();
+    const handlers = createContentMapperHandlers(evaluateConfigInProcess);
+    await handlers.initialize({ positionEncodings: ["utf-16"] });
+    await open(handlers, p.tsconfig);
+
+    const result = await transform(handlers, "", DB_FILE);
+
+    expect(result.text).toContain("status: Generated<string>;");
+    expect(precompileTailorDBTypeScripts).not.toHaveBeenCalled();
+  });
+
+  test("types db.tailor as a module that exports getDB over no namespaces, without a diagnostic, when the project defines no tables yet", async () => {
+    using p = projectWithoutTables();
+    const handlers = createContentMapperHandlers(evaluateConfigInProcess);
+    await handlers.initialize({ positionEncodings: ["utf-16"] });
+    await open(handlers, p.tsconfig);
+
+    const result = await transform(handlers, "", DB_FILE);
+
+    expect(result.text).toContain("export interface Namespace {}");
+    expect(result.text).toContain(
+      "export const getDB = createGetDB<Namespace>({ temporal: true })",
+    );
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  test("reports db.tailor when tailor.config.ts does not configure kyselyTypePlugin, and still types registry.tailor", async () => {
+    using p = project();
+    const handlers = createContentMapperHandlers(evaluateConfigInProcess);
+    await handlers.initialize({ positionEncodings: ["utf-16"] });
+    await open(handlers, p.tsconfig);
+
+    const db = await transform(handlers, "", DB_FILE);
+    const registry = await transform(handlers, "", REGISTRY_FILE);
+
+    expect(db.diagnostics).toEqual([
+      { messageText: expect.stringContaining("kyselyTypePlugin"), start: 0, length: 0, code: 2 },
+    ]);
+    expect(db.text).toBe("export {};\n");
+    expect(registry.diagnostics).toEqual([]);
+  });
+
+  test("reports db.tailor when kyselyTypePlugin writes a generated file instead of setting contentMapper", async () => {
+    using p = projectWithOrderTable();
+    fs.writeFileSync(
+      p.config,
+      ORDER_TABLE_CONFIG.replace("contentMapper: true", 'distPath: "./generated/db.ts"'),
+    );
+    const handlers = createContentMapperHandlers(evaluateConfigInProcess);
+    await handlers.initialize({ positionEncodings: ["utf-16"] });
+    await open(handlers, p.tsconfig);
+
+    const db = await transform(handlers, "", DB_FILE);
+
+    expect(db.diagnostics).toEqual([
+      {
+        messageText: expect.stringContaining("contentMapper: true"),
+        start: 0,
+        length: 0,
+        code: 2,
+      },
+    ]);
+    expect(db.text).toBe("export {};\n");
+  });
+
+  test("reports db.tailor when a TailorDB definition fails to load, and still types registry.tailor", async () => {
+    using p = projectWithOrderTable();
+    const handlers = createContentMapperHandlers(evaluateConfigInProcess);
+    await handlers.initialize({ positionEncodings: ["utf-16"] });
+    await open(handlers, p.tsconfig);
+
+    fs.writeFileSync(path.join(p.dir, "tailordb", "order.ts"), "export const order = ;\n");
+    using _logger = silenceLogger("error");
+    const opened = await open(handlers, p.tsconfig);
+
+    const db = await transform(handlers, "", DB_FILE);
+    const registry = await transform(handlers, "", REGISTRY_FILE);
+
+    expect(opened.configIdentity).toEqual(expect.any(String));
+    expect(db.diagnostics).toEqual([
+      { messageText: expect.stringContaining("order.ts"), start: 0, length: 0, code: 2 },
+    ]);
+    expect(registry.diagnostics).toEqual([]);
+  });
+
+  test("keeps watching the files of the last good evaluation when a TailorDB definition fails to load", async () => {
+    using p = project();
+    const order = path.join(p.dir, "tailordb", "order.ts");
+    const evaluations: Evaluation[] = [
+      { registryTypes: "export {};\n", kyselyTypes: "export {};\n", files: [order] },
+      { registryTypes: "export {};\n", kyselyError: "order.ts: unexpected token", files: [] },
+    ];
+    const handlers = createContentMapperHandlers(() => Promise.resolve(evaluations.shift()!));
+    await handlers.initialize({ positionEncodings: ["utf-16"] });
+    await open(handlers, p.tsconfig);
+
+    const opened = await open(handlers, p.tsconfig);
+
+    expect(opened.watchedFiles).toEqual(expect.arrayContaining([p.config, order]));
+  });
+
+  test("changes its identity and db.tailor types when a TailorDB definition changes", async () => {
+    using p = projectWithOrderTable();
+    const handlers = createContentMapperHandlers(evaluateConfigInProcess);
+    await handlers.initialize({ positionEncodings: ["utf-16"] });
+    const before = await open(handlers, p.tsconfig);
+
+    fs.writeFileSync(
+      path.join(p.dir, "tailordb", "order.ts"),
+      ORDER_TABLE.replace('["PAID", "OPEN"]', '["PAID", "OPEN", "VOID"]'),
+    );
+    const after = await open(handlers, p.tsconfig);
+
+    expect(after.configIdentity).not.toBe(before.configIdentity);
+    expect((await transform(handlers, "", DB_FILE)).text).toContain(
+      'status: "PAID" | "OPEN" | "VOID";',
+    );
   });
 
   test("changes its identity and types when the config changes", async () => {

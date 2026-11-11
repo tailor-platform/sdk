@@ -4,13 +4,15 @@ import * as path from "pathe";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
-import { defineConfig } from "#/configure/config/index";
+import { defineConfig, definePlugins } from "#/configure/config/index";
 import { defineAIGateway } from "#/configure/services/aigateway/index";
 import { defineAuth } from "#/configure/services/auth/index";
 import { defineIdp } from "#/configure/services/idp/index";
 import { defineSecretManager } from "#/configure/services/secrets/index";
 import { defineStaticWebSite } from "#/configure/services/staticwebsite/index";
 import { db } from "#/configure/services/tailordb/schema";
+import { kyselyTypePlugin } from "#/plugin/builtin/kysely-type/index";
+import { PluginManager } from "#/plugin/manager";
 import { getRegisteredWaitPoints, restoreWaitPointRegistry } from "#/utils/wait-point-registry";
 import { defineApplication, loadApplication } from "./application";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -668,6 +670,99 @@ export default createExecutor({
     expect(second.application.executorService).toBe(first.application.executorService);
     expect(second.application.tailorDBServices).toBe(first.application.tailorDBServices);
     expect(second.reusableBuildState).toBe(first.reusableBuildState);
+  });
+});
+
+describe("loadApplication kysely temporal", () => {
+  const GATE = "__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL";
+  let tmpDir: string | undefined;
+
+  afterEach(() => {
+    if (tmpDir) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      tmpDir = undefined;
+    }
+  });
+
+  async function bundledExecutor(options: { temporal?: boolean }): Promise<string> {
+    tmpDir ??= fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
+    const executorFile = path.join(tmpDir, "executor.ts");
+    fs.writeFileSync(
+      executorFile,
+      `
+import { createExecutor, incomingWebhookTrigger } from "@tailor-platform/sdk";
+
+const temporal = globalThis.process?.env.${GATE} === "true";
+
+export default createExecutor({
+  name: "webhook-executor",
+  trigger: incomingWebhookTrigger({ response: () => ({}) }),
+  operation: { kind: "function", body: () => temporal },
+});
+`,
+    );
+    const config = {
+      ...defineConfig({ name: "testApp", executor: { files: [executorFile] } }),
+      path: path.join(tmpDir, "tailor.config.ts"),
+    };
+    const { bundledScripts } = await loadApplication({
+      config,
+      pluginManager: new PluginManager(
+        definePlugins(kyselyTypePlugin({ distPath: "./db.ts", ...options })),
+      ),
+    });
+    return [...bundledScripts.executors.values()].join("\n");
+  }
+
+  test("bundles getDB of @tailor-platform/sdk/plugin/kysely-type/db with the plugin's temporal option", async () => {
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
+    const executorFile = path.join(tmpDir, "executor.ts");
+    fs.writeFileSync(
+      executorFile,
+      `
+import { createExecutor, incomingWebhookTrigger } from "@tailor-platform/sdk";
+import { getDB } from "@tailor-platform/sdk/plugin/kysely-type/db";
+
+export default createExecutor({
+  name: "webhook-executor",
+  trigger: incomingWebhookTrigger({ response: () => ({}) }),
+  operation: { kind: "function", body: () => getDB },
+});
+`,
+    );
+    const config = {
+      ...defineConfig({ name: "testApp", executor: { files: [executorFile] } }),
+      path: path.join(tmpDir, "tailor.config.ts"),
+    };
+    const bundle = async (temporal: boolean) =>
+      [
+        ...(
+          await loadApplication({
+            config,
+            pluginManager: new PluginManager(
+              definePlugins(kyselyTypePlugin({ distPath: "./db.ts", temporal })),
+            ),
+          })
+        ).bundledScripts.executors.values(),
+      ].join("\n");
+
+    const withTemporal = await bundle(true);
+    const withoutTemporal = await bundle(false);
+
+    expect(withTemporal).not.toContain(GATE);
+    expect(withTemporal).toMatch(/temporal:\s*(?:true|!0)/);
+    expect(withoutTemporal).not.toContain(GATE);
+    expect(withoutTemporal).toMatch(/temporal:\s*(?:false|!1)/);
+  });
+
+  test("folds the gate to follow the plugin's temporal option in what it bundles", async () => {
+    const withTemporal = await bundledExecutor({ temporal: true });
+    const withoutTemporal = await bundledExecutor({});
+
+    expect(withTemporal).not.toContain(GATE);
+    expect(withTemporal).toMatch(/=>\s*(?:true|!0)/);
+    expect(withoutTemporal).not.toContain(GATE);
+    expect(withoutTemporal).toMatch(/=>\s*(?:false|!1)/);
   });
 });
 
