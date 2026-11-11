@@ -396,8 +396,10 @@ createResolver({
    });
 
    // In executor file:
+   import processPayment from "../resolvers/processPayment";
+
    export default createExecutor({
-     trigger: resolverExecutedTrigger("processPayment"),
+     trigger: resolverExecutedTrigger({ resolver: processPayment }),
      // ...
    });
    ```
