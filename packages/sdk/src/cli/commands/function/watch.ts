@@ -6,7 +6,7 @@ import { isEmptyObject } from "es-toolkit";
 import * as path from "pathe";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { serializeError } from "#/cli/shared/error-json";
-import { errorSummary, isCLIError } from "#/cli/shared/errors";
+import { errorSummary, isCLIError, locatedMessage } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { beginUserModuleRun } from "#/cli/shared/user-modules";
 import {
@@ -102,7 +102,7 @@ function printFinished(
 function failureLines(error: unknown): string[] {
   if (!isCLIError(error)) return errorSummary(error).split("\n");
   return [
-    error.message,
+    locatedMessage(error),
     error.details,
     error.suggestion && `${styles.info("Suggestion:")} ${error.suggestion}`,
   ]
