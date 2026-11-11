@@ -3,6 +3,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
+import { errorToJson } from "#/cli/shared/error-json";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
 import { defineConfig, definePlugins } from "#/configure/config/index";
 import { defineAIGateway } from "#/configure/services/aigateway/index";
@@ -175,58 +176,6 @@ describe("AI Gateway authNamespace default", () => {
     );
   });
 
-  test.each([
-    {
-      configKey: "idp",
-      services: {
-        idp: [
-          defineIdp("same", { clients: ["default-client"] }),
-          defineIdp("same", { clients: ["default-client"] }),
-        ],
-      },
-      suggestion: "Give each IdP a unique name.",
-    },
-    {
-      configKey: "staticWebsites",
-      services: {
-        staticWebsites: [defineStaticWebSite("same", {}), defineStaticWebSite("same", {})],
-      },
-      suggestion: "Give each static website a unique name.",
-    },
-    {
-      configKey: "aiGateways",
-      services: {
-        aiGateways: [
-          defineAIGateway("same", { authNamespace: "auth" }),
-          defineAIGateway("same", { authNamespace: "auth" }),
-        ],
-      },
-      suggestion: "Give each AI Gateway a unique name.",
-    },
-  ])(
-    "reports a duplicate name under $configKey as CONFIG_INVALID",
-    ({ configKey, services, suggestion }) => {
-      const config = {
-        ...defineConfig({ name: "testApp", ...services }),
-        path: "tailor.config.ts",
-      };
-
-      expect(() => defineApplication({ config })).toThrow(
-        expect.objectContaining({
-          code: "CONFIG_INVALID",
-          message: `Invalid Tailor config:\n  - ${configKey}.1.name: Duplicate name "same"`,
-          suggestion,
-          context: expect.objectContaining({
-            file: "tailor.config.ts",
-            configKey,
-            name: "same",
-            issues: [{ path: [configKey, 1, "name"], message: 'Duplicate name "same"' }],
-          }),
-        }),
-      );
-    },
-  );
-
   test("reports secrets without a value as CONFIG_INVALID", () => {
     const config = {
       ...defineConfig({
@@ -287,6 +236,69 @@ describe("service config validation", () => {
     }
     throw new Error("expected defineApplication to throw");
   }
+
+  test.each([
+    {
+      configKey: "idp",
+      kind: "idp",
+      label: "IdP",
+      entries: [
+        defineIdp("duplicate", { clients: ["client"] }),
+        { name: "distinct", external: true },
+        { name: "duplicate", external: true },
+        defineIdp("duplicate", { clients: ["other-client"] }),
+      ],
+    },
+    {
+      configKey: "staticWebsites",
+      kind: "staticwebsite",
+      label: "static website",
+      entries: [
+        defineStaticWebSite("duplicate", {}),
+        defineStaticWebSite("distinct", {}),
+        defineStaticWebSite("duplicate", {}),
+        defineStaticWebSite("duplicate", {}),
+      ],
+    },
+    {
+      configKey: "aiGateways",
+      kind: "aigateway",
+      label: "AI Gateway",
+      entries: [
+        defineAIGateway("duplicate", { authNamespace: "my-auth" }),
+        defineAIGateway("distinct", { authNamespace: "my-auth" }),
+        defineAIGateway("duplicate", { authNamespace: "my-auth" }),
+        defineAIGateway("duplicate", { authNamespace: "my-auth" }),
+      ],
+    },
+  ])(
+    "reports all duplicate $configKey entries with their config paths",
+    ({ configKey, kind, label, entries }) => {
+      const error = defineInvalidApplication({ [configKey]: entries });
+      expect(errorToJson(error).error).toMatchObject({
+        code: "DEFINITION_NAME_DUPLICATE",
+        message: [
+          `Duplicate ${label} name "duplicate" found:`,
+          `  - tailor.config.ts (path: ${configKey}.0)`,
+          `  - tailor.config.ts (path: ${configKey}.2)`,
+          `  - tailor.config.ts (path: ${configKey}.3)`,
+        ].join("\n"),
+        context: {
+          kind,
+          duplicates: [
+            {
+              name: "duplicate",
+              definitions: [0, 2, 3].map((index) => ({
+                file: "tailor.config.ts",
+                exportName: "default",
+                path: [configKey, index],
+              })),
+            },
+          ],
+        },
+      });
+    },
+  );
 
   test("names the offending auth field when a machine user attribute is not a db field", () => {
     const error = defineInvalidApplication({

@@ -94,7 +94,7 @@ import {
   assertSkipNamespacesKnown,
   formatMigrationSkipSteps,
 } from "./tailordb/migration-skip-steps";
-import { validatePlan } from "./validate-plan";
+import { validatePlans } from "./validate-plan";
 import {
   collectVisibleIdpNames,
   collectVisibleResolverNamespaces,
@@ -737,14 +737,6 @@ export async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParam
   );
 }
 
-async function validateDeploymentPlans(
-  deployments: ReadonlyArray<PlannedDeployment>,
-): Promise<void> {
-  for (const deployment of deployments) {
-    await validatePlan(deploymentPlanResults(deployment));
-  }
-}
-
 /**
  * Validate and print the plan, then ask for the confirmations it needs, so
  * each one is answered with the whole plan in view.
@@ -756,7 +748,12 @@ async function reviewDeploymentPlans(params: ReviewDeploymentPlansParams): Promi
   if (noValidate) {
     logger.warn("Client-side validation skipped (--no-validate).");
   } else {
-    await validateDeploymentPlans(deployments);
+    await validatePlans(
+      deployments.map((deployment) => ({
+        application: deployment.application.name,
+        results: deploymentPlanResults(deployment),
+      })),
+    );
   }
   const summary = printDeploymentPlans(deployments, {
     dryRun,
