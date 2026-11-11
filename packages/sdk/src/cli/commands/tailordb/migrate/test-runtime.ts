@@ -9,8 +9,11 @@ import {
 } from "#/cli/commands/deploy/deploy";
 import { resourceTrn } from "#/cli/commands/deploy/label";
 import {
-  getMigrationMachineUser,
+  pendingMigrationsAfter,
+  resolveMigrationMachineUsers,
+  resolveScriptMachineUsers,
   updateMigrationLabel,
+  type MigrationMachineUsers,
 } from "#/cli/commands/deploy/tailordb/migration";
 import { bundleSeedScript } from "#/cli/commands/generate/seed/bundler";
 import {
@@ -30,7 +33,7 @@ import { loadAccessToken, loadPlatformClientConfig, loadWorkspaceId } from "#/cl
 import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
-import { executeScript } from "#/cli/shared/script-executor";
+import { executeScript, type ScriptInvoker } from "#/cli/shared/script-executor";
 import { chunkSeedData, type SeedData } from "#/cli/shared/seed-chunker";
 import { loadSeedContext, type SeedContext } from "#/cli/shared/seed-context";
 import { loadApplicationNamespaces } from "#/cli/shared/tailordb-namespaces";
@@ -54,13 +57,12 @@ import {
 } from "./snapshot";
 import { formatSchemaDrifts } from "./snapshot-remote";
 import type { LoadedApplicationNamespaces } from "#/cli/shared/tailordb-namespaces";
-import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
 import type {
   MigrationTestDependencies,
   MigrationTestOptions,
   PreparedMigrationTest,
 } from "./test-types";
-import type { RemoteSchemaVerificationResult } from "./types";
+import type { PendingMigration, RemoteSchemaVerificationResult } from "./types";
 import type { JsonObject, JsonValue } from "type-fest";
 
 const CLONE_POLL_INTERVAL = 3_000;
@@ -71,7 +73,22 @@ interface RuntimeState {
   client: OperatorClient;
   loaded: LoadedApplicationNamespaces;
   options: MigrationTestOptions;
-  seedContext?: SeedContext;
+  seeds: PreparedSeed[];
+  seedMachineUsers?: MigrationMachineUsers;
+  assertion?: PreparedAssertion;
+}
+
+interface PreparedAssertion {
+  namespace: string;
+  invoker: ScriptInvoker;
+}
+
+interface PreparedSeed {
+  namespace: string;
+  data: SeedData;
+  order: string[];
+  selfRefTypes: string[];
+  typesWithData: string[];
 }
 
 interface WaitForCloneOptions {
@@ -715,39 +732,31 @@ export async function deleteExistingUserProfileConfig(
   await state.client.deleteUserProfileConfig({ workspaceId: targetWorkspaceId, namespaceName });
 }
 
-function migrationConfig(
+function prepareSeedData(
   loaded: LoadedApplicationNamespaces,
-  namespace: string,
-): TailorDBServiceConfig["migration"] {
-  return (loaded.config.db?.[namespace] as TailorDBServiceConfig | undefined)?.migration;
-}
-
-function authExecutionContext(
-  state: RuntimeState,
-  namespace: string,
-  explicitMachineUser?: string,
-): { authNamespace: string; machineUserName: string } {
-  const auth = state.loaded.application.authService;
-  if (!auth) {
-    throw CLIError({
-      code: "AUTH_CONFIG_REQUIRED",
-      message: "Auth configuration is required to execute migration test scripts.",
-    });
+  seedContext: SeedContext,
+  baselines: PreparedMigrationTest["baselines"],
+): PreparedSeed[] {
+  const dataDir = path.join(seedContext.distPath, "data");
+  const seeds: PreparedSeed[] = [];
+  for (const service of loaded.application.tailorDBServices) {
+    const input = toTailorDBDeployInput(service);
+    const snapshot =
+      baselines.get(service.namespace)?.snapshot ??
+      normalizeSchemaSnapshot({
+        version: 1,
+        namespace: service.namespace,
+        createdAt: new Date().toISOString(),
+        tables: input.types,
+      });
+    const { order, selfRefTypes } = sortSeedTypesForSnapshot(snapshot);
+    const data = loadSnapshotSeedData(dataDir, order, snapshot);
+    const typesWithData = order.filter((tableName) => (data[tableName]?.length ?? 0) > 0);
+    if (typesWithData.length > 0) {
+      seeds.push({ namespace: service.namespace, data, order, selfRefTypes, typesWithData });
+    }
   }
-  const machineUserName =
-    explicitMachineUser ??
-    getMigrationMachineUser(
-      migrationConfig(state.loaded, namespace),
-      auth.config.machineUsers ? Object.keys(auth.config.machineUsers) : undefined,
-    );
-  if (!machineUserName) {
-    throw CLIError({
-      code: "MACHINE_USER_REQUIRED",
-      message: `No machine user is available for namespace "${namespace}".`,
-      suggestion: `Pass --machine-user or configure one in auth or db.${namespace}.migration.`,
-    });
-  }
-  return { authNamespace: auth.config.name, machineUserName };
+  return seeds;
 }
 
 async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
@@ -836,6 +845,7 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
   >();
   const targetSnapshots = new Map<string, NormalizedSchemaSnapshot>();
   const pendingNamespaces: string[] = [];
+  const pendingMigrations: PendingMigration[] = [];
   for (const namespace of namespaces) {
     const remoteState = await fetchRemoteMigrationState(
       client,
@@ -874,6 +884,9 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
     targetSnapshots.set(namespace.namespace, targetSnapshot);
     if (migrationNumber < latest) {
       pendingNamespaces.push(namespace.namespace);
+      pendingMigrations.push(
+        ...pendingMigrationsAfter(namespace.namespace, namespace.migrationsDir, migrationNumber),
+      );
     }
   }
   if (pendingNamespaces.length === 0) {
@@ -883,6 +896,13 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
     });
   }
 
+  const machineUserSource = {
+    application: loaded.application,
+    config: loaded.config,
+    migrationMachineUserOverride: options.machineUser,
+  };
+  resolveMigrationMachineUsers(machineUserSource, pendingMigrations);
+
   const baselineSnapshots = await createMigrationTestBaselineSnapshots({
     client,
     workspaceId: sourceWorkspaceId,
@@ -890,6 +910,33 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
     inputs,
     baselines,
   });
+
+  const seeds = seedContext ? prepareSeedData(loaded, seedContext, baselines) : [];
+  const seedMachineUsers = resolveScriptMachineUsers(
+    {
+      ...machineUserSource,
+      migrationMachineUserOverride: options.machineUser ?? seedContext?.machineUserName,
+    },
+    seeds.map(({ namespace }) => namespace),
+  );
+  let assertion: PreparedAssertion | undefined;
+  if (options.assertionPath) {
+    const namespace = resolveAssertionNamespace(pendingNamespaces, options.assertionNamespace);
+    const machineUsers = assertDefined(
+      resolveScriptMachineUsers(machineUserSource, [namespace]),
+      "assertion machine users missing",
+    );
+    assertion = {
+      namespace,
+      invoker: {
+        namespace: machineUsers.authNamespace,
+        machineUserName: assertDefined(
+          machineUsers.byNamespace.get(namespace),
+          "assertion machine user missing",
+        ),
+      },
+    };
+  }
 
   const prepared: PreparedMigrationTest = {
     sourceWorkspaceId,
@@ -908,7 +955,7 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
       : {}),
   };
   return {
-    state: { client, loaded, options, ...(seedContext ? { seedContext } : {}) },
+    state: { client, loaded, options, seeds, seedMachineUsers, assertion },
     prepared,
   };
 }
@@ -969,35 +1016,14 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
         );
       }
     },
-    seedData: async ({ prepared, targetWorkspaceId }) => {
+    seedData: async ({ targetWorkspaceId }) => {
       const state = stateOrThrow(runtimeState);
-      const seedContext = assertDefined(
-        state.seedContext,
-        "seed context missing after migration test preparation",
-      );
-      const dataDir = path.join(seedContext.distPath, "data");
-      assertSeedDataDirectory(dataDir);
-      const seedSnapshots = new Map(
-        state.loaded.application.tailorDBServices.map((service) => {
-          const baseline = prepared.baselines.get(service.namespace);
-          const input = toTailorDBDeployInput(service);
-          return [
-            service.namespace,
-            baseline?.snapshot ??
-              normalizeSchemaSnapshot({
-                version: 1,
-                namespace: service.namespace,
-                createdAt: new Date().toISOString(),
-                tables: input.types,
-              }),
-          ] as const;
-        }),
-      );
-      for (const [namespace, snapshot] of seedSnapshots) {
-        const { order, selfRefTypes } = sortSeedTypesForSnapshot(snapshot);
-        const data = loadSnapshotSeedData(dataDir, order, snapshot);
-        const typesWithData = order.filter((tableName) => (data[tableName]?.length ?? 0) > 0);
-        if (typesWithData.length === 0) continue;
+      for (const { namespace, data, order, selfRefTypes, typesWithData } of state.seeds) {
+        const machineUsers = assertDefined(state.seedMachineUsers, "seed machine users missing");
+        const machineUserName = assertDefined(
+          machineUsers.byNamespace.get(namespace),
+          `seed machine user missing for namespace "${namespace}"`,
+        );
         const bundled = await bundleSeedScript(
           namespace,
           typesWithData,
@@ -1009,11 +1035,6 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
           order,
           codeByteSize: new TextEncoder().encode(bundled.bundledCode).length,
         });
-        const auth = authExecutionContext(
-          state,
-          namespace,
-          state.options.machineUser ?? seedContext.machineUserName,
-        );
         for (const chunk of chunks) {
           const execution = await executeScript({
             client: state.client,
@@ -1022,8 +1043,8 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
             code: bundled.bundledCode,
             arg: { data: chunk.data, order: chunk.order, selfRefTypes, upsert: false },
             invoker: {
-              namespace: auth.authNamespace,
-              machineUserName: auth.machineUserName,
+              namespace: machineUsers.authNamespace,
+              machineUserName,
             },
           });
           if (!execution.success) {
@@ -1097,16 +1118,10 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
         machineUser,
       );
     },
-    runAssertion: async ({
-      prepared,
-      targetWorkspaceId,
-      assertionPath,
-      assertionNamespace,
-      machineUser,
-    }) => {
+    runAssertion: async ({ targetWorkspaceId, assertionPath }) => {
       const state = stateOrThrow(runtimeState);
-      const namespace = resolveAssertionNamespace(prepared.pendingNamespaces, assertionNamespace);
-      const auth = authExecutionContext(state, namespace, machineUser);
+      const assertion = assertDefined(state.assertion, "assertion missing after preparation");
+      const { namespace } = assertion;
       const bundled = await bundleMigrationScript(
         assertionPath,
         namespace,
@@ -1121,10 +1136,7 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
         workspaceId: targetWorkspaceId,
         name: `migration-test-assert-${namespace}.ts`,
         code: bundled.bundledCode,
-        invoker: {
-          namespace: auth.authNamespace,
-          machineUserName: auth.machineUserName,
-        },
+        invoker: assertion.invoker,
       });
       if (!execution.success) {
         throw CLIError({

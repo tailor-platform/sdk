@@ -686,7 +686,7 @@ tailor tailordb migration test --data seed
 
 Rows are loaded only for tables present in the deployed pre-migration snapshots (and current schemas without migrations), in foreign-key dependency order. Fields introduced by pending migrations, including timestamp and nested fields, are removed before insertion so current fixtures can be loaded into the baseline schema. Missing table files are treated as empty. IdP `_User` fixtures are not loaded by this command.
 
-Use `--machine-user` to run the seed, the pending migration scripts, and the assertion as that machine user, in place of `db.<namespace>.migration.machineUser` and the first entry in `auth.machineUsers` (and, for the seed, the seed plugin's `machineUserName`). For the pending migration scripts, it must be defined in `auth.machineUsers`.
+Use `--machine-user` to run the seed, the pending migration scripts, and the assertion as that machine user, in place of `db.<namespace>.migration.machineUser` and the first entry in `auth.machineUsers` (and, for the seed, the seed plugin's `machineUserName`). An empty override is rejected. Every machine user needed for these scripts must be defined in `auth.machineUsers`; the command checks this before creating a temporary workspace or deploying to a designated target. No machine user is required when there are no seed rows, pending migration scripts, or assertions to execute.
 
 ### Clone mode
 

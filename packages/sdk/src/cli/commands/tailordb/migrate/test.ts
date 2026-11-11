@@ -264,7 +264,7 @@ export const testCommand = defineAppCommand({
         "How long to wait for the clone to finish with --data clone, e.g. 30s or 10m (default: 30m)",
       completion: { type: "none" },
     }),
-    "machine-user": arg(z.string().optional(), {
+    "machine-user": arg(z.string().min(1).optional(), {
       description: "Machine user for seed, migration, and assertion script execution",
     }),
   }),

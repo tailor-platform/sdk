@@ -142,6 +142,18 @@ describe("tailordb migration test", () => {
     );
   });
 
+  test("rejects an empty --machine-user before preparing or creating a workspace", async () => {
+    const dependencies = createDependencies([]);
+    mocks.dependencies = dependencies;
+
+    const result = await runCommand(testCommand, ["--machine-user", ""]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ message: expect.stringContaining("machine-user:") });
+    expect(dependencies.prepare).not.toHaveBeenCalled();
+    expect(dependencies.createWorkspace).not.toHaveBeenCalled();
+  });
+
   test("passes the clone timeout to the clone step", async () => {
     const dependencies = createDependencies([]);
 

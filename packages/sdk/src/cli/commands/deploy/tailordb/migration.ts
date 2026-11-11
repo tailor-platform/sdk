@@ -1453,9 +1453,23 @@ export function resolveMigrationMachineUsers(
   source: MigrationRunSource,
   pendingMigrations: readonly PendingMigration[],
 ): MigrationMachineUsers | undefined {
-  const namespaces = new Set(
+  return resolveScriptMachineUsers(
+    source,
     pendingMigrations.filter((migration) => migration.hasScript).map(({ namespace }) => namespace),
   );
+}
+
+/**
+ * Resolve machine users for namespaces that execute scripts.
+ * @param source - Auth, config, and override to resolve from
+ * @param scriptNamespaces - Namespaces with scripts to run
+ * @returns Machine users, or undefined when no script runs
+ */
+export function resolveScriptMachineUsers(
+  source: MigrationRunSource,
+  scriptNamespaces: readonly string[],
+): MigrationMachineUsers | undefined {
+  const namespaces = new Set(scriptNamespaces);
   if (namespaces.size === 0) return undefined;
   const authService = source.application.authService;
   if (!authService) {
