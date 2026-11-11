@@ -8,13 +8,8 @@ export interface FileLoadConfig {
 
 const DEFAULT_IGNORE_PATTERNS = ["**/*.test.ts", "**/*.spec.ts"];
 
-// loadFilesWithIgnores is called once per service/bundler, so a single
-// generate/apply run can call it multiple times for the same baseDir (once
-// per resolver/executor/tailordb/etc. config sharing that directory). Track
-// which (baseDir, patterns) pairs have already warned so each one only warns
-// once per run — keyed by patterns too, since different services sharing a
-// baseDir can have different `files` patterns each needing their own warning.
-const warnedFallbacks = new Set<string>();
+// Deduplicate compatibility warnings per destination, directory, and pattern set.
+const warnedFallbacks = new WeakMap<(message: string) => void, Set<string>>();
 
 /**
  * Load files matching the given patterns, excluding files that match ignore patterns.
@@ -54,8 +49,13 @@ export function loadFilesWithIgnores(
   // Remove this fallback in v2, once such configs are expected to have
   // migrated.
   const fallbackKey = `${baseDir}\0${config.files.join("\0")}`;
-  if (!warnedFallbacks.has(fallbackKey)) {
-    warnedFallbacks.add(fallbackKey);
+  let warned = warnedFallbacks.get(warn);
+  if (!warned) {
+    warned = new Set<string>();
+    warnedFallbacks.set(warn, warned);
+  }
+  if (!warned.has(fallbackKey)) {
+    warned.add(fallbackKey);
     warn(
       `No files matched "${config.files.join(", ")}" relative to "${baseDir}"; falling back to ` +
         `process.cwd(). Update this config's file patterns to be relative to its own directory ` +

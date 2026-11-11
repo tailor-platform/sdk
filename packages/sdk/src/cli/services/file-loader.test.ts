@@ -3,6 +3,7 @@ import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
+import { loadFilesWithIgnores as loadSharedFiles } from "#/utils/file-loader";
 import { loadFilesWithIgnores } from "./file-loader";
 
 // Delegates to the real implementation by default, so only the one test
@@ -168,6 +169,32 @@ describe("loadFilesWithIgnores", () => {
       loadFilesWithIgnores({ files: ["./src/**/*.ts"] }, emptyBaseDir);
       loadFilesWithIgnores({ files: ["./src/**/*.ts"] }, emptyBaseDir);
       loadFilesWithIgnores({ files: ["./src/**/*.ts"] }, emptyBaseDir);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test.each([true, false])("warns once per destination (shared first: %s)", (sharedFirst) => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const sharedWarn = vi.fn();
+    const cwdDir = makeDirWithFile("file-loader-destinations-cwd-", "src/legacy.ts");
+    const baseDir = makeTempDir("file-loader-destinations-base-");
+    tmpDirs.push(baseDir);
+    const config = { files: ["./src/**/*.ts"] };
+    const loaders = [
+      () => loadSharedFiles(config, baseDir, sharedWarn),
+      () => loadFilesWithIgnores(config, baseDir),
+    ];
+    const originalCwd = process.cwd();
+    process.chdir(cwdDir);
+    try {
+      for (const load of sharedFirst ? loaders : loaders.toReversed()) {
+        for (let i = 0; i < 2; i++) {
+          expect(load()).toEqual([path.join(process.cwd(), "src/legacy.ts")]);
+        }
+      }
+      expect(sharedWarn).toHaveBeenCalledTimes(1);
       expect(warnSpy).toHaveBeenCalledTimes(1);
     } finally {
       process.chdir(originalCwd);
