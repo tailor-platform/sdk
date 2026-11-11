@@ -1248,19 +1248,13 @@ One specific cause is a `migration rebaseline` run on a different environment wh
 
 ### "No machine user available for migration execution"
 
-**Cause:** Neither `migration.machineUser` is set nor are there any machine users in `auth.machineUsers`. `tailor deploy` reports this while planning, including with `--dry-run`, before anything is applied, and `tailor tailordb migration validate` reports it too.
+**Cause:** Neither `migration.machineUser` is set nor are there any machine users in `auth.machineUsers`. `tailor deploy` reports this while planning, including with `--dry-run`, before anything is applied, and `tailor tailordb migration validate` reports it too. `tailor tailordb migration test` checks the users needed for seed, migration, and assertion scripts before creating or modifying its target workspace.
 
 **Resolution:** Add a machine user to `auth.machineUsers`, then run `tailor deploy` again. The deploy creates the machine user before it runs the migration scripts.
 
 ### "Machine user for migration execution is not defined in auth"
 
-**Cause:** `migration.machineUser`, or `--machine-user` of `tailor tailordb migration test`, names a machine user that is not in `auth.machineUsers`. `tailor deploy` reports this while planning, including with `--dry-run`, before anything is applied, and `tailor tailordb migration validate` reports it too.
-
-**Resolution:** Either add the machine user to `auth.machineUsers`, or name one that is defined there.
-
-### "Machine user not found"
-
-**Cause:** In `tailor tailordb migration test`, the machine user that runs the seed or the assertion (from `--machine-user`, the seed plugin's `machineUserName`, or `migration.machineUser`) is not in `auth.machineUsers`, so the temporary workspace does not have it.
+**Cause:** `migration.machineUser`, or the `--machine-user` override or seed plugin's `machineUserName` used by `tailor tailordb migration test`, names a machine user that is not in `auth.machineUsers`. `tailor deploy` reports this while planning, including with `--dry-run`, before anything is applied, and `tailor tailordb migration validate` reports it too. The migration test reports it during preparation, before creating or modifying its target workspace.
 
 **Resolution:** Either add the machine user to `auth.machineUsers`, or name one that is defined there.
 
