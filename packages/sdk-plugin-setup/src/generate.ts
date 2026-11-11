@@ -19,6 +19,7 @@ import {
   LOCK_VERSION,
   planEnvironmentCollisions,
   readLock,
+  targetJobEnvironments,
   targetWorkflows,
   writeLock,
   type LockFile,
@@ -51,7 +52,6 @@ import {
   appSlug,
   isPackageManager,
   LOCKFILES,
-  planEnvironmentOf,
   renderBranchWorkflow,
   renderPreviewCleanupWorkflow,
   renderPreviewWorkflow,
@@ -1039,10 +1039,8 @@ export type SetupTargetResult = {
   kind: TargetKind;
   /** Repository-relative path of the generated workflow. */
   file: string;
-  /** Resolved GitHub Environment name. */
-  environment: string;
-  /** GitHub Environment of the plan job, when it runs apart from `environment`. */
-  planEnvironment?: string;
+  /** GitHub Environments used by the generated target's jobs. */
+  environments: readonly string[];
   /** Whether the app id was moved out of tailor.config.ts. */
   configEdited: boolean;
 };
@@ -1052,14 +1050,12 @@ export type SetupTargetResult = {
  * @param result - What {@link setupTarget} generated
  */
 export function printTargetNextSteps(result: SetupTargetResult): void {
-  const { environment, planEnvironment, configEdited } = result;
+  const { environments, configEdited } = result;
 
   logger.newline();
   logger.info("Next steps:");
   logger.newline();
-  printEnvironmentStep(
-    planEnvironment === undefined ? [environment] : [environment, planEnvironment],
-  );
+  printEnvironmentStep(environments);
 
   logger.newline();
   logger.log("2. Commit the generated files:");
@@ -1303,11 +1299,16 @@ export async function setupTarget(options: SetupTargetOptions): Promise<SetupTar
     if (!knownCollisions.has(collision)) logger.warn(collision);
   }
 
+  const environments = new Map<string, string>();
+  for (const { environment } of targetJobEnvironments(newTarget)) {
+    const key = environment.toLowerCase();
+    if (!environments.has(key)) environments.set(key, environment);
+  }
+
   return {
     kind: resolved.kind,
     file: resolved.file,
-    environment: resolved.environment,
-    planEnvironment: planEnvironmentOf(resolved.inputs),
+    environments: [...environments.values()],
     configEdited,
   };
 }
