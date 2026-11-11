@@ -124,6 +124,7 @@ type HasCreateRequest = { name: string; createRequest: unknown };
 type HasUpdateRequest = { name: string; updateRequest: unknown };
 
 type ValidateItemsParams<Desc extends DescMessage> = {
+  application: string;
   schema: Desc;
   resourceType: ValidatedResourceType;
   action: "create" | "update" | "replace";
@@ -149,7 +150,7 @@ function validatorFor(schema: DescMessage): Validator {
 }
 
 function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Desc>): void {
-  const { schema, resourceType, action, items, requestKey, violations } = params;
+  const { application, schema, resourceType, action, items, requestKey, violations } = params;
   if (items.length === 0) {
     return;
   }
@@ -171,7 +172,7 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
     } else if (result.kind === "error") {
       // Evaluator failures must not block deploys; the platform stays the authoritative validator.
       logger.warn(
-        `Could not validate ${RESOURCE_LABELS[resourceType]} "${item.name}" (${action}): ${result.error.message}`,
+        `Application "${application}": Could not validate ${RESOURCE_LABELS[resourceType]} "${item.name}" (${action}): ${result.error.message}`,
       );
     }
   }
@@ -197,10 +198,11 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
  * auth idpConfig.config (provider oneof) is absent at plan time for BuiltInIdP but carries no
  * required constraint — the request is validated as-is from the changeset.
  *
+ * @param application - Application the plan belongs to
  * @param results - Plan results of one deployment
  * @returns Violations found in the deployment's requests
  */
-function collectViolations(results: PlanResults): ViolationEntry[] {
+function collectViolations(application: string, results: PlanResults): ViolationEntry[] {
   const {
     tailorDB,
     staticWebsite,
@@ -223,6 +225,7 @@ function collectViolations(results: PlanResults): ViolationEntry[] {
     items: ReadonlyArray<HasRequest>,
   ): void {
     validateItems({
+      application,
       schema,
       resourceType,
       action: "create",
@@ -238,6 +241,7 @@ function collectViolations(results: PlanResults): ViolationEntry[] {
     items: ReadonlyArray<HasRequest>,
   ): void {
     validateItems({
+      application,
       schema,
       resourceType,
       action: "update",
@@ -253,6 +257,7 @@ function collectViolations(results: PlanResults): ViolationEntry[] {
     items: ReadonlyArray<HasCreateRequest>,
   ): void {
     validateItems({
+      application,
       schema,
       resourceType,
       action: "replace",
@@ -268,6 +273,7 @@ function collectViolations(results: PlanResults): ViolationEntry[] {
     items: ReadonlyArray<HasUpdateRequest>,
   ): void {
     validateItems({
+      application,
       schema,
       resourceType,
       action: "replace",
@@ -712,7 +718,10 @@ export type PlanToValidate = {
  */
 export async function validatePlans(plans: ReadonlyArray<PlanToValidate>): Promise<void> {
   const violations = plans.flatMap((plan) =>
-    collectViolations(plan.results).map((v) => ({ application: plan.application, ...v })),
+    collectViolations(plan.application, plan.results).map((v) => ({
+      application: plan.application,
+      ...v,
+    })),
   );
   if (violations.length === 0) {
     return;
