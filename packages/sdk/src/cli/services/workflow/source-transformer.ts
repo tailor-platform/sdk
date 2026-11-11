@@ -1,4 +1,5 @@
 import { parseSync } from "oxc-parser";
+import { RolldownMagicString } from "rolldown";
 import { type ASTNode, type Replacement, applyReplacements, findStatementEnd } from "./ast-utils";
 import { findAllJobs } from "./job-detector";
 import { collectSdkBindings, isSdkFunctionCall } from "./sdk-binding-collector";
@@ -71,14 +72,14 @@ function findWorkflowDefaultExport(program: Program): { start: number; end: numb
  * @param targetJobName - The name of the target job (from job config)
  * @param targetJobExportName - The export name of the target job (optional, for enhanced detection)
  * @param otherJobExportNames - Export names of other jobs to remove (optional, for enhanced detection)
- * @returns Transformed workflow source code
+ * @returns Workflow source edits with their original positions
  */
 export function transformWorkflowSource(
   source: string,
   targetJobName: string,
   targetJobExportName?: string,
   otherJobExportNames?: string[],
-): string {
+): RolldownMagicString {
   // Use .ts extension to properly parse TypeScript code
   const { program } = parseSync("input.ts", source);
 
@@ -91,7 +92,7 @@ export function transformWorkflowSource(
   // from files that don't contain the target job.
   const targetJobExistsInFile = detectedJobs.some((j) => j.name === targetJobName);
   if (!targetJobExistsInFile) {
-    return source;
+    return new RolldownMagicString(source);
   }
 
   // Find all variable declarations for export name-based removal

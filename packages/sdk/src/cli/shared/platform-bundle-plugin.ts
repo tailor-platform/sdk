@@ -1,3 +1,4 @@
+import { RolldownMagicString } from "rolldown";
 import type { EffectiveDateDefault } from "#/runtime/types";
 import type * as rolldown from "rolldown";
 
@@ -60,13 +61,15 @@ export function createPlatformBundleDefinePlugin(
     name: "tailor-platform-bundle-define",
     transform(code) {
       if (!code.includes("__TAILOR_PLATFORM_BUNDLE")) return null;
+      const source = new RolldownMagicString(code)
+        .replaceAll(GATE, "true")
+        .replaceAll(WITHOUT_DATE_GATE, String(!dateRepresentations.date))
+        .replaceAll(WITHOUT_TEMPORAL_GATE, String(!dateRepresentations.temporal))
+        .replaceAll(DATE_DEFAULT_GATE, dateDefaultLiteral)
+        .replaceAll(KYSELY_TEMPORAL_GATE, kyselyTemporalLiteral);
       return {
-        code: code
-          .replace(GATE, "true")
-          .replace(WITHOUT_DATE_GATE, String(!dateRepresentations.date))
-          .replace(WITHOUT_TEMPORAL_GATE, String(!dateRepresentations.temporal))
-          .replace(DATE_DEFAULT_GATE, dateDefaultLiteral)
-          .replace(KYSELY_TEMPORAL_GATE, kyselyTemporalLiteral),
+        code: source.toString(),
+        map: source.generateMap({ hires: "boundary" }).toString(),
       };
     },
     resolveId(source) {

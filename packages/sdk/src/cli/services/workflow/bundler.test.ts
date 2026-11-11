@@ -4,7 +4,8 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
 import { buildStartContext, normalizeFilePath } from "#/cli/shared/start-context";
-import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
+import { originalPositionAt } from "#/cli/shared/test-helpers/sourcemap";
+import { makeTempDir, tempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { assertDefined } from "#/utils/assert";
 import {
   bundleWorkflowJobs,
@@ -14,6 +15,69 @@ import {
 } from "./bundler";
 
 describe("bundleWorkflowJobs", () => {
+  test.each([false, true])(
+    "preserves error positions after job removal with start calls %s",
+    async (withStart) => {
+      using tmp = tempDir("workflow-sourcemap-");
+      const sourceFile = path.join(tmp.dir, "workflow.ts");
+      fs.writeFileSync(
+        sourceFile,
+        `import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+export const step = createWorkflowJob({
+  name: "step",
+  body: async () => "step",
+});
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async (input: { fail?: boolean }) => {
+${
+  withStart
+    ? `    await step.start(
+      (() => {
+        if (input.fail) throw new Error("ARGUMENT_POSITION");
+        return {};
+      })(),
+    );`
+    : ""
+}
+    throw new Error("WORKFLOW_POSITION");
+  },
+});
+export default createWorkflow({ name: "flow", mainJob });
+`,
+      );
+      const result = await bundleWorkflowJobs({
+        allJobs: [
+          { name: "step", exportName: "step", sourceFile },
+          { name: "main-job", exportName: "mainJob", sourceFile },
+        ],
+        mainJobNames: ["step", "main-job"],
+        startContext: await buildStartContext({ files: [sourceFile] }),
+        baseDir: tmp.dir,
+        inlineSourcemap: true,
+      });
+      const code = assertDefined(result.bundledCode.get("main-job"), "job missing");
+      const traceMap = assertDefined(extractInlineSourcemap(code), "inline sourcemap missing");
+      const positions = withStart
+        ? ([
+            ["ARGUMENT_POSITION", 11, 34],
+            ["WORKFLOW_POSITION", 15, 14],
+          ] as const)
+        : ([["WORKFLOW_POSITION", 10, 14]] as const);
+      for (const [message, line, column] of positions) {
+        const messageOffset = code.indexOf(message);
+        expect(messageOffset).toBeGreaterThan(-1);
+        expect(
+          originalPositionAt(traceMap, code, code.lastIndexOf("Error", messageOffset)),
+        ).toMatchObject({
+          source: expect.stringContaining("workflow.ts"),
+          line,
+          column,
+        });
+      }
+    },
+  );
+
   test("does not throw when no workflow jobs are provided", async () => {
     await expect(
       bundleWorkflowJobs({

@@ -22,7 +22,7 @@ import {
   getStartCallInfo,
 } from "./ast-utils";
 import type { Program } from "@oxc-project/types";
-import type { Plugin } from "rolldown";
+import type { Plugin, RolldownMagicString } from "rolldown";
 
 export interface ResolvedStartCall extends StartCallInfo {
   kind: "job" | "workflow";
@@ -182,7 +182,7 @@ function assertNoUndetectableStartCalls(
       }
     }
 
-    const startCall = getStartCallInfo(node, sourceText);
+    const startCall = getStartCallInfo(node);
     if (!startCall || shadowedNames.has(startCall.identifierName)) return;
     const undetectable = undetectableImports.get(startCall.identifierName);
     if (!undetectable) return;
@@ -215,7 +215,7 @@ function detectStartCallsWithTargets(
       return;
     }
 
-    const startCall = getStartCallInfo(node, sourceText);
+    const startCall = getStartCallInfo(node);
     if (!startCall || shadowedNames.has(startCall.identifierName)) return;
     const target = targets.get(startCall.identifierName);
     if (target) {
@@ -243,7 +243,7 @@ export function transformStartCalls(
   source: string,
   startContext: StartContext,
   currentFilePath: string,
-): string {
+): RolldownMagicString {
   const { program } = parseSync("input.ts", source);
   const localTargets = collectLocalTargets(program, startContext, currentFilePath);
   assertNoUndetectableStartCalls(program, source, localTargets, currentFilePath);
@@ -274,33 +274,39 @@ export function transformStartCalls(
   let needsNormalizerHelper = false;
 
   for (const call of startCalls) {
-    let transformedCall: string;
-    if (call.kind === "workflow") {
-      let optionsPart = "";
-      if (call.optionsText !== undefined) {
-        if (authNamespace) {
-          optionsPart = `, ${NORMALIZER_IDENTIFIER}(${call.optionsText})`;
-          needsNormalizerHelper = true;
-        } else {
-          optionsPart = `, ${call.optionsText}`;
-        }
-      }
-      transformedCall = `${WORKFLOW_RUNTIME_EXPR}.startWorkflow(${JSON.stringify(call.targetName)}, ${call.argsText || "undefined"}${optionsPart})`;
-    } else {
-      const optionsPart = call.optionsText !== undefined ? `, ${call.optionsText}` : "";
-      transformedCall = `${WORKFLOW_RUNTIME_EXPR}.execJobFunction(${JSON.stringify(call.targetName)}, ${call.argsText || "undefined"}${optionsPart})`;
+    const method = call.kind === "workflow" ? "startWorkflow" : "execJobFunction";
+    const prefix = `${WORKFLOW_RUNTIME_EXPR}.${method}(${JSON.stringify(call.targetName)}, `;
+    const { argsRange, optionsRange, callRange } = call;
+    if (!argsRange) {
+      replacements.push({ ...callRange, text: `${prefix}undefined)` });
+      continue;
     }
     replacements.push({
-      start: call.callRange.start,
-      end: call.callRange.end,
-      text: transformedCall,
+      start: callRange.start,
+      end: argsRange.start,
+      text: prefix,
     });
+    const normalizeOptions = call.kind === "workflow" && authNamespace && optionsRange;
+    if (optionsRange) {
+      replacements.push({
+        start: argsRange.end,
+        end: optionsRange.start,
+        text: normalizeOptions ? `, ${NORMALIZER_IDENTIFIER}(` : ", ",
+      });
+    }
+    replacements.push({
+      start: optionsRange?.end ?? argsRange.end,
+      end: callRange.end,
+      text: normalizeOptions ? "))" : ")",
+    });
+    if (normalizeOptions) needsNormalizerHelper = true;
   }
 
   const transformed = applyReplacements(source, replacements);
-  return needsNormalizerHelper && authNamespace
-    ? buildNormalizerHelperSource(authNamespace) + transformed
-    : transformed;
+  if (needsNormalizerHelper && authNamespace) {
+    transformed.prepend(buildNormalizerHelperSource(authNamespace));
+  }
+  return transformed;
 }
 
 export function createStartTransformPlugin(
@@ -314,7 +320,11 @@ export function createStartTransformPlugin(
       filter: { id: { include: [/\.(ts|mts|cts|js|mjs|cjs)$/] } },
       handler(code, id) {
         if (!hasStartCall(code)) return null;
-        return { code: transformStartCalls(code, startContext, id) };
+        const transformed = transformStartCalls(code, startContext, id);
+        return {
+          code: transformed.toString(),
+          map: transformed.generateMap({ hires: "boundary" }).toString(),
+        };
       },
     },
   };

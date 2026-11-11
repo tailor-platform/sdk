@@ -1,6 +1,11 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { TraceMap } from "@jridgewell/trace-mapping";
+import { build } from "rolldown";
 import { describe, expect, test } from "vitest";
+import { originalPositionAt } from "#/cli/shared/test-helpers/sourcemap";
+import { tempDir } from "#/cli/shared/test-helpers/temp-dir";
+import { assertDefined } from "#/utils/assert";
 import {
   createPlatformBundleDefinePlugin,
   platformBundleDefinePlugin,
@@ -12,6 +17,41 @@ const run = (code: string, plugin = platformBundleDefinePlugin): string | null =
 };
 
 describe("platformBundleDefinePlugin", () => {
+  test.each([
+    "process.env.__TAILOR_PLATFORM_BUNDLE",
+    "globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DATE",
+    "globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_TEMPORAL",
+    "globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT",
+    "globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL",
+  ])("preserves error positions after folding %s", async (gate) => {
+    using tmp = tempDir("platform-sourcemap-");
+    const sourceLines = [
+      `export function main() { if (${gate}) throw new Error("GATE"); }`,
+      `export function later() { throw new Error("LATER"); }`,
+    ];
+    const sourceFile = join(tmp.dir, "function.js");
+    writeFileSync(sourceFile, sourceLines.join("\n"));
+    const result = await build({
+      input: sourceFile,
+      plugins: [createPlatformBundleDefinePlugin({ date: false, temporal: false }, "date", true)],
+      output: { format: "esm", sourcemap: true, minify: true },
+      write: false,
+    });
+    const chunk = result.output[0];
+    expect(chunk.type).toBe("chunk");
+    const traceMap = new TraceMap(assertDefined(chunk.map, "sourcemap missing").toString());
+    for (const [index, message] of ["GATE", "LATER"].entries()) {
+      const messageOffset = chunk.code.indexOf(message);
+      expect(messageOffset).toBeGreaterThan(-1);
+      expect(
+        originalPositionAt(traceMap, chunk.code, chunk.code.lastIndexOf("throw", messageOffset)),
+      ).toMatchObject({
+        line: index + 1,
+        column: assertDefined(sourceLines[index], "source line missing").indexOf("throw"),
+      });
+    }
+  });
+
   test("folds the gate member-expression to true", () => {
     expect(run("if (!process.env.__TAILOR_PLATFORM_BUNDLE) register();")).toBe(
       "if (!true) register();",
