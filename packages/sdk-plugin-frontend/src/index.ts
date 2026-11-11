@@ -1,3 +1,4 @@
+import { PluginValidationError } from "@tailor-platform/sdk";
 import * as path from "pathe";
 import type { FrontendDefinition } from "./types";
 import type { Plugin } from "@tailor-platform/sdk";
@@ -18,8 +19,8 @@ export function frontendPlugin(
   ...frontends: [FrontendDefinition, ...FrontendDefinition[]]
 ): Plugin<unknown, FrontendDefinition[]> {
   if (frontends.length === 0) throw new Error("frontendPlugin requires at least one frontend");
-  const names = new Set<string>();
-  for (const frontend of frontends) {
+  const indicesByName = new Map<string, number[]>();
+  for (const [index, frontend] of frontends.entries()) {
     const name = typeof frontend.site === "string" ? frontend.site : frontend.site.name;
     if (frontend.distDir.length === 0)
       throw new Error(`distDir must not be empty for site "${name}"`);
@@ -27,8 +28,25 @@ export function frontendPlugin(
       throw new Error(
         `build must not be blank for site "${name}"; omit it to publish without building`,
       );
-    if (names.has(name)) throw new Error(`Duplicate frontend site "${name}"`);
-    names.add(name);
+    const indices = indicesByName.get(name);
+    if (indices) indices.push(index);
+    else indicesByName.set(name, [index]);
+  }
+  const duplicates = [...indicesByName]
+    .filter(([, indices]) => indices.length > 1)
+    .map(([name, indices]) => ({ name, indices }));
+  if (duplicates.length > 0) {
+    throw new PluginValidationError({
+      code: "FRONTEND_SITE_DUPLICATE",
+      message: duplicates
+        .map(
+          ({ name, indices }) =>
+            `Duplicate frontend site "${name}" at argument indices: ${indices.join(", ")}`,
+        )
+        .join("\n"),
+      suggestion: "Configure each site only once in frontendPlugin().",
+      context: { pluginId: FrontendPluginID, duplicates },
+    });
   }
   return {
     id: FrontendPluginID,

@@ -3,8 +3,10 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { AppConfigSchema } from "#/parser/app-config/schema";
 import { PluginConfigSchema } from "#/parser/plugin-config/index";
+import { PluginValidationError } from "#/utils/plugin-validation-error";
 import { loadConfigPath } from "./context";
 import { assertEnvHasNoSecrets, resolveEnvValue } from "./env-secret-scan";
+import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
 import { CLIError } from "./errors";
 import { installCliTailordbStub } from "./mock";
 import { currentImportNonce, IMPORT_NONCE_PARAM } from "./user-modules";
@@ -182,5 +184,20 @@ export async function loadConfig(
  * @returns An Error carrying the source location the failure points at
  */
 export function atConfigSource(error: unknown, resolvedPath: string): unknown {
+  if (error instanceof PluginValidationError) {
+    return atUserModule(
+      withErrorDiagnostics(
+        CLIError({
+          code: error.code,
+          message: error.message,
+          suggestion: error.suggestion,
+          context: error.context,
+          cause: error,
+        }),
+        getErrorDiagnostics(error),
+      ),
+      resolvedPath,
+    );
+  }
   return syntaxInvalidError(error) ?? atUserModule(error, resolvedPath);
 }

@@ -43,6 +43,7 @@ export {
 export * from "#/configure/services/index";
 
 export { defineConfig, definePlugins } from "#/configure/config/index";
+export { PluginValidationError } from "#/utils/plugin-validation-error";
 
 // Plugin types for custom plugin development
 export type {

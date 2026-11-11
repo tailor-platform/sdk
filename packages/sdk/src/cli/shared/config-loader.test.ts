@@ -3,8 +3,10 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
 import { invalidPluginsExports } from "#/plugin/test-helpers/invalid-plugins-exports";
+import { PluginValidationError } from "#/utils/plugin-validation-error";
 import { atConfigSource, loadConfig } from "./config-loader";
 import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
+import { errorToJson } from "./error-json";
 
 // Assembled at runtime: spelled out in full, this fixture is indistinguishable
 // from a live credential to the repository's own push protection.
@@ -292,6 +294,36 @@ const syntaxDiagnostic = {
 };
 
 describe("atConfigSource", () => {
+  test.each([undefined, { file: "/repo/plugin-options.ts", line: 9 }])(
+    "preserves plugin validation diagnostics with source location %j",
+    (location) => {
+      const context = { pluginId: "example", duplicates: [{ name: "web", indices: [0, 2] }] };
+      const original = new PluginValidationError({
+        code: "EXAMPLE_INVALID",
+        message: "Invalid example options",
+        suggestion: "Fix the example options.",
+        context,
+      });
+      if (location) withErrorDiagnostics(original, { location });
+
+      const result = atConfigSource(original, "/repo/tailor.config.ts");
+      const expectedLocation = location ?? { file: "/repo/tailor.config.ts" };
+      const source = path.relative(process.cwd(), expectedLocation.file);
+      const line = location ? ":9" : "";
+
+      expect(result).toMatchObject({ name: "CLIError", cause: original });
+      expect(getErrorDiagnostics(result as Error).location).toEqual(expectedLocation);
+      expect(errorToJson(result)).toEqual({
+        error: {
+          code: "EXAMPLE_INVALID",
+          message: `${source}${line}: Invalid example options`,
+          suggestion: "Fix the example options.",
+          context,
+        },
+      });
+    },
+  );
+
   test("reports unparsable source as SYNTAX_INVALID at the line it failed on", () => {
     const result = atConfigSource(syntaxDiagnostic, "/repo/tailor.config.ts");
 
