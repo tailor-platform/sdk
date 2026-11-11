@@ -7,6 +7,7 @@ import { db } from "#/configure/services/tailordb/index";
 import { _clearCacheForTesting } from "./get-generated-table";
 import { getExtendedTable, getGeneratedTable } from "./index";
 import type { TailorAnyDBType } from "#/configure/services/tailordb/types";
+import type { TailorDBServiceConfigInput } from "#/types/tailordb.generated";
 
 declare global {
   // oxlint-disable-next-line no-var
@@ -43,14 +44,17 @@ order.plugin(${attachments});
     );
   };
 
-  const writeConfig = (plugins: string) => {
+  const writeConfig = (
+    plugins: string,
+    namespaceConfig: TailorDBServiceConfigInput = { files: [tablePath] },
+  ) => {
     fs.writeFileSync(
       configPath,
       `import { db } from "@tailor-platform/sdk";
 export const plugins = [${plugins}];
 export default {
   db: {
-    main: { files: [${JSON.stringify(tablePath)}] },
+    main: ${JSON.stringify(namespaceConfig)},
   },
 };
 `,
@@ -127,6 +131,22 @@ export default {
     const order = await loadTable();
 
     expect(await getExtendedTable(configPath, order)).toBe(order);
+  });
+
+  test("does not import default-excluded files while applying plugin extensions", async () => {
+    writeTable('{ "first": {} }');
+    fs.writeFileSync(
+      path.join(path.dirname(configPath), "ignored.test.ts"),
+      'throw new Error("Excluded module imported");',
+    );
+    writeConfig(extendingPlugin("first", "rank", "db.int()"), {
+      files: ["./ignored.test.ts", "./order.mjs"],
+    });
+    const order = await loadTable();
+
+    const table = await getExtendedTable(configPath, order);
+
+    expect(Object.keys(table.fields)).toEqual(["id", "name", "rank"]);
   });
 
   test("runs the plugins once per table, even for concurrent callers", async () => {
@@ -248,6 +268,135 @@ export default {
   });
 
   describe("table-attached plugin", () => {
+    const writeNamespaceFixture = async (
+      namespaces: Record<string, TailorDBServiceConfigInput>,
+      sourceFile: string,
+      excludedFiles: string[],
+    ) => {
+      const tablesDir = path.join(path.dirname(configPath), "tables");
+      fs.mkdirSync(tablesDir);
+      const tablePath = path.join(tablesDir, sourceFile);
+      fs.writeFileSync(
+        tablePath,
+        'export const order = { name: "Order", fields: {}, plugins: [] };',
+      );
+      for (const file of excludedFiles) {
+        fs.writeFileSync(
+          path.join(tablesDir, file),
+          'throw new Error("Excluded module imported");',
+        );
+      }
+      fs.writeFileSync(
+        configPath,
+        `export const plugins = [{
+  id: "table-plugin",
+  description: "test",
+  importPath: "@test/table-plugin",
+  onTableLoaded({ namespace }) {
+    return { tables: { archive: { name: namespace + "Archive", fields: {}, plugins: [] } } };
+  },
+}];
+export default { db: ${JSON.stringify(namespaces)} };
+`,
+      );
+      const { order } = (await import(pathToFileURL(tablePath).href)) as {
+        order: TailorAnyDBType;
+      };
+      return order;
+    };
+
+    test.each(["a.test.ts", "a.spec.ts"])(
+      "does not import excluded %s by default",
+      async (file) => {
+        const order = await writeNamespaceFixture(
+          { main: { files: [`./tables/${file}`, "./tables/*.ts"] } },
+          "z.ts",
+          [file],
+        );
+
+        const table = await getGeneratedTable(configPath, "table-plugin", order, "archive");
+
+        expect(table.name).toBe("mainArchive");
+      },
+    );
+
+    test.each([
+      {
+        rule: "explicit ignores replacing the defaults",
+        config: { files: ["./tables/a.ts", "./tables/*.ts"], ignores: ["./tables/a.ts"] },
+        sourceFile: "z.test.ts",
+      },
+      {
+        rule: "a negated files pattern",
+        config: { files: ["./tables/a.ts", "./tables/*.ts", "!./tables/a.ts"] },
+        sourceFile: "z.ts",
+      },
+    ])("does not import files excluded by $rule", async ({ config, sourceFile }) => {
+      const order = await writeNamespaceFixture({ main: config }, sourceFile, ["a.ts"]);
+
+      const table = await getGeneratedTable(configPath, "table-plugin", order, "archive");
+
+      expect(table.name).toBe("mainArchive");
+    });
+
+    test.each([
+      {
+        rule: "the default test-file exclusion",
+        config: { files: ["./tables/*.ts"] },
+        sourceFile: "z.test.ts",
+      },
+      {
+        rule: "a later negated files pattern",
+        config: { files: ["./tables/*.ts", "!./tables/z.ts"] },
+        sourceFile: "z.ts",
+      },
+      {
+        rule: "ignores after a later positive pattern",
+        config: {
+          files: ["./tables/*.ts", "!./tables/*.ts", "./tables/z.ts"],
+          ignores: ["./tables/z.ts"],
+        },
+        sourceFile: "z.ts",
+      },
+    ])(
+      "skips namespaces excluding the source table through $rule",
+      async ({ config, sourceFile }) => {
+        const order = await writeNamespaceFixture(
+          { excluded: config, main: { files: ["./tables/*.ts"], ignores: [] } },
+          sourceFile,
+          [],
+        );
+
+        const table = await getGeneratedTable(configPath, "table-plugin", order, "archive");
+
+        expect(table.name).toBe("mainArchive");
+      },
+    );
+
+    test.each([
+      {
+        rule: "a positive pattern after an exclusion",
+        config: { files: ["./tables/*.ts", "!./tables/*.ts", "./tables/z.ts"] },
+        sourceFile: "z.ts",
+      },
+      {
+        rule: "an exclusion before any positive pattern",
+        config: { files: ["!./tables/*.ts", "./tables/*.ts"] },
+        sourceFile: "z.ts",
+      },
+      {
+        rule: "ignores: [] to include test files",
+        config: { files: ["./tables/*.ts"], ignores: [] },
+        sourceFile: "z.test.ts",
+      },
+    ])("resolves the namespace with $rule", async ({ config, sourceFile }) => {
+      const order = await writeNamespaceFixture({ main: config }, sourceFile, []);
+
+      const table = await getGeneratedTable(configPath, "table-plugin", order, "archive");
+
+      expect(table.name).toBe("mainArchive");
+    });
+
     test("passes the table context and caches the generated table", async () => {
       const tablePath = path.join(path.dirname(configPath), "order.mjs");
       fs.writeFileSync(
