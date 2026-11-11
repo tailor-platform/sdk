@@ -241,13 +241,13 @@ function defineResolver(
 
   for (const [namespace, serviceConfig] of Object.entries(config)) {
     if (!("external" in serviceConfig)) {
-      const resolverService = createResolverService(
+      const resolverService = createResolverService({
         namespace,
-        serviceConfig,
+        config: serviceConfig,
         configPath,
         baseDir,
         plugins,
-      );
+      });
       resolverServices.push(resolverService);
     }
     subgraphs.push({ Type: "pipeline", Name: namespace });
@@ -282,13 +282,13 @@ export function definePluginResolverServices(
       continue;
     }
     resolverServices.push(
-      createResolverService(
+      createResolverService({
         namespace,
-        { files: [] },
-        config.path,
+        config: { files: [] },
+        configPath: config.path,
         baseDir,
-        pluginResolverSource(config, pluginManager),
-      ),
+        plugins: pluginResolverSource(config, pluginManager),
+      }),
     );
   }
   return resolverServices;

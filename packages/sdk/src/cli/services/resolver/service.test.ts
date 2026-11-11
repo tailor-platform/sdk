@@ -49,12 +49,12 @@ export default createResolver({
     const fileA = writeResolver("a.ts", resolverSource("resolver-a"));
     const fileB = writeResolver("b.ts", resolverSource("resolver-b"));
 
-    const service = createResolverService(
-      "ns",
-      { files: [fileA, fileB] },
+    const service = createResolverService({
+      namespace: "ns",
+      config: { files: [fileA, fileB] },
       configPath,
-      process.cwd(),
-    );
+      baseDir: process.cwd(),
+    });
     await service.loadResolvers();
 
     expect(
@@ -75,7 +75,12 @@ export default resolver;
 `,
     );
 
-    const service = createResolverService("ns", { files: [file] }, configPath, process.cwd());
+    const service = createResolverService({
+      namespace: "ns",
+      config: { files: [file] },
+      configPath,
+      baseDir: process.cwd(),
+    });
     using _logger = silenceLogger("error");
     await expect(service.loadResolvers()).rejects.toMatchObject({
       code: "DEFINITION_INVALID",
@@ -93,12 +98,12 @@ export default resolver;
     const fileA = writeResolver("a.ts", resolverSource("duplicate"));
     const fileB = writeResolver("b.ts", resolverSource("duplicate"));
 
-    const service = createResolverService(
-      "ns",
-      { files: [fileA, fileB] },
+    const service = createResolverService({
+      namespace: "ns",
+      config: { files: [fileA, fileB] },
       configPath,
-      process.cwd(),
-    );
+      baseDir: process.cwd(),
+    });
 
     await expect(service.loadResolvers()).rejects.toMatchObject({
       code: "DEFINITION_NAME_DUPLICATE",
@@ -122,7 +127,12 @@ export default resolver;
     const file = writeResolver("not-a-resolver.ts", `export default { not: "a resolver" };\n`);
     const log = vi.spyOn(logger, "log").mockImplementation(() => {});
 
-    const service = createResolverService("ns", { files: [file] }, configPath, process.cwd());
+    const service = createResolverService({
+      namespace: "ns",
+      config: { files: [file] },
+      configPath,
+      baseDir: process.cwd(),
+    });
     await service.loadResolvers();
     await service.loadResolvers();
 
@@ -136,12 +146,12 @@ export default resolver;
   test("warns with the configured patterns when no resolver files match", async () => {
     const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
 
-    const service = createResolverService(
-      "ns",
-      { files: ["./missing/*.ts"] },
+    const service = createResolverService({
+      namespace: "ns",
+      config: { files: ["./missing/*.ts"] },
       configPath,
-      process.cwd(),
-    );
+      baseDir: process.cwd(),
+    });
     await service.loadResolvers();
 
     const warnings = warn.mock.calls.map(([message]) => String(message));
@@ -152,7 +162,12 @@ export default resolver;
   test("warns without patterns when the namespace configures none", async () => {
     const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
 
-    const service = createResolverService("ns", { files: [] }, configPath, process.cwd());
+    const service = createResolverService({
+      namespace: "ns",
+      config: { files: [] },
+      configPath,
+      baseDir: process.cwd(),
+    });
     await service.loadResolvers();
 
     const warnings = warn.mock.calls.map(([message]) => String(message));
@@ -162,15 +177,15 @@ export default resolver;
 
   test("rejects an invalid defaultPermission at the config file", () => {
     expect(() =>
-      createResolverService(
-        "ns",
-        {
+      createResolverService({
+        namespace: "ns",
+        config: {
           files: [],
           defaultPermission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: false }],
         },
         configPath,
-        process.cwd(),
-      ),
+        baseDir: process.cwd(),
+      }),
     ).toThrow(
       expect.objectContaining({
         code: "CONFIG_INVALID",
@@ -220,7 +235,12 @@ export default createResolver({
 `,
     );
 
-    const service = createResolverService("ns", { files: [file] }, configPath, process.cwd());
+    const service = createResolverService({
+      namespace: "ns",
+      config: { files: [file] },
+      configPath,
+      baseDir: process.cwd(),
+    });
     using _logger = silenceLogger("error");
     await expect(service.loadResolvers()).rejects.toMatchObject({
       code: "DEFINITION_INVALID",
@@ -244,7 +264,12 @@ export default createResolver({
 `,
     );
 
-    const service = createResolverService("ns", { files: [file] }, configPath, process.cwd());
+    const service = createResolverService({
+      namespace: "ns",
+      config: { files: [file] },
+      configPath,
+      baseDir: process.cwd(),
+    });
     using _logger = silenceLogger("error");
     await expect(service.loadResolvers()).rejects.toMatchObject({
       code: "DEFINITION_INVALID",
@@ -277,7 +302,12 @@ export default createResolver({
     test("warns when neither the namespace nor a resolver declares one", async () => {
       const file = writeResolver("warn.ts", resolverSource("unguarded"));
 
-      const service = createResolverService("ns", { files: [file] }, configPath, process.cwd());
+      const service = createResolverService({
+        namespace: "ns",
+        config: { files: [file] },
+        configPath,
+        baseDir: process.cwd(),
+      });
       await service.loadResolvers();
 
       expect(warnings).toHaveLength(1);
@@ -287,12 +317,12 @@ export default createResolver({
     test("stays silent when the namespace declares a defaultPermission", async () => {
       const file = writeResolver("defaulted.ts", resolverSource("inherits"));
 
-      const service = createResolverService(
-        "ns",
-        { files: [file], defaultPermission: "allowAnonymous" },
+      const service = createResolverService({
+        namespace: "ns",
+        config: { files: [file], defaultPermission: "allowAnonymous" },
         configPath,
-        process.cwd(),
-      );
+        baseDir: process.cwd(),
+      });
       await service.loadResolvers();
 
       expect(warnings).toEqual([]);
@@ -313,7 +343,12 @@ export default createResolver({
 `,
       );
 
-      const service = createResolverService("ns", { files: [file] }, configPath, process.cwd());
+      const service = createResolverService({
+        namespace: "ns",
+        config: { files: [file] },
+        configPath,
+        baseDir: process.cwd(),
+      });
       await service.loadResolvers();
 
       expect(warnings).toEqual([]);
