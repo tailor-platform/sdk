@@ -161,7 +161,10 @@ credential in `env`, a missing default export, or the issues collected across `p
 reported the same way through `configIssuesError()`. Data the SDK or the
 Platform produced goes through `invalidDataError()`, an `internalError()`.
 `local/no-raw-zod-error` rejects a throwing `.parse()` or a rethrown `safeParse` error under
-`packages/sdk/src/cli`.
+`packages/sdk/src/cli`, and `local/no-plain-error` rejects `new Error()` and `Error` subclasses there:
+raise a `CLIError`, or an `internalError()` for an SDK invariant no user action can fix. rolldown
+rejects a build with an error of its own, so a `CLIError` raised inside a rolldown hook is kept with
+`createHookFailures()` (`cli/services/hook-failures.ts`) and thrown after the build.
 
 A failure that points at a file carries it as its `location` (the `cli/shared/validation-errors.ts`
 factories, `atUserModule()`, `withSourceLocation()`), and its `message` leaves the file out: the
