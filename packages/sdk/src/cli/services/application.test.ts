@@ -3,6 +3,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
+import { errorToJson } from "#/cli/shared/error-json";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
 import { defineConfig, definePlugins } from "#/configure/config/index";
 import { defineAIGateway } from "#/configure/services/aigateway/index";
@@ -183,6 +184,69 @@ describe("service config validation", () => {
     }
     throw new Error("expected defineApplication to throw");
   }
+
+  test.each([
+    {
+      configKey: "idp",
+      kind: "idp",
+      label: "IdP",
+      entries: [
+        defineIdp("duplicate", { clients: ["client"] }),
+        { name: "distinct", external: true },
+        { name: "duplicate", external: true },
+        defineIdp("duplicate", { clients: ["other-client"] }),
+      ],
+    },
+    {
+      configKey: "staticWebsites",
+      kind: "staticwebsite",
+      label: "static website",
+      entries: [
+        defineStaticWebSite("duplicate", {}),
+        defineStaticWebSite("distinct", {}),
+        defineStaticWebSite("duplicate", {}),
+        defineStaticWebSite("duplicate", {}),
+      ],
+    },
+    {
+      configKey: "aiGateways",
+      kind: "aigateway",
+      label: "AI Gateway",
+      entries: [
+        defineAIGateway("duplicate", { authNamespace: "my-auth" }),
+        defineAIGateway("distinct", { authNamespace: "my-auth" }),
+        defineAIGateway("duplicate", { authNamespace: "my-auth" }),
+        defineAIGateway("duplicate", { authNamespace: "my-auth" }),
+      ],
+    },
+  ])(
+    "reports all duplicate $configKey entries with their config paths",
+    ({ configKey, kind, label, entries }) => {
+      const error = defineInvalidApplication({ [configKey]: entries });
+      expect(errorToJson(error).error).toMatchObject({
+        code: "DEFINITION_NAME_DUPLICATE",
+        message: [
+          `Duplicate ${label} name "duplicate" found:`,
+          `  - tailor.config.ts (path: ${configKey}.0)`,
+          `  - tailor.config.ts (path: ${configKey}.2)`,
+          `  - tailor.config.ts (path: ${configKey}.3)`,
+        ].join("\n"),
+        context: {
+          kind,
+          duplicates: [
+            {
+              name: "duplicate",
+              definitions: [0, 2, 3].map((index) => ({
+                file: "tailor.config.ts",
+                exportName: "default",
+                path: [configKey, index],
+              })),
+            },
+          ],
+        },
+      });
+    },
+  );
 
   test("names the offending auth field when a machine user attribute is not a db field", () => {
     const error = defineInvalidApplication({

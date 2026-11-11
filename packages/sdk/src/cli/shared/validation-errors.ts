@@ -150,12 +150,23 @@ export function definitionExportError(params: DefinitionErrorParams): CLIError {
   );
 }
 
+const DUPLICATE_NAME_LABELS = {
+  ...DEFINITION_LABELS,
+  idp: "IdP",
+  staticwebsite: "static website",
+  aigateway: "AI Gateway",
+} as const;
+
 interface NamedDefinition extends Omit<DefinitionErrorParams, "kind"> {
   /** Name the definition declares. */
   name: string;
+  /** Path within the exported config, when the definition is a config entry. */
+  path?: FlatIssue["path"];
 }
 
-export interface UniqueDefinitionNamesParams extends Pick<DefinitionErrorParams, "kind"> {
+export interface UniqueDefinitionNamesParams {
+  /** Kind of definition whose names must be unique. */
+  kind: keyof typeof DUPLICATE_NAME_LABELS;
   /** Namespace the names must be unique in, when the kind has one. */
   namespace?: string;
   /** Loaded definitions to check. */
@@ -183,20 +194,25 @@ export function assertUniqueDefinitionNames(params: UniqueDefinitionNamesParams)
     .filter(([, sameName]) => sameName.length > 1)
     .map(([name, sameName]) => ({
       name,
-      definitions: sameName.map(({ file, exportName }) => ({ file, exportName })),
+      definitions: sameName.map(({ file, exportName, path }) => ({
+        file,
+        exportName,
+        ...(path === undefined ? {} : { path }),
+      })),
     }));
   if (duplicates.length === 0) return;
 
-  const label = DEFINITION_LABELS[kind];
+  const label = DUPLICATE_NAME_LABELS[kind];
   const scope = namespace === undefined ? "" : ` in namespace "${namespace}"`;
   throw CLIError({
     code: "DEFINITION_NAME_DUPLICATE",
     message: duplicates
       .flatMap((duplicate) => [
         `Duplicate ${label} name "${duplicate.name}" found${scope}:`,
-        ...duplicate.definitions.map(({ file, exportName }) => {
+        ...duplicate.definitions.map(({ file, exportName, path: configPath }) => {
           const exportLabel = exportName === "default" ? "" : ` (export: ${exportName})`;
-          return `  - ${path.relative(process.cwd(), file)}${exportLabel}`;
+          const pathLabel = configPath === undefined ? "" : ` (path: ${configPath.join(".")})`;
+          return `  - ${path.relative(process.cwd(), file)}${exportLabel}${pathLabel}`;
         }),
       ])
       .join("\n"),
