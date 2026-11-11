@@ -602,7 +602,7 @@ async function planDeploymentTarget(
           },
         ),
       ),
-      withSpan("plan.executor", () => planExecutor(ctx, previous?.executor.existingExecutors)),
+      withSpan("plan.executor", () => planExecutor(ctx, previous?.executor)),
       withSpan("plan.workflow", () =>
         planWorkflow(
           client,
