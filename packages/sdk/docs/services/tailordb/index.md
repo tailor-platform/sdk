@@ -404,6 +404,8 @@ export const order = db
 
 Add validation rules to fields. Validators run after hooks.
 
+Field-level and table-level validators must be synchronous: do not use `async`/`await`. Validation does not wait for asynchronous work, so issues reported after an `await` would be lost. Async validators are rejected at build time.
+
 **Note:** Custom validators run only when built-in type validation succeeds, so `value` always has the field's declared type. For array fields, the validator is called once with the complete array, not per element:
 
 ```typescript
