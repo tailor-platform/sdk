@@ -123,6 +123,7 @@ export function emptyPlanResults(): PlanResults {
       changeSet: createChangeSet("Executors"),
       ...emptyOwnership(),
       existingExecutors: {},
+      existingExecutorDetails: new Map(),
     },
     workflow: {
       changeSet: createChangeSet("Workflows"),

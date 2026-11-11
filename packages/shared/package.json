@@ -9,7 +9,9 @@
     "./color": "./src/color.ts",
     "./node-builtins": "./src/node-builtins.ts",
     "./resource-name": "./src/resource-name.ts",
-    "./workflow-policy": "./src/workflow-policy.ts"
+    "./workflow-policy": "./src/workflow-policy.ts",
+    "./plugin-error": "./src/plugin-error.ts",
+    "./seed-order": "./src/seed-order.ts"
   },
   "scripts": {
     "lint": "oxlint --type-aware .",

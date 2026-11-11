@@ -31,6 +31,36 @@ export function dateDefaultFromConfig(configModule: unknown): EffectiveDateDefau
   );
 }
 
+/** What the Vitest host reads from `tailor.config.ts` for the tailor-runtime environment. */
+export type ConfigDefaults = {
+  /** The representation `t` date fields without `as` follow. */
+  dateDefault: EffectiveDateDefault;
+  /** Whether the kyselyTypePlugin the config exports is configured with `temporal: true`. */
+  kyselyTemporal: boolean;
+};
+
+const KYSELY_TYPE_PLUGIN_ID = "@tailor-platform/kysely-type";
+
+/**
+ * Read the `temporal` option of the kyselyTypePlugin a config module exports in `plugins`.
+ * @param configModule - The imported module namespace
+ * @returns Whether the plugin is configured with `temporal: true`
+ */
+export function kyselyTemporalFromConfig(configModule: unknown): boolean {
+  const plugins =
+    configModule && typeof configModule === "object"
+      ? (configModule as { plugins?: unknown }).plugins
+      : undefined;
+  if (!Array.isArray(plugins)) return false;
+  const plugin = plugins.find(
+    (candidate): candidate is { pluginConfig?: { temporal?: unknown } } =>
+      typeof candidate === "object" &&
+      candidate !== null &&
+      (candidate as { id?: unknown }).id === KYSELY_TYPE_PLUGIN_ID,
+  );
+  return plugin?.pluginConfig?.temporal === true;
+}
+
 type TsHookModule = {
   resolveSync: Parameters<typeof mod.registerHooks>[0]["resolve"];
   loadSync: Parameters<typeof mod.registerHooks>[0]["load"];
@@ -94,18 +124,19 @@ function describeParseError(error: unknown, configPath: string): string {
 }
 
 /**
- * Load `defaultDateRepresentation` from a `tailor.config.ts` file in the
- * Vitest host process, before the tailor-runtime environment applies.
+ * Load `defaultDateRepresentation` and the kyselyTypePlugin's `temporal` option
+ * from one import of a `tailor.config.ts` file in the Vitest host process,
+ * before the tailor-runtime environment applies.
  *
  * A missing file or a file that does not parse fails the run, as does a value
  * the config schema rejects. A config that throws while being evaluated, for
  * example on an environment variable only the deploy environment sets, is
- * reported and read as the legacy default, the way the secrets loader has
- * always tolerated it.
+ * reported and read as the legacy default with `temporal` off, the way the
+ * secrets loader has always tolerated it.
  * @param configPath - Absolute path to tailor.config.ts
- * @returns The representation `t` date fields without `as` follow
+ * @returns The date default and the kysely `temporal` option the config sets
  */
-export async function loadDateDefaultFromConfig(configPath: string): Promise<EffectiveDateDefault> {
+export async function loadConfigDefaultsFromConfig(configPath: string): Promise<ConfigDefaults> {
   if (!existsSync(configPath)) {
     throw new Error(
       `tailor-runtime: tailor.config.ts not found at ${configPath}. Check the \`config\` option of tailorRuntime().`,
@@ -123,7 +154,10 @@ export async function loadDateDefaultFromConfig(configPath: string): Promise<Eff
     console.warn(
       `tailor-runtime could not load ${configPath} to read defaultDateRepresentation; t date fields use string values in this run. If the config sets "temporal" or "date", tests disagree with tailor.d.ts until the error is fixed: ${describeError(error)}`,
     );
-    return "legacy";
+    return { dateDefault: "legacy", kyselyTemporal: false };
   }
-  return dateDefaultFromConfig(configModule);
+  return {
+    dateDefault: dateDefaultFromConfig(configModule),
+    kyselyTemporal: kyselyTemporalFromConfig(configModule),
+  };
 }

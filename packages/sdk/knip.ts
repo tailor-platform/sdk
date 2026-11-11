@@ -13,6 +13,7 @@ export default {
     "src/types/*.ts",
     "src/vitest/integration/vitest.config.ts",
     "src/vitest/integration/fixtures/tailor.config.ts",
+    "src/vitest/integration/fixtures/user-setup-probe.ts",
   ],
   ignoreIssues: {
     "src/runtime/{aigateway,authconnection,context,file,iconv,idp,secretmanager,workflow}.ts": [

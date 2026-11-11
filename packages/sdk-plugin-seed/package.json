@@ -43,10 +43,11 @@
   },
   "devDependencies": {
     "@tailor-platform/sdk": "workspace:^",
+    "@tailor-platform/shared": "workspace:^",
     "@types/node": "26.6.6",
     "oxlint": "1.92.0",
     "oxlint-tsgolint": "7.0.2006",
-    "tsdown": "0.23.2",
+    "tsdown": "0.23.7",
     "typescript": "6.0.3",
     "vitest": "5.1.0"
   },

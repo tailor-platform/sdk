@@ -109,6 +109,14 @@ includes separate `error.context.apply` and `error.context.recovery` errors, eac
 and available recovery information. Inspect the current resource state before retrying: some writes
 may have completed. `--verbose --json` additionally includes stack traces for both causes.
 
+When `tailor deploy` finds values the Tailor Platform would reject, it stops before applying
+anything and reports `DEPLOY_VALIDATION_FAILED`. `error.context.issues` lists every rejected
+value across all configs in the run, each with its `application`, `resourceType`, `name`,
+`action`, `fieldPath`, and `message`. `resourceType` is a resource type id such as `idp.client`,
+`action` is `create`, `update`, or `replace`, and `fieldPath` is a dotted field path in the
+request sent to the Platform, such as `tailordb_type.name`. The IdP email-domain check instead
+uses the config field path `userAuthPolicy.allowedEmailDomains`.
+
 Generation hook failures use `PLUGIN_GENERATION_FAILED`. The error includes the failed hook
 and each failing plugin's ID and error in `error.context.failures`; successful plugins are
 excluded from that list.

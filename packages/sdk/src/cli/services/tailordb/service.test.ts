@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { aroundEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { logger } from "#/cli/shared/logger";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
@@ -10,9 +10,19 @@ import {
   unsafeAllowAllTypePermission,
 } from "#/configure/services/tailordb/index";
 import { PluginManager } from "#/plugin/manager";
+import { precompileTailorDBTypeScripts } from "./hooks-validate-bundler";
 import { createTailorDBService } from "./service";
 import type { TailorTypePermission } from "#/configure/services/tailordb/permission";
 import type { Plugin } from "#/plugin/types";
+import type * as HooksValidateBundler from "./hooks-validate-bundler";
+
+vi.mock("./hooks-validate-bundler", async (importOriginal) => {
+  const actual = await importOriginal<typeof HooksValidateBundler>();
+  return {
+    ...actual,
+    precompileTailorDBTypeScripts: vi.fn(actual.precompileTailorDBTypeScripts),
+  };
+});
 
 const malformedTypePermission = {
   create: [{ conditions: [[null, "=", "loggedin"]], permit: true }],
@@ -30,6 +40,10 @@ describe("createTailorDBService.loadTypes", () => {
       fs.rmSync(tmpDir, { recursive: true, force: true });
       tmpDir = undefined;
     }
+  });
+
+  beforeEach(() => {
+    vi.mocked(precompileTailorDBTypeScripts).mockClear();
   });
 
   function writeTypeFile(name: string, source: string): string {
@@ -134,49 +148,86 @@ user.name = 1;
     });
   });
 
-  test("allows type names that match Object prototype properties", async () => {
-    const typeFile = writeTypeFile(
-      "object-prototype.ts",
-      `
+  test.each(["item", "toString", "__proto__"])(
+    "reports invalid table name %s with its definition file and export",
+    async (name) => {
+      const file = writeTypeFile(
+        "item.ts",
+        `
 import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
-export const objectPrototype = db.table("toString", {
-  value: db.string(),
+export const item = db.table(${JSON.stringify(name)}, {
+  title: db.string(),
 }).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
 `,
-    );
+      );
 
+      const service = createTailorDBService({
+        namespace: "main",
+        config: { files: [file] },
+        baseDir: process.cwd(),
+      });
+
+      using _logger = silenceLogger("error");
+      const error = await service.loadTypes().catch((thrown: unknown) => thrown);
+      if (!(error instanceof Error)) throw new Error("expected loadTypes to reject with an Error");
+      expect(error).toMatchObject({
+        code: "DEFINITION_INVALID",
+        message: expect.stringContaining("Invalid TailorDB type `item`"),
+        context: {
+          kind: "tailordb-type",
+          file,
+          exportName: "item",
+          issues: [
+            {
+              path: ["name"],
+              message: "must be 1-63 ASCII letters or digits, starting with an uppercase letter",
+            },
+            {
+              path: ["metadata", "name"],
+              message: "must be 1-63 ASCII letters or digits, starting with an uppercase letter",
+            },
+          ],
+        },
+      });
+      expect(getErrorDiagnostics(error).location).toEqual({ file });
+    },
+  );
+
+  const HOOKED_TYPE = `
+import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+export const user = db.table("User", {
+  name: db.string().hooks({ create: ({ value }) => value ?? "anonymous" }),
+}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
+`;
+
+  test("bundles the hook and validator scripts of each table it loads", async () => {
+    const file = writeTypeFile("hooked.ts", HOOKED_TYPE);
     const service = createTailorDBService({
       namespace: "main",
-      config: { files: [typeFile] },
+      config: { files: [file] },
       baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log");
-    const types = await service.loadTypes();
-    expect(Object.hasOwn(types ?? {}, "toString")).toBe(true);
+    await service.loadTypes();
+
+    expect(precompileTailorDBTypeScripts).toHaveBeenCalledTimes(1);
   });
 
-  test("allows __proto__ as a type name", async () => {
-    const typeFile = writeTypeFile(
-      "proto.ts",
-      `
-import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
-export const proto = db.table("__proto__", {
-  value: db.string(),
-}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
-`,
-    );
-
+  test("loads the tables without bundling their hook and validator scripts when precompileScripts is false", async () => {
+    const file = writeTypeFile("hooked.ts", HOOKED_TYPE);
     const service = createTailorDBService({
       namespace: "main",
-      config: { files: [typeFile] },
+      config: { files: [file] },
       baseDir: process.cwd(),
+      precompileScripts: false,
     });
 
     using _logger = silenceLogger("error", "log");
     const types = await service.loadTypes();
-    expect(Object.hasOwn(types ?? {}, "__proto__")).toBe(true);
-    expect(Object.hasOwn(service.typeSourceInfo, "__proto__")).toBe(true);
+
+    expect(Object.hasOwn(types ?? {}, "User")).toBe(true);
+    expect(precompileTailorDBTypeScripts).not.toHaveBeenCalled();
   });
 
   test("loads the same matched file only once", async () => {

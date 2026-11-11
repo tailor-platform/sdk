@@ -49,7 +49,10 @@ describe("secret update command", () => {
       default: false,
     });
     expect(result.success).toBe(false);
-    expect(result.error).toMatchObject({ code: "SECRET_UPDATE_CANCELLED" });
+    expect(result.error).toMatchObject({
+      code: "SECRET_UPDATE_CANCELLED",
+      message: "Secret update cancelled. The vault is still managed by the config.",
+    });
     expect(client.updateSecretManagerSecret).not.toHaveBeenCalled();
     expect(releaseVaultOwnership).not.toHaveBeenCalled();
   });
@@ -81,7 +84,7 @@ describe("secret update command", () => {
     expect(releaseVaultOwnership).toHaveBeenCalledTimes(1);
   });
 
-  test("prints the secret and vault under JSON output", async () => {
+  test("skips the confirmation with --yes and prints the secret and vault under JSON output", async () => {
     const client = { updateSecretManagerSecret: vi.fn().mockResolvedValue({}) };
     vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
       client,
@@ -101,6 +104,7 @@ describe("secret update command", () => {
     ]);
 
     expect(result.success).toBe(true);
+    expect(prompt.confirm).not.toHaveBeenCalled();
     expect(JSON.parse(stdout.output)).toEqual({
       changed: true,
       workspaceId: "workspace-1",

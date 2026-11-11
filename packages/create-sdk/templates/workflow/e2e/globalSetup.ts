@@ -27,9 +27,7 @@ async function setupWorkspace(name: string, region: string): Promise<WorkspaceIn
     ttl: "24h",
   });
   if (workspace.ttl?.state === "unconfirmed") {
-    await deleteWorkspace({ workspaceId: workspace.id }).catch((error: unknown) => {
-      console.warn(`Could not delete workspace "${workspace.name}" (${workspace.id}).`, error);
-    });
+    await cleanupWorkspace(workspace.id);
     throw new Error(
       `Could not record an expiry on workspace "${workspace.name}": ${workspace.ttl.message}`,
     );
@@ -46,8 +44,19 @@ async function deployApplication(): Promise<void> {
 
 async function cleanupWorkspace(workspaceId: string): Promise<void> {
   console.log("Deleting workspace...");
-  await deleteWorkspace({ workspaceId });
-  console.log("Workspace deleted successfully.");
+  try {
+    await deleteWorkspace({ workspaceId });
+    console.log("Workspace deleted successfully.");
+  } catch (error) {
+    console.warn(`Could not delete workspace (${workspaceId}).`, error);
+  }
+}
+
+async function provideApp(project: TestProject): Promise<void> {
+  const app = await show();
+  const tokens = await getMachineUserToken({ name: "admin" });
+  project.provide("url", app.url);
+  project.provide("token", tokens.accessToken);
 }
 
 export async function setup(project: TestProject): Promise<void> {
@@ -61,17 +70,22 @@ export async function setup(project: TestProject): Promise<void> {
       );
     }
     createdWorkspace = await setupWorkspace(workspaceName, workspaceRegion);
-    process.env.TAILOR_PLATFORM_WORKSPACE_ID = createdWorkspace.id;
-    // This pipeline deploys a fresh app into a per-run workspace, so let the
-    // SDK inject a missing app id even in CI (normally a hard error there).
-    process.env.TAILOR_CI_ALLOW_ID_INJECTION = "true";
-    await deployApplication();
+    try {
+      process.env.TAILOR_PLATFORM_WORKSPACE_ID = createdWorkspace.id;
+      // This pipeline deploys a fresh app into a per-run workspace, so let the
+      // SDK inject a missing app id even in CI (normally a hard error there).
+      process.env.TAILOR_CI_ALLOW_ID_INJECTION = "true";
+      await deployApplication();
+      await provideApp(project);
+    } catch (error) {
+      await cleanupWorkspace(createdWorkspace.id);
+      createdWorkspace = null;
+      throw error;
+    }
+    return;
   }
 
-  const app = await show();
-  const tokens = await getMachineUserToken({ name: "admin" });
-  project.provide("url", app.url);
-  project.provide("token", tokens.accessToken);
+  await provideApp(project);
 }
 
 export async function teardown(): Promise<void> {

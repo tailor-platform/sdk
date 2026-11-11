@@ -141,7 +141,7 @@ that source table's plugin processing.
 onTableLoaded(context) {
   const { table, tableConfig, namespace } = context;
   return {
-    tables: { archive: db.table(`Deleted_${table.name}`, { ... }) },
+    tables: { archive: db.table(`Deleted${table.name}`, { ... }) },
     extends: { fields: { deletedAt: db.datetime({ optional: true }) } },
     executors: [{ name: `${table.name}-on-delete`, resolve: async () => await import("./on-delete"), context: { sourceTable: table, namespace } }],
   };
@@ -497,7 +497,7 @@ function processSoftDelete(
   context: PluginTableProcessContext<SoftDeleteTableConfig, SoftDeletePluginConfig>,
 ): TablePluginOutput {
   const { table, tableConfig, pluginConfig, namespace } = context;
-  const prefix = pluginConfig?.archiveTablePrefix ?? "Deleted_";
+  const prefix = pluginConfig?.archiveTablePrefix ?? "Deleted";
 
   // Generate archive table
   const archiveTable = db
@@ -601,7 +601,7 @@ import softDeletePlugin from "./plugins/soft-delete";
 
 export const plugins = definePlugins(
   softDeletePlugin({
-    archiveTablePrefix: "Deleted_",
+    archiveTablePrefix: "Deleted",
     defaultRetentionDays: 90,
   }),
 );

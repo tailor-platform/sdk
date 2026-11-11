@@ -8,6 +8,7 @@ const mapperEntry = fileURLToPath(
   new URL("../../../dist/cli/content-mapper/mapper-main.mjs", import.meta.url),
 );
 const REGISTRY_FILE = "/node_modules/@tailor-platform/sdk/dist/configure/registry.tailor";
+const DB_FILE = "/node_modules/@tailor-platform/sdk/dist/plugin/builtin/kysely-type/db.tailor";
 const CONFIG = `import { defineConfig } from "@tailor-platform/sdk";
 export default defineConfig({ name: "app", env: { stage: "dev" } });
 `;
@@ -96,6 +97,45 @@ describe("content mapper process", () => {
       expect(opened.watchedFiles).toContain(path.join(dir, "tailor.config.ts"));
       expect(result.diagnostics).toEqual([]);
       expect(result.text).toContain("stage: string;");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "types db.tailor from the TailorDB definitions and watches the files that define them",
+    async () => {
+      const dir = projectDir();
+      const order = path.join(dir, "tailordb", "order.ts");
+      fs.mkdirSync(path.dirname(order));
+      fs.writeFileSync(
+        order,
+        `import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+export const order = db
+  .table("Order", { status: db.enum(["PAID", "OPEN"]) })
+  .permission(unsafeAllowAllTypePermission)
+  .gqlPermission(unsafeAllowAllGqlPermission);
+`,
+      );
+      fs.writeFileSync(
+        path.join(dir, "tailor.config.ts"),
+        `import { defineConfig, definePlugins } from "@tailor-platform/sdk";
+import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
+export default defineConfig({ name: "app", db: { main: { files: ["./tailordb/*.ts"] } } });
+export const plugins = definePlugins(kyselyTypePlugin({ contentMapper: true }));
+`,
+      );
+      const mapper = startMapper();
+
+      const opened = await open(mapper, dir);
+      const result = (await mapper.call("transform", {
+        fileName: DB_FILE,
+        content: "",
+        projectHandle: "p1",
+      })) as { text: string; diagnostics: unknown[] };
+
+      expect(opened.watchedFiles).toContain(order);
+      expect(result.diagnostics).toEqual([]);
+      expect(result.text).toContain('status: "PAID" | "OPEN";');
     },
     TIMEOUT_MS,
   );

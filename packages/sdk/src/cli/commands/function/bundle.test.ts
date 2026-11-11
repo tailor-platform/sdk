@@ -109,6 +109,23 @@ export default function(input: any) {
       await expectMainExport("verify-plain.mjs", result.bundledCode);
     });
 
+    test("folds the gate of the kysely plugin's temporal option in what it bundles", async () => {
+      const detected: DetectedFunction = { type: "plain", name: "gate" };
+      const source = `
+export default function() {
+  return globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL === "true";
+}
+`;
+
+      const withTemporal = await bundle("gate-on.ts", source, detected, { kyselyTemporal: true });
+      const withoutTemporal = await bundle("gate-off.ts", source, detected);
+
+      expect(withTemporal.bundledCode).not.toContain("__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL");
+      expect(withTemporal.bundledCode).toMatch(/return\s*(?:true|!0)/);
+      expect(withoutTemporal.bundledCode).not.toContain("__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL");
+      expect(withoutTemporal.bundledCode).toMatch(/return\s*(?:false|!1)/);
+    });
+
     test("bundles a named-exported main function", async () => {
       const detected: DetectedFunction = { type: "plain", name: "named-main", namedMain: true };
       const result = await bundle(

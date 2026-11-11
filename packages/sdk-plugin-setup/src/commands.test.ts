@@ -364,7 +364,7 @@ describe("next steps", () => {
       const result = {
         kind: "branch",
         file: ".github/workflows/tailor-app.yml",
-        environment: "app",
+        environments: ["app"],
         configEdited: false,
       } as const;
       vi.mocked(setupTarget).mockResolvedValue(result);
