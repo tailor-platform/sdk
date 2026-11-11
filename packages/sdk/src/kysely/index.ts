@@ -210,11 +210,9 @@ type NestedNeedsColumnType<Fields, IsTemporal extends boolean> = true extends {
     ? NestedNeedsColumnType<NestedFieldsOf<Fields[K]>, IsTemporal>
     : ElementColumn<Fields[K], IsTemporal, true> extends ColumnType<unknown, unknown, unknown>
       ? true
-      : null extends output<Fields[K]>
-        ? true
-        : Fields[K] extends TailorAnyDBField
-          ? IsAutoFilledDBField<Fields[K]>
-          : false;
+      : Fields[K] extends TailorAnyDBField
+        ? IsAutoFilledDBField<Fields[K]>
+        : false;
 }[keyof Fields]
   ? true
   : false;
