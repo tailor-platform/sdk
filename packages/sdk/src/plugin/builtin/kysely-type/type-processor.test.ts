@@ -252,7 +252,7 @@ describe("Kysely TypeProcessor", () => {
       expect(result.name).toBe("SimpleUser");
       expect(result.typeDef).toContain("SimpleUser: ");
       expect(result.typeDef).toContain("profile:");
-      expect(result.typeDef).toContain("ObjectColumnType<");
+      expect(result.typeDef).not.toContain("ObjectColumnType<");
       expect(result.typeDef).toContain("name: string");
       expect(result.typeDef).toContain("email?: string | null");
     });
@@ -276,6 +276,7 @@ describe("Kysely TypeProcessor", () => {
 
       const typeDef = await getTypeDef(deepNestedType);
 
+      expect(typeDef).not.toContain("ObjectColumnType");
       expect(typeDef).toContain("details:");
       expect(typeDef).toContain("address:");
       expect(typeDef).toContain("street: string");
@@ -336,8 +337,9 @@ describe("Kysely TypeProcessor", () => {
         }),
       );
 
-      expect(typeDef).toContain("ArrayColumnType<ObjectColumnType<");
-      expect(typeDef).toContain("| null");
+      expect(typeDef).not.toContain("ColumnType");
+      expect(typeDef).toContain("value?: string | null");
+      expect(typeDef).toContain("}[] | null;");
     });
 
     test("should use plain array syntax for nested objects without ColumnType fields", async () => {
@@ -353,7 +355,6 @@ describe("Kysely TypeProcessor", () => {
         }),
       );
 
-      // Plain object (no Timestamp/optional fields) uses regular array syntax
       expect(typeDef).toContain("}[];");
       expect(typeDef).not.toContain("ArrayColumnType");
     });
@@ -473,10 +474,10 @@ describe("Kysely TypeProcessor", () => {
       {
         name: "ObjectColumnType",
         type: db.table("User", {
-          profile: db.object({ nickname: db.string({ optional: true }) }),
+          profile: db.object({ createdAt: db.datetime() }),
         }),
         expected: {
-          Timestamp: false,
+          Timestamp: true,
           TemporalDate: false,
           TemporalInstant: false,
           TemporalTime: false,
