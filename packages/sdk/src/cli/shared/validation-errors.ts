@@ -57,7 +57,8 @@ export function configInvalidError(params: ConfigInvalidErrorParams): CLIError {
 }
 
 /**
- * Create the error for a config file whose values a check other than its schema rejected.
+ * Create the error for a config file from issues the caller collected, such as values a check
+ * other than its schema rejected.
  * @param params - Failed config and the issues found in it
  * @returns CLIError coded `CONFIG_INVALID`, located at the config file
  */

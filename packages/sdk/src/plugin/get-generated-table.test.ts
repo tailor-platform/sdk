@@ -336,6 +336,7 @@ export const generators = [{ id: "also-ignored", description: "test" }];`);
         /Invalid `plugins` export/,
       ],
       ["is explicitly undefined", "undefined", /Invalid `plugins` export/],
+      ["is null", "null", /got null/],
       [
         "contains an array decorated with plugin properties",
         `[Object.assign([], { id: "array", description: "test" })]`,
