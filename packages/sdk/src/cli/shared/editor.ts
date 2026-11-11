@@ -72,7 +72,7 @@ export async function openInEditor(
         CLIError({
           code: "EDITOR_FAILED",
           message: `Editor exited with code ${code}.`,
-          context: { exitCode: code },
+          context: { editor, exitCode: code },
         }),
       );
     });

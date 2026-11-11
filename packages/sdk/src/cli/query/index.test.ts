@@ -929,7 +929,11 @@ describe("resolveQueryCommandInput", () => {
 
     vi.mocked(getEditorCommand).mockReturnValue("vim");
     vi.mocked(mkdtemp).mockResolvedValue("/tmp/tailor-query-123");
-    const failure = CLIError({ code: "EDITOR_FAILED", message: "Editor exited with code 1." });
+    const failure = CLIError({
+      code: "EDITOR_FAILED",
+      message: "Editor exited with code 1.",
+      context: { editor: "vim", exitCode: 1 },
+    });
     vi.mocked(openInEditor).mockRejectedValue(failure);
 
     await expect(resolveQueryCommandInput({ edit: true, engine: "sql" })).rejects.toBe(failure);
