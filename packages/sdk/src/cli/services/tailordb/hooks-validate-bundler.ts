@@ -3,6 +3,7 @@ import { parseSync } from "oxc-parser";
 import { resolve } from "pathe";
 import * as rolldown from "rolldown";
 import { createBundleLog } from "#/cli/shared/bundle-log";
+import { CLIError } from "#/cli/shared/errors";
 import { findUndefinedReferences, TS_TYPE_FIELDS } from "#/cli/shared/free-variables";
 import { createPlatformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
@@ -330,10 +331,14 @@ async function bundleScriptTarget(args: {
   const context = `${kind} in table "${tableName}"`;
   const fnSource = stringifyFunction(fn);
   if ((kind === "typeValidate" || kind === "validate") && fn.constructor.name === "AsyncFunction") {
-    throw new Error(
-      `${context} must be synchronous — the generated validator runs synchronously, ` +
-        "so issues reported after an await are silently lost. Remove the async keyword.",
-    );
+    throw CLIError({
+      code: "TAILORDB_VALIDATOR_ASYNC_UNSUPPORTED",
+      message: `${context} must be synchronous.`,
+      details:
+        "The generated validator runs synchronously, so issues reported after an await are silently lost.",
+      suggestion: "Remove the async keyword.",
+      context: { tableName, kind },
+    });
   }
   const inlineExpr = assertParsableExpression(`(${fnSource})(${buildHookCallArgs(kind)})`, context);
 
@@ -356,11 +361,14 @@ async function bundleScriptTarget(args: {
     return inlineExpr;
   }
   if (unresolved.length > 0) {
-    throw new Error(
-      `${context} captures unresolvable variables (${unresolved.join(", ")}). ` +
-        "Hooks and validators must not reference variables that cannot be resolved from the source file.\n" +
-        `  ${kind}: ${fnSource}`,
-    );
+    throw CLIError({
+      code: "TAILORDB_HOOK_UNRESOLVED_REFERENCE",
+      message: `${context} captures unresolvable variables (${unresolved.join(", ")}).`,
+      details: `${kind}: ${fnSource}`,
+      suggestion:
+        "Reference only variables that can be resolved from the source file in hooks and validators.",
+      context: { tableName, kind, names: unresolved },
+    });
   }
 
   const entryContent = buildMinimalEntryFromResolved(
