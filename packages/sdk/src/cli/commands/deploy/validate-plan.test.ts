@@ -6,13 +6,44 @@ import {
 import { describe, expect, test, vi } from "vitest";
 import { logger, plainRedacted } from "#/cli/shared/logger";
 import { emptyPlanResults } from "./test-helpers/plan-results";
-import { validatePlan, type ValidatePlanInput } from "./validate-plan";
+import { validatePlans } from "./validate-plan";
+import type { PlanResults } from "./apply-phases";
 
 const WS_ID = "00000000-0000-0000-0000-000000000001";
 const METADATA = { trn: "", labels: {} };
 
-type Mutator = (input: ValidatePlanInput) => void;
+type Mutator = (input: PlanResults) => void;
 type Case<Expected> = { name: string; mutate: Mutator; expected: Expected };
+
+function invalidTableName(input: PlanResults): void {
+  input.tailorDB.changeSet.type.creates.push({
+    name: "invalidLowercaseName",
+    request: {
+      workspaceId: WS_ID,
+      namespaceName: "my-namespace",
+      tailordbType: { name: "invalidLowercaseName" },
+    },
+  } as never);
+}
+
+function invalidRetryPolicy(input: PlanResults): void {
+  input.workflow.changeSet.creates.push({
+    name: "my-workflow",
+    workspaceId: WS_ID,
+    workflow: {
+      name: "my-workflow",
+      mainJob: { name: "my-main-job" },
+      retryPolicy: {
+        maxRetries: 3,
+        initialBackoff: "10s",
+        maxBackoff: "5s",
+        backoffMultiplier: 2.0,
+      },
+    },
+    usedJobNames: ["my-main-job"],
+    metaRequest: METADATA,
+  } as never);
+}
 
 const validCases: Case<undefined>[] = [
   {
@@ -209,38 +240,12 @@ const validCases: Case<undefined>[] = [
 const invalidCases: Case<RegExp>[] = [
   {
     name: "(b) TailorDB table name violating ^[A-Z][a-zA-Z0-9]{0,62}$ produces a violation",
-    mutate: (input) => {
-      input.tailorDB.changeSet.type.creates.push({
-        name: "invalidLowercaseName",
-        request: {
-          workspaceId: WS_ID,
-          namespaceName: "my-namespace",
-          tailordbType: { name: "invalidLowercaseName" },
-        },
-      } as never);
-    },
+    mutate: invalidTableName,
     expected: /1 validation error\(s\) found in 1 resource\(s\)/,
   },
   {
-    name: "(c) workflow create with retryPolicy initialBackoff > maxBackoff is rejected via validatePlan",
-    mutate: (input) => {
-      input.workflow.changeSet.creates.push({
-        name: "my-workflow",
-        workspaceId: WS_ID,
-        workflow: {
-          name: "my-workflow",
-          mainJob: { name: "my-main-job" },
-          retryPolicy: {
-            maxRetries: 3,
-            initialBackoff: "10s",
-            maxBackoff: "5s",
-            backoffMultiplier: 2.0,
-          },
-        },
-        usedJobNames: ["my-main-job"],
-        metaRequest: METADATA,
-      } as never);
-    },
+    name: "(c) workflow create with retryPolicy initialBackoff > maxBackoff is rejected",
+    mutate: invalidRetryPolicy,
     expected: /\d+ validation error\(s\) found in 1 resource\(s\)/,
   },
   {
@@ -501,17 +506,21 @@ const invalidCases: Case<RegExp>[] = [
   },
 ];
 
-describe("validatePlan", () => {
+describe("validatePlans", () => {
   test.each(validCases)("$name", async ({ mutate }) => {
     const input = emptyPlanResults();
     mutate(input);
-    await expect(validatePlan(input)).resolves.toBeUndefined();
+    await expect(
+      validatePlans([{ application: "my-app", results: input }]),
+    ).resolves.toBeUndefined();
   });
 
   test.each(invalidCases)("$name", async ({ mutate, expected }) => {
     const input = emptyPlanResults();
     mutate(input);
-    await expect(validatePlan(input)).rejects.toThrow(expected);
+    await expect(validatePlans([{ application: "my-app", results: input }])).rejects.toThrow(
+      expected,
+    );
   });
 
   test("names the IdP services that leave allowedEmailDomains empty and how each is applied", async () => {
@@ -530,9 +539,31 @@ describe("validatePlan", () => {
     });
     input.idp.changeSet.service.unchanged.push({ name: "unchanged-idp" });
 
-    await expect(validatePlan(input)).rejects.toThrow(
-      /2 validation error\(s\) found in 2 resource\(s\)/,
+    const error = await validatePlans([{ application: "my-app", results: input }]).catch(
+      (error: unknown) => error,
     );
+    expect(error).toMatchObject({
+      code: "DEPLOY_VALIDATION_FAILED",
+      message: "2 validation error(s) found in 2 resource(s)",
+      context: {
+        issues: [
+          {
+            application: "my-app",
+            resourceType: "idp.service",
+            name: "new-idp",
+            action: "create",
+            fieldPath: "userAuthPolicy.allowedEmailDomains",
+          },
+          {
+            application: "my-app",
+            resourceType: "idp.service",
+            name: "existing-idp",
+            action: "update",
+            fieldPath: "userAuthPolicy.allowedEmailDomains",
+          },
+        ],
+      },
+    });
 
     const reason =
       'userAuthPolicy.allowedEmailDomains: must be set unless useNonEmailIdentifier is true; use ["*"] to allow every email domain, or list the domains you accept';
@@ -560,7 +591,71 @@ describe("validatePlan", () => {
       },
     });
 
-    await expect(validatePlan(input)).resolves.toBeUndefined();
+    await expect(
+      validatePlans([{ application: "my-app", results: input }]),
+    ).resolves.toBeUndefined();
     expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test("carries each violation in the error context", async () => {
+    using _errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
+    using logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+    const input = emptyPlanResults();
+    invalidTableName(input);
+
+    const error = await validatePlans([{ application: "my-app", results: input }]).catch(
+      (e: unknown) => e,
+    );
+
+    expect(error).toMatchObject({
+      code: "DEPLOY_VALIDATION_FAILED",
+      context: {
+        issues: [
+          {
+            application: "my-app",
+            resourceType: "tailordb.type",
+            name: "invalidLowercaseName",
+            action: "create",
+            fieldPath: "tailordb_type.name",
+            message: expect.any(String),
+          },
+        ],
+      },
+    });
+    expect(logSpy.mock.calls.flat().join("\n")).not.toContain("my-app");
+  });
+
+  test("reports the violations of every plan in one error", async () => {
+    using _errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
+    using logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+    const first = emptyPlanResults();
+    invalidTableName(first);
+    const second = emptyPlanResults();
+    invalidTableName(second);
+
+    const error = await validatePlans([
+      { application: "app-a", results: first },
+      { application: "app-b", results: second },
+    ]).catch((e: unknown) => e);
+
+    expect(error).toMatchObject({
+      message: "2 validation error(s) found in 2 resource(s)",
+      context: {
+        issues: [
+          { application: "app-a", name: "invalidLowercaseName" },
+          { application: "app-b", name: "invalidLowercaseName" },
+        ],
+      },
+    });
+    expect(logSpy.mock.calls.map(([line]) => plainRedacted(line))).toEqual([
+      '  Application "app-a":',
+      expect.stringMatching(
+        /^ {4}TailorDB table invalidLowercaseName \(create\) — tailordb_type\.name: /,
+      ),
+      '  Application "app-b":',
+      expect.stringMatching(
+        /^ {4}TailorDB table invalidLowercaseName \(create\) — tailordb_type\.name: /,
+      ),
+    ]);
   });
 });
