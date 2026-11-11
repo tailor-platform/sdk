@@ -686,7 +686,7 @@ tailor tailordb migration test --data seed
 
 Rows are loaded only for tables present in the deployed pre-migration snapshots (and current schemas without migrations), in foreign-key dependency order. Fields introduced by pending migrations, including timestamp and nested fields, are removed before insertion so current fixtures can be loaded into the baseline schema. Missing table files are treated as empty. IdP `_User` fixtures are not loaded by this command.
 
-Use `--machine-user` to run the seed, the pending migration scripts, and the assertion as that machine user, in place of `db.<namespace>.migration.machineUser` and the first entry in `auth.machineUsers` (and, for the seed, the seed plugin's `machineUserName`). For the pending migration scripts, it must be defined in `auth.machineUsers`.
+Use `--machine-user` to run the seed, the pending migration scripts, and the assertion as that machine user, in place of `db.<namespace>.migration.machineUser` and the first entry in `auth.machineUsers` (and, for the seed, the seed plugin's `machineUserName`). An empty override is rejected. Every machine user needed for these scripts must be defined in `auth.machineUsers`; the command checks this before creating a temporary workspace or deploying to a designated target. No machine user is required when there are no seed rows, pending migration scripts, or assertions to execute.
 
 ### Clone mode
 
@@ -1248,19 +1248,13 @@ One specific cause is a `migration rebaseline` run on a different environment wh
 
 ### "No machine user available for migration execution"
 
-**Cause:** Neither `migration.machineUser` is set nor are there any machine users in `auth.machineUsers`. `tailor deploy` reports this while planning, including with `--dry-run`, before anything is applied, and `tailor tailordb migration validate` reports it too.
+**Cause:** Neither `migration.machineUser` is set nor are there any machine users in `auth.machineUsers`. `tailor deploy` reports this while planning, including with `--dry-run`, before anything is applied, and `tailor tailordb migration validate` reports it too. `tailor tailordb migration test` checks the users needed for seed, migration, and assertion scripts before creating or modifying its target workspace.
 
 **Resolution:** Add a machine user to `auth.machineUsers`, then run `tailor deploy` again. The deploy creates the machine user before it runs the migration scripts.
 
 ### "Machine user for migration execution is not defined in auth"
 
-**Cause:** `migration.machineUser`, or `--machine-user` of `tailor tailordb migration test`, names a machine user that is not in `auth.machineUsers`. `tailor deploy` reports this while planning, including with `--dry-run`, before anything is applied, and `tailor tailordb migration validate` reports it too.
-
-**Resolution:** Either add the machine user to `auth.machineUsers`, or name one that is defined there.
-
-### "Machine user not found"
-
-**Cause:** In `tailor tailordb migration test`, the machine user that runs the seed or the assertion (from `--machine-user`, the seed plugin's `machineUserName`, or `migration.machineUser`) is not in `auth.machineUsers`, so the temporary workspace does not have it.
+**Cause:** `migration.machineUser`, or the `--machine-user` override or seed plugin's `machineUserName` used by `tailor tailordb migration test`, names a machine user that is not in `auth.machineUsers`. `tailor deploy` reports this while planning, including with `--dry-run`, before anything is applied, and `tailor tailordb migration validate` reports it too. The migration test reports it during preparation, before creating or modifying its target workspace.
 
 **Resolution:** Either add the machine user to `auth.machineUsers`, or name one that is defined there.
 
