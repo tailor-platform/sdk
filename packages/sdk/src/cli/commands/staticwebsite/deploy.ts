@@ -217,10 +217,6 @@ async function uploadSingleFile(
 }
 
 /**
- * Log skipped files after a deployment, including reasons for skipping.
- * @param skippedFiles - List of skipped file descriptions
- */
-/**
  * Create the error for a static website deployment that outlasts its 10-minute limit.
  * @returns CLIError coded `STATIC_WEBSITE_DEPLOY_TIMEOUT`
  */
@@ -231,6 +227,10 @@ export function staticWebsiteDeployTimeoutError(): CLIError {
   });
 }
 
+/**
+ * Log skipped files after a deployment, including reasons for skipping.
+ * @param skippedFiles - List of skipped file descriptions
+ */
 function logSkippedFiles(skippedFiles: string[]) {
   if (skippedFiles.length === 0) {
     return;
