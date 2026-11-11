@@ -11,6 +11,7 @@ import {
   defineCommand,
   runMain,
 } from "@tailor-platform/sdk/cli";
+import { reportPluginError } from "@tailor-platform/shared/plugin-error";
 import * as path from "pathe";
 import { readPackageJSON } from "pkg-types";
 import { z } from "zod";
@@ -18,14 +19,6 @@ import { seedApplyCommand } from "./apply";
 import { seedDumpCommand } from "./dump";
 import { seedFillCommand } from "./fill";
 import { seedValidateCommand } from "./validate";
-
-function formattedText(error: unknown): string | undefined {
-  if (typeof error !== "object" || error === null) return undefined;
-  const format = (error as { format?: unknown }).format;
-  if (typeof format !== "function") return undefined;
-  const formatted: unknown = format.call(error);
-  return typeof formatted === "string" ? formatted : undefined;
-}
 
 /**
  * Prefix a failure's message with the file it points at, as the host CLI prints it.
@@ -62,21 +55,6 @@ void runMain(mainCommand, {
   globalArgs: z.strictObject(createCommonArgs(commonArgsOptions)),
   displayErrors: false,
   setup: () => loadEnvFilesFromArgv(process.argv.slice(2), commonArgsOptions),
-  cleanup: ({ error }) => {
-    if (!error) return;
-    const formatted = formattedText(error);
-    if (logger.jsonMode) {
-      logger.log(serializeError(error, { includeStack: logger.verbose }));
-    } else if (formatted !== undefined) {
-      logger.log(formatted);
-    } else if (error instanceof Error) {
-      logger.error(locatedMessage(error));
-    } else {
-      logger.error(`Unknown error: ${String(error)}`);
-    }
-    if (!logger.jsonMode && error instanceof Error && error.stack) {
-      logger.debug(`\nStack trace:\n${error.stack}`);
-    }
-    annotateTerminalError(error, { jsonMode: logger.jsonMode });
-  },
+  cleanup: ({ error }) =>
+    reportPluginError(error, { logger, serializeError, annotateTerminalError, locatedMessage }),
 });

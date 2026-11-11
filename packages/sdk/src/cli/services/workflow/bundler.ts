@@ -9,6 +9,7 @@ import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import ml from "#/utils/multiline";
 import { getModuleExportName, type ASTNode } from "./ast-utils";
+import { walkAst } from "./ast-walk";
 import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { detectResolvedStartCalls, hasStartCall, transformStartCalls } from "./start-transformer";
@@ -143,8 +144,7 @@ function findDirectExecJobFunctionCalls(program: ASTNode): DirectExecJobFunction
   const runtimeWorkflowBindings = collectRuntimeWorkflowImportBindings(program);
   const calls: DirectExecJobFunctionCall[] = [];
 
-  function walk(node: ASTNode | null | undefined): void {
-    if (!node || typeof node !== "object") return;
+  walkAst(program, (node) => {
     if (
       node.type === "CallExpression" &&
       isDirectExecJobFunctionCallee(node.callee, runtimeWorkflowBindings)
@@ -152,17 +152,7 @@ function findDirectExecJobFunctionCalls(program: ASTNode): DirectExecJobFunction
       const args = node.arguments as unknown[] | undefined;
       calls.push({ targetName: extractStaticStringValue(args?.[0]) });
     }
-    for (const key of Object.keys(node)) {
-      const child = node[key];
-      if (Array.isArray(child)) {
-        child.forEach((c: unknown) => walk(c as ASTNode | null));
-      } else if (child && typeof child === "object") {
-        walk(child as ASTNode);
-      }
-    }
-  }
-
-  walk(program);
+  });
   return calls;
 }
 
@@ -203,8 +193,7 @@ export function collectExecJobFunctionTargets(code: string): string[] {
   }
   const targets: string[] = [];
 
-  function walk(node: ASTNode | null | undefined): void {
-    if (!node || typeof node !== "object") return;
+  walkAst(program, (node) => {
     if (node.type === "CallExpression") {
       const root = getWorkflowExecJobFunctionRoot(node.callee);
       if (isTailorIdentifier(root) || isGlobalThisTailor(root)) {
@@ -213,17 +202,7 @@ export function collectExecJobFunctionTargets(code: string): string[] {
         if (target !== undefined) targets.push(target);
       }
     }
-    for (const key of Object.keys(node)) {
-      const child = node[key];
-      if (Array.isArray(child)) {
-        child.forEach((c: unknown) => walk(c as ASTNode | null));
-      } else if (child && typeof child === "object") {
-        walk(child as ASTNode);
-      }
-    }
-  }
-
-  walk(program as unknown as ASTNode);
+  });
   return targets;
 }
 

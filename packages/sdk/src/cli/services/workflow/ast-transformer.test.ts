@@ -83,6 +83,12 @@ function transformWorkflowJobSource(
 
 describe("AST Transformer - createWorkflowJob call detection", () => {
   describe("findAllJobs", () => {
+    test("detects jobs whose bodies contain sparse arrays", () => {
+      const source = `import { createWorkflowJob } from "@tailor-platform/sdk";
+export const sparse = createWorkflowJob({ name: "sparse", body: () => [, "value"] });`;
+      expect(findJobs(source)).toMatchObject([{ name: "sparse", exportName: "sparse" }]);
+    });
+
     test("detects createWorkflowJob calls", () => {
       const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";
