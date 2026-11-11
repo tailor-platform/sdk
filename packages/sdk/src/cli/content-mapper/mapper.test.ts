@@ -275,6 +275,15 @@ describe("content mapper", () => {
     ]);
   });
 
+  test("names the file a failing config points at", async () => {
+    using p = project();
+    fs.writeFileSync(p.config, 'throw new Error("config is broken");\n');
+
+    const evaluation = await evaluateConfigInProcess(p.config);
+
+    expect(evaluation.error).toBe("tailor.config.ts: config is broken");
+  });
+
   test("watches the tailor.config.ts a nearer directory could add above the one it uses", async () => {
     using p = project();
     const nested = path.join(p.dir, "packages", "app");

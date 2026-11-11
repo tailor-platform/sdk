@@ -1,7 +1,5 @@
 import { z } from "zod";
-import { functionSchema } from "../common";
-
-const NAME_PATTERN = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
+import { functionSchema, resourceNameSchema } from "../common";
 
 const inputHandlersSchema = z
   .strictObject({
@@ -21,13 +19,7 @@ const inputHandlersSchema = z
   .describe("Per-method functions that transform HTTP requests to GraphQL requests");
 
 export const HttpAdapterConfigSchema = z.strictObject({
-  name: z
-    .string()
-    .regex(
-      NAME_PATTERN,
-      "name must be 3-63 chars, lowercase alphanumeric with hyphens, not starting or ending with a hyphen",
-    )
-    .describe("Unique adapter name within the domain"),
+  name: resourceNameSchema.describe("Unique adapter name within the domain"),
   pathPattern: z
     .string()
     .min(1)

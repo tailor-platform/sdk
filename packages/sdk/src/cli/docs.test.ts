@@ -31,6 +31,7 @@ const templateFiles: [output: string, commands: string[]][] = [
   ["secret", ["secret"]],
   ["staticwebsite", ["staticwebsite"]],
   ["crashreport", ["crashreport"]],
+  ["notification", ["notification"]],
   ["upgrade", ["upgrade"]],
   ["skills", ["skills"]],
   ["plugin", ["plugin"]],

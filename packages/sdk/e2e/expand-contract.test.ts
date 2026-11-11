@@ -23,9 +23,10 @@ import { loadAccessToken } from "../src/cli/shared/context";
 import { CLI_BUDGET_MS, cliTestTimeout, runCli, tryCli } from "./cli";
 import {
   resolveE2ERunId,
+  resolveE2EWorkspaceLocation,
   resolveE2EWorkspaceRegion,
-  trackWorkspace,
   trackTempDir,
+  trackWorkspace,
 } from "./globalSetup";
 import { mergeStepsIntoOne, runTailorDBScript } from "./migration-workspace";
 
@@ -121,8 +122,7 @@ export type user = typeof user;
       workspaceName: testWorkspaceName,
       workspaceRegion: region,
       deleteProtection: false,
-      organizationId: process.env.TAILOR_PLATFORM_ORGANIZATION_ID,
-      folderId: process.env.TAILOR_PLATFORM_FOLDER_ID,
+      ...(await resolveE2EWorkspaceLocation()),
     });
     workspaceId = createResp.workspace!.id!;
     await trackWorkspace(client, workspaceId);

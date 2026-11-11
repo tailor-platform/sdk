@@ -22,6 +22,7 @@
     "codemod:resolve-pending": "tsx packages/sdk-codemod/scripts/resolve-pending-boundaries.ts",
     "deprecations:resolve-pending": "tsx packages/sdk-codemod/scripts/resolve-pending-deprecations.ts",
     "setup:template-version:resolve-pending": "TEMPLATE_VERSION_RELEASE=1 pnpm --filter @tailor-platform/sdk-plugin-setup exec vitest run src/template-fingerprint.test.ts",
+    "setup:templates:dump": ": \"${TEMPLATES_DUMP_DIR:?set TEMPLATES_DUMP_DIR to an absolute directory}\" && pnpm --filter @tailor-platform/sdk-plugin-setup exec vitest run src/template-dump.test.ts",
     "check": "pnpm run generate && pnpm run format && pnpm run \"/^check:/\"",
     "check:agent-rules": "pnpm run agent:rules:check",
     "check:codemod-docs": "pnpm run codemod:docs:check",
@@ -55,14 +56,14 @@
     "@changesets/changelog-github": "1.0.1",
     "@changesets/cli": "3.0.3",
     "@tailor-platform/sdk": "workspace:^",
-    "@types/node": "26.6.5",
+    "@types/node": "26.6.6",
     "eslint-plugin-zod": "5.2.2",
-    "knip": "6.43.0",
+    "knip": "6.44.2",
     "lefthook": "2.2.1",
     "madge": "8.0.0",
     "oxfmt": "0.75.0",
     "oxlint": "1.90.0",
-    "pkg-pr-new": "0.0.92",
+    "pkg-pr-new": "0.0.93",
     "publint": "0.3.25",
     "tsx": "4.23.15",
     "typescript": "6.0.3"
@@ -70,5 +71,5 @@
   "engines": {
     "node": ">= 22.18.0"
   },
-  "packageManager": "pnpm@12.16.1"
+  "packageManager": "pnpm@12.18.0"
 }

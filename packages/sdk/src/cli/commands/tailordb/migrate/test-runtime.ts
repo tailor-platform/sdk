@@ -24,6 +24,7 @@ import { parseAge } from "#/cli/commands/workspace/age";
 import { createValidatedWorkspaceWithClient } from "#/cli/commands/workspace/create";
 import { writeWorkspaceExpiry } from "#/cli/commands/workspace/expiry";
 import { type RecoveryContext } from "#/cli/shared/args";
+import { buildOptionsOf } from "#/cli/shared/build-options";
 import { getOrNull, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadPlatformClientConfig, loadWorkspaceId } from "#/cli/shared/context";
 import { effectiveDateDefault } from "#/cli/shared/date-default";
@@ -1001,6 +1002,7 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
           namespace,
           typesWithData,
           path.dirname(state.loaded.config.path),
+          buildOptionsOf(state.loaded.config),
         );
         const chunks = chunkSeedData({
           data,

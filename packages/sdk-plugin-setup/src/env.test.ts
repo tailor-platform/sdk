@@ -16,7 +16,15 @@ import {
   renderedTemplates,
   type WorkflowTemplate,
 } from "./template-fingerprint";
-import { AUTOFIX_PROVIDERS, renderBranchWorkflow, type AutofixProvider } from "./templates";
+import {
+  AUTOFIX_CODEMODS,
+  AUTOFIX_PROVIDERS,
+  COPILOT_AUTHS,
+  renderBranchWorkflow,
+  type AutofixCodemod,
+  type AutofixProvider,
+  type CopilotAuth,
+} from "./templates";
 import { autofixLockEntry, renderAutofixFor } from "./test-helpers/autofix";
 import { envTarget as target } from "./test-helpers/env-target";
 import { tempDir } from "./test-helpers/temp-dir";
@@ -43,6 +51,18 @@ const namesOf = (kind: TargetKind) =>
     .map((r) => `${r.type} ${r.name}`)
     .toSorted();
 
+// A job in another environment, such as a dedicated migration test's, reads that environment's.
+function namesInEnvironment(content: string, environment: string): string[] {
+  const doc = parseDocument(content);
+  const jobs = doc.get("jobs");
+  if (!isMap(jobs)) throw new Error("expected a jobs mapping");
+  jobs.items = jobs.items.filter((pair) => {
+    const jobEnvironment = isMap(pair.value) ? pair.value.get("environment") : undefined;
+    return jobEnvironment === undefined || jobEnvironment === environment;
+  });
+  return referencedNames(doc.toString({ lineWidth: 0 }));
+}
+
 function fallbackSecretNames(content: string): string[] {
   const names = new Set<string>();
   for (const match of content.matchAll(/\bvars\.([A-Za-z_][A-Za-z0-9_]*) \|\| secrets\.\1\b/g)) {
@@ -64,17 +84,8 @@ describe("targetRequirements matches the secrets/vars the rendered templates ref
     return kind === null ? [] : [{ ...rendered, kind }];
   });
 
-  // A job in another environment, such as a dedicated migration test's, reads that environment's.
-  function namesInTargetEnvironment(content: string): string[] {
-    const doc = parseDocument(content);
-    const jobs = doc.get("jobs");
-    if (!isMap(jobs)) throw new Error("expected a jobs mapping");
-    jobs.items = jobs.items.filter((pair) => {
-      const environment = isMap(pair.value) ? pair.value.get("environment") : undefined;
-      return environment === undefined || environment === RENDERED_ENVIRONMENT;
-    });
-    return referencedNames(doc.toString({ lineWidth: 0 }));
-  }
+  const namesInTargetEnvironment = (content: string) =>
+    namesInEnvironment(content, RENDERED_ENVIRONMENT);
 
   test.each(renders)("$name reads only what its target kind lists", ({ kind, content }) => {
     expect(namesOf(kind)).toEqual(expect.arrayContaining(namesInTargetEnvironment(content)));
@@ -104,13 +115,49 @@ const withAutofix = (provider: AutofixProvider, ...targets: LockTarget[]): LockF
 });
 
 describe("autofixRequirements matches the secrets/vars the rendered autofix workflow references", () => {
-  test.each(AUTOFIX_PROVIDERS)("%s", (provider) => {
-    expect(referencedNames(renderAutofixFor(provider).content)).toEqual(
-      autofixRequirements(provider)
+  const variants = AUTOFIX_PROVIDERS.flatMap((provider) =>
+    AUTOFIX_CODEMODS.flatMap((codemod) =>
+      (codemod === "copilot" ? COPILOT_AUTHS : [undefined]).map(
+        (
+          copilotAuth,
+        ): { provider: AutofixProvider; codemod: AutofixCodemod; copilotAuth?: CopilotAuth } => ({
+          provider,
+          codemod,
+          copilotAuth,
+        }),
+      ),
+    ),
+  );
+  test.each(variants)("$provider, codemod $codemod, copilot auth $copilotAuth", (inputs) => {
+    expect(referencedNames(renderAutofixFor(inputs.provider, inputs).content)).toEqual(
+      autofixRequirements(inputs)
         .map((r) => `${r.type} ${r.name}`)
         .toSorted(),
     );
   });
+
+  test.each([
+    ["claude", undefined, ["TAILOR_AUTOFIX_ANTHROPIC_API_KEY"], "TAILOR_AUTOFIX_CLAUDE_MODEL"],
+    ["codex", undefined, ["TAILOR_AUTOFIX_OPENAI_API_KEY"], "TAILOR_AUTOFIX_CODEX_MODEL"],
+    ["copilot", "pat", ["TAILOR_AUTOFIX_COPILOT_TOKEN"], "TAILOR_AUTOFIX_COPILOT_MODEL"],
+    ["copilot", "github-token", [], "TAILOR_AUTOFIX_COPILOT_MODEL"],
+  ] as const)(
+    "codemod %s with Copilot auth %s needs %j, and takes the model from the optional %s",
+    (codemod, copilotAuth, secrets, model) => {
+      expect(
+        autofixRequirements({ provider: "github-app", codemod, copilotAuth }).map((r) => [
+          r.type,
+          r.name,
+          r.required,
+        ]),
+      ).toEqual([
+        ["variable", "TAILOR_AUTOFIX_APP_CLIENT_ID", true],
+        ["secret", "TAILOR_AUTOFIX_APP_PRIVATE_KEY", true],
+        ...secrets.map((name) => ["secret", name, true]),
+        ["variable", model, false],
+      ]);
+    },
+  );
 });
 
 describe("repository secrets and variables of the autofix workflow", () => {
@@ -369,6 +416,60 @@ describe("collectEnvironmentRequirements", () => {
       expect(referencedNames(job)).toEqual(
         dedicated?.requirements.map((r) => `${r.type} ${r.name}`).toSorted(),
       );
+    });
+  });
+
+  describe("split plan environment", () => {
+    const split = (workspaceName: string, environment: string) =>
+      target("branch", workspaceName, environment, { splitPlanEnvironment: true });
+
+    test("lists the plan environment with its own machine user, for which a viewer role is enough", () => {
+      const environments = collectEnvironmentRequirements(lockOf(split("my-app", "stg")));
+      const plan = environments.find((e) => e.environment === "stg-plan");
+
+      expect(environments.map((e) => [e.environment, e.targets])).toEqual([
+        ["stg", ["branch my-app"]],
+        ["stg-plan", ["branch my-app (plan)"]],
+      ]);
+      expect(plan?.requirements.filter((r) => r.required).map((r) => [r.type, r.name])).toEqual([
+        ["variable", "TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID"],
+        ["secret", "TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET"],
+        ["variable", "TAILOR_PLATFORM_WORKSPACE_ID"],
+      ]);
+      expect(plan?.requirements[0]?.description).toMatch(/a viewer role .* is enough/);
+    });
+
+    test("lists for each environment what the jobs running in it read", () => {
+      const { content } = renderBranchWorkflow({
+        workspaceName: "my-app",
+        environment: "stg",
+        packageManager: "pnpm",
+        branch: "main",
+        erdPreview: null,
+        seedValidate: true,
+        seed: { datasets: [] },
+        splitPlanEnvironment: true,
+      });
+      const names = (environment: string) =>
+        collectEnvironmentRequirements(lockOf(split("my-app", "stg")))
+          .find((e) => e.environment === environment)
+          ?.requirements.map((r) => `${r.type} ${r.name}`)
+          .toSorted();
+
+      expect(names("stg-plan")).toEqual(namesInEnvironment(content, "stg-plan"));
+      expect(names("stg")).toEqual(namesInEnvironment(content, "stg"));
+    });
+
+    test("keeps the deploy wording when another target deploys through the plan environment", () => {
+      const plan = collectEnvironmentRequirements(
+        lockOf(split("my-app", "stg"), target("branch", "other", "stg-plan")),
+      ).find((e) => e.environment === "stg-plan");
+      const description = (name: string) =>
+        plan?.requirements.find((r) => r.name === name)?.description;
+
+      expect(plan?.targets).toEqual(["branch my-app (plan)", "branch other"]);
+      expect(description("TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID")).toMatch(/editor or admin/);
+      expect(description("TAILOR_PLATFORM_WORKSPACE_ID")).toMatch(/this environment deploys to/);
     });
   });
 
@@ -859,6 +960,46 @@ describe("setupEnv", () => {
 
     const [stg] = collectEnvironmentRequirements(lock);
     expect(out).toHaveBeenCalledWith(renderGhCommands([stg!]));
+  });
+
+  test("warns when a plan environment is also another target's environment", () => {
+    using tmp = tempDir("setup-env-");
+    writeLock(
+      tmp.dir,
+      lockOf(
+        target("branch", "my-app", "stg", { splitPlanEnvironment: true }),
+        target("branch", "other", "stg-plan"),
+      ),
+    );
+    using _out = vi.spyOn(logger, "out").mockImplementation(() => {});
+    using warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    setupEnv({ outputDir: tmp.dir, format: "gh", ghRunner: noGh });
+
+    expect(warn.mock.calls).toEqual([
+      [
+        expect.stringMatching(
+          /^GitHub Environment "stg-plan" is used by both branch my-app \(plan\) and branch other,/,
+        ),
+      ],
+    ]);
+  });
+
+  test("rejects an invalid environment name before warning about it", () => {
+    using tmp = tempDir("setup-env-");
+    writeLock(
+      tmp.dir,
+      lockOf(
+        target("branch", "my-app", "stg;", { splitPlanEnvironment: true }),
+        target("branch", "other", "stg;-plan"),
+      ),
+    );
+    using warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    expect(() => setupEnv({ outputDir: tmp.dir, format: "gh", ghRunner: noGh })).toThrow(
+      /Invalid environment name/,
+    );
+    expect(warn).not.toHaveBeenCalled();
   });
 
   test("rejects an --environment that no workflow uses, listing the ones that exist", () => {

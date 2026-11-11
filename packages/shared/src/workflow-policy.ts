@@ -1,4 +1,6 @@
-export const EXECUTION_POLICY_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
+import { RESOURCE_NAME_PATTERN } from "./resource-name";
+
+export const EXECUTION_POLICY_NAME_PATTERN = RESOURCE_NAME_PATTERN;
 export const EXECUTION_POLICY_NAME_MESSAGE =
   "Invalid execution policy name: must match [a-z0-9-] (3-63 chars; must start and end with [a-z0-9])";
 

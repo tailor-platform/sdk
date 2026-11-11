@@ -7,6 +7,8 @@
  */
 
 import { describe, test, expect, vi, beforeEach } from "vitest";
+import { requiredFieldNullValuesError } from "#/cli/commands/tailordb/migrate/test-helpers/platform-errors";
+import { errorToJson } from "#/cli/shared/error-json";
 import * as migrationModule from "./migration";
 import {
   createPlanResult,
@@ -82,7 +84,7 @@ describe("migration flow: namespaces without pending migrations", () => {
     const client = checkpoint.createMockClient();
     const planResult = createMockPlanResult();
 
-    checkpoint.mockPending([mkPendingMigration()]);
+    planResult.context.pendingMigrations = checkpoint.mockPending([mkPendingMigration()]);
 
     await applyTailorDB(client, planResult, "create-update");
 
@@ -116,6 +118,31 @@ describe("migration flow: namespaces without pending migrations", () => {
     });
     expect(deletedTypes).toContain("analytics-ns/Legacy");
   });
+
+  test.each([
+    ["alongside another namespace's migration", () => [mkPendingMigration()]],
+    ["when no migration is pending", () => []],
+  ])(
+    "says how to proceed when records without a value refuse a table update %s",
+    async (_case, pendingMigrations) => {
+      const client = checkpoint.createMockClient();
+      vi.mocked(client.updateTailorDBType).mockRejectedValue(requiredFieldNullValuesError());
+      const planResult = createMockPlanResult();
+      planResult.context.pendingMigrations = checkpoint.mockPending(pendingMigrations());
+
+      const error = await applyTailorDB(client, planResult, "create-update").catch(
+        (failure: unknown) => failure,
+      );
+
+      expect(errorToJson(error).error).toMatchObject({
+        code: "TAILORDB_REQUIRED_FIELD_HAS_NULL_VALUES",
+        suggestion: expect.stringMatching(
+          /`tailor query`, then deploy again\..*`migration` configured.*`tailor tailordb migration generate --config=\S*\/test\/tailor\.config\.ts`/s,
+        ),
+      });
+    },
+  );
+
   test("writes the metadata of tables planned alongside a migration", async () => {
     // The migration flow applies tables through its own phases, so it has to write
     // their metadata itself. Leaving it to the non-migration branch would skip a
@@ -124,7 +151,7 @@ describe("migration flow: namespaces without pending migrations", () => {
     const client = checkpoint.createMockClient();
     const planResult = createMockPlanResult();
 
-    checkpoint.mockPending([mkPendingMigration()]);
+    planResult.context.pendingMigrations = checkpoint.mockPending([mkPendingMigration()]);
 
     await applyTailorDB(client, planResult, "create-update");
 

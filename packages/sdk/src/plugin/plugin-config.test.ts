@@ -7,6 +7,8 @@ import type {
   PluginExecutorContextBase,
   PluginTableProcessContext,
   TablePluginOutput,
+  TailorDBNamespaceLoadedContext,
+  TailorDBNamespacePluginOutput,
   TailorDBTableForPlugin,
 } from "#/configure/index";
 import type {
@@ -30,6 +32,33 @@ describe("PluginConfig generated type alignment", () => {
     expectTypeOf<"onTableLoaded">().toExtend<keyof Plugin>();
     expectTypeOf<`on${"Type"}Loaded`>().not.toExtend<keyof Plugin>();
   });
+
+  test("exports the TailorDB namespace hook contract", () => {
+    expectTypeOf<TailorDBNamespaceLoadedContext>().toHaveProperty("namespace");
+    expectTypeOf<TailorDBNamespacePluginOutput>().toHaveProperty("tables");
+    expectTypeOf<"onTailorDBNamespaceLoaded">().toExtend<keyof Plugin>();
+  });
+});
+
+test("rejects a non-function onTailorDBNamespaceLoaded hook", () => {
+  expect(
+    PluginConfigSchema.safeParse({
+      id: "namespace",
+      description: "namespace",
+      importPath: "@example/namespace",
+      onTailorDBNamespaceLoaded: 42,
+    }).success,
+  ).toBe(false);
+});
+test("requires importPath for a plugin with onTailorDBNamespaceLoaded", () => {
+  const result = PluginConfigSchema.safeParse({
+    id: "namespace",
+    description: "namespace",
+    onTailorDBNamespaceLoaded: () => ({}),
+  });
+  expect(result.error?.issues.map((issue) => issue.message)).toEqual([
+    "importPath is required when plugin has definition-time hooks (onTableLoaded/onTailorDBNamespaceLoaded/onNamespaceLoaded)",
+  ]);
 });
 
 test("rejects a non-function onDeployed hook", () => {

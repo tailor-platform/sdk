@@ -17,6 +17,8 @@ function snapshotType(name: string): TailorDBSnapshotType {
   return { name, pluralForm: `${name}s`, fields: {} };
 }
 
+const referenceField = { type: "uuid", required: true, index: true, foreignKey: true } as const;
+
 // Helper to create a MigrationDiff
 function createDiff(
   changes: MigrationDiff["changes"],
@@ -155,7 +157,7 @@ describe("diff-calculator", () => {
             },
           },
         ],
-        expected: ["~ address: members: -zip, +zipCode, ~geo.lat"],
+        expected: ["~ address: members: -zip, +zipCode, ~geo.lat (required: false → true)"],
       },
       {
         name: "renamed nested members",
@@ -181,6 +183,130 @@ describe("diff-calculator", () => {
           },
         ],
         expected: ["~ address: members: -fax, zip → zipCode (renamed)"],
+      },
+      {
+        name: "foreign keys on nested members",
+        changes: [
+          {
+            kind: "field_modified",
+            tableName: "Post",
+            fieldName: "address",
+            before: {
+              type: "nested",
+              required: false,
+              fields: {
+                ownerId: { ...referenceField, foreignKeyType: "User", foreignKeyField: "id" },
+                managerId: { type: "uuid", required: true },
+                reviewerId: { ...referenceField, foreignKeyType: "User", foreignKeyField: "id" },
+              },
+            },
+            after: {
+              type: "nested",
+              required: false,
+              fields: {
+                ownerId: { ...referenceField, foreignKeyType: "Person", foreignKeyField: "id" },
+                managerId: { ...referenceField, foreignKeyType: "User", foreignKeyField: "id" },
+                reviewerId: { type: "uuid", required: true, index: true },
+              },
+            },
+          },
+        ],
+        expected: [
+          "~ address: members: ~ownerId (foreignKey: User.id → Person.id), ~managerId (index: false → true, foreignKey: none → User.id), ~reviewerId (foreignKey: User.id → none)",
+        ],
+      },
+      {
+        name: "nested member without a rendered detail",
+        changes: [
+          {
+            kind: "field_modified",
+            tableName: "User",
+            fieldName: "address",
+            before: {
+              type: "nested",
+              required: false,
+              fields: { zip: { type: "string", required: false } },
+            },
+            after: {
+              type: "nested",
+              required: false,
+              fields: { zip: { type: "string", required: false, description: "Postal code" } },
+            },
+          },
+        ],
+        expected: ["~ address: members: ~zip"],
+      },
+      {
+        name: "added foreign key",
+        changes: [
+          {
+            kind: "field_modified",
+            tableName: "Post",
+            fieldName: "ownerId",
+            before: { type: "uuid", required: true },
+            after: {
+              type: "uuid",
+              required: true,
+              index: true,
+              foreignKey: true,
+              foreignKeyType: "User",
+              foreignKeyField: "id",
+            },
+          },
+        ],
+        expected: ["~ ownerId: index: false → true, foreignKey: none → User.id"],
+      },
+      {
+        name: "retargeted foreign key",
+        changes: [
+          {
+            kind: "field_modified",
+            tableName: "Post",
+            fieldName: "ownerId",
+            before: { ...referenceField, foreignKeyType: "User", foreignKeyField: "id" },
+            after: { ...referenceField, foreignKeyType: "Person", foreignKeyField: "id" },
+          },
+        ],
+        expected: ["~ ownerId: foreignKey: User.id → Person.id"],
+      },
+      {
+        name: "foreign key moved to another key",
+        changes: [
+          {
+            kind: "field_modified",
+            tableName: "Post",
+            fieldName: "ownerId",
+            before: { ...referenceField, foreignKeyType: "User" },
+            after: { ...referenceField, foreignKeyType: "User", foreignKeyField: "email" },
+          },
+        ],
+        expected: ["~ ownerId: foreignKey: User.id → User.email"],
+      },
+      {
+        name: "removed foreign key",
+        changes: [
+          {
+            kind: "field_modified",
+            tableName: "Post",
+            fieldName: "ownerId",
+            before: { ...referenceField, foreignKeyType: "User", foreignKeyField: "id" },
+            after: { type: "uuid", required: true, index: true },
+          },
+        ],
+        expected: ["~ ownerId: foreignKey: User.id → none"],
+      },
+      {
+        name: "field filled on create",
+        changes: [
+          {
+            kind: "field_modified",
+            tableName: "User",
+            fieldName: "status",
+            before: { type: "string", required: true },
+            after: { type: "string", required: true, optionalOnCreate: true },
+          },
+        ],
+        expected: ["~ status: optionalOnCreate: false → true"],
       },
       {
         name: "modified field without a rendered detail",
@@ -242,10 +368,10 @@ describe("diff-calculator", () => {
         expected: ["tailordb.User:", "tailordb.Product:"],
       },
     ])("should format $name", ({ changes, expected }) => {
-      const result = formatMigrationDiff(createDiff(changes));
-      for (const substring of expected) {
-        expect(result).toContain(substring);
-      }
+      const lines = formatMigrationDiff(createDiff(changes))
+        .split("\n")
+        .map((line) => line.trim());
+      expect(lines).toEqual(expect.arrayContaining(expected));
     });
   });
 

@@ -19,6 +19,7 @@ import { initCommand } from "./commands/init";
 import { loginCommand } from "./commands/login";
 import { logoutCommand } from "./commands/logout";
 import { machineuserCommand } from "./commands/machineuser";
+import { notificationCommand } from "./commands/notification";
 import { oauth2clientCommand } from "./commands/oauth2client";
 import { openCommand } from "./commands/open";
 import { organizationCommand } from "./commands/organization";
@@ -34,6 +35,7 @@ import { userCommand } from "./commands/user";
 import { workflowCommand } from "./commands/workflow";
 import { workspaceCommand } from "./commands/workspace";
 import { initCrashReporting } from "./crashreport";
+import { printNotificationBanner, startNotificationLookup } from "./notification-banner/index";
 import { queryCommand } from "./query";
 import {
   commonArgs,
@@ -43,7 +45,7 @@ import {
 } from "./shared/args";
 import { getErrorDiagnostics } from "./shared/error-diagnostics";
 import { serializeError } from "./shared/error-json";
-import { isCLIError, typeOnlyImportHint } from "./shared/errors";
+import { isCLIError, locatedMessage, typeOnlyImportHint } from "./shared/errors";
 import { annotateTerminalError } from "./shared/github-actions";
 import { JSON_OUTPUT_ENV_VAR, logger, setJsonDefaultAgent, styles } from "./shared/logger";
 import { readPackageJson } from "./shared/package-json";
@@ -96,6 +98,7 @@ The \`setup\` commands are provided by the @tailor-platform/sdk-plugin-setup CLI
       login: loginCommand,
       logout: logoutCommand,
       machineuser: machineuserCommand,
+      notification: notificationCommand,
       oauth2client: oauth2clientCommand,
       open: openCommand,
       organization: organizationCommand,
@@ -147,6 +150,10 @@ void runMain(mainCommand, {
   setup: ({ agent }) => {
     setJsonDefaultAgent(agent?.id);
     loadEnvFilesFromArgv(process.argv.slice(2));
+    // Best-effort unread-notification lookup for the post-command banner, started after the
+    // env files so it sees their values. It runs alongside the command; cleanup prints it,
+    // waiting at most 150 ms for an answer.
+    startNotificationLookup(process.argv.slice(2));
   },
   // CLI plugin dispatch: an unknown subcommand at any level execs the external
   // `tailor-<path...>-<name>` binary, forwarding args and injecting context.
@@ -172,7 +179,7 @@ void runMain(mainCommand, {
           logger.debug(`\nStack trace:\n${error.stack}`);
         }
       } else if (error instanceof Error) {
-        logger.error(error.message);
+        logger.error(locatedMessage(error));
         suggestion = getErrorDiagnostics(error).suggestion ?? typeOnlyImportHint(error);
         if (suggestion) {
           logger.log(`  ${styles.info("Suggestion:")} ${suggestion}`);
@@ -199,6 +206,8 @@ void runMain(mainCommand, {
         await reportCrash(error, "handledError");
       }
     }
+    // After the error (the user reads that first), before telemetry shuts down.
+    await printNotificationBanner({ error });
     const { shutdownTelemetry } = await import("#/cli/telemetry/index");
     await shutdownTelemetry();
   },

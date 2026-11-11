@@ -159,7 +159,29 @@ export const plugins = definePlugins(kyselyTypePlugin({ contentMapper: true }));
       expect(opened.watchedFiles).toEqual(
         expect.arrayContaining([path.join(dir, "tailor.config.ts"), helper]),
       );
-      expect(result.diagnostics.map((d) => d.messageText)).toEqual(["boom"]);
+      expect(result.diagnostics.map((d) => d.messageText)).toEqual(["tailor.config.ts: boom"]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "reports a syntax error in a file the config imports with its file and line",
+    async () => {
+      const dir = projectDir();
+      fs.writeFileSync(path.join(dir, "bad.ts"), "export const x = (;\n");
+      fs.writeFileSync(path.join(dir, "tailor.config.ts"), `import "./bad";\n${CONFIG}`);
+      const mapper = startMapper();
+
+      await open(mapper, dir);
+      const result = (await mapper.call("transform", {
+        fileName: REGISTRY_FILE,
+        content: "",
+        projectHandle: "p1",
+      })) as { diagnostics: { messageText: string }[] };
+
+      expect(result.diagnostics.map((d) => d.messageText)).toEqual([
+        "bad.ts:1: Invalid syntax: Expression expected",
+      ]);
     },
     TIMEOUT_MS,
   );

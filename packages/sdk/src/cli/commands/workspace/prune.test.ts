@@ -90,14 +90,6 @@ function workspace(
   } as Workspace;
 }
 
-// A workspace no organization or folder owns, which the fixture default would otherwise give one.
-function personalWorkspace(
-  name: string,
-  overrides: Parameters<typeof workspace>[1] = {},
-): Workspace {
-  return workspace(name, { ...overrides, organizationId: "", folderId: "" });
-}
-
 /**
  * Stub the metadata read behind `--expired`, keyed by workspace id.
  * @param expiries - Expiry per workspace id; an absent id records no expiry, an `Error` fails the read
@@ -153,7 +145,6 @@ describe("selectPruneCandidates", () => {
     olderThanMs: parseAge("24h"),
     organizationRoots: [],
     folderIds: [],
-    personal: false,
     exclude: new Set<string>(),
   };
 
@@ -216,8 +207,7 @@ describe("selectPruneCandidates", () => {
     const atRootB = workspace("e2e-ws-root-b", { organizationId: ORG_B });
     const inFolderA = workspace("e2e-ws-folder-a", { folderId: FOLDER_A });
     const inFolderB = workspace("e2e-ws-folder-b", { folderId: FOLDER_B });
-    const personal = personalWorkspace("e2e-ws-personal");
-    const everywhere = [atRootA, atRootB, inFolderA, inFolderB, personal];
+    const everywhere = [atRootA, atRootB, inFolderA, inFolderB];
 
     test("selects every location when none is given", () => {
       expect(selectPruneCandidates(everywhere, baseCriteria, NOW).candidates).toEqual(everywhere);
@@ -237,20 +227,14 @@ describe("selectPruneCandidates", () => {
       ).toEqual([inFolderA]);
     });
 
-    test("personal reaches only the workspaces no organization or folder owns", () => {
-      expect(
-        selectPruneCandidates(everywhere, { ...baseCriteria, personal: true }, NOW).candidates,
-      ).toEqual([personal]);
-    });
-
     test("several locations combine as a union", () => {
       expect(
         selectPruneCandidates(
           everywhere,
-          { ...baseCriteria, organizationRoots: [ORG_A], folderIds: [FOLDER_B], personal: true },
+          { ...baseCriteria, organizationRoots: [ORG_A], folderIds: [FOLDER_B] },
           NOW,
         ).candidates,
-      ).toEqual([atRootA, inFolderB, personal]);
+      ).toEqual([atRootA, inFolderB]);
       expect(
         selectPruneCandidates(
           everywhere,
@@ -259,14 +243,6 @@ describe("selectPruneCandidates", () => {
         ).candidates,
       ).toEqual([atRootA, atRootB, inFolderA, inFolderB]);
     });
-  });
-
-  test("does not treat a workspace with only a folder as personal", () => {
-    const folderOnly = workspace("e2e-ws-a", { organizationId: "", folderId: FOLDER_A });
-
-    expect(
-      selectPruneCandidates([folderOnly], { ...baseCriteria, personal: true }, NOW).candidates,
-    ).toEqual([]);
   });
 
   test("keeps excluded names even when they match", () => {
@@ -346,24 +322,24 @@ describe("workspace prune command", () => {
     },
   );
 
-  test.each([["--organization-root", ORG_A], ["--folder-id", FOLDER_A], ["--personal"]])(
-    "does not warn about an unscoped sweep with %j",
-    async (...location) => {
-      stubClient([]);
-      const result = await runCommand(pruneCommand, [
-        "--name",
-        "e2e-ws-.*",
-        "--older-than",
-        "7d",
-        "--yes",
-        ...location,
-      ]);
-      expect(result.success).toBe(true);
-      expect(logger.warn).not.toHaveBeenCalledWith(
-        expect.stringContaining("Every workspace visible to this login"),
-      );
-    },
-  );
+  test.each([
+    ["--organization-root", ORG_A],
+    ["--folder-id", FOLDER_A],
+  ])("does not warn about an unscoped sweep with %j", async (...location) => {
+    stubClient([]);
+    const result = await runCommand(pruneCommand, [
+      "--name",
+      "e2e-ws-.*",
+      "--older-than",
+      "7d",
+      "--yes",
+      ...location,
+    ]);
+    expect(result.success).toBe(true);
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      expect.stringContaining("Every workspace visible to this login"),
+    );
+  });
 
   test("requires a name filter", async () => {
     const client = stubClient([workspace("e2e-ws-1")]);
@@ -393,10 +369,7 @@ describe("workspace prune command", () => {
       "0s",
       "--yes",
     ]);
-    expectFailure(
-      unscoped,
-      "--older-than 0s requires --organization-root, --folder-id, or --personal.",
-    );
+    expectFailure(unscoped, "--older-than 0s requires --organization-root or --folder-id.");
     if (unscoped.success || !isCLIError(unscoped.error)) throw new Error("Expected CLIError");
     expect(unscoped.error.suggestion).toContain("`tailor user update`");
     expect(unscoped.error.suggestion).toContain("on the command line");
@@ -1225,7 +1198,7 @@ describe("workspace prune command", () => {
 
       const result = await runCommand(pruneCommand, ["--expired", "--yes"]);
 
-      expectFailure(result, "--expired requires --organization-root, --folder-id, or --personal.");
+      expectFailure(result, "--expired requires --organization-root or --folder-id.");
       if (result.success || !isCLIError(result.error)) throw new Error("Expected CLIError");
       expect(result.error.suggestion).toContain("`tailor user update`");
       expect(result.error.suggestion).toContain("on the command line");
@@ -1285,161 +1258,6 @@ describe("workspace prune command", () => {
 
       expectFailure(result, "--older-than");
       expect(client.listWorkspaces).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("--personal", () => {
-    test("satisfies the scope --expired requires, reaching a workspace no id scope can", async () => {
-      const target = personalWorkspace("ws-expired", { createdAt: hoursAgo(99) });
-      const client = stubClient([target], { [target.id]: hoursAgo(1) });
-
-      const result = await runCommand(pruneCommand, ["--expired", "--personal", "--yes"]);
-
-      expect(result.success).toBe(true);
-      expect(client.deleteWorkspace).toHaveBeenCalledExactlyOnceWith({ workspaceId: target.id });
-    });
-
-    test("leaves organization-owned workspaces alone when it is the only scope", async () => {
-      const personal = personalWorkspace("ws-personal", { createdAt: hoursAgo(99) });
-      const owned = workspace("ws-owned", { createdAt: hoursAgo(99) });
-      const client = stubClient([personal, owned], {
-        [personal.id]: hoursAgo(1),
-        [owned.id]: hoursAgo(1),
-      });
-
-      const result = await runCommand(pruneCommand, ["--expired", "--personal", "--yes"]);
-
-      expect(result.success).toBe(true);
-      expect(client.deleteWorkspace).toHaveBeenCalledExactlyOnceWith({ workspaceId: personal.id });
-    });
-
-    test("combines with the other locations as a union", async () => {
-      const personal = personalWorkspace("ws-personal", { createdAt: hoursAgo(99) });
-      const atRoot = workspace("ws-root", { createdAt: hoursAgo(99) });
-      const inFolderA = workspace("ws-folder-a", { createdAt: hoursAgo(99), folderId: FOLDER_A });
-      const inFolderB = workspace("ws-folder-b", { createdAt: hoursAgo(99), folderId: FOLDER_B });
-      const all = [personal, atRoot, inFolderA, inFolderB];
-      const client = stubClient(all, Object.fromEntries(all.map((ws) => [ws.id, hoursAgo(1)])));
-
-      const result = await runCommand(pruneCommand, [
-        "--expired",
-        "--personal",
-        "--folder-id",
-        FOLDER_A,
-        "--folder-id",
-        FOLDER_B,
-        "--yes",
-      ]);
-
-      expect(result.success).toBe(true);
-      expect(client.deleteWorkspace.mock.calls).toEqual([
-        [{ workspaceId: personal.id }],
-        [{ workspaceId: inFolderA.id }],
-        [{ workspaceId: inFolderB.id }],
-      ]);
-    });
-
-    test("ignores a location left in the environment, so the sweep stays personal", async () => {
-      vi.stubEnv("TAILOR_PLATFORM_ORGANIZATION_ID", ORG_A);
-      vi.stubEnv("TAILOR_PLATFORM_FOLDER_ID", FOLDER_A);
-      const personal = personalWorkspace("ws-personal", { createdAt: hoursAgo(99) });
-      const atRoot = workspace("ws-root", { createdAt: hoursAgo(99) });
-      const inFolder = workspace("ws-folder", { createdAt: hoursAgo(99), folderId: FOLDER_A });
-      const client = stubClient([personal, atRoot, inFolder], {
-        [personal.id]: hoursAgo(1),
-        [atRoot.id]: hoursAgo(1),
-        [inFolder.id]: hoursAgo(1),
-      });
-
-      const result = await runCommand(pruneCommand, ["--expired", "--personal", "--yes"]);
-
-      expect(result.success).toBe(true);
-      expect(client.deleteWorkspace).toHaveBeenCalledExactlyOnceWith({ workspaceId: personal.id });
-    });
-
-    test("does not satisfy the empty-location check on an --organization-root passed empty", async () => {
-      const client = stubClient([personalWorkspace("ws-expired", { createdAt: hoursAgo(99) })]);
-
-      const result = await runCommand(pruneCommand, [
-        "--expired",
-        "--personal",
-        "--organization-root",
-        "",
-        "--yes",
-      ]);
-
-      expectFailure(result, "--organization-root resolved to an empty value");
-      expect(client.listWorkspaces).not.toHaveBeenCalled();
-    });
-
-    test("still honours delete protection, --exclude, and --name", async () => {
-      const target = personalWorkspace("e2e-ws-target", { createdAt: hoursAgo(99) });
-      const excluded = personalWorkspace("e2e-ws-keep", { createdAt: hoursAgo(99) });
-      const guarded = personalWorkspace("e2e-ws-guarded", {
-        createdAt: hoursAgo(99),
-        deleteProtection: true,
-      });
-      const otherName = personalWorkspace("other-ws", { createdAt: hoursAgo(99) });
-      const client = stubClient([target, excluded, guarded, otherName], {
-        [target.id]: hoursAgo(1),
-        [excluded.id]: hoursAgo(1),
-        [guarded.id]: hoursAgo(1),
-        [otherName.id]: hoursAgo(1),
-      });
-
-      const result = await runCommand(pruneCommand, [
-        "--expired",
-        "--personal",
-        "--name",
-        "e2e-ws-.*",
-        "--exclude",
-        "e2e-ws-keep",
-        "--yes",
-      ]);
-
-      expect(result.success).toBe(true);
-      expect(client.deleteWorkspace).toHaveBeenCalledExactlyOnceWith({ workspaceId: target.id });
-    });
-
-    test("counts as a scope for --older-than 0s as well", async () => {
-      const target = personalWorkspace("e2e-ws-1", { createdAt: NOW });
-      const client = stubClient([target]);
-
-      const result = await runCommand(pruneCommand, [
-        "--name",
-        "e2e-ws-.*",
-        "--older-than",
-        "0s",
-        "--personal",
-        "--yes",
-      ]);
-
-      expect(result.success).toBe(true);
-      expect(client.deleteWorkspace).toHaveBeenCalledExactlyOnceWith({ workspaceId: target.id });
-    });
-
-    test("keeps a personal workspace that records no expiry", async () => {
-      const client = stubClient([personalWorkspace("ws-personal", { createdAt: hoursAgo(99) })]);
-
-      const result = await runCommand(pruneCommand, ["--expired", "--personal", "--yes"]);
-
-      expect(result.success).toBe(true);
-      expect(client.deleteWorkspace).not.toHaveBeenCalled();
-    });
-
-    test("keeps the scope columns hidden when it is the only scope", async () => {
-      const personal = personalWorkspace("ws-personal", { createdAt: hoursAgo(99) });
-      stubClient([personal], { [personal.id]: hoursAgo(1) });
-
-      const result = await runCommand(pruneCommand, ["--expired", "--personal", "--dry-run"]);
-
-      expect(result.success).toBe(true);
-      expect(logger.out).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          display: expect.objectContaining({ organizationId: null, folderId: null }),
-        }),
-      );
     });
   });
 });

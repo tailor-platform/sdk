@@ -6,9 +6,11 @@ import {
   sanitizeMigrationLabel,
   type PendingMigration,
 } from "#/cli/commands/tailordb/migrate/types";
+import { tailorDBPlanResultContext } from "../../test-helpers/plan-results";
 import { detectPendingMigrations, type updateMigrationLabel } from "../migration";
 import type { NamespaceWithMigrations } from "#/cli/commands/tailordb/migrate/config";
 import type { DiffChange, MigrationDiff } from "#/cli/commands/tailordb/migrate/diff-calculator";
+import type { RemoteMigrationState } from "#/cli/commands/tailordb/migrate/remote-state";
 import type {
   NormalizedSchemaSnapshot,
   SnapshotFieldConfig,
@@ -53,33 +55,40 @@ export function createMockClient(overrides: MockClientOverrides = {}): OperatorC
   } as unknown as OperatorClient;
 }
 
+type MockedRemoteState = Pick<RemoteMigrationState, "number" | "historyId"> &
+  Partial<RemoteMigrationState>;
+
+export type PlannedPendingMigrations = TailorDBPlanResult["context"]["pendingMigrations"];
+
 /**
  * Have the mocked detection find `migrations` pending and read each namespace's checkpoint the way
  * the real detection does, so the deploy expects that checkpoint.
  * @param migrations - Migrations to report as pending
- * @param checkpointOf - Checkpoint and history ID of a namespace when the detection runs
+ * @param remoteStateOf - Checkpoint, history ID, and any other remote state of a namespace when the detection runs
+ * @returns The pending migrations a plan made at this point would record, for `context.pendingMigrations`
  */
 export function mockPendingMigrations(
   migrations: PendingMigration[],
-  checkpointOf: (namespace: string) => { number: number | null; historyId: string | null },
-): void {
+  remoteStateOf: (namespace: string) => MockedRemoteState,
+): PlannedPendingMigrations {
   vi.mocked(detectPendingMigrations).mockImplementation(
     async (_client, _workspaceId, namespaces, _configPath, overrides, remoteStates) => {
       for (const { namespace } of namespaces) {
         if (overrides?.has(namespace)) continue;
         remoteStates?.set(namespace, {
           metadataExists: true,
-          ...checkpointOf(namespace),
           historyIdInvalid: false,
           inProgress: null,
           inProgressInvalid: false,
           maintenanceModeCheckpoint: null,
           cleanupCheckpoint: null,
+          ...remoteStateOf(namespace),
         });
       }
       return migrations;
     },
   );
+  return migrations.map(({ namespace, number }) => ({ namespace, number }));
 }
 
 export type RemoteCheckpoint = ReturnType<typeof createRemoteCheckpoint>;
@@ -122,13 +131,13 @@ export function createRemoteCheckpoint(initialNumber: number | null) {
     /**
      * Has the mocked detection find `migrations` pending on the checkpoint as it stands then.
      * @param migrations - Migrations to report as pending
+     * @returns The pending migrations a plan made at this point would record, for `context.pendingMigrations`
      */
-    mockPending: (migrations: PendingMigration[]): void => {
+    mockPending: (migrations: PendingMigration[]): PlannedPendingMigrations =>
       mockPendingMigrations(migrations, () => ({
         number: state.number,
         historyId: state.historyId,
-      }));
-    },
+      })),
     createMockClient: (overrides: MockClientOverrides = {}): OperatorClient =>
       createMockClient({
         getMetadata: vi.fn(async () => ({
@@ -185,6 +194,65 @@ export function tailordbTypeWrites(client: OperatorClient) {
   return writes.toSorted((a, b) => a.order - b.order);
 }
 
+/**
+ * List the call order of each deletion of a table and of its GraphQL permission.
+ * @param client - Mocked operator client
+ * @param namespace - Namespace of the table
+ * @param tableName - Table name
+ * @returns Invocation order of each table deletion and each GraphQL permission deletion
+ */
+export function deleteOrders(client: OperatorClient, namespace: string, tableName: string) {
+  const ordersOf = (
+    mock: { calls: unknown[][]; invocationCallOrder: number[] },
+    matches: (request: Record<string, unknown>) => boolean,
+  ) =>
+    mock.calls.flatMap((call, index) => {
+      const order = mock.invocationCallOrder[index];
+      return order !== undefined && matches(call[0] as Record<string, unknown>) ? [order] : [];
+    });
+  return {
+    table: ordersOf(
+      vi.mocked(client.deleteTailorDBType).mock,
+      (request) => request.namespaceName === namespace && request.tailordbTypeName === tableName,
+    ),
+    permission: ordersOf(
+      vi.mocked(client.deleteTailorDBGQLPermission).mock,
+      (request) => request.namespaceName === namespace && request.typeName === tableName,
+    ),
+  };
+}
+
+/**
+ * Summarize how a table and its GraphQL permission were deleted, to compare with
+ * {@link DELETED_ONCE_AFTER_CHECKPOINT}.
+ * @param client - Mocked operator client
+ * @param namespace - Namespace of the table
+ * @param tableName - Table name
+ * @param checkpoint - Invocation order of the checkpoint update the deletion must follow
+ * @returns Deletion counts and whether they ran in order
+ */
+export function deletionOf(
+  client: OperatorClient,
+  namespace: string,
+  tableName: string,
+  checkpoint: number | undefined,
+) {
+  const { table, permission } = deleteOrders(client, namespace, tableName);
+  return {
+    tableDeletes: table.length,
+    permissionDeletes: permission.length,
+    afterCheckpoint: checkpoint !== undefined && permission.every((order) => order > checkpoint),
+    permissionFirst: table.every((tableOrder) => permission.every((order) => order < tableOrder)),
+  };
+}
+
+export const DELETED_ONCE_AFTER_CHECKPOINT = {
+  tableDeletes: 1,
+  permissionDeletes: 1,
+  afterCheckpoint: true,
+  permissionFirst: true,
+};
+
 export const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
 
 type ChangeEntries<Group extends TailorDBChangeSet[keyof TailorDBChangeSet]> = Partial<
@@ -226,30 +294,28 @@ export function createPlanResult(options: PlanResultOptions = {}): TailorDBPlanR
       type: changeGroup(options.type),
       gqlPermission: changeGroup(options.gqlPermission),
     },
-    context: {
+    context: tailorDBPlanResultContext({
       workspaceId: WORKSPACE_ID,
       application: {
         name: APP_NAME,
         authService: { config: { name: "auth", machineUsers: { migrator: {} } } },
         ...options.application,
-      },
+      } as Application,
       tailorDBInputs: options.local
         ? [
             {
               namespace: NAMESPACE,
-              config: {},
+              config: { files: [] },
               types: Object.fromEntries(options.local.map((type) => [type.name, type])),
             },
           ]
         : [],
-      executorUsedTables: new Set<string>(),
       config: mockConfig,
       noSchemaCheck: true,
-      checkpointRepairs: [],
       namespacesWithMigrations,
       migrationFileState: captureMigrationFileState(namespacesWithMigrations),
       ...options.context,
-    },
+    }),
   } as unknown as TailorDBPlanResult;
 }
 

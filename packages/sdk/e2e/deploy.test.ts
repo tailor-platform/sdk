@@ -9,7 +9,8 @@
  *
  * Prerequisites:
  * - Authentication via TAILOR_PLATFORM_TOKEN env var or `tailor login`
- * - TAILOR_PLATFORM_ORGANIZATION_ID environment variable must be set
+ * - TAILOR_PLATFORM_ORGANIZATION_ID environment variable must be set, unless logged in with
+ *   `tailor login` and a default organization is saved with `tailor user update`
  */
 
 import * as fs from "node:fs";
@@ -23,9 +24,10 @@ import { loadAccessToken } from "../src/cli/shared/context";
 import { logger } from "../src/cli/shared/logger";
 import {
   resolveE2ERunId,
+  resolveE2EWorkspaceLocation,
   resolveE2EWorkspaceRegion,
-  trackWorkspace,
   trackTempDir,
+  trackWorkspace,
 } from "./globalSetup";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -64,8 +66,7 @@ describe("E2E: Service deletion order", () => {
       workspaceName: testWorkspaceName,
       workspaceRegion: region,
       deleteProtection: false,
-      organizationId: process.env.TAILOR_PLATFORM_ORGANIZATION_ID,
-      folderId: process.env.TAILOR_PLATFORM_FOLDER_ID,
+      ...(await resolveE2EWorkspaceLocation()),
     });
     workspaceId = createResp.workspace!.id!;
     await trackWorkspace(client, workspaceId);
@@ -371,6 +372,7 @@ import {
 const idp = defineIdp("${idpName}", {
   clients: ["default-idp-client"],
   permission: unsafeAllowAllIdPPermission,
+  userAuthPolicy: { allowedEmailDomains: ["*"] },
 });
 
 export default defineConfig({
@@ -447,6 +449,7 @@ import {
 const idp = defineIdp("${idpName}", {
   clients: ["default-idp-client"],
   permission: unsafeAllowAllIdPPermission,
+  userAuthPolicy: { allowedEmailDomains: ["*"] },
 });
 
 const auth = defineAuth("${authName}", {
@@ -487,6 +490,7 @@ import {
 const idp = defineIdp("${idpName}", {
   clients: ["default-idp-client"],
   permission: unsafeAllowAllIdPPermission,
+  userAuthPolicy: { allowedEmailDomains: ["*"] },
 });
 
 export default defineConfig({
@@ -669,8 +673,7 @@ describe("E2E: static website env reference created in the same deploy", () => {
       workspaceName,
       workspaceRegion: region,
       deleteProtection: false,
-      organizationId: process.env.TAILOR_PLATFORM_ORGANIZATION_ID,
-      folderId: process.env.TAILOR_PLATFORM_FOLDER_ID,
+      ...(await resolveE2EWorkspaceLocation()),
     });
     workspaceId = createResp.workspace!.id!;
     await trackWorkspace(client, workspaceId);

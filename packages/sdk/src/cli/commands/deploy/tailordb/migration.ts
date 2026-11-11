@@ -46,7 +46,6 @@ import {
 import {
   analyzeMigrationScript,
   countUnresolvedTodosInFile,
-  ignoredStepsWarning,
   UNRESOLVED_TODO_SUGGESTION,
   usesStepRunner,
 } from "#/cli/commands/tailordb/migrate/script-form";
@@ -284,18 +283,12 @@ export async function detectPendingMigrations(
           suggestion: `Add a script: ${formatMigrationScriptHint(commandOptions)}\nOr record that no script is needed: ${formatMigrationScriptHint({ ...commandOptions, noScript: true })}`,
         });
       }
-      if (diff.scriptSkipped) {
-        const migrationLabel = `${namespace}/${formatMigrationNumber(migrationNumber)}`;
-        if (hasScript) {
-          throw CLIError({
-            code: "MIGRATION_SCRIPT_SKIP_CONFLICT",
-            message: `Migration ${migrationLabel} has both a --no-script skip acknowledgment and migrate.ts.`,
-            suggestion: `Keep the script and clear the stale acknowledgment: ${formatMigrationScriptHint({ migrationNumber, namespace, configPath })}\nOr keep the skip: delete migrate.ts`,
-          });
-        }
-        logger.info(
-          `Migration ${migrationLabel} runs without a script (skip acknowledged at ${diff.scriptSkipped.acknowledgedAt}: ${diff.scriptSkipped.reason})`,
-        );
+      if (diff.scriptSkipped && hasScript) {
+        throw CLIError({
+          code: "MIGRATION_SCRIPT_SKIP_CONFLICT",
+          message: `Migration ${namespace}/${formatMigrationNumber(migrationNumber)} has both a --no-script skip acknowledgment and migrate.ts.`,
+          suggestion: `Keep the script and clear the stale acknowledgment: ${formatMigrationScriptHint({ migrationNumber, namespace, configPath })}\nOr keep the skip: delete migrate.ts`,
+        });
       }
 
       if (hasScript && countUnresolvedTodosInFile(scriptPath) > 0) {
@@ -306,12 +299,7 @@ export async function detectPendingMigrations(
         });
       }
 
-      const pendingMigration = withScriptForm(migration);
-      const { scriptForm } = pendingMigration;
-      if (scriptForm?.kind === "main" && scriptForm.ignoredSteps) {
-        logger.warn(ignoredStepsWarning(`${namespace}/${formatMigrationNumber(migrationNumber)}`));
-      }
-      pendingMigrations.push(pendingMigration);
+      pendingMigrations.push(withScriptForm(migration));
     }
   }
 
@@ -945,6 +933,18 @@ function partiallyAppliedError(
 }
 
 /**
+ * Recovery advice attached to the failure that a rollback error replaces. A CLI error's advice
+ * is left out: the rollback error says how to go on from the state it leaves.
+ * @param cause - The failure that triggered the rollback
+ * @returns The advice to keep, if any
+ */
+function causeSuggestion(cause: unknown): string | undefined {
+  return cause instanceof Error && !isCLIError(cause)
+    ? getErrorDiagnostics(cause).suggestion
+    : undefined;
+}
+
+/**
  * The failure of a migration that asked to be rolled back and was.
  * @param migration - Migration whose schema changes were rolled back
  * @param cause - The failure that triggered the rollback
@@ -953,10 +953,7 @@ function partiallyAppliedError(
 export function rolledBackError(migration: PendingMigration, cause: unknown): Error {
   const { namespace } = migration;
   const checkpoint = formatMigrationNumber(migration.number - 1);
-  const causeHint =
-    cause instanceof Error && !isCLIError(cause)
-      ? getErrorDiagnostics(cause).suggestion
-      : undefined;
+  const causeHint = causeSuggestion(cause);
   return CLIError({
     code: "MIGRATION_ROLLED_BACK",
     message: cause instanceof Error ? cause.message : String(cause),
@@ -1008,7 +1005,12 @@ export function rollbackSkippedError(
   return CLIError({
     code: "MIGRATION_PARTIALLY_APPLIED",
     message: cause instanceof Error ? cause.message : String(cause),
-    suggestion: withMaintenanceModeNote(next, namespace, maintenanceMode, "Until then"),
+    suggestion: [
+      withMaintenanceModeNote(next, namespace, maintenanceMode, "Until then"),
+      causeSuggestion(cause),
+    ]
+      .filter(Boolean)
+      .join(" "),
     context: {
       namespace,
       migrationNumber: migration.number,
@@ -1388,7 +1390,11 @@ export async function executeMigrations(
         }
         throw (
           result.failure ??
-          CLIError({ code: "MIGRATION_FAILED", message: result.error ?? "Migration failed" })
+          CLIError({
+            code: "MIGRATION_FAILED",
+            message: `Migration ${migrationLabel} failed${result.error ? `: ${result.error}` : ""}`,
+            context: { namespace: migration.namespace, migrationNumber: migration.number },
+          })
         );
       }
     }

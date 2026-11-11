@@ -28,6 +28,15 @@ export type SerialConfig<T extends "string" | "integer" = "string" | "integer"> 
     gapless?: boolean;
   } & (T extends "string"
     ? {
+        /**
+         * printf-style text that the sequence number is written into. It holds
+         * exactly one of `%d` (decimal), `%o` (octal), `%x` (lowercase
+         * hexadecimal), or `%X` (uppercase hexadecimal), optionally with a
+         * width: `%5d` pads with spaces and `%05d` with zeros, to at least 5
+         * characters. Write a literal `%` as `%%`. The format is at most 32
+         * characters.
+         * @example db.string().serial({ start: 1, format: "INV-%05d" }) // INV-00001, INV-00002, ...
+         */
         format?: string;
       }
     : object)
@@ -347,6 +356,14 @@ export type RelationType = "1-1" | "oneToOne" | "n-1" | "manyToOne" | "N-1" | "k
 
 type TailorDBExternalConfig = { external: true };
 
+type TailorDBOwnServiceConfigInput = Omit<TailorDBServiceConfigInput, "ignores"> & {
+  /**
+   * Glob patterns to exclude from table discovery.
+   * @deprecated since 2.40.0 — write `!`-prefixed patterns in `files` instead. codemod: v3/files-ignores-to-negation
+   */
+  ignores?: TailorDBServiceConfigInput["ignores"];
+};
+
 export type TailorDBServiceInput = {
-  [namespace: string]: TailorDBServiceConfigInput | TailorDBExternalConfig;
+  [namespace: string]: TailorDBOwnServiceConfigInput | TailorDBExternalConfig;
 };

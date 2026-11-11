@@ -1,10 +1,16 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { decodeExpiresAt, expiresAtLabelKey } from "../src/cli/commands/workspace/expiry";
-import { trackWorkspace } from "./globalSetup";
+import { loadUserWorkspaceDefaults } from "../src/cli/shared/context";
+import { resolveE2EWorkspaceLocation, trackWorkspace } from "./globalSetup";
 import type { OperatorClient } from "../src/cli/shared/client";
+
+vi.mock("../src/cli/shared/context", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/cli/shared/context")>()),
+  loadUserWorkspaceDefaults: vi.fn(),
+}));
 
 const workspaceId = "00000000-0000-4000-8000-000000000001";
 const trackingFile = path.join(os.tmpdir(), "e2e-workspaces", workspaceId);
@@ -57,5 +63,64 @@ describe("trackWorkspace", () => {
     client.deleteWorkspace.mockRejectedValue(new Error("delete denied"));
 
     await expect(trackWorkspace(asOperator, workspaceId)).rejects.toThrow("metadata unavailable");
+  });
+});
+
+describe("resolveE2EWorkspaceLocation", () => {
+  const userDefaults = { organizationId: "default-org", folderId: "default-folder" };
+
+  beforeEach(() => {
+    vi.mocked(loadUserWorkspaceDefaults).mockResolvedValue(userDefaults);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.mocked(loadUserWorkspaceDefaults).mockReset();
+  });
+
+  test("uses the organization and folder from the environment when both are set", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_ORGANIZATION_ID", "env-org");
+    vi.stubEnv("TAILOR_PLATFORM_FOLDER_ID", "env-folder");
+
+    await expect(resolveE2EWorkspaceLocation()).resolves.toEqual({
+      organizationId: "env-org",
+      folderId: "env-folder",
+    });
+    expect(loadUserWorkspaceDefaults).not.toHaveBeenCalled();
+  });
+
+  test("does not mix in the user's default folder when only the organization is set", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_ORGANIZATION_ID", "env-org");
+    vi.stubEnv("TAILOR_PLATFORM_FOLDER_ID", "");
+
+    await expect(resolveE2EWorkspaceLocation()).resolves.toEqual({
+      organizationId: "env-org",
+      folderId: undefined,
+    });
+  });
+
+  test("treats empty environment variables as not set", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_ORGANIZATION_ID", "");
+    vi.stubEnv("TAILOR_PLATFORM_FOLDER_ID", "");
+
+    await expect(resolveE2EWorkspaceLocation()).resolves.toEqual(userDefaults);
+  });
+
+  test("falls back to the user's default organization and folder without environment variables", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_ORGANIZATION_ID", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_FOLDER_ID", undefined);
+
+    await expect(resolveE2EWorkspaceLocation()).resolves.toEqual(userDefaults);
+  });
+
+  test("returns no location when neither the environment nor the user provides one", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_ORGANIZATION_ID", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_FOLDER_ID", undefined);
+    vi.mocked(loadUserWorkspaceDefaults).mockResolvedValue(undefined);
+
+    await expect(resolveE2EWorkspaceLocation()).resolves.toEqual({
+      organizationId: undefined,
+      folderId: undefined,
+    });
   });
 });

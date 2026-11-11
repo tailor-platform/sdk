@@ -7,12 +7,15 @@ import { getDistDir } from "#/cli/shared/dist-dir";
 import { CLIError } from "#/cli/shared/errors";
 import { findUndefinedReferences } from "#/cli/shared/free-variables";
 import { flattenZodIssues, formatIssueList } from "#/cli/shared/zod-issues";
+import { checkPermissionInputs } from "#/parser/service/resolver/permission-operands";
 import { ResolverSchema } from "#/parser/service/resolver/schema";
 import { stringifyFunction } from "#/parser/service/tailordb/field";
 import type { PluginResolverInfo } from "#/plugin/manager";
 import type { TailorField } from "#/types/field.generated";
 
-const PluginResolverSchema = ResolverSchema.extend({ body: z.string() });
+export const PluginResolverSchema = z
+  .strictObject({ ...ResolverSchema.shape, body: z.string() })
+  .superRefine(checkPermissionInputs);
 
 /**
  * Generate validated resolver modules for the standard loader and bundler.

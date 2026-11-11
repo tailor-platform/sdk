@@ -4,9 +4,16 @@ import type { JsonValue } from "#/types/helpers";
 
 export interface IncomingWebhookArgs<T extends IncomingWebhookRequest> {
   body: T["body"];
+  /**
+   * Request headers. Empty when the executor is triggered manually with
+   * `tailor executor trigger` or `triggerExecutor`.
+   */
   headers: T["headers"];
   method: "POST" | "GET" | "PUT" | "DELETE";
-  /** Raw request body, base64-encoded. */
+  /**
+   * Raw request body, base64-encoded. Absent when the executor is triggered
+   * manually with `tailor executor trigger` or `triggerExecutor`.
+   */
   rawBody: string;
   env: TailorEnv;
 }

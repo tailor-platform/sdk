@@ -30,7 +30,10 @@ Add the plugin and its rules to `.oxlintrc.json`:
     "tailor-sdk/no-job-start-outside-body": "warn",
     "tailor-sdk/no-node-builtin-imports": "warn",
     "tailor-sdk/no-node-only-globals": "warn",
+    "tailor-sdk/no-plain-tailor-any-field-param": "warn",
+    "tailor-sdk/no-unbound-caller-id-input": "warn",
     "tailor-sdk/no-unconditional-permit": "warn",
+    "tailor-sdk/no-unused-resolver-input": "warn",
     "tailor-sdk/valid-execution-policy-definition": "warn",
     "tailor-sdk/valid-resolver-permission": "warn",
     "tailor-sdk/valid-workflow-exports": "warn",
@@ -40,8 +43,8 @@ Add the plugin and its rules to `.oxlintrc.json`:
 }
 ```
 
-Oxlint JavaScript plugins are currently alpha. These rules use syntax and import binding analysis
-only; they do not require type-aware custom rule support.
+Oxlint JavaScript plugins are currently alpha. These rules use syntax, import binding, and scope
+analysis only; they do not require type-aware custom rule support.
 
 ## ESLint
 
@@ -290,6 +293,37 @@ still checks the bundled output. In a file that only defines HTTP adapters the m
 suggestions, which are written for `body` functions. References that reach the global through
 `globalThis.process`, and references guarded by `typeof process !== "undefined"`, are not reported.
 
+### `no-plain-tailor-any-field-param` (warning)
+
+When a helper uses a field passed to a parameter typed with `TailorAnyField` itself to build another
+field, such as with `t.object()`, the passed field's output type becomes `any`, so `t.infer` and
+resolver `body` types stop checking it. A type parameter constrained by `TailorAnyField` keeps the
+field's type.
+
+Incorrect:
+
+```ts
+function paginated(item: Record<string, TailorAnyField>) {
+  return t.object({ items: t.object(item, { array: true }), totalCount: t.int() });
+}
+```
+
+Correct:
+
+```ts
+function paginated<F extends Record<string, TailorAnyField>>(item: F) {
+  return t.object({ items: t.object(item, { array: true }), totalCount: t.int() });
+}
+```
+
+The rule reports `TailorAnyField` in a function parameter's type, including inside arrays, unions,
+object types, and type arguments such as `Record<...>`, `Map<...>`, or `Promise<...>`. It also
+reports a helper that only reads the field, such as one that returns `field.metadata.description`;
+the same rewrite is harmless there. Callback types, callbacks passed directly to a call such as
+`.map()`, type parameter constraints, and the implementation of an overloaded function are not
+reported. It does not follow type aliases or interfaces, and it does not check a function typed
+through a variable annotation such as `const wrap: (field: TailorAnyField) => ...`.
+
 ### `valid-execution-policy-definition` (warning)
 
 Workflow execution policy names must match `[a-z0-9-]` (3-63 characters, starting and ending with
@@ -336,8 +370,11 @@ retryPolicy: { maxRetries: 3, initialBackoff: "1s", maxBackoff: "30s", backoffMu
 
 A literal resolver `permission` (or a namespace `defaultPermission` in `defineConfig`) must contain
 at least one policy with `permit: true`, every policy at least one condition, and every condition
-exactly one `{ user }` operand compared to a string or a boolean. `_loggedIn` must compare to a
-boolean and `id` to a string.
+exactly one `{ user }` operand compared to a string, a boolean, or an `{ input }` operand. `_loggedIn`
+must compare to a boolean and `id` to a string or an `{ input }` operand. An `{ input }` operand is
+compared with `=` and may appear only in a `permit: true` policy of a resolver's own `permission`, never in
+`defaultPermission`. Whether the `{ input }` operand names a declared string, uuid, or enum input
+field is left to the type checker and the build.
 
 Incorrect:
 
@@ -357,3 +394,104 @@ another module are skipped and still validated by the build.
 
 The rules recognize named and namespace imports from `@tailor-platform/sdk`, including local import
 aliases. Same-named functions imported from other packages are ignored.
+
+### `no-unbound-caller-id-input` (warning)
+
+A caller can send any value for a resolver input, so a mutation that takes the acting user's ID as
+input lets a caller act as another user by sending that user's ID. The rule reports a mutation's
+`t.uuid()` or `db.uuid()` input named like the caller's ID, such as `approverId`, `requesterId`,
+`actorId`, `currentUserId`, `createdBy`, `lastUpdatedBy`, or `created_by_id`, unless every
+`permit: true` policy of the resolver's `permission` compares it with a `user` operand using `=`.
+Policies are OR'd, so a policy that admits callers by role alone lets them send any ID; an omitted
+`permission` or `"allowAnonymous"` compares nothing.
+
+Incorrect:
+
+```ts
+export default createResolver({
+  name: "approveRequest",
+  operation: "mutation",
+  input: { requestId: t.uuid(), approverId: t.uuid() },
+  permission: [{ conditions: [[{ user: "role" }, "=", "MANAGER"]], permit: true }],
+  body: ({ input }) => approve(input.requestId, input.approverId),
+  output: t.bool(),
+});
+```
+
+Correct:
+
+```ts
+export default createResolver({
+  name: "approveRequest",
+  operation: "mutation",
+  input: { requestId: t.uuid() },
+  permission: [{ conditions: [[{ user: "role" }, "=", "MANAGER"]], permit: true }],
+  body: ({ input, caller }) => approve(input.requestId, caller),
+  output: t.bool(),
+});
+```
+
+To keep the input, add `[{ input: "approverId" }, "=", { user: "id" }]` to the conditions of every
+`permit: true` policy instead. When the input names another user on purpose, such as the approver an
+admin assigns, or a `permit: true` policy admits only callers trusted to act for others, suppress the
+report on that input with `// oxlint-disable-next-line tailor-sdk/no-unbound-caller-id-input` (or
+`eslint-disable-next-line`).
+
+Queries, `t.string()` inputs, array inputs, fields nested in `t.object()`, and fields reused from a
+TailorDB type (`user.fields.id`) are not checked. The rule reads literals and `const` values defined
+in the same file, and no other check covers what it skips: an input is not reported when the rule
+cannot read the resolver's options, `operation`, `input`, or the field's options, when its key is
+computed or a spread follows it in `input`, or when the rule cannot read whether a `permit: true`
+policy compares it. An input is still reported when one `permit: true` policy the rule can read does
+not compare it, even if other policies cannot be read.
+
+### `no-unused-resolver-input` (warning)
+
+A resolver `input` field that `body` never reads still appears in the GraphQL schema, so a caller may
+expect it to take effect. The rule reports such a field on its declaration.
+
+Incorrect:
+
+```ts
+export default createResolver({
+  name: "updateNote",
+  operation: "mutation",
+  input: { noteId: t.string(), note: t.string(), draft: t.bool() },
+  body: ({ input }) => saveNote(input.noteId, input.note),
+  output: t.bool(),
+});
+```
+
+Correct:
+
+```ts
+export default createResolver({
+  name: "updateNote",
+  operation: "mutation",
+  input: { noteId: t.string(), note: t.string() },
+  body: ({ input }) => saveNote(input.noteId, input.note),
+  output: t.bool(),
+});
+```
+
+A field also counts as used when the resolver's `permission` compares it with the caller through an
+`{ input }` operand, or when it, or a field nested in it, declares a `validate`. Reads in `body`'s
+parameter defaults, such as `({ input, x = input.b }) => …`, and through a rest element, such as
+`({ input: { ...args } }) => args.a`, count too.
+
+The rule does not report a resolver when it cannot tell which fields `body` reads: `body` passes
+`input`, its whole argument, or a rest element taken from either on (to another function or a
+spread), reads it with a dynamic key or checks it with `in`, reads a key `input` does not declare,
+such as `hasOwnProperty`, or reassigns it. Like `valid-resolver-permission`, it also skips a resolver whose config, `input`,
+`body`, or `permission` it cannot read statically, and it does not report a field built by a
+function of your own or imported from another module, which may declare a `validate`.
+
+To keep an input that is ignored on purpose, disable the rule on its line:
+
+```ts
+input: {
+  noteId: t.string(),
+  // eslint-disable-next-line tailor-sdk/no-unused-resolver-input -- kept for older clients
+  draft: t.bool(),
+},
+```

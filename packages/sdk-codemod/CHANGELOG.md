@@ -1,5 +1,55 @@
 # @tailor-platform/sdk-codemod
 
+## 0.11.0
+
+### Minor Changes
+
+- [#2986](https://github.com/tailor-platform/sdk/pull/2986) [`57fa11a`](https://github.com/tailor-platform/sdk/commit/57fa11afc854a359caa7ae7457dcc3eb06c59432) Thanks [@dqn](https://github.com/dqn)! - `files` in `db`, `resolver`, `executor`, `workflow`, and `httpAdapter` now treats a pattern starting with `!` as an exclusion: for each file, the last `files` pattern that matches it decides. Before, such a pattern matched nothing and excluded nothing, so a config that already lists `!` patterns now leaves those files out, and the next deploy removes the resources they defined. A file that several `files` patterns match is now loaded once.
+  
+  `ignores` is deprecated and will be removed in v3, together with the default exclusion of `**/*.test.ts` and `**/*.spec.ts`. `tailor upgrade` runs the `v3/files-ignores-to-negation` codemod, which moves `ignores` into `files` as `!` patterns and adds `"!**/*.test.ts"` and `"!**/*.spec.ts"` to services without `ignores`.
+  
+  ```ts
+  export default defineConfig({
+    name: "my-app",
+    executor: {
+      files: ["executors/**/*.ts", "!executors/ci-only.ts"],
+    },
+  });
+  ```
+
+- [#3025](https://github.com/tailor-platform/sdk/pull/3025) [`ee30e41`](https://github.com/tailor-platform/sdk/commit/ee30e41a37cbb38f0b3764e6cbe068eb8a51f59e) Thanks [@dqn](https://github.com/dqn)! - The plugin hook `onNamespaceLoaded` is renamed to `onTailorDBNamespaceLoaded`, which says that it runs once for each TailorDB namespace in the config (except external ones). Its context and output types are renamed to `TailorDBNamespaceLoadedContext` and `TailorDBNamespacePluginOutput`.
+  
+  `onNamespaceLoaded`, `PluginNamespaceProcessContext`, and `NamespacePluginOutput` are deprecated and will be removed in v3; plugins that use them keep working until then. A plugin that defines both `onNamespaceLoaded` and `onTailorDBNamespaceLoaded` is rejected when the config loads. `tailor upgrade` runs the `v3/tailordb-namespace-loaded-rename` codemod, which renames the hook and the two types.
+  
+  ```ts
+  export const auditLogPlugin: Plugin = {
+    id: "@example/audit-log",
+    description: "Adds an audit log table",
+    importPath: "@example/audit-log",
+    onTailorDBNamespaceLoaded({ namespace }) {
+      return { tables: { auditLog: db.table(`AuditLog_${namespace}`, { message: db.string() }) } };
+    },
+  };
+  ```
+
+## 0.10.8
+
+### Patch Changes
+
+- [#2955](https://github.com/tailor-platform/sdk/pull/2955) [`0e86776`](https://github.com/tailor-platform/sdk/commit/0e867766a8b5daa17927f6018c59281457bfebb9) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​politty/zod to v0.7.1
+
+- [#2964](https://github.com/tailor-platform/sdk/pull/2964) [`a376815`](https://github.com/tailor-platform/sdk/commit/a376815b3b95d9359738439cd1be669d09b9c614) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​ast-grep/napi to v0.51.1
+
+- [#2973](https://github.com/tailor-platform/sdk/pull/2973) [`c0ae913`](https://github.com/tailor-platform/sdk/commit/c0ae913259e1b51c7df799f3c023e4dd4ea567c9) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency semver to v7.8.6
+
+- [#2982](https://github.com/tailor-platform/sdk/pull/2982) [`cd33cdb`](https://github.com/tailor-platform/sdk/commit/cd33cdb901bf2eb4ee57e77ba8d62b134c1064d1) Thanks [@dqn](https://github.com/dqn)! - The v2 migration guide and `tailor upgrade` prompt for the programmatic CLI functions no longer say that `triggerExecutor`'s `payload` is typed from the executor definition. `payload` is accepted only for an executor with an incoming webhook trigger, and its shape is not checked; `startWorkflow`'s `arg` is still typed from the workflow definition.
+
+## 0.10.7
+
+### Patch Changes
+
+- [#2905](https://github.com/tailor-platform/sdk/pull/2905) [`bc3dd45`](https://github.com/tailor-platform/sdk/commit/bc3dd45ccbb67641f9c7636594a4fdcda963dd4e) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @​types/node to v26.6.6
+
 ## 0.10.6
 
 ### Patch Changes

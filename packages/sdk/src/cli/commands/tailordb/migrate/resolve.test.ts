@@ -1,16 +1,17 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
-import { Code, ConnectError } from "@connectrpc/connect";
 import { runCommand } from "@politty/zod";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
+import { errorToJson } from "#/cli/shared/error-json";
 import { CLIError } from "#/cli/shared/errors";
 import { prompt } from "#/cli/shared/prompt";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { resolveCommand } from "./resolve";
+import { requiredFieldNullValuesError } from "./test-helpers/platform-errors";
 import {
   parsedType,
   remoteType,
@@ -509,17 +510,15 @@ describe("tailordb migration resolve", () => {
   });
 
   test("--complete explains how to go on when records without a value reject the update", async () => {
-    state.updateTailorDBType.mockRejectedValue(
-      new ConnectError(
-        'field "code" cannot be updated from non-required to required when records exist',
-        Code.FailedPrecondition,
-      ),
-    );
+    state.updateTailorDBType.mockRejectedValue(requiredFieldNullValuesError());
 
     const result = await runCommand(resolveCommand, ["--complete", "--yes"]);
 
     expect(result.success).toBe(false);
-    expect(state.stderr.join("")).toMatch(/run the command again.*stays in progress/s);
+    expect(errorToJson(result.error).error).toMatchObject({
+      code: "TAILORDB_REQUIRED_FIELD_HAS_NULL_VALUES",
+      suggestion: expect.stringMatching(/run the command again.*stays in progress/s),
+    });
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
 
@@ -567,11 +566,14 @@ describe("tailordb migration resolve", () => {
       });
     });
 
-    test("--rollback warns that the data a succeeded run wrote is lost", async () => {
+    test("--rollback warns what it removes and that --complete keeps what a succeeded run wrote", async () => {
       const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
 
       expect(result.success).toBe(true);
       const output = state.stderr.join("");
+      expect(output).toMatch(
+        /removes the fields the migration introduced and deletes the tables it introduced together with their data/,
+      );
       expect(output).toMatch(/run of migration 0002 succeeded/);
       expect(output).toMatch(/--complete/);
       expect(output).not.toMatch(/from the first step/);
@@ -741,19 +743,14 @@ describe("tailordb migration resolve", () => {
 
     test("--rollback explains how to go on when records without a value reject the update", async () => {
       leftInPrePhaseOf0002();
-      state.updateTailorDBType.mockRejectedValue(
-        new ConnectError(
-          'field "code" cannot be updated from non-required to required when records exist',
-          Code.FailedPrecondition,
-        ),
-      );
+      state.updateTailorDBType.mockRejectedValue(requiredFieldNullValuesError());
 
       const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
 
       expect(result.success).toBe(false);
-      const output = state.stderr.join("");
-      expect(output).toMatch(/Fill in those records first/);
-      expect(output).not.toMatch(/stays in progress/);
+      const { suggestion } = errorToJson(result.error).error;
+      expect(suggestion).toMatch(/Fill in those records first/);
+      expect(suggestion).not.toMatch(/stays in progress/);
     });
 
     test("--complete refuses, because no migration is in progress", async () => {

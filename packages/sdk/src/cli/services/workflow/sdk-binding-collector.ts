@@ -1,4 +1,5 @@
 import { type ASTNode, isTailorSdkSource, getImportSource, unwrapAwait } from "./ast-utils";
+import { walkAst } from "./ast-walk";
 import type {
   Program,
   ImportDeclaration,
@@ -17,9 +18,7 @@ import type {
 export function collectSdkBindings(program: Program, functionName: string): Set<string> {
   const bindings = new Set<string>();
 
-  function walk(node: ASTNode | null | undefined): void {
-    if (!node || typeof node !== "object") return;
-
+  walkAst(program, (node) => {
     const nodeType = node.type as string | undefined;
 
     // Static imports: import { createWorkflowJob } from "@tailor-platform/sdk"
@@ -97,18 +96,7 @@ export function collectSdkBindings(program: Program, functionName: string): Set<
         }
       }
     }
-
-    for (const key of Object.keys(node)) {
-      const child = node[key];
-      if (Array.isArray(child)) {
-        child.forEach((c: unknown) => walk(c as ASTNode | null));
-      } else if (child && typeof child === "object") {
-        walk(child as ASTNode);
-      }
-    }
-  }
-
-  walk(program as unknown as ASTNode);
+  });
   return bindings;
 }
 

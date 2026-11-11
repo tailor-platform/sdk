@@ -13,7 +13,7 @@ paths:
 4. `verifyRestorationCheckpoints` checks that every checkpoint still belongs to this deploy.
 5. Without a failure, `applyLocalDefinitions` (`--no-schema-check` only) creates the planned tables no earlier step created and writes the local definitions that differ from the last migration.
 6. `keepPartialMigrationsRestricted` drops the tables of a partially applied migration from `restoration`. The restore (`restoreMigrationRestrictions`) then lifts the restrictions: right away through `restoreAfterMigrations`, or, with `maintenanceMode: "deploy"` and no failure, through `releaseHeldMaintenanceMode` after the rest of the deploy, which checks ownership again. A failure is thrown after this step.
-7. `applyDeferredGqlPermissions`; `applyRemainingDeletions`, which deletes the remaining GraphQL permissions everywhere but tables only outside the migrating namespaces; then the metadata labels. With `"deploy"`, these run while the tables are still restricted.
+7. `applyDeferredGqlPermissions`; `applyRemainingDeletions`, which deletes the planned GraphQL permissions and tables that no migration deleted, in every namespace, and drops each deleted table from `restoration.settings`; then the metadata labels. With `"deploy"`, these run while the tables are still restricted.
 
 Keep these invariants:
 
@@ -25,4 +25,4 @@ Keep these invariants:
 - **Write order.** Within a step, creates go before updates: an update can add a relation to a table a create adds.
 - **Documented phases.** `flow.timeline` attributes maintenance time to the phases in `migration-timing.ts`. When a step moves between phases, update the phase table under "Time spent in maintenance mode" in `packages/sdk/docs/services/tailordb/migration.md`.
 
-Tests built with `createPlanResult` (`test-helpers/migration-apply.ts`) run under `--no-schema-check` unless they pass `context: { noSchemaCheck: false }`. Without `local`, the namespace has no deploy input, so the restrict and restore steps skip it.
+Tests built with `createPlanResult` (`test-helpers/migration-apply.ts`) run under `--no-schema-check` unless they pass `context: { noSchemaCheck: false }`. Without `local`, the namespace has no deploy input, so the restrict and restore steps skip it. The deploy stops with `DEPLOY_PLAN_STALE` when the pending migrations differ from the plan's, so set the plan's `context.pendingMigrations` to the list `mockPendingMigrations` returns.

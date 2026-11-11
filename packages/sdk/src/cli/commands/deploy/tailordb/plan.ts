@@ -49,7 +49,7 @@ import {
 } from "./compare";
 import { assertPendingMigrationsRunnable } from "./migration";
 import { selectSkipStepsOfNamespaces } from "./migration-skip-steps";
-import { validateAndDetectMigrations } from "./migration-validation";
+import { logMigrationPlanNotices, validateAndDetectMigrations } from "./migration-validation";
 import type { PlanContext } from "../types";
 
 export type TailorDBPlanResult = Awaited<ReturnType<typeof planTailorDB>>;
@@ -161,12 +161,15 @@ export async function planTailorDB(context: PlanContext) {
       inProgressByNamespace: detected.inProgressMigrations,
       source: context,
     });
+    logMigrationPlanNotices(detected);
   }
-  const { namespacesWithMigrations, migrationFileState, checkpointRepairs } = detected ?? {
-    namespacesWithMigrations: migrationConfig,
-    migrationFileState: captureMigrationFileState(migrationConfig),
-    checkpointRepairs: [],
-  };
+  const { namespacesWithMigrations, migrationFileState, checkpointRepairs, pendingMigrations } =
+    detected ?? {
+      namespacesWithMigrations: migrationConfig,
+      migrationFileState: captureMigrationFileState(migrationConfig),
+      checkpointRepairs: [],
+      pendingMigrations: [],
+    };
 
   const {
     changeSet: serviceChangeSet,
@@ -225,6 +228,7 @@ export async function planTailorDB(context: PlanContext) {
       namespacesWithMigrations,
       migrationFileState,
       checkpointRepairs,
+      pendingMigrations: pendingMigrations.map(({ namespace, number }) => ({ namespace, number })),
     },
   };
 }

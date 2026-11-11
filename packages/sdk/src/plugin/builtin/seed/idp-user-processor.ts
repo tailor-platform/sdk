@@ -1,4 +1,5 @@
 import ml from "#/utils/multiline";
+import { SEED_SCHEMA_MODULE } from "./schema-module";
 import type { GeneratorAuthInput } from "#/plugin/types";
 
 export interface IdpUserMetadata {
@@ -253,7 +254,7 @@ export function generateIdpUserSchemaFile(options: GenerateIdpUserSchemaFileOpti
 
   return ml /* ts */ `
     import { t } from "@tailor-platform/sdk";
-    import { defineSchema, fillIdpUserPassword } from "@tailor-platform/sdk/seed";
+    import { defineSchema, fillIdpUserPassword } from "${SEED_SCHEMA_MODULE}";
     import { createStandardSchema } from "@tailor-platform/sdk/test";
 
     const schemaType = t.object({

@@ -9,7 +9,8 @@
  *
  * Prerequisites:
  * - Authentication via TAILOR_PLATFORM_TOKEN env var or `tailor login`
- * - TAILOR_PLATFORM_ORGANIZATION_ID environment variable must be set
+ * - TAILOR_PLATFORM_ORGANIZATION_ID environment variable must be set, unless logged in with
+ *   `tailor login` and a default organization is saved with `tailor user update`
  *
  * Running Tests:
  * - Run specific test groups: `pnpm test -t "Initial Setup"`

@@ -32,6 +32,9 @@ export const ENVIRONMENT_EDITABLE_JOBS: readonly string[] = [
   "tailor-preview-result",
   "tailor-autofix",
   "tailor-autofix-push",
+  "tailor-codemod-result",
+  "tailor-codemod-agent",
+  "tailor-autofix-comment",
 ];
 
 // Users add their own jobs to the `needs` of these jobs; the `tailor-` entries stay managed.

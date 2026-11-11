@@ -52,6 +52,8 @@ export interface PlanSummary {
   replace: number;
   /** Updates, also counted in `update`, that are forced by the SDK version. */
   forcedBySdkVersion: number;
+  /** Function scripts left as they are whose labels are rewritten; not counted in `update`. */
+  labelRefreshes: number;
 }
 
 /**
@@ -119,6 +121,7 @@ export function summarizeChangeSets(
     delete: 0,
     replace: 0,
     forcedBySdkVersion: 0,
+    labelRefreshes: 0,
   };
 
   for (const changeSet of changeSets) {
@@ -150,6 +153,10 @@ export function formatPlanSummary(summary: PlanSummary): string {
 
   if (summary.replace > 0) {
     parts.push(`${summary.replace} to replace`);
+  }
+
+  if (summary.labelRefreshes > 0) {
+    parts.push(`${summary.labelRefreshes} function labels to refresh`);
   }
 
   return `Plan: ${parts.join(", ")}`;

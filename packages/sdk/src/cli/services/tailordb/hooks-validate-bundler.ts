@@ -327,7 +327,7 @@ async function bundleScriptTarget(args: {
     tsconfig,
     dateDefault,
   } = args;
-  const context = `${kind} in ${sourceFilePath}`;
+  const context = `${kind} in table "${tableName}"`;
   const fnSource = stringifyFunction(fn);
   if ((kind === "typeValidate" || kind === "validate") && fn.constructor.name === "AsyncFunction") {
     throw new Error(

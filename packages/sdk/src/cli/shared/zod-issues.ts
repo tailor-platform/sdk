@@ -33,7 +33,7 @@ export function flattenZodIssues(
 
 /**
  * Render flattened issues as an indented list, one `path: message` line each.
- * @param issues - Issues from `flattenZodIssues`
+ * @param issues - Issues to list
  * @returns Lines joined by newlines
  */
 export function formatIssueList(issues: readonly FlatIssue[]): string {

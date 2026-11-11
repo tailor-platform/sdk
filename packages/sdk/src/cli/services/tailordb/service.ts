@@ -3,7 +3,7 @@ import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { importUserModule } from "#/cli/shared/user-modules";
-import { definitionInvalidError } from "#/cli/shared/validation-errors";
+import { atUserModule, definitionInvalidError } from "#/cli/shared/validation-errors";
 import { flattenZodIssues, formatIssueList } from "#/cli/shared/zod-issues";
 import {
   pickTailorDBTypeSchemaKeys,
@@ -315,8 +315,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     } catch (error) {
       const relativePath = path.relative(process.cwd(), typeFile);
       logger.error(`Failed to load table from ${styles.bold(relativePath)}`);
-      logger.error(String(error));
-      throw error;
+      throw atUserModule(error, typeFile);
     }
     return loadedTypes;
   };
@@ -340,7 +339,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
             return undefined;
           }
 
-          const typeFiles = [...new Set(loadFilesWithIgnores(config, baseDir))];
+          const typeFiles = loadFilesWithIgnores(config, baseDir);
 
           const tsconfig = await resolveTSConfigWithFallback(baseDir);
 
@@ -372,7 +371,6 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
 
       const successfulResults = results.map(({ pluginId, config, result }) => {
         if (!result.success) {
-          logger.error(result.error);
           throw new Error(result.error);
         }
         return { pluginId, config, output: result.output };

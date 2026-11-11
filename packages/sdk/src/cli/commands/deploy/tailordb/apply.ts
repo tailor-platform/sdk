@@ -7,6 +7,7 @@ import {
 import { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-state";
 import {
   formatNamespaceMigrationHint,
+  migrationCommandArgs,
   migrationCommandContext,
   type MigrationCommandContext,
 } from "#/cli/commands/tailordb/migrate/hints";
@@ -32,10 +33,13 @@ import {
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { generateTailorDBTypeManifestFromSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
-import { handleOptionalToRequiredError } from "#/cli/commands/tailordb/migrate/types";
+import {
+  handleOptionalToRequiredError,
+  isRequiredFieldNullValuesError,
+} from "#/cli/commands/tailordb/migrate/types";
 import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
-import { CLIError, toError } from "#/cli/shared/errors";
+import { CLIError, formatCommandHint, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { withSpan } from "#/cli/telemetry/index";
 import { assertDefined } from "#/utils/assert";
@@ -63,6 +67,7 @@ import {
 import {
   applyMigrationRestrictions,
   acceptsMigrationWrites,
+  awaitAllSettledOrThrow,
   captureMigrationRestrictionState,
   deletedResources,
   deletePlannedTables,
@@ -222,6 +227,32 @@ async function buildMigrationContextForScripts(
   };
 }
 
+type MigrationRef = Pick<PendingMigration, "namespace" | "number">;
+
+function assertPendingMigrationsUnchanged(
+  planned: readonly MigrationRef[],
+  current: readonly MigrationRef[],
+): void {
+  const labelOf = (migration: MigrationRef) =>
+    `${migration.namespace}/${formatMigrationNumber(migration.number)}`;
+  const plannedLabels = planned.map(labelOf);
+  const currentLabels = current.map(labelOf);
+  if (
+    plannedLabels.length === currentLabels.length &&
+    plannedLabels.every((label, index) => label === currentLabels[index])
+  ) {
+    return;
+  }
+  const refs = (migrations: readonly MigrationRef[]) =>
+    migrations.map(({ namespace, number }) => ({ namespace, migrationNumber: number }));
+  throw CLIError({
+    code: "DEPLOY_PLAN_STALE",
+    message: `Pending migrations changed after deployment planning because the remote migration checkpoint moved (planned: ${plannedLabels.join(", ") || "none"}; now: ${currentLabels.join(", ") || "none"}).`,
+    suggestion: "Run the deployment again to review the pending migrations.",
+    context: { plannedPendingMigrations: refs(planned), pendingMigrations: refs(current) },
+  });
+}
+
 interface TailorDBMigrationState extends ValidateAndDetectResult {
   /** Machine user that runs the scripts of each namespace, or undefined when no script runs. */
   migrationMachineUsers: MigrationMachineUsers | undefined;
@@ -292,7 +323,7 @@ async function validateTailorDBMigrationState(
       suggestion: "Run the deployment again to review the updated repair.",
     });
   }
-  for (const [namespace, tableNames] of validation.unfinishedRemovals) {
+  for (const [namespace, { tableNames }] of validation.unfinishedRemovals) {
     const unplanned = tableNames.filter(
       (tableName) =>
         !result.changeSet.type.deletes.some(
@@ -314,6 +345,7 @@ async function validateTailorDBMigrationState(
       suggestion: "Run the deployment again to create a fresh plan.",
     });
   }
+  assertPendingMigrationsUnchanged(context.pendingMigrations, validation.pendingMigrations);
   await assertMigrationSkipSteps({
     client,
     workspaceId: context.workspaceId,
@@ -693,7 +725,7 @@ async function applyCreateUpdate(
   }
 
   deletedResources.reset();
-  for (const [namespace, tableNames] of unfinishedRemovals) {
+  for (const [namespace, { tableNames }] of unfinishedRemovals) {
     await deletePlannedTables(client, changeSet, namespace, new Set(tableNames));
     await clearCleanupRecord(client, migrationContext.workspaceId, namespace);
   }
@@ -712,7 +744,7 @@ async function applyCreateUpdate(
       holdMaintenanceMode: maintenanceMode === "deploy" ? options.holdMaintenanceMode : undefined,
     });
   } else {
-    await applyWithoutMigrations(client, changeSet);
+    await applyWithoutMigrations(client, changeSet, migrationContext);
   }
 
   // Skip when pending migrations ran: each already bumped the label, and
@@ -735,10 +767,16 @@ async function applyCreateUpdate(
   return maintenance;
 }
 
-const OPTIONAL_TO_REQUIRED_SUGGESTIONS = [
-  "Run 'tailor tailordb migration generate' to create migration files.",
-  "Migration scripts allow you to handle existing data before applying the schema change.",
-];
+function optionalToRequiredSuggestion(context: TailorDBPlanResult["context"]): string {
+  const generateCommand = formatCommandHint({
+    command: "tailor",
+    args: migrationCommandArgs(["generate"], { configPath: context.config.path }),
+  });
+  return (
+    "Fill in those records first, for example with `tailor query`, then deploy again. " +
+    `For a namespace with \`migration\` configured, run ${generateCommand} instead to fill them in with a migration script during the deploy.`
+  );
+}
 
 interface MigrationApplyInput {
   client: OperatorClient;
@@ -917,7 +955,9 @@ async function applyWithMigrations(
   const maintenance = held ? undefined : finishMaintenance(flow);
 
   await applyDeferredGqlPermissions(flow, deferredGqlPermissionKeys);
-  await applyRemainingDeletions(flow);
+  await applyRemainingDeletions(client, changeSet, (del) =>
+    excludeFromRestoration(restoration, del),
+  );
 
   // Write table metadata, which the migration phases above do not.
   // Tables inside migrating namespaces only exist once their phases have run,
@@ -1105,7 +1145,7 @@ async function applyChangesBeforeMigrations(flow: MigrationFlow): Promise<Set<st
       await client.updateTailorDBType(update.request);
     }
   } catch (error) {
-    handleOptionalToRequiredError(error, OPTIONAL_TO_REQUIRED_SUGGESTIONS);
+    handleOptionalToRequiredError(error, optionalToRequiredSuggestion(migrationContext));
   }
   await Promise.all([
     ...changeSet.gqlPermission.creates
@@ -1955,19 +1995,14 @@ function collectLocalDefinitionWrites(flow: MigrationFlow): LocalDefinitionWrite
 
 /**
  * Whether existing records refused a table update. The platform reports a unique index over
- * duplicated values as AlreadyExists, and marks a required field over null values, alone among
- * its FailedPrecondition refusals, with a PreconditionFailure detail.
+ * duplicated values as AlreadyExists.
  * @param error - Failure of the update
  * @returns True when the records refused it
  */
 function isRefusedByRecords(error: unknown): boolean {
-  if (!(error instanceof ConnectError)) return false;
-  if (error.code === Code.AlreadyExists) return true;
   return (
-    error.code === Code.FailedPrecondition &&
-    error.details.some(
-      (detail) => "type" in detail && detail.type === "google.rpc.PreconditionFailure",
-    )
+    (error instanceof ConnectError && error.code === Code.AlreadyExists) ||
+    isRequiredFieldNullValuesError(error)
   );
 }
 
@@ -2143,34 +2178,56 @@ function isDeleted(
   return deleted.has(`${del.request.namespaceName}/${del.name}`);
 }
 
-async function applyRemainingDeletions(flow: MigrationFlow): Promise<void> {
-  const { client, changeSet } = flow;
-  // Delete remaining GQL permissions that weren't deleted with their tables
-  const remainingGqlPermissionDeletes = changeSet.gqlPermission.deletes.filter(
-    (del) => !isDeleted(deletedResources.gqlPermissions, del),
-  );
-  if (remainingGqlPermissionDeletes.length > 0) {
-    await Promise.all(
-      remainingGqlPermissionDeletes.map((del) => client.deleteTailorDBGQLPermission(del.request)),
-    );
-  }
+type TableDeletion = TailorDBChangeSet["type"]["deletes"][number];
 
-  // Delete tables outside the migrating namespaces (their GQL
-  // permissions were just removed above; migration postPhases never see them)
+/**
+ * Delete the planned GraphQL permissions and tables that no migration has deleted.
+ * @param client - Operator client instance
+ * @param changeSet - TailorDB change set
+ * @param onTableDeleted - Called once each table is deleted
+ */
+async function applyRemainingDeletions(
+  client: OperatorClient,
+  changeSet: TailorDBChangeSet,
+  onTableDeleted: (del: TableDeletion) => void,
+): Promise<void> {
   await Promise.all(
+    changeSet.gqlPermission.deletes
+      .filter((del) => !isDeleted(deletedResources.gqlPermissions, del))
+      .map((del) => client.deleteTailorDBGQLPermission(del.request)),
+  );
+  await awaitAllSettledOrThrow(
     changeSet.type.deletes
-      .filter(
-        (del) =>
-          isOutsideMigrations(flow, del.request.namespaceName) &&
-          !isDeleted(deletedResources.types, del),
-      )
-      .map((del) => client.deleteTailorDBType(del.request)),
+      .filter((del) => !isDeleted(deletedResources.types, del))
+      .map(async (del) => {
+        await client.deleteTailorDBType(del.request);
+        onTableDeleted(del);
+      }),
+  );
+}
+
+/**
+ * Keep a deleted table out of the restore, which a held release runs after the deletion.
+ * @param restoration - What the tables return to, updated in place
+ * @param del - Deletion of the table
+ */
+function excludeFromRestoration(restoration: RestorationState, del: TableDeletion): void {
+  const namespaceName = assertDefined(
+    del.request.namespaceName,
+    "every planned table deletion names its namespace",
+  );
+  const settings = restoration.settings.get(namespaceName);
+  if (!settings?.has(del.name)) return;
+  restoration.settings.set(
+    namespaceName,
+    new Map([...settings].filter(([tableName]) => tableName !== del.name)),
   );
 }
 
 async function applyWithoutMigrations(
   client: OperatorClient,
   changeSet: TailorDBChangeSet,
+  migrationContext: TailorDBPlanResult["context"],
 ): Promise<void> {
   await executeServicesCreation(client, changeSet);
 
@@ -2191,7 +2248,7 @@ async function applyWithoutMigrations(
       ),
     );
   } catch (error) {
-    handleOptionalToRequiredError(error, OPTIONAL_TO_REQUIRED_SUGGESTIONS);
+    handleOptionalToRequiredError(error, optionalToRequiredSuggestion(migrationContext));
   }
 
   // GQLPermissions
@@ -2204,18 +2261,7 @@ async function applyWithoutMigrations(
     ),
   ]);
 
-  // Delete resources (only when no migrations occurred)
-  // Migrations already handle deletions in post-migration phase
-  await Promise.all(
-    changeSet.gqlPermission.deletes
-      .filter((del) => !isDeleted(deletedResources.gqlPermissions, del))
-      .map((del) => client.deleteTailorDBGQLPermission(del.request)),
-  );
-  await Promise.all(
-    changeSet.type.deletes
-      .filter((del) => !isDeleted(deletedResources.types, del))
-      .map((del) => client.deleteTailorDBType(del.request)),
-  );
+  await applyRemainingDeletions(client, changeSet, () => {});
 }
 
 /**
