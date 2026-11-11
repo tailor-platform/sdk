@@ -171,6 +171,47 @@ describe("assertUniqueDefinitionNames", () => {
       }),
     );
   });
+
+  test("describes definitions no file exports and names the scope spanning namespaces", () => {
+    let error: unknown;
+    try {
+      assertUniqueDefinitionNames({
+        kind: "tailordb-type",
+        uniqueAcross: "all TailorDB namespaces in the application",
+        definitions: [
+          { ...definition("User", "user.ts", "user"), source: 'namespace "main"' },
+          { name: "User", source: 'external namespace "shared"' },
+          { name: "User" },
+        ],
+      });
+    } catch (thrown) {
+      error = thrown;
+    }
+
+    expect(error).toMatchObject({
+      message: [
+        'Duplicate TailorDB type name "User" found:',
+        "  - unknown source",
+        '  - external namespace "shared"',
+        '  - resolvers/user.ts (export: user, namespace "main")',
+      ].join("\n"),
+      suggestion:
+        "Give each TailorDB type a name that is unique across all TailorDB namespaces in the application.",
+      context: {
+        kind: "tailordb-type",
+        duplicates: [
+          {
+            name: "User",
+            definitions: [
+              {},
+              { source: 'external namespace "shared"' },
+              { file: file("user.ts"), exportName: "user", source: 'namespace "main"' },
+            ],
+          },
+        ],
+      },
+    });
+  });
 });
 
 describe("atUserModule", () => {

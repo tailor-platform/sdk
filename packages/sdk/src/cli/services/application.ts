@@ -39,7 +39,7 @@ import {
   createTsconfigLookupCache,
   type TsconfigLookupCache,
 } from "#/cli/shared/tsconfig-paths-plugin";
-import { configInvalidError } from "#/cli/shared/validation-errors";
+import { configInvalidError, configIssuesError } from "#/cli/shared/validation-errors";
 import {
   type AppConfig,
   type ExecutorServiceInput,
@@ -166,6 +166,22 @@ function parseServiceConfig<Schema extends z.ZodType>(
     error: result.error,
     pathPrefix: key === undefined ? [configKey] : [configKey, key],
     service: { configKey, name },
+  });
+}
+
+function duplicateNameError(
+  configPath: string,
+  configKey: "idp" | "staticWebsites" | "aiGateways",
+  index: number,
+  name: string,
+): CLIError {
+  return configIssuesError({
+    file: configPath,
+    exportName: "default",
+    subject: "Tailor config",
+    service: { configKey, name },
+    issues: [{ path: [configKey, index, "name"], message: `Duplicate name "${name}"` }],
+    suggestion: `Give each ${SERVICE_LABELS[configKey]} a unique name.`,
   });
 }
 
@@ -322,7 +338,7 @@ function defineIdp(config: readonly IdPConfig[] | undefined, configPath: string)
   config.forEach((idpConfig, index) => {
     const name = idpConfig.name;
     if (idpNames.has(name)) {
-      throw new Error(`IdP with name "${name}" already defined.`);
+      throw duplicateNameError(configPath, "idp", index, name);
     }
     idpNames.add(name);
     if (!("external" in idpConfig)) {
@@ -367,6 +383,7 @@ function defineAuth(
       }),
       tailorDBServices,
       externalTailorDBNamespaces,
+      configPath,
     );
   }
   subgraphs.push({ Type: "auth", Name: config.name });
@@ -427,7 +444,7 @@ function defineStaticWebsites(
       name: config.name,
     });
     if (websiteNames.has(website.name)) {
-      throw new Error(`Static website with name "${website.name}" already defined.`);
+      throw duplicateNameError(configPath, "staticWebsites", index, website.name);
     }
     websiteNames.add(website.name);
     staticWebsiteServices.push(website);
@@ -452,15 +469,24 @@ function defineAIGateways(
       name: config.name,
     });
     if (gatewayNames.has(gateway.name)) {
-      throw new Error(`AI Gateway with name "${gateway.name}" already defined.`);
+      throw duplicateNameError(configPath, "aiGateways", index, gateway.name);
     }
     gatewayNames.add(gateway.name);
     if (gateway.authNamespace === undefined) {
       if (!applicationAuthNamespace) {
-        throw new Error(
-          `AI Gateway "${gateway.name}" has no "authNamespace" and no Auth service is configured ` +
-            `to default to. Define an Auth service, or set "authNamespace" explicitly.`,
-        );
+        throw configIssuesError({
+          file: configPath,
+          exportName: "default",
+          subject: "Tailor config",
+          service: { configKey: "aiGateways", name: gateway.name },
+          issues: [
+            {
+              path: ["aiGateways", index, "authNamespace"],
+              message: "No Auth service is configured to default to",
+            },
+          ],
+          suggestion: 'Define an Auth service, or set "authNamespace" explicitly.',
+        });
       }
       gateway.authNamespace = applicationAuthNamespace;
     }
@@ -494,15 +520,24 @@ function parseSecretManager(
 
   // Defensive check: error if nullish values exist without ignoreNullishValues
   if (!ignoreNullishValues) {
-    for (const vault of secrets) {
-      for (const secret of vault.secrets) {
-        if (secret.value == null) {
-          throw new Error(
-            `Secret "${vault.vaultName}/${secret.name}" has no value. ` +
-              `Use { ignoreNullishValues: true } option in defineSecretManager() to skip secrets without values.`,
-          );
-        }
-      }
+    const issues = secrets.flatMap((vault) =>
+      vault.secrets
+        .filter((secret) => secret.value == null)
+        .map((secret) => ({
+          path: ["secrets", "vaults", vault.vaultName, secret.name],
+          message: "Has no value",
+        })),
+    );
+    if (issues.length > 0) {
+      throw configIssuesError({
+        file: configPath,
+        exportName: "default",
+        subject: "Tailor config",
+        service: { configKey: "secrets" },
+        issues,
+        suggestion:
+          "Use the { ignoreNullishValues: true } option in defineSecretManager() to skip secrets without values.",
+      });
     }
   }
 
@@ -723,7 +758,11 @@ export function generatePluginFilesIfNeeded(
 function assertWaitPointKeys(): void {
   const failures = collectWaitPointKeyFailures(getScopedWaitPoints());
   if (failures.length === 0) return;
-  throw new Error(failures.join("\n"));
+  throw CLIError({
+    code: "WORKFLOW_WAIT_POINT_KEY_INVALID",
+    message: failures.join("\n"),
+    context: { failures },
+  });
 }
 
 /**

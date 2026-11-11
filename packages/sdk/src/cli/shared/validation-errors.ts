@@ -150,20 +150,45 @@ export function definitionExportError(params: DefinitionErrorParams): CLIError {
   );
 }
 
-interface NamedDefinition extends Omit<DefinitionErrorParams, "kind"> {
+interface NamedDefinition {
   /** Name the definition declares. */
   name: string;
+  /** Absolute path of the file that exports the definition, when a file does. */
+  file?: string;
+  /** Export the definition was found under, when a file exports it. */
+  exportName?: string;
+  /** Where the definition comes from when its file does not say, such as its namespace or the plugin that generated it. */
+  source?: string;
 }
 
 export interface UniqueDefinitionNamesParams extends Pick<DefinitionErrorParams, "kind"> {
   /** Namespace the names must be unique in, when the kind has one. */
   namespace?: string;
+  /** What the names must be unique across when that spans namespaces, such as "all TailorDB namespaces in the application". */
+  uniqueAcross?: string;
   /** Loaded definitions to check. */
   definitions: readonly NamedDefinition[];
 }
 
-function compareCodePoints(a: string, b: string): number {
+function compareCodePoints(a = "", b = ""): number {
   return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function definitionLine(definition: Omit<NamedDefinition, "name">): string {
+  const { file, exportName, source } = definition;
+  const notes = [
+    exportName === undefined || exportName === "default" ? undefined : `export: ${exportName}`,
+    source,
+  ].filter((note) => note !== undefined);
+  if (file === undefined) return `  - ${notes.join(", ") || "unknown source"}`;
+  return `  - ${path.relative(process.cwd(), file)}${notes.length > 0 ? ` (${notes.join(", ")})` : ""}`;
+}
+
+function uniqueNameSuggestion(label: string, params: UniqueDefinitionNamesParams): string {
+  if (params.uniqueAcross !== undefined) {
+    return `Give each ${label} a name that is unique across ${params.uniqueAcross}.`;
+  }
+  return `Give each ${label} a unique name${params.namespace === undefined ? "" : " within its namespace"}.`;
 }
 
 /**
@@ -177,13 +202,18 @@ export function assertUniqueDefinitionNames(params: UniqueDefinitionNamesParams)
     (a, b) =>
       compareCodePoints(a.name, b.name) ||
       compareCodePoints(a.file, b.file) ||
-      compareCodePoints(a.exportName, b.exportName),
+      compareCodePoints(a.exportName, b.exportName) ||
+      compareCodePoints(a.source, b.source),
   );
   const duplicates = [...Map.groupBy(sorted, (definition) => definition.name)]
     .filter(([, sameName]) => sameName.length > 1)
     .map(([name, sameName]) => ({
       name,
-      definitions: sameName.map(({ file, exportName }) => ({ file, exportName })),
+      definitions: sameName.map(({ file, exportName, source }) => ({
+        file,
+        exportName,
+        ...(source === undefined ? {} : { source }),
+      })),
     }));
   if (duplicates.length === 0) return;
 
@@ -194,13 +224,10 @@ export function assertUniqueDefinitionNames(params: UniqueDefinitionNamesParams)
     message: duplicates
       .flatMap((duplicate) => [
         `Duplicate ${label} name "${duplicate.name}" found${scope}:`,
-        ...duplicate.definitions.map(({ file, exportName }) => {
-          const exportLabel = exportName === "default" ? "" : ` (export: ${exportName})`;
-          return `  - ${path.relative(process.cwd(), file)}${exportLabel}`;
-        }),
+        ...duplicate.definitions.map(definitionLine),
       ])
       .join("\n"),
-    suggestion: `Give each ${label} a unique name${namespace === undefined ? "" : " within its namespace"}.`,
+    suggestion: uniqueNameSuggestion(label, params),
     context: { kind, namespace, duplicates },
   });
 }
