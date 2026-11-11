@@ -14,7 +14,7 @@ import {
 import { z } from "zod";
 import { createApplyLimiter } from "./apply-concurrency";
 import { withErrorDiagnostics } from "./error-diagnostics";
-import { CLIError, isCLIError } from "./errors";
+import { CLIError, internalError, isCLIError, toError } from "./errors";
 import { logger } from "./logger";
 import { userAgent } from "./user-agent";
 import { invalidDataError } from "./validation-errors";
@@ -325,7 +325,7 @@ export function createPooledStreamTransport(
   maxConnections: number,
 ): Transport {
   if (!Number.isInteger(maxConnections) || maxConnections < 1) {
-    throw new Error(
+    throw internalError(
       `createPooledStreamTransport: maxConnections must be a positive integer, got ${maxConnections}`,
     );
   }
@@ -394,7 +394,7 @@ export function createPooledStreamTransport(
             (error: unknown) => {
               pendingCreates--;
               cleanup();
-              reject(error instanceof Error ? error : new Error(String(error)));
+              reject(toError(error));
               // The failed connection never joins the pool, so a waiter
               // stuck behind "pool full" would wait forever unless woken to
               // retry (it may now see room to grow, or another release).
@@ -1154,7 +1154,11 @@ export async function fetchUserInfo(accessToken: string, config?: PlatformClient
     signal: AbortSignal.timeout(OAUTH2_REQUEST_TIMEOUT_MS),
   });
   if (!resp.ok) {
-    throw new Error(`Failed to fetch user info: ${resp.statusText}`);
+    throw CLIError({
+      code: "AUTH_USER_INFO_FAILED",
+      message: `Failed to fetch user info: ${resp.statusText}`,
+      context: { status: resp.status },
+    });
   }
 
   const rawJson: unknown = await resp.json();
@@ -1443,9 +1447,11 @@ export async function fetchMachineUserToken(url: string, clientId: string, clien
   );
   if (!resp.ok) {
     const body = await resp.text().catch(() => "");
-    throw new Error(
-      `Failed to fetch machine user token: ${resp.status} ${resp.statusText} ${body.slice(0, 500)}`,
-    );
+    throw CLIError({
+      code: "MACHINE_USER_TOKEN_FAILED",
+      message: `Failed to fetch machine user token: ${resp.status} ${resp.statusText} ${body.slice(0, 500)}`,
+      context: { status: resp.status },
+    });
   }
   const rawJson: unknown = await resp.json();
 

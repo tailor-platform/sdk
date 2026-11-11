@@ -114,6 +114,21 @@ describe("fetchUserInfo", () => {
 
     expect(fetchSpy.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
   });
+
+  test("reports a rejected user info request as AUTH_USER_INFO_FAILED", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(
+        async () => new Response("", { status: 401, statusText: "Unauthorized" }),
+      ),
+    );
+
+    await expect(fetchUserInfo("access-token")).rejects.toMatchObject({
+      code: "AUTH_USER_INFO_FAILED",
+      message: "Failed to fetch user info: Unauthorized",
+      context: { status: 401 },
+    });
+  });
 });
 
 describe("createTransport", () => {
@@ -2149,7 +2164,11 @@ describe("fetchMachineUserToken", () => {
 
     await expect(
       fetchMachineUserToken("https://example.com", "client-id", "client-secret"),
-    ).rejects.toThrow("Failed to fetch machine user token: 403 Forbidden access denied");
+    ).rejects.toMatchObject({
+      code: "MACHINE_USER_TOKEN_FAILED",
+      message: "Failed to fetch machine user token: 403 Forbidden access denied",
+      context: { status: 403 },
+    });
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 

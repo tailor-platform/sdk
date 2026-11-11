@@ -27,9 +27,17 @@ describe("bundle-log-level", () => {
   });
 
   test("rejects unsupported values", () => {
-    expect(() => resolveBundleLogLevel("OFF")).toThrow(
-      /Expected one of: DEBUG, INFO, WARN, ERROR, SILENT/,
-    );
+    let error: unknown;
+    try {
+      resolveBundleLogLevel("OFF");
+    } catch (thrown) {
+      error = thrown;
+    }
+    expect(error).toMatchObject({
+      code: "LOG_LEVEL_INVALID",
+      message: 'Invalid logLevel "OFF".',
+      suggestion: "Use one of: DEBUG, INFO, WARN, ERROR, SILENT",
+    });
   });
 
   test("treats console.log as DEBUG level, dropping it at INFO", () => {

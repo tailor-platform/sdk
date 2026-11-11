@@ -1,5 +1,6 @@
 import { parseSync } from "oxc-parser";
 import { ES_BUILTINS } from "#/utils/es-builtins";
+import { internalError } from "./errors";
 import type { BindingPattern, Node, ParamPattern } from "@oxc-project/types";
 
 /** Fields that contain TypeScript type annotations (not runtime references). */
@@ -236,7 +237,9 @@ export function findUndefinedReferences(
   const { program, errors } = parseSync("_.js", code);
   if (errors.length > 0) {
     const details = errors.map((error) => `  - ${error.message}`).join("\n");
-    throw new Error(`Failed to parse code for free-variable analysis.\nParse errors:\n${details}`);
+    throw internalError(
+      `Failed to parse code for free-variable analysis.\nParse errors:\n${details}`,
+    );
   }
   const references: { name: string; scope: Scope }[] = [];
   const rootScope: Scope = { bindings: new Set(), parent: null };

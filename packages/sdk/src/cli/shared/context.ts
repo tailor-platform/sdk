@@ -21,7 +21,8 @@ import {
   type PlatformClientConfig,
 } from "./client";
 import { type ConfigLockOptions, isConfigLockTimeout, withConfigLock } from "./config-lock";
-import { CLIError, formatCommandHint, profileNotFoundError } from "./errors";
+import { withErrorDiagnostics } from "./error-diagnostics";
+import { CLIError, formatCommandHint, profileNotFoundError, toError } from "./errors";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
 import { tightenSecretFilePermissions, writeSecretFile } from "./secret-file";
@@ -164,7 +165,11 @@ export type AuthStatus = {
 
 function platformConfigPath() {
   if (!xdgConfig) {
-    throw new Error("User home directory not found");
+    throw CLIError({
+      code: "USER_CONFIG_DIRECTORY_NOT_FOUND",
+      message: "User home directory not found",
+      suggestion: "Set HOME or XDG_CONFIG_HOME so the CLI can locate its config directory.",
+    });
   }
   return path.join(xdgConfig, "tailor-platform", "config.yaml");
 }
@@ -224,6 +229,12 @@ function canUseLegacyUserKey(platformUrl: string): boolean {
 
 type UserEntryLookupOptions = {
   allowLegacyUserKey?: boolean;
+};
+
+type StoredUserTokensLookup = UserEntryLookupOptions & {
+  platformConfig?: PlatformClientConfig;
+  /** Selected profile for login recovery */
+  profile?: string;
 };
 
 function findUserByEmail(
@@ -405,6 +416,9 @@ function migrateV1ToV3(v1Config: PfConfigV1): PfConfig {
   return migrateV2ToV3(migrateV1ToV2(v1Config));
 }
 
+const KEYRING_RECOVERY_SUGGESTION =
+  "Restore access to the OS keyring and try again, or run 'tailor login' in this environment to authenticate again.\nFor non-interactive environments, set TAILOR_PLATFORM_TOKEN.";
+
 function formatUnknownError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -476,13 +490,18 @@ export async function readPlatformConfig(): Promise<PfConfig> {
       "min_sdk_version" in (rawConfig as object)
         ? String((rawConfig as { min_sdk_version: unknown }).min_sdk_version)
         : undefined;
-    const updateHint = minSdk
-      ? `Please update your SDK to >= ${minSdk}: pnpm update @tailor-platform/sdk`
-      : "Please update your SDK: pnpm update @tailor-platform/sdk";
-    throw new Error(ml`
-      Config file uses version ${String(version)}, but this SDK only supports up to version ${String(LATEST_CONFIG_VERSION)}.
-      ${updateHint}
-    `);
+    throw CLIError({
+      code: "PLATFORM_CONFIG_VERSION_UNSUPPORTED",
+      message: `Config file uses version ${version}, but this SDK only supports up to version ${LATEST_CONFIG_VERSION}.`,
+      suggestion: minSdk
+        ? `Update your SDK to >= ${minSdk}: pnpm update @tailor-platform/sdk`
+        : "Update your SDK: pnpm update @tailor-platform/sdk",
+      context: {
+        version,
+        supportedVersion: LATEST_CONFIG_VERSION,
+        minSdkVersion: minSdk ?? null,
+      },
+    });
   }
 
   // Try v3 first
@@ -506,10 +525,15 @@ export async function readPlatformConfig(): Promise<PfConfig> {
   }
 
   // Neither v1, v2, nor v3
-  throw new Error(ml`
-    Failed to parse config file at ${configPath}.
-    The file may be corrupted or created by an incompatible SDK version.
-  `);
+  throw withErrorDiagnostics(
+    CLIError({
+      code: "PLATFORM_CONFIG_INVALID",
+      message: "Failed to parse config file.",
+      details: "The file may be corrupted or created by an incompatible SDK version.",
+      context: { file: configPath },
+    }),
+    { location: { file: configPath } },
+  );
 }
 
 function toV1ForDisk(config: PfConfigV2): PfConfigV1 {
@@ -623,7 +647,10 @@ function withoutKeyringFileTokens(users: PfConfig["users"] | PfConfigV2["users"]
 function validateUUID(value: string, source: string): string {
   const result = z.uuid().safeParse(value);
   if (!result.success) {
-    throw new Error(`Invalid value from ${source}: must be a valid UUID`);
+    throw CLIError({
+      code: "WORKSPACE_ID_INVALID",
+      message: `Invalid value from ${source}: must be a valid UUID`,
+    });
   }
   return result.data;
 }
@@ -639,10 +666,12 @@ export async function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): Promise<st
   const workspaceId = await tryLoadWorkspaceId(opts);
   if (workspaceId) return workspaceId;
 
-  throw new Error(ml`
-    Workspace ID not found.
-    Please specify workspace ID via --workspace-id option or TAILOR_PLATFORM_WORKSPACE_ID environment variable.
-  `);
+  throw CLIError({
+    code: "WORKSPACE_ID_REQUIRED",
+    message: "Workspace ID not found.",
+    suggestion:
+      "Specify the workspace ID via the --workspace-id option or the TAILOR_PLATFORM_WORKSPACE_ID environment variable.",
+  });
 }
 
 /**
@@ -876,7 +905,12 @@ export async function loadAuthStatus(opts?: LoadAccessTokenOptions): Promise<Aut
   if (identity) {
     const { userKey, userEntry } = findUserEntry(config, identity, platformConfig);
     if (userEntry) {
-      const tokens = await resolveTokens(userEntry, userKey, identity).catch(() => undefined);
+      const tokens = await resolveTokens(
+        userEntry,
+        userKey,
+        identity,
+        loginFailureFor(profile),
+      ).catch(() => undefined);
       if (tokens) {
         const expired = new Date(userEntry.token_expires_at) <= new Date();
         if (!expired) {
@@ -1002,34 +1036,33 @@ export function registerTokenSecrets(tokens: UserTokens): void {
  * @param userEntry - User entry from the config
  * @param user - User identifier
  * @param label - User-facing identifier used in error messages
+ * @param loginFailure - Builds the error for credentials the keyring does not hold
  * @returns Access token and optional refresh token
  */
 export async function resolveTokens(
   userEntry: PfUser,
   user: string,
-  label = user,
+  label: string,
+  loginFailure: LoginFailure,
 ): Promise<{ accessToken: string; refreshToken?: string }> {
   if (userEntry.storage === "keyring") {
     let tokens: UserTokens | undefined;
     try {
       tokens = await loadKeyringTokens(user);
     } catch (error) {
-      throw new Error(
-        ml`
-          Failed to read credentials from OS keyring for "${label}". ${formatUnknownError(error)}
-          Restore access to the OS keyring and try again, or run 'tailor login' in this environment to authenticate again.
-          For non-interactive environments, set TAILOR_PLATFORM_TOKEN.
-        `,
-        { cause: error },
-      );
+      throw CLIError({
+        code: "KEYRING_READ_FAILED",
+        message: `Failed to read credentials from OS keyring for "${label}". ${formatUnknownError(error)}`,
+        suggestion: KEYRING_RECOVERY_SUGGESTION,
+        cause: error,
+      });
     }
     if (!tokens) {
-      throw new Error(ml`
-        Credentials not found in OS keyring for "${label}".
-        Credentials may be missing or inaccessible from this environment (for example, due to sandbox restrictions).
-        Restore access to the OS keyring and try again, or run 'tailor login' in this environment to authenticate again.
-        For non-interactive environments, set TAILOR_PLATFORM_TOKEN.
-      `);
+      throw loginFailure(
+        "AUTH_TOKEN_NOT_FOUND",
+        `Credentials not found in OS keyring for "${label}".`,
+        `Credentials may be missing or inaccessible from this environment (for example, due to sandbox restrictions).\n${KEYRING_RECOVERY_SUGGESTION}`,
+      );
     }
     registerTokenSecrets(tokens);
     return tokens;
@@ -1138,15 +1171,13 @@ export async function deleteUserTokens(
  * Resolve stored tokens for a user on the selected platform.
  * @param config - Platform config
  * @param user - User name
- * @param platformConfig - Optional platform connection settings
- * @param opts - Token lookup options
+ * @param lookup - Platform, profile and user-key matching to look the user up with
  * @returns Stored user entry and token values, or undefined when the user is not logged in
  */
 export async function loadStoredUserTokens(
   config: PfConfig,
   user: string,
-  platformConfig?: PlatformClientConfig,
-  opts?: UserEntryLookupOptions,
+  lookup: StoredUserTokensLookup = {},
 ): Promise<
   | {
       userEntry: PfUser;
@@ -1155,9 +1186,10 @@ export async function loadStoredUserTokens(
     }
   | undefined
 > {
+  const { platformConfig, profile, ...opts } = lookup;
   const { userKey, userEntry } = findUserEntry(config, user, platformConfig, opts);
   if (!userEntry) return undefined;
-  const tokens = await resolveTokens(userEntry, userKey, user);
+  const tokens = await resolveTokens(userEntry, userKey, user, loginFailureFor(profile));
   return { userEntry, ...tokens };
 }
 
@@ -1275,7 +1307,7 @@ async function readStoredToken(
     userKey,
     configUser: userFromPlatformUserKey(userKey, platformConfig),
     entry: userEntry,
-    tokens: await resolveTokens(userEntry, userKey, user),
+    tokens: await resolveTokens(userEntry, userKey, user, loginFailure),
   };
 }
 
@@ -1519,7 +1551,7 @@ function createStoredTokenSource(init: StoredTokenSourceInit): AccessTokenSource
           retryAt = Date.now() + RENEWAL_RETRY_INTERVAL_MS;
         }
       } catch (error) {
-        renewalError = error instanceof Error ? error : new Error(String(error));
+        renewalError = toError(error);
         retryAt = Date.now() + RENEWAL_RETRY_INTERVAL_MS;
         logger.debug(`Failed to renew the access token: ${String(error)}`);
       } finally {

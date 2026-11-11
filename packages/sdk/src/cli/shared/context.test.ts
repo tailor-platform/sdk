@@ -19,8 +19,10 @@ import {
   tryLoadWorkspaceId,
   writePlatformConfig,
   loadStoredAccessTokenWithoutRefresh,
+  loadStoredUserTokens,
   platformConfigExists,
 } from "./context";
+import { getErrorDiagnostics } from "./error-diagnostics";
 import { errorToJson } from "./error-json";
 import { isCLIError } from "./errors";
 import { logger } from "./logger";
@@ -33,8 +35,12 @@ const keyringPasswords = vi.hoisted(() => new Map<string, string>());
 const keyringSetPasswordFailure = vi.hoisted(() => ({ error: undefined as Error | undefined }));
 const keyringGetPassword = vi.hoisted(() => vi.fn<(key: string) => string | null>());
 
+const xdgState = vi.hoisted(() => ({ missing: false }));
+
 vi.mock("xdg-basedir", () => ({
-  xdgConfig: xdgTempDir,
+  get xdgConfig() {
+    return xdgState.missing ? undefined : xdgTempDir;
+  },
 }));
 
 vi.mock("@napi-rs/keyring", () => ({
@@ -220,9 +226,10 @@ describe("loadWorkspaceId", () => {
     });
 
     test("throws error when opts.workspaceId is invalid UUID", async () => {
-      await expect(loadWorkspaceId({ workspaceId: invalidUUID })).rejects.toThrow(
-        "Invalid value from --workspace-id option: must be a valid UUID",
-      );
+      await expect(loadWorkspaceId({ workspaceId: invalidUUID })).rejects.toMatchObject({
+        code: "WORKSPACE_ID_INVALID",
+        message: "Invalid value from --workspace-id option: must be a valid UUID",
+      });
     });
 
     test("rejects an explicitly empty workspaceId instead of falling back", async () => {
@@ -357,7 +364,11 @@ describe("loadWorkspaceId", () => {
     });
 
     test("throws error when no workspaceId source is available", async () => {
-      await expect(loadWorkspaceId()).rejects.toThrow("Workspace ID not found");
+      await expect(loadWorkspaceId()).rejects.toMatchObject({
+        code: "WORKSPACE_ID_REQUIRED",
+        message: "Workspace ID not found.",
+        suggestion: expect.stringMatching(/--workspace-id.*TAILOR_PLATFORM_WORKSPACE_ID/),
+      });
     });
   });
 });
@@ -1965,6 +1976,55 @@ describe("newer config version notice", () => {
   });
 });
 
+describe("missing user config directory", () => {
+  afterEach(() => {
+    xdgState.missing = false;
+  });
+
+  test("codes a platform config read with no user config directory", async () => {
+    xdgState.missing = true;
+
+    await expect(readPlatformConfig()).rejects.toMatchObject({
+      code: "USER_CONFIG_DIRECTORY_NOT_FOUND",
+    });
+  });
+});
+
+describe("unreadable platform config", () => {
+  const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+
+  beforeEach(() => {
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  });
+
+  afterEach(() => {
+    fs.rmSync(configPath, { force: true });
+  });
+
+  test("names the SDK version a newer config needs", async () => {
+    writeFuturePlatformConfig();
+
+    await expect(readPlatformConfig()).rejects.toMatchObject({
+      code: "PLATFORM_CONFIG_VERSION_UNSUPPORTED",
+      message: expect.stringMatching(/^Config file uses version 999, .*version \d+\.$/),
+      suggestion: "Update your SDK to >= 999.0.0: pnpm update @tailor-platform/sdk",
+      context: { version: 999, minSdkVersion: "999.0.0" },
+    });
+  });
+
+  test("locates a config no known version parses at its file", async () => {
+    fs.writeFileSync(configPath, "version: 1\nusers: nope\n");
+
+    const error = await readPlatformConfig().catch((error: unknown) => error);
+
+    expect(error).toMatchObject({
+      code: "PLATFORM_CONFIG_INVALID",
+      message: "Failed to parse config file.",
+    });
+    expect(getErrorDiagnostics(error as Error).location).toEqual({ file: configPath });
+  });
+});
+
 describe("initial platform config", () => {
   const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
   const legacyHomeDir = path.join(xdgTempDir, "legacy-home");
@@ -2098,10 +2158,37 @@ describe("saveUserTokens", () => {
     };
     config.users["platform-user-sub"] = userEntry;
 
-    await expect(fetchLatestToken(config, "platform-user-sub")).rejects.toThrow(
-      /Credentials not found[\s\S]*missing or inaccessible[\s\S]*sandbox[\s\S]*run 'tailor login' in this environment[\s\S]*TAILOR_PLATFORM_TOKEN/,
+    const error = await fetchLatestToken(config, "platform-user-sub").catch(
+      (error: unknown) => error,
     );
+    expect(errorToJson(error).error).toMatchObject({
+      code: "AUTH_TOKEN_NOT_FOUND",
+      message: 'Credentials not found in OS keyring for "platform-user-sub".',
+      suggestion: expect.stringMatching(
+        /missing or inaccessible[\s\S]*sandbox[\s\S]*run 'tailor login' in this environment[\s\S]*TAILOR_PLATFORM_TOKEN/,
+      ),
+      next: { command: "tailor", args: ["login", "--help"] },
+      context: { profile: null },
+    });
     expect(config.users["platform-user-sub"]).toBe(userEntry);
+  });
+
+  test("points a profile's missing keyring credentials at a login for that profile", async () => {
+    const config = createEmptyConfig();
+    config.users["platform-user-sub"] = {
+      storage: "keyring" as const,
+      token_expires_at: futureDate,
+    };
+
+    const error = await loadStoredUserTokens(config, "platform-user-sub", {
+      profile: "dev",
+    }).catch((error: unknown) => error);
+
+    expect(errorToJson(error).error).toMatchObject({
+      code: "AUTH_TOKEN_NOT_FOUND",
+      next: { command: "tailor", args: ["login", "--profile", "dev", "--help"] },
+      context: { profile: "dev" },
+    });
   });
 
   test("reports keyring access failures with recovery instructions and preserves the saved user", async () => {
@@ -2117,12 +2204,13 @@ describe("saveUserTokens", () => {
     });
 
     await expect(fetchLatestToken(config, "platform-user-sub")).rejects.toMatchObject({
+      code: "KEYRING_READ_FAILED",
       message: expect.stringContaining("User interaction is not allowed."),
+      suggestion: expect.stringMatching(
+        /run 'tailor login' in this environment[\s\S]*TAILOR_PLATFORM_TOKEN/,
+      ),
       cause: accessError,
     });
-    await expect(fetchLatestToken(config, "platform-user-sub")).rejects.toThrow(
-      "run 'tailor login' in this environment",
-    );
     expect(config.users["platform-user-sub"]).toBe(userEntry);
   });
 

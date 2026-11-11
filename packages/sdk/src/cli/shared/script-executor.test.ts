@@ -85,9 +85,11 @@ describe("waitForExecution", () => {
       getFunctionExecution: vi.fn().mockResolvedValue({ execution: null }),
     });
 
-    await expect(waitForExecution(client, "workspace-1", "exec-1")).rejects.toThrow(
-      "Execution 'exec-1' not found.",
-    );
+    await expect(waitForExecution(client, "workspace-1", "exec-1")).rejects.toMatchObject({
+      code: "FUNCTION_EXECUTION_NOT_FOUND",
+      message: "Execution 'exec-1' not found.",
+      context: { executionId: "exec-1" },
+    });
   });
 
   test("polls until execution completes", async () => {
