@@ -30,7 +30,7 @@ describe("TailorDBTypeSchema name validation", () => {
     "Item-name",
     "Item name",
     "Item\n",
-    "商品",
+    "Café",
     "A".repeat(64),
   ])("rejects invalid table name %j in either name field", (name) => {
     const input = makeType([]);
