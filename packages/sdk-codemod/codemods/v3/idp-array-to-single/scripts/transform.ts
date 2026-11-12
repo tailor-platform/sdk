@@ -52,6 +52,23 @@ function isExternalDeclaration(element: SgNode): boolean {
 
 type Analysis = { edits: Edit[] } | ManualMigration | null;
 
+const WRAPPER_PUNCTUATION: ReadonlySet<string> = new Set(["(", ")", "comment"]);
+
+function unwrapExpression(node: SgNode): SgNode {
+  const kind = String(node.kind());
+  const inner =
+    kind === "parenthesized_expression"
+      ? node.children().find((child) => !WRAPPER_PUNCTUATION.has(String(child.kind())))
+      : kind === "as_expression" ||
+          kind === "satisfies_expression" ||
+          kind === "non_null_expression"
+        ? node.children()[0]
+        : kind === "type_assertion"
+          ? node.children().at(-1)
+          : undefined;
+  return inner ? unwrapExpression(inner) : node;
+}
+
 function isLocalArray(config: SgNode, name: string): boolean {
   return config
     .getRoot()
@@ -62,7 +79,7 @@ function isLocalArray(config: SgNode, name: string): boolean {
       return (
         binding?.kind() === "identifier" &&
         binding.text() === name &&
-        declarator.children().at(-1)?.kind() === "array"
+        unwrapExpression(declarator.children().at(-1) ?? declarator).kind() === "array"
       );
     });
 }
@@ -81,7 +98,11 @@ function analyzeConfig(source: string, config: SgNode): Analysis {
   if (hasUnknownKey(entries.slice(entryIndex + 1))) {
     return { reason: "a later spread or computed key may override idp", node: entry };
   }
-  const value = entry.kind() === "pair" ? pairValue(entry) : null;
+  const written = entry.kind() === "pair" ? pairValue(entry) : null;
+  const value = written ? unwrapExpression(written) : null;
+  if (written && value && value !== written && value.kind() === "array") {
+    return { reason: "the array is wrapped in a cast, satisfies, or parentheses", node: entry };
+  }
   const referenced =
     entry.kind() === "shorthand_property_identifier"
       ? entry.text()

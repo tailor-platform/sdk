@@ -95,6 +95,38 @@ describe("idp array -> single IdP migration review", () => {
   });
 
   test.each([
+    ["an array in parentheses", "export default defineConfig({\n  idp: ([shopIdp]),\n});\n"],
+    [
+      "an array with satisfies",
+      "export default defineConfig({\n  idp: [shopIdp] satisfies IdPConfig[],\n});\n",
+    ],
+    ["an array with as const", "export default defineConfig({\n  idp: [shopIdp] as const,\n});\n"],
+  ])("reports %s for a manual migration because it is wrapped", (_name, body) => {
+    const { transformed, findings } = review(body);
+
+    expect(transformed).toBeNull();
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("wrapped");
+  });
+
+  test("reports an idp that names a local array declared with as const", () => {
+    const { transformed, findings } = review(
+      "const idps = [shopIdp] as const;\nexport default defineConfig({\n  idp: idps,\n});\n",
+    );
+
+    expect(transformed).toBeNull();
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("declared as an array");
+  });
+
+  test("leaves an idp in parentheses that is a single IdP alone", () => {
+    expect(review("export default defineConfig({\n  idp: (shopIdp),\n});\n")).toEqual({
+      transformed: null,
+      findings: [],
+    });
+  });
+
+  test.each([
     [
       "an empty array after a spread",
       "export default defineConfig({\n  ...base,\n  idp: [],\n});\n",
