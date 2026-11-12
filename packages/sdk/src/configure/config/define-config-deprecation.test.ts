@@ -64,6 +64,8 @@ describe("defineConfig idp deprecation", () => {
       'export const external = defineConfig({ name: "a", idp: { name: "shared-idp", external: true } });',
       'export const none = defineConfig({ name: "a" });',
       'export const array = defineConfig({ name: "a", idp: [idp] });',
+      "declare const enabled: boolean;",
+      'export const either = defineConfig({ name: "a", idp: enabled ? [idp] : undefined });',
     ].join("\n");
 
     expect(deprecatedLines(probe)).toEqual([6]);

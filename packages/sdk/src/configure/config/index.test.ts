@@ -2,6 +2,7 @@
 import { describe, test } from "vitest";
 import { defineIdp } from "#/configure/services/idp/index";
 import { defineConfig } from "./index";
+import type { AppConfig } from "./types";
 
 describe("defineConfig", () => {
   test("rejects configuration with unknown properties", () => {
@@ -34,6 +35,22 @@ describe("defineConfig", () => {
       name: "my-app",
       // @ts-expect-error - idp must be an IdP or an array of IdPs, not a name
       idp: "my-idp",
+    });
+  });
+
+  test("accepts a config typed as AppConfig and an idp that is optional or either form", () => {
+    const idp = defineIdp("my-idp", { clients: ["my-client"] });
+    const typed: AppConfig = { name: "my-app" };
+    const enabled = Math.random() > 0.5;
+    defineConfig(typed);
+    defineConfig({ name: "my-app", idp: enabled ? idp : undefined });
+    // oxlint-disable-next-line typescript/no-deprecated -- Verify the deprecated array form still works until it is removed.
+    defineConfig({ name: "my-app", idp: enabled ? [idp] : undefined });
+    defineConfig({
+      name: "my-app",
+      idp: enabled ? [idp] : idp,
+      // @ts-expect-error - unknownProperty is not a valid AppConfig property
+      unknownProperty: "value",
     });
   });
 

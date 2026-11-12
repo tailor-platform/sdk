@@ -25,6 +25,17 @@ export function defineConfig<
 export function defineConfig<
   const Config extends Omit<AppConfig, "idp"> & { idp: IdPConfig[] } & UnknownKeys<Config>,
 >(config: Config): Config;
+/**
+ * Define a Tailor SDK application configuration whose `idp` is not known to be a single IdP or an array, such as a value typed as `AppConfig` or a conditional.
+ * @template Config
+ * @param config - Application configuration
+ * @returns The same configuration object
+ */
+export function defineConfig<
+  const Config extends Omit<AppConfig, "idp"> & {
+    idp?: IdPConfig | IdPConfig[];
+  } & UnknownKeys<Config>,
+>(config: Config): Config;
 /* @__NO_SIDE_EFFECTS__ */
 export function defineConfig(config: AppConfig): AppConfig {
   return config;
