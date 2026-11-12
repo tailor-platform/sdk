@@ -3,13 +3,20 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { decodeExpiresAt, expiresAtLabelKey } from "../src/cli/commands/workspace/expiry";
-import { loadUserWorkspaceDefaults } from "../src/cli/shared/context";
+import { initOperatorClient } from "../src/cli/shared/client";
+import { loadAccessToken, loadUserWorkspaceDefaults } from "../src/cli/shared/context";
 import { resolveE2EWorkspaceLocation, trackWorkspace } from "./globalSetup";
 import type { OperatorClient } from "../src/cli/shared/client";
 
 vi.mock("../src/cli/shared/context", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/cli/shared/context")>()),
   loadUserWorkspaceDefaults: vi.fn(),
+  loadAccessToken: vi.fn(),
+}));
+
+vi.mock("../src/cli/shared/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/cli/shared/client")>()),
+  initOperatorClient: vi.fn(),
 }));
 
 const workspaceId = "00000000-0000-4000-8000-000000000001";
@@ -122,5 +129,74 @@ describe("resolveE2EWorkspaceLocation", () => {
       organizationId: undefined,
       folderId: undefined,
     });
+  });
+});
+
+describe("teardown", () => {
+  let tmpRoot: string;
+  let trackingDir: string;
+  const deleteWorkspace = vi.fn();
+
+  async function loadTeardown() {
+    vi.resetModules();
+    return (await import("./globalSetup")).teardown;
+  }
+
+  beforeEach(() => {
+    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-teardown-test-"));
+    trackingDir = path.join(tmpRoot, "e2e-workspaces");
+    vi.stubEnv("TMPDIR", tmpRoot);
+    vi.stubEnv("TAILOR_PLATFORM_TOKEN", undefined);
+    deleteWorkspace.mockReset().mockResolvedValue({});
+    vi.mocked(loadAccessToken).mockReset().mockResolvedValue("profile-token");
+    vi.mocked(initOperatorClient)
+      .mockReset()
+      .mockResolvedValue({ deleteWorkspace } as unknown as OperatorClient);
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  });
+
+  function track(...ids: string[]) {
+    fs.mkdirSync(trackingDir, { recursive: true });
+    for (const id of ids) fs.writeFileSync(path.join(trackingDir, id), "");
+  }
+
+  test("deletes tracked workspaces even without the token environment variable", async () => {
+    track("ws-a", "ws-b");
+    const teardown = await loadTeardown();
+
+    await teardown();
+
+    expect(deleteWorkspace).toHaveBeenCalledTimes(2);
+    expect(deleteWorkspace).toHaveBeenCalledWith({ workspaceId: "ws-a" });
+    expect(deleteWorkspace).toHaveBeenCalledWith({ workspaceId: "ws-b" });
+  });
+
+  test("does not authenticate when no workspace is tracked", async () => {
+    const teardown = await loadTeardown();
+
+    await teardown();
+
+    expect(loadAccessToken).not.toHaveBeenCalled();
+  });
+
+  test("warns instead of throwing when authentication cannot be resolved", async () => {
+    track("ws-a");
+    vi.mocked(loadAccessToken).mockRejectedValue(new Error("Tailor Platform token not found."));
+    const teardown = await loadTeardown();
+
+    await expect(teardown()).resolves.toBeUndefined();
+
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining("authentication unavailable"),
+      expect.any(Error),
+    );
+    expect(deleteWorkspace).not.toHaveBeenCalled();
   });
 });
