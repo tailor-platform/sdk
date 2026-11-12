@@ -27,6 +27,7 @@ describe("defineConfig", () => {
   test("accepts idp as a single IdP or as an array", () => {
     const idp = defineIdp("my-idp", { clients: ["my-client"] });
     defineConfig({ name: "my-app", idp });
+    // oxlint-disable-next-line typescript/no-deprecated -- Verify the deprecated array form still works until it is removed.
     defineConfig({ name: "my-app", idp: [idp] });
     defineConfig({ name: "my-app", idp: { name: "shared-idp", external: true } });
     defineConfig({

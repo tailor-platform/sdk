@@ -59,6 +59,7 @@ describe("defineAuth parse wiring", () => {
     });
 
     const config = {
+      // oxlint-disable-next-line typescript/no-deprecated -- Verify the deprecated array form still works until it is removed.
       ...defineConfig({
         name: "testApp",
         idp: [idp],
