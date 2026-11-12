@@ -82,11 +82,27 @@ describe("drops the suggestion in files that only define HTTP adapters", () => {
   });
 });
 
+const HELPER =
+  'import { readFileSync } from "node:fs";\nexport const text = readFileSync("x", "utf8");';
+
 describe("ignores files that define no platform function", () => {
   runRuleTests(RULE, {
     valid: [
-      'import { readFileSync } from "node:fs";\nexport const text = readFileSync("x", "utf8");',
+      HELPER,
       'import { randomUUID } from "node:crypto";\nimport { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: randomUUID() });',
+      { code: HELPER, options: [{ check: "definition-files" }] },
+    ],
+  });
+});
+
+describe("checks files that define no platform function, without suggestions, when `check` is `all-files`", () => {
+  runRuleTests(RULE, {
+    invalid: [
+      {
+        code: HELPER,
+        options: [{ check: "all-files" }],
+        errors: ['"node:fs" is not available in the Tailor Platform runtime.'],
+      },
     ],
   });
 });
