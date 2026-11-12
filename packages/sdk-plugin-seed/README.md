@@ -171,7 +171,6 @@ tailor seed studio --port 0 --open            # pick a free port and open the br
 - Changes stay pending until you save them. A save is checked against the same generated schema files `tailor seed validate` uses, so a value they reject writes nothing and is shown with the change it came from.
 - A save writes the fields you entered, plus the `id` generated for a new row so other rows can reference it. Values the table fills in on create, such as `createdAt` or a computed field, stay out of the file; `--write-filled-values all` writes every filled value instead.
 - A table whose JSONL file has no rows is listed only when your project has `typescript` installed, since the studio reads the columns from the generated schema file's types. Without it, such a table is left out of the list.
-- The studio reads the schema files and the table definitions they import when it starts. After you change a table definition, restart the studio so a save is checked against the new one.
 - With `--dataset` or `--all-datasets`, a row is saved back to the file it came from. The schema files are the ones in the base data directory.
 - `--json` prints `url`, `dataDir`, and the selected `datasets` as JSON.
 - Run `tailor seed validate` before `tailor seed apply`: each save is checked on its own, so rows that reference each other across tables, such as a new `_User` and the user profile row for it, are only valid together once both are saved.

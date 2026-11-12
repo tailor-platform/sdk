@@ -35,9 +35,9 @@
     "publint": "publint --strict"
   },
   "dependencies": {
-    "@lines-db/studio": "0.16.4",
+    "@lines-db/studio": "0.16.6",
     "@politty/zod": "0.7.2",
-    "lines-db": "0.19.0",
+    "lines-db": "0.19.1",
     "open": "11.0.4",
     "pathe": "2.0.3",
     "pkg-types": "2.4.0",
