@@ -103,6 +103,7 @@ function validateConsistentColumnCount(rows: string[][]): void {
   }
   rows.forEach((row, index) => {
     if (row.length !== columnCount) {
+      // oxlint-disable-next-line local/no-plain-error -- internalError() lives in errors.ts, which imports this module through logger.ts
       throw new Error(
         `renderTable: all rows must have the same number of columns (expected ${columnCount}, row ${index} has ${row.length}).`,
       );

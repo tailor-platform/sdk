@@ -81,7 +81,7 @@ function functionParamSlots(node) {
 export default {
   meta: { name: "local" },
   rules: {
-    // CLI command modules must fail through CLIError({ code, ... }) so `--json`
+    // CLI modules must fail through CLIError({ code, ... }) so `--json`
     // output carries a stable code, or through internalError() for SDK
     // invariant violations. A bare `new Error()` surfaces as UNEXPECTED_ERROR.
     "no-plain-error": {
@@ -89,13 +89,13 @@ export default {
         type: "problem",
         docs: {
           description:
-            "Ban `new Error()` and Error subclasses in CLI command modules in favour of CLIError({ code }) or internalError().",
+            "Ban `new Error()` and Error subclasses in CLI modules in favour of CLIError({ code }) or internalError().",
         },
         messages: {
           plainError:
             "Use CLIError({ code, ... }) for user-actionable failures or internalError() for SDK invariant violations; a plain Error is reported as UNEXPECTED_ERROR under --json.",
           errorSubclass:
-            "Do not subclass Error in CLI command modules; throw CLIError({ code, ... }) and branch on error.code instead.",
+            "Do not subclass Error in CLI modules; throw CLIError({ code, ... }) and branch on error.code instead.",
         },
         schema: [],
       },

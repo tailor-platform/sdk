@@ -511,15 +511,16 @@
       }
     },
     {
-      "files": ["src/cli/commands/**/*.ts"],
+      "files": ["src/cli/**/*.ts"],
       "rules": {
-        "local/no-plain-error": "error"
+        "local/no-plain-error": "error",
+        "local/no-raw-zod-error": "error"
       }
     },
     {
-      "files": ["src/cli/**/*.ts"],
+      "files": ["src/cli/shared/errors.ts"],
       "rules": {
-        "local/no-raw-zod-error": "error"
+        "local/no-plain-error": "off"
       }
     },
     {
