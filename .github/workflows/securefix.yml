@@ -349,7 +349,7 @@ jobs:
       # token, so CI runs again on the new head. This step fails once it has
       # sent the request, which only marks this superseded run.
       - name: Push the fixed files
-        uses: csm-actions/securefix-action@6da661e4377faf2d71294c1c09b1c03c161ce7c1 # v0.6.8
+        uses: csm-actions/securefix-action@75f446c03c22cc2cfc1c944577dfd0dac5111738 # v0.7.0
         with:
           action: client
           app_id: ${{ vars.SECUREFIX_CLIENT_APP_ID }}
