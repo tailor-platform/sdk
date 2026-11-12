@@ -85,7 +85,7 @@ function analyzeConfig(source: string, config: SgNode): Analysis {
   }
   if (elements.length > 1) {
     const external = elements.some(isExternalDeclaration)
-      ? ", and an external declaration cannot sit next to another IdP in a single value"
+      ? ", and an external declaration cannot sit next to another IdP in a single value. If the external declaration only exists so that an executor can subscribe to that IdP, remove it and name the IdP in the idp option of the trigger"
       : "";
     return {
       reason: `the array declares ${elements.length} IdPs, but v3 accepts a single IdP per config${external}`,

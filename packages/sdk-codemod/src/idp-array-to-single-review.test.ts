@@ -111,12 +111,13 @@ describe("idp array -> single IdP migration review", () => {
     expect(review(body)).toEqual({ transformed: null, findings: [] });
   });
 
-  test("mentions the external declaration in the reason", () => {
+  test("tells how to drop an external declaration that only exists to subscribe", () => {
     const { findings } = review(
       'export default defineConfig({\n  idp: [shopIdp, { name: "backoffice-idp", external: true }],\n});\n',
     );
 
-    expect(findings[0]?.message).toContain("external");
+    expect(findings[0]?.message).toContain("external declaration");
+    expect(findings[0]?.message).toContain("idp option of the trigger");
   });
 
   test("reports the line and excerpt of the idp entry", () => {
