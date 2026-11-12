@@ -71,13 +71,22 @@ function writeUnloadableCliPackage(projectDir: string): void {
 }
 
 describe("buildFunctionBundle CLI entry point", () => {
-  test("bundles a function from a source that imports the CLI entry point without loading it", async () => {
+  function writeModules(projectDir: string, modules: Record<string, string>): string {
+    const sourceFile = writeFunction(projectDir, modules["function.ts"] ?? "");
+    for (const [name, source] of Object.entries(modules)) {
+      if (name !== "function.ts")
+        fs.writeFileSync(path.join(path.dirname(sourceFile), name), source);
+    }
+    return sourceFile;
+  }
+
+  test("bundles a function from a source that only mentions the CLI entry point in code that is removed", async () => {
     using tmp = tempCwd("sdk-function-bundle-cli-entry-");
     writeUnloadableCliPackage(tmp.dir);
     const sourceFile = writeFunction(
       tmp.dir,
       `import { apiCall } from "@tailor-platform/sdk/cli";\n` +
-        `export const deployOnly = () => apiCall({ endpoint: "Ping" });\n` +
+        `const deployOnly = () => apiCall({ endpoint: "Ping" });\n` +
         `export default async () => "OWN_SOURCE";\n`,
     );
 
@@ -86,75 +95,82 @@ describe("buildFunctionBundle CLI entry point", () => {
     expect(code).toContain("OWN_SOURCE");
     expect(code).not.toContain("@tailor-platform/sdk/cli");
   });
-  test("bundles a function that keeps the CLI entry point import in code the bundle retains", async () => {
-    using tmp = tempCwd("sdk-function-bundle-cli-entry-retained-");
+
+  test("bundles a function that imports several names, one of them renamed, from the CLI entry point", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-names-");
     writeUnloadableCliPackage(tmp.dir);
     const sourceFile = writeFunction(
       tmp.dir,
       `import { apiCall, getOAuth2Client as client } from "@tailor-platform/sdk/cli";\n` +
-        `export default async () => ["OWN_SOURCE", typeof apiCall, typeof client];\n`,
+        `export default async () => "OWN_SOURCE";\n`,
     );
 
-    const code = await bundle(sourceFile);
-
-    expect(code).toContain("OWN_SOURCE");
-    expect(code).not.toContain("@tailor-platform/sdk/cli");
+    await expect(bundle(sourceFile)).resolves.toContain("OWN_SOURCE");
   });
 
   test("bundles a function whose helper re-exports names from the CLI entry point", async () => {
     using tmp = tempCwd("sdk-function-bundle-cli-entry-reexport-");
     writeUnloadableCliPackage(tmp.dir);
-    const sourceFile = writeFunction(
-      tmp.dir,
-      `import { apiCall, getOAuth2Client } from "./helper";\n` +
-        `export default async () => ["OWN_SOURCE", typeof apiCall, typeof getOAuth2Client];\n`,
-    );
-    fs.writeFileSync(
-      path.join(path.dirname(sourceFile), "helper.ts"),
-      `export { apiCall, getOAuth2Client as getOAuth2Client } from "@tailor-platform/sdk/cli";\n`,
-    );
+    const sourceFile = writeModules(tmp.dir, {
+      "function.ts":
+        `import { apiCall, getOAuth2Client } from "./helper";\n` +
+        `export default async () => "OWN_SOURCE";\n`,
+      "helper.ts": `export { apiCall, getOAuth2Client as getOAuth2Client } from "@tailor-platform/sdk/cli";\n`,
+    });
 
-    const code = await bundle(sourceFile);
-
-    expect(code).toContain("OWN_SOURCE");
-    expect(code).not.toContain("@tailor-platform/sdk/cli");
+    await expect(bundle(sourceFile)).resolves.toContain("OWN_SOURCE");
   });
 
   test("bundles modules at different depths that import different names from the CLI entry point", async () => {
     using tmp = tempCwd("sdk-function-bundle-cli-entry-depths-");
     writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeModules(tmp.dir, {
+      "function.ts":
+        `import { apiCall } from "@tailor-platform/sdk/cli";\n` +
+        `import { first } from "./first";\n` +
+        `export default async () => ["OWN_SOURCE", first];\n`,
+      "first.ts": `import { second } from "./second";\nexport const first = second;\n`,
+      "second.ts": `import { getOAuth2Client } from "@tailor-platform/sdk/cli";\nexport const second = 1;\n`,
+    });
+
+    await expect(bundle(sourceFile)).resolves.toContain("OWN_SOURCE");
+  });
+
+  test("bundles a function whose entry imports the CLI entry point by a bare specifier", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-bare-entry-");
+    writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeFunction(tmp.dir, `export default async () => "OWN_SOURCE";\n`);
+
+    const code = await bundle(sourceFile, {
+      entry: (absoluteSourcePath) =>
+        `import { apiCall } from "@tailor-platform/sdk/cli";\n` +
+        `export { default as main } from "${absoluteSourcePath}";\n`,
+    });
+
+    expect(code).toContain("OWN_SOURCE");
+  });
+
+  test("turns a reference to the CLI entry point that survives tree-shaking into a call that explains the failure", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-used-");
+    writeUnloadableCliPackage(tmp.dir);
     const sourceFile = writeFunction(
       tmp.dir,
       `import { apiCall } from "@tailor-platform/sdk/cli";\n` +
-        `import { first } from "./first";\n` +
-        `export default async () => ["OWN_SOURCE", typeof apiCall, first];\n`,
-    );
-    const dir = path.dirname(sourceFile);
-    fs.writeFileSync(
-      path.join(dir, "first.ts"),
-      `import { second } from "./second";\nexport const first = second;\n`,
-    );
-    fs.writeFileSync(
-      path.join(dir, "second.ts"),
-      `import { getOAuth2Client } from "@tailor-platform/sdk/cli";\nexport const second = typeof getOAuth2Client;\n`,
+        `export default async () => apiCall({ endpoint: "Ping" });\n`,
     );
 
     const code = await bundle(sourceFile);
 
-    expect(code).toContain("OWN_SOURCE");
-    expect(code).not.toContain("@tailor-platform/sdk/cli");
+    expect(code).toContain("@tailor-platform/sdk/cli only works where tailor deploy runs");
+    expect(code).not.toContain("import");
   });
 
   test("still rejects a named import that another module does not export", async () => {
     using tmp = tempCwd("sdk-function-bundle-missing-export-");
-    const sourceFile = writeFunction(
-      tmp.dir,
-      `import { missing } from "./helper";\n` + `export default async () => missing;\n`,
-    );
-    fs.writeFileSync(
-      path.join(path.dirname(sourceFile), "helper.ts"),
-      "export const present = 1;\n",
-    );
+    const sourceFile = writeModules(tmp.dir, {
+      "function.ts": `import { missing } from "./helper";\nexport default async () => missing;\n`,
+      "helper.ts": "export const present = 1;\n",
+    });
 
     await expect(bundle(sourceFile)).rejects.toThrow("missing");
   });

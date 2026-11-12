@@ -127,8 +127,7 @@ run, as with a failed build command.
 To call the Platform from the function, use the functions exported from
 `@tailor-platform/sdk/cli`, such as `apiCall`, which works like `tailor api`. They authenticate
 the way the `tailor` command does: `TAILOR_PLATFORM_TOKEN`, then the profile (`TAILOR_PLATFORM_PROFILE`),
-then the logged-in user. Importing it in `tailor.config.ts` is safe; the bundles of functions that
-run on the Platform leave it out.
+then the logged-in user. Importing it in `tailor.config.ts` is safe. Code that runs on the Platform, such as a resolver or an auth hook, cannot use it: a call there throws an error saying it only works where `tailor deploy` runs.
 
 Running `tailor deploy` again after a failure runs the function again, so write what it
 does to be repeatable: look up or create a resource instead of always creating a new one.
