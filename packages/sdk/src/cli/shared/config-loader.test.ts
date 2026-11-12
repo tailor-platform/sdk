@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
+import { invalidPluginsExports } from "#/plugin/test-helpers/invalid-plugins-exports";
 import { atConfigSource, loadConfig } from "./config-loader";
 import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
 
@@ -99,40 +100,9 @@ describe("loadConfig", () => {
     expect(plugins).toEqual([]);
   });
 
-  test.each([
-    [
-      "is not an array",
-      `{ id: "not-an-array", description: "Invalid" }`,
-      [{ path: [], message: "expected an array returned by definePlugins(), got object" }],
-      undefined,
-    ],
-    [
-      "is explicitly undefined",
-      "undefined",
-      [{ path: [], message: "expected an array returned by definePlugins(), got undefined" }],
-      undefined,
-    ],
-    [
-      "is null",
-      "null",
-      [{ path: [], message: "expected an array returned by definePlugins(), got null" }],
-      undefined,
-    ],
-    [
-      "contains an invalid item",
-      `[{ id: "valid", description: "Valid item" }, null]`,
-      [{ path: [1], message: "Invalid input: expected object, received null" }],
-      undefined,
-    ],
-    [
-      "repeats a plugin ID",
-      `[{ id: "dup", description: "First" }, { id: "dup", description: "Second" }]`,
-      [{ path: [1, "id"], message: 'Duplicate plugin ID "dup"' }],
-      "Give each plugin a unique ID.",
-    ],
-  ])(
-    "reports a `plugins` export that %s as CONFIG_INVALID, pointing at the config file",
-    async (_case, pluginsExport, issues, suggestion) => {
+  test.each(invalidPluginsExports)(
+    "reports a `plugins` export that $name as CONFIG_INVALID, pointing at the config file",
+    async ({ pluginsExport, issues, suggestion, message }) => {
       const configPath = writeConfig(`
         export default { name: "test-app" };
         export const plugins = ${pluginsExport};
@@ -145,6 +115,7 @@ describe("loadConfig", () => {
         context: { file: configPath, exportName: "plugins", issues },
       });
       expect(error).toHaveProperty("suggestion", suggestion);
+      expect(error.message).toContain(message);
       expect(error.message).toMatch(/^Invalid `plugins` export:\n/);
       expect(error.message).not.toContain("tailor.config");
       expect(getErrorDiagnostics(error).location).toEqual({ file: configPath });
@@ -222,35 +193,6 @@ describe("loadConfig", () => {
         file: configPath,
         exportName: "plugins",
         issues: [{ path: [1], message: "Invalid input: expected object, received null" }],
-      },
-    });
-  });
-
-  test("rejects a plugin that defines both TailorDB namespace hook names", async () => {
-    const configPath = writeConfig(`
-      export default { name: "test-app" };
-      export const plugins = [{
-        id: "both",
-        description: "Defines both names",
-        importPath: "@example/both",
-        onTailorDBNamespaceLoaded: () => ({}),
-        onNamespaceLoaded: () => ({}),
-      }];
-    `);
-
-    const error = await rejectionOf(loadConfig(configPath));
-
-    expect(error).toMatchObject({
-      code: "CONFIG_INVALID",
-      context: {
-        exportName: "plugins",
-        issues: [
-          {
-            path: [0, "onNamespaceLoaded"],
-            message:
-              "'onNamespaceLoaded' is the deprecated name of 'onTailorDBNamespaceLoaded'. Define only 'onTailorDBNamespaceLoaded'.",
-          },
-        ],
       },
     });
   });

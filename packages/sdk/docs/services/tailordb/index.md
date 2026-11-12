@@ -27,6 +27,7 @@ Define TailorDB tables in files matching glob patterns specified in `tailor.conf
 - **Multiple tables per file**: You can define multiple TailorDB tables in a single file
 - **Export method**: Use named exports (`export const`)
 - **Export both value and type**: Always export both the runtime value and TypeScript type
+- **Table names**: Use 1-63 ASCII letters or digits, starting with an uppercase letter
 - **Uniqueness**: Table names must be unique across all TailorDB namespaces in the application
 
 ```typescript

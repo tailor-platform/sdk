@@ -104,12 +104,11 @@ function getNestedType(fieldConfig: KyselyFieldConfig, temporal: boolean): Field
   const fieldTypes = fieldResults.map((r) => r.fieldType);
   const obj = `{\n  ${fieldTypes.join(";\n  ")}${fieldTypes.length > 0 ? ";" : ""}\n}`;
 
-  const hasOptionalFields = Object.values(fields).some((config) => config.required !== true);
   const hasGeneratedFields = Object.values(fields).some(
     (config) =>
       config.hooks?.create || config.default !== undefined || config.optionalOnCreate === true,
   );
-  if (usesColumnTypeAlias(aggregatedUtilityTypes) || hasOptionalFields || hasGeneratedFields) {
+  if (usesColumnTypeAlias(aggregatedUtilityTypes) || hasGeneratedFields) {
     return {
       type: `ObjectColumnType<${obj}>`,
       usedUtilityTypes: { ...aggregatedUtilityTypes, ObjectColumnType: true },

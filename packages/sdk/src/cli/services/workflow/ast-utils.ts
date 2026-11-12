@@ -1,3 +1,4 @@
+import { RolldownMagicString } from "rolldown";
 import { internalError } from "#/cli/shared/errors";
 import { assertDefined } from "#/utils/assert";
 import type {
@@ -13,17 +14,20 @@ import type {
 /** A generic AST node for walking purposes */
 export type ASTNode = Record<string, unknown>;
 
-export interface Replacement {
+interface SourceRange {
   start: number;
   end: number;
+}
+
+export interface Replacement extends SourceRange {
   text: string;
 }
 
 export interface StartCallInfo {
   identifierName: string;
-  callRange: { start: number; end: number };
-  argsText: string;
-  optionsText?: string;
+  callRange: SourceRange;
+  argsRange?: SourceRange;
+  optionsRange?: SourceRange;
 }
 
 export interface FoundProperty {
@@ -90,23 +94,18 @@ export function getImportSource(node: Expression | null | undefined): string | n
   return null;
 }
 
-function argumentSourceText(arg: unknown, sourceText: string): string | undefined {
-  if (arg && typeof arg === "object" && "start" in arg && "end" in arg) {
-    return sourceText.slice(arg.start as number, arg.end as number);
-  }
-  return undefined;
+function argumentRange(
+  arg: CallExpression["arguments"][number] | undefined,
+): SourceRange | undefined {
+  return arg && { start: arg.start, end: arg.end };
 }
 
 /**
  * Get metadata for a static `identifier.start(...)` call.
  * @param node - AST node to inspect
- * @param sourceText - Source code text
  * @returns Start call metadata, or null when the node is not a start call
  */
-export function getStartCallInfo(
-  node: ASTNode | null | undefined,
-  sourceText: string,
-): StartCallInfo | null {
+export function getStartCallInfo(node: ASTNode | null | undefined): StartCallInfo | null {
   if (!node || typeof node !== "object" || node.type !== "CallExpression") {
     return null;
   }
@@ -131,8 +130,8 @@ export function getStartCallInfo(
   return {
     identifierName: memberExpr.object.name,
     callRange: { start: callExpr.start, end: callExpr.end },
-    argsText: argumentSourceText(callExpr.arguments[0], sourceText) ?? "",
-    optionsText: argumentSourceText(callExpr.arguments[1], sourceText),
+    argsRange: argumentRange(callExpr.arguments[0]),
+    optionsRange: argumentRange(callExpr.arguments[1]),
   };
 }
 
@@ -174,8 +173,8 @@ export function getNamespaceStartCallInfo(
     memberName,
     calleeText: sourceText.slice(callee.start as number, callee.end as number),
     callRange: { start: callExpr.start, end: callExpr.end },
-    argsText: argumentSourceText(callExpr.arguments[0], sourceText) ?? "",
-    optionsText: argumentSourceText(callExpr.arguments[1], sourceText),
+    argsRange: argumentRange(callExpr.arguments[0]),
+    optionsRange: argumentRange(callExpr.arguments[1]),
   };
 }
 
@@ -245,16 +244,15 @@ export function findProperty(properties: ObjectPropertyKind[], name: string): Fo
 }
 
 /**
- * Apply string replacements to source code
- * Replacements are applied from end to start to maintain positions
- * Ranges must not overlap; applying an overlapping range on top of an
- * already-shifted string would splice at stale offsets and corrupt the output,
- * so overlap is rejected up front
+ * Apply source replacements while retaining their original positions
  * @param source - Original source code
  * @param replacements - Replacements to apply
- * @returns Transformed source code
+ * @returns Source edits with their original positions
  */
-export function applyReplacements(source: string, replacements: Replacement[]): string {
+export function applyReplacements(
+  source: string,
+  replacements: Replacement[],
+): RolldownMagicString {
   const sorted = replacements.toSorted((a, b) => b.start - a.start);
   for (let i = 0; i + 1 < sorted.length; i++) {
     const current = assertDefined(sorted[i], `replacement missing at index ${i}`);
@@ -266,9 +264,9 @@ export function applyReplacements(source: string, replacements: Replacement[]): 
       );
     }
   }
-  let result = source;
+  const result = new RolldownMagicString(source);
   for (const r of sorted) {
-    result = result.slice(0, r.start) + r.text + result.slice(r.end);
+    result.overwrite(r.start, r.end, r.text);
   }
   return result;
 }

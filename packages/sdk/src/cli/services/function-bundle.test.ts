@@ -7,6 +7,7 @@ import { errorToJson } from "#/cli/shared/error-json";
 import { logger } from "#/cli/shared/logger";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
 import { normalizeFilePath, type StartContext } from "#/cli/shared/start-context";
+import { originalPositionAt } from "#/cli/shared/test-helpers/sourcemap";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import { assertDefined } from "#/utils/assert";
 import { buildFunctionBundle, type BuildFunctionBundleOptions } from "./function-bundle";
@@ -131,14 +132,25 @@ describe("buildFunctionBundle runtime globals", () => {
 });
 
 describe("buildFunctionBundle start transform", () => {
-  test("rewrites .start() calls through the start context by default", async () => {
-    using tmp = tempCwd("sdk-function-bundle-start-transform-");
+  test("preserves error positions inside start arguments and normalized options", async () => {
+    using tmp = tempCwd("sdk-function-bundle-start-arguments-");
     const sourceFile = writeFunction(
       tmp.dir,
-      `const flow = { start: () => "UNTRANSFORMED" };\n` +
-        `export default async () => flow.start({});\n`,
+      `const flow = { start: () => "UNTRANSFORMED" };
+export default async (input) => flow.start(
+  (() => {
+    if (input.args) throw new Error("ARGS");
+    return {};
+  })(),
+  (() => {
+    if (input.options) throw new Error("OPTIONS");
+    return { invoker: "admin" };
+  })(),
+);
+`,
     );
     const startContext: StartContext = {
+      authNamespace: "auth",
       modules: new Map([
         [
           normalizeFilePath(sourceFile),
@@ -150,10 +162,22 @@ describe("buildFunctionBundle start transform", () => {
         ],
       ]),
     };
-
-    await expect(bundle(sourceFile, { startContext })).resolves.toMatch(
-      /startWorkflow\(.order-flow./,
-    );
+    const code = await bundle(sourceFile, { startContext, inlineSourcemap: true });
+    const traceMap = assertDefined(extractInlineSourcemap(code), "inline sourcemap missing");
+    for (const [message, line, column] of [
+      ["ARGS", 4, 20],
+      ["OPTIONS", 8, 23],
+    ] as const) {
+      const messageOffset = code.indexOf(message);
+      expect(messageOffset).toBeGreaterThan(-1);
+      expect(
+        originalPositionAt(traceMap, code, code.lastIndexOf("throw", messageOffset)),
+      ).toMatchObject({
+        source: expect.stringContaining("src/function.ts"),
+        line,
+        column,
+      });
+    }
   });
 
   test("keeps the code of a .start() call the start transform cannot rewrite", async () => {
@@ -183,6 +207,42 @@ describe("buildFunctionBundle start transform", () => {
       },
     });
   });
+  test.each([undefined, "auth"])(
+    "preserves error positions after .start() with auth namespace %s",
+    async (authNamespace) => {
+      using tmp = tempCwd("sdk-function-bundle-start-transform-");
+      const sourceFile = writeFunction(
+        tmp.dir,
+        `const flow = { start: () => "UNTRANSFORMED" };\n` +
+          `export default async () => {\n` +
+          `  await flow.start({}, { invoker: "admin" });\n` +
+          `  throw new Error("AFTER_START");\n` +
+          `};\n`,
+      );
+      const startContext: StartContext = {
+        authNamespace,
+        modules: new Map([
+          [
+            normalizeFilePath(sourceFile),
+            {
+              sourceFile,
+              localBindings: new Map([["flow", { kind: "workflow", name: "order-flow" }]]),
+              exports: new Map(),
+            },
+          ],
+        ]),
+      };
+
+      const code = await bundle(sourceFile, { startContext, inlineSourcemap: true });
+      expect(code).toMatch(/startWorkflow\(.order-flow./);
+      const traceMap = assertDefined(extractInlineSourcemap(code), "inline sourcemap missing");
+      expect(originalPositionAt(traceMap, code, code.indexOf("throw"))).toMatchObject({
+        source: expect.stringContaining("src/function.ts"),
+        line: 4,
+        column: 2,
+      });
+    },
+  );
 });
 
 describe("buildFunctionBundle comments", () => {

@@ -47,6 +47,15 @@ import type { Executor } from "#/types/executor.generated";
 type ExistingExecutors = WithLabel<
   Awaited<ReturnType<OperatorClient["listExecutorExecutors"]>>["executors"][number]
 >;
+type ExistingExecutorDetail = Awaited<
+  ReturnType<OperatorClient["getExecutorExecutor"]>
+>["executor"];
+/** Fetch results a replan reuses instead of re-querying the platform. */
+interface PreviousExistingExecutors {
+  existingExecutors: ExistingExecutors;
+  /** Full detail per executor name, populated only for executors matched during the original diff. */
+  existingExecutorDetails: ReadonlyMap<string, ExistingExecutorDetail>;
+}
 
 /**
  * Apply executor-related changes for the given phase.
@@ -100,18 +109,21 @@ type DeleteExecutor = {
 /**
  * Plan executor-related changes based on current and desired state.
  * @param context - Planning context
- * @param previousExisting - A prior call's fetched existing executors, reused instead of
- *   re-listing them from the platform (the remote executor list cannot have changed between
- *   a deploy's first plan and its conditional rebuild's replan)
+ * @param previousExisting - A prior call's fetched existing executors and their details, reused
+ *   instead of re-fetching them from the platform (the remote executors cannot have changed
+ *   between a deploy's first plan and its conditional rebuild's replan)
  * @returns Planned changes
  */
-export async function planExecutor(context: PlanContext, previousExisting?: ExistingExecutors) {
+export async function planExecutor(
+  context: PlanContext,
+  previousExisting?: PreviousExistingExecutors,
+) {
   const { client, workspaceId, application, forRemoval } = context;
   const changeSet = createChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor>("Executors");
   const ownership = createOwnershipTracker(application.name, application.id);
 
   const fetchedExecutors =
-    previousExisting ??
+    previousExisting?.existingExecutors ??
     (await fetchExistingResourcesWithLabels({
       client,
       fetchPage: async (pageToken, pageSize) => {
@@ -140,6 +152,22 @@ export async function planExecutor(context: PlanContext, previousExisting?: Exis
         plannedMachineUsers: context.plannedMachineUsers,
       })
     : undefined;
+  const cachedDetails = previousExisting?.existingExecutorDetails;
+  const existingExecutorDetails = new Map(
+    await Promise.all(
+      Object.values(executors)
+        .filter((executor) => existingExecutors[executor.name])
+        .map(
+          async (executor) =>
+            [
+              executor.name,
+              cachedDetails?.has(executor.name)
+                ? cachedDetails.get(executor.name)
+                : (await client.getExecutorExecutor({ workspaceId, name: executor.name })).executor,
+            ] as const,
+        ),
+    ),
+  );
   for (const executor of Object.values(executors)) {
     const existing = existingExecutors[executor.name];
     const metaRequest = await buildMetaRequest({
@@ -155,7 +183,9 @@ export async function planExecutor(context: PlanContext, previousExisting?: Exis
         resourceName: executor.name,
       });
 
-      const configUnchanged = owned && areExecutorsEqual(existing.resource, desiredExecutor);
+      const existingDetail = existingExecutorDetails.get(executor.name);
+      const configUnchanged =
+        owned && !!existingDetail && areExecutorsEqual(existingDetail, desiredExecutor);
       if (configUnchanged && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
         changeSet.unchanged.push({ name: executor.name });
       } else {
@@ -194,7 +224,12 @@ export async function planExecutor(context: PlanContext, previousExisting?: Exis
     }
   });
 
-  return { changeSet, ...ownership.result, existingExecutors: fetchedExecutors };
+  return {
+    changeSet,
+    ...ownership.result,
+    existingExecutors: fetchedExecutors,
+    existingExecutorDetails,
+  };
 }
 
 type ExecutorDisplayEntry = GroupedDisplayEntry;

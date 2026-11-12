@@ -16,6 +16,7 @@ import {
   assertTargetMatchesLocation,
   loadSnapshotSeedData,
   resolveSourceMigrationNumber,
+  resolveAssertionNamespace,
   resolveTemporaryWorkspaceLocation,
   sortSeedTypesForSnapshot,
   waitForCloneApplicationData,
@@ -44,6 +45,15 @@ describe("migration test runtime", () => {
     for (const directory of temporaryDirectories.splice(0)) {
       fs.rmSync(directory, { recursive: true, force: true });
     }
+  });
+
+  test("requires an explicit assertion namespace when migrations span namespaces", () => {
+    expect(() => resolveAssertionNamespace(["primary", "analytics"])).toThrow(/--assert-namespace/);
+    expect(resolveAssertionNamespace(["primary", "analytics"], "analytics")).toBe("analytics");
+    expect(resolveAssertionNamespace(["primary"])).toBe("primary");
+    expect(() => resolveAssertionNamespace(["primary"], "analytics")).toThrow(
+      /no pending migrations/,
+    );
   });
 
   test("orders seed types by baseline foreign-key dependencies", () => {

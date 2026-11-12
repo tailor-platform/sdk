@@ -115,8 +115,12 @@ describe("planExecutor", () => {
         nextPageToken: "",
       }),
       listExecutorExecutors: vi.fn().mockResolvedValue({
-        executors: existingExecutors.map((e) => e.resource ?? { name: e.name }),
+        executors: existingExecutors.map((e) => ({ name: e.name })),
         nextPageToken: "",
+      }),
+      getExecutorExecutor: vi.fn().mockImplementation(({ name }: { name: string }) => {
+        const executor = existingExecutors.find((e) => e.name === name);
+        return { executor: executor?.resource ?? { name } };
       }),
       getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
         const name = trn.split(":").pop();
@@ -361,6 +365,31 @@ describe("planExecutor", () => {
 
       expect(result.changeSet.unchanged).toHaveLength(1);
       expect(result.changeSet.unchanged[0]!.name).toBe("existing-executor");
+      expect(result.changeSet.updates).toHaveLength(0);
+    });
+
+    test("existing executor is compared against its fetched detail, not its list row", async () => {
+      const executor = createMockExecutor("existing-executor");
+      const createResult = await planExecutor(buildPlanContext(createMockApplication([executor])));
+      const desiredExecutor = createResult.changeSet.creates[0]!.request.executor;
+
+      const client = createMockClient([
+        {
+          name: "existing-executor",
+          label: appName,
+          resource: desiredExecutor,
+        },
+      ]);
+
+      const result = await planExecutor(
+        buildPlanContext(createMockApplication([executor]), { client }),
+      );
+
+      expect(client.getExecutorExecutor).toHaveBeenCalledWith({
+        workspaceId: expect.any(String),
+        name: "existing-executor",
+      });
+      expect(result.changeSet.unchanged).toHaveLength(1);
       expect(result.changeSet.updates).toHaveLength(0);
     });
 
@@ -1431,24 +1460,27 @@ describe("planExecutor", () => {
         executors: [{ name: "existing-executor" }],
         nextPageToken: "",
       });
+      const getExecutorExecutor = vi
+        .fn()
+        .mockResolvedValue({ executor: { name: "existing-executor" } });
       const client = {
         listExecutorExecutors,
+        getExecutorExecutor,
         getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
       } as unknown as OperatorClient;
 
       const application = createMockApplication([createMockExecutor("existing-executor")]);
       const first = await planExecutor(buildPlanContext(application, { client }));
       expect(listExecutorExecutors).toHaveBeenCalledTimes(1);
+      expect(getExecutorExecutor).toHaveBeenCalledTimes(1);
       expect(first.changeSet.creates).toHaveLength(0);
       expect(first.changeSet.updates).toHaveLength(1);
 
-      const second = await planExecutor(
-        buildPlanContext(application, { client }),
-        first.existingExecutors,
-      );
+      const second = await planExecutor(buildPlanContext(application, { client }), first);
 
-      // Not called a second time: the platform list is reused as-is.
+      // Not called a second time: the platform list and details are reused as-is.
       expect(listExecutorExecutors).toHaveBeenCalledTimes(1);
+      expect(getExecutorExecutor).toHaveBeenCalledTimes(1);
       expect(second.changeSet.creates).toHaveLength(0);
       expect(second.changeSet.updates).toHaveLength(1);
     });

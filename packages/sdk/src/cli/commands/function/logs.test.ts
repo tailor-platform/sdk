@@ -495,16 +495,25 @@ describe("logs command detail output", () => {
     using stdout = captureStdout();
     using _stderr = captureStderr();
     using _json = jsonMode();
-    mockClient([functionExecution({ logEntries: entries, result: '{"ok":true}' })]);
+    mockClient([
+      functionExecution({
+        logEntries: [{ ...entries[0]!, message: "starting\n    continued\n" }, entries[1]!],
+        result: '{"ok":true}',
+      }),
+    ]);
 
     await runCommand(logsCommand, ["exec-1"]);
 
     expect(JSON.parse(stdout.output)).toMatchObject({
       id: "exec-1",
       status: "SUCCESS",
-      logs: "starting\ncareful",
+      logs: "starting\n    continued\n\ncareful",
       logEntries: [
-        { message: "starting", severity: "INFO", timestamp: "2026-09-05T00:00:00.000Z" },
+        {
+          message: "starting\n    continued\n",
+          severity: "INFO",
+          timestamp: "2026-09-05T00:00:00.000Z",
+        },
         { message: "careful", severity: "WARNING", timestamp: "2026-09-05T00:00:01.000Z" },
       ],
     });
@@ -549,14 +558,21 @@ describe("logs command detail output", () => {
   test("prints each structured entry once", async () => {
     using _stdout = captureStdout();
     using stderr = captureStderr();
-    mockClient([functionExecution({ logEntries: entries })]);
+    mockClient([
+      functionExecution({
+        logEntries: [{ ...entries[0]!, message: "starting\n\n    continued\n" }, entries[1]!],
+      }),
+    ]);
 
     await runCommand(logsCommand, ["exec-1"]);
 
     const plain = stripAnsi(stderr.output);
-    expect(plain).toContain("2026-09-05T00:00:00.000Z [INFO] starting");
+    expect(plain).toContain(
+      "  2026-09-05T00:00:00.000Z [INFO] starting\n  \n      continued\n  \n",
+    );
     expect(plain).toContain("2026-09-05T00:00:01.000Z [WARNING] careful");
     expect(plain.match(/starting/g)).toHaveLength(1);
+    expect(plain.match(/continued/g)).toHaveLength(1);
   });
 
   test("--json reports the error kind next to a consistent error object", async () => {
@@ -635,17 +651,25 @@ describe("logs command detail output", () => {
     using _stdout = captureStdout();
     using stderr = captureStderr();
     const first = logEntry("one", FunctionLogSeverity.LOG, "2026-09-05T00:00:00.000Z");
-    const second = logEntry("two", FunctionLogSeverity.LOG, "2026-09-05T00:00:01.000Z");
+    const second = logEntry(
+      "two\n\n    at main (main.ts:1:1)\n",
+      FunctionLogSeverity.LOG,
+      "2026-09-05T00:00:01.000Z",
+    );
+    const multilinePlatformNotice = {
+      ...platformNotice,
+      message: "runs close to the limit\nmove long work elsewhere",
+    };
     const third = logEntry("three", FunctionLogSeverity.ERROR, "2026-09-05T00:00:02.000Z");
     const getFunctionExecution = mockClient([
       functionExecution({ status: FunctionExecution_Status.RUNNING, logEntries: [first] }),
       functionExecution({
         status: FunctionExecution_Status.RUNNING,
-        logEntries: [first, second, platformNotice],
+        logEntries: [first, second, multilinePlatformNotice],
       }),
       functionExecution({
         status: FunctionExecution_Status.FAILED,
-        logEntries: [first, second, platformNotice, third],
+        logEntries: [first, second, multilinePlatformNotice, third],
         error: { name: "Error", message: "boom", stackTrace: "" },
       }),
     ]);
@@ -663,6 +687,14 @@ describe("logs command detail output", () => {
     );
     expect(plain.match(/\[LOG\] one/g)).toHaveLength(1);
     expect(plain.match(/\[LOG\] two/g)).toHaveLength(1);
+    expect(plain).toContain(
+      "  2026-09-05T00:00:01.000Z [LOG] two\n  \n      at main (main.ts:1:1)\n  \n",
+    );
+    expect(plain).toContain(
+      "  2026-09-05T00:00:02.000Z [WARNING] [PLATFORM] runs close to the limit\n  [PLATFORM] move long work elsewhere\n",
+    );
+    expect(plain.match(/at main/g)).toHaveLength(1);
+    expect(plain.match(/move long work elsewhere/g)).toHaveLength(1);
     expect(plain).toContain("Status: FAILED");
     expect(plain).toContain("Error: boom");
   });

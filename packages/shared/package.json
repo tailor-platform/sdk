@@ -21,7 +21,7 @@
     "test": "vitest"
   },
   "devDependencies": {
-    "oxlint": "1.90.0",
+    "oxlint": "1.92.0",
     "oxlint-tsgolint": "7.0.2006",
     "vitest": "5.1.0"
   }

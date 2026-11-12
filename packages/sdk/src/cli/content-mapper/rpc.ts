@@ -33,6 +33,7 @@ export async function serveJsonRpc(
       const header = buffer.subarray(0, headerEnd).toString("ascii");
       const length = /Content-Length:\s*(\d+)/i.exec(header)?.[1];
       if (length === undefined) {
+        // oxlint-disable-next-line local/no-plain-error -- Protocol framing errors must not load CLI helpers.
         throw new Error(`Malformed JSON-RPC header: ${header}`);
       }
       const bodyStart = headerEnd + HEADER_END.length;

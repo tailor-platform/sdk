@@ -1,6 +1,6 @@
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
-import { logger, symbols } from "#/cli/shared/logger";
+import { logger, plainRedacted, symbols } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
@@ -759,10 +759,7 @@ describe("confirmDeploymentPlans", () => {
 
     expect(confirm).toHaveBeenCalledOnce();
 
-    const plain = logSpy.mock.calls
-      .flat()
-      .join("\n")
-      .replace(/\[[0-9;]*m/g, "");
+    const plain = plainRedacted(logSpy.mock.calls.flat().join("\n"));
     expect(plain).toContain(listed);
   });
 

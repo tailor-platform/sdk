@@ -300,6 +300,46 @@ describe("service config validation", () => {
     },
   );
 
+  describe.each([
+    { configKey: "idp", entry: { clients: ["client"] } },
+    { configKey: "staticWebsites", entry: {} },
+    { configKey: "aiGateways", entry: { authNamespace: "my-auth" } },
+  ])("invalid $configKey names", ({ configKey, entry }) => {
+    test.each([{}, { name: null }, { name: 123 }])(
+      "reports repeated invalid names %j as CONFIG_INVALID",
+      (invalidName) => {
+        const invalidEntry = { ...entry, ...invalidName };
+        const error = defineInvalidApplication({ [configKey]: [invalidEntry, invalidEntry] });
+        expect(errorToJson(error).error).toMatchObject({
+          code: "CONFIG_INVALID",
+          context: {
+            file: "tailor.config.ts",
+            configKey,
+            issues: [
+              { path: [configKey, 0, "name"], message: expect.stringContaining("expected string") },
+            ],
+          },
+        });
+      },
+    );
+
+    test("preserves duplicate entry positions after an invalid name", () => {
+      const duplicate = { ...entry, name: "duplicate" };
+      const error = defineInvalidApplication({ [configKey]: [entry, duplicate, duplicate] });
+      expect(errorToJson(error).error).toMatchObject({
+        code: "DEFINITION_NAME_DUPLICATE",
+        context: {
+          duplicates: [
+            {
+              name: "duplicate",
+              definitions: [{ path: [configKey, 1] }, { path: [configKey, 2] }],
+            },
+          ],
+        },
+      });
+    });
+  });
+
   test("names the offending auth field when a machine user attribute is not a db field", () => {
     const error = defineInvalidApplication({
       auth: defineAuth("my-auth", {

@@ -100,10 +100,28 @@ describe("toFunctionLogEntryInfo", () => {
 describe("formatFunctionLogLines", () => {
   const entry = { message: "structured", severity: "INFO", timestamp: null, source: "USER" };
 
-  test("renders one line per structured entry", () => {
+  test("renders a single-line structured entry", () => {
     const lines = formatFunctionLogLines([entry]);
 
     expect(lines.map(stripAnsi)).toEqual(["N/A [INFO] structured"]);
+  });
+
+  test("renders physical lines while preserving message whitespace and Platform marks", () => {
+    const lines = formatFunctionLogLines([
+      { ...entry, message: "Error: boom\n\n    at main (main.ts:1:1)\n" },
+      { ...entry, message: "limit reached\ntry again", source: "PLATFORM" },
+      entry,
+    ]);
+
+    expect(lines.map(stripAnsi)).toEqual([
+      "N/A [INFO] Error: boom",
+      "",
+      "    at main (main.ts:1:1)",
+      "",
+      "N/A [INFO] [PLATFORM] limit reached",
+      "[PLATFORM] try again",
+      "N/A [INFO] structured",
+    ]);
   });
 
   test("returns no lines when there are no entries", () => {

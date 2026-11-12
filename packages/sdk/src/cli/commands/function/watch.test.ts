@@ -10,6 +10,7 @@ import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { stripAnsi } from "#/cli/shared/test-helpers/strip-ansi";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import { beginUserModuleRun } from "#/cli/shared/user-modules";
+import { syntaxInvalidError } from "#/cli/shared/validation-errors";
 import { assertDefined } from "#/utils/assert";
 import { bundleForRun } from "./bundle";
 import { detectFunctionType } from "./detect";
@@ -233,6 +234,32 @@ describe("startFunctionRunWatch", () => {
 
     await vi.waitFor(() => expect(stripAnsi(stderr.output)).toContain("<--  [OK]"));
   });
+
+  test.each([
+    [7, "fn.ts:7: Invalid syntax: Expression expected"],
+    [undefined, "fn.ts: Invalid syntax: Expression expected"],
+  ])(
+    "prints a syntax error's source location with line %s and keeps watching",
+    async (line, message) => {
+      using stderr = captureStderr();
+      vi.mocked(detectFunctionType).mockRejectedValueOnce(
+        syntaxInvalidError({
+          code: "InvalidSyntax",
+          message: "Expression expected",
+          filename: fnPath,
+          startLine: line,
+        }),
+      );
+
+      await start();
+
+      await vi.waitFor(() => expect(stripAnsi(stderr.output)).toContain(`[ERROR] ${message}\n`));
+      expect(executeScriptReportingStart).not.toHaveBeenCalled();
+      watcher.emit("change", fnPath);
+
+      await vi.waitFor(() => expect(stripAnsi(stderr.output)).toContain("<--  [OK]"));
+    },
+  );
 
   test("prints a failure's details and suggestion under its [ERROR] line", async () => {
     using stderr = captureStderr();
