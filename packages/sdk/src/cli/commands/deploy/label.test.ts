@@ -1,7 +1,9 @@
 import * as fs from "node:fs";
-import { create, createRegistry } from "@bufbuild/protobuf";
+import { create, createRegistry, fromBinary } from "@bufbuild/protobuf";
 import { usedTypes } from "@bufbuild/protobuf/reflect";
+import { base64Decode } from "@bufbuild/protobuf/wire";
 import { createValidator } from "@bufbuild/protovalidate";
+import { ViolationsSchema } from "@bufbuild/protovalidate/gen/buf/validate/validate_pb.js";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 import * as path from "pathe";
@@ -19,6 +21,7 @@ import {
   tailorDBTypeTrn,
   withMetadataWriteBatch,
   writeMetadataLabels,
+  writeMetadataLabelsDirect,
 } from "./label";
 import type { MetadataLabelBulkClient, MetadataLabelClient } from "./label";
 
@@ -175,17 +178,6 @@ describe("config metadata against the platform's label rules", () => {
   ])("agrees with the platform on %s", async (_case, metadata, accepted) => {
     expect(configAccepts(metadata)).toBe(accepted);
     expect(platformAccepts(await labelsFor(metadata))).toBe(accepted);
-  });
-
-  test("the entry cap fills the platform's label limit exactly once the SDK labels are added", async () => {
-    const entries = (count: number) =>
-      Object.fromEntries(Array.from({ length: count }, (_, i) => [`key-${i}`, "v"]));
-
-    expect(configAccepts(entries(17))).toBe(true);
-    expect(platformAccepts(await labelsFor(entries(17)))).toBe(true);
-
-    expect(configAccepts(entries(18))).toBe(false);
-    expect(platformAccepts(await labelsFor(entries(18)))).toBe(false);
   });
 });
 
@@ -766,5 +758,228 @@ describe("nested resource TRNs", () => {
   test("keeps a namespace TRN distinct from a type TRN inside it", () => {
     expect(tailorDBTypeTrn(ws, "db", "Order")).not.toBe(resourceTrn(ws, "tailordb", "db"));
     expect(tailorDBTypeTrn(ws, "db", "Order")).toContain(`${resourceTrn(ws, "tailordb", "db")}:`);
+  });
+});
+
+describe("label count rejected by the platform", () => {
+  // Violations bytes captured from the platform for a request holding 21 labels.
+  const bulkViolationAtIndex0 =
+    "Cm8SDW1hcC5tYXhfcGFpcnMaHm1hcCBtdXN0IGJlIGF0IG1vc3QgMjAgZW50cmllcyogChAIARIIcmVxdWVzdHMYCzAACgwIAhIGbGFiZWxzGAsyHAoJCBMSA21hcBgLCg8IAhIJbWF4X3BhaXJzGAQ=";
+  const singleViolation =
+    "Cl0SDW1hcC5tYXhfcGFpcnMaHm1hcCBtdXN0IGJlIGF0IG1vc3QgMjAgZW50cmllcyoOCgwIAhIGbGFiZWxzGAsyHAoJCBMSA21hcBgLCg8IAhIJbWF4X3BhaXJzGAQ=";
+  const platformMessage = "map must be at most 20 entries";
+
+  function rejection(
+    bytes: string,
+    rawMessage = `validation error: ${platformMessage}`,
+    code = Code.InvalidArgument,
+  ) {
+    return new ConnectError(rawMessage, code, undefined, [
+      { desc: ViolationsSchema, value: fromBinary(ViolationsSchema, base64Decode(bytes)) },
+    ]);
+  }
+
+  function bulkRejection(rules: { index: number; ruleId?: string; field?: string }[]) {
+    const violations = rules.map(({ index, ruleId = "map.max_pairs", field = "labels" }) => ({
+      ruleId,
+      message: platformMessage,
+      field: {
+        elements: [
+          { fieldName: "requests", subscript: { case: "index" as const, value: BigInt(index) } },
+          { fieldName: field },
+        ],
+      },
+    }));
+    return new ConnectError(
+      `validation error: ${platformMessage}`,
+      Code.InvalidArgument,
+      undefined,
+      [{ desc: ViolationsSchema, value: create(ViolationsSchema, { violations }) }],
+    );
+  }
+
+  const appTrn = "trn:v1:workspace:ws:application:my-app";
+  const sdkLabels = { "sdk-name": "my-app", "sdk-version": "v1-0-0" };
+  const userLabels = { team: "billing", tier: "gold" };
+  const applicationWrite = {
+    trn: appTrn,
+    labels: { ...userLabels, ...sdkLabels },
+    userLabelKeys: Object.keys(userLabels),
+  };
+
+  function createClient(labelsByTrn: Record<string, Record<string, string>> = {}) {
+    return {
+      getMetadata: vi.fn(async ({ trn }: { trn: string }) => ({
+        metadata: { labels: { ...labelsByTrn[trn] } },
+      })),
+      setMetadata: vi.fn().mockResolvedValue({}),
+      bulkSetMetadata: vi.fn().mockResolvedValue({ results: [] }),
+    } satisfies MetadataLabelBulkClient;
+  }
+
+  function flushOf(
+    client: MetadataLabelBulkClient,
+    writes: Parameters<typeof writeMetadataLabels>[1][],
+  ) {
+    return withMetadataWriteBatch(client, async (batchClient) => {
+      for (const write of writes) await writeMetadataLabels(batchClient, write);
+    });
+  }
+
+  test("buildMetaRequest records which keys came from the config's metadata", async () => {
+    const write = await buildMetaRequest({
+      trn: appTrn,
+      appName: "my-app",
+      metadata: userLabels,
+    });
+
+    expect(write.userLabelKeys).toEqual(["team", "tier"]);
+  });
+
+  test("buildMetaRequest records no user keys when the config has no metadata", async () => {
+    const write = await buildMetaRequest({ trn: appTrn, appName: "my-app" });
+
+    expect(write.userLabelKeys).toBeUndefined();
+  });
+
+  test("a write the platform accepts costs one bulk call", async () => {
+    const client = createClient();
+
+    await flushOf(client, [applicationWrite]);
+
+    expect(client.bulkSetMetadata).toHaveBeenCalledTimes(1);
+  });
+
+  test("rewrites the SDK labels without the config's metadata when the platform rejects the count", async () => {
+    const client = createClient({ [appTrn]: { foreign: "kept" } });
+    client.bulkSetMetadata.mockRejectedValueOnce(rejection(bulkViolationAtIndex0));
+
+    const error = await flushOf(client, [applicationWrite]).catch((e: unknown) => e);
+
+    expect(client.bulkSetMetadata).toHaveBeenCalledTimes(2);
+    expect(client.bulkSetMetadata).toHaveBeenLastCalledWith({
+      requests: [{ trn: appTrn, labels: { foreign: "kept", ...sdkLabels } }],
+    });
+    expect(error).toMatchObject({
+      name: "CLIError",
+      code: "DEPLOY_LABEL_LIMIT_EXCEEDED",
+      message: expect.stringContaining(platformMessage),
+      details: expect.stringContaining("2 'metadata'"),
+      suggestion: expect.stringContaining("'metadata'"),
+      context: {
+        resourceType: "application",
+        applications: [{ name: "my-app", metadataEntries: 2 }],
+        sdkLabelsWritten: true,
+      },
+    });
+  });
+
+  test("keeps the other writes of the same bulk when one write is rejected", async () => {
+    const client = createClient();
+    client.bulkSetMetadata.mockRejectedValueOnce(bulkRejection([{ index: 1 }]));
+    const other = { trn: "trn:a", labels: { mine: "value" } };
+
+    await flushOf(client, [other, applicationWrite]).catch(() => undefined);
+
+    expect(client.bulkSetMetadata).toHaveBeenLastCalledWith({
+      requests: [
+        { trn: "trn:a", labels: { mine: "value" } },
+        { trn: appTrn, labels: sdkLabels },
+      ],
+    });
+  });
+
+  test("fails with delete guidance when the SDK labels alone are rejected too", async () => {
+    const client = createClient();
+    client.bulkSetMetadata
+      .mockRejectedValueOnce(rejection(bulkViolationAtIndex0))
+      .mockRejectedValueOnce(rejection(bulkViolationAtIndex0));
+
+    const error = await flushOf(client, [applicationWrite]).catch((e: unknown) => e);
+
+    expect(error).toMatchObject({
+      code: "DEPLOY_LABEL_LIMIT_EXCEEDED",
+      suggestion: expect.stringContaining("Delete labels"),
+      context: { sdkLabelsWritten: false },
+    });
+  });
+
+  test("does not rewrite when the labels already hold the SDK's own", async () => {
+    const client = createClient({ [appTrn]: { ...sdkLabels, foreign: "kept" } });
+    client.bulkSetMetadata.mockRejectedValueOnce(rejection(bulkViolationAtIndex0));
+
+    const error = await flushOf(client, [applicationWrite]).catch((e: unknown) => e);
+
+    expect(client.bulkSetMetadata).toHaveBeenCalledTimes(1);
+    expect(error).toMatchObject({ code: "DEPLOY_LABEL_LIMIT_EXCEEDED" });
+  });
+
+  test.each([
+    ["a different rejection code", rejection(bulkViolationAtIndex0, "boom", Code.Unavailable)],
+    ["a different rule", bulkRejection([{ index: 0, ruleId: "string.max_len" }])],
+    ["a different field", bulkRejection([{ index: 0, field: "trn" }])],
+    ["no violation details", new ConnectError("bad", Code.InvalidArgument)],
+  ])("rethrows %s without rewriting", async (_case, platformError) => {
+    const client = createClient();
+    client.bulkSetMetadata.mockRejectedValueOnce(platformError);
+
+    const error = await flushOf(client, [applicationWrite]).catch((e: unknown) => e);
+
+    expect(error).toBe(platformError);
+    expect(client.bulkSetMetadata).toHaveBeenCalledTimes(1);
+  });
+
+  test("rethrows a count rejection for a write that carries no config metadata", async () => {
+    const client = createClient();
+    const platformError = bulkRejection([{ index: 0 }]);
+    client.bulkSetMetadata.mockRejectedValueOnce(platformError);
+
+    const error = await flushOf(client, [{ trn: "trn:a", labels: sdkLabels }]).catch(
+      (e: unknown) => e,
+    );
+
+    expect(error).toBe(platformError);
+    expect(client.bulkSetMetadata).toHaveBeenCalledTimes(1);
+  });
+
+  test("rethrows when a rejected write besides the application has nothing to drop", async () => {
+    const client = createClient();
+    const platformError = bulkRejection([{ index: 0 }, { index: 1 }]);
+    client.bulkSetMetadata.mockRejectedValueOnce(platformError);
+
+    const error = await flushOf(client, [
+      { trn: "trn:a", labels: sdkLabels },
+      applicationWrite,
+    ]).catch((e: unknown) => e);
+
+    expect(error).toBe(platformError);
+    expect(client.bulkSetMetadata).toHaveBeenCalledTimes(1);
+  });
+
+  test("a direct write is rewritten without the config's metadata and then fails the deploy", async () => {
+    const client = createClient({ [appTrn]: { foreign: "kept" } });
+    client.setMetadata.mockRejectedValueOnce(rejection(singleViolation));
+
+    const error = await writeMetadataLabelsDirect(client, applicationWrite).catch(
+      (e: unknown) => e,
+    );
+
+    expect(client.setMetadata).toHaveBeenCalledTimes(2);
+    expect(client.setMetadata).toHaveBeenLastCalledWith({
+      trn: appTrn,
+      labels: { foreign: "kept", ...sdkLabels },
+    });
+    expect(error).toMatchObject({
+      code: "DEPLOY_LABEL_LIMIT_EXCEEDED",
+      context: { sdkLabelsWritten: true },
+    });
+  });
+
+  test("a direct write the platform accepts costs one call", async () => {
+    const client = createClient();
+
+    await writeMetadataLabelsDirect(client, applicationWrite);
+
+    expect(client.setMetadata).toHaveBeenCalledTimes(1);
   });
 });

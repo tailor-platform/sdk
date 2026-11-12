@@ -51,7 +51,7 @@ When a project starts using `tailor setup`, the next local `deploy` or `setup` m
 
 **Disable Introspection**: Disable GraphQL introspection. Default is `false`.
 
-**Metadata**: Extra labels written to the deployed application's metadata on `deploy`, alongside the labels the SDK writes itself. Use it to record information that tooling reads back from the platform, such as the version of a framework the config is generated from. Keys must match `^[a-z][a-z0-9_-]{0,62}$` and must not start with `sdk-`; values must be empty or match the same pattern, so a version like `1.2.3` is written as `v1-2-3`. At most 17 entries can be set:
+**Metadata**: Extra labels written to the deployed application's metadata on `deploy`, alongside the labels the SDK writes itself. Use it to record information that tooling reads back from the platform, such as the version of a framework the config is generated from. Keys must match `^[a-z][a-z0-9_-]{0,62}$` and must not start with `sdk-`; values must be empty or match the same pattern, so a version like `1.2.3` is written as `v1-2-3`.:
 
 ```typescript
 const erpKitVersion = "1.2.3";
@@ -62,7 +62,7 @@ export default defineConfig({
 });
 ```
 
-Entries are only added or overwritten. An entry removed from the config keeps its last deployed value on the platform, and labels the config does not name are left untouched. Because those retained labels count towards the platform's limit of 20 labels per resource, `deploy` reports the overflow and stops before changing the application when the labels it would leave behind exceed that limit. The labels are written when the application itself is deployed, so a config without an application (see the end of [Application Settings](#application-settings)) has nothing to carry them.
+Entries are only added or overwritten. An entry removed from the config keeps its last deployed value on the platform, and labels the config does not name are left untouched. The SDK sets no limit on the number of entries; the platform limits the labels per resource, and the labels retained from earlier deploys or other tools count towards it. When the total exceeds that limit, `deploy` writes the SDK's own labels, leaves the `metadata` entries unwritten, and fails with the platform's error. Remove entries from `metadata` or delete labels the application no longer needs, then deploy again. The labels are written when the application itself is deployed, so a config without an application (see the end of [Application Settings](#application-settings)) has nothing to carry them.
 
 **Build Options**: `buildOptions` groups the settings that control how resolvers, executors, workflow jobs, and other functions are bundled: `logLevel` (below), `inlineSourcemap` (whether bundled functions embed an inline sourcemap for readable error stack traces; default `true`), `inlineSourcemapDependencySources` and `inlineSourcemapProjectSources` (below), `allowedRuntimeGlobals` (see [Node-only globals](#node-only-globals)), and `treeshake` (see [Removing unused code](#removing-unused-code)). The top-level `logLevel` and `inlineSourcemap` fields still work but are deprecated; `tailor upgrade` moves them into `buildOptions`. Setting the same option both at the top level and in `buildOptions` is rejected.
 

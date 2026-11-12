@@ -297,29 +297,13 @@ describe("planApplication", () => {
       }
     });
 
-    // The mock app carries no id, so a write names its metadata plus sdk-name
-    // and sdk-version.
-    const sdkLabelsPerWrite = 2;
-    const metadataEntries = (count: number) =>
-      Object.fromEntries(Array.from({ length: count }, (_, index) => [`key-${index}`, "v1"]));
-
-    test("rejects a plan whose retained labels push the total past the platform limit", async () => {
-      // The entries fit the metadata cap on their own, but labels kept from
-      // another tool are merged on top and the write would exceed the limit.
-      const retained = { team: "billing", owner: "platform", tier: "gold" };
-      const metadata = metadataEntries(17);
-      const client = createMockClient([{ ...matchingApplication, extraLabels: retained }]);
-      const total = Object.keys(metadata).length + sdkLabelsPerWrite + Object.keys(retained).length;
-
-      await expect(
-        planApplication(createContext(client, createMockApplication({ metadata }))),
-      ).rejects.toThrow(`would store ${total} labels, over the platform's limit of 20`);
-    });
-
-    test("allows a plan whose merged labels land exactly on the platform limit", async () => {
-      const retained = { team: "billing", owner: "platform" };
-      const metadata = metadataEntries(20 - sdkLabelsPerWrite - Object.keys(retained).length);
-      const client = createMockClient([{ ...matchingApplication, extraLabels: retained }]);
+    test("plans an application whose labels would exceed the platform's count limit", async () => {
+      const metadata = Object.fromEntries(
+        Array.from({ length: 30 }, (_, index) => [`key-${index}`, "v1"]),
+      );
+      const client = createMockClient([
+        { ...matchingApplication, extraLabels: { team: "billing" } },
+      ]);
 
       const result = await planApplication(
         createContext(client, createMockApplication({ metadata })),

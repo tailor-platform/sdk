@@ -1,3 +1,5 @@
+import { ViolationsSchema } from "@bufbuild/protovalidate/gen/buf/validate/validate_pb.js";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { getOrNull } from "#/cli/shared/client";
 import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError, isCLIError, toError } from "#/cli/shared/errors";
@@ -97,9 +99,6 @@ export function tailorDBTypeTrn(workspaceId: string, namespace: string, typeName
 export function resolverTrn(workspaceId: string, namespace: string, resolverName: string): string {
   return nestedResourceTrn(workspaceId, ["pipeline", namespace], ["resolver", resolverName]);
 }
-
-/** The platform rejects a `SetMetadata` write holding more labels than this. */
-export const MAX_RESOURCE_LABELS = 20;
 
 export const sdkNameLabelKey = "sdk-name";
 export const sdkVersionLabelKey = "sdk-version";
@@ -359,6 +358,7 @@ export async function buildMetaRequest(
     ? `v${packageJson.version.replace(/\./g, "-")}`
     : "unknown";
 
+  const userLabelKeys = Object.keys(metadata ?? {});
   return {
     trn,
     labels: {
@@ -368,6 +368,7 @@ export async function buildMetaRequest(
       ...(appId ? { [sdkAppIdLabelKey]: sdkAppIdLabelValue(appId) } : {}),
     },
     remove: appId ? undefined : [sdkAppIdLabelKey],
+    ...(userLabelKeys.length > 0 && { userLabelKeys }),
   };
 }
 
@@ -429,6 +430,11 @@ export interface MetadataLabelWrite {
   /** Label keys to delete. Absent keys are ignored. */
   remove?: ReadonlyArray<string>;
   /**
+   * Keys in `labels` that come from the config's `metadata`. When the platform
+   * rejects the label count, these are dropped and the rest is written again.
+   */
+  userLabelKeys?: ReadonlyArray<string>;
+  /**
    * Dependency records to reconcile against the labels found at write time.
    *
    * Which records to drop depends on what is already there, and
@@ -477,18 +483,22 @@ class MetadataWriteBatch {
 
   async #flushQueued(): Promise<void> {
     const queued = [...this.#writesByTrn].toSorted(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-    const readRequest = async ([trn, writes]: (typeof queued)[number]) => {
+    const readRequest = async ([trn, writes]: (typeof queued)[number]): Promise<
+      PlannedRequest | undefined
+    > => {
       const current = await getOrNull(() => this.#client.getMetadata({ trn }));
       const currentLabels = current?.metadata?.labels ?? {};
       const labels = writes.reduce(applyMetadataLabelWrite, currentLabels);
-      return areSameLabels(currentLabels, labels) ? undefined : { trn, labels };
+      return areSameLabels(currentLabels, labels)
+        ? undefined
+        : { request: { trn, labels }, writes, currentLabels };
     };
     const candidates: (typeof queued)[number][] = [];
+    const rejections: LabelLimitRejection[] = [];
     let cursor = 0;
 
     while (cursor < queued.length || candidates.length > 0) {
-      let freshRequests: MessageInitShape<typeof SetMetadataRequestSchema>[] | undefined =
-        candidates.length === 0 ? [] : undefined;
+      let freshRequests: PlannedRequest[] | undefined = candidates.length === 0 ? [] : undefined;
       while (cursor < queued.length && candidates.length < metadataWriteBatchSize) {
         // Fixed-width waves keep a nearly full batch from serializing a long no-op tail.
         if (candidates.length > 0) freshRequests = undefined;
@@ -496,14 +506,14 @@ class MetadataWriteBatch {
         cursor += entries.length;
         const changed = await Promise.all(
           entries.map(async (entry) => {
-            const request = await readRequest(entry);
-            return request ? { entry, request } : undefined;
+            const planned = await readRequest(entry);
+            return planned ? { entry, planned } : undefined;
           }),
         );
         for (const candidate of changed) {
           if (!candidate) continue;
           candidates.push(candidate.entry);
-          freshRequests?.push(candidate.request);
+          freshRequests?.push(candidate.planned);
         }
       }
 
@@ -512,13 +522,166 @@ class MetadataWriteBatch {
       const latestRequests =
         freshRequests ??
         (await Promise.all(batchEntries.map((entry) => readRequest(entry)))).filter(
-          (request) => request !== undefined,
+          (planned) => planned !== undefined,
         );
       if (latestRequests.length > 0) {
-        await this.#client.bulkSetMetadata({ requests: latestRequests });
+        rejections.push(...(await this.#bulkSet(latestRequests)));
       }
     }
+    if (rejections.length > 0) throw labelLimitError(rejections, true);
   }
+
+  /**
+   * Send one bulk write. A bulk is rejected as a whole, so when the platform
+   * refuses the label count of requests that carry config `metadata`, those
+   * requests are sent again without it and the rest of the bulk is kept.
+   * @param planned - Requests of the bulk, with the writes they were built from
+   * @returns The requests whose `metadata` was left out
+   */
+  async #bulkSet(planned: PlannedRequest[]): Promise<LabelLimitRejection[]> {
+    try {
+      await this.#client.bulkSetMetadata({ requests: planned.map((entry) => entry.request) });
+      return [];
+    } catch (error) {
+      const rejectedIndexes = new Set(labelLimitRejections(error).map(({ index }) => index));
+      const rejected = [...rejectedIndexes].map((index) =>
+        index === undefined ? undefined : planned[index],
+      );
+      const rejections = rejected.map((entry) => entry && labelLimitRejection(entry, error));
+      if (rejected.length === 0 || rejections.some((rejection) => !rejection)) throw error;
+
+      const reduced = planned.flatMap((entry, index) => {
+        if (!rejectedIndexes.has(index)) return [entry];
+        const labels = writesWithoutUserLabels(entry);
+        return areSameLabels(entry.currentLabels, labels)
+          ? []
+          : [{ ...entry, request: { trn: entry.request.trn, labels } }];
+      });
+      const limited = rejections.filter((rejection) => rejection !== undefined);
+      if (reduced.length === 0) return limited;
+      try {
+        await this.#client.bulkSetMetadata({ requests: reduced.map((entry) => entry.request) });
+      } catch (retryError) {
+        if (labelLimitRejections(retryError).length === 0) throw retryError;
+        throw labelLimitError(limited, false, retryError);
+      }
+      return limited;
+    }
+  }
+}
+
+/** A queued request with the writes and the stored labels it was built from. */
+type PlannedRequest = {
+  request: { trn: string; labels: Record<string, string> };
+  writes: MetadataLabelWrite[];
+  currentLabels: Record<string, string>;
+};
+
+/** An application whose `metadata` the platform refused over the label count. */
+type LabelLimitRejection = {
+  applicationName: string;
+  metadataEntries: number;
+  sdkLabelKeys: string[];
+  platformMessage: string;
+};
+
+/**
+ * Find the label-count violations in a rejected write.
+ * @param error - Error thrown by `SetMetadata` or `BulkSetMetadata`
+ * @returns One entry per violation; `index` is the request's position in a bulk, or undefined for `SetMetadata`
+ */
+function labelLimitRejections(error: unknown): { index: number | undefined }[] {
+  if (!(error instanceof ConnectError) || error.code !== Code.InvalidArgument) return [];
+  return error
+    .findDetails(ViolationsSchema)
+    .flatMap(({ violations }) => violations)
+    .flatMap((violation): { index: number | undefined }[] => {
+      if (violation.ruleId !== "map.max_pairs") return [];
+      const elements = violation.field?.elements ?? [];
+      const [first, second] = elements;
+      if (elements.length === 1 && first?.fieldName === "labels") return [{ index: undefined }];
+      if (
+        elements.length === 2 &&
+        first?.fieldName === "requests" &&
+        first.subscript.case === "index" &&
+        second?.fieldName === "labels"
+      ) {
+        return [{ index: Number(first.subscript.value) }];
+      }
+      return [];
+    });
+}
+
+function writesWithoutUserLabels(entry: Pick<PlannedRequest, "writes" | "currentLabels">) {
+  return entry.writes.map(withoutUserLabels).reduce(applyMetadataLabelWrite, entry.currentLabels);
+}
+
+function withoutUserLabels(write: MetadataLabelWrite): MetadataLabelWrite {
+  const userKeys = new Set(write.userLabelKeys);
+  return {
+    ...write,
+    labels: Object.fromEntries(
+      Object.entries(write.labels ?? {}).filter(([key]) => !userKeys.has(key)),
+    ),
+    userLabelKeys: undefined,
+  };
+}
+
+function labelLimitRejection(
+  entry: Pick<PlannedRequest, "request" | "writes">,
+  error: unknown,
+): LabelLimitRejection | undefined {
+  const userKeys = new Set(entry.writes.flatMap((write) => write.userLabelKeys ?? []));
+  if (userKeys.size === 0) return undefined;
+  const sdkLabelKeys = Object.keys(entry.request.labels).filter((key) => !userKeys.has(key));
+  return {
+    applicationName: entry.request.labels[sdkNameLabelKey] ?? entry.request.trn,
+    metadataEntries: userKeys.size,
+    sdkLabelKeys: sdkLabelKeys.filter((key) => key.startsWith("sdk-")),
+    platformMessage: ConnectError.from(error).rawMessage,
+  };
+}
+
+/**
+ * Build the failure for an application whose `metadata` the platform refused.
+ * @param rejections - Applications the platform refused
+ * @param sdkLabelsWritten - Whether the SDK's own labels were written in place of the whole write
+ * @param cause - The platform error that refused the SDK's own labels, when they were refused too
+ * @returns Error to throw once the labels are settled
+ */
+function labelLimitError(
+  rejections: LabelLimitRejection[],
+  sdkLabelsWritten: boolean,
+  cause?: unknown,
+) {
+  return CLIError({
+    code: "DEPLOY_LABEL_LIMIT_EXCEEDED",
+    message: rejections
+      .map(
+        ({ applicationName, platformMessage }) =>
+          `The platform rejected the labels for application '${applicationName}': ${platformMessage}`,
+      )
+      .join("\n"),
+    details: rejections
+      .map(({ applicationName, metadataEntries, sdkLabelKeys }) =>
+        sdkLabelsWritten
+          ? `Application '${applicationName}': the SDK's own labels (${sdkLabelKeys.join(", ")}) are in place, so it stays under SDK management. The ${metadataEntries} 'metadata' ${metadataEntries === 1 ? "entry" : "entries"} from the config ${metadataEntries === 1 ? "was" : "were"} not written.`
+          : `Application '${applicationName}': the SDK's own labels could not be written either, because the labels already stored on it, from other tools or earlier deploys, leave no room for them.`,
+      )
+      .join("\n"),
+    suggestion: sdkLabelsWritten
+      ? "Remove entries from 'metadata' in the config, or delete labels the application no longer needs."
+      : "Delete labels the application no longer needs, then deploy again.",
+    context: {
+      resourceType: "application",
+      applications: rejections.map(({ applicationName, metadataEntries }) => ({
+        name: applicationName,
+        metadataEntries,
+      })),
+      sdkLabelsWritten,
+    },
+    cause,
+  });
 }
 
 function hasMetadataLabelChange(write: MetadataLabelWrite): boolean {
@@ -647,8 +810,49 @@ export async function writeMetadataLabelsDirect(
   const currentLabels = current?.metadata?.labels ?? {};
   const merged = applyMetadataLabelWrite(currentLabels, write);
   if (areSameLabels(currentLabels, merged)) return false;
-  await client.setMetadata({ trn, labels: merged });
+  try {
+    await client.setMetadata({ trn, labels: merged });
+  } catch (error) {
+    await rewriteWithoutUserLabels(client, { write, currentLabels, error });
+  }
   return true;
+}
+
+type RewriteWithoutUserLabelsParams = {
+  write: MetadataLabelWrite;
+  currentLabels: Record<string, string>;
+  error: unknown;
+};
+
+/**
+ * Handle a `SetMetadata` the platform refused over the label count: write the
+ * labels again without the config's `metadata`, then fail the deploy. Any other
+ * rejection is rethrown as it came.
+ * @param client - Operator client instance
+ * @param params - The refused write, the labels it was merged into, and the platform error
+ */
+async function rewriteWithoutUserLabels(
+  client: MetadataLabelClient,
+  params: RewriteWithoutUserLabelsParams,
+): Promise<never> {
+  const { write, currentLabels, error } = params;
+  const rejection =
+    labelLimitRejections(error).some(({ index }) => index === undefined) &&
+    labelLimitRejection(
+      { request: { trn: write.trn, labels: write.labels ?? {} }, writes: [write] },
+      error,
+    );
+  if (!rejection) throw error;
+  const labels = writesWithoutUserLabels({ writes: [write], currentLabels });
+  if (!areSameLabels(currentLabels, labels)) {
+    try {
+      await client.setMetadata({ trn: write.trn, labels });
+    } catch (retryError) {
+      if (labelLimitRejections(retryError).length === 0) throw retryError;
+      throw labelLimitError([rejection], false, retryError);
+    }
+  }
+  throw labelLimitError([rejection], true);
 }
 
 function areSameLabels(a: Record<string, string>, b: Record<string, string>): boolean {

@@ -11,7 +11,7 @@ import {
   resolveStaticWebsiteUrls,
   type OperatorClient,
 } from "#/cli/shared/client";
-import { CLIError, internalError } from "#/cli/shared/errors";
+import { internalError } from "#/cli/shared/errors";
 import { symbols } from "#/cli/shared/logger";
 import { HTTP_METHODS } from "#/parser/service/http-adapter/index";
 import { assertDefined } from "#/utils/assert";
@@ -21,7 +21,6 @@ import {
   buildMetaRequest,
   hasMatchingSdkVersion,
   isOwnedByApp,
-  MAX_RESOURCE_LABELS,
   type MetadataLabelWrite,
   resourceTrn,
   writeMetadataLabels,
@@ -396,7 +395,6 @@ export async function planApplication(
   const existingLabels = previous
     ? previous.existingLabels
     : await fetchAppLabels(client, workspaceId, application.name);
-  assertLabelBudget(application.name, existingLabels, metaRequest);
   const metadataDetails = diffMetadataDisplay(existingLabels, application.config.metadata);
   const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
   const resolvedCors = await resolveStaticWebsiteUrls(
@@ -526,43 +524,6 @@ export function diffHttpAdapterDisplay(
   return entries
     .toSorted((left, right) => left.name.localeCompare(right.name))
     .map((entry) => `${entry.symbol} ${entry.name} (httpAdapter)`);
-}
-
-/**
- * Fail the plan when the labels this deploy would leave behind exceed the
- * platform's per-resource limit.
- *
- * The `metadata` cap alone cannot catch this: a write keeps every stored label
- * it does not name, so labels from another tool or an earlier config push are
- * merged on top of the entries being written. Reporting it here fails the run
- * before the application is created or updated, rather than leaving a bare
- * `SetMetadata` rejection after the resource has already changed.
- * @param appName - Application the labels belong to
- * @param existingLabels - Labels currently stored on the application
- * @param write - The metadata write planned for the application
- */
-function assertLabelBudget(
-  appName: string,
-  existingLabels: Record<string, string> | undefined,
-  write: MetadataLabelWrite,
-): void {
-  const merged = new Set([
-    ...Object.keys(existingLabels ?? {}),
-    ...Object.keys(write.labels ?? {}),
-  ]);
-  for (const key of write.remove ?? []) {
-    merged.delete(key);
-  }
-  if (merged.size <= MAX_RESOURCE_LABELS) return;
-  const named = new Set(Object.keys(write.labels ?? {}));
-  const retained = [...merged].filter((key) => !named.has(key)).toSorted();
-  throw CLIError({
-    code: "DEPLOY_LABEL_LIMIT_EXCEEDED",
-    message: `Application '${appName}' would store ${merged.size} labels, over the platform's limit of ${MAX_RESOURCE_LABELS}.`,
-    details: `${named.size} come from this deploy and ${retained.length} are kept from earlier deploys or other tools${retained.length ? ` (${retained.join(", ")})` : ""}.`,
-    suggestion:
-      "Remove entries from 'metadata' in the config, or delete labels the application no longer needs.",
-  });
 }
 
 /**

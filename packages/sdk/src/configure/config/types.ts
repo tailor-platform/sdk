@@ -271,12 +271,13 @@ export interface AppConfig<
    *
    * Keys must match `^[a-z][a-z0-9_-]{0,62}$` and must not start with `sdk-`.
    * Values must be empty or match `^[a-z][a-z0-9_-]{0,62}$`, so a version like
-   * `1.2.3` is written as `v1-2-3`. At most 17 entries can be set.
+   * `1.2.3` is written as `v1-2-3`.
    *
    * Entries are only added or overwritten: an entry removed from this config
    * keeps its last deployed value on the platform. Those retained labels count
-   * towards the platform's limit of 20 labels per resource, so `deploy` stops
-   * before changing the application when the total would exceed it.
+   * towards the platform's limit on labels per resource. When the total
+   * exceeds it, `deploy` writes the SDK's own labels, leaves `metadata`
+   * unwritten, and fails with the platform's error.
    */
   metadata?: Record<string, string>;
   /** TailorDB service configuration with table definition files. */

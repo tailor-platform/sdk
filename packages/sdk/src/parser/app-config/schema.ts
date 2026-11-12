@@ -22,8 +22,6 @@ export const LogLevelSchema = z.enum(LOG_LEVELS);
 const METADATA_KEY_PATTERN = /^[a-z][a-z0-9_-]{0,62}$/;
 const METADATA_VALUE_PATTERN = /^$|^[a-z][a-z0-9_-]{0,62}$/;
 const RESERVED_METADATA_KEY_PREFIX = "sdk-";
-// The platform stores at most 20 labels per resource; deploy writes three of its own.
-const MAX_METADATA_ENTRIES = 17;
 
 const metadataValueSchema = z.string().regex(METADATA_VALUE_PATTERN, {
   message: `'metadata' values must match ${METADATA_VALUE_PATTERN.source}.`,
@@ -32,14 +30,7 @@ const metadataValueSchema = z.string().regex(METADATA_VALUE_PATTERN, {
 // A key schema on `z.record` reports a generic "Invalid key in record", so the
 // keys are checked here to name the offending key and the constraint.
 const metadataSchema = z.record(z.string(), metadataValueSchema).superRefine((metadata, ctx) => {
-  const keys = Object.keys(metadata);
-  if (keys.length > MAX_METADATA_ENTRIES) {
-    ctx.addIssue({
-      code: "custom",
-      message: `'metadata' can hold at most ${MAX_METADATA_ENTRIES} entries.`,
-    });
-  }
-  for (const key of keys) {
+  for (const key of Object.keys(metadata)) {
     if (!METADATA_KEY_PATTERN.test(key)) {
       ctx.addIssue({
         code: "custom",
