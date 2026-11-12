@@ -56,7 +56,7 @@ export default defineConfig({
   name: "static-web-site",
   cors: [website.url],
   db: { "main-db": { files: ["./src/db/*.ts"] } },
-  idp: [idp],
+  idp,
   auth,
   staticWebsites: [website],
 });

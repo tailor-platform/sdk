@@ -147,7 +147,7 @@ export default defineConfig({
       defaultPermission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
     },
   },
-  idp: [idp],
+  idp,
   auth,
   secrets,
   executor: { files: ["./executors/*.ts"] },

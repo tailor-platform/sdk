@@ -586,6 +586,10 @@ export function read(plugins: unknown) { return generators; }
     await expect(runFixtureCases("v3/define-config-build-options")).resolves.toBeUndefined();
   });
 
+  test("v3/idp-array-to-single transforms correctly", async () => {
+    await expect(runFixtureCases("v3/idp-array-to-single")).resolves.toBeUndefined();
+  });
+
   test("v3/files-ignores-to-negation transforms correctly", async () => {
     await expect(runFixtureCases("v3/files-ignores-to-negation")).resolves.toBeUndefined();
   });

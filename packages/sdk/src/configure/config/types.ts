@@ -217,6 +217,12 @@ export type WorkflowServiceConfig = {
 export type WorkflowServiceInput = WorkflowServiceConfig;
 
 /**
+ * The array form of the `idp` option.
+ * @deprecated since NEXT_RELEASE — pass a single IdP (`idp: myIdp`) instead of an array. codemod: v3/idp-array-to-single
+ */
+type IdPConfigArray = IdPConfig[];
+
+/**
  * Application configuration for `defineConfig()`.
  *
  * Key fields:
@@ -230,7 +236,8 @@ export type WorkflowServiceInput = WorkflowServiceConfig;
  */
 export interface AppConfig<
   Auth extends AuthConfig = AuthConfig,
-  Idp extends IdPConfig | IdPConfig[] = IdPConfig | IdPConfig[],
+  // oxlint-disable-next-line typescript/no-deprecated -- The array form stays accepted until its removal in v3.
+  Idp extends IdPConfig | IdPConfigArray = IdPConfig | IdPConfigArray,
   StaticWebsites extends StaticWebsiteConfig[] = StaticWebsiteConfig[],
   AIGateways extends AIGatewayConfig[] = AIGatewayConfig[],
   Env extends Record<string, EnvEntry> = Record<string, EnvEntry>,
@@ -283,7 +290,9 @@ export interface AppConfig<
   db?: TailorDBServiceInput;
   /** Resolver service configuration with resolver files. */
   resolver?: ResolverServiceInput;
-  /** Identity Provider configuration: a single IdP, e.g. `myIdp`. An array of IdPs, e.g. `[myIdp]`, is also accepted. */
+  /**
+   * Identity Provider configuration: a single IdP, e.g. `myIdp`. An array of IdPs, e.g. `[myIdp]`, still works but is deprecated and removed in v3.
+   */
   idp?: Idp;
   /** Auth configuration (single object, not an array). */
   auth?: Auth;

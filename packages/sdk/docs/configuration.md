@@ -279,7 +279,7 @@ export default defineConfig({
     "my-resolver": { external: true },
   },
   auth: { name: "shared-auth", external: true },
-  idp: [{ name: "shared-idp", external: true }],
+  idp: { name: "shared-idp", external: true },
 });
 ```
 
@@ -343,7 +343,7 @@ const idp = defineIdp("my-idp", {
 });
 
 export default defineConfig({
-  idp: [idp],
+  idp,
 });
 ```
 
