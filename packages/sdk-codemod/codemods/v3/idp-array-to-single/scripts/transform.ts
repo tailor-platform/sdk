@@ -32,10 +32,42 @@ function isExternalDeclaration(element: SgNode): boolean {
 
 type Analysis = { edits: Edit[] } | ManualMigration | null;
 
+function isLocalArray(config: SgNode, name: string): boolean {
+  return config
+    .getRoot()
+    .root()
+    .findAll({ rule: { kind: "variable_declarator" } })
+    .some((declarator) => {
+      const [binding] = declarator.children();
+      return (
+        binding?.kind() === "identifier" &&
+        binding.text() === name &&
+        declarator.children().at(-1)?.kind() === "array"
+      );
+    });
+}
+
 function analyzeConfig(source: string, config: SgNode): Analysis {
-  const entry = objectEntries(config).find((candidate) => entryKey(candidate) === IDP_KEY);
-  if (entry?.kind() !== "pair") return null;
-  const array = pairValue(entry);
+  const entries = objectEntries(config);
+  const entry = entries.find((candidate) => entryKey(candidate) === IDP_KEY);
+  if (!entry) {
+    return entries.some((candidate) => entryKey(candidate) === null)
+      ? { reason: "a spread or computed key may carry an idp array", node: config }
+      : null;
+  }
+  const value = entry.kind() === "pair" ? pairValue(entry) : null;
+  const referenced =
+    entry.kind() === "shorthand_property_identifier"
+      ? entry.text()
+      : value?.kind() === "identifier"
+        ? value.text()
+        : null;
+  if (referenced !== null) {
+    return isLocalArray(config, referenced)
+      ? { reason: `idp refers to ${referenced}, which is declared as an array`, node: entry }
+      : null;
+  }
+  const array = value;
   if (array?.kind() !== "array") return null;
 
   if (array.children().some((child) => child.kind() === "comment")) {

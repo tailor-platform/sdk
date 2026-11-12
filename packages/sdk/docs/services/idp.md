@@ -24,7 +24,7 @@ Configure the Built-in IdP using `defineIdp()`:
 
 - **One IdP per config**: A config takes a single IdP, written as `idp: myIdp`
 - **Configuration location**: Define in `tailor.config.ts` and set it as `idp`
-- **Uniqueness**: IdP names must be unique across all IdP instances
+- **Uniqueness**: IdP names must be unique within a workspace
 - **Arrays are deprecated**: `idp: [myIdp]` still works but is removed in v3, and so is declaring several IdPs in one config. `tailor upgrade` rewrites an array that holds one IdP; an array with several IdPs is reported for you to change by hand.
 
 ```typescript

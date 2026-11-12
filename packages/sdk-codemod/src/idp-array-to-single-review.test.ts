@@ -70,7 +70,48 @@ describe("idp array -> single IdP migration review", () => {
     expect(findings[0]?.message).toContain(reason);
   });
 
-  test("points the own-IdP-plus-external case at subscribing by name", () => {
+  test.each([
+    [
+      "an idp value that is a local array",
+      "const idps = [shopIdp];\nexport default defineConfig({\n  idp: idps,\n});\n",
+      "declared as an array",
+    ],
+    [
+      "a shorthand idp that is a local array",
+      "const idp = [shopIdp];\nexport default defineConfig({\n  idp,\n});\n",
+      "declared as an array",
+    ],
+    [
+      "a spread that may carry an idp array",
+      'export default defineConfig({\n  ...base,\n  name: "shop",\n});\n',
+      "spread",
+    ],
+  ])("reports %s for a manual migration", (_name, body, reason) => {
+    const { transformed, findings } = review(body);
+
+    expect(transformed).toBeNull();
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain(reason);
+  });
+
+  test.each([
+    [
+      "an idp that is a single IdP declared in the file",
+      'const idp = defineIdp("shop-idp", { clients: ["c"] });\nexport default defineConfig({\n  idp,\n});\n',
+    ],
+    [
+      "an idp that is imported",
+      'import { shopIdp } from "./idp";\nexport default defineConfig({\n  idp: shopIdp,\n});\n',
+    ],
+    [
+      "a spread next to an idp written out",
+      "export default defineConfig({\n  ...base,\n  idp: shopIdp,\n});\n",
+    ],
+  ])("reports nothing for %s", (_name, body) => {
+    expect(review(body)).toEqual({ transformed: null, findings: [] });
+  });
+
+  test("mentions the external declaration in the reason", () => {
     const { findings } = review(
       'export default defineConfig({\n  idp: [shopIdp, { name: "backoffice-idp", external: true }],\n});\n',
     );
