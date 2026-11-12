@@ -59,7 +59,7 @@ export function mapQueryExecutionError(args: MapQueryExecutionErrorArgs): Error 
     )
   ) {
     return CLIError({
-      code: "INVALID_NAMESPACE",
+      code: "QUERY_SCHEMA_LOAD_FAILED",
       message: `Failed to load TailorDB schema for namespace '${args.namespace}'.`,
       suggestion:
         "Ensure the query references TailorDB tables from a single namespace and re-apply if needed.",

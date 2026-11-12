@@ -392,7 +392,7 @@ describe("query", () => {
     });
   });
 
-  test("reports an invalid SQL namespace when its schema cannot be loaded", async () => {
+  test("reports a SQL schema loading failure", async () => {
     const { executeScript } = await import("../shared/script-executor");
     vi.mocked(executeScript).mockResolvedValue({
       success: false,
@@ -410,7 +410,7 @@ describe("query", () => {
         query: "select 1",
       }),
     ).rejects.toMatchObject({
-      code: "INVALID_NAMESPACE",
+      code: "QUERY_SCHEMA_LOAD_FAILED",
       message: "Failed to load TailorDB schema for namespace 'tailordb'.",
       suggestion:
         "Ensure the query references TailorDB tables from a single namespace and re-apply if needed.",
