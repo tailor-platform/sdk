@@ -72,6 +72,40 @@ describe("defineAuth parse wiring", () => {
     expect(application.idpServices[0]?.name).toBe("my-idp");
   });
 
+  test("accepts a single IdP config instead of an array", () => {
+    const idp = defineIdp("my-idp", {
+      clients: ["default-client"],
+    });
+
+    const config = {
+      ...defineConfig({
+        name: "testApp",
+        idp,
+      }),
+      path: "tailor.config.ts",
+    };
+
+    const application = defineApplication({ config });
+
+    expect(application.idpServices.map((service) => service.name)).toEqual(["my-idp"]);
+    expect(application.subgraphs).toContainEqual({ Type: "idp", Name: "my-idp" });
+  });
+
+  test("accepts a single external IdP config", () => {
+    const config = {
+      ...defineConfig({
+        name: "testApp",
+        idp: { name: "shared-idp", external: true },
+      }),
+      path: "tailor.config.ts",
+    };
+
+    const application = defineApplication({ config });
+
+    expect(application.idpServices).toEqual([]);
+    expect(application.subgraphs).toContainEqual({ Type: "idp", Name: "shared-idp" });
+  });
+
   test("accepts defineStaticWebSite helper objects when parsing static websites", () => {
     const website = defineStaticWebSite("my-site", {
       description: "my website",
@@ -366,6 +400,15 @@ describe("service config validation", () => {
       configKey: "idp",
       name: "my-idp",
       path: ["idp", 1, "clients"],
+    },
+    {
+      serviceConfig: {
+        idp: { ...defineIdp("my-idp", { clients: ["default"] }), clients: "default" },
+      },
+      heading: 'IdP "my-idp"',
+      configKey: "idp",
+      name: "my-idp",
+      path: ["idp", "clients"],
     },
     {
       serviceConfig: {

@@ -384,6 +384,13 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
     expect(content).toContain("backoffice: true;");
   });
 
+  test("reads the idp name from a single idp config", () => {
+    const config = { name: "test-app", idp: { name: "primary-idp" } as never };
+
+    const { idpNames } = extractAttributesFromConfig(config);
+    expect(idpNames).toEqual(["primary-idp"]);
+  });
+
   test("de-duplicates idp names so the registry has unique keys", () => {
     const config = {
       name: "test-app",
