@@ -10,7 +10,7 @@ export type IdpUserTargetFor<R> =
       /**
        * IdP namespace name to subscribe to. Required when the project defines
        * multiple IdPs; optional when a single IdP exists. Must match an IdP the
-       * config declares in `defineConfig({ idp: [...] })`, or one owned by another
+       * config declares in `defineConfig({ idp })`, or one owned by another
        * config deployed in the same run.
        */
       idp?: IdpNameForRegistry<R>;

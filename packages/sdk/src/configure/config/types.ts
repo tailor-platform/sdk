@@ -223,14 +223,14 @@ export type WorkflowServiceInput = WorkflowServiceConfig;
  * - `name` (required): Application name
  * - `cors`: Array of allowed origins, e.g. `["https://example.com"]`
  * - `auth`: Single auth config object (not an array)
- * - `idp`: Array of IdP configs, e.g. `[myIdp]`
+ * - `idp`: Single IdP config, e.g. `myIdp`
  * - `staticWebsites`: Array of static website configs, e.g. `[website]`
  * - `aiGateways`: Array of AI Gateway configs, e.g. `[gateway]`
  * - `db`, `resolver`, `executor`, `workflow`, `httpAdapter`: Service configs with file globs (resolved relative to this config file's own directory, not the invocation directory)
  */
 export interface AppConfig<
   Auth extends AuthConfig = AuthConfig,
-  Idp extends IdPConfig[] = IdPConfig[],
+  Idp extends IdPConfig | IdPConfig[] = IdPConfig | IdPConfig[],
   StaticWebsites extends StaticWebsiteConfig[] = StaticWebsiteConfig[],
   AIGateways extends AIGatewayConfig[] = AIGatewayConfig[],
   Env extends Record<string, EnvEntry> = Record<string, EnvEntry>,
@@ -283,7 +283,9 @@ export interface AppConfig<
   db?: TailorDBServiceInput;
   /** Resolver service configuration with resolver files. */
   resolver?: ResolverServiceInput;
-  /** Identity Provider configurations. Must be an array, e.g. `[myIdp]`. */
+  /**
+   * Identity Provider configuration: a single IdP, e.g. `myIdp`. An array of IdPs, e.g. `[myIdp]`, still works but is deprecated and removed in v3.
+   */
   idp?: Idp;
   /** Auth configuration (single object, not an array). */
   auth?: Auth;

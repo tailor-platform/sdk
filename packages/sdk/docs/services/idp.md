@@ -22,9 +22,10 @@ Configure the Built-in IdP using `defineIdp()`:
 
 **Definition Rules:**
 
-- **Multiple IdPs allowed**: You can define multiple IdP instances in your config file
-- **Configuration location**: Define in `tailor.config.ts` and add to the `idp` array
-- **Uniqueness**: IdP names must be unique across all IdP instances
+- **One IdP per config**: A config takes a single IdP, written as `idp: myIdp`
+- **Configuration location**: Define in `tailor.config.ts` and set it as `idp`
+- **Uniqueness**: IdP names must be unique within a workspace
+- **Arrays are deprecated**: `idp: [myIdp]` still works but is removed in v3, and so is declaring several IdPs in one config. `tailor upgrade` rewrites an array that holds one IdP; an array with several IdPs is reported for you to change by hand.
 
 ```typescript
 import { defineIdp, defineConfig } from "@tailor-platform/sdk";
@@ -41,21 +42,8 @@ const idp = defineIdp("my-idp", {
   userAuthPolicy: { allowedEmailDomains: ["*"] },
 });
 
-// You can define multiple IdPs
-const anotherIdp = defineIdp("another-idp", {
-  clients: ["another-client"],
-  permission: {
-    create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
-    read: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
-    update: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
-    delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
-    sendPasswordResetEmail: [{ conditions: [], permit: false }],
-  },
-  userAuthPolicy: { allowedEmailDomains: ["*"] },
-});
-
 export default defineConfig({
-  idp: [idp, anotherIdp], // Add all IdPs to the array
+  idp,
 });
 ```
 
@@ -386,7 +374,7 @@ const auth = defineAuth("my-auth", {
 });
 
 export default defineConfig({
-  idp: [idp],
+  idp,
   auth,
 });
 ```

@@ -206,7 +206,7 @@ const auth = defineAuth("my-auth", {
 export default defineConfig({
   name: "my-app",
   cors: [website.url],
-  idp: [idp],
+  idp,
   auth,
   staticWebsites: [website],
 });

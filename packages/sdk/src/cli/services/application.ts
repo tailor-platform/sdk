@@ -31,6 +31,7 @@ import { type LoadedConfig } from "#/cli/shared/config-loader";
 import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { CLIError } from "#/cli/shared/errors";
+import { idpConfigList, isIdpConfigList, type IdpConfigInput } from "#/cli/shared/idp-config";
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { logger } from "#/cli/shared/logger";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
@@ -53,7 +54,7 @@ import {
   type WorkflowServiceConfig,
 } from "#/configure/config/types";
 import { type AuthConfig } from "#/configure/services/auth/types";
-import { type IdPConfig, type IdPOwnConfig } from "#/configure/services/idp/types";
+import { type IdPOwnConfig } from "#/configure/services/idp/types";
 import { AIGatewaySchema } from "#/parser/service/aigateway/index";
 import { AuthConfigSchema } from "#/parser/service/auth/index";
 import { IdPSchema } from "#/parser/service/idp/index";
@@ -314,17 +315,14 @@ function stripIdpProviderHelper(idpConfig: IdPOwnConfig): IdPOwnConfig {
   return config;
 }
 
-function defineIdp(config: readonly IdPConfig[] | undefined, configPath: string): DefineIdpResult {
+function defineIdp(config: IdpConfigInput | undefined, configPath: string): DefineIdpResult {
   const idpServices: IdP[] = [];
   const subgraphs: Array<{ Type: string; Name: string }> = [];
 
-  if (!config) {
-    return { idpServices, subgraphs };
-  }
-
+  const idps = idpConfigList(config);
   assertUniqueDefinitionNames({
     kind: "idp",
-    definitions: config
+    definitions: idps
       .map(({ name }, index) => ({
         name,
         file: configPath,
@@ -333,13 +331,13 @@ function defineIdp(config: readonly IdPConfig[] | undefined, configPath: string)
       }))
       .filter((definition) => typeof definition.name === "string"),
   });
-  config.forEach((idpConfig, index) => {
+  idps.forEach((idpConfig, index) => {
     const name = idpConfig.name;
     if (!("external" in idpConfig)) {
       const idp = parseServiceConfig(IdPSchema, stripIdpProviderHelper(idpConfig), {
         file: configPath,
         configKey: "idp",
-        key: index,
+        key: isIdpConfigList(config) ? index : undefined,
         name,
       });
       idpServices.push(idp);
