@@ -1,3 +1,4 @@
+import * as path from "pathe";
 import { isSyntaxDiagnostic } from "#/utils/syntax-diagnostic";
 import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
 import { CLIError, internalError } from "./errors";
@@ -147,6 +148,77 @@ export function definitionExportError(params: DefinitionErrorParams): CLIError {
     }),
     { location: { file } },
   );
+}
+
+const DUPLICATE_NAME_LABELS = {
+  ...DEFINITION_LABELS,
+  idp: "IdP",
+  staticwebsite: "static website",
+  aigateway: "AI Gateway",
+} as const;
+
+interface NamedDefinition extends Omit<DefinitionErrorParams, "kind"> {
+  /** Name the definition declares. */
+  name: string;
+  /** Path within the exported config, when the definition is a config entry. */
+  path?: FlatIssue["path"];
+}
+
+export interface UniqueDefinitionNamesParams {
+  /** Kind of definition whose names must be unique. */
+  kind: keyof typeof DUPLICATE_NAME_LABELS;
+  /** Namespace the names must be unique in, when the kind has one. */
+  namespace?: string;
+  /** Loaded definitions to check. */
+  definitions: readonly NamedDefinition[];
+}
+
+function compareCodePoints(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * Assert that no two loaded definitions of a kind declare the same name.
+ * @param params - Loaded definitions and what scopes their names
+ * @throws CLIError coded `DEFINITION_NAME_DUPLICATE`, listing every definition of each duplicated name
+ */
+export function assertUniqueDefinitionNames(params: UniqueDefinitionNamesParams): void {
+  const { kind, namespace, definitions } = params;
+  const sorted = definitions.toSorted(
+    (a, b) =>
+      compareCodePoints(a.name, b.name) ||
+      compareCodePoints(a.file, b.file) ||
+      compareCodePoints(a.exportName, b.exportName),
+  );
+  const duplicates = [...Map.groupBy(sorted, (definition) => definition.name)]
+    .filter(([, sameName]) => sameName.length > 1)
+    .map(([name, sameName]) => ({
+      name,
+      definitions: sameName.map(({ file, exportName, path }) => ({
+        file,
+        exportName,
+        ...(path === undefined ? {} : { path }),
+      })),
+    }));
+  if (duplicates.length === 0) return;
+
+  const label = DUPLICATE_NAME_LABELS[kind];
+  const scope = namespace === undefined ? "" : ` in namespace "${namespace}"`;
+  throw CLIError({
+    code: "DEFINITION_NAME_DUPLICATE",
+    message: duplicates
+      .flatMap((duplicate) => [
+        `Duplicate ${label} name "${duplicate.name}" found${scope}:`,
+        ...duplicate.definitions.map(({ file, exportName, path: configPath }) => {
+          const exportLabel = exportName === "default" ? "" : ` (export: ${exportName})`;
+          const pathLabel = configPath === undefined ? "" : ` (path: ${configPath.join(".")})`;
+          return `  - ${path.relative(process.cwd(), file)}${exportLabel}${pathLabel}`;
+        }),
+      ])
+      .join("\n"),
+    suggestion: `Give each ${label} a unique name${namespace === undefined ? "" : " within its namespace"}.`,
+    context: { kind, namespace, duplicates },
+  });
 }
 
 /**

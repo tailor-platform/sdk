@@ -80,6 +80,12 @@ guaranteed to contain an error object. A failure that points at a file starts it
 envelope and in plain output, with the file's path relative to the working directory and, when
 known, the line: `tailordb/order.ts:3: Invalid syntax: Expression expected`.
 
+`DEFINITION_NAME_DUPLICATE` reports names shared by multiple resolvers in one namespace, executors,
+workflow jobs, HTTP adapters, IdPs, static websites, or AI Gateways. `error.context.kind` identifies
+the kind, and `error.context.duplicates` lists each duplicated name and its definitions, including
+`file` and `exportName`. For IdPs, static websites, and AI Gateways, each definition also has a
+`path` array identifying the config entry, such as `["staticWebsites", 2]`.
+
 The exit code separates a mistyped command from a failed one without parsing output: `0` on success,
 `2` when the CLI rejects the command line itself, such as an unknown option or subcommand, an
 unexpected argument, or an option value that fails validation (including one set through its

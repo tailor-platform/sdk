@@ -189,6 +189,7 @@ export async function prepareFunction(options: PrepareFunctionOptions): Promise<
             config: config.resolver,
             filePath,
             baseDir,
+            configPath: config.path,
           })
         : undefined,
     env: config.env ?? {},

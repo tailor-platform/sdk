@@ -105,7 +105,21 @@ export default executor;
       baseDir: process.cwd(),
     });
 
-    await expect(service.loadExecutors()).rejects.toThrow(/Duplicate executor name "duplicate"/);
+    await expect(service.loadExecutors()).rejects.toMatchObject({
+      code: "DEFINITION_NAME_DUPLICATE",
+      context: {
+        kind: "executor",
+        duplicates: [
+          {
+            name: "duplicate",
+            definitions: [
+              { file: fileA, exportName: "default" },
+              { file: fileB, exportName: "default" },
+            ],
+          },
+        ],
+      },
+    });
   });
 
   test("exposes plugin executors to later loadExecutors() calls in a plugin-only configuration", async () => {
@@ -129,8 +143,9 @@ export default executor;
     const service = createExecutorService({ config: { files: [fileA] }, baseDir: process.cwd() });
     await service.loadExecutors();
 
-    await expect(service.loadPluginExecutorFiles([pluginFile])).rejects.toThrow(
-      /Duplicate executor name "shared-name"/,
-    );
+    await expect(service.loadPluginExecutorFiles([pluginFile])).rejects.toMatchObject({
+      code: "DEFINITION_NAME_DUPLICATE",
+      context: { kind: "executor", duplicates: [{ name: "shared-name" }] },
+    });
   });
 });

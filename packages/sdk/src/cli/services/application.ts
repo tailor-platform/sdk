@@ -39,7 +39,7 @@ import {
   createTsconfigLookupCache,
   type TsconfigLookupCache,
 } from "#/cli/shared/tsconfig-paths-plugin";
-import { configInvalidError } from "#/cli/shared/validation-errors";
+import { assertUniqueDefinitionNames, configInvalidError } from "#/cli/shared/validation-errors";
 import {
   type AppConfig,
   type ExecutorServiceInput,
@@ -227,11 +227,12 @@ function pluginResolverSource(
   config: LoadedConfig,
   pluginManager: PluginManager | undefined,
 ): PluginResolverSource | undefined {
-  return pluginManager && { pluginManager, appName: config.name, configPath: config.path };
+  return pluginManager && { pluginManager, appName: config.name };
 }
 
 function defineResolver(
   config: ResolverServiceInput | undefined,
+  configPath: string,
   baseDir: string,
   plugins: PluginResolverSource | undefined,
 ): DefineResolverResult {
@@ -244,7 +245,13 @@ function defineResolver(
 
   for (const [namespace, serviceConfig] of Object.entries(config)) {
     if (!("external" in serviceConfig)) {
-      const resolverService = createResolverService(namespace, serviceConfig, baseDir, plugins);
+      const resolverService = createResolverService({
+        namespace,
+        config: serviceConfig,
+        configPath,
+        baseDir,
+        plugins,
+      });
       resolverServices.push(resolverService);
     }
     subgraphs.push({ Type: "pipeline", Name: namespace });
@@ -279,12 +286,13 @@ export function definePluginResolverServices(
       continue;
     }
     resolverServices.push(
-      createResolverService(
+      createResolverService({
         namespace,
-        { files: [] },
+        config: { files: [] },
+        configPath: config.path,
         baseDir,
-        pluginResolverSource(config, pluginManager),
-      ),
+        plugins: pluginResolverSource(config, pluginManager),
+      }),
     );
   }
   return resolverServices;
@@ -310,13 +318,19 @@ function defineIdp(config: readonly IdPConfig[] | undefined, configPath: string)
     return { idpServices, subgraphs };
   }
 
-  const idpNames = new Set<string>();
+  assertUniqueDefinitionNames({
+    kind: "idp",
+    definitions: config
+      .map(({ name }, index) => ({
+        name,
+        file: configPath,
+        exportName: "default",
+        path: ["idp", index],
+      }))
+      .filter((definition) => typeof definition.name === "string"),
+  });
   config.forEach((idpConfig, index) => {
     const name = idpConfig.name;
-    if (idpNames.has(name)) {
-      throw new Error(`IdP with name "${name}" already defined.`);
-    }
-    idpNames.add(name);
     if (!("external" in idpConfig)) {
       const idp = parseServiceConfig(IdPSchema, stripIdpProviderHelper(idpConfig), {
         file: configPath,
@@ -409,7 +423,17 @@ function defineStaticWebsites(
   configPath: string,
 ): StaticWebsite[] {
   const staticWebsiteServices: StaticWebsite[] = [];
-  const websiteNames = new Set<string>();
+  assertUniqueDefinitionNames({
+    kind: "staticwebsite",
+    definitions: (websites ?? [])
+      .map(({ name }, index) => ({
+        name,
+        file: configPath,
+        exportName: "default",
+        path: ["staticWebsites", index],
+      }))
+      .filter((definition) => typeof definition.name === "string"),
+  });
 
   (websites ?? []).forEach((config, index) => {
     const website = parseServiceConfig(StaticWebsiteSchema, stripStaticWebsiteUrlHelper(config), {
@@ -418,10 +442,6 @@ function defineStaticWebsites(
       key: index,
       name: config.name,
     });
-    if (websiteNames.has(website.name)) {
-      throw new Error(`Static website with name "${website.name}" already defined.`);
-    }
-    websiteNames.add(website.name);
     staticWebsiteServices.push(website);
   });
 
@@ -434,7 +454,17 @@ function defineAIGateways(
   applicationAuthNamespace: string | undefined,
 ): AIGateway[] {
   const aiGatewayServices: AIGateway[] = [];
-  const gatewayNames = new Set<string>();
+  assertUniqueDefinitionNames({
+    kind: "aigateway",
+    definitions: (gateways ?? [])
+      .map(({ name }, index) => ({
+        name,
+        file: configPath,
+        exportName: "default",
+        path: ["aiGateways", index],
+      }))
+      .filter((definition) => typeof definition.name === "string"),
+  });
 
   (gateways ?? []).forEach((config, index) => {
     const gateway = parseServiceConfig(AIGatewaySchema, config, {
@@ -443,10 +473,6 @@ function defineAIGateways(
       key: index,
       name: config.name,
     });
-    if (gatewayNames.has(gateway.name)) {
-      throw new Error(`AI Gateway with name "${gateway.name}" already defined.`);
-    }
-    gatewayNames.add(gateway.name);
     if (gateway.authNamespace === undefined) {
       if (!applicationAuthNamespace) {
         throw new Error(
@@ -528,6 +554,7 @@ function defineServices(
   );
   const resolverResult = defineResolver(
     config.resolver,
+    config.path,
     baseDir,
     pluginResolverSource(config, pluginManager),
   );

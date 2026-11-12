@@ -3,6 +3,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
+import { errorToJson } from "#/cli/shared/error-json";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
 import { defineConfig, definePlugins } from "#/configure/config/index";
 import { defineAIGateway } from "#/configure/services/aigateway/index";
@@ -184,6 +185,109 @@ describe("service config validation", () => {
     throw new Error("expected defineApplication to throw");
   }
 
+  test.each([
+    {
+      configKey: "idp",
+      kind: "idp",
+      label: "IdP",
+      entries: [
+        defineIdp("duplicate", { clients: ["client"] }),
+        { name: "distinct", external: true },
+        { name: "duplicate", external: true },
+        defineIdp("duplicate", { clients: ["other-client"] }),
+      ],
+    },
+    {
+      configKey: "staticWebsites",
+      kind: "staticwebsite",
+      label: "static website",
+      entries: [
+        defineStaticWebSite("duplicate", {}),
+        defineStaticWebSite("distinct", {}),
+        defineStaticWebSite("duplicate", {}),
+        defineStaticWebSite("duplicate", {}),
+      ],
+    },
+    {
+      configKey: "aiGateways",
+      kind: "aigateway",
+      label: "AI Gateway",
+      entries: [
+        defineAIGateway("duplicate", { authNamespace: "my-auth" }),
+        defineAIGateway("distinct", { authNamespace: "my-auth" }),
+        defineAIGateway("duplicate", { authNamespace: "my-auth" }),
+        defineAIGateway("duplicate", { authNamespace: "my-auth" }),
+      ],
+    },
+  ])(
+    "reports all duplicate $configKey entries with their config paths",
+    ({ configKey, kind, label, entries }) => {
+      const error = defineInvalidApplication({ [configKey]: entries });
+      expect(errorToJson(error).error).toMatchObject({
+        code: "DEFINITION_NAME_DUPLICATE",
+        message: [
+          `Duplicate ${label} name "duplicate" found:`,
+          `  - tailor.config.ts (path: ${configKey}.0)`,
+          `  - tailor.config.ts (path: ${configKey}.2)`,
+          `  - tailor.config.ts (path: ${configKey}.3)`,
+        ].join("\n"),
+        context: {
+          kind,
+          duplicates: [
+            {
+              name: "duplicate",
+              definitions: [0, 2, 3].map((index) => ({
+                file: "tailor.config.ts",
+                exportName: "default",
+                path: [configKey, index],
+              })),
+            },
+          ],
+        },
+      });
+    },
+  );
+
+  describe.each([
+    { configKey: "idp", entry: { clients: ["client"] } },
+    { configKey: "staticWebsites", entry: {} },
+    { configKey: "aiGateways", entry: { authNamespace: "my-auth" } },
+  ])("invalid $configKey names", ({ configKey, entry }) => {
+    test.each([{}, { name: null }, { name: 123 }])(
+      "reports repeated invalid names %j as CONFIG_INVALID",
+      (invalidName) => {
+        const invalidEntry = { ...entry, ...invalidName };
+        const error = defineInvalidApplication({ [configKey]: [invalidEntry, invalidEntry] });
+        expect(errorToJson(error).error).toMatchObject({
+          code: "CONFIG_INVALID",
+          context: {
+            file: "tailor.config.ts",
+            configKey,
+            issues: [
+              { path: [configKey, 0, "name"], message: expect.stringContaining("expected string") },
+            ],
+          },
+        });
+      },
+    );
+
+    test("preserves duplicate entry positions after an invalid name", () => {
+      const duplicate = { ...entry, name: "duplicate" };
+      const error = defineInvalidApplication({ [configKey]: [entry, duplicate, duplicate] });
+      expect(errorToJson(error).error).toMatchObject({
+        code: "DEFINITION_NAME_DUPLICATE",
+        context: {
+          duplicates: [
+            {
+              name: "duplicate",
+              definitions: [{ path: [configKey, 1] }, { path: [configKey, 2] }],
+            },
+          ],
+        },
+      });
+    });
+  });
+
   test("names the offending auth field when a machine user attribute is not a db field", () => {
     const error = defineInvalidApplication({
       auth: defineAuth("my-auth", {
@@ -354,6 +458,20 @@ describe("service config validation", () => {
       configKey: "db",
       name: "main",
       path: ["db", "main", "files"],
+    },
+    {
+      serviceConfig: {
+        resolver: {
+          main: {
+            files: [],
+            defaultPermission: [{ conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false }],
+          },
+        },
+      },
+      heading: 'resolver namespace "main"',
+      configKey: "resolver",
+      name: "main",
+      path: ["resolver", "main", "defaultPermission"],
     },
     {
       serviceConfig: {
