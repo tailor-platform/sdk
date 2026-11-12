@@ -50,12 +50,69 @@ describe("assertUniqueLocalTailorDBTypeNames", () => {
       assertUniqueLocalTailorDBTypeNames({
         tailorDBServices: [localService("main", ["User"]), localService("analytics", ["User"])],
       }),
-    ).toThrow(/Duplicate TailorDB table names detected/);
+    ).toThrow(
+      expect.objectContaining({
+        code: "DEFINITION_NAME_DUPLICATE",
+        message: expect.stringMatching(
+          /^Duplicate TailorDB type name "User" found:\n {2}- .*User\.ts \(export: user, namespace "analytics"\)\n {2}- .*User\.ts \(export: user, namespace "main"\)$/,
+        ),
+        suggestion:
+          "Give each TailorDB type a name that is unique across all TailorDB namespaces in the application.",
+        context: {
+          kind: "tailordb-type",
+          duplicates: [
+            {
+              name: "User",
+              definitions: [
+                {
+                  file: "/app/analytics/User.ts",
+                  exportName: "user",
+                  source: 'namespace "analytics"',
+                },
+                { file: "/app/main/User.ts", exportName: "user", source: 'namespace "main"' },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+  });
+
+  test("reports every duplicated type name in one error", () => {
     expect(() =>
       assertUniqueLocalTailorDBTypeNames({
-        tailorDBServices: [localService("main", ["User"]), localService("analytics", ["User"])],
+        tailorDBServices: [
+          localService("main", ["User", "Order", "Event"]),
+          localService("analytics", ["User", "Order"]),
+        ],
       }),
-    ).toThrow(/namespace "main".*namespace "analytics"/);
+    ).toThrow(
+      expect.objectContaining({
+        code: "DEFINITION_NAME_DUPLICATE",
+        message: expect.stringMatching(
+          /^Duplicate TailorDB type name "Order" found:\n(?: {2}- .*\n){2}Duplicate TailorDB type name "User" found:\n(?: {2}- .*\n?){2}$/,
+        ),
+        context: {
+          kind: "tailordb-type",
+          duplicates: [
+            {
+              name: "Order",
+              definitions: [
+                expect.objectContaining({ file: "/app/analytics/Order.ts" }),
+                expect.objectContaining({ file: "/app/main/Order.ts" }),
+              ],
+            },
+            {
+              name: "User",
+              definitions: [
+                expect.objectContaining({ file: "/app/analytics/User.ts" }),
+                expect.objectContaining({ file: "/app/main/User.ts" }),
+              ],
+            },
+          ],
+        },
+      }),
+    );
   });
 });
 
@@ -149,7 +206,24 @@ describe("assertUniqueTailorDBTypeNamesWithExternal", () => {
         tailorDBServices: [localService("main", ["User"])],
         externalTailorDBNamespaces: ["shared"],
       }),
-    ).rejects.toThrow(/Table "User" is defined more than once/);
+    ).rejects.toMatchObject({
+      code: "DEFINITION_NAME_DUPLICATE",
+      message: expect.stringMatching(
+        /^Duplicate TailorDB type name "User" found:\n {2}- external namespace "shared"\n {2}- .*User\.ts \(export: user, namespace "main"\)$/,
+      ),
+      context: {
+        kind: "tailordb-type",
+        duplicates: [
+          {
+            name: "User",
+            definitions: [
+              { source: 'external namespace "shared"' },
+              { file: "/app/main/User.ts", exportName: "user", source: 'namespace "main"' },
+            ],
+          },
+        ],
+      },
+    });
   });
 
   test("rejects duplicate type names between external namespaces", async () => {
@@ -167,7 +241,7 @@ describe("assertUniqueTailorDBTypeNamesWithExternal", () => {
         tailorDBServices: [],
         externalTailorDBNamespaces: ["shared-a", "shared-b"],
       }),
-    ).rejects.toThrow(/external namespace "shared-a".*external namespace "shared-b"/);
+    ).rejects.toThrow(/external namespace "shared-a".*external namespace "shared-b"/s);
   });
 
   test("validates planned external namespaces without fetching remote types", async () => {
@@ -183,7 +257,7 @@ describe("assertUniqueTailorDBTypeNamesWithExternal", () => {
         externalTailorDBNamespaces: ["shared"],
         plannedExternalTailorDBServices: [localService("shared", ["User"])],
       }),
-    ).rejects.toThrow(/namespace "local".*external namespace "shared"/);
+    ).rejects.toThrow(/namespace "local".*external namespace "shared"/s);
     expect(client.listTailorDBTypes).not.toHaveBeenCalled();
   });
 });

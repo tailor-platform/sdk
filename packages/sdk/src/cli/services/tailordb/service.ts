@@ -1,9 +1,14 @@
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
+import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { importUserModule } from "#/cli/shared/user-modules";
-import { atUserModule, definitionInvalidError } from "#/cli/shared/validation-errors";
+import {
+  assertUniqueDefinitionNames,
+  atUserModule,
+  definitionInvalidError,
+} from "#/cli/shared/validation-errors";
 import { flattenZodIssues, formatIssueList } from "#/cli/shared/zod-issues";
 import {
   pickTailorDBTypeSchemaKeys,
@@ -18,7 +23,7 @@ import { getRawPluginTableName } from "#/plugin/guards";
 import { assertDefined } from "#/utils/assert";
 import { isSdkBranded } from "#/utils/brand";
 import { precompileTailorDBTypeScripts } from "./hooks-validate-bundler";
-import { formatTailorDBTypeSourceInfo } from "./type-name-validation";
+import { formatTailorDBTypeSourceInfo, tailorDBTypeDefinitionSource } from "./type-name-validation";
 import type {
   TypeSourceInfo,
   TypeSourceInfoEntry,
@@ -81,6 +86,8 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
   let types: Record<string, TailorDBType> = {};
   const typeSourceInfo = Object.create(null) as TypeSourceInfo;
   const pluginAttachments: Map<string, PluginAttachment[]> = new Map();
+  let registrations: { rawTypesKey: string; tableName: string; sourceInfo: TypeSourceInfoEntry }[] =
+    [];
   let loadPromise: Promise<Record<string, TailorDBType> | undefined> | undefined;
 
   const registerRawType = (
@@ -89,23 +96,26 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     type: TailorDBTypeSchemaOutput,
     sourceInfo: TypeSourceInfoEntry,
   ): void => {
-    const existingSourceInfo = Object.hasOwn(typeSourceInfo, tableName)
-      ? typeSourceInfo[tableName]
-      : undefined;
-    if (existingSourceInfo) {
-      const firstSource = formatTailorDBTypeSourceInfo(existingSourceInfo) ?? "unknown source";
-      const secondSource = formatTailorDBTypeSourceInfo(sourceInfo) ?? "unknown source";
-      throw new Error(
-        `Duplicate TailorDB table name "${tableName}" detected in TailorDB service "${namespace}". ` +
-          `First: ${firstSource}. Second: ${secondSource}. ` +
-          "TailorDB table names must be unique across all TailorDB files in a service.",
-      );
+    registrations.push({ rawTypesKey, tableName, sourceInfo });
+    if (Object.hasOwn(typeSourceInfo, tableName)) {
+      return;
     }
 
     assertDefined(rawTypes[rawTypesKey], `raw table entry missing for key: ${rawTypesKey}`)[
       tableName
     ] = type;
     typeSourceInfo[tableName] = sourceInfo;
+  };
+
+  const assertUniqueTypeNames = (): void => {
+    assertUniqueDefinitionNames({
+      kind: "tailordb-type",
+      namespace,
+      definitions: registrations.map(({ tableName, sourceInfo }) => ({
+        name: tableName,
+        ...tailorDBTypeDefinitionSource(sourceInfo),
+      })),
+    });
   };
 
   // Plugin-emitted tables are runtime values the schema has never seen, unlike
@@ -115,10 +125,13 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
   const parsePluginTable = (table: unknown, origin: string): TailorDBTypeSchemaOutput => {
     const result = TailorDBTypeSchema.safeParse(pickTailorDBTypeSchemaKeys(table));
     if (!result.success) {
-      throw new Error(
-        `TailorDB table ${origin} in TailorDB service "${namespace}" failed schema validation:\n${formatIssueList(flattenZodIssues(result.error.issues))}`,
-        { cause: result.error },
-      );
+      const issues = flattenZodIssues(result.error.issues);
+      throw CLIError({
+        code: "PLUGIN_TABLE_INVALID",
+        message: `TailorDB table ${origin} in TailorDB service "${namespace}" failed schema validation:\n${formatIssueList(issues)}`,
+        context: { namespace, issues },
+        cause: result.error,
+      });
     }
     return result.data;
   };
@@ -188,9 +201,11 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       }
     }
     if (errors.length > 0) {
-      throw new Error(
-        `TailorDB permission configuration errors in service "${namespace}":\n${errors.map((e) => `  - ${e}`).join("\n")}`,
-      );
+      throw CLIError({
+        code: "TAILORDB_PERMISSION_INVALID",
+        message: `TailorDB permission configuration errors in service "${namespace}":\n${errors.map((e) => `  - ${e}`).join("\n")}`,
+        context: { namespace, errors },
+      });
     }
   };
 
@@ -366,6 +381,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
           } else {
             await Promise.all(typeFiles.map((typeFile) => loadTypeFile(typeFile, tsconfig)));
           }
+          assertUniqueTypeNames();
           doParseTypes();
           warnOmittedPermit();
           validateRequiredPermissions();
@@ -382,7 +398,11 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
 
       const successfulResults = results.map(({ pluginId, config, result }) => {
         if (!result.success) {
-          throw new Error(result.error);
+          throw CLIError({
+            code: "PLUGIN_NAMESPACE_HOOK_FAILED",
+            message: result.error,
+            context: { pluginId, namespace },
+          });
         }
         return { pluginId, config, output: result.output };
       });
@@ -413,6 +433,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         }
       }
       rawTypes[pluginGeneratedKey] = createRawTypesByName();
+      registrations = registrations.filter(({ rawTypesKey }) => rawTypesKey !== pluginGeneratedKey);
 
       for (const { pluginId, config, kind, table } of parsedGeneratedTables) {
         const sourceInfo: TypeSourceInfoEntry = {
@@ -431,6 +452,8 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
           `  Generated: ${styles.success(table.name)} by namespace plugin ${styles.info(pluginId)}`,
         );
       }
+
+      assertUniqueTypeNames();
 
       // Re-parse tables to include namespace plugin tables
       if (parsedGeneratedTables.length > 0 || hadPreviousGeneratedTables) {

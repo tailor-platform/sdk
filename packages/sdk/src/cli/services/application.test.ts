@@ -166,8 +166,60 @@ describe("AI Gateway authNamespace default", () => {
     };
 
     expect(() => defineApplication({ config })).toThrow(
-      /AI Gateway "my-aigateway" has no "authNamespace"/,
+      expect.objectContaining({
+        code: "CONFIG_INVALID",
+        message:
+          "Invalid Tailor config:\n  - aiGateways.0.authNamespace: No Auth service is configured to default to",
+        suggestion: 'Define an Auth service, or set "authNamespace" explicitly.',
+        context: expect.objectContaining({ configKey: "aiGateways", name: "my-aigateway" }),
+      }),
     );
+  });
+
+  test("reports secrets without a value as CONFIG_INVALID", () => {
+    const config = {
+      ...defineConfig({
+        name: "testApp",
+        secrets: defineSecretManager({
+          vault: { first: undefined, second: "set", third: null },
+        } as never),
+      }),
+      path: "tailor.config.ts",
+    };
+
+    expect(() => defineApplication({ config })).toThrow(
+      expect.objectContaining({
+        code: "CONFIG_INVALID",
+        message:
+          "Invalid Tailor config:\n  - secrets.vaults.vault.first: Has no value\n  - secrets.vaults.vault.third: Has no value",
+        suggestion: expect.stringContaining("ignoreNullishValues: true"),
+        context: expect.objectContaining({ configKey: "secrets" }),
+      }),
+    );
+  });
+
+  test("reports a userProfile type no TailorDB namespace defines as CONFIG_INVALID", async () => {
+    const userType = db.table("User", { email: db.string().unique() });
+    const config = {
+      ...defineConfig({
+        name: "testApp",
+        db: { main: { files: [] }, other: { files: [] } },
+        auth: defineAuth("my-auth", {
+          userProfile: { type: userType, usernameField: "email" },
+          machineUsers: {},
+        }),
+      }),
+      path: "tailor.config.ts",
+    };
+
+    await expect(
+      defineApplication({ config }).authService!.resolveNamespaces(),
+    ).rejects.toMatchObject({
+      code: "CONFIG_INVALID",
+      message:
+        'Invalid Tailor config:\n  - auth.userProfile.type: Type "User" not found in any TailorDB namespace',
+      context: { file: "tailor.config.ts", configKey: "auth", name: "my-auth" },
+    });
   });
 });
 
@@ -525,9 +577,11 @@ export default createExecutor({
       path: path.join(tmpDir, "tailor.config.ts"),
     };
 
-    await expect(loadApplication({ config })).rejects.toThrow(
-      /Invalid wait point key "needsReview"/,
-    );
+    await expect(loadApplication({ config })).rejects.toMatchObject({
+      code: "WORKFLOW_WAIT_POINT_KEY_INVALID",
+      message: expect.stringMatching(/Invalid wait point key "needsReview"/),
+      context: { failures: [expect.stringMatching(/Invalid wait point key "needsReview"/)] },
+    });
   });
 });
 
