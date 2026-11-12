@@ -96,6 +96,53 @@ describe("idp array -> single IdP migration review", () => {
 
   test.each([
     [
+      "an empty array after a spread",
+      "export default defineConfig({\n  ...base,\n  idp: [],\n});\n",
+      "an earlier spread",
+    ],
+    [
+      "a spread after an idp that is written out",
+      "export default defineConfig({\n  idp: shopIdp,\n  ...base,\n});\n",
+      "a later spread",
+    ],
+    [
+      "a spread after a one-element array",
+      "export default defineConfig({\n  idp: [shopIdp],\n  ...base,\n});\n",
+      "a later spread",
+    ],
+  ])(
+    "reports %s for a manual migration because it may change which idp applies",
+    (_name, body, reason) => {
+      const { transformed, findings } = review(body);
+
+      expect(transformed).toBeNull();
+      expect(findings).toHaveLength(1);
+      expect(findings[0]?.message).toContain(reason);
+    },
+  );
+
+  test("keeps the contents of a multiline template literal when it moves the element", () => {
+    const { transformed } = review(
+      [
+        "export default defineConfig({",
+        "  idp: [",
+        '    defineIdp("my-idp", {',
+        "      description: `first",
+        "    second`,",
+        '      clients: ["c"],',
+        "    }),",
+        "  ],",
+        "});",
+        "",
+      ].join("\n"),
+    );
+
+    expect(transformed).toContain("`first\n    second`");
+    expect(transformed).toContain('  idp: defineIdp("my-idp", {\n');
+  });
+
+  test.each([
+    [
       "an idp that is a single IdP declared in the file",
       'const idp = defineIdp("shop-idp", { clients: ["c"] });\nexport default defineConfig({\n  idp,\n});\n',
     ],

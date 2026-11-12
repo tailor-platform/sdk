@@ -14,13 +14,33 @@ import type { Edit, SgNode } from "@ast-grep/napi";
 
 const IDP_KEY = "idp";
 
-function reindent(text: string, fromIndent: string, toIndent: string): string {
+type Range = { start: number; end: number };
+
+function reindent(text: string, fromIndent: string, toIndent: string, literals: Range[]): string {
+  let offset = 0;
   return text
     .split("\n")
-    .map((line, index) =>
-      index > 0 && line.startsWith(fromIndent) ? toIndent + line.slice(fromIndent.length) : line,
-    )
+    .map((line, index) => {
+      const lineStart = offset;
+      offset += line.length + 1;
+      const insideLiteral = literals.some(
+        (literal) => literal.start < lineStart && lineStart < literal.end,
+      );
+      return index > 0 && !insideLiteral && line.startsWith(fromIndent)
+        ? toIndent + line.slice(fromIndent.length)
+        : line;
+    })
     .join("\n");
+}
+
+function literalRanges(element: SgNode): Range[] {
+  const origin = element.range().start.index;
+  return element
+    .findAll({ rule: { any: [{ kind: "template_string" }, { kind: "string" }] } })
+    .map((literal) => ({
+      start: literal.range().start.index - origin,
+      end: literal.range().end.index - origin,
+    }));
 }
 
 function isExternalDeclaration(element: SgNode): boolean {
@@ -55,6 +75,12 @@ function analyzeConfig(source: string, config: SgNode): Analysis {
       ? { reason: "a spread or computed key may carry an idp array", node: config }
       : null;
   }
+  const entryIndex = entries.indexOf(entry);
+  const hasUnknownKey = (candidates: SgNode[]) =>
+    candidates.some((candidate) => entryKey(candidate) === null);
+  if (hasUnknownKey(entries.slice(entryIndex + 1))) {
+    return { reason: "a later spread or computed key may override idp", node: entry };
+  }
   const value = entry.kind() === "pair" ? pairValue(entry) : null;
   const referenced =
     entry.kind() === "shorthand_property_identifier"
@@ -78,6 +104,12 @@ function analyzeConfig(source: string, config: SgNode): Analysis {
     return { reason: "the array is built with a spread", node: entry };
   }
   if (elements.length === 0) {
+    if (hasUnknownKey(entries.slice(0, entryIndex))) {
+      return {
+        reason: "an earlier spread or computed key may supply an idp that the empty array hides",
+        node: entry,
+      };
+    }
     const range = ownLineRange(source, entry);
     return range
       ? { edits: [{ startPos: range.start, endPos: range.end, insertedText: "" }] }
@@ -98,6 +130,7 @@ function analyzeConfig(source: string, config: SgNode): Analysis {
     only.text(),
     ownLineIndent(source, only) ?? "",
     ownLineIndent(source, entry) ?? "",
+    literalRanges(only),
   );
   return {
     edits: [
