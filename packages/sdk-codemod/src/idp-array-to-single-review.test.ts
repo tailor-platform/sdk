@@ -109,6 +109,42 @@ describe("idp array -> single IdP migration review", () => {
     expect(findings[0]?.message).toContain("wrapped");
   });
 
+  test.each([
+    [
+      "an array in the true branch of a conditional",
+      "export default defineConfig({\n  idp: enabled ? [shopIdp] : undefined,\n});\n",
+    ],
+    [
+      "an array in the false branch of a conditional",
+      "export default defineConfig({\n  idp: enabled ? shopIdp : [shopIdp, customerIdp],\n});\n",
+    ],
+    ["an array after ??", "export default defineConfig({\n  idp: override ?? [shopIdp],\n});\n"],
+    ["an array after &&", "export default defineConfig({\n  idp: enabled && [shopIdp],\n});\n"],
+    [
+      "a local array in a conditional branch",
+      "const idps = [shopIdp];\nexport default defineConfig({\n  idp: enabled ? idps : undefined,\n});\n",
+    ],
+    [
+      "an array in a nested conditional",
+      "export default defineConfig({\n  idp: a ? shopIdp : b ? [shopIdp] : undefined,\n});\n",
+    ],
+  ])("reports %s for a manual migration", (_name, body) => {
+    const { transformed, findings } = review(body);
+
+    expect(transformed).toBeNull();
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("branch");
+  });
+
+  test("leaves a conditional whose branches are single IdPs alone", () => {
+    expect(
+      review("export default defineConfig({\n  idp: enabled ? shopIdp : customerIdp,\n});\n"),
+    ).toEqual({ transformed: null, findings: [] });
+    expect(
+      review("export default defineConfig({\n  idp: enabled ? shopIdp : undefined,\n});\n"),
+    ).toEqual({ transformed: null, findings: [] });
+  });
+
   test("reports an idp that names a local array declared with as const", () => {
     const { transformed, findings } = review(
       "const idps = [shopIdp] as const;\nexport default defineConfig({\n  idp: idps,\n});\n",

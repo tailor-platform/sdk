@@ -84,6 +84,32 @@ function isLocalArray(config: SgNode, name: string): boolean {
     });
 }
 
+const BRANCHING_OPERATORS: ReadonlySet<string> = new Set(["??", "||", "&&"]);
+const TERNARY_PUNCTUATION: ReadonlySet<string> = new Set(["?", ":", "comment"]);
+
+function branchesOf(node: SgNode): SgNode[] | null {
+  if (node.kind() === "ternary_expression") {
+    const [, consequence, alternative] = node
+      .children()
+      .filter((child) => !TERNARY_PUNCTUATION.has(String(child.kind())));
+    return [consequence, alternative].filter((branch): branch is SgNode => branch !== undefined);
+  }
+  if (node.kind() === "binary_expression") {
+    const [left, operator, right] = node.children();
+    return operator && BRANCHING_OPERATORS.has(operator.text()) && left && right
+      ? [left, right]
+      : null;
+  }
+  return null;
+}
+
+function holdsArray(config: SgNode, node: SgNode): boolean {
+  const value = unwrapExpression(node);
+  if (value.kind() === "array") return true;
+  if (value.kind() === "identifier") return isLocalArray(config, value.text());
+  return (branchesOf(value) ?? []).some((branch) => holdsArray(config, branch));
+}
+
 function analyzeConfig(source: string, config: SgNode): Analysis {
   const entries = objectEntries(config);
   const entry = entries.find((candidate) => entryKey(candidate) === IDP_KEY);
@@ -102,6 +128,11 @@ function analyzeConfig(source: string, config: SgNode): Analysis {
   const value = written ? unwrapExpression(written) : null;
   if (written && value && value !== written && value.kind() === "array") {
     return { reason: "the array is wrapped in a cast, satisfies, or parentheses", node: entry };
+  }
+  if (value && branchesOf(value) !== null) {
+    return holdsArray(config, value)
+      ? { reason: "a conditional or fallback branch of idp is an array", node: entry }
+      : null;
   }
   const referenced =
     entry.kind() === "shorthand_property_identifier"
