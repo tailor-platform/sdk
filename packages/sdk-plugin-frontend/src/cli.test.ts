@@ -1,9 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, test } from "vitest";
+import { beforeAll, describe, expect, test } from "vitest";
 
 const cliEntry = fileURLToPath(new URL("../../sdk/bin/tailor.mjs", import.meta.url));
 const frontendEntry = new URL("../dist/index.js", import.meta.url).href;
@@ -49,6 +49,20 @@ function runGenerate(cwd: string, args: string[] = []) {
 }
 
 describe("frontend config errors through the CLI", () => {
+  beforeAll(() => {
+    for (const entry of [
+      frontendEntry,
+      sdkEntry,
+      new URL("../../sdk/dist/cli/main.mjs", import.meta.url),
+    ]) {
+      if (!existsSync(new URL(entry))) {
+        throw new Error(
+          `Missing build output: ${fileURLToPath(entry)}. Run \`pnpm build\` from the repository root first.`,
+        );
+      }
+    }
+  });
+
   test("preserves duplicate diagnostics in JSON output", () => {
     using fixture = duplicateConfig();
 
