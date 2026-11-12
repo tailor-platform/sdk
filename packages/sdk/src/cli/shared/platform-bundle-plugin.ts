@@ -37,18 +37,26 @@ const KYSELY_TEMPORAL_GATE =
   /(?<![\w$.])globalThis\.process\?\.env\.__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL\b/g;
 
 const DEPLOY_ONLY_CLI_ENTRY = "@tailor-platform/sdk/cli";
-const DEPLOY_ONLY_CLI_STUB = "\0tailor-platform-sdk-cli-stub";
+const DEPLOY_ONLY_CLI_STUB_PREFIX = "\0tailor-platform-sdk-cli-stub:";
 
-function collectCliImports(code: string, id: string, names: Set<string>): void {
+function importedName(name: { type: string; name?: string; value?: unknown }): string {
+  return name.type === "Identifier" ? String(name.name) : String(name.value);
+}
+
+function collectCliImports(code: string, id: string): Set<string> {
+  const names = new Set<string>();
   const { program } = parseSync(id, code);
   for (const node of program.body) {
-    if (node.type !== "ImportDeclaration" || node.source.value !== DEPLOY_ONLY_CLI_ENTRY) continue;
-    for (const specifier of node.specifiers) {
-      if (specifier.type !== "ImportSpecifier") continue;
-      const imported = specifier.imported;
-      names.add(imported.type === "Identifier" ? imported.name : String(imported.value));
+    if (node.type === "ImportDeclaration" && node.source.value === DEPLOY_ONLY_CLI_ENTRY) {
+      for (const specifier of node.specifiers) {
+        if (specifier.type === "ImportSpecifier") names.add(importedName(specifier.imported));
+      }
+    }
+    if (node.type === "ExportNamedDeclaration" && node.source?.value === DEPLOY_ONLY_CLI_ENTRY) {
+      for (const specifier of node.specifiers) names.add(importedName(specifier.local));
     }
   }
+  return names;
 }
 
 /**
@@ -73,11 +81,13 @@ export function createPlatformBundleDefinePlugin(
 ): rolldown.Plugin {
   const dateDefaultLiteral = dateDefault === "legacy" ? "undefined" : JSON.stringify(dateDefault);
   const kyselyTemporalLiteral = kyselyTemporal ? '"true"' : "undefined";
-  const cliImports = new Set<string>();
+  const cliImportsByImporter = new Map<string, Set<string>>();
   return {
     name: "tailor-platform-bundle-define",
     transform(code, id) {
-      if (code.includes(DEPLOY_ONLY_CLI_ENTRY)) collectCliImports(code, id, cliImports);
+      if (code.includes(DEPLOY_ONLY_CLI_ENTRY)) {
+        cliImportsByImporter.set(id, collectCliImports(code, id));
+      }
       if (!code.includes("__TAILOR_PLATFORM_BUNDLE")) return null;
       const source = new RolldownMagicString(code)
         .replaceAll(GATE, "true")
@@ -90,15 +100,17 @@ export function createPlatformBundleDefinePlugin(
         map: source.generateMap({ hires: "boundary" }).toString(),
       };
     },
-    resolveId(source) {
+    resolveId(source, importer) {
       if (source === "node:async_hooks") return { id: source, external: true };
-      if (source === DEPLOY_ONLY_CLI_ENTRY)
-        return { id: DEPLOY_ONLY_CLI_STUB, moduleSideEffects: false };
+      if (source === DEPLOY_ONLY_CLI_ENTRY && importer) {
+        return { id: DEPLOY_ONLY_CLI_STUB_PREFIX + importer, moduleSideEffects: false };
+      }
       return null;
     },
     load(id) {
-      if (id !== DEPLOY_ONLY_CLI_STUB) return null;
-      return [...cliImports].map((name) => `export const ${name} = undefined;`).join("\n");
+      if (!id.startsWith(DEPLOY_ONLY_CLI_STUB_PREFIX)) return null;
+      const names = cliImportsByImporter.get(id.slice(DEPLOY_ONLY_CLI_STUB_PREFIX.length)) ?? [];
+      return [...names].map((name) => `export const ${name} = undefined;`).join("\n");
     },
   };
 }

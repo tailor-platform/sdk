@@ -101,6 +101,50 @@ describe("buildFunctionBundle CLI entry point", () => {
     expect(code).not.toContain("@tailor-platform/sdk/cli");
   });
 
+  test("bundles a function whose helper re-exports names from the CLI entry point", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-reexport-");
+    writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeFunction(
+      tmp.dir,
+      `import { apiCall, getOAuth2Client } from "./helper";\n` +
+        `export default async () => ["OWN_SOURCE", typeof apiCall, typeof getOAuth2Client];\n`,
+    );
+    fs.writeFileSync(
+      path.join(path.dirname(sourceFile), "helper.ts"),
+      `export { apiCall, getOAuth2Client as getOAuth2Client } from "@tailor-platform/sdk/cli";\n`,
+    );
+
+    const code = await bundle(sourceFile);
+
+    expect(code).toContain("OWN_SOURCE");
+    expect(code).not.toContain("@tailor-platform/sdk/cli");
+  });
+
+  test("bundles modules at different depths that import different names from the CLI entry point", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-depths-");
+    writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeFunction(
+      tmp.dir,
+      `import { apiCall } from "@tailor-platform/sdk/cli";\n` +
+        `import { first } from "./first";\n` +
+        `export default async () => ["OWN_SOURCE", typeof apiCall, first];\n`,
+    );
+    const dir = path.dirname(sourceFile);
+    fs.writeFileSync(
+      path.join(dir, "first.ts"),
+      `import { second } from "./second";\nexport const first = second;\n`,
+    );
+    fs.writeFileSync(
+      path.join(dir, "second.ts"),
+      `import { getOAuth2Client } from "@tailor-platform/sdk/cli";\nexport const second = typeof getOAuth2Client;\n`,
+    );
+
+    const code = await bundle(sourceFile);
+
+    expect(code).toContain("OWN_SOURCE");
+    expect(code).not.toContain("@tailor-platform/sdk/cli");
+  });
+
   test("still rejects a named import that another module does not export", async () => {
     using tmp = tempCwd("sdk-function-bundle-missing-export-");
     const sourceFile = writeFunction(
