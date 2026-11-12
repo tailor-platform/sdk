@@ -223,7 +223,7 @@ describe("query", () => {
         query: "   ",
       }),
     ).rejects.toMatchObject({
-      code: "invalid_sql",
+      code: "INVALID_SQL",
       message: "SQL parse error: Unexpected end of input",
       suggestion:
         'If your table name is a reserved keyword (e.g. User), wrap it in double quotes: SELECT * FROM "User"',
@@ -241,7 +241,7 @@ describe("query", () => {
         query: 'select "machine user does not exist" from from',
       }),
     ).rejects.toMatchObject({
-      code: "invalid_sql",
+      code: "INVALID_SQL",
       message: expect.stringMatching(/^SQL parse error: /),
     });
   });
@@ -386,8 +386,34 @@ describe("query", () => {
       }),
     ).rejects.toMatchObject({
       name: "CLIError",
+      code: "INVALID_SQL",
       message: "SQL parse error.",
       suggestion: "expected token at line 1",
+    });
+  });
+
+  test("reports an invalid SQL namespace when its schema cannot be loaded", async () => {
+    const { executeScript } = await import("../shared/script-executor");
+    vi.mocked(executeScript).mockResolvedValue({
+      success: false,
+      logs: "",
+      result: "",
+      error: "sqlaccess error: failed to fetch schema: query returned an unexpected number of rows",
+    });
+
+    await expect(
+      query({
+        workspaceId: "workspace-1",
+        configPath: "tailor.config.ts",
+        engine: "sql",
+        machineUser: "bot",
+        query: "select 1",
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_NAMESPACE",
+      message: "Failed to load TailorDB schema for namespace 'tailordb'.",
+      suggestion:
+        "Ensure the query references TailorDB tables from a single namespace and re-apply if needed.",
     });
   });
 
@@ -718,7 +744,10 @@ describe("query", () => {
         engine: "sql",
         query: 'select * from "User";',
       }),
-    ).rejects.toThrow("Machine user 'profile-bot' was not found.");
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      message: "Machine user 'profile-bot' was not found.",
+    });
   });
 
   test("throws 'Machine user is required' error when no machine user source resolves", async () => {

@@ -8,7 +8,7 @@ function toErrorMessage(error: unknown): string {
   return String(error);
 }
 
-const INVALID_SQL = "invalid_sql";
+const INVALID_SQL = "INVALID_SQL";
 
 /**
  * Build the error for SQL the local parser rejects, under the code of the server's parse failure.
@@ -46,7 +46,7 @@ export function mapQueryExecutionError(args: MapQueryExecutionErrorArgs): Error 
 
   if (message.includes("machine user does not exist")) {
     return CLIError({
-      code: "not_found",
+      code: "NOT_FOUND",
       message: `Machine user '${args.machineUser ?? "unknown"}' was not found.`,
       suggestion: "Run `tailor machineuser list` and use an existing name.",
     });
@@ -59,7 +59,7 @@ export function mapQueryExecutionError(args: MapQueryExecutionErrorArgs): Error 
     )
   ) {
     return CLIError({
-      code: "invalid_namespace",
+      code: "INVALID_NAMESPACE",
       message: `Failed to load TailorDB schema for namespace '${args.namespace}'.`,
       suggestion:
         "Ensure the query references TailorDB tables from a single namespace and re-apply if needed.",

@@ -13,7 +13,7 @@ describe("extractTableNamesFromSql", () => {
 
     expect(() => extractTableNamesFromSql(sql)).toThrow(
       expect.objectContaining({
-        code: "invalid_sql",
+        code: "INVALID_SQL",
         message: expect.stringMatching(/^SQL parse error: /),
         cause: expect.any(Error),
       }),
@@ -25,7 +25,7 @@ describe("extractTableNamesFromSql", () => {
 
     expect(() => extractTableNamesFromSql(sql)).toThrow(
       expect.objectContaining({
-        code: "invalid_sql",
+        code: "INVALID_SQL",
         message: expect.not.stringContaining("double quotes"),
         suggestion:
           'If your table name is a reserved keyword (e.g. User), wrap it in double quotes: SELECT * FROM "User"',
