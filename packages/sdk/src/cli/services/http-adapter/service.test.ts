@@ -60,6 +60,40 @@ export const shared = (value: string) => value.toUpperCase();
     expect(service.adapters[0]!.adapter.name).toBe("adapter");
   });
 
+  test("rejects two files declaring the same adapter name", async () => {
+    const source = `
+import { createHttpAdapter } from "@tailor-platform/sdk";
+export default createHttpAdapter({
+  name: "duplicate",
+  pathPattern: "/a",
+  input: { get: () => ({ query: "{}" }) },
+});
+`;
+    const fileA = writeAdapter("a.ts", source);
+    const fileB = writeAdapter("b.ts", source);
+
+    const service = createHttpAdapterService({
+      config: { files: [fileA, fileB] },
+      baseDir: process.cwd(),
+    });
+
+    await expect(service.loadAdapters()).rejects.toMatchObject({
+      code: "DEFINITION_NAME_DUPLICATE",
+      context: {
+        kind: "http-adapter",
+        duplicates: [
+          {
+            name: "duplicate",
+            definitions: [
+              { file: fileA, exportName: "default" },
+              { file: fileB, exportName: "default" },
+            ],
+          },
+        ],
+      },
+    });
+  });
+
   test("accepts a computed (non-literal) name as long as it is valid at runtime", async () => {
     const file = writeAdapter(
       "dynamic-name.ts",

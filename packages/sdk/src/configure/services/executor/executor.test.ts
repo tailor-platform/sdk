@@ -12,6 +12,7 @@ import {
   recordUpdatedTrigger,
   recordTrigger,
   resolverExecutedTrigger,
+  idpUserCreatedTrigger,
   idpUserTrigger,
   authAccessTokenTrigger,
   workflowExecutionTrigger,
@@ -1119,6 +1120,21 @@ describe("idpUserTrigger (multi-event)", () => {
     expect(trigger.idp).toBe("my-idp");
   });
 
+  test("accepts external: true with an idp name and leaves it out of the trigger", () => {
+    const trigger = idpUserTrigger({
+      events: ["created"],
+      idp: "backoffice-idp",
+      external: true,
+    });
+    expect(trigger.idp).toBe("backoffice-idp");
+    expect(trigger).not.toHaveProperty("external");
+  });
+
+  test("external: true without an idp name is a type error", () => {
+    // @ts-expect-error idp is required when external is true
+    idpUserTrigger({ events: ["created"], external: true });
+  });
+
   test("args have kind discriminant", () => {
     createExecutor({
       name: "test",
@@ -1634,5 +1650,18 @@ describe("workflowTarget", () => {
         },
       },
     });
+  });
+});
+
+describe("idpUserCreatedTrigger", () => {
+  test("accepts external: true with an idp name and leaves it out of the trigger", () => {
+    const trigger = idpUserCreatedTrigger({ idp: "backoffice-idp", external: true });
+    expect(trigger.idp).toBe("backoffice-idp");
+    expect(trigger).not.toHaveProperty("external");
+  });
+
+  test("external: true without an idp name is a type error", () => {
+    // @ts-expect-error idp is required when external is true
+    idpUserCreatedTrigger({ external: true });
   });
 });

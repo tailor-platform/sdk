@@ -5,6 +5,7 @@ import { z } from "zod";
 import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
 import { errorToJson } from "./error-json";
 import {
+  assertUniqueDefinitionNames,
   atUserModule,
   configInvalidError,
   configIssuesError,
@@ -76,6 +77,99 @@ describe("error factories", () => {
 
     expect(error?.message).toBe("Invalid syntax: Expression expected");
     expect(error && getErrorDiagnostics(error).location).toEqual({ file, line: 3 });
+  });
+});
+
+describe("assertUniqueDefinitionNames", () => {
+  const file = (name: string) => path.join(process.cwd(), "resolvers", name);
+  const definition = (name: string, fileName: string, exportName = "default") => ({
+    name,
+    file: file(fileName),
+    exportName,
+  });
+
+  test("accepts definitions with distinct names", () => {
+    expect(() =>
+      assertUniqueDefinitionNames({
+        kind: "resolver",
+        namespace: "main",
+        definitions: [definition("add", "add.ts"), definition("sub", "sub.ts")],
+      }),
+    ).not.toThrow();
+  });
+
+  test("reports every definition of every duplicated name", () => {
+    const definitions = [
+      definition("sub", "sub.ts"),
+      definition("add", "c.ts"),
+      definition("add", "a.ts"),
+      definition("sub", "sub-copy.ts"),
+      definition("add", "b.ts"),
+      definition("mul", "mul.ts"),
+    ];
+
+    let error: unknown;
+    try {
+      assertUniqueDefinitionNames({ kind: "resolver", namespace: "main", definitions });
+    } catch (thrown) {
+      error = thrown;
+    }
+
+    expect(error).toMatchObject({
+      code: "DEFINITION_NAME_DUPLICATE",
+      message: [
+        'Duplicate resolver name "add" found in namespace "main":',
+        "  - resolvers/a.ts",
+        "  - resolvers/b.ts",
+        "  - resolvers/c.ts",
+        'Duplicate resolver name "sub" found in namespace "main":',
+        "  - resolvers/sub-copy.ts",
+        "  - resolvers/sub.ts",
+      ].join("\n"),
+      suggestion: "Give each resolver a unique name within its namespace.",
+      context: {
+        kind: "resolver",
+        namespace: "main",
+        duplicates: [
+          {
+            name: "add",
+            definitions: ["a.ts", "b.ts", "c.ts"].map((name) => ({
+              file: file(name),
+              exportName: "default",
+            })),
+          },
+          {
+            name: "sub",
+            definitions: ["sub-copy.ts", "sub.ts"].map((name) => ({
+              file: file(name),
+              exportName: "default",
+            })),
+          },
+        ],
+      },
+    });
+    expect(getErrorDiagnostics(error as Error).location).toBeUndefined();
+  });
+
+  test("names the export of a definition that is not the default export", () => {
+    expect(() =>
+      assertUniqueDefinitionNames({
+        kind: "workflow-job",
+        definitions: [
+          definition("sync", "jobs.ts", "syncJob"),
+          definition("sync", "jobs.ts", "retryJob"),
+        ],
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        message: [
+          'Duplicate workflow job name "sync" found:',
+          "  - resolvers/jobs.ts (export: retryJob)",
+          "  - resolvers/jobs.ts (export: syncJob)",
+        ].join("\n"),
+        suggestion: "Give each workflow job a unique name.",
+      }),
+    );
   });
 });
 

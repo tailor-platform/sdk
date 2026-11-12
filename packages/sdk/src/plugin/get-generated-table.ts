@@ -7,6 +7,7 @@ import {
   definesBothTailorDBNamespaceHooks,
   hasDefinitionTimeHooks,
 } from "#/parser/plugin-config/definition-hooks";
+import { loadFilesWithIgnores, type FileLoadConfig } from "#/utils/file-loader";
 import { tailorDBNamespaceHookOf } from "./guards";
 import { PluginManager } from "./manager";
 import type { TailorAnyDBType } from "#/configure/services/tailordb/types";
@@ -126,8 +127,7 @@ async function loadAndCacheConfig(configPath: string): Promise<ConfigCache | nul
 // Namespace resolution
 // ========================================
 
-interface DbNamespaceConfig {
-  files?: string[];
+interface DbNamespaceConfig extends Partial<FileLoadConfig> {
   external?: boolean;
 }
 
@@ -154,21 +154,16 @@ async function resolveNamespaceForTable(
     // Skip external namespaces (no files to resolve)
     if (dbConfig.external || !dbConfig.files) continue;
 
-    for (const pattern of dbConfig.files) {
-      const absolutePattern = path.resolve(configDir, pattern);
-      let matchedFiles: string[];
-      try {
-        matchedFiles = fs.globSync(absolutePattern);
-      } catch {
-        continue;
-      }
-
-      for (const file of matchedFiles) {
-        const mod = await import(pathToFileURL(file).href);
-        for (const exported of Object.values(mod)) {
-          if (exported === sourceTable) {
-            return namespace;
-          }
+    const files = loadFilesWithIgnores(
+      { files: dbConfig.files, ignores: dbConfig.ignores },
+      configDir,
+      console.warn,
+    );
+    for (const file of files) {
+      const mod = await import(pathToFileURL(file).href);
+      for (const exported of Object.values(mod)) {
+        if (exported === sourceTable) {
+          return namespace;
         }
       }
     }
