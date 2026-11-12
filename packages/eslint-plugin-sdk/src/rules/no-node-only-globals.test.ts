@@ -80,7 +80,7 @@ describe("ignores files that define no platform function", () => {
   });
 });
 
-describe("checks files that define no platform function when `check` is `all-files`", () => {
+describe("checks files that define no platform function, without suggestions, when `check` is `all-files`", () => {
   runRuleTests(RULE, {
     valid: [
       {
@@ -92,7 +92,7 @@ describe("checks files that define no platform function when `check` is `all-fil
       {
         code: "export const region = process.env.REGION;",
         options: [{ check: "all-files" }],
-        errors: [PROCESS],
+        errors: ['"process" is not available in the Tailor Platform runtime.'],
       },
     ],
   });

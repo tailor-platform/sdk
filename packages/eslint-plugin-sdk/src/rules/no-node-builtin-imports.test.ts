@@ -95,15 +95,13 @@ describe("ignores files that define no platform function", () => {
   });
 });
 
-describe("checks files that define no platform function when `check` is `all-files`", () => {
+describe("checks files that define no platform function, without suggestions, when `check` is `all-files`", () => {
   runRuleTests(RULE, {
     invalid: [
       {
         code: HELPER,
         options: [{ check: "all-files" }],
-        errors: [
-          '"node:fs" is not available in the Tailor Platform runtime. File system access is not available in the Tailor Platform runtime.',
-        ],
+        errors: ['"node:fs" is not available in the Tailor Platform runtime.'],
       },
     ],
   });

@@ -289,8 +289,9 @@ const digest = await crypto.subtle.digest("SHA-256", data);
 By default, both rules only act on files that define a platform function, that is, files that call
 `createResolver`, `createExecutor`, `createWorkflowJob`, or `createHttpAdapter`. Configuration,
 scripts, and tests are left alone, and so are helper modules imported by a function file; the build
-still checks the bundled output. In a file that only defines HTTP adapters the messages omit the
-suggestions, which are written for `body` functions. References that reach the global through
+still checks the bundled output. The messages carry suggestions written for `body` functions, so
+they omit them in a file that defines no resolver, executor, or workflow job, such as one that only
+defines HTTP adapters. References that reach the global through
 `globalThis.process`, and references guarded by `typeof process !== "undefined"`, are not reported.
 
 To check helper modules as well, set the `check` option to `"all-files"` in an override whose
