@@ -64,10 +64,14 @@ function writeUnloadableCliPackage(projectDir: string): void {
     JSON.stringify({
       name: "@tailor-platform/sdk",
       type: "module",
-      exports: { "./cli": "./cli.node" },
+      exports: { "./cli": "./cli.mjs" },
     }),
   );
-  fs.writeFileSync(path.join(packageDir, "cli.node"), Buffer.from([0xff, 0xfe, 0x00, 0x80]));
+  fs.writeFileSync(
+    path.join(packageDir, "cli.mjs"),
+    `import "./binding.node";\nexport { apiCall, getOAuth2Client as getOAuth2Client };\nconst apiCall = () => 1;\nconst getOAuth2Client = () => 2;\n`,
+  );
+  fs.writeFileSync(path.join(packageDir, "binding.node"), Buffer.from([0xff, 0xfe, 0x00, 0x80]));
 }
 
 describe("buildFunctionBundle CLI entry point", () => {
@@ -163,6 +167,34 @@ describe("buildFunctionBundle CLI entry point", () => {
 
     expect(code).toContain("@tailor-platform/sdk/cli only works where tailor deploy runs");
     expect(code).not.toContain("import");
+  });
+
+  test("bundles a function whose helper re-exports everything from the CLI entry point", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-export-star-");
+    writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeModules(tmp.dir, {
+      "function.ts":
+        `import { apiCall } from "./helper";\n` +
+        `const deployOnly = () => apiCall();\n` +
+        `export default async () => "OWN_SOURCE";\n`,
+      "helper.ts": `export * from "@tailor-platform/sdk/cli";\n`,
+    });
+
+    await expect(bundle(sourceFile)).resolves.toContain("OWN_SOURCE");
+  });
+
+  test("bundles a function that takes the CLI entry point as a namespace or a dynamic import", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-namespace-");
+    writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeFunction(
+      tmp.dir,
+      `import * as cli from "@tailor-platform/sdk/cli";\n` +
+        `const viaNamespace = () => cli.apiCall();\n` +
+        `const viaDynamic = async () => (await import("@tailor-platform/sdk/cli")).apiCall();\n` +
+        `export default async () => "OWN_SOURCE";\n`,
+    );
+
+    await expect(bundle(sourceFile)).resolves.toContain("OWN_SOURCE");
   });
 
   test("still rejects a named import that another module does not export", async () => {

@@ -1,52 +1,59 @@
+import * as fs from "node:fs/promises";
 import { parseSync } from "oxc-parser";
 import type { Plugin } from "rolldown";
 
 const CLI_ENTRY = "@tailor-platform/sdk/cli";
 const STUB_PREFIX = "\0tailor-platform-sdk-cli-stub:";
+const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
 
 function exportedName(name: { type: string; name?: string; value?: unknown }): string {
   return name.type === "Identifier" ? String(name.name) : String(name.value);
 }
 
-function cliNamesOf(code: string, id: string): Set<string> {
+function exportedNamesOf(code: string, file: string): string[] {
   const names = new Set<string>();
-  const { program } = parseSync(id, code);
+  const { program } = parseSync(file, code);
   for (const node of program.body) {
-    if (node.type === "ImportDeclaration" && node.source.value === CLI_ENTRY) {
-      for (const specifier of node.specifiers) {
-        if (specifier.type === "ImportSpecifier") names.add(exportedName(specifier.imported));
-      }
+    if (node.type === "ExportAllDeclaration" && node.exported) {
+      names.add(exportedName(node.exported));
     }
-    if (node.type === "ExportNamedDeclaration" && node.source?.value === CLI_ENTRY) {
-      for (const specifier of node.specifiers) names.add(exportedName(specifier.local));
+    if (node.type !== "ExportNamedDeclaration") continue;
+    for (const specifier of node.specifiers) names.add(exportedName(specifier.exported));
+    const declaration = node.declaration;
+    if (declaration?.type === "VariableDeclaration") {
+      for (const declarator of declaration.declarations) {
+        if (declarator.id.type === "Identifier") names.add(declarator.id.name);
+      }
+    } else if (declaration && "id" in declaration && declaration.id?.type === "Identifier") {
+      names.add(declaration.id.name);
     }
   }
-  return names;
+  return [...names].filter((name) => name !== "default" && IDENTIFIER.test(name));
 }
 
 /**
- * Replace `@tailor-platform/sdk/cli` with an empty module per importing module, declaring only the
- * names that module asks for. The entry point only works where `tailor deploy` runs, and rolldown
- * loads every module it can reach before it removes unused code, so the real module (which needs a
- * native binding) would fail the bundle even when the import is never used on the Platform.
+ * Replace `@tailor-platform/sdk/cli` with a module that declares the same names as throwing
+ * functions. The entry point only works where `tailor deploy` runs, and rolldown loads every
+ * module it can reach before it removes unused code, so the real module (which needs a native
+ * binding) would fail the bundle even when the import is never used on the Platform. Declaring
+ * every name keeps named, re-exported, namespace and dynamic imports resolvable whatever order
+ * the modules are found in.
  * @returns Rolldown plugin that stubs the CLI entry point
  */
 export function createDeployOnlyCliStubPlugin(): Plugin {
-  const namesByImporter = new Map<string, Set<string>>();
   return {
     name: "tailor-deploy-only-cli-stub",
-    transform(code, id) {
-      if (code.includes(CLI_ENTRY)) namesByImporter.set(id, cliNamesOf(code, id));
-      return null;
-    },
-    resolveId(source, importer) {
+    async resolveId(source, importer) {
       if (source !== CLI_ENTRY || !importer) return null;
-      return { id: STUB_PREFIX + importer, moduleSideEffects: false };
+      const resolved = await this.resolve(source, importer, { skipSelf: true });
+      if (!resolved || resolved.external) return null;
+      const id = resolved.id.startsWith(STUB_PREFIX) ? resolved.id : STUB_PREFIX + resolved.id;
+      return { id, moduleSideEffects: false };
     },
-    load(id) {
+    async load(id) {
       if (!id.startsWith(STUB_PREFIX)) return null;
-      const names = namesByImporter.get(id.slice(STUB_PREFIX.length)) ?? [];
-      return [...names]
+      const file = id.slice(STUB_PREFIX.length);
+      return exportedNamesOf(await fs.readFile(file, "utf8"), file)
         .map(
           (name) =>
             `export function ${name}() { throw new Error("${CLI_ENTRY} only works where tailor deploy runs"); }`,

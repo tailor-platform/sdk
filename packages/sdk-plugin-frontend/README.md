@@ -93,15 +93,13 @@ Pass an async function as `build` when the build needs more than a shell command
 as writing a runtime configuration file into the assets before they are uploaded:
 
 ```typescript
-import { writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { apiCall } from "@tailor-platform/sdk/cli";
 
 frontendPlugin({
   site: website,
   workingDir: "../web",
   distDir: "dist",
-  build: async ({ site, application, workspaceId, distDir, exec }) => {
+  build: async ({ site, application, workspaceId, exec }) => {
     await exec("pnpm run build");
     const { data } = await apiCall({
       endpoint: "ListCustomDomains",
@@ -109,13 +107,27 @@ frontendPlugin({
     });
     const { customDomains } = data as { customDomains: { domain: string }[] };
     const origin = customDomains[0] ? `https://${customDomains[0].domain}` : site.url;
-    await writeFile(
-      join(distDir, "config.json"),
-      JSON.stringify({ origin, apiUrl: application.url }),
-    );
+    await exec("node scripts/write-config.mjs", {
+      env: { ORIGIN: origin, API_URL: application.url ?? "" },
+    });
   },
 });
 ```
+
+`scripts/write-config.mjs` in the frontend's directory writes the file into `dist`:
+
+```javascript
+import { writeFile } from "node:fs/promises";
+
+await writeFile(
+  "dist/config.json",
+  JSON.stringify({ origin: process.env.ORIGIN, apiUrl: process.env.API_URL }),
+);
+```
+
+`tailor.config.ts` is also bundled into functions that run on the Platform, such as auth
+hooks, so it cannot import Node.js modules like `node:fs`. Do file work in a script that
+`exec` runs, as above.
 
 The function runs after `env` resolves and before the upload, with the same context `env`
 receives plus `env` (the values it returned), the absolute `workingDir` and `distDir`, a
