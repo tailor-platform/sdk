@@ -34,7 +34,7 @@ Before raising the minimum supported migration format, identify a released bridg
 
 ## E2E Tests
 
-Most E2E suites require Platform credentials, and each of those creates its own disposable workspace. CI deletes the workspaces in a cleanup step keyed by the run ID; `globalSetup`'s teardown deletes them only when `TAILOR_PLATFORM_TOKEN` is set, so after a local run under `tailor login`, delete them yourself (the `e2e-test` skill's wrapper does this).
+Most E2E suites require Platform credentials, and each of those creates its own disposable workspace. CI deletes the workspaces in a cleanup step keyed by the run ID; `globalSetup`'s teardown also deletes them, authenticating the same way the tests do (`TAILOR_PLATFORM_TOKEN` or the `tailor login` session). If no credentials can be resolved at teardown it only warns, and the workspaces are left for prune to reclaim after their 24-hour expiry.
 
 Located in `packages/sdk/e2e/`. CI runs these in the `sdk-e2e.yml` workflow (pull requests and pushes to main); `sdk-metrics.yml` additionally runs the `e2e-coverage` project under coverage.
 
