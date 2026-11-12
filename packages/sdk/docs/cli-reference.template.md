@@ -79,6 +79,10 @@ the kind, and `error.context.duplicates` lists each duplicated name and its defi
 `file` and `exportName` when available. For IdPs, static websites, and AI Gateways, each definition also has a
 `path` array identifying the config entry, such as `["staticWebsites", 2]`.
 
+`FRONTEND_SITE_DUPLICATE` means `frontendPlugin()` selects a site more than once.
+`error.context.pluginId` identifies the plugin, and `error.context.duplicates` lists each
+duplicated `name` with its zero-based argument `indices`. Configure each site only once.
+
 The exit code separates a mistyped command from a failed one without parsing output: `0` on success,
 `2` when the CLI rejects the command line itself, such as an unknown option or subcommand, an
 unexpected argument, or an option value that fails validation (including one set through its

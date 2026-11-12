@@ -40,7 +40,7 @@ The configure module's import boundaries enforced by oxlint:
 1. **Cannot import from `cli/`** — CLI is deployment tooling, not user runtime
 2. **Cannot import from `parser/`** (except `parser/**/types.ts`, type-only) — prevents Zod from leaking into user bundles
 3. **Cannot import from `plugin/`** (except `plugin/types.ts`, type-only) — prevents plugin system code from bundling into user output
-4. **Can only import `utils/brand` or `utils/test/*`** — other utils helpers may have dependencies that would inflate user bundle sizes
+4. **Can only import allowlisted `utils/` modules** — pure helpers such as `brand` and `plugin-validation-error` are explicitly allowed by oxlint; other utils helpers may have dependencies that would inflate user bundle sizes
 
 ## Design Decisions
 

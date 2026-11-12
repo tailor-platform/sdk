@@ -24,6 +24,22 @@ export default myPlugin; // Required: must be default export
 
 This is required so that other plugins and generation-time hooks can use plugin-generated TailorDB tables via `getGeneratedTable()`.
 
+When a plugin factory rejects its options while loading the config, throw
+`PluginValidationError` from `@tailor-platform/sdk` to give the failure a
+stable code, recovery suggestion, and JSON context. The CLI prints the code,
+message, and suggestion at the config file; `--json` also includes the context.
+
+```typescript
+import { PluginValidationError } from "@tailor-platform/sdk";
+
+throw new PluginValidationError({
+  code: "MY_PLUGIN_OPTIONS_INVALID",
+  message: "The output directory is empty.",
+  suggestion: "Set a non-empty output directory.",
+  context: { pluginId: "@my-company/my-plugin", option: "outputDir" },
+});
+```
+
 ## Plugin Interface
 
 ```typescript

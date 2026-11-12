@@ -91,13 +91,31 @@ describe("frontendPlugin", () => {
   test.each(["", "   "])("rejects a blank build command %j", (build) => {
     expect(() => frontendPlugin({ site: "web", distDir: "dist", build })).toThrow(/build/);
   });
-  test("rejects duplicate site names across string and object definitions", () => {
+  test("reports every duplicate site and argument index across string and object definitions", () => {
     expect(() =>
       frontendPlugin(
         { site: "web", distDir: "dist" },
+        { site: "admin", distDir: "admin" },
         { site: { name: "web" } as StaticWebsiteConfig, distDir: "other" },
+        { site: "admin", distDir: "admin-copy" },
+        { site: "web", distDir: "web-copy" },
+        { site: "landing", distDir: "landing" },
       ),
-    ).toThrow(/web/);
+    ).toThrow(
+      expect.objectContaining({
+        code: "FRONTEND_SITE_DUPLICATE",
+        message:
+          'Duplicate frontend site "web" at argument indices: 0, 2, 4\nDuplicate frontend site "admin" at argument indices: 1, 3',
+        suggestion: "Configure each site only once in frontendPlugin().",
+        context: {
+          pluginId: "@tailor-platform/frontend",
+          duplicates: [
+            { name: "web", indices: [0, 2, 4] },
+            { name: "admin", indices: [1, 3] },
+          ],
+        },
+      }),
+    );
   });
   test("builds with awaited environment values in a working directory relative to the config", async () => {
     const build = "pnpm build";

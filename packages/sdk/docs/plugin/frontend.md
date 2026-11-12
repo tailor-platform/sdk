@@ -108,6 +108,11 @@ least one frontend is required, and each `distDir` must be non-empty. A `build` 
 
 ## Deploy behavior and failures
 
+Selecting the same site more than once fails while loading the config, including
+during `tailor generate`. With `--json`, the error code is `FRONTEND_SITE_DUPLICATE`;
+`error.context.duplicates` lists every duplicated `name` and its zero-based argument
+`indices` in `frontendPlugin()`. Configure each site only once.
+
 The plugin runs even if no platform resources changed. It does not run during
 dry-run, build-only, generation, or migration test deployments. Dry-run lists the
 plugin as a pending deploy hook.
