@@ -293,36 +293,54 @@ const syntaxDiagnostic = {
   endColumn: 15,
 };
 
+const otherPluginValidationErrorBrand = Symbol.for("tailor-platform/sdk:plugin-validation-error");
+
+class OtherPluginValidationError extends Error {
+  readonly [otherPluginValidationErrorBrand] = true;
+  readonly code: string;
+  readonly suggestion?: string;
+  readonly context?: PluginValidationError["context"];
+
+  constructor(options: ConstructorParameters<typeof PluginValidationError>[0]) {
+    super(options.message);
+    this.code = options.code;
+    this.suggestion = options.suggestion;
+    this.context = options.context;
+  }
+}
+
 describe("atConfigSource", () => {
-  test.each([undefined, { file: "/repo/plugin-options.ts", line: 9 }])(
-    "preserves plugin validation diagnostics with source location %j",
-    (location) => {
-      const context = { pluginId: "example", duplicates: [{ name: "web", indices: [0, 2] }] };
-      const original = new PluginValidationError({
-        code: "EXAMPLE_INVALID",
-        message: "Invalid example options",
-        suggestion: "Fix the example options.",
-        context,
-      });
-      if (location) withErrorDiagnostics(original, { location });
-
-      const result = atConfigSource(original, "/repo/tailor.config.ts");
-      const expectedLocation = location ?? { file: "/repo/tailor.config.ts" };
-      const source = path.relative(process.cwd(), expectedLocation.file);
-      const line = location ? ":9" : "";
-
-      expect(result).toMatchObject({ name: "CLIError", cause: original });
-      expect(getErrorDiagnostics(result as Error).location).toEqual(expectedLocation);
-      expect(errorToJson(result)).toEqual({
-        error: {
+  describe.each([PluginValidationError, OtherPluginValidationError])("with %s", (ErrorClass) => {
+    test.each([undefined, { file: "/repo/plugin-options.ts", line: 9 }])(
+      "preserves plugin validation diagnostics with source location %j",
+      (location) => {
+        const context = { pluginId: "example", duplicates: [{ name: "web", indices: [0, 2] }] };
+        const original = new ErrorClass({
           code: "EXAMPLE_INVALID",
-          message: `${source}${line}: Invalid example options`,
+          message: "Invalid example options",
           suggestion: "Fix the example options.",
           context,
-        },
-      });
-    },
-  );
+        });
+        if (location) withErrorDiagnostics(original, { location });
+
+        const result = atConfigSource(original, "/repo/tailor.config.ts");
+        const expectedLocation = location ?? { file: "/repo/tailor.config.ts" };
+        const source = path.relative(process.cwd(), expectedLocation.file);
+        const line = location ? ":9" : "";
+
+        expect(result).toMatchObject({ name: "CLIError", cause: original });
+        expect(getErrorDiagnostics(result as Error).location).toEqual(expectedLocation);
+        expect(errorToJson(result)).toEqual({
+          error: {
+            code: "EXAMPLE_INVALID",
+            message: `${source}${line}: Invalid example options`,
+            suggestion: "Fix the example options.",
+            context,
+          },
+        });
+      },
+    );
+  });
 
   test("reports unparsable source as SYNTAX_INVALID at the line it failed on", () => {
     const result = atConfigSource(syntaxDiagnostic, "/repo/tailor.config.ts");

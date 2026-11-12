@@ -3,7 +3,7 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { AppConfigSchema } from "#/parser/app-config/schema";
 import { PluginConfigSchema } from "#/parser/plugin-config/index";
-import { PluginValidationError } from "#/utils/plugin-validation-error";
+import { isPluginValidationError } from "#/utils/plugin-validation-error";
 import { loadConfigPath } from "./context";
 import { assertEnvHasNoSecrets, resolveEnvValue } from "./env-secret-scan";
 import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
@@ -184,7 +184,7 @@ export async function loadConfig(
  * @returns An Error carrying the source location the failure points at
  */
 export function atConfigSource(error: unknown, resolvedPath: string): unknown {
-  if (error instanceof PluginValidationError) {
+  if (isPluginValidationError(error)) {
     return atUserModule(
       withErrorDiagnostics(
         CLIError({
