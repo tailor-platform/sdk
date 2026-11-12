@@ -35,26 +35,12 @@ export type PlatformClientConfig = {
 
 const tokenPlatformConfigs = new Map<string, PlatformClientConfig>();
 
-const warnedDeprecatedEnvNames = new Set<string>();
-
-function readRenamedEnv(name: string, deprecatedName: string): string | undefined {
-  const value = process.env[name];
-  if (value) return value;
-  const deprecatedValue = process.env[deprecatedName];
-  if (!deprecatedValue) return undefined;
-  if (!warnedDeprecatedEnvNames.has(deprecatedName)) {
-    warnedDeprecatedEnvNames.add(deprecatedName);
-    logger.warn(`${deprecatedName} is deprecated. Please use ${name} instead.`);
-  }
-  return deprecatedValue;
-}
-
 function getEnvPlatformUrl(): string | undefined {
-  return readRenamedEnv("TAILOR_PLATFORM_URL", "PLATFORM_URL");
+  return process.env.TAILOR_PLATFORM_URL || undefined;
 }
 
 function getEnvOAuth2ClientId(): string | undefined {
-  return readRenamedEnv("TAILOR_PLATFORM_OAUTH2_CLIENT_ID", "PLATFORM_OAUTH2_CLIENT_ID");
+  return process.env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID || undefined;
 }
 
 export function normalizeBaseUrl(value: string): string {

@@ -502,6 +502,8 @@ describe("notification banner", () => {
     // The project config path, not the stored login, which always lives under xdgConfig.
     vi.stubEnv("TAILOR_CONFIG_PATH", "./tailor.config.ts");
     vi.stubEnv("TAILOR_PLATFORM_WORKSPACE_ID", "254ebca4-f29f-4744-bb1a-ac294c8e34c6");
+    vi.stubEnv("TAILOR_TOKEN", "ignored-token");
+    vi.stubEnv("PLATFORM_URL", "https://api.ignored.example");
 
     await printNotificationBanner({});
 

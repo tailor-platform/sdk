@@ -3,7 +3,6 @@ import { runCommand } from "@politty/zod";
 import { afterAll, afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { loadAuthStatus, writePlatformConfig } from "#/cli/shared/context";
 import { isCLIError } from "#/cli/shared/errors";
-import { logger } from "#/cli/shared/logger";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { statusCommand } from "./status";
 import type * as TokenStoreModule from "#/cli/shared/token-store";
@@ -101,15 +100,11 @@ describe("auth status", () => {
     });
   });
 
-  test("warns when using the deprecated environment token", async () => {
+  test("ignores TAILOR_TOKEN", async () => {
     writeConfig();
     vi.stubEnv("TAILOR_TOKEN", "environment-secret");
-    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
 
-    await expect(loadAuthStatus()).resolves.toMatchObject({ tokenStatus: "environment" });
-    expect(warnSpy).toHaveBeenCalledWith(
-      "TAILOR_TOKEN is deprecated. Please use TAILOR_PLATFORM_TOKEN instead.",
-    );
+    await expect(loadAuthStatus()).resolves.toMatchObject({ tokenStatus: "valid" });
   });
 
   test.each([
