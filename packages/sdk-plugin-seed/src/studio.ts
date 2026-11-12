@@ -20,7 +20,7 @@ import { assertSeedDataDirectory } from "./jsonl";
 import type { DatasetSelection } from "./datasets";
 
 function hasSchemaFiles(dir: string): boolean {
-  return readdirSync(dir).some((name) => name.endsWith(".schema.ts"));
+  return readdirSync(dir).some((name) => /\.schema\.[mc]?ts$/.test(name));
 }
 
 // The CLI's signal handler awaits the command's `cleanup` hook and then exits the process,

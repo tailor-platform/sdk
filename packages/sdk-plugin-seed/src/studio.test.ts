@@ -118,6 +118,30 @@ describe("seedStudioCommand", () => {
     );
   });
 
+  test.each([".schema.mts", ".schema.cts"])(
+    "recognizes %s as the schema files of the directory above a dataset opened by path",
+    async (extension) => {
+      writeFileSync(path.join(dataDir, `Item${extension}`), "export const schema = {};\n");
+
+      await runStudio([cogs]);
+
+      expect(startStudioServer).toHaveBeenCalledWith(
+        expect.objectContaining({ dataDir: cogs, schemaDir: dataDir }),
+      );
+    },
+  );
+
+  test("keeps a dataset's own .schema.mts files instead of taking the schemas above it", async () => {
+    writeFileSync(path.join(dataDir, "Item.schema.ts"), "export const schema = {};\n");
+    writeFileSync(path.join(cogs, "Item.schema.mts"), "export const schema = {};\n");
+
+    await runStudio([cogs]);
+
+    expect(startStudioServer).toHaveBeenCalledWith(
+      expect.not.objectContaining({ schemaDir: expect.anything() }),
+    );
+  });
+
   test("keeps the schema files next to the given directory when it has its own", async () => {
     writeFileSync(path.join(dataDir, "Item.schema.ts"), "export const schema = {};\n");
     writeFileSync(path.join(cogs, "Item.schema.ts"), "export const schema = {};\n");
