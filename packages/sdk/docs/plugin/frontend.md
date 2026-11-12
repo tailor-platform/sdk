@@ -103,9 +103,10 @@ frontendPlugin({
   site: website,
   workingDir: "../web",
   distDir: "dist",
-  build: async ({ site, application, workspaceId, exec }) => {
+  build: async ({ site, application, workspaceId, profile, exec }) => {
     await exec("pnpm run build");
     const { data } = await apiCall({
+      profile,
       endpoint: "ListCustomDomains",
       body: JSON.stringify({ workspaceId, staticWebsiteName: site.name }),
     });
@@ -141,9 +142,13 @@ function rejects, the frontend is not uploaded and later frontends and deploy ho
 run, as with a failed build command.
 
 To call the Platform from the function, use the functions exported from
-`@tailor-platform/sdk/cli`, such as `apiCall`, which works like `tailor api`. They authenticate
-the way the `tailor` command does: `TAILOR_PLATFORM_TOKEN`, then the profile (`TAILOR_PLATFORM_PROFILE`),
-then the logged-in user. Importing it in `tailor.config.ts` is safe. Code that runs on the Platform, such as a resolver or an auth hook, cannot use it: a call there throws an error saying it only works where `tailor deploy` runs.
+`@tailor-platform/sdk/cli`, such as `apiCall`, which works like `tailor api`. Pass them the
+`profile` the function receives, which is the profile `tailor deploy` ran with (`--profile`),
+so they call the Platform as the same user. Without a profile they use `TAILOR_PLATFORM_TOKEN`,
+then `TAILOR_PLATFORM_PROFILE`, then the logged-in user, as the `tailor` command does.
+Importing it in `tailor.config.ts` is safe. Code that runs on the Platform, such as a resolver
+or an auth hook, cannot use it: a call there throws an error saying it only works where
+`tailor deploy` runs.
 
 Running `tailor deploy` again after a failure runs the function again, so write what it
 does to be repeatable: look up or create a resource instead of always creating a new one.

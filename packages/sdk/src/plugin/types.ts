@@ -492,6 +492,8 @@ export interface PluginExecResult {
  */
 export interface DeployedContext<PluginConfig = unknown> {
   workspaceId: string;
+  /** Profile `tailor deploy` ran with (`--profile`). Absent when the deploy was run without one. */
+  profile?: string;
   /** Application whose config registers this plugin. Only its static websites can be published. */
   application: DeployedApplication<PublishableStaticWebsite>;
   /** Every application in this deploy run, including the registering one. */

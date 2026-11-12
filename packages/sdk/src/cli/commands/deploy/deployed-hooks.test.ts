@@ -102,6 +102,27 @@ describe("deployed hooks", () => {
       }),
     );
   });
+  test("passes the profile the deploy ran with to the hook", async () => {
+    const { client } = clientMock();
+    const hook = vi.fn();
+    await runDeployedHooks({
+      client,
+      workspaceId: "ws",
+      targets: [target([plugin(hook)])],
+      profile: "ci",
+    });
+    expect(hook).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ profile: "ci" }));
+  });
+
+  test("leaves the profile out of the hook context when the deploy was run without one", async () => {
+    const { client } = clientMock();
+    const hook = vi.fn();
+    await runDeployedHooks({ client, workspaceId: "ws", targets: [target([plugin(hook)])] });
+    expect(hook).toHaveBeenCalledExactlyOnceWith(
+      expect.not.objectContaining({ profile: expect.anything() }),
+    );
+  });
+
   test("lets the hook run shell commands on the deploying machine", async () => {
     const { client } = clientMock();
     const [stored] = await runDeployedHooks({

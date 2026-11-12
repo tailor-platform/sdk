@@ -89,6 +89,7 @@ export function frontendPlugin(
             application: ctx.application,
             applications: ctx.applications,
             workspaceId: ctx.workspaceId,
+            ...(ctx.profile !== undefined && { profile: ctx.profile }),
             env,
             workingDir,
             distDir,

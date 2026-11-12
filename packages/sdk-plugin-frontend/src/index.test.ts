@@ -52,6 +52,7 @@ function context(frontends: FrontendDefinition[]) {
   const logger = { info: vi.fn(), warn: vi.fn(), success: vi.fn() };
   const ctx: DeployedContext<FrontendDefinition[]> = {
     workspaceId: "ws",
+    profile: "ci",
     application,
     applications: [application, otherApplication],
     configPath: application.configPath,
@@ -247,6 +248,7 @@ describe("frontendPlugin", () => {
         application: ctx.application,
         applications: ctx.applications,
         workspaceId: "ws",
+        profile: "ci",
         env: { FRONTEND_TEST_VALUE: "value" },
         workingDir: join(root, "apps/web"),
         distDir: join(root, "apps/web/dist"),

@@ -20,6 +20,7 @@ interface LoadDeployedApplicationsParams {
 }
 interface RunDeployedHooksParams extends LoadDeployedApplicationsParams {
   applications?: readonly DeployedApplication[];
+  profile?: string;
 }
 
 interface DeployedHookOutput {
@@ -295,6 +296,7 @@ export async function runDeployedHooks(
         span.setAttribute("app.name", target.application.name);
         return hook.call(plugin, {
           workspaceId,
+          ...(params.profile !== undefined && { profile: params.profile }),
           application: publishable(
             assertDefined(applications[index], "Deployed application missing"),
           ),

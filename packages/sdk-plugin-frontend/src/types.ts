@@ -38,6 +38,8 @@ export type FrontendExecOptions = Partial<PluginExecOptions>;
 
 /** Passed to a function `build`. */
 export interface FrontendBuildContext extends FrontendEnvContext {
+  /** Profile `tailor deploy` ran with (`--profile`). Pass it to `@tailor-platform/sdk/cli` functions that take a profile. Absent when the deploy was run without one. */
+  profile?: string;
   /** Values the `env` callback returned. Empty when the frontend has no `env`. */
   env: Record<string, string>;
   /** Absolute directory commands run in by default. */
