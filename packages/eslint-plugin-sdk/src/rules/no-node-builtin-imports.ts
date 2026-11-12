@@ -4,7 +4,12 @@ import {
   isNodeBuiltinImport,
 } from "@tailor-platform/shared/node-builtins";
 import { type AstCallExpression, type AstNode, staticString } from "../lib/ast.js";
-import { platformFunctionFactories, suggestsAlternatives } from "../lib/platform-functions.js";
+import {
+  checkOptionSchema,
+  checksAllFiles,
+  platformFunctionFactories,
+  suggestsAlternatives,
+} from "../lib/platform-functions.js";
 import { configureImportTracker } from "../lib/sdk-bindings.js";
 import type { Rule } from "eslint";
 
@@ -37,7 +42,7 @@ const rule = {
     messages: {
       unavailable: "{{message}}",
     },
-    schema: [],
+    schema: [checkOptionSchema],
   },
   create(context) {
     const imports = configureImportTracker(context);
@@ -62,7 +67,7 @@ const rule = {
       CallExpression: (node) => calls.push(node),
       "Program:exit"() {
         const factories = platformFunctionFactories(imports, calls);
-        if (factories.size === 0) return;
+        if (factories.size === 0 && !checksAllFiles(context)) return;
         const describe = suggestsAlternatives(factories)
           ? getNodeBuiltinMessage
           : describeUnavailable;

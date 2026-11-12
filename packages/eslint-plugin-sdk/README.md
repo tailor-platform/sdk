@@ -286,12 +286,41 @@ Correct:
 const digest = await crypto.subtle.digest("SHA-256", data);
 ```
 
-Both rules only act on files that define a platform function, that is, files that call
+By default, both rules only act on files that define a platform function, that is, files that call
 `createResolver`, `createExecutor`, `createWorkflowJob`, or `createHttpAdapter`. Configuration,
 scripts, and tests are left alone, and so are helper modules imported by a function file; the build
 still checks the bundled output. In a file that only defines HTTP adapters the messages omit the
 suggestions, which are written for `body` functions. References that reach the global through
 `globalThis.process`, and references guarded by `typeof process !== "undefined"`, are not reported.
+
+To check helper modules as well, set the `check` option to `"all-files"` in an override whose
+`files` cover the code bundled into your functions. The rules then check every file the override
+matches, whether or not it defines a platform function; files outside it keep the default,
+`"definition-files"`. Test files inside those directories are checked too, so turn the rules off
+for them in a later override:
+
+```json
+{
+  "overrides": [
+    {
+      "files": ["src/resolver/**", "src/executor/**", "src/lib/**"],
+      "rules": {
+        "tailor-sdk/no-node-builtin-imports": ["warn", { "check": "all-files" }],
+        "tailor-sdk/no-node-only-globals": ["warn", { "check": "all-files" }]
+      }
+    },
+    {
+      "files": ["**/*.test.ts"],
+      "rules": {
+        "tailor-sdk/no-node-builtin-imports": "off",
+        "tailor-sdk/no-node-only-globals": "off"
+      }
+    }
+  ]
+}
+```
+
+With ESLint, set the same options in a flat config object whose `files` cover those directories.
 
 ### `no-plain-tailor-any-field-param` (warning)
 

@@ -1,5 +1,21 @@
 import type { AstCallExpression } from "./ast.js";
 import type { ImportTracker } from "./sdk-bindings.js";
+import type { Rule } from "eslint";
+
+interface CheckOption {
+  check?: "definition-files" | "all-files";
+}
+
+export const checkOptionSchema = {
+  type: "object" as const,
+  properties: { check: { enum: ["definition-files", "all-files"] } },
+  additionalProperties: false,
+};
+
+export function checksAllFiles(context: Rule.RuleContext): boolean {
+  const [option]: readonly (CheckOption | undefined)[] = context.options;
+  return option?.check === "all-files";
+}
 
 const PLATFORM_FUNCTION_FACTORIES: ReadonlySet<string> = new Set([
   "createExecutor",
