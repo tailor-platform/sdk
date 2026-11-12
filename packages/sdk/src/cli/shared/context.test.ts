@@ -685,13 +685,6 @@ describe("loadAccessToken", () => {
       expect(result).toBe(validToken);
     });
 
-    test("TAILOR_PLATFORM_TOKEN takes precedence over TAILOR_TOKEN", async () => {
-      vi.stubEnv("TAILOR_PLATFORM_TOKEN", validToken);
-      vi.stubEnv("TAILOR_TOKEN", otherToken);
-      const result = await loadAccessToken();
-      expect(result).toBe(validToken);
-    });
-
     test("TAILOR_PLATFORM_TOKEN takes precedence over profile", async () => {
       vi.stubEnv("TAILOR_PLATFORM_TOKEN", validToken);
       writePlatformConfig({
@@ -716,13 +709,9 @@ describe("loadAccessToken", () => {
   });
 
   describe("env.TAILOR_TOKEN", () => {
-    test("uses the deprecated TAILOR_TOKEN fallback", async () => {
+    test("ignores TAILOR_TOKEN", async () => {
       vi.stubEnv("TAILOR_TOKEN", validToken);
-      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-      await expect(loadAccessToken()).resolves.toBe(validToken);
-      expect(warnSpy).toHaveBeenCalledWith(
-        "TAILOR_TOKEN is deprecated. Please use TAILOR_PLATFORM_TOKEN instead.",
-      );
+      await expect(loadAccessToken()).rejects.toMatchObject({ code: "AUTH_TOKEN_NOT_FOUND" });
     });
   });
 

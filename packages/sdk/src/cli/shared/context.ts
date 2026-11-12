@@ -776,10 +776,10 @@ export async function loadMachineUserName(
 
 /**
  * Read the access token set through the environment, which takes precedence over any logged-in user.
- * @returns TAILOR_PLATFORM_TOKEN, or the deprecated TAILOR_TOKEN, when set
+ * @returns TAILOR_PLATFORM_TOKEN when set
  */
 export function readEnvironmentToken(): string | undefined {
-  return process.env.TAILOR_PLATFORM_TOKEN ?? process.env.TAILOR_TOKEN;
+  return process.env.TAILOR_PLATFORM_TOKEN;
 }
 
 /**
@@ -810,17 +810,13 @@ export async function loadStoredAccessTokenWithoutRefresh(opts: {
 /**
  * Load access token from environment variables, command options, or platform config.
  * In CLI context, profile env fallback is also handled by politty's arg env option.
- * Priority: env/TAILOR_PLATFORM_TOKEN > env/TAILOR_TOKEN (deprecated) > opts/profile > env/profile > config/currentUser > error
+ * Priority: env/TAILOR_PLATFORM_TOKEN > opts/profile > env/profile > config/currentUser > error
  * @param opts - Profile options
  * @returns Resolved access token
  */
 export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
   const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
   const envToken = readEnvironmentToken();
-  if (envToken && !process.env.TAILOR_PLATFORM_TOKEN) {
-    logger.warn("TAILOR_TOKEN is deprecated. Please use TAILOR_PLATFORM_TOKEN instead.");
-  }
-
   if (envToken) {
     logger.registerSecret(envToken);
     const platformConfig = await loadPlatformClientConfig({ profile, allowMissingProfile: true });
@@ -867,10 +863,6 @@ export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
 export async function loadAuthStatus(opts?: LoadAccessTokenOptions): Promise<AuthStatus> {
   const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
   const envToken = readEnvironmentToken();
-  if (envToken && !process.env.TAILOR_PLATFORM_TOKEN) {
-    logger.warn("TAILOR_TOKEN is deprecated. Please use TAILOR_PLATFORM_TOKEN instead.");
-  }
-
   if (envToken) {
     logger.registerSecret(envToken);
     const config = await readPlatformConfig().catch(() => undefined);
