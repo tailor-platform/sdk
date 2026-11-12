@@ -3,6 +3,7 @@ import * as path from "pathe";
 import { describe, expect, test, vi } from "vitest";
 import { createBundleCache } from "#/cli/cache/bundle-cache";
 import { createCacheStore } from "#/cli/cache/store";
+import { errorToJson } from "#/cli/shared/error-json";
 import { logger } from "#/cli/shared/logger";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
 import { normalizeFilePath, type StartContext } from "#/cli/shared/start-context";
@@ -179,6 +180,33 @@ export default async (input) => flow.start(
     }
   });
 
+  test("keeps the code of a .start() call the start transform cannot rewrite", async () => {
+    using tmp = tempCwd("sdk-function-bundle-start-undetectable-");
+    const workflowFile = path.join(tmp.dir, "src/flow.ts");
+    const sourceFile = writeFunction(
+      tmp.dir,
+      `import { flow } from "./flow";\nexport default async () => flow.start({});\n`,
+    );
+    fs.writeFileSync(workflowFile, `export const flow = { start: () => "UNTRANSFORMED" };\n`);
+    const startContext: StartContext = {
+      modules: new Map([
+        [
+          normalizeFilePath(workflowFile),
+          { sourceFile: workflowFile, localBindings: new Map(), exports: new Map() },
+        ],
+      ]),
+    };
+
+    const rejection = await bundle(sourceFile, { startContext }).catch((error: unknown) => error);
+
+    expect(errorToJson(rejection)).toMatchObject({
+      error: {
+        code: "WORKFLOW_START_TARGET_UNDETECTABLE",
+        message: expect.stringMatching(/^src\/function\.ts: flow\.start\(\) cannot be rewritten: /),
+        context: { importSource: "./flow", importedName: "flow" },
+      },
+    });
+  });
   test.each([undefined, "auth"])(
     "preserves error positions after .start() with auth namespace %s",
     async (authNamespace) => {

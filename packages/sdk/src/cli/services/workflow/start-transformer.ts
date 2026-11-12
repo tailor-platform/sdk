@@ -1,6 +1,8 @@
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { walkBindingAware } from "#/cli/shared/binding-aware-walk";
+import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import {
   normalizeFilePath,
@@ -21,6 +23,7 @@ import {
   getNamespaceStartCallInfo,
   getStartCallInfo,
 } from "./ast-utils";
+import type { HookFailures } from "#/cli/services/hook-failures";
 import type { Program } from "@oxc-project/types";
 import type { Plugin, RolldownMagicString } from "rolldown";
 
@@ -152,14 +155,20 @@ function undetectableStartCallError(
   { importSource, importedName }: UndetectableImport,
 ): Error {
   const exportLabel = importedName === "default" ? "default export" : `export "${importedName}"`;
-  return new Error(
-    `${calleeText}() in ${currentFilePath} cannot be rewritten: ` +
-      `"${importSource}" is a workflow file, but its ${exportLabel} is not a ` +
-      `workflow or job the build can detect. The build rewrites .start() on the file's ` +
-      `default-exported workflow (including one returned from a helper function) and on ` +
-      `workflows and jobs created in that file with createWorkflow({ name: "..." }) or ` +
-      `createWorkflowJob({ name: "...", body }) using a literal name; any other .start() ` +
-      `would fail at runtime after deploy.`,
+  return withErrorDiagnostics(
+    CLIError({
+      code: "WORKFLOW_START_TARGET_UNDETECTABLE",
+      message:
+        `${calleeText}() cannot be rewritten: "${importSource}" is a workflow file, but its ` +
+        `${exportLabel} is not a workflow or job the build can detect.`,
+      details:
+        `The build rewrites .start() on the file's default-exported workflow (including one ` +
+        `returned from a helper function) and on workflows and jobs created in that file with ` +
+        `createWorkflow({ name: "..." }) or createWorkflowJob({ name: "...", body }) using a ` +
+        `literal name; any other .start() would fail at runtime after deploy.`,
+      context: { file: currentFilePath, callee: calleeText, importSource, importedName },
+    }),
+    { location: { file: currentFilePath } },
   );
 }
 
@@ -311,6 +320,7 @@ export function transformStartCalls(
 
 export function createStartTransformPlugin(
   startContext: StartContext | undefined,
+  hookFailures: HookFailures,
 ): Plugin | undefined {
   if (!startContext || startContext.modules.size === 0) return undefined;
 
@@ -320,11 +330,13 @@ export function createStartTransformPlugin(
       filter: { id: { include: [/\.(ts|mts|cts|js|mjs|cjs)$/] } },
       handler(code, id) {
         if (!hasStartCall(code)) return null;
-        const transformed = transformStartCalls(code, startContext, id);
-        return {
-          code: transformed.toString(),
-          map: transformed.generateMap({ hires: "boundary" }).toString(),
-        };
+        return hookFailures.capture(() => {
+          const transformed = transformStartCalls(code, startContext, id);
+          return {
+            code: transformed.toString(),
+            map: transformed.generateMap({ hires: "boundary" }).toString(),
+          };
+        }, null);
       },
     },
   };

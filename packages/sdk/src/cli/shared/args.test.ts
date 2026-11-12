@@ -51,9 +51,18 @@ describe("loadEnvFiles", () => {
     });
 
     test("throws error when required file does not exist", () => {
-      expect(() => loadEnvFiles("nonexistent.env", undefined)).toThrow(
-        /Environment file not found/,
-      );
+      const envPath = path.resolve("nonexistent.env");
+      let error: unknown;
+      try {
+        loadEnvFiles("nonexistent.env", undefined);
+      } catch (thrown) {
+        error = thrown;
+      }
+      expect(error).toMatchObject({
+        code: "INVALID_ARGUMENTS",
+        message: `Environment file not found: ${envPath}`,
+        context: { file: envPath },
+      });
     });
 
     test("loads multiple files from array", () => {

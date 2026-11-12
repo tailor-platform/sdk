@@ -1232,7 +1232,10 @@ describe("planExecutor", () => {
 
       await expect(
         planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
-      ).rejects.toThrow("No Auth service configured");
+      ).rejects.toMatchObject({
+        code: "AUTH_CONFIG_REQUIRED",
+        message: "No Auth service configured",
+      });
     });
 
     test("multi-event record trigger emits multiple eventTypes", async () => {

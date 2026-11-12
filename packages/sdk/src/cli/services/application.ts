@@ -39,7 +39,11 @@ import {
   createTsconfigLookupCache,
   type TsconfigLookupCache,
 } from "#/cli/shared/tsconfig-paths-plugin";
-import { assertUniqueDefinitionNames, configInvalidError } from "#/cli/shared/validation-errors";
+import {
+  assertUniqueDefinitionNames,
+  configInvalidError,
+  configIssuesError,
+} from "#/cli/shared/validation-errors";
 import {
   type AppConfig,
   type ExecutorServiceInput,
@@ -373,6 +377,7 @@ function defineAuth(
       }),
       tailorDBServices,
       externalTailorDBNamespaces,
+      configPath,
     );
   }
   subgraphs.push({ Type: "auth", Name: config.name });
@@ -475,10 +480,19 @@ function defineAIGateways(
     });
     if (gateway.authNamespace === undefined) {
       if (!applicationAuthNamespace) {
-        throw new Error(
-          `AI Gateway "${gateway.name}" has no "authNamespace" and no Auth service is configured ` +
-            `to default to. Define an Auth service, or set "authNamespace" explicitly.`,
-        );
+        throw configIssuesError({
+          file: configPath,
+          exportName: "default",
+          subject: "Tailor config",
+          service: { configKey: "aiGateways", name: gateway.name },
+          issues: [
+            {
+              path: ["aiGateways", index, "authNamespace"],
+              message: "No Auth service is configured to default to",
+            },
+          ],
+          suggestion: 'Define an Auth service, or set "authNamespace" explicitly.',
+        });
       }
       gateway.authNamespace = applicationAuthNamespace;
     }
@@ -512,15 +526,24 @@ function parseSecretManager(
 
   // Defensive check: error if nullish values exist without ignoreNullishValues
   if (!ignoreNullishValues) {
-    for (const vault of secrets) {
-      for (const secret of vault.secrets) {
-        if (secret.value == null) {
-          throw new Error(
-            `Secret "${vault.vaultName}/${secret.name}" has no value. ` +
-              `Use { ignoreNullishValues: true } option in defineSecretManager() to skip secrets without values.`,
-          );
-        }
-      }
+    const issues = secrets.flatMap((vault) =>
+      vault.secrets
+        .filter((secret) => secret.value == null)
+        .map((secret) => ({
+          path: ["secrets", "vaults", vault.vaultName, secret.name],
+          message: "Has no value",
+        })),
+    );
+    if (issues.length > 0) {
+      throw configIssuesError({
+        file: configPath,
+        exportName: "default",
+        subject: "Tailor config",
+        service: { configKey: "secrets" },
+        issues,
+        suggestion:
+          "Use the { ignoreNullishValues: true } option in defineSecretManager() to skip secrets without values.",
+      });
     }
   }
 
@@ -741,7 +764,11 @@ export function generatePluginFilesIfNeeded(
 function assertWaitPointKeys(): void {
   const failures = collectWaitPointKeyFailures(getScopedWaitPoints());
   if (failures.length === 0) return;
-  throw new Error(failures.join("\n"));
+  throw CLIError({
+    code: "WORKFLOW_WAIT_POINT_KEY_INVALID",
+    message: failures.join("\n"),
+    context: { failures },
+  });
 }
 
 /**

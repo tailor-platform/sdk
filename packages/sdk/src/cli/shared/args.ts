@@ -6,6 +6,7 @@ import * as path from "pathe";
 import { z } from "zod";
 import { assertDefined } from "#/utils/assert";
 import { withErrorDiagnostics } from "./error-diagnostics";
+import { CLIError } from "./errors";
 import { JSON_OUTPUT_ENV_VAR, jsonDefaultAgent, logger, type JsonModeSource } from "./logger";
 import { parseBoolean } from "./parse-boolean";
 
@@ -162,7 +163,13 @@ export function loadEnvFiles(envFiles: EnvFileArg, envFilesIfExists: EnvFileArg)
       const envPath = path.resolve(process.cwd(), file);
       if (!fs.existsSync(envPath)) {
         if (required) {
-          throw new Error(`Environment file not found: ${envPath}`);
+          throw CLIError({
+            code: "INVALID_ARGUMENTS",
+            message: `Environment file not found: ${envPath}`,
+            suggestion:
+              "Check the --env-file path, or use --env-file-if-exists for a file that may be absent.",
+            context: { file: envPath },
+          });
         }
         continue;
       }

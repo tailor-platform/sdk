@@ -20,10 +20,18 @@ describe("resolvePublishEvents", () => {
   );
 
   test("throws when an opt-out is combined with a subscriber", () => {
-    expect(() => resolvePublishEvents({ explicit: false, subscribed: true, conflict })).toThrow(
-      'Resolver "processOrder" has "publishEvents: false", but executors with resolverExecuted triggers subscribe to it. ' +
-        'Either remove "publishEvents: false" or remove the matching executor triggers.',
-    );
+    let error: unknown;
+    try {
+      resolvePublishEvents({ explicit: false, subscribed: true, conflict });
+    } catch (thrown) {
+      error = thrown;
+    }
+    expect(error).toMatchObject({
+      code: "PUBLISH_EVENTS_CONFLICT",
+      message:
+        'Resolver "processOrder" has "publishEvents: false", but executors with resolverExecuted triggers subscribe to it.',
+      suggestion: 'Either remove "publishEvents: false" or remove the matching executor triggers.',
+    });
   });
 
   test("names what the subscribers subscribe to when it is not the resource itself", () => {

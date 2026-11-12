@@ -1,3 +1,4 @@
+import { internalError } from "./errors";
 import { logger } from "./logger";
 
 const SERVICE_NAME = "tailor-platform-cli";
@@ -49,7 +50,7 @@ export async function isKeyringAvailable(): Promise<boolean> {
  */
 export async function loadKeyringTokens(account: string): Promise<TokenData | undefined> {
   const Entry = await getEntryClass();
-  if (!Entry) throw new Error("System keyring is not available.");
+  if (!Entry) throw internalError("System keyring is not available.");
 
   const entry = new Entry(SERVICE_NAME, account);
   const raw = entry.getPassword();
@@ -68,7 +69,7 @@ export async function loadKeyringTokens(account: string): Promise<TokenData | un
  */
 export async function saveKeyringTokens(account: string, tokens: TokenData): Promise<void> {
   const Entry = await getEntryClass();
-  if (!Entry) throw new Error("System keyring is not available.");
+  if (!Entry) throw internalError("System keyring is not available.");
 
   const entry = new Entry(SERVICE_NAME, account);
   entry.setPassword(JSON.stringify(tokens));

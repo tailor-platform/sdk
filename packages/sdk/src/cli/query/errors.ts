@@ -1,4 +1,4 @@
-import { CLIError } from "../shared/errors";
+import { CLIError, isCLIError, toError } from "../shared/errors";
 import type { QueryEngine } from "./types";
 
 function toErrorMessage(error: unknown): string {
@@ -6,6 +6,23 @@ function toErrorMessage(error: unknown): string {
     return error.message;
   }
   return String(error);
+}
+
+const INVALID_SQL = "invalid_sql";
+
+/**
+ * Build the error for SQL the local parser rejects, under the code of the server's parse failure.
+ * @param cause - What the parser threw
+ * @returns CLIError carrying the parser's message
+ */
+export function sqlParseError(cause: unknown): CLIError {
+  return CLIError({
+    code: INVALID_SQL,
+    message: `SQL parse error: ${toErrorMessage(cause)}`,
+    suggestion:
+      'If your table name is a reserved keyword (e.g. User), wrap it in double quotes: SELECT * FROM "User"',
+    cause,
+  });
 }
 
 type MapQueryExecutionErrorArgs = {
@@ -21,6 +38,10 @@ type MapQueryExecutionErrorArgs = {
  * @returns A CLIError with a user-friendly message
  */
 export function mapQueryExecutionError(args: MapQueryExecutionErrorArgs): Error {
+  if (isCLIError(args.error) && args.error.code === INVALID_SQL) {
+    return args.error;
+  }
+
   const message = toErrorMessage(args.error);
 
   if (message.includes("machine user does not exist")) {
@@ -54,11 +75,11 @@ export function mapQueryExecutionError(args: MapQueryExecutionErrorArgs): Error 
       ?.trim();
 
     return CLIError({
-      code: "invalid_sql",
+      code: INVALID_SQL,
       message: "SQL parse error.",
       suggestion: parserReason ?? "The SQL query contains unsupported syntax.",
     });
   }
 
-  return args.error instanceof Error ? args.error : new Error(message);
+  return toError(args.error);
 }

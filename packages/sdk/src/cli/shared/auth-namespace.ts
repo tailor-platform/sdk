@@ -1,3 +1,4 @@
+import { CLIError } from "./errors";
 import type { AppConfig } from "#/configure/config/types";
 
 type AuthNamespaceApplication = {
@@ -24,7 +25,11 @@ export function getApplicationAuthNamespace(
 export function requireApplicationAuthNamespace(application: AuthNamespaceApplication): string {
   const authNamespace = getApplicationAuthNamespace(application);
   if (!authNamespace) {
-    throw new Error("No Auth service configured");
+    throw CLIError({
+      code: "AUTH_CONFIG_REQUIRED",
+      message: "No Auth service configured",
+      suggestion: "Ensure tailor.config.ts has an auth config.",
+    });
   }
   return authNamespace;
 }

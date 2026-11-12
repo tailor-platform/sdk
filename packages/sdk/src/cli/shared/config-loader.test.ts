@@ -36,6 +36,20 @@ afterEach(() => {
 });
 
 describe("loadConfig", () => {
+  test("reports a config path that does not exist as CONFIG_NOT_FOUND", async () => {
+    const configPath = path.join(os.tmpdir(), "tailor-config-missing", "tailor.config.ts");
+
+    const error = await rejectionOf(loadConfig(configPath));
+
+    expect(error).toMatchObject({
+      code: "CONFIG_NOT_FOUND",
+      message: `Configuration file not found: ${configPath}`,
+      suggestion: "Check the path given with --config or TAILOR_CONFIG_PATH.",
+      context: { file: configPath },
+    });
+    expect(getErrorDiagnostics(error).location).toBeUndefined();
+  });
+
   test("preserves class plugin state when invoking generation hooks", async () => {
     const configPath = writeConfig(`
       export default { name: "test-app" };
