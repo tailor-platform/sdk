@@ -2,7 +2,8 @@
 //
 // "Public API" is derived from package.json#exports — each `types` entry
 // points at the .d.mts file under dist/, and the matching .ts source under
-// src/ is the entry point this check walks. We replicate ESLint's
+// src/ is the entry point this check walks. An entry whose `types` is a
+// content-mapped `.tailor` file is walked through its `import` file instead. We replicate ESLint's
 // require-public-api-jsdoc rule logic standalone so it does not depend on the
 // linter at all.
 import { existsSync, readFileSync } from "node:fs";
@@ -39,12 +40,16 @@ function entryPoints(): string[] {
       continue;
     }
     const types = value.types;
-    if (!/^\.\/dist\/.+\.d\.mts$/.test(types)) {
+    const built =
+      types.endsWith(".tailor") && typeof value.import === "string" ? value.import : types;
+    const contentMapped = built !== types;
+    const builtPattern = contentMapped ? /^\.\/dist\/.+\.mjs$/ : /^\.\/dist\/.+\.d\.mts$/;
+    if (!builtPattern.test(built)) {
       throw new Error(
-        `package.json exports[${JSON.stringify(key)}].types does not match expected ./dist/*.d.mts pattern: ${types}`,
+        `package.json exports[${JSON.stringify(key)}] does not match expected ${contentMapped ? "./dist/*.mjs" : "./dist/*.d.mts"} pattern: ${built}`,
       );
     }
-    const src = types.replace(/^\.\/dist\//, "src/").replace(/\.d\.mts$/, ".ts");
+    const src = built.replace(/^\.\/dist\//, "src/").replace(/\.d\.mts$|\.mjs$/, ".ts");
     const abs = resolve(sdkRoot, src);
     if (!existsSync(abs)) {
       throw new Error(

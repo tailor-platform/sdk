@@ -1,10 +1,15 @@
+import * as fs from "node:fs";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { defineAuth } from "#/configure/services/auth/index";
 import { t } from "#/configure/types/type";
+import { logger } from "./logger";
+import { tempDir } from "./test-helpers/temp-dir";
 import {
   extractAttributesFromConfig,
   generateTypeDefinition,
+  generateTypeDefinitionFromConfig,
+  generateUserTypes,
   resolveTypeDefinitionPath,
 } from "./type-generator";
 import type { AttributeListConfig, AttributesConfig } from "./type-generator";
@@ -620,5 +625,98 @@ describe("generateTypeDefinition DateRepresentationRegistry", () => {
     expect(generateTypeDefinition(undefined, undefined)).toContain(
       "interface DateRepresentationRegistry {}",
     );
+  });
+});
+
+describe("generateTypeDefinitionFromConfig", () => {
+  test("declares the registries of the config without writing a file", () => {
+    const config = {
+      name: "test-app",
+      env: { stage: "dev" },
+      auth: defineAuth("auth", {
+        machineUserAttributes: { role: t.enum(["ADMIN", "WORKER"]) },
+        machineUsers: { admin: { attributes: { role: "ADMIN" } } },
+      }),
+    };
+
+    const content = generateTypeDefinitionFromConfig(config);
+
+    expect(content).toContain('role: "ADMIN" | "WORKER";');
+    expect(content).toContain("admin: true;");
+    expect(content).toContain("stage: string;");
+    expect(content).toContain('"test-app": "unset";');
+    expect(content).toContain('declare module "@tailor-platform/sdk"');
+  });
+});
+
+describe("generateUserTypes", () => {
+  const MAPPER_TSCONFIG = JSON.stringify({
+    contentMappers: [{ package: "@tailor-platform/sdk", extensions: [".tailor"] }],
+  });
+
+  function project(tsconfig: string | undefined) {
+    const t = tempDir("generate-user-types-");
+    const configPath = path.join(t.dir, "tailor.config.ts");
+    fs.writeFileSync(configPath, "");
+    if (tsconfig !== undefined) fs.writeFileSync(path.join(t.dir, "tsconfig.json"), tsconfig);
+    return { t, configPath, dts: path.join(t.dir, "tailor.d.ts") };
+  }
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  test("writes tailor.d.ts when the content mapper is not enabled", async () => {
+    const { t, configPath, dts } = project("{}");
+    using _t = t;
+    vi.spyOn(logger, "success").mockImplementation(() => {});
+
+    await generateUserTypes({ config: { name: "app" }, configPath });
+
+    expect(fs.readFileSync(dts, "utf8")).toContain('declare module "@tailor-platform/sdk"');
+  });
+
+  test("does not write tailor.d.ts when the tsconfig enables the content mapper", async () => {
+    const { t, configPath, dts } = project(MAPPER_TSCONFIG);
+    using _t = t;
+
+    await generateUserTypes({ config: { name: "app" }, configPath });
+
+    expect(fs.existsSync(dts)).toBe(false);
+  });
+
+  test("still writes the file TAILOR_DTS_PATH names when the content mapper is enabled", async () => {
+    const { t, configPath } = project(MAPPER_TSCONFIG);
+    using _t = t;
+    const explicit = path.join(t.dir, "types", "custom.d.ts");
+    vi.stubEnv("TAILOR_DTS_PATH", explicit);
+    vi.spyOn(logger, "success").mockImplementation(() => {});
+
+    await generateUserTypes({ config: { name: "app" }, configPath });
+
+    expect(fs.existsSync(explicit)).toBe(true);
+  });
+
+  test("warns that an existing tailor.d.ts is no longer updated when the content mapper is enabled", async () => {
+    const { t, configPath, dts } = project(MAPPER_TSCONFIG);
+    using _t = t;
+    fs.writeFileSync(dts, "// old");
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    await generateUserTypes({ config: { name: "app" }, configPath });
+
+    expect(fs.readFileSync(dts, "utf8")).toBe("// old");
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("tailor.d.ts"));
+  });
+
+  test("does not warn about tailor.d.ts when none exists and the content mapper is enabled", async () => {
+    const { t, configPath } = project(MAPPER_TSCONFIG);
+    using _t = t;
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    await generateUserTypes({ config: { name: "app" }, configPath });
+
+    expect(warn).not.toHaveBeenCalled();
   });
 });

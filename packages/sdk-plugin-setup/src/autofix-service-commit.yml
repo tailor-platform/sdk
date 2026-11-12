@@ -1,0 +1,27 @@
+# __AUTOFIX_CI_START__
+# autofix.ci fetches the pull request head itself, which a private repository authenticates.
+- id: tailor-autofix-ci-auth
+  # __SERVICE_COMMIT_IF__
+  env:
+    TOKEN: ${{ github.token }}
+  run: |
+    basic="$(printf 'x-access-token:%s' "$TOKEN" | base64 | tr -d '\n')"
+    echo "::add-mask::$basic"
+    git config --local "http.$GITHUB_SERVER_URL/.extraheader" "AUTHORIZATION: basic $basic"
+- id: tailor-autofix-ci
+  # __SERVICE_COMMIT_IF__
+  uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
+  with:
+    commit-message: "__SERVICE_COMMIT_MESSAGE__"
+# __AUTOFIX_CI_END__
+# __SECUREFIX_START__
+- id: tailor-securefix
+  # __SERVICE_COMMIT_IF__
+  uses: csm-actions/securefix-action@6da661e4377faf2d71294c1c09b1c03c161ce7c1 # v0.6.8
+  with:
+    action: client
+    client_id: ${{ vars.TAILOR_AUTOFIX_APP_CLIENT_ID }}
+    app_private_key: ${{ secrets.TAILOR_AUTOFIX_APP_PRIVATE_KEY }}
+    server_repository: __SECUREFIX_SERVER_REPOSITORY__
+    commit_message: "__SERVICE_COMMIT_MESSAGE__"
+# __SECUREFIX_END__

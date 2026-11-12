@@ -2,6 +2,7 @@ import type {
   TailorDBMigrationTestBaseline,
   TailorDBMigrationTestSnapshots,
 } from "#/cli/commands/deploy/types";
+import type { ScriptInvoker } from "#/cli/shared/script-executor";
 
 type MigrationTestDataMode = "seed" | "clone";
 
@@ -25,7 +26,13 @@ export interface MigrationTestOptions {
 
 type MigrationTestBaseline = TailorDBMigrationTestBaseline;
 
+export interface PreparedAssertion {
+  namespace: string;
+  invoker: ScriptInvoker;
+}
+
 export interface PreparedMigrationTest {
+  assertion?: PreparedAssertion;
   sourceWorkspaceId: string;
   sourceApplicationName: string;
   temporaryWorkspace: {
@@ -65,9 +72,9 @@ interface MigrationTestScriptTarget extends MigrationTestTarget {
   machineUser?: string;
 }
 
-interface MigrationTestAssertionTarget extends MigrationTestScriptTarget {
+interface MigrationTestAssertionTarget extends MigrationTestTarget {
   assertionPath: string;
-  assertionNamespace?: string;
+  assertion: PreparedAssertion;
 }
 
 export interface MigrationTestDependencies {

@@ -2,9 +2,9 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "@politty/zod";
 import { ExecutorTriggerType } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { z } from "zod";
-import { durationArg, parseDuration, recoveryContextArgs, workspaceArgs } from "#/cli/shared/args";
+import { durationArg, parseDuration, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
-import { CLIError, formatCommandHint } from "#/cli/shared/errors";
+import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertWritable } from "#/cli/shared/readonly-guard";
@@ -59,6 +59,20 @@ const headerArg = z
     message: "Header name cannot be empty",
   });
 
+type HeaderEntry = z.output<typeof headerArg>;
+
+type TriggerHeaders = Record<string, string | string[]>;
+
+function groupHeaders(entries: HeaderEntry[]): TriggerHeaders {
+  const grouped = new Map<string, string | string[]>();
+  for (const { key, value } of entries) {
+    const name = key.toLowerCase();
+    const current = grouped.get(name);
+    grouped.set(name, current === undefined ? value : [...[current].flat(), value]);
+  }
+  return Object.fromEntries(grouped);
+}
+
 type ManualTrigger = IncomingWebhookTrigger | ScheduleTriggerInput;
 
 type ManualTriggerExecutor<T extends ManualTrigger = ManualTrigger> = T extends ManualTrigger
@@ -77,6 +91,7 @@ type TriggerExecutorBaseOptions<E extends ManualTriggerExecutor> = {
 interface TriggerExecutorByNameOptions {
   executorName: string;
   payload?: JsonObject;
+  headers?: TriggerHeaders;
   workspaceId?: string;
   profile?: string;
 }
@@ -86,8 +101,14 @@ export type TriggerExecutorTypedOptions<E extends ManualTriggerExecutor = Manual
     ? TriggerExecutorBaseOptions<E> & {
         /** JSON object the executor receives as `body`. */
         payload?: JsonObject;
+        /**
+         * Request headers the executor receives as `headers`, keyed by header name.
+         * A value is a string, or a list of strings for a name sent on more than one line.
+         * Unlike `--header`, names are sent as given, and two keys that differ only in letter case are rejected.
+         */
+        headers?: TriggerHeaders;
       }
-    : TriggerExecutorBaseOptions<E> & { payload?: never };
+    : TriggerExecutorBaseOptions<E> & { payload?: never; headers?: never };
 
 export interface TriggerExecutorResult {
   jobId?: string;
@@ -106,6 +127,7 @@ async function triggerExecutorByName(
       workspaceId,
       executorName: options.executorName,
       payload: options.payload,
+      headers: options.headers,
     });
 
     return { jobId: response.jobId };
@@ -136,18 +158,23 @@ async function triggerExecutorByName(
 export async function triggerExecutor<E extends ManualTriggerExecutor>(
   options: TriggerExecutorTypedOptions<E>,
 ): Promise<TriggerExecutorResult> {
-  if (options.executor.trigger.kind !== "incomingWebhook" && options.payload !== undefined) {
+  const webhookOnlyOptions = [
+    options.payload !== undefined && "payload",
+    options.headers !== undefined && "headers",
+  ].filter((name) => name !== false);
+  if (options.executor.trigger.kind !== "incomingWebhook" && webhookOnlyOptions.length > 0) {
     throw CLIError({
       code: "EXECUTOR_TRIGGER_UNSUPPORTED",
       message:
         `Executor '${options.executor.name}' has '${options.executor.trigger.kind}' trigger type. ` +
-        `The payload is only available for 'incomingWebhook' trigger type.`,
+        `The ${webhookOnlyOptions.map((name) => `'${name}'`).join(" and ")} ${webhookOnlyOptions.length > 1 ? "options are" : "option is"} only available for 'incomingWebhook' trigger type.`,
     });
   }
 
   return await triggerExecutorByName({
     executorName: options.executor.name,
     payload: options.payload,
+    headers: options.headers,
     workspaceId: options.workspaceId,
     profile: options.profile,
   });
@@ -161,7 +188,7 @@ Executors with \`EVENT\` trigger types (such as \`recordCreated\`, \`recordUpdat
 
 The \`--data\` and \`--header\` options are accepted only for \`INCOMING_WEBHOOK\` trigger type.
 
-The executor receives the \`--data\` JSON as \`body\`, with empty \`headers\` and no \`rawBody\`. \`--header\` values are not passed to the executor. To test an executor that reads headers or verifies a signature over \`rawBody\`, send the request to its webhook URL, which \`executor webhook list\` shows.
+The executor receives the \`--data\` JSON as \`body\` and the \`--header\` values as \`headers\`, with no \`rawBody\`. Header names are lower-cased. A header given once reaches the executor as a string, and a header given more than once (names that differ only in letter case are the same header) as an array, as when a request sends it on more than one line. To test an executor that verifies a signature over \`rawBody\`, send the request to its webhook URL, which \`executor webhook list\` shows.
 
 **Downstream Execution Tracking**
 
@@ -177,6 +204,10 @@ The \`--logs\` option displays logs from the downstream execution when available
     {
       cmd: 'my-executor -d \'{"message": "hello"}\'',
       desc: "Trigger with data",
+    },
+    {
+      cmd: 'my-executor -d \'{"message": "hello"}\' -H "X-Custom: value" -H "Accept: application/json" -H "Accept: text/html"',
+      desc: "Trigger with data and headers (a repeated name is delivered as an array)",
     },
     { cmd: "my-executor -W", desc: "Trigger and wait for completion" },
     { cmd: "my-executor -W -l", desc: "Trigger, wait, and show logs" },
@@ -195,7 +226,7 @@ The \`--logs\` option displays logs from the downstream execution when available
       alias: "H",
       overrideBuiltinAlias: true,
       description:
-        "Ignored, as the executor receives empty headers (format: 'Key: Value', can be specified multiple times)",
+        "Request header (format: 'Key: Value', can be specified multiple times; a repeated name is delivered as an array)",
     }),
     wait: arg(z.boolean().default(false), {
       alias: "W",
@@ -257,25 +288,10 @@ The \`--logs\` option displays logs from the downstream execution when available
       });
     }
 
-    if (args.header) {
-      const webhookListCommand = {
-        command: "tailor",
-        args: [
-          "executor",
-          "webhook",
-          "list",
-          ...recoveryContextArgs({ profile: args.profile, workspaceId: args["workspace-id"] }),
-        ],
-      };
-      logger.warn(
-        "--header values are not passed to the executor, which receives empty headers. " +
-          `Remove --header, or if the executor needs headers, send the request to its webhook URL (${formatCommandHint(webhookListCommand)} lists it).`,
-      );
-    }
-
     const result = await triggerExecutorByName({
       executorName: args.executorName,
       payload: args.data,
+      headers: args.header ? groupHeaders(args.header) : undefined,
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });

@@ -295,7 +295,6 @@ type DeleteWorkflow = {
   workspaceId: string;
   workflowId: string;
   usedJobNames: string[];
-  deletableJobNames: string[];
 };
 
 type DeleteWorkflowJobFunction = {
@@ -511,7 +510,6 @@ export interface PreviousWorkflowExisting {
  * @param eventPublishing - Executor subscriptions and explicit job flags driving execution event publishing
  * @param previousExisting - A prior call's fetched existing job functions/workflows, reused instead of
  *   re-querying the platform
- * @param forcedJobFunctions - Job functions the function registry plan updates only because of the SDK version
  * @returns Planned workflow changes
  */
 export async function planWorkflow(
@@ -524,7 +522,6 @@ export async function planWorkflow(
   unchangedJobFunctions: ReadonlySet<string> = new Set<string>(),
   eventPublishing: WorkflowEventPublishing = {},
   previousExisting?: PreviousWorkflowExisting,
-  forcedJobFunctions: ReadonlySet<string> = new Set<string>(),
 ) {
   const changeSet = createChangeSet<
     CreateWorkflow,
@@ -652,10 +649,7 @@ export async function planWorkflow(
         }
       } else {
         const forcedBySdkVersion =
-          configUnchanged &&
-          usedJobNames.every(
-            (jobName) => unchangedJobFunctions.has(jobName) || forcedJobFunctions.has(jobName),
-          );
+          configUnchanged && usedJobNames.every((jobName) => unchangedJobFunctions.has(jobName));
         changeSet.updates.push({
           name: workflow.name,
           workspaceId,
@@ -677,7 +671,6 @@ export async function planWorkflow(
     }
   }
 
-  const deleteWorkflows: DeleteWorkflow[] = [];
   Object.values(existingWorkflows).forEach((existing) => {
     if (!existing) {
       return;
@@ -685,12 +678,11 @@ export async function planWorkflow(
     const owned = ownership.ownsRemaining(existing.allLabels);
     const usedJobNames = getExistingWorkflowJobNames(existing.resource);
     if (owned) {
-      deleteWorkflows.push({
+      changeSet.deletes.push({
         name: existing.resource.name,
         workspaceId,
         workflowId: existing.resource.id,
         usedJobNames,
-        deletableJobNames: [],
       });
     } else {
       usedJobNames.forEach((jobName) => retainedWorkflowJobNames.add(jobName));
@@ -704,16 +696,6 @@ export async function planWorkflow(
     existingJobFunctionNames: [...existingJobFunctions.keys()],
     retainedWorkflowJobNames,
   });
-  const deletableJobNames = new Set(jobFunctionDeletes.map((del) => del.jobFunctionName));
-
-  for (const del of deleteWorkflows) {
-    changeSet.deletes.push({
-      ...del,
-      deletableJobNames: del.usedJobNames.filter(
-        (jobName) => !retainedWorkflowJobNames.has(jobName) && deletableJobNames.has(jobName),
-      ),
-    });
-  }
 
   return {
     changeSet,

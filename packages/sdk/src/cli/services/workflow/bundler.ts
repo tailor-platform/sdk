@@ -9,9 +9,10 @@ import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import ml from "#/utils/multiline";
 import { getModuleExportName, type ASTNode } from "./ast-utils";
+import { walkAst } from "./ast-walk";
 import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
-import { detectResolvedStartCalls, hasStartCall, transformStartCalls } from "./start-transformer";
+import { createStartTransformPlugin, detectResolvedStartCalls } from "./start-transformer";
 import type { StartContext } from "#/cli/shared/start-context";
 import type { AllowedRuntimeGlobals } from "#/configure/config/types";
 import type * as rolldown from "rolldown";
@@ -143,8 +144,7 @@ function findDirectExecJobFunctionCalls(program: ASTNode): DirectExecJobFunction
   const runtimeWorkflowBindings = collectRuntimeWorkflowImportBindings(program);
   const calls: DirectExecJobFunctionCall[] = [];
 
-  function walk(node: ASTNode | null | undefined): void {
-    if (!node || typeof node !== "object") return;
+  walkAst(program, (node) => {
     if (
       node.type === "CallExpression" &&
       isDirectExecJobFunctionCallee(node.callee, runtimeWorkflowBindings)
@@ -152,17 +152,7 @@ function findDirectExecJobFunctionCalls(program: ASTNode): DirectExecJobFunction
       const args = node.arguments as unknown[] | undefined;
       calls.push({ targetName: extractStaticStringValue(args?.[0]) });
     }
-    for (const key of Object.keys(node)) {
-      const child = node[key];
-      if (Array.isArray(child)) {
-        child.forEach((c: unknown) => walk(c as ASTNode | null));
-      } else if (child && typeof child === "object") {
-        walk(child as ASTNode);
-      }
-    }
-  }
-
-  walk(program);
+  });
   return calls;
 }
 
@@ -203,8 +193,7 @@ export function collectExecJobFunctionTargets(code: string): string[] {
   }
   const targets: string[] = [];
 
-  function walk(node: ASTNode | null | undefined): void {
-    if (!node || typeof node !== "object") return;
+  walkAst(program, (node) => {
     if (node.type === "CallExpression") {
       const root = getWorkflowExecJobFunctionRoot(node.callee);
       if (isTailorIdentifier(root) || isGlobalThisTailor(root)) {
@@ -213,17 +202,7 @@ export function collectExecJobFunctionTargets(code: string): string[] {
         if (target !== undefined) targets.push(target);
       }
     }
-    for (const key of Object.keys(node)) {
-      const child = node[key];
-      if (Array.isArray(child)) {
-        child.forEach((c: unknown) => walk(c as ASTNode | null));
-      } else if (child && typeof child === "object") {
-        walk(child as ASTNode);
-      }
-    }
-  }
-
-  walk(program as unknown as ASTNode);
+  });
   return targets;
 }
 
@@ -373,7 +352,7 @@ export async function bundleWorkflowJobs(
       sourceFile: job.sourceFile,
       tsconfig,
       runtimeGlobals: { label: `Workflow job "${job.name}"`, allowed: allowedRuntimeGlobals },
-      createTransformPlugin: () => createWorkflowTransformPlugin(job, usedJobs, startContext),
+      createTransformPlugins: () => createWorkflowTransformPlugins(job, usedJobs, startContext),
       entry: (absoluteSourcePath) => ml /* js */ `
         import { ${JSON.stringify(job.exportName)} as _internalJob } from "${absoluteSourcePath}";
 
@@ -625,11 +604,11 @@ async function filterUsedJobs(
   return { usedJobs, mainJobDeps };
 }
 
-function createWorkflowTransformPlugin(
+function createWorkflowTransformPlugins(
   job: JobInfo,
   allJobs: JobInfo[],
   startContext: StartContext,
-): rolldown.Plugin {
+): (rolldown.Plugin | undefined)[] {
   // Pre-compute once to avoid redundant realpathSync calls per module
   const resolvedSourceFile = safeRealpath(job.sourceFile);
 
@@ -641,48 +620,41 @@ function createWorkflowTransformPlugin(
     )
     .map((j) => j.exportName);
 
-  // Transform start calls and remove other job declarations
-  return {
-    name: "workflow-transform",
-    transform: {
-      filter: {
-        id: {
-          include: [/\.(ts|mts|cts|js|mjs|cjs)$/],
+  return [
+    {
+      name: "workflow-transform",
+      transform: {
+        filter: {
+          id: {
+            include: [/\.(ts|mts|cts|js|mjs|cjs)$/],
+          },
         },
-      },
-      handler(code, id) {
-        // Only transform source files that contain workflow jobs or start calls
-        if (
-          !code.includes("createWorkflowJob") &&
-          !code.includes("createWorkflow") &&
-          !hasStartCall(code)
-        ) {
-          return null;
-        }
+        handler(code, id) {
+          if (!code.includes("createWorkflowJob") && !code.includes("createWorkflow")) {
+            return null;
+          }
 
-        // Only remove other jobs and the default workflow export from the job's
-        // own source file. Dependency files imported by the source file must keep
-        // their exports intact for rolldown to resolve cross-file
-        // imports (e.g. `import workflow from "./other-workflow"`).
-        let transformed = code;
-        const isJobSourceFile = safeRealpath(id) === resolvedSourceFile;
-        if (isJobSourceFile) {
-          transformed = transformWorkflowSource(
+          // Only remove other jobs and the default workflow export from the job's
+          // own source file. Dependency files imported by the source file must keep
+          // their exports intact for rolldown to resolve cross-file
+          // imports (e.g. `import workflow from "./other-workflow"`).
+          const isJobSourceFile = safeRealpath(id) === resolvedSourceFile;
+          if (!isJobSourceFile) return null;
+          const transformed = transformWorkflowSource(
             code,
             job.name,
             job.exportName,
             otherJobExportNames,
           );
-        }
 
-        // Apply workflow.start / job.start transformation.
-        if (hasStartCall(transformed)) {
-          transformed = transformStartCalls(transformed, startContext, id);
-        }
-
-        if (transformed === code) return null;
-        return { code: transformed };
+          if (!transformed.hasChanged()) return null;
+          return {
+            code: transformed.toString(),
+            map: transformed.generateMap({ hires: "boundary" }).toString(),
+          };
+        },
       },
     },
-  };
+    createStartTransformPlugin(startContext),
+  ];
 }

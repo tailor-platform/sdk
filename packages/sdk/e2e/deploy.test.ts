@@ -372,6 +372,7 @@ import {
 const idp = defineIdp("${idpName}", {
   clients: ["default-idp-client"],
   permission: unsafeAllowAllIdPPermission,
+  userAuthPolicy: { allowedEmailDomains: ["*"] },
 });
 
 export default defineConfig({
@@ -448,6 +449,7 @@ import {
 const idp = defineIdp("${idpName}", {
   clients: ["default-idp-client"],
   permission: unsafeAllowAllIdPPermission,
+  userAuthPolicy: { allowedEmailDomains: ["*"] },
 });
 
 const auth = defineAuth("${authName}", {
@@ -488,6 +490,7 @@ import {
 const idp = defineIdp("${idpName}", {
   clients: ["default-idp-client"],
   permission: unsafeAllowAllIdPPermission,
+  userAuthPolicy: { allowedEmailDomains: ["*"] },
 });
 
 export default defineConfig({

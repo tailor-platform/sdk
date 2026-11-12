@@ -109,6 +109,7 @@ export const renderChanges = (results: BenchResult[], sources: Record<string, st
     ...rows,
     "",
     ...details,
+    "",
   ].join("\n");
 };
 

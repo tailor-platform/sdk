@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
+import { invalidPluginsExports } from "#/plugin/test-helpers/invalid-plugins-exports";
 import { atConfigSource, loadConfig } from "./config-loader";
 import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
 
@@ -85,26 +86,9 @@ describe("loadConfig", () => {
     expect(plugins).toEqual([]);
   });
 
-  test.each([
-    [
-      "is not an array",
-      `{ id: "not-an-array", description: "Invalid" }`,
-      /Invalid `plugins` export/,
-    ],
-    ["is explicitly undefined", "undefined", /Invalid `plugins` export/],
-    [
-      "contains an invalid item",
-      `[{ id: "valid", description: "Valid item" }, null]`,
-      /Invalid `plugins` export/,
-    ],
-    [
-      "repeats a plugin ID",
-      `[{ id: "dup", description: "First" }, { id: "dup", description: "Second" }]`,
-      /Duplicate plugin ID "dup"/,
-    ],
-  ])(
-    "rejects a `plugins` export that %s, pointing at the config file",
-    async (_case, pluginsExport, message) => {
+  test.each(invalidPluginsExports)(
+    "reports a `plugins` export that $name as CONFIG_INVALID, pointing at the config file",
+    async ({ pluginsExport, issues, suggestion, message }) => {
       const configPath = writeConfig(`
         export default { name: "test-app" };
         export const plugins = ${pluginsExport};
@@ -112,10 +96,40 @@ describe("loadConfig", () => {
 
       const error = await rejectionOf(loadConfig(configPath));
 
-      expect(error.message).toMatch(message);
+      expect(error).toMatchObject({
+        code: "CONFIG_INVALID",
+        context: { file: configPath, exportName: "plugins", issues },
+      });
+      expect(error).toHaveProperty("suggestion", suggestion);
+      expect(error.message).toContain(message);
+      expect(error.message).toMatch(/^Invalid `plugins` export:\n/);
+      expect(error.message).not.toContain("tailor.config");
       expect(getErrorDiagnostics(error).location).toEqual({ file: configPath });
     },
   );
+
+  test("reports every rejected `plugins` item together", async () => {
+    const configPath = writeConfig(`
+      export default { name: "test-app" };
+      export const plugins = [
+        { id: "dup", description: "First" },
+        null,
+        { id: "dup", description: "Second" },
+      ];
+    `);
+
+    const error = await rejectionOf(loadConfig(configPath));
+
+    expect(error).toMatchObject({
+      code: "CONFIG_INVALID",
+      context: {
+        issues: [
+          { path: [1], message: "Invalid input: expected object, received null" },
+          { path: [2, "id"], message: 'Duplicate plugin ID "dup"' },
+        ],
+      },
+    });
+  });
 
   test("reports an invalid default export as CONFIG_INVALID", async () => {
     const configPath = writeConfig(`export default { name: "" };`);
@@ -124,7 +138,7 @@ describe("loadConfig", () => {
 
     expect(error).toMatchObject({
       code: "CONFIG_INVALID",
-      message: `Invalid Tailor config in ${path.relative(process.cwd(), configPath)}:\n  - name: 'name' must be a non-empty string.`,
+      message: `Invalid Tailor config:\n  - name: 'name' must be a non-empty string.`,
       context: {
         file: configPath,
         exportName: "default",
@@ -160,7 +174,7 @@ describe("loadConfig", () => {
 
     expect(error).toMatchObject({
       code: "CONFIG_INVALID",
-      message: `Invalid \`plugins\` export in ${path.relative(process.cwd(), configPath)}:\n  - 1: Invalid input: expected object, received null`,
+      message: `Invalid \`plugins\` export:\n  - 1: Invalid input: expected object, received null`,
       context: {
         file: configPath,
         exportName: "plugins",
@@ -169,24 +183,33 @@ describe("loadConfig", () => {
     });
   });
 
-  test("rejects a module without a default export, pointing at the config file", async () => {
+  test("reports a module without a default export as CONFIG_INVALID, pointing at the config file", async () => {
     const configPath = writeConfig(`export const name = "test-app";`);
 
     const error = await rejectionOf(loadConfig(configPath));
 
-    expect(error.message).toContain("Invalid Tailor config module: default export not found");
+    expect(error).toMatchObject({
+      code: "CONFIG_INVALID",
+      message: "Invalid Tailor config:\n  - (root): default export not found",
+      suggestion: "Export the config as the default export: export default defineConfig({ ... })",
+      context: {
+        file: configPath,
+        exportName: "default",
+        issues: [{ path: [], message: "default export not found" }],
+      },
+    });
     expect(getErrorDiagnostics(error).location).toEqual({ file: configPath });
   });
 
-  test("rejects a credential in env, naming the config it came from", async () => {
+  test("rejects a credential in env, pointing at the config it came from", async () => {
     const configPath = writeConfig(
       `export default { name: "test-app", env: { SLACK_BOT_TOKEN: ${JSON.stringify(SLACK_TOKEN)} } };`,
     );
 
     const error = await rejectionOf(loadConfig(configPath));
 
-    expect(error.message).toMatch(/env\.SLACK_BOT_TOKEN \(matched slack: SLACK_TOKEN\)/);
-    expect(error.message).toContain(configPath);
+    expect(error).toMatchObject({ code: "CONFIG_INVALID", context: { file: configPath } });
+    expect(error.message).not.toContain(configPath);
     expect(getErrorDiagnostics(error).location).toEqual({ file: configPath });
   });
 
@@ -261,7 +284,7 @@ describe("atConfigSource", () => {
     expect(result).toMatchObject({
       name: "CLIError",
       code: "SYNTAX_INVALID",
-      message: `Invalid syntax in ${path.relative(process.cwd(), "/repo/tailordb/User.ts")}:4: Unexpected token \`=\`. Expected an identifier`,
+      message: `Invalid syntax: Unexpected token \`=\`. Expected an identifier`,
       context: { file: "/repo/tailordb/User.ts", line: 4 },
       cause: syntaxDiagnostic,
     });
@@ -310,7 +333,7 @@ describe("atConfigSource", () => {
     const result = atConfigSource(withoutLine, "/repo/tailor.config.ts");
 
     expect(result).toMatchObject({
-      message: `Invalid syntax in ${path.relative(process.cwd(), "/repo/tailordb/User.ts")}: Unexpected token \`=\`. Expected an identifier`,
+      message: `Invalid syntax: Unexpected token \`=\`. Expected an identifier`,
     });
     expect((result as { context?: unknown }).context).toEqual({ file: "/repo/tailordb/User.ts" });
     expect(getErrorDiagnostics(result as Error).location).toEqual({

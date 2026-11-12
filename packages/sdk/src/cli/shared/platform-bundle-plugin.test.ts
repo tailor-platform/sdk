@@ -1,6 +1,11 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { TraceMap } from "@jridgewell/trace-mapping";
+import { build } from "rolldown";
 import { describe, expect, test } from "vitest";
+import { originalPositionAt } from "#/cli/shared/test-helpers/sourcemap";
+import { tempDir } from "#/cli/shared/test-helpers/temp-dir";
+import { assertDefined } from "#/utils/assert";
 import {
   createPlatformBundleDefinePlugin,
   platformBundleDefinePlugin,
@@ -12,6 +17,41 @@ const run = (code: string, plugin = platformBundleDefinePlugin): string | null =
 };
 
 describe("platformBundleDefinePlugin", () => {
+  test.each([
+    "process.env.__TAILOR_PLATFORM_BUNDLE",
+    "globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DATE",
+    "globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_TEMPORAL",
+    "globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT",
+    "globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL",
+  ])("preserves error positions after folding %s", async (gate) => {
+    using tmp = tempDir("platform-sourcemap-");
+    const sourceLines = [
+      `export function main() { if (${gate}) throw new Error("GATE"); }`,
+      `export function later() { throw new Error("LATER"); }`,
+    ];
+    const sourceFile = join(tmp.dir, "function.js");
+    writeFileSync(sourceFile, sourceLines.join("\n"));
+    const result = await build({
+      input: sourceFile,
+      plugins: [createPlatformBundleDefinePlugin({ date: false, temporal: false }, "date", true)],
+      output: { format: "esm", sourcemap: true, minify: true },
+      write: false,
+    });
+    const chunk = result.output[0];
+    expect(chunk.type).toBe("chunk");
+    const traceMap = new TraceMap(assertDefined(chunk.map, "sourcemap missing").toString());
+    for (const [index, message] of ["GATE", "LATER"].entries()) {
+      const messageOffset = chunk.code.indexOf(message);
+      expect(messageOffset).toBeGreaterThan(-1);
+      expect(
+        originalPositionAt(traceMap, chunk.code, chunk.code.lastIndexOf("throw", messageOffset)),
+      ).toMatchObject({
+        line: index + 1,
+        column: assertDefined(sourceLines[index], "source line missing").indexOf("throw"),
+      });
+    }
+  });
+
   test("folds the gate member-expression to true", () => {
     expect(run("if (!process.env.__TAILOR_PLATFORM_BUNDLE) register();")).toBe(
       "if (!true) register();",
@@ -74,6 +114,23 @@ describe("createPlatformBundleDefinePlugin date default", () => {
   });
 });
 
+describe("createPlatformBundleDefinePlugin kysely temporal", () => {
+  const code = "read(globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL);";
+
+  test("folds the kysely temporal gate to undefined unless the plugin is configured with temporal", () => {
+    expect(run(code)).toBe("read(undefined);");
+    expect(run(code, createPlatformBundleDefinePlugin(undefined, "legacy", false))).toBe(
+      "read(undefined);",
+    );
+  });
+
+  test("folds the kysely temporal gate to the string true when the plugin is configured with temporal", () => {
+    expect(run(code, createPlatformBundleDefinePlugin(undefined, "legacy", true))).toBe(
+      'read("true");',
+    );
+  });
+});
+
 describe("date default gate in the built runtime", () => {
   // The gate is read by the SDK's own runtime code, which user bundles pull in
   // from dist. If tsdown ever emitted it in a shape the regex does not match,
@@ -92,5 +149,31 @@ describe("date default gate in the built runtime", () => {
     const folded = run(chunk!, createPlatformBundleDefinePlugin(undefined, "temporal"));
     expect(folded).not.toContain("__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT");
     expect(folded).toMatch(/="temporal";return \w+===`temporal`\|\|\w+===`date`\?\w+:`legacy`/);
+  });
+});
+
+describe("kysely temporal gate in the built runtime", () => {
+  // `getDB` of `@tailor-platform/sdk/plugin/kysely-type/db` reads the gate from dist. If tsdown
+  // ever emitted it in a shape the regex does not match, a deployed function would silently
+  // read Date and string values while the project's types say Temporal.
+  test("the built db module reads the gate in the exact shape the plugin folds", () => {
+    const built = readFileSync(
+      join(
+        import.meta.dirname,
+        "..",
+        "..",
+        "..",
+        "dist",
+        "plugin",
+        "builtin",
+        "kysely-type",
+        "db.mjs",
+      ),
+      "utf8",
+    );
+
+    const folded = run(built, createPlatformBundleDefinePlugin(undefined, "legacy", true));
+    expect(folded).not.toContain("__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL");
+    expect(folded).toContain('"true"===`true`');
   });
 });

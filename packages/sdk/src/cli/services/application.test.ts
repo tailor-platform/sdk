@@ -4,13 +4,15 @@ import * as path from "pathe";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
-import { defineConfig } from "#/configure/config/index";
+import { defineConfig, definePlugins } from "#/configure/config/index";
 import { defineAIGateway } from "#/configure/services/aigateway/index";
 import { defineAuth } from "#/configure/services/auth/index";
 import { defineIdp } from "#/configure/services/idp/index";
 import { defineSecretManager } from "#/configure/services/secrets/index";
 import { defineStaticWebSite } from "#/configure/services/staticwebsite/index";
 import { db } from "#/configure/services/tailordb/schema";
+import { kyselyTypePlugin } from "#/plugin/builtin/kysely-type/index";
+import { PluginManager } from "#/plugin/manager";
 import { getRegisteredWaitPoints, restoreWaitPointRegistry } from "#/utils/wait-point-registry";
 import { defineApplication, loadApplication } from "./application";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -193,7 +195,7 @@ describe("service config validation", () => {
       name: "CLIError",
       code: "CONFIG_INVALID",
       message:
-        'Invalid config for Auth service "my-auth" in tailor.config.ts:\n' +
+        'Invalid config for Auth service "my-auth":\n' +
         "  - auth.machineUserAttributes.role.metadata: Invalid input: expected object, received undefined\n" +
         "  - auth.machineUserAttributes.role.fields: Invalid input: expected record, received undefined",
       context: {
@@ -216,20 +218,43 @@ describe("service config validation", () => {
     expect(getErrorDiagnostics(error as Error).location).toEqual({ file: "tailor.config.ts" });
   });
 
-  test("names an OAuth2 client whose name the platform rejects", () => {
-    const error = defineInvalidApplication({
-      auth: defineAuth("my-auth", {
-        machineUserAttributes: {},
-        oauth2Clients: { c1: { redirectURIs: ["https://example.com/callback"] } },
-      }),
-    });
+  test.each([
+    {
+      label: "an OAuth2 client name",
+      serviceConfig: {
+        auth: defineAuth("my-auth", {
+          machineUserAttributes: {},
+          oauth2Clients: { c1: { redirectURIs: ["https://example.com/callback"] } },
+        }),
+      },
+      path: ["auth", "oauth2Clients", "c1"],
+    },
+    {
+      label: "a secret manager vault name",
+      serviceConfig: { secrets: defineSecretManager({ My_Vault: { key: "value" } }) },
+      path: ["secrets", "vaults", "My_Vault"],
+    },
+    {
+      label: "a secret manager secret name",
+      serviceConfig: { secrets: defineSecretManager({ "my-vault": { My_Key: "value" } }) },
+      path: ["secrets", "vaults", "my-vault", "My_Key"],
+    },
+    {
+      label: "an AI Gateway authNamespace",
+      serviceConfig: {
+        aiGateways: [defineAIGateway("my-gateway", { authNamespace: "My_Auth" })],
+      },
+      path: ["aiGateways", 0, "authNamespace"],
+    },
+  ])("names $label the platform rejects", ({ serviceConfig, path }) => {
+    const error = defineInvalidApplication(serviceConfig);
 
     expect(error).toMatchObject({
       code: "CONFIG_INVALID",
       context: {
         issues: [
           {
-            path: ["auth", "oauth2Clients", "c1"],
+            path,
             message:
               "must be 3-63 lowercase letters, digits, or hyphens, starting and ending with a letter or digit",
           },
@@ -369,7 +394,7 @@ describe("service config validation", () => {
     "reports an invalid $configKey config as CONFIG_INVALID",
     ({ serviceConfig, heading, configKey, name, path }) => {
       const error = defineInvalidApplication(serviceConfig) as Error;
-      const expectedStart = `Invalid config for ${heading} in tailor.config.ts:\n  - ${path.join(".")}: `;
+      const expectedStart = `Invalid config for ${heading}:\n  - ${path.join(".")}: `;
 
       expect(error.message.slice(0, expectedStart.length)).toBe(expectedStart);
       expect(error).toMatchObject({
@@ -631,6 +656,99 @@ export default createExecutor({
     expect(second.application.executorService).toBe(first.application.executorService);
     expect(second.application.tailorDBServices).toBe(first.application.tailorDBServices);
     expect(second.reusableBuildState).toBe(first.reusableBuildState);
+  });
+});
+
+describe("loadApplication kysely temporal", () => {
+  const GATE = "__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL";
+  let tmpDir: string | undefined;
+
+  afterEach(() => {
+    if (tmpDir) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      tmpDir = undefined;
+    }
+  });
+
+  async function bundledExecutor(options: { temporal?: boolean }): Promise<string> {
+    tmpDir ??= fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
+    const executorFile = path.join(tmpDir, "executor.ts");
+    fs.writeFileSync(
+      executorFile,
+      `
+import { createExecutor, incomingWebhookTrigger } from "@tailor-platform/sdk";
+
+const temporal = globalThis.process?.env.${GATE} === "true";
+
+export default createExecutor({
+  name: "webhook-executor",
+  trigger: incomingWebhookTrigger({ response: () => ({}) }),
+  operation: { kind: "function", body: () => temporal },
+});
+`,
+    );
+    const config = {
+      ...defineConfig({ name: "testApp", executor: { files: [executorFile] } }),
+      path: path.join(tmpDir, "tailor.config.ts"),
+    };
+    const { bundledScripts } = await loadApplication({
+      config,
+      pluginManager: new PluginManager(
+        definePlugins(kyselyTypePlugin({ distPath: "./db.ts", ...options })),
+      ),
+    });
+    return [...bundledScripts.executors.values()].join("\n");
+  }
+
+  test("bundles getDB of @tailor-platform/sdk/plugin/kysely-type/db with the plugin's temporal option", async () => {
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
+    const executorFile = path.join(tmpDir, "executor.ts");
+    fs.writeFileSync(
+      executorFile,
+      `
+import { createExecutor, incomingWebhookTrigger } from "@tailor-platform/sdk";
+import { getDB } from "@tailor-platform/sdk/plugin/kysely-type/db";
+
+export default createExecutor({
+  name: "webhook-executor",
+  trigger: incomingWebhookTrigger({ response: () => ({}) }),
+  operation: { kind: "function", body: () => getDB },
+});
+`,
+    );
+    const config = {
+      ...defineConfig({ name: "testApp", executor: { files: [executorFile] } }),
+      path: path.join(tmpDir, "tailor.config.ts"),
+    };
+    const bundle = async (temporal: boolean) =>
+      [
+        ...(
+          await loadApplication({
+            config,
+            pluginManager: new PluginManager(
+              definePlugins(kyselyTypePlugin({ distPath: "./db.ts", temporal })),
+            ),
+          })
+        ).bundledScripts.executors.values(),
+      ].join("\n");
+
+    const withTemporal = await bundle(true);
+    const withoutTemporal = await bundle(false);
+
+    expect(withTemporal).not.toContain(GATE);
+    expect(withTemporal).toMatch(/temporal:\s*(?:true|!0)/);
+    expect(withoutTemporal).not.toContain(GATE);
+    expect(withoutTemporal).toMatch(/temporal:\s*(?:false|!1)/);
+  });
+
+  test("folds the gate to follow the plugin's temporal option in what it bundles", async () => {
+    const withTemporal = await bundledExecutor({ temporal: true });
+    const withoutTemporal = await bundledExecutor({});
+
+    expect(withTemporal).not.toContain(GATE);
+    expect(withTemporal).toMatch(/=>\s*(?:true|!0)/);
+    expect(withoutTemporal).not.toContain(GATE);
+    expect(withoutTemporal).toMatch(/=>\s*(?:false|!1)/);
   });
 });
 

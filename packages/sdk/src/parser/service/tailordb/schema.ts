@@ -235,13 +235,20 @@ export const RawPermissionsSchema = z.strictObject({
   gql: z.array(GqlPermissionPolicySchema).readonly().optional(),
 });
 
+const TailorDBTypeNameSchema = z
+  .string()
+  .regex(
+    /^[A-Z][a-zA-Z0-9]{0,62}$/,
+    "must be 1-63 ASCII letters or digits, starting with an uppercase letter",
+  );
+
 export const TailorDBTypeSchema = z.strictObject({
-  name: z.string(),
+  name: TailorDBTypeNameSchema,
   fields: z.record(z.string(), TailorDBFieldSchema),
   // oxlint-disable-next-line zod/prefer-strict-object, tailor-zod/require-object-policy-comment -- Keep z.object().strict() so zinfer preserves the RawPermissions alias in generated types.
   metadata: z
     .object({
-      name: z.string(),
+      name: TailorDBTypeNameSchema,
       description: z.string().optional(),
       settings: TailorDBTypeSettingsSchema.optional(),
       permissions: RawPermissionsSchema,
@@ -276,7 +283,11 @@ const TailorDBMigrationConfigSchema = z.strictObject({
  * Normalizes gqlOperations from alias ("query") to object format.
  */
 export const TailorDBServiceConfigSchema = z.strictObject({
-  files: z.array(z.string()).describe("Glob patterns for TailorDB table definition files"),
+  files: z
+    .array(z.string())
+    .describe(
+      "Glob patterns for TailorDB table definition files. A pattern starting with `!` excludes the files it matches; for each file, the last matching pattern decides.",
+    ),
   ignores: z.array(z.string()).optional().describe("Glob patterns to exclude from table discovery"),
   migration: TailorDBMigrationConfigSchema.optional().describe(
     "Migration configuration\n\n**Beta:** This API may change in future releases.",

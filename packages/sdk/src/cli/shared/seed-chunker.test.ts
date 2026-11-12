@@ -23,11 +23,37 @@ const expectSequentialIndices = (chunks: SeedChunk[]) => {
 };
 
 describe("chunkSeedData size accounting", () => {
-  const withSpareBudget = (data: SeedData, order: string[]) => ({
+  const withArgBudget = (data: SeedData, order: string[], argBudget: number) => ({
     data,
     order,
     codeByteSize: 0,
-    maxMessageSize: jsonByteSize(data, order) + 1024 + 10,
+    maxMessageSize: argBudget + 1024,
+  });
+
+  const withSpareBudget = (data: SeedData, order: string[]) =>
+    withArgBudget(data, order, jsonByteSize(data, order) + 10);
+
+  const records = makeRecords(8, 50);
+  const batchByteSize = (count: number) => jsonByteSize({ T: records.slice(0, count) }, ["T"]);
+  const recordCounts = (chunks: SeedChunk[]) => chunks.map((chunk) => chunk.data["T"]!.length);
+
+  test.each([
+    { budget: "one record exactly", argBudget: batchByteSize(1), counts: [1, 1, 1, 1, 1, 1, 1, 1] },
+    { budget: "three records exactly", argBudget: batchByteSize(3), counts: [3, 3, 2] },
+    { budget: "one byte under four records", argBudget: batchByteSize(4) - 1, counts: [3, 3, 2] },
+  ])(
+    "fills each chunk with as many records as fit in a budget of $budget",
+    ({ argBudget, counts }) => {
+      const chunks = chunkSeedData(withArgBudget({ T: records }, ["T"], argBudget));
+
+      expect(recordCounts(chunks)).toEqual(counts);
+    },
+  );
+
+  test("rejects a record whose chunk is one byte over the budget, reporting the record's size", () => {
+    expect(() => chunkSeedData(withArgBudget({ T: records }, ["T"], batchByteSize(1) - 1))).toThrow(
+      `A single record in table "T" (80 bytes)`,
+    );
   });
 
   test("splits data whose <, > and & characters grow to 6 bytes each once the platform escapes them", () => {
@@ -190,19 +216,6 @@ describe("chunkSeedData", () => {
         maxMessageSize: 3_500_000,
       }),
     ).toThrow("Code size (4000000 bytes) exceeds the message size limit (3500000 bytes)");
-  });
-
-  test("throws error when a single record exceeds budget", () => {
-    const hugeRecord = { id: "1", payload: "x".repeat(1_000_000) };
-
-    expect(() =>
-      chunkSeedData({
-        data: { HugeType: [hugeRecord] },
-        order: ["HugeType"],
-        codeByteSize: 1000,
-        maxMessageSize: 100_000,
-      }),
-    ).toThrow(/single record in table "HugeType"/);
   });
 
   test("uses default maxMessageSize when not specified", () => {

@@ -1911,6 +1911,7 @@ describe("Tailor Platform action pins", () => {
     expect(new Set(shared.map(([action]) => action))).toEqual(
       new Set([
         "actions/checkout",
+        "actions/setup-node",
         "actions/upload-artifact",
         "tailor-platform/actions/setup",
         "tailor-platform/actions/install",
@@ -2942,6 +2943,71 @@ export default defineConfig({
       /tailor setup ci env --environment stg --environment stg-plan --check +#/,
     );
   });
+
+  test.each([
+    {
+      splitPlanEnvironment: false,
+      heading: 'the "stg" and "migration-test" environments need',
+      flags: "--environment stg --environment migration-test",
+    },
+    {
+      splitPlanEnvironment: true,
+      heading: 'the "stg" and "stg-plan" and "migration-test" environments need',
+      flags: "--environment stg --environment stg-plan --environment migration-test",
+    },
+  ])(
+    "next steps name the dedicated migration test environment (splitPlanEnvironment=$splitPlanEnvironment)",
+    async ({ splitPlanEnvironment, heading, flags }) => {
+      using log = vi.spyOn(logger, "log").mockImplementation(() => {});
+      printTargetNextSteps(
+        await setupTarget(
+          baseOptions({
+            workspaceName: "my-app",
+            environment: "stg",
+            migrationTest: true,
+            migrationTestEnvironment: "migration-test",
+            loadHasMigrations: async () => true,
+            splitPlanEnvironment,
+          }),
+        ),
+      );
+      const output = log.mock.calls.map(([line]) => line).join("\n");
+
+      expect(output).toContain(heading);
+      expect(output).toMatch(new RegExp(`tailor setup ci env ${flags} +# gh commands`));
+      expect(output).toContain(`tailor setup ci env ${flags} --format terraform`);
+      expect(output).toContain(`tailor setup ci env ${flags} --check`);
+    },
+  );
+
+  test.each(["stg", "STG", "stg-plan", "STG-PLAN"])(
+    "next steps list a shared migration test environment only once (%s)",
+    async (migrationTestEnvironment) => {
+      using log = vi.spyOn(logger, "log").mockImplementation(() => {});
+      printTargetNextSteps(
+        await setupTarget(
+          baseOptions({
+            workspaceName: "my-app",
+            environment: "stg",
+            migrationTest: true,
+            migrationTestEnvironment,
+            loadHasMigrations: async () => true,
+            splitPlanEnvironment: true,
+          }),
+        ),
+      );
+      const output = log.mock.calls.map(([line]) => line).join("\n");
+
+      expect(output).toContain('the "stg" and "stg-plan" environments need');
+      expect(output).toMatch(/tailor setup ci env --environment stg --environment stg-plan +#/);
+      expect(output).toContain(
+        "tailor setup ci env --environment stg --environment stg-plan --format terraform",
+      );
+      expect(output).toContain(
+        "tailor setup ci env --environment stg --environment stg-plan --check",
+      );
+    },
+  );
 
   test("next steps suggest checking with --check what the environment still lacks", async () => {
     using log = vi.spyOn(logger, "log").mockImplementation(() => {});

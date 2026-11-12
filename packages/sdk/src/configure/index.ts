@@ -15,7 +15,7 @@ export namespace t {
   export type infer<T> = TailorOutput<T>;
 }
 
-export { type TailorField } from "#/configure/types/type";
+export { type TailorAnyField, type TailorField } from "#/configure/types/type";
 export { type DateRepresentationRegistry } from "#/configure/types/field.types";
 export {
   type TailorPrincipal,
@@ -62,8 +62,12 @@ export type {
   PluginFieldExtensions,
   PluginOutput,
   TablePluginOutput,
+  TailorDBNamespacePluginOutput,
+  // oxlint-disable-next-line typescript/no-deprecated -- Stays exported until its removal in v3.
   NamespacePluginOutput,
   PluginTableProcessContext,
+  TailorDBNamespaceLoadedContext,
+  // oxlint-disable-next-line typescript/no-deprecated -- Stays exported until its removal in v3.
   PluginNamespaceProcessContext,
   PluginAttachment,
   PluginGeneratedTable,

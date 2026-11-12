@@ -12,8 +12,8 @@
   "devDependencies": {
     "@types/node": "26.6.6",
     "eslint-plugin-zod": "5.2.2",
-    "oxlint": "1.90.0",
-    "oxlint-tsgolint": "7.0.2005",
+    "oxlint": "1.92.0",
+    "oxlint-tsgolint": "7.0.2006",
     "tsx": "4.23.15",
     "typescript": "6.0.3",
     "vitest": "5.1.0"

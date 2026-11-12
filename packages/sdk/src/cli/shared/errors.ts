@@ -1,3 +1,5 @@
+import * as path from "pathe";
+import { getErrorDiagnostics } from "./error-diagnostics";
 import { redactSecrets, styles } from "./logger";
 import { formatShellCommandLines } from "./shell-quote";
 import type { Jsonifiable } from "type-fest";
@@ -82,7 +84,7 @@ function redactAndIndent(text: string): string {
  */
 function formatError(error: CLIError): string {
   const parts: string[] = [
-    styles.error(`Error${error.code ? ` [${error.code}]` : ""}: ${error.message}`),
+    styles.error(`Error${error.code ? ` [${error.code}]` : ""}: ${locatedMessage(error)}`),
   ];
 
   if (error.details) {
@@ -137,16 +139,48 @@ export function isCLIError(error: unknown): error is CLIError {
 }
 
 /**
+ * Read the report an error other than a CLIError lays out itself, as the seed
+ * plugin's validate error does.
+ * @param error - Failure being rendered
+ * @returns The string its own `format()` returns, or undefined when it has no
+ * `format()` or its `format()` returns something else, as a ZodError's does
+ */
+export function formattedReport(error: Error): string | undefined {
+  if (isCLIError(error)) return undefined;
+  const format = (error as { format?: unknown }).format;
+  if (typeof format !== "function") return undefined;
+  const formatted: unknown = format.call(error);
+  return typeof formatted === "string" ? formatted : undefined;
+}
+
+/**
+ * Prefix a failure's message with the source location it points at.
+ *
+ * An error with a report of its own (see `formattedReport`) lays that report
+ * out itself, so its message is returned as-is.
+ * @param error - Failure being rendered
+ * @returns `<file>[:<line>]: <message>`, with the file relative to the working
+ * directory, or the message alone when the failure has no source location
+ */
+export function locatedMessage(error: Error): string {
+  const { location } = getErrorDiagnostics(error);
+  if (!location || formattedReport(error) !== undefined) return error.message;
+  const line = location.line === undefined ? "" : `:${location.line}`;
+  return `${path.relative(process.cwd(), location.file)}${line}: ${error.message}`;
+}
+
+/**
  * Summarize a failure as plain text for reports that carry a single error string.
  * CLI errors contribute their details and suggestion so the remediation survives.
  * @param error - Failure to summarize
- * @returns Message followed by any details and suggestion, one per line
+ * @returns Message, after the source location the failure points at, followed by
+ * any details and suggestion, one per line
  */
 export function errorSummary(error: unknown): string {
   if (isCLIError(error)) {
-    return [error.message, error.details, error.suggestion].filter(Boolean).join("\n");
+    return [locatedMessage(error), error.details, error.suggestion].filter(Boolean).join("\n");
   }
-  return error instanceof Error ? error.message : String(error);
+  return error instanceof Error ? locatedMessage(error) : String(error);
 }
 
 /**

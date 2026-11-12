@@ -79,6 +79,7 @@ type SQLResultRow = Record<string, unknown>;
 type SQLExecutionResult = {
   rows: SQLResultRow[];
   rowCount: number;
+  affectedRows?: number;
 };
 
 type QueryCommandInput =
@@ -849,29 +850,39 @@ function isSQLExecutionResult(value: unknown): value is SQLExecutionResult {
   }
 
   const candidate = value as Partial<SQLExecutionResult>;
-  return Array.isArray(candidate.rows) && typeof candidate.rowCount === "number";
+  return (
+    Array.isArray(candidate.rows) &&
+    typeof candidate.rowCount === "number" &&
+    (candidate.affectedRows === undefined || typeof candidate.affectedRows === "number")
+  );
+}
+
+function toSqlJsonResult(execResult: SQLExecutionResult) {
+  const { rows, rowCount, affectedRows } = execResult;
+  return { results: rows, rowCount, affectedRows };
 }
 
 function printSingleSqlResult(
   execResult: SQLExecutionResult,
   options: { json?: boolean } = {},
 ): void {
-  if (execResult.rows.length === 0) {
-    if (options.json) {
-      logger.out({ results: [], rowCount: 0 });
-      return;
-    }
-    logger.info("No rows returned.");
+  if (options.json) {
+    logger.out(toSqlJsonResult(execResult));
     return;
   }
 
-  if (options.json) {
-    logger.out({ results: execResult.rows, rowCount: execResult.rowCount });
+  if (execResult.rows.length === 0) {
+    const { affectedRows } = execResult;
+    logger.info(
+      affectedRows === undefined
+        ? "No rows returned."
+        : `${affectedRows} ${affectedRows === 1 ? "row" : "rows"} affected.`,
+    );
     return;
   }
 
   logger.out(execResult.rows, { showNull: true });
-  logger.out(`rows: ${execResult.rowCount}`);
+  logger.info(`rows: ${execResult.rowCount}`);
 }
 
 function splitSqlStatements(query: string): string[] {
@@ -898,7 +909,7 @@ function isSQLExecutionResultArray(value: unknown): value is SQLExecutionResult[
 function printSqlResult(result: SQLQueryDispatchResult, options: { json?: boolean } = {}): void {
   if (isSQLExecutionResultArray(result.result)) {
     if (options.json) {
-      logger.out(result.result.map((r) => ({ results: r.rows, rowCount: r.rowCount })));
+      logger.out(result.result.map(toSqlJsonResult));
       return;
     }
     const queries = splitSqlStatements(result.query);

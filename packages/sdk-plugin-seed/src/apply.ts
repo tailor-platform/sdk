@@ -17,6 +17,7 @@ import {
   styles,
   arg,
 } from "@tailor-platform/sdk/cli";
+import { sortBySelfReference } from "@tailor-platform/shared/seed-order";
 import * as path from "pathe";
 import { z } from "zod";
 import {
@@ -29,7 +30,7 @@ import {
 import { selectEntities } from "./entities";
 import { parseExecutionResult } from "./execution-result";
 import { assertSeedDataDirectory, loadSeedData } from "./jsonl";
-import { sortRecordsBySelfReference, topologicalSort } from "./topo-sort";
+import { topologicalSort } from "./topo-sort";
 import { IDP_SEED_WORKFLOW_KINDS, seedWorkflowName } from "./workflow-name";
 import type { SeedWorkflowKind } from "./workflow-name";
 import type {
@@ -149,7 +150,7 @@ function buildNamespaceSeedPlan(params: NamespaceSeedPlanParams): NamespaceSeedP
     const fields = selfRefFields[type];
     const records = data[type];
     if (records && fields && fields.length > 0) {
-      data[type] = sortRecordsBySelfReference(records, fields, selfRefKeys[type]);
+      data[type] = sortBySelfReference(records, fields, selfRefKeys[type]);
     }
   }
   return {
@@ -298,7 +299,7 @@ async function hookIdpUserRows(
   schemaDir: string,
   rows: SeedData[string] | undefined,
 ): Promise<SeedData[string]> {
-  const { hookSeedRows } = await import("@tailor-platform/sdk/seed");
+  const { hookSeedRows } = await import("./seed-data");
   const source = rows ?? [];
   const hooked = (await hookSeedRows({
     schemaDir,

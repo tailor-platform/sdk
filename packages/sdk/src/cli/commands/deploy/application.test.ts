@@ -143,6 +143,10 @@ async function planForRemoval(client: OperatorClient, application: Application) 
   return planApplication({ ...createContext(client, application), forRemoval: true });
 }
 
+async function planWithoutSubgraphs(client: OperatorClient, application: Application) {
+  return planApplication(createContext(client, { ...application, subgraphs: [] }));
+}
+
 describe("planApplication", () => {
   test("carries the sdk-app-id removal through for a config with no id", async () => {
     const client = createMockClient([
@@ -327,11 +331,9 @@ describe("planApplication", () => {
     test("plans no metadata write when the application has no subgraphs", async () => {
       const client = createMockClient([]);
 
-      const result = await planApplication(
-        createContext(
-          client,
-          createMockApplication({ subgraphs: [], metadata: { "erp-kit-version": "v1-2-3" } }),
-        ),
+      const result = await planWithoutSubgraphs(
+        client,
+        createMockApplication({ metadata: { "app-version": "v1-2-3" } }),
       );
 
       expect(result.creates).toHaveLength(0);
@@ -593,8 +595,28 @@ describe("planApplication", () => {
       expect(result.creates).toHaveLength(1);
       expect(result.deletes).toHaveLength(0);
     });
+  });
 
-    test("forRemoval also deletes id-matched renamed apps", async () => {
+  describe.each([
+    ["forRemoval", planForRemoval, ["other-app"]],
+    ["a config without subgraphs", planWithoutSubgraphs, []],
+  ])("ownership check when %s deletes the application (issue #1279)", (_case, plan, owners) => {
+    test.each([
+      ["legacy sdk-name (no sdk-app-id)", undefined, undefined],
+      ["matching sdk-app-id", "stable-id", "stable-id"],
+    ])("deletes a same-name app owned via %s", async (_owner, remoteAppId, localAppId) => {
+      const client = createMockClient([{ name: appName, label: appName, sdkAppId: remoteAppId }]);
+      const application = createMockApplication({ name: appName, id: localAppId });
+
+      const result = await plan(client, application);
+
+      expect(result.deletes).toHaveLength(1);
+      expect(result.deletes[0]!.name).toBe(appName);
+      expect(result.creates).toHaveLength(0);
+      expect(result.updates).toHaveLength(0);
+    });
+
+    test("deletes id-matched renamed apps", async () => {
       const appId = "stable-id";
       const oldName = "old-app-name";
       const client = createMockClient([
@@ -608,26 +630,11 @@ describe("planApplication", () => {
       ]);
       const application = createMockApplication({ name: appName, id: appId });
 
-      const result = await planForRemoval(client, application);
+      const result = await plan(client, application);
 
       expect(result.deletes).toHaveLength(1);
       expect(result.deletes[0]!.name).toBe(oldName);
       expect(result.creates).toHaveLength(0);
-    });
-  });
-
-  describe("forRemoval ownership check (issue #1279)", () => {
-    test.each([
-      ["legacy sdk-name (no sdk-app-id)", undefined, undefined],
-      ["matching sdk-app-id", "stable-id", "stable-id"],
-    ])("deletes a same-name app owned via %s", async (_case, remoteAppId, localAppId) => {
-      const client = createMockClient([{ name: appName, label: appName, sdkAppId: remoteAppId }]);
-      const application = createMockApplication({ name: appName, id: localAppId });
-
-      const result = await planForRemoval(client, application);
-
-      expect(result.deletes).toHaveLength(1);
-      expect(result.deletes[0]!.name).toBe(appName);
     });
 
     test("does not delete a same-name app owned by a different id", async () => {
@@ -636,7 +643,7 @@ describe("planApplication", () => {
       ]);
       const application = createMockApplication({ name: appName, id: "my-id" });
 
-      const result = await planForRemoval(client, application);
+      const result = await plan(client, application);
 
       expect(result.deletes).toHaveLength(0);
     });
@@ -648,7 +655,7 @@ describe("planApplication", () => {
       } as unknown as OperatorClient;
       const application = createMockApplication({ name: appName });
 
-      const result = await planForRemoval(client, application);
+      const result = await plan(client, application);
 
       expect(result.deletes).toHaveLength(0);
     });
@@ -657,15 +664,27 @@ describe("planApplication", () => {
       const client = createMockClient([
         { name: appName, label: appName },
         { name: "other-app", label: "other-app" },
-        { name: "another-app", label: "another-app" },
+        { name: "another-app", label: appName },
       ]);
       const application = createMockApplication({ name: appName });
 
-      const result = await planForRemoval(client, application);
+      const result = await plan(client, application);
 
       expect(result.deletes).toHaveLength(1);
       expect(result.deletes[0]!.name).toBe(appName);
       expect(client.getMetadata).toHaveBeenCalledTimes(1);
+    });
+
+    test("records another id's app as a resource owner only when removing", async () => {
+      const client = createMockClient([
+        { name: "other-app", label: "other-app", sdkAppId: "other-id" },
+      ]);
+      const application = createMockApplication({ name: appName, id: "stable-id" });
+
+      const result = await plan(client, application);
+
+      expect(result.deletes).toHaveLength(0);
+      expect([...result.resourceOwners]).toEqual(owners);
     });
   });
 

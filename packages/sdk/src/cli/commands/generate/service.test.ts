@@ -327,6 +327,79 @@ describe("GenerationManager", () => {
       await expect(duplicateManager.generate()).rejects.toThrow(
         /Duplicate TailorDB table names detected/,
       );
+      expect(vi.mocked(logger.error).mock.calls).toEqual([
+        ["Error validating TailorDB table names"],
+      ]);
+    });
+
+    test("names the TailorDB service whose tables fail to load, leaving the error to the caller", async () => {
+      const loadFailure = new Error("table load failed");
+      const application = applicationWithTailorDBServices(mockConfig, [
+        {
+          ...loadedTailorDBService("main", []),
+          loadTypes: vi.fn().mockRejectedValue(loadFailure),
+        },
+      ]);
+      const manager = createGenerationManager({ application, config: mockConfig });
+
+      await expect(manager.generate()).rejects.toBe(loadFailure);
+      expect(vi.mocked(logger.error).mock.calls).toEqual([
+        [expect.stringMatching(/Error loading tables for TailorDB service .*main/)],
+      ]);
+    });
+
+    test("names the Resolver service whose resolvers fail to load, leaving the error to the caller", async () => {
+      const loadFailure = new Error("resolver load failed");
+      const config = { ...mockConfig, db: {}, resolver: {} };
+      const application: Application = {
+        ...defineApplication({ config }),
+        resolverServices: [
+          {
+            namespace: "main",
+            config: { files: [] },
+            defaultPermission: undefined,
+            resolvers: {},
+            loadResolvers: vi.fn().mockRejectedValue(loadFailure),
+          },
+        ],
+      };
+      const manager = createGenerationManager({ application, config });
+
+      await expect(manager.generate()).rejects.toBe(loadFailure);
+      expect(vi.mocked(logger.error).mock.calls).toEqual([
+        [expect.stringMatching(/Error loading resolvers for Resolver service .*main/)],
+      ]);
+    });
+
+    test("names a generated file that fails to write, leaving its error to the plugin failure report", async () => {
+      const writeFailure = new Error("generated file write failed");
+      vi.mocked(fs.writeFile).mockImplementationOnce((_path, _data, callback) => {
+        callback(writeFailure);
+      });
+      const config = { ...mockConfig, db: {}, resolver: {} };
+      const manager = createGenerationManager({
+        application: defineApplication({ config }),
+        config,
+        pluginManager: new PluginManager([
+          {
+            id: "writing-plugin",
+            description: "Writes one file",
+            onTailorDBReady: async () => ({
+              files: [{ path: path.join(tempDir, "generated.txt"), content: "generated" }],
+            }),
+          },
+        ]),
+      });
+
+      await expect(manager.generate()).rejects.toMatchObject({
+        code: "PLUGIN_GENERATION_FAILED",
+      });
+      expect(fs.writeFile).toHaveBeenCalledOnce();
+      expect(vi.mocked(logger.error).mock.calls).toEqual([
+        [expect.stringMatching(/Error writing file .*generated\.txt/)],
+        [expect.stringMatching(/Error processing plugin .*writing-plugin.* \(onTailorDBReady\)/)],
+        [expect.stringContaining(writeFailure.message)],
+      ]);
     });
   });
 });

@@ -109,6 +109,23 @@ export default function(input: any) {
       await expectMainExport("verify-plain.mjs", result.bundledCode);
     });
 
+    test("folds the gate of the kysely plugin's temporal option in what it bundles", async () => {
+      const detected: DetectedFunction = { type: "plain", name: "gate" };
+      const source = `
+export default function() {
+  return globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL === "true";
+}
+`;
+
+      const withTemporal = await bundle("gate-on.ts", source, detected, { kyselyTemporal: true });
+      const withoutTemporal = await bundle("gate-off.ts", source, detected);
+
+      expect(withTemporal.bundledCode).not.toContain("__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL");
+      expect(withTemporal.bundledCode).toMatch(/return\s*(?:true|!0)/);
+      expect(withoutTemporal.bundledCode).not.toContain("__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL");
+      expect(withoutTemporal.bundledCode).toMatch(/return\s*(?:false|!1)/);
+    });
+
     test("bundles a named-exported main function", async () => {
       const detected: DetectedFunction = { type: "plain", name: "named-main", namedMain: true };
       const result = await bundle(
@@ -235,6 +252,30 @@ export function main() {
 
       expect(texts.some((text) => text.includes("INSTALLED_LIB_SOURCE"))).toBe(true);
     });
+  });
+
+  test("lists the project files it read, leaving out the generated entry and installed packages", async () => {
+    const libDir = path.join(testDir, "node_modules", "function-watch-lib");
+    fs.mkdirSync(libDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(libDir, "package.json"),
+      JSON.stringify({ name: "function-watch-lib", type: "module", main: "index.js" }),
+    );
+    fs.writeFileSync(path.join(libDir, "index.js"), "export const libValue = () => 'LIB';\n");
+    fs.writeFileSync(path.join(testDir, "helper.ts"), "export const helper = () => 'HELPER';\n");
+
+    const result = await bundle(
+      "uses-helper.ts",
+      `import { helper } from "./helper";\n` +
+        `import { libValue } from "function-watch-lib";\n` +
+        `export function main() { return helper() + libValue(); }\n`,
+      { type: "plain", name: "uses-helper", namedMain: true },
+    );
+
+    expect(result.sourceFiles.toSorted()).toEqual([
+      path.join(testDir, "helper.ts"),
+      path.join(testDir, "uses-helper.ts"),
+    ]);
   });
 
   describe("resolver", () => {

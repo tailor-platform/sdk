@@ -23,6 +23,7 @@ import {
   MIGRATION_IN_PROGRESS_LABEL_KEY,
   MIGRATION_LABEL_KEY,
 } from "#/cli/commands/tailordb/migrate/types";
+import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { withMetadataWriteBatch } from "../label";
@@ -34,6 +35,7 @@ import {
   executeMigrations,
   isMigrationPartiallyApplied,
   resolveMigrationMachineUsers,
+  rollbackSkippedError,
   rolledBackError,
   type MigrationContext,
 } from "./migration";
@@ -1673,7 +1675,11 @@ describe("migration", () => {
             [createMockMigration({ number: 3 })],
             checkpoints,
           ),
-        ).rejects.toMatchObject({ code: "MIGRATION_FAILED", message: "boom" });
+        ).rejects.toMatchObject({
+          code: "MIGRATION_FAILED",
+          message: "Migration tailordb/0003 failed: boom",
+          context: { namespace: "tailordb", migrationNumber: 3 },
+        });
         expect(store.labels()).not.toHaveProperty(MIGRATION_IN_PROGRESS_LABEL_KEY);
         expect(store.labels()).not.toHaveProperty(MIGRATION_EXECUTION_LABEL_KEY);
         expect(removeMigrationWorkflowResourcesMock).toHaveBeenCalledWith(
@@ -1682,6 +1688,25 @@ describe("migration", () => {
           "tailordb",
           3,
         );
+      });
+
+      test("names the migration when the failed run reports no error", async () => {
+        const store = createMetadataStore({});
+        executeMigrationAsWorkflowMock.mockImplementationOnce(
+          runThat(() => ({ success: false, logs: "" })),
+        );
+
+        await expect(
+          executeMigrations(
+            { ...createMockContext(), client: store.client },
+            [createMockMigration({ number: 3 })],
+            checkpoints,
+          ),
+        ).rejects.toMatchObject({
+          code: "MIGRATION_FAILED",
+          message: "Migration tailordb/0003 failed",
+          context: { namespace: "tailordb", migrationNumber: 3 },
+        });
       });
 
       test("clears the record when the run fails before it starts", async () => {
@@ -2338,5 +2363,40 @@ describe("rolledBackError", () => {
     );
 
     expect((error as { suggestion?: string }).suggestion).not.toContain("do not run again");
+  });
+});
+
+describe("rollbackSkippedError", () => {
+  test("keeps the recovery advice of the failure after how to settle the migration", () => {
+    const error = rollbackSkippedError(
+      createMockMigration({ number: 3 }),
+      withErrorDiagnostics(new ConnectError("refused", Code.FailedPrecondition), {
+        suggestion: "Fill in the records.",
+      }),
+      true,
+      { confirmed: true, kind: "steps" },
+      {},
+    );
+
+    expect(error).toMatchObject({
+      code: "MIGRATION_PARTIALLY_APPLIED",
+      suggestion: expect.stringMatching(
+        /Deploy again to resume it.*stay in maintenance mode.*Fill in the records\.$/s,
+      ),
+    });
+  });
+
+  test("leaves out advice attached to a CLI error", () => {
+    const error = rollbackSkippedError(
+      createMockMigration({ number: 3 }),
+      withErrorDiagnostics(CLIError({ code: "MIGRATION_FAILED", message: "boom" }), {
+        suggestion: "Fix the failure in migrate.ts.",
+      }),
+      false,
+      { confirmed: true, kind: "steps" },
+      {},
+    );
+
+    expect((error as { suggestion?: string }).suggestion).not.toContain("Fix the failure");
   });
 });

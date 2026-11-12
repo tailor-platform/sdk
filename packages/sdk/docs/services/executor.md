@@ -109,6 +109,8 @@ type WebhookRequest = {
 incomingWebhookTrigger<WebhookRequest>();
 ```
 
+Name only what you want to change in the type argument. The body type and the type of each header you name are replaced, and the others keep their defaults. For example, `incomingWebhookTrigger<{ headers: { "x-request-id": string[] } }>()` types `x-request-id` as `string[]`. Because one header is an array, the headers you do not name may then be arrays as well.
+
 You can customize the HTTP response returned to the webhook caller:
 
 ```typescript
@@ -135,7 +137,7 @@ Fires when a resolver is executed:
 ```typescript
 resolverExecutedTrigger({
   resolver: createOrderResolver,
-  condition: ({ result, error }) => !error && result?.order?.id,
+  condition: (args) => args.success && !!args.result.order,
 });
 ```
 
@@ -417,51 +419,11 @@ Without an `invoker`, the operation runs as whoever raised the trigger event, or
 
 ## Event Payloads
 
-Each trigger type provides specific context data in the callback functions.
+The SDK exports the args type of each single-event trigger under the trigger's name in PascalCase with `Trigger` replaced by `Args`, such as `RecordCreatedArgs` for `recordCreatedTrigger()`; a multi-event trigger's callbacks receive the union of the args of the events it lists. Editor autocompletion lists each type's fields. `actor`, where present, is the principal that raised the event, or `null` when there is none.
 
 ### Record Event Payloads
 
-Record triggers receive context based on the operation type:
-
-#### Created Event
-
-```typescript
-interface RecordCreatedContext<T> {
-  event: "created"; // Short event name for type narrowing
-  rawEvent: "tailordb.type_record.created"; // Full event type string
-  workspaceId: string; // Workspace identifier
-  appNamespace: string; // Application/namespace name
-  typeName: string; // TailorDB table name
-  newRecord: T; // The newly created record
-}
-```
-
-#### Updated Event
-
-```typescript
-interface RecordUpdatedContext<T> {
-  event: "updated";
-  rawEvent: "tailordb.type_record.updated";
-  workspaceId: string;
-  appNamespace: string;
-  typeName: string;
-  oldRecord: T; // Previous record state
-  newRecord: T; // Current record state
-}
-```
-
-#### Deleted Event
-
-```typescript
-interface RecordDeletedContext<T> {
-  event: "deleted";
-  rawEvent: "tailordb.type_record.deleted";
-  workspaceId: string;
-  appNamespace: string;
-  typeName: string;
-  oldRecord: T; // The deleted record
-}
-```
+`newRecord` holds the record after a create or update, and `oldRecord` holds it before an update or delete.
 
 **Usage Example:**
 
@@ -488,26 +450,11 @@ export default createExecutor({
 
 ### Schedule Event Payload
 
-Schedule triggers receive minimal context:
-
-```typescript
-interface ScheduleContext {
-  scheduledTime: string; // ISO 8601 timestamp
-}
-```
+`ScheduleArgs` holds only `env`.
 
 ### Incoming Webhook Payload
 
-Webhook triggers receive HTTP request data:
-
-```typescript
-interface WebhookContext<T = unknown> {
-  body: T; // Parsed request body
-  headers: Record<string, string>; // Request headers
-  method: "POST" | "GET" | "PUT" | "DELETE"; // HTTP method
-  rawBody: string; // Raw request body, base64-encoded
-}
-```
+`IncomingWebhookArgs` types `body` and `headers` from the type argument of `incomingWebhookTrigger()`. Header names are in lower case. `accept`, `via` and the other headers a client may send on several lines are `string | string[]`; any other header is a `string`.
 
 **Usage Example:**
 
@@ -543,7 +490,9 @@ export default createExecutor({
 
 The webhook URL is public, so verify the signature over the unparsed request body before trusting `body`. `rawBody` is delivered base64-encoded; decode it to the original bytes before computing the signature.
 
-When an executor is triggered manually with [`tailor executor trigger`](../cli/executor.md#executor-trigger) or `triggerExecutor` from `@tailor-platform/sdk/cli`, it receives empty `headers`, even when `--header` is given, and no `rawBody`. To test an executor that reads headers or verifies a signature, send a request to its webhook URL, which [`tailor executor webhook list`](../cli/executor.md#executor-webhook-list) shows.
+A header sent on one line is a string, and a header sent on more than one line is an array of strings.
+
+When an executor is triggered manually with [`tailor executor trigger`](../cli/executor.md#executor-trigger) or `triggerExecutor` from `@tailor-platform/sdk/cli`, it receives the headers passed with `--header` or the `headers` option, and no `rawBody`. A header passed once is a string, and a header passed more than once is an array. To test an executor that verifies a signature over `rawBody`, send a request to its webhook URL, which [`tailor executor webhook list`](../cli/executor.md#executor-webhook-list) shows.
 
 **With custom response:**
 
@@ -567,17 +516,7 @@ export default createExecutor({
 
 ### Resolver Executed Payload
 
-Resolver triggers receive the resolver's result or error:
-
-```typescript
-interface ResolverExecutedContext<TResult> {
-  workspaceId: string; // Workspace identifier
-  appNamespace: string; // Application/namespace name
-  resolverName: string; // Name of the executed resolver
-  result?: TResult; // Return value (on success)
-  error?: string; // Error message (on failure)
-}
-```
+Narrow `ResolverExecutedArgs` on `success`: `result` holds the resolver's output when it is `true`, and `error` holds the error message when it is `false`.
 
 **Usage Example:**
 
@@ -589,13 +528,14 @@ export default createExecutor({
   name: "order-created-notification",
   trigger: resolverExecutedTrigger({
     resolver: createOrderResolver,
-    condition: ({ result, error }) => !error && !!result?.order,
+    condition: (args) => args.success && !!args.result.order,
   }),
   operation: {
     kind: "function",
-    body: async ({ result, resolverName }) => {
-      console.log(`${resolverName} completed successfully`);
-      console.log(`Order ID: ${result.order.id}`);
+    body: async (args) => {
+      if (!args.success) return;
+      console.log(`${args.resolverName} completed successfully`);
+      console.log(`Order ID: ${args.result.order.id}`);
     },
   },
 });
@@ -603,68 +543,12 @@ export default createExecutor({
 
 ### IdP User Event Payload
 
-IdP user triggers receive user context:
-
-```typescript
-interface IdpUserContext {
-  event: "created" | "updated" | "deleted"; // Short event name
-  rawEvent: string; // Full event type (e.g., "idp.user.created")
-  namespaceName: string; // IdP namespace name
-  userId: string; // The affected user ID
-}
-```
+`namespaceName` names the IdP namespace, and `userId` the affected user.
 
 ### Auth Access Token Event Payload
 
-Auth access token triggers receive token context:
+`namespaceName` names the Auth namespace, and `userId` the user the token belongs to.
 
-```typescript
-interface AuthAccessTokenContext {
-  event: "issued" | "refreshed" | "revoked"; // Short event name
-  rawEvent: string; // Full event type (e.g., "auth.access_token.issued")
-  namespaceName: string; // Auth namespace name
-  userId: string; // The user associated with the token
-}
-```
+### Workflow Execution Event Payloads
 
-### Workflow Execution Event Payload
-
-Workflow execution triggers receive execution context:
-
-```typescript
-interface WorkflowExecutionContext {
-  workspaceId: string; // Workspace identifier
-  env: TailorEnv; // Environment variables from tailor.config.ts
-  actor: TailorActor | null; // Principal that triggered the workflow
-  workflowId: string; // Workflow resource ID
-  workflowName: string; // Workflow name
-  workflowExecutionId: string; // Workflow execution ID
-  event: "started" | "completed" | "retried" | "resumed" | "wait_started" | "wait_resolved";
-  rawEvent: string; // Full event type
-}
-```
-
-Completed events narrow on `success`. Failed executions include `error`; retried executions include `retryCount` and `retryAfter`.
-
-```typescript
-body: async (args) => {
-  if (args.event === "completed" && !args.success) {
-    console.error(args.error);
-  }
-};
-```
-
-### Workflow Job Execution Event Payload
-
-Workflow job execution triggers include every `WorkflowExecutionContext` field above, plus job-specific fields:
-
-```typescript
-interface WorkflowJobExecutionContext {
-  workflowJobExecutionId: string; // Job execution ID
-  jobFunctionName: string; // Name passed to createWorkflowJob
-  event: "started" | "completed" | "wait_started" | "wait_resolved";
-  rawEvent: string; // Full event type
-}
-```
-
-`wait_started` events include `waitKey`, plus JSON-serialized `waitPayload` when the wait point recorded one; `wait_resolved` events include `waitKey`.
+See [Workflow Execution Triggers](#workflow-execution-triggers) for narrowing workflow and job execution args on `event` and `success`.

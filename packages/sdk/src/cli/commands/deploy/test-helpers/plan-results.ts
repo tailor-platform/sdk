@@ -1,4 +1,4 @@
-import { isPlainObject } from "es-toolkit";
+import { isPlainObject } from "es-toolkit/predicate";
 import { createChangeSet } from "../change-set";
 import type { PlanResults } from "../apply-phases";
 
@@ -51,6 +51,7 @@ export function emptyPlanResults(): PlanResults {
   return {
     functionRegistry: {
       changeSet: createChangeSet("Function registry"),
+      metadataUpdates: [],
       workflowJobChanges: emptyFunctionChanges(),
       resolverFunctionChanges: emptyFunctionChanges(),
       executorFunctionChanges: emptyFunctionChanges(),
@@ -115,14 +116,14 @@ export function emptyPlanResults(): PlanResults {
       existingServices: {},
       existingResolvers: new Map(),
     },
-    app: Object.assign(
-      createChangeSet("Applications"),
-      emptyOwnership(),
-    ) as unknown as PlanResults["app"],
+    app: Object.assign(createChangeSet("Applications"), emptyOwnership(), {
+      existingApplications: [],
+    }) as unknown as PlanResults["app"],
     executor: {
       changeSet: createChangeSet("Executors"),
       ...emptyOwnership(),
       existingExecutors: {},
+      existingExecutorDetails: new Map(),
     },
     workflow: {
       changeSet: createChangeSet("Workflows"),

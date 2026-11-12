@@ -1,9 +1,9 @@
 import { formatWithOptions, stripVTControlCharacters, type InspectOptions } from "node:util";
 import { color, renderFor } from "@tailor-platform/shared/color";
-import { formatDistanceToNowStrict } from "date-fns";
 import { isCI } from "std-env";
 import { renderTable } from "./ascii-table";
 import { parseBoolean } from "./parse-boolean";
+import { formatRelativeTime } from "./relative-time";
 
 /** Environment variable selecting JSON as the default output for every command. */
 export const JSON_OUTPUT_ENV_VAR = "TAILOR_JSON_OUTPUT";
@@ -616,7 +616,7 @@ export const logger = {
       if (options?.showNull && value === null) return "NULL";
       if (value === null || value === undefined) return "N/A";
       if (value instanceof Date) {
-        return formatDistanceToNowStrict(value, { addSuffix: true });
+        return formatRelativeTime(value);
       }
       if (typeof value === "object") {
         return pretty ? JSON.stringify(value, null, 2) : JSON.stringify(value);

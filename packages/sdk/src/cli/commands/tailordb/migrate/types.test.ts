@@ -1,4 +1,6 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, expect, test } from "vitest";
+import { errorToJson } from "#/cli/shared/error-json";
 import {
   isValidMigrationNumber,
   formatMigrationNumber,
@@ -11,11 +13,16 @@ import {
   DB_TYPES_FILE_NAME,
 } from "./snapshot";
 import {
+  preconditionFailureError,
+  requiredFieldNullValuesError,
+} from "./test-helpers/platform-errors";
+import {
   sanitizeMigrationLabel,
   parseMigrationLabelNumber,
   executionIdToLabel,
   parseExecutionLabel,
   MAX_LABEL_LENGTH,
+  handleOptionalToRequiredError,
 } from "./types";
 
 describe("migration constants", () => {
@@ -156,5 +163,49 @@ describe("execution labels", () => {
     expect(parseExecutionLabel("e1234")).toBeNull();
     expect(parseExecutionLabel(executionIdToLabel(executionId).slice(1))).toBeNull();
     expect(parseExecutionLabel("e0190F3A27C1E7D4B9A6F1B2C3D4E5F60")).toBeNull();
+  });
+});
+
+describe("handleOptionalToRequiredError", () => {
+  function thrownBy(handle: () => unknown): unknown {
+    try {
+      handle();
+    } catch (error) {
+      return error;
+    }
+    throw new Error("expected the handler to throw");
+  }
+
+  test("carries a code and the remediation when records without a value block making a field required", () => {
+    const error = requiredFieldNullValuesError();
+
+    const thrown = thrownBy(() => handleOptionalToRequiredError(error, "Fill in the records."));
+
+    expect(thrown).toBe(error);
+    expect(errorToJson(thrown).error).toMatchObject({
+      code: "TAILORDB_REQUIRED_FIELD_HAS_NULL_VALUES",
+      suggestion: "Fill in the records.",
+    });
+  });
+
+  const refusalMessage = requiredFieldNullValuesError().rawMessage;
+
+  test.each([
+    [
+      "without a PreconditionFailure detail",
+      new ConnectError(refusalMessage, Code.FailedPrecondition),
+    ],
+    [
+      "for another violation type",
+      preconditionFailureError(refusalMessage, "ANOTHER_VIOLATION", "note"),
+    ],
+  ])("adds nothing to a failed precondition %s", (_case, error) => {
+    const thrown = thrownBy(() => handleOptionalToRequiredError(error, "Fill in the records."));
+
+    expect(thrown).toBe(error);
+    expect(errorToJson(thrown).error).toEqual({
+      code: "RPC_FAILED_PRECONDITION",
+      message: error.message,
+    });
   });
 });

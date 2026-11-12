@@ -3,6 +3,7 @@
 import { fileURLToPath } from "node:url";
 import {
   annotateTerminalError,
+  errorToJson,
   serializeError,
   createCommonArgs,
   loadEnvFilesFromArgv,
@@ -10,6 +11,7 @@ import {
   defineCommand,
   runMain,
 } from "@tailor-platform/sdk/cli";
+import { reportPluginError } from "@tailor-platform/shared/plugin-error";
 import * as path from "pathe";
 import { readPackageJSON } from "pkg-types";
 import { z } from "zod";
@@ -19,12 +21,14 @@ import { seedFillCommand } from "./fill";
 import { seedStudioCommand } from "./studio";
 import { seedValidateCommand } from "./validate";
 
-function hasFormat(error: unknown): error is { format(): string } {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    typeof (error as { format?: unknown }).format === "function"
-  );
+/**
+ * Prefix a failure's message with the file it points at, as the host CLI prints it.
+ * @param error - Failure to print
+ * @returns The message of the failure's JSON error envelope
+ */
+function locatedMessage(error: Error): string {
+  const { message } = errorToJson(error).error;
+  return typeof message === "string" ? message : error.message;
 }
 
 const packageRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -53,20 +57,6 @@ void runMain(mainCommand, {
   globalArgs: z.strictObject(createCommonArgs(commonArgsOptions)),
   displayErrors: false,
   setup: () => loadEnvFilesFromArgv(process.argv.slice(2), commonArgsOptions),
-  cleanup: ({ error }) => {
-    if (!error) return;
-    if (logger.jsonMode) {
-      logger.log(serializeError(error, { includeStack: logger.verbose }));
-    } else if (hasFormat(error)) {
-      logger.log(error.format());
-    } else if (error instanceof Error) {
-      logger.error(error.message);
-    } else {
-      logger.error(`Unknown error: ${String(error)}`);
-    }
-    if (!logger.jsonMode && error instanceof Error && error.stack) {
-      logger.debug(`\nStack trace:\n${error.stack}`);
-    }
-    annotateTerminalError(error, { jsonMode: logger.jsonMode });
-  },
+  cleanup: ({ error }) =>
+    reportPluginError(error, { logger, serializeError, annotateTerminalError, locatedMessage }),
 });

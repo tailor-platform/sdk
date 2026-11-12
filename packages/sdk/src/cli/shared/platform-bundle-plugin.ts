@@ -1,3 +1,4 @@
+import { RolldownMagicString } from "rolldown";
 import type { EffectiveDateDefault } from "#/runtime/types";
 import type * as rolldown from "rolldown";
 
@@ -30,6 +31,10 @@ const WITHOUT_TEMPORAL_GATE =
 const DATE_DEFAULT_GATE =
   /(?<![\w$.])globalThis\.process\?\.env\.__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT\b/g;
 
+// Read at module top level by the bundled `getDB` of `@tailor-platform/sdk/plugin/kysely-type/db`.
+const KYSELY_TEMPORAL_GATE =
+  /(?<![\w$.])globalThis\.process\?\.env\.__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL\b/g;
+
 /**
  * Date representations whose conversion code a bundle keeps.
  */
@@ -42,23 +47,29 @@ export type BundledDateRepresentations = {
  * Create the platform bundle define plugin.
  * @param dateRepresentations - Date representations whose conversion code the bundle keeps
  * @param dateDefault - Representation applied to `t` date fields that omit `as`
+ * @param kyselyTemporal - Whether `kyselyTypePlugin` is configured with `temporal: true`
  * @returns Rolldown plugin folding the platform bundle gates
  */
 export function createPlatformBundleDefinePlugin(
   dateRepresentations: BundledDateRepresentations = { date: true, temporal: true },
   dateDefault: EffectiveDateDefault = "legacy",
+  kyselyTemporal = false,
 ): rolldown.Plugin {
   const dateDefaultLiteral = dateDefault === "legacy" ? "undefined" : JSON.stringify(dateDefault);
+  const kyselyTemporalLiteral = kyselyTemporal ? '"true"' : "undefined";
   return {
     name: "tailor-platform-bundle-define",
     transform(code) {
       if (!code.includes("__TAILOR_PLATFORM_BUNDLE")) return null;
+      const source = new RolldownMagicString(code)
+        .replaceAll(GATE, "true")
+        .replaceAll(WITHOUT_DATE_GATE, String(!dateRepresentations.date))
+        .replaceAll(WITHOUT_TEMPORAL_GATE, String(!dateRepresentations.temporal))
+        .replaceAll(DATE_DEFAULT_GATE, dateDefaultLiteral)
+        .replaceAll(KYSELY_TEMPORAL_GATE, kyselyTemporalLiteral);
       return {
-        code: code
-          .replace(GATE, "true")
-          .replace(WITHOUT_DATE_GATE, String(!dateRepresentations.date))
-          .replace(WITHOUT_TEMPORAL_GATE, String(!dateRepresentations.temporal))
-          .replace(DATE_DEFAULT_GATE, dateDefaultLiteral),
+        code: source.toString(),
+        map: source.generateMap({ hires: "boundary" }).toString(),
       };
     },
     resolveId(source) {

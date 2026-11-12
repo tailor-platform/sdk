@@ -730,7 +730,9 @@ describe("planIdP and an implicit all-domains policy", () => {
     });
 
     expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining("leaves userAuthPolicy.allowedEmailDomains empty"),
+      expect.stringContaining(
+        "leaves userAuthPolicy.allowedEmailDomains empty, which the platform rejects when deploy creates or updates the IdP.",
+      ),
     );
   });
 

@@ -3,7 +3,7 @@ import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { importUserModule } from "#/cli/shared/user-modules";
-import { definitionInvalidError } from "#/cli/shared/validation-errors";
+import { atUserModule, definitionInvalidError } from "#/cli/shared/validation-errors";
 import { flattenZodIssues, formatIssueList } from "#/cli/shared/zod-issues";
 import {
   pickTailorDBTypeSchemaKeys,
@@ -56,6 +56,8 @@ export interface CreateTailorDBServiceParams {
   baseDir: string;
   /** Representation applied to `t` date fields that omit `as` in hook and validator scripts */
   dateDefault?: EffectiveDateDefault;
+  /** Bundle each table's hook and validator scripts while loading. Defaults to `true`; turn it off when only the table definitions are read. */
+  precompileScripts?: boolean;
 }
 
 /**
@@ -64,7 +66,14 @@ export interface CreateTailorDBServiceParams {
  * @returns A new TailorDBService instance
  */
 export function createTailorDBService(params: CreateTailorDBServiceParams): TailorDBService {
-  const { namespace, config, pluginManager, baseDir, dateDefault = "legacy" } = params;
+  const {
+    namespace,
+    config,
+    pluginManager,
+    baseDir,
+    dateDefault = "legacy",
+    precompileScripts = true,
+  } = params;
   type TailorDBTypesByName = Record<string, TailorDBTypeSchemaOutput>;
   const createRawTypesByName = (): TailorDBTypesByName =>
     Object.create(null) as TailorDBTypesByName;
@@ -292,7 +301,9 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         logger.debug(
           `Type: ${styles.successBright(`"${result.data.name}"`)} loaded from ${styles.path(relativePath)}`,
         );
-        await precompileTailorDBTypeScripts(result.data, typeFile, tsconfig, dateDefault);
+        if (precompileScripts) {
+          await precompileTailorDBTypeScripts(result.data, typeFile, tsconfig, dateDefault);
+        }
         loadedTypes[result.data.name] = result.data;
         registerRawType(typeFile, result.data.name, result.data, {
           filePath: typeFile,
@@ -315,8 +326,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     } catch (error) {
       const relativePath = path.relative(process.cwd(), typeFile);
       logger.error(`Failed to load table from ${styles.bold(relativePath)}`);
-      logger.error(String(error));
-      throw error;
+      throw atUserModule(error, typeFile);
     }
     return loadedTypes;
   };
@@ -340,7 +350,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
             return undefined;
           }
 
-          const typeFiles = [...new Set(loadFilesWithIgnores(config, baseDir))];
+          const typeFiles = loadFilesWithIgnores(config, baseDir);
 
           const tsconfig = await resolveTSConfigWithFallback(baseDir);
 
@@ -372,7 +382,6 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
 
       const successfulResults = results.map(({ pluginId, config, result }) => {
         if (!result.success) {
-          logger.error(result.error);
           throw new Error(result.error);
         }
         return { pluginId, config, output: result.output };
