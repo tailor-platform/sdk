@@ -107,7 +107,7 @@ frontendPlugin({
   distDir: "dist",
   build: async ({ site, workspaceId, distDir, exec, api }) => {
     await exec("pnpm run build");
-    const client = (await api("example.v1.ExampleService/CreateClient", {
+    const client = (await api("example.v1.ExampleService/GetOrCreateClient", {
       workspaceId,
       redirectUri: `${site.url}/callback`,
     })) as { id: string };
@@ -120,9 +120,13 @@ The function runs after `env` resolves and before the upload, with the same cont
 receives plus `env` (the values it returned), the absolute `workingDir` and `distDir`, a
 `logger`, `exec`, and `api`. `exec` runs a shell command in `workingDir` with those `env`
 values added; pass `workingDir`, `env`, or `output` to override them for one command. `api`
-calls a Platform endpoint as the user or machine user `tailor deploy` ran as, like
-`tailor api`. When the function rejects, the frontend is not uploaded and later frontends
-and deploy hooks do not run, as with a failed build command.
+calls a Platform endpoint with the credentials `tailor deploy` used, like `tailor api`. When
+the function rejects, the frontend is not uploaded and later frontends and deploy hooks do
+not run, as with a failed build command.
+
+Running `tailor deploy` again after such a failure runs the function again, so write what it
+does with `api` to be repeatable: look up or create the resource instead of always creating a
+new one.
 
 ## Upload existing assets
 

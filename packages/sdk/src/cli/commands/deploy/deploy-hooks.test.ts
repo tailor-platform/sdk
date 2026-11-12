@@ -122,6 +122,10 @@ vi.mock(import("./secret-manager"), async (original) => ({
   ...(await original()),
   planSecretManager: async () => mocks.results.secretManager,
 }));
+vi.mock("../api/api-call", () => ({
+  apiCall: vi.fn().mockResolvedValue({ status: 200, data: {} }),
+}));
+import { apiCall } from "../api/api-call";
 import { deploy, deployMigrationTestBaseline, deployMigrationTestTarget } from "./deploy";
 beforeEach(() => {
   const application = {
@@ -180,6 +184,18 @@ test("runs a hook once after remaining resources are applied even when the plan 
       }),
     }),
   );
+});
+test("lets a hook call the Platform as the profile the deploy ran with", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  register(async (ctx) => {
+    await ctx.api("example.v1.ExampleService/List");
+  });
+  await deploy({ yes: true, noValidate: true, profile: "dev" });
+  expect(apiCall).toHaveBeenCalledExactlyOnceWith({
+    profile: "dev",
+    endpoint: "example.v1.ExampleService/List",
+    body: "{}",
+  });
 });
 test("checks services in use after the plan drops claimed deletes and schedules renamed applications' deletes", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");

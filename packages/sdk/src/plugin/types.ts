@@ -508,7 +508,7 @@ export interface DeployedContext<PluginConfig = unknown> {
    */
   exec(command: string, options: PluginExecOptions): Promise<PluginExecResult>;
   /**
-   * Call a Platform API endpoint as the user or machine user `tailor deploy` ran as, like `tailor api`.
+   * Call a Platform API endpoint with the credentials `tailor deploy` used, like `tailor api`.
    * Rejects when the call fails.
    * @param endpoint - Endpoint in the forms `tailor api` accepts, such as `tailor.v1.OperatorService/GetApplication`
    * @param body - Request body, sent as JSON. Defaults to `{}`

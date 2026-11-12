@@ -366,8 +366,8 @@ functions that run on the Tailor Platform, such as auth hooks, and a plugin modu
 that imports Node.js-only modules makes that bundle fail.
 
 To call a Platform endpoint that the hook needs, await `ctx.api(endpoint, body)`. It
-sends `body` as JSON as the user or machine user `tailor deploy` ran as, like
-`tailor api`, and resolves to the parsed response. `endpoint` takes the same forms as
+sends `body` as JSON with the credentials `tailor deploy` used (`TAILOR_PLATFORM_TOKEN`,
+the profile, or the logged-in user), like `tailor api`, and resolves to the parsed response. `endpoint` takes the same forms as
 `tailor api`, such as `tailor.v1.OperatorService/GetApplication`; put `ctx.workspaceId` in
 `body` when the endpoint takes a workspace. It rejects when the call fails.
 
