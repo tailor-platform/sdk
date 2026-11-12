@@ -7,7 +7,7 @@ import type { ManagedResourceType } from "./managed-resource-type";
 
 type ServiceDeletePlan = Pick<
   PlannedDeployment,
-  "application" | "app" | "auth" | "tailorDB" | "pipeline"
+  "application" | "app" | "auth" | "tailorDB" | "pipeline" | "idp"
 >;
 
 type CheckedService = {
@@ -28,6 +28,10 @@ const CHECKED_SERVICES = {
     label: "Resolver namespace",
     deletesOf: (plan) => plan.pipeline.changeSet.service.deletes,
   },
+  "idp.service": {
+    label: "IdP",
+    deletesOf: (plan) => plan.idp.changeSet.service.deletes,
+  },
 } satisfies Partial<Record<ManagedResourceType, CheckedService>>;
 
 type CheckedResourceType = keyof typeof CHECKED_SERVICES;
@@ -35,6 +39,7 @@ type CheckedResourceType = keyof typeof CHECKED_SERVICES;
 const SUBGRAPH_RESOURCE_TYPES = new Map<Subgraph_ServiceType, CheckedResourceType>([
   [Subgraph_ServiceType.TAILORDB, "tailordb.service"],
   [Subgraph_ServiceType.PIPELINE, "pipeline.service"],
+  [Subgraph_ServiceType.IDP, "idp.service"],
 ]);
 
 type ServiceRef = { resourceType: CheckedResourceType; name: string };
@@ -98,7 +103,7 @@ function serviceUses(deployments: ReadonlyArray<ServiceDeletePlan>): ServiceUse[
 }
 
 /**
- * Reject a run that deletes an Auth service, TailorDB namespace, or resolver namespace an
+ * Reject a run that deletes an Auth service, TailorDB namespace, resolver namespace, or IdP an
  * application still uses.
  * An application the plan writes counts by the services its config names, any other by the ones
  * the workspace records. When the run spans several configs, call it after deletes that another
