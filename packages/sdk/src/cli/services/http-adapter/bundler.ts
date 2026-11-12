@@ -3,9 +3,11 @@ import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
+import { createHookFailures } from "#/cli/services/hook-failures";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
+import { CLIError } from "#/cli/shared/errors";
 import {
   composeFunctionTreeshakeOptions,
   createUserTreeshakeOptions,
@@ -142,13 +144,19 @@ async function bundleAdapterScript(
         absoluteSourcePath,
       );
 
+      const hookFailures = createHookFailures();
       const rejectNodeImports: rolldown.Plugin = {
         name: "http-adapter-reject-node-imports",
         resolveId(source) {
-          if (isNodeBuiltinImport(source)) {
-            throw new Error(`HTTP adapter "${adapter.name}": ${getNodeBuiltinMessage(source)}`);
-          }
-          return null;
+          if (!isNodeBuiltinImport(source)) return null;
+          hookFailures.record(
+            CLIError({
+              code: "HTTP_ADAPTER_NODE_IMPORT_UNSUPPORTED",
+              message: `HTTP adapter "${adapter.name}": ${getNodeBuiltinMessage(source)}`,
+              context: { name: adapter.name, specifier: source },
+            }),
+          );
+          return { id: source, external: true };
         },
       };
 
@@ -179,7 +187,7 @@ async function bundleAdapterScript(
       ];
 
       const bundleLog = createBundleLog({ tsconfig });
-      const result = await rolldown.build({
+      const buildOptions = {
         input: entry.input,
         write: false,
         output: {
@@ -200,15 +208,23 @@ async function bundleAdapterScript(
           createUserTreeshakeOptions(bundleTreeshake),
         ]),
         ...bundleLog.options,
-      } as rolldown.BuildOptions);
+      } as rolldown.BuildOptions;
+      const result = await hookFailures.run(() => rolldown.build(buildOptions));
       bundleLog.assertAllResolved();
       const bundled = result.output[0].code;
 
       const byteLength = Buffer.byteLength(bundled, "utf8");
       if (byteLength > ADAPTER_BUNDLE_ERROR_BYTES) {
-        throw new Error(
-          `HTTP adapter "${adapter.name}" ${kind} script is ${byteLength} bytes, exceeding the ${ADAPTER_BUNDLE_ERROR_BYTES} byte limit`,
-        );
+        throw CLIError({
+          code: "HTTP_ADAPTER_BUNDLE_TOO_LARGE",
+          message: `HTTP adapter "${adapter.name}" ${kind} script is ${byteLength} bytes, exceeding the ${ADAPTER_BUNDLE_ERROR_BYTES} byte limit`,
+          context: {
+            name: adapter.name,
+            kind,
+            byteLength,
+            limitBytes: ADAPTER_BUNDLE_ERROR_BYTES,
+          },
+        });
       }
       if (byteLength > ADAPTER_BUNDLE_WARN_BYTES) {
         logger.warn(
@@ -304,9 +320,12 @@ function rejectAsyncInBundle(code: string, adapterName: string, kind: "input" | 
   }
 
   if (asyncFound) {
-    throw new Error(
-      `HTTP adapter "${adapterName}" ${kind} bundle contains async/await, which is unavailable in the gateway runtime. ` +
-        `Check imported helper modules — even if your handler is synchronous, an async helper will fail at runtime.`,
-    );
+    throw CLIError({
+      code: "HTTP_ADAPTER_ASYNC_UNSUPPORTED",
+      message: `HTTP adapter "${adapterName}" ${kind} bundle contains async/await, which is unavailable in the gateway runtime.`,
+      suggestion:
+        "Check imported helper modules — even if your handler is synchronous, an async helper will fail at runtime.",
+      context: { name: adapterName, kind },
+    });
   }
 }

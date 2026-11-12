@@ -4,6 +4,8 @@ import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { buildFunctionBundle, type FunctionBundleSettings } from "#/cli/services/function-bundle";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
+import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
+import { CLIError, internalError, isCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
@@ -13,6 +15,7 @@ import { walkAst } from "./ast-walk";
 import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { detectResolvedStartCalls, hasStartCall, transformStartCalls } from "./start-transformer";
+import type { HookFailures } from "#/cli/services/hook-failures";
 import type { StartContext } from "#/cli/shared/start-context";
 import type { AllowedRuntimeGlobals } from "#/configure/config/types";
 import type * as rolldown from "rolldown";
@@ -33,11 +36,14 @@ interface JobInfo {
   sourceFile: string;
 }
 
-/**
- * Thrown when a job's dependency graph cannot be statically determined, so the
- * job or a call to it would otherwise be silently dropped from the bundle.
- */
-class WorkflowJobDetectionError extends Error {}
+const JOB_UNDETECTABLE = "WORKFLOW_JOB_UNDETECTABLE";
+const SOURCE_PARSE_FAILED = "WORKFLOW_SOURCE_PARSE_FAILED";
+
+function isJobDetectionError(error: unknown): boolean {
+  return (
+    isCLIError(error) && (error.code === JOB_UNDETECTABLE || error.code === SOURCE_PARSE_FAILED)
+  );
+}
 
 function getWorkflowExecJobFunctionRoot(node: unknown): ASTNode | undefined {
   if (!node || typeof node !== "object") return undefined;
@@ -156,22 +162,46 @@ function findDirectExecJobFunctionCalls(program: ASTNode): DirectExecJobFunction
   return calls;
 }
 
-function buildDirectExecJobFunctionErrorMessage(
+function directExecJobFunctionError(sourceFile: string, call: DirectExecJobFunctionCall): CLIError {
+  const { targetName } = call;
+  const text =
+    targetName !== undefined
+      ? {
+          message: `Workflow file calls execJobFunction("${targetName}", ...) directly.`,
+          details:
+            `A direct call is never recognized as a dependency, so "${targetName}" would silently ` +
+            `be dropped from the bundle unless something else happens to reference it.`,
+          suggestion: `Call the "${targetName}" job's .start(...) method from inside a job body instead.`,
+        }
+      : {
+          message:
+            `Workflow file calls execJobFunction(...) directly with a job name that isn't a ` +
+            `string literal, so the target can't be resolved at build time.`,
+          suggestion:
+            `Call the target job's own .start(...) method from inside a job body instead of ` +
+            `calling execJobFunction directly.`,
+        };
+  return jobUndetectableError(sourceFile, { ...text, context: { targetJobName: targetName } });
+}
+
+interface JobUndetectableDescription {
+  message: string;
+  details?: string;
+  suggestion: string;
+  context: Record<string, string | undefined>;
+}
+
+function jobUndetectableError(
   sourceFile: string,
-  call: DirectExecJobFunctionCall,
-): string {
-  if (call.targetName !== undefined) {
-    return (
-      `Workflow file ${sourceFile} calls execJobFunction("${call.targetName}", ...) directly. A ` +
-      `direct call is never recognized as a dependency, so "${call.targetName}" would silently be ` +
-      `dropped from the bundle unless something else happens to reference it. Call the ` +
-      `"${call.targetName}" job's .start(...) method from inside a job body instead.`
-    );
-  }
-  return (
-    `Workflow file ${sourceFile} calls execJobFunction(...) directly with a job name that isn't a ` +
-    `string literal, so the target can't be resolved at build time. Call the target job's own ` +
-    `.start(...) method from inside a job body instead of calling execJobFunction directly.`
+  description: JobUndetectableDescription,
+): CLIError {
+  return withErrorDiagnostics(
+    CLIError({
+      ...description,
+      code: JOB_UNDETECTABLE,
+      context: { file: sourceFile, ...description.context },
+    }),
+    { location: { file: sourceFile } },
   );
 }
 
@@ -186,7 +216,7 @@ function buildDirectExecJobFunctionErrorMessage(
 export function collectExecJobFunctionTargets(code: string): string[] {
   const { program, errors } = parseSync("input.js", code);
   if (errors.length > 0) {
-    throw new WorkflowJobDetectionError(
+    throw internalError(
       `Failed to parse bundled job code while checking for missed dependencies: ` +
         `${errors.map((e) => e.message).join("; ")}`,
     );
@@ -208,8 +238,8 @@ export function collectExecJobFunctionTargets(code: string): string[] {
 
 /**
  * Check every bundled job's code for execJobFunction targets that were not
- * bundled, throwing a WorkflowJobDetectionError naming the caller job when
- * one is found (or when the caller's own bundled code fails to parse).
+ * bundled, throwing an error naming the caller job when one is found (or when
+ * the caller's own bundled code fails to parse).
  * @param bundledCode - Bundled job code by job name
  * @param usedJobNames - Job names that were actually bundled
  */
@@ -224,22 +254,27 @@ export function validateBundledDependencies(
       targets = collectExecJobFunctionTargets(code);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      throw new WorkflowJobDetectionError(
+      throw internalError(
         `Failed to check the bundled output of workflow job "${callerJobName}" for missed ` +
           `dependencies: ${message}`,
+        { cause: error },
       );
     }
 
     for (const targetJobName of targets) {
       if (!usedJobNameSet.has(targetJobName)) {
-        throw new WorkflowJobDetectionError(
-          `Workflow job "${callerJobName}" calls execJobFunction("${targetJobName}", ...) — usually the ` +
-            `result of a rewritten "${targetJobName}" job .start() call — but "${targetJobName}" was not ` +
-            `detected as a dependency and is not included in the bundle. Call the "${targetJobName}" job's ` +
-            `.start() method from inside the body of workflow job "${callerJobName}" (a nested function ` +
-            `inside body works too), or make sure the file containing the call is covered by the workflow ` +
-            `service's "files" pattern.`,
-        );
+        throw CLIError({
+          code: JOB_UNDETECTABLE,
+          message:
+            `Workflow job "${callerJobName}" calls execJobFunction("${targetJobName}", ...), but ` +
+            `"${targetJobName}" was not detected as a dependency and is not included in the bundle.`,
+          details: `The call is usually the result of a rewritten "${targetJobName}" job .start() call.`,
+          suggestion:
+            `Call the "${targetJobName}" job's .start() method from inside the body of workflow job ` +
+            `"${callerJobName}" (a nested function inside body works too), or make sure the file ` +
+            `containing the call is covered by the workflow service's "files" pattern.`,
+          context: { callerJobName, targetJobName },
+        });
       }
     }
   }
@@ -352,7 +387,8 @@ export async function bundleWorkflowJobs(
       sourceFile: job.sourceFile,
       tsconfig,
       runtimeGlobals: { label: `Workflow job "${job.name}"`, allowed: allowedRuntimeGlobals },
-      createTransformPlugin: () => createWorkflowTransformPlugin(job, usedJobs, startContext),
+      createTransformPlugin: (hookFailures) =>
+        createWorkflowTransformPlugin(job, usedJobs, startContext, hookFailures),
       entry: (absoluteSourcePath) => ml /* js */ `
         import { ${JSON.stringify(job.exportName)} as _internalJob } from "${absoluteSourcePath}";
 
@@ -487,16 +523,19 @@ async function filterUsedJobs(
         const source = await fs.promises.readFile(sourceFile, "utf-8");
         const { program, errors } = parseSync(sourceFile, source);
         if (errors.length > 0) {
-          throw new WorkflowJobDetectionError(
-            `Failed to parse ${sourceFile}: ${errors.map((e) => e.message).join("; ")}`,
+          throw withErrorDiagnostics(
+            CLIError({
+              code: SOURCE_PARSE_FAILED,
+              message: `Failed to parse workflow source: ${errors.map((e) => e.message).join("; ")}`,
+              context: { file: sourceFile },
+            }),
+            { location: { file: sourceFile } },
           );
         }
 
         const [firstDirectExecCall] = findDirectExecJobFunctionCalls(program as unknown as ASTNode);
         if (firstDirectExecCall) {
-          throw new WorkflowJobDetectionError(
-            buildDirectExecJobFunctionErrorMessage(sourceFile, firstDirectExecCall),
-          );
+          throw directExecJobFunctionError(sourceFile, firstDirectExecCall);
         }
 
         // Find all jobs in this file to get body ranges
@@ -509,12 +548,14 @@ async function filterUsedJobs(
         for (const job of jobs) {
           const detectedJob = detectedJobs.find((d) => d.name === job.name);
           if (!detectedJob) {
-            throw new WorkflowJobDetectionError(
-              `Workflow job "${job.name}" (export "${job.exportName}" in ${sourceFile}) could not be ` +
-                `statically detected: createWorkflowJob's "name" must be a string literal and "body" ` +
-                `must be a function expression. Dynamic or computed values (e.g. body: someWrapper(fn)) ` +
-                `cannot be bundled and would be silently dropped.`,
-            );
+            throw jobUndetectableError(sourceFile, {
+              message: `Workflow job "${job.name}" (export "${job.exportName}") could not be statically detected.`,
+              details:
+                `Dynamic or computed values (e.g. body: someWrapper(fn)) cannot be bundled and ` +
+                `would be silently dropped.`,
+              suggestion: `Make createWorkflowJob's "name" a string literal and "body" a function expression.`,
+              context: { jobName: job.name, exportName: job.exportName },
+            });
           }
 
           const jobDeps = new Set<string>();
@@ -543,19 +584,22 @@ async function filterUsedJobs(
               call.callRange.end <= detectedJob.bodyValueRange.end,
           );
           if (!isInsideAJobBody) {
-            throw new WorkflowJobDetectionError(
-              `Call to job "${call.targetName}".start() in ${sourceFile} is not inside any workflow ` +
-                `job's body: it was factored into a function defined outside the calling job's body. ` +
-                `Dependency detection only sees .start() calls lexically inside a job body, so this call ` +
-                `would silently drop "${call.targetName}" from the bundle. Move the call to a function ` +
-                `defined inside the calling job's body.`,
-            );
+            throw jobUndetectableError(sourceFile, {
+              message:
+                `Call to job "${call.targetName}".start() is not inside any workflow job's body: it ` +
+                `was factored into a function defined outside the calling job's body.`,
+              details:
+                `Dependency detection only sees .start() calls lexically inside a job body, so this ` +
+                `call would silently drop "${call.targetName}" from the bundle.`,
+              suggestion: `Move the call to a function defined inside the calling job's body.`,
+              context: { targetJobName: call.targetName },
+            });
           }
         }
 
         return jobDependencies;
       } catch (error) {
-        if (error instanceof WorkflowJobDetectionError) throw error;
+        if (isJobDetectionError(error)) throw error;
         // Some other unexpected error (e.g. a file read failure): treat the
         // file as having no dependencies rather than failing the whole build.
         return [];
@@ -608,6 +652,7 @@ function createWorkflowTransformPlugin(
   job: JobInfo,
   allJobs: JobInfo[],
   startContext: StartContext,
+  hookFailures: HookFailures,
 ): rolldown.Plugin {
   // Pre-compute once to avoid redundant realpathSync calls per module
   const resolvedSourceFile = safeRealpath(job.sourceFile);
@@ -656,7 +701,13 @@ function createWorkflowTransformPlugin(
 
         // Apply workflow.start / job.start transformation.
         if (hasStartCall(transformed)) {
-          transformed = transformStartCalls(transformed, startContext, id);
+          const source = transformed;
+          const rewritten = hookFailures.capture(
+            () => transformStartCalls(source, startContext, id),
+            undefined,
+          );
+          if (rewritten === undefined) return null;
+          transformed = rewritten;
         }
 
         if (transformed === code) return null;

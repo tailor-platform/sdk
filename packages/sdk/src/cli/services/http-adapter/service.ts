@@ -1,5 +1,6 @@
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
+import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { importUserModule } from "#/cli/shared/user-modules";
 import {
@@ -163,18 +164,21 @@ function rejectAsyncHandlers(adapter: HttpAdapterConfig, methods: HttpMethodKey[
   const input = adapter.input as Partial<Record<HttpMethodKey, unknown>>;
   for (const method of methods) {
     if (isAsyncFunction(input[method])) {
-      throw new Error(
-        `HTTP adapter "${adapter.name}" has an async \`input.${method}\` function. ` +
-          `Handlers must be synchronous; async/await is not supported.`,
-      );
+      throw asyncHandlerError(adapter.name, `input.${method}`);
     }
   }
   if (adapter.output !== undefined && isAsyncFunction(adapter.output)) {
-    throw new Error(
-      `HTTP adapter "${adapter.name}" has an async \`output\` function. ` +
-        `Handlers must be synchronous; async/await is not supported.`,
-    );
+    throw asyncHandlerError(adapter.name, "output");
   }
+}
+
+function asyncHandlerError(name: string, handler: string): CLIError {
+  return CLIError({
+    code: "HTTP_ADAPTER_ASYNC_UNSUPPORTED",
+    message: `HTTP adapter "${name}" has an async \`${handler}\` function.`,
+    suggestion: "Make the handler synchronous; async/await is not supported.",
+    context: { name, kind: handler },
+  });
 }
 
 function isAsyncFunction(fn: unknown): boolean {
