@@ -91,6 +91,39 @@ are visible to visitors, so supply only values intended for public use.
 Build commands run in a shell. Their stdout and stderr both go to stderr, keeping
 `tailor deploy --json` stdout available for the JSON result. Builds have no timeout.
 
+## Build with a function
+
+Pass an async function as `build` when the build needs more than a shell command, such
+as creating something on the Platform from the deployed site URL and writing its ID into
+the assets before they are uploaded:
+
+```typescript
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
+
+frontendPlugin({
+  site: website,
+  workingDir: "../web",
+  distDir: "dist",
+  build: async ({ site, workspaceId, distDir, exec, api }) => {
+    await exec("pnpm run build");
+    const client = (await api("example.v1.ExampleService/CreateClient", {
+      workspaceId,
+      redirectUri: `${site.url}/callback`,
+    })) as { id: string };
+    await writeFile(join(distDir, "config.json"), JSON.stringify({ clientId: client.id }));
+  },
+});
+```
+
+The function runs after `env` resolves and before the upload, with the same context `env`
+receives plus `env` (the values it returned), the absolute `workingDir` and `distDir`, a
+`logger`, `exec`, and `api`. `exec` runs a shell command in `workingDir` with those `env`
+values added; pass `workingDir`, `env`, or `output` to override them for one command. `api`
+calls a Platform endpoint as the user or machine user `tailor deploy` ran as, like
+`tailor api`. When the function rejects, the frontend is not uploaded and later frontends
+and deploy hooks do not run, as with a failed build command.
+
 ## Upload existing assets
 
 Omit `build` to upload an existing directory:

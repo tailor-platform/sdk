@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { frontendPlugin } from "./index";
-import type { FrontendDefinition } from "./types";
+import type { FrontendBuildContext, FrontendDefinition } from "./types";
 import type {
   DeployedContext,
   PluginExecOptions,
@@ -49,6 +49,7 @@ function context(frontends: FrontendDefinition[]) {
   const exec = vi.fn<(command: string, options: PluginExecOptions) => Promise<PluginExecResult>>(
     async () => ({ stdout: "", stderr: "" }),
   );
+  const api = vi.fn<(endpoint: string, body?: unknown) => Promise<unknown>>(async () => ({}));
   const logger = { info: vi.fn(), warn: vi.fn(), success: vi.fn() };
   const ctx: DeployedContext<FrontendDefinition[]> = {
     workspaceId: "ws",
@@ -58,17 +59,18 @@ function context(frontends: FrontendDefinition[]) {
     pluginConfig: frontends,
     logger,
     exec,
+    api,
   };
-  return { ctx, publish, exec, logger };
+  return { ctx, publish, exec, api, logger };
 }
 function setup(frontends: [FrontendDefinition, ...FrontendDefinition[]]) {
   const plugin = frontendPlugin(...frontends);
-  const { ctx, publish, exec, logger } = context(frontends);
+  const { ctx, publish, exec, api, logger } = context(frontends);
   const run = async () => {
     if (!plugin.onDeployed) throw new Error("onDeployed hook missing");
     return plugin.onDeployed(ctx);
   };
-  return { ctx, publish, exec, logger, run };
+  return { ctx, publish, exec, api, logger, run };
 }
 describe("frontendPlugin", () => {
   test("accepts only static website definitions or names as site", () => {
@@ -223,5 +225,118 @@ describe("frontendPlugin", () => {
     publish.mockRejectedValue(new Error("upload failed"));
     await expect(run()).rejects.toThrow("upload failed");
     expect(nextEnv).not.toHaveBeenCalled();
+  });
+  describe("with a function build", () => {
+    test("accepts a function without validating it like a command string", () => {
+      expect(() =>
+        frontendPlugin({ site: "web", distDir: "dist", build: async () => {} }),
+      ).not.toThrow();
+    });
+    test("calls it with the deployed context, the awaited environment values and the resolved directories", async () => {
+      const build = vi.fn<(context: FrontendBuildContext) => Promise<void>>();
+      const { ctx, logger, publish, exec, run } = setup([
+        {
+          site: "web",
+          workingDir: "../web",
+          distDir: "dist",
+          env: async () => ({ FRONTEND_TEST_VALUE: "value" }),
+          build,
+        },
+      ]);
+      await run();
+      expect(build).toHaveBeenCalledExactlyOnceWith({
+        site: expect.objectContaining({ name: "web", url: "https://web" }),
+        application: ctx.application,
+        applications: ctx.applications,
+        workspaceId: "ws",
+        env: { FRONTEND_TEST_VALUE: "value" },
+        workingDir: join(root, "apps/web"),
+        distDir: join(root, "apps/web/dist"),
+        logger,
+        exec: expect.any(Function),
+        api: expect.any(Function),
+      });
+      expect(exec).not.toHaveBeenCalled();
+      expect(publish).toHaveBeenCalledExactlyOnceWith("web", join(root, "apps/web/dist"));
+    });
+    test("runs between the environment callback and the upload", async () => {
+      const sequence: string[] = [];
+      const { publish, run } = setup([
+        {
+          site: "web",
+          distDir: root,
+          env: async () => {
+            sequence.push("env");
+            return {};
+          },
+          build: async () => {
+            await Promise.resolve();
+            sequence.push("build");
+          },
+        },
+      ]);
+      publish.mockImplementation(async () => {
+        sequence.push("publish");
+        return { url: "https://published", skippedFiles: [] };
+      });
+      await run();
+      expect(sequence).toEqual(["env", "build", "publish"]);
+    });
+    test("runs commands in the working directory with the environment values unless overridden", async () => {
+      const { exec, run } = setup([
+        {
+          site: "web",
+          workingDir: "../web",
+          distDir: "dist",
+          env: async () => ({ FIRST: "1", SECOND: "2" }),
+          build: async ({ exec }) => {
+            await exec("pnpm build");
+            await exec("pnpm check", { env: { SECOND: "override" }, output: "capture" });
+            await exec("pnpm other", { workingDir: "/elsewhere" });
+          },
+        },
+      ]);
+      await run();
+      const workingDir = join(root, "apps/web");
+      expect(exec.mock.calls).toEqual([
+        ["pnpm build", { workingDir, env: { FIRST: "1", SECOND: "2" } }],
+        ["pnpm check", { workingDir, env: { FIRST: "1", SECOND: "override" }, output: "capture" }],
+        ["pnpm other", { workingDir: "/elsewhere", env: { FIRST: "1", SECOND: "2" } }],
+      ]);
+    });
+    test("lets the function call Platform endpoints", async () => {
+      let received: unknown;
+      const { api, run } = setup([
+        {
+          site: "web",
+          distDir: root,
+          build: async ({ api }) => {
+            received = await api("example.v1.ExampleService/Create", { name: "x" });
+          },
+        },
+      ]);
+      api.mockResolvedValue({ id: "created" });
+      await run();
+      expect(api).toHaveBeenCalledExactlyOnceWith("example.v1.ExampleService/Create", {
+        name: "x",
+      });
+      expect(received).toEqual({ id: "created" });
+    });
+    test("does not upload or evaluate later frontends when the function fails", async () => {
+      const nextEnv = vi.fn();
+      const { publish, run } = setup([
+        {
+          site: "web",
+          distDir: root,
+          build: async () => {
+            throw new Error("config could not be written");
+          },
+        },
+        { site: "admin", distDir: root, env: nextEnv },
+      ]);
+      await expect(run()).rejects.toThrow("config could not be written");
+      expect(publish).not.toHaveBeenCalled();
+      expect(nextEnv).not.toHaveBeenCalled();
+    });
   });
 });

@@ -28,6 +28,8 @@ vi.mock("../staticwebsite/deploy", () => ({
   staticWebsiteDeployTimeoutError: vi.fn(),
 }));
 import { deployStaticWebsite } from "../staticwebsite/deploy";
+vi.mock("../api/api-call", () => ({ apiCall: vi.fn() }));
+import { apiCall } from "../api/api-call";
 
 function target(plugins: Plugin[], name = "app"): BuiltDeploymentTarget {
   return {
@@ -120,6 +122,46 @@ describe("deployed hooks", () => {
       ],
     });
     expect(stored?.outputs).toEqual({ stdout: "ran" });
+  });
+  test("lets the hook call a Platform API endpoint as the profile the deploy ran with", async () => {
+    vi.mocked(apiCall).mockResolvedValue({ status: 200, data: { name: "created" } });
+    const { client } = clientMock();
+    const [stored] = await runDeployedHooks({
+      client,
+      workspaceId: "ws",
+      profile: "dev",
+      targets: [
+        target([
+          plugin(async (ctx) => {
+            const data = await ctx.api("example.v1.ExampleService/Create", { name: "x" });
+            return { outputs: { data: data as { name: string } } };
+          }),
+        ]),
+      ],
+    });
+    expect(apiCall).toHaveBeenCalledExactlyOnceWith({
+      profile: "dev",
+      endpoint: "example.v1.ExampleService/Create",
+      body: JSON.stringify({ name: "x" }),
+    });
+    expect(stored?.outputs).toEqual({ data: { name: "created" } });
+  });
+  test("sends an empty JSON object when the hook calls an endpoint without a body", async () => {
+    vi.mocked(apiCall).mockClear();
+    vi.mocked(apiCall).mockResolvedValue({ status: 200, data: {} });
+    const { client } = clientMock();
+    await runDeployedHooks({
+      client,
+      workspaceId: "ws",
+      targets: [
+        target([plugin(async (ctx) => void (await ctx.api("example.v1.ExampleService/List")))]),
+      ],
+    });
+    expect(apiCall).toHaveBeenCalledExactlyOnceWith({
+      profile: undefined,
+      endpoint: "example.v1.ExampleService/List",
+      body: "{}",
+    });
   });
   test("collects every OAuth client page", async () => {
     const { client, methods } = clientMock();

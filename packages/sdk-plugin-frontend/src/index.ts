@@ -3,7 +3,12 @@ import * as path from "pathe";
 import type { FrontendDefinition } from "./types";
 import type { Plugin } from "@tailor-platform/sdk";
 
-export type { FrontendDefinition, FrontendEnvContext } from "./types";
+export type {
+  FrontendBuildContext,
+  FrontendDefinition,
+  FrontendEnvContext,
+  FrontendExecOptions,
+} from "./types";
 
 /** Unique identifier for the frontend plugin. */
 export const FrontendPluginID = "@tailor-platform/frontend";
@@ -24,7 +29,7 @@ export function frontendPlugin(
     const name = typeof frontend.site === "string" ? frontend.site : frontend.site.name;
     if (frontend.distDir.length === 0)
       throw new Error(`distDir must not be empty for site "${name}"`);
-    if (frontend.build !== undefined && frontend.build.trim().length === 0)
+    if (typeof frontend.build === "string" && frontend.build.trim().length === 0)
       throw new Error(
         `build must not be blank for site "${name}"; omit it to publish without building`,
       );
@@ -75,7 +80,28 @@ export function frontendPlugin(
             applications: ctx.applications,
             workspaceId: ctx.workspaceId,
           })) ?? {};
-        if (def.build) {
+        if (typeof def.build === "function") {
+          ctx.logger.info(
+            `Building frontend for site "${name}" (working directory: ${workingDir})`,
+          );
+          await def.build({
+            site,
+            application: ctx.application,
+            applications: ctx.applications,
+            workspaceId: ctx.workspaceId,
+            env,
+            workingDir,
+            distDir,
+            logger: ctx.logger,
+            exec: (command, options) =>
+              ctx.exec(command, {
+                ...options,
+                workingDir: options?.workingDir ?? workingDir,
+                env: { ...env, ...options?.env },
+              }),
+            api: (endpoint, body) => ctx.api(endpoint, body),
+          });
+        } else if (def.build) {
           ctx.logger.info(
             `Building frontend for site "${name}": ${def.build} (working directory: ${workingDir})`,
           );

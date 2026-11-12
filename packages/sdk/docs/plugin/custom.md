@@ -365,6 +365,12 @@ pass `output: "capture"` to receive them as `stdout` and `stderr` instead, or
 functions that run on the Tailor Platform, such as auth hooks, and a plugin module
 that imports Node.js-only modules makes that bundle fail.
 
+To call a Platform endpoint that the hook needs, await `ctx.api(endpoint, body)`. It
+sends `body` as JSON as the user or machine user `tailor deploy` ran as, like
+`tailor api`, and resolves to the parsed response. `endpoint` takes the same forms as
+`tailor api`, such as `tailor.v1.OperatorService/GetApplication`; put `ctx.workspaceId` in
+`body` when the endpoint takes a workspace. It rejects when the call fails.
+
 Return JSON-serializable `outputs` to include a result in `deployedHooks` under
 `tailor deploy --json`. Each entry identifies the application and plugin. This
 key is omitted when no hook supplies outputs. `outputs` must be a plain object whose
