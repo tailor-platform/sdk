@@ -46,7 +46,7 @@ export function mapQueryExecutionError(args: MapQueryExecutionErrorArgs): Error 
 
   if (message.includes("machine user does not exist")) {
     return CLIError({
-      code: "NOT_FOUND",
+      code: "MACHINE_USER_NOT_FOUND",
       message: `Machine user '${args.machineUser ?? "unknown"}' was not found.`,
       suggestion: "Run `tailor machineuser list` and use an existing name.",
     });

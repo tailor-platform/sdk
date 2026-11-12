@@ -745,7 +745,7 @@ describe("query", () => {
         query: 'select * from "User";',
       }),
     ).rejects.toMatchObject({
-      code: "NOT_FOUND",
+      code: "MACHINE_USER_NOT_FOUND",
       message: "Machine user 'profile-bot' was not found.",
     });
   });
