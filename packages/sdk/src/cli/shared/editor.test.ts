@@ -14,7 +14,7 @@ describe("openInEditor", () => {
       openInEditor("query.sql", `${process.execPath} -e process.exit(3)`),
     ).rejects.toMatchObject({
       code: "EDITOR_FAILED",
-      message: "Editor exited with code 3.",
+      message: `Editor "${process.execPath} -e process.exit(3)" exited with code 3.`,
       context: { editor: `${process.execPath} -e process.exit(3)`, exitCode: 3 },
     });
   });

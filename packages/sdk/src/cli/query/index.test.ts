@@ -931,7 +931,7 @@ describe("resolveQueryCommandInput", () => {
     vi.mocked(mkdtemp).mockResolvedValue("/tmp/tailor-query-123");
     const failure = CLIError({
       code: "EDITOR_FAILED",
-      message: "Editor exited with code 1.",
+      message: 'Editor "vim" exited with code 1.',
       context: { editor: "vim", exitCode: 1 },
     });
     vi.mocked(openInEditor).mockRejectedValue(failure);

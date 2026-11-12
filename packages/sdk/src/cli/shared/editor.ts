@@ -71,7 +71,7 @@ export async function openInEditor(
       reject(
         CLIError({
           code: "EDITOR_FAILED",
-          message: `Editor exited with code ${code}.`,
+          message: `Editor "${editor}" exited with code ${code}.`,
           context: { editor, exitCode: code },
         }),
       );
