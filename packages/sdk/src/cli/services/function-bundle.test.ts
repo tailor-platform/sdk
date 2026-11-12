@@ -56,6 +56,66 @@ function bundle(
   });
 }
 
+function writeUnloadableCliPackage(projectDir: string): void {
+  const packageDir = path.join(projectDir, "node_modules", "@tailor-platform", "sdk");
+  fs.mkdirSync(packageDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(packageDir, "package.json"),
+    JSON.stringify({
+      name: "@tailor-platform/sdk",
+      type: "module",
+      exports: { "./cli": "./cli.node" },
+    }),
+  );
+  fs.writeFileSync(path.join(packageDir, "cli.node"), Buffer.from([0xff, 0xfe, 0x00, 0x80]));
+}
+
+describe("buildFunctionBundle CLI entry point", () => {
+  test("bundles a function from a source that imports the CLI entry point without loading it", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-");
+    writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeFunction(
+      tmp.dir,
+      `import { apiCall } from "@tailor-platform/sdk/cli";\n` +
+        `export const deployOnly = () => apiCall({ endpoint: "Ping" });\n` +
+        `export default async () => "OWN_SOURCE";\n`,
+    );
+
+    const code = await bundle(sourceFile);
+
+    expect(code).toContain("OWN_SOURCE");
+    expect(code).not.toContain("@tailor-platform/sdk/cli");
+  });
+  test("bundles a function that keeps the CLI entry point import in code the bundle retains", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-retained-");
+    writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeFunction(
+      tmp.dir,
+      `import { apiCall, getOAuth2Client as client } from "@tailor-platform/sdk/cli";\n` +
+        `export default async () => ["OWN_SOURCE", typeof apiCall, typeof client];\n`,
+    );
+
+    const code = await bundle(sourceFile);
+
+    expect(code).toContain("OWN_SOURCE");
+    expect(code).not.toContain("@tailor-platform/sdk/cli");
+  });
+
+  test("still rejects a named import that another module does not export", async () => {
+    using tmp = tempCwd("sdk-function-bundle-missing-export-");
+    const sourceFile = writeFunction(
+      tmp.dir,
+      `import { missing } from "./helper";\n` + `export default async () => missing;\n`,
+    );
+    fs.writeFileSync(
+      path.join(path.dirname(sourceFile), "helper.ts"),
+      "export const present = 1;\n",
+    );
+
+    await expect(bundle(sourceFile)).rejects.toThrow("missing");
+  });
+});
+
 describe("buildFunctionBundle runtime globals", () => {
   test("rejects a function that references a forbidden global, naming the function and its file", async () => {
     using tmp = tempCwd("sdk-function-bundle-forbidden-global-");

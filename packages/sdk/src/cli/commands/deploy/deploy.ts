@@ -1132,13 +1132,7 @@ async function deployInternal(
         : undefined;
     const deployedHooks = internalContext?.skipDeployedHooks
       ? []
-      : await runDeployedHooks({
-          client,
-          workspaceId,
-          targets,
-          applications,
-          profile: options?.profile,
-        });
+      : await runDeployedHooks({ client, workspaceId, targets, applications });
 
     if (!internalContext?.suppressResultOutput) {
       if (logger.jsonMode) {

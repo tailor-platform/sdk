@@ -507,14 +507,6 @@ export interface DeployedContext<PluginConfig = unknown> {
    * @returns Captured output when `options.output` is `"capture"`
    */
   exec(command: string, options: PluginExecOptions): Promise<PluginExecResult>;
-  /**
-   * Call a Platform API endpoint with the credentials `tailor deploy` used, like `tailor api`.
-   * Rejects when the call fails.
-   * @param endpoint - Endpoint in the forms `tailor api` accepts, such as `tailor.v1.OperatorService/GetApplication`
-   * @param body - Request body, sent as JSON. Defaults to `{}`
-   * @returns Response body
-   */
-  api(endpoint: string, body?: unknown): Promise<unknown>;
 }
 
 // Symbol keys only: string keys such as `toJSON?: never` would also reject interfaces with a data field of that name.

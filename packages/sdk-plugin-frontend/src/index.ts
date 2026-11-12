@@ -99,7 +99,6 @@ export function frontendPlugin(
                 workingDir: options?.workingDir ?? workingDir,
                 env: { ...env, ...options?.env },
               }),
-            api: (endpoint, body) => ctx.api(endpoint, body),
           });
         } else if (def.build) {
           ctx.logger.info(

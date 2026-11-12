@@ -53,12 +53,4 @@ export interface FrontendBuildContext extends FrontendEnvContext {
    * @returns Captured output when `options.output` is `"capture"`
    */
   exec: (command: string, options?: FrontendExecOptions) => Promise<PluginExecResult>;
-  /**
-   * Call a Platform API endpoint with the credentials `tailor deploy` used, like `tailor api`.
-   * Rejects when the call fails.
-   * @param endpoint - Endpoint in the forms `tailor api` accepts, such as `tailor.v1.OperatorService/GetApplication`
-   * @param body - Request body, sent as JSON. Defaults to `{}`
-   * @returns Response body
-   */
-  api: (endpoint: string, body?: unknown) => Promise<unknown>;
 }

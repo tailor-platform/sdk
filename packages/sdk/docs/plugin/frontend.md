@@ -94,39 +94,48 @@ Build commands run in a shell. Their stdout and stderr both go to stderr, keepin
 ## Build with a function
 
 Pass an async function as `build` when the build needs more than a shell command, such
-as creating something on the Platform from the deployed site URL and writing its ID into
-the assets before they are uploaded:
+as writing a runtime configuration file into the assets before they are uploaded:
 
 ```typescript
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { apiCall } from "@tailor-platform/sdk/cli";
 
 frontendPlugin({
   site: website,
   workingDir: "../web",
   distDir: "dist",
-  build: async ({ site, workspaceId, distDir, exec, api }) => {
+  build: async ({ site, application, workspaceId, distDir, exec }) => {
     await exec("pnpm run build");
-    const client = (await api("example.v1.ExampleService/GetOrCreateClient", {
-      workspaceId,
-      redirectUri: `${site.url}/callback`,
-    })) as { id: string };
-    await writeFile(join(distDir, "config.json"), JSON.stringify({ clientId: client.id }));
+    const { data } = await apiCall({
+      endpoint: "ListCustomDomains",
+      body: JSON.stringify({ workspaceId, staticWebsiteName: site.name }),
+    });
+    const { customDomains } = data as { customDomains: { domain: string }[] };
+    const origin = customDomains[0] ? `https://${customDomains[0].domain}` : site.url;
+    await writeFile(
+      join(distDir, "config.json"),
+      JSON.stringify({ origin, apiUrl: application.url }),
+    );
   },
 });
 ```
 
 The function runs after `env` resolves and before the upload, with the same context `env`
 receives plus `env` (the values it returned), the absolute `workingDir` and `distDir`, a
-`logger`, `exec`, and `api`. `exec` runs a shell command in `workingDir` with those `env`
-values added; pass `workingDir`, `env`, or `output` to override them for one command. `api`
-calls a Platform endpoint with the credentials `tailor deploy` used, like `tailor api`. When
-the function rejects, the frontend is not uploaded and later frontends and deploy hooks do
-not run, as with a failed build command.
+`logger`, and `exec`. `exec` runs a shell command in `workingDir` with those `env` values
+added; pass `workingDir`, `env`, or `output` to override them for one command. When the
+function rejects, the frontend is not uploaded and later frontends and deploy hooks do not
+run, as with a failed build command.
 
-Running `tailor deploy` again after such a failure runs the function again, so write what it
-does with `api` to be repeatable: look up or create the resource instead of always creating a
-new one.
+To call the Platform from the function, use the functions exported from
+`@tailor-platform/sdk/cli`, such as `apiCall`, which works like `tailor api`. They authenticate
+the way the `tailor` command does: `TAILOR_PLATFORM_TOKEN`, then the profile (`TAILOR_PLATFORM_PROFILE`),
+then the logged-in user. Importing it in `tailor.config.ts` is safe; the bundles of functions that
+run on the Platform leave it out.
+
+Running `tailor deploy` again after a failure runs the function again, so write what it
+does to be repeatable: look up or create a resource instead of always creating a new one.
 
 ## Upload existing assets
 

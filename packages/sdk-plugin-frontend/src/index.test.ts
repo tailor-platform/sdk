@@ -49,7 +49,6 @@ function context(frontends: FrontendDefinition[]) {
   const exec = vi.fn<(command: string, options: PluginExecOptions) => Promise<PluginExecResult>>(
     async () => ({ stdout: "", stderr: "" }),
   );
-  const api = vi.fn<(endpoint: string, body?: unknown) => Promise<unknown>>(async () => ({}));
   const logger = { info: vi.fn(), warn: vi.fn(), success: vi.fn() };
   const ctx: DeployedContext<FrontendDefinition[]> = {
     workspaceId: "ws",
@@ -59,18 +58,17 @@ function context(frontends: FrontendDefinition[]) {
     pluginConfig: frontends,
     logger,
     exec,
-    api,
   };
-  return { ctx, publish, exec, api, logger };
+  return { ctx, publish, exec, logger };
 }
 function setup(frontends: [FrontendDefinition, ...FrontendDefinition[]]) {
   const plugin = frontendPlugin(...frontends);
-  const { ctx, publish, exec, api, logger } = context(frontends);
+  const { ctx, publish, exec, logger } = context(frontends);
   const run = async () => {
     if (!plugin.onDeployed) throw new Error("onDeployed hook missing");
     return plugin.onDeployed(ctx);
   };
-  return { ctx, publish, exec, api, logger, run };
+  return { ctx, publish, exec, logger, run };
 }
 describe("frontendPlugin", () => {
   test("accepts only static website definitions or names as site", () => {
@@ -254,7 +252,6 @@ describe("frontendPlugin", () => {
         distDir: join(root, "apps/web/dist"),
         logger,
         exec: expect.any(Function),
-        api: expect.any(Function),
       });
       expect(exec).not.toHaveBeenCalled();
       expect(publish).toHaveBeenCalledExactlyOnceWith("web", join(root, "apps/web/dist"));
@@ -303,24 +300,6 @@ describe("frontendPlugin", () => {
         ["pnpm check", { workingDir, env: { FIRST: "1", SECOND: "override" }, output: "capture" }],
         ["pnpm other", { workingDir: "/elsewhere", env: { FIRST: "1", SECOND: "2" } }],
       ]);
-    });
-    test("lets the function call Platform endpoints", async () => {
-      let received: unknown;
-      const { api, run } = setup([
-        {
-          site: "web",
-          distDir: root,
-          build: async ({ api }) => {
-            received = await api("example.v1.ExampleService/Create", { name: "x" });
-          },
-        },
-      ]);
-      api.mockResolvedValue({ id: "created" });
-      await run();
-      expect(api).toHaveBeenCalledExactlyOnceWith("example.v1.ExampleService/Create", {
-        name: "x",
-      });
-      expect(received).toEqual({ id: "created" });
     });
     test("does not upload or evaluate later frontends when the function fails", async () => {
       const nextEnv = vi.fn();

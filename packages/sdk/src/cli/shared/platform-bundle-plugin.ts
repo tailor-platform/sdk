@@ -1,3 +1,4 @@
+import { parseSync } from "oxc-parser";
 import { RolldownMagicString } from "rolldown";
 import type { EffectiveDateDefault } from "#/runtime/types";
 import type * as rolldown from "rolldown";
@@ -35,6 +36,21 @@ const DATE_DEFAULT_GATE =
 const KYSELY_TEMPORAL_GATE =
   /(?<![\w$.])globalThis\.process\?\.env\.__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL\b/g;
 
+const DEPLOY_ONLY_CLI_ENTRY = "@tailor-platform/sdk/cli";
+const DEPLOY_ONLY_CLI_STUB = "\0tailor-platform-sdk-cli-stub";
+
+function collectCliImports(code: string, id: string, names: Set<string>): void {
+  const { program } = parseSync(id, code);
+  for (const node of program.body) {
+    if (node.type !== "ImportDeclaration" || node.source.value !== DEPLOY_ONLY_CLI_ENTRY) continue;
+    for (const specifier of node.specifiers) {
+      if (specifier.type !== "ImportSpecifier") continue;
+      const imported = specifier.imported;
+      names.add(imported.type === "Identifier" ? imported.name : String(imported.value));
+    }
+  }
+}
+
 /**
  * Date representations whose conversion code a bundle keeps.
  */
@@ -57,9 +73,11 @@ export function createPlatformBundleDefinePlugin(
 ): rolldown.Plugin {
   const dateDefaultLiteral = dateDefault === "legacy" ? "undefined" : JSON.stringify(dateDefault);
   const kyselyTemporalLiteral = kyselyTemporal ? '"true"' : "undefined";
+  const cliImports = new Set<string>();
   return {
     name: "tailor-platform-bundle-define",
-    transform(code) {
+    transform(code, id) {
+      if (code.includes(DEPLOY_ONLY_CLI_ENTRY)) collectCliImports(code, id, cliImports);
       if (!code.includes("__TAILOR_PLATFORM_BUNDLE")) return null;
       const source = new RolldownMagicString(code)
         .replaceAll(GATE, "true")
@@ -74,7 +92,13 @@ export function createPlatformBundleDefinePlugin(
     },
     resolveId(source) {
       if (source === "node:async_hooks") return { id: source, external: true };
+      if (source === DEPLOY_ONLY_CLI_ENTRY)
+        return { id: DEPLOY_ONLY_CLI_STUB, moduleSideEffects: false };
       return null;
+    },
+    load(id) {
+      if (id !== DEPLOY_ONLY_CLI_STUB) return null;
+      return [...cliImports].map((name) => `export const ${name} = undefined;`).join("\n");
     },
   };
 }

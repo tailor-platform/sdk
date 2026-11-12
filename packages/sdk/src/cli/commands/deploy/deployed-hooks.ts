@@ -7,7 +7,6 @@ import { logger } from "#/cli/shared/logger";
 import { withTimeout } from "#/cli/shared/progress";
 import { withSpan } from "#/cli/telemetry/index";
 import { assertDefined } from "#/utils/assert";
-import { apiCall } from "../api/api-call";
 import { deployStaticWebsite, staticWebsiteDeployTimeoutError } from "../staticwebsite/deploy";
 import { execPluginCommand } from "./plugin-exec";
 import type { DeployedApplication, DeployedOAuth2Client, Plugin } from "#/plugin/types";
@@ -21,7 +20,6 @@ interface LoadDeployedApplicationsParams {
 }
 interface RunDeployedHooksParams extends LoadDeployedApplicationsParams {
   applications?: readonly DeployedApplication[];
-  profile?: string;
 }
 
 interface DeployedHookOutput {
@@ -305,14 +303,6 @@ export async function runDeployedHooks(
           pluginConfig: plugin.pluginConfig,
           logger: { info: logger.info, warn: logger.warn, success: logger.success },
           exec: execPluginCommand,
-          api: async (endpoint, body) => {
-            const { data } = await apiCall({
-              profile: params.profile,
-              endpoint,
-              body: JSON.stringify(body ?? {}),
-            });
-            return data;
-          },
         });
       });
       const hookOutputs = result?.outputs;
