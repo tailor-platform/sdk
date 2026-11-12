@@ -51,7 +51,7 @@ When a project starts using `tailor setup`, the next local `deploy` or `setup` m
 
 **Disable Introspection**: Disable GraphQL introspection. Default is `false`.
 
-**Metadata**: Extra labels written to the deployed application's metadata on `deploy`, alongside the labels the SDK writes itself. Use it to record information that tooling reads back from the platform, such as the version of a framework the config is generated from. Keys must match `^[a-z][a-z0-9_-]{0,62}$` and must not start with `sdk-`; values must be empty or match the same pattern, so a version like `1.2.3` is written as `v1-2-3`.:
+**Metadata**: Extra labels written to the deployed application's metadata on `deploy`, alongside the labels the SDK writes itself. Use it to record information that tooling reads back from the platform, such as the version of a framework the config is generated from. Keys must match `^[a-z][a-z0-9_-]{0,62}$` and must not start with `sdk-`; values must be empty or match the same pattern, so a version like `1.2.3` is written as `v1-2-3`. For example:
 
 ```typescript
 const erpKitVersion = "1.2.3";
