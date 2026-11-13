@@ -97,7 +97,7 @@ Pass an async function as `build` when the build needs more than a shell command
 as writing a runtime configuration file into the assets before they are uploaded:
 
 ```typescript
-import { apiCall } from "@tailor-platform/sdk/cli";
+import { initOperatorClient, loadAccessToken } from "@tailor-platform/sdk/cli";
 
 frontendPlugin({
   site: website,
@@ -105,12 +105,11 @@ frontendPlugin({
   distDir: "dist",
   build: async ({ site, application, workspaceId, profile, exec }) => {
     await exec("pnpm run build");
-    const { data } = await apiCall({
-      profile,
-      endpoint: "ListCustomDomains",
-      body: JSON.stringify({ workspaceId, staticWebsiteName: site.name }),
+    const client = await initOperatorClient(await loadAccessToken({ profile }));
+    const { customDomains } = await client.listCustomDomains({
+      workspaceId,
+      staticWebsiteName: site.name,
     });
-    const { customDomains } = data as { customDomains: { domain: string }[] };
     const origin = customDomains[0] ? `https://${customDomains[0].domain}` : site.url;
     await exec("node scripts/write-config.mjs", {
       env: { ORIGIN: origin, API_URL: application.url ?? "" },
@@ -142,13 +141,13 @@ function rejects, the frontend is not uploaded and later frontends and deploy ho
 run, as with a failed build command.
 
 To call the Platform from the function, use the functions exported from
-`@tailor-platform/sdk/cli`, such as `apiCall`, which works like `tailor api`. Pass them the
-`profile` the function receives, which is the profile `tailor deploy` ran with (`--profile`),
-so they call the Platform as the same user. Without a profile they use `TAILOR_PLATFORM_TOKEN`,
-then `TAILOR_PLATFORM_PROFILE`, then the logged-in user, as the `tailor` command does.
-Importing it in `tailor.config.ts` is safe. Code that runs on the Platform, such as a resolver
-or an auth hook, cannot use it: a call there throws an error saying it only works where
-`tailor deploy` runs.
+`@tailor-platform/sdk/cli`, such as `initOperatorClient`, which returns a typed client for the
+Platform API. Pass `loadAccessToken` the `profile` the function receives, which is the profile
+`tailor deploy` ran with (`--profile`), so the client calls the Platform as the same user.
+Without a profile it uses `TAILOR_PLATFORM_TOKEN`, then `TAILOR_PLATFORM_PROFILE`, then the
+logged-in user, as the `tailor` command does. Importing it in `tailor.config.ts` is safe. Code
+that runs on the Platform, such as a resolver or an auth hook, cannot use it: a call there
+throws an error saying it only works where `tailor deploy` runs.
 
 Running `tailor deploy` again after a failure runs the function again, so write what it
 does to be repeatable: look up or create a resource instead of always creating a new one.
