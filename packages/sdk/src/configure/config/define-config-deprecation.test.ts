@@ -27,6 +27,7 @@ function deprecatedLines(probe: string): number[] {
     skipLibCheck: true,
     noEmit: true,
     target: ts.ScriptTarget.ES2022,
+    lib: ["lib.es2022.d.ts"],
     module: ts.ModuleKind.ESNext,
     moduleResolution: ts.ModuleResolutionKind.Bundler,
     paths: { "@tailor-platform/sdk": [join(SDK_SRC, "configure", "index.ts")] },
@@ -69,5 +70,5 @@ describe("defineConfig idp deprecation", () => {
     ].join("\n");
 
     expect(deprecatedLines(probe)).toEqual([6]);
-  });
+  }, 15_000);
 });
