@@ -1825,6 +1825,59 @@ export const allCodemods: CodemodPackage[] = [
     ].join("\n"),
   },
   {
+    id: "v3/files-config-relative",
+    name: "Service `files` patterns relative to the config's directory",
+    description:
+      "In v3, relative `files` patterns of the `db` and `resolver` namespaces and of `executor`, `workflow`, and `httpAdapter` resolve only against the directory of the config file that declares them. v2 resolved them, and `ignores`, against the directory the command ran from when none of a service's `files` patterns matched under the config's directory, and warned. For a config outside the project directory `tailor upgrade` runs on (`--path`, the current directory by default), the codemod rewrites string-literal `files` and `ignores` patterns that match files only from that project directory so that they name the same files relative to the config's directory, before `v3/files-ignores-to-negation` moves `ignores` into `files`. Configs it cannot rewrite, patterns it cannot glob, and patterns that match no files from either directory are reported for review.",
+    since: "0.8.0",
+    until: "3.0.0",
+    scriptPath: "v3/files-config-relative/scripts/transform.js",
+    filePatterns: ["**/*.{ts,mts,cts,js,mjs,cjs}"],
+    examples: [
+      {
+        caption: "`apps/a/tailor.config.ts`, with `tailor upgrade` run from the repository root",
+        before: [
+          "export default defineConfig({",
+          '  name: "a",',
+          '  db: { main: { files: ["apps/a/tailordb/*.ts"] } },',
+          '  executor: { files: ["apps/a/executors/*.ts", "!apps/a/executors/draft.ts"] },',
+          "});",
+        ].join("\n"),
+        after: [
+          "export default defineConfig({",
+          '  name: "a",',
+          '  db: { main: { files: ["tailordb/*.ts"] } },',
+          '  executor: { files: ["executors/*.ts", "!executors/draft.ts"] },',
+          "});",
+        ].join("\n"),
+      },
+    ],
+    prompt: [
+      "In Tailor SDK v3, relative `files` patterns of the `db` and `resolver`",
+      "namespaces and of `executor`, `workflow`, and `httpAdapter` resolve only",
+      "against the directory of the config file that declares them. v2 resolved them,",
+      "and `ignores`, against the directory the command ran from when none of a",
+      "service's `files` patterns matched under the config's directory. For each",
+      "flagged service, rewrite every relative `files` and `ignores` pattern so that",
+      "it names the same files relative to the config file's directory: for",
+      "`apps/a/tailor.config.ts` deployed from the",
+      "repository root, `apps/a/tailordb/*.ts` becomes `tailordb/*.ts`, and a leading",
+      "`!` stays in front. Leave absolute patterns unchanged. When the patterns are",
+      "built from a variable, a spread, or a helper, change them where they are",
+      "defined. When the patterns match no files from either directory, check whether",
+      "the files are generated later or the patterns point at the wrong directory.",
+    ].join("\n"),
+  },
+  {
+    id: "v3/tsconfig-cwd-fallback-removed",
+    name: "No tsconfig fallback to the directory the command runs from",
+    description:
+      'In v3, bundling no longer falls back to the `tsconfig.json` found from the directory the command runs from when none is found from the config\'s directory upward. v2 used that fallback and warned `No tsconfig found from "<dir>"`. If you saw that warning, add a `tsconfig.json` to the directory it names; it can `extends` the tsconfig you used.',
+    since: "0.8.0",
+    until: "3.0.0",
+    notice: true,
+  },
+  {
     id: "v3/files-ignores-to-negation",
     name: "Service `ignores` → `!` patterns in `files`",
     description:
