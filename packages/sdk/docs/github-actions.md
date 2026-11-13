@@ -1339,6 +1339,12 @@ server and its runners first:
   the pinned versions: update them with `actions-sync`, or, with GitHub
   Connect, delete them from the server's `actions` organization (see GitHub's
   [Using the latest version of the official bundled actions](https://docs.github.com/en/enterprise-server@latest/admin/managing-github-actions-for-your-enterprise/managing-access-to-actions-from-githubcom/using-the-latest-version-of-the-official-bundled-actions)).
+- **Actions cache service:** the plan, deploy, and preview deployment jobs keep
+  the SDK's bundles with `actions/cache`, so that later runs rebuild only the
+  bundles whose sources changed. For this to take effect, make sure the server's
+  Actions cache service is enabled (see `ghe-actions-cache-enable` in GitHub's
+  [Command-line utilities](https://docs.github.com/en/enterprise-server@latest/admin/administering-your-instance/administering-your-instance-from-the-command-line/command-line-utilities#ghe-actions-cache-enable)).
+  Without it, the jobs still succeed but rebuild every bundle on each run.
 - **Autofix workflow:** `tailor setup ci autofix` is not supported.
 - **Environment settings:** sign `gh` in to the server
   (`gh auth login --hostname <host>`) before you run `tailor setup ci env` in a
