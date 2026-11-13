@@ -20,7 +20,7 @@ The content mapper needs TypeScript 7.1 or later. TypeScript 7.1 is in beta, so 
 - `tailor.config.ts` configures `kyselyTypePlugin({ contentMapper: true })`, so `getDB()` imported from `@tailor-platform/sdk/plugin/kysely-type/db` is typed from the tables in `src/db/`.
 - `src/content-mapper.types.ts` type-checks only while the mapper runs: it rejects a misspelled machine user name, an `env` key and a `role` attribute value that `tailor.config.ts` does not define, and an unknown table.
 
-An editor whose TypeScript is older than 7.1 does not run the content mapper, so its diagnostics and completions do not reflect `tailor.config.ts`.
+An editor whose TypeScript is older than 7.1 does not run the content mapper, so its completions do not reflect `tailor.config.ts`, and it reports type errors in code that `typecheck` accepts, such as `getDB("main-db")` (TS2345), `env.greeting` (TS2322), and `{ user: "role" }` in a permission (TS2322). Switch the editor to the TypeScript 7.1 installed in this project. VS Code runs the mapper only after you trust the folder and grant the content mapper its permissions; it then runs `tailor.config.ts` like `typecheck` does, so grant them only for code you trust.
 
 To enable the mapper in an existing project, also delete its old `tailor.d.ts`. See [Type Definitions Without `tailor generate`](https://github.com/tailor-platform/sdk/blob/main/packages/sdk/docs/configuration.md#type-definitions-without-tailor-generate) for details.
 
