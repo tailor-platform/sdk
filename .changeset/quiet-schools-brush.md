@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-Note that the Slack challenge executor example in the executor docs omits signature verification
+Document that the Slack challenge example in the executor guide omits signature verification

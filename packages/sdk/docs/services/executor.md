@@ -524,7 +524,7 @@ export default createExecutor({
 });
 ```
 
-This example omits signature verification. To handle real Slack events, verify the request signature in the operation before trusting `body`, as the Stripe example above does.
+This example omits signature verification. To handle real Slack events, verify the request in the operation before trusting `body`, as the Stripe example above does. [Verifying requests from Slack](https://docs.slack.dev/authentication/verifying-requests-from-slack/) describes how to compute Slack's signature.
 
 ### Resolver Executed Payload
 
