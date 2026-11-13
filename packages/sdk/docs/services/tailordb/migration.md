@@ -956,7 +956,7 @@ If `tailor deploy` cannot tell whether a `main` script ran, for example because 
 
 If the post-migration schema changes fail after a `main` script succeeded and the deploy cannot clear the in-progress record, it keeps the pre-migration schema instead of rolling it back, so the data the script wrote stays. Settle the migration as above: `--complete` once the data meets the migration's schema, or `--rollback`.
 
-When a steps migration's post-migration schema changes fail and the deploy cannot return its tables to the pre-migration schema, it logs a warning. The next deploy accepts each table in either the pre-migration or the post-migration schema: it applies the pre-migration schema again, skips the completed steps unless the steps changed, and retries the post-migration schema changes.
+When a steps migration's post-migration schema changes fail and the deploy cannot return its tables to the pre-migration schema, it logs a warning. The next deploy accepts each table in either the pre-migration or the post-migration schema: it applies the pre-migration schema again and retries the post-migration schema changes without running the completed steps again unless you add, remove, or rename a step, change the order the steps run in, or the earlier run is no longer available.
 
 After a failure:
 
