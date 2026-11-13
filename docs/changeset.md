@@ -24,6 +24,11 @@ The key question for choosing a level: **How does this change affect SDK users?*
 
 SDK users must modify their code or configuration to upgrade.
 
+`major` is only accepted on a `v<N>` branch (for example `v3`) or a branch derived from it; the
+`Changeset check` workflow fails any other PR that carries a `major` changeset, so a stray `major`
+cannot bump the release PR to the next major. On `main`, a breaking change is `minor` and its
+description starts with `**Breaking change**:` followed by the user impact and migration steps.
+
 - Removing or renaming a public API (`defineConfig`, `db.table`, `createResolver`, etc.)
 - Changing the signature or behavior of an existing API in an incompatible way
 - Changing `tailor.config.ts` format in a way that requires migration
