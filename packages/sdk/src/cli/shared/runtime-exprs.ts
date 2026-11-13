@@ -13,6 +13,7 @@
  * `ACTOR_TRANSFORM_EXPR` below come from the same factory so the three stay in
  * sync.
  */
+import { internalError } from "#/cli/shared/errors";
 import {
   isInputOperand,
   isSingleCondition,
@@ -189,7 +190,7 @@ function resolverPermissionConditionExpr(condition: ResolverPermissionCondition)
 function resolverPermissionPolicyExpr(policy: ResolverPermissionPolicy): string {
   const conditions = isSingleCondition(policy.conditions) ? [policy.conditions] : policy.conditions;
   if (conditions.length === 0) {
-    throw new Error(
+    throw internalError(
       "Resolver permission policy must have at least one condition, got an empty array.",
     );
   }
@@ -232,7 +233,7 @@ export function buildResolverPermissionGuardExpr(
     return undefined;
   }
   if (permission.length === 0) {
-    throw new Error("Resolver permission must have at least one policy, got an empty array.");
+    throw internalError("Resolver permission must have at least one policy, got an empty array.");
   }
   const denyPolicies = permission.filter((policy) => policy.permit === false);
   const allowPolicies = permission.filter((policy) => policy.permit !== false);

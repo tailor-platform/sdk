@@ -2,20 +2,14 @@ import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
-import { z } from "zod";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { CLIError } from "#/cli/shared/errors";
 import { findUndefinedReferences } from "#/cli/shared/free-variables";
 import { flattenZodIssues, formatIssueList } from "#/cli/shared/zod-issues";
-import { checkPermissionInputs } from "#/parser/service/resolver/permission-operands";
-import { ResolverSchema } from "#/parser/service/resolver/schema";
+import { PluginResolverSchema } from "#/parser/service/resolver/schema";
 import { stringifyFunction } from "#/parser/service/tailordb/field";
 import type { PluginResolverInfo } from "#/plugin/manager";
 import type { TailorField } from "#/types/field.generated";
-
-export const PluginResolverSchema = z
-  .strictObject({ ...ResolverSchema.shape, body: z.string() })
-  .superRefine(checkPermissionInputs);
 
 /**
  * Generate validated resolver modules for the standard loader and bundler.
@@ -133,9 +127,10 @@ function serializeValue(value: unknown): string {
     const code = `(${stringifyFunction(value)})`;
     const references = findUndefinedReferences(code, { includeGuardedReferences: true });
     if (references.size > 0) {
-      throw new Error(
-        `Field functions must be self-contained; unresolved references: ${[...references].join(", ")}.`,
-      );
+      throw CLIError({
+        code: "PLUGIN_RESOLVER_INVALID",
+        message: `Field functions must be self-contained; unresolved references: ${[...references].join(", ")}.`,
+      });
     }
     return code;
   }
@@ -148,6 +143,9 @@ function serializeValue(value: unknown): string {
       .join(",")}}`;
   }
   if (typeof value === "symbol")
-    throw new Error("Plugin resolver fields contain an unsupported value.");
+    throw CLIError({
+      code: "PLUGIN_RESOLVER_INVALID",
+      message: "Plugin resolver fields contain an unsupported value.",
+    });
   return JSON.stringify(value);
 }

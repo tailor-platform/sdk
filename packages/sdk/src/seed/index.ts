@@ -31,19 +31,19 @@ import type {
 } from "lines-db";
 
 /**
- * @deprecated since NEXT_RELEASE — import defineSchema from @tailor-platform/sdk-plugin-seed/schema instead. codemod: v3/seed-subpath-to-plugin
+ * @deprecated since 2.41.0 — import defineSchema from @tailor-platform/sdk-plugin-seed/schema instead. codemod: v3/seed-subpath-to-plugin
  */
 export const defineSchema: typeof linesDbDefineSchema = linesDbDefineSchema;
 // oxlint-disable-next-line typescript/no-deprecated -- Re-exports the deprecated function until it is removed.
 export { fillIdpUserPassword } from "./idp-user-password";
 
 /**
- * @deprecated since NEXT_RELEASE — import ForeignKeyDefinition from @tailor-platform/sdk-plugin-seed/schema instead. codemod: v3/seed-subpath-to-plugin
+ * @deprecated since 2.41.0 — import ForeignKeyDefinition from @tailor-platform/sdk-plugin-seed/schema instead. codemod: v3/seed-subpath-to-plugin
  */
 export type ForeignKeyDefinition = LinesDbForeignKeyDefinition;
 
 /**
- * @deprecated since NEXT_RELEASE — import IndexDefinition from @tailor-platform/sdk-plugin-seed/schema instead. codemod: v3/seed-subpath-to-plugin
+ * @deprecated since 2.41.0 — import IndexDefinition from @tailor-platform/sdk-plugin-seed/schema instead. codemod: v3/seed-subpath-to-plugin
  */
 export type IndexDefinition = LinesDbIndexDefinition;
 
@@ -271,7 +271,7 @@ function formatValidationErrors(errors: ValidationErrorDetail[], verbose: boolea
  * holds, and returns formatted output and error messages. With `datasetDirs`,
  * the rows of those directories are validated on top of the rows in `path`,
  * against the schema files in `path`.
- * @deprecated since NEXT_RELEASE — run `tailor seed validate` instead. codemod: v3/seed-subpath-to-plugin
+ * @deprecated since 2.41.0 — run `tailor seed validate` instead. codemod: v3/seed-subpath-to-plugin
  * @param options - Validation options including path, datasets, and verbose flag
  * @returns Validation result with output messages and optional error details
  */
@@ -355,7 +355,7 @@ export async function validateSeedData(
  * generator stops the run with nothing filled in anywhere. Likewise, a file that
  * another tool changed after the fill read it is not overwritten: the call
  * rejects with an error naming that file, and no file is written.
- * @deprecated since NEXT_RELEASE — run `tailor seed fill` instead. codemod: v3/seed-subpath-to-plugin
+ * @deprecated since 2.41.0 — run `tailor seed fill` instead. codemod: v3/seed-subpath-to-plugin
  * @param options - Fill options including path and fields
  * @returns Which files received which fields
  */
@@ -433,7 +433,7 @@ type HookSeedRowsOptions = {
  * from the schema (such as the `_User` password read from the environment) are the ones that
  * are seeded. Rows are returned as they are when the table has no schema file or the file
  * exports no `hook`.
- * @deprecated since NEXT_RELEASE — run `tailor seed apply` instead. codemod: v3/seed-subpath-to-plugin
+ * @deprecated since 2.41.0 — run `tailor seed apply` instead. codemod: v3/seed-subpath-to-plugin
  * @param options - Schema directory, table name and rows
  * @returns The rows after the hook
  */

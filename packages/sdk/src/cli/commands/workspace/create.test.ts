@@ -676,7 +676,6 @@ describe("workspace create with user defaults", () => {
     for (const name of [
       "TAILOR_PLATFORM_PROFILE",
       "TAILOR_PLATFORM_TOKEN",
-      "TAILOR_TOKEN",
       "TAILOR_PLATFORM_URL",
       "TAILOR_PLATFORM_ORGANIZATION_ID",
       "TAILOR_PLATFORM_FOLDER_ID",
@@ -882,23 +881,20 @@ describe("workspace create with user defaults", () => {
     });
   });
 
-  test.each(["TAILOR_PLATFORM_TOKEN", "TAILOR_TOKEN"])(
-    "does not use the defaults when %s is set",
-    async (name) => {
-      vi.stubEnv(name, "mock-token");
-      const client = stubClient();
+  test("does not use the defaults when TAILOR_PLATFORM_TOKEN is set", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_TOKEN", "mock-token");
+    const client = stubClient();
 
-      const result = await runCreateWithDefaults();
+    const result = await runCreateWithDefaults();
 
-      expect(result).toMatchObject({
-        success: false,
-        error: { code: "WORKSPACE_ORGANIZATION_REQUIRED" },
-      });
-      const error = result.success ? undefined : result.error;
-      expect(isCLIError(error) && error.suggestion).not.toContain("tailor user update");
-      expect(client.createWorkspace).not.toHaveBeenCalled();
-    },
-  );
+    expect(result).toMatchObject({
+      success: false,
+      error: { code: "WORKSPACE_ORGANIZATION_REQUIRED" },
+    });
+    const error = result.success ? undefined : result.error;
+    expect(isCLIError(error) && error.suggestion).not.toContain("tailor user update");
+    expect(client.createWorkspace).not.toHaveBeenCalled();
+  });
 
   test.each([
     {

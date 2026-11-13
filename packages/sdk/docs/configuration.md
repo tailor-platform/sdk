@@ -141,13 +141,15 @@ Add the SDK as a content mapper for `.tailor` files in `tsconfig.json`:
 }
 ```
 
-Run `tsc` with `--runExternalCode`. TypeScript then runs your `tailor.config.ts` and the files it imports each time it checks the project, the same code `tailor generate` loads; without the flag it reports error TS18068 instead. Enable it only for projects whose code you trust. You do not create or import any `.tailor` file; the SDK ships the one TypeScript reads.
+Run `tsc` with `--runExternalCode`. TypeScript then runs your `tailor.config.ts` and the files it imports each time it checks the project, the same code `tailor generate` loads; without the flag it reports error TS18068 instead. Enable it only for projects whose code you trust, and the same goes for VS Code, where TypeScript runs the mapper only after you trust the folder and grant the content mapper its permissions. You do not create or import any `.tailor` file; the SDK ships the one TypeScript reads.
 
-Once `tsconfig.json` enables the mapper, `tailor generate` and `tailor deploy` stop writing `tailor.d.ts`, and warn when an old copy remains. They check only that `tsconfig.json` lists the mapper, not that TypeScript runs it, and TypeScript 6.0 and earlier ignore `contentMappers`: with them the names are no longer declared, so `MachineUserName` is any string and a misspelled machine user raises no error. Use TypeScript 7.1 or later wherever the mapper is enabled; 7.1 is in beta, so install it with `npm i -D typescript@beta`. Delete the old copy: while the file remains, TypeScript merges it with what it reads from `tailor.config.ts`, so a name you removed from the config (a machine user you deleted, for example) is still accepted.
+Once `tsconfig.json` enables the mapper, `tailor generate` and `tailor deploy` stop writing `tailor.d.ts`, and warn when an old copy remains. They check only that `tsconfig.json` lists the mapper, not that TypeScript runs it, and TypeScript older than 7.1 ignores `contentMappers`. With such a version the names are no longer declared. `MachineUserName` is any string and `env` accepts any key, so a misspelled machine user or `env` key raises no error. Code that TypeScript 7.1 accepts fails to type-check instead, such as code that reads an `env` value as a `string` (every value is `string | number | boolean`) or uses a `{ user: "<attribute>" }` permission condition. Use TypeScript 7.1 or later wherever the mapper is enabled, in your editor too; 7.1 is in beta, so install it with `npm i -D typescript@beta`. Delete the old copy: while the file remains, TypeScript merges it with what it reads from `tailor.config.ts`, so a name you removed from the config (a machine user you deleted, for example) is still accepted.
 
 Every TypeScript project that uses these names must enable the mapper. A project in the same repository that keeps reading `tailor.d.ts` without the mapper is not supported: the commands no longer update the file, so it goes stale.
 
 The commands read the `tsconfig.json` that applies to `tailor.config.ts`: the nearest one that includes the file, following `extends`, so a base config shared by a monorepo's packages works. When a `tsconfig.json` only lists `references`, they use the referenced project that includes `tailor.config.ts`, so put `contentMappers` in that project's tsconfig. The mapper looks for `tailor.config.ts` upward from the directory of that tsconfig, so the commands stop writing `tailor.d.ts` only when that search finds this very file: a tsconfig at a monorepo's root that merely includes `packages/app/tailor.config.ts`, or a config with another name passed to `--config`, does not count, and they keep writing `tailor.d.ts` (put the tsconfig that enables the mapper in the package, next to its config). If you set `TAILOR_DTS_PATH`, they write the file there regardless.
+
+To start from a project that enables the mapper, run `npm create @tailor-platform/sdk -- --template content-mapper <name>`.
 
 ### Service Configuration
 
@@ -279,7 +281,7 @@ export default defineConfig({
     "my-resolver": { external: true },
   },
   auth: { name: "shared-auth", external: true },
-  idp: [{ name: "shared-idp", external: true }],
+  idp: { name: "shared-idp", external: true },
 });
 ```
 
@@ -291,7 +293,7 @@ When using external resources:
 - The resource must be deployed and available before referencing it
 - You can combine external resources with locally-defined resources
 - TailorDB table names must remain unique across local and external TailorDB namespaces; `deploy` checks external TailorDB table names before applying changes
-- A TailorDB namespace, resolver namespace, or Auth service that another application references as external cannot be deleted. `deploy` and `remove` both stop with `SERVICE_IN_USE` before changing anything and list every application that still uses it, including applications the `deploy` does not include. For `deploy`, keep the resource in the config that defines it, or deploy the referencing applications without it, first or in the same `deploy`. For `remove`, first remove the referencing applications or deploy them without it
+- A TailorDB namespace, resolver namespace, IdP, or Auth service that another application references as external cannot be deleted. `deploy` and `remove` both stop with `SERVICE_IN_USE` before changing anything and list every application that still uses it, including applications the `deploy` does not include. For `deploy`, keep the resource in the config that defines it, or deploy the referencing applications without it, first or in the same `deploy`. For `remove`, first remove the referencing applications or deploy them without it
 - Destructive operations like `tailordb truncate` (and `tailor seed apply --truncate`) automatically exclude external resources to prevent accidental data loss in shared resources
 - Subscribing an executor to an external resource's events requires the config that owns the resource in the same `deploy`. Publishing is then enabled automatically, and `deploy` records the dependency so a later deploy without that config asks for confirmation instead of silently turning publishing off
 
@@ -343,7 +345,7 @@ const idp = defineIdp("my-idp", {
 });
 
 export default defineConfig({
-  idp: [idp],
+  idp,
 });
 ```
 
@@ -603,6 +605,6 @@ kyselyTypePlugin({ contentMapper: true });
 import { getDB } from "@tailor-platform/sdk/plugin/kysely-type/db";
 ```
 
-TypeScript 7.1 or later derives the types of that `getDB()` from your TailorDB definitions and the plugin options, `temporal` included, when the SDK is enabled as a content mapper for `.tailor` files as described in [Type Definitions Without `tailor generate`](#type-definitions-without-tailor-generate). Without the mapper, no types are available for it; use `distPath` instead of `contentMapper: true` so `tailor generate` writes the types file, and import `getDB()` from that file.
+TypeScript 7.1 or later derives the types of that `getDB()` from your TailorDB definitions and the plugin options, `temporal` included, when the SDK is enabled as a content mapper for `.tailor` files as described in [Type Definitions Without `tailor generate`](#type-definitions-without-tailor-generate). Without the mapper, `getDB()` accepts no namespace name, so every call fails to type-check; use `distPath` instead of `contentMapper: true` so `tailor generate` writes the types file, and import `getDB()` from that file.
 
 The types follow edits to your TailorDB definition files and to the plugin options. A definition file added while TypeScript is running is not picked up, whether you only create it or also open it in the editor: restart the TypeScript server in your editor, or the `tsc --watch` process. A single `tsc` run always reads the current files.

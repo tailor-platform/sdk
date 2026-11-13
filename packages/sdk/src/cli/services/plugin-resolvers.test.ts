@@ -15,7 +15,6 @@ import { defineConfig } from "#/configure/config/index";
 import { t } from "#/configure/types/type";
 import { PluginManager } from "#/plugin/manager";
 import { defineApplication, loadApplication } from "./application";
-import { PluginResolverSchema } from "./resolver/plugin-resolvers";
 import type { OperatorClient } from "#/cli/shared/client";
 
 describe("plugin-generated resolvers", () => {
@@ -407,9 +406,10 @@ describe("plugin-generated resolvers", () => {
       ...defineConfig({ name: "test-app", db: { main: { files: [] } } }),
       path: path.join(baseDir, "tailor.config.ts"),
     };
-    await expect(loadApplication({ config, pluginManager })).rejects.toThrow(
-      /plugin "closure".*self-contained.*allowedValue/s,
-    );
+    await expect(loadApplication({ config, pluginManager })).rejects.toMatchObject({
+      code: "PLUGIN_RESOLVER_INVALID",
+      message: expect.stringMatching(/plugin "closure".*self-contained.*allowedValue/s),
+    });
   });
 
   test("keeps the same resolver name separate across namespaces", async () => {
@@ -656,20 +656,5 @@ describe("plugin-generated resolvers", () => {
     await expect(
       createGenerationManager({ application, config, pluginManager }).generate(),
     ).rejects.toMatchObject({ code: "PLUGIN_RESOLVER_NAMESPACE_EXTERNAL" });
-  });
-});
-
-describe("PluginResolverSchema", () => {
-  test("rejects an input operand naming an undeclared input field", () => {
-    const result = PluginResolverSchema.safeParse({
-      operation: "query",
-      name: "getUser",
-      body: "return true;",
-      output: { type: "boolean", fields: {}, metadata: {} },
-      permission: [{ conditions: [[{ input: "ghost" }, "=", { user: "id" }]], permit: true }],
-    });
-    expect(result.error?.issues.map((issue) => issue.message)).toContain(
-      "`permission` references input field `ghost`, which `input` does not declare",
-    );
   });
 });

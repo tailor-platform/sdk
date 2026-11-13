@@ -25,6 +25,7 @@ function permissionDenied(path: string): Error {
 }
 vi.mock("../staticwebsite/deploy", () => ({
   deployStaticWebsite: vi.fn().mockResolvedValue({ url: "https://published", skippedFiles: [] }),
+  staticWebsiteDeployTimeoutError: vi.fn(),
 }));
 import { deployStaticWebsite } from "../staticwebsite/deploy";
 

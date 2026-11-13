@@ -2,7 +2,11 @@ import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { importUserModule } from "#/cli/shared/user-modules";
-import { atUserModule, definitionInvalidError } from "#/cli/shared/validation-errors";
+import {
+  assertUniqueDefinitionNames,
+  atUserModule,
+  definitionInvalidError,
+} from "#/cli/shared/validation-errors";
 import { ExecutorSchema } from "#/parser/service/executor/index";
 import { isSdkBranded } from "#/utils/brand";
 import { stripExecutorTriggerArgs } from "./loader";
@@ -147,18 +151,12 @@ export function createExecutorService(params: CreateExecutorServiceParams): Exec
  * @param executors - Loaded executors keyed by source file
  */
 function assertUniqueExecutorNames(executors: Record<string, Executor>): void {
-  const seenNames = new Map<string, string>();
-  for (const [file, executor] of Object.entries(executors)) {
-    const relativePath = path.relative(process.cwd(), file);
-    const existing = seenNames.get(executor.name);
-    if (existing) {
-      throw new Error(
-        `Duplicate executor name "${executor.name}" found:\n` +
-          `  - ${existing}\n` +
-          `  - ${relativePath}\n` +
-          `Each executor must have a unique name.`,
-      );
-    }
-    seenNames.set(executor.name, relativePath);
-  }
+  assertUniqueDefinitionNames({
+    kind: "executor",
+    definitions: Object.entries(executors).map(([file, executor]) => ({
+      name: executor.name,
+      file,
+      exportName: "default",
+    })),
+  });
 }

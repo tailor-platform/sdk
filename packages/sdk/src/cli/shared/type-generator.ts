@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { isContentMapperEnabled } from "#/cli/shared/content-mapper-config";
+import { idpConfigList } from "#/cli/shared/idp-config";
 import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
 import type { ResolvedEnvAppConfig } from "#/cli/shared/config-loader";
@@ -254,7 +255,8 @@ export {};
 function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
   // De-duplicate IdP names so duplicates in config don't emit duplicate
   // `IdpNameRegistry` keys (which would be invalid TypeScript).
-  const idpNames = config.idp?.length ? [...new Set(config.idp.map((idp) => idp.name))] : undefined;
+  const idpList = idpConfigList(config.idp);
+  const idpNames = idpList.length ? [...new Set(idpList.map((idp) => idp.name))] : undefined;
 
   // De-duplicate AI Gateway names for the same reason.
   const aiGatewayNames = config.aiGateways?.length

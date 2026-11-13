@@ -37,7 +37,7 @@ export default defineConfig({
       },
     },
   }),
-  idp: [idp],
+  idp,
   db: { "main-db": { files: ["./src/db/*.ts"] } },
   resolver: {
     "main-resolver": {

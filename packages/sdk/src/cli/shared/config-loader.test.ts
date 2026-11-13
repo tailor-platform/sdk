@@ -3,8 +3,10 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
 import { invalidPluginsExports } from "#/plugin/test-helpers/invalid-plugins-exports";
+import { PluginValidationError } from "#/utils/plugin-validation-error";
 import { atConfigSource, loadConfig } from "./config-loader";
 import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
+import { errorToJson } from "./error-json";
 
 // Assembled at runtime: spelled out in full, this fixture is indistinguishable
 // from a live credential to the repository's own push protection.
@@ -36,6 +38,20 @@ afterEach(() => {
 });
 
 describe("loadConfig", () => {
+  test("reports a config path that does not exist as CONFIG_NOT_FOUND", async () => {
+    const configPath = path.join(os.tmpdir(), "tailor-config-missing", "tailor.config.ts");
+
+    const error = await rejectionOf(loadConfig(configPath));
+
+    expect(error).toMatchObject({
+      code: "CONFIG_NOT_FOUND",
+      message: `Configuration file not found: ${configPath}`,
+      suggestion: "Check the path given with --config or TAILOR_CONFIG_PATH.",
+      context: { file: configPath },
+    });
+    expect(getErrorDiagnostics(error).location).toBeUndefined();
+  });
+
   test("preserves class plugin state when invoking generation hooks", async () => {
     const configPath = writeConfig(`
       export default { name: "test-app" };
@@ -277,7 +293,55 @@ const syntaxDiagnostic = {
   endColumn: 15,
 };
 
+const otherPluginValidationErrorBrand = Symbol.for("tailor-platform/sdk:plugin-validation-error");
+
+class OtherPluginValidationError extends Error {
+  readonly [otherPluginValidationErrorBrand] = true;
+  readonly code: string;
+  readonly suggestion?: string;
+  readonly context?: PluginValidationError["context"];
+
+  constructor(options: ConstructorParameters<typeof PluginValidationError>[0]) {
+    super(options.message);
+    this.code = options.code;
+    this.suggestion = options.suggestion;
+    this.context = options.context;
+  }
+}
+
 describe("atConfigSource", () => {
+  describe.each([PluginValidationError, OtherPluginValidationError])("with %s", (ErrorClass) => {
+    test.each([undefined, { file: "/repo/plugin-options.ts", line: 9 }])(
+      "preserves plugin validation diagnostics with source location %j",
+      (location) => {
+        const context = { pluginId: "example", duplicates: [{ name: "web", indices: [0, 2] }] };
+        const original = new ErrorClass({
+          code: "EXAMPLE_INVALID",
+          message: "Invalid example options",
+          suggestion: "Fix the example options.",
+          context,
+        });
+        if (location) withErrorDiagnostics(original, { location });
+
+        const result = atConfigSource(original, "/repo/tailor.config.ts");
+        const expectedLocation = location ?? { file: "/repo/tailor.config.ts" };
+        const source = path.relative(process.cwd(), expectedLocation.file);
+        const line = location ? ":9" : "";
+
+        expect(result).toMatchObject({ name: "CLIError", cause: original });
+        expect(getErrorDiagnostics(result as Error).location).toEqual(expectedLocation);
+        expect(errorToJson(result)).toEqual({
+          error: {
+            code: "EXAMPLE_INVALID",
+            message: `${source}${line}: Invalid example options`,
+            suggestion: "Fix the example options.",
+            context,
+          },
+        });
+      },
+    );
+  });
+
   test("reports unparsable source as SYNTAX_INVALID at the line it failed on", () => {
     const result = atConfigSource(syntaxDiagnostic, "/repo/tailor.config.ts");
 

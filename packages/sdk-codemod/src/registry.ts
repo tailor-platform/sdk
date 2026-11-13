@@ -2052,6 +2052,67 @@ export const allCodemods: CodemodPackage[] = [
       "codemod leaves alone.",
     ].join("\n"),
   },
+  {
+    id: "v3/idp-array-to-single",
+    name: "defineConfig idp array → single IdP",
+    description:
+      "Write the `idp` of `defineConfig()` as a single IdP, `idp: myIdp`, instead of an array, `idp: [myIdp]`. A config takes one IdP in v3, so the array form is removed; both forms work until then. The codemod rewrites an array that holds one IdP, whether the config owns it or declares it as external, and removes an empty array. An array with two or more IdPs has no mechanical replacement, so `tailor upgrade` reports it for a manual change.",
+    since: "0.8.0",
+    until: "3.0.0",
+    scriptPath: "v3/idp-array-to-single/scripts/transform.js",
+    filePatterns: ["**/*.{ts,mts,cts,js,mjs,cjs}"],
+    examples: [
+      {
+        before: [
+          "export default defineConfig({",
+          '  name: "backoffice",',
+          "  idp: [backofficeIdp],",
+          "});",
+        ].join("\n"),
+        after: [
+          "export default defineConfig({",
+          '  name: "backoffice",',
+          "  idp: backofficeIdp,",
+          "});",
+        ].join("\n"),
+      },
+      {
+        before: [
+          "export default defineConfig({",
+          '  name: "shop",',
+          '  idp: [{ name: "shared-idp", external: true }],',
+          "});",
+        ].join("\n"),
+        after: [
+          "export default defineConfig({",
+          '  name: "shop",',
+          '  idp: { name: "shared-idp", external: true },',
+          "});",
+        ].join("\n"),
+        caption: "An external declaration is a single IdP too.",
+      },
+    ],
+    prompt: [
+      "In Tailor SDK v3, the `idp` option of `defineConfig()` takes a single IdP, and",
+      "an array of IdPs is removed. For each flagged config, write the IdP itself as",
+      "the value of `idp`.",
+      "",
+      "A config that declares two or more IdPs cannot be rewritten mechanically,",
+      "because a config can declare only one. Keep the IdP that the config's `auth`",
+      "uses (`idProvider`), or ask which one the config should keep, and declare each",
+      "of the others in the config of the app that should own it, deployed together",
+      "with this one. When one entry of the array is an external declaration",
+      "(`{ name, external: true }`) next to the config's own IdP, check what the",
+      "external declaration is used for before removing it: it puts that IdP's GraphQL",
+      "operations into this app, and code that calls them depends on it. If it only",
+      "exists so that an executor can subscribe to that IdP's user events, remove it",
+      "and pass the IdP name as `idp` in the executor's `idpUser` trigger, with",
+      "`external: true` next to it when the generated `IdpName` type rejects the name.",
+      "",
+      "When `idp` is built from a variable, a spread, or a helper, change it where the",
+      "array is defined. Leave the `idp` options of other tools unchanged.",
+    ].join("\n"),
+  },
 ];
 
 /**

@@ -114,6 +114,21 @@ describe("fetchUserInfo", () => {
 
     expect(fetchSpy.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
   });
+
+  test("reports a rejected user info request as AUTH_USER_INFO_FAILED", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(
+        async () => new Response("", { status: 401, statusText: "Unauthorized" }),
+      ),
+    );
+
+    await expect(fetchUserInfo("access-token")).rejects.toMatchObject({
+      code: "AUTH_USER_INFO_FAILED",
+      message: "Failed to fetch user info: Unauthorized",
+      context: { status: 401 },
+    });
+  });
 });
 
 describe("createTransport", () => {
@@ -775,97 +790,47 @@ describe("platform environment variables", () => {
   aroundEach(async (runTest) => {
     await runTest();
     vi.unstubAllEnvs();
-    vi.resetModules();
   });
 
-  async function importFreshClient() {
-    vi.resetModules();
-    const { logger } = await import("./logger");
-    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-    return { client: await import("./client"), warnSpy };
-  }
-
-  test("uses legacy platform env vars when renamed vars are absent, warning once per name", async () => {
+  test("ignores PLATFORM_URL and PLATFORM_OAUTH2_CLIENT_ID", () => {
     vi.stubEnv("PLATFORM_URL", "https://api.legacy.tailor.tech");
     vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", "legacy-client");
-    const { client, warnSpy } = await importFreshClient();
 
-    expect(client.getPlatformBaseUrl()).toBe("https://api.legacy.tailor.tech");
-    expect(client.getOAuth2ClientId()).toBe("legacy-client");
-    expect(client.getEffectivePlatformConfig()).toEqual({
-      platformUrl: "https://api.legacy.tailor.tech",
-      oauth2ClientId: "legacy-client",
-    });
-    expect(warnSpy.mock.calls).toEqual([
-      ["PLATFORM_URL is deprecated. Please use TAILOR_PLATFORM_URL instead."],
-      [
-        "PLATFORM_OAUTH2_CLIENT_ID is deprecated. Please use TAILOR_PLATFORM_OAUTH2_CLIENT_ID instead.",
-      ],
-    ]);
+    expect(getPlatformBaseUrl()).toBe("https://api.tailor.tech");
+    expect(getEffectivePlatformConfig()).toBeUndefined();
   });
 
   test.each([
     {
-      name: "uses the default platform when neither name is set",
+      name: "uses the default platform when unset",
       env: {},
       platformUrl: "https://api.tailor.tech",
-      warnings: [],
     },
     {
-      name: "uses the renamed var without warning",
+      name: "uses TAILOR_PLATFORM_URL",
       env: { TAILOR_PLATFORM_URL: "https://api.dev.tailor.tech" },
       platformUrl: "https://api.dev.tailor.tech",
-      warnings: [],
     },
     {
-      name: "treats an empty renamed var as unset",
-      env: { TAILOR_PLATFORM_URL: "", PLATFORM_URL: "https://api.legacy.tailor.tech" },
-      platformUrl: "https://api.legacy.tailor.tech",
-      warnings: [["PLATFORM_URL is deprecated. Please use TAILOR_PLATFORM_URL instead."]],
-    },
-    {
-      name: "treats empty vars as unset without warning",
-      env: { TAILOR_PLATFORM_URL: "", PLATFORM_URL: "" },
+      name: "treats an empty TAILOR_PLATFORM_URL as unset",
+      env: { TAILOR_PLATFORM_URL: "" },
       platformUrl: "https://api.tailor.tech",
-      warnings: [],
     },
-  ])("$name", async ({ env, platformUrl, warnings }) => {
+  ])("$name", ({ env, platformUrl }) => {
     for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
-    const { client, warnSpy } = await importFreshClient();
 
-    expect(client.getPlatformBaseUrl()).toBe(platformUrl);
-    expect(warnSpy.mock.calls).toEqual(warnings);
+    expect(getPlatformBaseUrl()).toBe(platformUrl);
   });
 
-  test("does not warn when the profile supplies the platform settings", async () => {
-    vi.stubEnv("PLATFORM_URL", "https://api.legacy.tailor.tech");
-    vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", "legacy-client");
-    const { client, warnSpy } = await importFreshClient();
-    const profile = {
-      platformUrl: "https://api.profile.tailor.tech",
-      oauth2ClientId: "profile-client",
-    };
-
-    expect(client.getPlatformBaseUrl(profile)).toBe("https://api.profile.tailor.tech");
-    expect(client.getOAuth2ClientId(profile)).toBe("profile-client");
-    expect(client.getEffectivePlatformConfig(profile)).toEqual(profile);
-    expect(warnSpy).not.toHaveBeenCalled();
-  });
-
-  test("prefers renamed platform env vars over legacy env vars without warning", () => {
-    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-    vi.stubEnv("PLATFORM_URL", "https://api.legacy.tailor.tech");
-    vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", "legacy-client");
+  test("uses TAILOR_PLATFORM_URL and TAILOR_PLATFORM_OAUTH2_CLIENT_ID", () => {
     vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
     vi.stubEnv("TAILOR_PLATFORM_OAUTH2_CLIENT_ID", "dev-client");
 
-    expect(getPlatformBaseUrl()).toBe("https://api.dev.tailor.tech");
     expect(getOAuth2ClientId()).toBe("dev-client");
     expect(getEffectivePlatformConfig()).toEqual({
       platformUrl: "https://api.dev.tailor.tech",
       oauth2ClientId: "dev-client",
     });
-    expect(warnSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -2149,7 +2114,11 @@ describe("fetchMachineUserToken", () => {
 
     await expect(
       fetchMachineUserToken("https://example.com", "client-id", "client-secret"),
-    ).rejects.toThrow("Failed to fetch machine user token: 403 Forbidden access denied");
+    ).rejects.toMatchObject({
+      code: "MACHINE_USER_TOKEN_FAILED",
+      message: "Failed to fetch machine user token: 403 Forbidden access denied",
+      context: { status: 403 },
+    });
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 

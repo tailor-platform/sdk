@@ -1,6 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { errorToJson } from "#/cli/shared/error-json";
+import { errorSummary } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
 import { buildStartContext, normalizeFilePath } from "#/cli/shared/start-context";
@@ -689,7 +691,18 @@ export default createWorkflow({ name: "workflow", mainJob });
           startContext: context,
           baseDir: dir,
         }),
-      ).rejects.toThrow(/syncWorkflow\.start\(\) .*cannot be rewritten/);
+      ).rejects.toSatisfy((error: unknown) => {
+        expect(errorToJson(error)).toMatchObject({
+          error: {
+            code: "WORKFLOW_START_TARGET_UNDETECTABLE",
+            message: expect.stringMatching(
+              /caller\.ts: syncWorkflow\.start\(\) cannot be rewritten/,
+            ),
+            context: { file: callerFile, importSource: "./sync", importedName: "syncWorkflow" },
+          },
+        });
+        return true;
+      });
     });
 
     test("includes jobs referenced through a namespace import", async () => {
@@ -791,7 +804,12 @@ export default createWorkflow({ name: "workflow", mainJob });
           startContext: context,
           baseDir: dir,
         }),
-      ).rejects.toThrow(/main-job/);
+      ).rejects.toMatchObject({
+        code: "WORKFLOW_JOB_UNDETECTABLE",
+        message: 'Workflow job "main-job" (export "mainJob") could not be statically detected.',
+        suggestion: expect.stringContaining('"name" a string literal'),
+        context: { file: workflowFile, jobName: "main-job", exportName: "mainJob" },
+      });
     });
 
     test("throws a parse error (not a misleading literal-config error) for a syntax error", async () => {
@@ -816,7 +834,11 @@ this is not valid syntax &&&
           startContext: context,
           baseDir: dir,
         }),
-      ).rejects.toThrow(/parse/i);
+      ).rejects.toMatchObject({
+        code: "WORKFLOW_SOURCE_PARSE_FAILED",
+        message: expect.stringMatching(/^Failed to parse workflow source: /),
+        context: { file: workflowFile },
+      });
     });
 
     test("throws when a start() call is factored outside any job body", async () => {
@@ -852,7 +874,10 @@ export default createWorkflow({ name: "workflow", mainJob });
           startContext: context,
           baseDir: dir,
         }),
-      ).rejects.toThrow(/step-a/);
+      ).rejects.toMatchObject({
+        code: "WORKFLOW_JOB_UNDETECTABLE",
+        message: expect.stringMatching(/step-a/),
+      });
     });
 
     test("throws when a start() call is factored into a helper in another file", async () => {
@@ -901,7 +926,10 @@ export default createWorkflow({ name: "workflow", mainJob });
           startContext: context,
           baseDir: dir,
         }),
-      ).rejects.toThrow(/step-a/);
+      ).rejects.toMatchObject({
+        code: "WORKFLOW_JOB_UNDETECTABLE",
+        message: expect.stringMatching(/step-a/),
+      });
     });
 
     test("throws when a factored-out start() call lives in a file outside workflow.files", async () => {
@@ -958,7 +986,10 @@ export default createWorkflow({ name: "workflow", mainJob });
           startContext: context,
           baseDir: dir,
         }),
-      ).rejects.toThrow(/step-a/);
+      ).rejects.toMatchObject({
+        code: "WORKFLOW_JOB_UNDETECTABLE",
+        message: expect.stringMatching(/step-a/),
+      });
     });
 
     test("does not log a success message when bundle-output validation fails", async () => {
@@ -1014,7 +1045,10 @@ export default createWorkflow({ name: "workflow", mainJob });
             startContext: context,
             baseDir: dir,
           }),
-        ).rejects.toThrow(/step-a/);
+        ).rejects.toMatchObject({
+          code: "WORKFLOW_JOB_UNDETECTABLE",
+          message: expect.stringMatching(/step-a/),
+        });
 
         expect(logSpy.mock.calls.some(([message]) => message.includes("Bundled"))).toBe(false);
       } finally {
@@ -1057,8 +1091,9 @@ export default createWorkflow({ name: "workflow", mainJob });
       }
 
       expect(error).toBeInstanceOf(Error);
-      expect((error as Error).message).toMatch(/worker.*\.start\(/);
-      expect((error as Error).message).not.toMatch(/move.*inside/i);
+      expect(error).toMatchObject({ code: "WORKFLOW_JOB_UNDETECTABLE" });
+      expect(errorSummary(error)).toMatch(/worker.*\.start\(/s);
+      expect(errorSummary(error)).not.toMatch(/move.*inside/i);
     });
 
     test("throws when a job body calls the imported workflow.execJobFunction directly (previously silent)", async () => {
@@ -1091,7 +1126,12 @@ export default createWorkflow({ name: "workflow", mainJob });
           startContext: context,
           baseDir: dir,
         }),
-      ).rejects.toThrow(/worker.*\.start\(/);
+      ).rejects.toMatchObject({
+        code: "WORKFLOW_JOB_UNDETECTABLE",
+        message: expect.stringMatching(/execJobFunction\("worker", \.\.\.\) directly/),
+        suggestion: expect.stringMatching(/"worker" job's \.start\(/),
+        context: { file: workflowFile, targetJobName: "worker" },
+      });
     });
 
     test("throws when a job body calls execJobFunction via an aliased runtime import", async () => {
@@ -1124,7 +1164,12 @@ export default createWorkflow({ name: "workflow", mainJob });
           startContext: context,
           baseDir: dir,
         }),
-      ).rejects.toThrow(/worker.*\.start\(/);
+      ).rejects.toMatchObject({
+        code: "WORKFLOW_JOB_UNDETECTABLE",
+        message: expect.stringMatching(/execJobFunction\("worker", \.\.\.\) directly/),
+        suggestion: expect.stringMatching(/"worker" job's \.start\(/),
+        context: { file: workflowFile, targetJobName: "worker" },
+      });
     });
 
     test("throws with a job-name-can't-be-resolved message when the execJobFunction target isn't a string literal", async () => {
@@ -1152,7 +1197,10 @@ export default createWorkflow({ name: "workflow", mainJob });
           startContext: context,
           baseDir: dir,
         }),
-      ).rejects.toThrow(/isn't a string literal/);
+      ).rejects.toMatchObject({
+        code: "WORKFLOW_JOB_UNDETECTABLE",
+        message: expect.stringMatching(/isn't a string literal/),
+      });
     });
 
     test("does not throw for a user-defined object with its own execJobFunction method", async () => {
@@ -1418,6 +1466,23 @@ export default createWorkflow({
     test("names the caller job when its bundled code fails to parse", () => {
       const bundledCode = new Map([["main-job", "this is not valid js &&&"]]);
       expect(() => validateBundledDependencies(bundledCode, ["main-job"])).toThrow(/main-job/);
+    });
+
+    test("explains a call to a job that was not bundled outside the message", () => {
+      const bundledCode = new Map([
+        ["main-job", "globalThis.tailor.workflow.execJobFunction(`step-a`, void 0)"],
+      ]);
+
+      expect(() => validateBundledDependencies(bundledCode, ["main-job"])).toThrow(
+        expect.objectContaining({
+          code: "WORKFLOW_JOB_UNDETECTABLE",
+          message:
+            'Workflow job "main-job" calls execJobFunction("step-a", ...), but "step-a" was not ' +
+            "detected as a dependency and is not included in the bundle.",
+          details: 'The call is usually the result of a rewritten "step-a" job .start() call.',
+          context: { callerJobName: "main-job", targetJobName: "step-a" },
+        }),
+      );
     });
 
     test("does not throw when every target is bundled", () => {

@@ -31,6 +31,7 @@ import { type LoadedConfig } from "#/cli/shared/config-loader";
 import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { CLIError } from "#/cli/shared/errors";
+import { idpConfigList, isIdpConfigList, type IdpConfigInput } from "#/cli/shared/idp-config";
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { logger } from "#/cli/shared/logger";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
@@ -39,7 +40,11 @@ import {
   createTsconfigLookupCache,
   type TsconfigLookupCache,
 } from "#/cli/shared/tsconfig-paths-plugin";
-import { configInvalidError } from "#/cli/shared/validation-errors";
+import {
+  assertUniqueDefinitionNames,
+  configInvalidError,
+  configIssuesError,
+} from "#/cli/shared/validation-errors";
 import {
   type AppConfig,
   type ExecutorServiceInput,
@@ -49,7 +54,7 @@ import {
   type WorkflowServiceConfig,
 } from "#/configure/config/types";
 import { type AuthConfig } from "#/configure/services/auth/types";
-import { type IdPConfig, type IdPOwnConfig } from "#/configure/services/idp/types";
+import { type IdPOwnConfig } from "#/configure/services/idp/types";
 import { AIGatewaySchema } from "#/parser/service/aigateway/index";
 import { AuthConfigSchema } from "#/parser/service/auth/index";
 import { IdPSchema } from "#/parser/service/idp/index";
@@ -227,11 +232,12 @@ function pluginResolverSource(
   config: LoadedConfig,
   pluginManager: PluginManager | undefined,
 ): PluginResolverSource | undefined {
-  return pluginManager && { pluginManager, appName: config.name, configPath: config.path };
+  return pluginManager && { pluginManager, appName: config.name };
 }
 
 function defineResolver(
   config: ResolverServiceInput | undefined,
+  configPath: string,
   baseDir: string,
   plugins: PluginResolverSource | undefined,
 ): DefineResolverResult {
@@ -244,7 +250,13 @@ function defineResolver(
 
   for (const [namespace, serviceConfig] of Object.entries(config)) {
     if (!("external" in serviceConfig)) {
-      const resolverService = createResolverService(namespace, serviceConfig, baseDir, plugins);
+      const resolverService = createResolverService({
+        namespace,
+        config: serviceConfig,
+        configPath,
+        baseDir,
+        plugins,
+      });
       resolverServices.push(resolverService);
     }
     subgraphs.push({ Type: "pipeline", Name: namespace });
@@ -279,12 +291,13 @@ export function definePluginResolverServices(
       continue;
     }
     resolverServices.push(
-      createResolverService(
+      createResolverService({
         namespace,
-        { files: [] },
+        config: { files: [] },
+        configPath: config.path,
         baseDir,
-        pluginResolverSource(config, pluginManager),
-      ),
+        plugins: pluginResolverSource(config, pluginManager),
+      }),
     );
   }
   return resolverServices;
@@ -302,26 +315,29 @@ function stripIdpProviderHelper(idpConfig: IdPOwnConfig): IdPOwnConfig {
   return config;
 }
 
-function defineIdp(config: readonly IdPConfig[] | undefined, configPath: string): DefineIdpResult {
+function defineIdp(config: IdpConfigInput | undefined, configPath: string): DefineIdpResult {
   const idpServices: IdP[] = [];
   const subgraphs: Array<{ Type: string; Name: string }> = [];
 
-  if (!config) {
-    return { idpServices, subgraphs };
-  }
-
-  const idpNames = new Set<string>();
-  config.forEach((idpConfig, index) => {
+  const idps = idpConfigList(config);
+  assertUniqueDefinitionNames({
+    kind: "idp",
+    definitions: idps
+      .map(({ name }, index) => ({
+        name,
+        file: configPath,
+        exportName: "default",
+        path: ["idp", index],
+      }))
+      .filter((definition) => typeof definition.name === "string"),
+  });
+  idps.forEach((idpConfig, index) => {
     const name = idpConfig.name;
-    if (idpNames.has(name)) {
-      throw new Error(`IdP with name "${name}" already defined.`);
-    }
-    idpNames.add(name);
     if (!("external" in idpConfig)) {
       const idp = parseServiceConfig(IdPSchema, stripIdpProviderHelper(idpConfig), {
         file: configPath,
         configKey: "idp",
-        key: index,
+        key: isIdpConfigList(config) ? index : undefined,
         name,
       });
       idpServices.push(idp);
@@ -359,6 +375,7 @@ function defineAuth(
       }),
       tailorDBServices,
       externalTailorDBNamespaces,
+      configPath,
     );
   }
   subgraphs.push({ Type: "auth", Name: config.name });
@@ -409,7 +426,17 @@ function defineStaticWebsites(
   configPath: string,
 ): StaticWebsite[] {
   const staticWebsiteServices: StaticWebsite[] = [];
-  const websiteNames = new Set<string>();
+  assertUniqueDefinitionNames({
+    kind: "staticwebsite",
+    definitions: (websites ?? [])
+      .map(({ name }, index) => ({
+        name,
+        file: configPath,
+        exportName: "default",
+        path: ["staticWebsites", index],
+      }))
+      .filter((definition) => typeof definition.name === "string"),
+  });
 
   (websites ?? []).forEach((config, index) => {
     const website = parseServiceConfig(StaticWebsiteSchema, stripStaticWebsiteUrlHelper(config), {
@@ -418,10 +445,6 @@ function defineStaticWebsites(
       key: index,
       name: config.name,
     });
-    if (websiteNames.has(website.name)) {
-      throw new Error(`Static website with name "${website.name}" already defined.`);
-    }
-    websiteNames.add(website.name);
     staticWebsiteServices.push(website);
   });
 
@@ -434,7 +457,17 @@ function defineAIGateways(
   applicationAuthNamespace: string | undefined,
 ): AIGateway[] {
   const aiGatewayServices: AIGateway[] = [];
-  const gatewayNames = new Set<string>();
+  assertUniqueDefinitionNames({
+    kind: "aigateway",
+    definitions: (gateways ?? [])
+      .map(({ name }, index) => ({
+        name,
+        file: configPath,
+        exportName: "default",
+        path: ["aiGateways", index],
+      }))
+      .filter((definition) => typeof definition.name === "string"),
+  });
 
   (gateways ?? []).forEach((config, index) => {
     const gateway = parseServiceConfig(AIGatewaySchema, config, {
@@ -443,16 +476,21 @@ function defineAIGateways(
       key: index,
       name: config.name,
     });
-    if (gatewayNames.has(gateway.name)) {
-      throw new Error(`AI Gateway with name "${gateway.name}" already defined.`);
-    }
-    gatewayNames.add(gateway.name);
     if (gateway.authNamespace === undefined) {
       if (!applicationAuthNamespace) {
-        throw new Error(
-          `AI Gateway "${gateway.name}" has no "authNamespace" and no Auth service is configured ` +
-            `to default to. Define an Auth service, or set "authNamespace" explicitly.`,
-        );
+        throw configIssuesError({
+          file: configPath,
+          exportName: "default",
+          subject: "Tailor config",
+          service: { configKey: "aiGateways", name: gateway.name },
+          issues: [
+            {
+              path: ["aiGateways", index, "authNamespace"],
+              message: "No Auth service is configured to default to",
+            },
+          ],
+          suggestion: 'Define an Auth service, or set "authNamespace" explicitly.',
+        });
       }
       gateway.authNamespace = applicationAuthNamespace;
     }
@@ -486,15 +524,24 @@ function parseSecretManager(
 
   // Defensive check: error if nullish values exist without ignoreNullishValues
   if (!ignoreNullishValues) {
-    for (const vault of secrets) {
-      for (const secret of vault.secrets) {
-        if (secret.value == null) {
-          throw new Error(
-            `Secret "${vault.vaultName}/${secret.name}" has no value. ` +
-              `Use { ignoreNullishValues: true } option in defineSecretManager() to skip secrets without values.`,
-          );
-        }
-      }
+    const issues = secrets.flatMap((vault) =>
+      vault.secrets
+        .filter((secret) => secret.value == null)
+        .map((secret) => ({
+          path: ["secrets", "vaults", vault.vaultName, secret.name],
+          message: "Has no value",
+        })),
+    );
+    if (issues.length > 0) {
+      throw configIssuesError({
+        file: configPath,
+        exportName: "default",
+        subject: "Tailor config",
+        service: { configKey: "secrets" },
+        issues,
+        suggestion:
+          "Use the { ignoreNullishValues: true } option in defineSecretManager() to skip secrets without values.",
+      });
     }
   }
 
@@ -528,6 +575,7 @@ function defineServices(
   );
   const resolverResult = defineResolver(
     config.resolver,
+    config.path,
     baseDir,
     pluginResolverSource(config, pluginManager),
   );
@@ -714,7 +762,11 @@ export function generatePluginFilesIfNeeded(
 function assertWaitPointKeys(): void {
   const failures = collectWaitPointKeyFailures(getScopedWaitPoints());
   if (failures.length === 0) return;
-  throw new Error(failures.join("\n"));
+  throw CLIError({
+    code: "WORKFLOW_WAIT_POINT_KEY_INVALID",
+    message: failures.join("\n"),
+    context: { failures },
+  });
 }
 
 /**

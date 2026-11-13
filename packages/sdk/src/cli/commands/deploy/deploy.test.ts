@@ -315,7 +315,6 @@ describe("computeRenamedAppDeletions", () => {
 describe("parseDeployConfigPaths", () => {
   test("preserves default config lookup when no path is provided", () => {
     vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
-    vi.stubEnv("TAILOR_PLATFORM_SDK_CONFIG_PATH", undefined);
     try {
       expect(parseDeployConfigPaths()).toEqual([undefined]);
     } finally {
@@ -329,24 +328,17 @@ describe("parseDeployConfigPaths", () => {
       env: { TAILOR_CONFIG_PATH: "buyer/tailor.config.ts,supplier/tailor.config.ts" },
       configPath: undefined,
       expected: ["buyer/tailor.config.ts", "supplier/tailor.config.ts"],
-      warnings: [],
     },
     {
-      name: "prefers a provided path over both config path variables",
-      env: {
-        TAILOR_CONFIG_PATH: "new/tailor.config.ts",
-        TAILOR_PLATFORM_SDK_CONFIG_PATH: "old/tailor.config.ts",
-      },
+      name: "prefers a provided path over TAILOR_CONFIG_PATH",
+      env: { TAILOR_CONFIG_PATH: "env/tailor.config.ts" },
       configPath: "given/tailor.config.ts",
       expected: ["given/tailor.config.ts"],
-      warnings: [],
     },
-  ])("$name", ({ env, configPath, expected, warnings }) => {
-    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+  ])("$name", ({ env, configPath, expected }) => {
     for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
     try {
       expect(parseDeployConfigPaths(configPath)).toEqual(expected);
-      expect(warnSpy.mock.calls).toEqual(warnings);
     } finally {
       vi.unstubAllEnvs();
     }
@@ -424,7 +416,7 @@ describe("visible same-run namespaces", () => {
     expect(result.has("peer-idp")).toBe(true);
   });
 
-  test("ignores same-run IdPs that the current app does not reference", () => {
+  test("collects IdPs owned by peer configs even when the current app declares none", () => {
     const current = {
       idpServices: [],
       subgraphs: [],
@@ -436,7 +428,7 @@ describe("visible same-run namespaces", () => {
 
     const result = collectVisibleIdpNames(current, [current, peer]);
 
-    expect(result.has("peer-idp")).toBe(false);
+    expect(result.has("peer-idp")).toBe(true);
   });
 });
 

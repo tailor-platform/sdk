@@ -12,7 +12,8 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
+  queue: max
 
 permissions: {}
 
@@ -25,6 +26,7 @@ jobs:
     runs-on: ubuntu-slim
     timeout-minutes: 10
     permissions:
+      actions: read
       contents: read # checkout the PR branch
       pull-requests: write # upsert the docs review on the PR
       id-token: write # OIDC for the Claude Code action
@@ -36,7 +38,14 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Check for a reusable docs review
+        id: reuse
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node .github/scripts/docs-consistency-reuse.mjs
+
       - name: Check docs-implementation consistency
+        if: steps.reuse.outputs.reuse == 'false'
         uses: anthropics/claude-code-action@4fa93a88de49bbef68b10eb15aabedf28ca0e1ed # v1.0.271
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -226,7 +235,7 @@ jobs:
 
       - name: Validate Recommended Actions heading
         id: validate-heading
-        if: always()
+        if: always() && steps.reuse.outputs.reuse == 'false'
         run: |
           if [ ! -s "$REVIEW_BODY_FILE" ]; then
             echo "needs_fix=false" >> "$GITHUB_OUTPUT"
@@ -238,7 +247,7 @@ jobs:
           fi
 
       - name: Fix Recommended Actions heading with Claude
-        if: always() && steps.validate-heading.outputs.needs_fix == 'true'
+        if: always() && steps.reuse.outputs.reuse == 'false' && steps.validate-heading.outputs.needs_fix == 'true'
         uses: anthropics/claude-code-action@4fa93a88de49bbef68b10eb15aabedf28ca0e1ed # v1.0.271
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -264,7 +273,7 @@ jobs:
             --allowedTools "Read,Write"
 
       - name: Post docs consistency review
-        if: always()
+        if: always() && steps.reuse.outputs.reuse == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ env.PR_NUMBER }}
@@ -272,8 +281,8 @@ jobs:
           MARKER: "<!-- docs-consistency-check -->"
         run: |
           if [ ! -s "$REVIEW_BODY_FILE" ]; then
-            echo "No review body was produced; nothing to post."
-            exit 0
+            echo "No review body was produced." >&2
+            exit 1
           fi
 
           # Neutralizes @mentions so unrelated contributors are never

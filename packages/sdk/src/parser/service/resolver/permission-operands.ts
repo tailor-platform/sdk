@@ -44,24 +44,6 @@ export function isSingleCondition<C extends ResolverPermissionCondition>(
   return conditions.length === 3 && typeof conditions[1] === "string";
 }
 
-/**
- * Collect the input fields a resolver permission compares with the caller.
- * @param permission - A resolver `permission` or namespace `defaultPermission`
- * @returns Names of the input fields its `{ input }` operands reference
- */
-export function permissionInputFields(permission: Resolver["permission"]): Set<string> {
-  if (typeof permission !== "object") {
-    return new Set();
-  }
-  return new Set(
-    permission.flatMap(({ conditions }) =>
-      (isSingleCondition(conditions) ? [conditions] : conditions)
-        .flatMap(([left, , right]) => [left, right])
-        .flatMap((operand) => (isInputOperand(operand) ? [operand.input] : [])),
-    ),
-  );
-}
-
 type IndexedCondition<C extends ResolverPermissionCondition> = {
   condition: C;
   path: (string | number)[];
@@ -80,6 +62,27 @@ export function indexedConditions<C extends ResolverPermissionCondition>(
     : conditions.map((condition, index) => ({ condition, path: ["conditions", index] }));
 }
 
+type InputOperandReference = {
+  field: string;
+  path: (string | number)[];
+};
+
+function inputOperandReferences(permission: Resolver["permission"]): InputOperandReference[] {
+  if (typeof permission !== "object") {
+    return [];
+  }
+  return permission.flatMap((policy, policyIndex) =>
+    indexedConditions(policy.conditions).flatMap(({ condition, path }) =>
+      ([0, 2] as const).flatMap((side) => {
+        const operand = condition[side];
+        return isInputOperand(operand)
+          ? [{ field: operand.input, path: [policyIndex, ...path, side] }]
+          : [];
+      }),
+    ),
+  );
+}
+
 const COMPARABLE_INPUT_FIELD_TYPES = new Set<string>(["string", "uuid", "enum"]);
 
 /**
@@ -92,33 +95,42 @@ export function checkPermissionInputs(
   resolver: Pick<Resolver, "input" | "permission">,
   ctx: z.RefinementCtx,
 ): void {
-  if (typeof resolver.permission !== "object") {
-    return;
-  }
   const input = resolver.input ?? {};
-  resolver.permission.forEach((policy, policyIndex) => {
-    for (const { condition, path } of indexedConditions(policy.conditions)) {
-      for (const side of [0, 2] as const) {
-        const operand = condition[side];
-        if (!isInputOperand(operand)) {
-          continue;
-        }
-        const operandPath = ["permission", policyIndex, ...path, side];
-        const field = Object.hasOwn(input, operand.input) ? input[operand.input] : undefined;
-        if (field === undefined) {
-          ctx.addIssue({
-            code: "custom",
-            path: operandPath,
-            message: `\`permission\` references input field \`${operand.input}\`, which \`input\` does not declare`,
-          });
-        } else if (!COMPARABLE_INPUT_FIELD_TYPES.has(field.type) || field.metadata.array) {
-          ctx.addIssue({
-            code: "custom",
-            path: operandPath,
-            message: `\`permission\` compares input field \`${operand.input}\`, but only a string, uuid, or enum field that is not an array can be compared`,
-          });
-        }
-      }
+  for (const reference of inputOperandReferences(resolver.permission)) {
+    const path = ["permission", ...reference.path];
+    const field = Object.hasOwn(input, reference.field) ? input[reference.field] : undefined;
+    if (field === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path,
+        message: `\`permission\` references input field \`${reference.field}\`, which \`input\` does not declare`,
+      });
+    } else if (!COMPARABLE_INPUT_FIELD_TYPES.has(field.type) || field.metadata.array) {
+      ctx.addIssue({
+        code: "custom",
+        path,
+        message: `\`permission\` compares input field \`${reference.field}\`, but only a string, uuid, or enum field that is not an array can be compared`,
+      });
     }
-  });
+  }
+}
+
+/**
+ * Report each `{ input }` operand in a resolver namespace's `defaultPermission`.
+ * @param defaultPermission - The namespace's `defaultPermission`
+ * @param ctx - Refinement context the issues are added to
+ */
+export function checkDefaultPermissionInputs(
+  defaultPermission: Resolver["permission"],
+  ctx: z.RefinementCtx,
+): void {
+  for (const { path } of inputOperandReferences(defaultPermission)) {
+    ctx.addIssue({
+      code: "custom",
+      path,
+      message:
+        "`defaultPermission` cannot use an `input` operand, since a namespace has no input; " +
+        "declare it in each resolver's own `permission`",
+    });
+  }
 }

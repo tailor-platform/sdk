@@ -3,8 +3,11 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { AppConfigSchema } from "#/parser/app-config/schema";
 import { PluginConfigSchema } from "#/parser/plugin-config/index";
+import { isPluginValidationError } from "#/utils/plugin-validation-error";
 import { loadConfigPath } from "./context";
 import { assertEnvHasNoSecrets, resolveEnvValue } from "./env-secret-scan";
+import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
+import { CLIError } from "./errors";
 import { installCliTailordbStub } from "./mock";
 import { currentImportNonce, IMPORT_NONCE_PARAM } from "./user-modules";
 import {
@@ -30,6 +33,9 @@ export type ResolvedEnvAppConfig = Omit<AppConfig, "env"> & {
 /** Loaded configuration with resolved path. */
 export type LoadedConfig = ResolvedEnvAppConfig & { path: string };
 
+const CONFIG_NOT_FOUND_SUGGESTION =
+  "Run the command from the app directory, or pass the config file with --config.";
+
 export interface LoadConfigOptions {
   /** Import cache-busting value for callers that reload the config module after a rebuild. */
   importNonce?: string;
@@ -48,14 +54,22 @@ export async function loadConfig(
   installCliTailordbStub();
   const foundPath = loadConfigPath(configPath);
   if (!foundPath) {
-    throw new Error(
-      "Configuration file not found: tailor.config.ts not found in current or parent directories",
-    );
+    throw CLIError({
+      code: "CONFIG_NOT_FOUND",
+      message:
+        "Configuration file not found: tailor.config.ts not found in current or parent directories",
+      suggestion: CONFIG_NOT_FOUND_SUGGESTION,
+    });
   }
   const resolvedPath = path.resolve(process.cwd(), foundPath);
 
   if (!fs.existsSync(resolvedPath)) {
-    throw new Error(`Configuration file not found: ${configPath}`);
+    throw CLIError({
+      code: "CONFIG_NOT_FOUND",
+      message: `Configuration file not found: ${foundPath}`,
+      suggestion: "Check the path given with --config or TAILOR_CONFIG_PATH.",
+      context: { file: resolvedPath },
+    });
   }
 
   const configUrl = pathToFileURL(resolvedPath);
@@ -170,5 +184,20 @@ export async function loadConfig(
  * @returns An Error carrying the source location the failure points at
  */
 export function atConfigSource(error: unknown, resolvedPath: string): unknown {
+  if (isPluginValidationError(error)) {
+    return atUserModule(
+      withErrorDiagnostics(
+        CLIError({
+          code: error.code,
+          message: error.message,
+          suggestion: error.suggestion,
+          context: error.context,
+          cause: error,
+        }),
+        getErrorDiagnostics(error),
+      ),
+      resolvedPath,
+    );
+  }
   return syntaxInvalidError(error) ?? atUserModule(error, resolvedPath);
 }

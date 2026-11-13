@@ -72,6 +72,8 @@ export default defineConfig([
         "codemods/v3/files-ignores-to-negation/scripts/transform.ts",
       "v3/tailordb-namespace-loaded-rename/scripts/transform":
         "codemods/v3/tailordb-namespace-loaded-rename/scripts/transform.ts",
+      "v3/idp-array-to-single/scripts/transform":
+        "codemods/v3/idp-array-to-single/scripts/transform.ts",
     },
     format: ["esm"],
     target: "node22",

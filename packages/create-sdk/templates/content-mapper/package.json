@@ -1,0 +1,22 @@
+{
+  "name": "content-mapper",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "tailor deploy",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint --type-aware .",
+    "lint:fix": "oxlint --type-aware --fix .",
+    "typecheck": "tsc --noEmit --runExternalCode"
+  },
+  "devDependencies": {
+    "@tailor-platform/eslint-plugin-sdk": "workspace:^",
+    "@tailor-platform/sdk": "workspace:^",
+    "@types/node": "26.6.6",
+    "oxfmt": "0.77.0",
+    "oxlint": "1.92.0",
+    "oxlint-tsgolint": "7.0.2006",
+    "typescript": "7.1.0-beta"
+  }
+}

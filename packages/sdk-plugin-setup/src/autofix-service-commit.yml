@@ -17,7 +17,7 @@
 # __SECUREFIX_START__
 - id: tailor-securefix
   # __SERVICE_COMMIT_IF__
-  uses: csm-actions/securefix-action@6da661e4377faf2d71294c1c09b1c03c161ce7c1 # v0.6.8
+  uses: csm-actions/securefix-action@75f446c03c22cc2cfc1c944577dfd0dac5111738 # v0.7.0
   with:
     action: client
     client_id: ${{ vars.TAILOR_AUTOFIX_APP_CLIENT_ID }}

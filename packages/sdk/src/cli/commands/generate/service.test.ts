@@ -325,7 +325,7 @@ describe("GenerationManager", () => {
       });
 
       await expect(duplicateManager.generate()).rejects.toThrow(
-        /Duplicate TailorDB table names detected/,
+        /Duplicate TailorDB type name "User"/,
       );
       expect(vi.mocked(logger.error).mock.calls).toEqual([
         ["Error validating TailorDB table names"],

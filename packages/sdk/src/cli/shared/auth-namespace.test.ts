@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { getApplicationAuthNamespace } from "./auth-namespace";
+import { getApplicationAuthNamespace, requireApplicationAuthNamespace } from "./auth-namespace";
 
 describe("getApplicationAuthNamespace", () => {
   test("uses the local auth service name first", () => {
@@ -21,5 +21,21 @@ describe("getApplicationAuthNamespace", () => {
 
   test("returns undefined when no auth is configured", () => {
     expect(getApplicationAuthNamespace({ config: {} })).toBeUndefined();
+  });
+});
+
+describe("requireApplicationAuthNamespace", () => {
+  test("rejects an application without auth as AUTH_CONFIG_REQUIRED", () => {
+    let error: unknown;
+    try {
+      requireApplicationAuthNamespace({ config: {} });
+    } catch (thrown) {
+      error = thrown;
+    }
+    expect(error).toMatchObject({
+      code: "AUTH_CONFIG_REQUIRED",
+      message: "No Auth service configured",
+      suggestion: "Ensure tailor.config.ts has an auth config.",
+    });
   });
 });

@@ -3,6 +3,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
+import { errorToJson } from "#/cli/shared/error-json";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
 import { defineConfig, definePlugins } from "#/configure/config/index";
 import { defineAIGateway } from "#/configure/services/aigateway/index";
@@ -59,6 +60,7 @@ describe("defineAuth parse wiring", () => {
     });
 
     const config = {
+      // oxlint-disable-next-line typescript/no-deprecated -- Verify the deprecated array form still works until it is removed.
       ...defineConfig({
         name: "testApp",
         idp: [idp],
@@ -70,6 +72,40 @@ describe("defineAuth parse wiring", () => {
 
     expect(application.idpServices).toHaveLength(1);
     expect(application.idpServices[0]?.name).toBe("my-idp");
+  });
+
+  test("accepts a single IdP config instead of an array", () => {
+    const idp = defineIdp("my-idp", {
+      clients: ["default-client"],
+    });
+
+    const config = {
+      ...defineConfig({
+        name: "testApp",
+        idp,
+      }),
+      path: "tailor.config.ts",
+    };
+
+    const application = defineApplication({ config });
+
+    expect(application.idpServices.map((service) => service.name)).toEqual(["my-idp"]);
+    expect(application.subgraphs).toContainEqual({ Type: "idp", Name: "my-idp" });
+  });
+
+  test("accepts a single external IdP config", () => {
+    const config = {
+      ...defineConfig({
+        name: "testApp",
+        idp: { name: "shared-idp", external: true },
+      }),
+      path: "tailor.config.ts",
+    };
+
+    const application = defineApplication({ config });
+
+    expect(application.idpServices).toEqual([]);
+    expect(application.subgraphs).toContainEqual({ Type: "idp", Name: "shared-idp" });
   });
 
   test("accepts defineStaticWebSite helper objects when parsing static websites", () => {
@@ -165,8 +201,60 @@ describe("AI Gateway authNamespace default", () => {
     };
 
     expect(() => defineApplication({ config })).toThrow(
-      /AI Gateway "my-aigateway" has no "authNamespace"/,
+      expect.objectContaining({
+        code: "CONFIG_INVALID",
+        message:
+          "Invalid Tailor config:\n  - aiGateways.0.authNamespace: No Auth service is configured to default to",
+        suggestion: 'Define an Auth service, or set "authNamespace" explicitly.',
+        context: expect.objectContaining({ configKey: "aiGateways", name: "my-aigateway" }),
+      }),
     );
+  });
+
+  test("reports secrets without a value as CONFIG_INVALID", () => {
+    const config = {
+      ...defineConfig({
+        name: "testApp",
+        secrets: defineSecretManager({
+          vault: { first: undefined, second: "set", third: null },
+        } as never),
+      }),
+      path: "tailor.config.ts",
+    };
+
+    expect(() => defineApplication({ config })).toThrow(
+      expect.objectContaining({
+        code: "CONFIG_INVALID",
+        message:
+          "Invalid Tailor config:\n  - secrets.vaults.vault.first: Has no value\n  - secrets.vaults.vault.third: Has no value",
+        suggestion: expect.stringContaining("ignoreNullishValues: true"),
+        context: expect.objectContaining({ configKey: "secrets" }),
+      }),
+    );
+  });
+
+  test("reports a userProfile type no TailorDB namespace defines as CONFIG_INVALID", async () => {
+    const userType = db.table("User", { email: db.string().unique() });
+    const config = {
+      ...defineConfig({
+        name: "testApp",
+        db: { main: { files: [] }, other: { files: [] } },
+        auth: defineAuth("my-auth", {
+          userProfile: { type: userType, usernameField: "email" },
+          machineUsers: {},
+        }),
+      }),
+      path: "tailor.config.ts",
+    };
+
+    await expect(
+      defineApplication({ config }).authService!.resolveNamespaces(),
+    ).rejects.toMatchObject({
+      code: "CONFIG_INVALID",
+      message:
+        'Invalid Tailor config:\n  - auth.userProfile.type: Type "User" not found in any TailorDB namespace',
+      context: { file: "tailor.config.ts", configKey: "auth", name: "my-auth" },
+    });
   });
 });
 
@@ -183,6 +271,109 @@ describe("service config validation", () => {
     }
     throw new Error("expected defineApplication to throw");
   }
+
+  test.each([
+    {
+      configKey: "idp",
+      kind: "idp",
+      label: "IdP",
+      entries: [
+        defineIdp("duplicate", { clients: ["client"] }),
+        { name: "distinct", external: true },
+        { name: "duplicate", external: true },
+        defineIdp("duplicate", { clients: ["other-client"] }),
+      ],
+    },
+    {
+      configKey: "staticWebsites",
+      kind: "staticwebsite",
+      label: "static website",
+      entries: [
+        defineStaticWebSite("duplicate", {}),
+        defineStaticWebSite("distinct", {}),
+        defineStaticWebSite("duplicate", {}),
+        defineStaticWebSite("duplicate", {}),
+      ],
+    },
+    {
+      configKey: "aiGateways",
+      kind: "aigateway",
+      label: "AI Gateway",
+      entries: [
+        defineAIGateway("duplicate", { authNamespace: "my-auth" }),
+        defineAIGateway("distinct", { authNamespace: "my-auth" }),
+        defineAIGateway("duplicate", { authNamespace: "my-auth" }),
+        defineAIGateway("duplicate", { authNamespace: "my-auth" }),
+      ],
+    },
+  ])(
+    "reports all duplicate $configKey entries with their config paths",
+    ({ configKey, kind, label, entries }) => {
+      const error = defineInvalidApplication({ [configKey]: entries });
+      expect(errorToJson(error).error).toMatchObject({
+        code: "DEFINITION_NAME_DUPLICATE",
+        message: [
+          `Duplicate ${label} name "duplicate" found:`,
+          `  - tailor.config.ts (path: ${configKey}.0)`,
+          `  - tailor.config.ts (path: ${configKey}.2)`,
+          `  - tailor.config.ts (path: ${configKey}.3)`,
+        ].join("\n"),
+        context: {
+          kind,
+          duplicates: [
+            {
+              name: "duplicate",
+              definitions: [0, 2, 3].map((index) => ({
+                file: "tailor.config.ts",
+                exportName: "default",
+                path: [configKey, index],
+              })),
+            },
+          ],
+        },
+      });
+    },
+  );
+
+  describe.each([
+    { configKey: "idp", entry: { clients: ["client"] } },
+    { configKey: "staticWebsites", entry: {} },
+    { configKey: "aiGateways", entry: { authNamespace: "my-auth" } },
+  ])("invalid $configKey names", ({ configKey, entry }) => {
+    test.each([{}, { name: null }, { name: 123 }])(
+      "reports repeated invalid names %j as CONFIG_INVALID",
+      (invalidName) => {
+        const invalidEntry = { ...entry, ...invalidName };
+        const error = defineInvalidApplication({ [configKey]: [invalidEntry, invalidEntry] });
+        expect(errorToJson(error).error).toMatchObject({
+          code: "CONFIG_INVALID",
+          context: {
+            file: "tailor.config.ts",
+            configKey,
+            issues: [
+              { path: [configKey, 0, "name"], message: expect.stringContaining("expected string") },
+            ],
+          },
+        });
+      },
+    );
+
+    test("preserves duplicate entry positions after an invalid name", () => {
+      const duplicate = { ...entry, name: "duplicate" };
+      const error = defineInvalidApplication({ [configKey]: [entry, duplicate, duplicate] });
+      expect(errorToJson(error).error).toMatchObject({
+        code: "DEFINITION_NAME_DUPLICATE",
+        context: {
+          duplicates: [
+            {
+              name: "duplicate",
+              definitions: [{ path: [configKey, 1] }, { path: [configKey, 2] }],
+            },
+          ],
+        },
+      });
+    });
+  });
 
   test("names the offending auth field when a machine user attribute is not a db field", () => {
     const error = defineInvalidApplication({
@@ -357,6 +548,20 @@ describe("service config validation", () => {
     },
     {
       serviceConfig: {
+        resolver: {
+          main: {
+            files: [],
+            defaultPermission: [{ conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false }],
+          },
+        },
+      },
+      heading: 'resolver namespace "main"',
+      configKey: "resolver",
+      name: "main",
+      path: ["resolver", "main", "defaultPermission"],
+    },
+    {
+      serviceConfig: {
         idp: [
           defineIdp("other-idp", { clients: ["default"] }),
           { ...defineIdp("my-idp", { clients: ["default"] }), clients: "default" },
@@ -366,6 +571,15 @@ describe("service config validation", () => {
       configKey: "idp",
       name: "my-idp",
       path: ["idp", 1, "clients"],
+    },
+    {
+      serviceConfig: {
+        idp: { ...defineIdp("my-idp", { clients: ["default"] }), clients: "default" },
+      },
+      heading: 'IdP "my-idp"',
+      configKey: "idp",
+      name: "my-idp",
+      path: ["idp", "clients"],
     },
     {
       serviceConfig: {
@@ -447,9 +661,11 @@ export default createExecutor({
       path: path.join(tmpDir, "tailor.config.ts"),
     };
 
-    await expect(loadApplication({ config })).rejects.toThrow(
-      /Invalid wait point key "needsReview"/,
-    );
+    await expect(loadApplication({ config })).rejects.toMatchObject({
+      code: "WORKFLOW_WAIT_POINT_KEY_INVALID",
+      message: expect.stringMatching(/Invalid wait point key "needsReview"/),
+      context: { failures: [expect.stringMatching(/Invalid wait point key "needsReview"/)] },
+    });
   });
 });
 

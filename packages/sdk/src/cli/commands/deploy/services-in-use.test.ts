@@ -65,6 +65,13 @@ const SUBGRAPH_SERVICES = [
     serviceType: Subgraph_ServiceType.PIPELINE,
     deletesOf: (results: PlanResults) => results.pipeline.changeSet.service.deletes,
   },
+  {
+    label: "IdP service",
+    resourceType: "idp.service",
+    configType: "idp",
+    serviceType: Subgraph_ServiceType.IDP,
+    deletesOf: (results: PlanResults) => results.idp.changeSet.service.deletes,
+  },
 ];
 
 describe("assertServicesNotInUse", () => {

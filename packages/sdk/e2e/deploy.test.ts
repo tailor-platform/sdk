@@ -380,7 +380,7 @@ export default defineConfig({
   db: {
     "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
   },
-  idp: [idp],
+  idp,
 });
 `;
 
@@ -461,7 +461,7 @@ export default defineConfig({
   db: {
     "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
   },
-  idp: [idp],
+  idp,
   auth,
 });
 `;
@@ -498,7 +498,7 @@ export default defineConfig({
   db: {
     "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
   },
-  idp: [idp],
+  idp,
 });
 `;
 

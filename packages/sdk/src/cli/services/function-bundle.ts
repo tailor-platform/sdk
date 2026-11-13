@@ -1,6 +1,7 @@
 import * as path from "pathe";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
+import { createHookFailures, type HookFailures } from "#/cli/services/hook-failures";
 import { createStartTransformPlugin } from "#/cli/services/workflow/start-transformer";
 import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
@@ -83,7 +84,7 @@ export interface BuildFunctionBundleOptions extends FunctionBundleSettings {
   /** Generates the entry module source. The source is part of the cache key, so this also runs on a cache hit and must have no side effects */
   entry: (absoluteSourcePath: string) => string;
   /** Creates the plugins that rewrite the function's sources before path resolution; defaults to the start transform */
-  createTransformPlugins?: () => (rolldown.Plugin | undefined)[];
+  createTransformPlugins?: (hookFailures: HookFailures) => (rolldown.Plugin | undefined)[];
   /** Date representations whose conversion code the bundle keeps */
   dateRepresentations?: BundledDateRepresentations;
   /** Expressions replaced with constants while bundling */
@@ -159,9 +160,12 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
         "js",
         absoluteSourcePath,
       );
+      const hookFailures = createHookFailures();
       const plugins: rolldown.InputOptions["plugins"] = [
         virtualEntry.plugin,
-        ...(createTransformPlugins?.() ?? [createStartTransformPlugin(startContext)]),
+        ...(createTransformPlugins?.(hookFailures) ?? [
+          createStartTransformPlugin(startContext, hookFailures),
+        ]),
         createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
         createPlatformBundleDefinePlugin(dateRepresentations, dateDefault, kyselyTemporal),
         createSdkBuilderPurePlugin(sdkBuilderAnnotationCache),
@@ -169,7 +173,7 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
       ];
 
       const bundleLog = createBundleLog({ tsconfig });
-      const result = await rolldown.build({
+      const buildOptions = {
         input: virtualEntry.input,
         write: false,
         output: {
@@ -193,7 +197,8 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
           createUserTreeshakeOptions(bundleTreeshake),
         ]),
         ...bundleLog.options,
-      } as rolldown.BuildOptions);
+      } as rolldown.BuildOptions;
+      const result = await hookFailures.run(() => rolldown.build(buildOptions));
       bundleLog.assertAllResolved();
 
       const [chunk] = result.output;

@@ -56,11 +56,11 @@ jobs:
           fi
       # __CODEMOD_BASE_END__
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
+        uses: tailor-platform/actions/setup@1c1a451a463770897b3e1987c45df57b27369c8f # v2.9.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
+        uses: tailor-platform/actions/install@1c1a451a463770897b3e1987c45df57b27369c8f # v2.9.0
         with:
           package-manager: __PACKAGE_MANAGER__
       # Files the steps above leave, such as an .npmrc, are kept out of the fix commit.

@@ -1310,7 +1310,7 @@ describe("deploy job outputs", () => {
     ["branch", () => renderBranchWorkflow(branchBase).content],
     ["tag", () => renderTagWorkflow(tagBase).content],
   ] as const)(
-    "%s workflow's deploy job exposes the deployed workspace id and app URL to user jobs",
+    "%s workflow's deploy job exposes the workspace id and application URL maps to user jobs",
     (_kind, render) => {
       const workflow = parseYAML(render()) as {
         jobs: Record<string, { outputs?: Record<string, string> }>;
@@ -1319,13 +1319,33 @@ describe("deploy job outputs", () => {
       expect(workflow.jobs["tailor-deploy"]?.outputs).toEqual({
         "workspace-id": "${{ steps.tailor-apply.outputs.workspace-id }}",
         "app-url": "${{ steps.tailor-apply.outputs.app-url }}",
+        "app-urls": "${{ steps.tailor-apply.outputs.app-urls }}",
+        "console-urls": "${{ steps.tailor-apply.outputs.console-urls }}",
       });
     },
   );
 });
 
 describe("renderPreviewWorkflow", () => {
-  test("deploy job exposes the preview workspace id, name, and app URL to user jobs", () => {
+  test.each([
+    { scope: "single-directory", apps: undefined },
+    { scope: "multi-directory", apps: [{ dir: "apps/core" }, { dir: "apps/portal" }] },
+  ])("passes application URL maps to the preview comment ($scope)", ({ apps }) => {
+    const workflow = parseYAML(
+      renderPreviewWorkflow({ ...previewBase, apps }).content,
+    ) as GeneratedWorkflow;
+    const comment = workflow.jobs["tailor-preview-deploy"]?.steps.find(
+      (step) => step.id === "tailor-preview-comment",
+    );
+
+    expect(comment?.with).toMatchObject({
+      "app-url": "${{ steps.tailor-preview-deploy.outputs.app-url }}",
+      "app-urls": "${{ steps.tailor-preview-deploy.outputs.app-urls }}",
+      "console-urls": "${{ steps.tailor-preview-deploy.outputs.console-urls }}",
+    });
+  });
+
+  test("deploy job exposes the preview workspace id, name, and application URL maps to user jobs", () => {
     const { content } = renderPreviewWorkflow({
       workspaceName: "my-app",
       branch: "main",
@@ -1341,6 +1361,8 @@ describe("renderPreviewWorkflow", () => {
       "workspace-id": "${{ steps.tailor-preview-deploy.outputs.workspace-id }}",
       "workspace-name": "${{ steps.tailor-preview-deploy.outputs.workspace-name }}",
       "app-url": "${{ steps.tailor-preview-deploy.outputs.app-url }}",
+      "app-urls": "${{ steps.tailor-preview-deploy.outputs.app-urls }}",
+      "console-urls": "${{ steps.tailor-preview-deploy.outputs.console-urls }}",
     });
   });
 
@@ -3387,53 +3409,75 @@ export default defineConfig({
     });
   });
 
-  test("preview: re-running on a workflow from before the deploy job had outputs adds them and keeps user jobs that read them", async () => {
-    const opts = {
-      kind: "preview",
-      workspaceName: "my-app",
-      region: "us-west",
-      dir: ".",
-      force: false,
-      outputDir: testDir,
-      gitRunner: () => "origin/main",
-      loadConfigName: async () => "my-app",
-      loadConfigId: async () => undefined,
-    } as const;
-    await setupTarget(opts);
-    const wf = path.join(testDir, ".github/workflows/tailor-my-app-preview.yml");
-    const outputsBlock =
-      "    outputs:\n" +
-      "      workspace-id: ${{ steps.tailor-preview-deploy.outputs.workspace-id }}\n" +
-      "      workspace-name: ${{ steps.tailor-preview-deploy.outputs.workspace-name }}\n" +
-      "      app-url: ${{ steps.tailor-preview-deploy.outputs.app-url }}\n";
-    const userJob =
-      "  e2e:\n" +
-      "    needs: tailor-preview-deploy\n" +
-      "    runs-on: ubuntu-latest\n" +
-      "    steps:\n" +
-      "      - run: echo ${{ needs.tailor-preview-deploy.outputs.app-url }}\n";
-    const generated = fs.readFileSync(wf, "utf-8");
-    expect(generated).toContain(outputsBlock);
-    const legacy = generated.replace(outputsBlock, "").concat(userJob);
-    fs.writeFileSync(wf, legacy);
-    const lock = readLock(testDir);
-    const [target] = lock?.targets ?? [];
-    if (!lock || !target) throw new Error("expected a lock target");
-    writeLock(testDir, {
-      ...lock,
-      targets: [
-        {
-          ...target,
-          templateVersion: TEMPLATE_VERSION - 1,
-          contentHash: computeManagedHash(legacy, target.generatedIds),
-        },
-      ],
-    });
+  test.each([false, true])(
+    "preview: updating a released workflow adds URL maps and keeps user jobs (remove outputs: %s)",
+    async (removeOutputs) => {
+      const opts = {
+        kind: "preview",
+        workspaceName: "my-app",
+        region: "us-west",
+        dir: ".",
+        force: false,
+        outputDir: testDir,
+        gitRunner: () => "origin/main",
+        loadConfigName: async () => "my-app",
+        loadConfigId: async () => undefined,
+      } as const;
+      await setupTarget(opts);
+      const wf = path.join(testDir, ".github/workflows/tailor-my-app-preview.yml");
+      const outputsBlock =
+        "    outputs:\n" +
+        "      workspace-id: ${{ steps.tailor-preview-deploy.outputs.workspace-id }}\n" +
+        "      workspace-name: ${{ steps.tailor-preview-deploy.outputs.workspace-name }}\n" +
+        "      app-url: ${{ steps.tailor-preview-deploy.outputs.app-url }}\n";
+      const userJob =
+        "  e2e:\n" +
+        "    needs: tailor-preview-deploy\n" +
+        "    runs-on: ubuntu-latest\n" +
+        "    steps:\n" +
+        "      - run: echo ${{ needs.tailor-preview-deploy.outputs.app-url }}\n";
+      const released = fs.readFileSync(
+        path.join(import.meta.dirname, "test-helpers/fixtures/preview-v0.18.0.yml.fixture"),
+        "utf-8",
+      );
+      expect(released).toContain(outputsBlock);
+      const legacy = (removeOutputs ? released.replace(outputsBlock, "") : released).concat(
+        userJob,
+      );
+      fs.writeFileSync(wf, legacy);
+      const lock = readLock(testDir);
+      const [target] = lock?.targets ?? [];
+      if (!lock || !target) throw new Error("expected a lock target");
+      writeLock(testDir, {
+        ...lock,
+        targets: [
+          {
+            ...target,
+            templateVersion: TEMPLATE_VERSION - 1,
+            contentHash: computeManagedHash(legacy, target.generatedIds),
+          },
+        ],
+      });
 
-    await setupTarget(opts);
+      await setupTarget(opts);
 
-    expect(fs.readFileSync(wf, "utf-8")).toBe(generated.concat(userJob));
-  });
+      const updated = parseYAML(fs.readFileSync(wf, "utf-8")) as {
+        jobs: Record<string, { outputs?: Record<string, string> }>;
+      };
+      expect(updated.jobs["tailor-preview-deploy"]?.outputs).toEqual({
+        "workspace-id": "${{ steps.tailor-preview-deploy.outputs.workspace-id }}",
+        "workspace-name": "${{ steps.tailor-preview-deploy.outputs.workspace-name }}",
+        "app-url": "${{ steps.tailor-preview-deploy.outputs.app-url }}",
+        "app-urls": "${{ steps.tailor-preview-deploy.outputs.app-urls }}",
+        "console-urls": "${{ steps.tailor-preview-deploy.outputs.console-urls }}",
+      });
+      expect(updated.jobs.e2e).toEqual({
+        needs: "tailor-preview-deploy",
+        "runs-on": "ubuntu-latest",
+        steps: [{ run: "echo ${{ needs.tailor-preview-deploy.outputs.app-url }}" }],
+      });
+    },
+  );
 
   describe("preview: re-running on a workflow whose concurrency was on the deploy job", () => {
     const opts = {

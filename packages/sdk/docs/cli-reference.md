@@ -80,6 +80,16 @@ guaranteed to contain an error object. A failure that points at a file starts it
 envelope and in plain output, with the file's path relative to the working directory and, when
 known, the line: `tailordb/order.ts:3: Invalid syntax: Expression expected`.
 
+`DEFINITION_NAME_DUPLICATE` reports names shared by multiple TailorDB types, resolvers in one namespace,
+executors, workflow jobs, HTTP adapters, IdPs, static websites, or AI Gateways. `error.context.kind` identifies
+the kind, and `error.context.duplicates` lists each duplicated name and its definitions, including
+`file` and `exportName` when available. For IdPs, static websites, and AI Gateways, each definition also has a
+`path` array identifying the config entry, such as `["staticWebsites", 2]`.
+
+`FRONTEND_SITE_DUPLICATE` means `frontendPlugin()` selects a site more than once.
+`error.context.pluginId` identifies the plugin, and `error.context.duplicates` lists each
+duplicated `name` with its zero-based argument `indices`. Configure each site only once.
+
 The exit code separates a mistyped command from a failed one without parsing output: `0` on success,
 `2` when the CLI rejects the command line itself, such as an unknown option or subcommand, an
 unexpected argument, or an option value that fails validation (including one set through its
@@ -493,7 +503,10 @@ the plugin does not need to re-implement authentication or re-resolve the active
 | `TAILOR_BIN`                       | Path to the `tailor` executable, for calling back into the CLI           |
 
 The token, workspace ID, and user are best-effort: whatever the current context can resolve is injected,
-and auth-free plugins still run when you are not logged in. A long-running plugin (or one started on its
+and auth-free plugins still run when you are not logged in. The user is not injected when the token comes
+from `TAILOR_PLATFORM_TOKEN`, since that token does not belong to a logged-in user. When the plugin's arguments
+include `--env-file` or `--env-file-if-exists`, the CLI loads those files before resolving the context, so
+the values they set apply as they would to any other command. A long-running plugin (or one started on its
 own) can obtain a fresh token at any time with `tailor auth token`, which prints a valid access token to
 stdout, refreshing it first if it expires within five minutes.
 
