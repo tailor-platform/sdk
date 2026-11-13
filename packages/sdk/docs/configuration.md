@@ -149,6 +149,8 @@ Every TypeScript project that uses these names must enable the mapper. A project
 
 The commands read the `tsconfig.json` that applies to `tailor.config.ts`: the nearest one that includes the file, following `extends`, so a base config shared by a monorepo's packages works. When a `tsconfig.json` only lists `references`, they use the referenced project that includes `tailor.config.ts`, so put `contentMappers` in that project's tsconfig. The mapper looks for `tailor.config.ts` upward from the directory of that tsconfig, so the commands stop writing `tailor.d.ts` only when that search finds this very file: a tsconfig at a monorepo's root that merely includes `packages/app/tailor.config.ts`, or a config with another name passed to `--config`, does not count, and they keep writing `tailor.d.ts` (put the tsconfig that enables the mapper in the package, next to its config). If you set `TAILOR_DTS_PATH`, they write the file there regardless.
 
+To start from a project that enables the mapper, run `npm create @tailor-platform/sdk -- --template content-mapper <name>`.
+
 ### Service Configuration
 
 Specify glob patterns to load service files:
