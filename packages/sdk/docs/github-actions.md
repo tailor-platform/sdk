@@ -1331,8 +1331,9 @@ server and its runners first:
   actions the workflows use, and `gh` and `jq` on `PATH` (plus `node` with
   `--erd-preview`).
 - **Actions from github.com:** the workflows use `tailor-platform/actions`,
-  `actions/checkout`, `actions/setup-node`, `pnpm/action-setup`, and
-  `oven-sh/setup-bun` (and `actions/upload-artifact` with `--erd-preview`).
+  `actions/cache`, `actions/checkout`, `actions/setup-node`,
+  `pnpm/action-setup`, and `oven-sh/setup-bun` (and `actions/upload-artifact`
+  with `--erd-preview`).
   Make them available on the server with GitHub Connect or `actions-sync`. The
   server ships its own copies of the `actions/*` ones, which may not include
   the pinned versions: update them with `actions-sync`, or, with GitHub
