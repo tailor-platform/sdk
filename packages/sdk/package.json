@@ -222,7 +222,7 @@
     "globals": "17.14.0",
     "inflection": "3.0.2",
     "kysely": "0.29.8",
-    "lines-db": "0.19.0",
+    "lines-db": "0.19.1",
     "mime-types": "3.0.2",
     "open": "11.0.4",
     "oxc-parser": "0.157.0",

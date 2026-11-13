@@ -733,8 +733,8 @@ importers:
         specifier: 0.29.8
         version: 0.29.8
       lines-db:
-        specifier: 0.19.0
-        version: 0.19.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(typescript@6.0.3)
+        specifier: 0.19.1
+        version: 0.19.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(typescript@6.0.3)
       mime-types:
         specifier: 3.0.2
         version: 3.0.2
@@ -943,8 +943,8 @@ importers:
         specifier: 0.7.2
         version: 0.7.2(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(zod@4.6.7)
       lines-db:
-        specifier: 0.19.0
-        version: 0.19.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(typescript@6.0.3)
+        specifier: 0.19.1
+        version: 0.19.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(typescript@6.0.3)
       pathe:
         specifier: 2.0.3
         version: 2.0.3
@@ -3973,8 +3973,8 @@ packages:
     resolution: {integrity: sha512-WkUDrojuJs0xkgGf2udWxa3yGBRxPtxUkB79i6aCZLRgc7PM8fZe9TosfPDcvEpQZbuFASnHYmRLBLUbmLOIIA==}
     engines: {node: '>= 12.0.0'}
 
-  lines-db@0.19.0:
-    resolution: {integrity: sha512-kQzwof1EzIJKz+XBn+ueYTNFNyqz7Bami0O0cy2844gte1zjLclFYMpKPRVscL93s2dhlhdDBHbwd6k6P4RH4w==}
+  lines-db@0.19.1:
+    resolution: {integrity: sha512-qyV103gYYNoo2s8y1l7SAmhVlAc/1n+JK4hXGELKWMrLWLTyEwoqSxr8y0EOmi8NSMN6z7GFnxUgFqA9knM20Q==}
     engines: {node: '>=22.18.0'}
     hasBin: true
     peerDependencies:
@@ -7022,7 +7022,7 @@ snapshots:
       lightningcss-win32-arm64-msvc: 1.33.0
       lightningcss-win32-x64-msvc: 1.33.0
 
-  lines-db@0.19.0(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(typescript@6.0.3):
+  lines-db@0.19.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(typescript@6.0.3):
     dependencies:
       '@politty/loculus': 0.4.2(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.5(@types/node@26.6.6))(loculus@0.4.1)
       '@standard-schema/spec': 1.1.0

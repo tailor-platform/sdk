@@ -36,7 +36,7 @@
   },
   "dependencies": {
     "@politty/zod": "0.7.2",
-    "lines-db": "0.19.0",
+    "lines-db": "0.19.1",
     "pathe": "2.0.3",
     "pkg-types": "2.4.0",
     "zod": "4.6.7"
