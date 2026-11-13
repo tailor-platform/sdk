@@ -285,6 +285,9 @@ export function describeMainRunSettlement(
   );
 }
 
+export const COMPLETED_STEPS_ON_RESUME =
+  "unless you add, remove, or rename a step or change the order the steps run in, steps that already completed do not run again";
+
 /** A command that continues or settles a migration left in progress, and what it does. */
 export type InProgressMigrationAction = CLIErrorNextAction & {
   action: "resume" | MigrationResolution;
@@ -333,7 +336,7 @@ export function inProgressMigrationActions(
   return [
     {
       action: "resume",
-      description: "steps that already completed do not run again",
+      description: COMPLETED_STEPS_ON_RESUME,
       command: "tailor",
       args: ["deploy", ...migrationContextArgs(context)],
     },
@@ -397,6 +400,6 @@ export function assertNoMigrationInProgress(
           ].join("\n")
         : state.inProgress?.kind === "main"
           ? describeMainRunSettlement(namespace, context)
-          : "Finish the migration with a deploy first; steps that already completed do not run again.",
+          : "Finish the migration with a deploy first.",
   });
 }

@@ -1289,6 +1289,30 @@ describe("migration", () => {
       expect(order(spinnerMock.fail)).toBeLessThan(order(vi.mocked(logger.error)));
     });
 
+    test("tells a step failure that changing the steps runs the completed ones again", async () => {
+      const migration = createMockMigration({ scriptForm: stepsForm });
+      executeMigrationStepsAsWorkflowMock.mockResolvedValueOnce({
+        success: false,
+        logs: "",
+        error: "boom",
+        executionId: "exec-1",
+        completedSteps: ["backfill"],
+        failedSteps: ["recompute"],
+        stepsMayHaveCommitted: true,
+      });
+
+      await expect(
+        executeMigrations(stepsContext(vi.fn()), [migration], checkpoints, {
+          tailordb: { number: 1, kind: "steps" },
+        }),
+      ).rejects.toMatchObject({
+        code: "MIGRATION_PARTIALLY_APPLIED",
+        suggestion: expect.stringContaining(
+          "Fix the failing step in migrate.ts and deploy again; unless you add, remove, or rename a step or change the order the steps run in, steps that already completed do not run again.",
+        ),
+      });
+    });
+
     test("keeps the remediation of a failure that is not a step's own", async () => {
       const migration = createMockMigration({
         scriptForm: { kind: "steps", order: ["backfill", "recompute"] },
@@ -2358,7 +2382,7 @@ describe("rolledBackError", () => {
         code: "MIGRATION_PARTIALLY_APPLIED",
         message: "Migration tailordb/0003 failed at recompute: boom",
         suggestion:
-          "Fix the failing step in migrate.ts and deploy again; steps that already completed do not run again.",
+          "Fix the failing step in migrate.ts and deploy again; unless you add, remove, or rename a step or change the order the steps run in, steps that already completed do not run again.",
       }),
     );
 

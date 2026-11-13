@@ -16,6 +16,7 @@ import {
   includeTablesDeletedAfterCheckpoint,
 } from "#/cli/commands/tailordb/migrate/pre-migration-schema";
 import {
+  COMPLETED_STEPS_ON_RESUME,
   describeMigrationCheckpoint,
   fetchRemoteMigrationState,
   isCheckpointStillOwned,
@@ -1652,7 +1653,7 @@ async function confirmCheckpointAfterUpdateFailure(
       `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} could not be confirmed after its update failed; remote remains at ${describeMigrationCheckpoint(remoteMigrationNumber)}. ` +
         "Leaving the post-migration schema unchanged to avoid rolling back a concurrent deployment. " +
         (resumable
-          ? "Deploy again to resume the migration; unless you add, remove, rename, or reorder steps, steps that already completed do not run again."
+          ? `Deploy again to resume the migration; ${COMPLETED_STEPS_ON_RESUME}.`
           : "Repair the checkpoint before retrying."),
     );
     throw updateError;

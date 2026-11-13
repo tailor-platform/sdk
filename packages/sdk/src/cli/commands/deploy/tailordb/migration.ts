@@ -39,6 +39,7 @@ import {
   formatMigrationResolveHint,
   isCheckpointStillOwned,
   matchesLocalMigrationHistory,
+  COMPLETED_STEPS_ON_RESUME,
   type ExpectedMigrationCheckpoint,
   type MigrationResolution,
   type RemoteMigrationState,
@@ -916,7 +917,7 @@ function partiallyAppliedError(
     suggestion: withMaintenanceModeNote(
       isCLIError(cause) && cause.suggestion
         ? cause.suggestion
-        : "Fix the failing step in migrate.ts and deploy again; steps that already completed do not run again.",
+        : `Fix the failing step in migrate.ts and deploy again; ${COMPLETED_STEPS_ON_RESUME}.`,
       migration.namespace,
       maintenanceMode,
     ),

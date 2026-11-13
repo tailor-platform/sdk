@@ -136,7 +136,9 @@ describe("assertNoMigrationInProgress", () => {
         code: "MIGRATION_IN_PROGRESS",
         suggestion: expect.toSatisfy(
           (suggestion: string) =>
-            suggestion.includes("`tailor deploy`") &&
+            suggestion.includes(
+              "`tailor deploy` (unless you add, remove, or rename a step or change the order the steps run in, steps that already completed do not run again)",
+            ) &&
             suggestion.includes(
               "`tailor tailordb migration resolve --rollback --namespace tailordb`",
             ) &&
@@ -172,13 +174,13 @@ describe("assertNoMigrationInProgress", () => {
     );
   });
 
-  test("does not name migration resolve for a record the checkpoint already covers", () => {
+  test("names only a deploy for a record the checkpoint already covers", () => {
     expect(() =>
       assertNoMigrationInProgress(state({ number: 3, kind: "steps" }, 3), "tailordb", {}),
     ).toThrow(
       expect.objectContaining({
         code: "MIGRATION_IN_PROGRESS",
-        suggestion: expect.not.stringContaining("migration resolve"),
+        suggestion: "Finish the migration with a deploy first.",
       }),
     );
   });
