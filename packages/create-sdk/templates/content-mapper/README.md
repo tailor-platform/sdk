@@ -1,6 +1,6 @@
 # Content Mapper
 
-This is a sample project for [Tailor Platform SDK](https://www.npmjs.com/package/@tailor-platform/sdk) whose types TypeScript derives from `tailor.config.ts` through the SDK's content mapper, so the project has no `tailor.d.ts` and no generated Kysely types file.
+This is a sample project for [Tailor Platform SDK](https://www.npmjs.com/package/@tailor-platform/sdk). TypeScript derives its types from `tailor.config.ts` through the SDK's content mapper, so the project has no `tailor.d.ts` and no generated Kysely types file.
 
 This project was bootstrapped with [Create Tailor Platform SDK](https://www.npmjs.com/package/@tailor-platform/create-sdk).
 
@@ -20,7 +20,7 @@ The content mapper needs TypeScript 7.1 or later. TypeScript 7.1 is in beta, so 
 - `tailor.config.ts` configures `kyselyTypePlugin({ contentMapper: true })`, so `getDB()` imported from `@tailor-platform/sdk/plugin/kysely-type/db` is typed from the tables in `src/db/`.
 - `src/content-mapper.types.ts` type-checks only while the mapper runs: it rejects a misspelled machine user name, an `env` key and a `role` attribute value that `tailor.config.ts` does not define, and an unknown table.
 
-An editor that runs TypeScript 6.0 or earlier ignores the content mapper, so its diagnostics and completions do not reflect `tailor.config.ts`.
+An editor whose TypeScript is older than 7.1 does not run the content mapper, so its diagnostics and completions do not reflect `tailor.config.ts`.
 
 To enable the mapper in an existing project, also delete its old `tailor.d.ts`. See [Type Definitions Without `tailor generate`](https://github.com/tailor-platform/sdk/blob/main/packages/sdk/docs/configuration.md#type-definitions-without-tailor-generate) for details.
 

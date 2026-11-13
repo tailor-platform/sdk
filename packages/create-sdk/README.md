@@ -26,18 +26,18 @@ Note: npm 7+ requires `--` before create-sdk options (for example, `--template`)
 
 ## Available Templates
 
-| Template               | Description                                         | Features                                                      |
-| ---------------------- | --------------------------------------------------- | ------------------------------------------------------------- |
-| `hello-world`          | Minimal starter project                             | Simple resolver example                                       |
-| `inventory-management` | Full-featured sample application                    | TailorDB, Resolver, Executor, Permissions                     |
-| `multi-application`    | Multi-app architecture                              | Shared databases, multiple applications                       |
-| `tailordb`             | TailorDB table definitions                          | Field types, relations, validations, hooks                    |
-| `resolver`             | Resolver patterns                                   | Query and mutation resolvers, Vitest setup                    |
-| `workflow`             | Workflow patterns                                   | Job chaining, `runWorkflowLocally()` tests                    |
-| `executor`             | Executor trigger types                              | Record, resolver, IdP, auth token, schedule, webhook triggers |
-| `static-web-site`      | Static website with auth                            | Static website, IdP, OAuth2 login page                        |
-| `generators`           | Built-in generator plugins                          | Kysely types, enum constants, file utils, seed                |
-| `content-mapper`       | Types from `tailor.config.ts` (TypeScript 7.1 beta) | Content mapper, Kysely types without generated files          |
+| Template               | Description                      | Features                                                      |
+| ---------------------- | -------------------------------- | ------------------------------------------------------------- |
+| `hello-world`          | Minimal starter project          | Simple resolver example                                       |
+| `inventory-management` | Full-featured sample application | TailorDB, Resolver, Executor, Permissions                     |
+| `multi-application`    | Multi-app architecture           | Shared databases, multiple applications                       |
+| `tailordb`             | TailorDB table definitions       | Field types, relations, validations, hooks                    |
+| `resolver`             | Resolver patterns                | Query and mutation resolvers, Vitest setup                    |
+| `workflow`             | Workflow patterns                | Job chaining, `runWorkflowLocally()` tests                    |
+| `executor`             | Executor trigger types           | Record, resolver, IdP, auth token, schedule, webhook triggers |
+| `static-web-site`      | Static website with auth         | Static website, IdP, OAuth2 login page                        |
+| `generators`           | Built-in generator plugins       | Kysely types, enum constants, file utils, seed                |
+| `content-mapper`       | Types from `tailor.config.ts`    | Content mapper, Kysely types without generated files          |
 
 ### hello-world
 
@@ -141,11 +141,11 @@ Demonstrates the built-in generator plugins.
 
 ### content-mapper
 
-Types the project from `tailor.config.ts` through the TypeScript content mapper, without `tailor generate`. The mapper needs TypeScript 7.1, which is in beta, so the template pins `typescript@7.1.0-beta`.
+Types the project from `tailor.config.ts` through the SDK's content mapper, without `tailor generate`. The mapper needs TypeScript 7.1, which is in beta, so the template pins `typescript@7.1.0-beta`.
 
 **Includes:**
 
-- `tsconfig.json` that enables the SDK's content mapper, and a `typecheck` script that runs `tsc --runExternalCode`
+- `tsconfig.json` that enables the SDK's content mapper, and a `typecheck` script that runs `tsc --noEmit --runExternalCode`
 - `env` keys, attributes, and machine user names typed from `tailor.config.ts`, with no `tailor.d.ts`
 - `getDB()` typed from TailorDB definitions (`kyselyTypePlugin({ contentMapper: true })`)
 - Type tests that fail unless the mapper runs

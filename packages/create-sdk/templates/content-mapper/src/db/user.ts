@@ -1,7 +1,7 @@
-import { db } from "@tailor-platform/sdk";
+import { db, type PermissionCondition } from "@tailor-platform/sdk";
 
-const admin = [{ user: "role" }, "=", "ADMIN"] as const;
-const loggedIn = [{ user: "_loggedIn" }, "=", true] as const;
+const admin = [{ user: "role" }, "=", "ADMIN"] as const satisfies PermissionCondition;
+const loggedIn = [{ user: "_loggedIn" }, "=", true] as const satisfies PermissionCondition;
 
 export const user = db
   .table("User", {
@@ -12,7 +12,7 @@ export const user = db
   })
   .permission({
     create: [admin],
-    read: [admin, loggedIn],
+    read: [loggedIn],
     update: [admin],
     delete: [admin],
   })
