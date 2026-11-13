@@ -156,6 +156,7 @@ interface ExecutionResult {
   error?: string;
   /** Thrown in place of a plain migration failure once the logs are shown. */
   failure?: Error;
+  canceled?: boolean;
 }
 
 // ============================================================================
@@ -978,7 +979,7 @@ export function rolledBackError(migration: PendingMigration, cause: unknown): Er
       `Migration ${namespace}/${formatMigrationNumber(migration.number)} was rolled back to migration ${checkpoint} and is no longer in progress; ` +
       "any table the rollback could not revert is listed in a warning above. " +
       (canceled
-        ? "The run was canceled; the next deploy runs every step again from the beginning."
+        ? "The run was canceled; deploy again to run every step from the beginning."
         : "Fix the failure in migrate.ts and deploy again: the next deploy runs every step again from the beginning.") +
       (causeHint ? ` ${causeHint}` : ""),
     context: { namespace, migrationNumber: migration.number, ...(canceled ? { canceled } : {}) },
@@ -1272,6 +1273,7 @@ async function executeStepsMigration(
     success: false,
     logs: result.logs,
     error: result.error,
+    ...(result.canceled ? { canceled: true } : {}),
   };
   if (result.stepsMayHaveCommitted || inProgress) {
     return {
@@ -1412,7 +1414,11 @@ export async function executeMigrations(
           CLIError({
             code: "MIGRATION_FAILED",
             message: `Migration ${migrationLabel} failed${result.error ? `: ${result.error}` : ""}`,
-            context: { namespace: migration.namespace, migrationNumber: migration.number },
+            context: {
+              namespace: migration.namespace,
+              migrationNumber: migration.number,
+              ...(result.canceled ? { canceled: true } : {}),
+            },
           })
         );
       }

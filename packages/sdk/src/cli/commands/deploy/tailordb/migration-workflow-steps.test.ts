@@ -912,7 +912,9 @@ describe("executeMigrationStepsAsWorkflow", () => {
         expect(notify).toHaveBeenCalledWith(
           "warn",
           expect.stringMatching(/canceled.*backfillUser, backfillInvoice/),
-          expect.stringContaining("--migration-skip-steps"),
+          expect.stringContaining(
+            "To skip succeeded steps when a deploy runs every step of a migration in progress again, pass --migration-skip-steps",
+          ),
         );
       });
 
@@ -1021,7 +1023,7 @@ describe("executeMigrationStepsAsWorkflow", () => {
         expect(message).toContain("skipping backfillUser");
         expect(message).toContain("backfillInvoice already succeeded but runs again");
         expect(suggestion).toContain(
-          "--migration-skip-steps tailordb/backfillUser,tailordb/backfillInvoice",
+          "To skip backfillInvoice as well when a deploy runs every step again, pass --migration-skip-steps tailordb/backfillUser,tailordb/backfillInvoice.",
         );
       });
 
