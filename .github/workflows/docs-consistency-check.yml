@@ -8,6 +8,9 @@ on:
       - "packages/sdk-plugin-*/src/**"
       - "packages/sdk/docs/**"
       - "example/**"
+      - "packages/create-sdk/README.md"
+      - "packages/create-sdk/src/**"
+      - "packages/create-sdk/templates/**"
       - "AGENTS.md"
 
 concurrency:
@@ -68,11 +71,12 @@ jobs:
             - `packages/sdk/docs/configuration.md` - Configuration reference
             - `AGENTS.md` - Developer guide and code patterns
             - `example/` - Working example code
+            - `packages/create-sdk/README.md` and `packages/create-sdk/templates/*/README.md` - create-sdk READMEs; a template's README is copied into each project scaffolded from that template
             - Published JSDoc on **exported** symbols in `packages/sdk/src/**` - shipped to users' IDEs via the package's `.d.ts` files
 
             ### Audience scope (important)
 
-            - `packages/sdk/docs/**` ships inside the published npm package (`@tailor-platform/sdk`), `example/` is read by SDK users, and JSDoc on exported symbols reaches users through editor tooltips/autocompletion. Apply **both** the Consistency and Reader-Perspective checks to these.
+            - `packages/sdk/docs/**` ships inside the published npm package (`@tailor-platform/sdk`), `example/` and the create-sdk READMEs are read by SDK users, and JSDoc on exported symbols reaches users through editor tooltips/autocompletion. Apply **both** the Consistency and Reader-Perspective checks to these.
             - `AGENTS.md` contains developer/contributor instructions and is **not** user-facing. Apply **only** the Consistency check to it; do **not** raise reader-perspective issues for it.
             - JSDoc on non-exported / internal symbols is not user-facing — skip it for the reader-perspective check.
 
@@ -109,6 +113,11 @@ jobs:
             - Verify documented function signatures, parameters, and return types match the implementation
             - Check if new exports are documented
 
+            #### create-sdk READMEs (every PR)
+            - Collect the create-sdk READMEs that the PR can make stale: each one it changes; for each template whose files it changes, that template's README and the section of `packages/create-sdk/README.md` that describes the template; and each one that describes a command, API, config option, or `packages/sdk/docs/**` section the PR changes (Grep `packages/create-sdk` for its name or the docs path)
+            - Compare each collected README with the files it describes (a template's `package.json` scripts, `tsconfig.json`, `tailor.config.ts`, and sources; `packages/create-sdk/src/**` for the options and behavior that `packages/create-sdk/README.md` describes) and with the `packages/sdk/docs/**` sections it links to or restates. Flag every claim that disagrees with them, including a version bound that differs (for example, "older than 7.1" against "6.0 and earlier")
+            - A link to `https://github.com/tailor-platform/sdk/blob/main/<path>` refers to `<path>` in the checkout; read that file instead of fetching the URL
+
             #### Pattern / Example Changes
             - Read relevant files in `example/` directory
             - Verify examples use current API patterns (not deprecated ones)
@@ -124,7 +133,7 @@ jobs:
             - For each API whose mark the PR adds or removes, and each heading or list item the PR adds or changes, verify that a heading or list item dedicated to one beta API or behavior carries `(Beta)`. One on an enclosing heading or on the sentence introducing the list also counts, and generated CLI docs show it through the `(beta)` in the command description
             - Also verify that a heading or list item for an API that is not beta does not carry `(Beta)` itself
 
-            ### 4. Reader-Perspective Review (`packages/sdk/docs/**`, `example/`, and published JSDoc)
+            ### 4. Reader-Perspective Review (`packages/sdk/docs/**`, `example/`, create-sdk READMEs, and published JSDoc)
 
             For changed user-facing docs, check that they describe only what an SDK *user* needs and do not leak SDK/Platform internals. Flag the following:
 
@@ -225,7 +234,7 @@ jobs:
               `${{ env.REVIEW_BODY_FILE }}`
             - Be specific: include file paths and line numbers for every issue
             - Only flag real issues, not stylistic differences
-            - Reader-perspective issues apply **only** to user-facing documentation: `packages/sdk/docs/**`, `example/`, and published JSDoc on exported symbols in `packages/sdk/src/**`. Do **not** raise reader-perspective issues for `AGENTS.md` (developer-facing) or for non-exported / internal code.
+            - Reader-perspective issues apply **only** to user-facing documentation: `packages/sdk/docs/**`, `example/`, the create-sdk READMEs, and published JSDoc on exported symbols in `packages/sdk/src/**`. Do **not** raise reader-perspective issues for `AGENTS.md` (developer-facing) or for non-exported / internal code.
             - Do not flag internal mechanics that a user must understand to use the API correctly (see the note in step 4)
             - If unsure whether something is an issue, mention it with a note that it may be intentional
 
