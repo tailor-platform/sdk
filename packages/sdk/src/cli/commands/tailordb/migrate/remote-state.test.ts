@@ -137,7 +137,7 @@ describe("assertNoMigrationInProgress", () => {
         suggestion: expect.toSatisfy(
           (suggestion: string) =>
             suggestion.includes(
-              "`tailor deploy` (unless you add, remove, or rename a step or change the order the steps run in, steps that already completed do not run again)",
+              "`tailor deploy` (steps that already completed do not run again unless you add, remove, or rename a step, change the order the steps run in, or the earlier run was canceled or is no longer available)",
             ) &&
             suggestion.includes(
               "`tailor tailordb migration resolve --rollback --namespace tailordb`",

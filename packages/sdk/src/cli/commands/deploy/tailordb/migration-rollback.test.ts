@@ -3413,7 +3413,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
 
       expect(warn).toHaveBeenCalledWith(
         expect.stringMatching(
-          /test-ns\/0001 could not be confirmed after its update failed; .* Deploy again to resume the migration; unless you add, remove, or rename a step or change the order the steps run in, steps that already completed do not run again\.$/,
+          /test-ns\/0001 could not be confirmed after its update failed; .* Deploy again to resume the migration; steps that already completed do not run again unless you add, remove, or rename a step, change the order the steps run in, or the earlier run was canceled or is no longer available\.$/,
         ),
       );
       warn.mockRestore();

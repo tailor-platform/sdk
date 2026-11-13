@@ -1353,7 +1353,7 @@ describe("tailordb migration validate", () => {
         "Migration in progress: Migration tailordb/0001 was partially applied by its steps, but its migrate.ts no longer exports `steps`.",
       );
       expect(stderr.output).toContain(
-        "Keep the migration as `steps` so the deploy can finish it; unless you add, remove, or rename a step or change the order the steps run in, steps that already completed do not run again.",
+        "Keep the migration as `steps` so the deploy can finish it; steps that already completed do not run again unless you add, remove, or rename a step, change the order the steps run in, or the earlier run was canceled or is no longer available.",
       );
     });
 

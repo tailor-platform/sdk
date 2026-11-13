@@ -285,8 +285,9 @@ export function describeMainRunSettlement(
   );
 }
 
+/** When completed steps run again on resuming a migration, as a clause without a final period. */
 export const COMPLETED_STEPS_ON_RESUME =
-  "unless you add, remove, or rename a step or change the order the steps run in, steps that already completed do not run again";
+  "steps that already completed do not run again unless you add, remove, or rename a step, change the order the steps run in, or the earlier run was canceled or is no longer available";
 
 /** A command that continues or settles a migration left in progress, and what it does. */
 export type InProgressMigrationAction = CLIErrorNextAction & {

@@ -34,12 +34,12 @@ import {
   type MigrationSubcommandArgs,
 } from "#/cli/commands/tailordb/migrate/hints";
 import {
+  COMPLETED_STEPS_ON_RESUME,
   describeMigrationCheckpoint,
   fetchRemoteMigrationState,
   formatMigrationResolveHint,
   isCheckpointStillOwned,
   matchesLocalMigrationHistory,
-  COMPLETED_STEPS_ON_RESUME,
   type ExpectedMigrationCheckpoint,
   type MigrationResolution,
   type RemoteMigrationState,

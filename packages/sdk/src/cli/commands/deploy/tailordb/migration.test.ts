@@ -11,6 +11,7 @@ import {
   SCHEMA_SNAPSHOT_VERSION,
   type MigrationDiff,
 } from "#/cli/commands/tailordb/migrate/diff-calculator";
+import { COMPLETED_STEPS_ON_RESUME } from "#/cli/commands/tailordb/migrate/remote-state";
 import {
   formatMigrationNumber,
   DIFF_FILE_NAME,
@@ -1289,7 +1290,7 @@ describe("migration", () => {
       expect(order(spinnerMock.fail)).toBeLessThan(order(vi.mocked(logger.error)));
     });
 
-    test("tells a step failure that changing the steps runs the completed ones again", async () => {
+    test("qualifies the resume advice of a step failure with what runs every step again", async () => {
       const migration = createMockMigration({ scriptForm: stepsForm });
       executeMigrationStepsAsWorkflowMock.mockResolvedValueOnce({
         success: false,
@@ -1308,7 +1309,7 @@ describe("migration", () => {
       ).rejects.toMatchObject({
         code: "MIGRATION_PARTIALLY_APPLIED",
         suggestion: expect.stringContaining(
-          "Fix the failing step in migrate.ts and deploy again; unless you add, remove, or rename a step or change the order the steps run in, steps that already completed do not run again.",
+          "Fix the failing step in migrate.ts and deploy again; steps that already completed do not run again unless you add, remove, or rename a step, change the order the steps run in, or the earlier run was canceled or is no longer available.",
         ),
       });
     });
@@ -2381,8 +2382,7 @@ describe("rolledBackError", () => {
       CLIError({
         code: "MIGRATION_PARTIALLY_APPLIED",
         message: "Migration tailordb/0003 failed at recompute: boom",
-        suggestion:
-          "Fix the failing step in migrate.ts and deploy again; unless you add, remove, or rename a step or change the order the steps run in, steps that already completed do not run again.",
+        suggestion: `Fix the failing step in migrate.ts and deploy again; ${COMPLETED_STEPS_ON_RESUME}.`,
       }),
     );
 

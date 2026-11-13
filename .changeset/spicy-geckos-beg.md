@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-Fix hints for a multi-step migration left in progress that said completed steps never run again: they now note that adding, removing, or renaming a step, or changing the order the steps run in, runs every step again
+Fix hints for a multi-step migration left in progress that claimed completed steps never run again. They now say that completed steps run again when you add, remove, or rename a step, change the order the steps run in, or the earlier run was canceled or is no longer available.
