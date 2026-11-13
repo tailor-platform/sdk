@@ -279,6 +279,7 @@ describe("remove command", () => {
         authNamespace: "shared-auth",
         subgraphs: [
           { serviceType: Subgraph_ServiceType.PIPELINE, serviceNamespace: "my-resolvers" },
+          { serviceType: Subgraph_ServiceType.IDP, serviceNamespace: "my-idp" },
         ],
       },
     ] as never;
@@ -289,6 +290,7 @@ describe("remove command", () => {
       ...PLANNED_DELETE,
       name: "my-resolvers",
     });
+    mocks.plans.idp.changeSet.service.deletes.push({ ...PLANNED_DELETE, name: "my-idp" });
 
     const result = await runCommand(removeCommand, ["--yes"]);
 
@@ -297,6 +299,7 @@ describe("remove command", () => {
       message: [
         'Auth service "shared-auth" cannot be deleted: application "portal" still uses it.',
         'Resolver namespace "my-resolvers" cannot be deleted: application "portal" still uses it.',
+        'IdP service "my-idp" cannot be deleted: application "portal" still uses it.',
       ].join("\n"),
       suggestion: expect.stringContaining("then run remove again"),
     });
