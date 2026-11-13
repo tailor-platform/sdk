@@ -524,6 +524,8 @@ export default createExecutor({
 });
 ```
 
+This example omits signature verification. To handle real Slack events, verify the request signature in the operation before trusting `body`, as the Stripe example above does.
+
 ### Resolver Executed Payload
 
 Narrow `ResolverExecutedArgs` on `success`: `result` holds the resolver's output when it is `true`, and `error` holds the error message when it is `false`.
