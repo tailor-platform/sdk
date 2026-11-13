@@ -185,9 +185,15 @@ files: ["executors/**/*.ts", "!executors/internal/**", "executors/internal/keep.
 
 To exclude a directory, match the files in it (`!executors/internal/**`); `!executors/internal` excludes nothing.
 
-Test files (`**/*.test.ts` and `**/*.spec.ts`) are excluded by default.
+Test files (`**/*.test.ts` and `**/*.spec.ts`) are excluded by default, as if `"!**/*.test.ts"` and `"!**/*.spec.ts"` followed the last pattern that does not end in `.test.ts` or `.spec.ts`. To include test files, add patterns ending in `.test.ts` or `.spec.ts` after the other patterns:
 
-**ignores** (deprecated): Glob patterns to exclude files. Optional. Write `!` patterns in `files` instead; `ignores` is removed in v3, and `tailor upgrade` moves its patterns into `files`. Specifying `ignores` replaces the default test-file exclusion, so `ignores: []` includes test files. `ignores` and the default test-file exclusion apply after `files`, so no `files` pattern includes the files they exclude. In v3, test files are no longer excluded by default; add `"!**/*.test.ts"` and `"!**/*.spec.ts"` to `files` to keep them out.
+```typescript
+files: ["executors/**/*.ts", "executors/**/*.test.ts"],
+```
+
+A test-file pattern placed before another pattern includes nothing, because the default exclusion follows that other pattern.
+
+**ignores** (deprecated): Glob patterns to exclude files. Optional. Write `!` patterns in `files` instead; `ignores` is removed in v3, and `tailor upgrade` moves its patterns into `files`. Specifying `ignores` replaces the default test-file exclusion, so `ignores: []` includes test files. `ignores` applies after `files`, so no `files` pattern includes the files it excludes. In v3, test files are no longer excluded by default; `tailor upgrade` writes `"!**/*.test.ts"` and `"!**/*.spec.ts"` into `files` where the default exclusion applied them.
 
 **defaultPermission** (resolver namespaces only): Access requirement applied to every resolver in the namespace that declares no `permission` of its own. Optional, and takes the same values as a resolver's own `permission`, except that it cannot use an `input` operand. See [Namespace-wide default](./services/resolver.md#namespace-wide-default-defaultpermission).
 

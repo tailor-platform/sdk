@@ -6,7 +6,14 @@ export interface FileLoadConfig {
   ignores?: string[];
 }
 
-const DEFAULT_IGNORE_PATTERNS = ["**/*.test.ts", "**/*.spec.ts"];
+const TEST_FILE_SUFFIXES = [".test.ts", ".spec.ts"];
+
+// Unanchored, so they also exclude test files a pattern reaching outside baseDir matches.
+const DEFAULT_TEST_FILE_EXCLUSIONS: FilePatternRule[] = TEST_FILE_SUFFIXES.map((suffix) => ({
+  pattern: `!**/*${suffix}`,
+  negated: true,
+  glob: `**/*${suffix}`,
+}));
 
 // Deduplicate compatibility warnings per destination, directory, and pattern set.
 const warnedFallbacks = new WeakMap<(message: string) => void, Set<string>>();
@@ -15,7 +22,9 @@ const warnedFallbacks = new WeakMap<(message: string) => void, Set<string>>();
  * Load files matching the given patterns, excluding files that match ignore patterns.
  * A `files` entry starting with `!` excludes the files it matches; for each file, the last
  * `files` entry that matches it decides. Each file is returned once.
- * By default, test files (*.test.ts, *.spec.ts) are excluded unless ignores is explicitly specified.
+ * Unless ignores is specified, test files (*.test.ts, *.spec.ts) are excluded as if `!`
+ * entries for them followed the last `files` entry that does not end in `.test.ts` or
+ * `.spec.ts`, so entries ending in those after it include test files.
  * @param config - Configuration with files patterns and optional ignores patterns
  * @param baseDir - Directory relative patterns are resolved against
  * @param warn - Reports glob errors and compatibility warnings
@@ -76,25 +85,24 @@ function resolveFiles(
   baseDir: string,
   warn: (message: string) => void,
 ): ResolvedFiles {
-  // Use user-provided patterns if specified, otherwise use defaults. Default
-  // patterns are left unanchored ("**/*.test.ts") so they match a test file
-  // regardless of which directory a `files` pattern's matches actually came
-  // from — this matters when a pattern is absolute or otherwise escapes
-  // baseDir. User-provided patterns are baseDir-relative, matching `files`.
-  const isDefaultIgnores = config.ignores === undefined;
-  const ignorePatterns = config.ignores ?? DEFAULT_IGNORE_PATTERNS;
-  const resolvedIgnorePatterns = isDefaultIgnores
-    ? ignorePatterns
-    : ignorePatterns.map((ignorePattern) => path.resolve(baseDir, ignorePattern));
+  const resolvedIgnorePatterns = (config.ignores ?? []).map((ignorePattern) =>
+    path.resolve(baseDir, ignorePattern),
+  );
 
   const rules = config.files.map((pattern) => parseFilePattern(pattern, baseDir));
+  if (config.ignores === undefined) {
+    const lastNonTestRuleIndex = rules.findLastIndex(
+      (rule) => !rule.negated && !isTestFilePattern(rule.pattern),
+    );
+    rules.splice(lastNonTestRuleIndex + 1, 0, ...DEFAULT_TEST_FILE_EXCLUSIONS);
+  }
   // Map insertion order keeps each file at the position its first match produced.
   const lastPositiveRuleIndex = new Map<string, number>();
   let matchedAnyPattern = false;
   rules.forEach((rule, ruleIndex) => {
     if (rule.negated) return;
     try {
-      const matchedFiles = fs.globSync(rule.absolutePattern);
+      const matchedFiles = fs.globSync(rule.glob);
       if (matchedFiles.length > 0) {
         matchedAnyPattern = true;
       }
@@ -115,7 +123,7 @@ function resolveFiles(
       ([file, ruleIndex]) =>
         !rules
           .slice(ruleIndex + 1)
-          .some((rule) => rule.negated && path.matchesGlob(file, rule.absolutePattern)),
+          .some((rule) => rule.negated && path.matchesGlob(file, rule.glob)),
     )
     .map(([file]) => file)
     .filter(
@@ -132,11 +140,15 @@ interface FilePatternRule {
   /** Whether the entry starts with `!` and excludes the files it matches. */
   negated: boolean;
   /** The entry without its `!`, resolved against baseDir. */
-  absolutePattern: string;
+  glob: string;
 }
 
 function parseFilePattern(pattern: string, baseDir: string): FilePatternRule {
   const negated = pattern.startsWith("!");
   const glob = negated ? pattern.slice(1) : pattern;
-  return { pattern, negated, absolutePattern: path.resolve(baseDir, glob) };
+  return { pattern, negated, glob: path.resolve(baseDir, glob) };
+}
+
+function isTestFilePattern(pattern: string): boolean {
+  return TEST_FILE_SUFFIXES.some((suffix) => pattern.endsWith(suffix));
 }

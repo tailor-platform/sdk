@@ -89,6 +89,65 @@ describe("loadFilesWithIgnores", () => {
     expect(files).toEqual([path.join(baseDir, "src", "a.ts")]);
   });
 
+  test.each([".test.ts", ".spec.ts"])(
+    "includes %s files matched by a test-file pattern after the other patterns",
+    (suffix) => {
+      const warnSpy = vi.fn();
+      const baseDir = makeDirWithFile("file-loader-test-pattern-", "src/a.ts");
+      writeFiles(baseDir, ["src/a.test.ts", "src/a.spec.ts", `src/skip${suffix}`]);
+
+      const files = loadFilesWithIgnores(
+        { files: ["./src/**/*.ts", `./src/**/*${suffix}`, `!./src/skip${suffix}`] },
+        baseDir,
+        warnSpy,
+      );
+      expect(files.toSorted()).toEqual(
+        [path.join(baseDir, "src", "a.ts"), path.join(baseDir, "src", `a${suffix}`)].toSorted(),
+      );
+    },
+  );
+
+  test("includes test files when files has only test-file patterns", () => {
+    const warnSpy = vi.fn();
+    const baseDir = makeDirWithFile("file-loader-only-test-patterns-", "e2e/a.test.ts");
+
+    const files = loadFilesWithIgnores({ files: ["./e2e/**/*.test.ts"] }, baseDir, warnSpy);
+    expect(files).toEqual([path.join(baseDir, "e2e", "a.test.ts")]);
+  });
+
+  test("excludes test files matched by a test-file pattern before another pattern", () => {
+    const warnSpy = vi.fn();
+    const baseDir = makeDirWithFile("file-loader-test-pattern-first-", "src/a.ts");
+    writeFiles(baseDir, ["src/a.test.ts", "lib/b.ts"]);
+
+    expect(
+      loadFilesWithIgnores({ files: ["./src/**/*.test.ts", "./src/**/*.ts"] }, baseDir, warnSpy),
+    ).toEqual([path.join(baseDir, "src", "a.ts")]);
+    expect(
+      loadFilesWithIgnores(
+        { files: ["./src/**/*.ts", "./src/**/*.test.ts", "./lib/**/*.ts"] },
+        baseDir,
+        warnSpy,
+      ).toSorted(),
+    ).toEqual([path.join(baseDir, "lib", "b.ts"), path.join(baseDir, "src", "a.ts")]);
+  });
+
+  test("applies ignores after a trailing test-file pattern", () => {
+    const warnSpy = vi.fn();
+    const baseDir = makeDirWithFile("file-loader-ignores-after-test-pattern-", "src/a.ts");
+    writeFiles(baseDir, ["src/a.test.ts", "src/a.spec.ts"]);
+
+    const files = loadFilesWithIgnores(
+      { files: ["./src/**/*.ts", "./src/**/*.test.ts"], ignores: ["**/*.test.ts"] },
+      baseDir,
+      warnSpy,
+    );
+    expect(files.toSorted()).toEqual([
+      path.join(baseDir, "src", "a.spec.ts"),
+      path.join(baseDir, "src", "a.ts"),
+    ]);
+  });
+
   test("does not fall back when every non-! pattern is absolute", () => {
     const warnSpy = vi.fn();
     const cwdDir = makeDirWithFile("file-loader-absolute-negation-cwd-", "src/legacy.ts");

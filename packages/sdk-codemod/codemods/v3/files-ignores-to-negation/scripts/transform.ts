@@ -19,12 +19,30 @@ import type { Edit, SgNode } from "@ast-grep/napi";
 /** Services keyed by namespace, each namespace holding its own `files`. */
 const NAMESPACED_SERVICES: ReadonlySet<string> = new Set(["db", "resolver"]);
 const SINGLE_SERVICES: ReadonlySet<string> = new Set(["executor", "workflow", "httpAdapter"]);
-const DEFAULT_NEGATIONS = ["!**/*.test.ts", "!**/*.spec.ts"];
+const TEST_FILE_SUFFIXES = [".test.ts", ".spec.ts"];
+const DEFAULT_NEGATIONS = TEST_FILE_SUFFIXES.map((suffix) => `!**/*${suffix}`);
 
 type Analysis = { edits: Edit[]; findings: ManualMigration[] };
 
 function isNegation(element: SgNode): boolean {
   return element.kind() === "string" && (stringValue(element) ?? "").startsWith("!");
+}
+
+/** Whether `element` is a positive entry ending in a test-file suffix. */
+function isTestFilePattern(element: SgNode): boolean {
+  if (element.kind() !== "string" && element.kind() !== "template_string") return false;
+  if (isNegation(element)) return false;
+  const withoutClosingQuote = element.text().slice(0, -1);
+  return TEST_FILE_SUFFIXES.some((suffix) => withoutClosingQuote.endsWith(suffix));
+}
+
+/** The string values of the `!` elements that directly follow `elements[index]`. */
+function negationsAfter(elements: SgNode[], index: number): Set<string | null> {
+  const following = elements.slice(index + 1);
+  const end = following.findIndex((element) => !isNegation(element));
+  return new Set(
+    following.slice(0, end === -1 ? undefined : end).map((element) => stringValue(element)),
+  );
 }
 
 /** Whether a `files` entry can match files outside the config's own directory. */
@@ -78,6 +96,31 @@ function appendElements(source: string, array: SgNode, texts: string[]): Edit[] 
   ];
 }
 
+/** Edits that insert `texts` as elements right after `elements[index]`. */
+function insertElementsAfter(
+  source: string,
+  array: SgNode,
+  elements: SgNode[],
+  index: number,
+  texts: string[],
+): Edit[] {
+  const next = elements[index + 1];
+  if (!next) return appendElements(source, array, texts);
+  const nextIndent = ownLineIndent(source, next);
+  if (nextIndent === null) {
+    const start = next.range().start.index;
+    return [{ startPos: start, endPos: start, insertedText: `${texts.join(", ")}, ` }];
+  }
+  const insertAt = lineStart(source, next.range().start.index);
+  return [
+    {
+      startPos: insertAt,
+      endPos: insertAt,
+      insertedText: texts.map((text) => `${nextIndent}${text},\n`).join(""),
+    },
+  ];
+}
+
 function quoteOf(elements: SgNode[]): string {
   const quoted = elements.findLast((element) => element.kind() === "string");
   return quoted?.text()[0] ?? '"';
@@ -116,16 +159,19 @@ function analyzeService(source: string, service: SgNode, label: string): Analysi
       ? { edits: [entryRemoval(source, entries, ignoresEntry)], findings: [] }
       : { edits: [], findings: [] };
   }
-  const trailingNegations = new Set(
-    elements.slice(lastPositive + 1).map((element) => stringValue(element)),
-  );
-
   if (!ignoresEntry) {
+    const lastNonTestPositive = elements.findLastIndex(
+      (element) => !isNegation(element) && !isTestFilePattern(element),
+    );
+    if (lastNonTestPositive === -1) return { edits: [], findings: [] };
+    const existing = negationsAfter(elements, lastNonTestPositive);
     const quote = quoteOf(elements);
-    const missing = DEFAULT_NEGATIONS.filter((pattern) => !trailingNegations.has(pattern)).map(
+    const missing = DEFAULT_NEGATIONS.filter((pattern) => !existing.has(pattern)).map(
       (pattern) => `${quote}${pattern}${quote}`,
     );
-    const findings = elements.some((element) => !isNegation(element) && mayEscapeConfigDir(element))
+    const findings = elements
+      .slice(0, lastNonTestPositive + 1)
+      .some((element) => !isNegation(element) && mayEscapeConfigDir(element))
       ? [
           {
             reason: `${label}.files can match files outside this config's directory, where the explicit test-file exclusion does not apply`,
@@ -133,8 +179,15 @@ function analyzeService(source: string, service: SgNode, label: string): Analysi
           },
         ]
       : [];
-    return { edits: missing.length > 0 ? appendElements(source, files, missing) : [], findings };
+    return {
+      edits:
+        missing.length > 0
+          ? insertElementsAfter(source, files, elements, lastNonTestPositive, missing)
+          : [],
+      findings,
+    };
   }
+  const trailingNegations = negationsAfter(elements, lastPositive);
 
   const ignores = ignoresEntry.kind() === "pair" ? pairValue(ignoresEntry) : null;
   const ignoreElements = ignores?.kind() === "array" ? arrayElements(ignores) : null;
