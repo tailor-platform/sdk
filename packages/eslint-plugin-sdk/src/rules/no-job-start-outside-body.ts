@@ -3,7 +3,7 @@ import { configureImportTracker, constInitializer } from "../lib/sdk-bindings.js
 import { hasAncestor, workflowJobDefinition } from "../lib/workflow.js";
 import type { Rule } from "eslint";
 
-const rule = {
+const rule: Rule.RuleModule = {
   meta: {
     type: "problem",
     docs: {
@@ -50,6 +50,6 @@ const rule = {
       },
     };
   },
-} satisfies Rule.RuleModule;
+};
 
 export default rule;

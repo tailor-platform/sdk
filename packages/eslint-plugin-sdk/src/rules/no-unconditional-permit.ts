@@ -108,7 +108,7 @@ function reportUnconditionalEntries(context: Rule.RuleContext, node: AstNode): v
   }
 }
 
-const rule = {
+const rule: Rule.RuleModule = {
   meta: {
     type: "problem",
     docs: {
@@ -156,6 +156,6 @@ const rule = {
       },
     };
   },
-} satisfies Rule.RuleModule;
+};
 
 export default rule;

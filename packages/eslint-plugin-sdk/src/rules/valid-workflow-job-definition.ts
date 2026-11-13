@@ -7,7 +7,7 @@ function isStringLiteral(node: AstNode | null | undefined): boolean {
   return node?.type === "Literal" && typeof node.value === "string";
 }
 
-const rule = {
+const rule: Rule.RuleModule = {
   meta: {
     type: "problem",
     docs: {
@@ -49,6 +49,6 @@ const rule = {
       },
     };
   },
-} satisfies Rule.RuleModule;
+};
 
 export default rule;

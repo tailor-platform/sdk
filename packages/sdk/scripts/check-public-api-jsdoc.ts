@@ -9,7 +9,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
+import { API } from "typescript/sync";
 import { findUndocumentedSymbols } from "./lib/find-undocumented-symbols.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -61,20 +61,28 @@ function entryPoints(): string[] {
   return points;
 }
 
-const tsconfigPath = resolve(sdkRoot, "tsconfig.json");
-const parsed = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
-if (parsed.error) {
-  console.error(ts.flattenDiagnosticMessageText(parsed.error.messageText, "\n"));
-  process.exit(1);
-}
-const config = ts.parseJsonConfigFileContent(parsed.config, ts.sys, sdkRoot);
-if (config.errors.length > 0) {
-  for (const err of config.errors) {
-    console.error(ts.flattenDiagnosticMessageText(err.messageText, "\n"));
+function loadCompilerOptions() {
+  const api = new API({ cwd: sdkRoot });
+  try {
+    const parsed = api.readConfigFile(resolve(sdkRoot, "tsconfig.json"));
+    if (parsed.error) {
+      console.error(parsed.error.text);
+      process.exit(1);
+    }
+    const config = api.parseJsonConfigFileContent(parsed.config, { configDirectory: sdkRoot });
+    if (config.errors.length > 0) {
+      for (const err of config.errors) {
+        console.error(err.text);
+      }
+      process.exit(1);
+    }
+    return config.options;
+  } finally {
+    api.close();
   }
-  process.exit(1);
 }
-const failures = findUndocumentedSymbols(entryPoints(), config.options, sdkRoot);
+
+const failures = findUndocumentedSymbols(entryPoints(), loadCompilerOptions(), sdkRoot);
 
 if (failures.length === 0) {
   process.exit(0);

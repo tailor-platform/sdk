@@ -3,8 +3,11 @@ import { stripTypeScriptTypes } from "node:module";
 import * as os from "node:os";
 import { PGlite } from "@electric-sql/pglite";
 import * as path from "pathe";
-import ts from "typescript";
-import { describe, expect, test, aroundEach } from "vitest";
+import { ScriptTarget } from "typescript/ast";
+import { isCallExpression, isIdentifier } from "typescript/ast/is";
+import { ModuleKind, ModuleResolutionKind } from "typescript/sync";
+import { afterAll, describe, expect, test, aroundEach } from "vitest";
+import { createTypeChecker, flattenDiagnosticText } from "#/utils/test-helpers/type-check";
 import { runMigrationSteps } from "#/vitest/migration-steps";
 import { createKyselyPGlite } from "#/vitest/pglite-kysely";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
@@ -34,49 +37,55 @@ import { createMockMigrationDiff } from "./test-helpers/migration-diff";
 import type { DiffChange } from "./diff-calculator";
 import type { ExpandContractPlan } from "./expand-contract";
 import type { SnapshotFieldConfig } from "./snapshot-types";
+import type { CallExpression, Node } from "typescript/ast";
 
 const packageRoot = path.resolve(import.meta.dirname, "../../../../..");
+
+const checker = createTypeChecker();
+
+afterAll(() => {
+  checker.close();
+});
 
 function getTypeScriptDiagnostics(
   filePath: string,
 ): readonly { code: number; messageText: string }[] {
-  const program = ts.createProgram([filePath], {
-    module: ts.ModuleKind.ESNext,
-    moduleResolution: ts.ModuleResolutionKind.Bundler,
-    noEmit: true,
-    paths: {
-      "@tailor-platform/sdk": [path.join(packageRoot, "src/configure/index.ts")],
-      "@tailor-platform/sdk/kysely": [path.join(packageRoot, "src/kysely/index.ts")],
-      "@tailor-platform/sdk/vitest": [path.join(packageRoot, "src/vitest/index.ts")],
-      "@electric-sql/pglite": [path.join(packageRoot, "node_modules/@electric-sql/pglite")],
-      vitest: [path.join(packageRoot, "node_modules/vitest")],
-    },
-    skipLibCheck: true,
-    strict: true,
-    target: ts.ScriptTarget.ES2022,
-  });
-
-  return ts
-    .getPreEmitDiagnostics(program)
-    .filter((diagnostic) => diagnostic.file?.fileName === filePath)
+  return checker
+    .diagnostics([filePath], {
+      module: ModuleKind.ESNext,
+      moduleResolution: ModuleResolutionKind.Bundler,
+      noEmit: true,
+      paths: {
+        "@tailor-platform/sdk": [path.join(packageRoot, "src/configure/index.ts")],
+        "@tailor-platform/sdk/kysely": [path.join(packageRoot, "src/kysely/index.ts")],
+        "@tailor-platform/sdk/vitest": [path.join(packageRoot, "src/vitest/index.ts")],
+        "@electric-sql/pglite": [path.join(packageRoot, "node_modules/@electric-sql/pglite")],
+        vitest: [path.join(packageRoot, "node_modules/vitest")],
+      },
+      skipLibCheck: true,
+      strict: true,
+      target: ScriptTarget.ES2022,
+    })
+    .filter((diagnostic) => diagnostic.fileName === filePath)
     .map((diagnostic) => ({
       code: diagnostic.code,
-      messageText: ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+      messageText: flattenDiagnosticText(diagnostic, "\n"),
     }));
 }
 
 function replaceTodoCalls(source: string, replacement: string): string {
-  const ast = ts.createSourceFile("migrate.ts", source, ts.ScriptTarget.Latest, true);
-  const calls: ts.CallExpression[] = [];
-  const visit = (node: ts.Node) => {
+  using retained = checker.api.createSourceFile("migrate.ts", source);
+  const ast = retained.sourceFile;
+  const calls: CallExpression[] = [];
+  const visit = (node: Node) => {
     if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
+      isCallExpression(node) &&
+      isIdentifier(node.expression) &&
       node.expression.text === "TODO"
     ) {
       calls.push(node);
     }
-    ts.forEachChild(node, visit);
+    node.forEachChild(visit);
   };
   visit(ast);
   return calls

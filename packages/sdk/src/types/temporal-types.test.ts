@@ -1,14 +1,18 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import ts from "typescript";
+import { ScriptTarget } from "typescript/ast";
+import { ModuleKind, ModuleResolutionKind } from "typescript/sync";
 import { afterAll, describe, expect, test } from "vitest";
+import { createTypeChecker, flattenDiagnosticText } from "#/utils/test-helpers/type-check";
 
 const SDK_ROOT = join(import.meta.dirname, "..", "..");
 
 const tempDirs: string[] = [];
+const checker = createTypeChecker();
 
 afterAll(() => {
+  checker.close();
   for (const dir of tempDirs) {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -20,24 +24,19 @@ function diagnosticsFor(source: string, lib: string[]): string[] {
   const fileName = join(dir, "case.ts");
   writeFileSync(fileName, source);
 
-  const program = ts.createProgram({
-    rootNames: [fileName],
-    options: {
+  return checker
+    .diagnostics([fileName], {
       strict: true,
       skipLibCheck: false,
       noEmit: true,
-      target: ts.ScriptTarget.ES2022,
-      module: ts.ModuleKind.ESNext,
-      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      target: ScriptTarget.ES2022,
+      module: ModuleKind.ESNext,
+      moduleResolution: ModuleResolutionKind.Bundler,
       lib,
-    },
-  });
-
-  return ts
-    .getPreEmitDiagnostics(program)
+    })
     .map(
       (diagnostic) =>
-        `${diagnostic.file?.fileName ?? "<unknown>"}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, " ")}`,
+        `${diagnostic.fileName ?? "<unknown>"}: ${flattenDiagnosticText(diagnostic, " ")}`,
     );
 }
 

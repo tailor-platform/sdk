@@ -21,7 +21,7 @@ function isWorkflowRuntime(
   return isAmbientTailor(context, object) || imports.isNamespace(object);
 }
 
-const rule = {
+const rule: Rule.RuleModule = {
   meta: {
     type: "problem",
     docs: {
@@ -54,6 +54,6 @@ const rule = {
       },
     };
   },
-} satisfies Rule.RuleModule;
+};
 
 export default rule;

@@ -135,7 +135,7 @@ function checkResolver(
   }
 }
 
-const rule = {
+const rule: Rule.RuleModule = {
   meta: {
     type: "problem",
     docs: {
@@ -164,6 +164,6 @@ const rule = {
       },
     };
   },
-} satisfies Rule.RuleModule;
+};
 
 export default rule;
