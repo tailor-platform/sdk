@@ -1,6 +1,8 @@
+import * as fs from "node:fs/promises";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { frontendPlugin } from "./index";
 import type { FrontendBuildContext, FrontendDefinition } from "./types";
@@ -59,6 +61,7 @@ function context(frontends: FrontendDefinition[]) {
     pluginConfig: frontends,
     logger,
     exec,
+    node: { fs, path },
   };
   return { ctx, publish, exec, logger };
 }
@@ -253,6 +256,7 @@ describe("frontendPlugin", () => {
         workingDir: join(root, "apps/web"),
         distDir: join(root, "apps/web/dist"),
         logger,
+        node: ctx.node,
         exec: expect.any(Function),
       });
       expect(exec).not.toHaveBeenCalled();

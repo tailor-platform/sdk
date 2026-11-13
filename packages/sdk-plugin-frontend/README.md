@@ -99,7 +99,7 @@ frontendPlugin({
   site: website,
   workingDir: "../web",
   distDir: "dist",
-  build: async ({ site, application, workspaceId, profile, exec }) => {
+  build: async ({ site, application, workspaceId, profile, distDir, exec, node }) => {
     await exec("pnpm run build");
     const client = await initOperatorClient(await loadAccessToken({ profile }));
     const { customDomains } = await client.listCustomDomains({
@@ -107,31 +107,21 @@ frontendPlugin({
       staticWebsiteName: site.name,
     });
     const origin = customDomains[0] ? `https://${customDomains[0].domain}` : site.url;
-    await exec("node scripts/write-config.mjs", {
-      env: { ORIGIN: origin, API_URL: application.url ?? "" },
-    });
+    await node.fs.writeFile(
+      node.path.join(distDir, "config.json"),
+      JSON.stringify({ origin, apiUrl: application.url }),
+    );
   },
 });
 ```
 
-`scripts/write-config.mjs` in the frontend's directory writes the file into `dist`:
-
-```javascript
-import { writeFile } from "node:fs/promises";
-
-await writeFile(
-  "dist/config.json",
-  JSON.stringify({ origin: process.env.ORIGIN, apiUrl: process.env.API_URL }),
-);
-```
-
-`tailor.config.ts` is also bundled into functions that run on the Platform, such as auth
-hooks, so it cannot import Node.js modules like `node:fs`. Do file work in a script that
-`exec` runs, as above.
+`node.fs` is Node.js's `fs/promises` module, and `node.path` is `pathe`, which works like `path` but uses `/` separators on every OS. `tailor.config.ts` is
+also bundled into functions that run on the Platform, such as auth hooks, so importing
+`node:` modules there fails the bundle. Use `node` instead.
 
 The function runs after `env` resolves and before the upload, with the same context `env`
 receives plus `env` (the values it returned), the absolute `workingDir` and `distDir`, a
-`logger`, and `exec`. `exec` runs a shell command in `workingDir` with those `env` values
+`logger`, `node`, and `exec`. `exec` runs a shell command in `workingDir` with those `env` values
 added; pass `workingDir`, `env`, or `output` to override them for one command. When the
 function rejects, the frontend is not uploaded and later frontends and deploy hooks do not
 run, as with a failed build command.

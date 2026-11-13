@@ -1,5 +1,6 @@
 import type {
   DeployedApplication,
+  DeployedContext,
   DeployedStaticWebsite,
   PluginExecOptions,
   PluginExecResult,
@@ -55,4 +56,6 @@ export interface FrontendBuildContext extends FrontendEnvContext {
    * @returns Captured output when `options.output` is `"capture"`
    */
   exec: (command: string, options?: FrontendExecOptions) => Promise<PluginExecResult>;
+  /** Node's `fs/promises` module and `pathe` (`path` with `/` separators on every OS). Use these instead of importing `node:` modules in `tailor.config.ts`, which is bundled into functions that run on the Platform. */
+  node: DeployedContext["node"];
 }

@@ -94,6 +94,7 @@ export function frontendPlugin(
             workingDir,
             distDir,
             logger: ctx.logger,
+            node: ctx.node,
             exec: (command, options) =>
               ctx.exec(command, {
                 ...options,

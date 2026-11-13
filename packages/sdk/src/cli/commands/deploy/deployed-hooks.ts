@@ -1,3 +1,4 @@
+import * as nodeFs from "node:fs/promises";
 import { stat } from "node:fs/promises";
 import * as path from "pathe";
 import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
@@ -305,6 +306,7 @@ export async function runDeployedHooks(
           pluginConfig: plugin.pluginConfig,
           logger: { info: logger.info, warn: logger.warn, success: logger.success },
           exec: execPluginCommand,
+          node: { fs: nodeFs, path },
         });
       });
       const hookOutputs = result?.outputs;
