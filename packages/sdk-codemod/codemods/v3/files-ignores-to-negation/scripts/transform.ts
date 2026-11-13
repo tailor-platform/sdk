@@ -24,16 +24,20 @@ const DEFAULT_NEGATIONS = TEST_FILE_SUFFIXES.map((suffix) => `!**/*${suffix}`);
 
 type Analysis = { edits: Edit[]; findings: ManualMigration[] };
 
-function isNegation(element: SgNode): boolean {
-  return element.kind() === "string" && (stringValue(element) ?? "").startsWith("!");
+function isStringLiteral(element: SgNode): boolean {
+  return element.kind() === "string" || element.kind() === "template_string";
 }
 
-/** Whether `element` is a positive entry ending in a test-file suffix. */
+function isNegation(element: SgNode): boolean {
+  return isStringLiteral(element) && element.text()[1] === "!";
+}
+
 function isTestFilePattern(element: SgNode): boolean {
-  if (element.kind() !== "string" && element.kind() !== "template_string") return false;
-  if (isNegation(element)) return false;
   const withoutClosingQuote = element.text().slice(0, -1);
-  return TEST_FILE_SUFFIXES.some((suffix) => withoutClosingQuote.endsWith(suffix));
+  return (
+    isStringLiteral(element) &&
+    TEST_FILE_SUFFIXES.some((suffix) => withoutClosingQuote.endsWith(suffix))
+  );
 }
 
 /** The string values of the `!` elements that directly follow `elements[index]`. */
@@ -96,15 +100,14 @@ function appendElements(source: string, array: SgNode, texts: string[]): Edit[] 
   ];
 }
 
-/** Edits that insert `texts` as elements right after `elements[index]`. */
+/** Edits that insert `texts` as elements right after the element at `index` of `array`. */
 function insertElementsAfter(
   source: string,
   array: SgNode,
-  elements: SgNode[],
   index: number,
   texts: string[],
 ): Edit[] {
-  const next = elements[index + 1];
+  const next = arrayElements(array)[index + 1];
   if (!next) return appendElements(source, array, texts);
   const nextIndent = ownLineIndent(source, next);
   if (nextIndent === null) {
@@ -181,9 +184,7 @@ function analyzeService(source: string, service: SgNode, label: string): Analysi
       : [];
     return {
       edits:
-        missing.length > 0
-          ? insertElementsAfter(source, files, elements, lastNonTestPositive, missing)
-          : [],
+        missing.length > 0 ? insertElementsAfter(source, files, lastNonTestPositive, missing) : [],
       findings,
     };
   }

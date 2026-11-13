@@ -52,6 +52,16 @@ describe("ignores -> files negation migration review", () => {
     );
   });
 
+  test("treats a template literal starting with ! as a negation", () => {
+    const { transformed } = review(
+      'export default defineConfig({\n  workflow: { files: ["w/*.ts", "w/*.test.ts", `!${dir}/x.ts`] },\n});\n',
+    );
+
+    expect(transformed).toContain(
+      'files: ["w/*.ts", "!**/*.test.ts", "!**/*.spec.ts", "w/*.test.ts", `!${dir}/x.ts`]',
+    );
+  });
+
   test("does not flag a test-file pattern outside the config directory, which nothing excludes", () => {
     const { transformed, findings } = review(
       'export default defineConfig({\n  executor: { files: ["src/**/*.ts", "../shared/**/*.test.ts"] },\n});\n',
