@@ -46,8 +46,6 @@ export function loadFilesWithIgnores(
   // resolution is meant to prevent. Also skipped when every non-`!` pattern
   // is already absolute, since baseDir can't change an absolute pattern's
   // resolution — re-running against cwd would just repeat the same glob.
-  // Remove this fallback in v2, once such configs are expected to have
-  // migrated.
   const fallbackKey = `${baseDir}\0${config.files.join("\0")}`;
   let warned = warnedFallbacks.get(warn);
   if (!warned) {
@@ -58,8 +56,8 @@ export function loadFilesWithIgnores(
     warned.add(fallbackKey);
     warn(
       `No files matched "${config.files.join(", ")}" relative to "${baseDir}"; falling back to ` +
-        `process.cwd(). Update this config's file patterns to be relative to its own directory ` +
-        `before v2, when this fallback will be removed.`,
+        `process.cwd(). Update this config's file patterns to be relative to its own directory; ` +
+        `this fallback will be removed in v3.`,
     );
   }
   return resolveFiles(config, process.cwd(), warn).files;

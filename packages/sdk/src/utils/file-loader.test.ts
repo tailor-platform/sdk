@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { expectRemovalInFutureMajor } from "#/cli/shared/test-helpers/removal-version";
 import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { loadFilesWithIgnores } from "./file-loader";
 
@@ -159,7 +160,7 @@ describe("loadFilesWithIgnores", () => {
     }
   });
 
-  test("warns when falling back to process.cwd()", () => {
+  test("warns when falling back to process.cwd(), naming a future removal major", async () => {
     const warnSpy = vi.fn();
     const cwdDir = makeDirWithFile("file-loader-cwd-warn-", "src/legacy.ts");
     const emptyBaseDir = makeTempDir("file-loader-empty-warn-");
@@ -169,7 +170,8 @@ describe("loadFilesWithIgnores", () => {
     process.chdir(cwdDir);
     try {
       loadFilesWithIgnores({ files: ["./src/**/*.ts"] }, emptyBaseDir, warnSpy);
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(emptyBaseDir));
+      expect(warnSpy).toHaveBeenCalledExactlyOnceWith(expect.stringContaining(emptyBaseDir));
+      await expectRemovalInFutureMajor(warnSpy.mock.calls[0]?.[0] ?? "");
     } finally {
       process.chdir(originalCwd);
     }
