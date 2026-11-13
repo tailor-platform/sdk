@@ -11,6 +11,7 @@ import {
   SCHEMA_SNAPSHOT_VERSION,
   type MigrationDiff,
 } from "#/cli/commands/tailordb/migrate/diff-calculator";
+import { COMPLETED_STEPS_ON_RESUME } from "#/cli/commands/tailordb/migrate/remote-state";
 import {
   formatMigrationNumber,
   DIFF_FILE_NAME,
@@ -1289,6 +1290,97 @@ describe("migration", () => {
       expect(order(spinnerMock.fail)).toBeLessThan(order(vi.mocked(logger.error)));
     });
 
+    test("qualifies the resume advice of a step failure with what runs every step again", async () => {
+      const migration = createMockMigration({ scriptForm: stepsForm });
+      executeMigrationStepsAsWorkflowMock.mockResolvedValueOnce({
+        success: false,
+        logs: "",
+        error: "boom",
+        executionId: "exec-1",
+        completedSteps: ["backfill"],
+        failedSteps: ["recompute"],
+        stepsMayHaveCommitted: true,
+      });
+
+      await expect(
+        executeMigrations(stepsContext(vi.fn()), [migration], checkpoints, {
+          tailordb: { number: 1, kind: "steps" },
+        }),
+      ).rejects.toMatchObject({
+        code: "MIGRATION_PARTIALLY_APPLIED",
+        suggestion: expect.stringContaining(
+          "Fix the failing step in migrate.ts and deploy again; steps that already completed do not run again unless you add, remove, or rename a step, change the order the steps run in, or the earlier run was canceled or is no longer available.",
+        ),
+      });
+    });
+
+    test.each([
+      {
+        outcome: "how to skip the completed ones",
+        completedSteps: ["backfill"],
+        failedSteps: ["recompute"],
+        stepsMayHaveCommitted: true,
+        suggestion:
+          /^The run was canceled, so the next deploy runs every step again\. To keep backfill from running again, pass --migration-skip-steps tailordb\/backfill to that deploy; every other step must be safe to run twice\./,
+      },
+      {
+        outcome: "that each step must be safe to run twice when none completed",
+        completedSteps: [],
+        failedSteps: ["backfill"],
+        stepsMayHaveCommitted: false,
+        suggestion:
+          /^The run was canceled, so the next deploy runs every step again; each step must be safe to run twice\./,
+      },
+    ])(
+      "tells a canceled run in progress that every step runs again and $outcome",
+      async ({ completedSteps, failedSteps, stepsMayHaveCommitted, suggestion }) => {
+        const migration = createMockMigration({ scriptForm: stepsForm });
+        executeMigrationStepsAsWorkflowMock.mockResolvedValueOnce({
+          success: false,
+          logs: "",
+          error: "Migration workflow execution was canceled.",
+          executionId: "exec-1",
+          canceled: true,
+          completedSteps,
+          failedSteps,
+          stepsMayHaveCommitted,
+          runEnded: true,
+        });
+
+        await expect(
+          executeMigrations(stepsContext(vi.fn()), [migration], checkpoints, {
+            tailordb: { number: 1, kind: "steps" },
+          }),
+        ).rejects.toMatchObject({
+          code: "MIGRATION_PARTIALLY_APPLIED",
+          suggestion: expect.stringMatching(suggestion),
+          context: expect.objectContaining({ canceled: true }),
+        });
+      },
+    );
+
+    test("marks a run canceled before any step committed as canceled", async () => {
+      const migration = createMockMigration({ scriptForm: stepsForm });
+      executeMigrationStepsAsWorkflowMock.mockResolvedValueOnce({
+        success: false,
+        logs: "",
+        error: "Migration workflow execution was canceled.",
+        executionId: "exec-1",
+        canceled: true,
+        completedSteps: [],
+        failedSteps: ["backfill"],
+        stepsMayHaveCommitted: false,
+        runEnded: true,
+      });
+
+      await expect(
+        executeMigrations(stepsContext(vi.fn()), [migration], checkpoints),
+      ).rejects.toMatchObject({
+        code: "MIGRATION_FAILED",
+        context: expect.objectContaining({ canceled: true }),
+      });
+    });
+
     test("keeps the remediation of a failure that is not a step's own", async () => {
       const migration = createMockMigration({
         scriptForm: { kind: "steps", order: ["backfill", "recompute"] },
@@ -2357,13 +2449,35 @@ describe("rolledBackError", () => {
       CLIError({
         code: "MIGRATION_PARTIALLY_APPLIED",
         message: "Migration tailordb/0003 failed at recompute: boom",
-        suggestion:
-          "Fix the failing step in migrate.ts and deploy again; steps that already completed do not run again.",
+        suggestion: `Fix the failing step in migrate.ts and deploy again; ${COMPLETED_STEPS_ON_RESUME}.`,
       }),
     );
 
     expect((error as { suggestion?: string }).suggestion).not.toContain("do not run again");
   });
+
+  test.each(["MIGRATION_PARTIALLY_APPLIED", "MIGRATION_FAILED"])(
+    "does not ask to fix migrate.ts after a canceled run was rolled back (%s)",
+    (code) => {
+      const error = rolledBackError(
+        createMockMigration({ number: 3 }),
+        CLIError({
+          code,
+          message: "Migration tailordb/0003 failed: Migration workflow execution was canceled.",
+          context: { canceled: true },
+        }),
+      );
+
+      expect(error).toMatchObject({
+        code: "MIGRATION_ROLLED_BACK",
+        suggestion: expect.stringMatching(
+          /rolled back to migration 0002.* The run was canceled; deploy again to run every step from the beginning\.$/s,
+        ),
+        context: expect.objectContaining({ canceled: true }),
+      });
+      expect((error as { suggestion?: string }).suggestion).not.toContain("Fix the failure");
+    },
+  );
 });
 
 describe("rollbackSkippedError", () => {
