@@ -24,7 +24,7 @@ function passwordFor(name: unknown, raw: string): string | undefined {
  *
  * A plain string applies to every user. A JSON object maps each user `name` to its
  * password, and a user missing from the object is left without one.
- * @deprecated since NEXT_RELEASE — import fillIdpUserPassword from @tailor-platform/sdk-plugin-seed/schema instead. codemod: v3/seed-subpath-to-plugin
+ * @deprecated since 2.41.0 — import fillIdpUserPassword from @tailor-platform/sdk-plugin-seed/schema instead. codemod: v3/seed-subpath-to-plugin
  * @param row - A `_User` seed row
  * @param env - Environment to read from. Defaults to `process.env`.
  * @returns The row with `password` filled in when the environment supplies one

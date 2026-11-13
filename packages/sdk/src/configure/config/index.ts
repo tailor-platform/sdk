@@ -17,7 +17,7 @@ export function defineConfig<
 >(config: Config): Config;
 /**
  * Define a Tailor SDK application configuration with `idp` written as an array.
- * @deprecated since NEXT_RELEASE — pass a single IdP (`idp: myIdp`) instead of an array. codemod: v3/idp-array-to-single
+ * @deprecated since 2.41.0 — pass a single IdP (`idp: myIdp`) instead of an array. codemod: v3/idp-array-to-single
  * @template Config
  * @param config - Application configuration
  * @returns The same configuration object
