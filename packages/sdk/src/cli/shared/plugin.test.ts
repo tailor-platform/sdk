@@ -174,6 +174,7 @@ process.exit(${exitCode});
 // dispatched child only sees what buildPluginEnv injects.
 const CONTEXT_ENV_KEYS = [
   "TAILOR_PLATFORM_TOKEN",
+  "TAILOR_PLATFORM_URL",
   "TAILOR_PLATFORM_WORKSPACE_ID",
   "TAILOR_PLATFORM_USER",
   "TAILOR_CONFIG_PATH",
@@ -300,7 +301,10 @@ describe("dispatchPlugin", () => {
     // Node itself also parses --env-file after the script path
     // (https://github.com/nodejs/node/issues/54232), so the file must exist for
     // the capture plugin process to start.
-    fs.writeFileSync(path.join(project, ".env.staging"), "TAILOR_PLATFORM_WORKSPACE_ID=ws-env");
+    fs.writeFileSync(
+      path.join(project, ".env.staging"),
+      "TAILOR_PLATFORM_WORKSPACE_ID=ws-env\nTAILOR_PLATFORM_URL=https://api.env.example.com",
+    );
     contextMocks.loadWorkspaceId.mockImplementation(
       async () => process.env.TAILOR_PLATFORM_WORKSPACE_ID ?? "ws-456",
     );
@@ -316,7 +320,7 @@ describe("dispatchPlugin", () => {
     expect(env.TAILOR_PLATFORM_WORKSPACE_ID).toBe("ws-env");
     expect(env.TAILOR_PLATFORM_TOKEN).toBe("tok-123");
     expect(env.TAILOR_PLATFORM_USER).toBe("me@example.com");
-    expect(env.TAILOR_PLATFORM_URL).toBe(getPlatformBaseUrl());
+    expect(env.TAILOR_PLATFORM_URL).toBe("https://api.env.example.com");
     expect(env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID).toBe(getOAuth2ClientId());
     expect(env.TAILOR_CONFIG_PATH).toBe("/proj/tailor.config.ts");
   });

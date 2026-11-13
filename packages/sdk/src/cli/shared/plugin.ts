@@ -243,7 +243,8 @@ interface PluginContextOptions {
  * internal user key. An environment token's identity is not a config user, so
  * none is resolved while one is set.
  * @param profile - Active profile name; falls back to TAILOR_PLATFORM_PROFILE
- * @returns The resolved user (email when known), or undefined when not logged in
+ * @returns The resolved user (email when known), or undefined when not logged in or an environment
+ *   token is set
  */
 async function resolveActiveUser(profile?: string): Promise<string | undefined> {
   if (readEnvironmentToken()) return undefined;
