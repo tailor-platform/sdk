@@ -668,8 +668,24 @@ Everything else is yours, and re-running `setup` keeps it:
   [Requiring the workflow in branch protection](#requiring-the-workflow-in-branch-protection)).
 
 In a preview workflow, the `tailor-preview-deploy` job exposes the per-PR
-workspace as the outputs `workspace-id`, `workspace-name`, and `app-url`, so a
-job of your own can run tests or deploy extra assets against it:
+workspace as `workspace-id` and `workspace-name`, plus the JSON maps `app-urls`
+and `console-urls`, so a job of your own can run tests or deploy extra assets
+against it:
+
+- `app-urls` maps every application name in the workspace, including existing
+  applications, to its base URL. Append `/query` when making GraphQL requests.
+- `console-urls` maps those names to their application pages in the Console.
+
+Both maps are JSON object strings. They are `{}` when there are no applications;
+if a URL lookup fails, the action emits a warning and returns `{}` for that map
+without failing the deployment. For example,
+`${{ fromJSON(needs.tailor-preview-deploy.outputs.app-urls)['core'] }}` reads the
+base URL of the application named `core`.
+
+Preview comments show an `App URL (name)` row and a `Console URL (name)` row for
+each application. The legacy `app-url` output remains available for existing
+jobs. Run `tailor setup update` to regenerate existing workflows with these
+outputs and comment inputs.
 
 ```yaml
 deploy-assets:
@@ -687,7 +703,7 @@ deploy-assets:
 A job that runs `tailor` against the workspace needs the machine-user
 [secrets](#secrets), so it declares the preview target's GitHub Environment
 (the `--environment` value, or the workspace name when omitted) as above. A job
-that only uses `app-url`, such as end-to-end tests, does not.
+that only reads the URL outputs, such as end-to-end tests, does not.
 
 The job is skipped whenever `tailor-preview-deploy` is skipped (see
 [Pull requests that get a preview](#pull-requests-that-get-a-preview)).
@@ -731,8 +747,8 @@ runs when its run is cancelled, and the new run waits for it to finish; use
 `if: ${{ !cancelled() }}` instead so it stops with the run.
 
 Likewise, the `tailor-deploy` job of a branch or tag workflow exposes the
-deployed workspace as the outputs `workspace-id` and `app-url` to a job with
-`needs: tailor-deploy`. Reading them does not require the target's GitHub
+deployed workspace as `workspace-id`, `app-urls`, `console-urls`, and the legacy
+`app-url` to a job with `needs: tailor-deploy`. Reading them does not require the target's GitHub
 Environment; a job that runs `tailor` against the workspace declares it for the
 machine-user secrets, as in the preview example above.
 
@@ -1194,7 +1210,8 @@ With `--erd-preview`, each TailorDB namespace is previewed from the app that
 owns it. A namespace may be owned by only one app; the others reference it with
 `external: true`.
 
-With more than one app, the preview comment does not link an application URL.
+With more than one app, the preview comment lists each application's base URL
+and Console URL.
 
 ### Running on changes outside the app directories
 
