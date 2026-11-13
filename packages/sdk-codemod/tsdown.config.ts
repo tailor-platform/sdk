@@ -68,6 +68,8 @@ export default defineConfig([
         "codemods/v3/relation-toward-table/scripts/transform.ts",
       "v3/define-config-build-options/scripts/transform":
         "codemods/v3/define-config-build-options/scripts/transform.ts",
+      "v3/files-config-relative/scripts/transform":
+        "codemods/v3/files-config-relative/scripts/transform.ts",
       "v3/files-ignores-to-negation/scripts/transform":
         "codemods/v3/files-ignores-to-negation/scripts/transform.ts",
       "v3/tailordb-namespace-loaded-rename/scripts/transform":
