@@ -311,6 +311,29 @@ describe("executeMigrationStepsAsWorkflow", () => {
     expect(calls.slice(calls.indexOf("startWorkflow"))).not.toContain("deleteWorkflow");
   });
 
+  test("reports a canceled run as canceled, with the steps that committed before it", async () => {
+    const { client } = createStepsClient({
+      run: {
+        statuses: [WorkflowExecution_Status.CANCELED],
+        jobs: [
+          { status: WorkflowJobExecution_Status.CANCELED },
+          runnerJob(0, WorkflowJobExecution_Status.SUCCESS),
+          runnerJob(1, WorkflowJobExecution_Status.CANCELED),
+        ],
+      },
+    });
+
+    const result = await run(client);
+
+    expect(result).toMatchObject({
+      success: false,
+      canceled: true,
+      completedSteps: ["backfillUser"],
+      failedSteps: ["backfillInvoice"],
+      error: "Migration workflow execution was canceled.",
+    });
+  });
+
   test("reports the failed step's error rather than another step's result", async () => {
     const { client } = createStepsClient({
       run: {
@@ -1002,11 +1025,22 @@ describe("executeMigrationStepsAsWorkflow", () => {
         );
       });
 
-      test("starts a new run that skips the requested steps even though the plan changed", async () => {
+      test.each([
+        {
+          reason: "even though the plan changed",
+          plan: ["backfillUser"],
+          status: WorkflowExecution_Status.FAILED,
+        },
+        {
+          reason: "after the earlier run was canceled",
+          plan: ORDER,
+          status: WorkflowExecution_Status.CANCELED,
+        },
+      ])("starts a new run that skips the requested steps $reason", async ({ plan, status }) => {
         const { raw, result } = runKeeping(
           {
-            existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(["backfillUser"]) },
-            listed: [succeededThenFailed(WorkflowExecution_Status.FAILED)],
+            existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(plan) },
+            listed: [succeededThenFailed(status)],
           },
           { skipSteps: ["backfillUser"] },
         );

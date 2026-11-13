@@ -734,6 +734,8 @@ export interface MigrationStepsWorkflowResult {
   stepsMayHaveCommitted: boolean;
   /** Whether the execution was observed in a final state, so no job of the run can still be writing. */
   runEnded?: boolean;
+  /** Whether the run was canceled, so the next deploy runs every step again. */
+  canceled?: boolean;
 }
 
 interface StepOutcome {
@@ -1145,11 +1147,15 @@ async function summarizeSteps(
     runEnded: true,
   };
   if (execution.status === WorkflowExecution_Status.SUCCESS) return { success: true, ...base };
-  const error =
-    execution.status === WorkflowExecution_Status.CANCELED
-      ? "Migration workflow execution was canceled."
-      : extractFailureMessage(jobOutcomes);
-  return { success: false, error, ...base };
+  if (execution.status === WorkflowExecution_Status.CANCELED) {
+    return {
+      success: false,
+      error: "Migration workflow execution was canceled.",
+      canceled: true,
+      ...base,
+    };
+  }
+  return { success: false, error: extractFailureMessage(jobOutcomes), ...base };
 }
 
 async function waitForSteps(
