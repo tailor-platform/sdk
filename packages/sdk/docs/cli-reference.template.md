@@ -496,7 +496,8 @@ the plugin does not need to re-implement authentication or re-resolve the active
 | `TAILOR_BIN`                       | Path to the `tailor` executable, for calling back into the CLI           |
 
 The token, workspace ID, and user are best-effort: whatever the current context can resolve is injected,
-and auth-free plugins still run when you are not logged in. A long-running plugin (or one started on its
+and auth-free plugins still run when you are not logged in. The user is omitted when the token comes from
+`TAILOR_PLATFORM_TOKEN`, since that token does not belong to a logged-in user. A long-running plugin (or one started on its
 own) can obtain a fresh token at any time with `tailor auth token`, which prints a valid access token to
 stdout, refreshing it first if it expires within five minutes.
 
