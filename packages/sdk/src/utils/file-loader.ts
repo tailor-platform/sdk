@@ -23,8 +23,8 @@ const warnedFallbacks = new WeakMap<(message: string) => void, Set<string>>();
  * A `files` entry starting with `!` excludes the files it matches; for each file, the last
  * `files` entry that matches it decides. Each file is returned once.
  * Unless ignores is specified, test files (*.test.ts, *.spec.ts) are excluded as if `!`
- * entries for them followed the last `files` entry that does not end in `.test.ts` or
- * `.spec.ts`, so entries ending in those after it include test files.
+ * entries for them followed the last `files` entry that neither starts with `!` nor ends in
+ * `.test.ts` or `.spec.ts`, so entries ending in those after it include test files.
  * @param config - Configuration with files patterns and optional ignores patterns
  * @param baseDir - Directory relative patterns are resolved against
  * @param warn - Reports glob errors and compatibility warnings
@@ -139,7 +139,7 @@ interface FilePatternRule {
   pattern: string;
   /** Whether the entry starts with `!` and excludes the files it matches. */
   negated: boolean;
-  /** The entry without its `!`, resolved against baseDir. */
+  /** The entry without its `!`, resolved against baseDir; unanchored for the default test-file exclusions. */
   glob: string;
 }
 

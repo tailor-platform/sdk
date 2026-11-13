@@ -24,22 +24,30 @@ const DEFAULT_NEGATIONS = TEST_FILE_SUFFIXES.map((suffix) => `!**/*${suffix}`);
 
 type Analysis = { edits: Edit[]; findings: ManualMigration[] };
 
-function isNegation(pattern: string | null): boolean {
-  return pattern?.startsWith("!") ?? false;
+function isStringLiteral(element: SgNode): boolean {
+  return element.kind() === "string" || element.kind() === "template_string";
 }
 
-/** Whether `element` is a string or template literal ending in a test-file suffix. */
+function isNegation(element: SgNode): boolean {
+  return isStringLiteral(element) && element.text()[1] === "!";
+}
+
 function isTestFilePattern(element: SgNode): boolean {
-  if (element.kind() !== "string" && element.kind() !== "template_string") return false;
   const withoutClosingQuote = element.text().slice(0, -1);
-  return TEST_FILE_SUFFIXES.some((suffix) => withoutClosingQuote.endsWith(suffix));
+  return (
+    isStringLiteral(element) &&
+    TEST_FILE_SUFFIXES.some((suffix) => withoutClosingQuote.endsWith(suffix))
+  );
 }
 
-/** The `!` patterns that directly follow `patterns[index]`. */
-function negationsAfter(patterns: (string | null)[], index: number): Set<string | null> {
-  const following = patterns.slice(index + 1);
-  const end = following.findIndex((pattern) => !isNegation(pattern));
-  return new Set(following.slice(0, end === -1 ? undefined : end));
+/** The `patterns` of the `!` elements that directly follow `elements[index]`. */
+function negationsAfter(
+  elements: SgNode[],
+  patterns: (string | null)[],
+  index: number,
+): Set<string | null> {
+  const end = elements.findIndex((element, i) => i > index && !isNegation(element));
+  return new Set(patterns.slice(index + 1, end === -1 ? undefined : end));
 }
 
 /** Whether a `files` entry can match files outside the config's own directory. */
@@ -93,15 +101,14 @@ function appendElements(source: string, array: SgNode, texts: string[]): Edit[] 
   ];
 }
 
-/** Edits that insert `texts` as elements right after `elements[index]`. */
+/** Edits that insert `texts` as elements right after the element at `index` of `array`. */
 function insertElementsAfter(
   source: string,
   array: SgNode,
-  elements: SgNode[],
   index: number,
   texts: string[],
 ): Edit[] {
-  const next = elements[index + 1];
+  const next = arrayElements(array)[index + 1];
   if (!next) return appendElements(source, array, texts);
   const nextIndent = ownLineIndent(source, next);
   if (nextIndent === null) {
@@ -151,7 +158,7 @@ function analyzeService(source: string, service: SgNode, label: string): Analysi
 
   const elements = arrayElements(files);
   const patterns = elements.map((element) => sourceStringContent(element, source));
-  const lastPositive = patterns.findLastIndex((pattern) => !isNegation(pattern));
+  const lastPositive = elements.findLastIndex((element) => !isNegation(element));
   if (lastPositive === -1) {
     return ignoresEntry
       ? { edits: [entryRemoval(source, entries, ignoresEntry)], findings: [] }
@@ -159,17 +166,17 @@ function analyzeService(source: string, service: SgNode, label: string): Analysi
   }
   if (!ignoresEntry) {
     const lastNonTestPositive = elements.findLastIndex(
-      (element, index) => !isNegation(patterns[index]) && !isTestFilePattern(element),
+      (element) => !isNegation(element) && !isTestFilePattern(element),
     );
     if (lastNonTestPositive === -1) return { edits: [], findings: [] };
-    const existing = negationsAfter(patterns, lastNonTestPositive);
+    const existing = negationsAfter(elements, patterns, lastNonTestPositive);
     const quote = quoteOf(elements);
     const missing = DEFAULT_NEGATIONS.filter((pattern) => !existing.has(pattern)).map(
       (pattern) => `${quote}${pattern}${quote}`,
     );
     const findings = patterns
       .slice(0, lastNonTestPositive + 1)
-      .some((pattern) => !isNegation(pattern) && mayEscapeConfigDir(pattern))
+      .some((pattern, index) => !isNegation(elements[index]) && mayEscapeConfigDir(pattern))
       ? [
           {
             reason: `${label}.files can match files outside this config's directory, where the explicit test-file exclusion does not apply`,
@@ -179,9 +186,7 @@ function analyzeService(source: string, service: SgNode, label: string): Analysi
       : [];
     return {
       edits:
-        missing.length > 0
-          ? insertElementsAfter(source, files, elements, lastNonTestPositive, missing)
-          : [],
+        missing.length > 0 ? insertElementsAfter(source, files, lastNonTestPositive, missing) : [],
       findings,
     };
   }

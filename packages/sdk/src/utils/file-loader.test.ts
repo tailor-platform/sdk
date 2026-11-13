@@ -94,10 +94,17 @@ describe("loadFilesWithIgnores", () => {
     (suffix) => {
       const warnSpy = vi.fn();
       const baseDir = makeDirWithFile("file-loader-test-pattern-", "src/a.ts");
-      writeFiles(baseDir, ["src/a.test.ts", "src/a.spec.ts", `src/skip${suffix}`]);
+      writeFiles(baseDir, ["src/a.test.ts", "src/a.spec.ts", `src/skip${suffix}`, "src/legacy.ts"]);
 
       const files = loadFilesWithIgnores(
-        { files: ["./src/**/*.ts", `./src/**/*${suffix}`, `!./src/skip${suffix}`] },
+        {
+          files: [
+            "./src/**/*.ts",
+            `./src/**/*${suffix}`,
+            `!./src/skip${suffix}`,
+            "!./src/legacy.ts",
+          ],
+        },
         baseDir,
         warnSpy,
       );

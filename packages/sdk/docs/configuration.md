@@ -185,13 +185,13 @@ files: ["executors/**/*.ts", "!executors/internal/**", "executors/internal/keep.
 
 To exclude a directory, match the files in it (`!executors/internal/**`); `!executors/internal` excludes nothing.
 
-Test files (`**/*.test.ts` and `**/*.spec.ts`) are excluded by default, as if `"!**/*.test.ts"` and `"!**/*.spec.ts"` followed the last pattern that does not end in `.test.ts` or `.spec.ts`. To include test files, add patterns ending in `.test.ts` or `.spec.ts` after the other patterns:
+Test files (`**/*.test.ts` and `**/*.spec.ts`) are excluded by default, in any directory, as if `"!**/*.test.ts"` and `"!**/*.spec.ts"` followed the last pattern that neither starts with `!` nor ends in `.test.ts` or `.spec.ts`. To include test files, add patterns ending in `.test.ts` or `.spec.ts` after the other patterns:
 
 ```typescript
 files: ["executors/**/*.ts", "executors/**/*.test.ts"],
 ```
 
-A test-file pattern placed before another pattern includes nothing, because the default exclusion follows that other pattern.
+A test-file pattern placed before another pattern that does not start with `!` includes nothing, because the default exclusion follows that other pattern. When every pattern starts with `!` or ends in `.test.ts` or `.spec.ts`, nothing is excluded by default.
 
 **ignores** (deprecated): Glob patterns to exclude files. Optional. Write `!` patterns in `files` instead; `ignores` is removed in v3, and `tailor upgrade` moves its patterns into `files`. Specifying `ignores` replaces the default test-file exclusion, so `ignores: []` includes test files. `ignores` applies after `files`, so no `files` pattern includes the files it excludes. In v3, test files are no longer excluded by default; `tailor upgrade` writes `"!**/*.test.ts"` and `"!**/*.spec.ts"` into `files` where the default exclusion applied them.
 
