@@ -13,7 +13,7 @@
   "env": {
     "builtin": true
   },
-  "ignorePatterns": [".tailor/", "tailor.d.ts"],
+  "ignorePatterns": [".tailor/"],
   "rules": {
     "tailor-sdk/no-api-prefix-in-path-pattern": "warn",
     "tailor-sdk/no-direct-exec-job-function": "warn",
