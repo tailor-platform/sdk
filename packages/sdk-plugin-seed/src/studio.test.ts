@@ -36,6 +36,7 @@ let dataDir: string;
 let cogs: string;
 let startStudioServer: typeof lines.startStudioServer;
 let closeStudio: ReturnType<typeof vi.fn<() => Promise<void>>>;
+let exit: ReturnType<typeof vi.spyOn>;
 
 function writeRows(file: string, rows: object[]): void {
   writeFileSync(file, rows.map((row) => `${JSON.stringify(row)}\n`).join(""));
@@ -43,6 +44,7 @@ function writeRows(file: string, rows: object[]): void {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
   vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
   distPath = mkdtempSync(path.join(tmpdir(), "seed-studio-command-"));
   dataDir = path.join(distPath, "data");
@@ -79,6 +81,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  exit.mockRestore();
   vi.unstubAllEnvs();
   rmSync(distPath, { recursive: true, force: true });
 });
@@ -131,27 +134,19 @@ describe("seedStudioCommand", () => {
     },
   );
 
-  test("keeps a dataset's own .schema.mts files instead of taking the schemas above it", async () => {
-    writeFileSync(path.join(dataDir, "Item.schema.ts"), "export const schema = {};\n");
-    writeFileSync(path.join(cogs, "Item.schema.mts"), "export const schema = {};\n");
+  test.each([".schema.ts", ".schema.mts"])(
+    "keeps a dataset's own %s files instead of taking the schemas above it",
+    async (extension) => {
+      writeFileSync(path.join(dataDir, "Item.schema.ts"), "export const schema = {};\n");
+      writeFileSync(path.join(cogs, `Item${extension}`), "export const schema = {};\n");
 
-    await runStudio([cogs]);
+      await runStudio([cogs]);
 
-    expect(startStudioServer).toHaveBeenCalledWith(
-      expect.not.objectContaining({ schemaDir: expect.anything() }),
-    );
-  });
-
-  test("keeps the schema files next to the given directory when it has its own", async () => {
-    writeFileSync(path.join(dataDir, "Item.schema.ts"), "export const schema = {};\n");
-    writeFileSync(path.join(cogs, "Item.schema.ts"), "export const schema = {};\n");
-
-    await runStudio([cogs]);
-
-    expect(startStudioServer).toHaveBeenCalledWith(
-      expect.not.objectContaining({ schemaDir: expect.anything() }),
-    );
-  });
+      expect(startStudioServer).toHaveBeenCalledWith(
+        expect.not.objectContaining({ schemaDir: expect.anything() }),
+      );
+    },
+  );
 
   test("opens the selected datasets together with the base seed data, sharing its schema files", async () => {
     const result = await runStudio(["--dataset", "cogs"]);
@@ -204,6 +199,13 @@ describe("seedStudioCommand", () => {
     process.emit("SIGTERM");
     await running;
     expect(closeStudio).toHaveBeenCalledTimes(1);
+  });
+
+  test("exits with 0 once the studio is closed on a stop signal", async () => {
+    await runStudio([]);
+
+    expect(closeStudio).toHaveBeenCalledWith();
+    expect(exit).toHaveBeenCalledWith(0);
   });
 
   test("leaves no signal listeners behind once stopped", async () => {

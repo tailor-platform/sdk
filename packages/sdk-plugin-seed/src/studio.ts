@@ -32,8 +32,8 @@ export const seedStudioCommand = defineAppCommand({
   description: "Browse and edit JSONL seed data in the browser.",
   notes:
     "Starts a local web UI that lists the seed tables and edits them as a grid or a row form. " +
-    "Changes stay pending until saved, and a value the table's schema rejects is not written, so " +
-    "the saved files pass `tailor seed validate`. A save writes only the primary key the schema " +
+    "Changes stay pending until saved, and a value the table's schema rejects is not written. " +
+    "A save writes only the primary key the schema " +
     "generates, leaving values such as createdAt to be filled on create; --write-filled-values all " +
     "writes every filled value. " +
     "With --dataset, the rows of each dataset are shown on top of the base seed data and edits go " +
@@ -53,7 +53,6 @@ export const seedStudioCommand = defineAppCommand({
     "write-filled-values": arg(z.enum(["all", "primaryKey"]).default("primaryKey"), {
       description:
         "Values the schema fills in that a save writes: all of them, or only a generated primary key",
-      completion: { type: "none" },
     }),
     path: arg(z.string().optional(), {
       positional: true,
@@ -127,9 +126,10 @@ export const seedStudioCommand = defineAppCommand({
           process.off("SIGINT", stop);
           process.off("SIGTERM", stop);
           resolve();
+          void closeRunningStudio?.().finally(() => process.exit(0));
         };
-        process.once("SIGINT", stop);
-        process.once("SIGTERM", stop);
+        process.prependListener("SIGINT", stop);
+        process.prependListener("SIGTERM", stop);
       });
     } finally {
       await closeRunningStudio();
