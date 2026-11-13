@@ -79,6 +79,26 @@ jobs:
           echo "add 'skip-changeset' label to this PR."
           exit 1
 
+      - name: Fail if a major changeset is outside a v<N> branch
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          version_branch='^v[0-9]+([./-].*)?$'
+          if [[ "$BASE_REF" =~ $version_branch || "$HEAD_REF" =~ $version_branch ]]; then
+            exit 0
+          fi
+          majors=$(grep -lE '^"[^"]+": *major *$' .changeset/*.md || true)
+          if [ -n "$majors" ]; then
+            echo "::error::A major changeset is only allowed on a v<N> branch (for example v3) or a branch derived from it."
+            echo ""
+            echo "Major changesets found (base: $BASE_REF, head: $HEAD_REF):"
+            echo "$majors"
+            echo ""
+            echo "Until the next major release is planned, use minor and start the description with '**Breaking change**:'."
+            exit 1
+          fi
+
       - name: Install Deps
         if: steps.filter.outputs.changeset == 'true'
         uses: $/.github/actions/install-deps
