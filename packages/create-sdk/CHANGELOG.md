@@ -1,5 +1,19 @@
 # @tailor-platform/create-sdk
 
+## 2.41.0
+
+### Minor Changes
+
+- [#3016](https://github.com/tailor-platform/sdk/pull/3016) [`cd01a32`](https://github.com/tailor-platform/sdk/commit/cd01a32754ea877bc1cf979e4450fdd6dd1a4417) Thanks [@dqn](https://github.com/dqn)! - Add the `no-unused-resolver-input` lint rule, which reports a resolver `input` field that `body` never reads, since a caller may expect it to take effect. A field that `permission` compares with the caller or that declares a `validate` counts as used, and a resolver whose `body` passes its input on in a way that hides which fields it reads is not reported. Silence a field kept on purpose with `eslint-disable-next-line`. Enabled in the ESLint `recommended` config and in newly scaffolded projects; existing Oxlint projects add `"tailor-sdk/no-unused-resolver-input": "warn"` to `.oxlintrc.json`.
+
+- [#3015](https://github.com/tailor-platform/sdk/pull/3015) [`0d690dc`](https://github.com/tailor-platform/sdk/commit/0d690dcef12d53582f01a550ffa9739f8f21b072) Thanks [@dqn](https://github.com/dqn)! - Add the `no-unbound-caller-id-input` lint rule, which reports a resolver mutation's `t.uuid()` or `db.uuid()` input named like the caller's ID, such as `approverId`, `requesterId`, or `createdBy`, unless every `permit: true` policy of its `permission` compares the input with the caller; otherwise a caller can act as another user by sending that user's ID. Enabled in newly scaffolded projects and in the ESLint `recommended` config; add `"tailor-sdk/no-unbound-caller-id-input": "warn"` to the `rules` of an existing `.oxlintrc.json` to enable it there.
+
+### Patch Changes
+
+- [#3042](https://github.com/tailor-platform/sdk/pull/3042) [`52bd46a`](https://github.com/tailor-platform/sdk/commit/52bd46ab491069a2e03f1f678f92ae66955dc8f1) Thanks [@dqn](https://github.com/dqn)! - The platform now rejects creating or updating an IdP whose `allowedEmailDomains` is empty or omitted unless `useNonEmailIdentifier` is `true`, so `tailor deploy` fails on such an IdP. That includes an IdP deployed earlier, on the first deploy after upgrading the SDK, which updates every IdP. Add `allowedEmailDomains: ["*"]` to the IdP's `userAuthPolicy` (adding `userAuthPolicy` when the IdP has none) to keep allowing every email domain, or list the domains you accept. Newly scaffolded `executor`, `generators`, and `static-web-site` projects now set `["*"]`, the deploy warning about an empty list now says the platform rejects it, and the IdP docs describe the requirement.
+
+- [#3057](https://github.com/tailor-platform/sdk/pull/3057) [`5fa2f69`](https://github.com/tailor-platform/sdk/commit/5fa2f6903681a87f2c1aab791211bd85b3e1348a) Thanks [@toiroakr](https://github.com/toiroakr)! - The `workflow` template's e2e `globalSetup` now deletes the workspace it created when the deploy or a later setup step fails, instead of relying on the test runner calling `teardown` after a failed setup. A failing workspace delete is logged as a warning and no longer replaces the original error.
+
 ## 2.40.0
 
 ### Minor Changes
