@@ -66,7 +66,7 @@ const SUBGRAPH_SERVICES = [
     deletesOf: (results: PlanResults) => results.pipeline.changeSet.service.deletes,
   },
   {
-    label: "IdP",
+    label: "IdP service",
     resourceType: "idp.service",
     configType: "idp",
     serviceType: Subgraph_ServiceType.IDP,

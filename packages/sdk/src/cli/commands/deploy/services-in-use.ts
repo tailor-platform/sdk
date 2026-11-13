@@ -29,7 +29,7 @@ const CHECKED_SERVICES = {
     deletesOf: (plan) => plan.pipeline.changeSet.service.deletes,
   },
   "idp.service": {
-    label: "IdP",
+    label: "IdP service",
     deletesOf: (plan) => plan.idp.changeSet.service.deletes,
   },
 } satisfies Partial<Record<ManagedResourceType, CheckedService>>;
