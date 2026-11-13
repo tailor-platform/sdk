@@ -115,3 +115,88 @@ export type Resolver = {
     | undefined;
 };
 export type ResolverInput = Resolver;
+
+export type PluginResolver = {
+  /** GraphQL operation type (query or mutation) */
+  operation: QueryType;
+  /** Resolver name */
+  name: string;
+  /** Resolver description */
+  description?: string | undefined;
+  /** Input field definitions */
+  input?: {
+    [x: string]: TailorField;
+  };
+  /** Output field definition */
+  output: TailorField;
+  /** Enable publishing events from this resolver */
+  publishEvents?: boolean | undefined;
+  /** Machine user to execute this resolver as */
+  invoker?:
+    | string
+    | {
+        /** Auth namespace */
+        namespace: string;
+        /** Machine user name for authentication */
+        machineUserName: string;
+      }
+    | undefined;
+  /** Access requirement for this resolver, evaluated against the original caller (unaffected by `invoker`) and the input before `body` runs. "allowAnonymous" documents that anonymous callers are allowed. Omitted (default): unchanged, anonymous callers can reach the resolver */
+  permission?:
+    | "allowAnonymous"
+    | readonly {
+        conditions:
+          | readonly (readonly [
+              (
+                | string
+                | boolean
+                | {
+                    user: string;
+                  }
+                | {
+                    input: string;
+                  }
+              ),
+              "!=" | "=",
+              (
+                | string
+                | boolean
+                | {
+                    user: string;
+                  }
+                | {
+                    input: string;
+                  }
+              ),
+            ])[]
+          | readonly [
+              (
+                | string
+                | boolean
+                | {
+                    user: string;
+                  }
+                | {
+                    input: string;
+                  }
+              ),
+              "!=" | "=",
+              (
+                | string
+                | boolean
+                | {
+                    user: string;
+                  }
+                | {
+                    input: string;
+                  }
+              ),
+            ];
+        permit: boolean;
+        /** Reason recorded for this policy, used in the access-denied error message */
+        description?: string | undefined;
+      }[]
+    | undefined;
+  body: string;
+};
+export type PluginResolverInput = PluginResolver;
