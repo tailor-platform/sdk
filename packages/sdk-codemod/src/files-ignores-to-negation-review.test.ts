@@ -31,6 +31,48 @@ describe("ignores -> files negation migration review", () => {
     expect(transform(transformed!, "tailor.config.ts")).toBeNull();
   });
 
+  test("leaves the result unchanged when run again on a config with a test-file pattern", () => {
+    const { transformed } = review(
+      'export default defineConfig({\n  workflow: { files: ["w/*.ts", "w/*.test.ts"] },\n});\n',
+    );
+
+    expect(transformed).toContain(
+      'files: ["w/*.ts", "!**/*.test.ts", "!**/*.spec.ts", "w/*.test.ts"]',
+    );
+    expect(transform(transformed!, "tailor.config.ts")).toBeNull();
+  });
+
+  test("treats a template literal ending in .test.ts as a test-file pattern", () => {
+    const { transformed } = review(
+      "export default defineConfig({\n  workflow: { files: [`w/*.ts`, `${dir}/*.test.ts`] },\n});\n",
+    );
+
+    expect(transformed).toContain(
+      'files: [`w/*.ts`, "!**/*.test.ts", "!**/*.spec.ts", `${dir}/*.test.ts`]',
+    );
+  });
+
+  test("treats a template literal starting with ! as a negation", () => {
+    const { transformed } = review(
+      'export default defineConfig({\n  workflow: { files: ["w/*.ts", "w/*.test.ts", `!${dir}/x.ts`] },\n});\n',
+    );
+
+    expect(transformed).toContain(
+      'files: ["w/*.ts", "!**/*.test.ts", "!**/*.spec.ts", "w/*.test.ts", `!${dir}/x.ts`]',
+    );
+  });
+
+  test("does not flag a test-file pattern outside the config directory, which nothing excludes", () => {
+    const { transformed, findings } = review(
+      'export default defineConfig({\n  executor: { files: ["src/**/*.ts", "../shared/**/*.test.ts"] },\n});\n',
+    );
+
+    expect(transformed).toContain(
+      'files: ["src/**/*.ts", "!**/*.test.ts", "!**/*.spec.ts", "../shared/**/*.test.ts"]',
+    );
+    expect(findings).toEqual([]);
+  });
+
   test.each([
     [
       "a config passed as a variable",
