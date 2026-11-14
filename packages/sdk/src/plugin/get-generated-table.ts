@@ -245,8 +245,11 @@ async function resolveNamespaceForNamespacePlugin(
 // Process caching
 // ========================================
 
-// Cache: plugin -> cacheKey -> TablePluginOutput
-const processCache = new WeakMap<Plugin, Map<string, TablePluginOutput>>();
+// Cache: plugin -> source table instance -> cacheKey -> TablePluginOutput
+const processCache = new WeakMap<
+  Plugin,
+  WeakMap<TailorAnyDBType, Map<string, TablePluginOutput>>
+>();
 
 // Cache for namespace plugins: plugin -> cacheKey -> PluginOutput
 const namespaceProcessCache = new WeakMap<Plugin, Map<string, PluginOutput>>();
@@ -348,10 +351,15 @@ async function getGeneratedTableForTableAttachedPlugin(
   }
 
   // Check cache first
-  let pluginCache = processCache.get(plugin);
+  let tablesCache = processCache.get(plugin);
+  if (!tablesCache) {
+    tablesCache = new WeakMap();
+    processCache.set(plugin, tablesCache);
+  }
+  let pluginCache = tablesCache.get(sourceTable);
   if (!pluginCache) {
     pluginCache = new Map();
-    processCache.set(plugin, pluginCache);
+    tablesCache.set(sourceTable, pluginCache);
   }
 
   const cacheKey = getCacheKey(`${sourceTable.name}:ns=${namespace}`, pluginConfig);

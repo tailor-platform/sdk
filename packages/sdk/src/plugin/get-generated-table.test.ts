@@ -467,6 +467,64 @@ export default {
       expect(second).toBe(first);
       expect(globalThis.__testProcessTableCalls).toEqual(["Order:30:main"]);
     });
+
+    test("generates the table again from a source table imported again after its file changed", async () => {
+      const tablePath = path.join(path.dirname(configPath), "order.mjs");
+      const writeOrder = (retentionDays: number) =>
+        fs.writeFileSync(
+          tablePath,
+          `export const order = {
+  name: "Order",
+  fields: {},
+  plugins: [{ pluginId: "table-plugin", config: { retentionDays: ${retentionDays} } }],
+};
+`,
+        );
+      fs.writeFileSync(
+        configPath,
+        `export const plugins = [{
+  id: "table-plugin",
+  description: "test",
+  importPath: "@test/table-plugin",
+  onTableLoaded({ tableConfig }) {
+    return {
+      tables: {
+        archive: { name: "OrderArchive" + tableConfig.retentionDays, fields: {}, plugins: [] },
+      },
+    };
+  },
+}];
+export default {
+  db: {
+    main: { files: [${JSON.stringify(tablePath)}] },
+  },
+};
+`,
+      );
+      const importOrder = async (version: string) =>
+        (
+          (await import(`${pathToFileURL(tablePath).href}?linesDbV=${version}`)) as {
+            order: TailorAnyDBType;
+          }
+        ).order;
+
+      writeOrder(30);
+      const before = await getGeneratedTable(
+        configPath,
+        "table-plugin",
+        await importOrder("v1"),
+        "archive",
+      );
+      writeOrder(60);
+      const after = await getGeneratedTable(
+        configPath,
+        "table-plugin",
+        await importOrder("v2"),
+        "archive",
+      );
+
+      expect([before.name, after.name]).toEqual(["OrderArchive30", "OrderArchive60"]);
+    });
   });
 
   describe("plugin export selection", () => {
