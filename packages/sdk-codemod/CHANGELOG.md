@@ -1,5 +1,11 @@
 # @tailor-platform/sdk-codemod
 
+## 0.12.1
+
+### Patch Changes
+
+- [#3104](https://github.com/tailor-platform/sdk/pull/3104) [`34cef36`](https://github.com/tailor-platform/sdk/commit/34cef366b27c11b19882facfd50f635934f33cdb) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​clack/prompts to v1.9.0
+
 ## 0.12.0
 
 ### Minor Changes

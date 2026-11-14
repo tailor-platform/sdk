@@ -1,5 +1,11 @@
 # @tailor-platform/create-sdk
 
+## 2.42.0
+
+### Minor Changes
+
+- [#3102](https://github.com/tailor-platform/sdk/pull/3102) [`bfc6357`](https://github.com/tailor-platform/sdk/commit/bfc6357b6b7aef7e88629fadd5d42f2a569b8c8e) Thanks [@dqn](https://github.com/dqn)! - Add the `content-mapper` template. TypeScript derives its types from `tailor.config.ts` through the SDK's content mapper instead of `tailor.d.ts`. It pins `typescript@7.1.0-beta`, since the content mapper needs TypeScript 7.1.
+
 ## 2.41.0
 
 ### Minor Changes

@@ -1,5 +1,13 @@
 # @tailor-platform/sdk-plugin-seed
 
+## 0.9.1
+
+### Patch Changes
+
+- [#3104](https://github.com/tailor-platform/sdk/pull/3104) [`34cef36`](https://github.com/tailor-platform/sdk/commit/34cef366b27c11b19882facfd50f635934f33cdb) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​clack/prompts to v1.9.0
+- Updated dependencies [[`4a6b439`](https://github.com/tailor-platform/sdk/commit/4a6b439905505893b102dcb8a8a7225909cb293a), [`c0ebbab`](https://github.com/tailor-platform/sdk/commit/c0ebbabd259a05b03b813637ad629dffa0b9ed8a), [`16f1f21`](https://github.com/tailor-platform/sdk/commit/16f1f214b4aa273305c22a02235dbfd56d2cc350), [`ceadfd9`](https://github.com/tailor-platform/sdk/commit/ceadfd9ed7ac079e75308cd03e2b381b26f9d426), [`1f26ed6`](https://github.com/tailor-platform/sdk/commit/1f26ed64816ee39bc78ae641c807352b124d04f5), [`8a3a4a5`](https://github.com/tailor-platform/sdk/commit/8a3a4a550fd54451fbe47b1eda32b50468a59a79), [`c52ce10`](https://github.com/tailor-platform/sdk/commit/c52ce106416a21fc2eef5be02292fb17d84fa583), [`4703c73`](https://github.com/tailor-platform/sdk/commit/4703c7323eecea23458c21b18d154b51530bd016), [`34cef36`](https://github.com/tailor-platform/sdk/commit/34cef366b27c11b19882facfd50f635934f33cdb), [`c52ce10`](https://github.com/tailor-platform/sdk/commit/c52ce106416a21fc2eef5be02292fb17d84fa583), [`1100601`](https://github.com/tailor-platform/sdk/commit/11006013da378a986ec23ec9de24cb9b6e6db238), [`90da2db`](https://github.com/tailor-platform/sdk/commit/90da2db779903b6f1bc9dd5285a97c79c3feab1a)]:
+  - @tailor-platform/sdk@2.42.0
+
 ## 0.9.0
 
 ### Minor Changes
