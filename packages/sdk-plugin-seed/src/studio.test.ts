@@ -166,13 +166,11 @@ describe("seedStudioCommand", () => {
     );
   });
 
-  test("passes --port and --write-filled-values through", async () => {
-    const result = await runStudio(["--port", "0", "--write-filled-values", "all"]);
+  test("passes --port through", async () => {
+    const result = await runStudio(["--port", "0"]);
 
     expect(result.exitCode).toBe(0);
-    expect(startStudioServer).toHaveBeenCalledWith(
-      expect.objectContaining({ port: 0, writeFilledValues: "all" }),
-    );
+    expect(startStudioServer).toHaveBeenCalledWith(expect.objectContaining({ port: 0 }));
   });
 
   test("tells where the studio runs and stops it when the command is stopped", async () => {

@@ -34,8 +34,7 @@ export const seedStudioCommand = defineAppCommand({
     "Starts a local web UI that lists the seed tables and edits them as a grid or a row form. " +
     "Changes stay pending until saved, and a value the table's schema rejects is not written. " +
     "A save writes only the primary key the schema " +
-    "generates, leaving values such as createdAt to be filled on create; --write-filled-values all " +
-    "writes every filled value. " +
+    "generates, leaving values such as createdAt to be filled on create. " +
     "With --dataset, the rows of each dataset are shown on top of the base seed data and edits go " +
     "back to the file each row came from. The studio runs until it is stopped with Ctrl+C.",
   args: z.strictObject({
@@ -49,10 +48,6 @@ export const seedStudioCommand = defineAppCommand({
     }),
     open: arg(z.boolean().default(false), {
       description: "Open the studio in the default browser",
-    }),
-    "write-filled-values": arg(z.enum(["all", "primaryKey"]).default("primaryKey"), {
-      description:
-        "Values the schema fills in that a save writes: all of them, or only a generated primary key",
     }),
     path: arg(z.string().optional(), {
       positional: true,
@@ -94,7 +89,7 @@ export const seedStudioCommand = defineAppCommand({
       dataDir: dataDirs.length === 1 ? dataDirs[0] : dataDirs,
       ...(schemaDir ? { schemaDir } : {}),
       port: args.port,
-      writeFilledValues: args["write-filled-values"],
+      writeFilledValues: "primaryKey",
     }).catch((error: unknown) => {
       if ((error as NodeJS.ErrnoException).code !== "EADDRINUSE") throw error;
       throw new Error(
