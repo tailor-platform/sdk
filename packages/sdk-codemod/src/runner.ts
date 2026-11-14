@@ -18,8 +18,9 @@ import type {
 import type { SgNode } from "@ast-grep/napi";
 
 /**
- * A transform function that receives source text and file path,
- * and returns modified source or null if no changes are needed.
+ * A transform function that receives source text, its absolute file path, and
+ * the absolute project directory being transformed, and returns modified
+ * source or null if no changes are needed.
  *
  * For AST-based transforms, parse with ast-grep:
  * ```typescript
@@ -42,6 +43,7 @@ import type { SgNode } from "@ast-grep/napi";
 export type TransformFn = (
   source: string,
   filePath: string,
+  targetPath: string,
 ) => Promise<string | null> | string | null;
 
 /** Result of running codemods on a project. */
@@ -534,6 +536,7 @@ export async function runCodemods(
     });
   }
 
+  const absoluteTargetPath = path.resolve(targetPath);
   const filesModified: string[] = [];
   const warnings: string[] = [];
   const appliedCodemodIds = new Set<string>();
@@ -560,7 +563,7 @@ export async function runCodemods(
     const reviewTargets: Array<{ lt: LoadedTransform; snapshot: string }> = [];
     for (const lt of matchedTransforms) {
       if (lt.transform) {
-        const result = await lt.transform(current, absolute);
+        const result = await lt.transform(current, absolute, absoluteTargetPath);
         if (result != null) {
           current = result;
           appliedCodemodIds.add(lt.id);
@@ -613,7 +616,7 @@ export async function runCodemods(
         return files;
       };
       if (lt.reviewFindings) {
-        let findings = await lt.reviewFindings(snapshot, absolute, relative);
+        let findings = await lt.reviewFindings(snapshot, absolute, relative, absoluteTargetPath);
         if (snapshot !== current && findings.length > 0) {
           const remap = lineRemapper(snapshot, current);
           findings = findings.map((finding) => ({ ...finding, line: remap(finding.line) }));

@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
+import { expectRemovalInFutureMajor } from "#/cli/shared/test-helpers/removal-version";
 import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { resolveTSConfigWithFallback } from "./resolve-tsconfig";
 
@@ -51,7 +52,7 @@ describe("resolveTSConfigWithFallback", () => {
     }
   });
 
-  test("warns when falling back to process.cwd()", async () => {
+  test("warns when falling back to process.cwd(), naming a future removal major", async () => {
     using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const baseDir = makeIsolatedBaseDir("resolve-tsconfig-warn");
     tmpDirs.push(baseDir);
@@ -61,7 +62,8 @@ describe("resolveTSConfigWithFallback", () => {
     process.chdir(cwdDir);
     try {
       await resolveTSConfigWithFallback(baseDir);
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(baseDir));
+      expect(warnSpy).toHaveBeenCalledExactlyOnceWith(expect.stringContaining(baseDir));
+      await expectRemovalInFutureMajor(warnSpy.mock.calls[0]?.[0] ?? "");
     } finally {
       process.chdir(originalCwd);
     }

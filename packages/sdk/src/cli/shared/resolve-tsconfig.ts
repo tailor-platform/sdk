@@ -20,15 +20,14 @@ export async function resolveTSConfigWithFallback(baseDir: string): Promise<stri
   }
 
   // v1 compatibility fallback: pre-existing configs may rely on a tsconfig
-  // discoverable from the invocation cwd rather than baseDir. Remove this
-  // fallback in v2, once such configs are expected to have migrated.
+  // discoverable from the invocation cwd rather than baseDir.
   const fallback = await tryResolve(process.cwd());
   if (fallback && !warnedBaseDirs.has(baseDir)) {
     warnedBaseDirs.add(baseDir);
     logger.warn(
       `No tsconfig found from "${baseDir}"; falling back to the tsconfig resolved from ` +
-        `process.cwd(). Move (or extend) a tsconfig into this directory before ` +
-        `v2, when this fallback will be removed.`,
+        `process.cwd(). Move (or extend) a tsconfig into this directory; this fallback ` +
+        `will be removed in v3.`,
     );
   }
   return fallback;

@@ -1,14 +1,20 @@
 import {
   callArgument,
+  entryKey,
   findImportStatements,
   importBindings,
   localDeclarationNames,
+  objectEntries,
+  pairValue,
   parseRoot,
 } from "./ast-grep-helpers";
-import type { SgNode } from "@ast-grep/napi";
+import type { Edit, SgNode } from "@ast-grep/napi";
 
 const SDK_MODULE = "@tailor-platform/sdk";
 const DEFINE_CONFIG = "defineConfig";
+/** Services keyed by namespace, each namespace holding its own `files`. */
+const NAMESPACED_SERVICES: ReadonlySet<string> = new Set(["db", "resolver"]);
+const SINGLE_SERVICES: ReadonlySet<string> = new Set(["executor", "workflow", "httpAdapter"]);
 
 /** Local names through which a file reaches the SDK's `defineConfig`. */
 type DefineConfigBindings = {
@@ -23,6 +29,12 @@ type DefineConfigObject = { config: SgNode };
 
 /** Code a transform leaves for a manual migration, with why. */
 export type ManualMigration = { reason: string; node: SgNode };
+
+/** A service config object literal that loads files, labelled like `executor` or `db.main`. */
+type ServiceConfig = { label: string; node: SgNode };
+
+/** The edits a transform makes to a file, and the code it leaves for a manual migration. */
+export type Analysis = { edits: Edit[]; findings: ManualMigration[] };
 
 /** The `defineConfig()` calls of a parsed file. */
 export type DefineConfigCalls = {
@@ -101,4 +113,83 @@ export function findDefineConfigCalls(source: string, filePath: string): DefineC
     calls.push({ config });
   }
   return { root, calls };
+}
+
+function objectValue(entry: SgNode): SgNode | null {
+  const value = entry.kind() === "pair" ? pairValue(entry) : null;
+  return value?.kind() === "object" ? value : null;
+}
+
+/**
+ * The service configs of a `defineConfig()` argument that load files through
+ * `files`: each `db` and `resolver` namespace, `executor`, `workflow`, and
+ * `httpAdapter`.
+ * @param config - The object literal passed to `defineConfig()`
+ * @returns Each service config in source order, or why one cannot be read from the source
+ */
+function serviceConfigs(config: SgNode): Array<ServiceConfig | ManualMigration> {
+  const services: Array<ServiceConfig | ManualMigration> = [];
+  const entries = objectEntries(config);
+  if (entries.some((entry) => entryKey(entry) === null)) {
+    services.push({
+      reason: "the config has a spread or computed key that may hold service files",
+      node: config,
+    });
+  }
+  for (const entry of entries) {
+    const key = entryKey(entry);
+    if (key === null || (!NAMESPACED_SERVICES.has(key) && !SINGLE_SERVICES.has(key))) continue;
+    const value = objectValue(entry);
+    if (!value) {
+      services.push({ reason: `\`${key}\` is not an object literal`, node: entry });
+      continue;
+    }
+    if (SINGLE_SERVICES.has(key)) {
+      services.push({ label: key, node: value });
+      continue;
+    }
+    for (const namespaceEntry of objectEntries(value)) {
+      const namespace = entryKey(namespaceEntry);
+      const namespaceConfig = namespace === null ? null : objectValue(namespaceEntry);
+      if (namespace === null || !namespaceConfig) {
+        services.push({
+          reason: `a \`${key}\` namespace is not written as an object literal`,
+          node: namespaceEntry,
+        });
+        continue;
+      }
+      services.push({ label: `${key}.${namespace}`, node: namespaceConfig });
+    }
+  }
+  return services;
+}
+
+/**
+ * Analyze every service config of `calls` that loads files, keeping the calls
+ * and services that cannot be read from the source as findings.
+ * @param calls - The `defineConfig()` calls of a file
+ * @param analyze - Analysis of one service config, given its label and object literal
+ * @returns The edits and findings of all service configs, in source order
+ */
+export function analyzeServiceConfigs(
+  calls: DefineConfigCalls["calls"],
+  analyze: (label: string, service: SgNode) => Analysis,
+): Analysis {
+  const analysis: Analysis = { edits: [], findings: [] };
+  for (const call of calls) {
+    if ("reason" in call) {
+      analysis.findings.push(call);
+      continue;
+    }
+    for (const service of serviceConfigs(call.config)) {
+      if ("reason" in service) {
+        analysis.findings.push(service);
+        continue;
+      }
+      const result = analyze(service.label, service.node);
+      analysis.edits.push(...result.edits);
+      analysis.findings.push(...result.findings);
+    }
+  }
+  return analysis;
 }

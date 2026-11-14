@@ -215,6 +215,36 @@ describe("runCodemods", () => {
     },
   );
 
+  test("passes the absolute target directory to transforms and detectors", async () => {
+    const { tmpDir: dir } = await createTestProject("config.ts", "const target = null;\n");
+    tmpDir = dir;
+    const scriptPath = path.join(dir, "probe.mjs");
+    await fs.promises.writeFile(
+      scriptPath,
+      `export default function transform(source, filePath, targetPath) {
+        return source.replace("null", JSON.stringify(targetPath));
+      }
+      export function reviewFindings(source, filePath, relativePath, targetPath) {
+        return [{ file: relativePath, line: 1, message: targetPath, excerpt: "" }];
+      }`,
+      "utf-8",
+    );
+    const codemod = makeCodemod("test/target", scriptPath, ["**/*.ts"], undefined, {
+      prompt: "Review.",
+    });
+
+    const result = await runCodemods(
+      [{ codemod, scriptPath }],
+      path.relative(process.cwd(), dir),
+      false,
+    );
+
+    expect(await fs.promises.readFile(path.join(dir, "config.ts"), "utf-8")).toBe(
+      `const target = ${JSON.stringify(dir)};\n`,
+    );
+    expect(result.llmReviews[0]?.findings?.[0]?.message).toBe(dir);
+  });
+
   describe("chained transforms in dry-run", () => {
     // Transform A: renames "oldFunc" → "midFunc"
     const transformAPath = path.join(os.tmpdir(), "transform-a.ts");

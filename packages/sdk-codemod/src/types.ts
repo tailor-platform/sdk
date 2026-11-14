@@ -129,6 +129,7 @@ export type ReviewFindingsFn = (
   source: string,
   filePath: string,
   relativePath: string,
+  targetPath: string,
 ) => Promise<LlmReviewFinding[]> | LlmReviewFinding[];
 
 /** A batch of files an LLM should review for one codemod, with its prompt. */
