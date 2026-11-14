@@ -131,9 +131,21 @@ interface DbNamespaceConfig extends Partial<FileLoadConfig> {
   external?: boolean;
 }
 
+function isTableNamed(value: unknown, name: string): boolean {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "plugins" in value &&
+    "name" in value &&
+    value.name === name
+  );
+}
+
 /**
  * Resolve the namespace for a table-attached source table by checking config.db file patterns.
- * Uses ESM module cache identity: same file path yields same object references.
+ * Uses ESM module cache identity: same file path yields same object references. A table imported
+ * under a different URL (such as a version query) is another instance, so it is matched by name
+ * when exactly one namespace holds a table of that name.
  * @param config - App config with db namespace definitions
  * @param config.db - DB namespace definitions
  * @param configDir - Directory containing the config file
@@ -149,6 +161,7 @@ async function resolveNamespaceForTable(
     throw new Error(`No db configuration found in config`);
   }
 
+  const namespacesOfSameName = new Set<string>();
   for (const [namespace, nsConfig] of Object.entries(config.db)) {
     const dbConfig = nsConfig as DbNamespaceConfig;
     // Skip external namespaces (no files to resolve)
@@ -165,8 +178,16 @@ async function resolveNamespaceForTable(
         if (exported === sourceTable) {
           return namespace;
         }
+        if (isTableNamed(exported, sourceTable.name)) {
+          namespacesOfSameName.add(namespace);
+        }
       }
     }
+  }
+
+  const [onlyNamespace] = namespacesOfSameName;
+  if (namespacesOfSameName.size === 1 && onlyNamespace !== undefined) {
+    return onlyNamespace;
   }
 
   throw new Error(

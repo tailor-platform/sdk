@@ -119,6 +119,38 @@ export default {
     ]);
   });
 
+  test("finds the namespace of a table imported under a version query", async () => {
+    writeTable('{ "first": {} }');
+    writeConfig(extendingPlugin("first", "deletedAt", "db.datetime({ optional: true })"));
+    const { order } = (await import(`${pathToFileURL(tablePath).href}?linesDbV=abc123`)) as {
+      order: TailorAnyDBType;
+    };
+
+    const table = await getExtendedTable(configPath, order);
+
+    expect(Object.keys(table.fields)).toEqual(["id", "name", "deletedAt"]);
+  });
+
+  test("does not guess the namespace of a versioned import when two namespaces hold a table of that name", async () => {
+    writeTable('{ "first": {} }');
+    const otherPath = path.join(path.dirname(tablePath), "other-order.mjs");
+    fs.copyFileSync(tablePath, otherPath);
+    writeConfig(extendingPlugin("first", "deletedAt", "db.datetime({ optional: true })"));
+    fs.writeFileSync(
+      configPath,
+      fs
+        .readFileSync(configPath, "utf8")
+        .replace("  db: {", `  db: {\n    other: ${JSON.stringify({ files: [otherPath] })},`),
+    );
+    const { order } = (await import(`${pathToFileURL(tablePath).href}?linesDbV=abc123`)) as {
+      order: TailorAnyDBType;
+    };
+
+    await expect(getExtendedTable(configPath, order)).rejects.toThrow(
+      'Could not resolve namespace for table "Order"',
+    );
+  });
+
   test("returns the source table when no attached plugin adds fields", async () => {
     writeTable('{ "archiver": {} }');
     writeConfig(`{
