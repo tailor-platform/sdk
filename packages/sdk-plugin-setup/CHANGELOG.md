@@ -1,5 +1,19 @@
 # @tailor-platform/sdk-plugin-setup
 
+## 0.19.0
+
+### Minor Changes
+
+- [#3099](https://github.com/tailor-platform/sdk/pull/3099) [`4a6b439`](https://github.com/tailor-platform/sdk/commit/4a6b439905505893b102dcb8a8a7225909cb293a) Thanks [@dqn](https://github.com/dqn)! - Expose application base URL and Console URL maps in generated deploy workflows and preview comments. Regenerate existing workflows with tailor setup update; the legacy app-url output remains available.
+
+### Patch Changes
+
+- [#3105](https://github.com/tailor-platform/sdk/pull/3105) [`ceadfd9`](https://github.com/tailor-platform/sdk/commit/ceadfd9ed7ac079e75308cd03e2b381b26f9d426) Thanks [@dqn](https://github.com/dqn)! - The workflows `tailor setup ci` generates now use tailor-platform/actions v2.9.0. Branch pushes and manual runs save the SDK bundle cache, and pull request and tag runs restore the one saved on the base or default branch, so plan, deploy, and preview deployment jobs rebuild only the bundles whose sources changed. Each saved entry counts toward the repository's Actions cache limit. A failed plan job's log now also shows the CLI's error. On GitHub Enterprise Server, make the pinned `actions/cache` version available on the server before your workflows move to v2.9.0, whether through `tailor setup update` or Renovate, and make sure the server's Actions cache service is enabled for the cache to take effect.
+
+- [#3104](https://github.com/tailor-platform/sdk/pull/3104) [`34cef36`](https://github.com/tailor-platform/sdk/commit/34cef366b27c11b19882facfd50f635934f33cdb) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​clack/prompts to v1.9.0
+- Updated dependencies [[`4a6b439`](https://github.com/tailor-platform/sdk/commit/4a6b439905505893b102dcb8a8a7225909cb293a), [`c0ebbab`](https://github.com/tailor-platform/sdk/commit/c0ebbabd259a05b03b813637ad629dffa0b9ed8a), [`16f1f21`](https://github.com/tailor-platform/sdk/commit/16f1f214b4aa273305c22a02235dbfd56d2cc350), [`ceadfd9`](https://github.com/tailor-platform/sdk/commit/ceadfd9ed7ac079e75308cd03e2b381b26f9d426), [`1f26ed6`](https://github.com/tailor-platform/sdk/commit/1f26ed64816ee39bc78ae641c807352b124d04f5), [`8a3a4a5`](https://github.com/tailor-platform/sdk/commit/8a3a4a550fd54451fbe47b1eda32b50468a59a79), [`c52ce10`](https://github.com/tailor-platform/sdk/commit/c52ce106416a21fc2eef5be02292fb17d84fa583), [`4703c73`](https://github.com/tailor-platform/sdk/commit/4703c7323eecea23458c21b18d154b51530bd016), [`34cef36`](https://github.com/tailor-platform/sdk/commit/34cef366b27c11b19882facfd50f635934f33cdb), [`c52ce10`](https://github.com/tailor-platform/sdk/commit/c52ce106416a21fc2eef5be02292fb17d84fa583), [`1100601`](https://github.com/tailor-platform/sdk/commit/11006013da378a986ec23ec9de24cb9b6e6db238), [`90da2db`](https://github.com/tailor-platform/sdk/commit/90da2db779903b6f1bc9dd5285a97c79c3feab1a)]:
+  - @tailor-platform/sdk@2.42.0
+
 ## 0.18.1
 
 ### Patch Changes

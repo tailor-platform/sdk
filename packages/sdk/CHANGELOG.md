@@ -1,5 +1,33 @@
 # @tailor-platform/sdk
 
+## 2.42.0
+
+### Patch Changes
+
+- [#3099](https://github.com/tailor-platform/sdk/pull/3099) [`4a6b439`](https://github.com/tailor-platform/sdk/commit/4a6b439905505893b102dcb8a8a7225909cb293a) Thanks [@dqn](https://github.com/dqn)! - Expose application base URL and Console URL maps in generated deploy workflows and preview comments. Regenerate existing workflows with tailor setup update; the legacy app-url output remains available.
+
+- [#3102](https://github.com/tailor-platform/sdk/pull/3102) [`c0ebbab`](https://github.com/tailor-platform/sdk/commit/c0ebbabd259a05b03b813637ad629dffa0b9ed8a) Thanks [@dqn](https://github.com/dqn)! - Point the content mapper docs to the `content-mapper` create-sdk template, and document that while the mapper is enabled, TypeScript older than 7.1, in an editor too, rejects code that 7.1 accepts, and that VS Code runs the mapper only after you trust the folder and grant its permissions.
+
+- [#3030](https://github.com/tailor-platform/sdk/pull/3030) [`16f1f21`](https://github.com/tailor-platform/sdk/commit/16f1f214b4aa273305c22a02235dbfd56d2cc350) Thanks [@dqn](https://github.com/dqn)! - Internal refactoring: validate plugin-generated resolvers with a schema defined alongside the resolver schema. Plugin resolver validation and its error messages are unchanged.
+
+- [#3105](https://github.com/tailor-platform/sdk/pull/3105) [`ceadfd9`](https://github.com/tailor-platform/sdk/commit/ceadfd9ed7ac079e75308cd03e2b381b26f9d426) Thanks [@dqn](https://github.com/dqn)! - The workflows `tailor setup ci` generates now use tailor-platform/actions v2.9.0. Branch pushes and manual runs save the SDK bundle cache, and pull request and tag runs restore the one saved on the base or default branch, so plan, deploy, and preview deployment jobs rebuild only the bundles whose sources changed. Each saved entry counts toward the repository's Actions cache limit. A failed plan job's log now also shows the CLI's error. On GitHub Enterprise Server, make the pinned `actions/cache` version available on the server before your workflows move to v2.9.0, whether through `tailor setup update` or Renovate, and make sure the server's Actions cache service is enabled for the cache to take effect.
+
+- [#3100](https://github.com/tailor-platform/sdk/pull/3100) [`1f26ed6`](https://github.com/tailor-platform/sdk/commit/1f26ed64816ee39bc78ae641c807352b124d04f5) Thanks [@dqn](https://github.com/dqn)! - CLI plugins now receive the Tailor Platform context (token, platform URL, OAuth2 client ID, workspace, and user) when their arguments include `--env-file` or `--env-file-if-exists`. The context is resolved after loading the env files, the same way other `tailor` commands resolve it, so the values the files set apply as they would to those commands. `TAILOR_PLATFORM_USER` is no longer injected when the token comes from `TAILOR_PLATFORM_TOKEN`.
+
+- [#3098](https://github.com/tailor-platform/sdk/pull/3098) [`8a3a4a5`](https://github.com/tailor-platform/sdk/commit/8a3a4a550fd54451fbe47b1eda32b50468a59a79) Thanks [@dqn](https://github.com/dqn)! - Document that the Slack challenge example in the executor guide omits signature verification
+
+- [#3108](https://github.com/tailor-platform/sdk/pull/3108) [`c52ce10`](https://github.com/tailor-platform/sdk/commit/c52ce106416a21fc2eef5be02292fb17d84fa583) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @​opentelemetry
+
+- [#3094](https://github.com/tailor-platform/sdk/pull/3094) [`4703c73`](https://github.com/tailor-platform/sdk/commit/4703c7323eecea23458c21b18d154b51530bd016) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.3.1
+
+- [#3104](https://github.com/tailor-platform/sdk/pull/3104) [`34cef36`](https://github.com/tailor-platform/sdk/commit/34cef366b27c11b19882facfd50f635934f33cdb) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​clack/prompts to v1.9.0
+
+- [#3108](https://github.com/tailor-platform/sdk/pull/3108) [`c52ce10`](https://github.com/tailor-platform/sdk/commit/c52ce106416a21fc2eef5be02292fb17d84fa583) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
+- [#3106](https://github.com/tailor-platform/sdk/pull/3106) [`1100601`](https://github.com/tailor-platform/sdk/commit/11006013da378a986ec23ec9de24cb9b6e6db238) Thanks [@dqn](https://github.com/dqn)! - Fix hints for a multi-step migration left in progress that claimed completed steps never run again. They now say that completed steps run again when you add, remove, or rename a step, change the order the steps run in, or the earlier run was canceled or is no longer available. A canceled run no longer asks you to fix a failing step or `migrate.ts`: the error says that the next deploy runs every step again and, after a step completed, which `--migration-skip-steps` value keeps the completed steps from running again.
+
+- [#3085](https://github.com/tailor-platform/sdk/pull/3085) [`90da2db`](https://github.com/tailor-platform/sdk/commit/90da2db779903b6f1bc9dd5285a97c79c3feab1a) Thanks [@dqn](https://github.com/dqn)! - `tailor deploy` and `tailor remove` now also stop with `SERVICE_IN_USE` before they change anything when they would delete an IdP that another application references as `external`, as they already do for a TailorDB namespace, resolver namespace, or Auth service. Before, they deleted the IdP without an error or warning, which left the referencing application pointing at an IdP that no longer exists. For `tailor deploy`, keep the IdP in the config that defines it, or deploy the referencing applications without it first or in the same `deploy`. For `tailor remove`, first remove the referencing applications or deploy them without it.
+
 ## 2.41.0
 
 ### Minor Changes
