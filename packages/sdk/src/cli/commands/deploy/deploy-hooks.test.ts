@@ -181,6 +181,13 @@ test("runs a hook once after remaining resources are applied even when the plan 
     }),
   );
 });
+test("lets a hook see the profile the deploy ran with", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  const hook = vi.fn();
+  register(hook);
+  await deploy({ yes: true, noValidate: true, profile: "ci" });
+  expect(hook).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ profile: "ci" }));
+});
 test("checks services in use after the plan drops claimed deletes and schedules renamed applications' deletes", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
   await deploy({ dryRun: true, noValidate: true });

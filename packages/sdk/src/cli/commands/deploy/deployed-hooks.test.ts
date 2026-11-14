@@ -102,6 +102,27 @@ describe("deployed hooks", () => {
       }),
     );
   });
+  test("passes the profile the deploy ran with to the hook", async () => {
+    const { client } = clientMock();
+    const hook = vi.fn();
+    await runDeployedHooks({
+      client,
+      workspaceId: "ws",
+      targets: [target([plugin(hook)])],
+      profile: "ci",
+    });
+    expect(hook).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ profile: "ci" }));
+  });
+
+  test("leaves the profile out of the hook context when the deploy was run without one", async () => {
+    const { client } = clientMock();
+    const hook = vi.fn();
+    await runDeployedHooks({ client, workspaceId: "ws", targets: [target([plugin(hook)])] });
+    expect(hook).toHaveBeenCalledExactlyOnceWith(
+      expect.not.objectContaining({ profile: expect.anything() }),
+    );
+  });
+
   test("lets the hook run shell commands on the deploying machine", async () => {
     const { client } = clientMock();
     const [stored] = await runDeployedHooks({
@@ -120,6 +141,28 @@ describe("deployed hooks", () => {
       ],
     });
     expect(stored?.outputs).toEqual({ stdout: "ran" });
+  });
+  test("gives the hook Node's fs and path to work with files on the deploying machine", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "deployed-hooks-node-"));
+    try {
+      const { client } = clientMock();
+      const [stored] = await runDeployedHooks({
+        client,
+        workspaceId: "ws",
+        targets: [
+          target([
+            plugin(async (ctx) => {
+              const file = ctx.node.path.join(dir, "config.json");
+              await ctx.node.fs.writeFile(file, '{"ok":true}');
+              return { outputs: { content: await ctx.node.fs.readFile(file, "utf8") } };
+            }),
+          ]),
+        ],
+      });
+      expect(stored?.outputs).toEqual({ content: '{"ok":true}' });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
   test("collects every OAuth client page", async () => {
     const { client, methods } = clientMock();

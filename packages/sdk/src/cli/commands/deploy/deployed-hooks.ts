@@ -1,3 +1,4 @@
+import * as nodeFs from "node:fs/promises";
 import { stat } from "node:fs/promises";
 import * as path from "pathe";
 import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
@@ -20,6 +21,7 @@ interface LoadDeployedApplicationsParams {
 }
 interface RunDeployedHooksParams extends LoadDeployedApplicationsParams {
   applications?: readonly DeployedApplication[];
+  profile?: string;
 }
 
 interface DeployedHookOutput {
@@ -295,6 +297,7 @@ export async function runDeployedHooks(
         span.setAttribute("app.name", target.application.name);
         return hook.call(plugin, {
           workspaceId,
+          ...(params.profile !== undefined && { profile: params.profile }),
           application: publishable(
             assertDefined(applications[index], "Deployed application missing"),
           ),
@@ -303,6 +306,7 @@ export async function runDeployedHooks(
           pluginConfig: plugin.pluginConfig,
           logger: { info: logger.info, warn: logger.warn, success: logger.success },
           exec: execPluginCommand,
+          node: { fs: nodeFs, path },
         });
       });
       const hookOutputs = result?.outputs;

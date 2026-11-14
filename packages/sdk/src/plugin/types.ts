@@ -15,6 +15,8 @@ import type { TailorDBType, TypeSourceInfoEntry } from "#/parser/service/tailord
 import type { IdProvider as IdProviderConfig, OAuth2Client } from "#/types/auth.generated";
 import type { Executor } from "#/types/executor.generated";
 import type { Resolver } from "#/types/resolver.generated";
+import type * as NodeFs from "node:fs/promises";
+import type * as Pathe from "pathe";
 
 /**
  * A single generated file to write to disk.
@@ -492,6 +494,8 @@ export interface PluginExecResult {
  */
 export interface DeployedContext<PluginConfig = unknown> {
   workspaceId: string;
+  /** Profile `tailor deploy` ran with (`--profile`). Absent when the deploy was run without one. */
+  profile?: string;
   /** Application whose config registers this plugin. Only its static websites can be published. */
   application: DeployedApplication<PublishableStaticWebsite>;
   /** Every application in this deploy run, including the registering one. */
@@ -507,6 +511,14 @@ export interface DeployedContext<PluginConfig = unknown> {
    * @returns Captured output when `options.output` is `"capture"`
    */
   exec(command: string, options: PluginExecOptions): Promise<PluginExecResult>;
+  /**
+   * Node's `fs/promises` module and `pathe` (`path` with `/` separators on every OS), for hooks that read or write files on the machine running `tailor deploy`.
+   * A plugin's own source is bundled into functions that run on the Platform, where `node:` imports cannot be resolved, so a hook uses these instead of importing the modules.
+   */
+  node: {
+    fs: typeof NodeFs;
+    path: typeof Pathe;
+  };
 }
 
 // Symbol keys only: string keys such as `toJSON?: never` would also reject interfaces with a data field of that name.

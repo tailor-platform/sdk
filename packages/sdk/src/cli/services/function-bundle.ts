@@ -5,6 +5,7 @@ import { createHookFailures, type HookFailures } from "#/cli/services/hook-failu
 import { createStartTransformPlugin } from "#/cli/services/workflow/start-transformer";
 import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
+import { createDeployOnlyCliStubPlugin } from "#/cli/shared/deploy-only-cli-stub";
 import {
   assertPackageRuntimeGlobalsAllowed,
   checkForbiddenRuntimeGlobals,
@@ -162,6 +163,7 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
       );
       const hookFailures = createHookFailures();
       const plugins: rolldown.InputOptions["plugins"] = [
+        createDeployOnlyCliStubPlugin(),
         virtualEntry.plugin,
         ...(createTransformPlugins?.(hookFailures) ?? [
           createStartTransformPlugin(startContext, hookFailures),
