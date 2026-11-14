@@ -34,6 +34,7 @@ import {
   type MigrationSubcommandArgs,
 } from "#/cli/commands/tailordb/migrate/hints";
 import {
+  COMPLETED_STEPS_ON_RESUME,
   describeMigrationCheckpoint,
   fetchRemoteMigrationState,
   formatMigrationResolveHint,
@@ -77,7 +78,11 @@ import { protoEnumName } from "#/cli/shared/proto-enum";
 import { spinner } from "#/cli/shared/spinner";
 import { assertDefined } from "#/utils/assert";
 import { resourceTrn, writeMetadataLabelsDirect } from "../label";
-import { assertMigrationSkipSteps, type MigrationSkipStepsCheck } from "./migration-skip-steps";
+import {
+  assertMigrationSkipSteps,
+  formatMigrationSkipSteps,
+  type MigrationSkipStepsCheck,
+} from "./migration-skip-steps";
 import { formatDuration, ScriptRunTimer, type MaintenanceTimeline } from "./migration-timing";
 import {
   executeMigrationAsWorkflow,
@@ -151,6 +156,7 @@ interface ExecutionResult {
   error?: string;
   /** Thrown in place of a plain migration failure once the logs are shown. */
   failure?: Error;
+  canceled?: boolean;
 }
 
 // ============================================================================
@@ -893,11 +899,19 @@ function withMaintenanceModeNote(
   return suggestion ? `${suggestion} ${note}` : note;
 }
 
+function canceledRunAdvice(namespace: string, completedSteps: readonly string[]): string {
+  const skipSteps = formatMigrationSkipSteps(new Map([[namespace, completedSteps]]));
+  return skipSteps
+    ? "The run was canceled, so the next deploy runs every step again. " +
+        `To keep ${completedSteps.join(", ")} from running again, pass --migration-skip-steps ${skipSteps} to that deploy; every other step must be safe to run twice.`
+    : "The run was canceled, so the next deploy runs every step again; each step must be safe to run twice.";
+}
+
 function partiallyAppliedError(
   migration: PendingMigration,
   result: Pick<
     MigrationStepsWorkflowResult,
-    "completedSteps" | "failedSteps" | "executionId" | "runEnded"
+    "completedSteps" | "failedSteps" | "executionId" | "runEnded" | "canceled"
   >,
   cause: unknown,
   maintenanceMode: boolean,
@@ -916,7 +930,9 @@ function partiallyAppliedError(
     suggestion: withMaintenanceModeNote(
       isCLIError(cause) && cause.suggestion
         ? cause.suggestion
-        : "Fix the failing step in migrate.ts and deploy again; steps that already completed do not run again.",
+        : result.canceled
+          ? canceledRunAdvice(migration.namespace, result.completedSteps)
+          : `Fix the failing step in migrate.ts and deploy again; ${COMPLETED_STEPS_ON_RESUME}.`,
       migration.namespace,
       maintenanceMode,
     ),
@@ -927,6 +943,7 @@ function partiallyAppliedError(
       failedSteps: result.failedSteps,
       ...(result.executionId ? { executionId: result.executionId } : {}),
       ...(result.runEnded ? { runEnded: true } : {}),
+      ...(result.canceled ? { canceled: true } : {}),
     },
     cause,
   });
@@ -954,15 +971,18 @@ export function rolledBackError(migration: PendingMigration, cause: unknown): Er
   const { namespace } = migration;
   const checkpoint = formatMigrationNumber(migration.number - 1);
   const causeHint = causeSuggestion(cause);
+  const canceled = isCLIError(cause) && cause.context?.canceled === true;
   return CLIError({
     code: "MIGRATION_ROLLED_BACK",
     message: cause instanceof Error ? cause.message : String(cause),
     suggestion:
       `Migration ${namespace}/${formatMigrationNumber(migration.number)} was rolled back to migration ${checkpoint} and is no longer in progress; ` +
       "any table the rollback could not revert is listed in a warning above. " +
-      "Fix the failure in migrate.ts and deploy again: the next deploy runs every step again from the beginning." +
+      (canceled
+        ? "The run was canceled; deploy again to run every step from the beginning."
+        : "Fix the failure in migrate.ts and deploy again: the next deploy runs every step again from the beginning.") +
       (causeHint ? ` ${causeHint}` : ""),
-    context: { namespace, migrationNumber: migration.number },
+    context: { namespace, migrationNumber: migration.number, ...(canceled ? { canceled } : {}) },
     cause,
   });
 }
@@ -1253,6 +1273,7 @@ async function executeStepsMigration(
     success: false,
     logs: result.logs,
     error: result.error,
+    ...(result.canceled ? { canceled: true } : {}),
   };
   if (result.stepsMayHaveCommitted || inProgress) {
     return {
@@ -1393,7 +1414,11 @@ export async function executeMigrations(
           CLIError({
             code: "MIGRATION_FAILED",
             message: `Migration ${migrationLabel} failed${result.error ? `: ${result.error}` : ""}`,
-            context: { namespace: migration.namespace, migrationNumber: migration.number },
+            context: {
+              namespace: migration.namespace,
+              migrationNumber: migration.number,
+              ...(result.canceled ? { canceled: true } : {}),
+            },
           })
         );
       }

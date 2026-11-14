@@ -40,7 +40,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install pnpm + Node.js
-        uses: pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2
+        uses: pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1 # v3.2.0
         with:
           runtime: node@26.13.1
           install: false
@@ -48,7 +48,7 @@ jobs:
       - name: Audit lockfile for newly introduced vulnerabilities
         id: audit_regression
         continue-on-error: true
-        uses: tailor-platform/actions/lockfile-audit@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
+        uses: tailor-platform/actions/lockfile-audit@1c1a451a463770897b3e1987c45df57b27369c8f # v2.9.0
 
       - name: Require a clean full audit when the regression check fails
         if: steps.audit_regression.outcome == 'failure'

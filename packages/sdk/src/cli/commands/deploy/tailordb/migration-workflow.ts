@@ -734,6 +734,8 @@ export interface MigrationStepsWorkflowResult {
   stepsMayHaveCommitted: boolean;
   /** Whether the execution was observed in a final state, so no job of the run can still be writing. */
   runEnded?: boolean;
+  /** Whether the run was canceled, so the next deploy runs every step again. */
+  canceled?: boolean;
 }
 
 interface StepOutcome {
@@ -923,7 +925,7 @@ function describeRerun(params: RerunDescriptionParams): { message: string; sugge
       suggestion:
         "Every other step runs again, so each must be safe to run twice." +
         (rerunningSkippable.length > 0
-          ? ` To skip ${rerunningSkippable.join(", ")} as well, pass ${skipOption([...skipped, ...rerunningSkippable])} on a deploy that changes the steps.`
+          ? ` To skip ${rerunningSkippable.join(", ")} as well when a deploy runs every step again, pass ${skipOption([...skipped, ...rerunningSkippable])}.`
           : ""),
     };
   }
@@ -942,7 +944,7 @@ function describeRerun(params: RerunDescriptionParams): { message: string; sugge
     message,
     suggestion:
       "A step that is not safe to run twice breaks on its second run, and this deploy starts the run without waiting. " +
-      `To skip succeeded steps on a deploy that changes the steps of a migration in progress, pass ${skipOption(rerunningSkippable)}. ` +
+      `To skip succeeded steps when a deploy runs every step of a migration in progress again, pass ${skipOption(rerunningSkippable)}. ` +
       "A renamed step cannot be skipped.",
   };
 }
@@ -1145,11 +1147,15 @@ async function summarizeSteps(
     runEnded: true,
   };
   if (execution.status === WorkflowExecution_Status.SUCCESS) return { success: true, ...base };
-  const error =
-    execution.status === WorkflowExecution_Status.CANCELED
-      ? "Migration workflow execution was canceled."
-      : extractFailureMessage(jobOutcomes);
-  return { success: false, error, ...base };
+  if (execution.status === WorkflowExecution_Status.CANCELED) {
+    return {
+      success: false,
+      error: "Migration workflow execution was canceled.",
+      canceled: true,
+      ...base,
+    };
+  }
+  return { success: false, error: extractFailureMessage(jobOutcomes), ...base };
 }
 
 async function waitForSteps(
