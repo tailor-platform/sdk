@@ -204,6 +204,7 @@ export function createStandardSchema<T = Record<string, unknown>>(
     "~standard": {
       version: 1,
       vendor: "@tailor-platform/sdk",
+      types: {} as StandardSchemaV1.Types<T, T>,
       validate: (value: unknown) => {
         const hooked = hook(value);
         const undeclared: StandardSchemaV1.Issue[] = [];

@@ -119,6 +119,38 @@ export default {
     ]);
   });
 
+  test("finds the namespace of a table imported under a version query", async () => {
+    writeTable('{ "first": {} }');
+    writeConfig(extendingPlugin("first", "deletedAt", "db.datetime({ optional: true })"));
+    const { order } = (await import(`${pathToFileURL(tablePath).href}?linesDbV=abc123`)) as {
+      order: TailorAnyDBType;
+    };
+
+    const table = await getExtendedTable(configPath, order);
+
+    expect(Object.keys(table.fields)).toEqual(["id", "name", "deletedAt"]);
+  });
+
+  test("does not guess the namespace of a versioned import when two namespaces hold a table of that name", async () => {
+    writeTable('{ "first": {} }');
+    const otherPath = path.join(path.dirname(tablePath), "other-order.mjs");
+    fs.copyFileSync(tablePath, otherPath);
+    writeConfig(extendingPlugin("first", "deletedAt", "db.datetime({ optional: true })"));
+    fs.writeFileSync(
+      configPath,
+      fs
+        .readFileSync(configPath, "utf8")
+        .replace("  db: {", `  db: {\n    other: ${JSON.stringify({ files: [otherPath] })},`),
+    );
+    const { order } = (await import(`${pathToFileURL(tablePath).href}?linesDbV=abc123`)) as {
+      order: TailorAnyDBType;
+    };
+
+    await expect(getExtendedTable(configPath, order)).rejects.toThrow(
+      'Could not resolve namespace for table "Order"',
+    );
+  });
+
   test("returns the source table when no attached plugin adds fields", async () => {
     writeTable('{ "archiver": {} }');
     writeConfig(`{
@@ -434,6 +466,64 @@ export default {
       expect(first.name).toBe("OrderArchive");
       expect(second).toBe(first);
       expect(globalThis.__testProcessTableCalls).toEqual(["Order:30:main"]);
+    });
+
+    test("generates the table again from a source table imported again after its file changed", async () => {
+      const tablePath = path.join(path.dirname(configPath), "order.mjs");
+      const writeOrder = (retentionDays: number) =>
+        fs.writeFileSync(
+          tablePath,
+          `export const order = {
+  name: "Order",
+  fields: {},
+  plugins: [{ pluginId: "table-plugin", config: { retentionDays: ${retentionDays} } }],
+};
+`,
+        );
+      fs.writeFileSync(
+        configPath,
+        `export const plugins = [{
+  id: "table-plugin",
+  description: "test",
+  importPath: "@test/table-plugin",
+  onTableLoaded({ tableConfig }) {
+    return {
+      tables: {
+        archive: { name: "OrderArchive" + tableConfig.retentionDays, fields: {}, plugins: [] },
+      },
+    };
+  },
+}];
+export default {
+  db: {
+    main: { files: [${JSON.stringify(tablePath)}] },
+  },
+};
+`,
+      );
+      const importOrder = async (version: string) =>
+        (
+          (await import(`${pathToFileURL(tablePath).href}?linesDbV=${version}`)) as {
+            order: TailorAnyDBType;
+          }
+        ).order;
+
+      writeOrder(30);
+      const before = await getGeneratedTable(
+        configPath,
+        "table-plugin",
+        await importOrder("v1"),
+        "archive",
+      );
+      writeOrder(60);
+      const after = await getGeneratedTable(
+        configPath,
+        "table-plugin",
+        await importOrder("v2"),
+        "archive",
+      );
+
+      expect([before.name, after.name]).toEqual(["OrderArchive30", "OrderArchive60"]);
     });
   });
 
