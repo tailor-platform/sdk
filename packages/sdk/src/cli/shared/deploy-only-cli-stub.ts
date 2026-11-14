@@ -32,8 +32,8 @@ function exportedNamesOf(code: string, file: string): string[] {
 }
 
 /**
- * Replace `@tailor-platform/sdk/cli` with a module that declares the same names as throwing
- * functions. The entry point only works where `tailor deploy` runs, and rolldown loads every
+ * Replace `@tailor-platform/sdk/cli` with a module that declares the same names as values that
+ * throw when called, read, or written, whether the real export is a function, an object, or a constant. The entry point only works where `tailor deploy` runs, and rolldown loads every
  * module it can reach before it removes unused code, so the real module (which needs a native
  * binding) would fail the bundle even when the import is never used on the Platform. Declaring
  * every name keeps named, re-exported, namespace and dynamic imports resolvable whatever order
@@ -53,12 +53,14 @@ export function createDeployOnlyCliStubPlugin(): Plugin {
     async load(id) {
       if (!id.startsWith(STUB_PREFIX)) return null;
       const file = id.slice(STUB_PREFIX.length);
-      return exportedNamesOf(await fs.readFile(file, "utf8"), file)
-        .map(
-          (name) =>
-            `export function ${name}() { throw new Error("${CLI_ENTRY} only works where tailor deploy runs"); }`,
-        )
-        .join("\n");
+      const names = exportedNamesOf(await fs.readFile(file, "utf8"), file);
+      return [
+        `function deployOnly() {`,
+        `  const fail = () => { throw new Error("${CLI_ENTRY} only works where tailor deploy runs"); };`,
+        `  return new Proxy(function () {}, { get: fail, set: fail, apply: fail, construct: fail });`,
+        `}`,
+        ...names.map((name) => `export const ${name} = /* @__PURE__ */ deployOnly();`),
+      ].join("\n");
     },
   };
 }
