@@ -60,7 +60,9 @@ function hasBackslash(elements: SgNode[]): boolean {
 function rebase(glob: string, { configDir, projectDir }: Directories): string {
   const rebased = path.relative(configDir, path.resolve(projectDir, glob)) || ".";
   const leavesConfigDir = rebased === "." || rebased === ".." || rebased.startsWith("../");
-  return glob.startsWith("./") && !leavesConfigDir ? `./${rebased}` : rebased;
+  return (glob.startsWith("./") || rebased.startsWith("!")) && !leavesConfigDir
+    ? `./${rebased}`
+    : rebased;
 }
 
 function rebaseEdit(pattern: Pattern, dirs: Directories): Edit {

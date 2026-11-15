@@ -96,6 +96,16 @@ describe("files patterns -> config-relative migration", () => {
     expect(transformed).toContain('files: ["tailordb/*.ts", "!."]');
   });
 
+  test("keeps a rebased pattern that starts with `!` from turning into an exclusion", () => {
+    writeFiles("apps/a/!jobs/run.ts");
+
+    const { transformed } = migrate(
+      'export default defineConfig({\n  executor: { files: ["apps/a/!jobs/*.ts", "!apps/a/!jobs/draft.ts"] },\n});\n',
+    );
+
+    expect(transformed).toContain('files: ["./!jobs/*.ts", "!./!jobs/draft.ts"]');
+  });
+
   test("rewrites a config default-exported through an export clause", () => {
     writeFiles("apps/a/tailordb/user.ts");
 
