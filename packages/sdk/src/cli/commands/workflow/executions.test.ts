@@ -39,6 +39,12 @@ vi.mock("#/cli/shared/client", async (importOriginal) => ({
   initOperatorClient: vi.fn(),
 }));
 
+aroundEach(async (runTest) => {
+  vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
+  vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
+  await runTest();
+});
+
 function execution(
   status: WorkflowExecution_Status,
   jobExecutions: WorkflowExecution["jobExecutions"] = [],
@@ -59,12 +65,6 @@ const runningJob = {
 } as unknown as WorkflowExecution["jobExecutions"][number];
 
 describe("getWorkflowExecution", () => {
-  aroundEach(async (runTest) => {
-    vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
-    vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
-    await runTest();
-  });
-
   test("returns wait diagnostics when waiting times out", async () => {
     vi.mocked(initOperatorClient).mockResolvedValue({
       getWorkflowExecution: vi.fn().mockResolvedValue({
@@ -360,12 +360,6 @@ const executionsByWorkflow = {
 };
 
 describe("listWorkflowExecutions", () => {
-  aroundEach(async (runTest) => {
-    vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
-    vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
-    await runTest();
-  });
-
   test("lists the executions of every workflow when no workflow is given", async () => {
     const { listWorkflowExecutions: listRequest } = mockWorkflowClient(executionsByWorkflow);
 
@@ -377,7 +371,7 @@ describe("listWorkflowExecutions", () => {
     );
   });
 
-  test("keeps the newest executions across workflows within the limit", async () => {
+  test("cuts the merged executions at the limit", async () => {
     const { listWorkflowExecutions: listRequest } = mockWorkflowClient(executionsByWorkflow);
 
     const executions = await listWorkflowExecutions({ limit: 2 });
@@ -396,15 +390,15 @@ describe("listWorkflowExecutions", () => {
     expect(executions.map((e) => e.id)).toEqual(["b1", "b2", "a1", "a2", "a3"]);
   });
 
-  test("lists an execution that has not started where its workflow lists it", async () => {
+  test("lists an execution that has not started after started ones with asc order", async () => {
     mockWorkflowClient({
+      "wf-queued": [{ id: "q1" }],
       "wf-a": [{ id: "a1", startedAt: "2026-11-01T10:30:00Z" }],
-      "wf-c": [{ id: "c0" }, { id: "c1", startedAt: "2026-11-01T10:15:00Z" }],
     });
 
-    const executions = await listWorkflowExecutions({ order: "asc" });
+    const executions = await listWorkflowExecutions({ order: "asc", limit: 1 });
 
-    expect(executions.map((e) => e.id)).toEqual(["c0", "c1", "a1"]);
+    expect(executions.map((e) => e.id)).toEqual(["a1"]);
   });
 
   test("sends the status filter with each workflow's request", async () => {
@@ -455,8 +449,6 @@ describe("listWorkflowExecutions", () => {
 
 describe("executionsCommand", () => {
   test("lists the executions of every workflow without --workflow-name", async () => {
-    vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
-    vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
     mockWorkflowClient(executionsByWorkflow);
     using stdout = captureStdout();
     using _json = jsonMode();
