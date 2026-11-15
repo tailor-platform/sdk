@@ -1828,7 +1828,7 @@ export const allCodemods: CodemodPackage[] = [
     id: "v3/files-config-relative",
     name: "Service `files` patterns relative to the config's directory",
     description:
-      "In v3, relative `files` patterns of the `db` and `resolver` namespaces and of `executor`, `workflow`, and `httpAdapter` resolve only against the directory of the config file that declares them. v2 resolved them, and `ignores`, against the directory the command ran from when none of a service's `files` patterns matched under the config's directory, and warned. For a config outside the project directory `tailor upgrade` runs on (`--path`, the current directory by default), the codemod rewrites string-literal `files` and `ignores` patterns that match files only from that project directory so that they name the same files relative to the config's directory, before `v3/files-ignores-to-negation` moves `ignores` into `files`. It reports for review configs it cannot rewrite, patterns it cannot glob, patterns that match no files from either directory, and `defineConfig()` calls other than the module's default export whose patterns it would rewrite.",
+      "In v3, relative `files` patterns of the `db` and `resolver` namespaces and of `executor`, `workflow`, and `httpAdapter` resolve only against the directory of the config file the CLI loads. v2 resolved them, and `ignores`, against the directory the command ran from when none of a service's `files` patterns matched under the config's directory, and warned. For a config outside the project directory `tailor upgrade` runs on (`--path`, the current directory by default), the codemod rewrites string-literal `files` and `ignores` patterns that match files only from that project directory so that they name the same files relative to the config's directory, before `v3/files-ignores-to-negation` moves `ignores` into `files`. It reports for review configs it cannot rewrite, patterns it cannot glob, patterns that match no files from either directory, `defineConfig()` calls other than the module's default export whose patterns it would rewrite or report, and configs that a source file in another directory default-exports, directly or through modules that pass the config on.",
     since: "0.8.0",
     until: "3.0.0",
     scriptPath: "v3/files-config-relative/scripts/transform.js",
@@ -1863,7 +1863,8 @@ export const allCodemods: CodemodPackage[] = [
       "loads, which is the flagged file unless the finding says another config file",
       "loads it: for `apps/a/tailor.config.ts` deployed from the",
       "repository root, `apps/a/tailordb/*.ts` becomes `tailordb/*.ts`, and a leading",
-      "`!` stays in front. Leave absolute patterns unchanged. When the patterns are",
+      "`!` stays in front. Leave absolute patterns, and patterns that already name",
+      "their files that way, unchanged. When the patterns are",
       "built from a variable, a spread, or a helper, change them where they are",
       "defined. When the patterns match no files from either directory, check whether",
       "the files are generated later or the patterns point at the wrong directory.",
