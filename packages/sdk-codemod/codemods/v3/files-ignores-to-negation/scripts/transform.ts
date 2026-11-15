@@ -136,9 +136,14 @@ function analyzeService(source: string, service: SgNode, label: string): Analysi
   }
 
   const ignores = ignoresEntry.kind() === "pair" ? pairValue(ignoresEntry) : null;
-  const ignoreElements = ignores?.kind() === "array" ? arrayElements(ignores) : null;
-  const ignorePatterns = ignoreElements?.map((element) => sourceStringContent(element, source));
-  if (!ignoreElements || !ignorePatterns || ignorePatterns.some((pattern) => pattern === null)) {
+  const ignoreElements =
+    ignores?.kind() === "array"
+      ? arrayElements(ignores).map((element) => ({
+          element,
+          pattern: sourceStringContent(element, source),
+        }))
+      : null;
+  if (!ignoreElements || ignoreElements.some(({ pattern }) => pattern === null)) {
     return {
       edits: [],
       findings: [
@@ -147,8 +152,8 @@ function analyzeService(source: string, service: SgNode, label: string): Analysi
     };
   }
   const missing = ignoreElements
-    .filter((_element, index) => !trailingNegations.has(`!${ignorePatterns[index]}`))
-    .map(negated);
+    .filter(({ pattern }) => !trailingNegations.has(`!${pattern}`))
+    .map(({ element }) => negated(element));
   return {
     edits: [
       entryRemoval(source, entries, ignoresEntry),
@@ -198,16 +203,16 @@ function analyzeConfig(source: string, config: SgNode): Analysis {
       continue;
     }
     for (const namespaceEntry of objectEntries(value)) {
-      const namespace = namespaceLabel(namespaceEntry);
-      const namespaceConfig = namespace === null ? null : objectValue(namespaceEntry);
-      if (namespace === null || !namespaceConfig) {
+      const label = namespaceLabel(namespaceEntry);
+      const namespaceConfig = label === null ? null : objectValue(namespaceEntry);
+      if (label === null || !namespaceConfig) {
         analysis.findings.push({
           reason: `a \`${key}\` namespace is not written as an object literal`,
           node: namespaceEntry,
         });
         continue;
       }
-      mergeInto(analysis, analyzeService(source, namespaceConfig, `${key}${namespace}`));
+      mergeInto(analysis, analyzeService(source, namespaceConfig, `${key}${label}`));
     }
   }
   return analysis;
