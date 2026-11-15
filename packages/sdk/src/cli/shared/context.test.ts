@@ -27,7 +27,7 @@ import { errorToJson } from "./error-json";
 import { isCLIError } from "./errors";
 import { logger } from "./logger";
 import { writeHeldConfigLock } from "./test-helpers/config-lock";
-import { invalidYAMLPlatformConfig } from "./test-helpers/platform-config";
+import { invalidYAMLPlatformConfig, storedTokenMarker } from "./test-helpers/platform-config";
 import { isKeyringAvailable, resetKeyringState } from "./token-store";
 import type * as ClientModule from "./client";
 
@@ -2024,6 +2024,7 @@ describe("unreadable platform config", () => {
       message: "Failed to parse config file.",
       details: "Invalid YAML at line 6, column 4.",
     });
+    expect(JSON.stringify(errorToJson(error as Error))).not.toContain(storedTokenMarker);
     expect((error as { context?: unknown }).context).toEqual({
       file: configPath,
       line: 6,

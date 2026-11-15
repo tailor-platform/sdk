@@ -2,7 +2,7 @@
 export const storedTokenMarker = "SECRET";
 
 /**
- * A CLI config file storing tokens whose sixth line is misindented, so YAML parsing fails at
+ * A CLI config file that stores tokens and misindents its sixth line, so YAML parsing fails at
  * line 6, column 4, right below the token lines.
  */
 export const invalidYAMLPlatformConfig = [

@@ -473,7 +473,7 @@ export async function readPlatformConfig(): Promise<PfConfig> {
     return config;
   }
 
-  const rawConfig = parsePlatformConfigYAML(configPath);
+  const rawConfig = readPlatformConfigYAML(configPath);
 
   // Legacy installs may have left the config world-readable (umask default
   // 0o644). Tighten it here so users who only run read-only commands still
@@ -531,7 +531,7 @@ export async function readPlatformConfig(): Promise<PfConfig> {
   );
 }
 
-function parsePlatformConfigYAML(configPath: string): unknown {
+function readPlatformConfigYAML(configPath: string): unknown {
   const source = fs.readFileSync(configPath, "utf-8");
   try {
     return parseYAML(source);
@@ -565,7 +565,7 @@ function platformConfigInvalidError(
       details,
       context: { file: configPath, ...position },
     }),
-    { location: position ? { file: configPath, line: position.line } : { file: configPath } },
+    { location: { file: configPath, line: position?.line } },
   );
 }
 
