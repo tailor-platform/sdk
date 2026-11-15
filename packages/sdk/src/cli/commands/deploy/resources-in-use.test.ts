@@ -371,21 +371,24 @@ describe("assertResourcesNotInUse", () => {
 
 type ExecutorInit = MessageInitShape<typeof ExecutorExecutorSchema>;
 
+type EventConfig = Extract<
+  NonNullable<NonNullable<ExecutorInit["triggerConfig"]>["config"]>,
+  { case: "event" }
+>["value"]["typedConfig"];
+
 const INVOKER = { namespace: "core-auth", machineUserName: "admin" };
 
-const INVOKER_TARGETS: Array<{ kind: string; targetConfig: ExecutorInit["targetConfig"] }> = [
-  { kind: "function", targetConfig: { config: { case: "function", value: { invoker: INVOKER } } } },
-  {
-    kind: "tailorGraphql",
-    targetConfig: { config: { case: "tailorGraphql", value: { invoker: INVOKER } } },
-  },
-  {
-    kind: "workflow",
-    targetConfig: {
-      config: { case: "workflow", value: { workflowName: "sync", invoker: INVOKER } },
-    },
-  },
-];
+const FUNCTION_TARGET: ExecutorInit["targetConfig"] = {
+  config: { case: "function", value: { invoker: INVOKER } },
+};
+
+const ADMIN = 'Machine user "admin" of Auth service "core-auth"';
+
+const ADMIN_USE = { resourceType: "auth.machine_user", namespace: "core-auth", name: "admin" };
+
+function eventTrigger(typedConfig: EventConfig): ExecutorInit["triggerConfig"] {
+  return { config: { case: "event", value: { typedConfig } } };
+}
 
 function withWorkspaceExecutor(results: PlanResults, executor: ExecutorInit, application?: string) {
   results.executor.existingExecutors[executor.name!] = {
@@ -395,8 +398,17 @@ function withWorkspaceExecutor(results: PlanResults, executor: ExecutorInit, app
   return results;
 }
 
-function deletingMachineUser() {
-  const results = emptyPlanResults();
+function withWorkspaceGateway(results: PlanResults) {
+  results.aiGateway.existingGateways = {
+    chat: {
+      resource: create(AIGatewaySchema, { name: "chat", authNamespace: "core-auth" }),
+      allLabels: { "sdk-name": "viewer" },
+    },
+  };
+  return results;
+}
+
+function deletingAdmin(results = emptyPlanResults()) {
   results.auth.changeSet.machineUser.deletes.push({
     name: "admin",
     request: { workspaceId: "ws", authNamespace: "core-auth", name: "admin" },
@@ -404,88 +416,252 @@ function deletingMachineUser() {
   return results;
 }
 
+function deletingOrderFlow(results: PlanResults) {
+  results.workflow.changeSet.deletes.push({
+    name: "order-flow",
+    workspaceId: "ws",
+    workflowId: "id",
+    usedJobNames: [],
+  });
+}
+
+function deletingOrderTable(results: PlanResults) {
+  results.tailorDB.changeSet.type.deletes.push({
+    name: "Order",
+    request: { workspaceId: "ws", namespaceName: "main", tailordbTypeName: "Order" },
+  });
+}
+
 function resolverInvoking(name: string) {
   return create(PipelineResolverSchema, { name, pipelines: [{ name: "step", invoker: INVOKER }] });
 }
 
-describe("assertResourcesNotInUse for machine users used as invoker", () => {
-  test.each(INVOKER_TARGETS)(
-    "rejects a deleted machine user that a $kind executor outside the run uses as invoker",
-    async ({ targetConfig }) => {
+function inUse(message: unknown, uses?: unknown[]) {
+  return expect.objectContaining({
+    code: "SERVICE_IN_USE",
+    message,
+    ...(uses ? { context: { uses } } : {}),
+  });
+}
+
+const EXECUTOR_USES: Array<{
+  label: string;
+  deletes: (results: PlanResults) => void;
+  executor: ExecutorInit;
+  resource: string;
+  use: { resourceType: string; namespace?: string; name: string };
+}> = [
+  {
+    label: "machine user that a function target runs as",
+    deletes: deletingAdmin,
+    executor: { targetConfig: FUNCTION_TARGET },
+    resource: ADMIN,
+    use: ADMIN_USE,
+  },
+  {
+    label: "machine user that a disabled graphql target runs as",
+    deletes: deletingAdmin,
+    executor: {
+      disabled: true,
+      targetConfig: { config: { case: "tailorGraphql", value: { invoker: INVOKER } } },
+    },
+    resource: ADMIN,
+    use: ADMIN_USE,
+  },
+  {
+    label: "machine user that a workflow target runs as",
+    deletes: deletingAdmin,
+    executor: {
+      targetConfig: {
+        config: { case: "workflow", value: { workflowName: "sync", invoker: INVOKER } },
+      },
+    },
+    resource: ADMIN,
+    use: ADMIN_USE,
+  },
+  {
+    label: "workflow that an execution trigger names",
+    deletes: deletingOrderFlow,
+    executor: {
+      triggerConfig: eventTrigger({ case: "workflow", value: { workflowName: "order-flow" } }),
+    },
+    resource: 'Workflow "order-flow"',
+    use: { resourceType: "workflow", name: "order-flow" },
+  },
+  {
+    label: "workflow that a workflow target starts",
+    deletes: deletingOrderFlow,
+    executor: {
+      targetConfig: { config: { case: "workflow", value: { workflowName: "order-flow" } } },
+    },
+    resource: 'Workflow "order-flow"',
+    use: { resourceType: "workflow", name: "order-flow" },
+  },
+  {
+    label: "TailorDB table that a record trigger names",
+    deletes: deletingOrderTable,
+    executor: {
+      triggerConfig: eventTrigger({
+        case: "tailordb",
+        value: { namespaceName: "main", typeName: "Order" },
+      }),
+    },
+    resource: 'TailorDB table "Order" in namespace "main"',
+    use: { resourceType: "tailordb.type", namespace: "main", name: "Order" },
+  },
+  {
+    label: "resolver that a resolver trigger names",
+    deletes: (results) =>
+      results.pipeline.changeSet.resolver.deletes.push({
+        name: "createOrder",
+        request: { workspaceId: "ws", namespaceName: "main", resolverName: "createOrder" },
+      }),
+    executor: {
+      triggerConfig: eventTrigger({
+        case: "pipeline",
+        value: { namespaceName: "main", resolverName: "createOrder" },
+      }),
+    },
+    resource: 'Resolver "createOrder" in namespace "main"',
+    use: { resourceType: "pipeline.resolver", namespace: "main", name: "createOrder" },
+  },
+  {
+    label: "IdP that an IdP user trigger names",
+    deletes: (results) =>
+      results.idp.changeSet.service.deletes.push({ name: "main-idp", request: {} }),
+    executor: {
+      triggerConfig: eventTrigger({ case: "idp", value: { namespaceName: "main-idp" } }),
+    },
+    resource: 'IdP service "main-idp"',
+    use: { resourceType: "idp.service", name: "main-idp" },
+  },
+];
+
+describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", () => {
+  test.each(EXECUTOR_USES)(
+    "rejects a deleted $label in an executor outside the run",
+    async ({ deletes, executor, resource, use }) => {
       const owner = withWorkspaceExecutor(
-        deletingMachineUser(),
-        { name: "notify", targetConfig },
+        emptyPlanResults(),
+        { name: "notify", ...executor },
         "portal",
       );
+      deletes(owner);
 
       await expect(check([deployment({ name: "core" }, owner)], "deploy")).rejects.toThrow(
-        expect.objectContaining({
-          code: "SERVICE_IN_USE",
-          message:
-            'Machine user "admin" of Auth service "core-auth" cannot be deleted: executor "notify" of application "portal" still uses it.',
-          context: {
-            uses: [
-              {
-                resourceType: "auth.machine_user",
-                namespace: "core-auth",
-                name: "admin",
-                application: "portal",
-                usedBy: { resourceType: "executor", name: "notify" },
-              },
-            ],
-          },
-        }),
+        inUse(
+          `${resource} cannot be deleted: executor "notify" of application "portal" still uses it.`,
+          [{ ...use, application: "portal", usedBy: { resourceType: "executor", name: "notify" } }],
+        ),
       );
     },
   );
 
-  test("rejects an executor of the run whose planned invoker is a deleted machine user", async () => {
-    const owner = deletingMachineUser();
+  test("names no application for an executor that no application manages", async () => {
+    const owner = withWorkspaceExecutor(deletingAdmin(), {
+      name: "notify",
+      targetConfig: FUNCTION_TARGET,
+    });
+
+    await expect(check([deployment({ name: "core" }, owner)], "deploy")).rejects.toThrow(
+      expect.objectContaining({
+        message: `${ADMIN} cannot be deleted: executor "notify" still uses it.`,
+        suggestion: expect.stringContaining("outside the SDK"),
+        context: { uses: [{ ...ADMIN_USE, usedBy: { resourceType: "executor", name: "notify" } }] },
+      }),
+    );
+  });
+
+  test("rejects an executor and an AI gateway of the run whose planned versions use deleted resources", async () => {
     const portal = emptyPlanResults();
     portal.executor.changeSet.creates.push({
       name: "notify",
-      request: {
-        workspaceId: "ws",
-        executor: { name: "notify", targetConfig: INVOKER_TARGETS[0]!.targetConfig },
-      },
+      request: { workspaceId: "ws", executor: { name: "notify", targetConfig: FUNCTION_TARGET } },
+      metaRequest: { trn: "trn" },
+    });
+    portal.aiGateway.changeSet.creates.push({
+      name: "chat",
+      request: { workspaceId: "ws", aigatewayName: "chat", authNamespace: "core-auth", cors: [] },
       metaRequest: { trn: "trn" },
     });
 
     await expect(
       check(
-        [deployment({ name: "core" }, owner), deployment({ name: "portal" }, portal)],
+        [
+          deployment({ name: "core" }, deletingAdmin(ownerDeleting("core-auth"))),
+          deployment({ name: "portal" }, portal),
+        ],
         "deploy",
       ),
     ).rejects.toThrow(
-      expect.objectContaining({
-        message:
-          'Machine user "admin" of Auth service "core-auth" cannot be deleted: executor "notify" of application "portal" still uses it.',
-      }),
+      inUse(
+        [
+          `${ADMIN} cannot be deleted: executor "notify" of application "portal" still uses it.`,
+          'Auth service "core-auth" cannot be deleted: AI gateway "chat" of application "portal" still uses it.',
+        ].join("\n"),
+      ),
     );
   });
 
-  test("accepts executors that the run deletes or rewrites without the invoker", async () => {
-    const owner = deletingMachineUser();
+  test("rejects a deleted Auth service that an AI gateway outside the run uses", async () => {
+    const owner = withWorkspaceGateway(ownerDeleting("core-auth"));
+
+    await expect(check([deployment({ name: "core" }, owner)], "remove")).rejects.toThrow(
+      inUse(
+        'Auth service "core-auth" cannot be deleted: AI gateway "chat" of application "viewer" still uses it.',
+        [
+          {
+            resourceType: "auth.service",
+            name: "core-auth",
+            application: "viewer",
+            usedBy: { resourceType: "aigateway", name: "chat" },
+          },
+        ],
+      ),
+    );
+  });
+
+  test("accepts uses that the run deletes or rewrites, and a table of another namespace", async () => {
+    const owner = withWorkspaceGateway(deletingAdmin(ownerDeleting("core-auth")));
+    deletingOrderTable(owner);
     for (const name of ["notify", "sync"]) {
-      withWorkspaceExecutor(
-        owner,
-        { name, targetConfig: INVOKER_TARGETS[0]!.targetConfig },
-        "portal",
-      );
+      withWorkspaceExecutor(owner, { name, targetConfig: FUNCTION_TARGET }, "portal");
     }
+    withWorkspaceExecutor(
+      owner,
+      {
+        name: "audit",
+        triggerConfig: eventTrigger({
+          case: "tailordb",
+          value: { namespaceName: "other", typeName: "Order" },
+        }),
+      },
+      "portal",
+    );
     owner.executor.changeSet.deletes.push({ name: "notify", request: {} });
     owner.executor.changeSet.updates.push({
       name: "sync",
       request: { workspaceId: "ws", executor: { name: "sync" } },
       metaRequest: { trn: "trn" },
     });
+    owner.aiGateway.changeSet.deletes.push({ name: "chat", request: {} });
 
     await expect(check([deployment({ name: "core" }, owner)], "deploy")).resolves.toBeUndefined();
   });
 
-  test("rejects a deleted machine user that a resolver in another namespace uses, read in full", async () => {
-    const owner = deletingMachineUser();
+  test("rejects a deleted machine user that resolvers of the run and of other namespaces use", async () => {
+    const owner = deletingAdmin();
+    owner.pipeline.existingResolvers = new Map([
+      [
+        "main",
+        {
+          existingResolvers: [],
+          existingResolverDetails: new Map([["pay", resolverInvoking("pay")]]),
+        },
+      ],
+    ]);
     owner.pipeline.existingServices = {
+      main: { resource: {} as never, allLabels: { "sdk-name": "core" } },
       billing: { resource: {} as never, allLabels: { "sdk-name": "billing-app" } },
     };
     const listPipelineResolvers = vi.fn(async () => ({
@@ -496,47 +672,30 @@ describe("assertResourcesNotInUse for machine users used as invoker", () => {
     await expect(
       check([deployment({ name: "core" }, owner)], "deploy", { listPipelineResolvers }),
     ).rejects.toThrow(
-      expect.objectContaining({
-        message:
-          'Machine user "admin" of Auth service "core-auth" cannot be deleted: resolver "charge" in namespace "billing" of application "billing-app" still uses it.',
-        context: {
-          uses: [
-            {
-              resourceType: "auth.machine_user",
-              namespace: "core-auth",
-              name: "admin",
-              application: "billing-app",
-              usedBy: { resourceType: "pipeline.resolver", namespace: "billing", name: "charge" },
-            },
-          ],
-        },
-      }),
+      inUse(
+        [
+          `${ADMIN} cannot be deleted: resolver "pay" in namespace "main" of application "core" still uses it.`,
+          `${ADMIN} cannot be deleted: resolver "charge" in namespace "billing" of application "billing-app" still uses it.`,
+        ].join("\n"),
+        [
+          {
+            ...ADMIN_USE,
+            application: "core",
+            usedBy: { resourceType: "pipeline.resolver", namespace: "main", name: "pay" },
+          },
+          {
+            ...ADMIN_USE,
+            application: "billing-app",
+            usedBy: { resourceType: "pipeline.resolver", namespace: "billing", name: "charge" },
+          },
+        ],
+      ),
     );
-    expect(listPipelineResolvers).toHaveBeenCalledWith(
+    expect(listPipelineResolvers).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({
         workspaceId: "ws",
         namespaceName: "billing",
         pipelineResolverView: PipelineResolverView.FULL,
-      }),
-    );
-  });
-
-  test("rejects a deleted machine user that a resolver the run keeps uses", async () => {
-    const owner = deletingMachineUser();
-    owner.pipeline.existingResolvers = new Map([
-      [
-        "main",
-        {
-          existingResolvers: [],
-          existingResolverDetails: new Map([["charge", resolverInvoking("charge")]]),
-        },
-      ],
-    ]);
-
-    await expect(check([deployment({ name: "core" }, owner)], "deploy")).rejects.toThrow(
-      expect.objectContaining({
-        message:
-          'Machine user "admin" of Auth service "core-auth" cannot be deleted: resolver "charge" in namespace "main" of application "core" still uses it.',
       }),
     );
   });
@@ -552,247 +711,5 @@ describe("assertResourcesNotInUse for machine users used as invoker", () => {
       check([deployment({ name: "core" }, owner)], "deploy", { listPipelineResolvers }),
     ).resolves.toBeUndefined();
     expect(listPipelineResolvers).not.toHaveBeenCalled();
-  });
-
-  test("names no application for an executor that no application manages", async () => {
-    const owner = withWorkspaceExecutor(deletingMachineUser(), {
-      name: "notify",
-      targetConfig: INVOKER_TARGETS[0]!.targetConfig,
-    });
-
-    await expect(check([deployment({ name: "core" }, owner)], "deploy")).rejects.toThrow(
-      expect.objectContaining({
-        message:
-          'Machine user "admin" of Auth service "core-auth" cannot be deleted: executor "notify" still uses it.',
-        suggestion: expect.stringContaining("outside the SDK"),
-        context: {
-          uses: [
-            {
-              resourceType: "auth.machine_user",
-              namespace: "core-auth",
-              name: "admin",
-              usedBy: { resourceType: "executor", name: "notify" },
-            },
-          ],
-        },
-      }),
-    );
-  });
-});
-
-describe("assertResourcesNotInUse for Auth services used by AI gateways", () => {
-  function withWorkspaceGateway(results: PlanResults) {
-    results.aiGateway.existingGateways = {
-      chat: {
-        resource: create(AIGatewaySchema, { name: "chat", authNamespace: "core-auth" }),
-        allLabels: { "sdk-name": "viewer" },
-      },
-    };
-    return results;
-  }
-
-  test("rejects a deleted Auth service that an AI gateway outside the run uses", async () => {
-    const owner = withWorkspaceGateway(ownerDeleting("core-auth"));
-
-    await expect(check([deployment({ name: "core" }, owner)], "remove")).rejects.toThrow(
-      expect.objectContaining({
-        message:
-          'Auth service "core-auth" cannot be deleted: AI gateway "chat" of application "viewer" still uses it.',
-        context: {
-          uses: [
-            {
-              resourceType: "auth.service",
-              name: "core-auth",
-              application: "viewer",
-              usedBy: { resourceType: "aigateway", name: "chat" },
-            },
-          ],
-        },
-      }),
-    );
-  });
-
-  test("accepts an AI gateway that the run deletes", async () => {
-    const owner = withWorkspaceGateway(ownerDeleting("core-auth"));
-    owner.aiGateway.changeSet.deletes.push({ name: "chat", request: {} });
-
-    await expect(check([deployment({ name: "core" }, owner)], "deploy")).resolves.toBeUndefined();
-  });
-
-  test("rejects an AI gateway of the run whose planned Auth service is deleted", async () => {
-    const viewer = emptyPlanResults();
-    viewer.aiGateway.changeSet.creates.push({
-      name: "chat",
-      request: { workspaceId: "ws", aigatewayName: "chat", authNamespace: "core-auth", cors: [] },
-      metaRequest: { trn: "trn" },
-    });
-
-    await expect(
-      check(
-        [
-          deployment({ name: "core" }, ownerDeleting("core-auth")),
-          deployment({ name: "viewer" }, viewer),
-        ],
-        "deploy",
-      ),
-    ).rejects.toThrow(
-      expect.objectContaining({
-        message:
-          'Auth service "core-auth" cannot be deleted: AI gateway "chat" of application "viewer" still uses it.',
-      }),
-    );
-  });
-});
-
-type EventSource = {
-  label: string;
-  deletes: (results: PlanResults) => void;
-  executor: ExecutorInit;
-  message: string;
-  use: { resourceType: string; namespace?: string; name: string };
-};
-
-function deletingOrderFlow(results: PlanResults) {
-  results.workflow.changeSet.deletes.push({
-    name: "order-flow",
-    workspaceId: "ws",
-    workflowId: "id",
-    usedJobNames: [],
-  });
-}
-
-function eventTrigger(
-  typedConfig: Extract<
-    NonNullable<NonNullable<ExecutorInit["triggerConfig"]>["config"]>,
-    { case: "event" }
-  >["value"]["typedConfig"],
-): ExecutorInit["triggerConfig"] {
-  return { config: { case: "event", value: { typedConfig } } };
-}
-
-const WORKFLOW_TRIGGER: EventSource = {
-  label: "workflow used by the execution trigger",
-  deletes: deletingOrderFlow,
-  executor: {
-    triggerConfig: eventTrigger({ case: "workflow", value: { workflowName: "order-flow" } }),
-  },
-  message: 'Workflow "order-flow"',
-  use: { resourceType: "workflow", name: "order-flow" },
-};
-
-const TABLE_TRIGGER: EventSource = {
-  label: "TailorDB table used by the record trigger",
-  deletes: (results) =>
-    results.tailorDB.changeSet.type.deletes.push({
-      name: "Order",
-      request: { workspaceId: "ws", namespaceName: "main", tailordbTypeName: "Order" },
-    }),
-  executor: {
-    triggerConfig: eventTrigger({
-      case: "tailordb",
-      value: { namespaceName: "main", typeName: "Order" },
-    }),
-  },
-  message: 'TailorDB table "Order" in namespace "main"',
-  use: { resourceType: "tailordb.type", namespace: "main", name: "Order" },
-};
-
-const EVENT_SOURCES: EventSource[] = [
-  WORKFLOW_TRIGGER,
-  {
-    label: "workflow used by the workflow target",
-    deletes: deletingOrderFlow,
-    executor: {
-      targetConfig: { config: { case: "workflow", value: { workflowName: "order-flow" } } },
-    },
-    message: 'Workflow "order-flow"',
-    use: { resourceType: "workflow", name: "order-flow" },
-  },
-  TABLE_TRIGGER,
-  {
-    label: "resolver used by the resolver trigger",
-    deletes: (results) =>
-      results.pipeline.changeSet.resolver.deletes.push({
-        name: "createOrder",
-        request: { workspaceId: "ws", namespaceName: "main", resolverName: "createOrder" },
-      }),
-    executor: {
-      triggerConfig: eventTrigger({
-        case: "pipeline",
-        value: { namespaceName: "main", resolverName: "createOrder" },
-      }),
-    },
-    message: 'Resolver "createOrder" in namespace "main"',
-    use: { resourceType: "pipeline.resolver", namespace: "main", name: "createOrder" },
-  },
-  {
-    label: "IdP used by the IdP user trigger",
-    deletes: (results) =>
-      results.idp.changeSet.service.deletes.push({ name: "main-idp", request: {} }),
-    executor: {
-      triggerConfig: eventTrigger({ case: "idp", value: { namespaceName: "main-idp" } }),
-    },
-    message: 'IdP service "main-idp"',
-    use: { resourceType: "idp.service", name: "main-idp" },
-  },
-];
-
-describe("assertResourcesNotInUse for event sources and workflows that executors use", () => {
-  test.each(EVENT_SOURCES)(
-    "rejects a deleted $label of an executor outside the run",
-    async ({ deletes, executor, message, use }) => {
-      const owner = withWorkspaceExecutor(
-        emptyPlanResults(),
-        { name: "notify", ...executor },
-        "portal",
-      );
-      deletes(owner);
-
-      await expect(check([deployment({ name: "core" }, owner)], "deploy")).rejects.toThrow(
-        expect.objectContaining({
-          code: "SERVICE_IN_USE",
-          message: `${message} cannot be deleted: executor "notify" of application "portal" still uses it.`,
-          context: {
-            uses: [
-              {
-                ...use,
-                application: "portal",
-                usedBy: { resourceType: "executor", name: "notify" },
-              },
-            ],
-          },
-        }),
-      );
-    },
-  );
-
-  test("counts a disabled executor", async () => {
-    const owner = withWorkspaceExecutor(
-      emptyPlanResults(),
-      { name: "notify", disabled: true, ...WORKFLOW_TRIGGER.executor },
-      "portal",
-    );
-    WORKFLOW_TRIGGER.deletes(owner);
-
-    await expect(check([deployment({ name: "core" }, owner)], "deploy")).rejects.toThrow(
-      expect.objectContaining({ code: "SERVICE_IN_USE" }),
-    );
-  });
-
-  test("matches a TailorDB table only in its own namespace", async () => {
-    const owner = withWorkspaceExecutor(
-      emptyPlanResults(),
-      {
-        name: "notify",
-        triggerConfig: eventTrigger({
-          case: "tailordb",
-          value: { namespaceName: "other", typeName: "Order" },
-        }),
-      },
-      "portal",
-    );
-    TABLE_TRIGGER.deletes(owner);
-
-    await expect(check([deployment({ name: "core" }, owner)], "deploy")).resolves.toBeUndefined();
   });
 });
