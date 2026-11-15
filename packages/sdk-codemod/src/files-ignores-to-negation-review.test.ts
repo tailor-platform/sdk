@@ -14,12 +14,36 @@ const review = (body: string) => {
 };
 
 describe("ignores -> files negation migration review", () => {
-  test("rewrites a literal config and reports nothing left to review", () => {
-    const { transformed, findings } = review(
-      'export default defineConfig({\n  executor: { files: ["executors/**/*.ts"], ignores: ["**/x.ts"] },\n});\n',
-    );
+  test.each([
+    [
+      "a literal config",
+      'executor: { files: ["executors/**/*.ts"], ignores: ["**/x.ts"] },',
+      'executor: { files: ["executors/**/*.ts", "!**/x.ts"] },',
+    ],
+    [
+      "a template-literal negation already in files",
+      "executor: { files: [`e/**/*.ts`, `!**/*.test.ts`] },",
+      'executor: { files: [`e/**/*.ts`, `!**/*.test.ts`, "!**/*.spec.ts"] },',
+    ],
+    [
+      "template-literal ignores",
+      'executor: { files: ["e/**/*.ts"], ignores: [`**/x.ts`] },',
+      'executor: { files: ["e/**/*.ts", `!**/x.ts`] },',
+    ],
+    [
+      "template-literal ignores already negated in files",
+      'executor: { files: ["e/**/*.ts", `!**/x.ts`], ignores: [`**/x.ts`] },',
+      'executor: { files: ["e/**/*.ts", `!**/x.ts`] },',
+    ],
+    [
+      "a namespace with a computed key",
+      'db: { [shared]: { files: ["db/*.ts"] } },',
+      'db: { [shared]: { files: ["db/*.ts", "!**/*.test.ts", "!**/*.spec.ts"] } },',
+    ],
+  ])("rewrites %s and reports nothing left to review", (_name, service, rewritten) => {
+    const { transformed, findings } = review(`export default defineConfig({\n  ${service}\n});\n`);
 
-    expect(transformed).toContain('executor: { files: ["executors/**/*.ts", "!**/x.ts"] },');
+    expect(transformed).toContain(rewritten);
     expect(findings).toEqual([]);
   });
 
@@ -50,6 +74,11 @@ describe("ignores -> files negation migration review", () => {
     [
       "a namespace config passed as a variable",
       "export default defineConfig({\n  db: { main: mainDb },\n});\n",
+      "a `db` namespace is not written as an object literal",
+    ],
+    [
+      "a namespace config with a computed key passed as a variable",
+      "export default defineConfig({\n  db: { [shared]: sharedDb },\n});\n",
       "a `db` namespace is not written as an object literal",
     ],
     [
@@ -87,6 +116,8 @@ describe("ignores -> files negation migration review", () => {
     ["a pattern above the config directory with backslashes", '"..\\\\shared\\\\**\\\\*.ts"'],
     ["an absolute pattern", '"/repo/shared/executors/**/*.ts"'],
     ["a pattern built from a variable", "sharedExecutors"],
+    ["a template-literal pattern above the config directory", "`../shared/*.ts`"],
+    ["a template-literal pattern with a substitution", "`${dir}/*.ts`"],
   ])("appends the test-file exclusion but flags %s, which it may not cover", (_name, element) => {
     const { transformed, findings } = review(
       `export default defineConfig({\n  executor: { files: [${element}] },\n});\n`,
@@ -103,11 +134,26 @@ describe("ignores -> files negation migration review", () => {
   test.each([
     ["a pattern whose `..` stays inside the config directory", '"src/../executors/**/*.ts"'],
     ["a `!` pattern whose `..` leads above it", '"executors/**/*.ts", "!src/../../shared/x.ts"'],
+    ["a template-literal pattern inside the config directory", "`executors/**/*.ts`"],
   ])("does not flag %s", (_name, elements) => {
     const { findings } = review(
       `export default defineConfig({\n  executor: { files: [${elements}] },\n});\n`,
     );
 
     expect(findings).toEqual([]);
+  });
+
+  test("labels a computed namespace key by its source text", () => {
+    const { findings } = review(
+      'export default defineConfig({\n  db: { [shared]: { files: ["../db/*.ts"] } },\n});\n',
+    );
+
+    expect(findings).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining(
+          "db[shared].files can match files outside this config's directory",
+        ),
+      }),
+    ]);
   });
 });

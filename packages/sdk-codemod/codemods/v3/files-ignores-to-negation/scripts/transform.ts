@@ -10,9 +10,9 @@ import {
   ownLineIndent,
   ownLineRange,
   pairValue,
-  stringValue,
 } from "../../../../src/ast-grep-helpers";
 import { findDefineConfigCalls, type ManualMigration } from "../../../../src/define-config";
+import { sourceStringContent } from "../../../../src/source-strings";
 import type { LlmReviewFinding } from "../../../../src/types";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
@@ -23,14 +23,14 @@ const DEFAULT_NEGATIONS = ["!**/*.test.ts", "!**/*.spec.ts"];
 
 type Analysis = { edits: Edit[]; findings: ManualMigration[] };
 
-function isNegation(element: SgNode): boolean {
-  return element.kind() === "string" && (stringValue(element) ?? "").startsWith("!");
+function isNegation(pattern: string | null): boolean {
+  return pattern?.startsWith("!") ?? false;
 }
 
 /** Whether a `files` entry can match files outside the config's own directory. */
-function mayEscapeConfigDir(element: SgNode): boolean {
-  if (element.kind() !== "string") return true;
-  const pattern = path.normalize(stringValue(element) ?? "");
+function mayEscapeConfigDir(content: string | null): boolean {
+  if (content === null) return true;
+  const pattern = path.normalize(content);
   return pattern.startsWith("/") || pattern.startsWith("../") || /^[A-Za-z]:[\\/]/u.test(pattern);
 }
 
@@ -110,22 +110,21 @@ function analyzeService(source: string, service: SgNode, label: string): Analysi
   }
 
   const elements = arrayElements(files);
-  const lastPositive = elements.findLastIndex((element) => !isNegation(element));
+  const patterns = elements.map((element) => sourceStringContent(element, source));
+  const lastPositive = patterns.findLastIndex((pattern) => !isNegation(pattern));
   if (lastPositive === -1) {
     return ignoresEntry
       ? { edits: [entryRemoval(source, entries, ignoresEntry)], findings: [] }
       : { edits: [], findings: [] };
   }
-  const trailingNegations = new Set(
-    elements.slice(lastPositive + 1).map((element) => stringValue(element)),
-  );
+  const trailingNegations = new Set(patterns.slice(lastPositive + 1));
 
   if (!ignoresEntry) {
     const quote = quoteOf(elements);
     const missing = DEFAULT_NEGATIONS.filter((pattern) => !trailingNegations.has(pattern)).map(
       (pattern) => `${quote}${pattern}${quote}`,
     );
-    const findings = elements.some((element) => !isNegation(element) && mayEscapeConfigDir(element))
+    const findings = patterns.some((pattern) => !isNegation(pattern) && mayEscapeConfigDir(pattern))
       ? [
           {
             reason: `${label}.files can match files outside this config's directory, where the explicit test-file exclusion does not apply`,
@@ -138,7 +137,8 @@ function analyzeService(source: string, service: SgNode, label: string): Analysi
 
   const ignores = ignoresEntry.kind() === "pair" ? pairValue(ignoresEntry) : null;
   const ignoreElements = ignores?.kind() === "array" ? arrayElements(ignores) : null;
-  if (!ignoreElements || ignoreElements.some((element) => element.kind() !== "string")) {
+  const ignorePatterns = ignoreElements?.map((element) => sourceStringContent(element, source));
+  if (!ignoreElements || !ignorePatterns || ignorePatterns.some((pattern) => pattern === null)) {
     return {
       edits: [],
       findings: [
@@ -147,7 +147,7 @@ function analyzeService(source: string, service: SgNode, label: string): Analysi
     };
   }
   const missing = ignoreElements
-    .filter((element) => !trailingNegations.has(`!${stringValue(element)}`))
+    .filter((_element, index) => !trailingNegations.has(`!${ignorePatterns[index]}`))
     .map(negated);
   return {
     edits: [
@@ -161,6 +161,14 @@ function analyzeService(source: string, service: SgNode, label: string): Analysi
 function objectValue(entry: SgNode): SgNode | null {
   const value = entry.kind() === "pair" ? pairValue(entry) : null;
   return value?.kind() === "object" ? value : null;
+}
+
+/** How a finding names a namespace: `.name`, or `[expression]` for a computed key. */
+function namespaceLabel(entry: SgNode): string | null {
+  const name = entryKey(entry);
+  if (name !== null) return `.${name}`;
+  const key = entry.kind() === "pair" ? entry.children()[0] : undefined;
+  return key?.kind() === "computed_property_name" ? key.text() : null;
 }
 
 function mergeInto(target: Analysis, result: Analysis): void {
@@ -190,7 +198,7 @@ function analyzeConfig(source: string, config: SgNode): Analysis {
       continue;
     }
     for (const namespaceEntry of objectEntries(value)) {
-      const namespace = entryKey(namespaceEntry);
+      const namespace = namespaceLabel(namespaceEntry);
       const namespaceConfig = namespace === null ? null : objectValue(namespaceEntry);
       if (namespace === null || !namespaceConfig) {
         analysis.findings.push({
@@ -199,7 +207,7 @@ function analyzeConfig(source: string, config: SgNode): Analysis {
         });
         continue;
       }
-      mergeInto(analysis, analyzeService(source, namespaceConfig, `${key}.${namespace}`));
+      mergeInto(analysis, analyzeService(source, namespaceConfig, `${key}${namespace}`));
     }
   }
   return analysis;
