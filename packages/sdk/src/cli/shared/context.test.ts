@@ -27,6 +27,7 @@ import { errorToJson } from "./error-json";
 import { isCLIError } from "./errors";
 import { logger } from "./logger";
 import { writeHeldConfigLock } from "./test-helpers/config-lock";
+import { invalidYAMLPlatformConfig } from "./test-helpers/platform-config";
 import { isKeyringAvailable, resetKeyringState } from "./token-store";
 import type * as ClientModule from "./client";
 
@@ -2010,6 +2011,38 @@ describe("unreadable platform config", () => {
       code: "PLATFORM_CONFIG_INVALID",
       message: "Failed to parse config file.",
     });
+    expect(getErrorDiagnostics(error as Error).location).toEqual({ file: configPath });
+  });
+
+  test("locates a config that is not valid YAML at its line and column", async () => {
+    fs.writeFileSync(configPath, invalidYAMLPlatformConfig);
+
+    const error = await readPlatformConfig().catch((error: unknown) => error);
+
+    expect(error).toMatchObject({
+      code: "PLATFORM_CONFIG_INVALID",
+      message: "Failed to parse config file.",
+      details: "Invalid YAML at line 6, column 4.",
+    });
+    expect((error as { context?: unknown }).context).toEqual({
+      file: configPath,
+      line: 6,
+      column: 4,
+    });
+    expect(getErrorDiagnostics(error as Error).location).toEqual({ file: configPath, line: 6 });
+  });
+
+  test("codes an empty config as invalid YAML", async () => {
+    fs.writeFileSync(configPath, "");
+
+    const error = await readPlatformConfig().catch((error: unknown) => error);
+
+    expect(error).toMatchObject({
+      code: "PLATFORM_CONFIG_INVALID",
+      message: "Failed to parse config file.",
+      details: "Invalid YAML.",
+    });
+    expect((error as { context?: unknown }).context).toEqual({ file: configPath });
     expect(getErrorDiagnostics(error as Error).location).toEqual({ file: configPath });
   });
 });
