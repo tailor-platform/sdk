@@ -93,6 +93,15 @@ describe("FileUtilsPlugin", () => {
       expect(result).not.toContain("openDownloadStream");
     });
 
+    test("should deprecate the string overload without encoding since 2.15.0", () => {
+      const result = generateUnifiedFileUtils([
+        { namespace: "tailordb", types: [{ name: "User", fileFields: ["avatar"] }] },
+      ]);
+
+      expect(result).toContain("@deprecated since 2.15.0 — pass encoding");
+      expect(result).not.toContain("NEXT_RELEASE");
+    });
+
     test("should merge types from multiple namespaces", () => {
       const namespaceData = [
         {
