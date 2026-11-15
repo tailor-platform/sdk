@@ -106,14 +106,64 @@ describe("files patterns -> config-relative migration", () => {
     expect(transformed).toContain('files: ["./!jobs/*.ts", "!./!jobs/draft.ts"]');
   });
 
-  test("rewrites a config default-exported through an export clause", () => {
+  test.each([
+    ["an export clause", "const config = %s;\nexport { config as default };\n"],
+    ["`export default` of a variable", "const config = %s;\nexport default config;\n"],
+    [
+      "`export default` of an exported variable",
+      "export const config = %s;\nexport default config;\n",
+    ],
+  ])("rewrites a config default-exported through %s", (_, template) => {
     writeFiles("apps/a/tailordb/user.ts");
 
     const { transformed } = migrate(
-      'const config = defineConfig({\n  db: { main: { files: ["apps/a/tailordb/*.ts"] } },\n});\nexport { config as default };\n',
+      template.replace(
+        "%s",
+        'defineConfig({\n  db: { main: { files: ["apps/a/tailordb/*.ts"] } },\n})',
+      ),
     );
 
     expect(transformed).toContain('files: ["tailordb/*.ts"]');
+  });
+
+  test("rewrites only the defineConfig() call the module default-exports", () => {
+    writeFiles("apps/a/tailordb/user.ts", "apps/a/executors/run.ts");
+    const fragment =
+      'export const fragment = defineConfig({\n  executor: { files: ["apps/a/executors/*.ts"] },\n});\n';
+
+    const { transformed, findings } = migrate(
+      fragment +
+        'export default defineConfig({\n  db: { main: { files: ["apps/a/tailordb/*.ts"] } },\n});\n',
+    );
+
+    expect(transformed).toBe(
+      IMPORT +
+        fragment +
+        'export default defineConfig({\n  db: { main: { files: ["tailordb/*.ts"] } },\n});\n',
+    );
+    expect(findings).toEqual([expect.stringContaining("not the module's default export")]);
+  });
+
+  test("reports a defineConfig() call next to an unrelated default export instead of rewriting it", () => {
+    writeFiles("apps/a/executors/run.ts");
+
+    const { transformed, findings } = migrate(
+      'export const fragment = defineConfig({\n  executor: { files: ["apps/a/executors/*.ts"] },\n});\nexport default function helper() {}\n',
+    );
+
+    expect(transformed).toBeNull();
+    expect(findings).toEqual([expect.stringContaining("not the module's default export")]);
+  });
+
+  test("does not report a defineConfig() call that is not the default export when it needs no rewrite", () => {
+    writeFiles("apps/a/executors/run.ts");
+
+    const { transformed, findings } = migrate(
+      'export const fragment = defineConfig({\n  executor: { files: ["executors/*.ts"] },\n});\n',
+    );
+
+    expect(transformed).toBeNull();
+    expect(findings).toEqual([]);
   });
 
   test.each([
@@ -227,7 +277,12 @@ describe("files patterns -> config-relative migration", () => {
     [
       "a module that does not default-export a config",
       'export const shared = defineConfig({\n  db: { main: { files: ["apps/a/tailordb/*.ts"] } },\n});\n',
-      "does not default-export a config",
+      "not the module's default export",
+    ],
+    [
+      "a defineConfig() call other than the default export whose patterns cannot be read",
+      "export const shared = defineConfig({\n  executor: { files: executorFiles },\n});\nexport default function helper() {}\n",
+      "not the module's default export",
     ],
   ])("reports %s outside the project directory", (_, body, reason) => {
     writeFiles("apps/a/tailordb/user.ts");

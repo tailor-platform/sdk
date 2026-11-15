@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import {
   arrayElements,
+  callArgument,
   entryKey,
   excerptOf,
   lineOf,
@@ -13,12 +14,14 @@ import {
   analyzeServiceConfigs,
   findDefineConfigCalls,
   type Analysis,
+  type DefineConfigCalls,
 } from "../../../../src/define-config";
+import { nodeRangeKey } from "../../../../src/source-strings";
 import type { LlmReviewFinding } from "../../../../src/types";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
-const NOT_A_CONFIG_MODULE =
-  "this module does not default-export a config, so its patterns resolve against the directory of the config file that loads it";
+const NOT_THE_DEFAULT_EXPORT =
+  "this defineConfig() call is not the module's default export, so its patterns resolve against the directory of the config file that loads it";
 
 /** The config file's directory, and the project directory commands are assumed to run from. */
 type Directories = { configDir: string; projectDir: string };
@@ -136,12 +139,64 @@ function analyzeService(label: string, service: SgNode, dirs: Directories): Anal
   };
 }
 
-function isDefaultExport(statement: SgNode): boolean {
-  if (statement.kind() !== "export_statement") return false;
-  if (statement.children().some((child) => child.kind() === "default")) return true;
-  return statement
-    .findAll({ rule: { kind: "export_specifier" } })
-    .some((specifier) => specifier.children().at(-1)?.text() === "default");
+/** The expression a module's own `export default` exports, or the local name it exports as default. */
+function defaultExportTarget(root: SgNode): SgNode | string | null {
+  for (const statement of root.children()) {
+    if (statement.kind() !== "export_statement" || statement.field("source")) continue;
+    const value = statement.field("value");
+    if (value) return value.kind() === "identifier" ? value.text() : value;
+    const specifier = statement
+      .findAll({ rule: { kind: "export_specifier" } })
+      .find((candidate) => candidate.field("alias")?.text() === "default");
+    const name = specifier?.field("name")?.text();
+    if (name) return name;
+  }
+  return null;
+}
+
+function topLevelValue(root: SgNode, name: string): SgNode | null {
+  for (const statement of root.children()) {
+    const declaration =
+      statement.kind() === "export_statement" ? statement.field("declaration") : statement;
+    if (
+      declaration?.kind() !== "lexical_declaration" &&
+      declaration?.kind() !== "variable_declaration"
+    ) {
+      continue;
+    }
+    const declarator = declaration
+      .children()
+      .find(
+        (child) => child.kind() === "variable_declarator" && child.field("name")?.text() === name,
+      );
+    if (declarator) return declarator.field("value");
+  }
+  return null;
+}
+
+/** The expression a module default-exports, followed through a top-level variable. */
+function defaultExportedValue(root: SgNode): SgNode | null {
+  const target = defaultExportTarget(root);
+  return typeof target === "string" ? topLevelValue(root, target) : target;
+}
+
+function isSameNode(a: SgNode, b: SgNode): boolean {
+  return nodeRangeKey(a) === nodeRangeKey(b);
+}
+
+function analyzeCall(
+  call: DefineConfigCalls["calls"][number],
+  exported: SgNode | null,
+  dirs: Directories,
+): Analysis {
+  const analysis = analyzeServiceConfigs([call], (label, service) =>
+    analyzeService(label, service, dirs),
+  );
+  if ("reason" in call) return analysis;
+  const exportedConfig = exported?.kind() === "call_expression" ? callArgument(exported) : null;
+  if (exportedConfig && isSameNode(exportedConfig, call.config)) return analysis;
+  if (analysis.edits.length === 0 && analysis.findings.length === 0) return analysis;
+  return { edits: [], findings: [{ reason: NOT_THE_DEFAULT_EXPORT, node: call.config }] };
 }
 
 function analyzeFile(
@@ -153,23 +208,20 @@ function analyzeFile(
   if (dirs.configDir === projectDir) return null;
   const found = findDefineConfigCalls(source, filePath);
   if (!found) return null;
-  const calls = found.root.children().some(isDefaultExport)
-    ? found.calls
-    : found.calls.map((call) =>
-        "reason" in call ? call : { reason: NOT_A_CONFIG_MODULE, node: call.config },
-      );
-  return {
-    root: found.root,
-    analysis: analyzeServiceConfigs(calls, (label, service) =>
-      analyzeService(label, service, dirs),
-    ),
-  };
+  const exported = defaultExportedValue(found.root);
+  const analysis: Analysis = { edits: [], findings: [] };
+  for (const call of found.calls) {
+    const result = analyzeCall(call, exported, dirs);
+    analysis.edits.push(...result.edits);
+    analysis.findings.push(...result.findings);
+  }
+  return { root: found.root, analysis };
 }
 
 /**
- * Rewrite the relative `files` and `ignores` patterns of a config outside the
- * project directory that match files only from the project directory, so they
- * name the same files relative to the config's own directory.
+ * Rewrite the relative `files` and `ignores` patterns of a default-exported
+ * config outside the project directory that match files only from the project
+ * directory, so they name the same files relative to the config's own directory.
  * @param source - File contents
  * @param filePath - Absolute path to the file being transformed
  * @param targetPath - Absolute project directory the codemod runs on
@@ -187,7 +239,9 @@ export default function transform(
 
 /**
  * Report service configs outside the project directory whose patterns this
- * transform cannot rewrite, cannot glob, or that match no files from either directory.
+ * transform cannot rewrite, cannot glob, or that match no files from either
+ * directory, and `defineConfig()` calls other than the default export whose
+ * patterns it would rewrite.
  * @param source - File contents
  * @param filePath - Absolute path to the file being reviewed
  * @param relativePath - Project-relative path reported to the user
@@ -205,7 +259,7 @@ export function reviewFindings(
   return result.analysis.findings.map((finding) => ({
     file: relativePath,
     line: lineOf(finding.node),
-    message: `Make the relative \`files\` and \`ignores\` patterns relative to this config's directory by hand: ${finding.reason}.`,
+    message: `Rewrite the relative \`files\` and \`ignores\` patterns by hand so that they name their files relative to the directory of the config file the CLI loads: ${finding.reason}.`,
     excerpt: excerptOf(finding.node),
   }));
 }
