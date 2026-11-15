@@ -23,7 +23,7 @@ When editing files matching these globs, read and follow the linked rule documen
 - `**`: [Code Comments](.agents/rules/code-comments.md)
 - `packages/sdk/src/cli/commands/deploy/apply-phases.ts`, `packages/sdk/src/cli/commands/deploy/managed-resource-type.ts`, `packages/sdk/src/cli/commands/deploy/test-helpers/plan-results.ts`, `packages/sdk/src/cli/commands/remove.ts`, `packages/sdk/src/cli/commands/remove.test.ts`, `packages/sdk/src/cli/commands/deploy/deploy.test.ts`, `packages/sdk/src/cli/commands/deploy/plan-report.ts`, `packages/sdk/src/cli/commands/deploy/validate-plan.ts`, `packages/sdk/src/cli/commands/deploy/managed-resources.ts`: [Adding a Deploy-Managed Resource Type](.agents/rules/deploy-managed-resources.md)
 - `packages/sdk/src/**/*.ts`, `packages/sdk-codemod/src/registry.ts`: [Deprecating a Public API](.agents/rules/deprecation.md)
-- `packages/sdk/docs/**`, `packages/sdk/src/**/*.ts`: [User-Facing Docs Authoring](.agents/rules/docs-authoring.md)
+- `packages/sdk/docs/**`, `packages/sdk/src/**/*.ts`, `packages/create-sdk/README.md`, `packages/create-sdk/templates/*/README.md`: [User-Facing Docs Authoring](.agents/rules/docs-authoring.md)
 - `packages/sdk/e2e/**`: [SDK E2E Tests](.agents/rules/e2e-tests.md)
 - `packages/sdk/src/**/*.ts`: [JSDoc Parameter Rules (SDK)](.agents/rules/jsdoc.md)
 - `packages/sdk/src/types/**/*.ts`, `packages/sdk/src/parser/**/types.ts`, `packages/sdk/src/configure/**/types.ts`, `packages/sdk/src/configure/**/*.types.ts`, `packages/sdk/src/plugin/types.ts`, `packages/sdk/src/runtime/types.ts`, `packages/sdk/src/parser/**/schema.ts`, `packages/sdk/zinfer.config.ts`: [Schema Types](.agents/rules/schema-types.md)
