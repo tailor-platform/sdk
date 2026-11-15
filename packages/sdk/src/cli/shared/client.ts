@@ -590,7 +590,7 @@ export function retryInterceptor(): Interceptor {
           await reportCrash(error, "handledError");
         }
         const unsentRequest = isUnsentRequest(error);
-        if (unsentRequest || isRetirable(error, req.method)) {
+        if (unsentRequest || isRetriable(error, req.method)) {
           lastError = error;
           priorAttemptMayHaveCommitted ||= !unsentRequest;
           logger.debug(
@@ -748,12 +748,12 @@ const RETRY_BASE_DELAY_MS = 500;
 const MAX_RETRY_ATTEMPTS = 3;
 
 /**
- * Methods without an idempotency declaration whose repeat, after an attempt that may
- * have committed, leaves the same state instead of starting another execution or
- * returning another one-time secret.
+ * Methods without an idempotency declaration that are retried even after an attempt
+ * that may have committed, because a repeat converges on what the first attempt left
+ * instead of running an execution again or creating a second resource the user sees.
  *
- * A drift guard (see client.test.ts) fails CI if a write used in the deploy flow is
- * neither listed here nor explicitly classified as not repeated.
+ * A drift guard (see client.test.ts) fails CI if a write the CLI calls is neither
+ * listed here nor explicitly classified as not repeated.
  * @internal
  */
 export const REPEATABLE_METHODS: ReadonlySet<string> = new Set([
@@ -761,6 +761,7 @@ export const REPEATABLE_METHODS: ReadonlySet<string> = new Set([
   "AddCustomDomain",
   "BulkSetMetadata",
   "CancelCustomDomainTransfer",
+  "CreateDeployment",
   "CreateIdPClient",
   "CreateWorkflowJobFunction",
   "DeleteAIGateway",
@@ -777,6 +778,8 @@ export const REPEATABLE_METHODS: ReadonlySet<string> = new Set([
   "DeleteFunctionRegistry",
   "DeleteIdPClient",
   "DeleteIdPService",
+  "DeleteOrganizationFolder",
+  "DeletePersonalAccessToken",
   "DeletePipelineResolver",
   "DeletePipelineService",
   "DeleteSecretManagerSecret",
@@ -791,10 +794,14 @@ export const REPEATABLE_METHODS: ReadonlySet<string> = new Set([
   "DeleteWorkflowJobFunction",
   "DeleteWorkflowJobFunctionExecutionPolicy",
   "DeleteWorkspace",
+  "DismissMyNotification",
   "MarkMyNotificationsRead",
   "PublishDeployment",
   "RemoveCustomDomain",
+  "RemoveWorkspacePlatformUser",
   "RequestCustomDomainTransfer",
+  "RestoreWorkspace",
+  "RevokeAuthConnection",
   "SetMetadata",
   "UpdateAIGateway",
   "UpdateApplication",
@@ -808,6 +815,8 @@ export const REPEATABLE_METHODS: ReadonlySet<string> = new Set([
   "UpdateAuthService",
   "UpdateExecutorExecutor",
   "UpdateIdPService",
+  "UpdateOrganization",
+  "UpdateOrganizationFolder",
   "UpdatePipelineResolver",
   "UpdatePipelineService",
   "UpdateSecretManagerSecret",
@@ -819,6 +828,7 @@ export const REPEATABLE_METHODS: ReadonlySet<string> = new Set([
   "UpdateWorkflow",
   "UpdateWorkflowJobFunction",
   "UpdateWorkflowJobFunctionExecutionPolicy",
+  "UpdateWorkspacePlatformUser",
 ]);
 
 /**
@@ -897,7 +907,7 @@ function isUnsentRequest(error: unknown): boolean {
  * @param method - Descriptor of the requested method
  * @returns True if the error should be retried
  */
-function isRetirable(error: unknown, method: UnaryResponse["method"]) {
+function isRetriable(error: unknown, method: UnaryResponse["method"]) {
   const isIdempotentOrSideEffectFree =
     method.idempotency === MethodOptions_IdempotencyLevel.NO_SIDE_EFFECTS ||
     method.idempotency === MethodOptions_IdempotencyLevel.IDEMPOTENT;

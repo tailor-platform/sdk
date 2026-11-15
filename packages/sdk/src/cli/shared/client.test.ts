@@ -1238,6 +1238,53 @@ describe("retryInterceptor", () => {
     },
   );
 
+  test("retries ExecScript when a refused connection is nested deeper in the cause chain", async () => {
+    const refused = Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:443"), {
+      code: "ECONNREFUSED",
+    });
+    const nested = new ConnectError(
+      "unavailable",
+      Code.Unavailable,
+      undefined,
+      undefined,
+      new Error("session error", { cause: refused }),
+    );
+    const next = vi.fn().mockRejectedValueOnce(nested).mockResolvedValueOnce(okResponse);
+
+    const res = await settle(
+      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.execScript)),
+    );
+
+    expect(res).toBe(okResponse);
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  test("does not retry ExecScript on a refused connection reported as another code", async () => {
+    const refused = nodeNetworkError(
+      "ECONNREFUSED",
+      "connect ECONNREFUSED 127.0.0.1:443",
+      Code.Internal,
+    );
+    const next = vi.fn().mockRejectedValueOnce(refused).mockResolvedValueOnce(okResponse);
+
+    await expect(
+      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.execScript))),
+    ).rejects.toBe(refused);
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  test("does not retry ExecScript when the cause chain loops", async () => {
+    const looping: Error = new Error("looping cause");
+    looping.cause = looping;
+    const error = new ConnectError("unavailable", Code.Unavailable, undefined, undefined, looping);
+    const next = vi.fn().mockRejectedValueOnce(error).mockResolvedValueOnce(okResponse);
+
+    await expect(
+      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.execScript))),
+    ).rejects.toBe(error);
+    expect(next).toHaveBeenCalledOnce();
+  });
+
   test("does not retry ExecScript on a timeout that may follow the request", async () => {
     const timeout = nodeNetworkError("ETIMEDOUT", "read ETIMEDOUT", Code.Unavailable);
     const next = vi.fn().mockRejectedValueOnce(timeout).mockResolvedValueOnce(okResponse);
@@ -1391,11 +1438,11 @@ describe("retryInterceptor", () => {
   type OperatorMethod = (typeof OperatorService.method)[keyof typeof OperatorService.method];
 
   /**
-   * Collect the OperatorService methods that the deploy/apply flow calls.
-   * @returns Methods called as `client.<method>(` in non-test deploy sources
+   * Collect the OperatorService methods that the sources under a directory call.
+   * @param relativeDir - Directory to scan, relative to this file
+   * @returns Methods called as `client.<method>(` in non-test sources under the directory
    */
-  function deployClientMethods(): OperatorMethod[] {
-    const deployDir = path.resolve(import.meta.dirname, "../commands/deploy");
+  function clientMethodsCalledIn(relativeDir: string): OperatorMethod[] {
     const tsFiles: string[] = [];
     const walk = (dir: string) => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -1404,7 +1451,7 @@ describe("retryInterceptor", () => {
         else if (entry.name.endsWith(".ts") && !entry.name.includes(".test.")) tsFiles.push(full);
       }
     };
-    walk(deployDir);
+    walk(path.resolve(import.meta.dirname, relativeDir));
 
     const methods = new Set<OperatorMethod>();
     const callRe = /client\.([a-z][A-Za-z0-9]*)\s*\(/g;
@@ -1433,7 +1480,7 @@ describe("retryInterceptor", () => {
       "CreateFunctionRegistry", // client-streaming: bypasses the retry loop
     ]);
 
-    const used = deployClientMethods()
+    const used = clientMethodsCalledIn("../commands/deploy")
       .map(({ name }) => name)
       .filter((name) => name.startsWith("Create"));
 
@@ -1461,36 +1508,39 @@ describe("retryInterceptor", () => {
     expect(typos).toEqual([]);
   });
 
-  test("REPEATABLE_METHODS covers every deploy write or it is explicitly not repeated", () => {
-    const NOT_REPEATED_DEPLOY_WRITES = new Set([
+  const isUnaryWrite = ({ methodKind, idempotency }: OperatorMethod) =>
+    methodKind === "unary" && idempotency === MethodOptions_IdempotencyLevel.IDEMPOTENCY_UNKNOWN;
+
+  test("REPEATABLE_METHODS covers every write the CLI calls or it is explicitly not repeated", () => {
+    const NOT_REPEATED_WRITES = new Set([
+      "CloneApplicationData", // starts another clone operation
+      "CreateOrganizationFolder", // may create another folder with the same name
+      "CreatePersonalAccessToken", // creates another token
+      "CreateWorkspace", // creates another workspace
+      "ExchangeAuthConnectionAuthorizationCode", // the authorization code is single-use
+      "ExecScript", // starts another execution
+      "InviteWorkspacePlatformUser", // may send another invitation
       "ResumeWorkflowExecution", // resumes the execution again
       "StartWorkflow", // starts another execution
+      "TriggerExecutor", // triggers another job
+      "TruncateTailorDBType", // also deletes records written in between
+      "TruncateTailorDBTypes", // also deletes records written in between
     ]);
 
-    const writes = deployClientMethods()
-      .filter(
-        ({ methodKind, idempotency }) =>
-          methodKind === "unary" &&
-          idempotency === MethodOptions_IdempotencyLevel.IDEMPOTENCY_UNKNOWN,
-      )
+    const writes = clientMethodsCalledIn("..")
+      .filter(isUnaryWrite)
       .map(({ name }) => name);
 
     expect(writes).toContain("UpdateTailorDBType");
     expect(
-      writes.filter(
-        (name) => !REPEATABLE_METHODS.has(name) && !NOT_REPEATED_DEPLOY_WRITES.has(name),
-      ),
+      writes.filter((name) => !REPEATABLE_METHODS.has(name) && !NOT_REPEATED_WRITES.has(name)),
     ).toEqual([]);
   });
 
   test("every REPEATABLE_METHODS entry is a unary OperatorService write", () => {
     const unaryWrites = new Set(
       Object.values(OperatorService.method)
-        .filter(
-          ({ methodKind, idempotency }) =>
-            methodKind === "unary" &&
-            idempotency === MethodOptions_IdempotencyLevel.IDEMPOTENCY_UNKNOWN,
-        )
+        .filter(isUnaryWrite)
         .map(({ name }) => name),
     );
 
