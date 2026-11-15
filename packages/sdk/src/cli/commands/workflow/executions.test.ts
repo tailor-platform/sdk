@@ -8,16 +8,25 @@ import {
   FunctionLogSeverity,
   FunctionLogSource,
 } from "@tailor-platform/tailor-proto/function_resource_pb";
+import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import {
   WorkflowExecution_Status,
+  WorkflowExecutionSchema,
   WorkflowJobExecution_Status,
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
-import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
+import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { stripAnsi } from "#/cli/shared/test-helpers/strip-ansi";
-import { executionsCommand, getWorkflowExecution, printExecutionWithLogs } from "./executions";
+import {
+  executionsCommand,
+  getWorkflowExecution,
+  listWorkflowExecutions,
+  printExecutionWithLogs,
+} from "./executions";
+import type { ListWorkflowExecutionsRequest } from "@tailor-platform/tailor-proto/workflow_pb";
 import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 vi.mock("#/cli/shared/context", () => ({
@@ -25,7 +34,8 @@ vi.mock("#/cli/shared/context", () => ({
   loadWorkspaceId: vi.fn(),
 }));
 
-vi.mock("#/cli/shared/client", () => ({
+vi.mock("#/cli/shared/client", async (importOriginal) => ({
+  ...(await importOriginal()),
   initOperatorClient: vi.fn(),
 }));
 
@@ -288,7 +298,181 @@ describe("printExecutionWithLogs", () => {
   });
 });
 
+interface ExecutionFixture {
+  id: string;
+  startedAt?: string;
+}
+
+function mockWorkflowClient(
+  executionsByWorkflow: Record<string, ExecutionFixture[] | ConnectError>,
+) {
+  const listWorkflows = vi.fn(async () => ({
+    workflows: Object.keys(executionsByWorkflow).map((name) => ({ name })),
+    nextPageToken: "",
+  }));
+  const listWorkflowExecutions = vi.fn(async (request: Partial<ListWorkflowExecutionsRequest>) => {
+    const workflowName = request.workflowName ?? "";
+    if (workflowName === "") {
+      throw new ConnectError(
+        "validation error: workflow_name: does not match regex pattern",
+        Code.InvalidArgument,
+      );
+    }
+    const created = executionsByWorkflow[workflowName];
+    if (created === undefined) {
+      throw new ConnectError(`workflow '${workflowName}' not found`, Code.NotFound);
+    }
+    if (created instanceof ConnectError) throw created;
+    const ordered = request.pageDirection === PageDirection.ASC ? created : created.toReversed();
+    const offset = Number(request.pageToken || 0);
+    const end = offset + (request.pageSize || ordered.length);
+    return {
+      executions: ordered.slice(offset, end).map(({ id, startedAt }) =>
+        create(WorkflowExecutionSchema, {
+          id,
+          workflowName,
+          status: startedAt ? WorkflowExecution_Status.SUCCESS : WorkflowExecution_Status.PENDING,
+          startedAt: startedAt ? timestampFromDate(new Date(startedAt)) : undefined,
+        }),
+      ),
+      nextPageToken: end < ordered.length ? String(end) : "",
+    };
+  });
+  vi.mocked(initOperatorClient).mockResolvedValue({
+    listWorkflows,
+    listWorkflowExecutions,
+  } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+  return { listWorkflows, listWorkflowExecutions };
+}
+
+// Each list is in creation order, oldest first.
+const executionsByWorkflow = {
+  "wf-a": [
+    { id: "a1", startedAt: "2026-11-01T10:30:00Z" },
+    { id: "a2", startedAt: "2026-11-01T10:20:00Z" },
+    { id: "a3" },
+  ],
+  "wf-b": [
+    { id: "b1", startedAt: "2026-11-01T10:10:00Z" },
+    { id: "b2", startedAt: "2026-11-01T10:25:00Z" },
+  ],
+  "wf-empty": [],
+};
+
+describe("listWorkflowExecutions", () => {
+  aroundEach(async (runTest) => {
+    vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
+    vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
+    await runTest();
+  });
+
+  test("lists the executions of every workflow when no workflow is given", async () => {
+    const { listWorkflowExecutions: listRequest } = mockWorkflowClient(executionsByWorkflow);
+
+    const executions = await listWorkflowExecutions();
+
+    expect(executions.map((e) => e.id)).toEqual(["a3", "b2", "a2", "a1", "b1"]);
+    expect(new Set(listRequest.mock.calls.map(([request]) => request.workflowName))).toEqual(
+      new Set(["wf-a", "wf-b", "wf-empty"]),
+    );
+  });
+
+  test("keeps the newest executions across workflows within the limit", async () => {
+    const { listWorkflowExecutions: listRequest } = mockWorkflowClient(executionsByWorkflow);
+
+    const executions = await listWorkflowExecutions({ limit: 2 });
+
+    expect(executions.map((e) => e.id)).toEqual(["a3", "b2"]);
+    for (const [request] of listRequest.mock.calls) {
+      expect(request.pageSize).toBeLessThanOrEqual(2);
+    }
+  });
+
+  test("lists the oldest executions first across workflows with asc order", async () => {
+    mockWorkflowClient(executionsByWorkflow);
+
+    const executions = await listWorkflowExecutions({ order: "asc" });
+
+    expect(executions.map((e) => e.id)).toEqual(["b1", "b2", "a1", "a2", "a3"]);
+  });
+
+  test("lists an execution that has not started where its workflow lists it", async () => {
+    mockWorkflowClient({
+      "wf-a": [{ id: "a1", startedAt: "2026-11-01T10:30:00Z" }],
+      "wf-c": [{ id: "c0" }, { id: "c1", startedAt: "2026-11-01T10:15:00Z" }],
+    });
+
+    const executions = await listWorkflowExecutions({ order: "asc" });
+
+    expect(executions.map((e) => e.id)).toEqual(["c0", "c1", "a1"]);
+  });
+
+  test("sends the status filter with each workflow's request", async () => {
+    const { listWorkflowExecutions: listRequest } = mockWorkflowClient(executionsByWorkflow);
+
+    await listWorkflowExecutions({ status: "RUNNING" });
+
+    expect(listRequest).toHaveBeenCalledTimes(3);
+    for (const [request] of listRequest.mock.calls) {
+      expect(request.filter?.and[0]?.condition).toMatchObject({
+        field: "status",
+        value: { kind: { case: "numberValue", value: WorkflowExecution_Status.RUNNING } },
+      });
+    }
+  });
+
+  test("skips a workflow that is deleted while listing", async () => {
+    mockWorkflowClient({
+      ...executionsByWorkflow,
+      "wf-gone": new ConnectError("workflow 'wf-gone' not found", Code.NotFound),
+    });
+
+    const executions = await listWorkflowExecutions();
+
+    expect(executions.map((e) => e.id)).toEqual(["a3", "b2", "a2", "a1", "b1"]);
+  });
+
+  test("fails when a workflow's executions cannot be listed", async () => {
+    mockWorkflowClient({
+      ...executionsByWorkflow,
+      "wf-b": new ConnectError("try later", Code.Unavailable),
+    });
+
+    await expect(listWorkflowExecutions()).rejects.toThrow("try later");
+  });
+
+  test("queries only the given workflow", async () => {
+    const { listWorkflows, listWorkflowExecutions: listRequest } =
+      mockWorkflowClient(executionsByWorkflow);
+
+    const executions = await listWorkflowExecutions({ workflow: { name: "wf-a" } });
+
+    expect(executions.map((e) => e.id)).toEqual(["a3", "a2", "a1"]);
+    expect(listWorkflows).not.toHaveBeenCalled();
+    expect(listRequest.mock.calls.map(([request]) => request.workflowName)).toEqual(["wf-a"]);
+  });
+});
+
 describe("executionsCommand", () => {
+  test("lists the executions of every workflow without --workflow-name", async () => {
+    vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
+    vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
+    mockWorkflowClient(executionsByWorkflow);
+    using stdout = captureStdout();
+    using _json = jsonMode();
+
+    const result = await runCommand(executionsCommand, []);
+
+    expect(result.success).toBe(true);
+    expect((JSON.parse(stdout.output) as { id: string }[]).map((e) => e.id)).toEqual([
+      "a3",
+      "b2",
+      "a2",
+      "a1",
+      "b1",
+    ]);
+  });
+
   test("rejects a workflow name the platform rejects", async () => {
     const result = await runCommand(executionsCommand, ["--workflow-name", "My_Workflow"]);
 

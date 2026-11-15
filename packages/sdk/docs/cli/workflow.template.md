@@ -118,4 +118,6 @@ tailor workflow executions <execution-id> --logs
 tailor workflow executions <execution-id> -W
 ```
 
+Without `-n`, the list covers every workflow in the workspace. Executions of different workflows are interleaved by start time, while each workflow's executions keep their creation order. In a workspace with many workflows this takes longer; pass `-n` to list one workflow's executions.
+
 {{politty:command:workflow resume}}
