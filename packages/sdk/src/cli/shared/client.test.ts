@@ -31,6 +31,7 @@ import {
   rememberPlatformConfigForToken,
   resolveStaticWebsiteUrls,
   resolveStaticWebsiteUrlsInEnv,
+  REPEATABLE_METHODS,
   RETRY_SAFE_CREATE_METHODS,
   retryInterceptor,
   staticWebsiteNameFromPlaceholder,
@@ -1033,6 +1034,20 @@ describe("retryInterceptor", () => {
     expect(next).toHaveBeenCalledTimes(2);
   });
 
+  test("retries Unavailable for no-side-effect methods then succeeds", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
+      .mockResolvedValueOnce(okResponse);
+
+    const res = await settle(
+      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.getWorkspace)),
+    );
+
+    expect(res).toBe(okResponse);
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
   test("retries Aborted for no-side-effect methods then succeeds", async () => {
     const next = vi
       .fn()
@@ -1135,8 +1150,12 @@ describe("retryInterceptor", () => {
   test.each(
     [
       OperatorService.method.cloneApplicationData,
+      OperatorService.method.createPersonalAccessToken,
       OperatorService.method.createWorkspace,
+      OperatorService.method.execScript,
+      OperatorService.method.resumeWorkflowExecution,
       OperatorService.method.startWorkflow,
+      OperatorService.method.triggerExecutor,
     ].flatMap((method) =>
       [Code.Unavailable, Code.ResourceExhausted].map((code) => ({
         method,
@@ -1160,21 +1179,26 @@ describe("retryInterceptor", () => {
   );
 
   /**
-   * Build the error connect-node raises for a connection reset.
-   * @param message - Message Node gives the underlying `ECONNRESET`
-   * @returns The reset wrapped as connect-node wraps it
+   * Build the error connect-node raises for a Node network error.
+   * @param nodeCode - `code` of the underlying Node error (e.g. "ECONNRESET")
+   * @param message - Message of the underlying Node error
+   * @param code - Connect code connect-node assigns to that Node error
+   * @returns The Node error wrapped as connect-node wraps it
    */
-  function connectionReset(message: string) {
-    return ConnectError.from(
-      Object.assign(new Error(message), { code: "ECONNRESET" }),
-      Code.Aborted,
-    );
+  function nodeNetworkError(nodeCode: string, message: string, code: Code) {
+    return ConnectError.from(Object.assign(new Error(message), { code: nodeCode }), code);
   }
+
+  const connectionReset = (message: string) =>
+    nodeNetworkError("ECONNRESET", message, Code.Aborted);
 
   const preHandshakeDisconnect = () =>
     connectionReset(
       "Client network socket disconnected before secure TLS connection was established",
     );
+
+  const connectionRefused = () =>
+    nodeNetworkError("ECONNREFUSED", "connect ECONNREFUSED 127.0.0.1:443", Code.Unavailable);
 
   test.each([
     OperatorService.method.cloneApplicationData,
@@ -1191,6 +1215,37 @@ describe("retryInterceptor", () => {
 
     expect(res).toBe(okResponse);
     expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  test.each([
+    { nodeCode: "ECONNREFUSED", message: "connect ECONNREFUSED 127.0.0.1:443" },
+    { nodeCode: "ENOTFOUND", message: "getaddrinfo ENOTFOUND api.tailor.tech" },
+    { nodeCode: "EAI_AGAIN", message: "getaddrinfo EAI_AGAIN api.tailor.tech" },
+  ])(
+    "retries ExecScript when the connection could not be opened ($nodeCode)",
+    async ({ nodeCode, message }) => {
+      const next = vi
+        .fn()
+        .mockRejectedValueOnce(nodeNetworkError(nodeCode, message, Code.Unavailable))
+        .mockResolvedValueOnce(okResponse);
+
+      const res = await settle(
+        retryInterceptor()(next)(makeUnaryReq(OperatorService.method.execScript)),
+      );
+
+      expect(res).toBe(okResponse);
+      expect(next).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  test("does not retry ExecScript on a timeout that may follow the request", async () => {
+    const timeout = nodeNetworkError("ETIMEDOUT", "read ETIMEDOUT", Code.Unavailable);
+    const next = vi.fn().mockRejectedValueOnce(timeout).mockResolvedValueOnce(okResponse);
+
+    await expect(
+      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.execScript))),
+    ).rejects.toBe(timeout);
+    expect(next).toHaveBeenCalledOnce();
   });
 
   test("does not retry CreateWorkspace on a connection reset that may follow the request", async () => {
@@ -1270,18 +1325,24 @@ describe("retryInterceptor", () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
-  test("routes an AlreadyExists that follows only pre-handshake disconnects to error tracking, then surfaces it", async () => {
-    const next = vi
-      .fn()
-      .mockRejectedValueOnce(preHandshakeDisconnect())
-      .mockRejectedValueOnce(new ConnectError("duplicated key not allowed", Code.AlreadyExists));
+  test.each([
+    { name: "pre-handshake disconnects", unsent: preHandshakeDisconnect },
+    { name: "refused connections", unsent: connectionRefused },
+  ])(
+    "routes an AlreadyExists that follows only $name to error tracking, then surfaces it",
+    async ({ unsent }) => {
+      const next = vi
+        .fn()
+        .mockRejectedValueOnce(unsent())
+        .mockRejectedValueOnce(new ConnectError("duplicated key not allowed", Code.AlreadyExists));
 
-    await expect(
-      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType))),
-    ).rejects.toThrow("duplicated key not allowed");
-    expect(vi.mocked(reportCrash)).toHaveBeenCalledTimes(1);
-    expect(next).toHaveBeenCalledTimes(2);
-  });
+      await expect(
+        settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType))),
+      ).rejects.toThrow("duplicated key not allowed");
+      expect(vi.mocked(reportCrash)).toHaveBeenCalledTimes(1);
+      expect(next).toHaveBeenCalledTimes(2);
+    },
+  );
 
   test("swallows an AlreadyExists when an attempt before a pre-handshake disconnect may have committed", async () => {
     const next = vi
@@ -1327,6 +1388,38 @@ describe("retryInterceptor", () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
+  type OperatorMethod = (typeof OperatorService.method)[keyof typeof OperatorService.method];
+
+  /**
+   * Collect the OperatorService methods that the deploy/apply flow calls.
+   * @returns Methods called as `client.<method>(` in non-test deploy sources
+   */
+  function deployClientMethods(): OperatorMethod[] {
+    const deployDir = path.resolve(import.meta.dirname, "../commands/deploy");
+    const tsFiles: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (entry.name.endsWith(".ts") && !entry.name.includes(".test.")) tsFiles.push(full);
+      }
+    };
+    walk(deployDir);
+
+    const methods = new Set<OperatorMethod>();
+    const callRe = /client\.([a-z][A-Za-z0-9]*)\s*\(/g;
+    for (const file of tsFiles) {
+      const src = fs.readFileSync(file, "utf8");
+      for (const m of src.matchAll(callRe)) {
+        const method = Object.hasOwn(OperatorService.method, m[1]!)
+          ? OperatorService.method[m[1] as keyof typeof OperatorService.method]
+          : undefined;
+        if (method) methods.add(method);
+      }
+    }
+    return [...methods];
+  }
+
   // Drift guard: every Create RPC invoked in the deploy/apply flow must be
   // consciously classified — either retry-safe (response unused, in
   // RETRY_SAFE_CREATE_METHODS) or explicitly exempt below. A newly added apply
@@ -1340,31 +1433,14 @@ describe("retryInterceptor", () => {
       "CreateFunctionRegistry", // client-streaming: bypasses the retry loop
     ]);
 
-    const deployDir = path.resolve(import.meta.dirname, "../commands/deploy");
-    const tsFiles: string[] = [];
-    const walk = (dir: string) => {
-      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) walk(full);
-        else if (entry.name.endsWith(".ts") && !entry.name.includes(".test.")) tsFiles.push(full);
-      }
-    };
-    walk(deployDir);
-
-    const used = new Set<string>();
-    const callRe = /client\.(create[A-Z][A-Za-z0-9]*)\s*\(/g;
-    for (const file of tsFiles) {
-      const src = fs.readFileSync(file, "utf8");
-      for (const m of src.matchAll(callRe)) {
-        const local = m[1]!;
-        used.add(local.charAt(0).toUpperCase() + local.slice(1));
-      }
-    }
+    const used = deployClientMethods()
+      .map(({ name }) => name)
+      .filter((name) => name.startsWith("Create"));
 
     // Sanity: the scan actually found deploy creates (guards against a broken regex/path).
-    expect(used.has("CreateTailorDBType")).toBe(true);
+    expect(used).toContain("CreateTailorDBType");
 
-    const unclassified = [...used].filter(
+    const unclassified = used.filter(
       (name) => !RETRY_SAFE_CREATE_METHODS.has(name) && !EXEMPT_DEPLOY_CREATES.has(name),
     );
     // On failure the diff lists the offending method(s). Each must be added to
@@ -1383,6 +1459,42 @@ describe("retryInterceptor", () => {
     // RETRY_SAFE_CREATE_METHODS to match the OperatorService method name.
     const typos = [...RETRY_SAFE_CREATE_METHODS].filter((name) => !realCreateNames.has(name));
     expect(typos).toEqual([]);
+  });
+
+  test("REPEATABLE_METHODS covers every deploy write or it is explicitly not repeated", () => {
+    const NOT_REPEATED_DEPLOY_WRITES = new Set([
+      "ResumeWorkflowExecution", // resumes the execution again
+      "StartWorkflow", // starts another execution
+    ]);
+
+    const writes = deployClientMethods()
+      .filter(
+        ({ methodKind, idempotency }) =>
+          methodKind === "unary" &&
+          idempotency === MethodOptions_IdempotencyLevel.IDEMPOTENCY_UNKNOWN,
+      )
+      .map(({ name }) => name);
+
+    expect(writes).toContain("UpdateTailorDBType");
+    expect(
+      writes.filter(
+        (name) => !REPEATABLE_METHODS.has(name) && !NOT_REPEATED_DEPLOY_WRITES.has(name),
+      ),
+    ).toEqual([]);
+  });
+
+  test("every REPEATABLE_METHODS entry is a unary OperatorService write", () => {
+    const unaryWrites = new Set(
+      Object.values(OperatorService.method)
+        .filter(
+          ({ methodKind, idempotency }) =>
+            methodKind === "unary" &&
+            idempotency === MethodOptions_IdempotencyLevel.IDEMPOTENCY_UNKNOWN,
+        )
+        .map(({ name }) => name),
+    );
+
+    expect([...REPEATABLE_METHODS].filter((name) => !unaryWrites.has(name))).toEqual([]);
   });
 });
 

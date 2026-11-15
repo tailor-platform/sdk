@@ -534,14 +534,12 @@ async function currentAccessToken(source: AccessTokenSource): Promise<string> {
 /**
  * Create an interceptor that retries failed unary requests with backoff.
  *
- * Retries unary methods on `Unavailable`/`ResourceExhausted`, and
- * `Aborted`/`Internal` only for methods declared side-effect-free or idempotent,
- * up to 3 attempts. Workspace creation, workflow starts, and application data
- * cloning are excluded because they have no idempotency key and a lost response
- * is ambiguous: a retry could start a second operation, or fail while the first
- * keeps running.
- * A connection that closed before the TLS handshake completed is retried for every
- * unary method, since no request reached the server.
+ * Retries unary methods, up to 3 attempts, on `Unavailable`/`ResourceExhausted`
+ * when they are declared side-effect-free or idempotent or are in
+ * `REPEATABLE_METHODS`, and on `Aborted`/`Internal` only when declared
+ * side-effect-free or idempotent.
+ * A request that never reached the server (see `isUnsentRequest`) is retried for
+ * every unary method.
  * As a targeted exception for the deploy/apply flow, a post-retry `AlreadyExists`
  * from an allowlisted Create (see `RETRY_SAFE_CREATE_METHODS`) is treated as
  * success, since it means a prior attempt already committed the resource
@@ -591,13 +589,10 @@ export function retryInterceptor(): Interceptor {
           const { reportCrash } = await import("#/cli/crashreport/index");
           await reportCrash(error, "handledError");
         }
-        const preHandshakeDisconnect = isPreHandshakeDisconnect(error);
-        if (
-          preHandshakeDisconnect ||
-          (!NON_RETRIED_METHODS.has(req.method.name) && isRetirable(error, req.method.idempotency))
-        ) {
+        const unsentRequest = isUnsentRequest(error);
+        if (unsentRequest || isRetirable(error, req.method)) {
           lastError = error;
-          priorAttemptMayHaveCommitted ||= !preHandshakeDisconnect;
+          priorAttemptMayHaveCommitted ||= !unsentRequest;
           logger.debug(
             `retry: ${req.method.name} attempt ${i + 1} failed with ` +
               `${retryErrorCodeName(error)}; retrying`,
@@ -752,11 +747,78 @@ const RETRY_BASE_DELAY_MS = 500;
 /** Maximum number of attempts, including the initial one, for a retried request. */
 const MAX_RETRY_ATTEMPTS = 3;
 
-/** Methods without an idempotency key, which a retry could apply twice. */
-const NON_RETRIED_METHODS: ReadonlySet<string> = new Set([
-  "CloneApplicationData",
-  "CreateWorkspace",
-  "StartWorkflow",
+/**
+ * Methods without an idempotency declaration whose repeat, after an attempt that may
+ * have committed, leaves the same state instead of starting another execution or
+ * returning another one-time secret.
+ *
+ * A drift guard (see client.test.ts) fails CI if a write used in the deploy flow is
+ * neither listed here nor explicitly classified as not repeated.
+ * @internal
+ */
+export const REPEATABLE_METHODS: ReadonlySet<string> = new Set([
+  ...RETRY_SAFE_CREATE_METHODS,
+  "AddCustomDomain",
+  "BulkSetMetadata",
+  "CancelCustomDomainTransfer",
+  "CreateIdPClient",
+  "CreateWorkflowJobFunction",
+  "DeleteAIGateway",
+  "DeleteApplication",
+  "DeleteAuthConnection",
+  "DeleteAuthHook",
+  "DeleteAuthIDPConfig",
+  "DeleteAuthMachineUser",
+  "DeleteAuthOAuth2Client",
+  "DeleteAuthSCIMConfig",
+  "DeleteAuthSCIMResource",
+  "DeleteAuthService",
+  "DeleteExecutorExecutor",
+  "DeleteFunctionRegistry",
+  "DeleteIdPClient",
+  "DeleteIdPService",
+  "DeletePipelineResolver",
+  "DeletePipelineService",
+  "DeleteSecretManagerSecret",
+  "DeleteSecretManagerVault",
+  "DeleteStaticWebsite",
+  "DeleteTailorDBGQLPermission",
+  "DeleteTailorDBService",
+  "DeleteTailorDBType",
+  "DeleteTenantConfig",
+  "DeleteUserProfileConfig",
+  "DeleteWorkflow",
+  "DeleteWorkflowJobFunction",
+  "DeleteWorkflowJobFunctionExecutionPolicy",
+  "DeleteWorkspace",
+  "MarkMyNotificationsRead",
+  "PublishDeployment",
+  "RemoveCustomDomain",
+  "RequestCustomDomainTransfer",
+  "SetMetadata",
+  "UpdateAIGateway",
+  "UpdateApplication",
+  "UpdateAuthConnection",
+  "UpdateAuthHook",
+  "UpdateAuthIDPConfig",
+  "UpdateAuthMachineUser",
+  "UpdateAuthOAuth2Client",
+  "UpdateAuthSCIMConfig",
+  "UpdateAuthSCIMResource",
+  "UpdateAuthService",
+  "UpdateExecutorExecutor",
+  "UpdateIdPService",
+  "UpdatePipelineResolver",
+  "UpdatePipelineService",
+  "UpdateSecretManagerSecret",
+  "UpdateStaticWebsite",
+  "UpdateTailorDBGQLPermission",
+  "UpdateTailorDBType",
+  "UpdateTenantConfig",
+  "UpdateUserProfileConfig",
+  "UpdateWorkflow",
+  "UpdateWorkflowJobFunction",
+  "UpdateWorkflowJobFunctionExecutionPolicy",
 ]);
 
 /**
@@ -795,33 +857,50 @@ function isTransportDisconnectError(error: unknown): error is Error & { code: st
   );
 }
 
+// Node error codes connect-node maps to `Unavailable` that occur before a connection
+// is open, so no request reached the server.
+const CONNECTION_NOT_OPENED_ERROR_CODES: ReadonlySet<string> = new Set([
+  "ECONNREFUSED",
+  "ENOTFOUND",
+  "EAI_AGAIN",
+]);
+
 /**
- * Whether the connection closed before the TLS handshake completed, so no request
- * reached the server.
+ * Whether the request failed before it reached the server: the connection could not
+ * be opened, or it closed before the TLS handshake completed.
  * @param error - Error thrown by the request
- * @returns True if the error wraps Node's pre-handshake `ECONNRESET`
+ * @returns True if the error's cause chain carries such a Node error
  */
-function isPreHandshakeDisconnect(error: unknown): boolean {
+function isUnsentRequest(error: unknown): boolean {
   if (!(error instanceof ConnectError)) return false;
-  const { cause } = error;
-  return (
-    isTransportDisconnectError(cause) &&
-    cause.code === "ECONNRESET" &&
-    cause.message ===
-      "Client network socket disconnected before secure TLS connection was established"
-  );
+  const seen = new Set<unknown>();
+  for (let cause = error.cause; cause instanceof Error && !seen.has(cause); cause = cause.cause) {
+    seen.add(cause);
+    if (!("code" in cause) || typeof cause.code !== "string") continue;
+    if (error.code === Code.Unavailable && CONNECTION_NOT_OPENED_ERROR_CODES.has(cause.code)) {
+      return true;
+    }
+    if (
+      cause.code === "ECONNRESET" &&
+      cause.message ===
+        "Client network socket disconnected before secure TLS connection was established"
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
- * Determine whether the given error is retriable for the method idempotency.
+ * Determine whether the given error is retriable for the method.
  * @param error - Error thrown by the request
- * @param idempotency - Method idempotency level
+ * @param method - Descriptor of the requested method
  * @returns True if the error should be retried
  */
-function isRetirable(error: unknown, idempotency: MethodOptions_IdempotencyLevel) {
+function isRetirable(error: unknown, method: UnaryResponse["method"]) {
   const isIdempotentOrSideEffectFree =
-    idempotency === MethodOptions_IdempotencyLevel.NO_SIDE_EFFECTS ||
-    idempotency === MethodOptions_IdempotencyLevel.IDEMPOTENT;
+    method.idempotency === MethodOptions_IdempotencyLevel.NO_SIDE_EFFECTS ||
+    method.idempotency === MethodOptions_IdempotencyLevel.IDEMPOTENT;
 
   if (!(error instanceof ConnectError)) {
     return isTransportDisconnectError(error) && isIdempotentOrSideEffectFree;
@@ -830,7 +909,7 @@ function isRetirable(error: unknown, idempotency: MethodOptions_IdempotencyLevel
   switch (error.code) {
     case Code.ResourceExhausted:
     case Code.Unavailable:
-      return true;
+      return isIdempotentOrSideEffectFree || REPEATABLE_METHODS.has(method.name);
     case Code.Aborted:
     case Code.Internal:
       return isIdempotentOrSideEffectFree;
