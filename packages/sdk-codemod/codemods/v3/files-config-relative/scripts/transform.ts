@@ -108,7 +108,7 @@ function analyzeService(label: string, service: SgNode, dirs: Directories): Anal
   if ("failed" in fromProjectDir) return globFailure(fromProjectDir);
   if (!fromProjectDir.matched) {
     return manual(
-      `${label}.files matches no files from this config's directory or from the project directory`,
+      `${label}.files matches no files from this config's directory or from the project directory "${dirs.projectDir}"`,
       filesEntry,
     );
   }

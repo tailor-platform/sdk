@@ -168,12 +168,22 @@ describe("files patterns -> config-relative migration", () => {
     expect(transform(transformed!, path.join(root, CONFIG_PATH), root)).toBeNull();
   });
 
-  test.each([
-    [
-      "patterns that match no files from either directory",
+  test("names the project directory it searched when no pattern matches from either directory", () => {
+    writeFiles("apps/a/tailordb/user.ts");
+
+    const { transformed, findings } = migrate(
       'export default defineConfig({\n  db: { main: { files: ["apps/a/missing/*.ts"] } },\n});\n',
-      "db.main.files matches no files",
-    ],
+    );
+
+    expect(transformed).toBeNull();
+    expect(findings).toEqual([
+      expect.stringContaining(
+        `db.main.files matches no files from this config's directory or from the project directory "${root}"`,
+      ),
+    ]);
+  });
+
+  test.each([
     [
       "`files` passed as a variable",
       "export default defineConfig({\n  executor: { files: executorFiles },\n});\n",
