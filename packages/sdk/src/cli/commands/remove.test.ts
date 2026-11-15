@@ -1,7 +1,9 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
+import { create } from "@bufbuild/protobuf";
 import { runCommand } from "@politty/zod";
 import { Subgraph_ServiceType } from "@tailor-platform/tailor-proto/application_resource_pb";
+import { ExecutorExecutorSchema } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import * as path from "pathe";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
@@ -304,6 +306,45 @@ describe("remove command", () => {
       suggestion: expect.stringContaining("then run remove again"),
     });
     expect(logger.log).not.toHaveBeenCalledWith(expect.stringContaining("Auth services:"));
+    expect(Object.values(APPLY_BY_PLAN).flatMap((apply) => apply.mock.calls)).toEqual([]);
+  });
+
+  test("stops before listing or deleting anything when another application's executor subscribes to a workflow it deletes", async () => {
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      listWorkflowJobFunctionExecutionPolicies: vi.fn(async () => ({
+        policies: [],
+        nextPageToken: "",
+      })),
+    } as never);
+    mocks.plans.workflow.changeSet.deletes.push({
+      name: "order-flow",
+      workspaceId: "ws",
+      workflowId: "id",
+      usedJobNames: [],
+    });
+    mocks.plans.executor.existingExecutors = {
+      notify: {
+        resource: create(ExecutorExecutorSchema, {
+          name: "notify",
+          triggerConfig: {
+            config: {
+              case: "event",
+              value: { typedConfig: { case: "workflow", value: { workflowName: "order-flow" } } },
+            },
+          },
+        }),
+        allLabels: { "sdk-name": "portal" },
+      },
+    };
+
+    const result = await runCommand(removeCommand, ["--yes"]);
+
+    expect(result.error).toMatchObject({
+      code: "SERVICE_IN_USE",
+      message:
+        'Workflow "order-flow" cannot be deleted: executor "notify" of application "portal" still uses it.',
+    });
+    expect(logger.log).not.toHaveBeenCalledWith(expect.stringContaining("Workflows:"));
     expect(Object.values(APPLY_BY_PLAN).flatMap((apply) => apply.mock.calls)).toEqual([]);
   });
 

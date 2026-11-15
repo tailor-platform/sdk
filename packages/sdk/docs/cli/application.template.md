@@ -113,6 +113,17 @@ Names that identify a resource across the whole workspace, such as application, 
 
 Each config's `files` patterns (see [Service Configuration](../configuration.md#service-configuration)) resolve relative to that config's own directory, not the directory you ran `deploy` from. For example, `apps/buyer/tailor.config.ts` declaring `files: ["db/**/*.ts"]` loads files from `apps/buyer/db/`, independent of where `apps/supplier/tailor.config.ts`'s patterns resolve. If a config's relative patterns match nothing under its own directory, the SDK falls back to the invocation directory and logs a warning (see [Service Configuration](../configuration.md#service-configuration) for details).
 
+**Resources Other Applications Use:**
+
+`deploy` and `remove` stop with `SERVICE_IN_USE` before changing anything when they would delete a resource that another application still uses, and list each use. These uses are checked:
+
+- A TailorDB namespace, resolver namespace, IdP, or Auth service that an application references as `external`
+- An Auth service that an AI gateway sets as its `authNamespace`
+- A machine user that an executor or resolver uses as its `invoker`
+- A TailorDB table, resolver, IdP, or workflow that an executor's trigger names, and a workflow that an executor starts
+
+An application in the `deploy` counts by its config, and any other application by what the workspace has. A disabled executor counts too. The `invoker` passed to `workflow.start()` is not checked. For `deploy`, keep the resource in the config that defines it, or deploy the applications that use it so that they stop using it, first or in the same `deploy`. For `remove`, first remove those applications or deploy them so that they stop using it. An executor, resolver, or AI gateway listed without an application is not deployed by the SDK, so change or delete it outside the SDK.
+
 **Migration Handling (Beta):**
 
 When migrations are configured (`db.<namespace>.migration` in config), the `deploy` command:
