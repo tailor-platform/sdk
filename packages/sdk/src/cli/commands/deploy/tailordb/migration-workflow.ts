@@ -736,7 +736,10 @@ export interface MigrationStepsWorkflowResult {
   runEnded?: boolean;
   /** Whether the run was canceled, so the next deploy runs every step again. */
   canceled?: boolean;
-  /** Whether the steps completed in an earlier run, which this deploy reused without running them again. */
+  /**
+   * Whether the steps completed in an earlier run, which this deploy reused
+   * without running them again.
+   */
   reusedEarlierRun?: boolean;
 }
 

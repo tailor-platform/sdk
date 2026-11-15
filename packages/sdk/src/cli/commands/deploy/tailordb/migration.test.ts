@@ -1036,14 +1036,28 @@ describe("migration", () => {
       expect(logger.log).toHaveBeenCalledWith("skip them with --migration-skip-steps");
     });
 
-    test("says that the steps completed in an earlier run when the run is reused", async () => {
+    test.each([
+      {
+        run: "a steps run of this deploy",
+        reused: {},
+        outcome: "Migration tailordb/0001 completed successfully",
+        heading: "Logs:",
+      },
+      {
+        run: "a reused earlier steps run",
+        reused: { reusedEarlierRun: true },
+        outcome:
+          "Steps of migration tailordb/0001 completed in an earlier run and were not run again",
+        heading: "Logs from the earlier run:",
+      },
+    ])("reports $run with its logs", async ({ reused, outcome, heading }) => {
       executeMigrationStepsAsWorkflowMock.mockResolvedValueOnce({
         success: true,
         logs: "[backfill] done",
         completedSteps: ["backfill", "recompute"],
         failedSteps: [],
         stepsMayHaveCommitted: true,
-        reusedEarlierRun: true,
+        ...reused,
       });
       spinnerMock.succeed.mockClear();
       vi.mocked(logger.log).mockClear();
@@ -1055,34 +1069,8 @@ describe("migration", () => {
         { tailordb: { number: 1, kind: "steps" } },
       );
 
-      expect(spinnerMock.succeed).toHaveBeenCalledWith(
-        "Steps of migration tailordb/0001 completed in an earlier run and were not run again",
-      );
-      expect(logger.log).toHaveBeenCalledWith("Logs from the earlier run:\n[backfill] done");
-    });
-
-    test("reports a steps run of this deploy as completed with its logs", async () => {
-      executeMigrationStepsAsWorkflowMock.mockResolvedValueOnce({
-        success: true,
-        logs: "[backfill] done",
-        completedSteps: ["backfill", "recompute"],
-        failedSteps: [],
-        stepsMayHaveCommitted: true,
-      });
-      spinnerMock.succeed.mockClear();
-      vi.mocked(logger.log).mockClear();
-
-      await executeMigrations(
-        stepsContext(vi.fn()),
-        [createMockMigration({ scriptForm: stepsForm })],
-        checkpoints,
-        { tailordb: { number: 1, kind: "steps" } },
-      );
-
-      expect(spinnerMock.succeed).toHaveBeenCalledWith(
-        "Migration tailordb/0001 completed successfully",
-      );
-      expect(logger.log).toHaveBeenCalledWith("Logs:\n[backfill] done");
+      expect(spinnerMock.succeed).toHaveBeenCalledWith(outcome);
+      expect(logger.log).toHaveBeenCalledWith(`${heading}\n[backfill] done`);
     });
 
     test("treats another deploy's active run as in progress without touching its records", async () => {
