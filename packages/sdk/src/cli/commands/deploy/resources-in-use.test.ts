@@ -644,68 +644,71 @@ describe("assertResourcesNotInUse for Auth services used by AI gateways", () => 
   });
 });
 
-const EVENT_SOURCES: Array<{
+type EventSource = {
   label: string;
   deletes: (results: PlanResults) => void;
   executor: ExecutorInit;
   message: string;
   use: { resourceType: string; namespace?: string; name: string };
-}> = [
-  {
-    label: "workflow used by the execution trigger",
-    deletes: (results) =>
-      results.workflow.changeSet.deletes.push({
-        name: "order-flow",
-        workspaceId: "ws",
-        workflowId: "id",
-        usedJobNames: [],
-      }),
-    executor: {
-      triggerConfig: {
-        config: {
-          case: "event",
-          value: { typedConfig: { case: "workflow", value: { workflowName: "order-flow" } } },
-        },
-      },
-    },
-    message: 'Workflow "order-flow"',
-    use: { resourceType: "workflow", name: "order-flow" },
+};
+
+function deletingOrderFlow(results: PlanResults) {
+  results.workflow.changeSet.deletes.push({
+    name: "order-flow",
+    workspaceId: "ws",
+    workflowId: "id",
+    usedJobNames: [],
+  });
+}
+
+function eventTrigger(
+  typedConfig: Extract<
+    NonNullable<NonNullable<ExecutorInit["triggerConfig"]>["config"]>,
+    { case: "event" }
+  >["value"]["typedConfig"],
+): ExecutorInit["triggerConfig"] {
+  return { config: { case: "event", value: { typedConfig } } };
+}
+
+const WORKFLOW_TRIGGER: EventSource = {
+  label: "workflow used by the execution trigger",
+  deletes: deletingOrderFlow,
+  executor: {
+    triggerConfig: eventTrigger({ case: "workflow", value: { workflowName: "order-flow" } }),
   },
+  message: 'Workflow "order-flow"',
+  use: { resourceType: "workflow", name: "order-flow" },
+};
+
+const TABLE_TRIGGER: EventSource = {
+  label: "TailorDB table used by the record trigger",
+  deletes: (results) =>
+    results.tailorDB.changeSet.type.deletes.push({
+      name: "Order",
+      request: { workspaceId: "ws", namespaceName: "main", tailordbTypeName: "Order" },
+    }),
+  executor: {
+    triggerConfig: eventTrigger({
+      case: "tailordb",
+      value: { namespaceName: "main", typeName: "Order" },
+    }),
+  },
+  message: 'TailorDB table "Order" in namespace "main"',
+  use: { resourceType: "tailordb.type", namespace: "main", name: "Order" },
+};
+
+const EVENT_SOURCES: EventSource[] = [
+  WORKFLOW_TRIGGER,
   {
     label: "workflow used by the workflow target",
-    deletes: (results) =>
-      results.workflow.changeSet.deletes.push({
-        name: "order-flow",
-        workspaceId: "ws",
-        workflowId: "id",
-        usedJobNames: [],
-      }),
+    deletes: deletingOrderFlow,
     executor: {
       targetConfig: { config: { case: "workflow", value: { workflowName: "order-flow" } } },
     },
     message: 'Workflow "order-flow"',
     use: { resourceType: "workflow", name: "order-flow" },
   },
-  {
-    label: "TailorDB table used by the record trigger",
-    deletes: (results) =>
-      results.tailorDB.changeSet.type.deletes.push({
-        name: "Order",
-        request: { workspaceId: "ws", namespaceName: "main", tailordbTypeName: "Order" },
-      }),
-    executor: {
-      triggerConfig: {
-        config: {
-          case: "event",
-          value: {
-            typedConfig: { case: "tailordb", value: { namespaceName: "main", typeName: "Order" } },
-          },
-        },
-      },
-    },
-    message: 'TailorDB table "Order" in namespace "main"',
-    use: { resourceType: "tailordb.type", namespace: "main", name: "Order" },
-  },
+  TABLE_TRIGGER,
   {
     label: "resolver used by the resolver trigger",
     deletes: (results) =>
@@ -714,17 +717,10 @@ const EVENT_SOURCES: Array<{
         request: { workspaceId: "ws", namespaceName: "main", resolverName: "createOrder" },
       }),
     executor: {
-      triggerConfig: {
-        config: {
-          case: "event",
-          value: {
-            typedConfig: {
-              case: "pipeline",
-              value: { namespaceName: "main", resolverName: "createOrder" },
-            },
-          },
-        },
-      },
+      triggerConfig: eventTrigger({
+        case: "pipeline",
+        value: { namespaceName: "main", resolverName: "createOrder" },
+      }),
     },
     message: 'Resolver "createOrder" in namespace "main"',
     use: { resourceType: "pipeline.resolver", namespace: "main", name: "createOrder" },
@@ -734,12 +730,7 @@ const EVENT_SOURCES: Array<{
     deletes: (results) =>
       results.idp.changeSet.service.deletes.push({ name: "main-idp", request: {} }),
     executor: {
-      triggerConfig: {
-        config: {
-          case: "event",
-          value: { typedConfig: { case: "idp", value: { namespaceName: "main-idp" } } },
-        },
-      },
+      triggerConfig: eventTrigger({ case: "idp", value: { namespaceName: "main-idp" } }),
     },
     message: 'IdP service "main-idp"',
     use: { resourceType: "idp.service", name: "main-idp" },
@@ -776,13 +767,12 @@ describe("assertResourcesNotInUse for event sources and workflows that executors
   );
 
   test("counts a disabled executor", async () => {
-    const [workflowTrigger] = EVENT_SOURCES;
     const owner = withWorkspaceExecutor(
       emptyPlanResults(),
-      { name: "notify", disabled: true, ...workflowTrigger!.executor },
+      { name: "notify", disabled: true, ...WORKFLOW_TRIGGER.executor },
       "portal",
     );
-    workflowTrigger!.deletes(owner);
+    WORKFLOW_TRIGGER.deletes(owner);
 
     await expect(check([deployment({ name: "core" }, owner)], "deploy")).rejects.toThrow(
       expect.objectContaining({ code: "SERVICE_IN_USE" }),
@@ -790,26 +780,18 @@ describe("assertResourcesNotInUse for event sources and workflows that executors
   });
 
   test("matches a TailorDB table only in its own namespace", async () => {
-    const tableTrigger = EVENT_SOURCES[2]!;
     const owner = withWorkspaceExecutor(
       emptyPlanResults(),
       {
         name: "notify",
-        triggerConfig: {
-          config: {
-            case: "event",
-            value: {
-              typedConfig: {
-                case: "tailordb",
-                value: { namespaceName: "other", typeName: "Order" },
-              },
-            },
-          },
-        },
+        triggerConfig: eventTrigger({
+          case: "tailordb",
+          value: { namespaceName: "other", typeName: "Order" },
+        }),
       },
       "portal",
     );
-    tableTrigger.deletes(owner);
+    TABLE_TRIGGER.deletes(owner);
 
     await expect(check([deployment({ name: "core" }, owner)], "deploy")).resolves.toBeUndefined();
   });

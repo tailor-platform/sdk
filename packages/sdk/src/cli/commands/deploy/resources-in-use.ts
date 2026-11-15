@@ -37,46 +37,64 @@ type CheckedResourceType = Extract<
   | "workflow"
 >;
 
-type ResourceRef = { resourceType: CheckedResourceType; namespace?: string; name: string };
-
-type DeletedResource = Omit<ResourceRef, "resourceType">;
-
-const DELETED_RESOURCES: Record<
-  CheckedResourceType,
-  (plan: ResourceDeletePlan) => ReadonlyArray<DeletedResource>
-> = {
-  "auth.service": (plan) => plan.auth.changeSet.service.deletes,
-  "tailordb.service": (plan) => plan.tailorDB.changeSet.service.deletes,
-  "pipeline.service": (plan) => plan.pipeline.changeSet.service.deletes,
-  "idp.service": (plan) => plan.idp.changeSet.service.deletes,
-  "auth.machine_user": (plan) =>
-    plan.auth.changeSet.machineUser.deletes.map(({ name, request }) => ({
-      namespace: request.authNamespace,
-      name,
-    })),
-  "tailordb.type": (plan) =>
-    plan.tailorDB.changeSet.type.deletes.map(({ name, request }) => ({
-      namespace: request.namespaceName,
-      name,
-    })),
-  "pipeline.resolver": (plan) =>
-    plan.pipeline.changeSet.resolver.deletes.map(({ name, request }) => ({
-      namespace: request.namespaceName,
-      name,
-    })),
-  workflow: (plan) => plan.workflow.changeSet.deletes,
+type ResourceKey<T extends ManagedResourceType> = {
+  resourceType: T;
+  namespace?: string;
+  name: string;
 };
 
-const RESOURCE_LABELS: Record<CheckedResourceType, (ref: ResourceRef) => string> = {
-  "auth.service": ({ name }) => `Auth service "${name}"`,
-  "tailordb.service": ({ name }) => `TailorDB namespace "${name}"`,
-  "pipeline.service": ({ name }) => `Resolver namespace "${name}"`,
-  "idp.service": ({ name }) => `IdP service "${name}"`,
-  "auth.machine_user": ({ namespace, name }) =>
-    `Machine user "${name}" of Auth service "${namespace}"`,
-  "tailordb.type": ({ namespace, name }) => `TailorDB table "${name}" in namespace "${namespace}"`,
-  "pipeline.resolver": ({ namespace, name }) => `Resolver "${name}" in namespace "${namespace}"`,
-  workflow: ({ name }) => `Workflow "${name}"`,
+type ResourceRef = ResourceKey<CheckedResourceType>;
+
+type CheckedResource = {
+  label: (ref: ResourceRef) => string;
+  deletesOf: (plan: ResourceDeletePlan) => ReadonlyArray<Omit<ResourceRef, "resourceType">>;
+};
+
+const CHECKED_RESOURCES: Record<CheckedResourceType, CheckedResource> = {
+  "auth.service": {
+    label: ({ name }) => `Auth service "${name}"`,
+    deletesOf: (plan) => plan.auth.changeSet.service.deletes,
+  },
+  "tailordb.service": {
+    label: ({ name }) => `TailorDB namespace "${name}"`,
+    deletesOf: (plan) => plan.tailorDB.changeSet.service.deletes,
+  },
+  "pipeline.service": {
+    label: ({ name }) => `Resolver namespace "${name}"`,
+    deletesOf: (plan) => plan.pipeline.changeSet.service.deletes,
+  },
+  "idp.service": {
+    label: ({ name }) => `IdP service "${name}"`,
+    deletesOf: (plan) => plan.idp.changeSet.service.deletes,
+  },
+  "auth.machine_user": {
+    label: ({ namespace, name }) => `Machine user "${name}" of Auth service "${namespace}"`,
+    deletesOf: (plan) =>
+      plan.auth.changeSet.machineUser.deletes.map(({ name, request }) => ({
+        namespace: request.authNamespace,
+        name,
+      })),
+  },
+  "tailordb.type": {
+    label: ({ namespace, name }) => `TailorDB table "${name}" in namespace "${namespace}"`,
+    deletesOf: (plan) =>
+      plan.tailorDB.changeSet.type.deletes.map(({ name, request }) => ({
+        namespace: request.namespaceName,
+        name,
+      })),
+  },
+  "pipeline.resolver": {
+    label: ({ namespace, name }) => `Resolver "${name}" in namespace "${namespace}"`,
+    deletesOf: (plan) =>
+      plan.pipeline.changeSet.resolver.deletes.map(({ name, request }) => ({
+        namespace: request.namespaceName,
+        name,
+      })),
+  },
+  workflow: {
+    label: ({ name }) => `Workflow "${name}"`,
+    deletesOf: (plan) => plan.workflow.changeSet.deletes,
+  },
 };
 
 type UserResourceType = Extract<
@@ -84,7 +102,7 @@ type UserResourceType = Extract<
   "executor" | "pipeline.resolver" | "aigateway"
 >;
 
-type ResourceUser = { resourceType: UserResourceType; namespace?: string; name: string };
+type ResourceUser = ResourceKey<UserResourceType>;
 
 const USER_LABELS: Record<UserResourceType, (user: ResourceUser) => string> = {
   executor: ({ name }) => `executor "${name}"`,
@@ -117,7 +135,7 @@ const SUBGRAPH_RESOURCE_TYPES = new Map<Subgraph_ServiceType, CheckedResourceTyp
   [Subgraph_ServiceType.IDP, "idp.service"],
 ]);
 
-function refKey(ref: ResourceRef): string {
+function refKey(ref: ResourceKey<ManagedResourceType>): string {
   return JSON.stringify([ref.resourceType, ref.namespace ?? "", ref.name]);
 }
 
@@ -178,11 +196,12 @@ type FinalUser<T> = {
 
 function finalUsers<T>(
   planned: ReadonlyArray<FinalUser<T>>,
-  rewritten: ReadonlySet<string>,
+  deleted: ReadonlyArray<{ name: string }>,
   recorded: ReadonlyArray<
     [string, { resource: T; allLabels?: Record<string, string> } | undefined]
   >,
 ): FinalUser<T>[] {
+  const rewritten = new Set([...planned, ...deleted].map(({ name }) => name));
   const kept = new Map(
     recorded.flatMap(([name, entry]) =>
       entry && !rewritten.has(name)
@@ -198,7 +217,7 @@ function finalUsers<T>(
   return [...planned, ...kept.values()];
 }
 
-function invokerRef(
+function invokerRefs(
   invoker: MessageInitShape<typeof AuthInvokerSchema> | undefined,
 ): ResourceRef[] {
   return invoker?.namespace && invoker.machineUserName
@@ -245,11 +264,11 @@ function executorRefs(executor: MessageInitShape<typeof ExecutorExecutorSchema>)
   switch (target?.case) {
     case "function":
     case "tailorGraphql":
-      refs.push(...invokerRef(target.value.invoker));
+      refs.push(...invokerRefs(target.value.invoker));
       break;
     case "workflow":
       refs.push({ resourceType: "workflow", name: target.value.workflowName ?? "" });
-      refs.push(...invokerRef(target.value.invoker));
+      refs.push(...invokerRefs(target.value.invoker));
       break;
     case "webhook":
     case undefined:
@@ -266,17 +285,10 @@ function executorUses(deployments: ReadonlyArray<ResourceDeletePlan>): ResourceU
       application: application.name,
     })),
   );
-  const rewritten = new Set([
-    ...planned.map(({ name }) => name),
-    ...deployments.flatMap(({ executor }) => executor.changeSet.deletes.map(({ name }) => name)),
-  ]);
-  const recorded = deployments.flatMap(({ executor }) =>
-    Object.entries(executor.existingExecutors),
-  );
   return finalUsers<MessageInitShape<typeof ExecutorExecutorSchema>>(
     planned,
-    rewritten,
-    recorded,
+    deployments.flatMap(({ executor }) => executor.changeSet.deletes),
+    deployments.flatMap(({ executor }) => Object.entries(executor.existingExecutors)),
   ).flatMap(({ resource, name, application }) =>
     executorRefs(resource).map((ref) => ({
       ...ref,
@@ -294,25 +306,21 @@ function aiGatewayUses(deployments: ReadonlyArray<ResourceDeletePlan>): Resource
       application: application.name,
     })),
   );
-  const rewritten = new Set([
-    ...planned.map(({ name }) => name),
-    ...deployments.flatMap(({ aiGateway }) => aiGateway.changeSet.deletes.map(({ name }) => name)),
-  ]);
-  const recorded = deployments.flatMap(({ aiGateway }) =>
-    Object.entries(aiGateway.existingGateways),
-  );
-  return finalUsers<{ authNamespace?: string }>(planned, rewritten, recorded).flatMap(
-    ({ resource, name, application }) =>
-      resource.authNamespace
-        ? [
-            {
-              resourceType: "auth.service" as const,
-              name: resource.authNamespace,
-              ...(application ? { application } : {}),
-              usedBy: { resourceType: "aigateway" as const, name },
-            },
-          ]
-        : [],
+  return finalUsers<{ authNamespace?: string }>(
+    planned,
+    deployments.flatMap(({ aiGateway }) => aiGateway.changeSet.deletes),
+    deployments.flatMap(({ aiGateway }) => Object.entries(aiGateway.existingGateways)),
+  ).flatMap(({ resource, name, application }) =>
+    resource.authNamespace
+      ? [
+          {
+            resourceType: "auth.service" as const,
+            name: resource.authNamespace,
+            ...(application ? { application } : {}),
+            usedBy: { resourceType: "aigateway" as const, name },
+          },
+        ]
+      : [],
   );
 }
 
@@ -325,7 +333,7 @@ type ResolverUsesParams = {
 async function resolverUses(params: ResolverUsesParams): Promise<ResourceUse[]> {
   const { deployments, client, workspaceId } = params;
   const resolverKey = (namespace: string | undefined, name: string) =>
-    JSON.stringify([namespace ?? "", name]);
+    refKey({ resourceType: "pipeline.resolver", namespace, name });
   const planned = deployments.flatMap(({ application, pipeline }) =>
     [...pipeline.changeSet.resolver.creates, ...pipeline.changeSet.resolver.updates].map(
       (entry) => ({
@@ -395,7 +403,7 @@ async function resolverUses(params: ResolverUsesParams): Promise<ResourceUse[]> 
   ];
   return resolvers.flatMap(({ resource, name, namespace, application }) =>
     (resource.pipelines ?? [])
-      .flatMap((step) => invokerRef(step.invoker))
+      .flatMap((step) => invokerRefs(step.invoker))
       .map((ref) => ({
         ...ref,
         ...(application ? { application } : {}),
@@ -408,7 +416,7 @@ function describeUse(use: ResourceUse): string {
   const user = use.usedBy
     ? `${USER_LABELS[use.usedBy.resourceType](use.usedBy)}${use.application ? ` of application "${use.application}"` : ""}`
     : `application "${use.application}"`;
-  return `${RESOURCE_LABELS[use.resourceType](use)} cannot be deleted: ${user} still uses it.`;
+  return `${CHECKED_RESOURCES[use.resourceType].label(use)} cannot be deleted: ${user} still uses it.`;
 }
 
 type AssertResourcesNotInUseParams = {
@@ -437,7 +445,7 @@ export async function assertResourcesNotInUse(
   const { deployments, command, client, workspaceId } = params;
   const deleted = new Set(
     deployments.flatMap((plan) =>
-      Object.entries(DELETED_RESOURCES).flatMap(([resourceType, deletesOf]) =>
+      Object.entries(CHECKED_RESOURCES).flatMap(([resourceType, { deletesOf }]) =>
         deletesOf(plan).map((resource) =>
           refKey({ ...resource, resourceType: resourceType as CheckedResourceType }),
         ),
