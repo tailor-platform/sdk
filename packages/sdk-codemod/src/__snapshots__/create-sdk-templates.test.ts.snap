@@ -1,0 +1,332 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`next-major codemods on create-sdk templates > content-mapper 1`] = `
+{
+  "diffs": {
+    "tailor.config.ts": "@@ -23,12 +23,12 @@
+         },
+       },
+     },
+   }),
+-  db: { "main-db": { files: ["./src/db/*.ts"] } },
++  db: { "main-db": { files: ["./src/db/*.ts", "!**/*.test.ts", "!**/*.spec.ts"] } },
+   resolver: {
+     "main-resolver": {
+-      files: ["./src/resolvers/*.ts"],
++      files: ["./src/resolvers/*.ts", "!**/*.test.ts", "!**/*.spec.ts"],
+       defaultPermission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+     },
+   },
+ });
+",
+  },
+  "llmReviews": [],
+  "warnings": [],
+}
+`;
+
+exports[`next-major codemods on create-sdk templates > executor 1`] = `
+{
+  "diffs": {
+    "tailor.config.ts": "@@ -37,18 +37,18 @@
+       },
+     },
+   }),
+   idp,
+-  db: { "main-db": { files: ["./src/db/*.ts"] } },
++  db: { "main-db": { files: ["./src/db/*.ts", "!**/*.test.ts", "!**/*.spec.ts"] } },
+   resolver: {
+     "main-resolver": {
+-      files: ["./src/resolver/*.ts"],
++      files: ["./src/resolver/*.ts", "!**/*.test.ts", "!**/*.spec.ts"],
+       // Every resolver in this namespace requires an authenticated caller.
+       // A single resolver opts out with \`permission: "allowAnonymous"\`.
+       defaultPermission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+     },
+   },
+-  executor: { files: ["./src/executor/*.ts"] },
+-  workflow: { files: ["./src/workflow/*.ts"] },
++  executor: { files: ["./src/executor/*.ts", "!**/*.test.ts", "!**/*.spec.ts"] },
++  workflow: { files: ["./src/workflow/*.ts", "!**/*.test.ts", "!**/*.spec.ts"] },
+ });
+ 
+ export const plugins = definePlugins(kyselyTypePlugin({ distPath: "./src/generated/db.ts" }));
+",
+  },
+  "llmReviews": [],
+  "warnings": [],
+}
+`;
+
+exports[`next-major codemods on create-sdk templates > generators 1`] = `
+{
+  "diffs": {
+    "tailor.config.ts": "@@ -30,12 +30,12 @@
+       },
+     },
+   }),
+   idp,
+-  db: { "main-db": { files: ["./src/db/*.ts"] } },
++  db: { "main-db": { files: ["./src/db/*.ts", "!**/*.test.ts", "!**/*.spec.ts"] } },
+   resolver: {
+     "main-resolver": {
+-      files: ["./src/resolver/*.ts"],
++      files: ["./src/resolver/*.ts", "!**/*.test.ts", "!**/*.spec.ts"],
+       // Every resolver in this namespace requires an authenticated caller.
+       // A single resolver opts out with \`permission: "allowAnonymous"\`.
+       defaultPermission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+     },
+",
+  },
+  "llmReviews": [
+    {
+      "codemodId": "v3/file-upload-encoding",
+      "files": [
+        "src/generated/files.ts",
+      ],
+    },
+  ],
+  "warnings": [],
+}
+`;
+
+exports[`next-major codemods on create-sdk templates > hello-world 1`] = `
+{
+  "diffs": {
+    "tailor.config.ts": "@@ -2,12 +2,12 @@
+ import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
+ 
+ export default defineConfig({
+   name: "hello-world",
+-  db: { "main-db": { files: [\`./src/db/*.ts\`] } },
++  db: { "main-db": { files: [\`./src/db/*.ts\`, "!**/*.test.ts", "!**/*.spec.ts"] } },
+   resolver: {
+     "main-resolver": {
+-      files: [\`./src/resolvers/**/*.ts\`],
++      files: [\`./src/resolvers/**/*.ts\`, "!**/*.test.ts", "!**/*.spec.ts"],
+       // This template defines no auth, so its resolvers are public by design.
+       defaultPermission: "allowAnonymous",
+     },
+   },
+",
+  },
+  "llmReviews": [
+    {
+      "codemodId": "v3/files-ignores-to-negation",
+      "files": [
+        "tailor.config.ts",
+      ],
+      "findings": [
+        {
+          "excerpt": "files: [\`./src/db/*.ts\`, "!**/*.test.ts", "!**/*.spec.ts"]",
+          "file": "tailor.config.ts",
+          "line": 6,
+          "message": "Migrate \`ignores\` and the default test-file exclusion into \`files\` by hand: db.main-db.files can match files outside this config's directory, where the explicit test-file exclusion does not apply.",
+        },
+        {
+          "excerpt": "files: [\`./src/resolvers/**/*.ts\`, "!**/*.test.ts", "!**/*.spec.ts"]",
+          "file": "tailor.config.ts",
+          "line": 9,
+          "message": "Migrate \`ignores\` and the default test-file exclusion into \`files\` by hand: resolver.main-resolver.files can match files outside this config's directory, where the explicit test-file exclusion does not apply.",
+        },
+      ],
+    },
+  ],
+  "warnings": [],
+}
+`;
+
+exports[`next-major codemods on create-sdk templates > inventory-management 1`] = `
+{
+  "diffs": {
+    "tailor.config.ts": "@@ -3,12 +3,12 @@
+ import { user } from "./src/db/user";
+ 
+ export default defineConfig({
+   name: "inventory-management",
+-  db: { "main-db": { files: [\`./src/db/*.ts\`] } },
++  db: { "main-db": { files: [\`./src/db/*.ts\`, "!**/*.test.ts", "!**/*.spec.ts"] } },
+   resolver: {
+     "main-resolver": {
+-      files: ["./src/resolver/*.ts"],
++      files: ["./src/resolver/*.ts", "!**/*.test.ts", "!**/*.spec.ts"],
+       // Every resolver in this namespace requires an authenticated caller.
+       // A single resolver opts out with \`permission: "allowAnonymous"\`.
+       defaultPermission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+     },
+@@ -29,9 +29,9 @@
+         attributes: { role: "STAFF" },
+       },
+     },
+   }),
+-  executor: { files: ["./src/executor/*.ts"] },
++  executor: { files: ["./src/executor/*.ts", "!**/*.test.ts", "!**/*.spec.ts"] },
+ });
+ 
+ export const plugins = definePlugins(
+   kyselyTypePlugin({ distPath: \`./src/generated/kysely-tailordb.ts\` }),
+",
+  },
+  "llmReviews": [
+    {
+      "codemodId": "v3/files-ignores-to-negation",
+      "files": [
+        "tailor.config.ts",
+      ],
+      "findings": [
+        {
+          "excerpt": "files: [\`./src/db/*.ts\`, "!**/*.test.ts", "!**/*.spec.ts"]",
+          "file": "tailor.config.ts",
+          "line": 7,
+          "message": "Migrate \`ignores\` and the default test-file exclusion into \`files\` by hand: db.main-db.files can match files outside this config's directory, where the explicit test-file exclusion does not apply.",
+        },
+      ],
+    },
+  ],
+  "warnings": [],
+}
+`;
+
+exports[`next-major codemods on create-sdk templates > multi-application 1`] = `
+{
+  "diffs": {
+    "apps/admin/tailor.config.ts": "@@ -4,7 +4,7 @@
+ export default defineConfig({
+   name: "admin",
+   db: {
+     [sharedDb]: { external: true },
+-    "admin-db": { files: [\`./db/**/*.ts\`] },
++    "admin-db": { files: [\`./db/**/*.ts\`, "!**/*.test.ts", "!**/*.spec.ts"] },
+   },
+ });
+",
+  },
+  "llmReviews": [
+    {
+      "codemodId": "v3/files-ignores-to-negation",
+      "files": [
+        "apps/admin/tailor.config.ts",
+        "apps/user/tailor.config.ts",
+      ],
+      "findings": [
+        {
+          "excerpt": "[sharedDb]: { external: true }",
+          "file": "apps/admin/tailor.config.ts",
+          "line": 7,
+          "message": "Migrate \`ignores\` and the default test-file exclusion into \`files\` by hand: a \`db\` namespace is not written as an object literal.",
+        },
+        {
+          "excerpt": "files: [\`./db/**/*.ts\`, "!**/*.test.ts", "!**/*.spec.ts"]",
+          "file": "apps/admin/tailor.config.ts",
+          "line": 8,
+          "message": "Migrate \`ignores\` and the default test-file exclusion into \`files\` by hand: db.admin-db.files can match files outside this config's directory, where the explicit test-file exclusion does not apply.",
+        },
+        {
+          "excerpt": "[sharedDb]: { files: [\`./db/**/*.ts\`] }",
+          "file": "apps/user/tailor.config.ts",
+          "line": 7,
+          "message": "Migrate \`ignores\` and the default test-file exclusion into \`files\` by hand: a \`db\` namespace is not written as an object literal.",
+        },
+      ],
+    },
+  ],
+  "warnings": [],
+}
+`;
+
+exports[`next-major codemods on create-sdk templates > resolver 1`] = `
+{
+  "diffs": {
+    "tailor.config.ts": "@@ -18,12 +18,12 @@
+         },
+       },
+     },
+   }),
+-  db: { "main-db": { files: ["./src/db/*.ts"] } },
++  db: { "main-db": { files: ["./src/db/*.ts", "!**/*.test.ts", "!**/*.spec.ts"] } },
+   resolver: {
+     "main-resolver": {
+-      files: ["./src/resolver/*.ts"],
++      files: ["./src/resolver/*.ts", "!**/*.test.ts", "!**/*.spec.ts"],
+       // Every resolver in this namespace requires an authenticated caller.
+       // A single resolver opts out with \`permission: "allowAnonymous"\`.
+       defaultPermission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+     },
+",
+  },
+  "llmReviews": [],
+  "warnings": [],
+}
+`;
+
+exports[`next-major codemods on create-sdk templates > static-web-site 1`] = `
+{
+  "diffs": {
+    "tailor.config.ts": "@@ -54,9 +54,9 @@
+ 
+ export default defineConfig({
+   name: "static-web-site",
+   cors: [website.url],
+-  db: { "main-db": { files: ["./src/db/*.ts"] } },
++  db: { "main-db": { files: ["./src/db/*.ts", "!**/*.test.ts", "!**/*.spec.ts"] } },
+   idp,
+   auth,
+   staticWebsites: [website],
+ });
+",
+  },
+  "llmReviews": [],
+  "warnings": [],
+}
+`;
+
+exports[`next-major codemods on create-sdk templates > tailordb 1`] = `
+{
+  "diffs": {
+    "tailor.config.ts": "@@ -19,8 +19,8 @@
+         },
+       },
+     },
+   }),
+-  db: { "main-db": { files: ["./src/db/*.ts"] } },
++  db: { "main-db": { files: ["./src/db/*.ts", "!**/*.test.ts", "!**/*.spec.ts"] } },
+ });
+ 
+ export const plugins = definePlugins(kyselyTypePlugin({ distPath: "./src/generated/db.ts" }));
+",
+  },
+  "llmReviews": [],
+  "warnings": [],
+}
+`;
+
+exports[`next-major codemods on create-sdk templates > workflow 1`] = `
+{
+  "diffs": {
+    "tailor.config.ts": "@@ -14,17 +14,17 @@
+         },
+       },
+     },
+   }),
+-  db: { "main-db": { files: ["./src/db/*.ts"] } },
++  db: { "main-db": { files: ["./src/db/*.ts", "!**/*.test.ts", "!**/*.spec.ts"] } },
+   resolver: {
+     "main-resolver": {
+-      files: ["./src/resolver/*.ts"],
++      files: ["./src/resolver/*.ts", "!**/*.test.ts", "!**/*.spec.ts"],
+       // Every resolver in this namespace requires an authenticated caller.
+       // A single resolver opts out with \`permission: "allowAnonymous"\`.
+       defaultPermission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+     },
+   },
+-  workflow: { files: ["./src/workflow/*.ts"] },
++  workflow: { files: ["./src/workflow/*.ts", "!**/*.test.ts", "!**/*.spec.ts"] },
+ });
+ 
+ export const plugins = definePlugins(kyselyTypePlugin({ distPath: "./src/generated/db.ts" }));
+",
+  },
+  "llmReviews": [],
+  "warnings": [],
+}
+`;
