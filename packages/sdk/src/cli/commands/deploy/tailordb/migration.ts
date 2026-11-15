@@ -157,6 +157,8 @@ interface ExecutionResult {
   /** Thrown in place of a plain migration failure once the logs are shown. */
   failure?: Error;
   canceled?: boolean;
+  /** Whether the script's steps completed in an earlier run, which this deploy reused without running them again. */
+  reusedEarlierRun?: boolean;
 }
 
 // ============================================================================
@@ -1265,6 +1267,7 @@ async function executeStepsMigration(
       migrationNumber: migration.number,
       success: true,
       logs: result.logs,
+      ...(result.reusedEarlierRun ? { reusedEarlierRun: true } : {}),
     };
   }
   const failed = {
@@ -1384,7 +1387,14 @@ export async function executeMigrations(
         timeline?.recordScript(timer);
       }
 
-      if (result.success) {
+      if (result.success && result.reusedEarlierRun) {
+        sp.succeed(
+          `Steps of migration ${migrationLabel} completed in an earlier run and were not run again`,
+        );
+        if (result.logs?.trim()) {
+          logger.log(`Logs from the earlier run:\n${result.logs}`);
+        }
+      } else if (result.success) {
         const timing = [
           ...(timer.startObserved
             ? [

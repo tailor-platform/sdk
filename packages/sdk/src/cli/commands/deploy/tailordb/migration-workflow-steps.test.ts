@@ -251,6 +251,7 @@ describe("executeMigrationStepsAsWorkflow", () => {
       failedSteps: [],
       stepsMayHaveCommitted: true,
     });
+    expect(result.reusedEarlierRun).toBeUndefined();
     expect(raw.createWorkflow).toHaveBeenCalledWith(
       expect.objectContaining({
         workflowName: NAME,
@@ -670,6 +671,7 @@ describe("executeMigrationStepsAsWorkflow", () => {
       const result = await run(client, { inProgress: { executionId: "exec-old" } });
 
       expect(result).toMatchObject({ success: true, executionId: "exec-old" });
+      expect(result.reusedEarlierRun).toBeUndefined();
       expect(calls).toContain("updateFunctionRegistry");
       expect(calls.indexOf("updateFunctionRegistry")).toBeLessThan(
         calls.indexOf("resumeWorkflowExecution exec-old"),
@@ -775,7 +777,11 @@ describe("executeMigrationStepsAsWorkflow", () => {
 
       const result = await run(client, { inProgress: { executionId: "exec-old" } });
 
-      expect(result).toMatchObject({ success: true, completedSteps: ORDER });
+      expect(result).toMatchObject({
+        success: true,
+        completedSteps: ORDER,
+        reusedEarlierRun: true,
+      });
       expect(raw.startWorkflow).not.toHaveBeenCalled();
       expect(raw.resumeWorkflowExecution).not.toHaveBeenCalled();
     });
@@ -818,6 +824,7 @@ describe("executeMigrationStepsAsWorkflow", () => {
       const result = await run(client, { inProgress: { executionId: "exec-old" } });
 
       expect(result.success).toBe(true);
+      expect(result.reusedEarlierRun).toBeUndefined();
       expect(raw.startWorkflow).not.toHaveBeenCalled();
       expect(raw.resumeWorkflowExecution).not.toHaveBeenCalled();
     });

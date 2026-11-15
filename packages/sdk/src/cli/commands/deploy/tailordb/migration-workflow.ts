@@ -736,6 +736,8 @@ export interface MigrationStepsWorkflowResult {
   runEnded?: boolean;
   /** Whether the run was canceled, so the next deploy runs every step again. */
   canceled?: boolean;
+  /** Whether the steps completed in an earlier run, which this deploy reused without running them again. */
+  reusedEarlierRun?: boolean;
 }
 
 interface StepOutcome {
@@ -1234,7 +1236,10 @@ export async function executeMigrationStepsAsWorkflow(
       waited = true;
       if (planUnchanged) return earlier;
     } else if (execution?.status === WorkflowExecution_Status.SUCCESS && planUnchanged) {
-      return await summarizeSteps(client, workspaceId, execution, runnerName, order);
+      return {
+        ...(await summarizeSteps(client, workspaceId, execution, runnerName, order)),
+        reusedEarlierRun: true,
+      };
     }
     if (execution?.status === WorkflowExecution_Status.FAILED && planUnchanged) {
       await uploadMigrationFunction(client, workspaceId, name, code, appName, appId, "update");
