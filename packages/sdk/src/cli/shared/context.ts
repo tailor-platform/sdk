@@ -776,10 +776,10 @@ export async function loadMachineUserName(
 
 /**
  * Read the access token set through the environment, which takes precedence over any logged-in user.
- * @returns TAILOR_PLATFORM_TOKEN when set
+ * @returns TAILOR_PLATFORM_TOKEN, or undefined when it is unset or empty
  */
 export function readEnvironmentToken(): string | undefined {
-  return process.env.TAILOR_PLATFORM_TOKEN;
+  return process.env.TAILOR_PLATFORM_TOKEN || undefined;
 }
 
 /**
