@@ -1655,7 +1655,7 @@ export const allCodemods: CodemodPackage[] = [
     id: "v2/node-minimum-22-15-0",
     name: "Node.js minimum version raised to 22.15.0",
     description:
-      "v2 requires Node.js **22.15.0** or later. This is the first version that includes `module.registerHooks()`, which the SDK uses to register its TypeScript loader hook synchronously in the main thread. The actual floor is now **22.18.0**: Node 22.15.0–22.17.x has a bug that crashes `tailor seed validate` when requiring `node:`-scheme-only builtins such as `node:sqlite`, fixed upstream by [nodejs/node#58612](https://github.com/nodejs/node/pull/58612) in 22.18.0. No source change is required; ensure your environment runs Node.js 22.18.0+.",
+      "v2 requires Node.js **22.15.0** or later. This is the first version that includes `module.registerHooks()`, which the SDK uses to register its TypeScript loader hook synchronously in the main thread. The floor was later raised to **22.18.0**: Node 22.15.0–22.17.x has a bug that crashes `tailor seed validate` when requiring `node:`-scheme-only builtins such as `node:sqlite`, fixed upstream by [nodejs/node#58612](https://github.com/nodejs/node/pull/58612) in 22.18.0. Current v2 releases require Node.js 22 (22.22.2 or later), 24 (24.15.0 or later), or 26 and later, the versions the CLI's interactive prompt dependencies support. No source change is required; ensure your environment runs one of these versions.",
     since: "1.0.0",
     until: "2.0.0",
     notice: true,
