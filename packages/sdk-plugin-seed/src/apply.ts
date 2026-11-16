@@ -267,11 +267,11 @@ async function runIdpScript(
   return { success, parsed, outcomeUnknown };
 }
 
-// The generated IdP scripts upsert or delete users one call at a time (about a
-// second or more per row), so each script execution must carry few enough rows
-// to finish well within a workflow job's execution time limit, and to keep the
-// rows an interrupted chunk may have applied few. Byte-size chunking cannot
-// capture this.
+// The generated IdP scripts upsert or delete users with a bounded number of
+// concurrent calls (about a second per call), so each script execution must
+// carry few enough rows to finish well within a workflow job's execution time
+// limit, and to keep the rows an interrupted chunk may have applied few.
+// Byte-size chunking cannot capture this.
 const IDP_USER_CHUNK_SIZE = 25;
 
 function chunkIdpUsers<T>(rows: T[]): T[][] {

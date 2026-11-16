@@ -1,5 +1,6 @@
 import { aroundEach, describe, expect, test } from "vitest";
 import {
+  IDP_USER_CONCURRENCY,
   generateIdpListUsersScriptCode,
   generateIdpSeedScriptCode,
   generateIdpTruncateScriptCode,
@@ -281,12 +282,12 @@ describe("generateIdpSeedScriptCode", () => {
 
     expect(calls.created).toEqual([{ name: "fresh", password: "p1" }]);
     expect(calls.updated).toEqual([{ id: "existing-id", password: "p2" }]);
-    expect(calls.operations).toEqual([
-      "lookup:fresh",
-      "create:fresh",
-      "lookup:existing",
-      "update:existing-id",
-    ]);
+    expect(calls.operations.indexOf("lookup:fresh")).toBeLessThan(
+      calls.operations.indexOf("create:fresh"),
+    );
+    expect(calls.operations.indexOf("lookup:existing")).toBeLessThan(
+      calls.operations.indexOf("update:existing-id"),
+    );
     expect(result).toMatchObject({
       success: true,
       processed: 2,
@@ -348,6 +349,92 @@ describe("generateIdpSeedScriptCode", () => {
     expect(result.errors[0]).toContain("create failed (already exists)");
     expect(result.errors[0]).toContain("lookup failed (not found)");
     expect(updated).toEqual([]);
+  });
+
+  describe("concurrent processing", () => {
+    const settle = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    test("rejects a row whose name repeats an earlier row without calling the IdP for it", async () => {
+      const calls = stubIdp({});
+      const main = await loadSeedMain(generateIdpSeedScriptCode("test-ns"));
+
+      const result = await main({
+        users: [{ name: "a" }, { name: "b" }, { name: "a" }],
+        offset: 10,
+        total: 13,
+      });
+
+      expect(calls.created.map((u) => u.name)).toEqual(["a", "b"]);
+      expect(result).toMatchObject({ success: false, processed: 2, created: 2 });
+      expect(result.errors).toEqual(["Row 13 (a): duplicate of row 11"]);
+    });
+
+    test("does not look up or update a repeated name when upsert is enabled", async () => {
+      const calls = stubIdp({ a: { id: "a-id" } });
+      const main = await loadSeedMain(generateIdpSeedScriptCode("test-ns"));
+
+      const result = await main({
+        users: [
+          { name: "a", password: "p1" },
+          { name: "a", password: "p2" },
+        ],
+        upsert: true,
+      });
+
+      expect(calls.lookups).toEqual(["a"]);
+      expect(calls.updated).toEqual([{ id: "a-id", password: "p1" }]);
+      expect(result.errors).toEqual(["Row 2 (a): duplicate of row 1"]);
+    });
+
+    test("runs up to the concurrency limit of createUser calls at once", async () => {
+      let inFlight = 0;
+      let maxInFlight = 0;
+      (globalThis as { tailor?: unknown }).tailor = {
+        idp: {
+          Client: class {
+            async createUser() {
+              inFlight++;
+              maxInFlight = Math.max(maxInFlight, inFlight);
+              await settle(5);
+              inFlight--;
+              return { id: "id" };
+            }
+          },
+        },
+      };
+      const main = await loadSeedMain(generateIdpSeedScriptCode("test-ns"));
+
+      const result = await main({
+        users: Array.from({ length: IDP_USER_CONCURRENCY * 3 }, (_, i) => ({ name: `u${i}` })),
+      });
+
+      expect(maxInFlight).toBe(IDP_USER_CONCURRENCY);
+      expect(result).toMatchObject({ success: true, created: IDP_USER_CONCURRENCY * 3 });
+    });
+
+    test("reports errors in input order even when later rows finish first", async () => {
+      (globalThis as { tailor?: unknown }).tailor = {
+        idp: {
+          Client: class {
+            async createUser(input: SeedUser) {
+              const row = Number(input.name.slice(1));
+              await settle((5 - row) * 5);
+              if (row === 1 || row === 4) throw new Error(`rejected ${input.name}`);
+              return { id: input.name };
+            }
+          },
+        },
+      };
+      const main = await loadSeedMain(generateIdpSeedScriptCode("test-ns"));
+
+      const result = await main({
+        users: [0, 1, 2, 3, 4].map((i) => ({ name: `u${i}` })),
+        offset: 20,
+      });
+
+      expect(result.errors).toEqual(["Row 22 (u1): rejected u1", "Row 25 (u4): rejected u4"]);
+      expect(result).toMatchObject({ processed: 3, created: 3 });
+    });
   });
 
   test("preserves the lookup failure reason alongside the create error", async () => {
@@ -529,6 +616,48 @@ describe("generateIdpTruncateScriptCode", () => {
     });
 
     expect(result).toEqual({ success: true, deleted: 1, notFound: 1, total: 2, errors: [] });
+  });
+
+  test("runs up to the concurrency limit of deleteUser calls at once", async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    installDeleteClient(async () => {
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight--;
+      return true;
+    });
+    const main = await loadGeneratedMain<TruncateInput, TruncateResult>(
+      generateIdpTruncateScriptCode("test-ns"),
+    );
+
+    const users = Array.from({ length: IDP_USER_CONCURRENCY * 3 }, (_, i) => ({
+      id: `${i}`,
+      name: `u${i}`,
+    }));
+    const result = await main({ users });
+
+    expect(maxInFlight).toBe(IDP_USER_CONCURRENCY);
+    expect(result).toMatchObject({ success: true, deleted: users.length });
+  });
+
+  test("reports delete failures in input order even when later users finish first", async () => {
+    installDeleteClient(async (id) => {
+      await new Promise((resolve) => setTimeout(resolve, (5 - Number(id)) * 5));
+      if (id === "1" || id === "4") throw new Error(`rejected ${id}`);
+      return true;
+    });
+    const main = await loadGeneratedMain<TruncateInput, TruncateResult>(
+      generateIdpTruncateScriptCode("test-ns"),
+    );
+
+    const result = await main({
+      users: [0, 1, 2, 3, 4].map((i) => ({ id: `${i}`, name: `u${i}` })),
+    });
+
+    expect(result.errors).toEqual(["User 1 (u1): rejected 1", "User 4 (u4): rejected 4"]);
+    expect(result).toMatchObject({ deleted: 3, total: 5 });
   });
 
   test("reports other delete failures with the user id and name", async () => {

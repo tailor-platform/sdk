@@ -38,6 +38,23 @@ export function processIdpUser(auth: GeneratorAuthInput): IdpUserMetadata | unde
   };
 }
 
+export const IDP_USER_CONCURRENCY = 16;
+
+const mapWithConcurrencyFunction = ml /* ts */ `
+  async function mapWithConcurrency(items, limit, run) {
+    const results = new Array(items.length);
+    let next = 0;
+    const lanes = Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (next < items.length) {
+        const index = next++;
+        results[index] = await run(items[index], index);
+      }
+    });
+    await Promise.all(lanes);
+    return results;
+  }
+`;
+
 /**
  * Generates the server-side IDP seed script code.
  * Uses the global tailor.idp.Client - no bundling required.
@@ -46,6 +63,8 @@ export function processIdpUser(auth: GeneratorAuthInput): IdpUserMetadata | unde
  */
 export function generateIdpSeedScriptCode(idpNamespace: string): string {
   return ml /* ts */ `
+    ${mapWithConcurrencyFunction}
+
     export async function main(input) {
       const client = new tailor.idp.Client({ namespace: "${idpNamespace}" });
       const errors = [];
@@ -59,13 +78,26 @@ export function generateIdpSeedScriptCode(idpNamespace: string): string {
       const offset = typeof input.offset === "number" ? input.offset : 0;
       const total = typeof input.total === "number" ? input.total : input.users.length;
 
-      for (let i = 0; i < input.users.length; i++) {
+      const firstRowByName = new Map();
+      const outcomes = new Array(input.users.length);
+      const indexes = [];
+      input.users.forEach((user, i) => {
+        if (firstRowByName.has(user.name)) {
+          outcomes[i] = { error: \`duplicate of row \${offset + firstRowByName.get(user.name) + 1}\` };
+        } else {
+          firstRowByName.set(user.name, i);
+          indexes.push(i);
+        }
+      });
+
+      await mapWithConcurrency(indexes, ${String(IDP_USER_CONCURRENCY)}, async (i) => {
         try {
           const { initialPassword, ...row } = input.users[i];
           const createInput =
             initialPassword === undefined || row.password !== undefined
               ? row
               : { ...row, password: initialPassword };
+          let status = "created";
           if (upsert) {
             let existing;
             let lookupError;
@@ -79,15 +111,14 @@ export function generateIdpSeedScriptCode(idpNamespace: string): string {
             if (existing) {
               const { name, ...attributes } = row;
               if (Object.keys(attributes).length === 0) {
-                skipped++;
+                status = "skipped";
               } else {
                 await client.updateUser({ id: existing.id, ...attributes });
-                updated++;
+                status = "updated";
               }
             } else {
               try {
                 await client.createUser(createInput);
-                created++;
               } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 throw new Error(
@@ -97,16 +128,25 @@ export function generateIdpSeedScriptCode(idpNamespace: string): string {
             }
           } else {
             await client.createUser(createInput);
-            created++;
           }
-          processed++;
+          outcomes[i] = { status };
           console.log(\`[_User] \${offset + i + 1}/\${total}: \${input.users[i].name}\`);
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          errors.push(\`Row \${offset + i + 1} (\${input.users[i].name}): \${message}\`);
-          console.error(\`[_User] Row \${offset + i + 1} failed: \${message}\`);
+          outcomes[i] = { error: error instanceof Error ? error.message : String(error) };
         }
-      }
+      });
+
+      outcomes.forEach((outcome, i) => {
+        if (outcome.error !== undefined) {
+          errors.push(\`Row \${offset + i + 1} (\${input.users[i].name}): \${outcome.error}\`);
+          console.error(\`[_User] Row \${offset + i + 1} failed: \${outcome.error}\`);
+          return;
+        }
+        processed++;
+        if (outcome.status === "created") created++;
+        else if (outcome.status === "updated") updated++;
+        else skipped++;
+      });
 
       return {
         success: errors.length === 0,
@@ -165,6 +205,7 @@ export function generateIdpListUsersScriptCode(idpNamespace: string): string {
 export function generateIdpTruncateScriptCode(idpNamespace: string): string {
   return ml /* ts */ `
     ${listIdpUsersFunction}
+    ${mapWithConcurrencyFunction}
 
     export async function main(input) {
       const client = new tailor.idp.Client({ namespace: "${idpNamespace}" });
@@ -175,22 +216,25 @@ export function generateIdpTruncateScriptCode(idpNamespace: string): string {
       const offset = typeof input.offset === "number" ? input.offset : 0;
       const total = typeof input.total === "number" ? input.total : users.length;
 
-      for (let i = 0; i < users.length; i++) {
-        const user = users[i];
+      const outcomes = await mapWithConcurrency(users, ${String(IDP_USER_CONCURRENCY)}, async (user, i) => {
         try {
           await client.deleteUser(user.id);
-          deleted++;
           console.log(\`[_User] Deleted \${offset + i + 1}/\${total}: \${user.name}\`);
+          return { status: "deleted" };
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           if (/user not found/i.test(message)) {
-            notFound++;
             console.log(\`[_User] Already deleted \${offset + i + 1}/\${total}: \${user.name}\`);
-            continue;
+            return { status: "notFound" };
           }
-          errors.push(\`User \${user.id} (\${user.name}): \${message}\`);
           console.error(\`[_User] Delete failed for \${user.name}: \${message}\`);
+          return { error: \`User \${user.id} (\${user.name}): \${message}\` };
         }
+      });
+      for (const outcome of outcomes) {
+        if (outcome.error !== undefined) errors.push(outcome.error);
+        else if (outcome.status === "deleted") deleted++;
+        else notFound++;
       }
 
       return {
