@@ -101,13 +101,15 @@ function parseStatus(status: string): WorkflowExecution_Status {
   return parsed;
 }
 
-function precedes(candidate: Date | null, current: Date | null, order: Order): boolean {
-  const candidateTime = candidate?.getTime() ?? Infinity;
-  const currentTime = current?.getTime() ?? Infinity;
-  return order === "asc" ? candidateTime < currentTime : candidateTime > currentTime;
+function startOrFinishTime(execution: WorkflowExecutionInfo): number {
+  return (execution.startedAt ?? execution.finishedAt)?.getTime() ?? Infinity;
 }
 
-function mergeByStartTime(
+function precedes(candidate: number, current: number, order: Order): boolean {
+  return order === "asc" ? candidate < current : candidate > current;
+}
+
+function mergeByStartOrFinishTime(
   lists: WorkflowExecutionInfo[][],
   order: Order,
   limit: number | undefined,
@@ -118,7 +120,10 @@ function mergeByStartTime(
     let next: { cursor: (typeof cursors)[number]; execution: WorkflowExecutionInfo } | undefined;
     for (const cursor of cursors) {
       const execution = cursor.items[cursor.index];
-      if (execution && (!next || precedes(execution.startedAt, next.execution.startedAt, order))) {
+      if (
+        execution &&
+        (!next || precedes(startOrFinishTime(execution), startOrFinishTime(next.execution), order))
+      ) {
         next = { cursor, execution };
       }
     }
@@ -139,8 +144,10 @@ function mergeByStartTime(
  *
  * Without `options.workflow`, it lists the executions of every workflow in the
  * workspace: executions of different workflows are interleaved by start time,
- * while each workflow's executions keep their creation order. An execution
- * that has not started yet counts as newer than every started one.
+ * or by finish time for one that finished without starting, while each
+ * workflow's executions keep their creation order. An execution that has
+ * neither started nor finished counts as newer than every started or finished
+ * one.
  * @param options - Workflow execution listing options
  * @returns List of workflow executions
  */
@@ -212,7 +219,7 @@ export async function listWorkflowExecutions<W extends WorkflowLike>(
       async (workflow) => (await getOrNull(() => listExecutionsOf(workflow.name))) ?? [],
     ),
   );
-  return mergeByStartTime(lists, order, options?.limit);
+  return mergeByStartOrFinishTime(lists, order, options?.limit);
 }
 
 /**

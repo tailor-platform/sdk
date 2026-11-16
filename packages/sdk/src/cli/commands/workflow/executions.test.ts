@@ -301,6 +301,7 @@ describe("printExecutionWithLogs", () => {
 interface ExecutionFixture {
   id: string;
   startedAt?: string;
+  finishedAt?: string;
 }
 
 function mockWorkflowClient(
@@ -327,12 +328,17 @@ function mockWorkflowClient(
     const offset = Number(request.pageToken || 0);
     const end = offset + (request.pageSize || ordered.length);
     return {
-      executions: ordered.slice(offset, end).map(({ id, startedAt }) =>
+      executions: ordered.slice(offset, end).map(({ id, startedAt, finishedAt }) =>
         create(WorkflowExecutionSchema, {
           id,
           workflowName,
-          status: startedAt ? WorkflowExecution_Status.SUCCESS : WorkflowExecution_Status.PENDING,
+          status: startedAt
+            ? WorkflowExecution_Status.SUCCESS
+            : finishedAt
+              ? WorkflowExecution_Status.CANCELED
+              : WorkflowExecution_Status.PENDING,
           startedAt: startedAt ? timestampFromDate(new Date(startedAt)) : undefined,
+          finishedAt: finishedAt ? timestampFromDate(new Date(finishedAt)) : undefined,
         }),
       ),
       nextPageToken: end < ordered.length ? String(end) : "",
@@ -382,23 +388,50 @@ describe("listWorkflowExecutions", () => {
     }
   });
 
-  test("lists the oldest executions first across workflows with asc order", async () => {
-    mockWorkflowClient(executionsByWorkflow);
+  test.each<{
+    name: string;
+    workflows: Record<string, ExecutionFixture[]>;
+    limit?: number;
+    expected: string[];
+  }>([
+    {
+      name: "the oldest executions first across workflows",
+      workflows: executionsByWorkflow,
+      expected: ["b1", "b2", "a1", "a2", "a3"],
+    },
+    {
+      name: "an execution that has neither started nor finished after the others",
+      workflows: {
+        "wf-queued": [{ id: "q1" }],
+        "wf-a": [{ id: "a1", startedAt: "2026-11-01T10:30:00Z" }],
+      },
+      limit: 1,
+      expected: ["a1"],
+    },
+    {
+      name: "an execution that finished without starting by its finish time",
+      workflows: {
+        "wf-a": [
+          { id: "a-canceled", finishedAt: "2026-11-01T08:30:00Z" },
+          { id: "a-early", startedAt: "2026-11-01T09:00:00Z" },
+        ],
+        "wf-b": [
+          { id: "b1", startedAt: "2026-11-01T10:00:00Z" },
+          { id: "b2", startedAt: "2026-11-01T11:00:00Z" },
+        ],
+        "wf-c": [
+          { id: "c1", startedAt: "2026-11-01T08:00:00Z", finishedAt: "2026-11-01T09:30:00Z" },
+        ],
+      },
+      limit: 3,
+      expected: ["c1", "a-canceled", "a-early"],
+    },
+  ])("lists $name with asc order", async ({ workflows, limit, expected }) => {
+    mockWorkflowClient(workflows);
 
-    const executions = await listWorkflowExecutions({ order: "asc" });
+    const executions = await listWorkflowExecutions({ order: "asc", limit });
 
-    expect(executions.map((e) => e.id)).toEqual(["b1", "b2", "a1", "a2", "a3"]);
-  });
-
-  test("lists an execution that has not started after started ones with asc order", async () => {
-    mockWorkflowClient({
-      "wf-queued": [{ id: "q1" }],
-      "wf-a": [{ id: "a1", startedAt: "2026-11-01T10:30:00Z" }],
-    });
-
-    const executions = await listWorkflowExecutions({ order: "asc", limit: 1 });
-
-    expect(executions.map((e) => e.id)).toEqual(["a1"]);
+    expect(executions.map((e) => e.id)).toEqual(expected);
   });
 
   test("sends the status filter with each workflow's request", async () => {
