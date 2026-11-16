@@ -107,6 +107,7 @@ export function emptyPlanResults(): PlanResults {
         connection: createChangeSet("Auth connections"),
       },
       ...emptyOwnership(),
+      existingServices: {},
     },
     pipeline: {
       changeSet: {

@@ -1,9 +1,18 @@
-import { create, type MessageInitShape } from "@bufbuild/protobuf";
+import { create, type DescFile, type DescMessage, type MessageInitShape } from "@bufbuild/protobuf";
+import { nestedTypes } from "@bufbuild/protobuf/reflect";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { AIGatewaySchema } from "@tailor-platform/tailor-proto/aigateway_resource_pb";
 import { Subgraph_ServiceType } from "@tailor-platform/tailor-proto/application_resource_pb";
+import {
+  AuthIDPConfig_AuthType,
+  AuthIDPConfigSchema,
+  AuthSCIMConfig_AuthorizationType,
+  AuthSCIMConfigSchema,
+} from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { ExecutorExecutorSchema } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { PipelineResolverView } from "@tailor-platform/tailor-proto/pipeline_pb";
 import { PipelineResolverSchema } from "@tailor-platform/tailor-proto/pipeline_resource_pb";
+import { file_tailor_v1_service } from "@tailor-platform/tailor-proto/service_pb";
 import { describe, expect, test, vi } from "vitest";
 import { dropCrossDeploymentManagedDeletes } from "./managed-resources";
 import { assertResourcesNotInUse } from "./resources-in-use";
@@ -431,6 +440,26 @@ function deletingOrderTable(results: PlanResults) {
   });
 }
 
+function deletingCoreApplication(results: PlanResults) {
+  results.app.deletes.push({ name: "core", request: {} });
+}
+
+const API_KEY = { vaultName: "shared", secretKey: "api-key" };
+
+const API_KEY_LABEL = 'Secret "api-key" in vault "shared"';
+
+const API_KEY_USE = { resourceType: "secret.secret", namespace: "shared", name: "api-key" };
+
+function deletingApiKey(results = emptyPlanResults()) {
+  results.secretManager.secretChangeSet.deletes.push({
+    name: "shared/api-key",
+    secretName: "api-key",
+    workspaceId: "ws",
+    vaultName: "shared",
+  });
+  return results;
+}
+
 function resolverInvoking(name: string) {
   return create(PipelineResolverSchema, { name, pipelines: [{ name: "step", invoker: INVOKER }] });
 }
@@ -445,6 +474,7 @@ function inUse(message: unknown, uses?: unknown[]) {
 
 const EXECUTOR_USES: Array<{
   label: string;
+  field?: string;
   deletes: (results: PlanResults) => void;
   executor: ExecutorInit;
   resource: string;
@@ -452,6 +482,7 @@ const EXECUTOR_USES: Array<{
 }> = [
   {
     label: "machine user that a function target runs as",
+    field: "tailor.v1.ExecutorTargetFunctionConfig.invoker",
     deletes: deletingAdmin,
     executor: { targetConfig: FUNCTION_TARGET },
     resource: ADMIN,
@@ -459,6 +490,7 @@ const EXECUTOR_USES: Array<{
   },
   {
     label: "machine user that a disabled graphql target runs as",
+    field: "tailor.v1.ExecutorTargetTailorGraphqlConfig.invoker",
     deletes: deletingAdmin,
     executor: {
       disabled: true,
@@ -469,6 +501,7 @@ const EXECUTOR_USES: Array<{
   },
   {
     label: "machine user that a workflow target runs as",
+    field: "tailor.v1.ExecutorTargetWorkflowConfig.invoker",
     deletes: deletingAdmin,
     executor: {
       targetConfig: {
@@ -543,6 +576,46 @@ const EXECUTOR_USES: Array<{
     resource: 'Auth service "core-auth"',
     use: { resourceType: "auth.service", name: "core-auth" },
   },
+  {
+    label: "application that a graphql target queries",
+    field: "tailor.v1.ExecutorTargetTailorGraphqlConfig.app_name",
+    deletes: deletingCoreApplication,
+    executor: {
+      targetConfig: { config: { case: "tailorGraphql", value: { appName: "core" } } },
+    },
+    resource: 'Application "core"',
+    use: { resourceType: "application", name: "core" },
+  },
+  {
+    label: "secret that a webhook header sends",
+    field: "tailor.v1.ExecutorTargetWebhookHeader.secret_value",
+    deletes: deletingApiKey,
+    executor: {
+      targetConfig: {
+        config: {
+          case: "webhook",
+          value: {
+            headers: [
+              { key: "X-Source", value: { case: "rawValue", value: "portal" } },
+              { key: "Authorization", value: { case: "secretValue", value: API_KEY } },
+            ],
+          },
+        },
+      },
+    },
+    resource: API_KEY_LABEL,
+    use: API_KEY_USE,
+  },
+  {
+    label: "secret that a webhook target signs with",
+    field: "tailor.v1.ExecutorWebhookConfig.secret",
+    deletes: deletingApiKey,
+    executor: {
+      targetConfig: { config: { case: "webhook", value: { secret: API_KEY } } },
+    },
+    resource: API_KEY_LABEL,
+    use: API_KEY_USE,
+  },
 ];
 
 describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", () => {
@@ -611,6 +684,78 @@ describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", ()
     );
   });
 
+  describe("for an application that an executor of its own config targets", () => {
+    const CORE_QUERY: ExecutorInit["targetConfig"] = {
+      config: { case: "tailorGraphql", value: { appName: "core" } },
+    };
+    const DEPLOY_SUGGESTION =
+      "Keep each listed resource in the config that defines it, or deploy the applications that use it so that they stop using it, first or in the same run.";
+    const OWN_APPLICATION_SUGGESTION =
+      "An application that an executor in its own config still targets is deleted because that config no longer defines or references a TailorDB namespace, resolver namespace, IdP, or Auth service, so add one of them back to that config or remove that executor from it.";
+    const UNMANAGED_SUGGESTION =
+      "An executor, resolver, AI gateway, or Auth service listed without an application is not deployed by the SDK, so change or delete it outside the SDK.";
+
+    function coreQueriedBySelf() {
+      const core = emptyPlanResults();
+      deletingCoreApplication(core);
+      core.executor.changeSet.creates.push({
+        name: "self-query",
+        request: { workspaceId: "ws", executor: { name: "self-query", targetConfig: CORE_QUERY } },
+        metaRequest: { trn: "trn" },
+      });
+      return core;
+    }
+
+    test("suggests only restoring a service or removing the executor when that executor is the only user", async () => {
+      await expect(
+        check([deployment({ name: "core" }, coreQueriedBySelf())], "deploy"),
+      ).rejects.toThrow(
+        expect.objectContaining({
+          message:
+            'Application "core" cannot be deleted: executor "self-query" of application "core" still uses it.',
+          suggestion: OWN_APPLICATION_SUGGESTION,
+        }),
+      );
+    });
+
+    test("adds the suggestions for other applications and unmanaged executors that also use it", async () => {
+      const core = coreQueriedBySelf();
+      withWorkspaceExecutor(core, { name: "notify", targetConfig: CORE_QUERY }, "portal");
+      withWorkspaceExecutor(core, { name: "legacy", targetConfig: CORE_QUERY });
+
+      await expect(check([deployment({ name: "core" }, core)], "deploy")).rejects.toThrow(
+        expect.objectContaining({
+          suggestion: [DEPLOY_SUGGESTION, OWN_APPLICATION_SUGGESTION, UNMANAGED_SUGGESTION].join(
+            " ",
+          ),
+        }),
+      );
+    });
+
+    test("keeps the deploy suggestion when an application uses a deleted service of its own name", async () => {
+      const owner = withWorkspaceApplications(ownerDeleting("portal"), [
+        { name: "portal", authNamespace: "portal" },
+      ]);
+
+      await expect(check([deployment({ name: "core" }, owner)], "deploy")).rejects.toThrow(
+        expect.objectContaining({ suggestion: DEPLOY_SUGGESTION }),
+      );
+    });
+
+    test("keeps the remove suggestion when an executor labelled with the removed application remains", async () => {
+      const core = emptyPlanResults();
+      deletingCoreApplication(core);
+      withWorkspaceExecutor(core, { name: "self-query", targetConfig: CORE_QUERY }, "core");
+
+      await expect(check([deployment({ name: "core" }, core)], "remove")).rejects.toThrow(
+        expect.objectContaining({
+          suggestion:
+            "Remove the applications that use each listed resource, or deploy them so that they stop using it, then run remove again.",
+        }),
+      );
+    });
+  });
+
   test("rejects a deleted Auth service that an AI gateway outside the run uses", async () => {
     const owner = withWorkspaceGateway(ownerDeleting("core-auth"));
 
@@ -632,9 +777,35 @@ describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", ()
   test("accepts uses that the run deletes or rewrites, and a table of another namespace", async () => {
     const owner = withWorkspaceGateway(deletingAdmin(ownerDeleting("core-auth")));
     deletingOrderTable(owner);
-    for (const name of ["notify", "sync"]) {
-      withWorkspaceExecutor(owner, { name, targetConfig: FUNCTION_TARGET }, "portal");
-    }
+    deletingCoreApplication(owner);
+    deletingApiKey(owner);
+    withWorkspaceExecutor(
+      owner,
+      {
+        name: "notify",
+        targetConfig: {
+          config: { case: "tailorGraphql", value: { appName: "core", invoker: INVOKER } },
+        },
+      },
+      "core",
+    );
+    withWorkspaceExecutor(owner, { name: "sync", targetConfig: FUNCTION_TARGET }, "portal");
+    withWorkspaceExecutor(
+      owner,
+      {
+        name: "forward",
+        targetConfig: {
+          config: {
+            case: "webhook",
+            value: {
+              secret: API_KEY,
+              headers: [{ key: "Authorization", value: { case: "secretValue", value: API_KEY } }],
+            },
+          },
+        },
+      },
+      "portal",
+    );
     withWorkspaceExecutor(
       owner,
       {
@@ -647,11 +818,13 @@ describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", ()
       "portal",
     );
     owner.executor.changeSet.deletes.push({ name: "notify", request: {} });
-    owner.executor.changeSet.updates.push({
-      name: "sync",
-      request: { workspaceId: "ws", executor: { name: "sync" } },
-      metaRequest: { trn: "trn" },
-    });
+    for (const name of ["sync", "forward"]) {
+      owner.executor.changeSet.updates.push({
+        name,
+        request: { workspaceId: "ws", executor: { name } },
+        metaRequest: { trn: "trn" },
+      });
+    }
     owner.aiGateway.changeSet.deletes.push({ name: "chat", request: {} });
 
     await expect(check([deployment({ name: "core" }, owner)], "deploy")).resolves.toBeUndefined();
@@ -708,16 +881,280 @@ describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", ()
     );
   });
 
-  test("lists no resolver when the run deletes no machine user", async () => {
-    const owner = ownerDeleting("core-auth");
+  test("lists no resolver or Auth config when the run deletes no machine user or secret", async () => {
+    const owner = withWorkspaceAuth(ownerDeleting("core-auth"), "portal-auth", "portal");
     owner.pipeline.existingServices = {
       billing: { resource: {} as never, allLabels: { "sdk-name": "billing-app" } },
     };
-    const listPipelineResolvers = vi.fn();
+    const client = {
+      listPipelineResolvers: vi.fn(),
+      listAuthIDPConfigs: vi.fn(),
+      getAuthSCIMConfig: vi.fn(),
+    };
 
     await expect(
-      check([deployment({ name: "core" }, owner)], "deploy", { listPipelineResolvers }),
+      check([deployment({ name: "core" }, owner)], "deploy", client),
     ).resolves.toBeUndefined();
-    expect(listPipelineResolvers).not.toHaveBeenCalled();
+    for (const method of Object.values(client)) {
+      expect(method).not.toHaveBeenCalled();
+    }
+  });
+});
+
+const OTHER_KEY = { vaultName: "shared", secretKey: "other-key" };
+
+function oidcConfig(clientSecretKey: typeof API_KEY) {
+  return create(AuthIDPConfigSchema, {
+    name: "oidc",
+    authType: AuthIDPConfig_AuthType.OIDC,
+    config: {
+      config: {
+        case: "oidc",
+        value: { clientIdKey: "client", clientSecretKey, providerUrl: "https://idp.example.com" },
+      },
+    },
+  });
+}
+
+function bearerSCIMConfig(bearerSecret: typeof API_KEY) {
+  return create(AuthSCIMConfigSchema, {
+    machineUserName: "admin",
+    authorizationType: AuthSCIMConfig_AuthorizationType.BEARER,
+    authorizationConfig: { case: "bearerSecret", value: bearerSecret },
+  });
+}
+
+function withWorkspaceAuth(results: PlanResults, namespace: string, application?: string) {
+  results.auth.existingServices[namespace] = {
+    resource: {} as never,
+    allLabels: application ? { "sdk-name": application } : {},
+  };
+  return results;
+}
+
+type WorkspaceAuthConfigs = {
+  idpConfigs?: Record<string, ReturnType<typeof oidcConfig>[]>;
+  scimConfigs?: Record<string, ReturnType<typeof bearerSCIMConfig>>;
+};
+
+function authClient(configs: WorkspaceAuthConfigs) {
+  return {
+    listAuthIDPConfigs: vi.fn(async ({ namespaceName }: { namespaceName: string }) => ({
+      idpConfigs: configs.idpConfigs?.[namespaceName] ?? [],
+      nextPageToken: "",
+    })),
+    getAuthSCIMConfig: vi.fn(async ({ namespaceName }: { namespaceName: string }) => {
+      const scimConfig = configs.scimConfigs?.[namespaceName];
+      if (!scimConfig) throw new ConnectError("not found", Code.NotFound);
+      return { scimConfig };
+    }),
+  };
+}
+
+const AUTH_CONFIG_USERS = [
+  {
+    label: "OIDC IdP config",
+    field: "tailor.v1.AuthIDPConfig.OIDCConfig.client_secret_key",
+    configs: { idpConfigs: { "portal-auth": [oidcConfig(API_KEY)] } },
+    user: 'IdP config "oidc" of Auth service "portal-auth"',
+    usedBy: { resourceType: "auth.idp_config", namespace: "portal-auth", name: "oidc" },
+  },
+  {
+    label: "SCIM config",
+    field: "tailor.v1.AuthSCIMConfig.bearer_secret",
+    configs: { scimConfigs: { "portal-auth": bearerSCIMConfig(API_KEY) } },
+    user: 'SCIM config of Auth service "portal-auth"',
+    usedBy: {
+      resourceType: "auth.scim",
+      namespace: "portal-auth",
+      name: "portal-auth-scim-config",
+    },
+  },
+];
+
+describe("assertResourcesNotInUse for Auth IdP and SCIM configs", () => {
+  test.each(AUTH_CONFIG_USERS)(
+    "rejects a deleted secret that the $label of an Auth service outside the run names",
+    async ({ configs, user, usedBy }) => {
+      const owner = withWorkspaceAuth(deletingApiKey(), "portal-auth", "portal");
+
+      await expect(
+        check([deployment({ name: "core" }, owner)], "remove", authClient(configs)),
+      ).rejects.toThrow(
+        inUse(
+          `${API_KEY_LABEL} cannot be deleted: ${user} of application "portal" still uses it.`,
+          [{ ...API_KEY_USE, application: "portal", usedBy }],
+        ),
+      );
+    },
+  );
+
+  test("names no application for an Auth service that no application manages", async () => {
+    const owner = withWorkspaceAuth(deletingApiKey(), "portal-auth");
+    const client = authClient({ idpConfigs: { "portal-auth": [oidcConfig(API_KEY)] } });
+
+    await expect(check([deployment({ name: "core" }, owner)], "deploy", client)).rejects.toThrow(
+      expect.objectContaining({
+        message: `${API_KEY_LABEL} cannot be deleted: IdP config "oidc" of Auth service "portal-auth" still uses it.`,
+        suggestion: expect.stringContaining("Auth service listed without an application"),
+      }),
+    );
+  });
+
+  test("rejects a deleted secret that Auth configs the run writes name", async () => {
+    const portal = emptyPlanResults();
+    portal.auth.changeSet.idpConfig.creates.push({
+      name: "oidc",
+      idpConfig: {} as never,
+      request: { workspaceId: "ws", namespaceName: "portal-auth", idpConfig: oidcConfig(API_KEY) },
+    });
+    portal.auth.changeSet.scim.updates.push({
+      name: "portal-auth-scim-config",
+      request: {
+        workspaceId: "ws",
+        namespaceName: "portal-auth",
+        scimConfig: bearerSCIMConfig(API_KEY),
+      },
+    });
+
+    await expect(
+      check(
+        [deployment({ name: "core" }, deletingApiKey()), deployment({ name: "portal" }, portal)],
+        "deploy",
+      ),
+    ).rejects.toThrow(
+      inUse(
+        [
+          `${API_KEY_LABEL} cannot be deleted: IdP config "oidc" of Auth service "portal-auth" of application "portal" still uses it.`,
+          `${API_KEY_LABEL} cannot be deleted: SCIM config of Auth service "portal-auth" of application "portal" still uses it.`,
+        ].join("\n"),
+      ),
+    );
+  });
+
+  test("accepts Auth configs that the run rewrites or deletes, or that name no deleted secret", async () => {
+    const owner = withWorkspaceAuth(
+      withWorkspaceAuth(
+        withWorkspaceAuth(ownerDeleting("legacy-auth", deletingApiKey()), "portal-auth", "portal"),
+        "admin-auth",
+        "admin",
+      ),
+      "legacy-auth",
+      "core",
+    );
+    owner.auth.changeSet.idpConfig.updates.push({
+      name: "oidc",
+      idpConfig: {} as never,
+      request: {
+        workspaceId: "ws",
+        namespaceName: "portal-auth",
+        idpConfig: oidcConfig(OTHER_KEY),
+      },
+    });
+    owner.auth.changeSet.idpConfig.creates.push({
+      name: "builtin",
+      idpConfig: {} as never,
+      request: {
+        workspaceId: "ws",
+        namespaceName: "admin-auth",
+        idpConfig: { name: "builtin", authType: AuthIDPConfig_AuthType.OIDC, config: {} },
+      },
+    });
+    owner.auth.changeSet.scim.deletes.push({
+      name: "portal-auth-scim-config",
+      request: { workspaceId: "ws", namespaceName: "portal-auth" },
+    });
+    owner.auth.changeSet.scim.updates.push({
+      name: "admin-auth-scim-config",
+      request: {
+        workspaceId: "ws",
+        namespaceName: "admin-auth",
+        scimConfig: {
+          machineUserName: "admin",
+          authorizationType: AuthSCIMConfig_AuthorizationType.OAUTH2,
+          authorizationConfig: { case: "bearerSecret", value: {} },
+        },
+      },
+    });
+    const client = authClient({
+      idpConfigs: {
+        "portal-auth": [oidcConfig(API_KEY)],
+        "admin-auth": [oidcConfig(OTHER_KEY)],
+        "legacy-auth": [oidcConfig(API_KEY)],
+      },
+      scimConfigs: {
+        "portal-auth": bearerSCIMConfig(API_KEY),
+        "admin-auth": bearerSCIMConfig(API_KEY),
+        "legacy-auth": bearerSCIMConfig(API_KEY),
+      },
+    });
+
+    await expect(
+      check([deployment({ name: "core" }, owner)], "deploy", client),
+    ).resolves.toBeUndefined();
+    expect(
+      client.listAuthIDPConfigs.mock.calls.map(([{ namespaceName }]) => namespaceName),
+    ).toEqual(["portal-auth", "admin-auth"]);
+  });
+});
+
+/**
+ * Every field of a stored Platform resource that names an application, a Secret Manager secret,
+ * or a machine user, as `<message>.<field>`.
+ * @returns Reference fields of the messages the operator service's files define
+ */
+function referenceFields(): string[] {
+  const files = new Map<string, DescFile>();
+  const collect = (file: DescFile) => {
+    if (files.has(file.name)) return;
+    files.set(file.name, file);
+    file.dependencies.forEach(collect);
+  };
+  collect(file_tailor_v1_service);
+  const topLevel = (message: DescMessage): DescMessage =>
+    message.parent ? topLevel(message.parent) : message;
+  const referenceTypes = new Set(["tailor.v1.AuthInvoker", "tailor.v1.SecretValue"]);
+  const referenceNames = new Set(["app_name", "application_name", "machine_user_name"]);
+  return [...files.values()].flatMap((file) =>
+    [...nestedTypes(file)]
+      .filter((desc): desc is DescMessage => desc.kind === "message")
+      .filter(
+        (message) =>
+          !/(Request|Response)$/.test(topLevel(message).name) &&
+          !referenceTypes.has(message.typeName),
+      )
+      .flatMap((message) =>
+        message.fields
+          .filter(
+            (field) =>
+              referenceTypes.has(field.message?.typeName ?? "") || referenceNames.has(field.name),
+          )
+          .map((field) => `${message.typeName}.${field.name}`),
+      ),
+  );
+}
+
+describe("assertResourcesNotInUse coverage of Platform resource references", () => {
+  test("every field that names an application, secret, or machine user is checked or explicitly not checked", () => {
+    const CHECKED = new Set([
+      ...EXECUTOR_USES.flatMap(({ field }) => (field ? [field] : [])),
+      ...AUTH_CONFIG_USERS.map(({ field }) => field),
+      // "rejects a deleted machine user that resolvers of the run and of other namespaces use"
+      "tailor.v1.PipelineResolver.Pipeline.invoker",
+    ]);
+    const NOT_CHECKED = new Set([
+      // machine users of the hook's or SCIM config's own Auth service, which deploy requires its defineAuth to declare
+      "tailor.v1.AuthHook.invoker",
+      "tailor.v1.AuthSCIMConfig.machine_user_name",
+      // OTLP exporters are set up outside the SDK, which never lists them
+      "tailor.v1.OTLPExporterApiKeyAuth.secret_value",
+      "tailor.v1.OTLPExporterBearerTokenAuth.secret_value",
+    ]);
+
+    const fields = referenceFields();
+
+    expect(fields).toContain("tailor.v1.ExecutorTargetTailorGraphqlConfig.app_name");
+    expect(fields.filter((field) => !CHECKED.has(field) && !NOT_CHECKED.has(field))).toEqual([]);
+    expect([...CHECKED, ...NOT_CHECKED].filter((field) => !fields.includes(field))).toEqual([]);
   });
 });

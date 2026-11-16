@@ -218,6 +218,33 @@ function createMockApplicationWithTenantProvider(): Application {
   } as unknown as Application;
 }
 
+type MachineUserReferences = {
+  machineUsers: string[];
+  scimMachineUser?: string;
+  hookInvoker?: string;
+};
+
+function createMockApplicationNamingMachineUsers(references: MachineUserReferences): Application {
+  const { machineUsers, scimMachineUser, hookInvoker } = references;
+  const application = createMockApplication();
+  return {
+    ...application,
+    authService: {
+      ...application.authService,
+      config: {
+        ...application.authService?.config,
+        machineUsers: Object.fromEntries(machineUsers.map((name) => [name, {}])),
+        hooks: hookInvoker
+          ? { beforeLogin: { handler: async () => undefined, invoker: hookInvoker } }
+          : undefined,
+        scim: scimMachineUser
+          ? { machineUserName: scimMachineUser, authorization: { type: "oauth2" }, resources: [] }
+          : undefined,
+      },
+    },
+  } as unknown as Application;
+}
+
 function notFound(): never {
   throw new ConnectError("not found", Code.NotFound);
 }
@@ -863,6 +890,67 @@ describe("planAuth", () => {
     expect(result.changeSet.idpConfig.updates).toHaveLength(1);
     expect(result.changeSet.idpConfig.updates[0]?.name).toBe("default");
     expect(result.changeSet.idpConfig.unchanged).toHaveLength(0);
+  });
+
+  test("plans a SCIM config and a login hook whose machine users the Auth service defines", async () => {
+    const result = await planAuth(
+      createContext(
+        createMockClient(),
+        createMockApplicationNamingMachineUsers({
+          machineUsers: ["manager-machine-user"],
+          scimMachineUser: "manager-machine-user",
+          hookInvoker: "manager-machine-user",
+        }),
+      ),
+    );
+
+    expect(result.changeSet.scim.creates).toHaveLength(1);
+    expect(result.changeSet.authHook.creates).toHaveLength(1);
+  });
+
+  test.each([
+    {
+      label: "a SCIM machine user that the workspace has but the config drops",
+      remoteMachineUsers: ["manager-machine-user", "scim-bot"],
+      references: { machineUsers: ["manager-machine-user"], scimMachineUser: "scim-bot" },
+      message:
+        'Auth service "auth-a" names machine user "scim-bot" in scim.machineUserName, but defines no machine user with that name.',
+      suggestion:
+        "Add each listed machine user to machineUsers, or name a defined one instead: manager-machine-user.",
+      missing: [{ field: "scim.machineUserName", machineUserName: "scim-bot" }],
+    },
+    {
+      label: "a login hook invoker and a SCIM machine user when the Auth service defines none",
+      remoteMachineUsers: [],
+      references: {
+        machineUsers: [],
+        scimMachineUser: "scim-bot",
+        hookInvoker: "manager-machine-user",
+      },
+      message: [
+        'Auth service "auth-a" names machine user "scim-bot" in scim.machineUserName, but defines no machine user with that name.',
+        'Auth service "auth-a" names machine user "manager-machine-user" in hooks.beforeLogin.invoker, but defines no machine user with that name.',
+      ].join("\n"),
+      suggestion: "Add each listed machine user to machineUsers.",
+      missing: [
+        { field: "scim.machineUserName", machineUserName: "scim-bot" },
+        { field: "hooks.beforeLogin.invoker", machineUserName: "manager-machine-user" },
+      ],
+    },
+  ])("rejects $label", async ({ remoteMachineUsers, references, message, suggestion, missing }) => {
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
+      machineUsers: remoteMachineUsers.map((name) => ({ name, attributes: [], attributeMap: {} })),
+    });
+
+    await expect(
+      planAuth(createContext(client, createMockApplicationNamingMachineUsers(references))),
+    ).rejects.toMatchObject({
+      code: "AUTH_MACHINE_USER_NOT_FOUND",
+      message,
+      suggestion,
+      context: { authNamespace: "auth-a", missing, machineUsers: references.machineUsers },
+    });
   });
 
   test("does not mark a forceApplyAll idpConfig update that has nothing to compare against", async () => {

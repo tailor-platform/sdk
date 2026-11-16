@@ -188,7 +188,9 @@ export const SCIMResourceSchema = z.strictObject({
 });
 
 export const SCIMSchema = z.strictObject({
-  machineUserName: z.string().describe("Machine user name for SCIM operations"),
+  machineUserName: z
+    .string()
+    .describe("Machine user for SCIM operations, one of this Auth service's machineUsers"),
   authorization: SCIMAuthorizationSchema.describe("SCIM authorization configuration"),
   resources: z.array(SCIMResourceSchema).describe("SCIM resource definitions"),
 });

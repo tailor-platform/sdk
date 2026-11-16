@@ -23,6 +23,8 @@ import {
 import { type AuthService } from "#/cli/services/auth/service";
 import {
   fetchAllTolerant,
+  getAuthSCIMConfigOrNull,
+  listAuthIDPConfigsTolerant,
   listAuthMachineUsersTolerant,
   getOrNull,
   resolveStaticWebsiteUrls,
@@ -337,6 +339,32 @@ export async function applyAuth(
   }
 }
 
+function assertAuthMachineUsersDefined(config: Readonly<AuthService>["config"]): void {
+  const machineUsers = Object.keys(config.machineUsers ?? {}).toSorted();
+  const missing = [
+    { field: "scim.machineUserName", machineUserName: config.scim?.machineUserName },
+    { field: "hooks.beforeLogin.invoker", machineUserName: config.hooks?.beforeLogin?.invoker },
+  ].flatMap(({ field, machineUserName }) =>
+    machineUserName === undefined || machineUsers.includes(machineUserName)
+      ? []
+      : [{ field, machineUserName }],
+  );
+  if (missing.length === 0) return;
+  throw CLIError({
+    code: "AUTH_MACHINE_USER_NOT_FOUND",
+    message: missing
+      .map(
+        ({ field, machineUserName }) =>
+          `Auth service "${config.name}" names machine user "${machineUserName}" in ${field}, but defines no machine user with that name.`,
+      )
+      .join("\n"),
+    suggestion: machineUsers.length
+      ? `Add each listed machine user to machineUsers, or name a defined one instead: ${machineUsers.join(", ")}.`
+      : "Add each listed machine user to machineUsers.",
+    context: { authNamespace: config.name, missing, machineUsers },
+  });
+}
+
 /**
  * Plan auth-related changes based on current and desired state.
  * @param context - Planning context
@@ -347,6 +375,7 @@ export async function planAuth(context: PlanContext) {
   const auths: Readonly<AuthService>[] = [];
   if (!forRemoval && application.authService) {
     await application.authService.resolveNamespaces();
+    assertAuthMachineUsersDefined(application.authService.config);
     auths.push(application.authService);
   }
   const {
@@ -354,6 +383,7 @@ export async function planAuth(context: PlanContext) {
     conflicts,
     unmanaged,
     resourceOwners,
+    existingServices,
   } = await planServices(
     client,
     workspaceId,
@@ -409,6 +439,7 @@ export async function planAuth(context: PlanContext) {
     unmanaged: [...unmanaged, ...connectionResult.unmanaged],
     resourceOwners: new Set([...resourceOwners, ...connectionResult.resourceOwners]),
     connectionStateScope: connectionResult.stateScope,
+    existingServices,
   };
 }
 
@@ -440,7 +471,7 @@ async function planServices(
   const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>("Auth services");
   const ownership = createOwnershipTracker(appName, appId);
 
-  const existingServices = await fetchExistingResourcesWithLabels({
+  const fetchedServices = await fetchExistingResourcesWithLabels({
     client,
     fetchPage: async (pageToken, maxPageSize) => {
       const { authServices, nextPageToken } = await client.listAuthServices({
@@ -453,6 +484,7 @@ async function planServices(
     getName: (resource) => resource.namespace?.name,
     getTrn: (name) => resourceTrn(workspaceId, "auth", name),
   });
+  const existingServices = { ...fetchedServices };
 
   for (const auth of auths) {
     const { config } = auth;
@@ -508,7 +540,7 @@ async function planServices(
     }
   });
 
-  return { changeSet, ...ownership.result };
+  return { changeSet, ...ownership.result, existingServices: fetchedServices };
 }
 
 type CreateIdPConfig = {
@@ -539,21 +571,9 @@ async function planIdPConfigs(
     "Auth idpConfigs",
   );
 
-  const fetchIdPConfigs = (namespaceName: string) => {
-    return fetchAllTolerant(async (pageToken, maxPageSize) => {
-      const { idpConfigs, nextPageToken } = await client.listAuthIDPConfigs({
-        workspaceId,
-        namespaceName,
-        pageToken,
-        pageSize: maxPageSize,
-      });
-      return [idpConfigs, nextPageToken];
-    });
-  };
-
   for (const authService of auths) {
     const { config } = authService;
-    const existingIdPConfigs = await fetchIdPConfigs(config.name);
+    const existingIdPConfigs = await listAuthIDPConfigsTolerant(client, workspaceId, config.name);
     const existingMap = new Map<string, (typeof existingIdPConfigs)[number]>();
     existingIdPConfigs.forEach((idpConfig) => {
       existingMap.set(idpConfig.name, idpConfig);
@@ -623,7 +643,7 @@ async function planIdPConfigs(
   }
 
   for (const namespaceName of deletedServices) {
-    const existingIdPConfigs = await fetchIdPConfigs(namespaceName);
+    const existingIdPConfigs = await listAuthIDPConfigsTolerant(client, workspaceId, namespaceName);
     existingIdPConfigs.forEach((idpConfig) => {
       changeSet.deletes.push({
         name: idpConfig.name,
@@ -1532,6 +1552,15 @@ type DeleteSCIMConfig = {
   request: MessageInitShape<typeof DeleteAuthSCIMConfigRequestSchema>;
 };
 
+/**
+ * Name the SCIM config of an auth namespace in deploy plans.
+ * @param namespaceName - Auth namespace
+ * @returns Plan entry name of the namespace's SCIM config
+ */
+export function authSCIMConfigName(namespaceName: string): string {
+  return `${namespaceName}-scim-config`;
+}
+
 async function planSCIMConfigs(
   client: OperatorClient,
   workspaceId: string,
@@ -1544,13 +1573,8 @@ async function planSCIMConfigs(
 
   for (const auth of auths) {
     const { config } = auth;
-    const name = `${config.name}-scim-config`;
-    const existing = await getOrNull(async () => {
-      return await client.getAuthSCIMConfig({
-        workspaceId,
-        namespaceName: config.name,
-      });
-    });
+    const name = authSCIMConfigName(config.name);
+    const existing = await getAuthSCIMConfigOrNull(client, workspaceId, config.name);
     if (!existing) {
       if (config.scim) {
         changeSet.creates.push({
@@ -1583,15 +1607,10 @@ async function planSCIMConfigs(
   }
 
   for (const namespaceName of deletedServices) {
-    const existing = await getOrNull(async () => {
-      return await client.getAuthSCIMConfig({
-        workspaceId,
-        namespaceName,
-      });
-    });
+    const existing = await getAuthSCIMConfigOrNull(client, workspaceId, namespaceName);
     if (!existing) continue;
     changeSet.deletes.push({
-      name: `${namespaceName}-scim-config`,
+      name: authSCIMConfigName(namespaceName),
       request: {
         workspaceId,
         namespaceName,
