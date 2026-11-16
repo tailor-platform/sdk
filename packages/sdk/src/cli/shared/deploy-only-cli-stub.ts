@@ -6,7 +6,9 @@ const CLI_ENTRY = "@tailor-platform/sdk/cli";
 const STUB_PREFIX = "\0tailor-platform-sdk-cli-stub:";
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
 
-function exportedName(name: { type: string; name?: string; value?: unknown }): string {
+type ExportedNameNode = { type: string; name?: string; value?: unknown };
+
+function exportedName(name: ExportedNameNode): string {
   return name.type === "Identifier" ? String(name.name) : String(name.value);
 }
 

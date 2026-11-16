@@ -98,7 +98,7 @@ export function frontendPlugin(
             exec: (command, options) =>
               ctx.exec(command, {
                 ...options,
-                workingDir: options?.workingDir ?? workingDir,
+                workingDir: path.resolve(workingDir, options?.workingDir ?? "."),
                 env: { ...env, ...options?.env },
               }),
           });

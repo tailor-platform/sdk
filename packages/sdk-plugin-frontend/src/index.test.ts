@@ -307,6 +307,22 @@ describe("frontendPlugin", () => {
         ["pnpm other", { workingDir: "/elsewhere", env: { FIRST: "1", SECOND: "2" } }],
       ]);
     });
+    test("resolves a relative working directory override against the build's working directory", async () => {
+      const { exec, run } = setup([
+        {
+          site: "web",
+          workingDir: "../web",
+          distDir: "dist",
+          build: async ({ exec }) => {
+            await exec("pnpm build", { workingDir: "sub" });
+          },
+        },
+      ]);
+      await run();
+      expect(exec.mock.calls).toEqual([
+        ["pnpm build", { workingDir: join(root, "apps/web/sub"), env: {} }],
+      ]);
+    });
     test("does not upload or evaluate later frontends when the function fails", async () => {
       const nextEnv = vi.fn();
       const { publish, run } = setup([

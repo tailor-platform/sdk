@@ -14,6 +14,7 @@ import {
   createLogLevelTreeshakeOptions,
   resolveBundleLogLevel,
 } from "#/cli/shared/bundle-log-level";
+import { createDeployOnlyCliStubPlugin } from "#/cli/shared/deploy-only-cli-stub";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import {
   composeFunctionTreeshakeOptions,
@@ -133,6 +134,7 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
   const bundleLog = createBundleLog({ tsconfig });
   const buildResult = await rolldown.build({
     plugins: [
+      createDeployOnlyCliStubPlugin(),
       createGeneratedEntryResolverPlugin(entryPath, baseDir),
       createTsconfigPathsPlugin(),
       createPlatformBundleDefinePlugin(
