@@ -18,6 +18,13 @@ const FUNCTION_LIKE = new Set([
   "ArrowFunctionExpression",
   "TSDeclareFunction",
 ]);
+const TYPE_WRAPPERS = new Set([
+  "TSAsExpression",
+  "TSSatisfiesExpression",
+  "TSNonNullExpression",
+  "TSTypeAssertion",
+  "TSInstantiationExpression",
+]);
 const NAME_POSITIONS = new Set(["Property", "PropertyDefinition", "MethodDefinition"]);
 
 type ExportedNameNode = { type: string; name?: string; value?: unknown };
@@ -64,6 +71,7 @@ function importedBindings(program: ReturnType<typeof parseSync>["program"]): Set
 function isValueReference(parent: ASTNode | undefined, key: string | undefined): boolean {
   if (!parent) return true;
   const type = String(parent.type);
+  if (TYPE_WRAPPERS.has(type)) return key === "expression";
   if (type.startsWith("TS") || type === "ExportSpecifier") return false;
   if (type === "MemberExpression") return key !== "property" || parent.computed === true;
   if (NAME_POSITIONS.has(type)) return key !== "key" || parent.computed === true;

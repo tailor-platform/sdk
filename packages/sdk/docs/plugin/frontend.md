@@ -143,8 +143,9 @@ logged-in user, as the `tailor` command does. Importing it in `tailor.config.ts`
 `build` function is what it is for. Code that runs on the Platform, such as a resolver or an
 auth hook, cannot use it. A use outside any function, such as a call at the top level of
 `tailor.config.ts`, runs when an auth hook loads, so `tailor deploy` stops with
-`DEPLOY_ONLY_CLI_IMPORT` and names the line. A use inside a function that runs on the Platform
-throws an error saying it only works where `tailor deploy` runs when that function is called.
+`DEPLOY_ONLY_CLI_IMPORT` and names the line. Calling one of its functions inside a function that runs on the Platform
+throws an error saying it only works where `tailor deploy` runs. Its constants have no meaning
+there, so do not read them.
 
 Running `tailor deploy` again after a failure runs the function again, so write what it
 does to be repeatable: look up or create a resource instead of always creating a new one.

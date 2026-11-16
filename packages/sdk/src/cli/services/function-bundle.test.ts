@@ -162,6 +162,16 @@ describe("buildFunctionBundle CLI entry point", () => {
       "TAILOR_LOCK_FILENAME",
     ],
     ["a namespace member", `cli.apiCall();\nexport const config = { name: "N" };\n`, "cli"],
+    [
+      "a call wrapped in a type assertion",
+      `(logger as unknown as { info: (message: string) => void }).info("loading");\nexport const config = { name: "N" };\n`,
+      "logger",
+    ],
+    [
+      "a call with a non-null assertion",
+      `apiCall!();\nexport const config = { name: "N" };\n`,
+      "apiCall",
+    ],
   ])(
     "rejects the build when a module uses the CLI entry point at its top level through %s",
     async (_label, body, name) => {
@@ -169,7 +179,7 @@ describe("buildFunctionBundle CLI entry point", () => {
       writeUnloadableCliPackage(tmp.dir);
       const sourceFile = writeModules(tmp.dir, {
         "function.ts": `import { config } from "./config";\nexport default async () => config.name;\n`,
-        "config.ts": `import * as cli from "@tailor-platform/sdk/cli";\n${body.includes("TAILOR_LOCK_FILENAME") ? `import { TAILOR_LOCK_FILENAME } from "@tailor-platform/sdk/cli";\n` : ""}${body.includes("logger") ? `import { logger } from "@tailor-platform/sdk/cli";\n` : ""}${body}`,
+        "config.ts": `import * as cli from "@tailor-platform/sdk/cli";\n${body.includes("TAILOR_LOCK_FILENAME") ? `import { TAILOR_LOCK_FILENAME } from "@tailor-platform/sdk/cli";\n` : ""}${body.includes("logger") ? `import { logger } from "@tailor-platform/sdk/cli";\n` : ""}${body.includes("apiCall!") ? `import { apiCall } from "@tailor-platform/sdk/cli";\n` : ""}${body}`,
       });
 
       await expect(bundle(sourceFile)).rejects.toThrow(
