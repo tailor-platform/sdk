@@ -52,7 +52,10 @@ A feature is beta only when it carries the beta mark itself:
 - Behavior with no symbol or command of its own is beta only when listed here: how the CLI dispatches
   `tailor <name>` to a `tailor-<name>` plugin executable and the environment variables it passes, and
   how `tailor deploy` applies pending TailorDB migrations (schema verification, migration phases,
-  checkpoints, and scripts), including the `migrate.ts` contract.
+  checkpoints, and scripts), including the `migrate.ts` contract; and the content mapper, which is
+  the `typescript.contentMapper` field of the SDK's `package.json` that TypeScript 7.1 runs when
+  `tsconfig.json` lists it under `contentMappers`, together with the types it derives for `.tailor`
+  files.
 
 Where the docs explain or mention an API does not change this; the `(Beta)` in `packages/sdk/docs/`
 only repeats the mark for readers. When a change to a beta API also changes a non-beta one, such as a
