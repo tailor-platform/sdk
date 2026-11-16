@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk-plugin-frontend",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Build and deploy frontend assets after Tailor Platform deployments",
   "license": "MIT",
   "repository": {
