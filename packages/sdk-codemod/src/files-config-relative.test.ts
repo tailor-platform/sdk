@@ -294,7 +294,7 @@ describe("files patterns -> config-relative migration", () => {
     expect(findings).toEqual([expect.stringContaining(reason)]);
   });
 
-  test("reports a default-exported config that a config file elsewhere re-exports instead of rewriting it", async () => {
+  test("changes and reports nothing for a config that a config file in the project directory re-exports", async () => {
     writeFiles("src/run.ts");
     writeFile("tailor.config.ts", 'export { default } from "./configs/shared";\n');
 
@@ -304,83 +304,80 @@ describe("files patterns -> config-relative migration", () => {
     );
 
     expect(transformed).toBeNull();
-    expect(findings).toEqual([expect.stringContaining("`tailor.config.ts` loads this config")]);
+    expect(findings).toEqual([]);
   });
 
   const EXPORTED_CONFIG =
     'export const config = defineConfig({\n  db: { main: { files: ["apps/a/tailordb/*.ts"] } },\n});\nexport default config;\n';
 
-  test.each<[string, Record<string, string>, string]>([
+  test.each<[string, Record<string, string>]>([
     [
       "re-exports the default",
-      { "tailor.config.ts": 'export { default } from "./apps/a/tailor.config";\n' },
-      "tailor.config.ts",
+      { "deploy/tailor.config.ts": 'export { default } from "../apps/a/tailor.config";\n' },
     ],
     [
       "re-exports the default under a `.js` specifier",
-      { "tailor.config.ts": 'export { default as default } from "./apps/a/tailor.config.js";\n' },
-      "tailor.config.ts",
+      {
+        "deploy/tailor.config.ts":
+          'export { default as default } from "../apps/a/tailor.config.js";\n',
+      },
     ],
     [
       "default-exports the default import",
-      { "tailor.config.ts": 'import a from "./apps/a/tailor.config.ts";\nexport default a;\n' },
-      "tailor.config.ts",
+      {
+        "deploy/tailor.config.ts":
+          'import a from "../apps/a/tailor.config.ts";\nexport default a;\n',
+      },
     ],
     [
       "exports a `{ default as … }` import as default",
       {
-        "tailor.config.ts":
-          'import { default as a } from "./apps/a/tailor.config";\nexport { a as default };\n',
+        "deploy/tailor.config.ts":
+          'import { default as a } from "../apps/a/tailor.config";\nexport { a as default };\n',
       },
-      "tailor.config.ts",
     ],
     [
       "default-exports the binding the config module default-exports",
       {
-        "tailor.config.ts":
-          'import { config } from "./apps/a/tailor.config";\nexport default config;\n',
+        "deploy/tailor.config.ts":
+          'import { config } from "../apps/a/tailor.config";\nexport default config;\n',
       },
-      "tailor.config.ts",
     ],
     [
       "spreads the default import into its own default-exported config",
       {
-        "tailor.config.ts": `${IMPORT}import a from "./apps/a/tailor.config";\nexport default defineConfig({ ...a, name: "root" });\n`,
+        "deploy/tailor.config.ts": `${IMPORT}import a from "../apps/a/tailor.config";\nexport default defineConfig({ ...a, name: "root" });\n`,
       },
-      "tailor.config.ts",
     ],
     [
       "spreads the default import into a config it default-exports through a variable",
       {
-        "tailor.config.ts": `${IMPORT}import a from "./apps/a/tailor.config";\nconst config = defineConfig({ ...a, name: "root" });\nexport default config;\n`,
+        "deploy/tailor.config.ts": `${IMPORT}import a from "../apps/a/tailor.config";\nconst config = defineConfig({ ...a, name: "root" });\nexport default config;\n`,
       },
-      "tailor.config.ts",
     ],
     [
       "default-exports what a barrel re-exports under another name",
       {
         "configs/index.ts": 'export { default as a } from "../apps/a/tailor.config";\n',
-        "tailor.config.ts": 'import { a } from "./configs";\nexport default a;\n',
+        "deploy/tailor.config.ts": 'import { a } from "../configs";\nexport default a;\n',
       },
-      "tailor.config.ts",
     ],
     [
       "default-exports what a barrel imports and exports by name",
       {
         "configs/all.ts": 'import shared from "../apps/a/tailor.config";\nexport { shared };\n',
-        "tailor.config.ts": 'import { shared } from "./configs/all";\nexport default shared;\n',
+        "deploy/tailor.config.ts":
+          'import { shared } from "../configs/all";\nexport default shared;\n',
       },
-      "tailor.config.ts",
     ],
     [
       "re-exports an index module in the config's directory that re-exports it",
       {
         "apps/a/index.ts": 'export { default } from "./tailor.config";\n',
-        "tailor.config.ts": 'export { default } from "./apps/a";\n',
+        "deploy/tailor.config.ts": 'export { default } from "../apps/a";\n',
       },
-      "tailor.config.ts",
     ],
-  ])("reports a config that a config file elsewhere %s", async (_, importers, loader) => {
+  ])("reports a config that a config file in another directory %s", async (_, importers) => {
     writeFiles("apps/a/tailordb/user.ts");
     for (const [importerPath, importer] of Object.entries(importers)) {
       writeFile(importerPath, importer);
@@ -389,17 +386,35 @@ describe("files patterns -> config-relative migration", () => {
     const { transformed, findings } = await migrate(EXPORTED_CONFIG);
 
     expect(transformed).toBeNull();
-    expect(findings).toEqual([expect.stringContaining(`\`${loader}\` loads this config`)]);
+    expect(findings).toEqual([
+      expect.stringContaining("`deploy/tailor.config.ts` loads this config"),
+    ]);
   });
 
-  test("reports an index module that a config file elsewhere re-exports by its directory", async () => {
+  test("reports an index module that a config file in another directory re-exports by its directory", async () => {
     writeFiles("apps/a/tailordb/user.ts");
-    writeFile("tailor.config.ts", 'export { default } from "./apps/a";\n');
+    writeFile("deploy/tailor.config.ts", 'export { default } from "../apps/a";\n');
 
     const { transformed, findings } = await migrate(EXPORTED_CONFIG, "apps/a/index.ts");
 
     expect(transformed).toBeNull();
-    expect(findings).toEqual([expect.stringContaining("`tailor.config.ts` loads this config")]);
+    expect(findings).toEqual([
+      expect.stringContaining("`deploy/tailor.config.ts` loads this config"),
+    ]);
+  });
+
+  test("names every config file that loads a config when one outside the project directory does", async () => {
+    writeFiles("apps/a/tailordb/user.ts");
+    writeFile("tailor.config.ts", 'export { default } from "./apps/a/tailor.config";\n');
+    writeFile("configs/index.ts", 'export { default as a } from "../apps/a/tailor.config";\n');
+    writeFile("apps/b/tailor.config.ts", 'import { a } from "../../configs";\nexport default a;\n');
+
+    const { transformed, findings } = await migrate(EXPORTED_CONFIG);
+
+    expect(transformed).toBeNull();
+    expect(findings).toEqual([
+      expect.stringContaining("`apps/b/tailor.config.ts`, `tailor.config.ts` load this config"),
+    ]);
   });
 
   test.each<[string, Record<string, string>]>([

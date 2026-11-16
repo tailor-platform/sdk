@@ -26,8 +26,6 @@ import type { Edit, SgNode } from "@ast-grep/napi";
 
 const NOT_THE_DEFAULT_EXPORT =
   "this defineConfig() call is not the module's default export, so its patterns resolve against the directory of the config file that loads it";
-const LOADED_BY_ANOTHER_CONFIG =
-  "loads this config, so its patterns resolve against that file's directory when the CLI loads it";
 
 /** The config file's directory, and the project directory commands are assumed to run from. */
 type Directories = { configDir: string; projectDir: string };
@@ -318,15 +316,15 @@ async function readSourceFiles(projectDir: string): Promise<SourceFile[]> {
 }
 
 /**
- * The project-relative path of a source file outside `configFile`'s directory
- * that default-exports its config, following the modules that pass the config
- * on through relative specifiers.
+ * The source files outside `configFile`'s directory that default-export its
+ * config, following the modules that pass the config on through relative
+ * specifiers, in path order.
  */
-async function findConfigLoader(
+async function findConfigLoaders(
   configFile: string,
   projectDir: string,
   exportedName: string | null,
-): Promise<string | null> {
+): Promise<SourceFile[]> {
   const files = await projectSourceFiles(projectDir);
   const config: ConfigCarrier = {
     id: moduleId(configFile),
@@ -334,19 +332,29 @@ async function findConfigLoader(
   };
   const carriers = [config];
   const visited = new Set([config.id]);
+  const loaders = new Set<SourceFile>();
   for (const carrier of carriers) {
     const stem = path.basename(carrier.id);
-    for (const { relative, file, source } of files) {
-      if (!source.includes(stem)) continue;
-      const names = configExportNames(source, file, carrier);
-      if (names.has("default") && path.dirname(file) !== path.dirname(configFile)) return relative;
-      const id = moduleId(file);
+    for (const sourceFile of files) {
+      if (!sourceFile.source.includes(stem)) continue;
+      const names = configExportNames(sourceFile.source, sourceFile.file, carrier);
+      if (names.has("default") && path.dirname(sourceFile.file) !== path.dirname(configFile)) {
+        loaders.add(sourceFile);
+      }
+      const id = moduleId(sourceFile.file);
       if (names.size === 0 || visited.has(id)) continue;
       visited.add(id);
       carriers.push({ id, names });
     }
   }
-  return null;
+  return [...loaders].toSorted((a, b) => (a.relative < b.relative ? -1 : 1));
+}
+
+function loadedBy(loaders: SourceFile[]): string {
+  const files = loaders.map(({ relative }) => `\`${relative}\``).join(", ");
+  return loaders.length === 1
+    ? `${files} loads this config, so its patterns resolve against that file's directory when the CLI loads it`
+    : `${files} load this config, so its patterns resolve against the directory of whichever of them the CLI loads`;
 }
 
 async function analyzeFile(
@@ -364,13 +372,12 @@ async function analyzeFile(
   const analysis: Analysis = { edits: [], findings: [] };
   for (const call of found.calls) {
     const result = analyzeCall(call, exported, dirs);
-    const loader =
-      result.edits.length > 0 ? await findConfigLoader(filePath, projectDir, exportedName) : null;
-    if (loader && !("reason" in call)) {
-      analysis.findings.push({
-        reason: `\`${loader}\` ${LOADED_BY_ANOTHER_CONFIG}`,
-        node: call.config,
-      });
+    const loaders =
+      result.edits.length > 0 ? await findConfigLoaders(filePath, projectDir, exportedName) : [];
+    if (loaders.length > 0 && !("reason" in call)) {
+      if (loaders.some(({ file }) => path.dirname(file) !== projectDir)) {
+        analysis.findings.push({ reason: loadedBy(loaders), node: call.config });
+      }
       continue;
     }
     analysis.edits.push(...result.edits);
@@ -403,8 +410,9 @@ export default async function transform(
  * Report service configs outside the project directory whose patterns this
  * transform cannot rewrite, cannot glob, or that match no files from either
  * directory, `defineConfig()` calls other than the default export whose
- * patterns it would rewrite or report, and configs that a source file in
- * another directory default-exports.
+ * patterns it would rewrite or report, and configs it would rewrite that a
+ * source file outside both the config's directory and the project directory
+ * default-exports.
  * @param source - File contents
  * @param filePath - Absolute path to the file being reviewed
  * @param relativePath - Project-relative path reported to the user
