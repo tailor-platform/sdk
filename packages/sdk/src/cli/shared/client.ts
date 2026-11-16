@@ -663,8 +663,8 @@ function retryErrorCodeName(error: unknown): string {
  * An allowlist miss is safe: the resource simply loses race protection and an
  * `already_exists` surfaces loudly, as before — never a silent empty response.
  *
- * A drift guard (see client.test.ts) fails CI if any `client.create*` used in the
- * deploy flow is neither listed here nor explicitly classified as response-consuming,
+ * A drift guard (see client.test.ts) fails CI if any Create called in sources under
+ * `commands/deploy` is neither listed here nor exempt in that test,
  * so a newly added apply create cannot silently miss this list.
  * @internal
  */

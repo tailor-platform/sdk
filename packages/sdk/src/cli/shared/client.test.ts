@@ -1438,9 +1438,25 @@ describe("retryInterceptor", () => {
   type OperatorMethod = (typeof OperatorService.method)[keyof typeof OperatorService.method];
 
   /**
+   * Collect the OperatorService methods that a source calls.
+   * @param source - TypeScript source to scan
+   * @returns Methods called as `.<method>(` on any receiver in the source
+   */
+  function clientMethodsCalledInSource(source: string): OperatorMethod[] {
+    const methods = new Set<OperatorMethod>();
+    for (const m of source.matchAll(/\.([a-z][A-Za-z0-9]*)\s*\(/g)) {
+      const method = Object.hasOwn(OperatorService.method, m[1]!)
+        ? OperatorService.method[m[1] as keyof typeof OperatorService.method]
+        : undefined;
+      if (method) methods.add(method);
+    }
+    return [...methods];
+  }
+
+  /**
    * Collect the OperatorService methods that the sources under a directory call.
    * @param relativeDir - Directory to scan, relative to this file
-   * @returns Methods called as `client.<method>(` in non-test sources under the directory
+   * @returns Methods that `clientMethodsCalledInSource` finds in non-test sources under the directory
    */
   function clientMethodsCalledIn(relativeDir: string): OperatorMethod[] {
     const tsFiles: string[] = [];
@@ -1453,19 +1469,27 @@ describe("retryInterceptor", () => {
     };
     walk(path.resolve(import.meta.dirname, relativeDir));
 
-    const methods = new Set<OperatorMethod>();
-    const callRe = /client\.([a-z][A-Za-z0-9]*)\s*\(/g;
-    for (const file of tsFiles) {
-      const src = fs.readFileSync(file, "utf8");
-      for (const m of src.matchAll(callRe)) {
-        const method = Object.hasOwn(OperatorService.method, m[1]!)
-          ? OperatorService.method[m[1] as keyof typeof OperatorService.method]
-          : undefined;
-        if (method) methods.add(method);
-      }
-    }
-    return [...methods];
+    return [
+      ...new Set(
+        tsFiles.flatMap((file) => clientMethodsCalledInSource(fs.readFileSync(file, "utf8"))),
+      ),
+    ];
   }
+
+  test("the call scan finds a method on a wrapped line, after optional chaining, or on any receiver", () => {
+    const source = [
+      "await client\n  .updateWorkspace({});",
+      "client?.deleteWorkspace({});",
+      "opClient.restoreWorkspace({});",
+      "items.map(String);",
+    ].join("\n");
+
+    expect(clientMethodsCalledInSource(source).map(({ name }) => name)).toEqual([
+      "UpdateWorkspace",
+      "DeleteWorkspace",
+      "RestoreWorkspace",
+    ]);
+  });
 
   // Drift guard: every Create RPC invoked in the deploy/apply flow must be
   // consciously classified — either retry-safe (response unused, in
