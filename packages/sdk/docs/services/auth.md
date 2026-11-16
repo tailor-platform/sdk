@@ -112,6 +112,8 @@ userProfile: {
 },
 ```
 
+`deploy` and `remove` stop with `SERVICE_IN_USE` instead of deleting the table while `userProfile` still names it, including when another application's config defines the table. The same holds for the table that `tenantProvider` or a SCIM resource names.
+
 **usernameField**: The field in the TailorDB table used as the username. This field must have a unique constraint (`.unique()`) since it is used to uniquely identify users.
 
 **attributes**: Specifies which fields from the TailorDB table are used as user attributes. Set to `true` to enable a field. Machine user definitions must assign values to attributes derived from required fields; attributes derived from optional fields may be omitted (see [Machine Users](#machine-users)). Only fields with ValueOperand types (string, boolean, string[], boolean[]) can be used as attributes. The `id` field and datetime/date/time types are excluded.
@@ -376,6 +378,8 @@ idProvider: idp.provider("my-provider", "my-client"),
 
 See [IdP](./idp.md) for configuring identity providers.
 
+An application that references this Auth service as `external` authenticates with the provider named by the first argument (`"my-provider"`). After a rename, it switches to the new name only in a `deploy` that also includes this config, so `deploy` stops with `SERVICE_IN_USE` instead of deleting the old provider while such an application is left out. Deploy them together or keep the name.
+
 ## SCIM Provisioning
 
 Let an external identity provider, such as Okta or Microsoft Entra ID, create, update, and delete users in a TailorDB table through SCIM 2.0:
@@ -401,7 +405,7 @@ scim: {
 
 - **machineUserName**: The machine user that SCIM requests run as. List it in [`machineUsers`](#machine-users) of the same `defineAuth()`, since `deploy` deletes the machine users that `machineUsers` does not list.
 - **authorization**: `"oauth2"` uses that machine user's client credentials; `"bearer"` uses a static token in the Secret Manager secret that `bearerSecret: { vaultName, secretKey }` names.
-- **resources**: Each entry maps SCIM attributes onto a TailorDB table. `deploy` accepts a `tailorDBType` that names no table, so check the names yourself.
+- **resources**: Each entry maps SCIM attributes onto a TailorDB table. `deploy` accepts a `tailorDBType` that names no table, so check the names yourself. `deploy` and `remove` stop with `SERVICE_IN_USE` instead of deleting a table while an entry still names it.
 
 Removing `scim`, or an entry of `resources`, deletes it on the next `deploy`. See the [SCIM Provisioning guide](https://docs.tailor.tech/guides/auth/scim) for attribute types, path expressions, and the endpoint URL.
 

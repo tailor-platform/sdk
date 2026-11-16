@@ -325,7 +325,7 @@ export default defineConfig({
 });
 ```
 
-- The reference follows renames of the Auth service and of its machine users.
+- The reference follows renames of the Auth service and of its machine users. It follows a renamed `idProvider` only in a `deploy` that includes both apps; otherwise `deploy` stops with `SERVICE_IN_USE` instead of deleting the provider the referencing app still uses.
 - The machine user names reach the generated `tailor.d.ts`, so a misspelled `invoker` is a type error in the referencing app, including when it is written as an expression such as `flag ? "portal" : "other"`.
 - Only the name and the machine users are taken over. Hooks, OAuth2 clients, and the rest of the definition stay with the app that owns the Auth service, so this project does not deploy them a second time.
 - Put the `defineAuth` call in its own file, as above. Importing the other app's `tailor.config.ts` also runs the rest of that file.

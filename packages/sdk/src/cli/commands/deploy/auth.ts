@@ -24,6 +24,9 @@ import { type AuthService } from "#/cli/services/auth/service";
 import {
   fetchAllTolerant,
   getAuthSCIMConfigOrNull,
+  getAuthSCIMResourcesOrEmpty,
+  getTenantConfigOrNull,
+  getUserProfileConfigOrNull,
   listAuthIDPConfigsTolerant,
   listAuthMachineUsersTolerant,
   getOrNull,
@@ -764,6 +767,18 @@ function protoIdPConfig(idpConfig: IdProviderConfig): MessageInitShape<typeof Au
   }
 }
 
+/**
+ * Name the secret that holds a built-in IdP client's secret, which the Auth IdP config reads.
+ * @param builtinIdP - Built-in IdP config naming the IdP and its client
+ * @returns Vault and secret key of the client's secret
+ */
+export function builtinIdPClientSecret(builtinIdP: Pick<BuiltinIdP, "namespace" | "clientName">) {
+  return {
+    vaultName: idpClientVaultName(builtinIdP.namespace, builtinIdP.clientName),
+    secretKey: idpClientSecretName(builtinIdP.namespace, builtinIdP.clientName),
+  };
+}
+
 async function protoBuiltinIdPConfig(
   client: OperatorClient,
   workspaceId: string,
@@ -802,17 +817,12 @@ async function tryProtoBuiltinIdPConfig(
   });
   if (!idpClient) return undefined;
 
-  const vaultName = idpClientVaultName(builtinIdPConfig.namespace, builtinIdPConfig.clientName);
-  const secretKey = idpClientSecretName(builtinIdPConfig.namespace, builtinIdPConfig.clientName);
   return {
     config: {
       case: "oidc",
       value: {
         clientIdKey: idpClient.client?.clientId,
-        clientSecretKey: {
-          vaultName,
-          secretKey,
-        },
+        clientSecretKey: builtinIdPClientSecret(builtinIdPConfig),
         providerUrl: idpService.idpService?.providerUrl,
         usernameClaim: "name",
       },
@@ -835,6 +845,15 @@ type DeleteUserProfileConfig = {
   request: MessageInitShape<typeof DeleteUserProfileConfigRequestSchema>;
 };
 
+/**
+ * Name the user profile config of an auth namespace in deploy plans.
+ * @param namespaceName - Auth namespace
+ * @returns Plan entry name of the namespace's user profile config
+ */
+export function authUserProfileConfigName(namespaceName: string): string {
+  return `${namespaceName}-user-profile-config`;
+}
+
 async function planUserProfileConfigs(
   client: OperatorClient,
   workspaceId: string,
@@ -850,13 +869,8 @@ async function planUserProfileConfigs(
 
   for (const auth of auths) {
     const { config } = auth;
-    const name = `${config.name}-user-profile-config`;
-    const existing = await getOrNull(async () => {
-      return await client.getUserProfileConfig({
-        workspaceId,
-        namespaceName: config.name,
-      });
-    });
+    const name = authUserProfileConfigName(config.name);
+    const existing = await getUserProfileConfigOrNull(client, workspaceId, config.name);
     if (!existing) {
       const userProfileForUpdate = auth.userProfile;
       if (userProfileForUpdate) {
@@ -875,10 +889,7 @@ async function planUserProfileConfigs(
     const userProfileForUpdate = auth.userProfile;
     if (userProfileForUpdate) {
       const desired = protoUserProfileConfig(userProfileForUpdate);
-      const configUnchanged = areUserProfileConfigsEqual(
-        existing.userProfileProviderConfig ?? {},
-        desired,
-      );
+      const configUnchanged = areUserProfileConfigsEqual(existing, desired);
       if (!forceApplyAll && configUnchanged) {
         changeSet.unchanged.push({ name });
       } else {
@@ -904,15 +915,10 @@ async function planUserProfileConfigs(
   }
 
   for (const namespaceName of deletedServices) {
-    const existing = await getOrNull(async () => {
-      return await client.getUserProfileConfig({
-        workspaceId,
-        namespaceName,
-      });
-    });
+    const existing = await getUserProfileConfigOrNull(client, workspaceId, namespaceName);
     if (!existing) continue;
     changeSet.deletes.push({
-      name: `${namespaceName}-user-profile-config`,
+      name: authUserProfileConfigName(namespaceName),
       request: {
         workspaceId,
         namespaceName,
@@ -963,6 +969,15 @@ type DeleteTenantConfig = {
   request: MessageInitShape<typeof DeleteTenantConfigRequestSchema>;
 };
 
+/**
+ * Name the tenant config of an auth namespace in deploy plans.
+ * @param namespaceName - Auth namespace
+ * @returns Plan entry name of the namespace's tenant config
+ */
+export function authTenantConfigName(namespaceName: string): string {
+  return `${namespaceName}-tenant-config`;
+}
+
 async function planTenantConfigs(
   client: OperatorClient,
   workspaceId: string,
@@ -976,13 +991,8 @@ async function planTenantConfigs(
 
   for (const auth of auths) {
     const { config } = auth;
-    const name = `${config.name}-tenant-config`;
-    const existing = await getOrNull(async () => {
-      return await client.getTenantConfig({
-        workspaceId,
-        namespaceName: config.name,
-      });
-    });
+    const name = authTenantConfigName(config.name);
+    const existing = await getTenantConfigOrNull(client, workspaceId, config.name);
     if (!existing) {
       if (config.tenantProvider) {
         changeSet.creates.push({
@@ -999,7 +1009,7 @@ async function planTenantConfigs(
 
     if (config.tenantProvider) {
       const desired = protoTenantConfig(config.tenantProvider);
-      const configUnchanged = areTenantProviderConfigsEqual(existing.tenantProviderConfig, desired);
+      const configUnchanged = areTenantProviderConfigsEqual(existing, desired);
       if (!forceApplyAll && configUnchanged) {
         changeSet.unchanged.push({ name });
       } else {
@@ -1025,15 +1035,10 @@ async function planTenantConfigs(
   }
 
   for (const namespaceName of deletedServices) {
-    const existing = await getOrNull(async () => {
-      return await client.getTenantConfig({
-        workspaceId,
-        namespaceName,
-      });
-    });
+    const existing = await getTenantConfigOrNull(client, workspaceId, namespaceName);
     if (!existing) continue;
     changeSet.deletes.push({
-      name: `${namespaceName}-tenant-config`,
+      name: authTenantConfigName(namespaceName),
       request: {
         workspaceId,
         namespaceName,
@@ -1673,20 +1678,13 @@ async function planSCIMResources(
     "Auth scimResources",
   );
 
-  const fetchSCIMResources = async (namespaceName: string) => {
-    const response = await getOrNull(async () => {
-      const { scimResources } = await client.getAuthSCIMResources({
-        workspaceId,
-        namespaceName,
-      });
-      return scimResources;
-    });
-    return response ?? [];
-  };
-
   for (const auth of auths) {
     const { config } = auth;
-    const existingSCIMResources = await fetchSCIMResources(config.name);
+    const existingSCIMResources = await getAuthSCIMResourcesOrEmpty(
+      client,
+      workspaceId,
+      config.name,
+    );
     const existingNameSet = new Set<string>();
     existingSCIMResources.forEach((scimResource) => {
       existingNameSet.add(scimResource.name);
@@ -1726,7 +1724,11 @@ async function planSCIMResources(
   }
 
   for (const namespaceName of deletedServices) {
-    const existingSCIMResources = await fetchSCIMResources(namespaceName);
+    const existingSCIMResources = await getAuthSCIMResourcesOrEmpty(
+      client,
+      workspaceId,
+      namespaceName,
+    );
     existingSCIMResources.forEach((scimResource) => {
       changeSet.deletes.push({
         name: scimResource.name,
