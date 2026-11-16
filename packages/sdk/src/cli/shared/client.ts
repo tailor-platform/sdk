@@ -1192,6 +1192,58 @@ export async function getAuthSCIMConfigOrNull(
 }
 
 /**
+ * Fetch the SCIM resources of an auth namespace, treating a namespace without them as empty.
+ * @param client - Operator client
+ * @param workspaceId - Workspace to query
+ * @param namespaceName - Auth namespace to fetch the SCIM resources of
+ * @returns SCIM resources of the namespace
+ */
+export async function getAuthSCIMResourcesOrEmpty(
+  client: OperatorClient,
+  workspaceId: string,
+  namespaceName: string,
+) {
+  const response = await getOrNull(() =>
+    client.getAuthSCIMResources({ workspaceId, namespaceName }),
+  );
+  return response?.scimResources ?? [];
+}
+
+/**
+ * Fetch the user profile config of an auth namespace, treating a namespace or config that does not exist as absent.
+ * @param client - Operator client
+ * @param workspaceId - Workspace to query
+ * @param namespaceName - Auth namespace to fetch the user profile config of
+ * @returns User profile config of the namespace, or undefined when it has none
+ */
+export async function getUserProfileConfigOrNull(
+  client: OperatorClient,
+  workspaceId: string,
+  namespaceName: string,
+) {
+  const response = await getOrNull(() =>
+    client.getUserProfileConfig({ workspaceId, namespaceName }),
+  );
+  return response?.userProfileProviderConfig;
+}
+
+/**
+ * Fetch the tenant config of an auth namespace, treating a namespace or config that does not exist as absent.
+ * @param client - Operator client
+ * @param workspaceId - Workspace to query
+ * @param namespaceName - Auth namespace to fetch the tenant config of
+ * @returns Tenant config of the namespace, or undefined when it has none
+ */
+export async function getTenantConfigOrNull(
+  client: OperatorClient,
+  workspaceId: string,
+  namespaceName: string,
+) {
+  const response = await getOrNull(() => client.getTenantConfig({ workspaceId, namespaceName }));
+  return response?.tenantProviderConfig;
+}
+
+/**
  * Fetch a single resource, treating NotFound as an absent value.
  * @template T
  * @param fn - Resource getter

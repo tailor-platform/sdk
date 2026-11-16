@@ -375,7 +375,9 @@ describe("planAuth", () => {
       authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
       machineUsers: [managerMachineUserRemote],
       userProfileConfig: {
-        providerType: UserProfileProviderConfig_UserProfileProviderType.TAILORDB,
+        userProfileProviderConfig: {
+          providerType: UserProfileProviderConfig_UserProfileProviderType.TAILORDB,
+        },
       },
     });
     const retainedTarget = await planAuth(createContext(retainedClient, strippedApplication));

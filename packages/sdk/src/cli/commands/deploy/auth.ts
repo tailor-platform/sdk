@@ -24,6 +24,9 @@ import { type AuthService } from "#/cli/services/auth/service";
 import {
   fetchAllTolerant,
   getAuthSCIMConfigOrNull,
+  getAuthSCIMResourcesOrEmpty,
+  getTenantConfigOrNull,
+  getUserProfileConfigOrNull,
   listAuthIDPConfigsTolerant,
   listAuthMachineUsersTolerant,
   getOrNull,
@@ -851,12 +854,7 @@ async function planUserProfileConfigs(
   for (const auth of auths) {
     const { config } = auth;
     const name = `${config.name}-user-profile-config`;
-    const existing = await getOrNull(async () => {
-      return await client.getUserProfileConfig({
-        workspaceId,
-        namespaceName: config.name,
-      });
-    });
+    const existing = await getUserProfileConfigOrNull(client, workspaceId, config.name);
     if (!existing) {
       const userProfileForUpdate = auth.userProfile;
       if (userProfileForUpdate) {
@@ -875,10 +873,7 @@ async function planUserProfileConfigs(
     const userProfileForUpdate = auth.userProfile;
     if (userProfileForUpdate) {
       const desired = protoUserProfileConfig(userProfileForUpdate);
-      const configUnchanged = areUserProfileConfigsEqual(
-        existing.userProfileProviderConfig ?? {},
-        desired,
-      );
+      const configUnchanged = areUserProfileConfigsEqual(existing, desired);
       if (!forceApplyAll && configUnchanged) {
         changeSet.unchanged.push({ name });
       } else {
@@ -904,12 +899,7 @@ async function planUserProfileConfigs(
   }
 
   for (const namespaceName of deletedServices) {
-    const existing = await getOrNull(async () => {
-      return await client.getUserProfileConfig({
-        workspaceId,
-        namespaceName,
-      });
-    });
+    const existing = await getUserProfileConfigOrNull(client, workspaceId, namespaceName);
     if (!existing) continue;
     changeSet.deletes.push({
       name: `${namespaceName}-user-profile-config`,
@@ -977,12 +967,7 @@ async function planTenantConfigs(
   for (const auth of auths) {
     const { config } = auth;
     const name = `${config.name}-tenant-config`;
-    const existing = await getOrNull(async () => {
-      return await client.getTenantConfig({
-        workspaceId,
-        namespaceName: config.name,
-      });
-    });
+    const existing = await getTenantConfigOrNull(client, workspaceId, config.name);
     if (!existing) {
       if (config.tenantProvider) {
         changeSet.creates.push({
@@ -999,7 +984,7 @@ async function planTenantConfigs(
 
     if (config.tenantProvider) {
       const desired = protoTenantConfig(config.tenantProvider);
-      const configUnchanged = areTenantProviderConfigsEqual(existing.tenantProviderConfig, desired);
+      const configUnchanged = areTenantProviderConfigsEqual(existing, desired);
       if (!forceApplyAll && configUnchanged) {
         changeSet.unchanged.push({ name });
       } else {
@@ -1025,12 +1010,7 @@ async function planTenantConfigs(
   }
 
   for (const namespaceName of deletedServices) {
-    const existing = await getOrNull(async () => {
-      return await client.getTenantConfig({
-        workspaceId,
-        namespaceName,
-      });
-    });
+    const existing = await getTenantConfigOrNull(client, workspaceId, namespaceName);
     if (!existing) continue;
     changeSet.deletes.push({
       name: `${namespaceName}-tenant-config`,
@@ -1673,20 +1653,13 @@ async function planSCIMResources(
     "Auth scimResources",
   );
 
-  const fetchSCIMResources = async (namespaceName: string) => {
-    const response = await getOrNull(async () => {
-      const { scimResources } = await client.getAuthSCIMResources({
-        workspaceId,
-        namespaceName,
-      });
-      return scimResources;
-    });
-    return response ?? [];
-  };
-
   for (const auth of auths) {
     const { config } = auth;
-    const existingSCIMResources = await fetchSCIMResources(config.name);
+    const existingSCIMResources = await getAuthSCIMResourcesOrEmpty(
+      client,
+      workspaceId,
+      config.name,
+    );
     const existingNameSet = new Set<string>();
     existingSCIMResources.forEach((scimResource) => {
       existingNameSet.add(scimResource.name);
@@ -1726,7 +1699,11 @@ async function planSCIMResources(
   }
 
   for (const namespaceName of deletedServices) {
-    const existingSCIMResources = await fetchSCIMResources(namespaceName);
+    const existingSCIMResources = await getAuthSCIMResourcesOrEmpty(
+      client,
+      workspaceId,
+      namespaceName,
+    );
     existingSCIMResources.forEach((scimResource) => {
       changeSet.deletes.push({
         name: scimResource.name,
