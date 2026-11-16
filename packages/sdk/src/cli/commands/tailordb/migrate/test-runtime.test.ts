@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { CloneOperationStatus } from "@tailor-platform/tailor-proto/application_pb";
+import { JsonlReader, unwrap } from "lines-db";
 import * as path from "pathe";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { verifyRemoteSchema } from "#/cli/commands/tailordb/migrate/schema-checks";
@@ -219,12 +220,36 @@ describe("migration test runtime", () => {
     expect(client.listTailorDBTypes).toHaveBeenCalledTimes(1);
   });
 
-  test("rejects malformed baseline seed rows with their file and line", () => {
+  test.each([
+    ["an interior blank line", '{"id":1}\n\n{"id":2}\n'],
+    ["whitespace-only lines", '{"id":1}\n \t \n{"id":2}\n'],
+    ["leading blank lines", '\n\n{"id":1}\n{"id":2}\n'],
+    ["CRLF endings and a blank line", '{"id":1}\r\n\r\n{"id":2}\r\n'],
+    ["a byte order mark", '\uFEFF{"id":1}\n{"id":2}\n'],
+  ])(
+    "reads the baseline seed rows the validator reads from a file with %s",
+    async (_label, content) => {
+      const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "migration-test-seed-"));
+      temporaryDirectories.push(dataDir);
+      fs.writeFileSync(path.join(dataDir, "Customer.jsonl"), content);
+      const validatorRows = unwrap(await JsonlReader.read(path.join(dataDir, "Customer.jsonl")));
+
+      expect(validatorRows).toEqual([{ id: 1 }, { id: 2 }]);
+      expect(loadSnapshotSeedData(dataDir, ["Customer"])).toEqual({ Customer: validatorRows });
+    },
+  );
+
+  test.each([
+    ["not-json\n", 1],
+    ['\n\n{"id":1}\nnot-json\n', 4],
+  ])("rejects malformed baseline seed rows in %j with their file and line", (content, line) => {
     const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "migration-test-seed-"));
     temporaryDirectories.push(dataDir);
-    fs.writeFileSync(path.join(dataDir, "Customer.jsonl"), "not-json\n");
+    fs.writeFileSync(path.join(dataDir, "Customer.jsonl"), content);
 
-    expect(() => loadSnapshotSeedData(dataDir, ["Customer"])).toThrow(/Customer\.jsonl.*line 1/);
+    expect(() => loadSnapshotSeedData(dataDir, ["Customer"])).toThrow(
+      new RegExp(`Customer\\.jsonl at line ${line}:`),
+    );
   });
 
   test("polls a clone operation until it completes", async () => {

@@ -51,6 +51,11 @@ describe("loadSeedData", () => {
     expect(loadSeedData(dir, ["User"])).toEqual({ User: [{ id: 1 }, { id: 2 }] });
   });
 
+  test("skips blank and whitespace-only lines between rows", () => {
+    const dir = makeDataDir({ "User.jsonl": '{"id":1}\n\n \t \n{"id":2}\n' });
+    expect(loadSeedData(dir, ["User"])).toEqual({ User: [{ id: 1 }, { id: 2 }] });
+  });
+
   test("loads missing and empty files as empty lists", () => {
     const dir = makeDataDir({ "Empty.jsonl": "\n" });
     expect(loadSeedData(dir, ["Empty", "Missing"])).toEqual({ Empty: [], Missing: [] });
@@ -88,14 +93,20 @@ describe("loadSeedData", () => {
       });
     });
 
-    test("rejects an id defined in two directories, naming both lines", () => {
-      const base = makeDataDir({ "User.jsonl": '{"id":"u1"}\n{"id":"u2"}\n' });
-      const cogs = makeDataset(base, "cogs", { "User.jsonl": '{"id":"u3"}\n{"id":"u2"}\n' });
+    test.each([
+      ["no blank lines", '{"id":"u1"}\n{"id":"u2"}\n', '{"id":"u3"}\n{"id":"u2"}\n', 2, 2],
+      ["blank lines", '\n{"id":"u2"}\n', '{"id":"u3"}\n\n{"id":"u2"}\n', 3, 2],
+    ])(
+      "rejects an id defined in two directories, naming both lines, with %s",
+      (_label, baseContent, cogsContent, cogsLine, baseLine) => {
+        const base = makeDataDir({ "User.jsonl": baseContent });
+        const cogs = makeDataset(base, "cogs", { "User.jsonl": cogsContent });
 
-      expect(() => loadSeedData([base, cogs], ["User"])).toThrow(
-        `${path.join(cogs, "User.jsonl")}:2: id "u2" is already defined at ${path.join(base, "User.jsonl")}:2.`,
-      );
-    });
+        expect(() => loadSeedData([base, cogs], ["User"])).toThrow(
+          `${path.join(cogs, "User.jsonl")}:${cogsLine}: id "u2" is already defined at ${path.join(base, "User.jsonl")}:${baseLine}.`,
+        );
+      },
+    );
 
     test("identifies rows by the key field it is given", () => {
       const base = makeDataDir({ "_User.jsonl": '{"name":"ada@example.com","password":"a"}\n' });
@@ -124,9 +135,12 @@ describe("loadSeedData", () => {
     });
   });
 
-  test("names the file and line for malformed JSON lines", () => {
-    const dir = makeDataDir({ "Bad.jsonl": '{"ok":true}\nnot-json\n' });
-    expect(() => loadSeedData(dir, ["Bad"])).toThrow(/Bad\.jsonl at line 2/);
+  test.each([
+    ['{"ok":true}\nnot-json\n', 2],
+    ['\n\n{"ok":true}\nnot-json\n', 4],
+  ])("names the file and physical line for malformed JSON lines in %j", (content, line) => {
+    const dir = makeDataDir({ "Bad.jsonl": content });
+    expect(() => loadSeedData(dir, ["Bad"])).toThrow(new RegExp(`Bad\\.jsonl at line ${line}:`));
   });
 
   test.each(["null", "[]", '"text"', "42"])("rejects non-object JSON rows: %s", (row) => {
@@ -139,8 +153,9 @@ describe("loadSeedData", () => {
   test.each([
     ["missing", '{"name":"Alice"}\n', 1],
     ["null", '{"id":"customer-1"}\n{"id":null,"name":"Bob"}\n', 2],
+    ["missing", '\n\n{"name":"Alice"}\n', 3],
   ])(
-    "rejects an %s id with the file and line number when requireId is set",
+    "rejects an %s id in %j with the file and line number when requireId is set",
     (_label, content, line) => {
       const dir = makeDataDir({ "Customer.jsonl": content });
       expect(() => loadSeedData(dir, ["Customer"], { requireId: true })).toThrow(

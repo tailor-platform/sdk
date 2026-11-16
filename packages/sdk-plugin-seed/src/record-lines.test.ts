@@ -1,9 +1,45 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { JsonlReader, unwrap } from "lines-db";
 import { describe, test, expect } from "vitest";
-import { firstErrorLocation, physicalLineOfRecord } from "./record-lines";
+import { firstErrorLocation, jsonlRecordLines, physicalLineOfRecord } from "./record-lines";
 import type { ValidationErrorDetail } from "lines-db";
+
+describe("jsonlRecordLines", () => {
+  test.each([
+    ["no blank lines", '{"a":1}\n{"a":2}\n'],
+    ["an interior blank line", '{"a":1}\n\n{"a":2}\n'],
+    ["whitespace-only lines", '  \n{"a":1}\n \t \n{"a":2}\n\n\n'],
+    ["leading blank lines", '\n\n{"a":1}\n{"a":2}\n'],
+    ["CRLF endings and a blank line", '{"a":1}\r\n\r\n{"a":2}\r\n'],
+    ["a byte order mark", '﻿{"a":1}\n{"a":2}\n'],
+  ])("reads the records the validator reads from a file with %s", async (_label, content) => {
+    const dir = mkdtempSync(join(tmpdir(), "seed-loc-"));
+    try {
+      const file = join(dir, "T.jsonl");
+      writeFileSync(file, content);
+      const validatorRows = unwrap(await JsonlReader.read(file));
+      expect(validatorRows).toEqual([{ a: 1 }, { a: 2 }]);
+
+      const records = jsonlRecordLines(content);
+      expect(records.map(({ text }) => JSON.parse(text))).toEqual(validatorRows);
+      const lines = content.split("\n");
+      for (const { text, line } of records) {
+        expect(lines[line - 1]).toContain(text);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("drops a leading byte order mark and each line's trailing carriage return", () => {
+    expect(jsonlRecordLines('\uFEFF{"a":1}\r\n\r\n{"a":2}\r\n')).toEqual([
+      { text: '{"a":1}', line: 1 },
+      { text: '{"a":2}', line: 3 },
+    ]);
+  });
+});
 
 describe("physicalLineOfRecord", () => {
   test("maps records to their own lines when the file has no blank lines", () => {
@@ -38,32 +74,6 @@ describe("physicalLineOfRecord", () => {
 
   test("returns undefined for a record index past the end", () => {
     expect(physicalLineOfRecord('{"a":1}\n', 5)).toBeUndefined();
-  });
-
-  // The reader's own rule, mirrored from lines-db: records are the
-  // non-blank lines of a trimmed file. A divergence here means reported
-  // locations point at the wrong line.
-  const readerRecords = (content: string): string[] =>
-    content
-      .trim()
-      .split("\n")
-      .filter((line) => line.trim().length > 0);
-
-  test.each([
-    ['{"a":1}\n{"a":2}\n', "no blank lines"],
-    ['{"a":1}\n\n{"a":2}\n', "an interior blank line"],
-    ['\n\n{"a":1}\n{"a":2}\n', "leading blank lines"],
-    ['{"a":1}\r\n\r\n{"a":2}\r\n', "CRLF endings"],
-    ['  \n{"a":1}\n \t \n{"a":2}\n\n\n', "whitespace-only lines"],
-  ])("points at the line holding each record with %s", (content) => {
-    const records = readerRecords(content);
-    expect(records.length).toBeGreaterThan(0);
-    const lines = content.split("\n");
-    for (const [index, record] of records.entries()) {
-      const line = physicalLineOfRecord(content, index);
-      expect(line).toBeDefined();
-      expect(lines[(line ?? 0) - 1]?.trim()).toBe(record.trim());
-    }
   });
 
   test("returns undefined for an empty file", () => {
