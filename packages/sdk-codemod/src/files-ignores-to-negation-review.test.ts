@@ -94,6 +94,8 @@ describe("ignores -> files negation migration review", () => {
   test.each([
     ["a test-file pattern", '"e2e/*.test.ts", "!e2e/skip.test.ts", "ex/*.ts"'],
     ["a test-file template literal", '`${dir}/*.spec.ts`, "ex/*.ts"'],
+    ["an absolute test-file pattern", '"/repo/app/e2e/*.test.ts", "src/*.ts"'],
+    ["a test-file pattern outside the config directory", '"../shared/**/*.test.ts", "src/**/*.ts"'],
   ])("inserts the test-file exclusion but flags %s before another pattern", (_name, elements) => {
     const { transformed, findings } = review(
       `export default defineConfig({\n  executor: { files: [${elements}] },\n});\n`,
@@ -110,11 +112,6 @@ describe("ignores -> files negation migration review", () => {
       "outside the config directory after another pattern",
       '"src/**/*.ts", "../shared/**/*.test.ts"',
       '"src/**/*.ts", "!**/*.test.ts", "!**/*.spec.ts", "../shared/**/*.test.ts"',
-    ],
-    [
-      "outside the config directory before another pattern",
-      '"../shared/**/*.test.ts", "src/**/*.ts"',
-      '"../shared/**/*.test.ts", "src/**/*.ts", "!**/*.test.ts", "!**/*.spec.ts"',
     ],
     [
       "whose exclusion the config already has",

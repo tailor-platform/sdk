@@ -181,17 +181,13 @@ function analyzeService(source: string, service: SgNode, label: string): Analysi
       );
     const findings: ManualMigration[] = [];
     if (
-      positivesUpToInsertion.some(({ element, pattern }) => {
+      positivesUpToInsertion.some(({ element }) => {
         const suffix = testFileSuffixOf(element);
-        return (
-          suffix !== undefined &&
-          missingSuffixes.includes(suffix) &&
-          (pattern === null || !mayEscapeConfigDir(pattern))
-        );
+        return suffix !== undefined && missingSuffixes.includes(suffix);
       })
     ) {
       findings.push({
-        reason: `${label}.files has a pattern ending in \`.test.ts\` or \`.spec.ts\` before another pattern, so the explicit test-file exclusion inserted after the other pattern excludes the test files the earlier pattern includes`,
+        reason: `${label}.files has a pattern ending in \`.test.ts\` or \`.spec.ts\` before another pattern, so the explicit test-file exclusion inserted after the other pattern can exclude the test files the earlier pattern includes`,
         node: filesEntry,
       });
     }
