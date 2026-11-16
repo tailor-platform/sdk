@@ -364,6 +364,28 @@ describe("confirmMissingDependentApps", () => {
     await expect(confirmMissingDependentApps(missing, "prompt")).rejects.toThrow(/Apply cancelled/);
   });
 
+  test("names publishSessionEvents as the option that keeps an Auth service publishing", async () => {
+    const { logger } = await import("#/cli/shared/logger");
+    vi.mocked(prompt.confirm).mockResolvedValue(false);
+    const authMissing: MissingDependentApp[] = [
+      {
+        resource: 'Auth service "core-auth"',
+        resourceType: "auth.service",
+        name: "core-auth",
+        scope: "resource",
+        appId: "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81",
+        reason: "publish-events",
+      },
+    ];
+
+    await expect(confirmMissingDependentApps(authMissing, "prompt")).rejects.toThrow(
+      "set publishSessionEvents explicitly",
+    );
+    expect(vi.mocked(logger.log).mock.calls.flat().join("\n")).toContain(
+      "set publishSessionEvents on",
+    );
+  });
+
   test("continues without asking when --yes is passed", async () => {
     await confirmMissingDependentApps(missing, "yes");
 

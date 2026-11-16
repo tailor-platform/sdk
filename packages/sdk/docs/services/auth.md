@@ -590,7 +590,21 @@ hooks: {
 
 ## Session Events
 
-Set `publishSessionEvents: true` in `defineAuth()` to have the Auth service publish an event each time it issues, refreshes, or revokes an access token, including machine user tokens. Executors with an [auth access token trigger](./executor.md#auth-access-token-triggers) run only while it is set; `deploy` does not enable it for them.
+`publishSessionEvents` has the Auth service publish an event each time it issues, refreshes, or revokes an access token, including machine user tokens. Executors with an [auth access token trigger](./executor.md#auth-access-token-triggers) consume them.
+
+```typescript
+const auth = defineAuth("my-auth", {
+  // ...
+  publishSessionEvents: true,
+});
+```
+
+**Auto-configuration:** When `publishSessionEvents` is omitted, `deploy` sets it from the executors taking part in the same run: `true` while one of them has an access token trigger, and `false` once none does. Removing the last such trigger turns publishing back off on the next `deploy`, as does disabling the last executor that carries one. Set the value explicitly to override:
+
+- `publishSessionEvents: true`: always publish events.
+- `publishSessionEvents: false`: never publish events. `deploy` rejects this with an error if an executor with an access token trigger takes part in the same run — either remove `publishSessionEvents: false` or remove the matching trigger.
+
+**Referencing the Auth service from another config:** an executor in a config that references the Auth service with `external: true` enables publishing the same way, as long as the config that defines the Auth service takes part in the same `deploy` (`--config a,b`). `deploy` records that dependency, so deploying the defining config alone later asks for confirmation instead of silently turning publishing off — it fails outright in a non-interactive environment. When the defining config does not take part, as with an Auth service managed by Terraform or another repository, `deploy` leaves the value as it is: set `publishSessionEvents: true` where the Auth service is defined.
 
 ## CLI Commands
 

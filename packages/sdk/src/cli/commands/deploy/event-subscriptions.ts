@@ -1,4 +1,6 @@
+import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
 import { CLIError } from "#/cli/shared/errors";
+import { logger } from "#/cli/shared/logger";
 import {
   eventSourceLabel,
   publishEventsConflict,
@@ -53,7 +55,8 @@ export type EventSubscription = {
   /** Stable identity of the subscribed resource, keying its dependency records. */
   key: string | undefined;
   /**
-   * Whether the owner declares `publishEvents` on the subscribed resource, which
+   * Whether the owner declares the publishing option (`publishEvents`, or
+   * `publishSessionEvents` on an Auth service) on the subscribed resource, which
    * pins the value and leaves nothing for a dependency record to protect.
    */
   pinned: boolean;
@@ -75,16 +78,15 @@ export type EventSubscription = {
  * external is naming a resource that does not exist.
  * @param executorName - Name of the subscribing executor
  * @param lookup - How the subscribed resource is found
- * @param subscriber - Deployment target declaring the executor
+ * @param external - What the subscribing config declares as owned elsewhere that could hold it
  * @returns Error message
  */
 function missingOwnerMessage(
   executorName: string,
   lookup: EventSourceLookup,
-  subscriber: BuiltDeploymentTarget,
+  external: string | undefined,
 ): string {
   const subject = `Executor "${executorName}" subscribes to ${lookup.resource}, which no config in this deploy declares.`;
-  const external = lookup.externalHint(subscriber);
   if (external) {
     return `${subject} This config declares ${external}, so add the config that owns it to --config.`;
   }
@@ -151,9 +153,19 @@ export function collectEventSubscriptions(
       }
       const [owner] = owners;
       if (!owner) {
+        if (lookup.missingOwner === "skip") {
+          logger.debug(
+            `Executor "${executor.name}" subscribes to ${lookup.resource}, which no config in this deploy declares; its event publishing stays as it is.`,
+          );
+          continue;
+        }
         throw CLIError({
           code: "EVENT_SUBSCRIPTION_OWNER_NOT_FOUND",
-          message: missingOwnerMessage(executor.name, lookup, subscriber),
+          message: missingOwnerMessage(
+            executor.name,
+            lookup,
+            lookup.missingOwner.externalHint(subscriber),
+          ),
         });
       }
       subscriptions.push({
@@ -270,6 +282,23 @@ export function subscribedIdps(
 }
 
 /**
+ * Collect the Auth services subscribed to among the given subscriptions.
+ * @param subscriptions - Subscriptions owned by the target being planned
+ * @returns Subscribed Auth service names
+ */
+export function subscribedAuthServices(
+  subscriptions: ReadonlyArray<EventSubscription>,
+): ReadonlySet<string> {
+  return new Set(
+    publishingSubscriptions(subscriptions).flatMap((subscription) =>
+      subscription.trigger.kind === "authAccessToken"
+        ? [getApplicationAuthNamespace(subscription.subscriber.application) ?? []].flat()
+        : [],
+    ),
+  );
+}
+
+/**
  * Collect the workflows subscribed to, per event granularity level.
  * @param subscriptions - Subscriptions owned by the target being planned
  * @returns Subscribers keyed by event granularity level
@@ -298,7 +327,7 @@ export function subscribedWorkflows(subscriptions: ReadonlyArray<EventSubscripti
  * events, so deploying this config without that one would resolve the flag from
  * a smaller set of executors and turn publishing off.
  *
- * A resource that declares `publishEvents` keeps its value either way, so
+ * A resource that declares its publishing option keeps its value either way, so
  * recording a dependency for it would ask about a partial deploy that changes
  * nothing — and `prompt.confirm` rejects outright where it cannot ask, failing a
  * deploy that was never at risk. A disabled subscriber is dropped for the same
@@ -355,6 +384,7 @@ type PublishingTrigger = Extract<
       | "tailordb"
       | "resolverExecuted"
       | "idpUser"
+      | "authAccessToken"
       | "workflowExecution"
       | "workflowJobExecution";
   }
@@ -394,7 +424,7 @@ type EventSourceLookup = {
   /** Whether `target` declares the resource. */
   declaredBy: (target: BuiltDeploymentTarget) => boolean | undefined;
   /**
-   * Whether `target` declares `publishEvents` on the resource, so the value does
+   * Whether `target` declares the publishing option on the resource, so the value does
    * not depend on which configs the run covers.
    */
   pinned: (target: BuiltDeploymentTarget) => boolean;
@@ -412,12 +442,23 @@ type EventSourceLookup = {
    */
   narrowOwners: (candidates: ReadonlyArray<BuiltDeploymentTarget>) => OwnerCandidates;
   /**
-   * What `target` declares as owned elsewhere that could hold this resource,
-   * described for an error message. Undefined for a resource kind that cannot be
-   * referenced from another config at all.
+   * What a run without the declaring config does with the subscription: reject
+   * it, or skip it for a resource that can be owned outside every config.
    */
-  externalHint: (target: BuiltDeploymentTarget) => string | undefined;
+  missingOwner: MissingOwner;
 };
+
+/** Handling of a subscription whose resource no config in the run declares. */
+type MissingOwner =
+  | {
+      /**
+       * What `target` declares as owned elsewhere that could hold the resource,
+       * described for the error message. Undefined for a resource kind that
+       * cannot be referenced from another config at all.
+       */
+      externalHint: (target: BuiltDeploymentTarget) => string | undefined;
+    }
+  | "skip";
 
 /**
  * TailorDB namespaces the config declares as owned elsewhere.
@@ -486,6 +527,10 @@ function declaresIdp(target: BuiltDeploymentTarget, idpName: string): boolean | 
   return target.application.idpServices.some((entry) => entry.name === idpName) || undefined;
 }
 
+function declaresAuth(target: BuiltDeploymentTarget, authName: string): boolean | undefined {
+  return target.application.authService?.config.name === authName || undefined;
+}
+
 function declaresWorkflow(
   target: BuiltDeploymentTarget,
   workflowName: string,
@@ -526,6 +571,11 @@ function pinsIdp(target: BuiltDeploymentTarget, idpName: string): boolean {
   return target.application.idpServices.some(
     (entry) => entry.name === idpName && entry.publishEvents !== undefined,
   );
+}
+
+function pinsAuth(target: BuiltDeploymentTarget, authName: string): boolean {
+  const config = target.application.authService?.config;
+  return config?.name === authName && config.publishSessionEvents !== undefined;
 }
 
 function pinsWorkflow(target: BuiltDeploymentTarget, workflowName: string): boolean {
@@ -625,8 +675,10 @@ function eventSourceLookup(
             declaresIn: (target, namespace) =>
               declaresTailorDBTypeIn(target, namespace, trigger.tableName),
           }),
-        externalHint: (target) =>
-          describeExternal("TailorDB namespace", externalTailorDBNamespaces(target)),
+        missingOwner: {
+          externalHint: (target) =>
+            describeExternal("TailorDB namespace", externalTailorDBNamespaces(target)),
+        },
       };
     case "resolverExecuted": {
       // The namespace the subscriber resolves the name through, in the same order
@@ -653,8 +705,10 @@ function eventSourceLookup(
             declaresIn: (target, namespace) =>
               declaresResolverIn(target, namespace, trigger.resolverName),
           }),
-        externalHint: (target) =>
-          describeExternal("resolver namespace", externalResolverNamespaces(target)),
+        missingOwner: {
+          externalHint: (target) =>
+            describeExternal("resolver namespace", externalResolverNamespaces(target)),
+        },
       };
     }
     case "idpUser": {
@@ -674,12 +728,29 @@ function eventSourceLookup(
           visibility.idps.has(idpName)
             ? candidates.filter((target) => declaresIdp(target, idpName))
             : [],
-        // The trigger names the IdP, so the hint can be exact rather than a list.
-        externalHint: (target) =>
-          describeExternal(
-            "IdP",
-            externalIdpNames(target).filter((name) => name === idpName),
-          ),
+        missingOwner: {
+          // The trigger names the IdP, so the hint can be exact rather than a list.
+          externalHint: (target) =>
+            describeExternal(
+              "IdP",
+              externalIdpNames(target).filter((name) => name === idpName),
+            ),
+        },
+      };
+    }
+    case "authAccessToken": {
+      const authName = getApplicationAuthNamespace(subscriber.application);
+      if (authName === undefined) {
+        return undefined;
+      }
+      return {
+        resource: eventSourceLabel.authService(authName),
+        trigger,
+        declaredBy: (target) => declaresAuth(target, authName),
+        pinned: (target) => pinsAuth(target, authName),
+        keyIn: () => eventSourceKey.auth(authName),
+        narrowOwners: (candidates) => candidates.filter((target) => declaresAuth(target, authName)),
+        missingOwner: "skip",
       };
     }
     case "workflowExecution":
@@ -704,7 +775,7 @@ function eventSourceLookup(
         narrowOwners: (candidates) =>
           candidates.filter((target) => declaresWorkflow(target, trigger.workflowName)),
         // A workflow has no `external` declaration to check.
-        externalHint: () => undefined,
+        missingOwner: { externalHint: () => undefined },
       };
     default:
       return undefined;

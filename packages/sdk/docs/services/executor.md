@@ -61,7 +61,7 @@ export default createExecutor({
 });
 ```
 
-A disabled executor does not count as a subscriber when `deploy` resolves `publishEvents` on the resource its trigger names. Publishing is not enabled on that resource's behalf, and an explicit `publishEvents: false` on it is not rejected. If the resource was publishing only for this executor, the next `deploy` turns publishing back off — so disabling the last subscriber of a shared table changes that table for every config that reads its events.
+A disabled executor does not count as a subscriber when `deploy` resolves `publishEvents` (`publishSessionEvents` on an Auth service) on the resource its trigger names. Publishing is not enabled on that resource's behalf, and an explicit `false` on it is not rejected. If the resource was publishing only for this executor, the next `deploy` turns publishing back off — so disabling the last subscriber of a shared table changes that table for every config that reads its events.
 
 The trigger is still deployed, so it must still name a resource the deploy declares; a disabled executor whose trigger names nothing fails the deploy exactly as an enabled one does. For the same reason, `deploy` and `remove` of another application stop with `SERVICE_IN_USE` instead of deleting a resource that a disabled executor's trigger names.
 
@@ -185,7 +185,7 @@ Fire on auth access token lifecycle events:
 authAccessTokenIssuedTrigger();
 ```
 
-These triggers require the Auth service to publish access token events. Set `publishSessionEvents: true` in the `defineAuth()` of the Auth service that the executor's config uses; when that config references the Auth service as external, set it where the Auth service is defined. `deploy` does not enable it automatically. See [Auth service - Session Events](./auth.md#session-events).
+These triggers require the Auth service to publish access token events. `deploy` enables `publishSessionEvents` automatically on the Auth service while an executor with one of these triggers takes part in the same run, and turns it back off once none remains; set the value explicitly on `defineAuth()` to pin it. An Auth service referenced with `external: true` whose defining config is not part of the same `deploy`, such as one managed by Terraform, keeps its value; set `publishSessionEvents: true` where it is defined. See [Auth service - Session Events](./auth.md#session-events).
 
 ### Workflow Execution Triggers
 

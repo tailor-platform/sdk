@@ -331,7 +331,14 @@ export type AuthServiceInput<
   scim?: SCIMConfig;
   tenantProvider?: TenantProviderConfig;
   connections?: Record<ConnectionNames, AuthConnectionConfig>;
-  /** Publish access token events for executors with an `authAccessToken*` trigger. */
+  /**
+   * Enable publishing access token events, letting executors with an
+   * `authAccessToken*` trigger observe them.
+   *
+   * Left unset, it is enabled automatically while an executor in the same
+   * `deploy` subscribes to this Auth service. Setting it to false while an
+   * enabled executor with such a trigger takes part in the `deploy` fails it.
+   */
   publishSessionEvents?: boolean;
 };
 

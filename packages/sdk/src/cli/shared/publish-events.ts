@@ -1,4 +1,5 @@
 import { CLIError } from "./errors";
+import type { ManagedResourceType } from "#/cli/commands/deploy/managed-resource-type";
 
 /** Resource and trigger named in a `publishEvents` opt-out conflict error. */
 export type PublishEventsConflict = {
@@ -8,6 +9,8 @@ export type PublishEventsConflict = {
   trigger: string;
   /** What the subscribing executors subscribe to. Defaults to `"it"`. */
   subscribesTo?: string;
+  /** Option the resource declares the value with. Defaults to `"publishEvents"`. */
+  option?: string;
 };
 
 /**
@@ -23,7 +26,17 @@ export const eventSourceLabel = {
   workflow: (name: string) => `Workflow "${name}"`,
   workflowJob: (name: string) => `Job "${name}"`,
   workflowJobs: (workflowName: string) => `Jobs of workflow "${workflowName}"`,
+  authService: (name: string) => `Auth service "${name}"`,
 } as const;
+
+/**
+ * Name the option a resource declares its event publishing with.
+ * @param resourceType - Managed resource type of the publishing resource
+ * @returns The option name, as users write it in their config
+ */
+export function publishEventsOption(resourceType: ManagedResourceType): string {
+  return resourceType === "auth.service" ? "publishSessionEvents" : "publishEvents";
+}
 
 /** Opt-out conflict details per event-publishing resource. */
 export const publishEventsConflict = {
@@ -48,6 +61,11 @@ export const publishEventsConflict = {
     trigger: "workflowJobExecution",
     subscribesTo: "a workflow that runs it",
   }),
+  authService: (name: string): PublishEventsConflict => ({
+    resource: eventSourceLabel.authService(name),
+    trigger: "authAccessToken",
+    option: publishEventsOption("auth.service"),
+  }),
 } as const;
 
 /**
@@ -57,11 +75,11 @@ export const publishEventsConflict = {
  * @returns CLIError coded `PUBLISH_EVENTS_CONFLICT`
  */
 function publishEventsConflictError(conflict: PublishEventsConflict): CLIError {
-  const { resource, trigger, subscribesTo = "it" } = conflict;
+  const { resource, trigger, subscribesTo = "it", option = "publishEvents" } = conflict;
   return CLIError({
     code: "PUBLISH_EVENTS_CONFLICT",
-    message: `${resource} has "publishEvents: false", but executors with ${trigger} triggers subscribe to ${subscribesTo}.`,
-    suggestion: 'Either remove "publishEvents: false" or remove the matching executor triggers.',
+    message: `${resource} has "${option}: false", but executors with ${trigger} triggers subscribe to ${subscribesTo}.`,
+    suggestion: `Either remove "${option}: false" or remove the matching executor triggers.`,
     context: { trigger },
   });
 }
@@ -87,7 +105,7 @@ export function subscribesToEvents(executor: EventSubscribingExecutor): boolean 
 
 /** Inputs deciding whether a resource publishes events. */
 export type ResolvePublishEventsParams = {
-  /** `publishEvents` declared on the resource, or undefined when unset. */
+  /** Publishing option declared on the resource, or undefined when unset. */
   explicit: boolean | undefined;
   /** Whether an executor taking part in the same run subscribes to it. */
   subscribed: boolean;

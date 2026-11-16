@@ -236,6 +236,7 @@ export const eventSourceKey = {
   resolver: (namespace: string, resolverName: string) =>
     `pipeline:${namespace}:resolver:${resolverName}`,
   idp: (name: string) => `idp:${name}`,
+  auth: (name: string) => `auth:${name}`,
   workflow: (name: string) => `workflow:${name}`,
   // A workflowJobExecution trigger names a workflow, but drives the jobs' value
   // rather than the workflow's own, so it aggregates separately.

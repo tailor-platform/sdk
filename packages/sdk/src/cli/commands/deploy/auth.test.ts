@@ -33,6 +33,7 @@ describe("applyAuth phase separation", () => {
       updateAuthSCIMConfig: vi.fn().mockResolvedValue({}),
       updateAuthSCIMResource: vi.fn().mockResolvedValue({}),
       setMetadata: vi.fn().mockResolvedValue({}),
+      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
     } as unknown as OperatorClient;
   }
 
@@ -46,6 +47,7 @@ describe("applyAuth phase separation", () => {
     return {
       creates: [],
       updates: [],
+      unchanged: [] as UnchangedEntry[],
       deletes: [{ name, request }],
       replaces: [] as OAuth2ClientReplace[],
       title,
@@ -55,18 +57,23 @@ describe("applyAuth phase separation", () => {
   }
 
   type CreateEntry = { name: string; request: Record<string, unknown> };
+  type UnchangedEntry = { name: string; metaRequest: { trn: string; labels: object } };
 
   function createMockPlanResult(opts?: {
     oauth2ClientReplaces?: OAuth2ClientReplace[];
     oauth2ClientCreates?: CreateEntry[];
     machineUserCreates?: CreateEntry[];
+    serviceUnchanged?: UnchangedEntry[];
   }) {
     return {
       changeSet: {
-        service: deletableChangeSet("Auth Services", "test-auth", {
-          workspaceId: "test-workspace",
-          namespaceName: "test-auth",
-        }),
+        service: {
+          ...deletableChangeSet("Auth Services", "test-auth", {
+            workspaceId: "test-workspace",
+            namespaceName: "test-auth",
+          }),
+          unchanged: opts?.serviceUnchanged ?? [],
+        },
         idpConfig: deletableChangeSet("Auth IdP Configs", "test-idp-config", {
           workspaceId: "test-workspace",
           namespaceName: "test-auth",
@@ -162,6 +169,20 @@ describe("applyAuth phase separation", () => {
       expect(client.deleteAuthService).toHaveBeenCalledTimes(servicesCalled);
     },
   );
+
+  test("create-update phase writes the labels of an unchanged service", async () => {
+    const client = createMockClientWithSpies();
+    const trn = "trn:v1:workspace:test-workspace:auth:test-auth";
+    const planResult = createMockPlanResult({
+      serviceUnchanged: [
+        { name: "test-auth", metaRequest: { trn, labels: { "sdk-name": "app" } } },
+      ],
+    });
+
+    await applyAuth(client, planResult, "create-update");
+
+    expect(client.setMetadata).toHaveBeenCalledWith(expect.objectContaining({ trn }));
+  });
 
   test("create-update phase handles OAuth2 client replaces (delete then create)", async () => {
     const client = createMockClientWithSpies();

@@ -2,6 +2,7 @@ import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/migration
 import { CLIError } from "#/cli/shared/errors";
 import { styles, logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
+import { publishEventsOption } from "#/cli/shared/publish-events";
 import ml from "#/utils/multiline";
 import type { MigrationCheckpointRepair } from "#/cli/commands/tailordb/migrate/types";
 import type { DependencyScope } from "./label";
@@ -356,7 +357,10 @@ export async function confirmMissingDependentApps(
   logger.newline();
   logger.log("  Applying without them turns off event publishing on the resources above:");
   logger.log("  nothing in this deploy subscribes to them, so the value resolves to false.");
-  logger.log("  To keep it, add their configs to --config, or set publishEvents on");
+  const optionNames = [
+    ...new Set(missing.map((entry) => publishEventsOption(entry.resourceType))),
+  ].join(" or ");
+  logger.log(`  To keep it, add their configs to --config, or set ${optionNames} on`);
   logger.log("  the resources above.");
 
   if (mode === "dry-run") return;
@@ -373,8 +377,8 @@ export async function confirmMissingDependentApps(
     throw CLIError({
       code: "DEPLOY_CANCELLED",
       message: ml`
-      Apply cancelled. Add the missing configs to --config, or set publishEvents
-      explicitly on the resources that should keep publishing.
+      Apply cancelled. Add the missing configs to --config,
+      or set ${optionNames} explicitly on the resources that should keep publishing.
     `,
     });
   }

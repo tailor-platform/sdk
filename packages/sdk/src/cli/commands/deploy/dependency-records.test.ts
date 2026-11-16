@@ -13,6 +13,8 @@ type AppSpec = {
   idps?: Record<string, boolean | undefined>;
   workflows?: Record<string, boolean | undefined>;
   jobs?: Record<string, boolean | undefined>;
+  /** Auth service name and its declared `publishSessionEvents`. */
+  auth?: [string, boolean | undefined];
 };
 
 function application(spec: AppSpec): Readonly<Application> {
@@ -42,6 +44,9 @@ function application(spec: AppSpec): Readonly<Application> {
       name,
       publishEvents,
     })),
+    authService: spec.auth
+      ? { config: { name: spec.auth[0], publishSessionEvents: spec.auth[1] } }
+      : undefined,
     workflowService: {
       workflows: Object.fromEntries(
         Object.entries(spec.workflows ?? {}).map(([name, publishEvents]) => [
@@ -188,6 +193,12 @@ describe("fetchMissingDependentApps", () => {
       { idps: { "shared-idp": undefined } },
       "trn:v1:workspace:ws:idp:shared-idp",
       { resource: 'IdP service "shared-idp"', resourceType: "idp.service", name: "shared-idp" },
+    ],
+    [
+      "Auth service",
+      { auth: ["core-auth", undefined] as [string, undefined] },
+      "trn:v1:workspace:ws:auth:core-auth",
+      { resource: 'Auth service "core-auth"', resourceType: "auth.service", name: "core-auth" },
     ],
     [
       "workflow",
