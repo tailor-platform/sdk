@@ -246,7 +246,10 @@ describe("remove command", () => {
       (path) => !DELETE_LISTS_REMOVAL_NEVER_PLANS.has(path),
     ),
   )("lists and applies a planned delete from %s when it is the only one", async (path) => {
-    const client = { deleteWorkflowJobFunctionExecutionPolicy: vi.fn() };
+    const client = {
+      deleteWorkflowJobFunctionExecutionPolicy: vi.fn(),
+      listOTLPExporters: vi.fn(async () => ({ otlpExporters: [], nextPageToken: "" })),
+    };
     vi.mocked(initOperatorClient).mockResolvedValue(client as never);
     vi.mocked(planWorkflowJobFunctionExecutionPolicy).mockImplementation(
       async () => mocks.plans.workflowExecutionPolicy,
