@@ -23,6 +23,7 @@ import {
 import { type AuthService } from "#/cli/services/auth/service";
 import {
   fetchAllTolerant,
+  getAuthSCIMConfigOrNull,
   listAuthIDPConfigsTolerant,
   listAuthMachineUsersTolerant,
   getOrNull,
@@ -543,12 +544,9 @@ async function planIdPConfigs(
     "Auth idpConfigs",
   );
 
-  const fetchIdPConfigs = (namespaceName: string) =>
-    listAuthIDPConfigsTolerant(client, workspaceId, namespaceName);
-
   for (const authService of auths) {
     const { config } = authService;
-    const existingIdPConfigs = await fetchIdPConfigs(config.name);
+    const existingIdPConfigs = await listAuthIDPConfigsTolerant(client, workspaceId, config.name);
     const existingMap = new Map<string, (typeof existingIdPConfigs)[number]>();
     existingIdPConfigs.forEach((idpConfig) => {
       existingMap.set(idpConfig.name, idpConfig);
@@ -618,7 +616,7 @@ async function planIdPConfigs(
   }
 
   for (const namespaceName of deletedServices) {
-    const existingIdPConfigs = await fetchIdPConfigs(namespaceName);
+    const existingIdPConfigs = await listAuthIDPConfigsTolerant(client, workspaceId, namespaceName);
     existingIdPConfigs.forEach((idpConfig) => {
       changeSet.deletes.push({
         name: idpConfig.name,
@@ -1534,22 +1532,6 @@ type DeleteSCIMConfig = {
  */
 export function authSCIMConfigName(namespaceName: string): string {
   return `${namespaceName}-scim-config`;
-}
-
-/**
- * Fetch the SCIM config of an auth namespace, treating a namespace or config that does not exist as absent.
- * @param client - Operator client
- * @param workspaceId - Workspace to query
- * @param namespaceName - Auth namespace to fetch the SCIM config of
- * @returns SCIM config of the namespace, or undefined when it has none
- */
-export async function getAuthSCIMConfigOrNull(
-  client: OperatorClient,
-  workspaceId: string,
-  namespaceName: string,
-) {
-  const response = await getOrNull(() => client.getAuthSCIMConfig({ workspaceId, namespaceName }));
-  return response?.scimConfig;
 }
 
 async function planSCIMConfigs(

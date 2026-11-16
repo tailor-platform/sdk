@@ -1176,6 +1176,22 @@ export async function listAuthIDPConfigsTolerant(
 }
 
 /**
+ * Fetch the SCIM config of an auth namespace, treating a namespace or config that does not exist as absent.
+ * @param client - Operator client
+ * @param workspaceId - Workspace to query
+ * @param namespaceName - Auth namespace to fetch the SCIM config of
+ * @returns SCIM config of the namespace, or undefined when it has none
+ */
+export async function getAuthSCIMConfigOrNull(
+  client: OperatorClient,
+  workspaceId: string,
+  namespaceName: string,
+) {
+  const response = await getOrNull(() => client.getAuthSCIMConfig({ workspaceId, namespaceName }));
+  return response?.scimConfig;
+}
+
+/**
  * Fetch a single resource, treating NotFound as an absent value.
  * @template T
  * @param fn - Resource getter

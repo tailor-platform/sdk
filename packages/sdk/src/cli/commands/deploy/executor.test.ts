@@ -324,6 +324,24 @@ describe("planExecutor", () => {
 
       expect(targetConfig.value.variables?.expr).toBe(expectedExpression);
     });
+
+    test.each([
+      ["the executor's own application without appName", undefined, appName],
+      ["the application that appName names", "core", "core"],
+    ])("graphql operation targets %s", async (_description, targetAppName, expectedAppName) => {
+      const executor = createMockExecutor("graphql-executor");
+      executor.operation = { kind: "graphql", appName: targetAppName, query: "query { ok }" };
+
+      const result = await planExecutor(
+        buildPlanContext(createMockApplication([executor]), { client: createMockClient([]) }),
+      );
+      const targetConfig = result.changeSet.creates[0]?.request.executor?.targetConfig?.config;
+      if (targetConfig?.case !== "tailorGraphql") {
+        throw new Error("Expected GraphQL target config");
+      }
+
+      expect(targetConfig.value.appName).toBe(expectedAppName);
+    });
   });
 
   describe("update scenarios", () => {

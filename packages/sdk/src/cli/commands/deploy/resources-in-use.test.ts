@@ -713,7 +713,15 @@ describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", ()
       owner,
       {
         name: "forward",
-        targetConfig: { config: { case: "webhook", value: { secret: API_KEY } } },
+        targetConfig: {
+          config: {
+            case: "webhook",
+            value: {
+              secret: API_KEY,
+              headers: [{ key: "Authorization", value: { case: "secretValue", value: API_KEY } }],
+            },
+          },
+        },
       },
       "portal",
     );

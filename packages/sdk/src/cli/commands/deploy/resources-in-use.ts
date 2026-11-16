@@ -3,12 +3,13 @@ import { PipelineResolverView } from "@tailor-platform/tailor-proto/pipeline_pb"
 import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
 import {
   fetchAllTolerant,
+  getAuthSCIMConfigOrNull,
   listAuthIDPConfigsTolerant,
   type OperatorClient,
 } from "#/cli/shared/client";
 import { CLIError } from "#/cli/shared/errors";
 import { protoSubgraph } from "./application";
-import { authSCIMConfigName, getAuthSCIMConfigOrNull } from "./auth";
+import { authSCIMConfigName } from "./auth";
 import { sdkNameLabelKey } from "./label";
 import type { PlannedDeployment } from "./apply-phases";
 import type { ManagedResourceType } from "./managed-resource-type";
@@ -249,6 +250,44 @@ function labelledUsers<T>(
   );
 }
 
+type NamespacedEntry = { name: string; request: { namespaceName?: string } };
+
+function namespacedName(entry: NamespacedEntry): UserName {
+  return { namespace: entry.request.namespaceName, name: entry.name };
+}
+
+function plannedUsers<E extends NamespacedEntry, T>(
+  application: string,
+  entries: ReadonlyArray<E>,
+  resourceOf: (entry: E) => T,
+): FinalUser<T>[] {
+  return entries.map((entry) => ({
+    ...namespacedName(entry),
+    resource: resourceOf(entry),
+    application,
+  }));
+}
+
+type NamedResource<T> = Pick<FinalUser<T>, "resource" | "name">;
+
+type NamespaceServices = ReadonlyMap<string, { allLabels?: Record<string, string> } | undefined>;
+
+async function recordedUsers<T>(
+  services: NamespaceServices,
+  fetchResources: (namespace: string) => Promise<NamedResource<T>[]>,
+): Promise<FinalUser<T>[]> {
+  const users = await Promise.all(
+    [...services].map(async ([namespace, service]) =>
+      (await fetchResources(namespace)).map((user) => ({
+        ...user,
+        namespace,
+        application: service?.allLabels?.[sdkNameLabelKey],
+      })),
+    ),
+  );
+  return users.flat();
+}
+
 function usesOf<T>(
   users: ReadonlyArray<FinalUser<T>>,
   resourceType: UserResourceType,
@@ -390,13 +429,10 @@ type WorkspaceUsesParams = {
 async function resolverUses(params: WorkspaceUsesParams): Promise<ResourceUse[]> {
   const { deployments, client, workspaceId } = params;
   const planned = deployments.flatMap(({ application, pipeline }) =>
-    [...pipeline.changeSet.resolver.creates, ...pipeline.changeSet.resolver.updates].map(
-      (entry) => ({
-        resource: entry.request.pipelineResolver ?? {},
-        name: entry.name,
-        namespace: entry.request.namespaceName,
-        application: application.name,
-      }),
+    plannedUsers(
+      application.name,
+      [...pipeline.changeSet.resolver.creates, ...pipeline.changeSet.resolver.updates],
+      (entry) => entry.request.pipelineResolver ?? {},
     ),
   );
   const deletedNamespaces = new Set(
@@ -421,35 +457,23 @@ async function resolverUses(params: WorkspaceUsesParams): Promise<ResourceUse[]>
       .flatMap(({ pipeline }) => Object.entries(pipeline.existingServices))
       .filter(([namespace]) => !runNamespaces.has(namespace)),
   );
-  const others = await Promise.all(
-    [...otherServices].map(async ([namespace, service]) => {
-      const resolvers = await fetchAllTolerant(async (pageToken, maxPageSize) => {
-        const { pipelineResolvers, nextPageToken } = await client.listPipelineResolvers({
-          workspaceId,
-          namespaceName: namespace,
-          pipelineResolverView: PipelineResolverView.FULL,
-          pageToken,
-          pageSize: maxPageSize,
-        });
-        return [pipelineResolvers, nextPageToken];
+  const others = await recordedUsers(otherServices, async (namespace) => {
+    const resolvers = await fetchAllTolerant(async (pageToken, maxPageSize) => {
+      const { pipelineResolvers, nextPageToken } = await client.listPipelineResolvers({
+        workspaceId,
+        namespaceName: namespace,
+        pipelineResolverView: PipelineResolverView.FULL,
+        pageToken,
+        pageSize: maxPageSize,
       });
-      return resolvers.map((resource) => ({
-        resource,
-        name: resource.name,
-        namespace,
-        application: service?.allLabels?.[sdkNameLabelKey],
-      }));
-    }),
-  );
+      return [pipelineResolvers, nextPageToken];
+    });
+    return resolvers.map((resource) => ({ resource, name: resource.name }));
+  });
   const resolvers = finalUsers<MessageInitShape<typeof PipelineResolverSchema>>(
     planned,
-    deployments.flatMap(({ pipeline }) =>
-      pipeline.changeSet.resolver.deletes.map(({ name, request }) => ({
-        namespace: request.namespaceName,
-        name,
-      })),
-    ),
-    [...runResolvers, ...others.flat()],
+    deployments.flatMap(({ pipeline }) => pipeline.changeSet.resolver.deletes.map(namespacedName)),
+    [...runResolvers, ...others],
   );
   return usesOf(resolvers, "pipeline.resolver", (resolver) =>
     (resolver.pipelines ?? []).flatMap((step) => invokerRefs(step.invoker)),
@@ -466,59 +490,37 @@ async function authConfigUses(params: WorkspaceUsesParams): Promise<ResourceUse[
       .flatMap(({ auth }) => Object.entries(auth.existingServices))
       .filter(([namespace]) => !deletedServices.has(namespace)),
   );
-  const recorded = await Promise.all(
-    [...services].map(async ([namespace, service]) => {
-      const application = service?.allLabels?.[sdkNameLabelKey];
-      const [idpConfigs, scimConfig] = await Promise.all([
-        listAuthIDPConfigsTolerant(client, workspaceId, namespace),
-        getAuthSCIMConfigOrNull(client, workspaceId, namespace),
-      ]);
-      return {
-        idpConfigs: idpConfigs.map((resource) => ({
-          resource,
-          name: resource.name,
-          namespace,
-          application,
-        })),
-        scimConfigs: scimConfig
-          ? [{ resource: scimConfig, name: authSCIMConfigName(namespace), namespace, application }]
-          : [],
-      };
+  const [recordedIdPConfigs, recordedSCIMConfigs] = await Promise.all([
+    recordedUsers(services, async (namespace) => {
+      const idpConfigs = await listAuthIDPConfigsTolerant(client, workspaceId, namespace);
+      return idpConfigs.map((resource) => ({ resource, name: resource.name }));
     }),
-  );
+    recordedUsers(services, async (namespace) => {
+      const scimConfig = await getAuthSCIMConfigOrNull(client, workspaceId, namespace);
+      return scimConfig ? [{ resource: scimConfig, name: authSCIMConfigName(namespace) }] : [];
+    }),
+  ]);
   const idpConfigs = finalUsers<MessageInitShape<typeof AuthIDPConfigSchema>>(
     deployments.flatMap(({ application, auth }) =>
-      [...auth.changeSet.idpConfig.creates, ...auth.changeSet.idpConfig.updates].map((entry) => ({
-        resource: entry.request.idpConfig ?? {},
-        name: entry.name,
-        namespace: entry.request.namespaceName,
-        application: application.name,
-      })),
+      plannedUsers(
+        application.name,
+        [...auth.changeSet.idpConfig.creates, ...auth.changeSet.idpConfig.updates],
+        (entry) => entry.request.idpConfig ?? {},
+      ),
     ),
-    deployments.flatMap(({ auth }) =>
-      auth.changeSet.idpConfig.deletes.map(({ name, request }) => ({
-        namespace: request.namespaceName,
-        name,
-      })),
-    ),
-    recorded.flatMap((entry) => entry.idpConfigs),
+    deployments.flatMap(({ auth }) => auth.changeSet.idpConfig.deletes.map(namespacedName)),
+    recordedIdPConfigs,
   );
   const scimConfigs = finalUsers<MessageInitShape<typeof AuthSCIMConfigSchema>>(
     deployments.flatMap(({ application, auth }) =>
-      [...auth.changeSet.scim.creates, ...auth.changeSet.scim.updates].map((entry) => ({
-        resource: entry.request.scimConfig ?? {},
-        name: entry.name,
-        namespace: entry.request.namespaceName,
-        application: application.name,
-      })),
+      plannedUsers(
+        application.name,
+        [...auth.changeSet.scim.creates, ...auth.changeSet.scim.updates],
+        (entry) => entry.request.scimConfig ?? {},
+      ),
     ),
-    deployments.flatMap(({ auth }) =>
-      auth.changeSet.scim.deletes.map(({ name, request }) => ({
-        namespace: request.namespaceName,
-        name,
-      })),
-    ),
-    recorded.flatMap((entry) => entry.scimConfigs),
+    deployments.flatMap(({ auth }) => auth.changeSet.scim.deletes.map(namespacedName)),
+    recordedSCIMConfigs,
   );
   return [
     ...usesOf(idpConfigs, "auth.idp_config", (idpConfig) => {
