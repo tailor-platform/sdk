@@ -2,9 +2,9 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
-import transform, { reviewFindings } from "../codemods/v3/files-config-relative/scripts/transform";
 import { getApplicableCodemods } from "./registry";
 import { runCodemods } from "./runner";
+import { reviewInProject, runnableCodemod } from "./test-helpers/codemods";
 
 vi.mock("node:fs", async (importOriginal) => {
   const original = await importOriginal<typeof fs>();
@@ -37,13 +37,13 @@ describe("files patterns -> config-relative migration", () => {
   }
 
   async function migrate(body: string, configPath = CONFIG_PATH) {
-    const source = IMPORT + body;
-    const absolute = path.join(root, configPath);
-    const findings = await reviewFindings(source, absolute, configPath, root);
-    return {
-      transformed: await transform(source, absolute, root),
-      findings: findings.map((finding) => finding.message),
-    };
+    const { transformed, findings } = await reviewInProject(
+      "v3/files-config-relative",
+      root,
+      IMPORT + body,
+      configPath,
+    );
+    return { transformed, findings: findings.map((finding) => finding.message) };
   }
 
   test("rebases `files`, `!` patterns, and `ignores` that match only from the project directory", async () => {
@@ -227,7 +227,14 @@ describe("files patterns -> config-relative migration", () => {
       'export default defineConfig({\n  db: { main: { files: ["apps/a/tailordb/*.ts"] } },\n});\n',
     );
 
-    expect(await transform(transformed!, path.join(root, CONFIG_PATH), root)).toBeNull();
+    const rerun = await reviewInProject(
+      "v3/files-config-relative",
+      root,
+      transformed!,
+      CONFIG_PATH,
+    );
+
+    expect(rerun.transformed).toBeNull();
   });
 
   test("names the project directory it searched when no pattern matches from either directory", async () => {
@@ -758,8 +765,8 @@ describe("files patterns -> config-relative migration", () => {
 
   test("runs before the `ignores` migration, which then moves the rebased patterns", async () => {
     writeFiles("apps/a/tailordb/user.ts", "apps/a/executors/run.ts");
-    fs.writeFileSync(
-      path.join(root, CONFIG_PATH),
+    writeFile(
+      CONFIG_PATH,
       IMPORT +
         [
           "export default defineConfig({",
@@ -769,17 +776,10 @@ describe("files patterns -> config-relative migration", () => {
           "",
         ].join("\n"),
     );
-    const ids = ["v3/files-config-relative", "v3/files-ignores-to-negation"];
     const codemods = getApplicableCodemods("2.41.0", "3.0.0")
-      .filter((codemod) => ids.includes(codemod.id))
-      .map((codemod) => ({
-        codemod,
-        scriptPath: path.resolve(
-          __dirname,
-          "../codemods",
-          codemod.scriptPath!.replace(/\.js$/, ".ts"),
-        ),
-      }));
+      .map((codemod) => codemod.id)
+      .filter((id) => id === "v3/files-config-relative" || id === "v3/files-ignores-to-negation")
+      .map(runnableCodemod);
 
     await runCodemods(codemods, root, false);
 
