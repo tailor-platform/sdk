@@ -2,10 +2,10 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 
 /**
- * Lists the TypeScript sources under a directory, leaving out tests and the `.`- and
- * `__test_`-prefixed fixture trees that suites create and delete while others walk the sources.
+ * Lists the `.ts` files under a directory except `*.test.ts` files and `.`- or `__test_`-prefixed
+ * entries, which hold test fixtures.
  * @param dir - Directory to walk
- * @returns Absolute paths of the non-test `.ts` files under the directory
+ * @returns Absolute paths of the listed files
  */
 export function listSourceFiles(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
