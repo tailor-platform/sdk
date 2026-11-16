@@ -63,7 +63,7 @@ This is enforced by oxlint's local plugin (see `packages/sdk/oxlint-plugins/inde
 
 ### Operator Client Mocks
 
-Build an `OperatorClient` mock with `mockOperatorClient()` from `packages/sdk/src/cli/shared/test-helpers/operator-client.ts`, giving each method its response or an implementation, so `tsc` checks both against the RPC. oxlint's `local/typed-operator-client-mock` rejects a cast to the client type and a `vi.fn` spy passed to `mockOperatorClient()`. Files written before the helper disable the rule at their top; migrate a file when you edit its mocks and drop that line.
+Build an `OperatorClient` mock with `mockOperatorClient()` from `packages/sdk/src/cli/shared/test-helpers/operator-client.ts`, giving each method its response or an implementation, so `tsc` checks them against the RPC (unknown fields only in a response given directly). oxlint's `local/typed-operator-client-mock` rejects a cast to the client type and a `vi.fn` spy passed to `mockOperatorClient()`. Files written before the helper disable the rule at their top; migrate a file when you edit its mocks and drop that line.
 
 ## Documentation Tests
 

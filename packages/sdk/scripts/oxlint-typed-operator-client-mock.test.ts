@@ -1,12 +1,5 @@
-import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { describe, expect, test } from "vitest";
-
-const packageRoot = path.resolve(import.meta.dirname, "..");
-const oxlintBin = path.join(packageRoot, "node_modules/.bin/oxlint");
-const pluginPath = path.join(packageRoot, "oxlint-plugins/index.js");
+import { lintWithLocalRule } from "./test-helpers/local-rule";
 
 const fixture = [
   'import { vi } from "vitest";',
@@ -19,38 +12,21 @@ const fixture = [
   "export const wrapped = mockOperatorClient({ getTenantConfig: vi.fn(async () => ({})) });",
   "export const unrelated = {} as unknown as string;",
   "export const spy = vi.fn().mockResolvedValue({});",
+  "export const intersected = {} as unknown as OperatorClient & { extra: true };",
+  "export const asserted = <OperatorClient>{};",
+  "const getTenantConfig = vi.fn().mockResolvedValue({});",
+  "export const shorthand = mockOperatorClient({ getTenantConfig });",
+  "export const byName = mockOperatorClient({ getTenantConfig: getTenantConfig });",
   "",
 ].join("\n");
 
-type Diagnostic = { code: string; labels: { span: { line: number } }[] };
-
-function lint(level: "error" | "off"): { rule: string; line: number }[] {
-  const dir = mkdtempSync(path.join(tmpdir(), "typed-operator-client-mock-"));
-  try {
-    const config = path.join(dir, ".oxlintrc.json");
-    writeFileSync(
-      config,
-      JSON.stringify({
-        plugins: [],
-        jsPlugins: [pluginPath],
-        rules: { "local/typed-operator-client-mock": level },
-      }),
-    );
-    const file = path.join(dir, "client.test.ts");
-    writeFileSync(file, fixture);
-    const result = spawnSync(oxlintBin, ["--config", config, "-f", "json", file], {
-      encoding: "utf8",
-    });
-    expect(result.error).toBeUndefined();
-    expect(result.stderr).toBe("");
-    const { diagnostics } = JSON.parse(result.stdout) as { diagnostics: Diagnostic[] };
-    return diagnostics.map((diagnostic) => ({
-      rule: diagnostic.code,
-      line: diagnostic.labels[0]?.span.line ?? 0,
-    }));
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
+function lint(level: "error" | "off") {
+  return lintWithLocalRule({
+    rule: "typed-operator-client-mock",
+    level,
+    fileName: "client.test.ts",
+    source: fixture,
+  });
 }
 
 describe("local/typed-operator-client-mock", () => {
@@ -60,6 +36,10 @@ describe("local/typed-operator-client-mock", () => {
       { rule: "local(typed-operator-client-mock)", line: 6 },
       { rule: "local(typed-operator-client-mock)", line: 7 },
       { rule: "local(typed-operator-client-mock)", line: 8 },
+      { rule: "local(typed-operator-client-mock)", line: 11 },
+      { rule: "local(typed-operator-client-mock)", line: 12 },
+      { rule: "local(typed-operator-client-mock)", line: 14 },
+      { rule: "local(typed-operator-client-mock)", line: 15 },
     ]);
   });
 

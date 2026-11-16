@@ -1,4 +1,4 @@
-// oxlint-disable local/typed-operator-client-mock -- Mocks predate mockOperatorClient.
+// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { FunctionExecution_Type } from "@tailor-platform/tailor-proto/function_resource_pb";
 import { describe, test, expect, vi } from "vitest";
 import { downloadFunctionScript, scriptNameToRegistryName } from "./function-script-download";

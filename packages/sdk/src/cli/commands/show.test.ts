@@ -1,4 +1,4 @@
-// oxlint-disable local/typed-operator-client-mock -- Mocks predate mockOperatorClient.
+// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { aroundEach, describe, expect, test, vi, type Mock } from "vitest";

@@ -1084,25 +1084,29 @@ function foundOrThrow<T>(value: T | undefined): T {
   return value;
 }
 
+type NamespacedRequest = { namespaceName?: string };
+
+function namespaceOf(request: NamespacedRequest): string {
+  return request.namespaceName ?? "";
+}
+
 function authClient(configs: WorkspaceAuthConfigs) {
   return mockOperatorClient({
     listAuthIDPConfigs: async (request) => ({
-      idpConfigs: configs.idpConfigs?.[request.namespaceName ?? ""] ?? [],
+      idpConfigs: configs.idpConfigs?.[namespaceOf(request)] ?? [],
       nextPageToken: "",
     }),
     getAuthSCIMConfig: async (request) => ({
-      scimConfig: foundOrThrow(configs.scimConfigs?.[request.namespaceName ?? ""]),
+      scimConfig: foundOrThrow(configs.scimConfigs?.[namespaceOf(request)]),
     }),
     getUserProfileConfig: async (request) => ({
-      userProfileProviderConfig: foundOrThrow(
-        configs.userProfileConfigs?.[request.namespaceName ?? ""],
-      ),
+      userProfileProviderConfig: foundOrThrow(configs.userProfileConfigs?.[namespaceOf(request)]),
     }),
     getTenantConfig: async (request) => ({
-      tenantProviderConfig: foundOrThrow(configs.tenantConfigs?.[request.namespaceName ?? ""]),
+      tenantProviderConfig: foundOrThrow(configs.tenantConfigs?.[namespaceOf(request)]),
     }),
     getAuthSCIMResources: async (request) => ({
-      scimResources: configs.scimResources?.[request.namespaceName ?? ""] ?? [],
+      scimResources: configs.scimResources?.[namespaceOf(request)] ?? [],
     }),
     listOTLPExporters: { otlpExporters: [], nextPageToken: "" },
   });

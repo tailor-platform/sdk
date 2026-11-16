@@ -12,6 +12,8 @@ type MethodImpl<K extends OperatorMethod> = (
 /** A method's mock: the response it returns to every request, or its implementation. */
 type MethodMock<K extends OperatorMethod> = Awaited<ReturnType<MethodImpl<K>>> | MethodImpl<K>;
 
+type MethodMocks<K extends OperatorMethod> = { [P in K]: MethodMock<P> };
+
 type OperatorClientMock<K extends OperatorMethod> = OperatorClient & {
   [P in K]: Mock<MethodImpl<P>>;
 };
@@ -29,9 +31,9 @@ function implementationOf(mock: unknown): (...args: never[]) => unknown {
  * @param methods - The mocked methods; the others are absent, as on a client cast from `{}`
  * @returns The client, with each mocked method as a `vi.fn` spy
  */
-export function mockOperatorClient<K extends OperatorMethod>(methods: {
-  [P in K]: MethodMock<P>;
-}): OperatorClientMock<K> {
+export function mockOperatorClient<K extends OperatorMethod>(
+  methods: MethodMocks<K>,
+): OperatorClientMock<K> {
   const spies = Object.fromEntries(
     Object.entries(methods).map(([name, mock]) => [name, vi.fn(implementationOf(mock))]),
   );

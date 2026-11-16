@@ -1,4 +1,4 @@
-// oxlint-disable local/typed-operator-client-mock -- Mocks predate mockOperatorClient.
+// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { runCommand } from "@politty/zod";
 import { CustomDomainStatus } from "@tailor-platform/tailor-proto/staticwebsite_resource_pb";
 import { describe, expect, test, vi } from "vitest";

@@ -1,4 +1,4 @@
-// oxlint-disable local/typed-operator-client-mock -- Mocks predate mockOperatorClient.
+// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";

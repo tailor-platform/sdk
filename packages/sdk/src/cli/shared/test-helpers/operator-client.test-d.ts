@@ -46,6 +46,20 @@ describe("mockOperatorClient", () => {
     );
   });
 
+  test("checks the requests of a client-streaming method", () => {
+    assertType(
+      mockOperatorClient({
+        createFunctionRegistry: async (requests) => {
+          for await (const request of requests) {
+            // @ts-expect-error A field the request does not have
+            assertType(request.functionRegistryName);
+          }
+          return {};
+        },
+      }),
+    );
+  });
+
   test("rejects a method the client does not have", () => {
     assertType(
       mockOperatorClient({

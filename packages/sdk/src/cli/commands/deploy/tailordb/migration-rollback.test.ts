@@ -1,4 +1,4 @@
-// oxlint-disable local/typed-operator-client-mock -- Mocks predate mockOperatorClient.
+// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 /**
  * A failed migration phase must restore the workspace to its prior checkpoint
  * and prior schema whenever the schema operations are reversible.

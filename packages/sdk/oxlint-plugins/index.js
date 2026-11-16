@@ -331,8 +331,10 @@ export default {
           if (type?.type === "TSTypeQuery" && type.exprName.name === "initOperatorClient") {
             return true;
           }
-          const typeArguments = type?.typeArguments ?? type?.typeParameters;
-          return (typeArguments?.params ?? []).some(namesOperatorClient);
+          if (type?.type === "TSIntersectionType" || type?.type === "TSUnionType") {
+            return type.types.some(namesOperatorClient);
+          }
+          return (type?.typeArguments?.params ?? []).some(namesOperatorClient);
         }
         function isViFn(node) {
           return (
@@ -351,12 +353,25 @@ export default {
           }
           return false;
         }
-        return {
-          TSAsExpression(node) {
-            if (namesOperatorClient(node.typeAnnotation)) {
-              context.report({ node, messageId: "cast" });
+        function initializerOf(identifier) {
+          for (let scope = context.sourceCode.getScope(identifier); scope; scope = scope.upper) {
+            const definition = scope.set.get(identifier.name)?.defs[0];
+            if (definition) {
+              return definition.node.type === "VariableDeclarator"
+                ? definition.node.init
+                : undefined;
             }
-          },
+          }
+          return undefined;
+        }
+        function checkCast(node) {
+          if (namesOperatorClient(node.typeAnnotation)) {
+            context.report({ node, messageId: "cast" });
+          }
+        }
+        return {
+          TSAsExpression: checkCast,
+          TSTypeAssertion: checkCast,
           CallExpression(node) {
             if (node.callee.type !== "Identifier" || node.callee.name !== "mockOperatorClient") {
               return;
@@ -364,7 +379,12 @@ export default {
             const [methods] = node.arguments;
             if (methods?.type !== "ObjectExpression") return;
             for (const property of methods.properties) {
-              if (property.type === "Property" && isSpy(property.value)) {
+              if (property.type !== "Property") continue;
+              const value =
+                property.value.type === "Identifier"
+                  ? initializerOf(property.value)
+                  : property.value;
+              if (isSpy(value)) {
                 context.report({ node: property.value, messageId: "spy" });
               }
             }
