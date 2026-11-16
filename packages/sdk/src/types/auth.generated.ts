@@ -221,7 +221,7 @@ export type SCIMResource = {
 export type SCIMResourceInput = SCIMResource;
 
 export type SCIMConfig = {
-  /** Machine user name for SCIM operations */
+  /** Machine user for SCIM operations, one of this Auth service's machineUsers */
   machineUserName: string;
   /** SCIM authorization configuration */
   authorization: SCIMAuthorization;
@@ -356,7 +356,7 @@ export type AuthConfigInput =
       /** SCIM provisioning configuration */
       scim?:
         | {
-            /** Machine user name for SCIM operations */
+            /** Machine user for SCIM operations, one of this Auth service's machineUsers */
             machineUserName: string;
             /** SCIM authorization configuration */
             authorization: {
@@ -1488,7 +1488,7 @@ export type AuthConfigInput =
       /** SCIM provisioning configuration */
       scim?:
         | {
-            /** Machine user name for SCIM operations */
+            /** Machine user for SCIM operations, one of this Auth service's machineUsers */
             machineUserName: string;
             /** SCIM authorization configuration */
             authorization: {
@@ -1765,7 +1765,7 @@ export type AuthConfig =
       /** SCIM provisioning configuration */
       scim?:
         | {
-            /** Machine user name for SCIM operations */
+            /** Machine user for SCIM operations, one of this Auth service's machineUsers */
             machineUserName: string;
             /** SCIM authorization configuration */
             authorization: {
@@ -2971,7 +2971,7 @@ export type AuthConfig =
       /** SCIM provisioning configuration */
       scim?:
         | {
-            /** Machine user name for SCIM operations */
+            /** Machine user for SCIM operations, one of this Auth service's machineUsers */
             machineUserName: string;
             /** SCIM authorization configuration */
             authorization: {

@@ -1143,11 +1143,10 @@ describe("assertResourcesNotInUse coverage of Platform resource references", () 
       "tailor.v1.PipelineResolver.Pipeline.invoker",
     ]);
     const NOT_CHECKED = new Set([
-      // a machine user of the hook's own Auth service, which its defineAuth must declare
+      // machine users of the hook's or SCIM config's own Auth service, which deploy requires its defineAuth to declare
       "tailor.v1.AuthHook.invoker",
-      // not checked yet: the guard reads a SCIM config for its bearer secret only
       "tailor.v1.AuthSCIMConfig.machine_user_name",
-      // telemetry routers are set up outside the SDK, which never lists them
+      // OTLP exporters are set up outside the SDK, which never lists them
       "tailor.v1.OTLPExporterApiKeyAuth.secret_value",
       "tailor.v1.OTLPExporterBearerTokenAuth.secret_value",
     ]);

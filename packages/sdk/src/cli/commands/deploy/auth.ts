@@ -339,6 +339,32 @@ export async function applyAuth(
   }
 }
 
+function assertAuthMachineUsersDefined(config: Readonly<AuthService>["config"]): void {
+  const machineUsers = Object.keys(config.machineUsers ?? {}).toSorted();
+  const missing = [
+    { field: "scim.machineUserName", machineUserName: config.scim?.machineUserName },
+    { field: "hooks.beforeLogin.invoker", machineUserName: config.hooks?.beforeLogin?.invoker },
+  ].flatMap(({ field, machineUserName }) =>
+    machineUserName === undefined || machineUsers.includes(machineUserName)
+      ? []
+      : [{ field, machineUserName }],
+  );
+  if (missing.length === 0) return;
+  throw CLIError({
+    code: "AUTH_MACHINE_USER_NOT_FOUND",
+    message: missing
+      .map(
+        ({ field, machineUserName }) =>
+          `Auth service "${config.name}" names machine user "${machineUserName}" in ${field}, but defines no machine user with that name.`,
+      )
+      .join("\n"),
+    suggestion: machineUsers.length
+      ? `Add each listed machine user to machineUsers, or name a defined one instead: ${machineUsers.join(", ")}.`
+      : "Add each listed machine user to machineUsers.",
+    context: { authNamespace: config.name, missing, machineUsers },
+  });
+}
+
 /**
  * Plan auth-related changes based on current and desired state.
  * @param context - Planning context
@@ -349,6 +375,7 @@ export async function planAuth(context: PlanContext) {
   const auths: Readonly<AuthService>[] = [];
   if (!forRemoval && application.authService) {
     await application.authService.resolveNamespaces();
+    assertAuthMachineUsersDefined(application.authService.config);
     auths.push(application.authService);
   }
   const {
