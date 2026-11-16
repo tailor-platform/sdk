@@ -405,7 +405,7 @@ scim: {
 
 - **machineUserName**: The machine user that SCIM requests run as. List it in [`machineUsers`](#machine-users) of the same `defineAuth()`, since `deploy` deletes the machine users that `machineUsers` does not list.
 - **authorization**: `"oauth2"` uses that machine user's client credentials; `"bearer"` uses a static token in the Secret Manager secret that `bearerSecret: { vaultName, secretKey }` names.
-- **resources**: Each entry maps SCIM attributes onto a TailorDB table. `deploy` accepts a `tailorDBType` that names no table, so check the names yourself.
+- **resources**: Each entry maps SCIM attributes onto a TailorDB table. `deploy` accepts a `tailorDBType` that names no table, so check the names yourself. `deploy` and `remove` stop with `SERVICE_IN_USE` instead of deleting a table while an entry still names it.
 
 Removing `scim`, or an entry of `resources`, deletes it on the next `deploy`. See the [SCIM Provisioning guide](https://docs.tailor.tech/guides/auth/scim) for attribute types, path expressions, and the endpoint URL.
 

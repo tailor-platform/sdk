@@ -79,7 +79,7 @@ type CheckedResource = {
   deletesOf: (plan: ResourceDeletePlan) => ReadonlyArray<Omit<ResourceRef, "resourceType">>;
 };
 
-function idpConfigLabel(ref: ResourceKey<ManagedResourceType>): string {
+function idpConfigLabel(ref: ResourceKey<string>): string {
   return `IdP config "${ref.name}" of Auth service "${ref.namespace}"`;
 }
 
