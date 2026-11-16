@@ -94,7 +94,11 @@ import {
   type MigrationRestrictionState,
   type RestrictedTables,
 } from "./migration-execution";
-import { assertMigrationSkipSteps, selectSkipStepsOfNamespaces } from "./migration-skip-steps";
+import {
+  assertMigrationSkipSteps,
+  formatMigrationSkipSteps,
+  selectSkipStepsOfNamespaces,
+} from "./migration-skip-steps";
 import {
   formatMaintenanceSummary,
   MaintenanceTimeline,
@@ -779,6 +783,20 @@ function optionalToRequiredSuggestion(context: TailorDBPlanResult["context"]): s
   );
 }
 
+function completedStepsRequiredFieldSuggestion(migration: PendingMigration): string {
+  const steps = migration.scriptForm?.kind === "steps" ? migration.scriptForm.order : [];
+  const skipSteps = assertDefined(
+    formatMigrationSkipSteps(new Map([[migration.namespace, steps]])),
+    `Migration ${migration.namespace}/${formatMigrationNumber(migration.number)} kept a step run without steps.`,
+  );
+  return (
+    "Every step completed, so the next deploy retries only the schema changes and runs the steps again only when you add, remove, or rename a step, change the order the steps run in, or the earlier run is no longer available. " +
+    "Editing a completed step has no effect. " +
+    "To fill in the records without a value, rename the step that should fill them and update the `dependsOn` lists that name it, or add a step that fills them. " +
+    `Every step then runs again from the beginning; to keep the others from running twice, pass --migration-skip-steps ${skipSteps} to that deploy, leaving out a renamed step, which cannot be skipped.`
+  );
+}
+
 interface MigrationApplyInput {
   client: OperatorClient;
   changeSet: TailorDBChangeSet;
@@ -1316,7 +1334,7 @@ async function runPostMigrationPhase(
         attemptedTables,
         gqlPermissionUndo,
       );
-      throw error;
+      handleOptionalToRequiredError(error, completedStepsRequiredFieldSuggestion(migration));
     }
     const failure = await rollbackMigration(flow, attempt, restoration, runLog, error, true);
     if (isRollbackSkippedWithRecord(failure)) {
