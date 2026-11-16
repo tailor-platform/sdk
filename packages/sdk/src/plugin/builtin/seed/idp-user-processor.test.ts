@@ -354,7 +354,7 @@ describe("generateIdpSeedScriptCode", () => {
   describe("concurrent processing", () => {
     const settle = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-    test("rejects a row whose name repeats an earlier row without calling the IdP for it", async () => {
+    test("sends no row of a chunk to the IdP when a name repeats within it", async () => {
       const calls = stubIdp({});
       const main = await loadSeedMain(generateIdpSeedScriptCode("test-ns"));
 
@@ -364,12 +364,12 @@ describe("generateIdpSeedScriptCode", () => {
         total: 13,
       });
 
-      expect(calls.created.map((u) => u.name)).toEqual(["a", "b"]);
-      expect(result).toMatchObject({ success: false, processed: 2, created: 2 });
+      expect(calls.operations).toEqual([]);
+      expect(result).toMatchObject({ success: false, processed: 0, created: 0 });
       expect(result.errors).toEqual(["Row 13 (a): duplicate of row 11"]);
     });
 
-    test("does not look up or update a repeated name when upsert is enabled", async () => {
+    test("does not look up or update any user when a name repeats and upsert is enabled", async () => {
       const calls = stubIdp({ a: { id: "a-id" } });
       const main = await loadSeedMain(generateIdpSeedScriptCode("test-ns"));
 
@@ -381,9 +381,29 @@ describe("generateIdpSeedScriptCode", () => {
         upsert: true,
       });
 
-      expect(calls.lookups).toEqual(["a"]);
-      expect(calls.updated).toEqual([{ id: "a-id", password: "p1" }]);
+      expect(calls.operations).toEqual([]);
       expect(result.errors).toEqual(["Row 2 (a): duplicate of row 1"]);
+    });
+
+    test("reports a missing name on every row instead of calling it a duplicate", async () => {
+      (globalThis as { tailor?: unknown }).tailor = {
+        idp: {
+          Client: class {
+            async createUser(input: { name?: string }) {
+              if (typeof input.name !== "string") throw new Error("name required");
+              return { id: input.name };
+            }
+          },
+        },
+      };
+      const main = await loadSeedMain(generateIdpSeedScriptCode("test-ns"));
+
+      const result = await main({ users: [{ password: "p1" }, { password: "p2" }] as SeedUser[] });
+
+      expect(result.errors).toEqual([
+        "Row 1 (undefined): name required",
+        "Row 2 (undefined): name required",
+      ]);
     });
 
     test("runs up to the concurrency limit of createUser calls at once", async () => {

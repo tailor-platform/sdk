@@ -316,6 +316,26 @@ async function hookIdpUserRows(
   });
 }
 
+function assertUniqueIdpUserNames(rows: SeedData[string]): void {
+  const firstRowByName = new Map<string, number>();
+  const duplicates: string[] = [];
+  rows.forEach((row, index) => {
+    if (typeof row.name !== "string") return;
+    const first = firstRowByName.get(row.name);
+    if (first === undefined) {
+      firstRowByName.set(row.name, index);
+    } else {
+      duplicates.push(`Row ${index + 1} (${row.name}): duplicate of row ${first + 1}`);
+    }
+  });
+  if (duplicates.length > 0) {
+    throw new Error(
+      `_User has rows that repeat a name, so nothing was applied. ` +
+        `Remove the repeated rows and run the command again.\n${duplicates.join("\n")}`,
+    );
+  }
+}
+
 async function seedIdpUser(
   params: SeedIdpUserParams,
 ): Promise<{ success: boolean; processed: number; transportError?: unknown }> {
@@ -640,6 +660,7 @@ export const seedApplyCommand = defineAppCommand({
           loadSeedData(dataDirs, ["_User"], { keyField: "name" })._User,
         )
       : [];
+    assertUniqueIdpUserNames(idpUserRows);
 
     const appInfo = await show({
       configPath: args.config,

@@ -78,17 +78,22 @@ export function generateIdpSeedScriptCode(idpNamespace: string): string {
       const offset = typeof input.offset === "number" ? input.offset : 0;
       const total = typeof input.total === "number" ? input.total : input.users.length;
 
-      const firstRowByName = new Map();
       const outcomes = new Array(input.users.length);
-      const indexes = [];
+      const fail = (i, message) => {
+        outcomes[i] = { error: message };
+        console.error(\`[_User] Row \${offset + i + 1} failed: \${message}\`);
+      };
+
+      const firstRowByName = new Map();
       input.users.forEach((user, i) => {
+        if (typeof user.name !== "string") return;
         if (firstRowByName.has(user.name)) {
-          outcomes[i] = { error: \`duplicate of row \${offset + firstRowByName.get(user.name) + 1}\` };
+          fail(i, \`duplicate of row \${offset + firstRowByName.get(user.name) + 1}\`);
         } else {
           firstRowByName.set(user.name, i);
-          indexes.push(i);
         }
       });
+      const indexes = outcomes.some(Boolean) ? [] : input.users.map((_, i) => i);
 
       await mapWithConcurrency(indexes, ${String(IDP_USER_CONCURRENCY)}, async (i) => {
         try {
@@ -132,14 +137,13 @@ export function generateIdpSeedScriptCode(idpNamespace: string): string {
           outcomes[i] = { status };
           console.log(\`[_User] \${offset + i + 1}/\${total}: \${input.users[i].name}\`);
         } catch (error) {
-          outcomes[i] = { error: error instanceof Error ? error.message : String(error) };
+          fail(i, error instanceof Error ? error.message : String(error));
         }
       });
 
       outcomes.forEach((outcome, i) => {
         if (outcome.error !== undefined) {
           errors.push(\`Row \${offset + i + 1} (\${input.users[i].name}): \${outcome.error}\`);
-          console.error(\`[_User] Row \${offset + i + 1} failed: \${outcome.error}\`);
           return;
         }
         processed++;

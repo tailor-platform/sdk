@@ -331,6 +331,25 @@ describe("seedApplyCommand", () => {
     expect(workflow.runScript).not.toHaveBeenCalled();
   });
 
+  test("rejects _User rows that repeat a name before truncating or applying anything", async () => {
+    jsonl.loadSeedData.mockImplementation((_dataDirs: string[], typeNames: string[]) =>
+      Object.fromEntries(
+        typeNames.map((typeName) => [
+          typeName,
+          typeName === "_User" ? [{ name: "Ada" }, { name: "Bob" }, { name: "Ada" }] : [],
+        ]),
+      ),
+    );
+
+    const result = await runApplyCommand(["--machine-user", "manager", "--truncate", "--yes"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(String(result.error)).toContain("Row 3 (Ada): duplicate of row 1");
+    expect(sdk.show).not.toHaveBeenCalled();
+    expect(sdk.truncate).not.toHaveBeenCalled();
+    expect(workflow.runScript).not.toHaveBeenCalled();
+  });
+
   test("rejects an unknown dataset even when nothing is left to seed", async () => {
     datasets.selectDatasets.mockImplementation(() => {
       throw new Error('Unknown dataset "typo".');
