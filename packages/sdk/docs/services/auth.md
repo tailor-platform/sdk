@@ -354,9 +354,9 @@ Client names must be 3 to 63 lowercase letters, digits, or hyphens, starting and
 
 - `confidential` - Server-side applications that can keep the client secret
 - `public` - Applications that cannot keep a secret, such as mobile apps and single-page apps
-- `browser` - Single-page apps that receive tokens in HTTP-only cookies. `requireDpop` cannot be `true` for this type.
+- `browser` - Single-page apps that receive tokens in HTTP-only cookies
 
-To choose between `public` and `browser` for a single-page app, see [OAuth2 Client Selection for SPAs](https://docs.tailor.tech/guides/auth/spa-oauth2-client).
+A `browser` client cannot set `requireDpop: true`. To choose between `public` and `browser` for a single-page app, see [OAuth2 Client Selection for SPAs](https://docs.tailor.tech/guides/auth/spa-oauth2-client).
 
 **grantTypes**: Supported OAuth 2.0 grant types:
 
@@ -379,12 +379,12 @@ tailor oauth2client get <name>
 
 ## Identity Provider
 
-`idProvider` sets the identity provider that users log in through. An Auth service takes one, and its `kind` selects the protocol:
+`idProvider` sets the identity provider that authenticates users. An Auth service takes one, and its `kind` selects the protocol:
 
 - `BuiltInIdP` - The [built-in IdP](./idp.md), written as `idp.provider()`
 - `OIDC` - An external OpenID Connect provider, such as Okta or Microsoft Entra ID
-- `SAML` - An external SAML provider. Set one of `metadataURL` and `rawMetadata`.
-- `IDToken` - An external provider whose ID tokens a client exchanges for access tokens, for server-to-server calls
+- `SAML` - An external SAML provider
+- `IDToken` - An external provider whose ID tokens clients exchange for access tokens without an interactive login, such as in server-to-server calls
 
 ```typescript
 idProvider: idp.provider("my-provider", "my-client"),
@@ -407,9 +407,9 @@ idProvider: {
 },
 ```
 
-`clientSecret` names a [Secret Manager](./secret.md) secret by `vaultName` and `secretKey`. An `IDToken` provider takes `clientID` and `providerURL` like `OIDC`, without `clientSecret`. See [Register Identity provider with Auth service](https://docs.tailor.tech/tutorials/setup-auth/register-identity-provider) for each kind's settings, and the [Okta](https://docs.tailor.tech/guides/auth/integration/okta) and other integration guides for provider-side setup.
+`clientSecret` names a [Secret Manager](./secret.md) secret by `vaultName` and `secretKey`. A `SAML` provider sets either `metadataURL` or `rawMetadata`, not both. An `IDToken` provider takes `clientID` and `providerURL` like `OIDC`, without `clientSecret`. See [Register Identity provider with Auth service](https://docs.tailor.tech/tutorials/setup-auth/register-identity-provider) for each kind's settings, and the [Okta](https://docs.tailor.tech/guides/auth/integration/okta) and other integration guides for provider-side setup.
 
-An application that references this Auth service as `external` authenticates with the provider that `name` names, the first argument of `idp.provider()`. After a rename, it switches to the new name only in a `deploy` that also includes this config, so `deploy` stops with `SERVICE_IN_USE` instead of deleting the old provider while such an application is left out. Deploy them together or keep the name.
+An application that references this Auth service as `external` authenticates with the provider named by `idProvider.name` (the first argument of `idp.provider()`). After a rename, it switches to the new name only in a `deploy` that also includes this config, so `deploy` stops with `SERVICE_IN_USE` instead of deleting the old provider while such an application is left out. Deploy them together or keep the name.
 
 ## SCIM Provisioning
 
