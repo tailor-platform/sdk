@@ -155,6 +155,7 @@ vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => {
 
 import { reconstructSnapshotFromMigrations } from "#/cli/commands/tailordb/migrate/snapshot";
 import { protoGqlPermission } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
+import { requiredFieldNullValuesError } from "#/cli/commands/tailordb/migrate/test-helpers/platform-errors";
 import { CLIError } from "#/cli/shared/errors";
 import { tailorDBPlanResultContext } from "../test-helpers/plan-results";
 import * as migrationModule from "./migration";
@@ -497,6 +498,22 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       },
     ];
     return planResult;
+  }
+
+  function failPostPhase(
+    client: OperatorClient,
+    failure: Error = new Error("post-phase constraint violation"),
+  ): unknown[] {
+    const goodsReceiptWrites: unknown[] = [];
+    vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((request as any)?.tailordbType?.name !== "GoodsReceipt") return {} as never;
+      goodsReceiptWrites.push(structuredClone(request));
+      // Restriction, Pre-phase, then the Post-phase write that fails.
+      if (goodsReceiptWrites.length === 3) throw failure;
+      return {} as never;
+    });
+    return goodsReceiptWrites;
   }
 
   function lastGoodsReceiptSettings(client: OperatorClient) {
@@ -2077,19 +2094,6 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       await runTest();
     });
 
-    function failPostPhase(client: OperatorClient): unknown[] {
-      const goodsReceiptWrites: unknown[] = [];
-      vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if ((request as any)?.tailordbType?.name !== "GoodsReceipt") return {} as never;
-        goodsReceiptWrites.push(structuredClone(request));
-        // Restriction, Pre-phase, then the Post-phase write that fails.
-        if (goodsReceiptWrites.length === 3) throw new Error("post-phase constraint violation");
-        return {} as never;
-      });
-      return goodsReceiptWrites;
-    }
-
     test("removes the run's resources once its checkpoint is committed", async () => {
       const client = createMockClient();
       const planResult = withInputs(createMockPlanResult());
@@ -2317,19 +2321,17 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
           { ...mkAddFieldMigration(1, "GoodsReceipt", "note"), scriptForm: rollbackForm },
         ]);
         vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
-        const goodsReceiptWrites: unknown[] = [];
-        vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          if ((request as any)?.tailordbType?.name !== "GoodsReceipt") return {} as never;
-          goodsReceiptWrites.push(structuredClone(request));
-          if (goodsReceiptWrites.length === 3) throw new Error("post-phase constraint violation");
-          return {} as never;
-        });
+        const goodsReceiptWrites = failPostPhase(client, requiredFieldNullValuesError());
 
-        await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
-          "post-phase constraint violation",
+        const error = await applyTailorDB(client, planResult, "create-update").catch(
+          (caught: unknown) => caught,
         );
 
+        expect(errorToJson(error).error).toMatchObject({
+          code: "MIGRATION_ROLLED_BACK",
+          suggestion: expect.stringContaining("Please check your migration script."),
+        });
+        expect(errorToJson(error).error.suggestion).not.toContain("--migration-skip-steps");
         expect(goodsReceiptWrites[3]).not.toEqual(goodsReceiptWrites[1]);
         expect(migrationModule.clearMigrationInProgress).toHaveBeenCalledWith(
           client,
@@ -2678,14 +2680,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
           vi.mocked(client.getMetadata).mockResolvedValue({
             metadata: { labels: { "sdk-migration": "m0000", ...extraLabels } },
           } as never);
-          const goodsReceiptWrites: unknown[] = [];
-          vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            if ((request as any)?.tailordbType?.name !== "GoodsReceipt") return {} as never;
-            goodsReceiptWrites.push(structuredClone(request));
-            if (goodsReceiptWrites.length === 3) throw new Error("post-phase constraint violation");
-            return {} as never;
-          });
+          const goodsReceiptWrites = failPostPhase(client);
 
           const error = await applyTailorDB(client, planResult, "create-update").catch(
             (caught: unknown) => caught,
@@ -3123,20 +3118,18 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         { ...mkAddFieldMigration(1, "GoodsReceipt", "note"), scriptForm: stepsForm },
       ]);
       vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
-      const goodsReceiptWrites: unknown[] = [];
-      vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if ((request as any)?.tailordbType?.name !== "GoodsReceipt") return {} as never;
-        goodsReceiptWrites.push(structuredClone(request));
-        // Restriction, Pre-phase, then the Post-phase write that fails.
-        if (goodsReceiptWrites.length === 3) throw new Error("post-phase constraint violation");
-        return {} as never;
-      });
+      const goodsReceiptWrites = failPostPhase(client, requiredFieldNullValuesError());
 
-      await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
-        "post-phase constraint violation",
+      const error = await applyTailorDB(client, planResult, "create-update").catch(
+        (caught: unknown) => caught,
       );
 
+      expect(errorToJson(error).error).toMatchObject({
+        code: "TAILORDB_REQUIRED_FIELD_HAS_NULL_VALUES",
+        suggestion: expect.stringMatching(
+          /Editing a completed step has no effect\..*--migration-skip-steps test-ns\/backfill,test-ns\/recompute /,
+        ),
+      });
       // The Pre-phase schema is written again, so the next deploy finds the
       // shape the in-progress migration expects.
       expect(goodsReceiptWrites).toHaveLength(4);
@@ -3182,22 +3175,45 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
           { ...mkAddFieldMigration(1, "GoodsReceipt", "note"), scriptForm: singleStep },
         ]);
         vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
-        const goodsReceiptWrites: unknown[] = [];
-        vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          if ((request as any)?.tailordbType?.name !== "GoodsReceipt") return {} as never;
-          goodsReceiptWrites.push(structuredClone(request));
-          if (goodsReceiptWrites.length === 3) throw new Error("post-phase constraint violation");
-          return {} as never;
-        });
+        const goodsReceiptWrites = failPostPhase(client, requiredFieldNullValuesError());
 
-        await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
-          "post-phase constraint violation",
+        const error = await applyTailorDB(client, planResult, "create-update").catch(
+          (caught: unknown) => caught,
         );
 
+        expect(errorToJson(error).error).toMatchObject({
+          code: "TAILORDB_REQUIRED_FIELD_HAS_NULL_VALUES",
+          suggestion: expect.stringContaining("Please check your migration script."),
+        });
+        expect(errorToJson(error).error.suggestion).not.toContain("--migration-skip-steps");
         // The schema goes back to the state before the migration, as for a main script;
         // the Pre-phase schema is not written again, which only a resumable run needs.
         expect(goodsReceiptWrites[3]).not.toEqual(goodsReceiptWrites[1]);
+        expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
+      });
+
+      test("says completed steps do not run again when the post-phase of a resumed run fails", async () => {
+        const client = createMockClient();
+        const planResult = withInputs(createUpdatePlanResult());
+        planResult.context.pendingMigrations = mockPendingMigrations(
+          [{ ...mkAddFieldMigration(1, "GoodsReceipt", "note"), scriptForm: singleStep }],
+          () => ({
+            number: 0,
+            historyId: null,
+            inProgress: { number: 1, executionId: "exec-1", kind: "steps" },
+          }),
+        );
+        vi.mocked(migrationModule.executeMigrations).mockResolvedValue(undefined);
+        failPostPhase(client, requiredFieldNullValuesError());
+
+        const error = await applyTailorDB(client, planResult, "create-update").catch(
+          (caught: unknown) => caught,
+        );
+
+        expect(errorToJson(error).error).toMatchObject({
+          code: "TAILORDB_REQUIRED_FIELD_HAS_NULL_VALUES",
+          suggestion: expect.stringContaining("--migration-skip-steps test-ns/backfill"),
+        });
         expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
       });
     });
