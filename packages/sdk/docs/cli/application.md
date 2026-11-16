@@ -191,8 +191,10 @@ Each config's `files` patterns (see [Service Configuration](../configuration.md#
 - An Auth service that an AI gateway sets as its `authNamespace`
 - A machine user that an executor or resolver uses as its `invoker`
 - A TailorDB table, resolver, IdP, Auth service, or workflow that an executor's trigger names, and a workflow that an executor starts
+- An application that an executor's `graphql` operation targets: the one its `appName` names, or the executor's own application without `appName`
+- A Secret Manager secret that a `webhook` operation's `headers` name, or that an Auth service's OIDC `idProvider` names as `clientSecret` or its SCIM config names as `bearerSecret`, including each secret of a vault the run deletes
 
-An application in the `deploy` counts by its config, and any other application by what the workspace has. A disabled executor counts too. The `invoker` passed to `workflow.start()` is not checked. For `deploy`, keep the resource in the config that defines it, or deploy the applications that use it so that they stop using it, first or in the same `deploy`. For `remove`, first remove those applications or deploy them so that they stop using it. An executor, resolver, or AI gateway listed without an application is not deployed by the SDK, so change or delete it outside the SDK.
+An application in the `deploy` counts by its config, and any other application by what the workspace has. A disabled executor counts too. The `invoker` passed to `workflow.start()`, and the secrets and applications that function code reads or queries, are not checked. For `deploy`, keep the resource in the config that defines it, or deploy the applications that use it so that they stop using it, first or in the same `deploy`. For `remove`, first remove those applications or deploy them so that they stop using it. An executor, resolver, AI gateway, or Auth service listed without an application is not deployed by the SDK, so change or delete it outside the SDK.
 
 **Migration Handling (Beta):**
 

@@ -364,6 +364,8 @@ createExecutor({
 });
 ```
 
+`appName` names the application whose GraphQL API the operation calls; without it, the operation calls the executor's own application. `deploy` and `remove` stop with `SERVICE_IN_USE` instead of deleting an application that an executor's `graphql` operation still targets.
+
 ### Workflow Operation
 
 Trigger workflows from executors. See [Workflow documentation](./workflow.md) for how to define workflows.

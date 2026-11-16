@@ -1153,6 +1153,29 @@ export async function listAuthMachineUsersTolerant(
 }
 
 /**
+ * List every IdP config of an auth namespace, treating a namespace that does not exist yet as empty.
+ * @param client - Operator client
+ * @param workspaceId - Workspace to query
+ * @param namespaceName - Auth namespace to list IdP configs of
+ * @returns IdP configs of the namespace
+ */
+export async function listAuthIDPConfigsTolerant(
+  client: OperatorClient,
+  workspaceId: string,
+  namespaceName: string,
+) {
+  return await fetchAllTolerant(async (pageToken, pageSize) => {
+    const { idpConfigs, nextPageToken } = await client.listAuthIDPConfigs({
+      workspaceId,
+      namespaceName,
+      pageToken,
+      pageSize,
+    });
+    return [idpConfigs, nextPageToken];
+  });
+}
+
+/**
  * Fetch a single resource, treating NotFound as an absent value.
  * @template T
  * @param fn - Resource getter

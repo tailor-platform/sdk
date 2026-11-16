@@ -1,16 +1,26 @@
 import { Subgraph_ServiceType } from "@tailor-platform/tailor-proto/application_resource_pb";
 import { PipelineResolverView } from "@tailor-platform/tailor-proto/pipeline_pb";
 import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
-import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
+import {
+  fetchAllTolerant,
+  listAuthIDPConfigsTolerant,
+  type OperatorClient,
+} from "#/cli/shared/client";
 import { CLIError } from "#/cli/shared/errors";
 import { protoSubgraph } from "./application";
+import { authSCIMConfigName, getAuthSCIMConfigOrNull } from "./auth";
 import { sdkNameLabelKey } from "./label";
 import type { PlannedDeployment } from "./apply-phases";
 import type { ManagedResourceType } from "./managed-resource-type";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { AuthInvokerSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
+import type {
+  AuthIDPConfigSchema,
+  AuthInvokerSchema,
+  AuthSCIMConfigSchema,
+} from "@tailor-platform/tailor-proto/auth_resource_pb";
 import type { ExecutorExecutorSchema } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import type { PipelineResolverSchema } from "@tailor-platform/tailor-proto/pipeline_resource_pb";
+import type { SecretValueSchema } from "@tailor-platform/tailor-proto/secret_manager_resource_pb";
 
 type ResourceDeletePlan = Pick<
   PlannedDeployment,
@@ -23,6 +33,7 @@ type ResourceDeletePlan = Pick<
   | "executor"
   | "aiGateway"
   | "workflow"
+  | "secretManager"
 >;
 
 type CheckedResourceType = Extract<
@@ -35,6 +46,8 @@ type CheckedResourceType = Extract<
   | "tailordb.type"
   | "pipeline.resolver"
   | "workflow"
+  | "application"
+  | "secret.secret"
 >;
 
 type ResourceKey<T extends ManagedResourceType> = {
@@ -95,11 +108,23 @@ const CHECKED_RESOURCES: Record<CheckedResourceType, CheckedResource> = {
     label: ({ name }) => `Workflow "${name}"`,
     deletesOf: (plan) => plan.workflow.changeSet.deletes,
   },
+  application: {
+    label: ({ name }) => `Application "${name}"`,
+    deletesOf: (plan) => plan.app.deletes,
+  },
+  "secret.secret": {
+    label: ({ namespace, name }) => `Secret "${name}" in vault "${namespace}"`,
+    deletesOf: (plan) =>
+      plan.secretManager.secretChangeSet.deletes.map(({ vaultName, secretName }) => ({
+        namespace: vaultName,
+        name: secretName,
+      })),
+  },
 };
 
 type UserResourceType = Extract<
   ManagedResourceType,
-  "executor" | "pipeline.resolver" | "aigateway"
+  "executor" | "pipeline.resolver" | "aigateway" | "auth.idp_config" | "auth.scim"
 >;
 
 type ResourceUser = ResourceKey<UserResourceType>;
@@ -108,6 +133,8 @@ const USER_LABELS: Record<UserResourceType, (user: ResourceUser) => string> = {
   executor: ({ name }) => `executor "${name}"`,
   "pipeline.resolver": ({ namespace, name }) => `resolver "${name}" in namespace "${namespace}"`,
   aigateway: ({ name }) => `AI gateway "${name}"`,
+  "auth.idp_config": ({ namespace, name }) => `IdP config "${name}" of Auth service "${namespace}"`,
+  "auth.scim": ({ namespace }) => `SCIM config of Auth service "${namespace}"`,
 };
 
 type ResourceUse = ResourceRef & {
@@ -127,7 +154,7 @@ const IN_USE_SUGGESTIONS: Record<ResourceDeletingCommand, string> = {
 };
 
 const UNMANAGED_USER_SUGGESTION =
-  "An executor, resolver, or AI gateway listed without an application is not deployed by the SDK, so change or delete it outside the SDK.";
+  "An executor, resolver, AI gateway, or Auth service listed without an application is not deployed by the SDK, so change or delete it outside the SDK.";
 
 const SUBGRAPH_RESOURCE_TYPES = new Map<Subgraph_ServiceType, CheckedResourceType>([
   [Subgraph_ServiceType.TAILORDB, "tailordb.service"],
@@ -194,27 +221,50 @@ type FinalUser<T> = {
   application: string | undefined;
 };
 
+type UserName = Pick<FinalUser<unknown>, "namespace" | "name">;
+
+function userKey(user: UserName): string {
+  return JSON.stringify([user.namespace ?? "", user.name]);
+}
+
 function finalUsers<T>(
   planned: ReadonlyArray<FinalUser<T>>,
-  deleted: ReadonlyArray<{ name: string }>,
-  recorded: ReadonlyArray<
-    [string, { resource: T; allLabels?: Record<string, string> } | undefined]
-  >,
+  deleted: ReadonlyArray<UserName>,
+  recorded: ReadonlyArray<FinalUser<T>>,
 ): FinalUser<T>[] {
-  const rewritten = new Set([...planned, ...deleted].map(({ name }) => name));
+  const rewritten = new Set([...planned, ...deleted].map(userKey));
   const kept = new Map(
-    recorded.flatMap(([name, entry]) =>
-      entry && !rewritten.has(name)
-        ? [
-            [
-              name,
-              { resource: entry.resource, name, application: entry.allLabels?.[sdkNameLabelKey] },
-            ],
-          ]
-        : [],
-    ),
+    recorded.filter((user) => !rewritten.has(userKey(user))).map((user) => [userKey(user), user]),
   );
   return [...planned, ...kept.values()];
+}
+
+function labelledUsers<T>(
+  records: ReadonlyArray<[string, { resource: T; allLabels?: Record<string, string> } | undefined]>,
+): FinalUser<T>[] {
+  return records.flatMap(([name, entry]) =>
+    entry
+      ? [{ resource: entry.resource, name, application: entry.allLabels?.[sdkNameLabelKey] }]
+      : [],
+  );
+}
+
+function usesOf<T>(
+  users: ReadonlyArray<FinalUser<T>>,
+  resourceType: UserResourceType,
+  refsOf: (resource: T) => ResourceRef[],
+): ResourceUse[] {
+  return users.flatMap((user) =>
+    refsOf(user.resource).map((ref) => ({
+      ...ref,
+      ...(user.application ? { application: user.application } : {}),
+      usedBy: {
+        resourceType,
+        ...(user.namespace === undefined ? {} : { namespace: user.namespace }),
+        name: user.name,
+      },
+    })),
+  );
 }
 
 function invokerRefs(
@@ -228,6 +278,12 @@ function invokerRefs(
           name: invoker.machineUserName,
         },
       ]
+    : [];
+}
+
+function secretRefs(secret: MessageInitShape<typeof SecretValueSchema> | undefined): ResourceRef[] {
+  return secret
+    ? [{ resourceType: "secret.secret", namespace: secret.vaultName, name: secret.secretKey ?? "" }]
     : [];
 }
 
@@ -265,7 +321,10 @@ function executorRefs(executor: MessageInitShape<typeof ExecutorExecutorSchema>)
   const target = executor.targetConfig?.config;
   switch (target?.case) {
     case "function":
+      refs.push(...invokerRefs(target.value.invoker));
+      break;
     case "tailorGraphql":
+      refs.push({ resourceType: "application", name: target.value.appName ?? "" });
       refs.push(...invokerRefs(target.value.invoker));
       break;
     case "workflow":
@@ -273,6 +332,11 @@ function executorRefs(executor: MessageInitShape<typeof ExecutorExecutorSchema>)
       refs.push(...invokerRefs(target.value.invoker));
       break;
     case "webhook":
+      refs.push(...secretRefs(target.value.secret));
+      for (const header of target.value.headers ?? []) {
+        if (header.value?.case === "secretValue") refs.push(...secretRefs(header.value.value));
+      }
+      break;
     case undefined:
       break;
   }
@@ -287,17 +351,14 @@ function executorUses(deployments: ReadonlyArray<ResourceDeletePlan>): ResourceU
       application: application.name,
     })),
   );
-  return finalUsers<MessageInitShape<typeof ExecutorExecutorSchema>>(
+  const executors = finalUsers<MessageInitShape<typeof ExecutorExecutorSchema>>(
     planned,
     deployments.flatMap(({ executor }) => executor.changeSet.deletes),
-    deployments.flatMap(({ executor }) => Object.entries(executor.existingExecutors)),
-  ).flatMap(({ resource, name, application }) =>
-    executorRefs(resource).map((ref) => ({
-      ...ref,
-      ...(application ? { application } : {}),
-      usedBy: { resourceType: "executor" as const, name },
-    })),
+    labelledUsers(
+      deployments.flatMap(({ executor }) => Object.entries(executor.existingExecutors)),
+    ),
   );
+  return usesOf(executors, "executor", executorRefs);
 }
 
 function aiGatewayUses(deployments: ReadonlyArray<ResourceDeletePlan>): ResourceUse[] {
@@ -308,34 +369,26 @@ function aiGatewayUses(deployments: ReadonlyArray<ResourceDeletePlan>): Resource
       application: application.name,
     })),
   );
-  return finalUsers<{ authNamespace?: string }>(
+  const gateways = finalUsers<{ authNamespace?: string }>(
     planned,
     deployments.flatMap(({ aiGateway }) => aiGateway.changeSet.deletes),
-    deployments.flatMap(({ aiGateway }) => Object.entries(aiGateway.existingGateways)),
-  ).flatMap(({ resource, name, application }) =>
-    resource.authNamespace
-      ? [
-          {
-            resourceType: "auth.service" as const,
-            name: resource.authNamespace,
-            ...(application ? { application } : {}),
-            usedBy: { resourceType: "aigateway" as const, name },
-          },
-        ]
-      : [],
+    labelledUsers(
+      deployments.flatMap(({ aiGateway }) => Object.entries(aiGateway.existingGateways)),
+    ),
+  );
+  return usesOf(gateways, "aigateway", (gateway) =>
+    gateway.authNamespace ? [{ resourceType: "auth.service", name: gateway.authNamespace }] : [],
   );
 }
 
-type ResolverUsesParams = {
+type WorkspaceUsesParams = {
   deployments: ReadonlyArray<ResourceDeletePlan>;
   client: OperatorClient;
   workspaceId: string;
 };
 
-async function resolverUses(params: ResolverUsesParams): Promise<ResourceUse[]> {
+async function resolverUses(params: WorkspaceUsesParams): Promise<ResourceUse[]> {
   const { deployments, client, workspaceId } = params;
-  const resolverKey = (namespace: string | undefined, name: string) =>
-    refKey({ resourceType: "pipeline.resolver", namespace, name });
   const planned = deployments.flatMap(({ application, pipeline }) =>
     [...pipeline.changeSet.resolver.creates, ...pipeline.changeSet.resolver.updates].map(
       (entry) => ({
@@ -346,27 +399,17 @@ async function resolverUses(params: ResolverUsesParams): Promise<ResourceUse[]> 
       }),
     ),
   );
-  const rewritten = new Set([
-    ...planned.map(({ namespace, name }) => resolverKey(namespace, name)),
-    ...deployments.flatMap(({ pipeline }) =>
-      pipeline.changeSet.resolver.deletes.map(({ name, request }) =>
-        resolverKey(request.namespaceName, name),
-      ),
-    ),
-  ]);
   const deletedNamespaces = new Set(
     deployments.flatMap(({ pipeline }) =>
       pipeline.changeSet.service.deletes.map(({ name }) => name),
     ),
   );
-  const kept = deployments.flatMap(({ application, pipeline }) =>
+  const runResolvers = deployments.flatMap(({ application, pipeline }) =>
     [...pipeline.existingResolvers].flatMap(([namespace, { existingResolverDetails }]) =>
       deletedNamespaces.has(namespace)
         ? []
         : [...existingResolverDetails].flatMap(([name, resource]) =>
-            resource && !rewritten.has(resolverKey(namespace, name))
-              ? [{ resource, name, namespace, application: application.name }]
-              : [],
+            resource ? [{ resource, name, namespace, application: application.name }] : [],
           ),
     ),
   );
@@ -398,20 +441,95 @@ async function resolverUses(params: ResolverUsesParams): Promise<ResourceUse[]> 
       }));
     }),
   );
-  const resolvers: FinalUser<MessageInitShape<typeof PipelineResolverSchema>>[] = [
-    ...planned,
-    ...kept,
-    ...others.flat(),
-  ];
-  return resolvers.flatMap(({ resource, name, namespace, application }) =>
-    (resource.pipelines ?? [])
-      .flatMap((step) => invokerRefs(step.invoker))
-      .map((ref) => ({
-        ...ref,
-        ...(application ? { application } : {}),
-        usedBy: { resourceType: "pipeline.resolver" as const, namespace, name },
+  const resolvers = finalUsers<MessageInitShape<typeof PipelineResolverSchema>>(
+    planned,
+    deployments.flatMap(({ pipeline }) =>
+      pipeline.changeSet.resolver.deletes.map(({ name, request }) => ({
+        namespace: request.namespaceName,
+        name,
       })),
+    ),
+    [...runResolvers, ...others.flat()],
   );
+  return usesOf(resolvers, "pipeline.resolver", (resolver) =>
+    (resolver.pipelines ?? []).flatMap((step) => invokerRefs(step.invoker)),
+  );
+}
+
+async function authConfigUses(params: WorkspaceUsesParams): Promise<ResourceUse[]> {
+  const { deployments, client, workspaceId } = params;
+  const deletedServices = new Set(
+    deployments.flatMap(({ auth }) => auth.changeSet.service.deletes.map(({ name }) => name)),
+  );
+  const services = new Map(
+    deployments
+      .flatMap(({ auth }) => Object.entries(auth.existingServices))
+      .filter(([namespace]) => !deletedServices.has(namespace)),
+  );
+  const recorded = await Promise.all(
+    [...services].map(async ([namespace, service]) => {
+      const application = service?.allLabels?.[sdkNameLabelKey];
+      const [idpConfigs, scimConfig] = await Promise.all([
+        listAuthIDPConfigsTolerant(client, workspaceId, namespace),
+        getAuthSCIMConfigOrNull(client, workspaceId, namespace),
+      ]);
+      return {
+        idpConfigs: idpConfigs.map((resource) => ({
+          resource,
+          name: resource.name,
+          namespace,
+          application,
+        })),
+        scimConfigs: scimConfig
+          ? [{ resource: scimConfig, name: authSCIMConfigName(namespace), namespace, application }]
+          : [],
+      };
+    }),
+  );
+  const idpConfigs = finalUsers<MessageInitShape<typeof AuthIDPConfigSchema>>(
+    deployments.flatMap(({ application, auth }) =>
+      [...auth.changeSet.idpConfig.creates, ...auth.changeSet.idpConfig.updates].map((entry) => ({
+        resource: entry.request.idpConfig ?? {},
+        name: entry.name,
+        namespace: entry.request.namespaceName,
+        application: application.name,
+      })),
+    ),
+    deployments.flatMap(({ auth }) =>
+      auth.changeSet.idpConfig.deletes.map(({ name, request }) => ({
+        namespace: request.namespaceName,
+        name,
+      })),
+    ),
+    recorded.flatMap((entry) => entry.idpConfigs),
+  );
+  const scimConfigs = finalUsers<MessageInitShape<typeof AuthSCIMConfigSchema>>(
+    deployments.flatMap(({ application, auth }) =>
+      [...auth.changeSet.scim.creates, ...auth.changeSet.scim.updates].map((entry) => ({
+        resource: entry.request.scimConfig ?? {},
+        name: entry.name,
+        namespace: entry.request.namespaceName,
+        application: application.name,
+      })),
+    ),
+    deployments.flatMap(({ auth }) =>
+      auth.changeSet.scim.deletes.map(({ name, request }) => ({
+        namespace: request.namespaceName,
+        name,
+      })),
+    ),
+    recorded.flatMap((entry) => entry.scimConfigs),
+  );
+  return [
+    ...usesOf(idpConfigs, "auth.idp_config", (idpConfig) => {
+      const config = idpConfig.config?.config;
+      return secretRefs(config?.case === "oidc" ? config.value.clientSecretKey : undefined);
+    }),
+    ...usesOf(scimConfigs, "auth.scim", (scimConfig) => {
+      const authorization = scimConfig.authorizationConfig;
+      return secretRefs(authorization?.case === "bearerSecret" ? authorization.value : undefined);
+    }),
+  ];
 }
 
 function describeUse(use: ResourceUse): string {
@@ -434,8 +552,10 @@ type AssertResourcesNotInUseParams = {
  * Reject a run that deletes a resource another application still uses: an Auth service,
  * TailorDB namespace, resolver namespace, or IdP that an application references, an Auth
  * service that an AI gateway authenticates against, a machine user that an executor or resolver
- * runs as, or a TailorDB table, resolver, IdP, Auth service, or workflow that an executor
- * subscribes to or runs.
+ * runs as, a TailorDB table, resolver, IdP, Auth service, or workflow that an executor
+ * subscribes to or runs, an application that an executor's GraphQL operation targets, or a
+ * Secret Manager secret that a webhook executor, or an Auth service's OIDC IdP or SCIM config,
+ * names.
  * A resource the plan writes counts by its planned version, a resource it deletes does not count,
  * and any other counts by the workspace's record. When the run spans several configs, call it
  * after deletes that another config in the run still claims are dropped and deletes of renamed
@@ -446,24 +566,28 @@ export async function assertResourcesNotInUse(
   params: AssertResourcesNotInUseParams,
 ): Promise<void> {
   const { deployments, command, client, workspaceId } = params;
-  const deleted = new Set(
-    deployments.flatMap((plan) =>
-      Object.entries(CHECKED_RESOURCES).flatMap(([resourceType, { deletesOf }]) =>
-        deletesOf(plan).map((resource) =>
-          refKey({ ...resource, resourceType: resourceType as CheckedResourceType }),
-        ),
-      ),
+  const deletedRefs = deployments.flatMap((plan) =>
+    Object.entries(CHECKED_RESOURCES).flatMap(([resourceType, { deletesOf }]) =>
+      deletesOf(plan).map((resource) => ({
+        ...resource,
+        resourceType: resourceType as CheckedResourceType,
+      })),
     ),
   );
-  if (deleted.size === 0) return;
-  const deletesMachineUser = deployments.some(
-    ({ auth }) => auth.changeSet.machineUser.deletes.length > 0,
-  );
+  if (deletedRefs.length === 0) return;
+  const deleted = new Set(deletedRefs.map(refKey));
+  const deletedTypes = new Set(deletedRefs.map(({ resourceType }) => resourceType));
+  const workspaceUsesParams = { deployments, client, workspaceId };
+  const [resolvers, authConfigs] = await Promise.all([
+    deletedTypes.has("auth.machine_user") ? resolverUses(workspaceUsesParams) : [],
+    deletedTypes.has("secret.secret") ? authConfigUses(workspaceUsesParams) : [],
+  ]);
   const allUses = [
     ...applicationUses(deployments),
     ...executorUses(deployments),
-    ...(deletesMachineUser ? await resolverUses({ deployments, client, workspaceId }) : []),
+    ...resolvers,
     ...aiGatewayUses(deployments),
+    ...authConfigs,
   ];
   const uses = [
     ...new Map(
