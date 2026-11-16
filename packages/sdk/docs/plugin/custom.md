@@ -327,6 +327,8 @@ same fields. OAuth client secrets are never included.
 
 `ctx.configPath` is the absolute path of the registering config. `ctx.workspaceId`
 and `ctx.pluginConfig` identify the deployment workspace and the plugin's options.
+`ctx.profile` is the profile `tailor deploy` ran with (`--profile`), and is absent when
+the deploy was run without one.
 Use `ctx.logger.info`, `warn`, and `success` for diagnostics; they write to stderr
 and preserve deploy's JSON stdout. A hook that writes to stdout itself, such as
 with `console.log`, makes `tailor deploy --json` output unparseable.

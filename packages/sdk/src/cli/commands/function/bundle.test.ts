@@ -126,6 +126,35 @@ export default function() {
       expect(withoutTemporal.bundledCode).toMatch(/return\s*(?:false|!1)/);
     });
 
+    test("bundles a function that imports the CLI entry point without using it", async () => {
+      const packageDir = path.join(testDir, "node_modules", "@tailor-platform", "sdk");
+      fs.mkdirSync(packageDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(packageDir, "package.json"),
+        JSON.stringify({
+          name: "@tailor-platform/sdk",
+          type: "module",
+          exports: { "./cli": "./cli.mjs" },
+        }),
+      );
+      fs.writeFileSync(
+        path.join(packageDir, "cli.mjs"),
+        `import "./binding.node";\nexport const apiCall = () => 1;\n`,
+      );
+      fs.writeFileSync(
+        path.join(packageDir, "binding.node"),
+        Buffer.from([0xff, 0xfe, 0x00, 0x80]),
+      );
+
+      const result = await bundle(
+        "uses-cli-entry.ts",
+        `import { apiCall } from "@tailor-platform/sdk/cli";\nconst deployOnly = () => apiCall();\nexport default function() { return "OWN_SOURCE"; }\n`,
+        { type: "plain", name: "uses-cli-entry" },
+      );
+
+      expect(result.bundledCode).toContain("OWN_SOURCE");
+    });
+
     test("bundles a named-exported main function", async () => {
       const detected: DetectedFunction = { type: "plain", name: "named-main", namedMain: true };
       const result = await bundle(
