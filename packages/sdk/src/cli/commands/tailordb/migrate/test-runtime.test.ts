@@ -240,17 +240,27 @@ describe("migration test runtime", () => {
   );
 
   test.each([
-    ["not-json\n", 1],
-    ['\n\n{"id":1}\nnot-json\n', 4],
-  ])("rejects malformed baseline seed rows in %j with their file and line", (content, line) => {
-    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "migration-test-seed-"));
-    temporaryDirectories.push(dataDir);
-    fs.writeFileSync(path.join(dataDir, "Customer.jsonl"), content);
+    ["a malformed row", "not-json\n", 1],
+    ["a malformed row after blank lines", '\n\n{"id":1}\nnot-json\n', 4],
+    ["a second byte order mark", '\uFEFF\uFEFF{"id":1}\n{"id":2}\n', 1],
+    ["a no-break space before the first row", '\u00A0{"id":1}\n{"id":2}\n', 1],
+    ["a no-break space after the last row", '{"id":1}\n{"id":2}\u00A0\n', 2],
+  ])(
+    "rejects a baseline seed file with %s at the line the validator rejects",
+    async (_label, content, line) => {
+      const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "migration-test-seed-"));
+      temporaryDirectories.push(dataDir);
+      fs.writeFileSync(path.join(dataDir, "Customer.jsonl"), content);
 
-    expect(() => loadSnapshotSeedData(dataDir, ["Customer"])).toThrow(
-      new RegExp(`Customer\\.jsonl at line ${line}:`),
-    );
-  });
+      expect(await JsonlReader.read(path.join(dataDir, "Customer.jsonl"))).toMatchObject({
+        ok: false,
+        error: { line },
+      });
+      expect(() => loadSnapshotSeedData(dataDir, ["Customer"])).toThrow(
+        new RegExp(`Customer\\.jsonl at line ${line}:`),
+      );
+    },
+  );
 
   test("polls a clone operation until it completes", async () => {
     const getOperation = vi

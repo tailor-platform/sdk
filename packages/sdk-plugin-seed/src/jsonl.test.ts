@@ -1,5 +1,6 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { JsonlReader } from "lines-db";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
 import {
@@ -136,11 +137,18 @@ describe("loadSeedData", () => {
   });
 
   test.each([
-    ['{"ok":true}\nnot-json\n', 2],
-    ['\n\n{"ok":true}\nnot-json\n', 4],
-  ])("names the file and physical line for malformed JSON lines in %j", (content, line) => {
-    const dir = makeDataDir({ "Bad.jsonl": content });
-    expect(() => loadSeedData(dir, ["Bad"])).toThrow(new RegExp(`Bad\\.jsonl at line ${line}:`));
+    ["a malformed row", '{"ok":true}\nnot-json\n', 2],
+    ["a malformed row after blank lines", '\n\n{"ok":true}\nnot-json\n', 4],
+    ["a second byte order mark", '\uFEFF\uFEFF{"id":1}\n{"id":2}\n', 1],
+    ["a no-break space before the first row", '\u00A0{"id":1}\n{"id":2}\n', 1],
+    ["a no-break space after the last row", '{"id":1}\n{"id":2}\u00A0\n', 2],
+  ])("rejects a file with %s at the line the validator rejects", async (_label, content, line) => {
+    const dir = makeDataDir({ "User.jsonl": content });
+    expect(await JsonlReader.read(path.join(dir, "User.jsonl"))).toMatchObject({
+      ok: false,
+      error: { line },
+    });
+    expect(() => loadSeedData(dir, ["User"])).toThrow(new RegExp(`User\\.jsonl at line ${line}:`));
   });
 
   test.each(["null", "[]", '"text"', "42"])("rejects non-object JSON rows: %s", (row) => {
