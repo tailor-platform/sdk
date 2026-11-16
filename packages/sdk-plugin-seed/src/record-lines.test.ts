@@ -13,7 +13,7 @@ describe("jsonlRecordLines", () => {
     ["whitespace-only lines", '  \n{"a":1}\n \t \n{"a":2}\n\n\n'],
     ["leading blank lines", '\n\n{"a":1}\n{"a":2}\n'],
     ["CRLF endings and a blank line", '{"a":1}\r\n\r\n{"a":2}\r\n'],
-    ["a byte order mark", '﻿{"a":1}\n{"a":2}\n'],
+    ["a byte order mark", '\uFEFF{"a":1}\n{"a":2}\n'],
   ])("reads the records the validator reads from a file with %s", async (_label, content) => {
     const dir = mkdtempSync(join(tmpdir(), "seed-loc-"));
     try {
