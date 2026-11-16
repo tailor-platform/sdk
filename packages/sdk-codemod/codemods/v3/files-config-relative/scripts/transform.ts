@@ -33,6 +33,11 @@ type Directories = { configDir: string; projectDir: string };
 /** A module, by `moduleId`, and the names under which it exports the config. */
 type ConfigCarrier = { id: string; names: ReadonlySet<string> };
 
+/** A name a module exports, the local binding it exports, if any, and the value exported. */
+type LocalExport = { name: string; local: string | null; value: SgNode | null };
+
+type DefineConfigCall = DefineConfigCalls["calls"][number];
+
 /** A project source file, by its project-relative and absolute paths, with its contents. */
 type SourceFile = { relative: string; file: string; source: string };
 
@@ -149,21 +154,6 @@ function analyzeService(label: string, service: SgNode, dirs: Directories): Anal
   };
 }
 
-/** The expression a module's own `export default` exports, or the local name it exports as default. */
-function defaultExportTarget(root: SgNode): SgNode | string | null {
-  for (const statement of root.children()) {
-    if (statement.kind() !== "export_statement" || statement.field("source")) continue;
-    const value = statement.field("value");
-    if (value) return value.kind() === "identifier" ? value.text() : value;
-    const specifier = statement
-      .findAll({ rule: { kind: "export_specifier" } })
-      .find((candidate) => candidate.field("alias")?.text() === "default");
-    const name = specifier?.field("name")?.text();
-    if (name) return name;
-  }
-  return null;
-}
-
 function topLevelValue(root: SgNode, name: string): SgNode | null {
   for (const statement of root.children()) {
     const declaration =
@@ -184,23 +174,46 @@ function topLevelValue(root: SgNode, name: string): SgNode | null {
   return null;
 }
 
+/** Each name a module's own export statements export. */
+function localExports(root: SgNode): LocalExport[] {
+  const entries: LocalExport[] = [];
+  for (const statement of root.children()) {
+    if (statement.kind() !== "export_statement" || statement.field("source")) continue;
+    const value = statement.field("value");
+    if (value) {
+      const local = value.kind() === "identifier" ? value.text() : null;
+      entries.push({ name: "default", local, value: local ? topLevelValue(root, local) : value });
+      continue;
+    }
+    for (const declarator of statement.field("declaration")?.children() ?? []) {
+      const name = declarator.kind() === "variable_declarator" ? declarator.field("name") : null;
+      if (name?.kind() !== "identifier") continue;
+      entries.push({ name: name.text(), local: name.text(), value: declarator.field("value") });
+    }
+    for (const [local, name] of exportSpecifierNames(statement)) {
+      entries.push({ name, local, value: topLevelValue(root, local) });
+    }
+  }
+  return entries;
+}
+
 function isSameNode(a: SgNode, b: SgNode): boolean {
   return nodeRangeKey(a) === nodeRangeKey(b);
 }
 
-function analyzeCall(
-  call: DefineConfigCalls["calls"][number],
-  exported: SgNode | null,
-  dirs: Directories,
-): Analysis {
-  const analysis = analyzeServiceConfigs([call], (label, service) =>
-    analyzeService(label, service, dirs),
-  );
-  if ("reason" in call) return analysis;
-  const exportedConfig = exported?.kind() === "call_expression" ? callArgument(exported) : null;
-  if (exportedConfig && isSameNode(exportedConfig, call.config)) return analysis;
-  if (analysis.edits.length === 0 && analysis.findings.length === 0) return analysis;
-  return { edits: [], findings: [{ reason: NOT_THE_DEFAULT_EXPORT, node: call.config }] };
+function isCallOf(value: SgNode | null, call: DefineConfigCall): boolean {
+  if (value?.kind() !== "call_expression") return false;
+  if ("reason" in call) return isSameNode(value, call.node);
+  const argument = callArgument(value);
+  return argument !== null && isSameNode(argument, call.config);
+}
+
+function analyzeFrom(call: DefineConfigCall, dirs: Directories): Analysis {
+  return analyzeServiceConfigs([call], (label, service) => analyzeService(label, service, dirs));
+}
+
+function isEmpty(analysis: Analysis): boolean {
+  return analysis.edits.length === 0 && analysis.findings.length === 0;
 }
 
 /** A module path or resolved specifier without its source extension or trailing `/index`. */
@@ -209,15 +222,8 @@ function moduleId(file: string): string {
 }
 
 function isDefineConfigCall(source: string, filePath: string, node: SgNode): boolean {
-  if (node.kind() !== "call_expression") return false;
-  const argument = callArgument(node);
-  const found = findDefineConfigCalls(source, filePath);
   return (
-    found?.calls.some((call) =>
-      "reason" in call
-        ? isSameNode(call.node, node)
-        : argument !== null && isSameNode(call.config, argument),
-    ) ?? false
+    findDefineConfigCalls(source, filePath)?.calls.some((call) => isCallOf(node, call)) ?? false
   );
 }
 
@@ -255,23 +261,19 @@ function importedLocalNames(statement: SgNode, exportedNames: ReadonlySet<string
 }
 
 /**
- * The names under which `file` exports the config that `carrier` exports: by
+ * The names under which `sourceFile` exports the config that `carrier` exports: by
  * re-exporting it through a relative specifier, by exporting a binding it
  * imports from it, or, as `default`, by default-exporting a `defineConfig()`
  * call next to such an import.
  */
-function configExportNames(source: string, file: string, carrier: ConfigCarrier): Set<string> {
+function configExportNames(sourceFile: SourceFile, carrier: ConfigCarrier): Set<string> {
+  const { source, file } = sourceFile;
   const exportNames = new Set<string>();
-  const root = parseRoot(source, file);
+  const root = parsedRoot(sourceFile);
   if (!root) return exportNames;
   const importedNames = new Set<string>();
-  const localExports: Array<[string, string]> = [];
   for (const statement of root.children()) {
     const specifier = stringValue(statement.field("source"));
-    if (statement.kind() === "export_statement" && specifier === null) {
-      localExports.push(...exportSpecifierNames(statement));
-      continue;
-    }
     if (!specifier?.startsWith(".")) continue;
     if (moduleId(path.resolve(path.dirname(file), specifier)) !== carrier.id) continue;
     for (const [name, exportedName] of exportSpecifierNames(statement)) {
@@ -280,17 +282,24 @@ function configExportNames(source: string, file: string, carrier: ConfigCarrier)
     for (const name of importedLocalNames(statement, carrier.names)) importedNames.add(name);
   }
   if (importedNames.size === 0) return exportNames;
-  for (const [name, exportedName] of localExports) {
-    if (importedNames.has(name)) exportNames.add(exportedName);
+  for (const { name, local, value } of localExports(root)) {
+    if (local !== null && importedNames.has(local)) exportNames.add(name);
+    if (name === "default" && value && isDefineConfigCall(source, file, value)) {
+      exportNames.add("default");
+    }
   }
-  const target = defaultExportTarget(root);
-  const value = typeof target === "string" ? topLevelValue(root, target) : target;
-  if (typeof target === "string" && importedNames.has(target)) exportNames.add("default");
-  if (value && isDefineConfigCall(source, file, value)) exportNames.add("default");
   return exportNames;
 }
 
 const sourceFilesByProject = new Map<string, Promise<SourceFile[]>>();
+const parsedRoots = new WeakMap<SourceFile, SgNode | null>();
+
+function parsedRoot(sourceFile: SourceFile): SgNode | null {
+  if (!parsedRoots.has(sourceFile)) {
+    parsedRoots.set(sourceFile, parseRoot(sourceFile.source, sourceFile.file));
+  }
+  return parsedRoots.get(sourceFile) ?? null;
+}
 
 function projectSourceFiles(projectDir: string): Promise<SourceFile[]> {
   let files = sourceFilesByProject.get(projectDir);
@@ -316,20 +325,17 @@ async function readSourceFiles(projectDir: string): Promise<SourceFile[]> {
 }
 
 /**
- * The source files outside `configFile`'s directory that default-export its
- * config, following the modules that pass the config on through relative
- * specifiers, in path order.
+ * The source files outside `configFile`'s directory that default-export the
+ * config it exports under `exportNames`, following the modules that pass the
+ * config on through relative specifiers, in path order.
  */
 async function findConfigLoaders(
   configFile: string,
   projectDir: string,
-  exportedName: string | null,
+  exportNames: ReadonlySet<string>,
 ): Promise<SourceFile[]> {
   const files = await projectSourceFiles(projectDir);
-  const config: ConfigCarrier = {
-    id: moduleId(configFile),
-    names: new Set(exportedName ? ["default", exportedName] : ["default"]),
-  };
+  const config: ConfigCarrier = { id: moduleId(configFile), names: exportNames };
   const carriers = [config];
   const visited = new Set([config.id]);
   const loaders = new Set<SourceFile>();
@@ -337,7 +343,7 @@ async function findConfigLoaders(
     const stem = path.basename(carrier.id);
     for (const sourceFile of files) {
       if (!sourceFile.source.includes(stem)) continue;
-      const names = configExportNames(sourceFile.source, sourceFile.file, carrier);
+      const names = configExportNames(sourceFile, carrier);
       if (names.has("default") && path.dirname(sourceFile.file) !== path.dirname(configFile)) {
         loaders.add(sourceFile);
       }
@@ -362,26 +368,37 @@ async function analyzeFile(
   filePath: string,
   projectDir: string,
 ): Promise<{ root: SgNode; analysis: Analysis } | null> {
-  const dirs: Directories = { configDir: path.dirname(filePath), projectDir };
-  if (dirs.configDir === projectDir) return null;
+  const configDir = path.dirname(filePath);
+  if (configDir === projectDir) return null;
   const found = findDefineConfigCalls(source, filePath);
   if (!found) return null;
-  const target = defaultExportTarget(found.root);
-  const exportedName = typeof target === "string" ? target : null;
-  const exported = typeof target === "string" ? topLevelValue(found.root, target) : target;
+  const moduleExports = localExports(found.root);
   const analysis: Analysis = { edits: [], findings: [] };
   for (const call of found.calls) {
-    const result = analyzeCall(call, exported, dirs);
+    const node = "reason" in call ? call.node : call.config;
+    const exportNames = new Set(
+      moduleExports.filter(({ value }) => isCallOf(value, call)).map(({ name }) => name),
+    );
     const loaders =
-      result.edits.length > 0 ? await findConfigLoaders(filePath, projectDir, exportedName) : [];
-    if (loaders.length > 0 && !("reason" in call)) {
-      if (loaders.some(({ file }) => path.dirname(file) !== projectDir)) {
-        analysis.findings.push({ reason: loadedBy(loaders), node: call.config });
-      }
+      exportNames.size > 0 ? await findConfigLoaders(filePath, projectDir, exportNames) : [];
+    if (loaders.length > 0) {
+      const affected = loaders.some(({ file }) => {
+        const loaderDir = path.dirname(file);
+        return (
+          loaderDir !== projectDir &&
+          !isEmpty(analyzeFrom(call, { configDir: loaderDir, projectDir }))
+        );
+      });
+      if (affected) analysis.findings.push({ reason: loadedBy(loaders), node });
       continue;
     }
-    analysis.edits.push(...result.edits);
-    analysis.findings.push(...result.findings);
+    const result = analyzeFrom(call, { configDir, projectDir });
+    if ("reason" in call || exportNames.has("default")) {
+      analysis.edits.push(...result.edits);
+      analysis.findings.push(...result.findings);
+    } else if (!isEmpty(result)) {
+      analysis.findings.push({ reason: NOT_THE_DEFAULT_EXPORT, node });
+    }
   }
   return { root: found.root, analysis };
 }
@@ -410,9 +427,9 @@ export default async function transform(
  * Report service configs outside the project directory whose patterns this
  * transform cannot rewrite, cannot glob, or that match no files from either
  * directory, `defineConfig()` calls other than the default export whose
- * patterns it would rewrite or report, and configs it would rewrite that a
- * source file outside both the config's directory and the project directory
- * default-exports.
+ * patterns it would rewrite or report, and configs that a source file outside
+ * both the config's directory and the project directory default-exports when
+ * their patterns would need a rewrite or a report from that file's directory.
  * @param source - File contents
  * @param filePath - Absolute path to the file being reviewed
  * @param relativePath - Project-relative path reported to the user

@@ -307,6 +307,89 @@ describe("files patterns -> config-relative migration", () => {
     expect(findings).toEqual([]);
   });
 
+  const SHARED_EXECUTOR = 'defineConfig({\n  executor: { files: ["jobs/*.ts"] },\n})';
+
+  test.each([
+    [
+      "by name",
+      `export const shared = ${SHARED_EXECUTOR};\n`,
+      'export { shared as default } from "../../configs/shared";\n',
+    ],
+    [
+      "under an alias",
+      `const base = ${SHARED_EXECUTOR};\nexport { base as shared };\n`,
+      'export { shared as default } from "../../configs/shared";\n',
+    ],
+    [
+      "as its default",
+      `export default ${SHARED_EXECUTOR};\n`,
+      'export { default } from "../../configs/shared";\n',
+    ],
+    [
+      "as its default with patterns it cannot read",
+      "export default defineConfig({\n  executor: { files: executorFiles },\n});\n",
+      'export { default } from "../../configs/shared";\n',
+    ],
+    [
+      "as its default with a variable passed to defineConfig()",
+      "export default defineConfig(base);\n",
+      'export { default } from "../../configs/shared";\n',
+    ],
+  ])(
+    "reports a shared config exported %s that a config file in another directory loads",
+    async (_, body, loader) => {
+      writeFiles("jobs/run.ts", "configs/jobs/helper.ts");
+      writeFile("apps/a/tailor.config.ts", loader);
+
+      const { transformed, findings } = await migrate(body, "configs/shared.ts");
+
+      expect(transformed).toBeNull();
+      expect(findings).toEqual([
+        expect.stringContaining("`apps/a/tailor.config.ts` loads this config"),
+      ]);
+    },
+  );
+
+  test.each([
+    [
+      "its patterns match from the loading config file's directory",
+      `export const shared = ${SHARED_EXECUTOR};\n`,
+      { "apps/a/tailor.config.ts": 'export { shared as default } from "../../configs/shared";\n' },
+      ["jobs/run.ts", "configs/jobs/helper.ts", "apps/a/jobs/run.ts"],
+    ],
+    [
+      "it has no `files` patterns",
+      'export const shared = defineConfig({\n  name: "app",\n});\n',
+      { "apps/a/tailor.config.ts": 'export { shared as default } from "../../configs/shared";\n' },
+      [],
+    ],
+    [
+      "only a config file in the project directory loads it",
+      `export const shared = ${SHARED_EXECUTOR};\n`,
+      { "tailor.config.ts": 'export { shared as default } from "./configs/shared";\n' },
+      ["jobs/run.ts", "configs/jobs/helper.ts"],
+    ],
+    [
+      "only a config file in the project directory loads it with a variable passed to defineConfig()",
+      "export default defineConfig(base);\n",
+      { "tailor.config.ts": 'export { default } from "./configs/shared";\n' },
+      [],
+    ],
+  ])(
+    "changes and reports nothing for a shared config when %s",
+    async (_, body, importers, files) => {
+      writeFiles(...files);
+      for (const [importerPath, importer] of Object.entries(importers)) {
+        writeFile(importerPath, importer);
+      }
+
+      const { transformed, findings } = await migrate(body, "configs/shared.ts");
+
+      expect(transformed).toBeNull();
+      expect(findings).toEqual([]);
+    },
+  );
+
   const EXPORTED_CONFIG =
     'export const config = defineConfig({\n  db: { main: { files: ["apps/a/tailordb/*.ts"] } },\n});\nexport default config;\n';
 
