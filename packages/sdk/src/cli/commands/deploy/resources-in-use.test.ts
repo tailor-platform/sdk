@@ -13,6 +13,11 @@ import { ExecutorExecutorSchema } from "@tailor-platform/tailor-proto/executor_r
 import { PipelineResolverView } from "@tailor-platform/tailor-proto/pipeline_pb";
 import { PipelineResolverSchema } from "@tailor-platform/tailor-proto/pipeline_resource_pb";
 import { file_tailor_v1_service } from "@tailor-platform/tailor-proto/service_pb";
+import {
+  type OTLPExporter,
+  type OTLPExporterAuthConfigSchema,
+  OTLPExporterSchema,
+} from "@tailor-platform/tailor-proto/telemetryrouter_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { dropCrossDeploymentManagedDeletes } from "./managed-resources";
 import { assertResourcesNotInUse } from "./resources-in-use";
@@ -33,11 +38,17 @@ type WorkspaceApplication = {
   subgraphs?: Array<{ serviceType: Subgraph_ServiceType; serviceNamespace: string }>;
 };
 
+function exporterClient(exporters: OTLPExporter[]) {
+  return {
+    listOTLPExporters: vi.fn(async () => ({ otlpExporters: exporters, nextPageToken: "" })),
+  };
+}
+
 function check(deployments: PlannedDeployment[], command: "deploy" | "remove", client = {}) {
   return assertResourcesNotInUse({
     deployments,
     command,
-    client: client as OperatorClient,
+    client: { ...exporterClient([]), ...client } as unknown as OperatorClient,
     workspaceId: "ws",
   });
 }
@@ -464,6 +475,9 @@ function resolverInvoking(name: string) {
   return create(PipelineResolverSchema, { name, pipelines: [{ name: "step", invoker: INVOKER }] });
 }
 
+const UNMANAGED_SUGGESTION =
+  "An OTLP exporter, or an executor, resolver, AI gateway, or Auth service listed without an application, is not deployed by the SDK, so change or delete it outside the SDK.";
+
 function inUse(message: unknown, uses?: unknown[]) {
   return expect.objectContaining({
     code: "SERVICE_IN_USE",
@@ -692,8 +706,6 @@ describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", ()
       "Keep each listed resource in the config that defines it, or deploy the applications that use it so that they stop using it, first or in the same run.";
     const OWN_APPLICATION_SUGGESTION =
       "An application that an executor in its own config still targets is deleted because that config no longer defines or references a TailorDB namespace, resolver namespace, IdP, or Auth service, so add one of them back to that config or remove that executor from it.";
-    const UNMANAGED_SUGGESTION =
-      "An executor, resolver, AI gateway, or Auth service listed without an application is not deployed by the SDK, so change or delete it outside the SDK.";
 
     function coreQueriedBySelf() {
       const core = emptyPlanResults();
@@ -881,7 +893,7 @@ describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", ()
     );
   });
 
-  test("lists no resolver or Auth config when the run deletes no machine user or secret", async () => {
+  test("lists no resolver, Auth config, or OTLP exporter when the run deletes no machine user or secret", async () => {
     const owner = withWorkspaceAuth(ownerDeleting("core-auth"), "portal-auth", "portal");
     owner.pipeline.existingServices = {
       billing: { resource: {} as never, allLabels: { "sdk-name": "billing-app" } },
@@ -890,6 +902,7 @@ describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", ()
       listPipelineResolvers: vi.fn(),
       listAuthIDPConfigs: vi.fn(),
       getAuthSCIMConfig: vi.fn(),
+      listOTLPExporters: vi.fn(),
     };
 
     await expect(
@@ -996,7 +1009,7 @@ describe("assertResourcesNotInUse for Auth IdP and SCIM configs", () => {
     await expect(check([deployment({ name: "core" }, owner)], "deploy", client)).rejects.toThrow(
       expect.objectContaining({
         message: `${API_KEY_LABEL} cannot be deleted: IdP config "oidc" of Auth service "portal-auth" still uses it.`,
-        suggestion: expect.stringContaining("Auth service listed without an application"),
+        suggestion: expect.stringContaining("outside the SDK"),
       }),
     );
   });
@@ -1098,6 +1111,65 @@ describe("assertResourcesNotInUse for Auth IdP and SCIM configs", () => {
   });
 });
 
+type ExporterAuth = MessageInitShape<typeof OTLPExporterAuthConfigSchema>;
+
+function otlpExporter(name: string, auth?: ExporterAuth) {
+  return create(OTLPExporterSchema, { name, endpoint: "https://otlp.example.com", auth });
+}
+
+const OTLP_EXPORTER_AUTHS: Array<{
+  label: string;
+  field: string;
+  auth: (secretValue: typeof API_KEY) => ExporterAuth;
+}> = [
+  {
+    label: "API key",
+    field: "tailor.v1.OTLPExporterApiKeyAuth.secret_value",
+    auth: (secretValue) => ({
+      method: { case: "apiKey", value: { headerName: "X-Api-Key", secretValue } },
+    }),
+  },
+  {
+    label: "bearer token",
+    field: "tailor.v1.OTLPExporterBearerTokenAuth.secret_value",
+    auth: (secretValue) => ({ method: { case: "bearerToken", value: { secretValue } } }),
+  },
+];
+
+describe("assertResourcesNotInUse for OTLP exporters", () => {
+  test.each(OTLP_EXPORTER_AUTHS)(
+    "rejects a deleted secret only for the OTLP exporter that sends it as its $label",
+    async ({ auth }) => {
+      const client = exporterClient([
+        otlpExporter("unauthenticated"),
+        otlpExporter("other", auth(OTHER_KEY)),
+        otlpExporter("vendor", auth(API_KEY)),
+      ]);
+
+      await expect(
+        check([deployment({ name: "core" }, deletingApiKey())], "remove", client),
+      ).rejects.toThrow(
+        expect.objectContaining({
+          code: "SERVICE_IN_USE",
+          message: `${API_KEY_LABEL} cannot be deleted: OTLP exporter "vendor" still uses it.`,
+          suggestion: UNMANAGED_SUGGESTION,
+          context: {
+            uses: [
+              {
+                ...API_KEY_USE,
+                usedBy: { resourceType: "telemetryrouter.otlp_exporter", name: "vendor" },
+              },
+            ],
+          },
+        }),
+      );
+      expect(client.listOTLPExporters).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ workspaceId: "ws" }),
+      );
+    },
+  );
+});
+
 /**
  * Every field of a stored Platform resource that names an application, a Secret Manager secret,
  * or a machine user, as `<message>.<field>`.
@@ -1139,6 +1211,7 @@ describe("assertResourcesNotInUse coverage of Platform resource references", () 
     const CHECKED = new Set([
       ...EXECUTOR_USES.flatMap(({ field }) => (field ? [field] : [])),
       ...AUTH_CONFIG_USERS.map(({ field }) => field),
+      ...OTLP_EXPORTER_AUTHS.map(({ field }) => field),
       // "rejects a deleted machine user that resolvers of the run and of other namespaces use"
       "tailor.v1.PipelineResolver.Pipeline.invoker",
     ]);
@@ -1146,9 +1219,6 @@ describe("assertResourcesNotInUse coverage of Platform resource references", () 
       // machine users of the hook's or SCIM config's own Auth service, which deploy requires its defineAuth to declare
       "tailor.v1.AuthHook.invoker",
       "tailor.v1.AuthSCIMConfig.machine_user_name",
-      // OTLP exporters are set up outside the SDK, which never lists them
-      "tailor.v1.OTLPExporterApiKeyAuth.secret_value",
-      "tailor.v1.OTLPExporterBearerTokenAuth.secret_value",
     ]);
 
     const fields = referenceFields();

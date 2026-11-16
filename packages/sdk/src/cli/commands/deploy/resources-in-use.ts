@@ -2,6 +2,7 @@ import { Subgraph_ServiceType } from "@tailor-platform/tailor-proto/application_
 import { PipelineResolverView } from "@tailor-platform/tailor-proto/pipeline_pb";
 import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
 import {
+  fetchAll,
   fetchAllTolerant,
   getAuthSCIMConfigOrNull,
   listAuthIDPConfigsTolerant,
@@ -51,7 +52,7 @@ type CheckedResourceType = Extract<
   | "secret.secret"
 >;
 
-type ResourceKey<T extends ManagedResourceType> = {
+type ResourceKey<T extends string> = {
   resourceType: T;
   namespace?: string;
   name: string;
@@ -123,10 +124,12 @@ const CHECKED_RESOURCES: Record<CheckedResourceType, CheckedResource> = {
   },
 };
 
-type UserResourceType = Extract<
-  ManagedResourceType,
-  "executor" | "pipeline.resolver" | "aigateway" | "auth.idp_config" | "auth.scim"
->;
+type UserResourceType =
+  | Extract<
+      ManagedResourceType,
+      "executor" | "pipeline.resolver" | "aigateway" | "auth.idp_config" | "auth.scim"
+    >
+  | "telemetryrouter.otlp_exporter";
 
 type ResourceUser = ResourceKey<UserResourceType>;
 
@@ -136,6 +139,7 @@ const USER_LABELS: Record<UserResourceType, (user: ResourceUser) => string> = {
   aigateway: ({ name }) => `AI gateway "${name}"`,
   "auth.idp_config": ({ namespace, name }) => `IdP config "${name}" of Auth service "${namespace}"`,
   "auth.scim": ({ namespace }) => `SCIM config of Auth service "${namespace}"`,
+  "telemetryrouter.otlp_exporter": ({ name }) => `OTLP exporter "${name}"`,
 };
 
 type ResourceUse = ResourceRef & {
@@ -158,7 +162,7 @@ const OWN_APPLICATION_SUGGESTION =
   "An application that an executor in its own config still targets is deleted because that config no longer defines or references a TailorDB namespace, resolver namespace, IdP, or Auth service, so add one of them back to that config or remove that executor from it.";
 
 const UNMANAGED_USER_SUGGESTION =
-  "An executor, resolver, AI gateway, or Auth service listed without an application is not deployed by the SDK, so change or delete it outside the SDK.";
+  "An OTLP exporter, or an executor, resolver, AI gateway, or Auth service listed without an application, is not deployed by the SDK, so change or delete it outside the SDK.";
 
 function inUseSuggestion(
   uses: ReadonlyArray<ResourceUse>,
@@ -166,8 +170,9 @@ function inUseSuggestion(
 ): string {
   const usesOwnApplication = (use: ResourceUse) =>
     command === "deploy" && use.resourceType === "application" && use.application === use.name;
+  const namesNoApplication = command === "remove" && uses.every((use) => !use.application);
   return [
-    ...(uses.every(usesOwnApplication) ? [] : [IN_USE_SUGGESTIONS[command]]),
+    ...(uses.every(usesOwnApplication) || namesNoApplication ? [] : [IN_USE_SUGGESTIONS[command]]),
     ...(uses.some(usesOwnApplication) ? [OWN_APPLICATION_SUGGESTION] : []),
     ...(uses.every((use) => use.application) ? [] : [UNMANAGED_USER_SUGGESTION]),
   ].join(" ");
@@ -550,6 +555,23 @@ async function authConfigUses(params: WorkspaceUsesParams): Promise<ResourceUse[
   ];
 }
 
+async function otlpExporterUses(params: WorkspaceUsesParams): Promise<ResourceUse[]> {
+  const { client, workspaceId } = params;
+  const exporters = await fetchAll(async (pageToken, maxPageSize) => {
+    const { otlpExporters, nextPageToken } = await client.listOTLPExporters({
+      workspaceId,
+      pageToken,
+      pageSize: maxPageSize,
+    });
+    return [otlpExporters, nextPageToken];
+  });
+  return usesOf(
+    exporters.map((resource) => ({ resource, name: resource.name, application: undefined })),
+    "telemetryrouter.otlp_exporter",
+    (exporter) => secretRefs(exporter.auth?.method.value?.secretValue),
+  );
+}
+
 function describeUse(use: ResourceUse): string {
   const user = use.usedBy
     ? `${USER_LABELS[use.usedBy.resourceType](use.usedBy)}${use.application ? ` of application "${use.application}"` : ""}`
@@ -572,8 +594,8 @@ type AssertResourcesNotInUseParams = {
  * service that an AI gateway authenticates against, a machine user that an executor or resolver
  * runs as, a TailorDB table, resolver, IdP, Auth service, or workflow that an executor
  * subscribes to or runs, an application that an executor's GraphQL operation targets, or a
- * Secret Manager secret that a webhook executor, or an Auth service's OIDC IdP or SCIM config,
- * names.
+ * Secret Manager secret that a webhook executor, an Auth service's OIDC IdP or SCIM config, or an
+ * OTLP exporter names.
  * A resource the plan writes counts by its planned version, a resource it deletes does not count,
  * and any other counts by the workspace's record. When the run spans several configs, call it
  * after deletes that another config in the run still claims are dropped and deletes of renamed
@@ -596,9 +618,10 @@ export async function assertResourcesNotInUse(
   const deleted = new Set(deletedRefs.map(refKey));
   const deletedTypes = new Set(deletedRefs.map(({ resourceType }) => resourceType));
   const workspaceUsesParams = { deployments, client, workspaceId };
-  const [resolvers, authConfigs] = await Promise.all([
+  const [resolvers, authConfigs, otlpExporters] = await Promise.all([
     deletedTypes.has("auth.machine_user") ? resolverUses(workspaceUsesParams) : [],
     deletedTypes.has("secret.secret") ? authConfigUses(workspaceUsesParams) : [],
+    deletedTypes.has("secret.secret") ? otlpExporterUses(workspaceUsesParams) : [],
   ]);
   const allUses = [
     ...applicationUses(deployments),
@@ -606,6 +629,7 @@ export async function assertResourcesNotInUse(
     ...resolvers,
     ...aiGatewayUses(deployments),
     ...authConfigs,
+    ...otlpExporters,
   ];
   const uses = [
     ...new Map(
