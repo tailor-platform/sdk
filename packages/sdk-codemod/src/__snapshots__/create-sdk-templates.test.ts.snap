@@ -110,28 +110,7 @@ exports[`next-major codemods on create-sdk templates > hello-world 1`] = `
    },
 ",
   },
-  "llmReviews": [
-    {
-      "codemodId": "v3/files-ignores-to-negation",
-      "files": [
-        "tailor.config.ts",
-      ],
-      "findings": [
-        {
-          "excerpt": "files: [\`./src/db/*.ts\`, "!**/*.test.ts", "!**/*.spec.ts"]",
-          "file": "tailor.config.ts",
-          "line": 6,
-          "message": "Migrate \`ignores\` and the default test-file exclusion into \`files\` by hand: db.main-db.files can match files outside this config's directory, where the explicit test-file exclusion does not apply.",
-        },
-        {
-          "excerpt": "files: [\`./src/resolvers/**/*.ts\`, "!**/*.test.ts", "!**/*.spec.ts"]",
-          "file": "tailor.config.ts",
-          "line": 9,
-          "message": "Migrate \`ignores\` and the default test-file exclusion into \`files\` by hand: resolver.main-resolver.files can match files outside this config's directory, where the explicit test-file exclusion does not apply.",
-        },
-      ],
-    },
-  ],
+  "llmReviews": [],
   "warnings": [],
 }
 `;
@@ -167,22 +146,7 @@ exports[`next-major codemods on create-sdk templates > inventory-management 1`] 
    kyselyTypePlugin({ distPath: \`./src/generated/kysely-tailordb.ts\` }),
 ",
   },
-  "llmReviews": [
-    {
-      "codemodId": "v3/files-ignores-to-negation",
-      "files": [
-        "tailor.config.ts",
-      ],
-      "findings": [
-        {
-          "excerpt": "files: [\`./src/db/*.ts\`, "!**/*.test.ts", "!**/*.spec.ts"]",
-          "file": "tailor.config.ts",
-          "line": 7,
-          "message": "Migrate \`ignores\` and the default test-file exclusion into \`files\` by hand: db.main-db.files can match files outside this config's directory, where the explicit test-file exclusion does not apply.",
-        },
-      ],
-    },
-  ],
+  "llmReviews": [],
   "warnings": [],
 }
 `;
@@ -200,36 +164,17 @@ exports[`next-major codemods on create-sdk templates > multi-application 1`] = `
    },
  });
 ",
+    "apps/user/tailor.config.ts": "@@ -3,6 +3,6 @@
+ export const sharedDb = "shared-db";
+ 
+ export default defineConfig({
+   name: "user",
+-  db: { [sharedDb]: { files: [\`./db/**/*.ts\`] } },
++  db: { [sharedDb]: { files: [\`./db/**/*.ts\`, "!**/*.test.ts", "!**/*.spec.ts"] } },
+ });
+",
   },
-  "llmReviews": [
-    {
-      "codemodId": "v3/files-ignores-to-negation",
-      "files": [
-        "apps/admin/tailor.config.ts",
-        "apps/user/tailor.config.ts",
-      ],
-      "findings": [
-        {
-          "excerpt": "[sharedDb]: { external: true }",
-          "file": "apps/admin/tailor.config.ts",
-          "line": 7,
-          "message": "Migrate \`ignores\` and the default test-file exclusion into \`files\` by hand: a \`db\` namespace is not written as an object literal.",
-        },
-        {
-          "excerpt": "files: [\`./db/**/*.ts\`, "!**/*.test.ts", "!**/*.spec.ts"]",
-          "file": "apps/admin/tailor.config.ts",
-          "line": 8,
-          "message": "Migrate \`ignores\` and the default test-file exclusion into \`files\` by hand: db.admin-db.files can match files outside this config's directory, where the explicit test-file exclusion does not apply.",
-        },
-        {
-          "excerpt": "[sharedDb]: { files: [\`./db/**/*.ts\`] }",
-          "file": "apps/user/tailor.config.ts",
-          "line": 7,
-          "message": "Migrate \`ignores\` and the default test-file exclusion into \`files\` by hand: a \`db\` namespace is not written as an object literal.",
-        },
-      ],
-    },
-  ],
+  "llmReviews": [],
   "warnings": [],
 }
 `;
