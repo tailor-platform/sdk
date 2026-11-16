@@ -649,6 +649,77 @@ describe("runCodemods", () => {
       expect(result.llmReviews).toEqual([]);
     });
 
+    test("runs a codemod's before-transform detector on its own transform's input", async () => {
+      const renameOldKeyPath = path.join(os.tmpdir(), "transform-rename-old-key.ts");
+      const reviewInputPath = path.join(os.tmpdir(), "transform-review-input.ts");
+      await fs.promises.writeFile(
+        renameOldKeyPath,
+        `export default function transform(source) {
+          if (!source.includes("oldKey:")) return null;
+          return source.replaceAll("oldKey:", "legacyKey:");
+        }`,
+        "utf-8",
+      );
+      await fs.promises.writeFile(
+        reviewInputPath,
+        `export default function transform(source) {
+          if (!source.includes("legacyKey:")) return null;
+          return "const inserted = 1;\\n" + source.replaceAll("legacyKey:", "newKey:");
+        }
+        export function reviewFindingsBeforeTransform(source, _filePath, relativePath) {
+          return source.split("\\n").flatMap((lineText, index) =>
+            lineText.includes("legacyKey:")
+              ? [{ file: relativePath, line: index + 1, message: "Review legacyKey usage.", excerpt: lineText.trim() }]
+              : [],
+          );
+        }`,
+        "utf-8",
+      );
+      try {
+        const { tmpDir: dir } = await createTestProject(
+          "model.ts",
+          'const a = 1;\nconst config = { oldKey: "user" };\n',
+        );
+        tmpDir = dir;
+
+        const result = await runCodemods(
+          [
+            {
+              codemod: makeCodemod("test/rename-old", renameOldKeyPath, ["**/*.ts"]),
+              scriptPath: renameOldKeyPath,
+            },
+            {
+              codemod: makeCodemod("test/review-input", reviewInputPath, ["**/*.ts"], undefined, {
+                prompt: "Review legacyKey usages.",
+              }),
+              scriptPath: reviewInputPath,
+            },
+          ],
+          dir,
+          false,
+        );
+
+        expect(result.llmReviews).toEqual([
+          {
+            codemodId: "test/review-input",
+            prompt: "Review legacyKey usages.",
+            files: ["model.ts"],
+            findings: [
+              {
+                file: "model.ts",
+                line: 3,
+                message: "Review legacyKey usage.",
+                excerpt: 'const config = { legacyKey: "user" };',
+              },
+            ],
+          },
+        ]);
+      } finally {
+        await fs.promises.rm(renameOldKeyPath, { force: true });
+        await fs.promises.rm(reviewInputPath, { force: true });
+      }
+    });
+
     test("runs a later detector on earlier transforms' output", async () => {
       const { tmpDir: dir } = await createTestProject(
         "model.ts",

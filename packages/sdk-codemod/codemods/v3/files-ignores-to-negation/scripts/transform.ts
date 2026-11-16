@@ -329,12 +329,12 @@ export default function transform(source: string, filePath = ""): string | null 
 /**
  * Report service configs whose `ignores` this transform cannot move into
  * `files`, or whose test-file exclusion it cannot fully carry over.
- * @param source - File contents
+ * @param source - File contents before this transform
  * @param filePath - Path to the file being reviewed
  * @param relativePath - Repository-relative path reported to the user
  * @returns Findings for configs needing a manual migration
  */
-export function reviewFindings(
+export function reviewFindingsBeforeTransform(
   source: string,
   filePath: string,
   relativePath: string,

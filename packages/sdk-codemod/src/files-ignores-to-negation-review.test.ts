@@ -1,7 +1,12 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "pathe";
 import { describe, expect, test } from "vitest";
 import transform, {
-  reviewFindings,
+  reviewFindingsBeforeTransform,
 } from "../codemods/v3/files-ignores-to-negation/scripts/transform";
+import { allCodemods } from "./registry";
+import { runCodemods } from "./runner";
 
 const IMPORT = 'import { defineConfig } from "@tailor-platform/sdk";\n';
 
@@ -9,7 +14,7 @@ const review = (body: string) => {
   const source = IMPORT + body;
   return {
     transformed: transform(source, "tailor.config.ts"),
-    findings: reviewFindings(source, "tailor.config.ts", "tailor.config.ts"),
+    findings: reviewFindingsBeforeTransform(source, "tailor.config.ts", "tailor.config.ts"),
   };
 };
 
@@ -228,5 +233,48 @@ describe("ignores -> files negation migration review", () => {
         ),
       }),
     ]);
+  });
+
+  describe("through runCodemods", () => {
+    const codemod = allCodemods.find((entry) => entry.id === "v3/files-ignores-to-negation")!;
+    const scriptPath = path.resolve(
+      __dirname,
+      "../codemods/v3/files-ignores-to-negation/scripts/transform.ts",
+    );
+
+    const runFindings = async (service: string) => {
+      const projectDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "files-ignores-"));
+      try {
+        await fs.promises.writeFile(
+          path.join(projectDir, "tailor.config.ts"),
+          `${IMPORT}export default defineConfig({\n  executor: { ${service} },\n});\n`,
+          "utf-8",
+        );
+        const result = await runCodemods([{ codemod, scriptPath }], projectDir, false);
+        return result.llmReviews.flatMap((llmReview) => llmReview.findings ?? []);
+      } finally {
+        await fs.promises.rm(projectDir, { recursive: true, force: true });
+      }
+    };
+
+    test("flags a test-file pattern before another pattern", async () => {
+      expect(await runFindings('files: ["e2e/*.test.ts", "src/*.ts"]')).toEqual([
+        expect.objectContaining({
+          line: 3,
+          message: expect.stringContaining("before another pattern"),
+        }),
+      ]);
+    });
+
+    test.each([
+      ["`ignores: []`", 'files: ["e2e/*.test.ts", "src/*.ts"], ignores: []'],
+      ["`ignores`", 'files: ["e2e/*.test.ts", "src/*.ts"], ignores: ["**/x.ts"]'],
+      [
+        "`ignores` and a pattern outside the config directory",
+        'files: ["../shared/**/*.ts"], ignores: ["**/x.ts"]',
+      ],
+    ])("does not flag a service with %s", async (_name, service) => {
+      expect(await runFindings(service)).toEqual([]);
+    });
   });
 });

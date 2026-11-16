@@ -138,11 +138,13 @@ function printDiff(filePath: string, before: string, after: string): void {
  * Load a transform module from a TypeScript file path.
  * Expects the module to have a default export that is a TransformFn.
  * @param scriptPath - Absolute path to the transform script
- * @returns The transform function and optional review detector
+ * @returns The transform function and optional review detectors
  */
-async function loadTransformModule(
-  scriptPath: string,
-): Promise<{ transform: TransformFn; reviewFindings?: ReviewFindingsFn }> {
+async function loadTransformModule(scriptPath: string): Promise<{
+  transform: TransformFn;
+  reviewFindings?: ReviewFindingsFn;
+  reviewFindingsBeforeTransform?: ReviewFindingsFn;
+}> {
   const mod = await import(url.pathToFileURL(scriptPath).href);
   if (typeof mod.default !== "function") {
     throw new Error(`Transform at ${scriptPath} does not have a default export function`);
@@ -153,6 +155,10 @@ async function loadTransformModule(
       typeof mod.reviewFindings === "function"
         ? (mod.reviewFindings as ReviewFindingsFn)
         : undefined,
+    reviewFindingsBeforeTransform:
+      typeof mod.reviewFindingsBeforeTransform === "function"
+        ? (mod.reviewFindingsBeforeTransform as ReviewFindingsFn)
+        : undefined,
   };
 }
 
@@ -162,6 +168,7 @@ interface LoadedTransform {
   /** Undefined for codemod-less ("manual") entries that ship only guidance. */
   transform?: TransformFn;
   reviewFindings?: ReviewFindingsFn;
+  reviewFindingsBeforeTransform?: ReviewFindingsFn;
   matches: (relativePath: string) => boolean;
   legacyPatterns: CodemodPatternGroup[];
   sourceStringLegacyPatterns: CodemodPatternGroup[];
@@ -523,6 +530,7 @@ export async function runCodemods(
       id: codemod.id,
       transform: loadedModule?.transform,
       reviewFindings: loadedModule?.reviewFindings,
+      reviewFindingsBeforeTransform: loadedModule?.reviewFindingsBeforeTransform,
       matches: picomatch(patterns, { dot: true }),
       legacyPatterns: codemod.legacyPatterns ?? [],
       sourceStringLegacyPatterns: codemod.sourceStringLegacyPatterns ?? [],
@@ -557,8 +565,9 @@ export async function runCodemods(
     }
 
     let current = original;
-    const reviewTargets: Array<{ lt: LoadedTransform; snapshot: string }> = [];
+    const reviewTargets: Array<{ lt: LoadedTransform; input: string; snapshot: string }> = [];
     for (const lt of matchedTransforms) {
+      const input = current;
       if (lt.transform) {
         const result = await lt.transform(current, absolute);
         if (result != null) {
@@ -566,7 +575,7 @@ export async function runCodemods(
           appliedCodemodIds.add(lt.id);
         }
       }
-      if (lt.prompt) reviewTargets.push({ lt, snapshot: current });
+      if (lt.prompt) reviewTargets.push({ lt, input, snapshot: current });
     }
 
     if (current !== original) {
@@ -603,7 +612,7 @@ export async function runCodemods(
       ),
     );
 
-    for (const { lt, snapshot } of reviewTargets) {
+    for (const { lt, input, snapshot } of reviewTargets) {
       const filesForReview = (): Set<string> => {
         let files = suspiciousByCodemod.get(lt.id);
         if (!files) {
@@ -612,10 +621,15 @@ export async function runCodemods(
         }
         return files;
       };
-      if (lt.reviewFindings) {
-        let findings = await lt.reviewFindings(snapshot, absolute, relative);
-        if (snapshot !== current && findings.length > 0) {
-          const remap = lineRemapper(snapshot, current);
+      const detectors = [
+        { detect: lt.reviewFindingsBeforeTransform, reviewed: input },
+        { detect: lt.reviewFindings, reviewed: snapshot },
+      ];
+      for (const { detect, reviewed } of detectors) {
+        if (!detect) continue;
+        let findings = await detect(reviewed, absolute, relative);
+        if (reviewed !== current && findings.length > 0) {
+          const remap = lineRemapper(reviewed, current);
           findings = findings.map((finding) => ({ ...finding, line: remap(finding.line) }));
         }
         if (findings.length > 0) {
@@ -655,7 +669,8 @@ export async function runCodemods(
     if (
       lt.suspiciousPatterns.length > 0 ||
       lt.sourceStringSuspiciousPatterns.length > 0 ||
-      lt.reviewFindings
+      lt.reviewFindings ||
+      lt.reviewFindingsBeforeTransform
     ) {
       // File-scoped: only surface when a suspicious pattern actually matched.
       const files = suspiciousByCodemod.get(lt.id);
