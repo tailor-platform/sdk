@@ -78,6 +78,14 @@ function functionParamSlots(node) {
   return node.params.map((p) => ({ astNode: p, names: collect(p) }));
 }
 
+function resolveVariable(context, node, name) {
+  for (let scope = context.sourceCode.getScope(node); scope; scope = scope.upper) {
+    const variable = scope.set.get(name);
+    if (variable) return variable;
+  }
+  return undefined;
+}
+
 export default {
   meta: { name: "local" },
   rules: {
@@ -179,14 +187,6 @@ export default {
           return call?.type === "CallExpression" && safeMethods.has(methodName(call.callee));
         }
 
-        function resolveVariable(node, name) {
-          for (let scope = context.sourceCode.getScope(node); scope; scope = scope.upper) {
-            const variable = scope.set.get(name);
-            if (variable) return variable;
-          }
-          return undefined;
-        }
-
         return {
           CallExpression(node) {
             if (throwingMethods.has(methodName(node.callee)) && isSchemaChain(node.callee.object)) {
@@ -202,7 +202,7 @@ export default {
             ) {
               return;
             }
-            const variable = resolveVariable(node, thrown.object.name);
+            const variable = resolveVariable(context, node, thrown.object.name);
             if (variable?.defs.some((def) => isSafeParseCall(def.node.init))) {
               context.report({ node, messageId: "rethrow" });
             }
@@ -319,7 +319,6 @@ export default {
         },
         messages: {
           cast: "Build the operator client mock with mockOperatorClient(); a cast leaves its requests and responses unchecked.",
-          spy: "Give mockOperatorClient() the response or an implementation; it makes the vi.fn spy, and a spy passed in leaves the response unchecked.",
         },
         schema: [],
       },
@@ -329,11 +328,33 @@ export default {
           "createPatOperatorClient",
           "loadOperatorWorkspaceContext",
         ]);
+        function exportedName(node) {
+          switch (node?.type) {
+            case "Identifier": {
+              const definition = resolveVariable(context, node, node.name)?.defs[0];
+              return definition?.type === "ImportBinding"
+                ? (definition.node.imported?.name ?? node.name)
+                : node.name;
+            }
+            case "TSQualifiedName":
+              return node.right.name;
+            case "MemberExpression":
+              return node.computed ? undefined : node.property.name;
+            case "TSImportType":
+              return node.qualifier?.name;
+            default:
+              return undefined;
+          }
+        }
         function namesOperatorClient(type) {
-          if (type?.type === "TSTypeReference" && type.typeName.name === "OperatorClient") {
+          if (
+            (type?.type === "TSTypeReference" &&
+              exportedName(type.typeName) === "OperatorClient") ||
+            (type?.type === "TSImportType" && exportedName(type) === "OperatorClient")
+          ) {
             return true;
           }
-          if (type?.type === "TSTypeQuery" && clientFactories.has(type.exprName.name)) {
+          if (type?.type === "TSTypeQuery" && clientFactories.has(exportedName(type.exprName))) {
             return true;
           }
           if (type?.type === "TSIndexedAccessType") {
@@ -351,7 +372,7 @@ export default {
             mocked.callee.type === "MemberExpression" &&
             mocked.callee.object.name === "vi" &&
             mocked.callee.property.name === "mocked" &&
-            clientFactories.has(mocked.arguments[0]?.name)
+            clientFactories.has(exportedName(mocked.arguments[0]))
           );
         }
         function isUncheckedCast(node) {
@@ -359,42 +380,6 @@ export default {
             node.type === "TSAsExpression" &&
             (node.typeAnnotation.type === "TSNeverKeyword" ||
               node.typeAnnotation.type === "TSAnyKeyword")
-          );
-        }
-        function isViFn(node) {
-          return (
-            node.callee.type === "MemberExpression" &&
-            node.callee.object.type === "Identifier" &&
-            node.callee.object.name === "vi" &&
-            node.callee.property.name === "fn"
-          );
-        }
-        function isSpy(node) {
-          let current = node;
-          while (current?.type === "CallExpression") {
-            if (isViFn(current)) return true;
-            current =
-              current.callee.type === "MemberExpression" ? current.callee.object : undefined;
-          }
-          return false;
-        }
-        function definitionOf(identifier) {
-          for (let scope = context.sourceCode.getScope(identifier); scope; scope = scope.upper) {
-            const definition = scope.set.get(identifier.name)?.defs[0];
-            if (definition) return definition;
-          }
-          return undefined;
-        }
-        function initializerOf(identifier) {
-          const definition = definitionOf(identifier);
-          return definition?.node.type === "VariableDeclarator" ? definition.node.init : undefined;
-        }
-        function isMockOperatorClient(callee) {
-          if (callee.type !== "Identifier") return false;
-          const definition = definitionOf(callee);
-          return (
-            definition?.type === "ImportBinding" &&
-            definition.parent.source.value.endsWith("/test-helpers/operator-client")
           );
         }
         function checkCast(node) {
@@ -406,24 +391,9 @@ export default {
           TSAsExpression: checkCast,
           TSTypeAssertion: checkCast,
           CallExpression(node) {
-            if (isMockedClientFactory(node.callee)) {
-              for (const argument of node.arguments.filter(isUncheckedCast)) {
-                context.report({ node: argument, messageId: "cast" });
-              }
-              return;
-            }
-            if (!isMockOperatorClient(node.callee)) return;
-            const [methods] = node.arguments;
-            if (methods?.type !== "ObjectExpression") return;
-            for (const property of methods.properties) {
-              if (property.type !== "Property") continue;
-              const value =
-                property.value.type === "Identifier"
-                  ? initializerOf(property.value)
-                  : property.value;
-              if (isSpy(value)) {
-                context.report({ node: property.value, messageId: "spy" });
-              }
+            if (!isMockedClientFactory(node.callee)) return;
+            for (const argument of node.arguments.filter(isUncheckedCast)) {
+              context.report({ node: argument, messageId: "cast" });
             }
           },
         };

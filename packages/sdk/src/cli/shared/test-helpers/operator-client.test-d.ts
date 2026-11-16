@@ -1,4 +1,4 @@
-import { assertType, describe, expectTypeOf, test } from "vitest";
+import { assertType, describe, expectTypeOf, test, vi } from "vitest";
 import { mockOperatorClient } from "./operator-client";
 
 describe("mockOperatorClient", () => {
@@ -56,6 +56,21 @@ describe("mockOperatorClient", () => {
           }
           return {};
         },
+      }),
+    );
+  });
+
+  test("rejects a vi.fn spy, which leaves its response unchecked", () => {
+    const methods = { getTenantConfig: vi.fn() };
+
+    // @ts-expect-error A spy in methods passed by variable
+    assertType(mockOperatorClient(methods));
+    // @ts-expect-error A spy spread into the methods
+    assertType(mockOperatorClient({ ...methods }));
+    assertType(
+      mockOperatorClient({
+        // @ts-expect-error A spy whose implementation returns a valid response
+        getTenantConfig: vi.fn(async () => ({ tenantProviderConfig: {} })),
       }),
     );
   });

@@ -9,8 +9,17 @@ type MethodImpl<K extends OperatorMethod> = (
   ...args: Parameters<OperatorClient[K]>
 ) => ReturnType<ServiceImpl<typeof OperatorService>[K]>;
 
+/**
+ * A method's implementation as a plain function; its `mock` rejects a `vi.fn` spy, whose response
+ * would go unchecked.
+ */
+type PlainImpl<K extends OperatorMethod> = {
+  (...args: Parameters<MethodImpl<K>>): ReturnType<MethodImpl<K>>;
+  mock?: never;
+};
+
 /** A method's mock: the response it returns to every request, or its implementation. */
-type MethodMock<K extends OperatorMethod> = Awaited<ReturnType<MethodImpl<K>>> | MethodImpl<K>;
+type MethodMock<K extends OperatorMethod> = Awaited<ReturnType<MethodImpl<K>>> | PlainImpl<K>;
 
 /** Mocks of the methods `K`, as {@link mockOperatorClient} takes them. */
 export type OperatorClientMocks<K extends OperatorMethod> = { [P in K]: MethodMock<P> };
