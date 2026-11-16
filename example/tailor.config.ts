@@ -101,6 +101,43 @@ export const auth = defineAuth("my-auth", {
     },
   },
   idProvider: idp.provider("sample", "default-idp-client"),
+  scim: {
+    machineUserName: "manager-machine-user",
+    authorization: { type: "oauth2" },
+    resources: [
+      {
+        name: "Users",
+        tailorDBNamespace: "tailordb",
+        tailorDBType: user.name,
+        coreSchema: {
+          name: "urn:ietf:params:scim:schemas:core:2.0:User",
+          attributes: [
+            { type: "string", name: "userName", required: true, uniqueness: "server" },
+            { type: "string", name: "displayName", required: true },
+            {
+              type: "complex",
+              name: "roles",
+              required: true,
+              multiValued: true,
+              subAttributes: [
+                {
+                  type: "string",
+                  name: "value",
+                  required: true,
+                  canonicalValues: ["MANAGER", "STAFF"],
+                },
+              ],
+            },
+          ],
+        },
+        attributeMapping: [
+          { tailorDBField: "email", scimPath: "userName" },
+          { tailorDBField: "name", scimPath: "displayName" },
+          { tailorDBField: "role", scimPath: "roles.0.value" },
+        ],
+      },
+    ],
+  },
   // connections: {
   //   "google-connection": {
   //     type: "oauth2",
