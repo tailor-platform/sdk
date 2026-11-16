@@ -185,6 +185,8 @@ Fire on auth access token lifecycle events:
 authAccessTokenIssuedTrigger();
 ```
 
+These triggers require the Auth service to publish access token events. Set `publishSessionEvents: true` in the `defineAuth()` of the Auth service that the executor's config uses; when that config references the Auth service as external, set it where the Auth service is defined. `deploy` does not enable it automatically. See [Auth service - Session Events](./auth.md#session-events).
+
 ### Workflow Execution Triggers
 
 Fire when a workflow execution changes state. Use the single-event helpers or `workflowExecutionTrigger()` for multiple events:

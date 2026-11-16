@@ -327,9 +327,11 @@ export type AuthServiceInput<
   >;
   oauth2Clients?: Record<string, OAuth2ClientInput>;
   idProvider?: IdProviderConfig;
+  /** Let an external identity provider provision users into a TailorDB table through SCIM 2.0. */
   scim?: SCIMConfig;
   tenantProvider?: TenantProviderConfig;
   connections?: Record<ConnectionNames, AuthConnectionConfig>;
+  /** Publish access token events for executors with an `authAccessToken*` trigger. */
   publishSessionEvents?: boolean;
 };
 

@@ -1,5 +1,5 @@
 ---
-description: "Configure authentication and authorization with defineAuth, including user profiles, machine users, OAuth 2.0 clients, identity providers, auth connections, and before-login hooks."
+description: "Configure authentication and authorization with defineAuth, including user profiles, machine users, OAuth 2.0 clients, identity providers, SCIM provisioning, auth connections, before-login hooks, and session events."
 ---
 
 # Auth
@@ -14,7 +14,9 @@ Auth provides:
 - Machine users for service-to-service authentication
 - OAuth 2.0 client configuration
 - Identity provider integration
+- SCIM provisioning of users from an external identity provider
 - Auth connections for external OAuth2 provider integration
+- Session events for executors
 
 For the official Tailor Platform documentation, see [Auth Guide](https://docs.tailor.tech/guides/auth/overview).
 
@@ -374,6 +376,35 @@ idProvider: idp.provider("my-provider", "my-client"),
 
 See [IdP](./idp.md) for configuring identity providers.
 
+## SCIM Provisioning
+
+Let an external identity provider, such as Okta or Microsoft Entra ID, create, update, and delete users in a TailorDB table through SCIM 2.0:
+
+```typescript
+scim: {
+  machineUserName: "scim-machine-user",
+  authorization: { type: "oauth2" },
+  resources: [
+    {
+      name: "Users",
+      tailorDBNamespace: "main",
+      tailorDBType: user.name,
+      coreSchema: {
+        name: "urn:ietf:params:scim:schemas:core:2.0:User",
+        attributes: [{ type: "string", name: "userName", required: true }],
+      },
+      attributeMapping: [{ tailorDBField: "email", scimPath: "userName" }],
+    },
+  ],
+},
+```
+
+- **machineUserName**: The machine user that SCIM requests run as. List it in [`machineUsers`](#machine-users) of the same `defineAuth()`, since `deploy` deletes the machine users that `machineUsers` does not list.
+- **authorization**: `"oauth2"` uses that machine user's client credentials; `"bearer"` uses a static token in the Secret Manager secret that `bearerSecret: { vaultName, secretKey }` names.
+- **resources**: Each entry maps SCIM attributes onto a TailorDB table. `deploy` accepts a `tailorDBType` that names no table, so check the names yourself.
+
+Removing `scim`, or an entry of `resources`, deletes it on the next `deploy`. See the [SCIM Provisioning guide](https://docs.tailor.tech/guides/auth/scim) for attribute types, path expressions, and the endpoint URL.
+
 ## Auth Connections
 
 Auth connections enable OAuth2 authentication with external providers (Google, Microsoft 365, QuickBooks, etc.) for application-to-application flows. Functions can access connection tokens at runtime via `authconnection.getConnectionToken()` (from `@tailor-platform/sdk/runtime`).
@@ -556,6 +587,10 @@ hooks: {
   },
 }
 ```
+
+## Session Events
+
+Set `publishSessionEvents: true` in `defineAuth()` to have the Auth service publish an event each time it issues, refreshes, or revokes an access token, including machine user tokens. Executors with an [auth access token trigger](./executor.md#auth-access-token-triggers) run only while it is set; `deploy` does not enable it for them.
 
 ## CLI Commands
 
