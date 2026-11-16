@@ -95,7 +95,7 @@ jobs:
             echo "Major changesets found (base: $BASE_REF, head: $HEAD_REF):"
             echo "$majors"
             echo ""
-            echo "Until the next major release is planned, use minor and start the description with '**Breaking change**:'."
+            echo "Breaking changes ship in the next major. For the narrow exception that allows minor, see docs/changeset.md."
             exit 1
           fi
 
