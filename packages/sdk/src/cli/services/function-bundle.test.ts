@@ -211,6 +211,34 @@ describe("buildFunctionBundle CLI entry point", () => {
     );
   });
 
+  test("bundles a function whose module uses the CLI entry point only in an instance field initializer", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-instance-field-");
+    writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeFunction(
+      tmp.dir,
+      `import { apiCall } from "@tailor-platform/sdk/cli";\n` +
+        `class Deploy { run = () => apiCall(); value = apiCall(); }\n` +
+        `export default async () => ["OWN_SOURCE", typeof Deploy];\n`,
+    );
+
+    await expect(bundle(sourceFile)).resolves.toContain("OWN_SOURCE");
+  });
+
+  test("rejects the build when a static field initializer uses the CLI entry point", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-static-field-");
+    writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeModules(tmp.dir, {
+      "function.ts": `import { Deploy } from "./config";\nexport default async () => Deploy.value;\n`,
+      "config.ts":
+        `import { apiCall } from "@tailor-platform/sdk/cli";\n` +
+        `export class Deploy { static value = apiCall(); }\n`,
+    });
+
+    await expect(bundle(sourceFile)).rejects.toThrow(
+      expect.objectContaining({ code: "DEPLOY_ONLY_CLI_IMPORT" }),
+    );
+  });
+
   test("bundles a function whose module only names a CLI export as a parameter or a property", async () => {
     using tmp = tempCwd("sdk-function-bundle-cli-entry-lookalike-");
     writeUnloadableCliPackage(tmp.dir);

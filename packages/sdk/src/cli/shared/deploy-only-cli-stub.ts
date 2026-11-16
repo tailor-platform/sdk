@@ -68,6 +68,10 @@ function importedBindings(program: ReturnType<typeof parseSync>["program"]): Set
   return names;
 }
 
+function isInstanceField(node: ASTNode): boolean {
+  return node.type === "PropertyDefinition" && node.static !== true;
+}
+
 function isValueReference(parent: ASTNode | undefined, key: string | undefined): boolean {
   if (!parent) return true;
   const type = String(parent.type);
@@ -89,7 +93,7 @@ function topLevelUses(code: string, file: string): TopLevelUse[] {
   walkBindingAware(program, names, (node, shadowed, parent, key) => {
     const start = node.start as number;
     const end = node.end as number;
-    if (FUNCTION_LIKE.has(String(node.type))) {
+    if (FUNCTION_LIKE.has(String(node.type)) || isInstanceField(node)) {
       functions.push([start, end]);
       return;
     }
