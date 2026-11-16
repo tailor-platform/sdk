@@ -122,22 +122,38 @@ describe("loadFilesWithIgnores", () => {
     expect(files).toEqual([path.join(baseDir, "e2e", "a.test.ts")]);
   });
 
-  test("excludes test files matched by a test-file pattern before another pattern", () => {
-    const warnSpy = vi.fn();
-    const baseDir = makeDirWithFile("file-loader-test-pattern-first-", "src/a.ts");
-    writeFiles(baseDir, ["src/a.test.ts", "lib/b.ts"]);
+  test.each([".test.ts", ".spec.ts"])(
+    "includes %s files matched by a test-file pattern before another pattern",
+    (suffix) => {
+      const warnSpy = vi.fn();
+      const baseDir = makeDirWithFile("file-loader-test-pattern-first-", "src/a.ts");
+      writeFiles(baseDir, [`src/a${suffix}`, `src/skip${suffix}`, "lib/b.ts"]);
 
-    expect(
-      loadFilesWithIgnores({ files: ["./src/**/*.test.ts", "./src/**/*.ts"] }, baseDir, warnSpy),
-    ).toEqual([path.join(baseDir, "src", "a.ts")]);
-    expect(
-      loadFilesWithIgnores(
-        { files: ["./src/**/*.ts", "./src/**/*.test.ts", "./lib/**/*.ts"] },
-        baseDir,
-        warnSpy,
-      ).toSorted(),
-    ).toEqual([path.join(baseDir, "lib", "b.ts"), path.join(baseDir, "src", "a.ts")]);
-  });
+      expect(
+        loadFilesWithIgnores(
+          { files: [`./src/**/*${suffix}`, `!./src/skip${suffix}`, "./src/**/*.ts"] },
+          baseDir,
+          warnSpy,
+        ).toSorted(),
+      ).toEqual(
+        [path.join(baseDir, "src", "a.ts"), path.join(baseDir, "src", `a${suffix}`)].toSorted(),
+      );
+      expect(
+        loadFilesWithIgnores(
+          { files: ["./src/**/*.ts", `./src/**/*${suffix}`, "./lib/**/*.ts"] },
+          baseDir,
+          warnSpy,
+        ).toSorted(),
+      ).toEqual(
+        [
+          path.join(baseDir, "lib", "b.ts"),
+          path.join(baseDir, "src", "a.ts"),
+          path.join(baseDir, "src", `a${suffix}`),
+          path.join(baseDir, "src", `skip${suffix}`),
+        ].toSorted(),
+      );
+    },
+  );
 
   test("applies ignores after a trailing test-file pattern", () => {
     const warnSpy = vi.fn();

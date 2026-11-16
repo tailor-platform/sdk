@@ -8,13 +8,6 @@ export interface FileLoadConfig {
 
 const TEST_FILE_SUFFIXES = [".test.ts", ".spec.ts"];
 
-// Unanchored, so they also exclude test files a pattern reaching outside baseDir matches.
-const DEFAULT_TEST_FILE_EXCLUSIONS: FilePatternRule[] = TEST_FILE_SUFFIXES.map((suffix) => ({
-  pattern: `!**/*${suffix}`,
-  negated: true,
-  glob: `**/*${suffix}`,
-}));
-
 // Deduplicate compatibility warnings per destination, directory, and pattern set.
 const warnedFallbacks = new WeakMap<(message: string) => void, Set<string>>();
 
@@ -22,9 +15,8 @@ const warnedFallbacks = new WeakMap<(message: string) => void, Set<string>>();
  * Load files matching the given patterns, excluding files that match ignore patterns.
  * A `files` entry starting with `!` excludes the files it matches; for each file, the last
  * `files` entry that matches it decides. Each file is returned once.
- * Unless ignores is specified, test files (*.test.ts, *.spec.ts) are excluded as if `!`
- * entries for them followed the last `files` entry that neither starts with `!` nor ends in
- * `.test.ts` or `.spec.ts`, so entries ending in those after it include test files.
+ * Unless ignores is specified, test files (*.test.ts, *.spec.ts) are excluded by default:
+ * a `files` entry that does not end in `.test.ts` or `.spec.ts` matches no test files.
  * @param config - Configuration with files patterns and optional ignores patterns
  * @param baseDir - Directory relative patterns are resolved against
  * @param warn - Reports glob errors and compatibility warnings
@@ -90,23 +82,19 @@ function resolveFiles(
   );
 
   const rules = config.files.map((pattern) => parseFilePattern(pattern, baseDir));
-  if (config.ignores === undefined) {
-    const lastNonTestRuleIndex = rules.findLastIndex(
-      (rule) => !rule.negated && !isTestFilePattern(rule.pattern),
-    );
-    rules.splice(lastNonTestRuleIndex + 1, 0, ...DEFAULT_TEST_FILE_EXCLUSIONS);
-  }
   // Map insertion order keeps each file at the position its first match produced.
   const lastPositiveRuleIndex = new Map<string, number>();
   let matchedAnyPattern = false;
   rules.forEach((rule, ruleIndex) => {
     if (rule.negated) return;
     try {
-      const matchedFiles = fs.globSync(rule.glob);
+      const matchedFiles = fs.globSync(rule.absolutePattern);
       if (matchedFiles.length > 0) {
         matchedAnyPattern = true;
       }
+      const skipsTestFiles = config.ignores === undefined && !hasTestFileSuffix(rule.pattern);
       for (const file of matchedFiles) {
+        if (skipsTestFiles && hasTestFileSuffix(file)) continue;
         lastPositiveRuleIndex.set(file, ruleIndex);
       }
     } catch (error) {
@@ -123,7 +111,7 @@ function resolveFiles(
       ([file, ruleIndex]) =>
         !rules
           .slice(ruleIndex + 1)
-          .some((rule) => rule.negated && path.matchesGlob(file, rule.glob)),
+          .some((rule) => rule.negated && path.matchesGlob(file, rule.absolutePattern)),
     )
     .map(([file]) => file)
     .filter(
@@ -139,16 +127,16 @@ interface FilePatternRule {
   pattern: string;
   /** Whether the entry starts with `!` and excludes the files it matches. */
   negated: boolean;
-  /** The entry without its `!`, resolved against baseDir; unanchored for the default test-file exclusions. */
-  glob: string;
+  /** The entry without its `!`, resolved against baseDir. */
+  absolutePattern: string;
 }
 
 function parseFilePattern(pattern: string, baseDir: string): FilePatternRule {
   const negated = pattern.startsWith("!");
   const glob = negated ? pattern.slice(1) : pattern;
-  return { pattern, negated, glob: path.resolve(baseDir, glob) };
+  return { pattern, negated, absolutePattern: path.resolve(baseDir, glob) };
 }
 
-function isTestFilePattern(pattern: string): boolean {
-  return TEST_FILE_SUFFIXES.some((suffix) => pattern.endsWith(suffix));
+function hasTestFileSuffix(patternOrFile: string): boolean {
+  return TEST_FILE_SUFFIXES.some((suffix) => patternOrFile.endsWith(suffix));
 }

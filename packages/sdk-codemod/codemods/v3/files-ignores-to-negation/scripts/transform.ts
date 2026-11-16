@@ -20,7 +20,6 @@ import type { Edit, SgNode } from "@ast-grep/napi";
 const NAMESPACED_SERVICES: ReadonlySet<string> = new Set(["db", "resolver"]);
 const SINGLE_SERVICES: ReadonlySet<string> = new Set(["executor", "workflow", "httpAdapter"]);
 const TEST_FILE_SUFFIXES = [".test.ts", ".spec.ts"];
-const DEFAULT_NEGATIONS = TEST_FILE_SUFFIXES.map((suffix) => `!**/*${suffix}`);
 
 type Analysis = { edits: Edit[]; findings: ManualMigration[] };
 
@@ -32,12 +31,14 @@ function isNegation(element: SgNode): boolean {
   return isStringLiteral(element) && element.text()[1] === "!";
 }
 
-function isTestFilePattern(element: SgNode): boolean {
+function testFileSuffixOf(element: SgNode): string | undefined {
+  if (!isStringLiteral(element)) return undefined;
   const withoutClosingQuote = element.text().slice(0, -1);
-  return (
-    isStringLiteral(element) &&
-    TEST_FILE_SUFFIXES.some((suffix) => withoutClosingQuote.endsWith(suffix))
-  );
+  return TEST_FILE_SUFFIXES.find((suffix) => withoutClosingQuote.endsWith(suffix));
+}
+
+function isTestFilePattern(element: SgNode): boolean {
+  return testFileSuffixOf(element) !== undefined;
 }
 
 /** The `patterns` of the `!` elements that directly follow `elements[index]`. */
@@ -171,19 +172,39 @@ function analyzeService(source: string, service: SgNode, label: string): Analysi
     if (lastNonTestPositive === -1) return { edits: [], findings: [] };
     const existing = negationsAfter(elements, patterns, lastNonTestPositive);
     const quote = quoteOf(elements);
-    const missing = DEFAULT_NEGATIONS.filter((pattern) => !existing.has(pattern)).map(
-      (pattern) => `${quote}${pattern}${quote}`,
-    );
-    const findings = patterns
+    const missingSuffixes = TEST_FILE_SUFFIXES.filter((suffix) => !existing.has(`!**/*${suffix}`));
+    const missing = missingSuffixes.map((suffix) => `${quote}!**/*${suffix}${quote}`);
+    const positivesUpToInsertion = elements
       .slice(0, lastNonTestPositive + 1)
-      .some((pattern, index) => !isNegation(elements[index]) && mayEscapeConfigDir(pattern))
-      ? [
-          {
-            reason: `${label}.files can match files outside this config's directory, where the explicit test-file exclusion does not apply`,
-            node: filesEntry,
-          },
-        ]
-      : [];
+      .flatMap((element, index) =>
+        isNegation(element) ? [] : [{ element, pattern: patterns[index] }],
+      );
+    const findings: ManualMigration[] = [];
+    if (
+      positivesUpToInsertion.some(({ element, pattern }) => {
+        const suffix = testFileSuffixOf(element);
+        return (
+          suffix !== undefined &&
+          missingSuffixes.includes(suffix) &&
+          (pattern === null || !mayEscapeConfigDir(pattern))
+        );
+      })
+    ) {
+      findings.push({
+        reason: `${label}.files has a pattern ending in \`.test.ts\` or \`.spec.ts\` before another pattern, so the explicit test-file exclusion inserted after the other pattern excludes the test files the earlier pattern includes`,
+        node: filesEntry,
+      });
+    }
+    if (
+      positivesUpToInsertion.some(
+        ({ element, pattern }) => !isTestFilePattern(element) && mayEscapeConfigDir(pattern),
+      )
+    ) {
+      findings.push({
+        reason: `${label}.files can match files outside this config's directory, where the explicit test-file exclusion does not apply`,
+        node: filesEntry,
+      });
+    }
     return {
       edits:
         missing.length > 0 ? insertElementsAfter(source, files, lastNonTestPositive, missing) : [],

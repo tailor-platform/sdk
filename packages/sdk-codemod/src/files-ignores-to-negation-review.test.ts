@@ -86,16 +86,47 @@ describe("ignores -> files negation migration review", () => {
     );
   });
 
-  test("does not flag a test-file pattern outside the config directory, which nothing excludes", () => {
+  test.each([
+    ["a test-file pattern", '"e2e/*.test.ts", "!e2e/skip.test.ts", "ex/*.ts"'],
+    ["a test-file template literal", '`${dir}/*.spec.ts`, "ex/*.ts"'],
+  ])("inserts the test-file exclusion but flags %s before another pattern", (_name, elements) => {
     const { transformed, findings } = review(
-      'export default defineConfig({\n  executor: { files: ["src/**/*.ts", "../shared/**/*.test.ts"] },\n});\n',
+      `export default defineConfig({\n  executor: { files: [${elements}] },\n});\n`,
     );
 
-    expect(transformed).toContain(
-      'files: ["src/**/*.ts", "!**/*.test.ts", "!**/*.spec.ts", "../shared/**/*.test.ts"]',
-    );
-    expect(findings).toEqual([]);
+    expect(transformed).toContain(`files: [${elements}, "!**/*.test.ts", "!**/*.spec.ts"]`);
+    expect(findings).toEqual([
+      expect.objectContaining({ message: expect.stringContaining("before another pattern") }),
+    ]);
   });
+
+  test.each([
+    [
+      "outside the config directory after another pattern",
+      '"src/**/*.ts", "../shared/**/*.test.ts"',
+      '"src/**/*.ts", "!**/*.test.ts", "!**/*.spec.ts", "../shared/**/*.test.ts"',
+    ],
+    [
+      "outside the config directory before another pattern",
+      '"../shared/**/*.test.ts", "src/**/*.ts"',
+      '"../shared/**/*.test.ts", "src/**/*.ts", "!**/*.test.ts", "!**/*.spec.ts"',
+    ],
+    [
+      "whose exclusion the config already has",
+      '"e2e/*.test.ts", "src/**/*.ts", "!**/*.test.ts"',
+      '"e2e/*.test.ts", "src/**/*.ts", "!**/*.spec.ts", "!**/*.test.ts"',
+    ],
+  ])(
+    "does not flag a test-file pattern %s, which no inserted pattern excludes",
+    (_name, elements, expected) => {
+      const { transformed, findings } = review(
+        `export default defineConfig({\n  executor: { files: [${elements}] },\n});\n`,
+      );
+
+      expect(transformed).toContain(`files: [${expected}]`);
+      expect(findings).toEqual([]);
+    },
+  );
 
   test.each([
     [
