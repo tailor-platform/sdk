@@ -154,8 +154,24 @@ const IN_USE_SUGGESTIONS: Record<ResourceDeletingCommand, string> = {
     "Remove the applications that use each listed resource, or deploy them so that they stop using it, then run remove again.",
 };
 
+const OWN_APPLICATION_SUGGESTION =
+  "An application that an executor in its own config still targets is deleted because that config no longer defines or references a TailorDB namespace, resolver namespace, IdP, or Auth service, so add one of them back to that config or remove that executor from it.";
+
 const UNMANAGED_USER_SUGGESTION =
   "An executor, resolver, AI gateway, or Auth service listed without an application is not deployed by the SDK, so change or delete it outside the SDK.";
+
+function inUseSuggestion(
+  uses: ReadonlyArray<ResourceUse>,
+  command: ResourceDeletingCommand,
+): string {
+  const usesOwnApplication = (use: ResourceUse) =>
+    command === "deploy" && use.resourceType === "application" && use.application === use.name;
+  return [
+    ...(uses.every(usesOwnApplication) ? [] : [IN_USE_SUGGESTIONS[command]]),
+    ...(uses.some(usesOwnApplication) ? [OWN_APPLICATION_SUGGESTION] : []),
+    ...(uses.every((use) => use.application) ? [] : [UNMANAGED_USER_SUGGESTION]),
+  ].join(" ");
+}
 
 const SUBGRAPH_RESOURCE_TYPES = new Map<Subgraph_ServiceType, CheckedResourceType>([
   [Subgraph_ServiceType.TAILORDB, "tailordb.service"],
@@ -551,7 +567,7 @@ type AssertResourcesNotInUseParams = {
 };
 
 /**
- * Reject a run that deletes a resource another application still uses: an Auth service,
+ * Reject a run that deletes a resource an application still uses: an Auth service,
  * TailorDB namespace, resolver namespace, or IdP that an application references, an Auth
  * service that an AI gateway authenticates against, a machine user that an executor or resolver
  * runs as, a TailorDB table, resolver, IdP, Auth service, or workflow that an executor
@@ -600,9 +616,7 @@ export async function assertResourcesNotInUse(
   throw CLIError({
     code: "SERVICE_IN_USE",
     message: uses.map(describeUse).join("\n"),
-    suggestion: uses.every((use) => use.application)
-      ? IN_USE_SUGGESTIONS[command]
-      : `${IN_USE_SUGGESTIONS[command]} ${UNMANAGED_USER_SUGGESTION}`,
+    suggestion: inUseSuggestion(uses, command),
     context: { uses },
   });
 }

@@ -684,6 +684,78 @@ describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", ()
     );
   });
 
+  describe("for an application that an executor of its own config targets", () => {
+    const CORE_QUERY: ExecutorInit["targetConfig"] = {
+      config: { case: "tailorGraphql", value: { appName: "core" } },
+    };
+    const DEPLOY_SUGGESTION =
+      "Keep each listed resource in the config that defines it, or deploy the applications that use it so that they stop using it, first or in the same run.";
+    const OWN_APPLICATION_SUGGESTION =
+      "An application that an executor in its own config still targets is deleted because that config no longer defines or references a TailorDB namespace, resolver namespace, IdP, or Auth service, so add one of them back to that config or remove that executor from it.";
+    const UNMANAGED_SUGGESTION =
+      "An executor, resolver, AI gateway, or Auth service listed without an application is not deployed by the SDK, so change or delete it outside the SDK.";
+
+    function coreQueriedBySelf() {
+      const core = emptyPlanResults();
+      deletingCoreApplication(core);
+      core.executor.changeSet.creates.push({
+        name: "self-query",
+        request: { workspaceId: "ws", executor: { name: "self-query", targetConfig: CORE_QUERY } },
+        metaRequest: { trn: "trn" },
+      });
+      return core;
+    }
+
+    test("suggests only restoring a service or removing the executor when that executor is the only user", async () => {
+      await expect(
+        check([deployment({ name: "core" }, coreQueriedBySelf())], "deploy"),
+      ).rejects.toThrow(
+        expect.objectContaining({
+          message:
+            'Application "core" cannot be deleted: executor "self-query" of application "core" still uses it.',
+          suggestion: OWN_APPLICATION_SUGGESTION,
+        }),
+      );
+    });
+
+    test("adds the suggestions for other applications and unmanaged executors that also use it", async () => {
+      const core = coreQueriedBySelf();
+      withWorkspaceExecutor(core, { name: "notify", targetConfig: CORE_QUERY }, "portal");
+      withWorkspaceExecutor(core, { name: "legacy", targetConfig: CORE_QUERY });
+
+      await expect(check([deployment({ name: "core" }, core)], "deploy")).rejects.toThrow(
+        expect.objectContaining({
+          suggestion: [DEPLOY_SUGGESTION, OWN_APPLICATION_SUGGESTION, UNMANAGED_SUGGESTION].join(
+            " ",
+          ),
+        }),
+      );
+    });
+
+    test("keeps the deploy suggestion when an application uses a deleted service of its own name", async () => {
+      const owner = withWorkspaceApplications(ownerDeleting("portal"), [
+        { name: "portal", authNamespace: "portal" },
+      ]);
+
+      await expect(check([deployment({ name: "core" }, owner)], "deploy")).rejects.toThrow(
+        expect.objectContaining({ suggestion: DEPLOY_SUGGESTION }),
+      );
+    });
+
+    test("keeps the remove suggestion when an executor labelled with the removed application remains", async () => {
+      const core = emptyPlanResults();
+      deletingCoreApplication(core);
+      withWorkspaceExecutor(core, { name: "self-query", targetConfig: CORE_QUERY }, "core");
+
+      await expect(check([deployment({ name: "core" }, core)], "remove")).rejects.toThrow(
+        expect.objectContaining({
+          suggestion:
+            "Remove the applications that use each listed resource, or deploy them so that they stop using it, then run remove again.",
+        }),
+      );
+    });
+  });
+
   test("rejects a deleted Auth service that an AI gateway outside the run uses", async () => {
     const owner = withWorkspaceGateway(ownerDeleting("core-auth"));
 
