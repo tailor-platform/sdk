@@ -26,16 +26,9 @@ SDK users must modify their code or configuration to upgrade.
 
 `major` is only accepted on a `v<N>` branch (for example `v3`) or a branch derived from it; the
 `Changeset check` workflow fails any other PR that carries a `major` changeset, so a stray `major`
-cannot bump the release PR to the next major. A breaking change ships in the next major, not on
-`main`.
-
-Only when the impact is clearly known to be very limited may a breaking change ship as `minor` on
-`main`, as an exception. Its description starts with `**Breaking change**:` followed by the user
-impact and migration steps, and the PR body states:
-
-- who or what breaks, with a concrete example (user, environment, operation)
-- why the impact is limited
-- whether a way to avoid breaking was considered, and why it was not taken
+cannot bump the release PR to the next major. A breaking change ships as `major` on a `v<N>` branch,
+not on `main`; see [Shipping a breaking change as minor on main](#shipping-a-breaking-change-as-minor-on-main)
+for the exception.
 
 - Removing or renaming a public API (`defineConfig`, `db.table`, `createResolver`, etc.)
 - Changing the signature or behavior of an existing API in an incompatible way
@@ -48,6 +41,16 @@ A CLI behavior change is not automatically breaking. A change that follows a bre
 external system is not an SDK breaking change when it preserves existing SDK invocations, scripts,
 code, and configuration. If that distinction cannot be established from the repository, confirm the
 expected compatibility with the user before choosing `major`.
+
+#### Shipping a breaking change as minor on main
+
+Only when the impact is clearly known to be very limited may a breaking change ship as `minor` on
+`main`, as an exception. Its description starts with `**Breaking change**:` followed by the user
+impact and migration steps, and the PR body states:
+
+- who or what breaks, with a concrete example (user, environment, operation)
+- why the impact is limited
+- whether a way to avoid breaking was considered, and why it was not taken
 
 #### Breaking changes to beta features
 

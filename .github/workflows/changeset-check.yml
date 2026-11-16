@@ -95,7 +95,7 @@ jobs:
             echo "Major changesets found (base: $BASE_REF, head: $HEAD_REF):"
             echo "$majors"
             echo ""
-            echo "Breaking changes ship in the next major. For the narrow exception that allows minor, see docs/changeset.md."
+            echo "Breaking changes ship as major on a v<N> branch. For the narrow exception that allows minor, see docs/changeset.md."
             exit 1
           fi
 
