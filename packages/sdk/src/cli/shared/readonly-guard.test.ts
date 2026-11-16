@@ -3,6 +3,7 @@ import * as path from "pathe";
 import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import { writePlatformConfig } from "./context";
 import { assertWritable } from "./readonly-guard";
+import { listSourceFiles } from "./test-helpers/source-files";
 import { resetKeyringState } from "./token-store";
 
 /**
@@ -156,32 +157,6 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
 ]);
 
 /**
- * Recursively list `*.ts` files under `dir`, excluding tests and test-only
- * fixtures/bundler workspaces.
- * Paths are returned relative to `dir` with forward slashes.
- * @param dir - Root directory to walk
- * @returns Relative file paths
- */
-function listCommandSourceFiles(dir: string): string[] {
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-  const out: string[] = [];
-  for (const entry of entries) {
-    if (entry.name === "__test_fixtures__") continue;
-    if (entry.name === "__test_bundler__") continue;
-    const child = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      const nested = listCommandSourceFiles(child).map((p) => `${entry.name}/${p}`);
-      out.push(...nested);
-      continue;
-    }
-    if (!entry.name.endsWith(".ts")) continue;
-    if (entry.name.endsWith(".test.ts")) continue;
-    out.push(entry.name);
-  }
-  return out;
-}
-
-/**
  * Decide whether a file defines a runnable CLI command. Helper modules that
  * only export utilities are skipped because they are exercised through the
  * commands that import them.
@@ -311,9 +286,10 @@ describe("write command coverage", () => {
     // deleting the call (while leaving the import) still fails this test.
     const callPattern = /\bawait\s+assertWritable\s*\(/;
     const offenders: string[] = [];
-    for (const relativePath of listCommandSourceFiles(commandsDir)) {
+    for (const file of listSourceFiles(commandsDir)) {
+      const relativePath = path.relative(commandsDir, file);
       if (READ_OR_LOCAL_COMMAND_PATHS.has(relativePath)) continue;
-      const source = fs.readFileSync(path.join(commandsDir, relativePath), "utf-8");
+      const source = fs.readFileSync(file, "utf-8");
       if (!isRunnableCommandFile(source)) continue;
       if (!callPattern.test(source)) {
         offenders.push(`commands/${relativePath}`);
