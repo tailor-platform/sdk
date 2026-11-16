@@ -35,14 +35,12 @@ const resolveInstalled = (fromDir: string, name: string): string | undefined => 
   }
 };
 
-const runtimeEdges = (manifest: Manifest, includePeers: boolean) => [
+const runtimeEdges = (manifest: Manifest) => [
   ...Object.keys(manifest.dependencies ?? {}).map((name) => ({ name, optional: false })),
   ...Object.keys(manifest.optionalDependencies ?? {}).map((name) => ({ name, optional: true })),
-  ...(includePeers
-    ? Object.keys(manifest.peerDependencies ?? {})
-        .filter((name) => !manifest.peerDependenciesMeta?.[name]?.optional)
-        .map((name) => ({ name, optional: false }))
-    : []),
+  ...Object.keys(manifest.peerDependencies ?? {})
+    .filter((name) => !manifest.peerDependenciesMeta?.[name]?.optional)
+    .map((name) => ({ name, optional: false })),
 ];
 
 const unsupportedDependencies = (packageDir: string, range: string): string[] => {
@@ -53,7 +51,7 @@ const unsupportedDependencies = (packageDir: string, range: string): string[] =>
   ];
   for (let item = queue.shift(); item; item = queue.shift()) {
     const chain = [...item.chain, item.manifest.name];
-    for (const edge of runtimeEdges(item.manifest, item.chain.length === 0)) {
+    for (const edge of runtimeEdges(item.manifest)) {
       const dir = resolveInstalled(item.dir, edge.name);
       if (dir === undefined) {
         if (edge.optional) continue;
@@ -74,14 +72,16 @@ const unsupportedDependencies = (packageDir: string, range: string): string[] =>
   return unsupported;
 };
 
-const publishedPackages = readdirSync(packagesDir)
+const packagesWithNodeEngines = readdirSync(packagesDir)
   .map((name) => path.join(packagesDir, name))
   .filter((dir) => existsSync(path.join(dir, "package.json")))
-  .map((dir) => ({ dir, manifest: readManifest(dir) }))
-  .filter(({ manifest }) => !manifest.private && manifest.engines?.node !== undefined)
-  .map(({ dir, manifest }) => ({ name: manifest.name, dir, range: nodeRange(manifest)! }));
+  .flatMap((dir) => {
+    const manifest = readManifest(dir);
+    const range = nodeRange(manifest);
+    return manifest.private || range === undefined ? [] : [{ name: manifest.name, dir, range }];
+  });
 
-test.each(publishedPackages)(
+test.each(packagesWithNodeEngines)(
   "$name runtime dependencies support every Node version in its engines.node",
   ({ dir, range }) => {
     expect(
