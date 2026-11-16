@@ -8,7 +8,11 @@ import { humanizeRelativeTime } from "#/cli/shared/format";
 import { logger, styles } from "#/cli/shared/logger";
 import { createNotificationClient } from "./client";
 import { isNotificationNotFound, notificationNotFound } from "./errors";
-import { transformNotificationDetail, type NotificationDetailInfo } from "./transform";
+import {
+  categoryDisplayLabel,
+  transformNotificationDetail,
+  type NotificationDetailInfo,
+} from "./transform";
 
 /** MarkMyNotificationsRead accepts at most this many ids per call. */
 const MARK_READ_BATCH = 100;
@@ -52,7 +56,7 @@ function formatDetail(detail: NotificationDetailInfo): string {
   const lines = [
     styles.bold(detail.title),
     `${styles.dim("id:")} ${detail.id}`,
-    `${styles.dim("severity:")} ${detail.severity}   ${styles.dim("category:")} ${detail.category}`,
+    `${styles.dim("severity:")} ${detail.severity}   ${styles.dim("category:")} ${categoryDisplayLabel(detail.category)}`,
     `${styles.dim("arrived:")} ${humanizeRelativeTime(detail.arrivedAt)}   ${styles.dim("expires:")} ${
       detail.expiresAt ? humanizeRelativeTime(detail.expiresAt) : "never"
     }`,

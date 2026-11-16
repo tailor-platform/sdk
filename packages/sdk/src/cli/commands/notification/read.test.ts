@@ -96,6 +96,20 @@ describe("notification read", () => {
     expect(text).toContain("Status page: https://status.example.com/");
   });
 
+  test("labels the ALERT category as your resources", async () => {
+    mockClient({
+      getMyNotification: vi.fn().mockResolvedValue({
+        notification: { ...notification(ID_A), category: NotificationCategory.ALERT },
+      }),
+    });
+    using stdout = captureStdout();
+
+    const result = await runCommand(readCommand, [ID_A, "--no-mark-read"]);
+
+    expect(result.success).toBe(true);
+    expect(stdout.text()).toMatch(/category:\S* your resources/);
+  });
+
   test("fetches every id and marks them read in one call", async () => {
     const client = mockClient();
     using _stdout = captureStdout();

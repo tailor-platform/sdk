@@ -266,6 +266,33 @@ describe("notification list", () => {
     ]);
   });
 
+  test("labels the ALERT category as your resources in the table", async () => {
+    mockClient(
+      vi.fn().mockResolvedValue({
+        notifications: [
+          {
+            id: "0d2c0f1e-5c2b-4e3a-9c1d-2f6a7b8c9d0e",
+            category: NotificationCategory.ALERT,
+            severity: NotificationSeverity.WARNING,
+            title: "Token expires soon",
+            bodyMarkdown: "body",
+            actions: [],
+            scopeRefs: [],
+            arrivedAt: timestampFromDate(new Date(Date.now() - 60 * 1000)),
+          },
+        ],
+        nextPageToken: "",
+        totalCount: 1,
+      }),
+    );
+    using stdout = captureStdout();
+
+    const result = await runCommand(listCommand, []);
+
+    expect(result.success).toBe(true);
+    expect(tableRows(stdout.text())[1]?.[2]).toBe("your resources");
+  });
+
   test("prints the full rows as JSON in JSON mode", async () => {
     const arrivedAt = new Date("2026-10-29T01:02:03Z");
     mockClient(

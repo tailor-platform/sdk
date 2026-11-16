@@ -8,9 +8,11 @@ politty:
 
 # Notification Commands
 
-Commands for reading the platform notifications addressed to you: alerts you must act on,
-incidents, maintenance notices and announcements. The inbox is per user, so these commands take a
-profile (for its login) but no workspace. Marking a notification read or dismissing it in the CLI
+Commands for reading the platform notifications addressed to you: notices about your own
+resources or account, incidents, maintenance and announcements. Tables and `read` show the `alert`
+category as "your resources"; `--category` and JSON output use `alert`.
+
+The inbox is per user, so these commands take a profile (for its login) but no workspace. Marking a notification read or dismissing it in the CLI
 also changes it in the Console, which shows the same inbox.
 
 When no subcommand is provided, defaults to `list`.
