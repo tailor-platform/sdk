@@ -131,6 +131,9 @@ export default defineConfig({
 
 ### Type Definitions Without `tailor generate`
 
+> [!WARNING]
+> The content mapper is a **beta** feature. It depends on TypeScript 7.1, which is still in development and in beta, and the `contentMappers` option is not final. The mapper's behavior may change in a future release.
+
 `tailor generate` and `tailor deploy` write `tailor.d.ts`, which declares the names and values your config defines (`Env`, `Attributes`, `MachineUserName`, `IdpName`, and so on) so your code is checked and autocompleted against them. With TypeScript 7.1 or later, TypeScript can read them from `tailor.config.ts` itself, so they are current without running either command.
 
 Add the SDK as a content mapper for `.tailor` files in `tsconfig.json`:
