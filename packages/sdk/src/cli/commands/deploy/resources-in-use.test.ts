@@ -8,6 +8,9 @@ import {
   AuthIDPConfigSchema,
   AuthSCIMConfig_AuthorizationType,
   AuthSCIMConfigSchema,
+  AuthSCIMResourceSchema,
+  TenantProviderConfigSchema,
+  UserProfileProviderConfigSchema,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { ExecutorExecutorSchema } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { PipelineResolverView } from "@tailor-platform/tailor-proto/pipeline_pb";
@@ -35,6 +38,7 @@ type ApplicationShape = {
 type WorkspaceApplication = {
   name: string;
   authNamespace?: string;
+  authIdpConfigName?: string;
   subgraphs?: Array<{ serviceType: Subgraph_ServiceType; serviceNamespace: string }>;
 };
 
@@ -69,9 +73,12 @@ function referencingExternally(authNamespace: string): ApplicationShape {
   return { name: "portal", config: { auth: { name: authNamespace, external: true } } };
 }
 
-function plannedApplication(name: string) {
+function plannedApplication(
+  name: string,
+  request: Pick<WorkspaceApplication, "authNamespace" | "authIdpConfigName"> = {},
+) {
   const results = emptyPlanResults();
-  results.app.unchanged.push({ name } as never);
+  results.app.unchanged.push({ name, request } as never);
   return results;
 }
 
@@ -169,7 +176,7 @@ describe("assertResourcesNotInUse", () => {
       { name: "core", authNamespace: "shared-auth" },
       { name: "portal", authNamespace: "shared-auth" },
     ]);
-    owner.app.updates.push({ name: "core" } as never);
+    owner.app.updates.push({ name: "core", request: {} } as never);
 
     await expect(
       check(
@@ -385,6 +392,119 @@ describe("assertResourcesNotInUse", () => {
           'Auth service "shared-auth" cannot be deleted: application "viewer" still uses it.',
       }),
     );
+  });
+});
+
+function deletingCoreConfig(results = emptyPlanResults()) {
+  results.auth.changeSet.idpConfig.deletes.push({
+    name: "core-config",
+    request: { workspaceId: "ws", namespaceName: "core-auth", name: "core-config" },
+  });
+  return results;
+}
+
+const CORE_CONFIG = 'IdP config "core-config" of Auth service "core-auth"';
+
+const DEPLOY_SUGGESTION =
+  "Keep each listed resource in the config that defines it, or deploy the applications that use it so that they stop using it, first or in the same run.";
+
+const IDP_CONFIG_SUGGESTION =
+  "An application that references an Auth service as external authenticates with the IdP config that the Auth service's idProvider names, and switches to a renamed one only in a deploy that also includes the config defining that Auth service, so deploy them together or keep the idProvider name.";
+
+const PORTAL_ON_CORE_CONFIG = {
+  name: "portal",
+  authNamespace: "core-auth",
+  authIdpConfigName: "core-config",
+};
+
+const CORE_CONFIG_USE = {
+  resourceType: "auth.idp_config",
+  namespace: "core-auth",
+  name: "core-config",
+};
+
+describe("assertResourcesNotInUse for the IdP configs that applications authenticate with", () => {
+  test("rejects a deleted IdP config that an application outside the run authenticates with", async () => {
+    const owner = withWorkspaceApplications(deletingCoreConfig(), [PORTAL_ON_CORE_CONFIG]);
+
+    await expect(check([deployment({ name: "core" }, owner)], "deploy")).rejects.toThrow(
+      expect.objectContaining({
+        code: "SERVICE_IN_USE",
+        message: `${CORE_CONFIG} cannot be deleted: application "portal" still uses it.`,
+        suggestion: IDP_CONFIG_SUGGESTION,
+        context: { uses: [{ ...CORE_CONFIG_USE, application: "portal" }] },
+      }),
+    );
+  });
+
+  test("adds the general suggestion when another deleted resource is also in use", async () => {
+    const owner = withWorkspaceApplications(deletingCoreConfig(ownerDeleting("billing-auth")), [
+      PORTAL_ON_CORE_CONFIG,
+      { name: "billing", authNamespace: "billing-auth" },
+    ]);
+
+    await expect(check([deployment({ name: "core" }, owner)], "deploy")).rejects.toThrow(
+      expect.objectContaining({
+        suggestion: [DEPLOY_SUGGESTION, IDP_CONFIG_SUGGESTION].join(" "),
+      }),
+    );
+  });
+
+  test("gives only the remove suggestion when remove deletes the IdP config", async () => {
+    const owner = withWorkspaceApplications(deletingCoreConfig(), [PORTAL_ON_CORE_CONFIG]);
+
+    await expect(check([deployment({ name: "core" }, owner)], "remove")).rejects.toThrow(
+      expect.objectContaining({
+        suggestion:
+          "Remove the applications that use each listed resource, or deploy them so that they stop using it, then run remove again.",
+      }),
+    );
+  });
+
+  test("rejects a deleted IdP config that an application of the run still names", async () => {
+    await expect(
+      check(
+        [
+          deployment({ name: "core" }, deletingCoreConfig(ownerDeleting("core-auth"))),
+          deployment(
+            referencingExternally("core-auth"),
+            plannedApplication("portal", {
+              authNamespace: "core-auth",
+              authIdpConfigName: "core-config",
+            }),
+          ),
+        ],
+        "deploy",
+      ),
+    ).rejects.toThrow(
+      expect.objectContaining({
+        message: [
+          'Auth service "core-auth" cannot be deleted: application "portal" still uses it.',
+          `${CORE_CONFIG} cannot be deleted: application "portal" still uses it.`,
+        ].join("\n"),
+        suggestion: DEPLOY_SUGGESTION,
+      }),
+    );
+  });
+
+  test("accepts an application of the run that switches to the renamed IdP config", async () => {
+    const owner = withWorkspaceApplications(deletingCoreConfig(), [PORTAL_ON_CORE_CONFIG]);
+
+    await expect(
+      check(
+        [
+          deployment({ name: "core" }, owner),
+          deployment(
+            referencingExternally("core-auth"),
+            plannedApplication("portal", {
+              authNamespace: "core-auth",
+              authIdpConfigName: "core-config-v2",
+            }),
+          ),
+        ],
+        "deploy",
+      ),
+    ).resolves.toBeUndefined();
   });
 });
 
@@ -702,8 +822,6 @@ describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", ()
     const CORE_QUERY: ExecutorInit["targetConfig"] = {
       config: { case: "tailorGraphql", value: { appName: "core" } },
     };
-    const DEPLOY_SUGGESTION =
-      "Keep each listed resource in the config that defines it, or deploy the applications that use it so that they stop using it, first or in the same run.";
     const OWN_APPLICATION_SUGGESTION =
       "An application that an executor in its own config still targets is deleted because that config no longer defines or references a TailorDB namespace, resolver namespace, IdP, or Auth service, so add one of them back to that config or remove that executor from it.";
 
@@ -896,7 +1014,7 @@ describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", ()
     );
   });
 
-  test("lists no resolver, Auth config, or OTLP exporter when the run deletes no machine user or secret", async () => {
+  test("lists no resolver, Auth config, or OTLP exporter when the run deletes no machine user, secret, IdP client, or table", async () => {
     const owner = withWorkspaceAuth(ownerDeleting("core-auth"), "portal-auth", "portal");
     owner.pipeline.existingServices = {
       billing: { resource: {} as never, allLabels: { "sdk-name": "billing-app" } },
@@ -906,6 +1024,9 @@ describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", ()
       listAuthIDPConfigs: vi.fn(),
       getAuthSCIMConfig: vi.fn(),
       listOTLPExporters: vi.fn(),
+      getUserProfileConfig: vi.fn(),
+      getTenantConfig: vi.fn(),
+      getAuthSCIMResources: vi.fn(),
     };
 
     await expect(
@@ -919,9 +1040,9 @@ describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", ()
 
 const OTHER_KEY = { vaultName: "shared", secretKey: "other-key" };
 
-function oidcConfig(clientSecretKey: typeof API_KEY) {
+function oidcConfig(clientSecretKey: typeof API_KEY, name = "oidc") {
   return create(AuthIDPConfigSchema, {
-    name: "oidc",
+    name,
     authType: AuthIDPConfig_AuthType.OIDC,
     config: {
       config: {
@@ -951,19 +1072,36 @@ function withWorkspaceAuth(results: PlanResults, namespace: string, application?
 type WorkspaceAuthConfigs = {
   idpConfigs?: Record<string, ReturnType<typeof oidcConfig>[]>;
   scimConfigs?: Record<string, ReturnType<typeof bearerSCIMConfig>>;
+  userProfileConfigs?: Record<string, ReturnType<typeof userProfileOn>>;
+  tenantConfigs?: Record<string, ReturnType<typeof tenantOn>>;
+  scimResources?: Record<string, ReturnType<typeof scimResourceOn>[]>;
 };
+
+type NamespaceRequest = { namespaceName: string };
+
+function foundOrThrow<T>(value: T | undefined): T {
+  if (value === undefined) throw new ConnectError("not found", Code.NotFound);
+  return value;
+}
 
 function authClient(configs: WorkspaceAuthConfigs) {
   return {
-    listAuthIDPConfigs: vi.fn(async ({ namespaceName }: { namespaceName: string }) => ({
+    listAuthIDPConfigs: vi.fn(async ({ namespaceName }: NamespaceRequest) => ({
       idpConfigs: configs.idpConfigs?.[namespaceName] ?? [],
       nextPageToken: "",
     })),
-    getAuthSCIMConfig: vi.fn(async ({ namespaceName }: { namespaceName: string }) => {
-      const scimConfig = configs.scimConfigs?.[namespaceName];
-      if (!scimConfig) throw new ConnectError("not found", Code.NotFound);
-      return { scimConfig };
-    }),
+    getAuthSCIMConfig: vi.fn(async ({ namespaceName }: NamespaceRequest) => ({
+      scimConfig: foundOrThrow(configs.scimConfigs?.[namespaceName]),
+    })),
+    getUserProfileConfig: vi.fn(async ({ namespaceName }: NamespaceRequest) => ({
+      userProfileProviderConfig: foundOrThrow(configs.userProfileConfigs?.[namespaceName]),
+    })),
+    getTenantConfig: vi.fn(async ({ namespaceName }: NamespaceRequest) => ({
+      tenantProviderConfig: foundOrThrow(configs.tenantConfigs?.[namespaceName]),
+    })),
+    getAuthSCIMResources: vi.fn(async ({ namespaceName }: NamespaceRequest) => ({
+      scimResources: configs.scimResources?.[namespaceName] ?? [],
+    })),
   };
 }
 
@@ -1169,6 +1307,260 @@ describe("assertResourcesNotInUse for OTLP exporters", () => {
       expect(client.listOTLPExporters).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({ workspaceId: "ws" }),
       );
+    },
+  );
+});
+
+const WEB_CLIENT_SECRET = {
+  vaultName: "idp-core-idp-web",
+  secretKey: "client-secret-core-idp-web",
+};
+
+const WEB_CLIENT = 'IdP client "web" of IdP service "core-idp"';
+
+const WEB_CLIENT_USE = { resourceType: "idp.client", namespace: "core-idp", name: "web" };
+
+function deletingWebClient(results = emptyPlanResults()) {
+  results.idp.changeSet.client.deletes.push({
+    name: "web",
+    request: { workspaceId: "ws", namespaceName: "core-idp", name: "web" },
+  });
+  return results;
+}
+
+function builtInIdPConfig(namespaceName: string, name: string, clientName: string) {
+  return {
+    name,
+    idpConfig: { name, kind: "BuiltInIdP" as const, namespace: "core-idp", clientName },
+    request: {
+      workspaceId: "ws",
+      namespaceName,
+      idpConfig: { name, authType: AuthIDPConfig_AuthType.OIDC, config: {} },
+    },
+  };
+}
+
+describe("assertResourcesNotInUse for the IdP clients that built-in IdP configs use", () => {
+  test("rejects a deleted IdP client that the built-in IdP config of an Auth service outside the run uses", async () => {
+    const owner = withWorkspaceAuth(deletingWebClient(), "portal-auth", "portal");
+    const client = authClient({
+      idpConfigs: { "portal-auth": [oidcConfig(WEB_CLIENT_SECRET, "core")] },
+    });
+
+    await expect(check([deployment({ name: "core" }, owner)], "remove", client)).rejects.toThrow(
+      inUse(
+        `${WEB_CLIENT} cannot be deleted: IdP config "core" of Auth service "portal-auth" of application "portal" still uses it.`,
+        [
+          {
+            ...WEB_CLIENT_USE,
+            application: "portal",
+            usedBy: { resourceType: "auth.idp_config", namespace: "portal-auth", name: "core" },
+          },
+        ],
+      ),
+    );
+  });
+
+  test("rejects a deleted IdP client that a built-in IdP config the run writes names", async () => {
+    const portal = emptyPlanResults();
+    portal.auth.changeSet.idpConfig.creates.push(builtInIdPConfig("portal-auth", "core", "web"));
+
+    await expect(
+      check(
+        [deployment({ name: "core" }, deletingWebClient()), deployment({ name: "portal" }, portal)],
+        "deploy",
+      ),
+    ).rejects.toThrow(
+      inUse(
+        `${WEB_CLIENT} cannot be deleted: IdP config "core" of Auth service "portal-auth" of application "portal" still uses it.`,
+      ),
+    );
+  });
+
+  test("accepts built-in IdP configs that the run rewrites or deletes, or that use another client", async () => {
+    const owner = withWorkspaceAuth(
+      withWorkspaceAuth(
+        withWorkspaceAuth(deletingWebClient(), "portal-auth", "portal"),
+        "admin-auth",
+        "admin",
+      ),
+      "billing-auth",
+      "billing",
+    );
+    owner.auth.changeSet.idpConfig.updates.push(builtInIdPConfig("portal-auth", "core", "app"));
+    owner.auth.changeSet.idpConfig.deletes.push({
+      name: "core",
+      request: { workspaceId: "ws", namespaceName: "admin-auth", name: "core" },
+    });
+    const client = authClient({
+      idpConfigs: {
+        "portal-auth": [oidcConfig(WEB_CLIENT_SECRET, "core")],
+        "admin-auth": [oidcConfig(WEB_CLIENT_SECRET, "core")],
+        "billing-auth": [
+          oidcConfig({ vaultName: "idp-core-idp-app", secretKey: "client-secret-core-idp-app" }),
+        ],
+      },
+    });
+
+    await expect(
+      check([deployment({ name: "core" }, owner)], "deploy", client),
+    ).resolves.toBeUndefined();
+  });
+});
+
+const ORDER_TABLE = 'TailorDB table "Order" in namespace "main"';
+
+const ORDER_USE = { resourceType: "tailordb.type", namespace: "main", name: "Order" };
+
+function userProfileOn(type: string) {
+  return create(UserProfileProviderConfigSchema, {
+    config: {
+      config: { case: "tailordb", value: { namespace: "main", type, usernameField: "email" } },
+    },
+  });
+}
+
+function tenantOn(type: string) {
+  return create(TenantProviderConfigSchema, {
+    config: {
+      config: { case: "tailordb", value: { namespace: "main", type, signatureField: "signature" } },
+    },
+  });
+}
+
+function scimResourceOn(type: string) {
+  return create(AuthSCIMResourceSchema, {
+    name: "User",
+    tailorDbNamespace: "main",
+    tailorDbType: type,
+  });
+}
+
+function mapValues<T>(record: Record<string, string>, valueOf: (value: string) => T) {
+  return Object.fromEntries(Object.entries(record).map(([key, value]) => [key, valueOf(value)]));
+}
+
+const AUTH_TABLE_USERS: Array<{
+  label: string;
+  user: string;
+  usedBy: { resourceType: string; namespace: string; name: string };
+  recorded: (tables: Record<string, string>) => WorkspaceAuthConfigs;
+  writes: (results: PlanResults, namespaceName: string, type: string) => void;
+  deletes: (results: PlanResults, namespaceName: string) => void;
+}> = [
+  {
+    label: "user profile config",
+    user: 'user profile config of Auth service "portal-auth"',
+    usedBy: {
+      resourceType: "auth.user_profile_config",
+      namespace: "portal-auth",
+      name: "portal-auth-user-profile-config",
+    },
+    recorded: (tables) => ({ userProfileConfigs: mapValues(tables, userProfileOn) }),
+    writes: (results, namespaceName, type) =>
+      results.auth.changeSet.userProfileConfig.updates.push({
+        name: `${namespaceName}-user-profile-config`,
+        request: {
+          workspaceId: "ws",
+          namespaceName,
+          userProfileProviderConfig: userProfileOn(type),
+        },
+      }),
+    deletes: (results, namespaceName) =>
+      results.auth.changeSet.userProfileConfig.deletes.push({
+        name: `${namespaceName}-user-profile-config`,
+        request: { workspaceId: "ws", namespaceName },
+      }),
+  },
+  {
+    label: "tenant config",
+    user: 'tenant config of Auth service "portal-auth"',
+    usedBy: {
+      resourceType: "auth.tenant_config",
+      namespace: "portal-auth",
+      name: "portal-auth-tenant-config",
+    },
+    recorded: (tables) => ({ tenantConfigs: mapValues(tables, tenantOn) }),
+    writes: (results, namespaceName, type) =>
+      results.auth.changeSet.tenantConfig.updates.push({
+        name: `${namespaceName}-tenant-config`,
+        request: { workspaceId: "ws", namespaceName, tenantProviderConfig: tenantOn(type) },
+      }),
+    deletes: (results, namespaceName) =>
+      results.auth.changeSet.tenantConfig.deletes.push({
+        name: `${namespaceName}-tenant-config`,
+        request: { workspaceId: "ws", namespaceName },
+      }),
+  },
+  {
+    label: "SCIM resource",
+    user: 'SCIM resource "User" of Auth service "portal-auth"',
+    usedBy: { resourceType: "auth.scim_resource", namespace: "portal-auth", name: "User" },
+    recorded: (tables) => ({ scimResources: mapValues(tables, (type) => [scimResourceOn(type)]) }),
+    writes: (results, namespaceName, type) =>
+      results.auth.changeSet.scimResource.updates.push({
+        name: "User",
+        request: { workspaceId: "ws", namespaceName, scimResource: scimResourceOn(type) },
+      }),
+    deletes: (results, namespaceName) =>
+      results.auth.changeSet.scimResource.deletes.push({
+        name: "User",
+        request: { workspaceId: "ws", namespaceName, name: "User" },
+      }),
+  },
+];
+
+describe("assertResourcesNotInUse for the tables that Auth configs name", () => {
+  test.each(AUTH_TABLE_USERS)(
+    "rejects a deleted table that the $label of an Auth service outside the run names",
+    async ({ user, usedBy, recorded }) => {
+      const owner = withWorkspaceAuth(emptyPlanResults(), "portal-auth", "portal");
+      deletingOrderTable(owner);
+      const client = authClient(recorded({ "portal-auth": "Order" }));
+
+      await expect(check([deployment({ name: "core" }, owner)], "deploy", client)).rejects.toThrow(
+        inUse(`${ORDER_TABLE} cannot be deleted: ${user} of application "portal" still uses it.`, [
+          { ...ORDER_USE, application: "portal", usedBy },
+        ]),
+      );
+    },
+  );
+
+  test.each(AUTH_TABLE_USERS)(
+    "rejects a deleted table that the $label the run writes names",
+    async ({ user, writes }) => {
+      const owner = emptyPlanResults();
+      deletingOrderTable(owner);
+      const portal = emptyPlanResults();
+      writes(portal, "portal-auth", "Order");
+
+      await expect(
+        check(
+          [deployment({ name: "core" }, owner), deployment({ name: "portal" }, portal)],
+          "deploy",
+        ),
+      ).rejects.toThrow(
+        inUse(`${ORDER_TABLE} cannot be deleted: ${user} of application "portal" still uses it.`),
+      );
+    },
+  );
+
+  test.each(AUTH_TABLE_USERS)(
+    "accepts the $label that the run rewrites to another table or deletes",
+    async ({ recorded, writes, deletes }) => {
+      const owner = withWorkspaceAuth(
+        withWorkspaceAuth(emptyPlanResults(), "portal-auth", "portal"),
+        "admin-auth",
+        "admin",
+      );
+      deletingOrderTable(owner);
+      writes(owner, "portal-auth", "Customer");
+      deletes(owner, "admin-auth");
+      const client = authClient(recorded({ "portal-auth": "Order", "admin-auth": "Order" }));
+
+      await expect(
+        check([deployment({ name: "core" }, owner)], "deploy", client),
+      ).resolves.toBeUndefined();
     },
   );
 });

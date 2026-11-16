@@ -388,4 +388,4 @@ idp.provider(
 );
 ```
 
-The second argument only accepts client names that were defined in the `clients` array of the IdP configuration.
+The second argument only accepts client names that were defined in the `clients` array of the IdP configuration. `deploy` and `remove` stop with `SERVICE_IN_USE` instead of deleting a client, or the IdP that holds it, while an Auth service still names it this way, including an Auth service of another application.

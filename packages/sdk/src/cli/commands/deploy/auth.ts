@@ -767,6 +767,18 @@ function protoIdPConfig(idpConfig: IdProviderConfig): MessageInitShape<typeof Au
   }
 }
 
+/**
+ * Name the secret that holds a built-in IdP client's secret, which the Auth IdP config reads.
+ * @param builtinIdP - Built-in IdP config naming the IdP and its client
+ * @returns Vault and secret key of the client's secret
+ */
+export function builtinIdPClientSecret(builtinIdP: Pick<BuiltinIdP, "namespace" | "clientName">) {
+  return {
+    vaultName: idpClientVaultName(builtinIdP.namespace, builtinIdP.clientName),
+    secretKey: idpClientSecretName(builtinIdP.namespace, builtinIdP.clientName),
+  };
+}
+
 async function protoBuiltinIdPConfig(
   client: OperatorClient,
   workspaceId: string,
@@ -805,17 +817,12 @@ async function tryProtoBuiltinIdPConfig(
   });
   if (!idpClient) return undefined;
 
-  const vaultName = idpClientVaultName(builtinIdPConfig.namespace, builtinIdPConfig.clientName);
-  const secretKey = idpClientSecretName(builtinIdPConfig.namespace, builtinIdPConfig.clientName);
   return {
     config: {
       case: "oidc",
       value: {
         clientIdKey: idpClient.client?.clientId,
-        clientSecretKey: {
-          vaultName,
-          secretKey,
-        },
+        clientSecretKey: builtinIdPClientSecret(builtinIdPConfig),
         providerUrl: idpService.idpService?.providerUrl,
         usernameClaim: "name",
       },
@@ -838,6 +845,15 @@ type DeleteUserProfileConfig = {
   request: MessageInitShape<typeof DeleteUserProfileConfigRequestSchema>;
 };
 
+/**
+ * Name the user profile config of an auth namespace in deploy plans.
+ * @param namespaceName - Auth namespace
+ * @returns Plan entry name of the namespace's user profile config
+ */
+export function authUserProfileConfigName(namespaceName: string): string {
+  return `${namespaceName}-user-profile-config`;
+}
+
 async function planUserProfileConfigs(
   client: OperatorClient,
   workspaceId: string,
@@ -853,7 +869,7 @@ async function planUserProfileConfigs(
 
   for (const auth of auths) {
     const { config } = auth;
-    const name = `${config.name}-user-profile-config`;
+    const name = authUserProfileConfigName(config.name);
     const existing = await getUserProfileConfigOrNull(client, workspaceId, config.name);
     if (!existing) {
       const userProfileForUpdate = auth.userProfile;
@@ -902,7 +918,7 @@ async function planUserProfileConfigs(
     const existing = await getUserProfileConfigOrNull(client, workspaceId, namespaceName);
     if (!existing) continue;
     changeSet.deletes.push({
-      name: `${namespaceName}-user-profile-config`,
+      name: authUserProfileConfigName(namespaceName),
       request: {
         workspaceId,
         namespaceName,
@@ -953,6 +969,15 @@ type DeleteTenantConfig = {
   request: MessageInitShape<typeof DeleteTenantConfigRequestSchema>;
 };
 
+/**
+ * Name the tenant config of an auth namespace in deploy plans.
+ * @param namespaceName - Auth namespace
+ * @returns Plan entry name of the namespace's tenant config
+ */
+export function authTenantConfigName(namespaceName: string): string {
+  return `${namespaceName}-tenant-config`;
+}
+
 async function planTenantConfigs(
   client: OperatorClient,
   workspaceId: string,
@@ -966,7 +991,7 @@ async function planTenantConfigs(
 
   for (const auth of auths) {
     const { config } = auth;
-    const name = `${config.name}-tenant-config`;
+    const name = authTenantConfigName(config.name);
     const existing = await getTenantConfigOrNull(client, workspaceId, config.name);
     if (!existing) {
       if (config.tenantProvider) {
@@ -1013,7 +1038,7 @@ async function planTenantConfigs(
     const existing = await getTenantConfigOrNull(client, workspaceId, namespaceName);
     if (!existing) continue;
     changeSet.deletes.push({
-      name: `${namespaceName}-tenant-config`,
+      name: authTenantConfigName(namespaceName),
       request: {
         workspaceId,
         namespaceName,
