@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import * as fs from "node:fs/promises";
 import { parseSync } from "oxc-parser";
 import { CLIError } from "#/cli/shared/errors";
@@ -6,14 +7,12 @@ import type { Plugin } from "rolldown";
 
 const CLI_ENTRY = "@tailor-platform/sdk/cli";
 const STUB_PREFIX = "\0tailor-platform-sdk-cli-stub:";
-// Marks each stubbed export in the bundle: the token is in the output only while the export is
-const EXPORT_TOKEN = /@tailor-platform\/sdk\/cli#([A-Za-z_$][\w$]*)/g;
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
 
 type ExportedNameNode = { type: string; name?: string; value?: unknown };
 
-function exportToken(name: string): string {
-  return `${CLI_ENTRY}#${name}`;
+function exportToken(nonce: string, name: string): string {
+  return `${CLI_ENTRY}#${nonce}#${name}`;
 }
 
 function exportedName(name: ExportedNameNode): string {
@@ -53,6 +52,9 @@ function exportedNamesOf(code: string, file: string): string[] {
  * @returns Rolldown plugin that stubs the CLI entry point
  */
 export function createDeployOnlyCliStubPlugin(hookFailures: HookFailures): Plugin {
+  // Marks each stubbed export in the bundle. The nonce keeps user code from containing a marker.
+  const nonce = randomUUID();
+  const exportTokens = new RegExp(`${CLI_ENTRY}#${nonce}#([A-Za-z_$][\\w$]*)`, "g");
   return {
     name: "tailor-deploy-only-cli-stub",
     async resolveId(source, importer) {
@@ -73,7 +75,7 @@ export function createDeployOnlyCliStubPlugin(hookFailures: HookFailures): Plugi
         `}`,
         ...names.map(
           (name) =>
-            `export const ${name} = /* @__PURE__ */ deployOnly(${JSON.stringify(exportToken(name))});`,
+            `export const ${name} = /* @__PURE__ */ deployOnly(${JSON.stringify(exportToken(nonce, name))});`,
         ),
       ].join("\n");
     },
@@ -81,7 +83,7 @@ export function createDeployOnlyCliStubPlugin(hookFailures: HookFailures): Plugi
       const remaining = new Set<string>();
       for (const output of Object.values(bundle)) {
         if (output.type !== "chunk") continue;
-        for (const [, name] of output.code.matchAll(EXPORT_TOKEN)) {
+        for (const [, name] of output.code.matchAll(exportTokens)) {
           if (name) remaining.add(name);
         }
       }

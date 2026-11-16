@@ -212,6 +212,16 @@ describe("buildFunctionBundle CLI entry point", () => {
     await expect(bundle(sourceFile)).resolves.toContain("OWN_SOURCE");
   });
 
+  test("bundles a function that only returns a string that looks like a CLI export marker", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-lookalike-");
+    const sourceFile = writeFunction(
+      tmp.dir,
+      `export default async () => "@tailor-platform/sdk/cli#logger";\n`,
+    );
+
+    await expect(bundle(sourceFile)).resolves.toContain("@tailor-platform/sdk/cli#logger");
+  });
+
   test("bundles a function whose helper re-exports everything from the CLI entry point", async () => {
     using tmp = tempCwd("sdk-function-bundle-cli-entry-export-star-");
     writeUnloadableCliPackage(tmp.dir);
