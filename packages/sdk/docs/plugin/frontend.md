@@ -123,6 +123,10 @@ frontendPlugin({
 also bundled into functions that run on the Platform, such as auth hooks, so importing
 `node:` modules there fails the bundle. Use `node` instead.
 
+`listCustomDomains` also returns domains that are not usable yet, for example while a domain is
+pending or being removed. `tailor staticwebsite domain list` shows each domain's status, so check it
+before you publish a domain's origin.
+
 The function runs after `env` resolves and before the upload, with the same context `env`
 receives plus `env` (the values it returned), the absolute `workingDir` and `distDir`, a
 `logger`, `node`, and `exec`. `exec` runs a shell command in `workingDir` with those `env` values
@@ -135,10 +139,12 @@ To call the Platform from the function, use the functions exported from
 Platform API. Pass `loadAccessToken` the `profile` the function receives, which is the profile
 `tailor deploy` ran with (`--profile`), so the client calls the Platform as the same user.
 Without a profile it uses `TAILOR_PLATFORM_TOKEN`, then `TAILOR_PLATFORM_PROFILE`, then the
-logged-in user, as the `tailor` command does. Importing it in `tailor.config.ts` is safe. Code
-that runs on the Platform, such as a resolver or an auth hook, cannot use it: `tailor deploy`
-stops with `DEPLOY_ONLY_CLI_IMPORT` and names the functions in use. This includes a call at the
-top level of `tailor.config.ts`, which an auth hook runs when it loads.
+logged-in user, as the `tailor` command does. Importing it in `tailor.config.ts` is safe, and using it inside the
+`build` function is what it is for. Code that runs on the Platform, such as a resolver or an
+auth hook, cannot use it. A use outside any function, such as a call at the top level of
+`tailor.config.ts`, runs when an auth hook loads, so `tailor deploy` stops with
+`DEPLOY_ONLY_CLI_IMPORT` and names the line. A use inside a function that runs on the Platform
+throws an error saying it only works where `tailor deploy` runs when that function is called.
 
 Running `tailor deploy` again after a failure runs the function again, so write what it
 does to be repeatable: look up or create a resource instead of always creating a new one.

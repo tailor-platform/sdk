@@ -154,73 +154,96 @@ describe("buildFunctionBundle CLI entry point", () => {
     expect(code).toContain("OWN_SOURCE");
   });
 
-  const DEPLOY_ONLY_ERROR = expect.objectContaining({
-    code: "DEPLOY_ONLY_CLI_IMPORT",
-    message: expect.stringContaining("@tailor-platform/sdk/cli"),
-  });
-
   test.each([
-    ["calling a function", `apiCall()`, "apiCall"],
-    ["calling a method of an object", `logger.info("x")`, "logger"],
-    ["joining a constant into a string", "`${TAILOR_LOCK_FILENAME}`", "TAILOR_LOCK_FILENAME"],
+    ["a call", `logger.info("loading");\nexport const config = { name: "N" };\n`, "logger"],
+    [
+      "a constant",
+      `export const config = { name: "N", lock: TAILOR_LOCK_FILENAME + ".bak" };\n`,
+      "TAILOR_LOCK_FILENAME",
+    ],
+    ["a namespace member", `cli.apiCall();\nexport const config = { name: "N" };\n`, "cli"],
   ])(
-    "rejects the build when code that runs on the Platform uses the CLI entry point by %s",
-    async (_label, expression, name) => {
-      using tmp = tempCwd("sdk-function-bundle-cli-entry-used-");
+    "rejects the build when a module uses the CLI entry point at its top level through %s",
+    async (_label, body, name) => {
+      using tmp = tempCwd("sdk-function-bundle-cli-entry-top-level-");
       writeUnloadableCliPackage(tmp.dir);
-      const sourceFile = writeFunction(
-        tmp.dir,
-        `import { apiCall, logger, TAILOR_LOCK_FILENAME } from "@tailor-platform/sdk/cli";\n` +
-          `export default async () => ${expression};\n`,
-      );
+      const sourceFile = writeModules(tmp.dir, {
+        "function.ts": `import { config } from "./config";\nexport default async () => config.name;\n`,
+        "config.ts": `import * as cli from "@tailor-platform/sdk/cli";\n${body.includes("TAILOR_LOCK_FILENAME") ? `import { TAILOR_LOCK_FILENAME } from "@tailor-platform/sdk/cli";\n` : ""}${body.includes("logger") ? `import { logger } from "@tailor-platform/sdk/cli";\n` : ""}${body}`,
+      });
 
       await expect(bundle(sourceFile)).rejects.toThrow(
         expect.objectContaining({
           code: "DEPLOY_ONLY_CLI_IMPORT",
+          context: expect.objectContaining({ file: expect.stringContaining("config.ts") }),
           details: expect.stringContaining(name),
         }),
       );
     },
   );
 
-  test("rejects the build when a config module calls the CLI entry point at its top level", async () => {
-    using tmp = tempCwd("sdk-function-bundle-cli-entry-top-level-");
+  test("bundles a function that uses the CLI entry point only inside function bodies, and the call fails when run", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-function-body-");
     writeUnloadableCliPackage(tmp.dir);
-    const sourceFile = writeModules(tmp.dir, {
-      "function.ts": `import { config } from "./config";\nexport default async () => config.name;\n`,
-      "config.ts":
-        `import { logger } from "@tailor-platform/sdk/cli";\n` +
-        `logger.info("loading config");\n` +
-        `export const config = { name: "N" };\n`,
-    });
+    const sourceFile = writeFunction(
+      tmp.dir,
+      `import { apiCall } from "@tailor-platform/sdk/cli";\n` +
+        `export default async () => apiCall();\n`,
+    );
 
-    await expect(bundle(sourceFile)).rejects.toThrow(DEPLOY_ONLY_ERROR);
+    const code = await bundle(sourceFile);
+    const bundled = await import(
+      /* @vite-ignore */ `data:text/javascript,${encodeURIComponent(code)}`
+    );
+
+    await expect(bundled.main()).rejects.toThrow(
+      "@tailor-platform/sdk/cli only works where tailor deploy runs",
+    );
   });
 
-  test("bundles a function whose config module uses the CLI entry point only inside a plugin's functions", async () => {
-    using tmp = tempCwd("sdk-function-bundle-cli-entry-plugin-closure-");
+  test("bundles a function whose module only names a CLI export as a parameter or a property", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-lookalike-");
     writeUnloadableCliPackage(tmp.dir);
-    const sourceFile = writeModules(tmp.dir, {
-      "function.ts": `import { config } from "./config";\nexport default async () => config.name;\n`,
-      "config.ts":
-        `import { apiCall } from "@tailor-platform/sdk/cli";\n` +
-        `const frontend = (options: { build: () => unknown }) => options;\n` +
-        `export const plugins = [frontend({ build: () => apiCall() })];\n` +
-        `export const config = { name: "OWN_SOURCE" };\n`,
-    });
+    const sourceFile = writeFunction(
+      tmp.dir,
+      `import { logger } from "@tailor-platform/sdk/cli";\n` +
+        `const read = (logger: { info: string }) => logger.info;\n` +
+        `const holder = { logger: "OWN_SOURCE" };\n` +
+        `export default async () => [read({ info: holder.logger }), logger];\n`,
+    );
 
     await expect(bundle(sourceFile)).resolves.toContain("OWN_SOURCE");
   });
 
-  test("bundles a function that only returns a string that looks like a CLI export marker", async () => {
-    using tmp = tempCwd("sdk-function-bundle-cli-entry-lookalike-");
-    const sourceFile = writeFunction(
-      tmp.dir,
-      `export default async () => "@tailor-platform/sdk/cli#logger";\n`,
-    );
+  test.each([
+    ["default tree-shaking", undefined],
+    ["annotations turned off", { annotations: false }],
+  ])(
+    "bundles a function whose config module uses the CLI entry point only inside a plugin's functions with %s",
+    async (_label, treeshake) => {
+      using tmp = tempCwd("sdk-function-bundle-cli-entry-plugin-closure-");
+      writeUnloadableCliPackage(tmp.dir);
+      const sourceFile = writeModules(tmp.dir, {
+        "function.ts": `import { config } from "./config";\nexport default async () => config.name;\n`,
+        "config.ts":
+          `import { apiCall } from "@tailor-platform/sdk/cli";\n` +
+          `type Definition = { site: string; distDir: string; build: () => unknown };\n` +
+          `const frontend = (...definitions: Definition[]) => {\n` +
+          `  if (definitions.length === 0) throw new Error("frontend requires a definition");\n` +
+          `  for (const definition of definitions) {\n` +
+          `    if (definition.distDir.length === 0) throw new Error("distDir must not be empty");\n` +
+          `  }\n` +
+          `  return definitions;\n` +
+          `};\n` +
+          `export const plugins = [frontend({ site: "web", distDir: "dist", build: () => apiCall() })];\n` +
+          `export const config = { name: "OWN_SOURCE" };\n`,
+      });
 
-    await expect(bundle(sourceFile)).resolves.toContain("@tailor-platform/sdk/cli#logger");
-  });
+      await expect(bundle(sourceFile, { bundleTreeshake: treeshake })).resolves.toContain(
+        "OWN_SOURCE",
+      );
+    },
+  );
 
   test("bundles a function whose helper re-exports everything from the CLI entry point", async () => {
     using tmp = tempCwd("sdk-function-bundle-cli-entry-export-star-");
