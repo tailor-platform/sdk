@@ -240,9 +240,25 @@ function isDefineConfigCall(source: string, filePath: string, node: SgNode): boo
   );
 }
 
+/** Whether a statement is type-only, including `export type *`, which parses with `type` in an ERROR node. */
+function isTypeOnlyStatement(statement: SgNode): boolean {
+  return (
+    isTypeOnlyImport(statement) ||
+    statement.children().some((child) => child.kind() === "ERROR" && child.text() === "type")
+  );
+}
+
+/** Whether a statement re-exports every name of its source but `default`, as `export * from` does. */
+function isStarExport(statement: SgNode): boolean {
+  return (
+    statement.kind() === "export_statement" &&
+    statement.children().some((child) => child.kind() === "*")
+  );
+}
+
 /** The `[name, exported name]` pairs of an export statement's specifiers, leaving out types. */
 function exportSpecifierNames(statement: SgNode): Array<[string, string]> {
-  if (isTypeOnlyImport(statement)) return [];
+  if (isTypeOnlyStatement(statement)) return [];
   return statement.findAll({ rule: { kind: "export_specifier" } }).flatMap((specifier) => {
     const names = importSpecNames(specifier);
     return names && !names.typeOnly
@@ -253,7 +269,7 @@ function exportSpecifierNames(statement: SgNode): Array<[string, string]> {
 
 /** The local names an import statement binds to any of `exportedNames`. */
 function importedLocalNames(statement: SgNode, exportedNames: ReadonlySet<string>): string[] {
-  if (statement.kind() !== "import_statement" || isTypeOnlyImport(statement)) return [];
+  if (statement.kind() !== "import_statement") return [];
   const clause = statement.children().find((child) => child.kind() === "import_clause");
   const names: string[] = [];
   for (const child of clause?.children() ?? []) {
@@ -275,9 +291,9 @@ function importedLocalNames(statement: SgNode, exportedNames: ReadonlySet<string
 
 /**
  * The names under which `sourceFile` exports the config that `carrier` exports: by
- * re-exporting it through a relative specifier, by exporting a binding it
- * imports from it, or, as `default`, by default-exporting a `defineConfig()`
- * call next to such an import.
+ * re-exporting it through a relative specifier, including with `export *`, by
+ * exporting a binding it imports from it, or, as `default`, by default-exporting
+ * a `defineConfig()` call next to such an import.
  */
 function configExportNames(sourceFile: SourceFile, carrier: ConfigCarrier): Set<string> {
   const { source, file } = sourceFile;
@@ -287,8 +303,11 @@ function configExportNames(sourceFile: SourceFile, carrier: ConfigCarrier): Set<
   const importedNames = new Set<string>();
   for (const statement of root.children()) {
     const specifier = stringValue(statement.field("source"));
-    if (!specifier?.startsWith(".")) continue;
+    if (!specifier?.startsWith(".") || isTypeOnlyStatement(statement)) continue;
     if (moduleId(path.resolve(path.dirname(file), specifier)) !== carrier.id) continue;
+    if (isStarExport(statement)) {
+      for (const name of carrier.names) if (name !== "default") exportNames.add(name);
+    }
     for (const [name, exportedName] of exportSpecifierNames(statement)) {
       if (carrier.names.has(name)) exportNames.add(exportedName);
     }

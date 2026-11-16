@@ -485,6 +485,14 @@ describe("files patterns -> config-relative migration", () => {
       },
     ],
     [
+      "default-exports what a module re-exports with `export *`",
+      {
+        "configs/mid.ts": 'export * from "../apps/a/tailor.config";\n',
+        "deploy/tailor.config.ts":
+          'import { config } from "../configs/mid";\nexport default config;\n',
+      },
+    ],
+    [
       "re-exports an index module in the config's directory that re-exports it",
       {
         "apps/a/index.ts": 'export { default } from "./tailor.config";\n',
@@ -575,6 +583,14 @@ describe("files patterns -> config-relative migration", () => {
     [
       "a module re-exports `*`, which leaves out the default",
       { "tailor.config.ts": 'export * from "./apps/a/tailor.config";\n' },
+    ],
+    [
+      "a config file default-exports a name a module re-exports with `export type *`",
+      {
+        "configs/mid.ts": 'export type * from "../apps/a/tailor.config";\n',
+        "deploy/tailor.config.ts":
+          'import { config } from "../configs/mid";\nexport default config;\n',
+      },
     ],
     [
       "a module imports it through a bare specifier",
