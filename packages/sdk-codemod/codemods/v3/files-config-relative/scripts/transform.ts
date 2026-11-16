@@ -234,13 +234,13 @@ function exportSpecifierNames(statement: SgNode): Array<[string, string]> {
   });
 }
 
-/** The local names an import statement binds to any of `exportedNames`, `default` included. */
+/** The local names an import statement binds to any of `exportedNames`. */
 function importedLocalNames(statement: SgNode, exportedNames: ReadonlySet<string>): string[] {
   if (statement.kind() !== "import_statement" || isTypeOnlyImport(statement)) return [];
   const clause = statement.children().find((child) => child.kind() === "import_clause");
   const names: string[] = [];
   for (const child of clause?.children() ?? []) {
-    if (child.kind() === "identifier") names.push(child.text());
+    if (child.kind() === "identifier" && exportedNames.has("default")) names.push(child.text());
     if (child.kind() !== "named_imports") continue;
     for (const specifier of child.findAll({ rule: { kind: "import_specifier" } })) {
       const specifierNames = importSpecNames(specifier);

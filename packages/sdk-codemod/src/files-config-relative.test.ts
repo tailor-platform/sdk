@@ -402,65 +402,76 @@ describe("files patterns -> config-relative migration", () => {
     expect(findings).toEqual([expect.stringContaining("`tailor.config.ts` loads this config")]);
   });
 
-  test.each([
+  test.each<[string, Record<string, string>]>([
     [
       "a resolver imports a named export",
-      "apps/b/resolvers/user.ts",
-      'import { auth } from "../../a/tailor.config";\nexport default createResolver({ auth });\n',
+      {
+        "apps/b/resolvers/user.ts":
+          'import { auth } from "../../a/tailor.config";\nexport default createResolver({ auth });\n',
+      },
     ],
     [
       "a resolver default-imports the config for something other than its default export",
-      "apps/a/resolvers/user.ts",
-      'import config from "../tailor.config";\nexport default createResolver({ body: () => config.name });\n',
+      {
+        "apps/a/resolvers/user.ts":
+          'import config from "../tailor.config";\nexport default createResolver({ body: () => config.name });\n',
+      },
     ],
     [
       "a test default-imports the config without a default export of its own",
-      "apps/a/tests/config.test.ts",
-      'import config from "../tailor.config";\ntest("config", () => expect(config).toBeDefined());\n',
+      {
+        "apps/a/tests/config.test.ts":
+          'import config from "../tailor.config";\ntest("config", () => expect(config).toBeDefined());\n',
+      },
     ],
     [
       "a module re-exports only its type",
-      "tailor.config.ts",
-      'export type { default } from "./apps/a/tailor.config";\n',
+      { "tailor.config.ts": 'export type { default } from "./apps/a/tailor.config";\n' },
     ],
     [
       "a module re-exports the default as a type",
-      "tailor.config.ts",
-      'export { type default } from "./apps/a/tailor.config";\n',
+      { "tailor.config.ts": 'export { type default } from "./apps/a/tailor.config";\n' },
     ],
     [
       "a module default-exports a type-only default import",
-      "tailor.config.ts",
-      'import type a from "./apps/a/tailor.config";\nexport default a;\n',
+      { "tailor.config.ts": 'import type a from "./apps/a/tailor.config";\nexport default a;\n' },
     ],
     [
       "a module default-exports a type-only named import",
-      "tailor.config.ts",
-      'import { type config } from "./apps/a/tailor.config";\nexport default config;\n',
+      {
+        "tailor.config.ts":
+          'import { type config } from "./apps/a/tailor.config";\nexport default config;\n',
+      },
     ],
     [
       "a module re-exports `*`, which leaves out the default",
-      "tailor.config.ts",
-      'export * from "./apps/a/tailor.config";\n',
+      { "tailor.config.ts": 'export * from "./apps/a/tailor.config";\n' },
     ],
     [
       "a module imports it through a bare specifier",
-      "tailor.config.ts",
-      'export { default } from "apps/a/tailor.config";\n',
+      { "tailor.config.ts": 'export { default } from "apps/a/tailor.config";\n' },
     ],
     [
       "a config file in the same directory re-exports it",
-      "apps/a/tailor.plugins.config.ts",
-      'export { default } from "./tailor.config";\n',
+      { "apps/a/tailor.plugins.config.ts": 'export { default } from "./tailor.config";\n' },
     ],
     [
       "a barrel re-exports it under another name that no config file default-exports",
-      "configs/index.ts",
-      'export { default as a } from "../apps/a/tailor.config";\n',
+      { "configs/index.ts": 'export { default as a } from "../apps/a/tailor.config";\n' },
     ],
-  ])("still rewrites a config when %s", async (_, importerPath, importer) => {
+    [
+      "a config file default-exports another config that a barrel carrying it by name default-exports",
+      {
+        "configs/index.ts":
+          'export { default as a } from "../apps/a/tailor.config";\nexport { default } from "../apps/b/tailor.config";\n',
+        "tailor.config.ts": 'import b from "./configs";\nexport default b;\n',
+      },
+    ],
+  ])("still rewrites a config when %s", async (_, importers) => {
     writeFiles("apps/a/tailordb/user.ts");
-    writeFile(importerPath, importer);
+    for (const [importerPath, importer] of Object.entries(importers)) {
+      writeFile(importerPath, importer);
+    }
 
     const { transformed, findings } = await migrate(EXPORTED_CONFIG);
 
