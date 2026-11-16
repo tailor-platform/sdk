@@ -11,17 +11,17 @@ import {
   ownLineRange,
   pairValue,
 } from "../../../../src/ast-grep-helpers";
-import { findDefineConfigCalls, type ManualMigration } from "../../../../src/define-config";
+import {
+  analyzeServiceConfigs,
+  findDefineConfigCalls,
+  type Analysis,
+  type ManualMigration,
+} from "../../../../src/define-config";
 import { sourceStringContent } from "../../../../src/source-strings";
 import type { LlmReviewFinding } from "../../../../src/types";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
-/** Services keyed by namespace, each namespace holding its own `files`. */
-const NAMESPACED_SERVICES: ReadonlySet<string> = new Set(["db", "resolver"]);
-const SINGLE_SERVICES: ReadonlySet<string> = new Set(["executor", "workflow", "httpAdapter"]);
 const TEST_FILE_SUFFIXES = [".test.ts", ".spec.ts"];
-
-type Analysis = { edits: Edit[]; findings: ManualMigration[] };
 
 function isStringLiteral(element: SgNode): boolean {
   return element.kind() === "string" || element.kind() === "template_string";
@@ -234,76 +234,18 @@ function analyzeService(source: string, service: SgNode, label: string): Analysi
   };
 }
 
-function objectValue(entry: SgNode): SgNode | null {
-  const value = entry.kind() === "pair" ? pairValue(entry) : null;
-  return value?.kind() === "object" ? value : null;
-}
-
-/** How a finding names a namespace: `.name`, or `[expression]` for a computed key. */
-function namespaceLabel(entry: SgNode): string | null {
-  const name = entryKey(entry);
-  if (name !== null) return `.${name}`;
-  const key = entry.kind() === "pair" ? entry.children()[0] : undefined;
-  return key?.kind() === "computed_property_name" ? key.text() : null;
-}
-
-function mergeInto(target: Analysis, result: Analysis): void {
-  target.edits.push(...result.edits);
-  target.findings.push(...result.findings);
-}
-
-function analyzeConfig(source: string, config: SgNode): Analysis {
-  const analysis: Analysis = { edits: [], findings: [] };
-  const entries = objectEntries(config);
-  if (entries.some((entry) => entryKey(entry) === null)) {
-    analysis.findings.push({
-      reason: "the config has a spread or computed key that may hold service files",
-      node: config,
-    });
-  }
-  for (const entry of entries) {
-    const key = entryKey(entry);
-    if (key === null || (!NAMESPACED_SERVICES.has(key) && !SINGLE_SERVICES.has(key))) continue;
-    const value = objectValue(entry);
-    if (!value) {
-      analysis.findings.push({ reason: `\`${key}\` is not an object literal`, node: entry });
-      continue;
-    }
-    if (SINGLE_SERVICES.has(key)) {
-      mergeInto(analysis, analyzeService(source, value, key));
-      continue;
-    }
-    for (const namespaceEntry of objectEntries(value)) {
-      const label = namespaceLabel(namespaceEntry);
-      const namespaceConfig = label === null ? null : objectValue(namespaceEntry);
-      if (label === null || !namespaceConfig) {
-        analysis.findings.push({
-          reason: `a \`${key}\` namespace is not written as an object literal`,
-          node: namespaceEntry,
-        });
-        continue;
-      }
-      mergeInto(analysis, analyzeService(source, namespaceConfig, `${key}${label}`));
-    }
-  }
-  return analysis;
-}
-
 function analyzeFile(
   source: string,
   filePath: string,
 ): { root: SgNode; analysis: Analysis } | null {
   const found = findDefineConfigCalls(source, filePath);
   if (!found) return null;
-  const analysis: Analysis = { edits: [], findings: [] };
-  for (const call of found.calls) {
-    if ("reason" in call) {
-      analysis.findings.push(call);
-      continue;
-    }
-    mergeInto(analysis, analyzeConfig(source, call.config));
-  }
-  return { root: found.root, analysis };
+  return {
+    root: found.root,
+    analysis: analyzeServiceConfigs(found.calls, (label, service) =>
+      analyzeService(source, service, label),
+    ),
+  };
 }
 
 /**

@@ -7,6 +7,7 @@ import * as path from "pathe";
 import picomatch from "picomatch";
 import { nodeRangeKey, sourceArrayElements, sourceStaticStringContent } from "./source-strings";
 import { TAILOR_CLI_VALUE_FLAG_SET } from "./tailor-cli-tokens";
+import { shouldSkipDirectory, SOURCE_EXTENSIONS, walkFiles } from "./walk-files";
 import type {
   CodemodPackage,
   CodemodPattern,
@@ -18,8 +19,9 @@ import type {
 import type { SgNode } from "@ast-grep/napi";
 
 /**
- * A transform function that receives source text and file path,
- * and returns modified source or null if no changes are needed.
+ * A transform function that receives source text, its absolute file path, and
+ * the absolute project directory being transformed, and returns modified
+ * source or null if no changes are needed.
  *
  * For AST-based transforms, parse with ast-grep:
  * ```typescript
@@ -42,6 +44,7 @@ import type { SgNode } from "@ast-grep/napi";
 export type TransformFn = (
   source: string,
   filePath: string,
+  targetPath: string,
 ) => Promise<string | null> | string | null;
 
 /** Result of running codemods on a project. */
@@ -58,10 +61,6 @@ export interface CodemodRunResult {
 /** Default file patterns for TypeScript files. */
 const DEFAULT_FILE_PATTERNS = ["**/*.{ts,tsx,mts,cts}"];
 
-/** Directory names always excluded from file scanning. */
-const EXCLUDE_DIRS = new Set(["node_modules", "dist", ".git"]);
-const ALLOWED_DOT_DIRS = new Set([".github", ".circleci"]);
-const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
 const SOURCE_STRING_FRAGMENT_SEPARATOR = "\0";
 const MASKED_SOURCE_NODE_KINDS: ReadonlySet<ReturnType<SgNode["kind"]>> = new Set([
   "comment",
@@ -73,10 +72,6 @@ const MASKED_SOURCE_NODE_KINDS: ReadonlySet<ReturnType<SgNode["kind"]>> = new Se
 const SOURCE_CLI_BINARY_RE =
   /^(?:(?:.*[\\/])?tailor(?:\.(?:cmd|ps1|exe))?|(?:.*[\\/])?tailor-sdk(?:@[^\s'"`;|&)]+)?(?:\.(?:cmd|ps1|exe))?|@tailor-platform\/sdk(?:@[^\s'"`;|&)]+)?)$/;
 
-function shouldSkipDirectory(name: string): boolean {
-  return EXCLUDE_DIRS.has(name) || (name.startsWith(".") && !ALLOWED_DOT_DIRS.has(name));
-}
-
 /**
  * Matches the target-relative paths of the files `runCodemods` applies `codemod` to.
  * @param codemod - Codemod whose file patterns decide
@@ -86,28 +81,6 @@ export function codemodFileMatcher(codemod: CodemodPackage): (relativePath: stri
   const matches = picomatch(codemod.filePatterns ?? DEFAULT_FILE_PATTERNS, { dot: true });
   return (relativePath) =>
     !relativePath.split("/").slice(0, -1).some(shouldSkipDirectory) && matches(relativePath);
-}
-
-async function* walkFiles(root: string, relativeDir = ""): AsyncGenerator<string> {
-  const absoluteDir = path.join(root, relativeDir);
-  let entries: fs.Dirent[];
-  try {
-    entries = await fs.promises.readdir(absoluteDir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-
-  for (const entry of entries) {
-    const relative = relativeDir ? path.join(relativeDir, entry.name) : entry.name;
-    if (entry.isDirectory()) {
-      if (shouldSkipDirectory(entry.name)) continue;
-      yield* walkFiles(root, relative);
-      continue;
-    }
-    if (entry.isFile()) {
-      yield relative;
-    }
-  }
 }
 
 function writeDiffLine(line: string, style?: StyleFn): void {
@@ -552,6 +525,7 @@ export async function runCodemods(
     });
   }
 
+  const absoluteTargetPath = path.resolve(targetPath);
   const filesModified: string[] = [];
   const warnings: string[] = [];
   const appliedCodemodIds = new Set<string>();
@@ -579,7 +553,7 @@ export async function runCodemods(
     for (const lt of matchedTransforms) {
       const input = current;
       if (lt.transform) {
-        const result = await lt.transform(current, absolute);
+        const result = await lt.transform(current, absolute, absoluteTargetPath);
         if (result != null) {
           current = result;
           appliedCodemodIds.add(lt.id);
@@ -637,7 +611,7 @@ export async function runCodemods(
       ];
       for (const { detect, reviewed } of detectors) {
         if (!detect) continue;
-        let findings = await detect(reviewed, absolute, relative);
+        let findings = await detect(reviewed, absolute, relative, absoluteTargetPath);
         if (reviewed !== current && findings.length > 0) {
           const remap = lineRemapper(reviewed, current);
           findings = findings.map((finding) => ({ ...finding, line: remap(finding.line) }));

@@ -28,6 +28,39 @@ export function runnableCodemod(id: string): { codemod: CodemodPackage; scriptPa
 }
 
 /**
+ * Runs the codemod `id` on `projectDir` with `source` saved at `relativePath`, as
+ * `tailor upgrade` does, so its review detectors receive the content the runner passes them.
+ * @param id - Registered codemod id
+ * @param projectDir - Absolute project directory, which may hold other files the codemod reads
+ * @param source - File contents
+ * @param relativePath - Path of the file in the project
+ * @returns The rewritten contents, or null when unchanged, and the runner's review findings for the file
+ */
+export async function reviewInProject(
+  id: string,
+  projectDir: string,
+  source: string,
+  relativePath: string,
+): Promise<{ transformed: string | null; findings: LlmReviewFinding[] }> {
+  const entry = runnableCodemod(id);
+  if (!entry.codemod.prompt) throw new Error(`${id} has no prompt, so the runner reviews nothing`);
+  if (!codemodFileMatcher(entry.codemod)(relativePath)) {
+    throw new Error(`${id} does not run on ${relativePath}`);
+  }
+  const file = path.join(projectDir, relativePath);
+  await fs.promises.mkdir(path.dirname(file), { recursive: true });
+  await fs.promises.writeFile(file, source, "utf-8");
+  const result = await runCodemods([entry], projectDir, false);
+  const output = await fs.promises.readFile(file, "utf-8");
+  return {
+    transformed: output === source ? null : output,
+    findings: result.llmReviews
+      .flatMap((review) => review.findings ?? [])
+      .filter((finding) => finding.file === relativePath),
+  };
+}
+
+/**
  * Runs the codemod `id` on `source` saved at `relativePath` in a temporary project, as
  * `tailor upgrade` does, so its review detectors receive the content the runner passes them.
  * @param id - Registered codemod id
@@ -40,22 +73,9 @@ export async function reviewThroughRunner(
   source: string,
   relativePath = "tailor.config.ts",
 ): Promise<{ transformed: string | null; findings: LlmReviewFinding[] }> {
-  const entry = runnableCodemod(id);
-  if (!entry.codemod.prompt) throw new Error(`${id} has no prompt, so the runner reviews nothing`);
-  if (!codemodFileMatcher(entry.codemod)(relativePath)) {
-    throw new Error(`${id} does not run on ${relativePath}`);
-  }
   const projectDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "codemod-review-"));
   try {
-    const file = path.join(projectDir, relativePath);
-    await fs.promises.mkdir(path.dirname(file), { recursive: true });
-    await fs.promises.writeFile(file, source, "utf-8");
-    const result = await runCodemods([entry], projectDir, false);
-    const output = await fs.promises.readFile(file, "utf-8");
-    return {
-      transformed: output === source ? null : output,
-      findings: result.llmReviews.flatMap((review) => review.findings ?? []),
-    };
+    return await reviewInProject(id, projectDir, source, relativePath);
   } finally {
     await fs.promises.rm(projectDir, { recursive: true, force: true });
   }
