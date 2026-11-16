@@ -309,5 +309,68 @@ export default {
         };
       },
     },
+
+    "typed-operator-client-mock": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Require operator client mocks in tests to go through mockOperatorClient() so their responses are type-checked.",
+        },
+        messages: {
+          cast: "Build the operator client mock with mockOperatorClient(); a cast leaves its requests and responses unchecked.",
+          spy: "Give mockOperatorClient() the response or an implementation; it makes the vi.fn spy, and a spy passed in leaves the response unchecked.",
+        },
+        schema: [],
+      },
+      create(context) {
+        function namesOperatorClient(type) {
+          if (type?.type === "TSTypeReference" && type.typeName.name === "OperatorClient") {
+            return true;
+          }
+          if (type?.type === "TSTypeQuery" && type.exprName.name === "initOperatorClient") {
+            return true;
+          }
+          const typeArguments = type?.typeArguments ?? type?.typeParameters;
+          return (typeArguments?.params ?? []).some(namesOperatorClient);
+        }
+        function isViFn(node) {
+          return (
+            node.callee.type === "MemberExpression" &&
+            node.callee.object.type === "Identifier" &&
+            node.callee.object.name === "vi" &&
+            node.callee.property.name === "fn"
+          );
+        }
+        function isSpy(node) {
+          let current = node;
+          while (current?.type === "CallExpression") {
+            if (isViFn(current)) return true;
+            current =
+              current.callee.type === "MemberExpression" ? current.callee.object : undefined;
+          }
+          return false;
+        }
+        return {
+          TSAsExpression(node) {
+            if (namesOperatorClient(node.typeAnnotation)) {
+              context.report({ node, messageId: "cast" });
+            }
+          },
+          CallExpression(node) {
+            if (node.callee.type !== "Identifier" || node.callee.name !== "mockOperatorClient") {
+              return;
+            }
+            const [methods] = node.arguments;
+            if (methods?.type !== "ObjectExpression") return;
+            for (const property of methods.properties) {
+              if (property.type === "Property" && isSpy(property.value)) {
+                context.report({ node: property.value, messageId: "spy" });
+              }
+            }
+          },
+        };
+      },
+    },
   },
 };
