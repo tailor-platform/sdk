@@ -17,6 +17,13 @@ const fixture = [
   "const getTenantConfig = vi.fn().mockResolvedValue({});",
   "export const shorthand = mockOperatorClient({ getTenantConfig });",
   "export const byName = mockOperatorClient({ getTenantConfig: getTenantConfig });",
+  "export const context = {} as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>;",
+  "export const pat = {} as unknown as Awaited<ReturnType<typeof createPatOperatorClient>>;",
+  'export const indexed = {} as unknown as Target["client"];',
+  "vi.mocked(initOperatorClient).mockResolvedValue({} as never);",
+  "vi.mocked(loadOperatorWorkspaceContext).mockResolvedValueOnce(cast as any);",
+  'export const otherIndex = {} as unknown as Target["name"];',
+  "vi.mocked(Math.max).mockReturnValue(1 as never);",
   "",
 ].join("\n");
 
@@ -49,6 +56,11 @@ describe("local/typed-operator-client-mock", () => {
       { rule: "local(typed-operator-client-mock)", line: 12 },
       { rule: "local(typed-operator-client-mock)", line: 14 },
       { rule: "local(typed-operator-client-mock)", line: 15 },
+      { rule: "local(typed-operator-client-mock)", line: 16 },
+      { rule: "local(typed-operator-client-mock)", line: 17 },
+      { rule: "local(typed-operator-client-mock)", line: 18 },
+      { rule: "local(typed-operator-client-mock)", line: 19 },
+      { rule: "local(typed-operator-client-mock)", line: 20 },
     ]);
   });
 

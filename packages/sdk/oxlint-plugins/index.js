@@ -324,17 +324,42 @@ export default {
         schema: [],
       },
       create(context) {
+        const clientFactories = new Set([
+          "initOperatorClient",
+          "createPatOperatorClient",
+          "loadOperatorWorkspaceContext",
+        ]);
         function namesOperatorClient(type) {
           if (type?.type === "TSTypeReference" && type.typeName.name === "OperatorClient") {
             return true;
           }
-          if (type?.type === "TSTypeQuery" && type.exprName.name === "initOperatorClient") {
+          if (type?.type === "TSTypeQuery" && clientFactories.has(type.exprName.name)) {
             return true;
+          }
+          if (type?.type === "TSIndexedAccessType") {
+            return type.indexType.literal?.value === "client";
           }
           if (type?.type === "TSIntersectionType" || type?.type === "TSUnionType") {
             return type.types.some(namesOperatorClient);
           }
           return (type?.typeArguments?.params ?? []).some(namesOperatorClient);
+        }
+        function isMockedClientFactory(node) {
+          const mocked = node?.type === "MemberExpression" ? node.object : undefined;
+          return (
+            mocked?.type === "CallExpression" &&
+            mocked.callee.type === "MemberExpression" &&
+            mocked.callee.object.name === "vi" &&
+            mocked.callee.property.name === "mocked" &&
+            clientFactories.has(mocked.arguments[0]?.name)
+          );
+        }
+        function isUncheckedCast(node) {
+          return (
+            node.type === "TSAsExpression" &&
+            (node.typeAnnotation.type === "TSNeverKeyword" ||
+              node.typeAnnotation.type === "TSAnyKeyword")
+          );
         }
         function isViFn(node) {
           return (
@@ -381,6 +406,12 @@ export default {
           TSAsExpression: checkCast,
           TSTypeAssertion: checkCast,
           CallExpression(node) {
+            if (isMockedClientFactory(node.callee)) {
+              for (const argument of node.arguments.filter(isUncheckedCast)) {
+                context.report({ node: argument, messageId: "cast" });
+              }
+              return;
+            }
             if (!isMockOperatorClient(node.callee)) return;
             const [methods] = node.arguments;
             if (methods?.type !== "ObjectExpression") return;
