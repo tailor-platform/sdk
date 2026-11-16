@@ -12,7 +12,7 @@ import type { TailorEnv } from "#/runtime/types";
 // references, importable type-only from any layer.
 import type { AuthConnectionConfig } from "#/types/auth-connection.generated";
 import type {
-  IdProvider as IdProviderConfig,
+  IdProviderInput as IdProviderConfig,
   OAuth2Client,
   OAuth2ClientInput,
   SCIMAttribute,

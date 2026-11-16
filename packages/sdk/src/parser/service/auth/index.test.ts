@@ -53,6 +53,12 @@ describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
     expectTypeOf<FunctionInput>().toExtend<SchemaInput>();
   });
 
+  test("accepts every schema input except fields narrowed by type parameters", () => {
+    type NarrowedKeys = "userProfile" | "machineUsers" | "hooks" | "machineUserAttributes";
+
+    expectTypeOf<Omit<AuthSchemaInput, NarrowedKeys>>().toExtend<Omit<AuthInput, NarrowedKeys>>();
+  });
+
   test("aligns particular userProfile with the schema", () => {
     type ServiceUserProfile = NonNullable<AuthInput["userProfile"]>;
     type SchemaUserProfile = NonNullable<AuthSchemaInput["userProfile"]>;

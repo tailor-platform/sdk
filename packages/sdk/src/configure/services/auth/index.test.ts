@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, test, expectTypeOf } from "vitest";
 import { t } from "#/configure/types/type";
 import { db } from "../tailordb/schema";
-import { defineAuth } from "./index";
+import { defineAuth, type IdProviderConfig, type SAML } from "./index";
 import type {
   AuthConfig,
   BeforeLoginHook,
@@ -115,6 +115,21 @@ describe("defineAuth", () => {
     expectTypeOf(authConfig.machineUsers!.admin.attributes.role).toEqualTypeOf<
       "ADMIN" | "WORKER"
     >();
+  });
+
+  test("accepts a SAML idProvider without enableSignRequest", () => {
+    type SamlWithoutSignRequest = { name: string; kind: "SAML"; metadataURL: string };
+
+    defineAuth("saml", {
+      machineUserAttributes: {},
+      idProvider: {
+        name: "okta-saml",
+        kind: "SAML",
+        metadataURL: "https://example.okta.com/app/abc123/sso/saml/metadata",
+      },
+    });
+    expectTypeOf<SamlWithoutSignRequest>().toExtend<SAML>();
+    expectTypeOf<SamlWithoutSignRequest>().toExtend<IdProviderConfig>();
   });
 
   test("rejects invalid machine user attributes when machineUsers-only", () => {
