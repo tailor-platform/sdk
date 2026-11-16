@@ -267,11 +267,11 @@ async function runIdpScript(
   return { success, parsed, outcomeUnknown };
 }
 
-// The generated IdP scripts upsert or delete users one call at a time (about a
-// second or more per row), so each script execution must carry few enough rows
-// to finish well within a workflow job's execution time limit, and to keep the
-// rows an interrupted chunk may have applied few. Byte-size chunking cannot
-// capture this.
+// The generated IdP scripts upsert or delete users with a bounded number of
+// concurrent calls (about a second per call), so each script execution must
+// carry few enough rows to finish well within a workflow job's execution time
+// limit, and to keep the rows an interrupted chunk may have applied few.
+// Byte-size chunking cannot capture this.
 const IDP_USER_CHUNK_SIZE = 25;
 
 function chunkIdpUsers<T>(rows: T[]): T[][] {
@@ -314,6 +314,26 @@ async function hookIdpUserRows(
     const { password, ...rest } = row;
     return password === undefined ? row : { ...rest, initialPassword: password };
   });
+}
+
+function assertUniqueIdpUserNames(rows: SeedData[string]): void {
+  const firstRowByName = new Map<string, number>();
+  const duplicates: string[] = [];
+  rows.forEach((row, index) => {
+    if (typeof row.name !== "string") return;
+    const first = firstRowByName.get(row.name);
+    if (first === undefined) {
+      firstRowByName.set(row.name, index);
+    } else {
+      duplicates.push(`Row ${index + 1} (${row.name}): duplicate of row ${first + 1}`);
+    }
+  });
+  if (duplicates.length > 0) {
+    throw new Error(
+      `_User has rows that repeat a name, so nothing was applied. ` +
+        `Remove the repeated rows and run the command again.\n${duplicates.join("\n")}`,
+    );
+  }
 }
 
 async function seedIdpUser(
@@ -640,6 +660,7 @@ export const seedApplyCommand = defineAppCommand({
           loadSeedData(dataDirs, ["_User"], { keyField: "name" })._User,
         )
       : [];
+    assertUniqueIdpUserNames(idpUserRows);
 
     const appInfo = await show({
       configPath: args.config,
