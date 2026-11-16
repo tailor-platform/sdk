@@ -589,7 +589,7 @@ type AssertResourcesNotInUseParams = {
 };
 
 /**
- * Reject a run that deletes a resource an application still uses: an Auth service,
+ * Reject a run that deletes a resource still in use: an Auth service,
  * TailorDB namespace, resolver namespace, or IdP that an application references, an Auth
  * service that an AI gateway authenticates against, a machine user that an executor or resolver
  * runs as, a TailorDB table, resolver, IdP, Auth service, or workflow that an executor

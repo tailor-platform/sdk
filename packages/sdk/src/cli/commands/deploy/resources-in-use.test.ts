@@ -754,15 +754,18 @@ describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", ()
       );
     });
 
-    test("keeps the remove suggestion when an executor labelled with the removed application remains", async () => {
+    test("keeps the remove suggestion when an executor labelled with the removed application remains beside an unmanaged one", async () => {
       const core = emptyPlanResults();
       deletingCoreApplication(core);
       withWorkspaceExecutor(core, { name: "self-query", targetConfig: CORE_QUERY }, "core");
+      withWorkspaceExecutor(core, { name: "legacy", targetConfig: CORE_QUERY });
 
       await expect(check([deployment({ name: "core" }, core)], "remove")).rejects.toThrow(
         expect.objectContaining({
-          suggestion:
+          suggestion: [
             "Remove the applications that use each listed resource, or deploy them so that they stop using it, then run remove again.",
+            UNMANAGED_SUGGESTION,
+          ].join(" "),
         }),
       );
     });
@@ -1113,8 +1116,8 @@ describe("assertResourcesNotInUse for Auth IdP and SCIM configs", () => {
 
 type ExporterAuth = MessageInitShape<typeof OTLPExporterAuthConfigSchema>;
 
-function otlpExporter(name: string, auth?: ExporterAuth) {
-  return create(OTLPExporterSchema, { name, endpoint: "https://otlp.example.com", auth });
+function otlpExporter(exporter: MessageInitShape<typeof OTLPExporterSchema>) {
+  return create(OTLPExporterSchema, { endpoint: "https://otlp.example.com", ...exporter });
 }
 
 const OTLP_EXPORTER_AUTHS: Array<{
@@ -1138,12 +1141,12 @@ const OTLP_EXPORTER_AUTHS: Array<{
 
 describe("assertResourcesNotInUse for OTLP exporters", () => {
   test.each(OTLP_EXPORTER_AUTHS)(
-    "rejects a deleted secret only for the OTLP exporter that sends it as its $label",
+    "rejects a deleted secret for a disabled OTLP exporter that sends it as its $label, and for no other exporter",
     async ({ auth }) => {
       const client = exporterClient([
-        otlpExporter("unauthenticated"),
-        otlpExporter("other", auth(OTHER_KEY)),
-        otlpExporter("vendor", auth(API_KEY)),
+        otlpExporter({ name: "unauthenticated", enabled: true }),
+        otlpExporter({ name: "other", enabled: true, auth: auth(OTHER_KEY) }),
+        otlpExporter({ name: "vendor", enabled: false, auth: auth(API_KEY) }),
       ]);
 
       await expect(

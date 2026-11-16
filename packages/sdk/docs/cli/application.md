@@ -185,7 +185,7 @@ Each config's `files` patterns (see [Service Configuration](../configuration.md#
 
 **Resources Still in Use:**
 
-`deploy` and `remove` stop with `SERVICE_IN_USE` before changing anything when they would delete a resource that an application, including the one whose config deletes it, still uses, and list each use. These uses are checked:
+`deploy` and `remove` stop with `SERVICE_IN_USE` before changing anything when they would delete a resource that is still in use, including by the application whose config deletes it, and list each use. These uses are checked:
 
 - A TailorDB namespace, resolver namespace, IdP, or Auth service that an application references as `external`
 - An Auth service that an AI gateway sets as its `authNamespace`
