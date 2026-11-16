@@ -137,8 +137,9 @@ Without a profile it uses `TAILOR_PLATFORM_TOKEN`, then `TAILOR_PLATFORM_PROFILE
 logged-in user, as the `tailor` command does. Importing it in `tailor.config.ts` is safe, and using it inside the
 `build` function is what it is for. Code that runs on the Platform, such as a resolver or an
 auth hook, cannot use it, because it only works where `tailor deploy` runs. `tailor.config.ts` is
-bundled into an auth hook, but its `plugins` export is left out, so the CLI functions a plugin
-uses do not reach the bundle. If code that runs on the Platform still uses them, such as a call at
+bundled into an auth hook, but the plugins you register with `definePlugins` in its `plugins`
+export are left out, so the CLI functions a plugin uses do not reach the bundle. Register plugins
+with `definePlugins`, as the examples do. If code that runs on the Platform still uses them, such as a call at
 the top level of `tailor.config.ts`, `tailor deploy` stops with `DEPLOY_ONLY_CLI_IMPORT` and
 names the file.
 

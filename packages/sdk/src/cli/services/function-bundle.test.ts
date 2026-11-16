@@ -64,8 +64,12 @@ function writeUnloadableCliPackage(projectDir: string): void {
     JSON.stringify({
       name: "@tailor-platform/sdk",
       type: "module",
-      exports: { "./cli": "./cli.mjs" },
+      exports: { ".": "./index.mjs", "./cli": "./cli.mjs" },
     }),
+  );
+  fs.writeFileSync(
+    path.join(packageDir, "index.mjs"),
+    `export const definePlugins = (...plugins) => plugins;\n`,
   );
   fs.writeFileSync(
     path.join(packageDir, "cli.mjs"),
@@ -218,6 +222,7 @@ describe("buildFunctionBundle CLI entry point", () => {
   );
 
   const pluginConfig = (registration: string) =>
+    `import { definePlugins } from "@tailor-platform/sdk";\n` +
     `import { apiCall } from "@tailor-platform/sdk/cli";\n` +
     `type Definition = { site: string; build: () => unknown };\n` +
     `const frontend = (...definitions: Definition[]) => {\n` +
@@ -228,8 +233,8 @@ describe("buildFunctionBundle CLI entry point", () => {
     `export const config = { name: "OWN_SOURCE" };\n`;
 
   const pluginRegistrations = {
-    "an arrow function": `export const plugins = [frontend({ site: "web", build: () => apiCall() })];\n`,
-    "a function defined next to the registration": `const build = async () => { await apiCall(); };\nexport const plugins = [frontend({ site: "web", build })];\n`,
+    "an arrow function": `export const plugins = definePlugins(frontend({ site: "web", build: () => apiCall() }));\n`,
+    "a function defined next to the registration": `const build = async () => { await apiCall(); };\nexport const plugins = definePlugins(frontend({ site: "web", build }));\n`,
   };
 
   test.each(
@@ -282,6 +287,33 @@ describe("buildFunctionBundle CLI entry point", () => {
     await expect(bundle(sourceFile)).rejects.toThrow(
       expect.objectContaining({ code: "DEPLOY_ONLY_CLI_IMPORT" }),
     );
+  });
+
+  test("rejects the build when code that runs on the Platform imports the CLI entry point dynamically", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-dynamic-");
+    writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeFunction(
+      tmp.dir,
+      `export default async () => (await import("@tailor-platform/sdk/cli")).apiCall();\n`,
+    );
+
+    await expect(bundle(sourceFile)).rejects.toThrow(
+      expect.objectContaining({
+        code: "DEPLOY_ONLY_CLI_IMPORT",
+        details: expect.stringContaining("function.ts"),
+      }),
+    );
+  });
+
+  test("keeps a plugins export that another module imports when it is not a plugin registration", async () => {
+    using tmp = tempCwd("sdk-function-bundle-plugins-export-");
+    writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeModules(tmp.dir, {
+      "function.ts": `import { plugins } from "./jobs";\nexport default async () => plugins[0];\n`,
+      "jobs.ts": `export const plugins = ["OWN_SOURCE"];\n`,
+    });
+
+    await expect(bundle(sourceFile)).resolves.toContain("OWN_SOURCE");
   });
 
   test("bundles a function whose module only has text, a parameter name and a property name that look like CLI exports", async () => {
