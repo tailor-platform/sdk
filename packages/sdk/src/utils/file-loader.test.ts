@@ -155,6 +155,19 @@ describe("loadFilesWithIgnores", () => {
     },
   );
 
+  test("does not include test files with a brace pattern that does not end in .test.ts or .spec.ts", () => {
+    const warnSpy = vi.fn();
+    const baseDir = makeDirWithFile("file-loader-brace-test-pattern-", "ex/x.ts");
+    writeFiles(baseDir, ["e2e/a.test.ts", "e2e/b.spec.ts"]);
+
+    const files = loadFilesWithIgnores(
+      { files: ["./ex/*.ts", "./e2e/*.{test,spec}.ts"] },
+      baseDir,
+      warnSpy,
+    );
+    expect(files).toEqual([path.join(baseDir, "ex", "x.ts")]);
+  });
+
   test("applies ignores after a trailing test-file pattern", () => {
     const warnSpy = vi.fn();
     const baseDir = makeDirWithFile("file-loader-ignores-after-test-pattern-", "src/a.ts");

@@ -191,6 +191,8 @@ Test files (`**/*.test.ts` and `**/*.spec.ts`) are excluded by default, in any d
 files: ["executors/**/*.ts", "executors/**/*.test.ts"],
 ```
 
+Only the pattern text counts: `e2e/*.{test,spec}.ts` does not end in `.test.ts` or `.spec.ts`, so it matches no test files; write `e2e/*.test.ts` and `e2e/*.spec.ts` instead.
+
 **ignores** (deprecated): Glob patterns to exclude files. Optional. Write `!` patterns in `files` instead; `ignores` is removed in v3, and `tailor upgrade` moves its patterns into `files`. Specifying `ignores` replaces the default test-file exclusion, so `ignores: []` includes test files. `ignores` applies after `files`, so no `files` pattern includes the files it excludes. In v3, test files are no longer excluded by default; `tailor upgrade` writes `"!**/*.test.ts"` and `"!**/*.spec.ts"` into `files` to keep them out.
 
 **defaultPermission** (resolver namespaces only): Access requirement applied to every resolver in the namespace that declares no `permission` of its own. Optional, and takes the same values as a resolver's own `permission`, except that it cannot use an `input` operand. See [Namespace-wide default](./services/resolver.md#namespace-wide-default-defaultpermission).
