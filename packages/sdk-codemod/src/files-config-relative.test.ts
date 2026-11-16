@@ -361,6 +361,26 @@ describe("files patterns -> config-relative migration", () => {
     },
   );
 
+  test("follows a name a module gains through a second route after the first one reached it", async () => {
+    writeFiles("jobs/run.ts", "barrels/jobs/local.ts");
+    writeFile("configs/forward.ts", 'export { default } from "./shared";\n');
+    writeFile(
+      "barrels/index.ts",
+      'export { default as named } from "../configs/shared";\nexport { default } from "../configs/forward";\n',
+    );
+    writeFile("apps/a/tailor.config.ts", 'import a from "../../barrels";\nexport default a;\n');
+
+    const { transformed, findings } = await migrate(
+      `export default ${SHARED_EXECUTOR};\n`,
+      "configs/shared.ts",
+    );
+
+    expect(transformed).toBeNull();
+    expect(findings).toEqual([
+      expect.stringContaining("`apps/a/tailor.config.ts`, `barrels/index.ts` load this config"),
+    ]);
+  });
+
   test.each([
     [
       "its patterns match from the loading config file's directory",

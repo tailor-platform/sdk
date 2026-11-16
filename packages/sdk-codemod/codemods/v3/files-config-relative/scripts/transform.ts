@@ -350,7 +350,7 @@ async function findConfigLoaders(
   const files = await projectSourceFiles(projectDir);
   const config: ConfigCarrier = { id: moduleId(configFile), names: exportNames };
   const carriers = [config];
-  const visited = new Set([config.id]);
+  const namesById = new Map([[config.id, exportNames]]);
   const loaders = new Set<SourceFile>();
   for (const carrier of carriers) {
     const stem = path.basename(carrier.id);
@@ -361,9 +361,11 @@ async function findConfigLoaders(
         loaders.add(sourceFile);
       }
       const id = moduleId(sourceFile.file);
-      if (names.size === 0 || visited.has(id)) continue;
-      visited.add(id);
-      carriers.push({ id, names });
+      const known = namesById.get(id);
+      const added = known ? names.difference(known) : names;
+      if (added.size === 0) continue;
+      namesById.set(id, known ? known.union(added) : added);
+      carriers.push({ id, names: added });
     }
   }
   return [...loaders].toSorted((a, b) => (a.relative < b.relative ? -1 : 1));
