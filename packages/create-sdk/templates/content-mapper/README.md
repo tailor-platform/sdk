@@ -4,6 +4,9 @@ This is a sample project for [Tailor Platform SDK](https://www.npmjs.com/package
 
 This project was bootstrapped with [Create Tailor Platform SDK](https://www.npmjs.com/package/@tailor-platform/create-sdk).
 
+> [!WARNING]
+> The content mapper is a **beta** feature. It depends on TypeScript 7.1, which is still in development, so its behavior may change in a future release.
+
 ## Requirements
 
 The content mapper needs TypeScript 7.1 or later. TypeScript 7.1 is in beta, so this project pins `typescript@7.1.0-beta`.

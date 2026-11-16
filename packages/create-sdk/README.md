@@ -141,7 +141,7 @@ Demonstrates the built-in generator plugins.
 
 ### content-mapper
 
-Types the project from `tailor.config.ts` through the SDK's content mapper, without `tailor generate`. The mapper needs TypeScript 7.1, which is in beta, so the template pins `typescript@7.1.0-beta`.
+Types the project from `tailor.config.ts` through the SDK's content mapper, without `tailor generate`. The content mapper is a **beta** feature: it needs TypeScript 7.1, which is still in development and in beta, so the template pins `typescript@7.1.0-beta`.
 
 **Includes:**
 

@@ -129,7 +129,12 @@ export default defineConfig({
 
 `deploy` creates the application only when the config defines or references at least one TailorDB namespace, resolver namespace, IdP, or Auth service. A config with none of them has no application, so its CORS, allowed IP addresses, introspection setting, metadata, and HTTP adapters are not deployed. When a config drops the last of them, `deploy` asks for [confirmation](./cli/application.md#deploy) and deletes the application an earlier deploy created, together with any labels other tools added to it. If an executor's `graphql` operation still targets the application, including one in the same config that sets no `appName`, `deploy` stops with `SERVICE_IN_USE` instead, so keep one of them or remove that executor. Once the application is deleted, adding one back recreates it at the same URL.
 
-### Type Definitions Without `tailor generate`
+### Type Definitions Without `tailor generate` (Beta)
+
+<a id="type-definitions-without-tailor-generate"></a>
+
+> [!WARNING]
+> The content mapper is a **beta** feature. It depends on TypeScript 7.1, which is still in development and in beta, and the `contentMappers` option is not final. The mapper's behavior may change in a future release.
 
 `tailor generate` and `tailor deploy` write `tailor.d.ts`, which declares the names and values your config defines (`Env`, `Attributes`, `MachineUserName`, `IdpName`, and so on) so your code is checked and autocompleted against them. With TypeScript 7.1 or later, TypeScript can read them from `tailor.config.ts` itself, so they are current without running either command.
 
