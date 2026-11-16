@@ -5,7 +5,7 @@ import type { OperatorClient } from "#/cli/shared/client";
 import type { PlanContext } from "./types";
 
 vi.mock("./label", async (importOriginal) => {
-  const original = (await importOriginal()) as Record<string, unknown>;
+  const original = await importOriginal<Record<string, unknown>>();
   return {
     ...original,
     buildMetaRequest: vi.fn().mockImplementation(async () => ({

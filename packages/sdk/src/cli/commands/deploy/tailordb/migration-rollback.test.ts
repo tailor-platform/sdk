@@ -24,7 +24,7 @@ const remoteCheckpoint = vi.hoisted(() => ({
 
 vi.mock("../label", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("../label");
+  const original = await importOriginal<typeof import("../label")>();
   return {
     ...original,
     buildMetaRequest: vi.fn().mockImplementation(async () => ({
@@ -36,7 +36,7 @@ vi.mock("../label", async (importOriginal) => {
 
 vi.mock("../change-set", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("../change-set");
+  const original = await importOriginal<typeof import("../change-set")>();
   return {
     ...original,
     createChangeSet: (title: string) => ({
@@ -48,7 +48,7 @@ vi.mock("../change-set", async (importOriginal) => {
 
 vi.mock("./migration", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("./migration");
+  const original = await importOriginal<typeof import("./migration")>();
   return {
     ...original,
     detectPendingMigrations: vi.fn(),
@@ -144,7 +144,7 @@ const snapshotFixtures = vi.hoisted(() => {
 vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => {
   const original =
     // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-    (await importOriginal()) as typeof import("#/cli/commands/tailordb/migrate/snapshot");
+    await importOriginal<typeof import("#/cli/commands/tailordb/migrate/snapshot")>();
   return {
     ...original,
     assertValidMigrationFiles: vi.fn(),

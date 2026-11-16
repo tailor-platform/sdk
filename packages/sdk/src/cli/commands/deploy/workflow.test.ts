@@ -9,7 +9,7 @@ import type { Workflow, WorkflowJob } from "#/types/workflow.generated";
 // Mock label.ts
 vi.mock("./label", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("./label");
+  const original = await importOriginal<typeof import("./label")>();
   return {
     ...original,
     // A fresh object per call, as the real one returns: callers mutate the write
@@ -27,7 +27,7 @@ vi.mock("./label", async (importOriginal) => {
 // Mock createChangeSet to suppress output in tests
 vi.mock("./change-set", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("./change-set");
+  const original = await importOriginal<typeof import("./change-set")>();
   return {
     ...original,
     createChangeSet: (title: string) => ({
