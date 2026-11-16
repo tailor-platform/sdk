@@ -163,7 +163,7 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
       );
       const hookFailures = createHookFailures();
       const plugins: rolldown.InputOptions["plugins"] = [
-        createDeployOnlyCliStubPlugin(),
+        createDeployOnlyCliStubPlugin(hookFailures),
         virtualEntry.plugin,
         ...(createTransformPlugins?.(hookFailures) ?? [
           createStartTransformPlugin(startContext, hookFailures),

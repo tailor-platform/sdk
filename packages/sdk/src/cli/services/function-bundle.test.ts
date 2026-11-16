@@ -154,45 +154,63 @@ describe("buildFunctionBundle CLI entry point", () => {
     expect(code).toContain("OWN_SOURCE");
   });
 
-  test("turns a reference to the CLI entry point that survives tree-shaking into a call that explains the failure", async () => {
-    using tmp = tempCwd("sdk-function-bundle-cli-entry-used-");
-    writeUnloadableCliPackage(tmp.dir);
-    const sourceFile = writeFunction(
-      tmp.dir,
-      `import { apiCall } from "@tailor-platform/sdk/cli";\n` +
-        `export default async () => apiCall({ endpoint: "Ping" });\n`,
-    );
-
-    const code = await bundle(sourceFile);
-
-    expect(code).toContain("@tailor-platform/sdk/cli only works where tailor deploy runs");
-    expect(code).not.toContain("import");
+  const DEPLOY_ONLY_ERROR = expect.objectContaining({
+    code: "DEPLOY_ONLY_CLI_IMPORT",
+    message: expect.stringContaining("@tailor-platform/sdk/cli"),
   });
 
   test.each([
-    ["calling a method of an object", `logger.info("x")`],
-    ["joining a constant into a string", "`${TAILOR_LOCK_FILENAME}`"],
+    ["calling a function", `apiCall()`, "apiCall"],
+    ["calling a method of an object", `logger.info("x")`, "logger"],
+    ["joining a constant into a string", "`${TAILOR_LOCK_FILENAME}`", "TAILOR_LOCK_FILENAME"],
   ])(
-    "explains the failure when a surviving reference to the CLI entry point is used by %s",
-    async (_label, expression) => {
-      using tmp = tempCwd("sdk-function-bundle-cli-entry-non-function-");
+    "rejects the build when code that runs on the Platform uses the CLI entry point by %s",
+    async (_label, expression, name) => {
+      using tmp = tempCwd("sdk-function-bundle-cli-entry-used-");
       writeUnloadableCliPackage(tmp.dir);
       const sourceFile = writeFunction(
         tmp.dir,
-        `import { logger, TAILOR_LOCK_FILENAME } from "@tailor-platform/sdk/cli";\n` +
+        `import { apiCall, logger, TAILOR_LOCK_FILENAME } from "@tailor-platform/sdk/cli";\n` +
           `export default async () => ${expression};\n`,
       );
 
-      const code = await bundle(sourceFile);
-      const bundled = await import(
-        /* @vite-ignore */ `data:text/javascript,${encodeURIComponent(code)}`
-      );
-
-      await expect(bundled.main()).rejects.toThrow(
-        "@tailor-platform/sdk/cli only works where tailor deploy runs",
+      await expect(bundle(sourceFile)).rejects.toThrow(
+        expect.objectContaining({
+          code: "DEPLOY_ONLY_CLI_IMPORT",
+          details: expect.stringContaining(name),
+        }),
       );
     },
   );
+
+  test("rejects the build when a config module calls the CLI entry point at its top level", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-top-level-");
+    writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeModules(tmp.dir, {
+      "function.ts": `import { config } from "./config";\nexport default async () => config.name;\n`,
+      "config.ts":
+        `import { logger } from "@tailor-platform/sdk/cli";\n` +
+        `logger.info("loading config");\n` +
+        `export const config = { name: "N" };\n`,
+    });
+
+    await expect(bundle(sourceFile)).rejects.toThrow(DEPLOY_ONLY_ERROR);
+  });
+
+  test("bundles a function whose config module uses the CLI entry point only inside a plugin's functions", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-plugin-closure-");
+    writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeModules(tmp.dir, {
+      "function.ts": `import { config } from "./config";\nexport default async () => config.name;\n`,
+      "config.ts":
+        `import { apiCall } from "@tailor-platform/sdk/cli";\n` +
+        `const frontend = (options: { build: () => unknown }) => options;\n` +
+        `export const plugins = [frontend({ build: () => apiCall() })];\n` +
+        `export const config = { name: "OWN_SOURCE" };\n`,
+    });
+
+    await expect(bundle(sourceFile)).resolves.toContain("OWN_SOURCE");
+  });
 
   test("bundles a function whose helper re-exports everything from the CLI entry point", async () => {
     using tmp = tempCwd("sdk-function-bundle-cli-entry-export-star-");

@@ -1,12 +1,20 @@
 import * as fs from "node:fs/promises";
 import { parseSync } from "oxc-parser";
+import { CLIError } from "#/cli/shared/errors";
+import type { HookFailures } from "#/cli/services/hook-failures";
 import type { Plugin } from "rolldown";
 
 const CLI_ENTRY = "@tailor-platform/sdk/cli";
 const STUB_PREFIX = "\0tailor-platform-sdk-cli-stub:";
+// Marks each stubbed export in the bundle: the token is in the output only while the export is
+const EXPORT_TOKEN = /@tailor-platform\/sdk\/cli#([A-Za-z_$][\w$]*)/g;
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
 
 type ExportedNameNode = { type: string; name?: string; value?: unknown };
+
+function exportToken(name: string): string {
+  return `${CLI_ENTRY}#${name}`;
+}
 
 function exportedName(name: ExportedNameNode): string {
   return name.type === "Identifier" ? String(name.name) : String(name.value);
@@ -39,10 +47,12 @@ function exportedNamesOf(code: string, file: string): string[] {
  * module it can reach before it removes unused code, so the real module (which needs a native
  * binding) would fail the bundle even when the import is never used on the Platform. Declaring
  * every name keeps named, re-exported, namespace and dynamic imports resolvable whatever order
- * the modules are found in.
+ * the modules are found in. A name that is still in the bundle after unused code is removed is
+ * reachable from code that runs on the Platform, so the build fails with the names left over.
+ * @param hookFailures - Keeps the failure until the build is over
  * @returns Rolldown plugin that stubs the CLI entry point
  */
-export function createDeployOnlyCliStubPlugin(): Plugin {
+export function createDeployOnlyCliStubPlugin(hookFailures: HookFailures): Plugin {
   return {
     name: "tailor-deploy-only-cli-stub",
     async resolveId(source, importer) {
@@ -57,12 +67,35 @@ export function createDeployOnlyCliStubPlugin(): Plugin {
       const file = id.slice(STUB_PREFIX.length);
       const names = exportedNamesOf(await fs.readFile(file, "utf8"), file);
       return [
-        `function deployOnly() {`,
-        `  const fail = () => { throw new Error("${CLI_ENTRY} only works where tailor deploy runs"); };`,
+        `function deployOnly(token) {`,
+        `  const fail = () => { throw new Error(token + " only works where tailor deploy runs"); };`,
         `  return new Proxy(function () {}, { get: fail, set: fail, apply: fail, construct: fail });`,
         `}`,
-        ...names.map((name) => `export const ${name} = /* @__PURE__ */ deployOnly();`),
+        ...names.map(
+          (name) =>
+            `export const ${name} = /* @__PURE__ */ deployOnly(${JSON.stringify(exportToken(name))});`,
+        ),
       ].join("\n");
+    },
+    generateBundle(_, bundle) {
+      const remaining = new Set<string>();
+      for (const output of Object.values(bundle)) {
+        if (output.type !== "chunk") continue;
+        for (const [, name] of output.code.matchAll(EXPORT_TOKEN)) {
+          if (name) remaining.add(name);
+        }
+      }
+      if (remaining.size === 0) return;
+      const names = [...remaining].toSorted();
+      hookFailures.record(
+        CLIError({
+          code: "DEPLOY_ONLY_CLI_IMPORT",
+          message: `${CLI_ENTRY} is used by code that runs on the Platform.`,
+          details: `Used: ${names.join(", ")}`,
+          suggestion: `Use ${CLI_ENTRY} only inside a plugin's build or onDeployed function, which runs where \`tailor deploy\` runs. A call at the top level of tailor.config.ts or in a resolver, executor or hook body runs on the Platform, where this entry point does not work.`,
+          context: { names },
+        }),
+      );
     },
   };
 }

@@ -132,8 +132,9 @@ Platform API. Pass `loadAccessToken` the `profile` the function receives, which 
 `tailor deploy` ran with (`--profile`), so the client calls the Platform as the same user.
 Without a profile it uses `TAILOR_PLATFORM_TOKEN`, then `TAILOR_PLATFORM_PROFILE`, then the
 logged-in user, as the `tailor` command does. Importing it in `tailor.config.ts` is safe. Code
-that runs on the Platform, such as a resolver or an auth hook, cannot use it: a call there
-throws an error saying it only works where `tailor deploy` runs.
+that runs on the Platform, such as a resolver or an auth hook, cannot use it: `tailor deploy`
+stops with `DEPLOY_ONLY_CLI_IMPORT` and names the functions in use. This includes a call at the
+top level of `tailor.config.ts`, which an auth hook runs when it loads.
 
 Running `tailor deploy` again after a failure runs the function again, so write what it
 does to be repeatable: look up or create a resource instead of always creating a new one.
