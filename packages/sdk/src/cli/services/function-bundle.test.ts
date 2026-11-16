@@ -224,6 +224,21 @@ describe("buildFunctionBundle CLI entry point", () => {
     await expect(bundle(sourceFile)).resolves.toContain("OWN_SOURCE");
   });
 
+  test("rejects the build when a computed instance field key uses the CLI entry point", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-computed-key-");
+    writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeModules(tmp.dir, {
+      "function.ts": `import { Deploy } from "./config";\nexport default async () => typeof Deploy;\n`,
+      "config.ts":
+        `import { apiCall } from "@tailor-platform/sdk/cli";\n` +
+        `export class Deploy { [String(apiCall())] = 1; }\n`,
+    });
+
+    await expect(bundle(sourceFile)).rejects.toThrow(
+      expect.objectContaining({ code: "DEPLOY_ONLY_CLI_IMPORT" }),
+    );
+  });
+
   test("rejects the build when a static field initializer uses the CLI entry point", async () => {
     using tmp = tempCwd("sdk-function-bundle-cli-entry-static-field-");
     writeUnloadableCliPackage(tmp.dir);
