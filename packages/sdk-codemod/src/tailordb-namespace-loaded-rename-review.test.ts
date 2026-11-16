@@ -1,19 +1,22 @@
 import { describe, expect, test } from "vitest";
-import transform, {
-  reviewFindings,
-} from "../codemods/v3/tailordb-namespace-loaded-rename/scripts/transform";
+import { reviewThroughRunner } from "./test-helpers/codemods";
+
+const review = (source: string) =>
+  reviewThroughRunner("v3/tailordb-namespace-loaded-rename", source, "src/plugin.ts");
 
 describe("onNamespaceLoaded -> onTailorDBNamespaceLoaded migration review", () => {
-  test("renames the hook and reports nothing left to review", () => {
+  test("renames the hook and reports nothing left to review", async () => {
     const source = `import type { Plugin } from "@tailor-platform/sdk";
 export const plugin: Plugin = { id: "a", description: "a", importPath: "a", onNamespaceLoaded: () => ({}) };
 `;
 
-    expect(transform(source, "plugin.ts")).toContain("onTailorDBNamespaceLoaded: () => ({})");
-    expect(reviewFindings(source, "plugin.ts", "src/plugin.ts")).toEqual([]);
+    const { transformed, findings } = await review(source);
+
+    expect(transformed).toContain("onTailorDBNamespaceLoaded: () => ({})");
+    expect(findings).toEqual([]);
   });
 
-  test("flags a plugin object that already defines both names instead of renaming", () => {
+  test("flags a plugin object that already defines both names instead of renaming", async () => {
     const source = `import type { Plugin } from "@tailor-platform/sdk";
 export const plugin: Plugin = {
   id: "a",
@@ -24,8 +27,10 @@ export const plugin: Plugin = {
 };
 `;
 
-    expect(transform(source, "plugin.ts")).toBeNull();
-    expect(reviewFindings(source, "plugin.ts", "src/plugin.ts")).toEqual([
+    const { transformed, findings } = await review(source);
+
+    expect(transformed).toBeNull();
+    expect(findings).toEqual([
       {
         file: "src/plugin.ts",
         line: 7,
@@ -36,7 +41,7 @@ export const plugin: Plugin = {
     ]);
   });
 
-  test("flags a class that already defines both methods", () => {
+  test("flags a class that already defines both methods", async () => {
     const source = `import type { Plugin } from "@tailor-platform/sdk";
 export class Both implements Plugin {
   readonly id = "a";
@@ -46,11 +51,13 @@ export class Both implements Plugin {
 }
 `;
 
-    expect(transform(source, "plugin.ts")).toBeNull();
-    expect(reviewFindings(source, "plugin.ts", "src/plugin.ts").map((f) => f.line)).toEqual([6]);
+    const { transformed, findings } = await review(source);
+
+    expect(transformed).toBeNull();
+    expect(findings.map((f) => f.line)).toEqual([6]);
   });
 
-  test("flags an interface that declares both names", () => {
+  test("flags an interface that declares both names", async () => {
     const source = `import type { Plugin } from "@tailor-platform/sdk";
 interface Hooks extends Plugin {
   onTailorDBNamespaceLoaded?(): object;
@@ -58,7 +65,9 @@ interface Hooks extends Plugin {
 }
 `;
 
-    expect(transform(source, "plugin.ts")).toBeNull();
-    expect(reviewFindings(source, "plugin.ts", "src/plugin.ts").map((f) => f.line)).toEqual([4]);
+    const { transformed, findings } = await review(source);
+
+    expect(transformed).toBeNull();
+    expect(findings.map((f) => f.line)).toEqual([4]);
   });
 });

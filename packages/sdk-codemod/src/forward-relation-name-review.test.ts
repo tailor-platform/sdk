@@ -1,8 +1,11 @@
 import { describe, expect, test } from "vitest";
-import transform, { reviewFindings } from "../codemods/v2/forward-relation-name/scripts/transform";
+import { reviewThroughRunner } from "./test-helpers/codemods";
+
+const review = (source: string, relativePath: string) =>
+  reviewThroughRunner("v2/forward-relation-name", source, relativePath);
 
 describe("forward relation name migration review", () => {
-  test("flags non-self relations that omit toward.as", () => {
+  test("flags non-self relations that omit toward.as", async () => {
     const source = `
 const post = db.table("Post", {
   authorId: db.uuid().relation({
@@ -12,8 +15,10 @@ const post = db.table("Post", {
 });
 `;
 
-    expect(transform(source, "post.ts")).toBeNull();
-    expect(reviewFindings(source, "post.ts", "post.ts")).toMatchObject([
+    const { transformed, findings } = await review(source, "post.ts");
+
+    expect(transformed).toBeNull();
+    expect(findings).toMatchObject([
       {
         file: "post.ts",
         line: 3,
@@ -23,7 +28,7 @@ const post = db.table("Post", {
     ]);
   });
 
-  test("ignores relations whose forward name behavior is unchanged", () => {
+  test("ignores relations whose forward name behavior is unchanged", async () => {
     const source = `
 const post = db.table("Post", {
   authorId: db.uuid().relation({
@@ -49,10 +54,12 @@ const post = db.table("Post", {
 });
 `;
 
-    expect(reviewFindings(source, "post.ts", "post.ts")).toEqual([]);
+    const { findings } = await review(source, "post.ts");
+
+    expect(findings).toEqual([]);
   });
 
-  test("flags relation configs composed with spreads or shorthand properties", () => {
+  test("flags relation configs composed with spreads or shorthand properties", async () => {
     const source = `
 const primary = db.uuid().relation({
   ...relationConfig,
@@ -61,12 +68,12 @@ const primary = db.uuid().relation({
 const secondary = db.uuid().relation({ type, toward });
 `;
 
-    const findings = reviewFindings(source, "post.ts", "post.ts");
+    const { findings } = await review(source, "post.ts");
 
     expect(findings).toHaveLength(2);
   });
 
-  test("flags relations whose toward.as value may use the default", () => {
+  test("flags relations whose toward.as value may use the default", async () => {
     const source = `
 const post = db.table("Post", {
   authorId: db.uuid().relation({
@@ -84,12 +91,12 @@ const post = db.table("Post", {
 });
 `;
 
-    const findings = reviewFindings(source, "post.ts", "post.ts");
+    const { findings } = await review(source, "post.ts");
 
     expect(findings).toHaveLength(3);
   });
 
-  test("flags relation calls that use computed member access", () => {
+  test("flags relation calls that use computed member access", async () => {
     const source = `
 const authorId = db.uuid()["relation"]({
   type: "n-1",
@@ -97,12 +104,12 @@ const authorId = db.uuid()["relation"]({
 });
 `;
 
-    const findings = reviewFindings(source, "post.ts", "post.ts");
+    const { findings } = await review(source, "post.ts");
 
     expect(findings).toHaveLength(1);
   });
 
-  test("flags relation calls that use dynamic computed member access", () => {
+  test("flags relation calls that use dynamic computed member access", async () => {
     const source = `
 const relationMethod = "relation";
 const authorId = db.uuid()[relationMethod]({
@@ -111,12 +118,12 @@ const authorId = db.uuid()[relationMethod]({
 });
 `;
 
-    const findings = reviewFindings(source, "post.ts", "post.ts");
+    const { findings } = await review(source, "post.ts");
 
     expect(findings).toHaveLength(1);
   });
 
-  test("flags multiline destructured relation builder aliases", () => {
+  test("flags multiline destructured relation builder aliases", async () => {
     const source = `
 const {
   relation: defineRelation,
@@ -127,12 +134,12 @@ const authorId = defineRelation({
 });
 `;
 
-    const findings = reviewFindings(source, "post.ts", "post.ts");
+    const { findings } = await review(source, "post.ts");
 
     expect(findings).toHaveLength(1);
   });
 
-  test("flags relation builder aliases destructured in function parameters", () => {
+  test("flags relation builder aliases destructured in function parameters", async () => {
     const source = `
 function apply({ relation }: ReturnType<typeof db.uuid>) {
   return relation({
@@ -142,12 +149,12 @@ function apply({ relation }: ReturnType<typeof db.uuid>) {
 }
 `;
 
-    const findings = reviewFindings(source, "post.ts", "post.ts");
+    const { findings } = await review(source, "post.ts");
 
     expect(findings).toHaveLength(1);
   });
 
-  test("parses TypeScript extensions as TypeScript when strings contain closing tags", () => {
+  test("parses TypeScript extensions as TypeScript when strings contain closing tags", async () => {
     const source = `
 const marker = "</div>";
 const typed = <Foo>value;
@@ -157,26 +164,28 @@ const authorId = db.uuid().relation({
 });
 `;
 
-    const findings = reviewFindings(source, "post.ts", "post.ts");
+    const { findings } = await review(source, "post.ts");
 
     expect(findings).toHaveLength(1);
   });
 
-  test("parses JavaScript extensions as TSX when they contain JSX", () => {
+  test("parses JavaScript extensions as TSX when they contain JSX", async () => {
     const source = `const view = <Widget />; const authorId = db.uuid().relation({ type: "n-1", toward: { type: user } });`;
 
-    const findings = reviewFindings(source, "post.js", "post.js");
+    const { findings } = await review(source, "post.js");
 
     expect(findings).toHaveLength(1);
   });
 
-  test("ignores malformed and unrelated relation-like calls", () => {
+  test("ignores malformed and unrelated relation-like calls", async () => {
     const source = `
 client.relation({ toward: { type: user } });
 client["validate"]({ type: "n-1", toward: { type: user } });
 const relation = { type: "n-1", toward: { type: user } };
 `;
 
-    expect(reviewFindings(source, "post.ts", "post.ts")).toEqual([]);
+    const { findings } = await review(source, "post.ts");
+
+    expect(findings).toEqual([]);
   });
 });

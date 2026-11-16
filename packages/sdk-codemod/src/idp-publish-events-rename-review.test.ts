@@ -2,21 +2,19 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { describe, expect, test } from "vitest";
-import { reviewFindings } from "../codemods/v2/idp-publish-events-rename/scripts/transform";
-import { allCodemods } from "./registry";
 import { runCodemods } from "./runner";
+import { runnableCodemod, reviewThroughRunner } from "./test-helpers/codemods";
 
-const filePath = "/repo/tailor.config.ts";
-const relativePath = "tailor.config.ts";
+const CODEMOD_ID = "v2/idp-publish-events-rename";
 
-function review(lines: string[]) {
-  return reviewFindings(lines.join("\n"), filePath, relativePath);
+async function review(lines: string[]) {
+  return (await reviewThroughRunner(CODEMOD_ID, lines.join("\n"))).findings;
 }
 
 describe("idp-publish-events-rename review findings", () => {
-  test("reports nothing when every option the transform rewrites is a direct key", () => {
+  test("reports nothing when every option the transform rewrites is a direct key", async () => {
     expect(
-      review([
+      await review([
         'import { defineIdp } from "@tailor-platform/sdk";',
         "",
         'export const idp = defineIdp("my-idp", { clients: ["c"], publishUserEvents: true });',
@@ -24,9 +22,9 @@ describe("idp-publish-events-rename review findings", () => {
     ).toEqual([]);
   });
 
-  test("leaves a nested key belonging to another option shape alone", () => {
+  test("leaves a nested key belonging to another option shape alone", async () => {
     expect(
-      review([
+      await review([
         'import { defineIdp } from "@tailor-platform/sdk";',
         "",
         'export const idp = defineIdp("my-idp", {',
@@ -37,8 +35,8 @@ describe("idp-publish-events-rename review findings", () => {
     ).toEqual([]);
   });
 
-  test("reports an options object the transform cannot reach", () => {
-    const findings = review([
+  test("reports an options object the transform cannot reach", async () => {
+    const findings = await review([
       'import { defineIdp } from "@tailor-platform/sdk";',
       "",
       'const options = { clients: ["c"], publishUserEvents: true };',
@@ -50,8 +48,8 @@ describe("idp-publish-events-rename review findings", () => {
     expect(findings[0]?.message).toContain("Rename the IdP option");
   });
 
-  test("reports a type declaration of the option", () => {
-    const findings = review([
+  test("reports a type declaration of the option", async () => {
+    const findings = await review([
       'import { defineIdp } from "@tailor-platform/sdk";',
       "",
       "type IdpOptions = {",
@@ -65,8 +63,8 @@ describe("idp-publish-events-rename review findings", () => {
     expect(findings[0]?.line).toBe(4);
   });
 
-  test("reports an options object the transform skips because of a type assertion", () => {
-    const findings = review([
+  test("reports an options object the transform skips because of a type assertion", async () => {
+    const findings = await review([
       'import { defineIdp } from "@tailor-platform/sdk";',
       "",
       'export const idp = defineIdp("my-idp", { clients: ["c"], publishUserEvents: true } as const);',
@@ -77,8 +75,8 @@ describe("idp-publish-events-rename review findings", () => {
     expect(findings[0]?.message).toContain("Rename the IdP option");
   });
 
-  test("reports a computed option key that may be the renamed option", () => {
-    const findings = review([
+  test("reports a computed option key that may be the renamed option", async () => {
+    const findings = await review([
       'import { defineIdp } from "@tailor-platform/sdk";',
       "",
       'const key = "publishUserEvents";',
@@ -90,8 +88,8 @@ describe("idp-publish-events-rename review findings", () => {
     );
   });
 
-  test("reports once when a local declaration shadows the defineIdp import", () => {
-    const findings = review([
+  test("reports once when a local declaration shadows the defineIdp import", async () => {
+    const findings = await review([
       'import { defineIdp } from "@tailor-platform/sdk";',
       "",
       "function wrap() {",
@@ -106,9 +104,9 @@ describe("idp-publish-events-rename review findings", () => {
     expect(findings[0]?.message).toContain("shadows the SDK defineIdp import");
   });
 
-  test("reports nothing for a file that never imports the SDK", () => {
+  test("reports nothing for a file that never imports the SDK", async () => {
     expect(
-      review([
+      await review([
         'import { defineIdp } from "./local-idp";',
         "",
         'export const idp = defineIdp("my-idp", { publishUserEvents: true });',
@@ -116,8 +114,8 @@ describe("idp-publish-events-rename review findings", () => {
     ).toEqual([]);
   });
 
-  test("reports a quoted key in an options object the transform cannot reach", () => {
-    const findings = review([
+  test("reports a quoted key in an options object the transform cannot reach", async () => {
+    const findings = await review([
       'import { defineIdp } from "@tailor-platform/sdk";',
       "",
       'const options = { clients: ["c"], "publishUserEvents": true };',
@@ -129,9 +127,9 @@ describe("idp-publish-events-rename review findings", () => {
     expect(findings[0]?.message).toContain("Rename the IdP option");
   });
 
-  test("reports nothing for a quoted key the transform rewrites in place", () => {
+  test("reports nothing for a quoted key the transform rewrites in place", async () => {
     expect(
-      review([
+      await review([
         'import { defineIdp } from "@tailor-platform/sdk";',
         "",
         'export const idp = defineIdp("my-idp", { "publishUserEvents": true });',
@@ -140,14 +138,6 @@ describe("idp-publish-events-rename review findings", () => {
   });
 
   test("does not warn that a migrated shorthand option was left unmigrated", async () => {
-    const codemod = allCodemods.find((entry) => entry.id === "v2/idp-publish-events-rename");
-    expect(codemod).toBeDefined();
-    if (!codemod) throw new Error("idp publishEvents codemod is not registered");
-
-    const scriptPath = path.resolve(
-      __dirname,
-      "../codemods/v2/idp-publish-events-rename/scripts/transform.ts",
-    );
     const projectDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "idp-publish-events-"));
 
     try {
@@ -163,7 +153,7 @@ describe("idp-publish-events-rename review findings", () => {
         "utf-8",
       );
 
-      const result = await runCodemods([{ codemod, scriptPath }], projectDir, false);
+      const result = await runCodemods([runnableCodemod(CODEMOD_ID)], projectDir, false);
 
       // The rewrite keeps reading the same local, so the legacy name survives on
       // purpose. Matching it as a residual reports every success as a failure.

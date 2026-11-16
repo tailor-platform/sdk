@@ -3,21 +3,10 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
 import dbTypeToTableTransform from "../codemods/v2/db-type-to-table/scripts/transform";
-import { allCodemods } from "./registry";
 import { runCodemods } from "./runner";
+import { runnableCodemod } from "./test-helpers/codemods";
 
-const CODEMODS_DIR = path.resolve(__dirname, "../codemods");
-
-const dbTypeToTable = allCodemods.find((codemod) => codemod.id === "v2/db-type-to-table");
-
-if (!dbTypeToTable?.scriptPath) {
-  throw new Error("v2/db-type-to-table codemod is not registered with a script");
-}
-
-const dbTypeToTableEntry = {
-  codemod: dbTypeToTable,
-  scriptPath: path.join(CODEMODS_DIR, dbTypeToTable.scriptPath.replace(/\.js$/, ".ts")),
-};
+const dbTypeToTableEntry = runnableCodemod("v2/db-type-to-table");
 
 describe("db-type-to-table review findings", () => {
   let tmpDir: string | undefined;

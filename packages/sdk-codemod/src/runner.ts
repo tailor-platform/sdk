@@ -77,6 +77,17 @@ function shouldSkipDirectory(name: string): boolean {
   return EXCLUDE_DIRS.has(name) || (name.startsWith(".") && !ALLOWED_DOT_DIRS.has(name));
 }
 
+/**
+ * Matches the target-relative paths of the files `runCodemods` applies `codemod` to.
+ * @param codemod - Codemod whose file patterns decide
+ * @returns Whether a target-relative path is one of those files
+ */
+export function codemodFileMatcher(codemod: CodemodPackage): (relativePath: string) => boolean {
+  const matches = picomatch(codemod.filePatterns ?? DEFAULT_FILE_PATTERNS, { dot: true });
+  return (relativePath) =>
+    !relativePath.split("/").slice(0, -1).some(shouldSkipDirectory) && matches(relativePath);
+}
+
 async function* walkFiles(root: string, relativeDir = ""): AsyncGenerator<string> {
   const absoluteDir = path.join(root, relativeDir);
   let entries: fs.Dirent[];
@@ -524,14 +535,13 @@ export async function runCodemods(
   // Load all transform functions with their file matchers
   const loaded: LoadedTransform[] = [];
   for (const { codemod, scriptPath } of codemods) {
-    const patterns = codemod.filePatterns ?? DEFAULT_FILE_PATTERNS;
     const loadedModule = scriptPath ? await loadTransformModule(scriptPath) : undefined;
     loaded.push({
       id: codemod.id,
       transform: loadedModule?.transform,
       reviewFindings: loadedModule?.reviewFindings,
       reviewFindingsBeforeTransform: loadedModule?.reviewFindingsBeforeTransform,
-      matches: picomatch(patterns, { dot: true }),
+      matches: codemodFileMatcher(codemod),
       legacyPatterns: codemod.legacyPatterns ?? [],
       sourceStringLegacyPatterns: codemod.sourceStringLegacyPatterns ?? [],
       sourceTextLegacyPatterns: codemod.sourceTextLegacyPatterns ?? [],

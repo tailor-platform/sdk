@@ -1,19 +1,13 @@
 import { describe, expect, test } from "vitest";
-import transform, { reviewFindings } from "../codemods/v3/idp-array-to-single/scripts/transform";
+import { reviewThroughRunner } from "./test-helpers/codemods";
 
 const IMPORT = 'import { defineConfig, defineIdp } from "@tailor-platform/sdk";\n';
 
-const review = (body: string) => {
-  const source = IMPORT + body;
-  return {
-    transformed: transform(source, "tailor.config.ts"),
-    findings: reviewFindings(source, "tailor.config.ts", "tailor.config.ts"),
-  };
-};
+const review = (body: string) => reviewThroughRunner("v3/idp-array-to-single", IMPORT + body);
 
 describe("idp array -> single IdP migration review", () => {
-  test("rewrites a one-element array and reports nothing left to review", () => {
-    const { transformed, findings } = review(
+  test("rewrites a one-element array and reports nothing left to review", async () => {
+    const { transformed, findings } = await review(
       'export default defineConfig({\n  name: "shop",\n  idp: [shopIdp],\n});\n',
     );
 
@@ -21,11 +15,11 @@ describe("idp array -> single IdP migration review", () => {
     expect(findings).toEqual([]);
   });
 
-  test("reports nothing for a config that is already migrated or has no idp", () => {
+  test("reports nothing for a config that is already migrated or has no idp", async () => {
     expect(
-      review('export default defineConfig({\n  name: "shop",\n  idp: shopIdp,\n});\n'),
+      await review('export default defineConfig({\n  name: "shop",\n  idp: shopIdp,\n});\n'),
     ).toEqual({ transformed: null, findings: [] });
-    expect(review('export default defineConfig({\n  name: "shop",\n});\n')).toEqual({
+    expect(await review('export default defineConfig({\n  name: "shop",\n});\n')).toEqual({
       transformed: null,
       findings: [],
     });
@@ -62,8 +56,8 @@ describe("idp array -> single IdP migration review", () => {
       "const config = { idp: [shopIdp] };\nexport default defineConfig(config);\n",
       "not an object literal",
     ],
-  ])("reports %s for a manual migration", (_name, body, reason) => {
-    const { transformed, findings } = review(body);
+  ])("reports %s for a manual migration", async (_name, body, reason) => {
+    const { transformed, findings } = await review(body);
 
     expect(transformed).toBeNull();
     expect(findings).toHaveLength(1);
@@ -86,8 +80,8 @@ describe("idp array -> single IdP migration review", () => {
       'export default defineConfig({\n  ...base,\n  name: "shop",\n});\n',
       "spread",
     ],
-  ])("reports %s for a manual migration", (_name, body, reason) => {
-    const { transformed, findings } = review(body);
+  ])("reports %s for a manual migration", async (_name, body, reason) => {
+    const { transformed, findings } = await review(body);
 
     expect(transformed).toBeNull();
     expect(findings).toHaveLength(1);
@@ -101,8 +95,8 @@ describe("idp array -> single IdP migration review", () => {
       "export default defineConfig({\n  idp: [shopIdp] satisfies IdPConfig[],\n});\n",
     ],
     ["an array with as const", "export default defineConfig({\n  idp: [shopIdp] as const,\n});\n"],
-  ])("reports %s for a manual migration because it is wrapped", (_name, body) => {
-    const { transformed, findings } = review(body);
+  ])("reports %s for a manual migration because it is wrapped", async (_name, body) => {
+    const { transformed, findings } = await review(body);
 
     expect(transformed).toBeNull();
     expect(findings).toHaveLength(1);
@@ -128,25 +122,25 @@ describe("idp array -> single IdP migration review", () => {
       "an array in a nested conditional",
       "export default defineConfig({\n  idp: a ? shopIdp : b ? [shopIdp] : undefined,\n});\n",
     ],
-  ])("reports %s for a manual migration", (_name, body) => {
-    const { transformed, findings } = review(body);
+  ])("reports %s for a manual migration", async (_name, body) => {
+    const { transformed, findings } = await review(body);
 
     expect(transformed).toBeNull();
     expect(findings).toHaveLength(1);
     expect(findings[0]?.message).toContain("branch");
   });
 
-  test("leaves a conditional whose branches are single IdPs alone", () => {
+  test("leaves a conditional whose branches are single IdPs alone", async () => {
     expect(
-      review("export default defineConfig({\n  idp: enabled ? shopIdp : customerIdp,\n});\n"),
+      await review("export default defineConfig({\n  idp: enabled ? shopIdp : customerIdp,\n});\n"),
     ).toEqual({ transformed: null, findings: [] });
     expect(
-      review("export default defineConfig({\n  idp: enabled ? shopIdp : undefined,\n});\n"),
+      await review("export default defineConfig({\n  idp: enabled ? shopIdp : undefined,\n});\n"),
     ).toEqual({ transformed: null, findings: [] });
   });
 
-  test("reports an idp that names a local array declared with as const", () => {
-    const { transformed, findings } = review(
+  test("reports an idp that names a local array declared with as const", async () => {
+    const { transformed, findings } = await review(
       "const idps = [shopIdp] as const;\nexport default defineConfig({\n  idp: idps,\n});\n",
     );
 
@@ -155,8 +149,8 @@ describe("idp array -> single IdP migration review", () => {
     expect(findings[0]?.message).toContain("declared as an array");
   });
 
-  test("leaves an idp in parentheses that is a single IdP alone", () => {
-    expect(review("export default defineConfig({\n  idp: (shopIdp),\n});\n")).toEqual({
+  test("leaves an idp in parentheses that is a single IdP alone", async () => {
+    expect(await review("export default defineConfig({\n  idp: (shopIdp),\n});\n")).toEqual({
       transformed: null,
       findings: [],
     });
@@ -180,8 +174,8 @@ describe("idp array -> single IdP migration review", () => {
     ],
   ])(
     "reports %s for a manual migration because it may change which idp applies",
-    (_name, body, reason) => {
-      const { transformed, findings } = review(body);
+    async (_name, body, reason) => {
+      const { transformed, findings } = await review(body);
 
       expect(transformed).toBeNull();
       expect(findings).toHaveLength(1);
@@ -189,8 +183,8 @@ describe("idp array -> single IdP migration review", () => {
     },
   );
 
-  test("keeps the contents of a multiline template literal when it moves the element", () => {
-    const { transformed } = review(
+  test("keeps the contents of a multiline template literal when it moves the element", async () => {
+    const { transformed } = await review(
       [
         "export default defineConfig({",
         "  idp: [",
@@ -222,12 +216,12 @@ describe("idp array -> single IdP migration review", () => {
       "a spread next to an idp written out",
       "export default defineConfig({\n  ...base,\n  idp: shopIdp,\n});\n",
     ],
-  ])("reports nothing for %s", (_name, body) => {
-    expect(review(body)).toEqual({ transformed: null, findings: [] });
+  ])("reports nothing for %s", async (_name, body) => {
+    expect(await review(body)).toEqual({ transformed: null, findings: [] });
   });
 
-  test("tells how to drop an external declaration that only exists to subscribe", () => {
-    const { findings } = review(
+  test("tells how to drop an external declaration that only exists to subscribe", async () => {
+    const { findings } = await review(
       'export default defineConfig({\n  idp: [shopIdp, { name: "backoffice-idp", external: true }],\n});\n',
     );
 
@@ -235,8 +229,8 @@ describe("idp array -> single IdP migration review", () => {
     expect(findings[0]?.message).toContain("idp option of the trigger");
   });
 
-  test("reports the line and excerpt of the idp entry", () => {
-    const { findings } = review(
+  test("reports the line and excerpt of the idp entry", async () => {
+    const { findings } = await review(
       'export default defineConfig({\n  name: "shop",\n  idp: [shopIdp, customerIdp],\n});\n',
     );
 

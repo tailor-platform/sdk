@@ -1,22 +1,10 @@
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "pathe";
 import { describe, expect, test } from "vitest";
-import transform, {
-  reviewFindingsBeforeTransform,
-} from "../codemods/v3/files-ignores-to-negation/scripts/transform";
-import { allCodemods } from "./registry";
-import { runCodemods } from "./runner";
+import transform from "../codemods/v3/files-ignores-to-negation/scripts/transform";
+import { reviewThroughRunner } from "./test-helpers/codemods";
 
 const IMPORT = 'import { defineConfig } from "@tailor-platform/sdk";\n';
 
-const review = (body: string) => {
-  const source = IMPORT + body;
-  return {
-    transformed: transform(source, "tailor.config.ts"),
-    findings: reviewFindingsBeforeTransform(source, "tailor.config.ts", "tailor.config.ts"),
-  };
-};
+const review = (body: string) => reviewThroughRunner("v3/files-ignores-to-negation", IMPORT + body);
 
 describe("ignores -> files negation migration review", () => {
   test.each([
@@ -50,23 +38,25 @@ describe("ignores -> files negation migration review", () => {
       'executor: { files: ["e/**/*.ts", "!e/legacy.ts"] },',
       'executor: { files: ["e/**/*.ts", "!e/legacy.ts", "!**/*.test.ts", "!**/*.spec.ts"] },',
     ],
-  ])("rewrites %s and reports nothing left to review", (_name, service, rewritten) => {
-    const { transformed, findings } = review(`export default defineConfig({\n  ${service}\n});\n`);
+  ])("rewrites %s and reports nothing left to review", async (_name, service, rewritten) => {
+    const { transformed, findings } = await review(
+      `export default defineConfig({\n  ${service}\n});\n`,
+    );
 
     expect(transformed).toContain(rewritten);
     expect(findings).toEqual([]);
   });
 
-  test("leaves the result unchanged when run again on a migrated config", () => {
-    const { transformed } = review(
+  test("leaves the result unchanged when run again on a migrated config", async () => {
+    const { transformed } = await review(
       'export default defineConfig({\n  workflow: { files: ["workflows/**/*.ts"] },\n});\n',
     );
 
     expect(transform(transformed!, "tailor.config.ts")).toBeNull();
   });
 
-  test("leaves the result unchanged when run again on a config with a test-file pattern", () => {
-    const { transformed } = review(
+  test("leaves the result unchanged when run again on a config with a test-file pattern", async () => {
+    const { transformed } = await review(
       'export default defineConfig({\n  workflow: { files: ["w/*.ts", "w/*.test.ts"] },\n});\n',
     );
 
@@ -76,8 +66,8 @@ describe("ignores -> files negation migration review", () => {
     expect(transform(transformed!, "tailor.config.ts")).toBeNull();
   });
 
-  test("does not insert a test-file exclusion that a `!` pattern after a test-file pattern writes", () => {
-    const { transformed, findings } = review(
+  test("does not insert a test-file exclusion that a `!` pattern after a test-file pattern writes", async () => {
+    const { transformed, findings } = await review(
       'export default defineConfig({\n  workflow: { files: ["w/*.ts", "w/*.test.ts", "!**/*.test.ts", "!**/*.spec.ts"] },\n});\n',
     );
 
@@ -85,8 +75,8 @@ describe("ignores -> files negation migration review", () => {
     expect(findings).toEqual([]);
   });
 
-  test("treats a template literal ending in .test.ts as a test-file pattern", () => {
-    const { transformed } = review(
+  test("treats a template literal ending in .test.ts as a test-file pattern", async () => {
+    const { transformed } = await review(
       "export default defineConfig({\n  workflow: { files: [`w/*.ts`, `${dir}/*.test.ts`] },\n});\n",
     );
 
@@ -95,8 +85,8 @@ describe("ignores -> files negation migration review", () => {
     );
   });
 
-  test("treats a template literal starting with ! as a negation", () => {
-    const { transformed } = review(
+  test("treats a template literal starting with ! as a negation", async () => {
+    const { transformed } = await review(
       'export default defineConfig({\n  workflow: { files: ["w/*.ts", "w/*.test.ts", `!${dir}/x.ts`] },\n});\n',
     );
 
@@ -106,20 +96,30 @@ describe("ignores -> files negation migration review", () => {
   });
 
   test.each([
-    ["a test-file pattern", '"e2e/*.test.ts", "!e2e/skip.test.ts", "ex/*.ts"'],
+    ["a test-file pattern", '"e2e/*.test.ts", "src/*.ts"'],
+    [
+      "a test-file pattern with its own `!` pattern",
+      '"e2e/*.test.ts", "!e2e/skip.test.ts", "ex/*.ts"',
+    ],
     ["a test-file template literal", '`${dir}/*.spec.ts`, "ex/*.ts"'],
     ["an absolute test-file pattern", '"/repo/app/e2e/*.test.ts", "src/*.ts"'],
     ["a test-file pattern outside the config directory", '"../shared/**/*.test.ts", "src/**/*.ts"'],
-  ])("inserts the test-file exclusion but flags %s before another pattern", (_name, elements) => {
-    const { transformed, findings } = review(
-      `export default defineConfig({\n  executor: { files: [${elements}] },\n});\n`,
-    );
+  ])(
+    "inserts the test-file exclusion but flags %s before another pattern",
+    async (_name, elements) => {
+      const { transformed, findings } = await review(
+        `export default defineConfig({\n  executor: { files: [${elements}] },\n});\n`,
+      );
 
-    expect(transformed).toContain(`files: [${elements}, "!**/*.test.ts", "!**/*.spec.ts"]`);
-    expect(findings).toEqual([
-      expect.objectContaining({ message: expect.stringContaining("before another pattern") }),
-    ]);
-  });
+      expect(transformed).toContain(`files: [${elements}, "!**/*.test.ts", "!**/*.spec.ts"]`);
+      expect(findings).toEqual([
+        expect.objectContaining({
+          line: 3,
+          message: expect.stringContaining("before another pattern"),
+        }),
+      ]);
+    },
+  );
 
   test.each([
     [
@@ -134,8 +134,8 @@ describe("ignores -> files negation migration review", () => {
     ],
   ])(
     "does not flag a test-file pattern %s, which no inserted pattern excludes",
-    (_name, elements, expected) => {
-      const { transformed, findings } = review(
+    async (_name, elements, expected) => {
+      const { transformed, findings } = await review(
         `export default defineConfig({\n  executor: { files: [${elements}] },\n});\n`,
       );
 
@@ -190,8 +190,8 @@ describe("ignores -> files negation migration review", () => {
       'export default defineConfig({\n  executor: { files: ["e/**/*.ts"], ignores: [`${dir}/*.ts`] },\n});\n',
       "executor.ignores is not an array of string literals",
     ],
-  ])("leaves %s unchanged and flags it for review", (_name, body, reason) => {
-    const { transformed, findings } = review(body);
+  ])("leaves %s unchanged and flags it for review", async (_name, body, reason) => {
+    const { transformed, findings } = await review(body);
 
     expect(transformed).toBeNull();
     expect(findings).toEqual([
@@ -207,34 +207,37 @@ describe("ignores -> files negation migration review", () => {
     ["a pattern built from a variable", "sharedExecutors"],
     ["a template-literal pattern above the config directory", "`../shared/*.ts`"],
     ["a template-literal pattern with a substitution", "`${dir}/*.ts`"],
-  ])("appends the test-file exclusion but flags %s, which it may not cover", (_name, element) => {
-    const { transformed, findings } = review(
-      `export default defineConfig({\n  executor: { files: [${element}] },\n});\n`,
-    );
+  ])(
+    "appends the test-file exclusion but flags %s, which it may not cover",
+    async (_name, element) => {
+      const { transformed, findings } = await review(
+        `export default defineConfig({\n  executor: { files: [${element}] },\n});\n`,
+      );
 
-    expect(transformed).toContain(`files: [${element}, "!**/*.test.ts", "!**/*.spec.ts"]`);
-    expect(findings).toEqual([
-      expect.objectContaining({
-        message: expect.stringContaining("can match files outside this config's directory"),
-      }),
-    ]);
-  });
+      expect(transformed).toContain(`files: [${element}, "!**/*.test.ts", "!**/*.spec.ts"]`);
+      expect(findings).toEqual([
+        expect.objectContaining({
+          message: expect.stringContaining("can match files outside this config's directory"),
+        }),
+      ]);
+    },
+  );
 
   test.each([
     ["a pattern whose `..` stays inside the config directory", '"src/../executors/**/*.ts"'],
     ["a `!` pattern whose `..` leads above it", '"executors/**/*.ts", "!src/../../shared/x.ts"'],
     ["a template-literal pattern inside the config directory", "`executors/**/*.ts`"],
     ["a `!` template literal with a substitution", '"executors/**/*.ts", `!${dir}/x.ts`'],
-  ])("does not flag %s", (_name, elements) => {
-    const { findings } = review(
+  ])("does not flag %s", async (_name, elements) => {
+    const { findings } = await review(
       `export default defineConfig({\n  executor: { files: [${elements}] },\n});\n`,
     );
 
     expect(findings).toEqual([]);
   });
 
-  test("labels a computed namespace key by its source text", () => {
-    const { findings } = review(
+  test("labels a computed namespace key by its source text", async () => {
+    const { findings } = await review(
       'export default defineConfig({\n  db: { [shared]: { files: ["../db/*.ts"] } },\n});\n',
     );
 
@@ -247,46 +250,18 @@ describe("ignores -> files negation migration review", () => {
     ]);
   });
 
-  describe("through runCodemods", () => {
-    const codemod = allCodemods.find((entry) => entry.id === "v3/files-ignores-to-negation")!;
-    const scriptPath = path.resolve(
-      __dirname,
-      "../codemods/v3/files-ignores-to-negation/scripts/transform.ts",
+  test.each([
+    ["`ignores: []`", 'files: ["e2e/*.test.ts", "src/*.ts"], ignores: []'],
+    ["`ignores`", 'files: ["e2e/*.test.ts", "src/*.ts"], ignores: ["**/x.ts"]'],
+    [
+      "`ignores` and a pattern outside the config directory",
+      'files: ["../shared/**/*.ts"], ignores: ["**/x.ts"]',
+    ],
+  ])("does not flag a service with %s", async (_name, service) => {
+    const { findings } = await review(
+      `export default defineConfig({\n  executor: { ${service} },\n});\n`,
     );
 
-    const runFindings = async (service: string) => {
-      const projectDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "files-ignores-"));
-      try {
-        await fs.promises.writeFile(
-          path.join(projectDir, "tailor.config.ts"),
-          `${IMPORT}export default defineConfig({\n  executor: { ${service} },\n});\n`,
-          "utf-8",
-        );
-        const result = await runCodemods([{ codemod, scriptPath }], projectDir, false);
-        return result.llmReviews.flatMap((llmReview) => llmReview.findings ?? []);
-      } finally {
-        await fs.promises.rm(projectDir, { recursive: true, force: true });
-      }
-    };
-
-    test("flags a test-file pattern before another pattern", async () => {
-      expect(await runFindings('files: ["e2e/*.test.ts", "src/*.ts"]')).toEqual([
-        expect.objectContaining({
-          line: 3,
-          message: expect.stringContaining("before another pattern"),
-        }),
-      ]);
-    });
-
-    test.each([
-      ["`ignores: []`", 'files: ["e2e/*.test.ts", "src/*.ts"], ignores: []'],
-      ["`ignores`", 'files: ["e2e/*.test.ts", "src/*.ts"], ignores: ["**/x.ts"]'],
-      [
-        "`ignores` and a pattern outside the config directory",
-        'files: ["../shared/**/*.ts"], ignores: ["**/x.ts"]',
-      ],
-    ])("does not flag a service with %s", async (_name, service) => {
-      expect(await runFindings(service)).toEqual([]);
-    });
+    expect(findings).toEqual([]);
   });
 });

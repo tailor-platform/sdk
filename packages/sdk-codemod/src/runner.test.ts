@@ -4,6 +4,7 @@ import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { allCodemods } from "./registry";
 import { runCodemods } from "./runner";
+import { runnableCodemod } from "./test-helpers/codemods";
 import type { CodemodPackage } from "./types";
 
 type TestCodemodExtra = Pick<
@@ -146,11 +147,9 @@ describe("runCodemods", () => {
     ],
   ])("reports manual migration for %s: %s", async (name, source) => {
     using _stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
-    const codemod = allCodemods.find((entry) => entry.id === `v2/${name}`)!;
     const { tmpDir: dir } = await createTestProject("tailor.config.ts", source);
     tmpDir = dir;
-    const scriptPath = path.resolve(__dirname, `../codemods/v2/${name}/scripts/transform.ts`);
-    const result = await runCodemods([{ codemod, scriptPath }], dir, true);
+    const result = await runCodemods([runnableCodemod(`v2/${name}`)], dir, true);
     expect(result.warnings.length + result.llmReviews.length).toBeGreaterThan(0);
   });
 
@@ -164,14 +163,13 @@ describe("runCodemods", () => {
     "export const plugins = [myPlugin()];",
     "function local() { const generators = definePlugins(); return generators; }",
   ])("does not report canonical or unexported plugin bindings: %s", async (source) => {
-    const codemod = allCodemods.find((entry) => entry.id === "v2/plugin-export-name-normalize")!;
     const { tmpDir: dir } = await createTestProject("tailor.config.ts", source);
     tmpDir = dir;
-    const scriptPath = path.resolve(
-      __dirname,
-      "../codemods/v2/plugin-export-name-normalize/scripts/transform.ts",
+    const result = await runCodemods(
+      [runnableCodemod("v2/plugin-export-name-normalize")],
+      dir,
+      true,
     );
-    const result = await runCodemods([{ codemod, scriptPath }], dir, true);
     expect(result.warnings).toEqual([]);
     expect(result.llmReviews).toEqual([]);
   });
@@ -190,10 +188,7 @@ describe("runCodemods", () => {
         'import { generator } from "./tailor.config";',
       );
       const codemods = ["define-generators-to-plugins", "plugin-export-name-normalize"].map(
-        (name) => ({
-          codemod: allCodemods.find((entry) => entry.id === `v2/${name}`)!,
-          scriptPath: path.resolve(__dirname, `../codemods/v2/${name}/scripts/transform.ts`),
-        }),
+        (name) => runnableCodemod(`v2/${name}`),
       );
       const result = await runCodemods(codemods, dir, dryRun);
       expect(result.filesModified).toContain(path.join(dir, "a-consumer.ts"));
@@ -205,12 +200,11 @@ describe("runCodemods", () => {
     async (source) => {
       const { tmpDir: dir } = await createTestProject("consumer.ts", source);
       tmpDir = dir;
-      const codemod = allCodemods.find((entry) => entry.id === "v2/plugin-export-name-normalize")!;
-      const scriptPath = path.resolve(
-        __dirname,
-        "../codemods/v2/plugin-export-name-normalize/scripts/transform.ts",
+      const result = await runCodemods(
+        [runnableCodemod("v2/plugin-export-name-normalize")],
+        dir,
+        true,
       );
-      const result = await runCodemods([{ codemod, scriptPath }], dir, true);
       expect(result.llmReviews.some((review) => review.files.includes("consumer.ts"))).toBe(true);
     },
   );
@@ -1328,13 +1322,7 @@ describe("runCodemods", () => {
     });
 
     test("flags runtime subpath imports left after conservative skips", async () => {
-      const codemod = allCodemods.find((entry) => entry.id === "v2/runtime-subpath-namespace");
-      if (!codemod?.scriptPath) throw new Error("runtime subpath codemod missing script");
-      const scriptPath = path.resolve(
-        __dirname,
-        "../codemods",
-        codemod.scriptPath.replace(/\.js$/, ".ts"),
-      );
+      const { codemod, scriptPath } = runnableCodemod("v2/runtime-subpath-namespace");
       const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-runtime-test-"));
       tmpDir = dir;
       await fs.promises.writeFile(
@@ -1545,13 +1533,7 @@ describe("runCodemods", () => {
     });
 
     test("flags unresolved auth connection token helper usages for LLM review", async () => {
-      const codemod = allCodemods.find((entry) => entry.id === "v2/auth-connection-token-helper");
-      if (!codemod?.scriptPath) throw new Error("auth connection token codemod missing script");
-      const scriptPath = path.resolve(
-        __dirname,
-        "../codemods",
-        codemod.scriptPath.replace(/\.js$/, ".ts"),
-      );
+      const { codemod, scriptPath } = runnableCodemod("v2/auth-connection-token-helper");
       const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-auth-token-test-"));
       tmpDir = dir;
       await fs.promises.writeFile(
