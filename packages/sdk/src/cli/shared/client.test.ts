@@ -41,6 +41,7 @@ import {
 import { errorToJson } from "./error-json";
 import { CLIError } from "./errors";
 import { logger } from "./logger";
+import { listSourceFiles } from "./test-helpers/source-files";
 
 vi.mock("@connectrpc/connect-node", () => ({
   createConnectTransport: vi.fn(() => ({ type: "node-transport" })),
@@ -1459,16 +1460,7 @@ describe("retryInterceptor", () => {
    * @returns Methods that `clientMethodsCalledInSource` finds in non-test sources under the directory
    */
   function clientMethodsCalledIn(relativeDir: string): OperatorMethod[] {
-    const tsFiles: string[] = [];
-    const walk = (dir: string) => {
-      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) walk(full);
-        else if (entry.name.endsWith(".ts") && !entry.name.includes(".test.")) tsFiles.push(full);
-      }
-    };
-    walk(path.resolve(import.meta.dirname, relativeDir));
-
+    const tsFiles = listSourceFiles(path.resolve(import.meta.dirname, relativeDir));
     return [
       ...new Set(
         tsFiles.flatMap((file) => clientMethodsCalledInSource(fs.readFileSync(file, "utf8"))),
