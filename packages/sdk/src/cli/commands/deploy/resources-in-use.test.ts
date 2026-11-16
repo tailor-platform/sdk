@@ -40,9 +40,8 @@ function deployment(application: ApplicationShape, results: PlanResults) {
   } as unknown as PlannedDeployment;
 }
 
-function ownerDeleting(authNamespace: string) {
-  const results = emptyPlanResults();
-  results.auth.changeSet.service.deletes.push({ name: authNamespace } as never);
+function ownerDeleting(authNamespace: string, results = emptyPlanResults()) {
+  results.auth.changeSet.service.deletes.push({ name: authNamespace, request: {} });
   return results;
 }
 
@@ -534,6 +533,15 @@ const EXECUTOR_USES: Array<{
     },
     resource: 'IdP service "main-idp"',
     use: { resourceType: "idp.service", name: "main-idp" },
+  },
+  {
+    label: "Auth service that an access token trigger names",
+    deletes: (results) => ownerDeleting("core-auth", results),
+    executor: {
+      triggerConfig: eventTrigger({ case: "auth", value: { namespaceName: "core-auth" } }),
+    },
+    resource: 'Auth service "core-auth"',
+    use: { resourceType: "auth.service", name: "core-auth" },
   },
 ];
 

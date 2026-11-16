@@ -257,6 +257,8 @@ function executorRefs(executor: MessageInitShape<typeof ExecutorExecutorSchema>)
       refs.push({ resourceType: "workflow", name: typed.value.workflowName ?? "" });
       break;
     case "auth":
+      refs.push({ resourceType: "auth.service", name: typed.value.namespaceName ?? "" });
+      break;
     case undefined:
       break;
   }
@@ -432,7 +434,8 @@ type AssertResourcesNotInUseParams = {
  * Reject a run that deletes a resource another application still uses: an Auth service,
  * TailorDB namespace, resolver namespace, or IdP that an application references, an Auth
  * service that an AI gateway authenticates against, a machine user that an executor or resolver
- * runs as, or a TailorDB table, resolver, IdP, or workflow that an executor subscribes to or runs.
+ * runs as, or a TailorDB table, resolver, IdP, Auth service, or workflow that an executor
+ * subscribes to or runs.
  * A resource the plan writes counts by its planned version, a resource it deletes does not count,
  * and any other counts by the workspace's record. When the run spans several configs, call it
  * after deletes that another config in the run still claims are dropped and deletes of renamed

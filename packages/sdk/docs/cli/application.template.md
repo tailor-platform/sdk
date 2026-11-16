@@ -120,7 +120,7 @@ Each config's `files` patterns (see [Service Configuration](../configuration.md#
 - A TailorDB namespace, resolver namespace, IdP, or Auth service that an application references as `external`
 - An Auth service that an AI gateway sets as its `authNamespace`
 - A machine user that an executor or resolver uses as its `invoker`
-- A TailorDB table, resolver, IdP, or workflow that an executor's trigger names, and a workflow that an executor starts
+- A TailorDB table, resolver, IdP, Auth service, or workflow that an executor's trigger names, and a workflow that an executor starts
 
 An application in the `deploy` counts by its config, and any other application by what the workspace has. A disabled executor counts too. The `invoker` passed to `workflow.start()` is not checked. For `deploy`, keep the resource in the config that defines it, or deploy the applications that use it so that they stop using it, first or in the same `deploy`. For `remove`, first remove those applications or deploy them so that they stop using it. An executor, resolver, or AI gateway listed without an application is not deployed by the SDK, so change or delete it outside the SDK.
 
