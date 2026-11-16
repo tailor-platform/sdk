@@ -19,7 +19,7 @@ import {
   type Analysis,
   type DefineConfigCalls,
 } from "../../../../src/define-config";
-import { nodeRangeKey } from "../../../../src/source-strings";
+import { nodeRangeKey, sourceStringContent } from "../../../../src/source-strings";
 import { SOURCE_EXTENSIONS, walkFiles } from "../../../../src/walk-files";
 import type { LlmReviewFinding } from "../../../../src/types";
 import type { Edit, SgNode } from "@ast-grep/napi";
@@ -47,8 +47,8 @@ type Pattern = { node: SgNode; negated: boolean; glob: string };
 /** Whether any pattern matched a file, or the pattern whose glob threw. */
 type GlobResult = { matched: boolean } | { failed: Pattern; error: unknown };
 
-function parsePattern(node: SgNode, negatable: boolean): Pattern {
-  const value = stringValue(node) ?? "";
+function parsePattern(node: SgNode, source: string, negatable: boolean): Pattern {
+  const value = sourceStringContent(node, source) ?? "";
   const negated = negatable && value.startsWith("!");
   return { node, negated, glob: negated ? value.slice(1) : value };
 }
@@ -64,10 +64,12 @@ function globFrom(patterns: Pattern[], dir: string): GlobResult {
   return { matched: false };
 }
 
-function stringLiterals(array: SgNode | null): SgNode[] | null {
+function literalPatterns(array: SgNode | null, source: string): SgNode[] | null {
   if (array?.kind() !== "array") return null;
   const elements = arrayElements(array);
-  return elements.every((element) => element.kind() === "string") ? elements : null;
+  return elements.every((element) => sourceStringContent(element, source) !== null)
+    ? elements
+    : null;
 }
 
 function hasBackslash(elements: SgNode[]): boolean {
@@ -90,7 +92,12 @@ function rebaseEdit(pattern: Pattern, dirs: Directories): Edit {
   );
 }
 
-function analyzeService(label: string, service: SgNode, dirs: Directories): Analysis {
+function analyzeService(
+  source: string,
+  label: string,
+  service: SgNode,
+  dirs: Directories,
+): Analysis {
   const nothing: Analysis = { edits: [], findings: [] };
   const manual = (reason: string, node: SgNode): Analysis => ({
     edits: [],
@@ -106,7 +113,7 @@ function analyzeService(label: string, service: SgNode, dirs: Directories): Anal
   if (files?.kind() !== "array") {
     return manual(`${label}.files is not an array literal`, filesEntry);
   }
-  const fileElements = stringLiterals(files);
+  const fileElements = literalPatterns(files, source);
   if (!fileElements) {
     return manual(`${label}.files has an entry that is not a string literal`, filesEntry);
   }
@@ -114,7 +121,7 @@ function analyzeService(label: string, service: SgNode, dirs: Directories): Anal
     return manual(`${label}.files has a pattern written with a backslash`, filesEntry);
   }
 
-  const filePatterns = fileElements.map((element) => parsePattern(element, true));
+  const filePatterns = fileElements.map((element) => parsePattern(element, source, true));
   const positives = filePatterns.filter((pattern) => !pattern.negated);
   if (positives.every((pattern) => path.isAbsolute(pattern.glob))) return nothing;
   const globFailure = ({ failed, error }: { failed: Pattern; error: unknown }) =>
@@ -134,8 +141,9 @@ function analyzeService(label: string, service: SgNode, dirs: Directories): Anal
   let ignoreElements: SgNode[] = [];
   const ignoresEntry = entries.find((entry) => entryKey(entry) === "ignores");
   if (ignoresEntry) {
-    const elements = stringLiterals(
+    const elements = literalPatterns(
       ignoresEntry.kind() === "pair" ? pairValue(ignoresEntry) : null,
+      source,
     );
     if (!elements) {
       return manual(`${label}.ignores is not an array of string literals`, ignoresEntry);
@@ -147,7 +155,10 @@ function analyzeService(label: string, service: SgNode, dirs: Directories): Anal
   }
 
   return {
-    edits: [...filePatterns, ...ignoreElements.map((element) => parsePattern(element, false))]
+    edits: [
+      ...filePatterns,
+      ...ignoreElements.map((element) => parsePattern(element, source, false)),
+    ]
       .filter((pattern) => !path.isAbsolute(pattern.glob))
       .map((pattern) => rebaseEdit(pattern, dirs)),
     findings: [],
@@ -208,8 +219,10 @@ function isCallOf(value: SgNode | null, call: DefineConfigCall): boolean {
   return argument !== null && isSameNode(argument, call.config);
 }
 
-function analyzeFrom(call: DefineConfigCall, dirs: Directories): Analysis {
-  return analyzeServiceConfigs([call], (label, service) => analyzeService(label, service, dirs));
+function analyzeFrom(source: string, call: DefineConfigCall, dirs: Directories): Analysis {
+  return analyzeServiceConfigs([call], (label, service) =>
+    analyzeService(source, label, service, dirs),
+  );
 }
 
 function isEmpty(analysis: Analysis): boolean {
@@ -386,13 +399,13 @@ async function analyzeFile(
         const loaderDir = path.dirname(file);
         return (
           loaderDir !== projectDir &&
-          !isEmpty(analyzeFrom(call, { configDir: loaderDir, projectDir }))
+          !isEmpty(analyzeFrom(source, call, { configDir: loaderDir, projectDir }))
         );
       });
       if (affected) analysis.findings.push({ reason: loadedBy(loaders), node });
       continue;
     }
-    const result = analyzeFrom(call, { configDir, projectDir });
+    const result = analyzeFrom(source, call, { configDir, projectDir });
     if ("reason" in call || exportNames.has("default")) {
       analysis.edits.push(...result.edits);
       analysis.findings.push(...result.findings);

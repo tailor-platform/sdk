@@ -107,6 +107,17 @@ describe("files patterns -> config-relative migration", () => {
     expect(transformed).toContain('files: ["./!jobs/*.ts", "!./!jobs/draft.ts"]');
   });
 
+  test("rebases template literals without substitutions and keeps their backticks", async () => {
+    writeFiles("apps/a/tailordb/user.ts");
+
+    const { transformed, findings } = await migrate(
+      "export default defineConfig({\n  db: { main: { files: [`apps/a/tailordb/*.ts`], ignores: [`apps/a/tailordb/draft.ts`] } },\n});\n",
+    );
+
+    expect(transformed).toContain("files: [`tailordb/*.ts`], ignores: [`tailordb/draft.ts`]");
+    expect(findings).toEqual([]);
+  });
+
   test.each([
     ["an export clause", "const config = %s;\nexport { config as default };\n"],
     ["`export default` of a variable", "const config = %s;\nexport default config;\n"],
