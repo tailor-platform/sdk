@@ -406,6 +406,16 @@ describe("files patterns -> config-relative migration", () => {
       { "tailor.config.ts": 'export { default } from "./configs/shared";\n' },
       [],
     ],
+    [
+      "a module beside the config file that loads it takes it through a namespace",
+      `export default ${SHARED_EXECUTOR};\n`,
+      {
+        "apps/a/tailor.config.ts": 'export { default } from "../../configs/shared";\n',
+        "apps/a/name.ts":
+          'import * as shared from "../../configs/shared";\nexport const name = shared.default.name;\n',
+      },
+      ["apps/a/jobs/run.ts"],
+    ],
   ])(
     "changes and reports nothing for a shared config when %s",
     async (_, body, importers, files) => {
@@ -420,6 +430,93 @@ describe("files patterns -> config-relative migration", () => {
       expect(findings).toEqual([]);
     },
   );
+
+  test.each<[string, Record<string, string>, string]>([
+    [
+      "a config file that default-exports a member of it",
+      {
+        "apps/a/tailor.config.ts":
+          'import * as shared from "../../configs/shared";\nexport default shared.default;\n',
+      },
+      "`apps/a/tailor.config.ts` imports or re-exports this config through a namespace",
+    ],
+    [
+      "a config file, through a module that re-exports it,",
+      {
+        "configs/index.ts": 'export { default } from "./shared";\n',
+        "apps/a/tailor.config.ts":
+          'import * as configs from "../../configs";\nexport default configs.default;\n',
+      },
+      "`apps/a/tailor.config.ts` imports or re-exports this config through a namespace",
+    ],
+    [
+      "a module with `export * as`",
+      {
+        "lib/configs.ts": 'export * as shared from "../configs/shared";\n',
+        "apps/a/tailor.config.ts":
+          'import { shared } from "../../lib/configs";\nexport default shared.default;\n',
+      },
+      "`lib/configs.ts` imports or re-exports this config through a namespace",
+    ],
+    [
+      "a module in the config's directory",
+      {
+        "configs/all.ts": 'export * as shared from "./shared";\n',
+        "apps/a/tailor.config.ts":
+          'import { shared } from "../../configs/all";\nexport default shared.default;\n',
+      },
+      "`configs/all.ts` imports or re-exports this config through a namespace",
+    ],
+    [
+      "a module in the project directory",
+      { "index.ts": 'export * as shared from "./configs/shared";\n' },
+      "`index.ts` imports or re-exports this config through a namespace",
+    ],
+    [
+      "a config file that default-exports a member of what it imports dynamically",
+      {
+        "apps/a/tailor.config.ts":
+          'export default (await import("../../configs/shared")).default;\n',
+      },
+      "`apps/a/tailor.config.ts` imports or re-exports this config through a namespace",
+    ],
+  ])("reports a shared config that %s takes through a namespace", async (_, importers, reason) => {
+    writeFiles("jobs/run.ts");
+    for (const [importerPath, importer] of Object.entries(importers)) {
+      writeFile(importerPath, importer);
+    }
+
+    const { transformed, findings } = await migrate(
+      `export default ${SHARED_EXECUTOR};\n`,
+      "configs/shared.ts",
+    );
+
+    expect(transformed).toBeNull();
+    expect(findings).toEqual([expect.stringContaining(reason)]);
+  });
+
+  test("names the files that load a config and those that take it through a namespace in one finding", async () => {
+    writeFiles("jobs/run.ts");
+    writeFile("apps/a/tailor.config.ts", 'export { default } from "../../configs/shared";\n');
+    writeFile(
+      "apps/b/tailor.config.ts",
+      'import shared, * as all from "../../configs/shared";\nexport default shared;\n',
+    );
+    writeFile("lib/b.ts", 'export * as shared from "../configs/shared";\n');
+    writeFile("lib/a.ts", 'export * as shared from "../configs/shared";\n');
+
+    const { transformed, findings } = await migrate(
+      `export default ${SHARED_EXECUTOR};\n`,
+      "configs/shared.ts",
+    );
+
+    expect(transformed).toBeNull();
+    expect(findings).toEqual([
+      expect.stringContaining(
+        "`apps/a/tailor.config.ts`, `apps/b/tailor.config.ts` load this config, so its patterns resolve against the directory of whichever of them the CLI loads; `lib/a.ts`, `lib/b.ts` import or re-export this config through a namespace",
+      ),
+    ]);
+  });
 
   const EXPORTED_CONFIG =
     'export const config = defineConfig({\n  db: { main: { files: ["apps/a/tailordb/*.ts"] } },\n});\nexport default config;\n';
@@ -559,6 +656,41 @@ describe("files patterns -> config-relative migration", () => {
       {
         "apps/a/tests/config.test.ts":
           'import config from "../tailor.config";\ntest("config", () => expect(config).toBeDefined());\n',
+      },
+    ],
+    [
+      "a test takes it through a namespace without exports of its own",
+      {
+        "apps/a/tests/config.test.ts":
+          'import * as config from "../tailor.config";\ntest("config", () => expect(config.default).toBeDefined());\n',
+      },
+    ],
+    [
+      "a module that exports only a type alias takes it through a namespace",
+      {
+        "apps/a/types.ts":
+          'import * as config from "./tailor.config";\nexport type AppConfig = typeof config.default;\n',
+      },
+    ],
+    [
+      "a module that exports only type specifiers takes it through a namespace",
+      {
+        "apps/a/types.ts":
+          'import * as config from "./tailor.config";\ntype AppConfig = typeof config.default;\nexport { type AppConfig };\n',
+      },
+    ],
+    [
+      "a module with exports takes only its types through a namespace import",
+      {
+        "deploy/name.ts":
+          'import type * as a from "../apps/a/tailor.config";\nexport const name = "deploy";\n',
+      },
+    ],
+    [
+      "a module with exports re-exports only its types through a namespace",
+      {
+        "lib/configs.ts":
+          'export type * as a from "../apps/a/tailor.config";\nexport const version = 1;\n',
       },
     ],
     [

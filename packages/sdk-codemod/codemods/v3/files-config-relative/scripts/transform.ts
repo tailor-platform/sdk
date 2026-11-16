@@ -41,6 +41,18 @@ type DefineConfigCall = DefineConfigCalls["calls"][number];
 /** A project source file, by its project-relative and absolute paths, with its contents. */
 type SourceFile = { relative: string; file: string; source: string };
 
+/**
+ * The names under which a module exports the config a carrier exports, and
+ * whether it takes the carrier as a namespace while exporting a value.
+ */
+type CarriedConfig = { names: Set<string>; takesNamespace: boolean };
+
+/**
+ * The source files that default-export a config, and those that take it as a
+ * namespace, which the loader search does not follow.
+ */
+type ConfigLoaders = { loaders: SourceFile[]; namespaceImporters: SourceFile[] };
+
 /** The pattern of a `files` or `ignores` entry without its quotes, with any leading `!` split off. */
 type Pattern = { node: SgNode; negated: boolean; glob: string };
 
@@ -289,22 +301,56 @@ function importedLocalNames(statement: SgNode, exportedNames: ReadonlySet<string
   return names;
 }
 
+function exportsValue(statement: SgNode): boolean {
+  if (statement.kind() !== "export_statement" || isTypeOnlyStatement(statement)) return false;
+  const declaration = statement.field("declaration")?.kind();
+  if (declaration === "type_alias_declaration" || declaration === "interface_declaration") {
+    return false;
+  }
+  const specifiers = statement.findAll({ rule: { kind: "export_specifier" } });
+  return (
+    specifiers.length === 0 || specifiers.some((specifier) => !importSpecNames(specifier)?.typeOnly)
+  );
+}
+
+function isCarrierSpecifier(
+  specifier: string | null,
+  file: string,
+  carrier: ConfigCarrier,
+): boolean {
+  return (
+    specifier?.startsWith(".") === true &&
+    moduleId(path.resolve(path.dirname(file), specifier)) === carrier.id
+  );
+}
+
 /**
- * The names under which `sourceFile` exports the config that `carrier` exports: by
- * re-exporting it through a relative specifier, including with `export *`, by
- * exporting a binding it imports from it, or, as `default`, by default-exporting
- * a `defineConfig()` call next to such an import.
+ * How `sourceFile` passes on the config that `carrier` exports: the names it
+ * exports it under, by re-exporting it through a relative specifier, including
+ * with `export *`, by exporting a binding it imports from it, or, as `default`,
+ * by default-exporting a `defineConfig()` call next to such an import; and
+ * whether it takes the carrier as a namespace with `import * as`,
+ * `export * as`, or `import()` while exporting a value.
  */
-function configExportNames(sourceFile: SourceFile, carrier: ConfigCarrier): Set<string> {
+function carriedConfig(sourceFile: SourceFile, carrier: ConfigCarrier): CarriedConfig {
   const { source, file } = sourceFile;
   const exportNames = new Set<string>();
   const root = parsedRoot(sourceFile);
-  if (!root) return exportNames;
+  if (!root) return { names: exportNames, takesNamespace: false };
   const importedNames = new Set<string>();
+  let takesNamespace = root
+    .findAll({ rule: { pattern: "import($SPECIFIER)" } })
+    .some((call) => isCarrierSpecifier(stringValue(call.getMatch("SPECIFIER")), file, carrier));
   for (const statement of root.children()) {
-    const specifier = stringValue(statement.field("source"));
-    if (!specifier?.startsWith(".") || isTypeOnlyStatement(statement)) continue;
-    if (moduleId(path.resolve(path.dirname(file), specifier)) !== carrier.id) continue;
+    if (isTypeOnlyStatement(statement)) continue;
+    if (!isCarrierSpecifier(stringValue(statement.field("source")), file, carrier)) continue;
+    if (
+      statement.find({
+        rule: { any: [{ kind: "namespace_import" }, { kind: "namespace_export" }] },
+      })
+    ) {
+      takesNamespace = true;
+    }
     if (isStarExport(statement)) {
       for (const name of carrier.names) if (name !== "default") exportNames.add(name);
     }
@@ -313,14 +359,16 @@ function configExportNames(sourceFile: SourceFile, carrier: ConfigCarrier): Set<
     }
     for (const name of importedLocalNames(statement, carrier.names)) importedNames.add(name);
   }
-  if (importedNames.size === 0) return exportNames;
-  for (const { name, local, value } of localExports(root)) {
+  for (const { name, local, value } of importedNames.size > 0 ? localExports(root) : []) {
     if (local !== null && importedNames.has(local)) exportNames.add(name);
     if (name === "default" && value && isDefineConfigCall(source, file, value)) {
       exportNames.add("default");
     }
   }
-  return exportNames;
+  return {
+    names: exportNames,
+    takesNamespace: takesNamespace && root.children().some(exportsValue),
+  };
 }
 
 const sourceFilesByProject = new Map<string, Promise<SourceFile[]>>();
@@ -358,27 +406,30 @@ async function readSourceFiles(projectDir: string): Promise<SourceFile[]> {
 
 /**
  * The source files outside `configFile`'s directory that default-export the
- * config it exports under `exportNames`, following the modules that pass the
- * config on through relative specifiers, in path order.
+ * config it exports under `exportNames`, and the other source files that take
+ * it as a namespace, following the modules that pass the config on through
+ * relative specifiers, each in path order.
  */
 async function findConfigLoaders(
   configFile: string,
   projectDir: string,
   exportNames: ReadonlySet<string>,
-): Promise<SourceFile[]> {
+): Promise<ConfigLoaders> {
   const files = await projectSourceFiles(projectDir);
   const config: ConfigCarrier = { id: moduleId(configFile), names: exportNames };
   const carriers = [config];
   const namesById = new Map([[config.id, exportNames]]);
   const loaders = new Set<SourceFile>();
+  const namespaceImporters = new Set<SourceFile>();
   for (const carrier of carriers) {
     const stem = path.basename(carrier.id);
     for (const sourceFile of files) {
       if (!sourceFile.source.includes(stem)) continue;
-      const names = configExportNames(sourceFile, carrier);
+      const { names, takesNamespace } = carriedConfig(sourceFile, carrier);
       if (names.has("default") && path.dirname(sourceFile.file) !== path.dirname(configFile)) {
         loaders.add(sourceFile);
       }
+      if (takesNamespace) namespaceImporters.add(sourceFile);
       const id = moduleId(sourceFile.file);
       const known = namesById.get(id);
       const added = known ? names.difference(known) : names;
@@ -387,14 +438,35 @@ async function findConfigLoaders(
       carriers.push({ id, names: added });
     }
   }
-  return [...loaders].toSorted((a, b) => (a.relative < b.relative ? -1 : 1));
+  const byPath = (a: SourceFile, b: SourceFile) => (a.relative < b.relative ? -1 : 1);
+  return {
+    loaders: [...loaders].toSorted(byPath),
+    namespaceImporters: [...namespaceImporters.difference(loaders)].toSorted(byPath),
+  };
 }
 
-function loadedBy(loaders: SourceFile[]): string {
-  const files = loaders.map(({ relative }) => `\`${relative}\``).join(", ");
-  return loaders.length === 1
-    ? `${files} loads this config, so its patterns resolve against that file's directory when the CLI loads it`
-    : `${files} load this config, so its patterns resolve against the directory of whichever of them the CLI loads`;
+function fileList(files: SourceFile[]): string {
+  return files.map(({ relative }) => `\`${relative}\``).join(", ");
+}
+
+function loadedBy({ loaders, namespaceImporters }: ConfigLoaders): string {
+  const reasons: string[] = [];
+  if (loaders.length === 1) {
+    reasons.push(
+      `${fileList(loaders)} loads this config, so its patterns resolve against that file's directory when the CLI loads it`,
+    );
+  } else if (loaders.length > 1) {
+    reasons.push(
+      `${fileList(loaders)} load this config, so its patterns resolve against the directory of whichever of them the CLI loads`,
+    );
+  }
+  if (namespaceImporters.length > 0) {
+    const verb = namespaceImporters.length === 1 ? "imports or re-exports" : "import or re-export";
+    reasons.push(
+      `${fileList(namespaceImporters)} ${verb} this config through a namespace, which this codemod does not follow, so check which config file the CLI loads it through`,
+    );
+  }
+  return reasons.join("; ");
 }
 
 async function analyzeFile(
@@ -413,17 +485,20 @@ async function analyzeFile(
     const exportNames = new Set(
       moduleExports.filter(({ value }) => isCallOf(value, call)).map(({ name }) => name),
     );
-    const loaders =
-      exportNames.size > 0 ? await findConfigLoaders(filePath, projectDir, exportNames) : [];
-    if (loaders.length > 0) {
-      const affected = loaders.some(({ file }) => {
-        const loaderDir = path.dirname(file);
-        return (
-          loaderDir !== projectDir &&
-          !isEmpty(analyzeFrom(source, call, { configDir: loaderDir, projectDir }))
-        );
-      });
-      if (affected) analysis.findings.push({ reason: loadedBy(loaders), node });
+    const configLoaders =
+      exportNames.size > 0
+        ? await findConfigLoaders(filePath, projectDir, exportNames)
+        : { loaders: [], namespaceImporters: [] };
+    const { loaders, namespaceImporters } = configLoaders;
+    if (loaders.length > 0 || namespaceImporters.length > 0) {
+      const loadingDirs = [...loaders, ...namespaceImporters]
+        .map(({ file }) => path.dirname(file))
+        .filter((dir) => dir !== projectDir);
+      if (loaders.length === 0) loadingDirs.push(configDir);
+      const affected = loadingDirs.some(
+        (dir) => !isEmpty(analyzeFrom(source, call, { configDir: dir, projectDir })),
+      );
+      if (affected) analysis.findings.push({ reason: loadedBy(configLoaders), node });
       continue;
     }
     const result = analyzeFrom(source, call, { configDir, projectDir });
@@ -441,7 +516,8 @@ async function analyzeFile(
  * Rewrite the relative `files` and `ignores` patterns of a default-exported
  * config outside the project directory that match files only from the project
  * directory, so they name the same files relative to the config's own directory,
- * unless a source file in another directory default-exports the config.
+ * unless a source file in another directory default-exports the config or a
+ * module that exports a value takes it as a namespace.
  * @param source - File contents
  * @param filePath - Absolute path to the file being transformed
  * @param targetPath - Absolute project directory the codemod runs on
@@ -461,9 +537,12 @@ export default async function transform(
  * Report service configs outside the project directory whose patterns this
  * transform cannot rewrite, cannot glob, or that match no files from either
  * directory, `defineConfig()` calls other than the default export whose
- * patterns it would rewrite or report, and configs that a source file outside
- * both the config's directory and the project directory default-exports when
- * their patterns would need a rewrite or a report from that file's directory.
+ * patterns it would rewrite or report, configs that a source file outside both
+ * the config's directory and the project directory default-exports when their
+ * patterns would need a rewrite or a report from that file's directory, and
+ * configs that a module that exports a value takes as a namespace when their
+ * patterns would need a rewrite or a report from its directory, unless it is the
+ * project directory, or, when no source file default-exports them, from their own.
  * @param source - File contents
  * @param filePath - Absolute path to the file being reviewed
  * @param relativePath - Project-relative path reported to the user
