@@ -97,7 +97,7 @@ Pass an async function as `build` when the build needs more than a shell command
 as writing a runtime configuration file into the assets before they are uploaded:
 
 ```typescript
-import { initOperatorClient, loadAccessToken } from "@tailor-platform/sdk/cli";
+import { CustomDomainStatus, initOperatorClient, loadAccessToken } from "@tailor-platform/sdk/cli";
 
 frontendPlugin({
   site: website,
@@ -110,7 +110,8 @@ frontendPlugin({
       workspaceId,
       staticWebsiteName: site.name,
     });
-    const origin = customDomains[0] ? `https://${customDomains[0].domain}` : site.url;
+    const active = customDomains.find((domain) => domain.status === CustomDomainStatus.ACTIVE);
+    const origin = active ? `https://${active.domain}` : site.url;
     await node.fs.writeFile(
       node.path.join(distDir, "config.json"),
       JSON.stringify({ origin, apiUrl: application.url }),
@@ -123,9 +124,7 @@ frontendPlugin({
 also bundled into functions that run on the Platform, such as auth hooks, so importing
 `node:` modules there fails the bundle. Use `node` instead.
 
-`listCustomDomains` also returns domains that are not usable yet, for example while a domain is
-pending or being removed. `tailor staticwebsite domain list` shows each domain's status, so check it
-before you publish a domain's origin.
+`listCustomDomains` also returns domains that are not usable yet, such as one that is pending or being removed, so the example picks the first domain whose `status` is `CustomDomainStatus.ACTIVE`, which `@tailor-platform/sdk/cli` exports.
 
 The function runs after `env` resolves and before the upload, with the same context `env`
 receives plus `env` (the values it returned), the absolute `workingDir` and `distDir`, a
