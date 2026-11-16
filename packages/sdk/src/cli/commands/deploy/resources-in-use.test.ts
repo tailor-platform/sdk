@@ -1226,7 +1226,6 @@ describe("assertResourcesNotInUse for Auth IdP and SCIM configs", () => {
         scimConfig: {
           machineUserName: "admin",
           authorizationType: AuthSCIMConfig_AuthorizationType.OAUTH2,
-          authorizationConfig: { case: "bearerSecret", value: {} },
         },
       },
     });

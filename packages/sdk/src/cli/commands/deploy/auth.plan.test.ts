@@ -5,6 +5,11 @@ import {
   AuthIDPConfigSchema,
   AuthOAuth2Client_ClientType,
   AuthOAuth2Client_GrantType,
+  AuthSCIMAttribute_Type,
+  AuthSCIMAttribute_Uniqueness,
+  AuthSCIMConfig_AuthorizationType,
+  AuthSCIMConfigSchema,
+  AuthSCIMResourceSchema,
   TenantProviderConfigSchema,
   UserProfileProviderConfig_UserProfileProviderType,
   UserProfileProviderConfigSchema,
@@ -18,6 +23,7 @@ import { t } from "#/configure/types/type";
 import { applyAuth, formatAuthHookChangeEntries, planAuth } from "./auth";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
+import type { SCIMAuthorization } from "#/types/auth.generated";
 import type { PlanContext } from "./types";
 
 vi.mock("./label", async (importOriginal) => {
@@ -131,6 +137,101 @@ function createMockApplicationWithUserProfile(options: MockUserProfileOptions = 
       },
     },
   } as unknown as Application;
+}
+
+const bearerSCIMAuthorization: SCIMAuthorization = {
+  type: "bearer",
+  bearerSecret: { vaultName: "scim", secretKey: "token" },
+};
+
+function createMockApplicationWithSCIM(authorization: SCIMAuthorization): Application {
+  const application = createMockApplication();
+  return {
+    ...application,
+    authService: {
+      ...application.authService,
+      config: {
+        ...application.authService?.config,
+        scim: {
+          machineUserName: "manager-machine-user",
+          authorization,
+          resources: [
+            {
+              name: "User",
+              tailorDBNamespace: "tailordb",
+              tailorDBType: "User",
+              coreSchema: {
+                name: "urn:ietf:params:scim:schemas:core:2.0:User",
+                attributes: [
+                  { type: "string", name: "userName", required: true },
+                  {
+                    type: "complex",
+                    name: "name",
+                    subAttributes: [{ type: "string", name: "givenName" }],
+                  },
+                ],
+              },
+              attributeMapping: [
+                { tailorDBField: "email", scimPath: "userName" },
+                { tailorDBField: "givenName", scimPath: "name.givenName" },
+              ],
+            },
+          ],
+        },
+      },
+    },
+  } as unknown as Application;
+}
+
+function remoteSCIMConfig(
+  authorization: SCIMAuthorization,
+  machineUserName = "manager-machine-user",
+) {
+  return create(AuthSCIMConfigSchema, {
+    machineUserName,
+    ...(authorization.type === "bearer"
+      ? {
+          authorizationType: AuthSCIMConfig_AuthorizationType.BEARER,
+          authorizationConfig: { case: "bearerSecret", value: authorization.bearerSecret ?? {} },
+        }
+      : { authorizationType: AuthSCIMConfig_AuthorizationType.OAUTH2 }),
+  });
+}
+
+function remoteSCIMResource(userNameDescription?: string) {
+  return create(AuthSCIMResourceSchema, {
+    name: "User",
+    tailorDbNamespace: "tailordb",
+    tailorDbType: "User",
+    coreSchema: {
+      name: "urn:ietf:params:scim:schemas:core:2.0:User",
+      attributes: [
+        {
+          type: AuthSCIMAttribute_Type.STRING,
+          name: "userName",
+          description: userNameDescription,
+          required: true,
+          uniqueness: AuthSCIMAttribute_Uniqueness.NONE,
+        },
+        {
+          type: AuthSCIMAttribute_Type.COMPLEX,
+          name: "name",
+          uniqueness: AuthSCIMAttribute_Uniqueness.NONE,
+          subAttributes: [
+            {
+              type: AuthSCIMAttribute_Type.STRING,
+              name: "givenName",
+              uniqueness: AuthSCIMAttribute_Uniqueness.NONE,
+            },
+          ],
+        },
+      ],
+    },
+    attributeMapping: [
+      { tailorDbField: "email", scimPath: "userName" },
+      { tailorDbField: "givenName", scimPath: "name.givenName" },
+    ],
+  });
 }
 
 function createMockApplicationWithCustomOAuth2Lifetimes(): Application {
@@ -282,6 +383,8 @@ function createMockClient(opts?: {
   };
   userProfileConfig?: Record<string, unknown>;
   tenantConfig?: Record<string, unknown>;
+  scimConfig?: MessageInitShape<typeof AuthSCIMConfigSchema>;
+  scimResources?: Array<MessageInitShape<typeof AuthSCIMResourceSchema>>;
 }): OperatorClient {
   const authServices = opts?.authServices ?? [];
   const authIdPConfigs = opts?.authIdPConfigs ?? [];
@@ -339,9 +442,11 @@ function createMockClient(opts?: {
         },
       };
     }),
-    getAuthSCIMConfig: vi.fn().mockImplementation(notFound),
+    getAuthSCIMConfig: opts?.scimConfig
+      ? vi.fn().mockResolvedValue({ scimConfig: opts.scimConfig })
+      : vi.fn().mockImplementation(notFound),
     getAuthSCIMResources: vi.fn().mockResolvedValue({
-      scimResources: [],
+      scimResources: opts?.scimResources ?? [],
     }),
     listAuthConnections: vi.fn().mockResolvedValue({
       connections: [],
@@ -636,6 +741,37 @@ describe("planAuth", () => {
     expect(result.changeSet.oauth2Client.unchanged).toHaveLength(0);
   });
 
+  test.each([
+    { authorization: bearerSCIMAuthorization, forceApplyAll: false, forced: [], unchanged: 1 },
+    { authorization: { type: "oauth2" }, forceApplyAll: false, forced: [], unchanged: 1 },
+    { authorization: bearerSCIMAuthorization, forceApplyAll: true, forced: [true], unchanged: 0 },
+    { authorization: { type: "oauth2" }, forceApplyAll: true, forced: [true], unchanged: 0 },
+  ] satisfies Array<{
+    authorization: SCIMAuthorization;
+    forceApplyAll: boolean;
+    forced: boolean[];
+    unchanged: number;
+  }>)(
+    "plans a $authorization.type SCIM config and resource that match remote with forceApplyAll $forceApplyAll",
+    async ({ authorization, forceApplyAll, forced, unchanged }) => {
+      const client = createMockClient({
+        authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
+        scimConfig: remoteSCIMConfig(authorization),
+        scimResources: [remoteSCIMResource()],
+      });
+
+      const result = await planAuth({
+        ...createContext(client, createMockApplicationWithSCIM(authorization)),
+        forceApplyAll,
+      });
+
+      for (const changeSet of [result.changeSet.scim, result.changeSet.scimResource]) {
+        expect(changeSet.updates.map((update) => update.forcedBySdkVersion)).toEqual(forced);
+        expect(changeSet.unchanged).toHaveLength(unchanged);
+      }
+    },
+  );
+
   test("does not mark forceApplyAll updates whose config differs from remote", async () => {
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
@@ -652,15 +788,22 @@ describe("planAuth", () => {
         scriptRef: "auth-hook--auth-a--before-login",
         invoker: { namespace: "auth-a", machineUserName: "another-machine-user" },
       },
+      scimConfig: remoteSCIMConfig(bearerSCIMAuthorization, "another-machine-user"),
+      scimResources: [remoteSCIMResource("Outdated description")],
     });
 
-    const result = await planAuth({ ...createContext(client), forceApplyAll: true });
+    const result = await planAuth({
+      ...createContext(client, createMockApplicationWithSCIM(bearerSCIMAuthorization)),
+      forceApplyAll: true,
+    });
 
     for (const updates of [
       result.changeSet.service.updates,
       result.changeSet.machineUser.updates,
       result.changeSet.oauth2Client.updates,
       result.changeSet.authHook.updates,
+      result.changeSet.scim.updates,
+      result.changeSet.scimResource.updates,
     ]) {
       expect(updates).toHaveLength(1);
       expect(updates[0]).not.toHaveProperty("forcedBySdkVersion");
