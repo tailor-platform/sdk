@@ -6,6 +6,7 @@ import { inc, major } from "semver";
 import { aroundEach, describe, expect, test } from "vitest";
 import { allCodemods, NEXT_RELEASE } from "./registry";
 import { runCodemods } from "./runner";
+import { transformSourcePath } from "./test-helpers/codemods";
 
 const REPO_ROOT = path.resolve(__dirname, "../../..");
 const TEMPLATES_DIR = path.join(REPO_ROOT, "packages/create-sdk/templates");
@@ -27,9 +28,7 @@ const codemods = allCodemods
   .filter((codemod) => codemod.until !== NEXT_RELEASE && major(codemod.until) === nextMajor)
   .map((codemod) => ({
     codemod,
-    scriptPath:
-      codemod.scriptPath &&
-      path.resolve(__dirname, "../codemods", codemod.scriptPath.replace(/\.js$/, ".ts")),
+    scriptPath: codemod.scriptPath && transformSourcePath(codemod.scriptPath),
   }));
 
 describe.skipIf(codemods.length === 0)("next-major codemods on create-sdk templates", () => {

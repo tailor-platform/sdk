@@ -89,6 +89,101 @@ describe("loadFilesWithIgnores", () => {
     expect(files).toEqual([path.join(baseDir, "src", "a.ts")]);
   });
 
+  test.each([".test.ts", ".spec.ts"])(
+    "includes %s files matched by a test-file pattern after the other patterns",
+    (suffix) => {
+      const warnSpy = vi.fn();
+      const baseDir = makeDirWithFile("file-loader-test-pattern-", "src/a.ts");
+      writeFiles(baseDir, ["src/a.test.ts", "src/a.spec.ts", `src/skip${suffix}`, "src/legacy.ts"]);
+
+      const files = loadFilesWithIgnores(
+        {
+          files: [
+            "./src/**/*.ts",
+            `./src/**/*${suffix}`,
+            `!./src/skip${suffix}`,
+            "!./src/legacy.ts",
+          ],
+        },
+        baseDir,
+        warnSpy,
+      );
+      expect(files.toSorted()).toEqual(
+        [path.join(baseDir, "src", "a.ts"), path.join(baseDir, "src", `a${suffix}`)].toSorted(),
+      );
+    },
+  );
+
+  test("includes test files when files has only test-file patterns", () => {
+    const warnSpy = vi.fn();
+    const baseDir = makeDirWithFile("file-loader-only-test-patterns-", "e2e/a.test.ts");
+
+    const files = loadFilesWithIgnores({ files: ["./e2e/**/*.test.ts"] }, baseDir, warnSpy);
+    expect(files).toEqual([path.join(baseDir, "e2e", "a.test.ts")]);
+  });
+
+  test.each([".test.ts", ".spec.ts"])(
+    "includes %s files matched by a test-file pattern before another pattern",
+    (suffix) => {
+      const warnSpy = vi.fn();
+      const baseDir = makeDirWithFile("file-loader-test-pattern-first-", "src/a.ts");
+      writeFiles(baseDir, [`src/a${suffix}`, `src/skip${suffix}`, "lib/b.ts"]);
+
+      expect(
+        loadFilesWithIgnores(
+          { files: [`./src/**/*${suffix}`, `!./src/skip${suffix}`, "./src/**/*.ts"] },
+          baseDir,
+          warnSpy,
+        ).toSorted(),
+      ).toEqual(
+        [path.join(baseDir, "src", "a.ts"), path.join(baseDir, "src", `a${suffix}`)].toSorted(),
+      );
+      expect(
+        loadFilesWithIgnores(
+          { files: ["./src/**/*.ts", `./src/**/*${suffix}`, "./lib/**/*.ts"] },
+          baseDir,
+          warnSpy,
+        ).toSorted(),
+      ).toEqual(
+        [
+          path.join(baseDir, "lib", "b.ts"),
+          path.join(baseDir, "src", "a.ts"),
+          path.join(baseDir, "src", `a${suffix}`),
+          path.join(baseDir, "src", `skip${suffix}`),
+        ].toSorted(),
+      );
+    },
+  );
+
+  test("does not include test files with a brace pattern that does not end in .test.ts or .spec.ts", () => {
+    const warnSpy = vi.fn();
+    const baseDir = makeDirWithFile("file-loader-brace-test-pattern-", "ex/x.ts");
+    writeFiles(baseDir, ["e2e/a.test.ts", "e2e/b.spec.ts"]);
+
+    const files = loadFilesWithIgnores(
+      { files: ["./ex/*.ts", "./e2e/*.{test,spec}.ts"] },
+      baseDir,
+      warnSpy,
+    );
+    expect(files).toEqual([path.join(baseDir, "ex", "x.ts")]);
+  });
+
+  test("applies ignores after a trailing test-file pattern", () => {
+    const warnSpy = vi.fn();
+    const baseDir = makeDirWithFile("file-loader-ignores-after-test-pattern-", "src/a.ts");
+    writeFiles(baseDir, ["src/a.test.ts", "src/a.spec.ts"]);
+
+    const files = loadFilesWithIgnores(
+      { files: ["./src/**/*.ts", "./src/**/*.test.ts"], ignores: ["**/*.test.ts"] },
+      baseDir,
+      warnSpy,
+    );
+    expect(files.toSorted()).toEqual([
+      path.join(baseDir, "src", "a.spec.ts"),
+      path.join(baseDir, "src", "a.ts"),
+    ]);
+  });
+
   test("does not fall back when every non-! pattern is absolute", () => {
     const warnSpy = vi.fn();
     const cwdDir = makeDirWithFile("file-loader-absolute-negation-cwd-", "src/legacy.ts");

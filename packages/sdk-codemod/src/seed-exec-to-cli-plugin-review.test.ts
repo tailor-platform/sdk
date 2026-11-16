@@ -2,11 +2,14 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { describe, expect, test } from "vitest";
-import transform, {
-  reviewFindings,
-} from "../codemods/v2/seed-exec-to-cli-plugin/scripts/transform";
-import { allCodemods } from "./registry";
+import transform from "../codemods/v2/seed-exec-to-cli-plugin/scripts/transform";
 import { runCodemods } from "./runner";
+import { runnableCodemod, reviewThroughRunner } from "./test-helpers/codemods";
+
+const CODEMOD_ID = "v2/seed-exec-to-cli-plugin";
+
+const review = (source: string, relativePath: string) =>
+  reviewThroughRunner(CODEMOD_ID, source, relativePath);
 
 const FORK_SETUP = `import { fork } from "node:child_process";
 
@@ -17,9 +20,11 @@ await new Promise<void>((resolve, reject) => {
 `;
 
 describe("seed exec.mjs migration review", () => {
-  test("declines fork() call sites and reports them for manual migration", () => {
-    expect(transform(FORK_SETUP, "setup.ts")).toBeNull();
-    expect(reviewFindings(FORK_SETUP, "setup.ts", "setup.ts")).toMatchObject([
+  test("declines fork() call sites and reports them for manual migration", async () => {
+    const { transformed, findings } = await review(FORK_SETUP, "setup.ts");
+
+    expect(transformed).toBeNull();
+    expect(findings).toMatchObject([
       {
         file: "setup.ts",
         line: 4,
@@ -29,7 +34,7 @@ describe("seed exec.mjs migration review", () => {
     ]);
   });
 
-  test("declines a file that mixes a rewritable invocation with a fork() call", () => {
+  test("declines a file that mixes a rewritable invocation with a fork() call", async () => {
     const source = `import { execSync, fork } from "node:child_process";
 
 execSync("node seed/exec.mjs --truncate");
@@ -38,25 +43,27 @@ const child = fork("seed/exec.mjs", [], { stdio: "inherit" });
 
     // Rewriting only the execSync line would leave the fork call stale while
     // marking the file as migrated, hiding it from the residual warning path.
-    expect(transform(source, "setup.ts")).toBeNull();
-    expect(reviewFindings(source, "setup.ts", "setup.ts")).toMatchObject([
-      { line: 4, excerpt: expect.stringContaining("fork(") },
-    ]);
+    const { transformed, findings } = await review(source, "setup.ts");
+
+    expect(transformed).toBeNull();
+    expect(findings).toMatchObject([{ line: 4, excerpt: expect.stringContaining("fork(") }]);
   });
 
-  test("rewrites a seed invocation when the same file only forks an unrelated script", () => {
+  test("rewrites a seed invocation when the same file only forks an unrelated script", async () => {
     const source = `import { execSync, fork } from "node:child_process";
 
 execSync("node seed/exec.mjs --truncate");
 fork("tools/worker.mjs");
 `;
 
-    expect(transform(source, "setup.ts")).toBe(`import { execSync, fork } from "node:child_process";
+    const { transformed, findings } = await review(source, "setup.ts");
+
+    expect(transformed).toBe(`import { execSync, fork } from "node:child_process";
 
 execSync("npx @tailor-platform/sdk seed apply --truncate");
 fork("tools/worker.mjs");
 `);
-    expect(reviewFindings(source, "setup.ts", "setup.ts")).toEqual([]);
+    expect(findings).toEqual([]);
   });
 
   test("declines a mixed file when the forked seed runner path is assembled dynamically", () => {
@@ -70,13 +77,15 @@ fork(path.join(distPath, "exec.mjs"));
     expect(transform(source, "setup.ts")).toBeNull();
   });
 
-  test("ignores fork() calls unrelated to the seed runner", () => {
+  test("ignores fork() calls unrelated to the seed runner", async () => {
     const source = `import { fork } from "node:child_process";\nfork("tools/worker.mjs");\n`;
 
-    expect(reviewFindings(source, "setup.ts", "setup.ts")).toEqual([]);
+    const { findings } = await review(source, "setup.ts");
+
+    expect(findings).toEqual([]);
   });
 
-  test("reports a fork() call whose runner path sits on a later line", () => {
+  test("reports a fork() call whose runner path sits on a later line", async () => {
     const source = `import { fork } from "node:child_process";
 const child = fork(
   "seed/exec.mjs",
@@ -84,32 +93,38 @@ const child = fork(
 );
 `;
 
-    expect(transform(source, "setup.ts")).toBeNull();
-    expect(reviewFindings(source, "setup.ts", "setup.ts")).toMatchObject([
-      { line: 2, excerpt: expect.stringContaining("fork(") },
-    ]);
+    const { transformed, findings } = await review(source, "setup.ts");
+
+    expect(transformed).toBeNull();
+    expect(findings).toMatchObject([{ line: 2, excerpt: expect.stringContaining("fork(") }]);
   });
 
-  test("reports only the seed runner fork when the file forks other scripts too", () => {
+  test("reports only the seed runner fork when the file forks other scripts too", async () => {
     const source = `import { fork } from "node:child_process";
 fork("seed/exec.mjs");
 fork("tools/worker.mjs");
 `;
 
-    expect(reviewFindings(source, "setup.ts", "setup.ts")).toMatchObject([
+    const { findings } = await review(source, "setup.ts");
+
+    expect(findings).toMatchObject([
       { line: 2, excerpt: expect.stringContaining("seed/exec.mjs") },
     ]);
   });
 
-  test("reports nothing once the seed runner call is migrated", () => {
+  test("reports nothing once the seed runner call is migrated", async () => {
     const source = `import { execSync } from "node:child_process";\nexecSync("pnpm tailor seed apply", { stdio: "inherit" });\n`;
 
-    expect(transform(source, "setup.ts")).toBeNull();
-    expect(reviewFindings(source, "setup.ts", "setup.ts")).toEqual([]);
+    const { transformed, findings } = await review(source, "setup.ts");
+
+    expect(transformed).toBeNull();
+    expect(findings).toEqual([]);
   });
 
-  test("reports nothing for non-source files", () => {
-    expect(reviewFindings(FORK_SETUP, "notes.md", "notes.md")).toEqual([]);
+  test("reports no findings for non-source files", async () => {
+    const { findings } = await review(FORK_SETUP, "notes.md");
+
+    expect(findings).toEqual([]);
   });
 
   test("rewrites execSync invocations through the package runner", () => {
@@ -264,26 +279,17 @@ fork("tools/worker.mjs");
     expect(transform("The generated seed/exec.mjs file\n", "README.md")).toBeNull();
   });
 
-  test("uses the package-runner form in the manual migration guidance", () => {
-    const codemod = allCodemods.find((entry) => entry.id === "v2/seed-exec-to-cli-plugin");
+  test("uses the package-runner form in the manual migration guidance", async () => {
+    const { codemod } = runnableCodemod(CODEMOD_ID);
+    const { findings } = await review(FORK_SETUP, "setup.ts");
 
-    expect(codemod?.prompt).toContain(
+    expect(codemod.prompt).toContain(
       'execSync("npx @tailor-platform/sdk seed apply", { env, stdio: "inherit" })',
     );
-    expect(reviewFindings(FORK_SETUP, "setup.ts", "setup.ts")[0]?.message).toContain(
-      'execSync("npx @tailor-platform/sdk seed apply")',
-    );
+    expect(findings[0]?.message).toContain('execSync("npx @tailor-platform/sdk seed apply")');
   });
 
   test("runs the transform for every supported source and shell extension", async () => {
-    const codemod = allCodemods.find((entry) => entry.id === "v2/seed-exec-to-cli-plugin");
-    expect(codemod).toBeDefined();
-    if (!codemod) throw new Error("seed exec codemod is not registered");
-
-    const scriptPath = path.resolve(
-      __dirname,
-      "../codemods/v2/seed-exec-to-cli-plugin/scripts/transform.ts",
-    );
     const projectDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "seed-exec-patterns-"));
     const sourceFiles = [
       "setup.ts",
@@ -311,7 +317,7 @@ fork("tools/worker.mjs");
         ),
       ]);
 
-      const result = await runCodemods([{ codemod, scriptPath }], projectDir, false);
+      const result = await runCodemods([runnableCodemod(CODEMOD_ID)], projectDir, false);
 
       expect(result.filesModified.map((file) => path.basename(file)).toSorted()).toEqual(
         [...sourceFiles, ...shellFiles].toSorted(),
@@ -336,14 +342,6 @@ fork("tools/worker.mjs");
   });
 
   test("surfaces shell-variable runner paths without flagging bare exec.mjs text", async () => {
-    const codemod = allCodemods.find((entry) => entry.id === "v2/seed-exec-to-cli-plugin");
-    expect(codemod).toBeDefined();
-    if (!codemod) throw new Error("seed exec codemod is not registered");
-
-    const scriptPath = path.resolve(
-      __dirname,
-      "../codemods/v2/seed-exec-to-cli-plugin/scripts/transform.ts",
-    );
     const projectDir = await fs.promises.mkdtemp(
       path.join(os.tmpdir(), "seed-exec-variable-paths-"),
     );
@@ -365,7 +363,7 @@ fork("tools/worker.mjs");
         ),
       ]);
 
-      const result = await runCodemods([{ codemod, scriptPath }], projectDir, false);
+      const result = await runCodemods([runnableCodemod(CODEMOD_ID)], projectDir, false);
 
       expect(result.filesModified).toEqual([]);
       expect(result.llmReviews).toMatchObject([
