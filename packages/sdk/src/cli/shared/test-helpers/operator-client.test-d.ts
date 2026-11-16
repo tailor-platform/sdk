@@ -60,6 +60,19 @@ describe("mockOperatorClient", () => {
     );
   });
 
+  test("rejects a stream given directly, which only the first call could read", () => {
+    async function* stream() {
+      yield {};
+    }
+
+    assertType(
+      mockOperatorClient({
+        // @ts-expect-error A stream instead of an implementation
+        downloadFunctionRegistryScript: stream(),
+      }),
+    );
+  });
+
   test("rejects a vi.fn spy, which leaves its response unchecked", () => {
     const methods = { getTenantConfig: vi.fn() };
 

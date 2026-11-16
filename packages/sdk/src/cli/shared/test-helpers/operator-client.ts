@@ -18,8 +18,15 @@ type PlainImpl<K extends OperatorMethod> = {
   mock?: never;
 };
 
-/** A method's mock: the response it returns to every request, or its implementation. */
-type MethodMock<K extends OperatorMethod> = Awaited<ReturnType<MethodImpl<K>>> | PlainImpl<K>;
+type MethodResponse<K extends OperatorMethod> = Awaited<ReturnType<MethodImpl<K>>>;
+
+/**
+ * A method's mock: the response it returns to every request, or its implementation. A streaming
+ * method takes only an implementation, which starts a new stream on each call.
+ */
+type MethodMock<K extends OperatorMethod> =
+  | (MethodResponse<K> extends AsyncIterable<unknown> ? never : MethodResponse<K>)
+  | PlainImpl<K>;
 
 /** Mocks of the methods `K`, as {@link mockOperatorClient} takes them. */
 export type OperatorClientMocks<K extends OperatorMethod> = { [P in K]: MethodMock<P> };
@@ -30,14 +37,14 @@ type OperatorClientMock<K extends OperatorMethod> = OperatorClient & {
 
 function implementationOf(mock: unknown): (...args: never[]) => unknown {
   if (typeof mock === "function") return mock as (...args: never[]) => unknown;
-  if (typeof mock === "object" && mock !== null && Symbol.asyncIterator in mock) return () => mock;
   return async () => mock;
 }
 
 /**
  * Build an operator client whose methods return responses shaped like the Platform's, as spies.
- * Give each method the response itself, or an implementation that receives the request. A response
- * given directly is also checked for unknown fields; one an implementation returns is not.
+ * Give each method the response itself, or an implementation that receives the request, such as an
+ * async generator function for a streaming method. A response given directly is also checked for
+ * unknown fields; one an implementation returns is not.
  * @param methods - The mocked methods; the others are absent, as on a client cast from `{}`
  * @returns The client, with each mocked method as a `vi.fn` spy
  */

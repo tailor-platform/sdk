@@ -30,18 +30,6 @@ describe("mockOperatorClient", () => {
     });
   });
 
-  test("streams a method given as the stream itself", async () => {
-    async function* stream() {
-      yield {};
-    }
-    const client = mockOperatorClient({ downloadFunctionRegistryScript: stream() });
-    const chunks: unknown[] = [];
-
-    for await (const chunk of client.downloadFunctionRegistryScript({})) chunks.push(chunk);
-
-    expect(chunks).toEqual([{}]);
-  });
-
   test("streams a method given as an async generator", async () => {
     const client = mockOperatorClient({
       async *downloadFunctionRegistryScript() {
