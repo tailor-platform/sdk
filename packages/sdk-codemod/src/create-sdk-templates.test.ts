@@ -32,7 +32,7 @@ const codemods = allCodemods
       path.resolve(__dirname, "../codemods", codemod.scriptPath.replace(/\.js$/, ".ts")),
   }));
 
-describe("next-major codemods on create-sdk templates", () => {
+describe.skipIf(codemods.length === 0)("next-major codemods on create-sdk templates", () => {
   let projectDir: string;
 
   aroundEach(async (runTest) => {
