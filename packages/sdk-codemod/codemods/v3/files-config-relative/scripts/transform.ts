@@ -292,6 +292,17 @@ function configExportNames(source: string, file: string, carrier: ConfigCarrier)
   return exportNames;
 }
 
+const sourceFilesByProject = new Map<string, Promise<SourceFile[]>>();
+
+function projectSourceFiles(projectDir: string): Promise<SourceFile[]> {
+  let files = sourceFilesByProject.get(projectDir);
+  if (!files) {
+    files = readSourceFiles(projectDir);
+    sourceFilesByProject.set(projectDir, files);
+  }
+  return files;
+}
+
 async function readSourceFiles(projectDir: string): Promise<SourceFile[]> {
   const files: SourceFile[] = [];
   for await (const relative of walkFiles(projectDir)) {
@@ -316,7 +327,7 @@ async function findConfigLoader(
   projectDir: string,
   exportedName: string | null,
 ): Promise<string | null> {
-  const files = await readSourceFiles(projectDir);
+  const files = await projectSourceFiles(projectDir);
   const config: ConfigCarrier = {
     id: moduleId(configFile),
     names: new Set(exportedName ? ["default", exportedName] : ["default"]),
