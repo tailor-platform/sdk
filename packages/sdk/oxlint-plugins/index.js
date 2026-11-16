@@ -353,16 +353,24 @@ export default {
           }
           return false;
         }
-        function initializerOf(identifier) {
+        function definitionOf(identifier) {
           for (let scope = context.sourceCode.getScope(identifier); scope; scope = scope.upper) {
             const definition = scope.set.get(identifier.name)?.defs[0];
-            if (definition) {
-              return definition.node.type === "VariableDeclarator"
-                ? definition.node.init
-                : undefined;
-            }
+            if (definition) return definition;
           }
           return undefined;
+        }
+        function initializerOf(identifier) {
+          const definition = definitionOf(identifier);
+          return definition?.node.type === "VariableDeclarator" ? definition.node.init : undefined;
+        }
+        function isMockOperatorClient(callee) {
+          if (callee.type !== "Identifier") return false;
+          const definition = definitionOf(callee);
+          return (
+            definition?.type === "ImportBinding" &&
+            definition.parent.source.value.endsWith("/test-helpers/operator-client")
+          );
         }
         function checkCast(node) {
           if (namesOperatorClient(node.typeAnnotation)) {
@@ -373,9 +381,7 @@ export default {
           TSAsExpression: checkCast,
           TSTypeAssertion: checkCast,
           CallExpression(node) {
-            if (node.callee.type !== "Identifier" || node.callee.name !== "mockOperatorClient") {
-              return;
-            }
+            if (!isMockOperatorClient(node.callee)) return;
             const [methods] = node.arguments;
             if (methods?.type !== "ObjectExpression") return;
             for (const property of methods.properties) {

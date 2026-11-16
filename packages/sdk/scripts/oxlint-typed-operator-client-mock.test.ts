@@ -20,12 +20,21 @@ const fixture = [
   "",
 ].join("\n");
 
-function lint(level: "error" | "off") {
+const localNamesake = [
+  'import { vi } from "vitest";',
+  "function mockOperatorClient(overrides: object) {",
+  "  return overrides;",
+  "}",
+  "export const local = mockOperatorClient({ getTenantConfig: vi.fn() });",
+  "",
+].join("\n");
+
+function lint(level: "error" | "off", source = fixture) {
   return lintWithLocalRule({
     rule: "typed-operator-client-mock",
     level,
     fileName: "client.test.ts",
-    source: fixture,
+    source,
   });
 }
 
@@ -41,6 +50,10 @@ describe("local/typed-operator-client-mock", () => {
       { rule: "local(typed-operator-client-mock)", line: 14 },
       { rule: "local(typed-operator-client-mock)", line: 15 },
     ]);
+  });
+
+  test("leaves spies passed to a local function of the same name alone", () => {
+    expect(lint("error", localNamesake)).toEqual([]);
   });
 
   test("reports nothing when disabled, so the fixture itself is clean", () => {
