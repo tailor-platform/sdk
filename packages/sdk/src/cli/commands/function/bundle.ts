@@ -15,7 +15,7 @@ import {
   createLogLevelTreeshakeOptions,
   resolveBundleLogLevel,
 } from "#/cli/shared/bundle-log-level";
-import { createDeployOnlyCliStubPlugin } from "#/cli/shared/deploy-only-cli-stub";
+import { createCliEntryExternalPlugin } from "#/cli/shared/cli-entry-external";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import {
   composeFunctionTreeshakeOptions,
@@ -137,7 +137,7 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
   const buildResult = await hookFailures.run(() =>
     rolldown.build({
       plugins: [
-        createDeployOnlyCliStubPlugin(hookFailures),
+        createCliEntryExternalPlugin(hookFailures),
         createGeneratedEntryResolverPlugin(entryPath, baseDir),
         createTsconfigPathsPlugin(),
         createPlatformBundleDefinePlugin(
