@@ -79,14 +79,16 @@ const restricted = {
 describe("migration flow: local definitions that no pending migration includes", () => {
   let checkpoint: RemoteCheckpoint;
 
-  function createMockClient(existingTableNames = ["User", "Post"]): OperatorClient {
+  type MockClient = ReturnType<typeof createMockClient>;
+
+  function createMockClient(existingTableNames = ["User", "Post"]) {
     return checkpoint.createMockClient({
-      listTailorDBTypes: vi.fn(async () => ({
+      listTailorDBTypes: async () => ({
         tailordbTypes: existingTableNames.map((name) => ({
           name,
           schema: { settings: { bulkUpsert: false, publishRecordEvents: false } },
         })),
-      })),
+      }),
     });
   }
 
@@ -132,30 +134,30 @@ describe("migration flow: local definitions that no pending migration includes",
     after: { type: "string", required: false },
   } as DiffChange;
 
-  function rejectLocalPost(client: OperatorClient, rejection: Error) {
-    vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
+  function rejectLocalPost(client: MockClient, rejection: Error) {
+    client.updateTailorDBType.mockImplementation(async (request) => {
       if (request.tailordbType?.schema?.fields?.body) throw rejection;
-      return {} as never;
+      return {};
     });
   }
 
   function refuseWritesToDeletedTables(
-    client: OperatorClient,
+    client: MockClient,
     refusedDeletion?: { tableName: string; error: Error },
   ) {
     const deleted = new Set<string>();
-    vi.mocked(client.deleteTailorDBType).mockImplementation(async (request) => {
+    client.deleteTailorDBType.mockImplementation(async (request) => {
       const tableName = request.tailordbTypeName ?? "";
       if (refusedDeletion && tableName === refusedDeletion.tableName) throw refusedDeletion.error;
       deleted.add(tableName);
       await new Promise((resolve) => setTimeout(resolve, 0));
-      return {} as never;
+      return {};
     });
-    vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
+    client.updateTailorDBType.mockImplementation(async (request) => {
       if (deleted.has(request.tailordbType?.name ?? "")) {
         throw new ConnectError("table not found", Code.NotFound);
       }
-      return {} as never;
+      return {};
     });
   }
 
@@ -354,11 +356,11 @@ describe("migration flow: local definitions that no pending migration includes",
 
   test("suggests deploying again when a table cannot be created for its local definition", async () => {
     const client = createMockClient();
-    vi.mocked(client.createTailorDBType).mockImplementation(async (request) => {
+    client.createTailorDBType.mockImplementation(async (request) => {
       if (request.tailordbType?.name === "Tag") {
         throw new ConnectError("table exists", Code.AlreadyExists);
       }
-      return {} as never;
+      return {};
     });
     const tag = snapshotTable("Tag", { label: { type: "string", required: true } });
     const planResult = createMockPlanResult({

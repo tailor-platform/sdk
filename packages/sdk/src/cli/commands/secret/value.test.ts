@@ -3,6 +3,7 @@ import { runCommand } from "@politty/zod";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { createSecretCommand } from "./create";
 import { updateSecretCommand } from "./update";
 import { MAX_PIPED_SECRET_KIB, resolveSecretValue } from "./value";
@@ -138,14 +139,11 @@ describe("resolveSecretValue", () => {
 });
 
 function stubClient() {
-  const client = {
-    createSecretManagerSecret: vi.fn().mockResolvedValue({}),
-    updateSecretManagerSecret: vi.fn().mockResolvedValue({}),
-  };
-  vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
-    client,
-    workspaceId: "workspace-1",
-  } as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>);
+  const client = mockOperatorClient({
+    createSecretManagerSecret: {},
+    updateSecretManagerSecret: {},
+  });
+  vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({ client, workspaceId: "workspace-1" });
   return client;
 }
 

@@ -2,6 +2,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { isCLIError } from "#/cli/shared/errors";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { resolveDeployWorkspace } from "./workspace";
 import type * as ClientModule from "#/cli/shared/client";
 import type * as ContextModule from "#/cli/shared/context";
@@ -74,11 +75,11 @@ vi.mock("./workspace-context", () => ({
   saveWorkspaceContext: mocks.saveWorkspaceContext,
 }));
 
-const client = {
-  getWorkspace: vi.fn(),
-  listAvailableWorkspaceRegions: vi.fn(),
-  listUserOrganizations: vi.fn(),
-};
+const client = mockOperatorClient({
+  getWorkspace: {},
+  listAvailableWorkspaceRegions: {},
+  listUserOrganizations: {},
+});
 
 const workspace = (id: string, name = "example-workspace", region = "us-west"): WorkspaceInfo => ({
   id,
@@ -107,9 +108,9 @@ describe("resolveDeployWorkspace", () => {
     client.listAvailableWorkspaceRegions.mockResolvedValue({
       regions: ["us-west", "asia-northeast"],
     });
-    client.getWorkspace.mockImplementation(async ({ workspaceId }: { workspaceId: string }) => ({
+    client.getWorkspace.mockImplementation(async (request) => ({
       workspace: {
-        id: workspaceId,
+        id: request.workspaceId,
         name: "explicit-workspace",
         region: "us-west",
         organizationId: "33333333-3333-4333-8333-333333333333",

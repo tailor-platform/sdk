@@ -141,17 +141,14 @@ function requiredFieldAdded(tableName: string, fieldName: string): DiffChange {
 
 function createMockClient() {
   return createBaseMockClient({
-    getMetadata: vi.fn().mockImplementation(async ({ trn }: { trn: string }) => {
-      const checkpoint = state.checkpoints.get(trn.split(":").at(-1) ?? "");
-      return {
-        metadata: {
-          labels:
-            checkpoint === undefined
-              ? {}
-              : { "sdk-migration": `m${String(checkpoint).padStart(4, "0")}` },
-        },
-      };
-    }),
+    getMetadata: async (request) => {
+      const checkpoint = state.checkpoints.get(request.trn?.split(":").at(-1) ?? "");
+      const labels: Record<string, string> =
+        checkpoint === undefined
+          ? {}
+          : { "sdk-migration": `m${String(checkpoint).padStart(4, "0")}` };
+      return { metadata: { labels } };
+    },
   });
 }
 

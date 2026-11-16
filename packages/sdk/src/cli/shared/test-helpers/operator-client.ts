@@ -6,13 +6,14 @@ import type { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 type OperatorMethod = keyof OperatorClient;
 
 type MethodImpl<K extends OperatorMethod> = (
-  request: Parameters<OperatorClient[K]>[0],
+  ...args: Parameters<OperatorClient[K]>
 ) => ReturnType<ServiceImpl<typeof OperatorService>[K]>;
 
 /** A method's mock: the response it returns to every request, or its implementation. */
 type MethodMock<K extends OperatorMethod> = Awaited<ReturnType<MethodImpl<K>>> | MethodImpl<K>;
 
-type MethodMocks<K extends OperatorMethod> = { [P in K]: MethodMock<P> };
+/** Mocks of the methods `K`, as {@link mockOperatorClient} takes them. */
+export type OperatorClientMocks<K extends OperatorMethod> = { [P in K]: MethodMock<P> };
 
 type OperatorClientMock<K extends OperatorMethod> = OperatorClient & {
   [P in K]: Mock<MethodImpl<P>>;
@@ -32,7 +33,7 @@ function implementationOf(mock: unknown): (...args: never[]) => unknown {
  * @returns The client, with each mocked method as a `vi.fn` spy
  */
 export function mockOperatorClient<K extends OperatorMethod>(
-  methods: MethodMocks<K>,
+  methods: OperatorClientMocks<K>,
 ): OperatorClientMock<K> {
   const spies = Object.fromEntries(
     Object.entries(methods).map(([name, mock]) => [name, vi.fn(implementationOf(mock))]),

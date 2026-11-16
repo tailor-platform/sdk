@@ -5,6 +5,7 @@ import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { deleteSecretCommand } from "./delete";
 
 vi.mock("#/cli/shared/operator-context", () => ({
@@ -26,13 +27,15 @@ vi.mock("./check-vault-managed", () => ({
   releaseVaultOwnership: vi.fn(),
 }));
 
+function mockContextClient() {
+  const client = mockOperatorClient({ deleteSecretManagerSecret: {} });
+  vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({ client, workspaceId: "workspace-1" });
+  return client;
+}
+
 describe("secret delete command", () => {
   test("fails without deleting when the entered name does not match", async () => {
-    const client = { deleteSecretManagerSecret: vi.fn().mockResolvedValue({}) };
-    vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
-      client,
-      workspaceId: "workspace-1",
-    } as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>);
+    const client = mockContextClient();
     vi.mocked(prompt.text).mockResolvedValue("other");
 
     const result = await runCommand(deleteSecretCommand, [
@@ -52,11 +55,7 @@ describe("secret delete command", () => {
   });
 
   test("deletes when the entered name matches", async () => {
-    const client = { deleteSecretManagerSecret: vi.fn().mockResolvedValue({}) };
-    vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
-      client,
-      workspaceId: "workspace-1",
-    } as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>);
+    const client = mockContextClient();
     vi.mocked(prompt.text).mockResolvedValue("stripe");
 
     const result = await runCommand(deleteSecretCommand, [
@@ -75,11 +74,7 @@ describe("secret delete command", () => {
   });
 
   test("prints the secret and vault under JSON output", async () => {
-    const client = { deleteSecretManagerSecret: vi.fn().mockResolvedValue({}) };
-    vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
-      client,
-      workspaceId: "workspace-1",
-    } as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>);
+    mockContextClient();
     using _json = jsonMode();
     using stdout = captureStdout();
 
