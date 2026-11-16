@@ -1,9 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { ResolverPermissionSchema, ResolverSchema } from "./schema";
+import { PluginResolverSchema, ResolverPermissionSchema, ResolverSchema } from "./schema";
 import type { ZodError } from "zod";
 
-function expectParseFailure<T>(
-  result: { success: true; data: T } | { success: false; error: ZodError },
+function expectParseFailure(
+  result: { success: true } | { success: false; error: ZodError },
 ): ZodError {
   expect(result.success).toBe(false);
   if (result.success) {
@@ -73,9 +73,12 @@ describe("ResolverSchema", () => {
       );
     });
 
-    test("rejects an input operand when the resolver declares no input", () => {
+    test.each([
+      ["ResolverSchema", ResolverSchema, validResolver],
+      ["PluginResolverSchema", PluginResolverSchema, { ...validResolver, body: "return true;" }],
+    ])("%s rejects an input operand when the resolver declares no input", (_, schema, resolver) => {
       const error = expectParseFailure(
-        ResolverSchema.safeParse({ ...validResolver, permission: bindTo("employeeId") }),
+        schema.safeParse({ ...resolver, permission: bindTo("employeeId") }),
       );
       expect(error.issues.map((issue) => issue.message)).toContain(
         "`permission` references input field `employeeId`, which `input` does not declare",

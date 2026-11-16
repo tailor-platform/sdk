@@ -8,7 +8,6 @@ import {
   dispatchPlugin,
   dispatchPluginWithInstallHint,
   explicitProfileFromArgs,
-  hasEnvFileFlag,
   listPlugins,
   resolvePlugin,
 } from "./plugin";
@@ -18,6 +17,7 @@ const contextMocks = vi.hoisted(() => ({
   loadWorkspaceId: vi.fn(),
   loadConfigPath: vi.fn(),
   loadPlatformClientConfig: vi.fn(),
+  readEnvironmentToken: vi.fn(),
   readPlatformConfig: vi.fn(),
 }));
 
@@ -174,6 +174,7 @@ process.exit(${exitCode});
 // dispatched child only sees what buildPluginEnv injects.
 const CONTEXT_ENV_KEYS = [
   "TAILOR_PLATFORM_TOKEN",
+  "TAILOR_PLATFORM_URL",
   "TAILOR_PLATFORM_WORKSPACE_ID",
   "TAILOR_PLATFORM_USER",
   "TAILOR_CONFIG_PATH",
@@ -199,6 +200,7 @@ describe("dispatchPlugin", () => {
     contextMocks.loadWorkspaceId.mockResolvedValue("ws-456");
     contextMocks.loadConfigPath.mockReturnValue("/proj/tailor.config.ts");
     contextMocks.loadPlatformClientConfig.mockResolvedValue(undefined);
+    contextMocks.readEnvironmentToken.mockImplementation(() => process.env.TAILOR_PLATFORM_TOKEN);
     contextMocks.readPlatformConfig.mockResolvedValue({
       users: { u1: { email: "me@example.com" } },
       profiles: {},
@@ -291,7 +293,7 @@ describe("dispatchPlugin", () => {
     expect(contextMocks.loadWorkspaceId).toHaveBeenCalledWith({ profile: "staging" });
   });
 
-  test("skips platform context injection when the forwarded args carry an env-file flag", async () => {
+  test("injects platform context alongside a forwarded env file, resolved after loading it", async () => {
     const project = path.join(tempDir, "project");
     writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-hello`, outFile);
     process.chdir(project);
@@ -299,7 +301,13 @@ describe("dispatchPlugin", () => {
     // Node itself also parses --env-file after the script path
     // (https://github.com/nodejs/node/issues/54232), so the file must exist for
     // the capture plugin process to start.
-    fs.writeFileSync(path.join(project, ".env.staging"), "");
+    fs.writeFileSync(
+      path.join(project, ".env.staging"),
+      "TAILOR_PLATFORM_WORKSPACE_ID=ws-env\nTAILOR_PLATFORM_URL=https://api.env.example.com",
+    );
+    contextMocks.loadWorkspaceId.mockImplementation(
+      async () => process.env.TAILOR_PLATFORM_WORKSPACE_ID ?? "ws-456",
+    );
 
     const code = await dispatchPlugin({
       name: "hello",
@@ -309,12 +317,50 @@ describe("dispatchPlugin", () => {
 
     expect(code).toBe(0);
     const { env } = readCapture();
-    expect(env.TAILOR_PLATFORM_TOKEN).toBeUndefined();
-    expect(env.TAILOR_PLATFORM_WORKSPACE_ID).toBeUndefined();
-    expect(env.TAILOR_PLATFORM_USER).toBeUndefined();
-    expect(env.TAILOR_PLATFORM_URL).toBeUndefined();
-    expect(env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID).toBeUndefined();
+    expect(env.TAILOR_PLATFORM_WORKSPACE_ID).toBe("ws-env");
+    expect(env.TAILOR_PLATFORM_TOKEN).toBe("tok-123");
+    expect(env.TAILOR_PLATFORM_USER).toBe("me@example.com");
+    expect(env.TAILOR_PLATFORM_URL).toBe("https://api.env.example.com");
+    expect(env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID).toBe(getOAuth2ClientId());
     expect(env.TAILOR_CONFIG_PATH).toBe("/proj/tailor.config.ts");
+  });
+
+  test("resolves the user from the profile a forwarded env file selects", async () => {
+    contextMocks.readPlatformConfig.mockResolvedValue({
+      users: { u1: { email: "me@example.com" }, u2: { email: "staging@example.com" } },
+      profiles: { staging: { user: "u2" } },
+      current_user: "u1",
+    });
+    const project = path.join(tempDir, "project");
+    writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-hello`, outFile);
+    process.chdir(project);
+    process.env.PATH = "";
+    fs.writeFileSync(path.join(project, ".env.staging"), "TAILOR_PLATFORM_PROFILE=staging");
+
+    const code = await dispatchPlugin({
+      name: "hello",
+      args: ["--env-file", ".env.staging", "deploy"],
+      cliName: CLI,
+    });
+
+    expect(code).toBe(0);
+    expect(readCapture().env.TAILOR_PLATFORM_USER).toBe("staging@example.com");
+  });
+
+  test("omits the user when the token comes from TAILOR_PLATFORM_TOKEN", async () => {
+    process.env.TAILOR_PLATFORM_TOKEN = "env-token";
+    contextMocks.loadAccessToken.mockImplementation(async () => process.env.TAILOR_PLATFORM_TOKEN);
+    const project = path.join(tempDir, "project");
+    writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-hello`, outFile);
+    process.chdir(project);
+    process.env.PATH = "";
+
+    const code = await dispatchPlugin({ name: "hello", args: [], cliName: CLI });
+
+    expect(code).toBe(0);
+    const { env } = readCapture();
+    expect(env.TAILOR_PLATFORM_TOKEN).toBe("env-token");
+    expect(env.TAILOR_PLATFORM_USER).toBeUndefined();
   });
 
   test("injects the config path a forwarded env file sets, leaving a missing one to the plugin", async () => {
@@ -352,13 +398,11 @@ describe("dispatchPlugin", () => {
     });
 
     expect(code).toBe(0);
-    const { env } = readCapture();
-    expect(env.TAILOR_CONFIG_PATH).toBe("env/tailor.config.ts");
-    expect(env.TAILOR_PLATFORM_TOKEN).toBeUndefined();
+    expect(readCapture().env.TAILOR_CONFIG_PATH).toBe("env/tailor.config.ts");
   });
 
   // `main.ts` hands the host-consumed tokens to `dispatchPlugin` already
-  // concatenated ahead of the post-name args, so the flags reaching the three
+  // concatenated ahead of the post-name args, so the flags reaching the two
   // consumers here are whatever position the user typed them in. The end-to-end
   // concatenation is pinned in `main.test.ts`, which does not run on Windows.
   test("honors a leading env-file flag that was typed before the plugin name", async () => {
@@ -366,7 +410,8 @@ describe("dispatchPlugin", () => {
     writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-hello`, outFile);
     process.chdir(project);
     process.env.PATH = "";
-    fs.writeFileSync(path.join(project, ".env.staging"), "");
+    fs.writeFileSync(path.join(project, ".env.staging"), "TAILOR_CONFIG_PATH=env/tailor.config.ts");
+    contextMocks.loadConfigPath.mockImplementation(() => process.env.TAILOR_CONFIG_PATH);
 
     const code = await dispatchPlugin({
       name: "hello",
@@ -377,8 +422,7 @@ describe("dispatchPlugin", () => {
     expect(code).toBe(0);
     const { env, argv } = readCapture();
     expect(argv).toEqual(["--env-file", ".env.staging", "deploy"]);
-    expect(env.TAILOR_PLATFORM_TOKEN).toBeUndefined();
-    expect(env.TAILOR_PLATFORM_URL).toBeUndefined();
+    expect(env.TAILOR_CONFIG_PATH).toBe("env/tailor.config.ts");
   });
 
   test("resolves the last profile when one was typed before the plugin name and one after", async () => {
@@ -398,7 +442,7 @@ describe("dispatchPlugin", () => {
     expect(contextMocks.loadWorkspaceId).toHaveBeenCalledWith({ profile: "second" });
   });
 
-  test("skips platform context even when the --env-file-if-exists file is missing", async () => {
+  test("injects platform context when the --env-file-if-exists file is missing", async () => {
     const project = path.join(tempDir, "project");
     writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-hello`, outFile);
     process.chdir(project);
@@ -410,13 +454,11 @@ describe("dispatchPlugin", () => {
       cliName: CLI,
     });
 
-    // The flag check is presence-only: with the file absent, neither the
-    // injected context nor the plugin's env-file loader supplies platform vars.
     expect(code).toBe(0);
     const { env } = readCapture();
-    expect(env.TAILOR_PLATFORM_TOKEN).toBeUndefined();
-    expect(env.TAILOR_PLATFORM_WORKSPACE_ID).toBeUndefined();
-    expect(env.TAILOR_PLATFORM_URL).toBeUndefined();
+    expect(env.TAILOR_PLATFORM_TOKEN).toBe("tok-123");
+    expect(env.TAILOR_PLATFORM_WORKSPACE_ID).toBe("ws-456");
+    expect(env.TAILOR_PLATFORM_URL).toBe(getPlatformBaseUrl());
   });
 
   test("omits best-effort context when it cannot be resolved but still dispatches", async () => {
@@ -572,22 +614,5 @@ describe("explicitProfileFromArgs", () => {
     [["deploy", "--", "--profile", "staging"], undefined],
   ])("extracts profile from %j", (args, expected) => {
     expect(explicitProfileFromArgs(args)).toBe(expected);
-  });
-});
-
-describe("hasEnvFileFlag", () => {
-  test.each([
-    [["deploy", "--env-file", ".env"], true],
-    [["deploy", "-e", ".env"], true],
-    [["deploy", "--env-file=.env"], true],
-    [["deploy", "--env-file-if-exists", ".env"], true],
-    [["deploy", "--envFile", ".env"], true],
-    [["deploy", "--envFileIfExists=.env"], true],
-    [["deploy", "-e"], false],
-    [["deploy", "-e", "--json"], false],
-    [["deploy"], false],
-    [["deploy", "--", "--env-file", ".env"], false],
-  ])("detects env-file flag in %j", (args, expected) => {
-    expect(hasEnvFileFlag(args, {})).toBe(expected);
   });
 });

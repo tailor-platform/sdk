@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,6 +14,9 @@ const packageDir = dirname(fileURLToPath(import.meta.url));
 const oxlintBinScript = fileURLToPath(
   new URL("bin/oxlint", import.meta.resolve("oxlint/package.json")),
 );
+
+const NODE_FS_HELPER =
+  'import { readFileSync } from "node:fs";\nexport const text = readFileSync("x", "utf8");';
 
 describe("plugin", () => {
   test("exports every rule in the recommended ESLint flat config", () => {
@@ -71,6 +74,23 @@ describe("plugin", () => {
     );
   });
 
+  test("checks every file an ESLint config object enables `check: all-files` for", () => {
+    const config: Linter.Config[] = [
+      plugin.configs.recommended,
+      {
+        files: ["lib/**"],
+        rules: { "tailor-sdk/no-node-builtin-imports": ["warn", { check: "all-files" }] },
+      },
+    ];
+    const ruleIds = (filename: string) =>
+      new Linter().verify(NODE_FS_HELPER, config, { filename }).map(({ ruleId }) => ruleId);
+
+    expect({ helper: ruleIds("lib/helper.js"), seed: ruleIds("seed.js") }).toEqual({
+      helper: ["tailor-sdk/no-node-builtin-imports"],
+      seed: [],
+    });
+  });
+
   test("runs the built plugin through an Oxlint jsPlugins config", () => {
     const dir = mkdtempSync(join(tmpdir(), "tailor-sdk-lint-"));
     onTestFinished(() => rmSync(dir, { recursive: true, force: true }));
@@ -78,6 +98,9 @@ describe("plugin", () => {
       join(dir, "adapter.ts"),
       'import { createHttpAdapter } from "@tailor-platform/sdk";\nexport default createHttpAdapter({ pathPattern: "/api/users/*" });',
     );
+    mkdirSync(join(dir, "lib"));
+    writeFileSync(join(dir, "lib", "helper.ts"), NODE_FS_HELPER);
+    writeFileSync(join(dir, "seed.ts"), NODE_FS_HELPER);
     writeFileSync(
       join(dir, ".oxlintrc.json"),
       JSON.stringify({
@@ -85,24 +108,50 @@ describe("plugin", () => {
           { name: "tailor-sdk", specifier: new URL("../dist/index.js", import.meta.url).href },
         ],
         rules: plugin.configs.recommended.rules,
+        overrides: [
+          {
+            files: ["lib/**"],
+            rules: { "tailor-sdk/no-node-builtin-imports": ["warn", { check: "all-files" }] },
+          },
+        ],
       }),
     );
 
     const result = spawnSync(
       process.execPath,
-      [oxlintBinScript, "--config", ".oxlintrc.json", "--format=json", "adapter.ts"],
+      [
+        oxlintBinScript,
+        "--config",
+        ".oxlintrc.json",
+        "--format=json",
+        "adapter.ts",
+        "lib/helper.ts",
+        "seed.ts",
+      ],
       { cwd: dir, encoding: "utf8" },
     );
 
     expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: "" });
     const { diagnostics } = JSON.parse(result.stdout) as {
-      diagnostics: { code: string; severity: string }[];
+      diagnostics: { code: string; filename: string; severity: string }[];
     };
     expect(
       diagnostics
         .filter(({ code }) => code.startsWith("tailor-sdk("))
-        .map(({ code, severity }) => ({ code, severity })),
-    ).toEqual([{ code: "tailor-sdk(no-api-prefix-in-path-pattern)", severity: "warning" }]);
+        .map(({ code, filename, severity }) => ({ code, filename, severity }))
+        .toSorted((a, b) => a.filename.localeCompare(b.filename)),
+    ).toEqual([
+      {
+        code: "tailor-sdk(no-api-prefix-in-path-pattern)",
+        filename: "adapter.ts",
+        severity: "warning",
+      },
+      {
+        code: "tailor-sdk(no-node-builtin-imports)",
+        filename: "lib/helper.ts",
+        severity: "warning",
+      },
+    ]);
   });
 
   test("keeps scaffolded Oxlint configs aligned with required rules", () => {

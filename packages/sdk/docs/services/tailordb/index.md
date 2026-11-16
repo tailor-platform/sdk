@@ -617,7 +617,7 @@ db.table("User", {
    });
    ```
 
-**Sharing a table across configs:** an executor in another config auto-enables publishing the same way, as long as both configs take part in the same `deploy` (`--config a,b`). `deploy` records that dependency, so deploying the owning config alone later asks for confirmation instead of silently turning publishing off — it fails outright in a non-interactive environment. Set `publishEvents: true` on the table to keep it on regardless of which configs take part.
+**Sharing a table across configs:** an executor in another config auto-enables publishing the same way, as long as both configs take part in the same `deploy` (`--config a,b`). `deploy` records that dependency, so deploying the owning config alone later asks for confirmation instead of silently turning publishing off — it fails outright in a non-interactive environment. Set `publishEvents: true` on the table to keep it on regardless of which configs take part. `deploy` and `remove` stop with `SERVICE_IN_USE` instead of deleting a table that another application's executor subscribes to.
 
 #### GraphQL Operations
 

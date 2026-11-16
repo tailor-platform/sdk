@@ -1,5 +1,4 @@
 import {
-  describeUnavailable,
   getForbiddenGlobalMessage,
   NODE_ONLY_GLOBAL_NAMES,
 } from "@tailor-platform/shared/node-builtins";
@@ -12,7 +11,7 @@ import {
   parentOf,
   staticString,
 } from "../lib/ast.js";
-import { platformFunctionFactories, suggestsAlternatives } from "../lib/platform-functions.js";
+import { checkOptionSchema, unavailableDescriber } from "../lib/platform-functions.js";
 import { configureImportTracker, isLocalBinding } from "../lib/sdk-bindings.js";
 import type { Rule } from "eslint";
 
@@ -88,12 +87,12 @@ const rule = {
     type: "problem",
     docs: {
       description:
-        "Disallow Node-only globals in files that define a resolver, executor, workflow job, or HTTP adapter.",
+        'Disallow Node-only globals in files that define a resolver, executor, workflow job, or HTTP adapter, or in every file with `check: "all-files"`.',
     },
     messages: {
       unavailable: "{{message}}",
     },
-    schema: [],
+    schema: [checkOptionSchema],
   },
   create(context) {
     const imports = configureImportTracker(context);
@@ -107,11 +106,8 @@ const rule = {
         if (NODE_ONLY_GLOBAL_NAMES.includes(node.name)) identifiers.push(node);
       },
       "Program:exit"() {
-        const factories = platformFunctionFactories(imports, calls);
-        if (factories.size === 0) return;
-        const describe = suggestsAlternatives(factories)
-          ? getForbiddenGlobalMessage
-          : describeUnavailable;
+        const describe = unavailableDescriber(context, imports, calls, getForbiddenGlobalMessage);
+        if (describe === null) return;
         for (const node of identifiers) {
           if (!isRuntimeGlobalReference(context, node)) continue;
           context.report({

@@ -13,11 +13,6 @@ export interface ApiCallResult {
   data: unknown;
 }
 
-function hasEnvAccessToken(): boolean {
-  const envToken = process.env.TAILOR_PLATFORM_TOKEN ?? process.env.TAILOR_TOKEN;
-  return Boolean(envToken);
-}
-
 /**
  * Call Tailor Platform API endpoints directly.
  * If the endpoint doesn't contain "/", it defaults to `tailor.v1.OperatorService/{endpoint}`.
@@ -34,7 +29,7 @@ export async function apiCall(options: ApiCallOptions): Promise<ApiCallResult> {
       profile: options.profile,
     });
   } catch (error) {
-    if (!hasEnvAccessToken()) throw error;
+    if (!process.env.TAILOR_PLATFORM_TOKEN) throw error;
   }
 
   let endpointPath: string;

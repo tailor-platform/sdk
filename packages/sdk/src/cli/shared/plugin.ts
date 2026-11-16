@@ -2,13 +2,14 @@ import { spawn } from "node:child_process";
 import { accessSync, constants, readdirSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { type CommonArgsOptions, loadEnvFilesFromArgv, readEnvFileArgs } from "./args";
+import { type CommonArgsOptions, loadEnvFilesFromArgv } from "./args";
 import { getOAuth2ClientId, getPlatformBaseUrl, type PlatformClientConfig } from "./client";
 import {
   loadAccessToken,
   loadConfigPath,
   loadPlatformClientConfig,
   loadWorkspaceId,
+  readEnvironmentToken,
   readPlatformConfig,
 } from "./context";
 import { logger } from "./logger";
@@ -235,19 +236,21 @@ export function listPlugins(cliName: string): DiscoveredPlugin[] {
 interface PluginContextOptions {
   /** Active profile used to resolve the workspace, user, and token. */
   profile?: string | undefined;
-  /** Skip platform context (URL, client ID, workspace, user, token) injection. */
-  skipPlatformContext?: boolean;
 }
 
 /**
  * Resolve the active user identifier, preferring the stored email over the
- * internal user key.
- * @param profile - Active profile name, if any
- * @returns The resolved user (email when known), or undefined when not logged in
+ * internal user key. An environment token's identity is not a config user, so
+ * none is resolved while one is set.
+ * @param profile - Active profile name; falls back to TAILOR_PLATFORM_PROFILE
+ * @returns The resolved user (email when known), or undefined when not logged in or an environment
+ *   token is set
  */
 async function resolveActiveUser(profile?: string): Promise<string | undefined> {
+  if (readEnvironmentToken()) return undefined;
   const config = await readPlatformConfig();
-  const user = profile ? config.profiles[profile]?.user : config.current_user;
+  const selectedProfile = profile || process.env.TAILOR_PLATFORM_PROFILE;
+  const user = selectedProfile ? config.profiles[selectedProfile]?.user : config.current_user;
   if (!user) return undefined;
   return config.users[user]?.email ?? user;
 }
@@ -279,13 +282,6 @@ async function buildPluginEnv(options: PluginContextOptions = {}): Promise<Recor
   const configPath = loadConfigPath();
   if (configPath) {
     env.TAILOR_CONFIG_PATH = configPath;
-  }
-
-  // An explicit --env-file supplies the plugin's platform context itself.
-  // Injected values would shadow it (the plugin's env-file loader never
-  // overwrites pre-existing keys), so skip context injection entirely.
-  if (options.skipPlatformContext) {
-    return env;
   }
 
   // Resolve the active profile's platform settings so the injected URL and
@@ -376,19 +372,6 @@ function buildSpawnTarget(
 }
 
 /**
- * Check whether args forwarded to a plugin name an env file. Scanning stops at
- * a `--` terminator. `--env-file-if-exists` counts even when the named file
- * does not exist, so no platform context is injected in that case either.
- * @param args - Args forwarded to the plugin
- * @param options - Options the plugin passes to `createCommonArgs()`
- * @returns Whether an `--env-file`/`-e`/`--env-file-if-exists` flag names a file
- */
-export function hasEnvFileFlag(args: readonly string[], options: CommonArgsOptions): boolean {
-  const { envFiles, envFilesIfExists } = readEnvFileArgs(args, options);
-  return envFiles.length > 0 || envFilesIfExists.length > 0;
-}
-
-/**
  * Extract an explicit `--profile`/`-p` value from args forwarded to a plugin,
  * so the injected platform context matches the profile the plugin will use.
  * Scanning stops at a `--` terminator; the last occurrence wins.
@@ -457,18 +440,14 @@ export async function dispatchPlugin(params: DispatchPluginParams): Promise<numb
   }
 
   const profile = explicitProfileFromArgs(params.args) ?? params.profile;
-  const commonArgsOptions = KNOWN_PLUGIN_COMMON_ARGS_OPTIONS.get(slug) ?? {};
-  const skipPlatformContext = hasEnvFileFlag(params.args, commonArgsOptions);
-  if (skipPlatformContext) {
-    try {
-      loadEnvFilesFromArgv(params.args, commonArgsOptions);
-    } catch {
-      // The plugin loads the same files and reports a missing one itself.
-    }
+  try {
+    loadEnvFilesFromArgv(params.args, KNOWN_PLUGIN_COMMON_ARGS_OPTIONS.get(slug));
+  } catch {
+    // The plugin loads the same files and reports a missing one itself.
   }
   const env = {
     ...process.env,
-    ...(await buildPluginEnv({ profile, skipPlatformContext })),
+    ...(await buildPluginEnv({ profile })),
   };
   const { command, args, shell } = buildSpawnTarget(plugin.path, params.args);
 

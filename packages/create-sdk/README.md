@@ -37,6 +37,7 @@ Note: npm 7+ requires `--` before create-sdk options (for example, `--template`)
 | `executor`             | Executor trigger types           | Record, resolver, IdP, auth token, schedule, webhook triggers |
 | `static-web-site`      | Static website with auth         | Static website, IdP, OAuth2 login page                        |
 | `generators`           | Built-in generator plugins       | Kysely types, enum constants, file utils, seed                |
+| `content-mapper`       | Types from `tailor.config.ts`    | Content mapper, Kysely types without generated files          |
 
 ### hello-world
 
@@ -137,6 +138,17 @@ Demonstrates the built-in generator plugins.
 - File upload and download utilities (`fileUtilsPlugin`)
 - Seed data templates (`seedPlugin`)
 - Vitest setup
+
+### content-mapper
+
+Types the project from `tailor.config.ts` through the SDK's content mapper, without `tailor generate`. The mapper needs TypeScript 7.1, which is in beta, so the template pins `typescript@7.1.0-beta`.
+
+**Includes:**
+
+- `tsconfig.json` that enables the SDK's content mapper, and a `typecheck` script that runs `tsc --noEmit --runExternalCode`
+- `env` keys, attributes, and machine user names typed from `tailor.config.ts`, with no `tailor.d.ts`
+- `getDB()` typed from TailorDB definitions (`kyselyTypePlugin({ contentMapper: true })`)
+- Type tests that fail unless the mapper runs
 
 ## What it does
 

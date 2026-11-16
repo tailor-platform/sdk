@@ -1,5 +1,15 @@
 # @tailor-platform/eslint-plugin-sdk
 
+## 0.5.0
+
+### Minor Changes
+
+- [#3016](https://github.com/tailor-platform/sdk/pull/3016) [`cd01a32`](https://github.com/tailor-platform/sdk/commit/cd01a32754ea877bc1cf979e4450fdd6dd1a4417) Thanks [@dqn](https://github.com/dqn)! - Add the `no-unused-resolver-input` lint rule, which reports a resolver `input` field that `body` never reads, since a caller may expect it to take effect. A field that `permission` compares with the caller or that declares a `validate` counts as used, and a resolver whose `body` passes its input on in a way that hides which fields it reads is not reported. Silence a field kept on purpose with `eslint-disable-next-line`. Enabled in the ESLint `recommended` config and in newly scaffolded projects; existing Oxlint projects add `"tailor-sdk/no-unused-resolver-input": "warn"` to `.oxlintrc.json`.
+
+- [#3015](https://github.com/tailor-platform/sdk/pull/3015) [`0d690dc`](https://github.com/tailor-platform/sdk/commit/0d690dcef12d53582f01a550ffa9739f8f21b072) Thanks [@dqn](https://github.com/dqn)! - Add the `no-unbound-caller-id-input` lint rule, which reports a resolver mutation's `t.uuid()` or `db.uuid()` input named like the caller's ID, such as `approverId`, `requesterId`, or `createdBy`, unless every `permit: true` policy of its `permission` compares the input with the caller; otherwise a caller can act as another user by sending that user's ID. Enabled in newly scaffolded projects and in the ESLint `recommended` config; add `"tailor-sdk/no-unbound-caller-id-input": "warn"` to the `rules` of an existing `.oxlintrc.json` to enable it there.
+
+- [#3087](https://github.com/tailor-platform/sdk/pull/3087) [`6ca179d`](https://github.com/tailor-platform/sdk/commit/6ca179ddfb0b83d1ce6669bd17136e33458604b2) Thanks [@dqn](https://github.com/dqn)! - Add a `check` option to `no-node-builtin-imports` and `no-node-only-globals`. With `{ "check": "all-files" }` in an override whose `files` cover the code bundled into your functions, the rules also report Node built-in imports and Node-only globals in helper modules that define no resolver, executor, workflow job, or HTTP adapter, so you see them while editing the helper instead of at `tailor generate` or `deploy`. Since a helper may be bundled into an HTTP adapter, its messages omit the suggested alternatives, which are written for `body` functions. The default, `"definition-files"`, keeps the current behavior.
+
 ## 0.4.0
 
 ### Minor Changes

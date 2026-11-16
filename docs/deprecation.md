@@ -26,6 +26,10 @@ the break.
   above the current package version is rejected. A concrete version belongs in the tag only when
   back-filling an already-released deprecation, and then it is looked up the same way — with the same
   limits — as the registry `since` below, never estimated.
+- That rewrite reads only JSDoc comments, not a `@deprecated` that a generator writes into the code it
+  emits from a string. In such a string, replace `NEXT_RELEASE` with the version once that release is
+  out, and regenerate the committed outputs (`pnpm generate` and `pnpm --filter example run
+  test:generator:update-expects`).
 - `codemod: <id>[, <id>]` names entries in `packages/sdk-codemod/src/registry.ts`.
 - `codemod: none (<reason>)` is for a deprecation that has no replacement API and no mechanical
   migration, where callers can only stop using the API. The reason is required and `none` cannot be

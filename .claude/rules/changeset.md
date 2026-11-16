@@ -12,7 +12,8 @@ See [docs/changeset.md](../../docs/changeset.md) for full conventions.
 Ask: **Does this change affect SDK users?**
 
 - `major`: Users must change their code, configuration, or automation to upgrade (API removal,
-  incompatible behavior change)
+  incompatible behavior change). Only on a `v<N>` branch or a branch derived from it; on `main`
+  the CI check rejects it, so use `minor` with a `**Breaking change**:` description instead
 - `minor`: Users can do something new (new command, new field type, new config option, new API)
 - `patch`: Invisible to users (bug fix, refactoring, perf, docs, tests, CI)
 

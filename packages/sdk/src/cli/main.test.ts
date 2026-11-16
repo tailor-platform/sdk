@@ -3,6 +3,10 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync }
 import { fileURLToPath } from "node:url";
 import * as path from "pathe";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import {
+  invalidYAMLPlatformConfig,
+  storedTokenMarker,
+} from "./shared/test-helpers/platform-config";
 import { makeTempDir, tempDir } from "./shared/test-helpers/temp-dir";
 
 const cliEntry = fileURLToPath(new URL("../../bin/tailor.mjs", import.meta.url));
@@ -120,6 +124,64 @@ describe.concurrent("CLI error source location", () => {
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("tailor.config.ts: config is broken");
+  }, 20_000);
+});
+
+describe.concurrent("platform config that is not valid YAML", () => {
+  function writeConfigWithTokens(dir: string): string {
+    const configPath = path.join(dir, "tailor-platform", "config.yaml");
+    mkdirSync(path.dirname(configPath), { recursive: true });
+    writeFileSync(configPath, invalidYAMLPlatformConfig);
+    return configPath;
+  }
+
+  test("locates the syntax error without echoing stored tokens", async () => {
+    expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
+    using tmp = tempDir("cli-invalid-yaml-");
+    writeConfigWithTokens(tmp.dir);
+
+    const result = await runCli(["profile", "list"], tmp.dir);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "Error [PLATFORM_CONFIG_INVALID]: tailor-platform/config.yaml:6: Failed to parse config file.",
+    );
+    expect(result.stderr).toContain("Details: Invalid YAML at line 6, column 4.");
+    expect(result.stdout + result.stderr).not.toContain(storedTokenMarker);
+  }, 20_000);
+
+  test("annotates the syntax error without echoing stored tokens", async () => {
+    expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
+    using tmp = tempDir("cli-invalid-yaml-annotation-");
+    writeConfigWithTokens(tmp.dir);
+
+    const result = await runCli(["profile", "list"], tmp.dir, {
+      GITHUB_ACTIONS: "true",
+      GITHUB_WORKSPACE: tmp.dir,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "::error title=PLATFORM_CONFIG_INVALID,file=tailor-platform/config.yaml,line=6::",
+    );
+    expect(result.stdout + result.stderr).not.toContain(storedTokenMarker);
+  }, 20_000);
+
+  test("serializes the syntax error position without echoing stored tokens", async () => {
+    expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
+    using tmp = tempDir("cli-invalid-yaml-json-");
+    const configPath = writeConfigWithTokens(tmp.dir);
+
+    const result = await runCli(["profile", "list", "--json"], tmp.dir);
+
+    expect(result.status).toBe(1);
+    expect(JSON.parse(result.stderr).error).toMatchObject({
+      code: "PLATFORM_CONFIG_INVALID",
+      message: "tailor-platform/config.yaml:6: Failed to parse config file.",
+      details: "Invalid YAML at line 6, column 4.",
+      context: { file: configPath, line: 6, column: 4 },
+    });
+    expect(result.stdout + result.stderr).not.toContain(storedTokenMarker);
   }, 20_000);
 });
 

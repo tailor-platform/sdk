@@ -668,8 +668,24 @@ Everything else is yours, and re-running `setup` keeps it:
   [Requiring the workflow in branch protection](#requiring-the-workflow-in-branch-protection)).
 
 In a preview workflow, the `tailor-preview-deploy` job exposes the per-PR
-workspace as the outputs `workspace-id`, `workspace-name`, and `app-url`, so a
-job of your own can run tests or deploy extra assets against it:
+workspace as `workspace-id` and `workspace-name`, plus the JSON maps `app-urls`
+and `console-urls`, so a job of your own can run tests or deploy extra assets
+against it:
+
+- `app-urls` maps every application name in the workspace, including existing
+  applications, to its base URL. Append `/query` when making GraphQL requests.
+- `console-urls` maps those names to their application pages in the Console.
+
+Both maps are JSON object strings. They are `{}` when there are no applications;
+if a URL lookup fails, the action emits a warning and returns `{}` for that map
+without failing the deployment. For example,
+`${{ fromJSON(needs.tailor-preview-deploy.outputs.app-urls)['core'] }}` reads the
+base URL of the application named `core`.
+
+Preview comments show an `App URL (name)` row and a `Console URL (name)` row for
+each application. The legacy `app-url` output remains available for existing
+jobs. Run `tailor setup update` to regenerate existing workflows with these
+outputs and comment inputs.
 
 ```yaml
 deploy-assets:
@@ -687,7 +703,7 @@ deploy-assets:
 A job that runs `tailor` against the workspace needs the machine-user
 [secrets](#secrets), so it declares the preview target's GitHub Environment
 (the `--environment` value, or the workspace name when omitted) as above. A job
-that only uses `app-url`, such as end-to-end tests, does not.
+that only reads the URL outputs, such as end-to-end tests, does not.
 
 The job is skipped whenever `tailor-preview-deploy` is skipped (see
 [Pull requests that get a preview](#pull-requests-that-get-a-preview)).
@@ -731,8 +747,8 @@ runs when its run is cancelled, and the new run waits for it to finish; use
 `if: ${{ !cancelled() }}` instead so it stops with the run.
 
 Likewise, the `tailor-deploy` job of a branch or tag workflow exposes the
-deployed workspace as the outputs `workspace-id` and `app-url` to a job with
-`needs: tailor-deploy`. Reading them does not require the target's GitHub
+deployed workspace as `workspace-id`, `app-urls`, `console-urls`, and the legacy
+`app-url` to a job with `needs: tailor-deploy`. Reading them does not require the target's GitHub
 Environment; a job that runs `tailor` against the workspace declares it for the
 machine-user secrets, as in the preview example above.
 
@@ -1194,7 +1210,8 @@ With `--erd-preview`, each TailorDB namespace is previewed from the app that
 owns it. A namespace may be owned by only one app; the others reference it with
 `external: true`.
 
-With more than one app, the preview comment does not link an application URL.
+With more than one app, the preview comment lists each application's base URL
+and Console URL.
 
 ### Running on changes outside the app directories
 
@@ -1314,13 +1331,20 @@ server and its runners first:
   actions the workflows use, and `gh` and `jq` on `PATH` (plus `node` with
   `--erd-preview`).
 - **Actions from github.com:** the workflows use `tailor-platform/actions`,
-  `actions/checkout`, `actions/setup-node`, `pnpm/action-setup`, and
-  `oven-sh/setup-bun` (and `actions/upload-artifact` with `--erd-preview`).
+  `actions/cache`, `actions/checkout`, `actions/setup-node`,
+  `pnpm/action-setup`, and `oven-sh/setup-bun` (and `actions/upload-artifact`
+  with `--erd-preview`).
   Make them available on the server with GitHub Connect or `actions-sync`. The
   server ships its own copies of the `actions/*` ones, which may not include
   the pinned versions: update them with `actions-sync`, or, with GitHub
   Connect, delete them from the server's `actions` organization (see GitHub's
   [Using the latest version of the official bundled actions](https://docs.github.com/en/enterprise-server@latest/admin/managing-github-actions-for-your-enterprise/managing-access-to-actions-from-githubcom/using-the-latest-version-of-the-official-bundled-actions)).
+- **Actions cache service:** the plan, deploy, and preview deployment jobs keep
+  the SDK's bundles with `actions/cache`, so that later runs rebuild only the
+  bundles whose sources changed. For this to take effect, make sure the server's
+  Actions cache service is enabled (see `ghe-actions-cache-enable` in GitHub's
+  [Command-line utilities](https://docs.github.com/en/enterprise-server@latest/admin/administering-your-instance/administering-your-instance-from-the-command-line/command-line-utilities#ghe-actions-cache-enable)).
+  Without it, the jobs still succeed but rebuild every bundle on each run.
 - **Autofix workflow:** `tailor setup ci autofix` is not supported.
 - **Environment settings:** sign `gh` in to the server
   (`gh auth login --hostname <host>`) before you run `tailor setup ci env` in a

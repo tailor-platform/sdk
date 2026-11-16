@@ -1,5 +1,5 @@
 import * as fs from "node:fs";
-import { parseYAML, stringifyYAML } from "confbox";
+import { parseYAML, stringifyYAML, YAMLException } from "confbox/yaml";
 import { findUpSync } from "find-up-simple";
 import * as path from "pathe";
 import { lt as semverLt } from "semver";
@@ -473,7 +473,7 @@ export async function readPlatformConfig(): Promise<PfConfig> {
     return config;
   }
 
-  const rawConfig = parseYAML(fs.readFileSync(configPath, "utf-8"));
+  const rawConfig = readPlatformConfigYAML(configPath);
 
   // Legacy installs may have left the config world-readable (umask default
   // 0o644). Tighten it here so users who only run read-only commands still
@@ -525,14 +525,47 @@ export async function readPlatformConfig(): Promise<PfConfig> {
   }
 
   // Neither v1, v2, nor v3
-  throw withErrorDiagnostics(
+  throw platformConfigInvalidError(
+    configPath,
+    "The file may be corrupted or created by an incompatible SDK version.",
+  );
+}
+
+function readPlatformConfigYAML(configPath: string): unknown {
+  const source = fs.readFileSync(configPath, "utf-8");
+  try {
+    return parseYAML(source);
+  } catch (error) {
+    if (!(error instanceof YAMLException)) throw error;
+    // The original message, reason, and mark quote the file, which may hold tokens.
+    if (!error.mark) throw platformConfigInvalidError(configPath, "Invalid YAML.");
+    const position = { line: error.mark.line + 1, column: error.mark.column + 1 };
+    throw platformConfigInvalidError(
+      configPath,
+      `Invalid YAML at line ${position.line}, column ${position.column}.`,
+      position,
+    );
+  }
+}
+
+type PlatformConfigPosition = {
+  line: number;
+  column: number;
+};
+
+function platformConfigInvalidError(
+  configPath: string,
+  details: string,
+  position?: PlatformConfigPosition,
+): CLIError {
+  return withErrorDiagnostics(
     CLIError({
       code: "PLATFORM_CONFIG_INVALID",
       message: "Failed to parse config file.",
-      details: "The file may be corrupted or created by an incompatible SDK version.",
-      context: { file: configPath },
+      details,
+      context: { file: configPath, ...position },
     }),
-    { location: { file: configPath } },
+    { location: { file: configPath, line: position?.line } },
   );
 }
 
@@ -776,10 +809,10 @@ export async function loadMachineUserName(
 
 /**
  * Read the access token set through the environment, which takes precedence over any logged-in user.
- * @returns TAILOR_PLATFORM_TOKEN, or the deprecated TAILOR_TOKEN, when set
+ * @returns TAILOR_PLATFORM_TOKEN, or undefined when it is unset or empty
  */
 export function readEnvironmentToken(): string | undefined {
-  return process.env.TAILOR_PLATFORM_TOKEN ?? process.env.TAILOR_TOKEN;
+  return process.env.TAILOR_PLATFORM_TOKEN || undefined;
 }
 
 /**
@@ -810,17 +843,13 @@ export async function loadStoredAccessTokenWithoutRefresh(opts: {
 /**
  * Load access token from environment variables, command options, or platform config.
  * In CLI context, profile env fallback is also handled by politty's arg env option.
- * Priority: env/TAILOR_PLATFORM_TOKEN > env/TAILOR_TOKEN (deprecated) > opts/profile > env/profile > config/currentUser > error
+ * Priority: env/TAILOR_PLATFORM_TOKEN > opts/profile > env/profile > config/currentUser > error
  * @param opts - Profile options
  * @returns Resolved access token
  */
 export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
   const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
   const envToken = readEnvironmentToken();
-  if (envToken && !process.env.TAILOR_PLATFORM_TOKEN) {
-    logger.warn("TAILOR_TOKEN is deprecated. Please use TAILOR_PLATFORM_TOKEN instead.");
-  }
-
   if (envToken) {
     logger.registerSecret(envToken);
     const platformConfig = await loadPlatformClientConfig({ profile, allowMissingProfile: true });
@@ -867,10 +896,6 @@ export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
 export async function loadAuthStatus(opts?: LoadAccessTokenOptions): Promise<AuthStatus> {
   const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
   const envToken = readEnvironmentToken();
-  if (envToken && !process.env.TAILOR_PLATFORM_TOKEN) {
-    logger.warn("TAILOR_TOKEN is deprecated. Please use TAILOR_PLATFORM_TOKEN instead.");
-  }
-
   if (envToken) {
     logger.registerSecret(envToken);
     const config = await readPlatformConfig().catch(() => undefined);

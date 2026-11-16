@@ -39,9 +39,7 @@ const LOOKUP_ENV = [
   "TAILOR_NOTIFICATION_BANNER",
   "TAILOR_PLATFORM_PROFILE",
   "TAILOR_PLATFORM_TOKEN",
-  "TAILOR_TOKEN",
   "TAILOR_PLATFORM_URL",
-  "PLATFORM_URL",
 ] as const;
 
 function lookupEnv(): string {
@@ -162,8 +160,6 @@ async function runLookup(
     if (!stored) return undefined;
     ({ accessToken, platformConfig } = stored);
   } else {
-    // Read directly rather than through loadAccessToken, whose deprecated-TAILOR_TOKEN warning
-    // the command itself already prints once.
     accessToken = envToken;
     platformConfig = await context.loadPlatformClientConfig({ profile, allowMissingProfile: true });
   }

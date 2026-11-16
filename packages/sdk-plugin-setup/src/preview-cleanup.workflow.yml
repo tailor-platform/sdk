@@ -33,15 +33,15 @@ jobs:
         with:
           persist-credentials: false
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
+        uses: tailor-platform/actions/setup@1c1a451a463770897b3e1987c45df57b27369c8f # v2.9.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
+        uses: tailor-platform/actions/install@1c1a451a463770897b3e1987c45df57b27369c8f # v2.9.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-preview-cleanup
-        uses: tailor-platform/actions/preview-cleanup@77effc033b3cb5fa7660b38571fbeb8361d121e8 # v2.8.0
+        uses: tailor-platform/actions/preview-cleanup@1c1a451a463770897b3e1987c45df57b27369c8f # v2.9.0
         with:
           workspace-name-prefix: __WORKSPACE_NAME__
           prune-expired: "true"

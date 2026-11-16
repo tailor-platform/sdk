@@ -1,5 +1,26 @@
 # @tailor-platform/sdk-codemod
 
+## 0.12.0
+
+### Minor Changes
+
+- [#3080](https://github.com/tailor-platform/sdk/pull/3080) [`e1f1410`](https://github.com/tailor-platform/sdk/commit/e1f1410fb38f1173ca6c2e4df4482dd6772b27fc) Thanks [@toiroakr](https://github.com/toiroakr)! - `defineConfig()` now takes `idp` as a single IdP, `idp: myIdp`, or as a single external declaration, `idp: { name: "shared-idp", external: true }`. The array form, `idp: [myIdp]`, still works but is deprecated, which editors and `no-deprecated` lint rules show on the `defineConfig()` call, and will be removed in v3, where a config declares one IdP.
+  
+  `tailor upgrade` runs the `v3/idp-array-to-single` codemod, which writes the IdP of a one-element array as the `idp` value itself and removes an empty array. An array with two or more IdPs has no mechanical replacement, so the codemod reports it for you to change by hand.
+  
+  ```ts
+  export default defineConfig({
+    name: "backoffice",
+    idp: backofficeIdp,
+  });
+  ```
+
+- [#3013](https://github.com/tailor-platform/sdk/pull/3013) [`75a6b2b`](https://github.com/tailor-platform/sdk/commit/75a6b2b3a1d2075f19bf2170e02a330c16846990) Thanks [@toiroakr](https://github.com/toiroakr)! - The seed schema files `tailor generate` writes now import `defineSchema` (and `fillIdpUserPassword` for the IdP user) from `@tailor-platform/sdk-plugin-seed/schema` instead of `@tailor-platform/sdk/seed`. Update `@tailor-platform/sdk-plugin-seed` to the release that adds the `./schema` entry (install it first if the project does not have it; the `tailor seed` commands need it as well), then run `tailor generate` again to rewrite the files. With an older plugin, `tailor seed validate` cannot load the regenerated files and `tsc` reports TS2307 for `@tailor-platform/sdk-plugin-seed/schema`. The `v3/seed-subpath-to-plugin` codemod entry tells `tailor upgrade` to re-run `tailor generate`. Schema files generated before keep working. `@tailor-platform/sdk/seed` is now `@deprecated` and is removed in v3: import `defineSchema`, `fillIdpUserPassword`, `ForeignKeyDefinition`, and `IndexDefinition` from `@tailor-platform/sdk-plugin-seed/schema` instead. `validateSeedData`, `fillSeedData`, and `hookSeedRows` have no replacement import; run `tailor seed validate`, `tailor seed fill`, or `tailor seed apply`.
+
+### Patch Changes
+
+- [#3004](https://github.com/tailor-platform/sdk/pull/3004) [`6852128`](https://github.com/tailor-platform/sdk/commit/685212835cc46909dddbe253790ee1119471387b) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​politty/zod to v0.7.2
+
 ## 0.11.0
 
 ### Minor Changes

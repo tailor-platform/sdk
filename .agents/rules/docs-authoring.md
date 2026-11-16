@@ -1,6 +1,6 @@
 # User-Facing Docs Authoring
 
-`packages/sdk/docs/**` ships inside the published npm package (`@tailor-platform/sdk`) and is read by **SDK users**. Write for that reader: document only what a user needs to use the SDK, not how the SDK or Platform is built. The same principle applies to JSDoc on **exported** symbols, which reaches users through editor tooltips.
+`packages/sdk/docs/**` ships inside the published npm package (`@tailor-platform/sdk`) and is read by **SDK users**. Write for that reader: document only what a user needs to use the SDK, not how the SDK or Platform is built. The same principle applies to JSDoc on **exported** symbols, which reaches users through editor tooltips, and to the create-sdk READMEs: `packages/create-sdk/README.md`, and each template's `packages/create-sdk/templates/<name>/README.md`, which is copied into every project scaffolded from that template. A create-sdk README must agree with the files it describes and with the `packages/sdk/docs/**` sections it restates.
 
 ## Write for the user, not the implementer
 
@@ -37,4 +37,4 @@ A heading or list item in `packages/sdk/docs/**` dedicated to one beta API or be
 
 ## Keep this rule and the CI check in sync
 
-The same principles are enforced in CI by `.github/workflows/docs-consistency-check.yml` (the "Reader-Perspective Review" and "Beta Marks" sections of its prompt). When you change the guidance here, update that workflow to match — and vice versa — so the rule humans read and the check CI runs do not drift apart.
+The same principles are enforced in CI by `.github/workflows/docs-consistency-check.yml` (the "Reader-Perspective Review", "Beta Marks", and "create-sdk READMEs" sections of its prompt). When you change the guidance here, update that workflow to match — and vice versa — so the rule humans read and the check CI runs do not drift apart.

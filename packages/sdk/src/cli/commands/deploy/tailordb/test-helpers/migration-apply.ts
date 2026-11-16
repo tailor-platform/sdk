@@ -1,3 +1,4 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { assert, vi } from "vitest";
 import { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-state";
 import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/migration-number";
@@ -51,6 +52,9 @@ export function createMockClient(overrides: MockClientOverrides = {}): OperatorC
     deleteTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
     deleteTailorDBType: vi.fn().mockResolvedValue({}),
     deleteTailorDBService: vi.fn().mockResolvedValue({}),
+    getWorkflowByName: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
+    deleteWorkflowJobFunction: vi.fn().mockResolvedValue({}),
+    deleteFunctionRegistry: vi.fn().mockResolvedValue({}),
     ...overrides,
   } as unknown as OperatorClient;
 }

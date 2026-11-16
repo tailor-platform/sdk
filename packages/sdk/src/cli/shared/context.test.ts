@@ -27,6 +27,7 @@ import { errorToJson } from "./error-json";
 import { isCLIError } from "./errors";
 import { logger } from "./logger";
 import { writeHeldConfigLock } from "./test-helpers/config-lock";
+import { invalidYAMLPlatformConfig, storedTokenMarker } from "./test-helpers/platform-config";
 import { isKeyringAvailable, resetKeyringState } from "./token-store";
 import type * as ClientModule from "./client";
 
@@ -685,13 +686,6 @@ describe("loadAccessToken", () => {
       expect(result).toBe(validToken);
     });
 
-    test("TAILOR_PLATFORM_TOKEN takes precedence over TAILOR_TOKEN", async () => {
-      vi.stubEnv("TAILOR_PLATFORM_TOKEN", validToken);
-      vi.stubEnv("TAILOR_TOKEN", otherToken);
-      const result = await loadAccessToken();
-      expect(result).toBe(validToken);
-    });
-
     test("TAILOR_PLATFORM_TOKEN takes precedence over profile", async () => {
       vi.stubEnv("TAILOR_PLATFORM_TOKEN", validToken);
       writePlatformConfig({
@@ -716,13 +710,9 @@ describe("loadAccessToken", () => {
   });
 
   describe("env.TAILOR_TOKEN", () => {
-    test("uses the deprecated TAILOR_TOKEN fallback", async () => {
+    test("ignores TAILOR_TOKEN", async () => {
       vi.stubEnv("TAILOR_TOKEN", validToken);
-      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-      await expect(loadAccessToken()).resolves.toBe(validToken);
-      expect(warnSpy).toHaveBeenCalledWith(
-        "TAILOR_TOKEN is deprecated. Please use TAILOR_PLATFORM_TOKEN instead.",
-      );
+      await expect(loadAccessToken()).rejects.toMatchObject({ code: "AUTH_TOKEN_NOT_FOUND" });
     });
   });
 
@@ -2021,6 +2011,39 @@ describe("unreadable platform config", () => {
       code: "PLATFORM_CONFIG_INVALID",
       message: "Failed to parse config file.",
     });
+    expect(getErrorDiagnostics(error as Error).location).toEqual({ file: configPath });
+  });
+
+  test("locates a config that is not valid YAML at its line and column", async () => {
+    fs.writeFileSync(configPath, invalidYAMLPlatformConfig);
+
+    const error = await readPlatformConfig().catch((error: unknown) => error);
+
+    expect(error).toMatchObject({
+      code: "PLATFORM_CONFIG_INVALID",
+      message: "Failed to parse config file.",
+      details: "Invalid YAML at line 6, column 4.",
+    });
+    expect(JSON.stringify(errorToJson(error as Error))).not.toContain(storedTokenMarker);
+    expect((error as { context?: unknown }).context).toEqual({
+      file: configPath,
+      line: 6,
+      column: 4,
+    });
+    expect(getErrorDiagnostics(error as Error).location).toEqual({ file: configPath, line: 6 });
+  });
+
+  test("codes an empty config as invalid YAML", async () => {
+    fs.writeFileSync(configPath, "");
+
+    const error = await readPlatformConfig().catch((error: unknown) => error);
+
+    expect(error).toMatchObject({
+      code: "PLATFORM_CONFIG_INVALID",
+      message: "Failed to parse config file.",
+      details: "Invalid YAML.",
+    });
+    expect((error as { context?: unknown }).context).toEqual({ file: configPath });
     expect(getErrorDiagnostics(error as Error).location).toEqual({ file: configPath });
   });
 });

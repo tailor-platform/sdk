@@ -123,7 +123,7 @@ export async function planAIGateway(context: PlanContext) {
   );
   const ownership = createOwnershipTracker(application.name, application.id);
 
-  const existingGateways = await fetchExistingResourcesWithLabels({
+  const fetchedGateways = await fetchExistingResourcesWithLabels({
     client,
     fetchPage: async (pageToken, pageSize) => {
       const { aigateways, nextPageToken } = await client.listAIGateways({
@@ -136,6 +136,7 @@ export async function planAIGateway(context: PlanContext) {
     getName: (resource) => resource.name,
     getTrn: (name) => resourceTrn(workspaceId, "aigateway", name),
   });
+  const existingGateways = { ...fetchedGateways };
 
   const aiGatewayServices = forRemoval ? [] : application.aiGatewayServices;
   const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
@@ -202,5 +203,5 @@ export async function planAIGateway(context: PlanContext) {
     }
   });
 
-  return { changeSet, ...ownership.result };
+  return { changeSet, ...ownership.result, existingGateways: fetchedGateways };
 }
