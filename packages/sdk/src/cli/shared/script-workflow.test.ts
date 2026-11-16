@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Mocks predate mockOperatorClient.
 import { Code, ConnectError } from "@connectrpc/connect";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { describe, expect, test, vi } from "vitest";

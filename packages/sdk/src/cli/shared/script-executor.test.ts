@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Mocks predate mockOperatorClient.
 import { create } from "@bufbuild/protobuf";
 import {
   FunctionExecution_Status,

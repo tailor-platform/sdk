@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Mocks predate mockOperatorClient.
 import { describe, expect, test, vi } from "vitest";
 import { planAIGateway } from "./aigateway";
 import type { Application } from "#/cli/services/application";

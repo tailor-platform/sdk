@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Mocks predate mockOperatorClient.
 import { runCommand } from "@politty/zod";
 import { CustomDomainStatus } from "@tailor-platform/tailor-proto/staticwebsite_resource_pb";
 import { describe, expect, test, vi } from "vitest";

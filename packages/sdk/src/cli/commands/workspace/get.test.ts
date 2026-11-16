@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Mocks predate mockOperatorClient.
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";

@@ -17,6 +17,7 @@ import {
 import { describe, expect, test, vi } from "vitest";
 import { defineApplication } from "#/cli/services/application";
 import { logger, symbols } from "#/cli/shared/logger";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { defineConfig } from "#/configure/config/index";
 import { defineAuth } from "#/configure/services/auth/index";
 import { t } from "#/configure/types/type";
@@ -25,6 +26,10 @@ import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { SCIMAuthorization } from "#/types/auth.generated";
 import type { PlanContext } from "./types";
+import type {
+  GetTenantConfigResponseSchema,
+  GetUserProfileConfigResponseSchema,
+} from "@tailor-platform/tailor-proto/auth_pb";
 
 vi.mock("./label", async (importOriginal) => {
   const original = await importOriginal<Record<string, unknown>>();
@@ -350,7 +355,7 @@ function notFound(): never {
   throw new ConnectError("not found", Code.NotFound);
 }
 
-function createMockClient(opts?: {
+type MockClientOptions = {
   authServices?: Array<{
     name: string;
     publishSessionEvents: boolean;
@@ -381,56 +386,44 @@ function createMockClient(opts?: {
       machineUserName: string;
     };
   };
-  userProfileConfig?: Record<string, unknown>;
-  tenantConfig?: Record<string, unknown>;
+  userProfileConfig?: MessageInitShape<typeof GetUserProfileConfigResponseSchema>;
+  tenantConfig?: MessageInitShape<typeof GetTenantConfigResponseSchema>;
   scimConfig?: MessageInitShape<typeof AuthSCIMConfigSchema>;
   scimResources?: Array<MessageInitShape<typeof AuthSCIMResourceSchema>>;
-}): OperatorClient {
+};
+
+function createMockClient(opts?: MockClientOptions): OperatorClient {
   const authServices = opts?.authServices ?? [];
   const authIdPConfigs = opts?.authIdPConfigs ?? [];
   const machineUsers = opts?.machineUsers ?? [];
   const oauth2Clients = opts?.oauth2Clients ?? [];
   const authHook = opts?.authHook;
 
-  return {
-    listAuthServices: vi.fn().mockResolvedValue({
+  return mockOperatorClient({
+    listAuthServices: {
       authServices: authServices.map((service) => ({
         namespace: { name: service.name },
         publishSessionEvents: service.publishSessionEvents,
       })),
       nextPageToken: "",
-    }),
-    getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
-      const name = trn.split(":").pop();
+    },
+    getMetadata: (request) => {
+      const name = request.trn?.split(":").pop();
       const service = authServices.find((entry) => entry.name === name);
-      return {
-        metadata: {
-          labels: service?.label ? { "sdk-name": service.label, "sdk-version": sdkVersion } : {},
-        },
-      };
-    }),
-    listAuthIDPConfigs: vi.fn().mockResolvedValue({
-      idpConfigs: authIdPConfigs,
-      nextPageToken: "",
-    }),
-    getIdPService: vi.fn().mockImplementation(notFound),
-    getIdPClient: vi.fn().mockImplementation(notFound),
-    getUserProfileConfig: opts?.userProfileConfig
-      ? vi.fn().mockResolvedValue(opts.userProfileConfig)
-      : vi.fn().mockImplementation(notFound),
-    deleteUserProfileConfig: vi.fn().mockResolvedValue({}),
-    getTenantConfig: opts?.tenantConfig
-      ? vi.fn().mockResolvedValue(opts.tenantConfig)
-      : vi.fn().mockImplementation(notFound),
-    listAuthMachineUsers: vi.fn().mockResolvedValue({
-      machineUsers,
-      nextPageToken: "",
-    }),
-    listAuthOAuth2Clients: vi.fn().mockResolvedValue({
-      oauth2Clients,
-      nextPageToken: "",
-    }),
-    getAuthHook: vi.fn().mockImplementation(() => {
+      const labels: Record<string, string> = service?.label
+        ? { "sdk-name": service.label, "sdk-version": sdkVersion }
+        : {};
+      return { metadata: { labels } };
+    },
+    listAuthIDPConfigs: { idpConfigs: authIdPConfigs, nextPageToken: "" },
+    getIdPService: notFound,
+    getIdPClient: notFound,
+    getUserProfileConfig: opts?.userProfileConfig ?? notFound,
+    deleteUserProfileConfig: {},
+    getTenantConfig: opts?.tenantConfig ?? notFound,
+    listAuthMachineUsers: { machineUsers, nextPageToken: "" },
+    listAuthOAuth2Clients: { oauth2Clients, nextPageToken: "" },
+    getAuthHook: () => {
       if (!authHook) {
         return notFound();
       }
@@ -441,18 +434,12 @@ function createMockClient(opts?: {
           invoker: authHook.invoker,
         },
       };
-    }),
-    getAuthSCIMConfig: opts?.scimConfig
-      ? vi.fn().mockResolvedValue({ scimConfig: opts.scimConfig })
-      : vi.fn().mockImplementation(notFound),
-    getAuthSCIMResources: vi.fn().mockResolvedValue({
-      scimResources: opts?.scimResources ?? [],
-    }),
-    listAuthConnections: vi.fn().mockResolvedValue({
-      connections: [],
-      nextPageToken: "",
-    }),
-  } as unknown as OperatorClient;
+    },
+    getAuthSCIMConfig: opts?.scimConfig ? { scimConfig: opts.scimConfig } : notFound,
+    getAuthSCIMResources: { scimResources: opts?.scimResources ?? [] },
+    listAuthConnections: { connections: [], nextPageToken: "" },
+    getStaticWebsite: notFound,
+  });
 }
 
 function createContext(
@@ -1140,11 +1127,7 @@ describe("planAuth", () => {
 
     test("does not warn when redirect URI references a locally-defined static website that is not yet on the platform", async () => {
       using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-      const baseClient = createMockClient({});
-      const client = {
-        ...baseClient,
-        getStaticWebsite: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
-      } as unknown as OperatorClient;
+      const client = createMockClient({});
 
       const result = await planAuth(
         createContext(client, createApplicationWithStaticWebsiteRedirectURI()),

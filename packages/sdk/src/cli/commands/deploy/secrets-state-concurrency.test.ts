@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Mocks predate mockOperatorClient.
 import { existsSync, rmSync } from "node:fs";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { applyAuthConnections, type planAuthConnections } from "./auth-connection";

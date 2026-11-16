@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Mocks predate mockOperatorClient.
 import { Code, ConnectError } from "@connectrpc/connect";
 import { assert, vi } from "vitest";
 import { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-state";

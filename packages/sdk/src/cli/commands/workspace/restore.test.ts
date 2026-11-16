@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Mocks predate mockOperatorClient.
 import { runCommand } from "@politty/zod";
 import { describe, expect, test, vi } from "vitest";
 import { SKIP_CONFIRMATION_SUGGESTION } from "#/cli/shared/args";

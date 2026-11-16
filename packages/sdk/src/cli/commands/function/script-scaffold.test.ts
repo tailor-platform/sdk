@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Mocks predate mockOperatorClient.
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { beforeEach, describe, expect, test, vi } from "vitest";

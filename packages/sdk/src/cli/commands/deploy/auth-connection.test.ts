@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Mocks predate mockOperatorClient.
 import { AuthConnection_Status } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";

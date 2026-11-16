@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Mocks predate mockOperatorClient.
 /**
  * A failed migration phase must restore the workspace to its prior checkpoint
  * and prior schema whenever the schema operations are reversible.

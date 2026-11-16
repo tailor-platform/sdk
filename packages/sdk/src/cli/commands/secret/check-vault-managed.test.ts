@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Mocks predate mockOperatorClient.
 import { describe, expect, test, vi } from "vitest";
 import { checkVaultManaged, releaseVaultOwnership } from "./check-vault-managed";
 import type { OperatorClient } from "#/cli/shared/client";

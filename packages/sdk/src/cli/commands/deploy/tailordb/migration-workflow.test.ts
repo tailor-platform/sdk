@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Mocks predate mockOperatorClient.
 import * as crypto from "node:crypto";
 import * as vm from "node:vm";
 import { Code, ConnectError } from "@connectrpc/connect";
