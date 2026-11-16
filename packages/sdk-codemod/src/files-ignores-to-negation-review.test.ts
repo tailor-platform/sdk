@@ -45,6 +45,11 @@ describe("ignores -> files negation migration review", () => {
       'db: { [shared]: { files: ["db/*.ts"] } },',
       'db: { [shared]: { files: ["db/*.ts", "!**/*.test.ts", "!**/*.spec.ts"] } },',
     ],
+    [
+      "a config ending in a `!` pattern",
+      'executor: { files: ["e/**/*.ts", "!e/legacy.ts"] },',
+      'executor: { files: ["e/**/*.ts", "!e/legacy.ts", "!**/*.test.ts", "!**/*.spec.ts"] },',
+    ],
   ])("rewrites %s and reports nothing left to review", (_name, service, rewritten) => {
     const { transformed, findings } = review(`export default defineConfig({\n  ${service}\n});\n`);
 
@@ -69,6 +74,15 @@ describe("ignores -> files negation migration review", () => {
       'files: ["w/*.ts", "!**/*.test.ts", "!**/*.spec.ts", "w/*.test.ts"]',
     );
     expect(transform(transformed!, "tailor.config.ts")).toBeNull();
+  });
+
+  test("does not insert a test-file exclusion that a `!` pattern after a test-file pattern writes", () => {
+    const { transformed, findings } = review(
+      'export default defineConfig({\n  workflow: { files: ["w/*.ts", "w/*.test.ts", "!**/*.test.ts", "!**/*.spec.ts"] },\n});\n',
+    );
+
+    expect(transformed).toBeNull();
+    expect(findings).toEqual([]);
   });
 
   test("treats a template literal ending in .test.ts as a test-file pattern", () => {
@@ -116,7 +130,7 @@ describe("ignores -> files negation migration review", () => {
     [
       "whose exclusion the config already has",
       '"e2e/*.test.ts", "src/**/*.ts", "!**/*.test.ts"',
-      '"e2e/*.test.ts", "src/**/*.ts", "!**/*.spec.ts", "!**/*.test.ts"',
+      '"e2e/*.test.ts", "src/**/*.ts", "!**/*.test.ts", "!**/*.spec.ts"',
     ],
   ])(
     "does not flag a test-file pattern %s, which no inserted pattern excludes",
@@ -210,6 +224,7 @@ describe("ignores -> files negation migration review", () => {
     ["a pattern whose `..` stays inside the config directory", '"src/../executors/**/*.ts"'],
     ["a `!` pattern whose `..` leads above it", '"executors/**/*.ts", "!src/../../shared/x.ts"'],
     ["a template-literal pattern inside the config directory", "`executors/**/*.ts`"],
+    ["a `!` template literal with a substitution", '"executors/**/*.ts", `!${dir}/x.ts`'],
   ])("does not flag %s", (_name, elements) => {
     const { findings } = review(
       `export default defineConfig({\n  executor: { files: [${elements}] },\n});\n`,

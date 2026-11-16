@@ -41,16 +41,6 @@ function isTestFilePattern(element: SgNode): boolean {
   return testFileSuffixOf(element) !== undefined;
 }
 
-/** The `patterns` of the `!` elements that directly follow `elements[index]`. */
-function negationsAfter(
-  elements: SgNode[],
-  patterns: (string | null)[],
-  index: number,
-): Set<string | null> {
-  const end = elements.findIndex((element, i) => i > index && !isNegation(element));
-  return new Set(patterns.slice(index + 1, end === -1 ? undefined : end));
-}
-
 /** Whether a `files` entry can match files outside the config's own directory. */
 function mayEscapeConfigDir(content: string | null): boolean {
   if (content === null) return true;
@@ -170,7 +160,15 @@ function analyzeService(source: string, service: SgNode, label: string): Analysi
       (element) => !isNegation(element) && !isTestFilePattern(element),
     );
     if (lastNonTestPositive === -1) return { edits: [], findings: [] };
-    const existing = negationsAfter(elements, patterns, lastNonTestPositive);
+    const existing = new Set(
+      patterns.filter(
+        (_pattern, index) => index > lastNonTestPositive && isNegation(elements[index]),
+      ),
+    );
+    const followingPositive = elements.findIndex(
+      (element, index) => index > lastNonTestPositive && !isNegation(element),
+    );
+    const insertAfter = (followingPositive === -1 ? elements.length : followingPositive) - 1;
     const quote = quoteOf(elements);
     const missingSuffixes = TEST_FILE_SUFFIXES.filter((suffix) => !existing.has(`!**/*${suffix}`));
     const missing = missingSuffixes.map((suffix) => `${quote}!**/*${suffix}${quote}`);
@@ -202,8 +200,7 @@ function analyzeService(source: string, service: SgNode, label: string): Analysi
       });
     }
     return {
-      edits:
-        missing.length > 0 ? insertElementsAfter(source, files, lastNonTestPositive, missing) : [],
+      edits: missing.length > 0 ? insertElementsAfter(source, files, insertAfter, missing) : [],
       findings,
     };
   }
