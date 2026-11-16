@@ -79,6 +79,7 @@ export function emptyPlanResults(): PlanResults {
     aiGateway: {
       changeSet: createChangeSet("AIGateways"),
       ...emptyOwnership(),
+      existingGateways: {},
     },
     idp: {
       changeSet: {

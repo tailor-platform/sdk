@@ -1,0 +1,5 @@
+---
+"@tailor-platform/sdk": patch
+---
+
+`tailor deploy` and `tailor remove` now also stop with `SERVICE_IN_USE` before they change anything when they would delete a machine user that another application's executor or resolver uses as `invoker`, an Auth service that an AI gateway uses as its `authNamespace`, or a TailorDB table, resolver, IdP, Auth service, or workflow that another application's executor subscribes to or starts. Before, they deleted it without an error or warning, which left the other application using a resource that no longer exists. For `tailor deploy`, keep the resource in the config that defines it, or deploy the applications that use it so that they stop using it, first or in the same `deploy`. For `tailor remove`, first remove those applications or deploy them so that they stop using it. Each entry of the error's `context.uses` now also carries `namespace` for a resource inside a namespace and `usedBy` for the executor, resolver, or AI gateway that uses it; `application` is absent when no application manages that user.

@@ -86,8 +86,8 @@ import {
 import { createMetadataLookupClient } from "./metadata-lookup";
 import { printDeploymentPlans, type PrintDeploymentPlansOptions } from "./plan-report";
 import { planPipeline } from "./resolver";
+import { assertResourcesNotInUse } from "./resources-in-use";
 import { planSecretManager } from "./secret-manager";
-import { assertServicesNotInUse } from "./services-in-use";
 import { planStaticWebsite } from "./staticwebsite";
 import { planTailorDB } from "./tailordb";
 import {
@@ -1000,7 +1000,7 @@ async function deployInternal(
       });
       dropCrossDeploymentManagedDeletes(deployments);
       scheduleRenamedAppDeletes(deployments);
-      assertServicesNotInUse(deployments, "deploy");
+      await assertResourcesNotInUse({ deployments, command: "deploy", client, workspaceId });
       assertNoSingleRunTransferHandoff(deployments);
       return { planTargets, metadataClient, runInputs, deployments };
     };

@@ -63,7 +63,7 @@ export default createExecutor({
 
 A disabled executor does not count as a subscriber when `deploy` resolves `publishEvents` on the resource its trigger names. Publishing is not enabled on that resource's behalf, and an explicit `publishEvents: false` on it is not rejected. If the resource was publishing only for this executor, the next `deploy` turns publishing back off — so disabling the last subscriber of a shared table changes that table for every config that reads its events.
 
-The trigger is still deployed, so it must still name a resource the deploy declares; a disabled executor whose trigger names nothing fails the deploy exactly as an enabled one does.
+The trigger is still deployed, so it must still name a resource the deploy declares; a disabled executor whose trigger names nothing fails the deploy exactly as an enabled one does. For the same reason, `deploy` and `remove` of another application stop with `SERVICE_IN_USE` instead of deleting a resource that a disabled executor's trigger names.
 
 ## Trigger Types
 

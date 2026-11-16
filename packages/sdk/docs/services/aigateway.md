@@ -76,7 +76,7 @@ export default defineConfig({
 });
 ```
 
-An `authNamespace` that doesn't match any auth namespace in your workspace surfaces only at runtime, as `401 Unauthorized` on every request to the gateway.
+An `authNamespace` that doesn't match any auth namespace in your workspace surfaces only at runtime, as `401 Unauthorized` on every request to the gateway. `deploy` and `remove` stop with `SERVICE_IN_USE` instead of deleting an Auth service that an AI gateway in the workspace still uses.
 
 ### cors
 
