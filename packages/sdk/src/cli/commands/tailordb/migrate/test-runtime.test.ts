@@ -27,14 +27,14 @@ import type { RemoteSchemaVerificationResult } from "./types";
 
 vi.mock("./config", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("./config");
+  const original = await importOriginal<typeof import("./config")>();
   return { ...original, getNamespacesWithMigrations: vi.fn() };
 });
 
 vi.mock("#/cli/commands/tailordb/migrate/schema-checks", async (importOriginal) => {
   const original =
     // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-    (await importOriginal()) as typeof import("#/cli/commands/tailordb/migrate/schema-checks");
+    await importOriginal<typeof import("#/cli/commands/tailordb/migrate/schema-checks")>();
   return { ...original, verifyRemoteSchema: vi.fn() };
 });
 

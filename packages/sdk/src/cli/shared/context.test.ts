@@ -2439,7 +2439,7 @@ describe("V1 to V3 migration", () => {
     expect(userEntry!.refresh_token).toBe("v1-refresh-token");
 
     // Disk: still V1 (not rewritten to V3)
-    const diskConfig = parseYAML(fs.readFileSync(configPath, "utf-8")) as { version: number };
+    const diskConfig = parseYAML<{ version: number }>(fs.readFileSync(configPath, "utf-8"));
     expect(diskConfig.version).toBe(1);
   });
 });
@@ -2477,11 +2477,11 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
     });
 
     // Disk: stays V2 so the keyring entry is not dropped.
-    const diskConfig = parseYAML(fs.readFileSync(configPath, "utf-8")) as {
+    const diskConfig = parseYAML<{
       version: number;
       users: Record<string, { storage?: string }>;
       current_user: string | null;
-    };
+    }>(fs.readFileSync(configPath, "utf-8"));
     expect(diskConfig.version).toBe(2);
     expect(diskConfig.users["keyring@example.com"]?.storage).toBe("keyring");
     expect(diskConfig.users["file@example.com"]?.storage).toBe("file");
@@ -2519,12 +2519,12 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
       current_user: "platform-user-sub",
     });
 
-    const diskConfig = parseYAML(fs.readFileSync(configPath, "utf-8")) as {
+    const diskConfig = parseYAML<{
       version: number;
       users: Record<string, { email?: string }>;
       profiles: Record<string, { user: string }>;
       current_user: string | null;
-    };
+    }>(fs.readFileSync(configPath, "utf-8"));
     expect(diskConfig.version).toBe(3);
     expect(diskConfig.users["platform-user-sub"]?.email).toBe("user@example.com");
     expect(diskConfig.profiles.default?.user).toBe("platform-user-sub");
@@ -2548,10 +2548,10 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
       current_user: "file@example.com",
     });
 
-    const diskConfig = parseYAML(fs.readFileSync(configPath, "utf-8")) as {
+    const diskConfig = parseYAML<{
       version: number;
       current_user: string | null;
-    };
+    }>(fs.readFileSync(configPath, "utf-8"));
     expect(diskConfig.version).toBe(1);
     expect(diskConfig.current_user).toBe("file@example.com");
   });
@@ -2584,7 +2584,7 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
       current_user: "file@example.com",
     });
 
-    const diskConfig = parseYAML(fs.readFileSync(configPath, "utf-8")) as {
+    const diskConfig = parseYAML<{
       version: number;
       min_sdk_version?: string;
       users: Record<string, unknown>;
@@ -2596,7 +2596,7 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
           console_url?: string;
         }
       >;
-    };
+    }>(fs.readFileSync(configPath, "utf-8"));
     expect(diskConfig.version).toBe(3);
     expect(diskConfig.min_sdk_version).toBe("2.0.0");
     expect(diskConfig.profiles.dev?.platform_url).toBe("https://api.dev.tailor.tech");
@@ -2625,10 +2625,10 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
       current_user: "missing@example.com",
     });
 
-    const diskConfig = parseYAML(fs.readFileSync(configPath, "utf-8")) as {
+    const diskConfig = parseYAML<{
       version: number;
       current_user: string | null;
-    };
+    }>(fs.readFileSync(configPath, "utf-8"));
     expect(diskConfig.version).toBe(1);
     expect(diskConfig.current_user).toBeNull();
   });
@@ -2655,7 +2655,7 @@ describe("unknown config keys", () => {
   }
 
   function readRawConfig(): RawConfig {
-    return parseYAML(fs.readFileSync(configPath, "utf-8")) as RawConfig;
+    return parseYAML<RawConfig>(fs.readFileSync(configPath, "utf-8"));
   }
 
   test.each([
