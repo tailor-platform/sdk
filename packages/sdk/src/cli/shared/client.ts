@@ -749,8 +749,10 @@ const MAX_RETRY_ATTEMPTS = 3;
 
 /**
  * Methods without an idempotency declaration that are retried even after an attempt
- * that may have committed, because a repeat converges on what the first attempt left
- * instead of running an execution again or creating a second resource the user sees.
+ * that may have committed, because a repeat neither runs an execution again nor leaves
+ * two records in use: it converges on what the first attempt left, fails on that state
+ * (a name the first attempt took, a record it removed), or creates a record the CLI
+ * uses in place of the first attempt's.
  *
  * A drift guard (see client.test.ts) fails CI if a write the CLI calls is neither
  * listed here nor explicitly classified as not repeated.
@@ -761,9 +763,9 @@ export const REPEATABLE_METHODS: ReadonlySet<string> = new Set([
   "AddCustomDomain",
   "BulkSetMetadata",
   "CancelCustomDomainTransfer",
-  "CreateDeployment",
-  "CreateIdPClient",
-  "CreateWorkflowJobFunction",
+  "CreateDeployment", // the CLI publishes the repeat's deployment
+  "CreateIdPClient", // fails on the name the first attempt took
+  "CreateWorkflowJobFunction", // the CLI uses the repeat's version
   "DeleteAIGateway",
   "DeleteApplication",
   "DeleteAuthConnection",
@@ -826,7 +828,7 @@ export const REPEATABLE_METHODS: ReadonlySet<string> = new Set([
   "UpdateTenantConfig",
   "UpdateUserProfileConfig",
   "UpdateWorkflow",
-  "UpdateWorkflowJobFunction",
+  "UpdateWorkflowJobFunction", // the CLI uses the repeat's version
   "UpdateWorkflowJobFunctionExecutionPolicy",
   "UpdateWorkspacePlatformUser",
 ]);
