@@ -236,7 +236,6 @@ describe("printExecutionWithLogs", () => {
   };
   const job = {
     id: "job-1",
-    stackedJobName: "main",
     kind: { type: "jobFunction" as const, name: "main" },
     position: null,
     status: "RUNNING",

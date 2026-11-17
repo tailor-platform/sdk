@@ -101,9 +101,9 @@ export interface ExecutorJobDetailInfo extends ExecutorJobInfo {
 interface WorkflowJobLog {
   jobExecutionId: string;
   /**
-   * @deprecated since NEXT_RELEASE — use `kind` for the job function name or wait key and `jobExecutionId` to identify the job instead. codemod: v3/workflow-job-execution-kind
+   * @deprecated since NEXT_RELEASE — the Platform is retiring this value, so this is never set; use `kind` for the job function name or wait key and `jobExecutionId` to identify the job instead. codemod: v3/workflow-job-execution-kind
    */
-  jobName: string;
+  jobName?: string;
   /** `null` when the job is of a kind this SDK version does not know. */
   kind: WorkflowJobExecutionKindInfo | null;
   logs?: string;
@@ -478,8 +478,6 @@ export async function watchExecutorJob<E extends ExecutorLike>(
                     .filter((job) => job.logs || job.result)
                     .map((job) => ({
                       jobExecutionId: job.id,
-                      // oxlint-disable-next-line typescript/no-deprecated -- Stays in the output until its removal in v3.
-                      jobName: job.stackedJobName || job.id,
                       kind: job.kind,
                       logs: job.logs,
                       logEntries: job.logEntries,

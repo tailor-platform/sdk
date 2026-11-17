@@ -388,9 +388,9 @@ describe("downstream logs", () => {
 
     expect(result.workflowJobLogs?.[0]).toMatchObject({
       jobExecutionId: "job-execution-1",
-      jobName: "main/fetch#0",
       kind: { type: "jobFunction", name: "fetch" },
     });
+    expect(result.workflowJobLogs?.[0]).not.toHaveProperty("jobName");
     expect(stripAnsi(stderr.output)).toContain("  Job: fetch (job-execution-1)\n");
     expect(result.workflowJobLogs?.[0]?.logEntries).toMatchObject([
       { source: "USER" },

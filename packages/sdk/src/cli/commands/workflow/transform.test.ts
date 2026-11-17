@@ -53,6 +53,18 @@ describe("toWorkflowJobExecutionInfo", () => {
     });
   });
 
+  test("leaves out the stacked job name the Platform still sends", () => {
+    const info = toWorkflowJobExecutionInfo(
+      create(WorkflowJobExecutionSchema, {
+        id: "job-2",
+        stackedJobName: "main/fetch#2.1",
+        kind: { case: "jobFunction", value: { name: "fetch" } },
+      }),
+    );
+
+    expect(info).not.toHaveProperty("stackedJobName");
+  });
+
   test("reports null kind and position when the Platform sent neither", () => {
     const info = toWorkflowJobExecutionInfo(create(WorkflowJobExecutionSchema, { id: "job-4" }));
 

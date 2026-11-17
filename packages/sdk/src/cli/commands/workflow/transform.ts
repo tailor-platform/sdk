@@ -46,9 +46,9 @@ export interface WorkflowJobExecutionPositionInfo {
 export interface WorkflowJobExecutionInfo {
   id: string;
   /**
-   * @deprecated since NEXT_RELEASE — use `kind` for the job function name or wait key and `position` for the place among the other jobs instead. codemod: v3/workflow-job-execution-kind
+   * @deprecated since NEXT_RELEASE — the Platform is retiring this value, so this is never set; use `kind` for the job function name or wait key and `position` for the place among the other jobs instead. codemod: v3/workflow-job-execution-kind
    */
-  stackedJobName: string;
+  stackedJobName?: string;
   /** `null` when the job is of a kind this SDK version does not know. */
   kind: WorkflowJobExecutionKindInfo | null;
   /** `null` when the Platform reported no position for the job. */
@@ -174,8 +174,6 @@ export function toWorkflowJobExecutionInfo(
 ): WorkflowJobExecutionInfo {
   return {
     id: jobExecution.id,
-    // oxlint-disable-next-line typescript/no-deprecated -- Stays in the output until its removal in v3.
-    stackedJobName: jobExecution.stackedJobName,
     kind: toWorkflowJobExecutionKindInfo(jobExecution.kind),
     position: toWorkflowJobExecutionPositionInfo(jobExecution.position),
     status: workflowJobExecutionStatusToString(jobExecution.status),
