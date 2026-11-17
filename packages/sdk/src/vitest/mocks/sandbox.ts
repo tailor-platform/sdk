@@ -7,7 +7,6 @@ import type {
   Execution,
   ExecutionInfo,
   ExecutionPage,
-  FileInfo,
   GetOrCreateSandboxOptions,
   ListExecutionsOptions,
   OutputChunk,
@@ -64,6 +63,8 @@ interface ExecutionState {
   stdout: Uint8Array;
   stderr: Uint8Array;
   idempotencyKey?: string;
+  /** Settles when the command handler has finished; rejects with its error. */
+  done: Promise<void>;
 }
 
 const encoder = new TextEncoder();
@@ -250,7 +251,10 @@ export function mockSandbox() {
     const key = opts?.idempotencyKey;
     if (key !== undefined) {
       const existing = sandboxState.executions.find((e) => e.idempotencyKey === key);
-      if (existing) return existing;
+      if (existing) {
+        await existing.done;
+        return existing;
+      }
     }
     const id = nextId("exec");
     const startedAt = now();
@@ -268,6 +272,7 @@ export function mockSandbox() {
       stdout: new Uint8Array(),
       stderr: new Uint8Array(),
       ...(key !== undefined && { idempotencyKey: key }),
+      done: Promise.resolve(),
     };
     makeExecution(state);
     sandboxState.executions.push(state);
@@ -278,12 +283,15 @@ export function mockSandbox() {
       executionId: id,
     });
 
-    const out = await handler([...argv], opts);
-    state.stdout = toBytes(out.stdout);
-    state.stderr = toBytes(out.stderr);
-    state.info.exitCode = out.exitCode ?? 0;
-    state.info.status = state.info.exitCode === 0 ? "SUCCESS" : "FAILED";
-    state.info.finishedAt = now();
+    state.done = (async () => {
+      const out = await handler([...argv], opts);
+      state.stdout = toBytes(out.stdout);
+      state.stderr = toBytes(out.stderr);
+      state.info.exitCode = out.exitCode ?? 0;
+      state.info.status = state.info.exitCode === 0 ? "SUCCESS" : "FAILED";
+      state.info.finishedAt = now();
+    })();
+    await state.done;
     executionView(state);
     return state;
   };
@@ -359,30 +367,14 @@ export function mockSandbox() {
         state.files.set(normalized, bytes);
         return { bytesWritten: bytes.length };
       },
+      // The platform answers UNIMPLEMENTED for both after validating the path; the mock does the same.
       async listFiles(path) {
-        const dir = normalizePath(path);
-        requireUsable(state, "listFiles");
-        const prefix = dir === "/" ? "/" : `${dir}/`;
-        const entries = new Map<string, FileInfo>();
-        for (const [filePath, bytes] of state.files) {
-          if (!filePath.startsWith(prefix)) continue;
-          const rest = filePath.slice(prefix.length);
-          const slash = rest.indexOf("/");
-          const name = slash === -1 ? rest : rest.slice(0, slash);
-          if (slash === -1) {
-            entries.set(name, { name, size: bytes.length, isDir: false, modTime: now() });
-          } else if (!entries.has(name)) {
-            entries.set(name, { name, size: 0, isDir: true, modTime: now() });
-          }
-        }
-        return [...entries.values()].toSorted((a, b) => a.name.localeCompare(b.name));
+        normalizePath(path);
+        throw new SandboxErrorMock("listing files is not available yet", "UNIMPLEMENTED");
       },
       async deleteFile(path) {
-        const normalized = normalizePath(path);
-        requireUsable(state, "deleteFile");
-        if (!state.files.delete(normalized)) {
-          throw new SandboxErrorMock(`file ${path} not found`, "NOT_FOUND");
-        }
+        normalizePath(path);
+        throw new SandboxErrorMock("deleting files is not available yet", "UNIMPLEMENTED");
       },
       async destroy() {
         if (sandbox.status === "DESTROYED") return;
@@ -406,26 +398,30 @@ export function mockSandbox() {
     return o;
   };
 
-  const create = vi.fn(async (opts: CreateSandboxOptions): Promise<Sandbox> => {
+  const defaultCreate = async (opts: CreateSandboxOptions): Promise<Sandbox> => {
     const valid = validateCreate(opts, "create");
     if (valid.name !== undefined && liveByName(valid.name)) {
       throw new SandboxErrorMock(`sandbox named ${valid.name} already exists`, "ALREADY_EXISTS");
     }
     return makeSandbox(valid).sandbox;
-  });
-  const getOrCreate = vi.fn(async (opts: GetOrCreateSandboxOptions): Promise<Sandbox> => {
+  };
+  const defaultGetOrCreate = async (opts: GetOrCreateSandboxOptions): Promise<Sandbox> => {
     const valid = validateCreate(opts, "getOrCreate");
     if (valid.name === undefined) {
       throw new SandboxErrorMock("getOrCreate: name is required", "INVALID_ARGUMENT");
     }
     return (liveByName(valid.name) ?? makeSandbox(valid)).sandbox;
-  });
-  const get = vi.fn(async (id: string): Promise<Sandbox> => requireById(id).sandbox);
-  const getByName = vi.fn(async (name: string): Promise<Sandbox> => {
+  };
+  const defaultGet = async (id: string): Promise<Sandbox> => requireById(id).sandbox;
+  const defaultGetByName = async (name: string): Promise<Sandbox> => {
     const state = liveByName(name);
     if (!state) throw new SandboxErrorMock(`sandbox named ${name} not found`, "NOT_FOUND");
     return state.sandbox;
-  });
+  };
+  const create = vi.fn(defaultCreate);
+  const getOrCreate = vi.fn(defaultGetOrCreate);
+  const get = vi.fn(defaultGet);
+  const getByName = vi.fn(defaultGetByName);
 
   const installed: PlatformSandboxAPI = {
     SandboxError: SandboxErrorMock,
@@ -495,10 +491,14 @@ export function mockSandbox() {
       recorded.length = 0;
       handler = () => ({});
       counter = 0;
-      create.mockClear();
-      getOrCreate.mockClear();
-      get.mockClear();
-      getByName.mockClear();
+      create.mockReset();
+      create.mockImplementation(defaultCreate);
+      getOrCreate.mockReset();
+      getOrCreate.mockImplementation(defaultGetOrCreate);
+      get.mockReset();
+      get.mockImplementation(defaultGet);
+      getByName.mockReset();
+      getByName.mockImplementation(defaultGetByName);
     },
   };
 

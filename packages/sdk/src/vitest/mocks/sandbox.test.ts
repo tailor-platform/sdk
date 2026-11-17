@@ -187,6 +187,39 @@ describe("mockSandbox", () => {
       expect(second.id).toBe(first.id);
       expect(sb.executions).toHaveLength(1);
     });
+
+    test("a concurrent exec with the same idempotencyKey waits for the first to finish", async () => {
+      using sb = mockSandbox();
+      let finish!: () => void;
+      sb.onExec(async () => {
+        await new Promise<void>((resolve) => (finish = resolve));
+        return { stdout: "done", exitCode: 0 };
+      });
+      const box = await sandboxApi().create({ template: "guest" });
+
+      const first = box.exec(["a"], { idempotencyKey: "k" });
+      const second = box.exec(["a"], { idempotencyKey: "k" });
+      await Promise.resolve();
+      finish();
+
+      const [a, b] = await Promise.all([first, second]);
+      expect(b).toMatchObject({ id: a.id, status: "SUCCESS", exitCode: 0, stdout: "done" });
+      expect(sb.executions).toHaveLength(1);
+    });
+
+    test("a concurrent exec with the same idempotencyKey rejects when the first one does", async () => {
+      using sb = mockSandbox();
+      sb.onExec(async () => {
+        throw new Error("boom");
+      });
+      const box = await sandboxApi().create({ template: "guest" });
+
+      const first = box.exec(["a"], { idempotencyKey: "k" });
+      const second = box.exec(["a"], { idempotencyKey: "k" });
+
+      await expect(first).rejects.toThrow("boom");
+      await expect(second).rejects.toThrow("boom");
+    });
   });
 
   describe("executions", () => {
@@ -304,30 +337,14 @@ describe("mockSandbox", () => {
       expect(new TextDecoder().decode(value)).toBe("abc");
     });
 
-    test("listFiles shows files and synthesized directories, sorted", async () => {
-      using _sb = mockSandbox();
-      const box = await sandboxApi().create({ template: "guest" });
-      await box.writeFile("/workspace/z.txt", "zz");
-      await box.writeFile("/workspace/src/a.ts", "a");
-      await box.writeFile("/workspace/src/b.ts", "b");
-
-      const root = await box.listFiles("/workspace");
-      expect(root.map(({ name, size, isDir }) => ({ name, size, isDir }))).toEqual([
-        { name: "src", size: 0, isDir: true },
-        { name: "z.txt", size: 2, isDir: false },
-      ]);
-      expect((await box.listFiles("/workspace/src")).map((f) => f.name)).toEqual(["a.ts", "b.ts"]);
-    });
-
-    test("deleteFile removes the file; a second delete or a read is NOT_FOUND", async () => {
-      using _sb = mockSandbox();
+    test("listFiles and deleteFile are UNIMPLEMENTED, like the platform, and change nothing", async () => {
+      using sb = mockSandbox();
       const box = await sandboxApi().create({ template: "guest" });
       await box.writeFile("/workspace/a", "x");
 
-      await box.deleteFile("/workspace/a");
-
-      await expect(box.readFile("/workspace/a")).rejects.toMatchObject({ code: "NOT_FOUND" });
-      await expect(box.deleteFile("/workspace/a")).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(box.listFiles("/workspace")).rejects.toMatchObject({ code: "UNIMPLEMENTED" });
+      await expect(box.deleteFile("/workspace/a")).rejects.toMatchObject({ code: "UNIMPLEMENTED" });
+      expect([...sb.files(box.id).keys()]).toEqual(["/workspace/a"]);
     });
 
     test.each([
@@ -372,6 +389,19 @@ describe("mockSandbox", () => {
 
       sb.reset();
       expect(sb.sandboxes).toEqual([]);
+    });
+
+    test("reset drops configured implementations and queued responses", async () => {
+      using sb = mockSandbox();
+      sb.create.mockRejectedValueOnce(new Error("queued"));
+      sb.get.mockImplementation(async () => {
+        throw new Error("custom");
+      });
+
+      sb.reset();
+
+      const box = await sandboxApi().create({ template: "guest" });
+      expect(await sandboxApi().get(box.id)).toBe(box);
     });
 
     test("nested scopes are isolated and the outer scope is restored", async () => {
