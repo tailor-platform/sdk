@@ -7,6 +7,10 @@ import {
   sanitizeMigrationLabel,
   type PendingMigration,
 } from "#/cli/commands/tailordb/migrate/types";
+import {
+  mockOperatorClient,
+  type OperatorClientMocks,
+} from "#/cli/shared/test-helpers/operator-client";
 import { tailorDBPlanResultContext } from "../../test-helpers/plan-results";
 import { detectPendingMigrations, type updateMigrationLabel } from "../migration";
 import type { NamespaceWithMigrations } from "#/cli/commands/tailordb/migrate/config";
@@ -37,26 +41,31 @@ function namespaceTrn(namespace: string) {
   return `trn:v1:workspace:${WORKSPACE_ID}:tailordb:${namespace}`;
 }
 
-type MockClientOverrides = Partial<Record<keyof OperatorClient, unknown>>;
-
-export function createMockClient(overrides: MockClientOverrides = {}): OperatorClient {
-  return {
-    createTailorDBService: vi.fn().mockResolvedValue({}),
-    getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
-    setMetadata: vi.fn().mockResolvedValue({}),
-    listTailorDBTypes: vi.fn().mockResolvedValue({ tailordbTypes: [] }),
-    createTailorDBType: vi.fn().mockResolvedValue({}),
-    updateTailorDBType: vi.fn().mockResolvedValue({}),
-    createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
-    updateTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
-    deleteTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
-    deleteTailorDBType: vi.fn().mockResolvedValue({}),
-    deleteTailorDBService: vi.fn().mockResolvedValue({}),
-    getWorkflowByName: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
-    deleteWorkflowJobFunction: vi.fn().mockResolvedValue({}),
-    deleteFunctionRegistry: vi.fn().mockResolvedValue({}),
-    ...overrides,
-  } as unknown as OperatorClient;
+/**
+ * Build an operator client whose TailorDB, metadata, and workflow cleanup methods succeed.
+ * @param overrides - Methods to mock differently, or in addition
+ * @returns The client, with each mocked method as a `vi.fn` spy
+ */
+export function createMockClient<K extends keyof OperatorClient = never>(
+  overrides?: OperatorClientMocks<K>,
+) {
+  const client = mockOperatorClient({
+    createTailorDBService: {},
+    getMetadata: { metadata: { labels: {} } },
+    setMetadata: {},
+    listTailorDBTypes: { tailordbTypes: [] },
+    createTailorDBType: {},
+    updateTailorDBType: {},
+    createTailorDBGQLPermission: {},
+    updateTailorDBGQLPermission: {},
+    deleteTailorDBGQLPermission: {},
+    deleteTailorDBType: {},
+    deleteTailorDBService: {},
+    getWorkflowByName: () => Promise.reject(new ConnectError("not found", Code.NotFound)),
+    deleteWorkflowJobFunction: {},
+    deleteFunctionRegistry: {},
+  });
+  return Object.assign(client, overrides && mockOperatorClient(overrides));
 }
 
 type MockedRemoteState = Pick<RemoteMigrationState, "number" | "historyId"> &
@@ -142,36 +151,40 @@ export function createRemoteCheckpoint(initialNumber: number | null) {
         number: state.number,
         historyId: state.historyId,
       })),
-    createMockClient: (overrides: MockClientOverrides = {}): OperatorClient =>
-      createMockClient({
-        getMetadata: vi.fn(async () => ({
-          metadata: {
-            labels: {
-              ...(state.number !== null && {
-                "sdk-migration": sanitizeMigrationLabel(state.number),
-              }),
-              ...(state.historyId && { "sdk-migration-history": state.historyId }),
-              ...(state.maintenanceMode && { "sdk-maintenance-mode": state.maintenanceMode }),
-              ...(state.cleanup && { "sdk-migration-cleanup": state.cleanup }),
+    createMockClient: <K extends keyof OperatorClient = never>(
+      overrides?: OperatorClientMocks<K>,
+    ) =>
+      Object.assign(
+        createMockClient({
+          getMetadata: async () => ({
+            metadata: {
+              labels: {
+                ...(state.number !== null && {
+                  "sdk-migration": sanitizeMigrationLabel(state.number),
+                }),
+                ...(state.historyId && { "sdk-migration-history": state.historyId }),
+                ...(state.maintenanceMode && { "sdk-maintenance-mode": state.maintenanceMode }),
+                ...(state.cleanup && { "sdk-migration-cleanup": state.cleanup }),
+              },
             },
+          }),
+          setMetadata: async (request) => {
+            const maintenanceMode = request.labels?.["sdk-maintenance-mode"] ?? null;
+            if (
+              request.trn === namespaceTrn(NAMESPACE) &&
+              maintenanceMode !== state.maintenanceMode
+            ) {
+              state.maintenanceMode = maintenanceMode;
+              state.maintenanceModeChanges.push(maintenanceMode);
+            }
+            if (request.trn === namespaceTrn(NAMESPACE)) {
+              setCleanup(request.labels?.["sdk-migration-cleanup"] ?? null);
+            }
+            return {};
           },
-        })),
-        setMetadata: vi.fn(async (request: { trn: string; labels: Record<string, string> }) => {
-          const maintenanceMode = request.labels["sdk-maintenance-mode"] ?? null;
-          if (
-            request.trn === namespaceTrn(NAMESPACE) &&
-            maintenanceMode !== state.maintenanceMode
-          ) {
-            state.maintenanceMode = maintenanceMode;
-            state.maintenanceModeChanges.push(maintenanceMode);
-          }
-          if (request.trn === namespaceTrn(NAMESPACE)) {
-            setCleanup(request.labels["sdk-migration-cleanup"] ?? null);
-          }
-          return {};
         }),
-        ...overrides,
-      }),
+        overrides && mockOperatorClient(overrides),
+      ),
   };
 }
 

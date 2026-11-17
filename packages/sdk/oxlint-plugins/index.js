@@ -78,6 +78,14 @@ function functionParamSlots(node) {
   return node.params.map((p) => ({ astNode: p, names: collect(p) }));
 }
 
+function resolveVariable(context, node, name) {
+  for (let scope = context.sourceCode.getScope(node); scope; scope = scope.upper) {
+    const variable = scope.set.get(name);
+    if (variable) return variable;
+  }
+  return undefined;
+}
+
 export default {
   meta: { name: "local" },
   rules: {
@@ -179,14 +187,6 @@ export default {
           return call?.type === "CallExpression" && safeMethods.has(methodName(call.callee));
         }
 
-        function resolveVariable(node, name) {
-          for (let scope = context.sourceCode.getScope(node); scope; scope = scope.upper) {
-            const variable = scope.set.get(name);
-            if (variable) return variable;
-          }
-          return undefined;
-        }
-
         return {
           CallExpression(node) {
             if (throwingMethods.has(methodName(node.callee)) && isSchemaChain(node.callee.object)) {
@@ -202,7 +202,7 @@ export default {
             ) {
               return;
             }
-            const variable = resolveVariable(node, thrown.object.name);
+            const variable = resolveVariable(context, node, thrown.object.name);
             if (variable?.defs.some((def) => isSafeParseCall(def.node.init))) {
               context.report({ node, messageId: "rethrow" });
             }
@@ -306,6 +306,96 @@ export default {
           FunctionDeclaration: checkFunction,
           FunctionExpression: checkFunction,
           ArrowFunctionExpression: checkFunction,
+        };
+      },
+    },
+
+    "typed-operator-client-mock": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Require operator client mocks in tests to go through mockOperatorClient() so their responses are type-checked.",
+        },
+        messages: {
+          cast: "Build the operator client mock with mockOperatorClient(); a cast leaves its requests and responses unchecked.",
+        },
+        schema: [],
+      },
+      create(context) {
+        const clientFactories = new Set([
+          "initOperatorClient",
+          "createPatOperatorClient",
+          "loadOperatorWorkspaceContext",
+        ]);
+        function exportedName(node) {
+          switch (node?.type) {
+            case "Identifier": {
+              const definition = resolveVariable(context, node, node.name)?.defs[0];
+              return definition?.type === "ImportBinding"
+                ? (definition.node.imported?.name ?? node.name)
+                : node.name;
+            }
+            case "TSQualifiedName":
+              return node.right.name;
+            case "MemberExpression":
+              return node.computed ? undefined : node.property.name;
+            case "TSImportType":
+              return node.qualifier?.name;
+            default:
+              return undefined;
+          }
+        }
+        function namesOperatorClient(type) {
+          if (
+            (type?.type === "TSTypeReference" &&
+              exportedName(type.typeName) === "OperatorClient") ||
+            (type?.type === "TSImportType" && exportedName(type) === "OperatorClient")
+          ) {
+            return true;
+          }
+          if (type?.type === "TSTypeQuery" && clientFactories.has(exportedName(type.exprName))) {
+            return true;
+          }
+          if (type?.type === "TSIndexedAccessType") {
+            return type.indexType.literal?.value === "client";
+          }
+          if (type?.type === "TSIntersectionType" || type?.type === "TSUnionType") {
+            return type.types.some(namesOperatorClient);
+          }
+          return (type?.typeArguments?.params ?? []).some(namesOperatorClient);
+        }
+        function isMockedClientFactory(node) {
+          const mocked = node?.type === "MemberExpression" ? node.object : undefined;
+          return (
+            mocked?.type === "CallExpression" &&
+            mocked.callee.type === "MemberExpression" &&
+            mocked.callee.object.name === "vi" &&
+            mocked.callee.property.name === "mocked" &&
+            clientFactories.has(exportedName(mocked.arguments[0]))
+          );
+        }
+        function isUncheckedCast(node) {
+          return (
+            node.type === "TSAsExpression" &&
+            (node.typeAnnotation.type === "TSNeverKeyword" ||
+              node.typeAnnotation.type === "TSAnyKeyword")
+          );
+        }
+        function checkCast(node) {
+          if (namesOperatorClient(node.typeAnnotation)) {
+            context.report({ node, messageId: "cast" });
+          }
+        }
+        return {
+          TSAsExpression: checkCast,
+          TSTypeAssertion: checkCast,
+          CallExpression(node) {
+            if (!isMockedClientFactory(node.callee)) return;
+            for (const argument of node.arguments.filter(isUncheckedCast)) {
+              context.report({ node: argument, messageId: "cast" });
+            }
+          },
         };
       },
     },

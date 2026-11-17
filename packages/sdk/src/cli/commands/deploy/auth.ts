@@ -15,8 +15,8 @@ import {
   AuthIDPConfigSchema,
   type AuthOAuth2ClientSchema,
   type AuthSCIMAttributeSchema,
-  type AuthSCIMConfigSchema,
-  type AuthSCIMResourceSchema,
+  AuthSCIMConfigSchema,
+  AuthSCIMResourceSchema,
   TenantProviderConfigSchema,
   UserProfileProviderConfigSchema,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
@@ -421,8 +421,8 @@ export async function planAuth(context: PlanContext) {
       expectedLocalWebsites,
       forceApplyAll,
     ),
-    planSCIMConfigs(client, workspaceId, auths, deletedServices),
-    planSCIMResources(client, workspaceId, auths, deletedServices),
+    planSCIMConfigs(client, workspaceId, auths, deletedServices, forceApplyAll),
+    planSCIMResources(client, workspaceId, auths, deletedServices, forceApplyAll),
     planAuthConnections(client, workspaceId, application.name, application.id, auths),
   ]);
   return {
@@ -1052,6 +1052,7 @@ function protoTenantConfig(
   tenantConfig: TenantProviderConfig,
 ): MessageInitShape<typeof TenantProviderConfigSchema> {
   return {
+    provider: "TAILORDB",
     providerType: TenantProviderConfig_TenantProviderType.TAILORDB,
     config: {
       config: {
@@ -1571,6 +1572,7 @@ async function planSCIMConfigs(
   workspaceId: string,
   auths: ReadonlyArray<Readonly<AuthService>>,
   deletedServices: ReadonlyArray<string>,
+  forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateSCIMConfig, UpdateSCIMConfig, DeleteSCIMConfig>(
     "Auth scimConfigs",
@@ -1592,14 +1594,21 @@ async function planSCIMConfigs(
         });
       }
     } else if (config.scim) {
-      changeSet.updates.push({
-        name,
-        request: {
-          workspaceId,
-          namespaceName: config.name,
-          scimConfig: protoSCIMConfig(config.scim),
-        },
-      });
+      const desired = protoSCIMConfig(config.scim);
+      const configUnchanged = areSCIMConfigsEqual(existing, desired);
+      if (!forceApplyAll && configUnchanged) {
+        changeSet.unchanged.push({ name });
+      } else {
+        changeSet.updates.push({
+          name,
+          request: {
+            workspaceId,
+            namespaceName: config.name,
+            scimConfig: desired,
+          },
+          ...(configUnchanged && { forcedBySdkVersion: true }),
+        });
+      }
     } else {
       changeSet.deletes.push({
         name,
@@ -1625,32 +1634,36 @@ async function planSCIMConfigs(
   return changeSet;
 }
 
-function protoSCIMConfig(scimConfig: SCIMConfig): MessageInitShape<typeof AuthSCIMConfigSchema> {
-  let authorizationType;
-  switch (scimConfig.authorization.type) {
-    case "bearer":
-      authorizationType = AuthSCIMConfig_AuthorizationType.BEARER;
-      break;
-    case "oauth2":
-      authorizationType = AuthSCIMConfig_AuthorizationType.OAUTH2;
-      break;
-    default:
-      throw internalError(
-        `Unknown SCIM authorization type: ${scimConfig.authorization.type satisfies never}`,
-      );
-  }
+function areSCIMConfigsEqual(
+  existing: MessageInitShape<typeof AuthSCIMConfigSchema>,
+  desired: MessageInitShape<typeof AuthSCIMConfigSchema>,
+) {
+  return areNormalizedEqual(
+    toComparableProtoJson(AuthSCIMConfigSchema, existing),
+    toComparableProtoJson(AuthSCIMConfigSchema, desired),
+  );
+}
 
-  return {
-    machineUserName: scimConfig.machineUserName,
-    authorizationType,
-    authorizationConfig: {
-      case: "bearerSecret",
-      value: {
-        vaultName: scimConfig.authorization.bearerSecret?.vaultName,
-        secretKey: scimConfig.authorization.bearerSecret?.secretKey,
-      },
-    },
-  };
+function protoSCIMConfig(scimConfig: SCIMConfig): MessageInitShape<typeof AuthSCIMConfigSchema> {
+  const { machineUserName, authorization } = scimConfig;
+  switch (authorization.type) {
+    case "bearer":
+      return {
+        machineUserName,
+        authorizationType: AuthSCIMConfig_AuthorizationType.BEARER,
+        authorizationConfig: {
+          case: "bearerSecret",
+          value: {
+            vaultName: authorization.bearerSecret?.vaultName,
+            secretKey: authorization.bearerSecret?.secretKey,
+          },
+        },
+      };
+    case "oauth2":
+      return { machineUserName, authorizationType: AuthSCIMConfig_AuthorizationType.OAUTH2 };
+    default:
+      throw internalError(`Unknown SCIM authorization type: ${authorization.type satisfies never}`);
+  }
 }
 
 type CreateSCIMResource = {
@@ -1673,6 +1686,7 @@ async function planSCIMResources(
   workspaceId: string,
   auths: ReadonlyArray<Readonly<AuthService>>,
   deletedServices: ReadonlyArray<string>,
+  forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateSCIMResource, UpdateSCIMResource, DeleteSCIMResource>(
     "Auth scimResources",
@@ -1685,33 +1699,40 @@ async function planSCIMResources(
       workspaceId,
       config.name,
     );
-    const existingNameSet = new Set<string>();
-    existingSCIMResources.forEach((scimResource) => {
-      existingNameSet.add(scimResource.name);
-    });
+    const existingMap = new Map(
+      existingSCIMResources.map((scimResource) => [scimResource.name, scimResource]),
+    );
     for (const scimResource of config.scim?.resources ?? []) {
-      if (existingNameSet.has(scimResource.name)) {
-        changeSet.updates.push({
-          name: scimResource.name,
-          request: {
-            workspaceId,
-            namespaceName: config.name,
-            scimResource: protoSCIMResource(scimResource),
-          },
-        });
-        existingNameSet.delete(scimResource.name);
+      const desired = protoSCIMResource(scimResource);
+      const existing = existingMap.get(scimResource.name);
+      if (existing) {
+        const configUnchanged = areSCIMResourcesEqual(existing, desired);
+        if (!forceApplyAll && configUnchanged) {
+          changeSet.unchanged.push({ name: scimResource.name });
+        } else {
+          changeSet.updates.push({
+            name: scimResource.name,
+            request: {
+              workspaceId,
+              namespaceName: config.name,
+              scimResource: desired,
+            },
+            ...(configUnchanged && { forcedBySdkVersion: true }),
+          });
+        }
+        existingMap.delete(scimResource.name);
       } else {
         changeSet.creates.push({
           name: scimResource.name,
           request: {
             workspaceId,
             namespaceName: config.name,
-            scimResource: protoSCIMResource(scimResource),
+            scimResource: desired,
           },
         });
       }
     }
-    existingNameSet.forEach((name) => {
+    existingMap.forEach((_, name) => {
       changeSet.deletes.push({
         name,
         request: {
@@ -1741,6 +1762,16 @@ async function planSCIMResources(
     });
   }
   return changeSet;
+}
+
+function areSCIMResourcesEqual(
+  existing: MessageInitShape<typeof AuthSCIMResourceSchema>,
+  desired: MessageInitShape<typeof AuthSCIMResourceSchema>,
+) {
+  return areNormalizedEqual(
+    toComparableProtoJson(AuthSCIMResourceSchema, existing),
+    toComparableProtoJson(AuthSCIMResourceSchema, desired),
+  );
 }
 
 function protoSCIMResource(
@@ -1801,22 +1832,19 @@ function protoSCIMAttribute(attr: SCIMAttribute): MessageInitShape<typeof AuthSC
     }
   }
   let uniqueness;
-  if (attr.uniqueness) {
-    switch (attr.uniqueness) {
-      case "none":
-        uniqueness = AuthSCIMAttribute_Uniqueness.NONE;
-        break;
-      case "server":
-        uniqueness = AuthSCIMAttribute_Uniqueness.SERVER;
-        break;
-      case "global":
-        uniqueness = AuthSCIMAttribute_Uniqueness.GLOBAL;
-        break;
-      default:
-        throw internalError(
-          `Unknown SCIM attribute uniqueness: ${attr.uniqueness satisfies never}`,
-        );
-    }
+  const configUniqueness = attr.uniqueness ?? "none";
+  switch (configUniqueness) {
+    case "none":
+      uniqueness = AuthSCIMAttribute_Uniqueness.NONE;
+      break;
+    case "server":
+      uniqueness = AuthSCIMAttribute_Uniqueness.SERVER;
+      break;
+    case "global":
+      uniqueness = AuthSCIMAttribute_Uniqueness.GLOBAL;
+      break;
+    default:
+      throw internalError(`Unknown SCIM attribute uniqueness: ${configUniqueness satisfies never}`);
   }
   return {
     type: typ,

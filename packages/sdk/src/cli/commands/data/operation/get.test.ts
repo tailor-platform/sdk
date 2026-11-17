@@ -2,9 +2,10 @@ import { runCommand } from "@politty/zod";
 import { CloneOperationStatus } from "@tailor-platform/tailor-proto/application_pb";
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { logger } from "#/cli/shared/logger";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { getCommand } from "./get";
 
-const client = { getCloneApplicationDataOperation: vi.fn() };
+const client = mockOperatorClient({ getCloneApplicationDataOperation: {} });
 
 vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn().mockResolvedValue("mock-token"),

@@ -5,6 +5,7 @@ import { prompt } from "#/cli/shared/prompt";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { collectHttpAdapterScripts, mergeBundledScripts } from "./bundled-scripts";
 import {
@@ -50,7 +51,6 @@ function plannedDeployment(name: string, results: PlanResults): PlannedDeploymen
 }
 
 describe("shouldForceApplyAll", () => {
-  type Client = Parameters<typeof shouldForceApplyAll>[0];
   type App = Parameters<typeof shouldForceApplyAll>[2];
 
   function minimalApplication(): App {
@@ -72,11 +72,12 @@ describe("shouldForceApplyAll", () => {
 
   test("fetches candidate metadata concurrently", async () => {
     const probe = createConcurrencyProbe();
-    const getMetadata = vi.fn().mockImplementation(async () => {
-      await probe.run();
-      return { metadata: { labels: {} } };
+    const client = mockOperatorClient({
+      getMetadata: async () => {
+        await probe.run();
+        return { metadata: { labels: {} } };
+      },
     });
-    const client = { getMetadata } as unknown as Client;
 
     const result = await shouldForceApplyAll(client, "test-workspace", minimalApplication(), [
       { name: "fn-a" },
@@ -85,15 +86,16 @@ describe("shouldForceApplyAll", () => {
     ]);
 
     expect(result).toBe(false);
-    expect(getMetadata).toHaveBeenCalledTimes(3);
+    expect(client.getMetadata).toHaveBeenCalledTimes(3);
     expect(probe.maxInFlight()).toBeGreaterThan(1);
   });
 
   test("returns true when an owned resource has a different sdk-version", async () => {
-    const getMetadata = vi.fn().mockResolvedValue({
-      metadata: { labels: { "sdk-name": "test-app", "sdk-version": "v0-0-0-other" } },
+    const client = mockOperatorClient({
+      getMetadata: {
+        metadata: { labels: { "sdk-name": "test-app", "sdk-version": "v0-0-0-other" } },
+      },
     });
-    const client = { getMetadata } as unknown as Client;
 
     const result = await shouldForceApplyAll(client, "test-workspace", minimalApplication(), [
       { name: "fn-a" },
@@ -103,13 +105,14 @@ describe("shouldForceApplyAll", () => {
   });
 
   test("prefers a detected sdk-version mismatch over an unrelated fetch failure", async () => {
-    const getMetadata = vi.fn();
-    vi.when(getMetadata, { onUnmatched: () => Promise.reject(new Error("unavailable")) })
+    const client = mockOperatorClient({
+      getMetadata: () => Promise.reject(new Error("unavailable")),
+    });
+    vi.when(client.getMetadata)
       .calledWith(expect.objectContaining({ trn: expect.stringMatching(/:fn-a$/) }))
       .thenResolve({
         metadata: { labels: { "sdk-name": "test-app", "sdk-version": "v0-0-0-other" } },
       });
-    const client = { getMetadata } as unknown as Client;
 
     const result = await shouldForceApplyAll(client, "test-workspace", minimalApplication(), [
       { name: "fn-a" },
@@ -120,8 +123,9 @@ describe("shouldForceApplyAll", () => {
   });
 
   test("propagates a fetch failure when no mismatch was detected", async () => {
-    const getMetadata = vi.fn().mockRejectedValue(new Error("unavailable"));
-    const client = { getMetadata } as unknown as Client;
+    const client = mockOperatorClient({
+      getMetadata: () => Promise.reject(new Error("unavailable")),
+    });
 
     await expect(
       shouldForceApplyAll(client, "test-workspace", minimalApplication(), [{ name: "fn-a" }]),
@@ -1545,7 +1549,7 @@ function fakeTarget(
 
 describe("multi-config deployment orchestration", () => {
   test("forwards client, workspaceId, and expectedLocalStaticWebsiteNames to every config build", async () => {
-    const client = {} as never;
+    const client = mockOperatorClient({});
     const expectedLocalStaticWebsiteNames = new Set(["buyer-site"]);
     const received: unknown[] = [];
 
@@ -1604,7 +1608,7 @@ describe("multi-config deployment orchestration", () => {
     const planPromise = planDeploymentTargets({
       targets: targets,
       runInputs: {} as never,
-      client: {} as never,
+      client: mockOperatorClient({}),
       workspaceId: "workspace-id",
       noSchemaCheck: false,
       planTarget: async (params) => {
@@ -1632,7 +1636,7 @@ describe("multi-config deployment orchestration", () => {
     await planDeploymentTargets({
       targets,
       runInputs: {} as never,
-      client: {} as never,
+      client: mockOperatorClient({}),
       workspaceId: "workspace-id",
       noSchemaCheck: false,
       skip,

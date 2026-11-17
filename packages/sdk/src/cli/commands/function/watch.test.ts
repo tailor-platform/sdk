@@ -7,6 +7,7 @@ import { CLIError } from "#/cli/shared/errors";
 import { executeScriptReportingStart } from "#/cli/shared/script-executor";
 import { captureStderr, captureStdoutStream } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { stripAnsi } from "#/cli/shared/test-helpers/strip-ansi";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import { beginUserModuleRun } from "#/cli/shared/user-modules";
@@ -87,7 +88,7 @@ describe("startFunctionRunWatch", () => {
       filePath: fnPath,
       jobName: undefined,
       config: { path: path.join(cwd, "tailor.config.ts") } as FunctionRunTarget["config"],
-      client: {} as FunctionRunTarget["client"],
+      client: mockOperatorClient({}),
       workspaceId: "ws-1",
       authNamespace: "auth",
       machineUser: { name: "admin", id: "mu-1", attributes: null, attributeList: [] },

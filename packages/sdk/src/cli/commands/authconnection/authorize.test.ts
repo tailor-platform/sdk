@@ -5,11 +5,11 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { authorizeAuthConnectionCommand } from "./authorize";
 import type * as ClientModule from "#/cli/shared/client";
 
 const fetchMock = vi.fn();
-const listAuthConnectionsMock = vi.fn();
 const openMock = vi.hoisted(() => vi.fn());
 const clientMocks = vi.hoisted(() => ({
   initOperatorClient: vi.fn(),
@@ -39,25 +39,7 @@ const discoveryUrl = `${providerUrl}/.well-known/openid-configuration`;
 
 aroundEach(async (runTest) => {
   vi.stubGlobal("fetch", fetchMock);
-  listAuthConnectionsMock.mockResolvedValue({
-    connections: [
-      {
-        name: "my-connection",
-        config: {
-          case: "oauth2",
-          value: {
-            providerUrl,
-            clientId: "client-id",
-            authUrl: "",
-          },
-        },
-      },
-    ],
-    nextPageToken: "",
-  });
-  clientMocks.initOperatorClient.mockResolvedValue({
-    listAuthConnections: listAuthConnectionsMock,
-  });
+  mockOAuth2Connection("");
 
   try {
     await runTest();
@@ -83,27 +65,28 @@ function getCallback(path: string): Promise<CallbackResponse> {
   });
 }
 
-function mockOAuth2Connection(exchangeMock: ReturnType<typeof vi.fn>) {
-  listAuthConnectionsMock.mockResolvedValue({
-    connections: [
-      {
-        name: "my-connection",
-        config: {
-          case: "oauth2",
-          value: {
-            providerUrl,
-            clientId: "client-id",
-            authUrl: "https://idp.example.com/authorize",
+function mockOAuth2Connection(authUrl = "https://idp.example.com/authorize") {
+  const client = mockOperatorClient({
+    listAuthConnections: {
+      connections: [
+        {
+          name: "my-connection",
+          config: {
+            case: "oauth2",
+            value: {
+              providerUrl,
+              clientId: "client-id",
+              authUrl,
+            },
           },
         },
-      },
-    ],
-    nextPageToken: "",
+      ],
+      nextPageToken: "",
+    },
+    exchangeAuthConnectionAuthorizationCode: {},
   });
-  clientMocks.initOperatorClient.mockResolvedValue({
-    listAuthConnections: listAuthConnectionsMock,
-    exchangeAuthConnectionAuthorizationCode: exchangeMock,
-  });
+  clientMocks.initOperatorClient.mockResolvedValue(client);
+  return client;
 }
 
 describe("authconnection authorize", () => {
@@ -126,27 +109,7 @@ describe("authconnection authorize", () => {
   });
 
   test("registers the returned authorization code before exchanging it and prints the result", async () => {
-    listAuthConnectionsMock.mockResolvedValue({
-      connections: [
-        {
-          name: "my-connection",
-          config: {
-            case: "oauth2",
-            value: {
-              providerUrl,
-              clientId: "client-id",
-              authUrl: "https://idp.example.com/authorize",
-            },
-          },
-        },
-      ],
-      nextPageToken: "",
-    });
-    const exchangeMock = vi.fn().mockResolvedValue({});
-    clientMocks.initOperatorClient.mockResolvedValue({
-      listAuthConnections: listAuthConnectionsMock,
-      exchangeAuthConnectionAuthorizationCode: exchangeMock,
-    });
+    const client = mockOAuth2Connection();
     using registerSecretSpy = vi.spyOn(logger, "registerSecret").mockImplementation(() => {});
     using _json = jsonMode();
     using stdout = captureStdout();
@@ -172,11 +135,12 @@ describe("authconnection authorize", () => {
     expect(result.success).toBe(true);
     expect(registerSecretSpy).toHaveBeenCalledWith("test-authorization-code");
     const registerOrder = registerSecretSpy.mock.invocationCallOrder[0];
-    const exchangeOrder = vi.mocked(exchangeMock).mock.invocationCallOrder[0];
+    const exchangeOrder =
+      client.exchangeAuthConnectionAuthorizationCode.mock.invocationCallOrder[0];
     expect(registerOrder).toBeDefined();
     expect(exchangeOrder).toBeDefined();
     expect(registerOrder).toBeLessThan(exchangeOrder as number);
-    expect(exchangeMock).toHaveBeenCalledWith({
+    expect(client.exchangeAuthConnectionAuthorizationCode).toHaveBeenCalledWith({
       workspaceId: "workspace-id",
       connectionName: "my-connection",
       authorizationCode: "test-authorization-code",
@@ -190,7 +154,7 @@ describe("authconnection authorize", () => {
   });
 
   test("returns an HTML page telling the user to close the tab after a successful authorization", async () => {
-    mockOAuth2Connection(vi.fn().mockResolvedValue({}));
+    mockOAuth2Connection();
     let pending: Promise<CallbackResponse> | undefined;
     openMock.mockImplementation(async (authorizeUrl: string) => {
       const state = new URL(authorizeUrl).searchParams.get("state");
@@ -210,7 +174,7 @@ describe("authconnection authorize", () => {
   });
 
   test("returns an escaped HTML failure page with 400 when the provider reports an error", async () => {
-    mockOAuth2Connection(vi.fn());
+    mockOAuth2Connection();
     let pending: Promise<CallbackResponse> | undefined;
     openMock.mockImplementation(async () => {
       pending = getCallback(`/callback?error=${encodeURIComponent("<script>x</script>")}`);
@@ -229,7 +193,10 @@ describe("authconnection authorize", () => {
   });
 
   test("does not expose internal error messages on the failure page", async () => {
-    mockOAuth2Connection(vi.fn().mockRejectedValue(new Error("secret-internal-detail")));
+    const client = mockOAuth2Connection();
+    client.exchangeAuthConnectionAuthorizationCode.mockRejectedValue(
+      new Error("secret-internal-detail"),
+    );
     let pending: Promise<CallbackResponse> | undefined;
     openMock.mockImplementation(async (authorizeUrl: string) => {
       const state = new URL(authorizeUrl).searchParams.get("state");

@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { Code, ConnectError } from "@connectrpc/connect";
 import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import { aroundEach, describe, expect, test, vi } from "vitest";

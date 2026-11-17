@@ -5,6 +5,12 @@ import {
   AuthIDPConfigSchema,
   AuthOAuth2Client_ClientType,
   AuthOAuth2Client_GrantType,
+  AuthSCIMAttribute_Type,
+  AuthSCIMAttribute_Uniqueness,
+  AuthSCIMConfig_AuthorizationType,
+  AuthSCIMConfigSchema,
+  AuthSCIMResourceSchema,
+  TenantProviderConfig_TenantProviderType,
   TenantProviderConfigSchema,
   UserProfileProviderConfig_UserProfileProviderType,
   UserProfileProviderConfigSchema,
@@ -12,13 +18,19 @@ import {
 import { describe, expect, test, vi } from "vitest";
 import { defineApplication } from "#/cli/services/application";
 import { logger, symbols } from "#/cli/shared/logger";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { defineConfig } from "#/configure/config/index";
 import { defineAuth } from "#/configure/services/auth/index";
 import { t } from "#/configure/types/type";
 import { applyAuth, formatAuthHookChangeEntries, planAuth } from "./auth";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
+import type { SCIMAuthorization } from "#/types/auth.generated";
 import type { PlanContext } from "./types";
+import type {
+  GetTenantConfigResponseSchema,
+  GetUserProfileConfigResponseSchema,
+} from "@tailor-platform/tailor-proto/auth_pb";
 
 vi.mock("./label", async (importOriginal) => {
   const original = await importOriginal<Record<string, unknown>>();
@@ -133,6 +145,101 @@ function createMockApplicationWithUserProfile(options: MockUserProfileOptions = 
   } as unknown as Application;
 }
 
+const bearerSCIMAuthorization: SCIMAuthorization = {
+  type: "bearer",
+  bearerSecret: { vaultName: "scim", secretKey: "token" },
+};
+
+function createMockApplicationWithSCIM(authorization: SCIMAuthorization): Application {
+  const application = createMockApplication();
+  return {
+    ...application,
+    authService: {
+      ...application.authService,
+      config: {
+        ...application.authService?.config,
+        scim: {
+          machineUserName: "manager-machine-user",
+          authorization,
+          resources: [
+            {
+              name: "User",
+              tailorDBNamespace: "tailordb",
+              tailorDBType: "User",
+              coreSchema: {
+                name: "urn:ietf:params:scim:schemas:core:2.0:User",
+                attributes: [
+                  { type: "string", name: "userName", required: true },
+                  {
+                    type: "complex",
+                    name: "name",
+                    subAttributes: [{ type: "string", name: "givenName" }],
+                  },
+                ],
+              },
+              attributeMapping: [
+                { tailorDBField: "email", scimPath: "userName" },
+                { tailorDBField: "givenName", scimPath: "name.givenName" },
+              ],
+            },
+          ],
+        },
+      },
+    },
+  } as unknown as Application;
+}
+
+function remoteSCIMConfig(
+  authorization: SCIMAuthorization,
+  machineUserName = "manager-machine-user",
+) {
+  return create(AuthSCIMConfigSchema, {
+    machineUserName,
+    ...(authorization.type === "bearer"
+      ? {
+          authorizationType: AuthSCIMConfig_AuthorizationType.BEARER,
+          authorizationConfig: { case: "bearerSecret", value: authorization.bearerSecret ?? {} },
+        }
+      : { authorizationType: AuthSCIMConfig_AuthorizationType.OAUTH2 }),
+  });
+}
+
+function remoteSCIMResource(userNameDescription?: string) {
+  return create(AuthSCIMResourceSchema, {
+    name: "User",
+    tailorDbNamespace: "tailordb",
+    tailorDbType: "User",
+    coreSchema: {
+      name: "urn:ietf:params:scim:schemas:core:2.0:User",
+      attributes: [
+        {
+          type: AuthSCIMAttribute_Type.STRING,
+          name: "userName",
+          description: userNameDescription,
+          required: true,
+          uniqueness: AuthSCIMAttribute_Uniqueness.NONE,
+        },
+        {
+          type: AuthSCIMAttribute_Type.COMPLEX,
+          name: "name",
+          uniqueness: AuthSCIMAttribute_Uniqueness.NONE,
+          subAttributes: [
+            {
+              type: AuthSCIMAttribute_Type.STRING,
+              name: "givenName",
+              uniqueness: AuthSCIMAttribute_Uniqueness.NONE,
+            },
+          ],
+        },
+      ],
+    },
+    attributeMapping: [
+      { tailorDbField: "email", scimPath: "userName" },
+      { tailorDbField: "givenName", scimPath: "name.givenName" },
+    ],
+  });
+}
+
 function createMockApplicationWithCustomOAuth2Lifetimes(): Application {
   return {
     name: appName,
@@ -218,6 +325,17 @@ function createMockApplicationWithTenantProvider(): Application {
   } as unknown as Application;
 }
 
+const tenantProviderConfigFromPlatform = create(TenantProviderConfigSchema, {
+  provider: "TAILORDB",
+  providerType: TenantProviderConfig_TenantProviderType.TAILORDB,
+  config: {
+    config: {
+      case: "tailordb",
+      value: { namespace: "tailordb", type: "Tenant", signatureField: "signature" },
+    },
+  },
+});
+
 type MachineUserReferences = {
   machineUsers: string[];
   scimMachineUser?: string;
@@ -249,7 +367,7 @@ function notFound(): never {
   throw new ConnectError("not found", Code.NotFound);
 }
 
-function createMockClient(opts?: {
+type MockClientOptions = {
   authServices?: Array<{
     name: string;
     publishSessionEvents: boolean;
@@ -280,54 +398,44 @@ function createMockClient(opts?: {
       machineUserName: string;
     };
   };
-  userProfileConfig?: Record<string, unknown>;
-  tenantConfig?: Record<string, unknown>;
-}): OperatorClient {
+  userProfileConfig?: MessageInitShape<typeof GetUserProfileConfigResponseSchema>;
+  tenantConfig?: MessageInitShape<typeof GetTenantConfigResponseSchema>;
+  scimConfig?: MessageInitShape<typeof AuthSCIMConfigSchema>;
+  scimResources?: Array<MessageInitShape<typeof AuthSCIMResourceSchema>>;
+};
+
+function createMockClient(opts?: MockClientOptions): OperatorClient {
   const authServices = opts?.authServices ?? [];
   const authIdPConfigs = opts?.authIdPConfigs ?? [];
   const machineUsers = opts?.machineUsers ?? [];
   const oauth2Clients = opts?.oauth2Clients ?? [];
   const authHook = opts?.authHook;
 
-  return {
-    listAuthServices: vi.fn().mockResolvedValue({
+  return mockOperatorClient({
+    listAuthServices: {
       authServices: authServices.map((service) => ({
         namespace: { name: service.name },
         publishSessionEvents: service.publishSessionEvents,
       })),
       nextPageToken: "",
-    }),
-    getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
-      const name = trn.split(":").pop();
+    },
+    getMetadata: (request) => {
+      const name = request.trn?.split(":").pop();
       const service = authServices.find((entry) => entry.name === name);
-      return {
-        metadata: {
-          labels: service?.label ? { "sdk-name": service.label, "sdk-version": sdkVersion } : {},
-        },
-      };
-    }),
-    listAuthIDPConfigs: vi.fn().mockResolvedValue({
-      idpConfigs: authIdPConfigs,
-      nextPageToken: "",
-    }),
-    getIdPService: vi.fn().mockImplementation(notFound),
-    getIdPClient: vi.fn().mockImplementation(notFound),
-    getUserProfileConfig: opts?.userProfileConfig
-      ? vi.fn().mockResolvedValue(opts.userProfileConfig)
-      : vi.fn().mockImplementation(notFound),
-    deleteUserProfileConfig: vi.fn().mockResolvedValue({}),
-    getTenantConfig: opts?.tenantConfig
-      ? vi.fn().mockResolvedValue(opts.tenantConfig)
-      : vi.fn().mockImplementation(notFound),
-    listAuthMachineUsers: vi.fn().mockResolvedValue({
-      machineUsers,
-      nextPageToken: "",
-    }),
-    listAuthOAuth2Clients: vi.fn().mockResolvedValue({
-      oauth2Clients,
-      nextPageToken: "",
-    }),
-    getAuthHook: vi.fn().mockImplementation(() => {
+      const labels: Record<string, string> = service?.label
+        ? { "sdk-name": service.label, "sdk-version": sdkVersion }
+        : {};
+      return { metadata: { labels } };
+    },
+    listAuthIDPConfigs: { idpConfigs: authIdPConfigs, nextPageToken: "" },
+    getIdPService: notFound,
+    getIdPClient: notFound,
+    getUserProfileConfig: opts?.userProfileConfig ?? notFound,
+    deleteUserProfileConfig: {},
+    getTenantConfig: opts?.tenantConfig ?? notFound,
+    listAuthMachineUsers: { machineUsers, nextPageToken: "" },
+    listAuthOAuth2Clients: { oauth2Clients, nextPageToken: "" },
+    getAuthHook: () => {
       if (!authHook) {
         return notFound();
       }
@@ -338,16 +446,12 @@ function createMockClient(opts?: {
           invoker: authHook.invoker,
         },
       };
-    }),
-    getAuthSCIMConfig: vi.fn().mockImplementation(notFound),
-    getAuthSCIMResources: vi.fn().mockResolvedValue({
-      scimResources: [],
-    }),
-    listAuthConnections: vi.fn().mockResolvedValue({
-      connections: [],
-      nextPageToken: "",
-    }),
-  } as unknown as OperatorClient;
+    },
+    getAuthSCIMConfig: opts?.scimConfig ? { scimConfig: opts.scimConfig } : notFound,
+    getAuthSCIMResources: { scimResources: opts?.scimResources ?? [] },
+    listAuthConnections: { connections: [], nextPageToken: "" },
+    getStaticWebsite: notFound,
+  });
 }
 
 function createContext(
@@ -500,21 +604,31 @@ describe("planAuth", () => {
     expect(result.changeSet.userProfileConfig.updates).toHaveLength(0);
   });
 
-  test("marks a tenant provider unchanged when its remote proto materializes defaults", async () => {
-    const application = createMockApplicationWithTenantProvider();
-    const createResult = await planAuth(createContext(createMockClient(), application));
-    const desired = createResult.changeSet.tenantConfig.creates[0]?.request.tenantProviderConfig;
-    expect(desired).toBeDefined();
-    const remote = create(TenantProviderConfigSchema, desired);
+  test("marks a tenant provider unchanged when the Platform returns it as deployed", async () => {
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
-      tenantConfig: { tenantProviderConfig: remote },
+      tenantConfig: { tenantProviderConfig: tenantProviderConfigFromPlatform },
     });
 
-    const result = await planAuth(createContext(client, application));
+    const result = await planAuth(createContext(client, createMockApplicationWithTenantProvider()));
 
     expect(result.changeSet.tenantConfig.unchanged).toHaveLength(1);
     expect(result.changeSet.tenantConfig.updates).toHaveLength(0);
+  });
+
+  test("plans an update that restores a tenant provider the Platform returns cleared", async () => {
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
+      tenantConfig: { tenantProviderConfig: {} },
+    });
+
+    const result = await planAuth(createContext(client, createMockApplicationWithTenantProvider()));
+
+    const updates = result.changeSet.tenantConfig.updates;
+    expect(updates).toHaveLength(1);
+    expect(create(TenantProviderConfigSchema, updates[0]?.request.tenantProviderConfig)).toEqual(
+      tenantProviderConfigFromPlatform,
+    );
   });
 
   test("marks machine user without attributes unchanged when remote attribute map is empty", async () => {
@@ -636,6 +750,37 @@ describe("planAuth", () => {
     expect(result.changeSet.oauth2Client.unchanged).toHaveLength(0);
   });
 
+  test.each([
+    { authorization: bearerSCIMAuthorization, forceApplyAll: false, forced: [], unchanged: 1 },
+    { authorization: { type: "oauth2" }, forceApplyAll: false, forced: [], unchanged: 1 },
+    { authorization: bearerSCIMAuthorization, forceApplyAll: true, forced: [true], unchanged: 0 },
+    { authorization: { type: "oauth2" }, forceApplyAll: true, forced: [true], unchanged: 0 },
+  ] satisfies Array<{
+    authorization: SCIMAuthorization;
+    forceApplyAll: boolean;
+    forced: boolean[];
+    unchanged: number;
+  }>)(
+    "plans a $authorization.type SCIM config and resource that match remote with forceApplyAll $forceApplyAll",
+    async ({ authorization, forceApplyAll, forced, unchanged }) => {
+      const client = createMockClient({
+        authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
+        scimConfig: remoteSCIMConfig(authorization),
+        scimResources: [remoteSCIMResource()],
+      });
+
+      const result = await planAuth({
+        ...createContext(client, createMockApplicationWithSCIM(authorization)),
+        forceApplyAll,
+      });
+
+      for (const changeSet of [result.changeSet.scim, result.changeSet.scimResource]) {
+        expect(changeSet.updates.map((update) => update.forcedBySdkVersion)).toEqual(forced);
+        expect(changeSet.unchanged).toHaveLength(unchanged);
+      }
+    },
+  );
+
   test("does not mark forceApplyAll updates whose config differs from remote", async () => {
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
@@ -652,15 +797,22 @@ describe("planAuth", () => {
         scriptRef: "auth-hook--auth-a--before-login",
         invoker: { namespace: "auth-a", machineUserName: "another-machine-user" },
       },
+      scimConfig: remoteSCIMConfig(bearerSCIMAuthorization, "another-machine-user"),
+      scimResources: [remoteSCIMResource("Outdated description")],
     });
 
-    const result = await planAuth({ ...createContext(client), forceApplyAll: true });
+    const result = await planAuth({
+      ...createContext(client, createMockApplicationWithSCIM(bearerSCIMAuthorization)),
+      forceApplyAll: true,
+    });
 
     for (const updates of [
       result.changeSet.service.updates,
       result.changeSet.machineUser.updates,
       result.changeSet.oauth2Client.updates,
       result.changeSet.authHook.updates,
+      result.changeSet.scim.updates,
+      result.changeSet.scimResource.updates,
     ]) {
       expect(updates).toHaveLength(1);
       expect(updates[0]).not.toHaveProperty("forcedBySdkVersion");
@@ -696,15 +848,14 @@ describe("planAuth", () => {
     const idpConfig = createResult.changeSet.idpConfig.creates[0]?.request.idpConfig;
     const userProfile =
       createResult.changeSet.userProfileConfig.creates[0]?.request.userProfileProviderConfig;
-    const tenant = createResult.changeSet.tenantConfig.creates[0]?.request.tenantProviderConfig;
-    expect(idpConfig && userProfile && tenant).toBeDefined();
+    expect(idpConfig && userProfile).toBeDefined();
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
       authIdPConfigs: [create(AuthIDPConfigSchema, idpConfig)],
       userProfileConfig: {
         userProfileProviderConfig: create(UserProfileProviderConfigSchema, userProfile),
       },
-      tenantConfig: { tenantProviderConfig: create(TenantProviderConfigSchema, tenant) },
+      tenantConfig: { tenantProviderConfig: tenantProviderConfigFromPlatform },
     });
 
     const result = await planAuth({ ...createContext(client, combined), forceApplyAll: true });
@@ -997,11 +1148,7 @@ describe("planAuth", () => {
 
     test("does not warn when redirect URI references a locally-defined static website that is not yet on the platform", async () => {
       using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-      const baseClient = createMockClient({});
-      const client = {
-        ...baseClient,
-        getStaticWebsite: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
-      } as unknown as OperatorClient;
+      const client = createMockClient({});
 
       const result = await planAuth(
         createContext(client, createApplicationWithStaticWebsiteRedirectURI()),

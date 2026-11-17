@@ -11,10 +11,14 @@ import {
   planWorkflowJobFunctionExecutionPolicy,
 } from "#/cli/commands/deploy/workflow-execution-policy";
 import { defineApplication } from "#/cli/services/application";
-import { initOperatorClient } from "#/cli/shared/client";
+import { initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { logger } from "#/cli/shared/logger";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import {
+  mockOperatorClient,
+  type OperatorClientMocks,
+} from "#/cli/shared/test-helpers/operator-client";
 import {
   emptyPlanResults,
   plannedDeleteLists,
@@ -149,6 +153,17 @@ const APPLY_BY_PLAN: Record<keyof PlanResults, { mock: { calls: unknown[][] } }>
   secretManager: mocks.applySecretManager,
 };
 
+function mockClient<K extends keyof OperatorClient = never>(methods?: OperatorClientMocks<K>) {
+  const client = Object.assign(
+    mockOperatorClient({
+      listWorkflowJobFunctionExecutionPolicies: { policies: [], nextPageToken: "" },
+    }),
+    methods && mockOperatorClient(methods),
+  );
+  vi.mocked(initOperatorClient).mockResolvedValue(client);
+  return client;
+}
+
 describe("remove command", () => {
   beforeEach(() => {
     mocks.plans = emptyPlanResults();
@@ -157,17 +172,14 @@ describe("remove command", () => {
   });
 
   test("deletes a managed workflow execution policy when it is the only remaining resource", async () => {
-    const client = {
-      listWorkflowJobFunctionExecutionPolicies: vi.fn(async () => ({
+    const client = mockClient({
+      listWorkflowJobFunctionExecutionPolicies: {
         policies: [{ name: "premium" }],
         nextPageToken: "",
-      })),
-      getMetadata: vi.fn(async () => ({
-        metadata: { labels: { "sdk-name": "my-app" } },
-      })),
-      deleteWorkflowJobFunctionExecutionPolicy: vi.fn(),
-    };
-    vi.mocked(initOperatorClient).mockResolvedValue(client as never);
+      },
+      getMetadata: { metadata: { labels: { "sdk-name": "my-app" } } },
+      deleteWorkflowJobFunctionExecutionPolicy: {},
+    });
 
     await runCommand(removeCommand, ["--yes"]);
 
@@ -194,16 +206,14 @@ describe("remove command", () => {
     );
   });
   test("prints the removal under JSON output", async () => {
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      listWorkflowJobFunctionExecutionPolicies: vi.fn(async () => ({
+    mockClient({
+      listWorkflowJobFunctionExecutionPolicies: {
         policies: [{ name: "premium" }],
         nextPageToken: "",
-      })),
-      getMetadata: vi.fn(async () => ({
-        metadata: { labels: { "sdk-name": "my-app" } },
-      })),
-      deleteWorkflowJobFunctionExecutionPolicy: vi.fn(),
-    } as never);
+      },
+      getMetadata: { metadata: { labels: { "sdk-name": "my-app" } } },
+      deleteWorkflowJobFunctionExecutionPolicy: {},
+    });
     using _json = jsonMode();
 
     await runCommand(removeCommand, ["--yes"]);
@@ -217,12 +227,7 @@ describe("remove command", () => {
   });
 
   test("reports no change under JSON output when nothing is left to remove", async () => {
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      listWorkflowJobFunctionExecutionPolicies: vi.fn(async () => ({
-        policies: [],
-        nextPageToken: "",
-      })),
-    } as never);
+    mockClient();
     using _json = jsonMode();
 
     await runCommand(removeCommand, ["--yes"]);
@@ -246,11 +251,12 @@ describe("remove command", () => {
       (path) => !DELETE_LISTS_REMOVAL_NEVER_PLANS.has(path),
     ),
   )("lists and applies a planned delete from %s when it is the only one", async (path) => {
-    const client = {
-      deleteWorkflowJobFunctionExecutionPolicy: vi.fn(),
-      listOTLPExporters: vi.fn(async () => ({ otlpExporters: [], nextPageToken: "" })),
-    };
-    vi.mocked(initOperatorClient).mockResolvedValue(client as never);
+    vi.mocked(initOperatorClient).mockResolvedValue(
+      mockOperatorClient({
+        deleteWorkflowJobFunctionExecutionPolicy: {},
+        listOTLPExporters: { otlpExporters: [], nextPageToken: "" },
+      }),
+    );
     vi.mocked(planWorkflowJobFunctionExecutionPolicy).mockImplementation(
       async () => mocks.plans.workflowExecutionPolicy,
     );
@@ -266,12 +272,7 @@ describe("remove command", () => {
   });
 
   test("stops before listing or deleting anything when another application uses a service it deletes", async () => {
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      listWorkflowJobFunctionExecutionPolicies: vi.fn(async () => ({
-        policies: [],
-        nextPageToken: "",
-      })),
-    } as never);
+    mockClient();
     mocks.plans.app.deletes.push({ ...PLANNED_DELETE, name: "my-app" });
     mocks.plans.app.existingApplications = [
       {
@@ -313,12 +314,7 @@ describe("remove command", () => {
   });
 
   test("stops before listing or deleting anything when another application's executor subscribes to a workflow it deletes", async () => {
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      listWorkflowJobFunctionExecutionPolicies: vi.fn(async () => ({
-        policies: [],
-        nextPageToken: "",
-      })),
-    } as never);
+    mockClient();
     mocks.plans.workflow.changeSet.deletes.push({
       name: "order-flow",
       workspaceId: "ws",
@@ -352,12 +348,7 @@ describe("remove command", () => {
   });
 
   test("lists workflow job functions under their own heading", async () => {
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      listWorkflowJobFunctionExecutionPolicies: vi.fn(async () => ({
-        policies: [],
-        nextPageToken: "",
-      })),
-    } as never);
+    mockClient();
     mocks.plans.workflow.jobFunctionDeletes.push({
       workspaceId: "workspace-id",
       jobFunctionName: "process-order",
@@ -385,12 +376,7 @@ describe("remove command", () => {
         config: { name: "my-app", path: configPath },
         plugins: [],
       });
-      vi.mocked(initOperatorClient).mockResolvedValue({
-        listWorkflowJobFunctionExecutionPolicies: vi.fn(async () => ({
-          policies: [],
-          nextPageToken: "",
-        })),
-      } as never);
+      mockClient();
 
       await runCommand(removeCommand, ["--yes"]);
 
@@ -405,14 +391,7 @@ describe("remove command", () => {
   test("does not claim success when same-name resources were left behind", async () => {
     // A resource tagged with this application's name that it does not own by id
     // is skipped. Reporting success would say the workspace is clean when it is not.
-    const client = {
-      listWorkflowJobFunctionExecutionPolicies: vi.fn(async () => ({
-        policies: [],
-        nextPageToken: "",
-      })),
-      getMetadata: vi.fn(async () => ({ metadata: { labels: {} } })),
-    };
-    vi.mocked(initOperatorClient).mockResolvedValue(client as never);
+    mockClient({ getMetadata: { metadata: { labels: {} } } });
     mocks.plans.executor.resourceOwners.add("my-app");
 
     await runCommand(removeCommand, ["--yes"]);
@@ -432,13 +411,7 @@ describe("remove command", () => {
   });
 
   test("reports an incomplete removal under JSON output when resources were left behind", async () => {
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      listWorkflowJobFunctionExecutionPolicies: vi.fn(async () => ({
-        policies: [],
-        nextPageToken: "",
-      })),
-      getMetadata: vi.fn(async () => ({ metadata: { labels: {} } })),
-    } as never);
+    mockClient({ getMetadata: { metadata: { labels: {} } } });
     mocks.plans.executor.resourceOwners.add("my-app");
     using _json = jsonMode();
 

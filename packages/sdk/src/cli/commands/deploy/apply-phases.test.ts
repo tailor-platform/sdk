@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import {
   applyDeploymentPlans,
   applyPrerequisiteResources,
@@ -8,11 +9,12 @@ import {
 } from "./apply-phases";
 import { writeMetadataLabels } from "./label";
 import { MaintenanceTimeline } from "./tailordb/migration-timing";
+import type { OperatorClient } from "#/cli/shared/client";
 import type { MaintenanceModeRelease } from "./tailordb";
 
 const mocks = vi.hoisted(() => {
   const calls: string[] = [];
-  const state: { onApplicationApply?: (client: unknown) => Promise<void> } = {};
+  const state: { onApplicationApply?: (client: OperatorClient) => Promise<void> } = {};
   const marker = (value: unknown) => (value as { marker: string }).marker;
   return {
     calls,
@@ -123,7 +125,7 @@ describe("applyDeploymentPlans", () => {
     trace.setGlobalTracerProvider(provider);
 
     try {
-      await applyDeploymentPlans({} as never, "workspace-id", [deployment("supplier")]);
+      await applyDeploymentPlans(mockOperatorClient({}), "workspace-id", [deployment("supplier")]);
 
       const byName = new Map(
         exporter.getFinishedSpans().map((span) => [span.name, span.parentSpanContext?.spanId]),
@@ -181,7 +183,7 @@ describe("applyDeploymentPlans", () => {
   test("creates TailorDB and IdP for every app before applying Auth or Applications", async () => {
     mocks.calls.length = 0;
 
-    await applyDeploymentPlans({} as never, "workspace-id", [
+    await applyDeploymentPlans(mockOperatorClient({}), "workspace-id", [
       deployment("supplier"),
       deployment("buyer"),
     ]);
@@ -251,7 +253,7 @@ describe("applyDeploymentPlans", () => {
   test("applyPrerequisiteResources applies only secretManager, staticWebsite, aiGateway, idp, and auth prerequisites", async () => {
     mocks.calls.length = 0;
 
-    await applyPrerequisiteResources({} as never, [deployment("supplier")]);
+    await applyPrerequisiteResources(mockOperatorClient({}), [deployment("supplier")]);
 
     expect(mocks.preflightTailorDB).not.toHaveBeenCalled();
     expect(mocks.applyTailorDB).not.toHaveBeenCalled();
@@ -282,7 +284,7 @@ describe("applyDeploymentPlans", () => {
       .mockImplementationOnce(async () => undefined)
       .mockImplementationOnce(async () => report as never);
 
-    const maintenance = await applyRemainingResources({} as never, "workspace-id", [
+    const maintenance = await applyRemainingResources(mockOperatorClient({}), "workspace-id", [
       deployment("supplier"),
       deployment("buyer"),
     ]);
@@ -293,7 +295,7 @@ describe("applyDeploymentPlans", () => {
   test("applyRemainingResources applies every kind except secretManager, staticWebsite, aiGateway, idp create-update, and auth prerequisites", async () => {
     mocks.calls.length = 0;
 
-    await applyRemainingResources({} as never, "workspace-id", [deployment("supplier")]);
+    await applyRemainingResources(mockOperatorClient({}), "workspace-id", [deployment("supplier")]);
 
     expect(mocks.preflightTailorDB).not.toHaveBeenCalled();
     expect(mocks.applySecretManager).toHaveBeenCalledTimes(1);
@@ -351,7 +353,10 @@ describe("applyDeploymentPlans", () => {
   test("preflightAllTailorDB runs before any resource is applied", async () => {
     mocks.calls.length = 0;
 
-    await preflightAllTailorDB({} as never, [deployment("supplier"), deployment("buyer")]);
+    await preflightAllTailorDB(mockOperatorClient({}), [
+      deployment("supplier"),
+      deployment("buyer"),
+    ]);
 
     expect(mocks.calls).toEqual([
       "tailordb-preflight:supplier-tailordb",
@@ -364,7 +369,7 @@ describe("applyDeploymentPlans", () => {
     mocks.preflightTailorDB.mockRejectedValueOnce(new Error("migration state changed"));
 
     await expect(
-      applyDeploymentPlans({} as never, "workspace-id", [deployment("supplier")]),
+      applyDeploymentPlans(mockOperatorClient({}), "workspace-id", [deployment("supplier")]),
     ).rejects.toThrow("migration state changed");
 
     // Preflight runs before anything else, so a failure leaves nothing applied --
@@ -379,22 +384,22 @@ describe("applyDeploymentPlans", () => {
 
   test("flushes resource metadata once before dependent delete phases", async () => {
     mocks.calls.length = 0;
-    const client = {
-      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
-      setMetadata: vi.fn().mockResolvedValue({}),
-      bulkSetMetadata: vi.fn().mockImplementation(async () => {
+    const client = mockOperatorClient({
+      getMetadata: { metadata: { labels: {} } },
+      setMetadata: {},
+      bulkSetMetadata: async () => {
         mocks.calls.push("metadata:bulk");
         return { results: [] };
-      }),
-    };
+      },
+    });
     mocks.state.onApplicationApply = async (applyClient) => {
-      await writeMetadataLabels(applyClient as never, {
+      await writeMetadataLabels(applyClient, {
         trn: "trn:v1:workspace:workspace-id:application:supplier",
         labels: { "sdk-name": "supplier" },
       });
     };
 
-    await applyDeploymentPlans(client as never, "workspace-id", [deployment("supplier")]);
+    await applyDeploymentPlans(client, "workspace-id", [deployment("supplier")]);
 
     expect(client.setMetadata).not.toHaveBeenCalled();
     expect(client.bulkSetMetadata).toHaveBeenCalledTimes(1);
@@ -408,20 +413,20 @@ describe("applyDeploymentPlans", () => {
 
   test("does not start dependent delete phases after a bulk metadata failure", async () => {
     mocks.calls.length = 0;
-    const client = {
-      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
-      setMetadata: vi.fn().mockResolvedValue({}),
-      bulkSetMetadata: vi.fn().mockRejectedValue(new Error("bulk write failed")),
-    };
+    const client = mockOperatorClient({
+      getMetadata: { metadata: { labels: {} } },
+      setMetadata: {},
+      bulkSetMetadata: () => Promise.reject(new Error("bulk write failed")),
+    });
     mocks.state.onApplicationApply = async (applyClient) => {
-      await writeMetadataLabels(applyClient as never, {
+      await writeMetadataLabels(applyClient, {
         trn: "trn:v1:workspace:workspace-id:application:supplier",
         labels: { "sdk-name": "supplier" },
       });
     };
 
     await expect(
-      applyDeploymentPlans(client as never, "workspace-id", [deployment("supplier")]),
+      applyDeploymentPlans(client, "workspace-id", [deployment("supplier")]),
     ).rejects.toThrow("bulk write failed");
 
     expect(mocks.calls).toContain("workflow:supplier-workflow:create-update");
@@ -447,7 +452,7 @@ describe("applyRemainingResources with a held maintenance mode", () => {
     );
     mocks.applyTailorDB.mockImplementationOnce(async () => immediate as never);
 
-    const maintenance = await applyRemainingResources({} as never, "workspace-id", [
+    const maintenance = await applyRemainingResources(mockOperatorClient({}), "workspace-id", [
       deployment("supplier"),
       deployment("buyer"),
     ]);
@@ -491,7 +496,7 @@ describe("applyRemainingResources with a held maintenance mode", () => {
   test("asks TailorDB to hold its maintenance mode", async () => {
     mocks.calls.length = 0;
 
-    await applyRemainingResources({} as never, "workspace-id", [deployment("supplier")]);
+    await applyRemainingResources(mockOperatorClient({}), "workspace-id", [deployment("supplier")]);
 
     expect(mocks.applyTailorDB).toHaveBeenCalledWith(
       expect.anything(),
@@ -508,7 +513,7 @@ describe("applyRemainingResources with a held maintenance mode", () => {
     });
 
     await expect(
-      applyRemainingResources({} as never, "workspace-id", [deployment("supplier")]),
+      applyRemainingResources(mockOperatorClient({}), "workspace-id", [deployment("supplier")]),
     ).rejects.toThrow("table deletion failed");
 
     expect(mocks.calls.at(-1)).toBe("release:supplier-tailordb");
@@ -517,9 +522,9 @@ describe("applyRemainingResources with a held maintenance mode", () => {
   test("lifts it once every other change of the deploy is applied", async () => {
     mocks.calls.length = 0;
     const release = holdMaintenanceMode();
-    const client = {};
+    const client = mockOperatorClient({});
 
-    await applyRemainingResources(client as never, "workspace-id", [
+    await applyRemainingResources(client, "workspace-id", [
       deployment("supplier"),
       deployment("buyer"),
     ]);
@@ -537,7 +542,7 @@ describe("applyRemainingResources with a held maintenance mode", () => {
   test("does not recompose an application whose deploy held nothing", async () => {
     mocks.calls.length = 0;
 
-    await applyRemainingResources({} as never, "workspace-id", [deployment("supplier")]);
+    await applyRemainingResources(mockOperatorClient({}), "workspace-id", [deployment("supplier")]);
 
     expect(mocks.calls.filter((call) => call.startsWith("recompose:"))).toEqual([]);
   });
@@ -548,7 +553,7 @@ describe("applyRemainingResources with a held maintenance mode", () => {
     mocks.applyExecutor.mockRejectedValueOnce(new Error("executor apply failed"));
 
     await expect(
-      applyRemainingResources({} as never, "workspace-id", [deployment("supplier")]),
+      applyRemainingResources(mockOperatorClient({}), "workspace-id", [deployment("supplier")]),
     ).rejects.toThrow("executor apply failed");
 
     expect(mocks.calls.at(-1)).toBe("release:supplier-tailordb");
@@ -569,7 +574,7 @@ describe("applyRemainingResources with a held maintenance mode", () => {
     );
 
     await expect(
-      applyRemainingResources({} as never, "workspace-id", [
+      applyRemainingResources(mockOperatorClient({}), "workspace-id", [
         deployment("supplier"),
         deployment("buyer"),
       ]),
@@ -592,7 +597,7 @@ describe("applyRemainingResources with a held maintenance mode", () => {
     mocks.applyExecutor.mockRejectedValueOnce(new Error("executor apply failed"));
 
     await expect(
-      applyRemainingResources({} as never, "workspace-id", [deployment("supplier")]),
+      applyRemainingResources(mockOperatorClient({}), "workspace-id", [deployment("supplier")]),
     ).rejects.toThrow("executor apply failed");
   });
 
@@ -603,7 +608,7 @@ describe("applyRemainingResources with a held maintenance mode", () => {
     });
 
     await expect(
-      applyRemainingResources({} as never, "workspace-id", [
+      applyRemainingResources(mockOperatorClient({}), "workspace-id", [
         deployment("supplier"),
         deployment("buyer"),
       ]),

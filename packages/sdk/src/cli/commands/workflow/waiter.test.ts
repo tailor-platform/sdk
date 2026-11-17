@@ -3,45 +3,40 @@ import {
   WorkflowExecution_Status,
   WorkflowJobExecution_Status,
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import {
   getWorkflowWaitFailure,
   waitForWorkflowExecution,
+  type WorkflowWaitOptions,
   type WorkflowWaitResult,
 } from "./waiter";
-import type {
-  WorkflowExecution,
-  WorkflowJobExecution,
-} from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { WorkflowExecutionSchema } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 function workflowExecution(
   status: WorkflowExecution_Status,
   jobStatuses: WorkflowJobExecution_Status[] = [],
-): WorkflowExecution {
+): MessageInitShape<typeof WorkflowExecutionSchema> {
   return {
     id: "execution-1",
     workflowName: "my-workflow",
     status,
-    jobExecutions: jobStatuses.map(
-      (jobStatus, index) =>
-        ({
-          id: `job-${index + 1}`,
-          stackedJobName: `job-${index + 1}`,
-          status: jobStatus,
-          executionId: `function-${index + 1}`,
-        }) as WorkflowJobExecution,
-    ),
-  } as WorkflowExecution;
+    jobExecutions: jobStatuses.map((jobStatus, index) => ({
+      id: `job-${index + 1}`,
+      stackedJobName: `job-${index + 1}`,
+      status: jobStatus,
+      executionId: `function-${index + 1}`,
+    })),
+  };
 }
 
 function wait(
-  getWorkflowExecution: ReturnType<typeof vi.fn>,
+  client: WorkflowWaitOptions["client"],
   overrides: Partial<Parameters<typeof waitForWorkflowExecution>[0]> = {},
 ) {
   return waitForWorkflowExecution({
-    client: { getWorkflowExecution } as unknown as Parameters<
-      typeof waitForWorkflowExecution
-    >[0]["client"],
+    client,
     workspaceId: "workspace-1",
     executionId: "execution-1",
     interval: 1,
@@ -53,8 +48,8 @@ function wait(
 
 describe("waitForWorkflowExecution", () => {
   test("treats retry and pending states as transient until success", async () => {
-    const getWorkflowExecution = vi
-      .fn()
+    const client = mockOperatorClient({ getWorkflowExecution: {} });
+    client.getWorkflowExecution
       .mockResolvedValueOnce({
         execution: workflowExecution(WorkflowExecution_Status.UNSPECIFIED),
       })
@@ -65,7 +60,7 @@ describe("waitForWorkflowExecution", () => {
         execution: workflowExecution(WorkflowExecution_Status.SUCCESS),
       });
 
-    const result = await wait(getWorkflowExecution);
+    const result = await wait(client);
 
     expect(result).toMatchObject({
       id: "execution-1",
@@ -78,13 +73,15 @@ describe("waitForWorkflowExecution", () => {
   });
 
   test("can wait for a job-level suspended state", async () => {
-    const getWorkflowExecution = vi.fn().mockResolvedValue({
-      execution: workflowExecution(WorkflowExecution_Status.RUNNING, [
-        WorkflowJobExecution_Status.WAITING,
-      ]),
+    const client = mockOperatorClient({
+      getWorkflowExecution: {
+        execution: workflowExecution(WorkflowExecution_Status.RUNNING, [
+          WorkflowJobExecution_Status.WAITING,
+        ]),
+      },
     });
 
-    const result = await wait(getWorkflowExecution, { until: "suspended" });
+    const result = await wait(client, { until: "suspended" });
 
     expect(result.status).toBe("RUNNING");
     expect(result.statusClass).toBe("suspended");
@@ -92,13 +89,15 @@ describe("waitForWorkflowExecution", () => {
   });
 
   test("stops at a canceled execution as a terminal failure", async () => {
-    const getWorkflowExecution = vi.fn().mockResolvedValue({
-      execution: workflowExecution(WorkflowExecution_Status.CANCELED, [
-        WorkflowJobExecution_Status.CANCELED,
-      ]),
+    const client = mockOperatorClient({
+      getWorkflowExecution: {
+        execution: workflowExecution(WorkflowExecution_Status.CANCELED, [
+          WorkflowJobExecution_Status.CANCELED,
+        ]),
+      },
     });
 
-    const result = await wait(getWorkflowExecution);
+    const result = await wait(client);
 
     expect(result).toMatchObject({
       status: "CANCELED",
@@ -114,14 +113,14 @@ describe("waitForWorkflowExecution", () => {
   });
 
   test("retries retryable poll failures", async () => {
-    const getWorkflowExecution = vi
-      .fn()
+    const client = mockOperatorClient({ getWorkflowExecution: {} });
+    client.getWorkflowExecution
       .mockRejectedValueOnce(new ConnectError("temporarily unavailable", Code.Unavailable))
       .mockResolvedValueOnce({
         execution: workflowExecution(WorkflowExecution_Status.SUCCESS),
       });
 
-    const result = await wait(getWorkflowExecution);
+    const result = await wait(client);
 
     expect(result.status).toBe("SUCCESS");
     expect(result.attempts).toBe(2);
@@ -129,11 +128,13 @@ describe("waitForWorkflowExecution", () => {
   });
 
   test("returns timeout diagnostics with the last observed status", async () => {
-    const getWorkflowExecution = vi.fn().mockResolvedValue({
-      execution: workflowExecution(WorkflowExecution_Status.PENDING),
+    const client = mockOperatorClient({
+      getWorkflowExecution: {
+        execution: workflowExecution(WorkflowExecution_Status.PENDING),
+      },
     });
 
-    const result = await wait(getWorkflowExecution, { timeout: 5 });
+    const result = await wait(client, { timeout: 5 });
 
     expect(result).toMatchObject({
       id: "execution-1",

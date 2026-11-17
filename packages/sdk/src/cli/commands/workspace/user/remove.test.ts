@@ -5,6 +5,7 @@ import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { removeCommand } from "./remove";
 
 vi.mock("#/cli/shared/operator-context", () => ({
@@ -21,13 +22,15 @@ vi.mock("#/cli/shared/readonly-guard", () => ({
   assertWritable: vi.fn(),
 }));
 
+function mockContextClient() {
+  const client = mockOperatorClient({ removeWorkspacePlatformUser: {} });
+  vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({ client, workspaceId: "workspace-1" });
+  return client;
+}
+
 describe("workspace user remove command", () => {
   test("fails without removing the user when the confirmation is not yes", async () => {
-    const client = { removeWorkspacePlatformUser: vi.fn().mockResolvedValue({}) };
-    vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
-      client,
-      workspaceId: "workspace-1",
-    } as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>);
+    const client = mockContextClient();
     vi.mocked(prompt.text).mockResolvedValue("no");
 
     const result = await runCommand(removeCommand, ["--email", "user@example.com"]);
@@ -41,11 +44,7 @@ describe("workspace user remove command", () => {
   });
 
   test("removes the user when the confirmation is yes", async () => {
-    const client = { removeWorkspacePlatformUser: vi.fn().mockResolvedValue({}) };
-    vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
-      client,
-      workspaceId: "workspace-1",
-    } as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>);
+    const client = mockContextClient();
     vi.mocked(prompt.text).mockResolvedValue("yes");
 
     const result = await runCommand(removeCommand, ["--email", "user@example.com"]);
@@ -58,11 +57,7 @@ describe("workspace user remove command", () => {
   });
 
   test("prints the removed user under JSON output", async () => {
-    const client = { removeWorkspacePlatformUser: vi.fn().mockResolvedValue({}) };
-    vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
-      client,
-      workspaceId: "workspace-1",
-    } as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>);
+    mockContextClient();
     using _json = jsonMode();
     using stdout = captureStdout();
 

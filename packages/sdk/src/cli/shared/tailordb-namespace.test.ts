@@ -1,21 +1,24 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 import { MAX_PAGE_SIZE } from "./client";
 import { resolveTableNamespace, resolveTableNamespaces } from "./tailordb-namespace";
+import { mockOperatorClient } from "./test-helpers/operator-client";
 
 const namesResult = (...names: string[]) => ({
   tailordbTypes: names.map((name) => ({ name })),
   nextPageToken: "",
 });
 
+function listingClient() {
+  return mockOperatorClient({ listTailorDBTypes: namesResult() });
+}
+
 describe("resolveTableNamespaces", () => {
   test("resolves multiple tables from different namespaces", async () => {
-    const client = {
-      listTailorDBTypes: vi
-        .fn()
-        .mockResolvedValueOnce(namesResult("User"))
-        .mockResolvedValueOnce(namesResult("Event")),
-    };
+    const client = listingClient();
+    client.listTailorDBTypes
+      .mockResolvedValueOnce(namesResult("User"))
+      .mockResolvedValueOnce(namesResult("Event"));
 
     const result = await resolveTableNamespaces({
       workspaceId: "workspace-id",
@@ -29,12 +32,10 @@ describe("resolveTableNamespaces", () => {
   });
 
   test("resolves tables listed on every page", async () => {
-    const client = {
-      listTailorDBTypes: vi
-        .fn()
-        .mockResolvedValueOnce({ tailordbTypes: [{ name: "User" }], nextPageToken: "page-2" })
-        .mockResolvedValueOnce(namesResult("Order")),
-    };
+    const client = listingClient();
+    client.listTailorDBTypes
+      .mockResolvedValueOnce({ tailordbTypes: [{ name: "User" }], nextPageToken: "page-2" })
+      .mockResolvedValueOnce(namesResult("Order"));
 
     const result = await resolveTableNamespaces({
       workspaceId: "workspace-id",
@@ -61,12 +62,10 @@ describe("resolveTableNamespaces", () => {
 
   test("propagates a failure to list a namespace's tables, including NotFound", async () => {
     const listError = new ConnectError("workspace not found", Code.NotFound);
-    const client = {
-      listTailorDBTypes: vi
-        .fn()
-        .mockRejectedValueOnce(listError)
-        .mockResolvedValueOnce(namesResult("User")),
-    };
+    const client = listingClient();
+    client.listTailorDBTypes
+      .mockRejectedValueOnce(listError)
+      .mockResolvedValueOnce(namesResult("User"));
 
     await expect(
       resolveTableNamespaces({
@@ -80,7 +79,8 @@ describe("resolveTableNamespaces", () => {
   });
 
   test("stops querying when all tables are resolved", async () => {
-    const client = { listTailorDBTypes: vi.fn().mockResolvedValueOnce(namesResult("User")) };
+    const client = listingClient();
+    client.listTailorDBTypes.mockResolvedValueOnce(namesResult("User"));
 
     await resolveTableNamespaces({
       workspaceId: "workspace-id",
@@ -93,12 +93,10 @@ describe("resolveTableNamespaces", () => {
   });
 
   test("stops paging a namespace once every table is resolved", async () => {
-    const client = {
-      listTailorDBTypes: vi
-        .fn()
-        .mockResolvedValueOnce({ tailordbTypes: [{ name: "User" }], nextPageToken: "page-2" })
-        .mockRejectedValueOnce(new ConnectError("transient failure", Code.Unavailable)),
-    };
+    const client = listingClient();
+    client.listTailorDBTypes
+      .mockResolvedValueOnce({ tailordbTypes: [{ name: "User" }], nextPageToken: "page-2" })
+      .mockRejectedValueOnce(new ConnectError("transient failure", Code.Unavailable));
 
     const result = await resolveTableNamespaces({
       workspaceId: "workspace-id",
@@ -112,7 +110,8 @@ describe("resolveTableNamespaces", () => {
   });
 
   test("matches requested type names case-insensitively", async () => {
-    const client = { listTailorDBTypes: vi.fn().mockResolvedValueOnce(namesResult("Project")) };
+    const client = listingClient();
+    client.listTailorDBTypes.mockResolvedValueOnce(namesResult("Project"));
 
     const result = await resolveTableNamespaces({
       workspaceId: "workspace-id",
@@ -127,7 +126,8 @@ describe("resolveTableNamespaces", () => {
 
 describe("resolveTableNamespace", () => {
   test("returns null when the type is not found", async () => {
-    const client = { listTailorDBTypes: vi.fn().mockResolvedValue(namesResult("Order")) };
+    const client = listingClient();
+    client.listTailorDBTypes.mockResolvedValue(namesResult("Order"));
 
     const result = await resolveTableNamespace({
       workspaceId: "workspace-id",

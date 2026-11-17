@@ -1,15 +1,11 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, expect, test, vi } from "vitest";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import {
   assertUniqueLocalTailorDBTypeNames,
   assertUniqueTailorDBTypeNamesWithExternal,
   fetchExternalTailorDBTypeNameSources,
 } from "./type-name-validation";
-
-type ListTailorDBTypesArgs = {
-  namespaceName: string;
-  pageToken?: string;
-};
 
 type ListTailorDBTypesResult = {
   tailordbTypes: Array<{ name: string }>;
@@ -118,12 +114,10 @@ describe("assertUniqueLocalTailorDBTypeNames", () => {
 
 describe("fetchExternalTailorDBTypeNameSources", () => {
   test("fetches all pages for external namespaces", async () => {
-    const client = {
-      listTailorDBTypes: vi
-        .fn()
-        .mockResolvedValueOnce(page(["User"], "next"))
-        .mockResolvedValueOnce(page(["Order"])),
-    };
+    const client = mockOperatorClient({ listTailorDBTypes: {} });
+    client.listTailorDBTypes
+      .mockResolvedValueOnce(page(["User"], "next"))
+      .mockResolvedValueOnce(page(["Order"]));
 
     const result = await fetchExternalTailorDBTypeNameSources({
       client,
@@ -140,14 +134,14 @@ describe("fetchExternalTailorDBTypeNameSources", () => {
 
   test("fetches external namespaces concurrently while keeping each namespace paginated", async () => {
     const pending = new Map<string, (result: ListTailorDBTypesResult) => void>();
-    const client = {
-      listTailorDBTypes: vi.fn((args: ListTailorDBTypesArgs) => {
-        const key = `${args.namespaceName}:${args.pageToken ?? ""}`;
+    const client = mockOperatorClient({
+      listTailorDBTypes: (request) => {
+        const key = `${request.namespaceName}:${request.pageToken ?? ""}`;
         return new Promise<ListTailorDBTypesResult>((resolve) => {
           pending.set(key, resolve);
         });
-      }),
-    };
+      },
+    });
 
     const promise = fetchExternalTailorDBTypeNameSources({
       client,
@@ -179,9 +173,9 @@ describe("fetchExternalTailorDBTypeNameSources", () => {
   });
 
   test("treats a missing external namespace as empty for validation", async () => {
-    const client = {
-      listTailorDBTypes: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
-    };
+    const client = mockOperatorClient({
+      listTailorDBTypes: () => Promise.reject(new ConnectError("not found", Code.NotFound)),
+    });
 
     const result = await fetchExternalTailorDBTypeNameSources({
       client,
@@ -195,9 +189,7 @@ describe("fetchExternalTailorDBTypeNameSources", () => {
 
 describe("assertUniqueTailorDBTypeNamesWithExternal", () => {
   test("rejects duplicate type names between local and external namespaces", async () => {
-    const client = {
-      listTailorDBTypes: vi.fn().mockResolvedValue(page(["User"])),
-    };
+    const client = mockOperatorClient({ listTailorDBTypes: page(["User"]) });
 
     await expect(
       assertUniqueTailorDBTypeNamesWithExternal({
@@ -227,12 +219,10 @@ describe("assertUniqueTailorDBTypeNamesWithExternal", () => {
   });
 
   test("rejects duplicate type names between external namespaces", async () => {
-    const client = {
-      listTailorDBTypes: vi
-        .fn()
-        .mockResolvedValueOnce(page(["User"]))
-        .mockResolvedValueOnce(page(["User"])),
-    };
+    const client = mockOperatorClient({ listTailorDBTypes: {} });
+    client.listTailorDBTypes
+      .mockResolvedValueOnce(page(["User"]))
+      .mockResolvedValueOnce(page(["User"]));
 
     await expect(
       assertUniqueTailorDBTypeNamesWithExternal({
@@ -245,9 +235,7 @@ describe("assertUniqueTailorDBTypeNamesWithExternal", () => {
   });
 
   test("validates planned external namespaces without fetching remote types", async () => {
-    const client = {
-      listTailorDBTypes: vi.fn(),
-    };
+    const client = mockOperatorClient({ listTailorDBTypes: {} });
 
     await expect(
       assertUniqueTailorDBTypeNamesWithExternal({
