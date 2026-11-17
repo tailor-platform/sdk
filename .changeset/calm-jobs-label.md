@@ -1,6 +1,5 @@
 ---
 "@tailor-platform/sdk": minor
-"@tailor-platform/sdk-codemod": patch
 ---
 
 Workflow job executions now carry `kind` (the job function name, or the key of a wait) and `position` (parent job, call order, parallel branch, depth) in the `jobDetails` of `getWorkflowExecution({ logs: true })` and of the `wait()` it returns, and in the matching `--json --logs` output of `tailor workflow executions`, `wait`, `start --wait` and `resume --wait`. `workflowJobLogs[]` of `watchExecutorJob()` and `tailor executor jobs --wait --logs` gains `kind` and `jobExecutionId`.
