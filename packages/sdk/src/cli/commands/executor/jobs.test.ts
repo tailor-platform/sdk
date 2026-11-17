@@ -400,4 +400,33 @@ describe("downstream logs", () => {
       "    Logs:\n      step 1\n      step 2\n      [PLATFORM] runs close to the limit\n      [PLATFORM] move long work elsewhere\n",
     );
   });
+
+  test("heads a workflow job of an unknown kind with its id alone", async () => {
+    using _stdout = captureStdout();
+    using stderr = captureStderr();
+    mockOperatorClient({
+      targetType: ExecutorTargetType.WORKFLOW,
+      listExecutorJobAttempts: attemptsReferencing("workflow-execution-1"),
+      getWorkflowExecution: vi.fn().mockResolvedValue({
+        execution: {
+          id: "workflow-execution-1",
+          workflowName: "daily-workflow",
+          status: WorkflowExecution_Status.SUCCESS,
+          jobExecutions: [
+            {
+              id: "job-execution-9",
+              kind: { case: undefined },
+              status: WorkflowJobExecution_Status.SUCCESS,
+              executionId: "function-execution-1",
+            },
+          ],
+        } as unknown as WorkflowExecution,
+      }),
+      getFunctionExecution: vi.fn().mockResolvedValue({ execution: functionExecution }),
+    });
+
+    await runCommand(jobsCommand, ["my-executor", "job-1", "-W", "-l", "-i", "1ms"]);
+
+    expect(stripAnsi(stderr.output)).toContain("  Job: job-execution-9\n");
+  });
 });

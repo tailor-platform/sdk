@@ -273,6 +273,17 @@ describe("printExecutionWithLogs", () => {
     expect(plain.match(/step 1/g)).toHaveLength(1);
   });
 
+  test("heads a job of an unknown kind with its id alone", () => {
+    using stderr = captureStderr();
+
+    printExecutionWithLogs({
+      ...base,
+      jobDetails: [{ ...job, id: "job-9", kind: { type: "unknown" } }],
+    });
+
+    expect(stripAnsi(stderr.output)).toContain("--- job-9 ---\n  Status: RUNNING\n");
+  });
+
   test("marks entries the Platform wrote apart from the job's own output", () => {
     using stderr = captureStderr();
 

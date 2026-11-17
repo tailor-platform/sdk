@@ -104,8 +104,7 @@ interface WorkflowJobLog {
    * @deprecated since NEXT_RELEASE — the Platform is retiring this value, so this is never set; use `kind` for the job function name or wait key and `jobExecutionId` to identify the job instead. codemod: none (no automatic migration exists)
    */
   jobName?: string;
-  /** `null` when the job is of a kind this SDK version does not know. */
-  kind: WorkflowJobExecutionKindInfo | null;
+  kind: WorkflowJobExecutionKindInfo;
   logs?: string;
   logEntries?: FunctionLogEntryInfo[];
   result?: string;
@@ -751,7 +750,9 @@ export function printDownstreamExecution(result: WatchExecutorJobResult): void {
     if (result.workflowJobLogs && result.workflowJobLogs.length > 0) {
       for (const jobLog of result.workflowJobLogs) {
         const name = workflowJobExecutionLabel({ id: jobLog.jobExecutionId, kind: jobLog.kind });
-        logger.log(styles.bold(`\n  Job: ${name} (${jobLog.jobExecutionId})`));
+        const heading =
+          jobLog.kind.type === "unknown" ? name : `${name} (${jobLog.jobExecutionId})`;
+        logger.log(styles.bold(`\n  Job: ${heading}`));
         const logs = formatFunctionLogMessages(jobLog.logEntries);
         if (logs) {
           logger.log(styles.dim("    Logs:"));

@@ -348,7 +348,9 @@ export function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): 
     logger.log(styles.bold("\nJob Executions:"));
     for (const job of execution.jobDetails) {
       logger.log(styles.info(`\n--- ${workflowJobExecutionLabel(job)} ---`));
-      logger.log(`  ID: ${job.id}`);
+      if (job.kind.type !== "unknown") {
+        logger.log(`  ID: ${job.id}`);
+      }
       logger.log(`  Status: ${job.status}`);
       logger.log(`  Started: ${formatDate(job.startedAt)}`);
       logger.log(`  Finished: ${formatDate(job.finishedAt)}`);

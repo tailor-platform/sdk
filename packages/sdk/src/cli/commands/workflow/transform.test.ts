@@ -65,10 +65,10 @@ describe("toWorkflowJobExecutionInfo", () => {
     expect(info).not.toHaveProperty("stackedJobName");
   });
 
-  test("reports null kind and position when the Platform sent neither", () => {
+  test("reports an unknown kind and a null position when the Platform sent neither", () => {
     const info = toWorkflowJobExecutionInfo(create(WorkflowJobExecutionSchema, { id: "job-4" }));
 
-    expect(info.kind).toBeNull();
+    expect(info.kind).toEqual({ type: "unknown" });
     expect(info.position).toBeNull();
   });
 });
@@ -87,6 +87,6 @@ describe("workflowJobExecutionLabel", () => {
   });
 
   test("falls back to the id when the kind is unknown", () => {
-    expect(workflowJobExecutionLabel({ id: "job-4", kind: null })).toBe("job-4");
+    expect(workflowJobExecutionLabel({ id: "job-4", kind: { type: "unknown" } })).toBe("job-4");
   });
 });
