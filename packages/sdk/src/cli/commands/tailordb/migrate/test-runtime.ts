@@ -331,7 +331,7 @@ export function loadSnapshotSeedData(
     const jsonlPath = path.join(dataDir, `${tableName}.jsonl`);
     let content: string;
     try {
-      content = fs.readFileSync(jsonlPath, "utf8").trim();
+      content = fs.readFileSync(jsonlPath, "utf8");
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         data[tableName] = [];
@@ -339,28 +339,30 @@ export function loadSnapshotSeedData(
       }
       throw error;
     }
-    data[tableName] = content
-      ? content.split("\n").map((line, index) => {
-          let value: unknown;
-          try {
-            value = JSON.parse(line);
-          } catch (error) {
-            throw CLIError({
-              code: "SEED_DATA_INVALID",
-              message: `Invalid JSON in ${jsonlPath} at line ${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
-              cause: error,
-            });
-          }
-          if (value === null || typeof value !== "object" || Array.isArray(value)) {
-            throw CLIError({
-              code: "SEED_DATA_INVALID",
-              message: `Invalid seed row in ${jsonlPath} at line ${index + 1}: expected a JSON object`,
-            });
-          }
-          const row = value as JsonObject;
-          return snapshotType ? projectSeedObject(row, snapshotType.fields, new Set(["id"])) : row;
-        })
-      : [];
+    const lines = (content.startsWith("\uFEFF") ? content.slice(1) : content).split("\n");
+    data[tableName] = lines.flatMap((raw, index) => {
+      const text = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
+      if (text.trim().length === 0) return [];
+      const line = index + 1;
+      let value: unknown;
+      try {
+        value = JSON.parse(text);
+      } catch (error) {
+        throw CLIError({
+          code: "SEED_DATA_INVALID",
+          message: `Invalid JSON in ${jsonlPath} at line ${line}: ${error instanceof Error ? error.message : String(error)}`,
+          cause: error,
+        });
+      }
+      if (value === null || typeof value !== "object" || Array.isArray(value)) {
+        throw CLIError({
+          code: "SEED_DATA_INVALID",
+          message: `Invalid seed row in ${jsonlPath} at line ${line}: expected a JSON object`,
+        });
+      }
+      const row = value as JsonObject;
+      return [snapshotType ? projectSeedObject(row, snapshotType.fields, new Set(["id"])) : row];
+    });
   }
   return data;
 }
