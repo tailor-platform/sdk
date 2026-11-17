@@ -61,6 +61,8 @@ function execution(
 const runningJob = {
   id: "job-1",
   stackedJobName: "main",
+  kind: { case: "jobFunction", value: { name: "main" } },
+  position: { parentWorkflowJobExecutionId: "", depth: 0 },
   status: WorkflowJobExecution_Status.RUNNING,
   executionId: "fn-exec-1",
 } as unknown as WorkflowExecution["jobExecutions"][number];
@@ -131,7 +133,8 @@ describe("getWorkflowExecution", () => {
     });
     expect(detail.jobDetails).toEqual([
       expect.objectContaining({
-        stackedJobName: "main",
+        kind: { type: "jobFunction", name: "main" },
+        position: { parentJobExecutionId: null, callIndex: null, branchIndex: null, depth: 0 },
         logs: "step 1\nruns close to the limit",
         result: undefined,
         logEntries: [
@@ -189,7 +192,9 @@ describe("getWorkflowExecution", () => {
       logs: true,
     });
 
-    expect(detail.jobDetails).toEqual([expect.objectContaining({ stackedJobName: "main" })]);
+    expect(detail.jobDetails).toEqual([
+      expect.objectContaining({ kind: { type: "jobFunction", name: "main" } }),
+    ]);
     expect(detail.jobDetails?.[0]).not.toHaveProperty("logEntries");
     expect(stderr.output).toBe("");
   });
@@ -210,7 +215,9 @@ describe("getWorkflowExecution", () => {
       logs: true,
     });
 
-    expect(detail.jobDetails).toEqual([expect.objectContaining({ stackedJobName: "main" })]);
+    expect(detail.jobDetails).toEqual([
+      expect.objectContaining({ kind: { type: "jobFunction", name: "main" } }),
+    ]);
     expect(stripAnsi(stderr.output)).toContain(
       "Could not fetch logs for function execution 'fn-exec-1'",
     );
@@ -230,6 +237,8 @@ describe("printExecutionWithLogs", () => {
   const job = {
     id: "job-1",
     stackedJobName: "main",
+    kind: { type: "jobFunction" as const, name: "main" },
+    position: null,
     status: "RUNNING",
     executionId: "fn-exec-1",
     startedAt: null,
@@ -258,6 +267,7 @@ describe("printExecutionWithLogs", () => {
     });
 
     const plain = stripAnsi(stderr.output);
+    expect(plain).toContain("--- main ---\n  ID: job-1\n");
     expect(plain).toContain(
       "    2026-09-05T00:00:00.000Z [INFO] step 1\n    \n        continued\n    \n",
     );

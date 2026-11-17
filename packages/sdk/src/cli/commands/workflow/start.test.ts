@@ -245,14 +245,20 @@ describe("startWorkflow", () => {
       using _json = jsonMode();
       getWorkflowExecutionMock.mockResolvedValue(
         executionResponse(WorkflowExecution_Status.SUCCESS, [
-          { id: "job-1", stackedJobName: "main", status: 0, executionId: "" },
+          {
+            id: "job-1",
+            stackedJobName: "main",
+            status: 0,
+            executionId: "",
+            kind: { case: "jobFunction", value: { name: "main" } },
+          },
         ]),
       );
       const result = await runWaitCommand(command, "--logs");
       expect(result.success).toBe(true);
       expect(JSON.parse(stdout.output)).toMatchObject({
         status: "SUCCESS",
-        jobDetails: [{ id: "job-1", stackedJobName: "main" }],
+        jobDetails: [{ id: "job-1", kind: { type: "jobFunction", name: "main" } }],
       });
     },
   );

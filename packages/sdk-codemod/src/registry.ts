@@ -1981,6 +1981,42 @@ export const allCodemods: CodemodPackage[] = [
     ].join("\n"),
   },
   {
+    id: "v3/workflow-job-execution-kind",
+    name: "Workflow job execution `stackedJobName` → `kind` and `position`",
+    description:
+      "The `stackedJobName` field of a workflow job execution is removed in v3. It is in the `jobDetails` that `getWorkflowExecution()` and `waitWorkflowExecution()` from `@tailor-platform/sdk/cli` return with `logs: true`, and in the `--json --logs` output of `tailor workflow executions`, `tailor workflow wait`, `tailor workflow start --wait` and `tailor workflow resume --wait`. Read `kind` for the job function name or the wait key, and `position` for where the job sits among the other jobs of the execution. Use `id` as a key, because two executions of the same job function share a name. This migration depends on how the value was used, so it provides review guidance instead of rewriting code automatically.",
+    since: "1.0.0",
+    until: "3.0.0",
+    filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
+    suspiciousPatterns: ["stackedJobName"],
+    examples: [
+      {
+        before: "const names = execution.jobDetails?.map((job) => job.stackedJobName);",
+        after:
+          'const names = execution.jobDetails?.map((job) =>\n  job.kind?.type === "jobFunction" ? job.kind.name : job.id,\n);',
+      },
+    ],
+    prompt: [
+      "`stackedJobName` on a workflow job execution (an element of `jobDetails` from",
+      "`getWorkflowExecution()` or `waitWorkflowExecution()` in `@tailor-platform/sdk/cli`, or of",
+      "the `--json --logs` output of `tailor workflow executions`, `tailor workflow wait`,",
+      "`tailor workflow start --wait` and `tailor workflow resume --wait`) is removed in v3.",
+      "Replace each read by what the code used it for:",
+      "",
+      '- As a display name: `job.kind?.type === "jobFunction"` gives `job.kind.name`, and',
+      '  `job.kind?.type === "wait"` gives `job.kind.key`. `kind` is `null` for a job of a kind the',
+      "  installed SDK does not know, so fall back to `job.id`.",
+      "- As a key that identifies a job execution (a map key, a comparison between two jobs): use",
+      "  `job.id`. Two executions of the same job function share `kind.name`.",
+      "- Parsed for the parent job, the order of the call, the parallel branch or the nesting depth:",
+      "  read `job.position.parentJobExecutionId`, `callIndex`, `branchIndex` and `depth`.",
+      "  `position` is `null` when the Platform reported none.",
+      "",
+      "Also review scripts that read `stackedJobName` out of the JSON output with a tool such as",
+      "`jq`. Leave unrelated objects that happen to have a `stackedJobName` property unchanged.",
+    ].join("\n"),
+  },
+  {
     id: "v3/secrets-get-to-secretmanager",
     name: "secrets.get()/getAll() (defineSecretManager) removed — use secretmanager from @tailor-platform/sdk/runtime",
     description:

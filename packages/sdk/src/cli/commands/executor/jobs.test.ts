@@ -367,6 +367,7 @@ describe("downstream logs", () => {
             {
               id: "job-execution-1",
               stackedJobName: "main",
+              kind: { case: "jobFunction", value: { name: "main" } },
               status: WorkflowJobExecution_Status.SUCCESS,
               executionId: "function-execution-1",
             },
@@ -385,6 +386,10 @@ describe("downstream logs", () => {
     });
     await runCommand(jobsCommand, ["my-executor", "job-1", "-W", "-l", "-i", "1ms"]);
 
+    expect(result.workflowJobLogs?.[0]).toMatchObject({
+      jobExecutionId: "job-execution-1",
+      jobName: "main",
+    });
     expect(result.workflowJobLogs?.[0]?.logEntries).toMatchObject([
       { source: "USER" },
       { source: "PLATFORM" },

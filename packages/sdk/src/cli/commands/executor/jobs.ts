@@ -42,6 +42,7 @@ import { spinner } from "#/cli/shared/spinner";
 import { formatWaitError, isRetryableWaitError } from "#/cli/shared/wait-error";
 import { getWorkflowExecution } from "../workflow/executions";
 import { waitForExecution } from "../workflow/start";
+import { workflowJobExecutionLabel } from "../workflow/transform";
 import {
   classifyExecutorJobStatus,
   colorizeExecutorJobStatus,
@@ -95,6 +96,7 @@ export interface ExecutorJobDetailInfo extends ExecutorJobInfo {
 }
 
 interface WorkflowJobLog {
+  jobExecutionId: string;
   jobName: string;
   logs?: string;
   logEntries?: FunctionLogEntryInfo[];
@@ -467,7 +469,8 @@ export async function watchExecutorJob<E extends ExecutorLike>(
                   workflowJobLogs = execWithLogs.jobDetails
                     .filter((job) => job.logs || job.result)
                     .map((job) => ({
-                      jobName: job.stackedJobName || job.id,
+                      jobExecutionId: job.id,
+                      jobName: workflowJobExecutionLabel(job),
                       logs: job.logs,
                       logEntries: job.logEntries,
                       result: job.result,
@@ -739,7 +742,7 @@ export function printDownstreamExecution(result: WatchExecutorJobResult): void {
     }
     if (result.workflowJobLogs && result.workflowJobLogs.length > 0) {
       for (const jobLog of result.workflowJobLogs) {
-        logger.log(styles.bold(`\n  Job: ${jobLog.jobName}`));
+        logger.log(styles.bold(`\n  Job: ${jobLog.jobName} (${jobLog.jobExecutionId})`));
         const logs = formatFunctionLogMessages(jobLog.logEntries);
         if (logs) {
           logger.log(styles.dim("    Logs:"));

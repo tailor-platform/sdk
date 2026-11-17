@@ -4,7 +4,9 @@ import {
   WorkflowJobExecution_Status,
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { describe, expect, test } from "vitest";
+import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { stripAnsi } from "#/cli/shared/test-helpers/strip-ansi";
 import {
   getWorkflowWaitFailure,
   waitForWorkflowExecution,
@@ -24,7 +26,7 @@ function workflowExecution(
     status,
     jobExecutions: jobStatuses.map((jobStatus, index) => ({
       id: `job-${index + 1}`,
-      stackedJobName: `job-${index + 1}`,
+      kind: { case: "jobFunction" as const, value: { name: `job-${index + 1}` } },
       status: jobStatus,
       executionId: `function-${index + 1}`,
     })),
@@ -86,6 +88,22 @@ describe("waitForWorkflowExecution", () => {
     expect(result.status).toBe("RUNNING");
     expect(result.statusClass).toBe("suspended");
     expect(getWorkflowWaitFailure(result, "suspended")).toBeUndefined();
+  });
+
+  test("names the active jobs by their job function while waiting", async () => {
+    using stderr = captureStderr();
+    const client = mockOperatorClient({
+      getWorkflowExecution: {
+        execution: workflowExecution(WorkflowExecution_Status.RUNNING, [
+          WorkflowJobExecution_Status.SUCCESS,
+          WorkflowJobExecution_Status.WAITING,
+        ]),
+      },
+    });
+
+    await wait(client, { until: "suspended", trackJobs: true, showProgress: true });
+
+    expect(stripAnsi(stderr.output)).toContain("Job | job-2: RUNNING");
   });
 
   test("stops at a canceled execution as a terminal failure", async () => {

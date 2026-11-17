@@ -26,9 +26,33 @@ export interface WorkflowInfo {
   updatedAt: Date | null;
 }
 
+/** What a workflow job execution ran, either a job function or a wait for a key to be resolved. */
+export type WorkflowJobExecutionKindInfo =
+  | { type: "jobFunction"; name: string }
+  | { type: "wait"; key: string };
+
+/** Where a workflow job execution sits among the jobs of its workflow execution. */
+export interface WorkflowJobExecutionPositionInfo {
+  /** `id` of the job execution that started this one. `null` on the main job. */
+  parentJobExecutionId: string | null;
+  /** Zero-based order of the call within the parent job. `null` on the main job. */
+  callIndex: number | null;
+  /** Zero-based branch within a group of jobs started in parallel. `null` outside such a group. */
+  branchIndex: number | null;
+  /** Distance from the main job, which is 0. */
+  depth: number;
+}
+
 export interface WorkflowJobExecutionInfo {
   id: string;
+  /**
+   * @deprecated since NEXT_RELEASE. Use `kind` for the job function name or wait key and `position` for the place among the other jobs instead. codemod: v3/workflow-job-execution-kind
+   */
   stackedJobName: string;
+  /** `null` when the job is of a kind this SDK version does not know. */
+  kind: WorkflowJobExecutionKindInfo | null;
+  /** `null` when the Platform reported no position for the job. */
+  position: WorkflowJobExecutionPositionInfo | null;
   status: string;
   executionId: string;
   startedAt: Date | null;
@@ -97,6 +121,49 @@ export function toWorkflowInfo(workflow: Workflow): WorkflowInfo {
   };
 }
 
+function toWorkflowJobExecutionKindInfo(
+  kind: WorkflowJobExecution["kind"],
+): WorkflowJobExecutionKindInfo | null {
+  switch (kind.case) {
+    case "jobFunction":
+      return { type: "jobFunction", name: kind.value.name };
+    case "wait":
+      return { type: "wait", key: kind.value.key };
+    default:
+      return null;
+  }
+}
+
+function toWorkflowJobExecutionPositionInfo(
+  position: WorkflowJobExecution["position"],
+): WorkflowJobExecutionPositionInfo | null {
+  if (!position) return null;
+  return {
+    parentJobExecutionId: position.parentWorkflowJobExecutionId || null,
+    callIndex: position.callIndex ?? null,
+    branchIndex: position.branchIndex ?? null,
+    depth: position.depth,
+  };
+}
+
+/**
+ * Name a workflow job execution for display.
+ * @param job - Workflow job execution info
+ * @returns The job function name, `wait(<key>)` for a wait, or the id when the kind is unknown
+ */
+export function workflowJobExecutionLabel(
+  job: Pick<WorkflowJobExecutionInfo, "id" | "kind">,
+): string {
+  switch (job.kind?.type) {
+    case "jobFunction":
+      return job.kind.name;
+    case "wait":
+      return `wait(${job.kind.key})`;
+    default:
+      return job.id;
+  }
+}
+
 /**
  * Convert a WorkflowJobExecution proto to CLI-friendly job execution info.
  * @param jobExecution - Workflow job execution resource
@@ -107,7 +174,10 @@ export function toWorkflowJobExecutionInfo(
 ): WorkflowJobExecutionInfo {
   return {
     id: jobExecution.id,
+    // oxlint-disable-next-line typescript/no-deprecated -- Stays in the output until its removal in v3.
     stackedJobName: jobExecution.stackedJobName,
+    kind: toWorkflowJobExecutionKindInfo(jobExecution.kind),
+    position: toWorkflowJobExecutionPositionInfo(jobExecution.position),
     status: workflowJobExecutionStatusToString(jobExecution.status),
     executionId: jobExecution.executionId,
     startedAt: jobExecution.startedAt ? timestampDate(jobExecution.startedAt) : null,

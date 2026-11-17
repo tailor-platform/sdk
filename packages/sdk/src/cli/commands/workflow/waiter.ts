@@ -17,7 +17,12 @@ import {
   type WorkflowExecutionStatusClass,
   type WorkflowWaitUntil,
 } from "./status";
-import { type WorkflowExecutionInfo, toWorkflowExecutionInfo } from "./transform";
+import {
+  type WorkflowExecutionInfo,
+  toWorkflowExecutionInfo,
+  toWorkflowJobExecutionInfo,
+  workflowJobExecutionLabel,
+} from "./transform";
 import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 const DEFAULT_WORKFLOW_WAIT_INTERVAL_MS = 3000;
@@ -86,7 +91,7 @@ function getActiveJobs(execution: WorkflowExecution): string {
         job.status === WorkflowJobExecution_Status.SUSPEND ||
         job.status === WorkflowJobExecution_Status.WAITING,
     )
-    .map((job) => job.stackedJobName)
+    .map((job) => workflowJobExecutionLabel(toWorkflowJobExecutionInfo(job)))
     .join(", ");
 }
 
