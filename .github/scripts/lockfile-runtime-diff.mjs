@@ -19,7 +19,24 @@ function parseArgs(argv) {
   return args;
 }
 
-function parseImporters(text) {
+const stripPeerSuffix = (version) => version.replace(/\(.*$/, "");
+
+function parseV13Projects(doc) {
+  const { projects = {} } = JSON.parse(doc.replace(/,(\s*[}\]])/g, "$1"));
+  const importers = {};
+  for (const [path, project] of Object.entries(projects)) {
+    if (!project.dependencies) continue;
+    importers[path] = JSON.stringify(
+      Object.entries(project.dependencies).map(([name, entry]) => [
+        name,
+        stripPeerSuffix(typeof entry === "string" ? entry : entry.version),
+      ]),
+    );
+  }
+  return importers;
+}
+
+function parseYamlImporters(text) {
   const lines = text.split("\n");
   // pnpm 12 lockfiles are two YAML documents; the real `dependencies` live in the last one.
   const importersIdx = lines.findLastIndex((l) => /^importers:\s*$/.test(l));
@@ -28,13 +45,14 @@ function parseImporters(text) {
   const importers = {};
   let currentImporter = null;
   let currentSection = null;
-  let sectionLines = [];
+  let currentDep = null;
+  let deps = [];
 
   const flush = () => {
     if (currentImporter && currentSection === "dependencies") {
-      importers[currentImporter] = sectionLines.join("\n");
+      importers[currentImporter] = JSON.stringify(deps);
     }
-    sectionLines = [];
+    deps = [];
   };
 
   for (let i = importersIdx + 1; i < lines.length; i++) {
@@ -57,11 +75,24 @@ function parseImporters(text) {
       currentSection = line.trim().replace(/:$/, "");
       continue;
     }
-    if (currentSection === "dependencies") sectionLines.push(line);
+    if (currentSection !== "dependencies") continue;
+    if (indent === 6) {
+      currentDep = line
+        .trim()
+        .replace(/:$/, "")
+        .replace(/^["']|["']$/g, "");
+    } else if (indent === 8 && line.trim().startsWith("version:")) {
+      deps.push([currentDep, stripPeerSuffix(line.trim().slice("version:".length).trim())]);
+    }
   }
   flush();
 
   return importers;
+}
+
+function parseImporters(text) {
+  const lastDoc = text.slice(text.lastIndexOf("\n---\n") + 1).replace(/^---\n/, "");
+  return lastDoc.trimStart().startsWith("{") ? parseV13Projects(lastDoc) : parseYamlImporters(text);
 }
 
 function readPackageMeta(importerPath) {
