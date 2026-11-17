@@ -366,8 +366,8 @@ describe("downstream logs", () => {
           jobExecutions: [
             {
               id: "job-execution-1",
-              stackedJobName: "main",
-              kind: { case: "jobFunction", value: { name: "main" } },
+              stackedJobName: "main/fetch#0",
+              kind: { case: "jobFunction", value: { name: "fetch" } },
               status: WorkflowJobExecution_Status.SUCCESS,
               executionId: "function-execution-1",
             },
@@ -388,8 +388,10 @@ describe("downstream logs", () => {
 
     expect(result.workflowJobLogs?.[0]).toMatchObject({
       jobExecutionId: "job-execution-1",
-      jobName: "main",
+      jobName: "main/fetch#0",
+      kind: { type: "jobFunction", name: "fetch" },
     });
+    expect(stripAnsi(stderr.output)).toContain("  Job: fetch (job-execution-1)\n");
     expect(result.workflowJobLogs?.[0]?.logEntries).toMatchObject([
       { source: "USER" },
       { source: "PLATFORM" },
