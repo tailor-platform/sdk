@@ -335,8 +335,9 @@ oauth2Clients: {
       `${website.url}/callback`,  // Type-safe URL from StaticWebsite
     ],
     description: "My OAuth2 client",
+    clientType: "public",                // Defaults to "confidential"
     grantTypes: ["authorization_code", "refresh_token"],
-    accessTokenLifetimeSeconds: 3600,    // 1 hour
+    accessTokenLifetimeSeconds: 900,     // 15 minutes
     refreshTokenLifetimeSeconds: 604800, // 7 days
     requireDpop: true,                   // Require DPoP for this client
   },
@@ -348,6 +349,14 @@ Client names must be 3 to 63 lowercase letters, digits, or hyphens, starting and
 **redirectURIs**: Allowed redirect URIs after authentication.
 
 **description**: Optional description of the client.
+
+**clientType**: Optional client type. Defaults to `confidential`.
+
+- `confidential` - Server-side applications that can keep the client secret
+- `public` - Applications that cannot keep a secret, such as mobile apps and single-page apps
+- `browser` - Single-page apps that receive tokens in HTTP-only cookies
+
+A `browser` client cannot set `requireDpop: true`. Changing `clientType` of a deployed client makes `deploy` delete and recreate it instead of updating it. To choose between `public` and `browser` for a single-page app, see [OAuth2 Client Selection for SPAs](https://docs.tailor.tech/guides/auth/spa-oauth2-client).
 
 **grantTypes**: Supported OAuth 2.0 grant types:
 
@@ -370,15 +379,37 @@ tailor oauth2client get <name>
 
 ## Identity Provider
 
-Connect to an external identity provider:
+`idProvider` sets the identity provider that authenticates users. An Auth service takes one, and its `kind` selects the protocol:
+
+- `BuiltInIdP` - The [built-in IdP](./idp.md), written as `idp.provider()`
+- `OIDC` - An external OpenID Connect provider, such as Okta or Microsoft Entra ID
+- `SAML` - An external SAML provider
+- `IDToken` - An external provider, such as Google Cloud Identity Platform or Amazon Cognito, whose ID tokens clients exchange for access tokens without an interactive login
 
 ```typescript
 idProvider: idp.provider("my-provider", "my-client"),
+
+// or an external OIDC provider
+idProvider: {
+  name: "okta",
+  kind: "OIDC",
+  clientID: process.env.OKTA_CLIENT_ID!,
+  clientSecret: { vaultName: "auth-secrets", secretKey: "okta-client-secret" },
+  providerURL: "https://example.okta.com",
+},
+
+// or an external SAML provider
+idProvider: {
+  name: "okta-saml",
+  kind: "SAML",
+  metadataURL: "https://example.okta.com/app/abc123/sso/saml/metadata",
+  enableSignRequest: false,
+},
 ```
 
-See [IdP](./idp.md) for configuring identity providers.
+`clientSecret` names a [Secret Manager](./secret.md) secret by `vaultName` and `secretKey`; declare the vault and secret with `defineSecretManager()` or create them with [`tailor secret`](../cli/secret.md). A `SAML` provider sets either `metadataURL` or `rawMetadata`, not both. An `IDToken` provider takes `clientID` and `providerURL` like `OIDC`, without `clientSecret`. See [Register Identity provider with Auth service](https://docs.tailor.tech/tutorials/setup-auth/register-identity-provider) for each kind's settings, and the [Okta](https://docs.tailor.tech/guides/auth/integration/okta) and other integration guides for provider-side setup.
 
-An application that references this Auth service as `external` authenticates with the provider named by the first argument (`"my-provider"`). After a rename, it switches to the new name only in a `deploy` that also includes this config, so `deploy` stops with `SERVICE_IN_USE` instead of deleting the old provider while such an application is left out. Deploy them together or keep the name.
+An application that references this Auth service as `external` authenticates with the provider named by `idProvider.name` (the first argument of `idp.provider()`). After a rename, it switches to the new name only in a `deploy` that also includes this config, so `deploy` stops with `SERVICE_IN_USE` instead of deleting the old provider while such an application is left out. Deploy them together or keep the name.
 
 ## SCIM Provisioning
 
