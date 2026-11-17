@@ -106,6 +106,38 @@ describe("waitForWorkflowExecution", () => {
     expect(stripAnsi(stderr.output)).toContain("Job | job-2: RUNNING");
   });
 
+  test("reports a new execution of a job function that is already listed by name", async () => {
+    using stderr = captureStderr();
+    const fetchJob = (id: string, status: WorkflowJobExecution_Status) => ({
+      id,
+      status,
+      kind: { case: "jobFunction" as const, value: { name: "fetch" } },
+    });
+    const running = (
+      jobExecutions: ReturnType<typeof fetchJob>[],
+    ): MessageInitShape<typeof WorkflowExecutionSchema> => ({
+      id: "execution-1",
+      workflowName: "my-workflow",
+      status: WorkflowExecution_Status.RUNNING,
+      jobExecutions,
+    });
+    const client = mockOperatorClient({ getWorkflowExecution: {} });
+    client.getWorkflowExecution
+      .mockResolvedValueOnce({
+        execution: running([fetchJob("job-1", WorkflowJobExecution_Status.RUNNING)]),
+      })
+      .mockResolvedValueOnce({
+        execution: running([
+          fetchJob("job-1", WorkflowJobExecution_Status.SUCCESS),
+          fetchJob("job-2", WorkflowJobExecution_Status.WAITING),
+        ]),
+      });
+
+    await wait(client, { until: "suspended", trackJobs: true, showProgress: true });
+
+    expect(stripAnsi(stderr.output).match(/Job \| fetch: RUNNING/g)).toHaveLength(2);
+  });
+
   test("stops at a canceled execution as a terminal failure", async () => {
     const client = mockOperatorClient({
       getWorkflowExecution: {
