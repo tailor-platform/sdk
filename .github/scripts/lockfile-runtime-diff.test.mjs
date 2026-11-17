@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), "lockfile-runtime-diff.mjs");
 
-const pnpm12Lockfile = (esbuildVersion) => `---
+const pnpm12Lockfile = (esbuildVersion, viteVersion = "8.3.8") => `---
 lockfileVersion: '9.0'
 
 importers:
@@ -51,6 +51,9 @@ importers:
       esbuild:
         specifier: ${esbuildVersion}
         version: ${esbuildVersion}
+      vite:
+        specifier: ^8.0.0
+        version: ${viteVersion}
 
 packages:
 
@@ -58,7 +61,7 @@ packages:
     resolution: {integrity: sha512-x}
 `;
 
-const pnpm11Lockfile = (esbuildVersion) => `lockfileVersion: '9.0'
+const pnpm11Lockfile = (esbuildVersion, viteVersion = "8.3.8") => `lockfileVersion: '9.0'
 
 importers:
 
@@ -73,6 +76,9 @@ importers:
       esbuild:
         specifier: ${esbuildVersion}
         version: ${esbuildVersion}
+      vite:
+        specifier: ^8.0.0
+        version: ${viteVersion}
 
 packages:
 
@@ -80,7 +86,7 @@ packages:
     resolution: {integrity: sha512-x}
 `;
 
-const pnpm12V13Lockfile = (esbuildVersion) => `---
+const pnpm12V13Lockfile = (esbuildVersion, viteVersion = "8.3.8") => `---
 lockfileVersion: '9.0'
 
 importers:
@@ -102,6 +108,7 @@ importers:
 \t\t"packages/foo": {
 \t\t\t"dependencies": {
 \t\t\t\t"esbuild": "${esbuildVersion}",
+\t\t\t\t"vite": { "specifier": "^8.0.0", "version": "${viteVersion}", },
 \t\t\t},
 \t\t},
 \t},
@@ -194,5 +201,15 @@ test("reports no changes when the v9 base and v13 head have the same dependencie
 test("detects a runtime dependency change between a v9 base and a v13 head", () => {
   const dir = setUp();
   const stdout = run(dir, pnpm12Lockfile("0.28.1"), pnpm12V13Lockfile("0.28.2"));
+  assert.match(stdout, /Runtime dependency changes detected in: @scope\/foo/);
+});
+
+test("detects a change in a v13 dependency recorded as a specifier/version object", () => {
+  const dir = setUp();
+  const stdout = run(
+    dir,
+    pnpm12V13Lockfile("0.28.1", "8.3.8"),
+    pnpm12V13Lockfile("0.28.1", "8.3.9"),
+  );
   assert.match(stdout, /Runtime dependency changes detected in: @scope\/foo/);
 });
