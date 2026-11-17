@@ -7,6 +7,7 @@ import { JsonlReader, unwrap } from "lines-db";
 import * as path from "pathe";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { verifyRemoteSchema } from "#/cli/commands/tailordb/migrate/schema-checks";
+import { errorToJson } from "#/cli/shared/error-json";
 import { getNamespacesWithMigrations } from "./config";
 import { normalizeSchemaSnapshot } from "./snapshot";
 import {
@@ -40,10 +41,21 @@ vi.mock("#/cli/commands/tailordb/migrate/schema-checks", async (importOriginal) 
   return { ...original, verifyRemoteSchema: vi.fn() };
 });
 
+function thrownBy(run: () => unknown): Error {
+  try {
+    run();
+  } catch (error) {
+    if (error instanceof Error) return error;
+    throw error;
+  }
+  return expect.unreachable("expected the call to throw");
+}
+
 describe("migration test runtime", () => {
   const temporaryDirectories: string[] = [];
 
   afterEach(() => {
+    vi.restoreAllMocks();
     for (const directory of temporaryDirectories.splice(0)) {
       fs.rmSync(directory, { recursive: true, force: true });
     }
@@ -253,15 +265,39 @@ describe("migration test runtime", () => {
       temporaryDirectories.push(dataDir);
       fs.writeFileSync(path.join(dataDir, "Customer.jsonl"), content);
 
-      expect(await JsonlReader.read(path.join(dataDir, "Customer.jsonl"))).toMatchObject({
+      const file = path.join(dataDir, "Customer.jsonl");
+      expect(await JsonlReader.read(file)).toMatchObject({
         ok: false,
         error: { line },
       });
-      expect(() => loadSnapshotSeedData(dataDir, ["Customer"])).toThrow(
-        new RegExp(`Customer\\.jsonl at line ${line}:`),
-      );
+      vi.spyOn(process, "cwd").mockReturnValue(dataDir);
+      const error = thrownBy(() => loadSnapshotSeedData(dataDir, ["Customer"]));
+      expect(error.message).toMatch(/^Invalid JSON: /);
+      expect(errorToJson(error).error).toEqual({
+        code: "SEED_DATA_INVALID",
+        message: `Customer.jsonl:${line}: ${error.message}`,
+        context: { file, line },
+      });
     },
   );
+
+  test("rejects a baseline seed row that is not a JSON object at its line", () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "migration-test-seed-"));
+    temporaryDirectories.push(dataDir);
+    const file = path.join(dataDir, "Customer.jsonl");
+    fs.writeFileSync(file, '{"id":1}\n[]\n');
+
+    vi.spyOn(process, "cwd").mockReturnValue(dataDir);
+
+    const error = thrownBy(() => loadSnapshotSeedData(dataDir, ["Customer"]));
+
+    expect(error.message).toBe("Invalid seed row: expected a JSON object");
+    expect(errorToJson(error).error).toEqual({
+      code: "SEED_DATA_INVALID",
+      message: "Customer.jsonl:2: Invalid seed row: expected a JSON object",
+      context: { file, line: 2 },
+    });
+  });
 
   test("polls a clone operation until it completes", async () => {
     const getOperation = vi

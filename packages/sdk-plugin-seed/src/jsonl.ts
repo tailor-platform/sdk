@@ -10,9 +10,10 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
+import { withSourceLocation } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { jsonlRecordLines } from "./record-lines";
-import type { SeedData } from "@tailor-platform/sdk/cli";
+import type { ErrorSourceLocation, SeedData } from "@tailor-platform/sdk/cli";
 
 export function assertSeedDataDirectory(dataDir: string): void {
   let stats: ReturnType<typeof statSync>;
@@ -79,8 +80,10 @@ export function loadSeedData(
           if (!first) {
             firstDefinitions.set(keyText, { file: jsonlPath, line });
           } else if (first.file !== jsonlPath) {
-            throw new Error(
-              `${jsonlPath}:${line}: ${keyField} ${keyText} is already defined at ${first.file}:${first.line}. ` +
+            const firstFile = path.relative(process.cwd(), first.file);
+            throw rowError(
+              { file: jsonlPath, line },
+              `${keyField} ${keyText} is already defined at ${firstFile}:${first.line}. ` +
                 "A row can be defined in only one of the data directories applied together.",
             );
           }
@@ -114,17 +117,16 @@ function readSeedRows(
       value = JSON.parse(text);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`Invalid JSON in ${jsonlPath} at line ${line}: ${message}`, {
-        cause: error,
-      });
+      throw rowError({ file: jsonlPath, line }, `Invalid JSON: ${message}`, { cause: error });
     }
     if (value === null || typeof value !== "object" || Array.isArray(value)) {
-      throw new Error(`Invalid seed row in ${jsonlPath} at line ${line}: expected a JSON object`);
+      throw rowError({ file: jsonlPath, line }, "Invalid seed row: expected a JSON object");
     }
     const record = value as Record<string, unknown>;
     if (requireId && (record.id === undefined || record.id === null)) {
-      throw new Error(
-        `${jsonlPath}:${line}: \`id\` is required with --upsert. ` +
+      throw rowError(
+        { file: jsonlPath, line },
+        "`id` is required with --upsert. " +
           "Run `tailor seed fill` to write an id into every row that does not have one.",
       );
     }
@@ -132,12 +134,17 @@ function readSeedRows(
       (field) => record[field] === undefined || record[field] === null,
     );
     if (missingRequiredField) {
-      throw new Error(
-        `${jsonlPath}:${line}: field \`${missingRequiredField}\` is required with --upsert`,
+      throw rowError(
+        { file: jsonlPath, line },
+        `field \`${missingRequiredField}\` is required with --upsert`,
       );
     }
     return { row: record as SeedData[string][number], line };
   });
+}
+
+function rowError(location: ErrorSourceLocation, message: string, options?: ErrorOptions): Error {
+  return withSourceLocation(new Error(message, options), location);
 }
 
 /**

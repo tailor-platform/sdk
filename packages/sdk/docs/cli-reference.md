@@ -340,10 +340,14 @@ is unchanged. Workflows that already echo their own `::error::` around the CLI k
 those messages describe the workflow's own checks, which can fail even when the CLI succeeds.
 
 When the failure has a known source, the annotation carries it: `seed validate` reports the
-offending JSONL file and line, including a line that is not valid JSON, and a rejected config or a
-TailorDB type, resolver, executor, workflow, or HTTP adapter file that fails to load reports its
-file. A `.ts` or `.mts` file that cannot be parsed — one of those files, the file passed to
-`function run`, or a file one of them imports — reports that file and the line it failed on.
+offending JSONL file and line, including a line that is not valid JSON. `seed apply`,
+`seed validate --upsert`, and `tailordb migration test --data seed` report the file and line of a
+seed row that is not valid JSON or not a JSON object. `seed apply` and `seed validate --upsert` do
+the same for a row that lacks `id` or a required field with `--upsert`, and for a row defined in
+more than one of the data directories applied together. A rejected config or a TailorDB type,
+resolver, executor, workflow, or HTTP adapter file that fails to load reports its file. A `.ts` or
+`.mts` file that cannot be parsed — one of those files, the file passed to `function run`, or a
+file one of them imports — reports that file and the line it failed on.
 Locations are written relative to `GITHUB_WORKSPACE`; a file outside it is annotated without a
 location rather than with a path the runner cannot resolve.
 

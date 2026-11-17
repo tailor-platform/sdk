@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { createCommonArgs, runCommand } from "@tailor-platform/sdk/cli";
+import { createCommonArgs, errorToJson, runCommand } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { z } from "zod";
@@ -90,6 +90,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllEnvs();
   rmSync(distPath, { recursive: true, force: true });
 });
@@ -134,9 +135,12 @@ describe("seedValidateCommand", () => {
       expect((await runValidate(["--upsert", ...selection])).exitCode).toBe(1);
       expect((await runValidate(["--upsert", ...selection, "--no-base"])).exitCode).toBe(0);
       writeLines(path.join(cogs, "Item.jsonl"), [{ name: "dataset without id" }]);
+      vi.spyOn(process, "cwd").mockReturnValue(dataDir);
       const result = await runValidate(["--upsert", ...selection, "--no-base"]);
       expect(result.exitCode).toBe(1);
-      expect(String(result.error)).toContain(path.join(cogs, "Item.jsonl"));
+      const message = result.error?.message;
+      expect(message).toMatch(/^`id` is required with --upsert/);
+      expect(errorToJson(result.error).error.message).toBe(`cogs/Item.jsonl:1: ${message}`);
     },
   );
 
