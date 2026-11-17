@@ -46,7 +46,7 @@ export interface WorkflowJobExecutionPositionInfo {
 export interface WorkflowJobExecutionInfo {
   id: string;
   /**
-   * @deprecated since NEXT_RELEASE. Use `kind` for the job function name or wait key and `position` for the place among the other jobs instead. codemod: v3/workflow-job-execution-kind
+   * @deprecated since NEXT_RELEASE — use `kind` for the job function name or wait key and `position` for the place among the other jobs instead. codemod: v3/workflow-job-execution-kind
    */
   stackedJobName: string;
   /** `null` when the job is of a kind this SDK version does not know. */

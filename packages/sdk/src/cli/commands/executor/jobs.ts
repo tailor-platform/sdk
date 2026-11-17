@@ -101,7 +101,7 @@ export interface ExecutorJobDetailInfo extends ExecutorJobInfo {
 interface WorkflowJobLog {
   jobExecutionId: string;
   /**
-   * @deprecated since NEXT_RELEASE. Use `kind` for the job function name or wait key and `jobExecutionId` to identify the job instead. codemod: v3/workflow-job-execution-kind
+   * @deprecated since NEXT_RELEASE — use `kind` for the job function name or wait key and `jobExecutionId` to identify the job instead. codemod: v3/workflow-job-execution-kind
    */
   jobName: string;
   /** `null` when the job is of a kind this SDK version does not know. */
