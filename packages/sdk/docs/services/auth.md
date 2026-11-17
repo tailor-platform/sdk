@@ -337,7 +337,7 @@ oauth2Clients: {
     description: "My OAuth2 client",
     clientType: "public",                // Defaults to "confidential"
     grantTypes: ["authorization_code", "refresh_token"],
-    accessTokenLifetimeSeconds: 3600,    // 1 hour
+    accessTokenLifetimeSeconds: 900,     // 15 minutes
     refreshTokenLifetimeSeconds: 604800, // 7 days
     requireDpop: true,                   // Require DPoP for this client
   },
