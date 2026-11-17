@@ -384,7 +384,7 @@ tailor oauth2client get <name>
 - `BuiltInIdP` - The [built-in IdP](./idp.md), written as `idp.provider()`
 - `OIDC` - An external OpenID Connect provider, such as Okta or Microsoft Entra ID
 - `SAML` - An external SAML provider
-- `IDToken` - An external provider whose ID tokens clients exchange for access tokens without an interactive login, such as in server-to-server calls
+- `IDToken` - An external provider, such as Google Cloud Identity Platform or Amazon Cognito, whose ID tokens clients exchange for access tokens without an interactive login
 
 ```typescript
 idProvider: idp.provider("my-provider", "my-client"),
