@@ -19,20 +19,32 @@ describe("resolvePublishEvents", () => {
     },
   );
 
-  test("throws when an opt-out is combined with a subscriber", () => {
-    let error: unknown;
-    try {
-      resolvePublishEvents({ explicit: false, subscribed: true, conflict });
-    } catch (thrown) {
-      error = thrown;
-    }
-    expect(error).toMatchObject({
-      code: "PUBLISH_EVENTS_CONFLICT",
+  test.each([
+    {
+      conflict,
       message:
         'Resolver "processOrder" has "publishEvents: false", but executors with resolverExecuted triggers subscribe to it.',
       suggestion: 'Either remove "publishEvents: false" or remove the matching executor triggers.',
-    });
-  });
+    },
+    {
+      conflict: publishEventsConflict.authService("core-auth"),
+      message:
+        'Auth service "core-auth" has "publishSessionEvents: false", but executors with authAccessToken triggers subscribe to it.',
+      suggestion:
+        'Either remove "publishSessionEvents: false" or remove the matching executor triggers.',
+    },
+  ])(
+    "throws when an opt-out is combined with a subscriber ($conflict.resource)",
+    ({ conflict, message, suggestion }) => {
+      let error: unknown;
+      try {
+        resolvePublishEvents({ explicit: false, subscribed: true, conflict });
+      } catch (thrown) {
+        error = thrown;
+      }
+      expect(error).toMatchObject({ code: "PUBLISH_EVENTS_CONFLICT", message, suggestion });
+    },
+  );
 
   test("names what the subscribers subscribe to when it is not the resource itself", () => {
     expect(() =>

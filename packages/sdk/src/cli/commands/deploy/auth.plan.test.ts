@@ -1218,3 +1218,91 @@ describe("formatAuthHookChangeEntries", () => {
     expect(entries).toEqual(expected);
   });
 });
+
+describe("planAuth / publishSessionEvents and authAccessToken triggers", () => {
+  const buyerId = "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b82";
+
+  function applicationWithPublishSessionEvents(value: boolean | undefined): Application {
+    const application = createMockApplication();
+    const { publishSessionEvents: _, ...config } = application.authService!.config;
+    return {
+      ...application,
+      authService: {
+        ...application.authService,
+        config: value === undefined ? config : { ...config, publishSessionEvents: value },
+      },
+    } as Application;
+  }
+
+  function subscribedContext(
+    client: OperatorClient,
+    application: Application,
+    subscribed: boolean,
+  ): PlanContext {
+    return {
+      ...createContext(client, application),
+      authAccessTokenTriggerTargets: new Set(subscribed ? ["auth-a"] : []),
+      dependentApps: new Map([["auth:auth-a", new Map([[buyerId, "publish-events" as const]])]]),
+      runAppIds: new Set(),
+    };
+  }
+
+  test("enables an unset publishSessionEvents while an authAccessToken executor subscribes", async () => {
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
+    });
+
+    const result = await planAuth(
+      subscribedContext(client, applicationWithPublishSessionEvents(undefined), true),
+    );
+
+    expect(result.changeSet.service.updates.map((update) => update.request)).toEqual([
+      expect.objectContaining({ namespaceName: "auth-a", publishSessionEvents: true }),
+    ]);
+  });
+
+  test("rejects publishSessionEvents: false while an authAccessToken executor subscribes", async () => {
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
+    });
+
+    await expect(
+      planAuth(subscribedContext(client, applicationWithPublishSessionEvents(false), true)),
+    ).rejects.toMatchObject({
+      code: "PUBLISH_EVENTS_CONFLICT",
+      message:
+        'Auth service "auth-a" has "publishSessionEvents: false", but executors with authAccessToken triggers subscribe to it.',
+    });
+  });
+
+  test.each([
+    { publishSessionEvents: undefined, pinned: false },
+    { publishSessionEvents: true, pinned: true },
+  ])(
+    "records the subscribing applications on an unchanged Auth service (publishSessionEvents=$publishSessionEvents)",
+    async ({ publishSessionEvents, pinned }) => {
+      const client = createMockClient({
+        authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
+      });
+
+      const result = await planAuth(
+        subscribedContext(client, applicationWithPublishSessionEvents(publishSessionEvents), true),
+      );
+
+      expect(result.changeSet.service.unchanged).toEqual([
+        expect.objectContaining({
+          name: "auth-a",
+          metaRequest: expect.objectContaining({
+            dependencies: [
+              {
+                dependentApps: new Map([[buyerId, "publish-events"]]),
+                runAppIds: new Set(),
+                pinned,
+              },
+            ],
+          }),
+        }),
+      ]);
+    },
+  );
+});

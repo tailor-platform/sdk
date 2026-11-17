@@ -33,6 +33,11 @@ export interface PlanContext {
    * no idpUser triggers are defined.
    */
   idpUserTriggerTargets?: ReadonlySet<string>;
+  /**
+   * Auth service names that have at least one executor with an authAccessToken
+   * trigger. Controls how `publishSessionEvents` defaults on the Auth service.
+   */
+  authAccessTokenTriggerTargets?: ReadonlySet<string>;
   /** Type names that have at least one executor with a TailorDB record trigger. */
   executorUsedTailorDBTables?: ReadonlySet<string>;
   /** Resolver names that have at least one executor with a resolverExecuted trigger. */

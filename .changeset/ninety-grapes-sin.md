@@ -1,0 +1,5 @@
+---
+"@tailor-platform/sdk": patch
+---
+
+Enable `publishSessionEvents` on the Auth service while an executor with an access token trigger (`authAccessTokenIssuedTrigger()` and the like) takes part in the `deploy`, and turn it back off once none does, as `deploy` already does with `publishEvents` for other triggers. Such executors used to never run unless `publishSessionEvents: true` was set; a project like the `executor` template now sees an Auth service update on its next `deploy`, and those executors start running. Setting `publishSessionEvents: false` alongside such an executor now fails the `deploy`, and deploying the config that defines the Auth service without the configs whose executors subscribe to it asks for confirmation first, which fails in a non-interactive environment. An Auth service referenced with `external: true` whose defining config is not part of the same `deploy`, such as one managed by Terraform, keeps its value, so set `publishSessionEvents: true` where it is defined.

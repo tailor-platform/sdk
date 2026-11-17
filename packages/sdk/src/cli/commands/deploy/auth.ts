@@ -35,6 +35,7 @@ import {
 } from "#/cli/shared/client";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
 import { assertDefined } from "#/utils/assert";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
@@ -52,7 +53,9 @@ import {
 } from "./grouped-display";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import {
+  addDependencyRecords,
   buildMetaRequest,
+  eventSourceKey,
   type MetadataLabelWrite,
   resourceTrn,
   writeMetadataLabels,
@@ -128,6 +131,7 @@ export async function applyAuth(
         await client.updateAuthService(update.request);
         await writeMetadataLabels(client, update.metaRequest);
       }),
+      ...changeSet.service.unchanged.map((entry) => writeMetadataLabels(client, entry.metaRequest)),
     ]);
   };
 
@@ -393,6 +397,7 @@ export async function planAuth(context: PlanContext) {
     application.name,
     application.id,
     auths,
+    context,
     forceApplyAll,
   );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
@@ -463,15 +468,37 @@ type DeleteService = {
   request: MessageInitShape<typeof DeleteAuthServiceRequestSchema>;
 };
 
+/**
+ * An Auth service whose definition is unchanged. Apply still writes its labels,
+ * because its dependency records can change while its definition does not.
+ */
+type UnchangedService = {
+  name: string;
+  metaRequest: MetadataLabelWrite;
+};
+
+/** What decides each Auth service's `publishSessionEvents` and its dependency records. */
+type AuthServicePublishing = Pick<
+  PlanContext,
+  "authAccessTokenTriggerTargets" | "dependentApps" | "runAppIds"
+>;
+
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
   appName: string,
   appId: string | undefined,
   auths: ReadonlyArray<Readonly<AuthService>>,
+  publishing: AuthServicePublishing,
   forceApplyAll = false,
 ) {
-  const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>("Auth services");
+  const changeSet = createChangeSet<
+    CreateService,
+    UpdateService,
+    DeleteService,
+    never,
+    UnchangedService
+  >("Auth services");
   const ownership = createOwnershipTracker(appName, appId);
 
   const fetchedServices = await fetchExistingResourcesWithLabels({
@@ -492,15 +519,28 @@ async function planServices(
   for (const auth of auths) {
     const { config } = auth;
     const existing = existingServices[config.name];
-    const metaRequest = await buildMetaRequest({
-      trn: resourceTrn(workspaceId, "auth", config.name),
-      appName,
-      appId,
+    const metaRequest = addDependencyRecords(
+      await buildMetaRequest({
+        trn: resourceTrn(workspaceId, "auth", config.name),
+        appName,
+        appId,
+      }),
+      {
+        key: eventSourceKey.auth(config.name),
+        dependentApps: publishing.dependentApps,
+        runAppIds: publishing.runAppIds,
+        pinned: config.publishSessionEvents !== undefined,
+      },
+    );
+    const publishSessionEvents = resolvePublishEvents({
+      explicit: config.publishSessionEvents,
+      subscribed: publishing.authAccessTokenTriggerTargets?.has(config.name) ?? false,
+      conflict: publishEventsConflict.authService(config.name),
     });
     const request = {
       workspaceId,
       namespaceName: config.name,
-      publishSessionEvents: config.publishSessionEvents,
+      publishSessionEvents,
     };
     if (existing) {
       const owned = ownership.ownsDesired(existing.allLabels, {
@@ -510,9 +550,9 @@ async function planServices(
       });
 
       const configUnchanged =
-        owned && existing.resource.publishSessionEvents === (config.publishSessionEvents ?? false);
+        owned && existing.resource.publishSessionEvents === publishSessionEvents;
       if (!forceApplyAll && configUnchanged) {
-        changeSet.unchanged.push({ name: config.name });
+        changeSet.unchanged.push({ name: config.name, metaRequest });
       } else {
         changeSet.updates.push({
           name: config.name,

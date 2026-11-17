@@ -21,7 +21,8 @@ type RecomputedResource = {
 } & Pick<MissingDependentApp, "resource" | "resourceType" | "namespace" | "name" | "scope">;
 
 /**
- * List the resources whose `publishEvents` this run recomputes.
+ * List the resources whose publishing option (`publishEvents`, or
+ * `publishSessionEvents` on an Auth service) this run recomputes.
  *
  * A resource that declares the value keeps it whatever the run covers, so no
  * absent config can change it and its records cannot matter. Skipping those is
@@ -30,7 +31,7 @@ type RecomputedResource = {
  * @param application - Application whose resources are listed
  * @param jobsByWorkflow - Job names each workflow runs, keyed by its main job
  * @param subscribedKeys - Resources this run subscribes to, by resource key
- * @returns One entry per value that leaves `publishEvents` unset
+ * @returns One entry per value that leaves its publishing option unset
  */
 function recomputedResources(
   workspaceId: string,
@@ -83,6 +84,18 @@ function recomputedResources(
         name: idp.name,
       });
     }
+  }
+
+  const authConfig = application.authService?.config;
+  if (authConfig && authConfig.publishSessionEvents === undefined) {
+    resources.push({
+      trn: resourceTrn(workspaceId, "auth", authConfig.name),
+      key: eventSourceKey.auth(authConfig.name),
+      scope: "resource",
+      resource: eventSourceLabel.authService(authConfig.name),
+      resourceType: "auth.service",
+      name: authConfig.name,
+    });
   }
 
   // A workflow carries two values: its own execution events and the ones its jobs

@@ -4,6 +4,7 @@ import {
   collectDependentApps,
   collectEventSubscriptions,
   ownedSubscriptions,
+  subscribedAuthServices,
   subscribedIdps,
   subscribedResolvers,
   subscribedResourceKeys,
@@ -36,6 +37,12 @@ type TargetSpec = {
   externalTailorDBNamespaces?: string[];
   externalResolverNamespaces?: string[];
   externalIdps?: string[];
+  /** Auth service the config defines. */
+  auth?: string;
+  /** Whether the defined Auth service declares `publishSessionEvents`, pinning the value. */
+  pinnedAuth?: boolean;
+  /** Auth service the config references with `external: true`. */
+  externalAuth?: string;
   executors?: Record<string, Record<string, unknown>>;
   /** Executors declared with `disabled: true`, keyed the same way as `executors`. */
   disabledExecutors?: Record<string, Record<string, unknown>>;
@@ -90,6 +97,17 @@ function target(spec: TargetSpec): Target {
         },
       ],
       idpServices: (spec.idps ?? []).map((name) => ({ name })),
+      // Mirrors defineApplication: only a defined Auth becomes authService, and an
+      // external reference stays on the config.
+      authService: spec.auth
+        ? {
+            config: {
+              name: spec.auth,
+              ...(spec.pinnedAuth ? { publishSessionEvents: true } : {}),
+            },
+          }
+        : undefined,
+      config: spec.externalAuth ? { auth: { name: spec.externalAuth, external: true } } : undefined,
       workflowService: {
         workflows: Object.fromEntries(
           (spec.workflows ?? []).map((name) => [
@@ -120,6 +138,7 @@ function target(spec: TargetSpec): Target {
         ...(spec.idps ?? []).map((Name) => ({ Type: "idp", Name })),
         ...(spec.externalResolverNamespaces ?? []).map((Name) => ({ Type: "pipeline", Name })),
         ...(spec.externalIdps ?? []).map((Name) => ({ Type: "idp", Name })),
+        ...[spec.auth, spec.externalAuth].flatMap((Name) => (Name ? [{ Type: "auth", Name }] : [])),
       ],
       executorService: {
         executors: Object.fromEntries([
@@ -294,6 +313,12 @@ describe("collectEventSubscriptions", () => {
       trigger: { kind: "workflowExecution", workflowName: "orders" },
       owns: { workflows: ["orders"] },
     },
+    {
+      kind: "authAccessToken",
+      trigger: { kind: "authAccessToken", events: ["auth.access_token.issued"] },
+      owns: { auth: "shared-auth" },
+      sees: { externalAuth: "shared-auth" },
+    },
   ])(
     "resolves a cross-config subscription to the declaring config ($kind)",
     ({ trigger, owns, sees }) => {
@@ -395,6 +420,37 @@ describe("collectEventSubscriptions", () => {
     expect(subscriptions).toEqual([]);
   });
 
+  test("leaves an external Auth service no config in the run declares to the config that owns it", () => {
+    expect(
+      collectEventSubscriptions([
+        target({
+          configPath: "buyer/tailor.config.ts",
+          externalAuth: "shared-auth",
+          executors: {
+            "on-token": { kind: "authAccessToken", events: ["auth.access_token.issued"] },
+          },
+        }),
+      ]),
+    ).toEqual([]);
+  });
+
+  test("pins an authAccessToken subscription when the Auth service declares publishSessionEvents", () => {
+    const subscriptions = collectEventSubscriptions([
+      target({
+        configPath: "supplier/tailor.config.ts",
+        auth: "shared-auth",
+        pinnedAuth: true,
+        executors: {
+          "on-token": { kind: "authAccessToken", events: ["auth.access_token.issued"] },
+        },
+      }),
+    ]);
+
+    expect(subscriptions.map(({ pinned, key }) => ({ pinned, key }))).toEqual([
+      { pinned: true, key: "auth:shared-auth" },
+    ]);
+  });
+
   test("ignores triggers that name no publishing resource", () => {
     expect(
       collectEventSubscriptions([
@@ -448,6 +504,24 @@ describe("collectDependentApps", () => {
 
     expect(collectDependentApps(subscriptions)).toEqual(
       new Map([["tailordb:db:type:Order", new Map([[buyerId, "publish-events"]])]]),
+    );
+  });
+
+  test("keys an Auth service record by the Auth service", () => {
+    const subscriptions = collectEventSubscriptions([
+      target({ configPath: "supplier/tailor.config.ts", appId: supplierId, auth: "shared-auth" }),
+      target({
+        configPath: "buyer/tailor.config.ts",
+        appId: buyerId,
+        externalAuth: "shared-auth",
+        executors: {
+          "on-token": { kind: "authAccessToken", events: ["auth.access_token.issued"] },
+        },
+      }),
+    ]);
+
+    expect(collectDependentApps(subscriptions)).toEqual(
+      new Map([["auth:shared-auth", new Map([[buyerId, "publish-events"]])]]),
     );
   });
 
@@ -785,6 +859,11 @@ describe("collectEventSubscriptions and a disabled executor", () => {
       trigger: { kind: "workflowJobExecution", workflowName: "orders" },
       owns: { workflows: ["orders"] },
     },
+    {
+      kind: "authAccessToken",
+      trigger: { kind: "authAccessToken", events: ["auth.access_token.issued"] },
+      owns: { auth: "shared-auth" },
+    },
   ])("a disabled executor is resolved but publishes nothing ($kind)", ({ trigger, owns }) => {
     const [subscriber] = [
       target({
@@ -804,6 +883,7 @@ describe("collectEventSubscriptions and a disabled executor", () => {
     expect(subscribedTailorDBTables(owned)).toEqual(new Set());
     expect(subscribedResolvers(owned)).toEqual(new Set());
     expect(subscribedIdps(owned)).toEqual(new Set());
+    expect(subscribedAuthServices(owned)).toEqual(new Set());
     const workflows = subscribedWorkflows(owned);
     expect(workflows.execution.workflowNames).toEqual(new Set());
     expect(workflows.jobExecution.workflowNames).toEqual(new Set());
@@ -819,6 +899,19 @@ describe("collectEventSubscriptions and a disabled executor", () => {
     const owned = ownedSubscriptions(collectEventSubscriptions([subscriber]), subscriber);
 
     expect(subscribedTailorDBTables(owned)).toEqual(new Set(["Order"]));
+  });
+
+  test("an enabled authAccessToken executor subscribes to the Auth service", () => {
+    const subscriber = target({
+      configPath: "buyer/tailor.config.ts",
+      auth: "shared-auth",
+      executors: {
+        "on-token": { kind: "authAccessToken", events: ["auth.access_token.issued"] },
+      },
+    });
+    const owned = ownedSubscriptions(collectEventSubscriptions([subscriber]), subscriber);
+
+    expect(subscribedAuthServices(owned)).toEqual(new Set(["shared-auth"]));
   });
 
   test.each([
@@ -871,6 +964,12 @@ describe("collectEventSubscriptions and a disabled executor", () => {
       trigger: { kind: "workflowJobExecution", workflowName: "orders" },
       owns: { workflows: ["orders"] },
       key: "workflow:orders:jobs",
+    },
+    {
+      kind: "authAccessToken",
+      trigger: { kind: "authAccessToken", events: ["auth.access_token.issued"] },
+      owns: { auth: "shared-auth" },
+      key: "auth:shared-auth",
     },
   ])(
     "a disabled-only subscriber leaves the resource key unclaimed ($kind)",
