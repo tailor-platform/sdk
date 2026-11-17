@@ -356,7 +356,7 @@ Client names must be 3 to 63 lowercase letters, digits, or hyphens, starting and
 - `public` - Applications that cannot keep a secret, such as mobile apps and single-page apps
 - `browser` - Single-page apps that receive tokens in HTTP-only cookies
 
-A `browser` client cannot set `requireDpop: true`. To choose between `public` and `browser` for a single-page app, see [OAuth2 Client Selection for SPAs](https://docs.tailor.tech/guides/auth/spa-oauth2-client).
+A `browser` client cannot set `requireDpop: true`. Changing `clientType` of a deployed client makes `deploy` delete and recreate it instead of updating it. To choose between `public` and `browser` for a single-page app, see [OAuth2 Client Selection for SPAs](https://docs.tailor.tech/guides/auth/spa-oauth2-client).
 
 **grantTypes**: Supported OAuth 2.0 grant types:
 
