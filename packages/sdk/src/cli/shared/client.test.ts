@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { MethodOptions_IdempotencyLevel } from "@bufbuild/protobuf/wkt";
@@ -31,6 +32,7 @@ import {
   rememberPlatformConfigForToken,
   resolveStaticWebsiteUrls,
   resolveStaticWebsiteUrlsInEnv,
+  REPEATABLE_METHODS,
   RETRY_SAFE_CREATE_METHODS,
   retryInterceptor,
   staticWebsiteNameFromPlaceholder,
@@ -40,6 +42,7 @@ import {
 import { errorToJson } from "./error-json";
 import { CLIError } from "./errors";
 import { logger } from "./logger";
+import { listSourceFiles } from "./test-helpers/source-files";
 
 vi.mock("@connectrpc/connect-node", () => ({
   createConnectTransport: vi.fn(() => ({ type: "node-transport" })),
@@ -113,6 +116,21 @@ describe("fetchUserInfo", () => {
     await fetchUserInfo("access-token");
 
     expect(fetchSpy.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  test("reports a rejected user info request as AUTH_USER_INFO_FAILED", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(
+        async () => new Response("", { status: 401, statusText: "Unauthorized" }),
+      ),
+    );
+
+    await expect(fetchUserInfo("access-token")).rejects.toMatchObject({
+      code: "AUTH_USER_INFO_FAILED",
+      message: "Failed to fetch user info: Unauthorized",
+      context: { status: 401 },
+    });
   });
 });
 
@@ -775,97 +793,47 @@ describe("platform environment variables", () => {
   aroundEach(async (runTest) => {
     await runTest();
     vi.unstubAllEnvs();
-    vi.resetModules();
   });
 
-  async function importFreshClient() {
-    vi.resetModules();
-    const { logger } = await import("./logger");
-    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-    return { client: await import("./client"), warnSpy };
-  }
-
-  test("uses legacy platform env vars when renamed vars are absent, warning once per name", async () => {
+  test("ignores PLATFORM_URL and PLATFORM_OAUTH2_CLIENT_ID", () => {
     vi.stubEnv("PLATFORM_URL", "https://api.legacy.tailor.tech");
     vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", "legacy-client");
-    const { client, warnSpy } = await importFreshClient();
 
-    expect(client.getPlatformBaseUrl()).toBe("https://api.legacy.tailor.tech");
-    expect(client.getOAuth2ClientId()).toBe("legacy-client");
-    expect(client.getEffectivePlatformConfig()).toEqual({
-      platformUrl: "https://api.legacy.tailor.tech",
-      oauth2ClientId: "legacy-client",
-    });
-    expect(warnSpy.mock.calls).toEqual([
-      ["PLATFORM_URL is deprecated. Please use TAILOR_PLATFORM_URL instead."],
-      [
-        "PLATFORM_OAUTH2_CLIENT_ID is deprecated. Please use TAILOR_PLATFORM_OAUTH2_CLIENT_ID instead.",
-      ],
-    ]);
+    expect(getPlatformBaseUrl()).toBe("https://api.tailor.tech");
+    expect(getEffectivePlatformConfig()).toBeUndefined();
   });
 
   test.each([
     {
-      name: "uses the default platform when neither name is set",
+      name: "uses the default platform when unset",
       env: {},
       platformUrl: "https://api.tailor.tech",
-      warnings: [],
     },
     {
-      name: "uses the renamed var without warning",
+      name: "uses TAILOR_PLATFORM_URL",
       env: { TAILOR_PLATFORM_URL: "https://api.dev.tailor.tech" },
       platformUrl: "https://api.dev.tailor.tech",
-      warnings: [],
     },
     {
-      name: "treats an empty renamed var as unset",
-      env: { TAILOR_PLATFORM_URL: "", PLATFORM_URL: "https://api.legacy.tailor.tech" },
-      platformUrl: "https://api.legacy.tailor.tech",
-      warnings: [["PLATFORM_URL is deprecated. Please use TAILOR_PLATFORM_URL instead."]],
-    },
-    {
-      name: "treats empty vars as unset without warning",
-      env: { TAILOR_PLATFORM_URL: "", PLATFORM_URL: "" },
+      name: "treats an empty TAILOR_PLATFORM_URL as unset",
+      env: { TAILOR_PLATFORM_URL: "" },
       platformUrl: "https://api.tailor.tech",
-      warnings: [],
     },
-  ])("$name", async ({ env, platformUrl, warnings }) => {
+  ])("$name", ({ env, platformUrl }) => {
     for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
-    const { client, warnSpy } = await importFreshClient();
 
-    expect(client.getPlatformBaseUrl()).toBe(platformUrl);
-    expect(warnSpy.mock.calls).toEqual(warnings);
+    expect(getPlatformBaseUrl()).toBe(platformUrl);
   });
 
-  test("does not warn when the profile supplies the platform settings", async () => {
-    vi.stubEnv("PLATFORM_URL", "https://api.legacy.tailor.tech");
-    vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", "legacy-client");
-    const { client, warnSpy } = await importFreshClient();
-    const profile = {
-      platformUrl: "https://api.profile.tailor.tech",
-      oauth2ClientId: "profile-client",
-    };
-
-    expect(client.getPlatformBaseUrl(profile)).toBe("https://api.profile.tailor.tech");
-    expect(client.getOAuth2ClientId(profile)).toBe("profile-client");
-    expect(client.getEffectivePlatformConfig(profile)).toEqual(profile);
-    expect(warnSpy).not.toHaveBeenCalled();
-  });
-
-  test("prefers renamed platform env vars over legacy env vars without warning", () => {
-    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-    vi.stubEnv("PLATFORM_URL", "https://api.legacy.tailor.tech");
-    vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", "legacy-client");
+  test("uses TAILOR_PLATFORM_URL and TAILOR_PLATFORM_OAUTH2_CLIENT_ID", () => {
     vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
     vi.stubEnv("TAILOR_PLATFORM_OAUTH2_CLIENT_ID", "dev-client");
 
-    expect(getPlatformBaseUrl()).toBe("https://api.dev.tailor.tech");
     expect(getOAuth2ClientId()).toBe("dev-client");
     expect(getEffectivePlatformConfig()).toEqual({
       platformUrl: "https://api.dev.tailor.tech",
       oauth2ClientId: "dev-client",
     });
-    expect(warnSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -1068,6 +1036,20 @@ describe("retryInterceptor", () => {
     expect(next).toHaveBeenCalledTimes(2);
   });
 
+  test("retries Unavailable for no-side-effect methods then succeeds", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
+      .mockResolvedValueOnce(okResponse);
+
+    const res = await settle(
+      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.getWorkspace)),
+    );
+
+    expect(res).toBe(okResponse);
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
   test("retries Aborted for no-side-effect methods then succeeds", async () => {
     const next = vi
       .fn()
@@ -1170,8 +1152,12 @@ describe("retryInterceptor", () => {
   test.each(
     [
       OperatorService.method.cloneApplicationData,
+      OperatorService.method.createPersonalAccessToken,
       OperatorService.method.createWorkspace,
+      OperatorService.method.execScript,
+      OperatorService.method.resumeWorkflowExecution,
       OperatorService.method.startWorkflow,
+      OperatorService.method.triggerExecutor,
     ].flatMap((method) =>
       [Code.Unavailable, Code.ResourceExhausted].map((code) => ({
         method,
@@ -1195,21 +1181,26 @@ describe("retryInterceptor", () => {
   );
 
   /**
-   * Build the error connect-node raises for a connection reset.
-   * @param message - Message Node gives the underlying `ECONNRESET`
-   * @returns The reset wrapped as connect-node wraps it
+   * Build the error connect-node raises for a Node network error.
+   * @param nodeCode - `code` of the underlying Node error (e.g. "ECONNRESET")
+   * @param message - Message of the underlying Node error
+   * @param code - Connect code connect-node assigns to that Node error
+   * @returns The Node error wrapped as connect-node wraps it
    */
-  function connectionReset(message: string) {
-    return ConnectError.from(
-      Object.assign(new Error(message), { code: "ECONNRESET" }),
-      Code.Aborted,
-    );
+  function nodeNetworkError(nodeCode: string, message: string, code: Code) {
+    return ConnectError.from(Object.assign(new Error(message), { code: nodeCode }), code);
   }
+
+  const connectionReset = (message: string) =>
+    nodeNetworkError("ECONNRESET", message, Code.Aborted);
 
   const preHandshakeDisconnect = () =>
     connectionReset(
       "Client network socket disconnected before secure TLS connection was established",
     );
+
+  const connectionRefused = () =>
+    nodeNetworkError("ECONNREFUSED", "connect ECONNREFUSED 127.0.0.1:443", Code.Unavailable);
 
   test.each([
     OperatorService.method.cloneApplicationData,
@@ -1226,6 +1217,84 @@ describe("retryInterceptor", () => {
 
     expect(res).toBe(okResponse);
     expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  test.each([
+    { nodeCode: "ECONNREFUSED", message: "connect ECONNREFUSED 127.0.0.1:443" },
+    { nodeCode: "ENOTFOUND", message: "getaddrinfo ENOTFOUND api.tailor.tech" },
+    { nodeCode: "EAI_AGAIN", message: "getaddrinfo EAI_AGAIN api.tailor.tech" },
+  ])(
+    "retries ExecScript when the connection could not be opened ($nodeCode)",
+    async ({ nodeCode, message }) => {
+      const next = vi
+        .fn()
+        .mockRejectedValueOnce(nodeNetworkError(nodeCode, message, Code.Unavailable))
+        .mockResolvedValueOnce(okResponse);
+
+      const res = await settle(
+        retryInterceptor()(next)(makeUnaryReq(OperatorService.method.execScript)),
+      );
+
+      expect(res).toBe(okResponse);
+      expect(next).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  test("retries ExecScript when a refused connection is nested deeper in the cause chain", async () => {
+    const refused = Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:443"), {
+      code: "ECONNREFUSED",
+    });
+    const nested = new ConnectError(
+      "unavailable",
+      Code.Unavailable,
+      undefined,
+      undefined,
+      new Error("session error", { cause: refused }),
+    );
+    const next = vi.fn().mockRejectedValueOnce(nested).mockResolvedValueOnce(okResponse);
+
+    const res = await settle(
+      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.execScript)),
+    );
+
+    expect(res).toBe(okResponse);
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  test("does not retry ExecScript on a refused connection reported as another code", async () => {
+    const refused = nodeNetworkError(
+      "ECONNREFUSED",
+      "connect ECONNREFUSED 127.0.0.1:443",
+      Code.Internal,
+    );
+    const next = vi.fn().mockRejectedValueOnce(refused).mockResolvedValueOnce(okResponse);
+
+    await expect(
+      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.execScript))),
+    ).rejects.toBe(refused);
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  test("does not retry ExecScript when the cause chain loops", async () => {
+    const looping: Error = new Error("looping cause");
+    looping.cause = looping;
+    const error = new ConnectError("unavailable", Code.Unavailable, undefined, undefined, looping);
+    const next = vi.fn().mockRejectedValueOnce(error).mockResolvedValueOnce(okResponse);
+
+    await expect(
+      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.execScript))),
+    ).rejects.toBe(error);
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  test("does not retry ExecScript on a timeout that may follow the request", async () => {
+    const timeout = nodeNetworkError("ETIMEDOUT", "read ETIMEDOUT", Code.Unavailable);
+    const next = vi.fn().mockRejectedValueOnce(timeout).mockResolvedValueOnce(okResponse);
+
+    await expect(
+      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.execScript))),
+    ).rejects.toBe(timeout);
+    expect(next).toHaveBeenCalledOnce();
   });
 
   test("does not retry CreateWorkspace on a connection reset that may follow the request", async () => {
@@ -1305,18 +1374,24 @@ describe("retryInterceptor", () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
-  test("routes an AlreadyExists that follows only pre-handshake disconnects to error tracking, then surfaces it", async () => {
-    const next = vi
-      .fn()
-      .mockRejectedValueOnce(preHandshakeDisconnect())
-      .mockRejectedValueOnce(new ConnectError("duplicated key not allowed", Code.AlreadyExists));
+  test.each([
+    { name: "pre-handshake disconnects", unsent: preHandshakeDisconnect },
+    { name: "refused connections", unsent: connectionRefused },
+  ])(
+    "routes an AlreadyExists that follows only $name to error tracking, then surfaces it",
+    async ({ unsent }) => {
+      const next = vi
+        .fn()
+        .mockRejectedValueOnce(unsent())
+        .mockRejectedValueOnce(new ConnectError("duplicated key not allowed", Code.AlreadyExists));
 
-    await expect(
-      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType))),
-    ).rejects.toThrow("duplicated key not allowed");
-    expect(vi.mocked(reportCrash)).toHaveBeenCalledTimes(1);
-    expect(next).toHaveBeenCalledTimes(2);
-  });
+      await expect(
+        settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType))),
+      ).rejects.toThrow("duplicated key not allowed");
+      expect(vi.mocked(reportCrash)).toHaveBeenCalledTimes(1);
+      expect(next).toHaveBeenCalledTimes(2);
+    },
+  );
 
   test("swallows an AlreadyExists when an attempt before a pre-handshake disconnect may have committed", async () => {
     const next = vi
@@ -1362,6 +1437,53 @@ describe("retryInterceptor", () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
+  type OperatorMethod = (typeof OperatorService.method)[keyof typeof OperatorService.method];
+
+  /**
+   * Collect the OperatorService methods that a source calls.
+   * @param source - TypeScript source to scan
+   * @returns Methods called as `.<method>(` on any receiver in the source
+   */
+  function clientMethodsCalledInSource(source: string): OperatorMethod[] {
+    const methods = new Set<OperatorMethod>();
+    for (const m of source.matchAll(/\.([a-z][A-Za-z0-9]*)\s*\(/g)) {
+      const method = Object.hasOwn(OperatorService.method, m[1]!)
+        ? OperatorService.method[m[1] as keyof typeof OperatorService.method]
+        : undefined;
+      if (method) methods.add(method);
+    }
+    return [...methods];
+  }
+
+  /**
+   * Collect the OperatorService methods that the sources under a directory call.
+   * @param relativeDir - Directory to scan, relative to this file
+   * @returns Methods that `clientMethodsCalledInSource` finds in non-test sources under the directory
+   */
+  function clientMethodsCalledIn(relativeDir: string): OperatorMethod[] {
+    const tsFiles = listSourceFiles(path.resolve(import.meta.dirname, relativeDir));
+    return [
+      ...new Set(
+        tsFiles.flatMap((file) => clientMethodsCalledInSource(fs.readFileSync(file, "utf8"))),
+      ),
+    ];
+  }
+
+  test("the call scan finds a method on a wrapped line, after optional chaining, or on any receiver", () => {
+    const source = [
+      "await client\n  .updateWorkspace({});",
+      "client?.deleteWorkspace({});",
+      "opClient.restoreWorkspace({});",
+      "items.map(String);",
+    ].join("\n");
+
+    expect(clientMethodsCalledInSource(source).map(({ name }) => name)).toEqual([
+      "UpdateWorkspace",
+      "DeleteWorkspace",
+      "RestoreWorkspace",
+    ]);
+  });
+
   // Drift guard: every Create RPC invoked in the deploy/apply flow must be
   // consciously classified — either retry-safe (response unused, in
   // RETRY_SAFE_CREATE_METHODS) or explicitly exempt below. A newly added apply
@@ -1375,31 +1497,14 @@ describe("retryInterceptor", () => {
       "CreateFunctionRegistry", // client-streaming: bypasses the retry loop
     ]);
 
-    const deployDir = path.resolve(import.meta.dirname, "../commands/deploy");
-    const tsFiles: string[] = [];
-    const walk = (dir: string) => {
-      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) walk(full);
-        else if (entry.name.endsWith(".ts") && !entry.name.includes(".test.")) tsFiles.push(full);
-      }
-    };
-    walk(deployDir);
-
-    const used = new Set<string>();
-    const callRe = /client\.(create[A-Z][A-Za-z0-9]*)\s*\(/g;
-    for (const file of tsFiles) {
-      const src = fs.readFileSync(file, "utf8");
-      for (const m of src.matchAll(callRe)) {
-        const local = m[1]!;
-        used.add(local.charAt(0).toUpperCase() + local.slice(1));
-      }
-    }
+    const used = clientMethodsCalledIn("../commands/deploy")
+      .map(({ name }) => name)
+      .filter((name) => name.startsWith("Create"));
 
     // Sanity: the scan actually found deploy creates (guards against a broken regex/path).
-    expect(used.has("CreateTailorDBType")).toBe(true);
+    expect(used).toContain("CreateTailorDBType");
 
-    const unclassified = [...used].filter(
+    const unclassified = used.filter(
       (name) => !RETRY_SAFE_CREATE_METHODS.has(name) && !EXEMPT_DEPLOY_CREATES.has(name),
     );
     // On failure the diff lists the offending method(s). Each must be added to
@@ -1418,6 +1523,45 @@ describe("retryInterceptor", () => {
     // RETRY_SAFE_CREATE_METHODS to match the OperatorService method name.
     const typos = [...RETRY_SAFE_CREATE_METHODS].filter((name) => !realCreateNames.has(name));
     expect(typos).toEqual([]);
+  });
+
+  const isUnaryWrite = ({ methodKind, idempotency }: OperatorMethod) =>
+    methodKind === "unary" && idempotency === MethodOptions_IdempotencyLevel.IDEMPOTENCY_UNKNOWN;
+
+  test("REPEATABLE_METHODS covers every write the CLI calls or it is explicitly not repeated", () => {
+    const NOT_REPEATED_WRITES = new Set([
+      "CloneApplicationData", // starts another clone operation
+      "CreateOrganizationFolder", // may create another folder with the same name
+      "CreatePersonalAccessToken", // creates another token
+      "CreateWorkspace", // creates another workspace
+      "ExchangeAuthConnectionAuthorizationCode", // the authorization code is single-use
+      "ExecScript", // starts another execution
+      "InviteWorkspacePlatformUser", // may send another invitation
+      "ResumeWorkflowExecution", // resumes the execution again
+      "StartWorkflow", // starts another execution
+      "TriggerExecutor", // triggers another job
+      "TruncateTailorDBType", // also deletes records written in between
+      "TruncateTailorDBTypes", // also deletes records written in between
+    ]);
+
+    const writes = clientMethodsCalledIn("..")
+      .filter(isUnaryWrite)
+      .map(({ name }) => name);
+
+    expect(writes).toContain("UpdateTailorDBType");
+    expect(
+      writes.filter((name) => !REPEATABLE_METHODS.has(name) && !NOT_REPEATED_WRITES.has(name)),
+    ).toEqual([]);
+  });
+
+  test("every REPEATABLE_METHODS entry is a unary OperatorService write", () => {
+    const unaryWrites = new Set(
+      Object.values(OperatorService.method)
+        .filter(isUnaryWrite)
+        .map(({ name }) => name),
+    );
+
+    expect([...REPEATABLE_METHODS].filter((name) => !unaryWrites.has(name))).toEqual([]);
   });
 });
 
@@ -2149,7 +2293,11 @@ describe("fetchMachineUserToken", () => {
 
     await expect(
       fetchMachineUserToken("https://example.com", "client-id", "client-secret"),
-    ).rejects.toThrow("Failed to fetch machine user token: 403 Forbidden access denied");
+    ).rejects.toMatchObject({
+      code: "MACHINE_USER_TOKEN_FAILED",
+      message: "Failed to fetch machine user token: 403 Forbidden access denied",
+      context: { status: 403 },
+    });
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 

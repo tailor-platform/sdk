@@ -96,9 +96,20 @@ describe("templateVersionDrift", () => {
     });
 
     expect(message).toMatch(/TEMPLATE_CHANGED_SINCE_RELEASE = true/);
-    expect(message).toMatch(/only added renders to `renderedTemplates\(\)`/);
-    expect(message).toMatch(/re-record the released fingerprint/);
+    expect(message).toMatch(/added renders to `renderedTemplates\(\)`/);
+    expect(message).toMatch(/options no release has shipped yet/);
+    expect(message).toContain(`\`// Released template fingerprint: ${NOW}\``);
     expect(message).toMatch(/TEMPLATE_CHANGED_SINCE_RELEASE = false/);
+  });
+
+  test("points to the dump that shows which renders changed", () => {
+    const message = templateVersionDrift({
+      changedSinceRelease: false,
+      releasedFingerprint: OLD,
+      currentHash: NOW,
+    });
+
+    expect(message).toContain("TEMPLATES_DUMP_DIR=<absolute dir> pnpm -w setup:templates:dump");
   });
 
   test("asks to clear the pending mark when the templates render as released", () => {

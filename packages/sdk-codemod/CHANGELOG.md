@@ -1,5 +1,82 @@
 # @tailor-platform/sdk-codemod
 
+## 0.12.1
+
+### Patch Changes
+
+- [#3113](https://github.com/tailor-platform/sdk/pull/3113) [`b573c2b`](https://github.com/tailor-platform/sdk/commit/b573c2bbbfd14cb6b802e8581ab0c22781d12cb9) Thanks [@dqn](https://github.com/dqn)! - **Breaking change**: A service `files` pattern ending in `.test.ts` or `.spec.ts` now includes the test files it matches, wherever it sits in `files`, so including them no longer needs the deprecated `ignores: []`. Test files stay excluded by default: a pattern that does not end in `.test.ts` or `.spec.ts` matches no test files. A config without `ignores` that already lists a pattern ending in `.test.ts` or `.spec.ts` now loads the files it matches, and the next `tailor deploy` deploys them; remove the pattern to keep them excluded. The v3 codemod writes `!**/*.test.ts` and `!**/*.spec.ts` after the last pattern that neither starts with `!` nor ends in `.test.ts` or `.spec.ts`, and flags a pattern ending in `.test.ts` or `.spec.ts` placed before that point for a manual migration.
+
+- [#3104](https://github.com/tailor-platform/sdk/pull/3104) [`34cef36`](https://github.com/tailor-platform/sdk/commit/34cef366b27c11b19882facfd50f635934f33cdb) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​clack/prompts to v1.9.0
+
+- [#3121](https://github.com/tailor-platform/sdk/pull/3121) [`515842d`](https://github.com/tailor-platform/sdk/commit/515842d1149be85c2fa217bbee7be6fa01ee81f7) Thanks [@dqn](https://github.com/dqn)! - Fix `v3/files-ignores-to-negation` reporting configs it can migrate: `files` and `ignores` patterns written as template literals without `${}`, and `db` or `resolver` namespaces with a computed key such as `[sharedDb]`, are now migrated instead of flagged for manual review, and the test-file exclusion is no longer appended again when `files` already writes it as a template literal. Projects created from the hello-world, inventory-management, and multi-application templates no longer get these findings from `tailor upgrade`.
+
+- [#3141](https://github.com/tailor-platform/sdk/pull/3141) [`edd0fd8`](https://github.com/tailor-platform/sdk/commit/edd0fd8f2572fa55bbcd08766b167cb66ebf47f2) Thanks [@dqn](https://github.com/dqn)! - Update the Node.js requirement in the v2 migration notice to Node.js 22 (22.22.2 or later), 24 (24.15.0 or later), or 26 and later.
+
+## 0.12.0
+
+### Minor Changes
+
+- [#3080](https://github.com/tailor-platform/sdk/pull/3080) [`e1f1410`](https://github.com/tailor-platform/sdk/commit/e1f1410fb38f1173ca6c2e4df4482dd6772b27fc) Thanks [@toiroakr](https://github.com/toiroakr)! - `defineConfig()` now takes `idp` as a single IdP, `idp: myIdp`, or as a single external declaration, `idp: { name: "shared-idp", external: true }`. The array form, `idp: [myIdp]`, still works but is deprecated, which editors and `no-deprecated` lint rules show on the `defineConfig()` call, and will be removed in v3, where a config declares one IdP.
+  
+  `tailor upgrade` runs the `v3/idp-array-to-single` codemod, which writes the IdP of a one-element array as the `idp` value itself and removes an empty array. An array with two or more IdPs has no mechanical replacement, so the codemod reports it for you to change by hand.
+  
+  ```ts
+  export default defineConfig({
+    name: "backoffice",
+    idp: backofficeIdp,
+  });
+  ```
+
+- [#3013](https://github.com/tailor-platform/sdk/pull/3013) [`75a6b2b`](https://github.com/tailor-platform/sdk/commit/75a6b2b3a1d2075f19bf2170e02a330c16846990) Thanks [@toiroakr](https://github.com/toiroakr)! - The seed schema files `tailor generate` writes now import `defineSchema` (and `fillIdpUserPassword` for the IdP user) from `@tailor-platform/sdk-plugin-seed/schema` instead of `@tailor-platform/sdk/seed`. Update `@tailor-platform/sdk-plugin-seed` to the release that adds the `./schema` entry (install it first if the project does not have it; the `tailor seed` commands need it as well), then run `tailor generate` again to rewrite the files. With an older plugin, `tailor seed validate` cannot load the regenerated files and `tsc` reports TS2307 for `@tailor-platform/sdk-plugin-seed/schema`. The `v3/seed-subpath-to-plugin` codemod entry tells `tailor upgrade` to re-run `tailor generate`. Schema files generated before keep working. `@tailor-platform/sdk/seed` is now `@deprecated` and is removed in v3: import `defineSchema`, `fillIdpUserPassword`, `ForeignKeyDefinition`, and `IndexDefinition` from `@tailor-platform/sdk-plugin-seed/schema` instead. `validateSeedData`, `fillSeedData`, and `hookSeedRows` have no replacement import; run `tailor seed validate`, `tailor seed fill`, or `tailor seed apply`.
+
+### Patch Changes
+
+- [#3004](https://github.com/tailor-platform/sdk/pull/3004) [`6852128`](https://github.com/tailor-platform/sdk/commit/685212835cc46909dddbe253790ee1119471387b) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​politty/zod to v0.7.2
+
+## 0.11.0
+
+### Minor Changes
+
+- [#2986](https://github.com/tailor-platform/sdk/pull/2986) [`57fa11a`](https://github.com/tailor-platform/sdk/commit/57fa11afc854a359caa7ae7457dcc3eb06c59432) Thanks [@dqn](https://github.com/dqn)! - `files` in `db`, `resolver`, `executor`, `workflow`, and `httpAdapter` now treats a pattern starting with `!` as an exclusion: for each file, the last `files` pattern that matches it decides. Before, such a pattern matched nothing and excluded nothing, so a config that already lists `!` patterns now leaves those files out, and the next deploy removes the resources they defined. A file that several `files` patterns match is now loaded once.
+  
+  `ignores` is deprecated and will be removed in v3, together with the default exclusion of `**/*.test.ts` and `**/*.spec.ts`. `tailor upgrade` runs the `v3/files-ignores-to-negation` codemod, which moves `ignores` into `files` as `!` patterns and adds `"!**/*.test.ts"` and `"!**/*.spec.ts"` to services without `ignores`.
+  
+  ```ts
+  export default defineConfig({
+    name: "my-app",
+    executor: {
+      files: ["executors/**/*.ts", "!executors/ci-only.ts"],
+    },
+  });
+  ```
+
+- [#3025](https://github.com/tailor-platform/sdk/pull/3025) [`ee30e41`](https://github.com/tailor-platform/sdk/commit/ee30e41a37cbb38f0b3764e6cbe068eb8a51f59e) Thanks [@dqn](https://github.com/dqn)! - The plugin hook `onNamespaceLoaded` is renamed to `onTailorDBNamespaceLoaded`, which says that it runs once for each TailorDB namespace in the config (except external ones). Its context and output types are renamed to `TailorDBNamespaceLoadedContext` and `TailorDBNamespacePluginOutput`.
+  
+  `onNamespaceLoaded`, `PluginNamespaceProcessContext`, and `NamespacePluginOutput` are deprecated and will be removed in v3; plugins that use them keep working until then. A plugin that defines both `onNamespaceLoaded` and `onTailorDBNamespaceLoaded` is rejected when the config loads. `tailor upgrade` runs the `v3/tailordb-namespace-loaded-rename` codemod, which renames the hook and the two types.
+  
+  ```ts
+  export const auditLogPlugin: Plugin = {
+    id: "@example/audit-log",
+    description: "Adds an audit log table",
+    importPath: "@example/audit-log",
+    onTailorDBNamespaceLoaded({ namespace }) {
+      return { tables: { auditLog: db.table(`AuditLog_${namespace}`, { message: db.string() }) } };
+    },
+  };
+  ```
+
+## 0.10.8
+
+### Patch Changes
+
+- [#2955](https://github.com/tailor-platform/sdk/pull/2955) [`0e86776`](https://github.com/tailor-platform/sdk/commit/0e867766a8b5daa17927f6018c59281457bfebb9) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​politty/zod to v0.7.1
+
+- [#2964](https://github.com/tailor-platform/sdk/pull/2964) [`a376815`](https://github.com/tailor-platform/sdk/commit/a376815b3b95d9359738439cd1be669d09b9c614) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​ast-grep/napi to v0.51.1
+
+- [#2973](https://github.com/tailor-platform/sdk/pull/2973) [`c0ae913`](https://github.com/tailor-platform/sdk/commit/c0ae913259e1b51c7df799f3c023e4dd4ea567c9) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency semver to v7.8.6
+
+- [#2982](https://github.com/tailor-platform/sdk/pull/2982) [`cd33cdb`](https://github.com/tailor-platform/sdk/commit/cd33cdb901bf2eb4ee57e77ba8d62b134c1064d1) Thanks [@dqn](https://github.com/dqn)! - The v2 migration guide and `tailor upgrade` prompt for the programmatic CLI functions no longer say that `triggerExecutor`'s `payload` is typed from the executor definition. `payload` is accepted only for an executor with an incoming webhook trigger, and its shape is not checked; `startWorkflow`'s `arg` is still typed from the workflow definition.
+
 ## 0.10.7
 
 ### Patch Changes

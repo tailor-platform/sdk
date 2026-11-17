@@ -2,7 +2,12 @@ import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { importUserModule } from "#/cli/shared/user-modules";
-import { definitionExportError, definitionInvalidError } from "#/cli/shared/validation-errors";
+import {
+  assertUniqueDefinitionNames,
+  atUserModule,
+  definitionExportError,
+  definitionInvalidError,
+} from "#/cli/shared/validation-errors";
 import { WorkflowJobSchema, WorkflowSchema } from "#/parser/service/workflow/index";
 import { isSdkBranded } from "#/utils/brand";
 import type { WorkflowServiceConfig } from "#/configure/config/types";
@@ -137,9 +142,6 @@ async function loadAndCollectJobs(
   const workflowFiles = loadFilesWithIgnores(config, baseDir);
   const fileCount = workflowFiles.length;
 
-  // Maps for collecting data
-  const allJobsMap = new Map<string, CollectedJob>();
-
   // Load all files in parallel and collect jobs and workflows
   const loadResults = await Promise.all(
     workflowFiles.map(async (workflowFile) => {
@@ -154,20 +156,16 @@ async function loadAndCollectJobs(
       workflows[workflowFile] = workflow;
     }
 
-    for (const job of jobs) {
-      const existing = allJobsMap.get(job.name);
-      if (existing) {
-        throw new Error(
-          `Duplicate job name "${job.name}" found:\n` +
-            `  - ${existing.sourceFile} (export: ${existing.exportName})\n` +
-            `  - ${job.sourceFile} (export: ${job.exportName})\n` +
-            `Each job must have a unique name.`,
-        );
-      }
-      allJobsMap.set(job.name, job);
-      collectedJobs.push(job);
-    }
+    collectedJobs.push(...jobs);
   }
+  assertUniqueDefinitionNames({
+    kind: "workflow-job",
+    definitions: collectedJobs.map(({ name, sourceFile, exportName }) => ({
+      name,
+      file: sourceFile,
+      exportName,
+    })),
+  });
 
   return {
     workflows,
@@ -237,8 +235,7 @@ async function loadFileContent(filePath: string): Promise<{
     logger.error(
       `${styles.error("Failed to load workflow from")} ${styles.errorBright(relativePath)}`,
     );
-    logger.error(String(error));
-    throw error;
+    throw atUserModule(error, filePath);
   }
 
   return { jobs, workflow };

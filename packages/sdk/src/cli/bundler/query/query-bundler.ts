@@ -33,7 +33,12 @@ function createSqlEntry(): string {
       for (const query of input.queries) {
         const result = await sql.raw(query).execute(db);
         const rows = result.rows ?? [];
-        results.push({ rows, rowCount: rows.length });
+        if (result.numAffectedRows === undefined) {
+          results.push({ rows, rowCount: rows.length });
+        } else {
+          const affectedRows = Number(result.numAffectedRows);
+          results.push({ rows, rowCount: affectedRows, affectedRows });
+        }
       }
       if (results.length === 1) {
         return results[0];

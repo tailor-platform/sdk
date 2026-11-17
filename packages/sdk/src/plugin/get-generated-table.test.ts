@@ -5,8 +5,10 @@ import * as path from "pathe";
 import { aroundEach, describe, expect, expectTypeOf, test } from "vitest";
 import { db } from "#/configure/services/tailordb/index";
 import { _clearCacheForTesting } from "./get-generated-table";
+import { invalidPluginsExports } from "./test-helpers/invalid-plugins-exports";
 import { getExtendedTable, getGeneratedTable } from "./index";
 import type { TailorAnyDBType } from "#/configure/services/tailordb/types";
+import type { TailorDBServiceConfigInput } from "#/types/tailordb.generated";
 
 declare global {
   // oxlint-disable-next-line no-var
@@ -43,14 +45,17 @@ order.plugin(${attachments});
     );
   };
 
-  const writeConfig = (plugins: string) => {
+  const writeConfig = (
+    plugins: string,
+    namespaceConfig: TailorDBServiceConfigInput = { files: [tablePath] },
+  ) => {
     fs.writeFileSync(
       configPath,
       `import { db } from "@tailor-platform/sdk";
 export const plugins = [${plugins}];
 export default {
   db: {
-    main: { files: [${JSON.stringify(tablePath)}] },
+    main: ${JSON.stringify(namespaceConfig)},
   },
 };
 `,
@@ -129,6 +134,22 @@ export default {
     expect(await getExtendedTable(configPath, order)).toBe(order);
   });
 
+  test("does not import default-excluded files while applying plugin extensions", async () => {
+    writeTable('{ "first": {} }');
+    fs.writeFileSync(
+      path.join(path.dirname(configPath), "ignored.test.ts"),
+      'throw new Error("Excluded module imported");',
+    );
+    writeConfig(extendingPlugin("first", "rank", "db.int()"), {
+      files: ["./*.ts", "./order.mjs"],
+    });
+    const order = await loadTable();
+
+    const table = await getExtendedTable(configPath, order);
+
+    expect(Object.keys(table.fields)).toEqual(["id", "name", "rank"]);
+  });
+
   test("runs the plugins once per table, even for concurrent callers", async () => {
     writeTable('{ "first": {} }');
     writeConfig(extendingPlugin("first", "rank", "db.int()"));
@@ -198,21 +219,14 @@ describe("getGeneratedTable", () => {
   });
 
   describe("namespace plugin", () => {
-    test("onNamespaceLoaded is called only once per namespace during resolution", async () => {
+    const writeNamespacePlugin = (hooks: string) =>
       fs.writeFileSync(
         configPath,
         `export const plugins = [{
   id: "ns-plugin",
   description: "test",
   importPath: "@test/ns-plugin",
-  onNamespaceLoaded({ pluginConfig, namespace }) {
-    globalThis.__testProcessNamespaceCalls.push(namespace);
-    return {
-      tables: {
-        auditLog: { name: "AuditLog", fields: { message: {} } },
-      },
-    };
-  },
+  ${hooks}
 }];
 export default {
   db: {
@@ -221,16 +235,157 @@ export default {
 };
 `,
       );
+    const recordingHook = (name: string) => `${name}({ pluginConfig, namespace }) {
+    globalThis.__testProcessNamespaceCalls.push(namespace);
+    return {
+      tables: {
+        auditLog: { name: "AuditLog", fields: { message: {} } },
+      },
+    };
+  },`;
 
-      globalThis.__testProcessNamespaceCalls = [];
+    test.each(["onTailorDBNamespaceLoaded", "onNamespaceLoaded"])(
+      "%s is called only once per namespace during resolution",
+      async (hookName) => {
+        writeNamespacePlugin(recordingHook(hookName));
+        globalThis.__testProcessNamespaceCalls = [];
 
-      await getGeneratedTable(configPath, "ns-plugin", null, "auditLog");
+        const table = await getGeneratedTable(configPath, "ns-plugin", null, "auditLog");
 
-      expect(globalThis.__testProcessNamespaceCalls).toEqual(["main"]);
-    });
+        expect(table.name).toBe("AuditLog");
+        expect(globalThis.__testProcessNamespaceCalls).toEqual(["main"]);
+      },
+    );
   });
 
   describe("table-attached plugin", () => {
+    const writeNamespaceFixture = async (
+      namespaces: Record<string, TailorDBServiceConfigInput>,
+      sourceFile: string,
+      excludedFiles: string[],
+    ) => {
+      const tablesDir = path.join(path.dirname(configPath), "tables");
+      fs.mkdirSync(tablesDir);
+      const tablePath = path.join(tablesDir, sourceFile);
+      fs.writeFileSync(
+        tablePath,
+        'export const order = { name: "Order", fields: {}, plugins: [] };',
+      );
+      for (const file of excludedFiles) {
+        fs.writeFileSync(
+          path.join(tablesDir, file),
+          'throw new Error("Excluded module imported");',
+        );
+      }
+      fs.writeFileSync(
+        configPath,
+        `export const plugins = [{
+  id: "table-plugin",
+  description: "test",
+  importPath: "@test/table-plugin",
+  onTableLoaded({ namespace }) {
+    return { tables: { archive: { name: namespace + "Archive", fields: {}, plugins: [] } } };
+  },
+}];
+export default { db: ${JSON.stringify(namespaces)} };
+`,
+      );
+      const { order } = (await import(pathToFileURL(tablePath).href)) as {
+        order: TailorAnyDBType;
+      };
+      return order;
+    };
+
+    test.each(["a.test.ts", "a.spec.ts"])(
+      "does not import excluded %s by default",
+      async (file) => {
+        const order = await writeNamespaceFixture({ main: { files: ["./tables/*.ts"] } }, "z.ts", [
+          file,
+        ]);
+
+        const table = await getGeneratedTable(configPath, "table-plugin", order, "archive");
+
+        expect(table.name).toBe("mainArchive");
+      },
+    );
+
+    test.each([
+      {
+        rule: "explicit ignores replacing the defaults",
+        config: { files: ["./tables/a.ts", "./tables/*.ts"], ignores: ["./tables/a.ts"] },
+        sourceFile: "z.test.ts",
+      },
+      {
+        rule: "a negated files pattern",
+        config: { files: ["./tables/a.ts", "./tables/*.ts", "!./tables/a.ts"] },
+        sourceFile: "z.ts",
+      },
+    ])("does not import files excluded by $rule", async ({ config, sourceFile }) => {
+      const order = await writeNamespaceFixture({ main: config }, sourceFile, ["a.ts"]);
+
+      const table = await getGeneratedTable(configPath, "table-plugin", order, "archive");
+
+      expect(table.name).toBe("mainArchive");
+    });
+
+    test.each([
+      {
+        rule: "the default test-file exclusion",
+        config: { files: ["./tables/*.ts"] },
+        sourceFile: "z.test.ts",
+      },
+      {
+        rule: "a later negated files pattern",
+        config: { files: ["./tables/*.ts", "!./tables/z.ts"] },
+        sourceFile: "z.ts",
+      },
+      {
+        rule: "ignores after a later positive pattern",
+        config: {
+          files: ["./tables/*.ts", "!./tables/*.ts", "./tables/z.ts"],
+          ignores: ["./tables/z.ts"],
+        },
+        sourceFile: "z.ts",
+      },
+    ])(
+      "skips namespaces excluding the source table through $rule",
+      async ({ config, sourceFile }) => {
+        const order = await writeNamespaceFixture(
+          { excluded: config, main: { files: ["./tables/*.ts"], ignores: [] } },
+          sourceFile,
+          [],
+        );
+
+        const table = await getGeneratedTable(configPath, "table-plugin", order, "archive");
+
+        expect(table.name).toBe("mainArchive");
+      },
+    );
+
+    test.each([
+      {
+        rule: "a positive pattern after an exclusion",
+        config: { files: ["./tables/*.ts", "!./tables/*.ts", "./tables/z.ts"] },
+        sourceFile: "z.ts",
+      },
+      {
+        rule: "an exclusion before any positive pattern",
+        config: { files: ["!./tables/*.ts", "./tables/*.ts"] },
+        sourceFile: "z.ts",
+      },
+      {
+        rule: "ignores: [] to include test files",
+        config: { files: ["./tables/*.ts"], ignores: [] },
+        sourceFile: "z.test.ts",
+      },
+    ])("resolves the namespace with $rule", async ({ config, sourceFile }) => {
+      const order = await writeNamespaceFixture({ main: config }, sourceFile, []);
+
+      const table = await getGeneratedTable(configPath, "table-plugin", order, "archive");
+
+      expect(table.name).toBe("mainArchive");
+    });
+
     test("passes the table context and caches the generated table", async () => {
       const tablePath = path.join(path.dirname(configPath), "order.mjs");
       fs.writeFileSync(
@@ -289,18 +444,6 @@ export default { db: { main: { files: [] } } };
 `,
       );
 
-    test.each([
-      'tableConfigRequired: "yes"',
-      "tableConfigRequired: null",
-      'onTableLoaded() {}, importPath: ""',
-    ])("rejects invalid plugin options: %s", async (options) => {
-      writeConfig(`export const plugins = [{ id: "invalid", description: "test", ${options} }];`);
-
-      await expect(getGeneratedTable(configPath, "invalid", null, "auditLog")).rejects.toThrow(
-        /Invalid `plugins` export/,
-      );
-    });
-
     test("ignores array exports under any name other than `plugins`", async () => {
       writeConfig(`export const plugins2 = [{ id: "ignored", description: "test" }];
 export const generators = [{ id: "also-ignored", description: "test" }];`);
@@ -310,35 +453,16 @@ export const generators = [{ id: "also-ignored", description: "test" }];`);
       );
     });
 
-    test.each([
-      [
-        "is not an array",
-        `{ id: "not-an-array", description: "test" }`,
-        /Invalid `plugins` export/,
-      ],
-      ["is explicitly undefined", "undefined", /Invalid `plugins` export/],
-      [
-        "contains an array decorated with plugin properties",
-        `[Object.assign([], { id: "array", description: "test" })]`,
-        /Invalid `plugins` export/,
-      ],
-      [
-        "contains an invalid item",
-        `[{ id: "valid", description: "test" }, { no: "shape" }]`,
-        /Invalid `plugins` export/,
-      ],
-      [
-        "repeats a plugin ID",
-        `[{ id: "dup", description: "first" }, { id: "dup", description: "second" }]`,
-        /Duplicate plugin ID "dup"/,
-      ],
-    ])("rejects a `plugins` export that %s", async (_case, pluginsExport, message) => {
-      writeConfig(`export const plugins = ${pluginsExport};`);
+    test.each(invalidPluginsExports)(
+      "rejects a `plugins` export that $name",
+      async ({ pluginsExport, message }) => {
+        writeConfig(`export const plugins = ${pluginsExport};`);
 
-      await expect(getGeneratedTable(configPath, "anything", null, "auditLog")).rejects.toThrow(
-        message,
-      );
-    });
+        await expect(getGeneratedTable(configPath, "anything", null, "auditLog")).rejects.toThrow(
+          message,
+        );
+      },
+    );
   });
 
   test("returns a placeholder when the config is unavailable", async () => {

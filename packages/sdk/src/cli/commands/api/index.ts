@@ -6,6 +6,7 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadWorkspaceId } from "#/cli/shared/context";
 import { CLIError } from "#/cli/shared/errors";
+import { idpConfigList } from "#/cli/shared/idp-config";
 import { logger } from "#/cli/shared/logger";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
@@ -29,7 +30,8 @@ function resolveNamespaceName(methodName: string, config: LoadedConfig): string 
     return config.auth?.name;
   }
   if (/IdP/.test(methodName)) {
-    if (config.idp?.length === 1) return assertDefined(config.idp[0], "idp config missing").name;
+    const idps = idpConfigList(config.idp);
+    if (idps.length === 1) return assertDefined(idps[0], "idp config missing").name;
     return undefined;
   }
   if (/TailorDB/.test(methodName)) {

@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { getErrorDiagnostics } from "./error-diagnostics";
-import { isCLIError, typeOnlyImportHint, type CLIErrorNextAction } from "./errors";
+import { isCLIError, locatedMessage, typeOnlyImportHint, type CLIErrorNextAction } from "./errors";
 import { plainRedacted, redactSecrets } from "./logger";
 import type { Jsonifiable } from "type-fest";
 
@@ -72,7 +72,7 @@ function plainRedactedCopy(envelope: ErrorEnvelope): ErrorEnvelope {
 function buildErrorEnvelope(error: unknown, options?: ErrorToJsonOptions): ErrorEnvelope {
   const envelope = baseErrorEnvelope(error, options);
   if (!(error instanceof Error)) return envelope;
-  // `location` drives source annotations for tooling, not the error envelope.
+  // `location` is rendered into `message`, not carried as its own field.
   const { causes, context, location: _location, ...diagnostics } = getErrorDiagnostics(error);
   return {
     error: {
@@ -100,7 +100,7 @@ function baseErrorEnvelope(error: unknown, options?: ErrorToJsonOptions): ErrorE
     return {
       error: {
         code: error.code || "CLI_ERROR",
-        message: error.message,
+        message: locatedMessage(error),
         ...(error.details ? { details: error.details } : {}),
         ...(error.suggestion ? { suggestion: error.suggestion } : {}),
         ...(error.command
@@ -123,7 +123,7 @@ function baseErrorEnvelope(error: unknown, options?: ErrorToJsonOptions): ErrorE
     return {
       error: {
         code: `RPC_${stableCode}`,
-        message: error.message,
+        message: locatedMessage(error),
         ...(options?.includeStack && error.stack ? { stack: error.stack } : {}),
       },
     };
@@ -133,7 +133,7 @@ function baseErrorEnvelope(error: unknown, options?: ErrorToJsonOptions): ErrorE
     return {
       error: {
         code: error.name === "CIPromptError" ? "INTERACTIVE_PROMPT_REQUIRED" : "UNEXPECTED_ERROR",
-        message: error.message,
+        message: locatedMessage(error),
         ...(suggestion ? { suggestion } : {}),
         ...(options?.includeStack && error.stack ? { stack: error.stack } : {}),
       },

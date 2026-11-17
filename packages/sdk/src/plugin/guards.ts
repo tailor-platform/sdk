@@ -2,7 +2,7 @@
 //
 // These live outside plugin/types.ts (a pure type module) because they are
 // runtime functions. The types they operate on are imported type-only.
-import type { PluginGeneratedExecutor, PluginGeneratedExecutorWithFile } from "./types";
+import type { Plugin, PluginGeneratedExecutor, PluginGeneratedExecutorWithFile } from "./types";
 
 /**
  * Reads a table name without assuming plugin output is a valid table object.
@@ -29,6 +29,19 @@ export function hasGenerationHooks(plugin: {
   onExecutorReady?: unknown;
 }): boolean {
   return !!(plugin.onTailorDBReady || plugin.onResolverReady || plugin.onExecutorReady);
+}
+
+type TailorDBNamespaceHook = NonNullable<Plugin["onTailorDBNamespaceLoaded"]>;
+
+/**
+ * Returns the plugin's TailorDB namespace hook, accepting its deprecated former name.
+ * @param plugin - The plugin to read the hook from.
+ * @returns The hook bound to the plugin, or undefined when the plugin defines neither name.
+ */
+export function tailorDBNamespaceHookOf(plugin: Plugin): TailorDBNamespaceHook | undefined {
+  // oxlint-disable-next-line typescript/no-deprecated -- Plugins written before the rename still define it.
+  const hook = plugin.onTailorDBNamespaceLoaded ?? plugin.onNamespaceLoaded;
+  return hook?.bind(plugin);
 }
 
 /**

@@ -1,4 +1,5 @@
 import { type TailorDBService } from "#/cli/services/tailordb/service";
+import { configIssuesError } from "#/cli/shared/validation-errors";
 import { type AuthConfigSchema } from "#/parser/service/auth/index";
 import { assertDefined } from "#/utils/assert";
 import type { AuthConnectionConfig } from "#/types/auth-connection.generated";
@@ -27,12 +28,14 @@ export type AuthService = {
  * @param config - The auth configuration
  * @param tailorDBServices - The TailorDB services
  * @param externalTailorDBNamespaces - External TailorDB namespaces
+ * @param configPath - Path of the config file that declares the auth service
  * @returns A new AuthService instance
  */
 export function createAuthService(
   config: ParsedAuthConfig,
   tailorDBServices: ReadonlyArray<TailorDBService>,
   externalTailorDBNamespaces: ReadonlyArray<string>,
+  configPath: string,
 ): AuthService {
   const connections: Record<string, AuthConnectionConfig> = config.connections
     ? { ...config.connections }
@@ -91,9 +94,20 @@ export function createAuthService(
         }
 
         if (!userProfileNamespace) {
-          throw new Error(
-            `userProfile type "${config.userProfile.type.name}" not found in any TailorDB namespace`,
-          );
+          throw configIssuesError({
+            file: configPath,
+            exportName: "default",
+            subject: "Tailor config",
+            service: { configKey: "auth", name: config.name },
+            issues: [
+              {
+                path: ["auth", "userProfile", "type"],
+                message: `Type "${config.userProfile.type.name}" not found in any TailorDB namespace`,
+              },
+            ],
+            suggestion:
+              "Define the type in a TailorDB namespace of this config, or set `userProfile.namespace` to the namespace that owns it.",
+          });
         }
       }
 

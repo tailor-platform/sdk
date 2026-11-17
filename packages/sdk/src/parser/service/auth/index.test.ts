@@ -53,6 +53,14 @@ describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
     expectTypeOf<FunctionInput>().toExtend<SchemaInput>();
   });
 
+  test("accepts every schema input except fields with config-specific types", () => {
+    type ConfigSpecificKeys = "userProfile" | "machineUsers" | "hooks" | "machineUserAttributes";
+
+    expectTypeOf<Omit<AuthSchemaInput, ConfigSpecificKeys>>().toExtend<
+      Omit<AuthInput, ConfigSpecificKeys>
+    >();
+  });
+
   test("aligns particular userProfile with the schema", () => {
     type ServiceUserProfile = NonNullable<AuthInput["userProfile"]>;
     type SchemaUserProfile = NonNullable<AuthSchemaInput["userProfile"]>;
@@ -340,6 +348,21 @@ describe("AuthConfigSchema built-in IdP client name validation", () => {
     expect(() => AuthConfigSchema.parse(configWithClient(clientName))).toThrow(
       "3-63 lowercase letters, digits, or hyphens",
     );
+  });
+});
+
+describe("AuthConfigSchema SAML idProvider", () => {
+  test("defaults enableSignRequest to false", () => {
+    const result = AuthConfigSchema.parse({
+      name: "my-auth",
+      idProvider: {
+        name: "okta-saml",
+        kind: "SAML",
+        metadataURL: "https://example.okta.com/app/abc123/sso/saml/metadata",
+      },
+    });
+
+    expect(result.idProvider).toMatchObject({ enableSignRequest: false });
   });
 });
 

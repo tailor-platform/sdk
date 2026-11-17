@@ -102,6 +102,61 @@ export function pairValue(pair: SgNode): SgNode | null {
   return children.slice(colonIndex + 1).find((child) => child.kind() !== "comment") ?? null;
 }
 
+const OBJECT_PUNCTUATION: ReadonlySet<string> = new Set(["{", "}", ",", "comment"]);
+const ARRAY_PUNCTUATION: ReadonlySet<string> = new Set(["[", "]", ",", "comment"]);
+
+/** The entries of an object literal: its pairs, shorthand properties, spreads, and methods. */
+export function objectEntries(object: SgNode): SgNode[] {
+  return object.children().filter((child) => !OBJECT_PUNCTUATION.has(String(child.kind())));
+}
+
+/** The elements of an array literal. */
+export function arrayElements(array: SgNode): SgNode[] {
+  return array.children().filter((child) => !ARRAY_PUNCTUATION.has(String(child.kind())));
+}
+
+/** The static key of an object entry, or null for a spread, a computed key, or a method. */
+export function entryKey(entry: SgNode): string | null {
+  if (entry.kind() === "shorthand_property_identifier") return entry.text();
+  if (entry.kind() !== "pair") return null;
+  const key = entry.children()[0];
+  if (key?.kind() !== "property_identifier" && key?.kind() !== "string") return null;
+  return stringValue(key);
+}
+
+/** The comma that separates `node` from the next element or entry, skipping comments. */
+export function followingComma(node: SgNode): SgNode | null {
+  const end = node.range().end.index;
+  const next = node
+    .parent()
+    ?.children()
+    .find((sibling) => sibling.range().start.index >= end && sibling.kind() !== "comment");
+  return next?.kind() === "," ? next : null;
+}
+
+export function lineStart(source: string, index: number): number {
+  return source.lastIndexOf("\n", index - 1) + 1;
+}
+
+/** The indentation before `node`, or null when other code precedes it on its line. */
+export function ownLineIndent(source: string, node: SgNode): string | null {
+  const start = node.range().start.index;
+  const indent = source.slice(lineStart(source, start), start);
+  return /^[ \t]*$/u.test(indent) ? indent : null;
+}
+
+/** The range of `entry`'s whole line(s) with its trailing comma, or null when it shares a line. */
+export function ownLineRange(source: string, entry: SgNode): { start: number; end: number } | null {
+  if (ownLineIndent(source, entry) === null) return null;
+  let end = entry.range().end.index;
+  while (source[end] === " " || source[end] === "\t") end += 1;
+  if (source[end] === ",") end += 1;
+  while (source[end] === " " || source[end] === "\t") end += 1;
+  if (source[end] === "\r") end += 1;
+  if (source[end] !== "\n") return null;
+  return { start: lineStart(source, entry.range().start.index), end: end + 1 };
+}
+
 export function stringValue(node: SgNode | null): string | null {
   return node?.text().replace(/^['"]|['"]$/g, "") ?? null;
 }

@@ -12,7 +12,7 @@ import {
   withPlatformConfigLock,
   writePlatformConfig,
 } from "#/cli/shared/context";
-import { profileNotFoundError } from "#/cli/shared/errors";
+import { errorSummary, profileNotFoundError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
 
@@ -56,10 +56,14 @@ async function logout(profile: string | undefined) {
   let storedTokens: Awaited<ReturnType<typeof loadStoredUserTokens>>;
   let tokenLoadFailed = false;
   try {
-    storedTokens = await loadStoredUserTokens(pfConfig, currentUser, platformConfig, lookupOptions);
+    storedTokens = await loadStoredUserTokens(pfConfig, currentUser, {
+      platformConfig,
+      profile,
+      ...lookupOptions,
+    });
   } catch (error) {
     tokenLoadFailed = true;
-    logger.warn(`Failed to revoke token: ${error instanceof Error ? error.message : error}`);
+    logger.warn(`Failed to revoke token: ${errorSummary(error)}`);
   }
   if (!storedTokens && !tokenLoadFailed) {
     logger.info("You are not logged in.");

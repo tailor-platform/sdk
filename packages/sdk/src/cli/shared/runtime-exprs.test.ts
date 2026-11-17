@@ -260,6 +260,7 @@ describe("buildResolverPermissionGuardExpr", () => {
   function runGuard(
     permission: Parameters<typeof buildResolverPermissionGuardExpr>[0],
     caller: unknown,
+    input: unknown = {},
   ): void {
     const guard = buildResolverPermissionGuardExpr(permission);
     if (!guard) {
@@ -267,7 +268,7 @@ describe("buildResolverPermissionGuardExpr", () => {
     }
     // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
     const fn = new Function("context", "TailorErrors", guard);
-    fn({ caller }, TailorErrors);
+    fn({ caller, input }, TailorErrors);
   }
 
   test("returns undefined when permission is omitted", () => {
@@ -336,6 +337,27 @@ describe("buildResolverPermissionGuardExpr", () => {
     const permission = [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }] as const;
     expect(() => runGuard(permission, { attributes: { role: "ADMIN" } })).not.toThrow();
     expect(() => runGuard(permission, { attributes: { role: "MEMBER" } })).toThrow(TailorErrors);
+  });
+
+  describe("input operands", () => {
+    const self = [
+      { conditions: [[{ input: "employeeId" }, "=", { user: "id" }]], permit: true },
+    ] as const;
+    test("allows an input equal to the caller's ID", () => {
+      expect(() => runGuard(self, { id: "u1" }, { employeeId: "u1" })).not.toThrow();
+    });
+
+    test("denies an input that names another user", () => {
+      expect(() => runGuard(self, { id: "u1" }, { employeeId: "u2" })).toThrow(TailorErrors);
+    });
+
+    test.each([
+      ["an omitted input from an anonymous caller", null, {}],
+      ["a null input from an anonymous caller", null, { employeeId: null }],
+      ["a null input from a caller without an ID", {}, { employeeId: null }],
+    ])("= does not match %s", (_, caller, input) => {
+      expect(() => runGuard(self, caller, input)).toThrow(TailorErrors);
+    });
   });
 
   test("ANDs multiple conditions within a policy", () => {

@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { describe, test, expect, vi, aroundEach } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { applySecretManager, planSecretManager } from "./secret-manager";
@@ -17,7 +18,7 @@ const stateScope = {
 
 vi.mock("./secrets-state", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const actual = (await importOriginal()) as typeof import("./secrets-state");
+  const actual = await importOriginal<typeof import("./secrets-state")>();
   return {
     ...actual,
     loadSecretsState: (...args: unknown[]) => mockLoadSecretsState(...args),
@@ -28,7 +29,7 @@ vi.mock("./secrets-state", async (importOriginal) => {
 
 vi.mock("#/cli/shared/client", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const actual = (await importOriginal()) as typeof import("#/cli/shared/client");
+  const actual = await importOriginal<typeof import("#/cli/shared/client")>();
   return {
     ...actual,
     fetchAll: async <T>(fn: (pageToken: string, maxPageSize: number) => Promise<[T[], string]>) => {
@@ -39,7 +40,7 @@ vi.mock("#/cli/shared/client", async (importOriginal) => {
 });
 
 vi.mock("./label", async (importOriginal) => {
-  const original = (await importOriginal()) as Record<string, unknown>;
+  const original = await importOriginal<Record<string, unknown>>();
   return {
     ...original,
     buildMetaRequest: vi

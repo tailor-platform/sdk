@@ -45,7 +45,7 @@ import {
 } from "./shared/args";
 import { getErrorDiagnostics } from "./shared/error-diagnostics";
 import { serializeError } from "./shared/error-json";
-import { isCLIError, typeOnlyImportHint } from "./shared/errors";
+import { isCLIError, locatedMessage, typeOnlyImportHint } from "./shared/errors";
 import { annotateTerminalError } from "./shared/github-actions";
 import { JSON_OUTPUT_ENV_VAR, logger, setJsonDefaultAgent, styles } from "./shared/logger";
 import { readPackageJson } from "./shared/package-json";
@@ -179,7 +179,7 @@ void runMain(mainCommand, {
           logger.debug(`\nStack trace:\n${error.stack}`);
         }
       } else if (error instanceof Error) {
-        logger.error(error.message);
+        logger.error(locatedMessage(error));
         suggestion = getErrorDiagnostics(error).suggestion ?? typeOnlyImportHint(error);
         if (suggestion) {
           logger.log(`  ${styles.info("Suggestion:")} ${suggestion}`);

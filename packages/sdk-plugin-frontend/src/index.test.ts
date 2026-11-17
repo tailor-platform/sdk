@@ -1,9 +1,11 @@
+import * as fs from "node:fs/promises";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { frontendPlugin } from "./index";
-import type { FrontendDefinition } from "./types";
+import type { FrontendBuildContext, FrontendDefinition } from "./types";
 import type {
   DeployedContext,
   PluginExecOptions,
@@ -52,12 +54,14 @@ function context(frontends: FrontendDefinition[]) {
   const logger = { info: vi.fn(), warn: vi.fn(), success: vi.fn() };
   const ctx: DeployedContext<FrontendDefinition[]> = {
     workspaceId: "ws",
+    profile: "ci",
     application,
     applications: [application, otherApplication],
     configPath: application.configPath,
     pluginConfig: frontends,
     logger,
     exec,
+    node: { fs, path },
   };
   return { ctx, publish, exec, logger };
 }
@@ -91,13 +95,31 @@ describe("frontendPlugin", () => {
   test.each(["", "   "])("rejects a blank build command %j", (build) => {
     expect(() => frontendPlugin({ site: "web", distDir: "dist", build })).toThrow(/build/);
   });
-  test("rejects duplicate site names across string and object definitions", () => {
+  test("reports every duplicate site and argument index across string and object definitions", () => {
     expect(() =>
       frontendPlugin(
         { site: "web", distDir: "dist" },
+        { site: "admin", distDir: "admin" },
         { site: { name: "web" } as StaticWebsiteConfig, distDir: "other" },
+        { site: "admin", distDir: "admin-copy" },
+        { site: "web", distDir: "web-copy" },
+        { site: "landing", distDir: "landing" },
       ),
-    ).toThrow(/web/);
+    ).toThrow(
+      expect.objectContaining({
+        code: "FRONTEND_SITE_DUPLICATE",
+        message:
+          'Duplicate frontend site "web" at argument indices: 0, 2, 4\nDuplicate frontend site "admin" at argument indices: 1, 3',
+        suggestion: "Configure each site only once in frontendPlugin().",
+        context: {
+          pluginId: "@tailor-platform/frontend",
+          duplicates: [
+            { name: "web", indices: [0, 2, 4] },
+            { name: "admin", indices: [1, 3] },
+          ],
+        },
+      }),
+    );
   });
   test("builds with awaited environment values in a working directory relative to the config", async () => {
     const build = "pnpm build";
@@ -205,5 +227,117 @@ describe("frontendPlugin", () => {
     publish.mockRejectedValue(new Error("upload failed"));
     await expect(run()).rejects.toThrow("upload failed");
     expect(nextEnv).not.toHaveBeenCalled();
+  });
+  describe("with a function build", () => {
+    test("accepts a function without validating it like a command string", () => {
+      expect(() =>
+        frontendPlugin({ site: "web", distDir: "dist", build: async () => {} }),
+      ).not.toThrow();
+    });
+    test("calls it with the deployed context, the awaited environment values and the resolved directories", async () => {
+      const build = vi.fn<(context: FrontendBuildContext) => Promise<void>>();
+      const { ctx, logger, publish, exec, run } = setup([
+        {
+          site: "web",
+          workingDir: "../web",
+          distDir: "dist",
+          env: async () => ({ FRONTEND_TEST_VALUE: "value" }),
+          build,
+        },
+      ]);
+      await run();
+      expect(build).toHaveBeenCalledExactlyOnceWith({
+        site: expect.objectContaining({ name: "web", url: "https://web" }),
+        application: ctx.application,
+        applications: ctx.applications,
+        workspaceId: "ws",
+        profile: "ci",
+        env: { FRONTEND_TEST_VALUE: "value" },
+        workingDir: join(root, "apps/web"),
+        distDir: join(root, "apps/web/dist"),
+        logger,
+        node: ctx.node,
+        exec: expect.any(Function),
+      });
+      expect(exec).not.toHaveBeenCalled();
+      expect(publish).toHaveBeenCalledExactlyOnceWith("web", join(root, "apps/web/dist"));
+    });
+    test("runs between the environment callback and the upload", async () => {
+      const sequence: string[] = [];
+      const { publish, run } = setup([
+        {
+          site: "web",
+          distDir: root,
+          env: async () => {
+            sequence.push("env");
+            return {};
+          },
+          build: async () => {
+            await Promise.resolve();
+            sequence.push("build");
+          },
+        },
+      ]);
+      publish.mockImplementation(async () => {
+        sequence.push("publish");
+        return { url: "https://published", skippedFiles: [] };
+      });
+      await run();
+      expect(sequence).toEqual(["env", "build", "publish"]);
+    });
+    test("runs commands in the working directory with the environment values unless overridden", async () => {
+      const { exec, run } = setup([
+        {
+          site: "web",
+          workingDir: "../web",
+          distDir: "dist",
+          env: async () => ({ FIRST: "1", SECOND: "2" }),
+          build: async ({ exec }) => {
+            await exec("pnpm build");
+            await exec("pnpm check", { env: { SECOND: "override" }, output: "capture" });
+            await exec("pnpm other", { workingDir: "/elsewhere" });
+          },
+        },
+      ]);
+      await run();
+      const workingDir = join(root, "apps/web");
+      expect(exec.mock.calls).toEqual([
+        ["pnpm build", { workingDir, env: { FIRST: "1", SECOND: "2" } }],
+        ["pnpm check", { workingDir, env: { FIRST: "1", SECOND: "override" }, output: "capture" }],
+        ["pnpm other", { workingDir: "/elsewhere", env: { FIRST: "1", SECOND: "2" } }],
+      ]);
+    });
+    test("resolves a relative working directory override against the build's working directory", async () => {
+      const { exec, run } = setup([
+        {
+          site: "web",
+          workingDir: "../web",
+          distDir: "dist",
+          build: async ({ exec }) => {
+            await exec("pnpm build", { workingDir: "sub" });
+          },
+        },
+      ]);
+      await run();
+      expect(exec.mock.calls).toEqual([
+        ["pnpm build", { workingDir: join(root, "apps/web/sub"), env: {} }],
+      ]);
+    });
+    test("does not upload or evaluate later frontends when the function fails", async () => {
+      const nextEnv = vi.fn();
+      const { publish, run } = setup([
+        {
+          site: "web",
+          distDir: root,
+          build: async () => {
+            throw new Error("config could not be written");
+          },
+        },
+        { site: "admin", distDir: root, env: nextEnv },
+      ]);
+      await expect(run()).rejects.toThrow("config could not be written");
+      expect(publish).not.toHaveBeenCalled();
+      expect(nextEnv).not.toHaveBeenCalled();
+    });
   });
 });

@@ -29,6 +29,7 @@ import type { SecretNameFor, SecretVaultName } from "@tailor-platform/sdk";
 export interface TailorSecretmanagerAPI {
   /**
    * Returns multiple secrets from a vault. Missing names are omitted from the result.
+   * Rejects when the vault does not exist.
    * @param vault - Vault name, as passed to `defineSecretManager()`
    * @param names - Secret names to fetch
    * @returns Partial record keyed by the requested names
@@ -39,10 +40,11 @@ export interface TailorSecretmanagerAPI {
   ): Promise<Partial<Record<T[number], string>>>;
 
   /**
-   * Returns a single secret from a vault, or `undefined` when missing.
+   * Returns a single secret from a vault, or `undefined` when the vault has no such secret.
+   * Rejects when the vault does not exist.
    * @param vault - Vault name, as passed to `defineSecretManager()`
    * @param name - Secret name
-   * @returns The secret value, or `undefined` if not present
+   * @returns The secret value, or `undefined` if the vault has no such secret
    */
   getSecret<V extends SecretVaultName>(
     vault: V,

@@ -1,5 +1,6 @@
 import { isPluginGeneratedTable } from "#/parser/service/tailordb/type-source";
 import ml from "#/utils/multiline";
+import { SEED_SCHEMA_MODULE } from "./schema-module";
 import type {
   ParsedField,
   PluginGeneratedTableSource,
@@ -216,7 +217,7 @@ export function generateLinesDbSchemaFile(
   if (configImportPath === undefined) {
     return ml /* ts */ `
     import { t } from "@tailor-platform/sdk";
-    import { defineSchema } from "@tailor-platform/sdk/seed";
+    import { defineSchema } from "${SEED_SCHEMA_MODULE}";
     import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
     import { ${exportName} } from "${typeImportPath}";
 
@@ -237,7 +238,7 @@ export function generateLinesDbSchemaFile(
     import { join } from "node:path";
     import { t } from "@tailor-platform/sdk";
     import { getExtendedTable } from "@tailor-platform/sdk/plugin";
-    import { defineSchema } from "@tailor-platform/sdk/seed";
+    import { defineSchema } from "${SEED_SCHEMA_MODULE}";
     import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
     import { ${exportName} as sourceTable } from ${JSON.stringify(typeImportPath)};
 
@@ -300,7 +301,7 @@ export function generateLinesDbSchemaFileWithPluginAPI(
     import { join } from "node:path";
     import { t } from "@tailor-platform/sdk";
     import { getGeneratedTable } from "@tailor-platform/sdk/plugin";
-    import { defineSchema } from "@tailor-platform/sdk/seed";
+    import { defineSchema } from "${SEED_SCHEMA_MODULE}";
     import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
     import { ${pluginSource.originalExportName} } from "${originalImportPath}";
 
@@ -330,7 +331,7 @@ export function generateLinesDbSchemaFileWithPluginAPI(
     import { join } from "node:path";
     import { t } from "@tailor-platform/sdk";
     import { getGeneratedTable } from "@tailor-platform/sdk/plugin";
-    import { defineSchema } from "@tailor-platform/sdk/seed";
+    import { defineSchema } from "${SEED_SCHEMA_MODULE}";
     import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
 
     const configPath = join(import.meta.dirname, "${configImportPath}");

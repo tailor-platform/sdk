@@ -3,7 +3,7 @@ import { enumConstantsPlugin } from "@tailor-platform/sdk/plugin/enum-constants"
 import { fileUtilsPlugin } from "@tailor-platform/sdk/plugin/file-utils";
 import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
 import { seedPlugin } from "@tailor-platform/sdk/plugin/seed";
-import config, { auth } from "../tailor.config";
+import config, { auth } from "./example-config";
 export default config;
 export { auth };
 export const plugins = definePlugins(

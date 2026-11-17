@@ -28,9 +28,9 @@ automatically wire the resource into every consumer — check each of these:
   decides from still need a manual update.
 - `cli/commands/deploy/plan-report.ts` — `buildPlanReport` and `summarizePlanResults` list
   each change set by hand.
-- `cli/commands/deploy/validate-plan.ts` — `ValidatePlanInput` is a `PlanResults` alias,
-  but `validatePlan` still needs `creates`/`updates` calls added for the new resource's
-  proto schema.
+- `cli/commands/deploy/validate-plan.ts` — `collectViolations` takes `PlanResults`, but
+  still needs `creates`/`updates` calls added for the new resource's proto schema, and
+  `RESOURCE_LABELS` its display label.
 - `cli/commands/deploy/managed-resources.ts`'s `managedResourceGroups` — add the new change
   set, so `deploy` drops a delete that another config in the same run still claims. Add a
   resource with a workspace-global name through `DEPLOY_MANAGED_RESOURCE_DEFINITIONS`

@@ -135,7 +135,7 @@ export function formatFunctionLogEntry(entry: FunctionLogEntryInfo): string {
  * @returns Lines to print, empty when there is nothing to show
  */
 export function formatFunctionLogLines(logEntries: FunctionLogEntryInfo[] | undefined): string[] {
-  return logEntries ? logEntries.map(formatFunctionLogEntry) : [];
+  return logEntries ? logEntries.flatMap((entry) => formatFunctionLogEntry(entry).split("\n")) : [];
 }
 
 /**

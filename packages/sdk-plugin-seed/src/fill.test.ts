@@ -1,11 +1,11 @@
 import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import * as os from "node:os";
 import { createCommonArgs, runCommand } from "@tailor-platform/sdk/cli";
-import { fillSeedData } from "@tailor-platform/sdk/seed";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { z } from "zod";
 import { seedFillCommand } from "./fill";
+import { fillSeedData } from "./seed-data";
 
 const sdk = vi.hoisted(() => ({ loadSeedContext: vi.fn() }));
 
@@ -29,10 +29,10 @@ vi.mock("@tailor-platform/sdk/cli", async (importOriginal) => ({
 const uuid = z.uuid();
 
 // The generated data dir lives outside the workspace, so the schema files it
-// holds import the SDK by resolved URL instead of by package name.
+// holds import the SDK and lines-db by resolved URL instead of by package name.
 const sdkUrls = {
   root: import.meta.resolve("@tailor-platform/sdk"),
-  seed: import.meta.resolve("@tailor-platform/sdk/seed"),
+  linesDb: import.meta.resolve("lines-db"),
   test: import.meta.resolve("@tailor-platform/sdk/test"),
 };
 
@@ -44,7 +44,7 @@ const sdkUrls = {
 function schemaSource(typeName: string): string {
   return `
 import { db, t } from "${sdkUrls.root}";
-import { defineSchema } from "${sdkUrls.seed}";
+import { defineSchema } from "${sdkUrls.linesDb}";
 import { createStandardSchema, createTailorDBHook } from "${sdkUrls.test}";
 
 const type = db

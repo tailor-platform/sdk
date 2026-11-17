@@ -4,6 +4,7 @@ import * as path from "pathe";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { writeHeldConfigLock } from "#/cli/shared/test-helpers/config-lock";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { createCommand } from "./create";
@@ -86,9 +87,7 @@ describe("profile create with a migrating legacy email user", () => {
       sub: "platform-user-sub",
       email: "legacy@example.com",
     });
-    clientMocks.initOperatorClient.mockResolvedValue({
-      listWorkspaces: vi.fn(),
-    });
+    clientMocks.initOperatorClient.mockResolvedValue(mockOperatorClient({ listWorkspaces: {} }));
     clientMocks.fetchAll.mockResolvedValue([{ id: validUUID }]);
 
     writePlatformConfig({

@@ -17,14 +17,10 @@ import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { nameArgs, waitArgs } from "./args";
-import { getWorkflowExecution, printExecutionWithLogs } from "./executions";
 import { resolveWorkflow } from "./get";
 import { type WorkflowWaitUntil } from "./status";
-import {
-  getWorkflowWaitFailure,
-  waitForWorkflowExecution,
-  type WorkflowWaitResult,
-} from "./waiter";
+import { printWorkflowWaitResult } from "./wait-output";
+import { waitForWorkflowExecution, type WorkflowWaitResult } from "./waiter";
 // Import from the public entry (not `@/types/auth`) so the `./cli` d.ts references
 // `@tailor-platform/sdk` externally instead of inlining the registry — a single
 // generated `declare module "@tailor-platform/sdk"` then narrows both entries.
@@ -289,29 +285,14 @@ export const startCommand = defineAppCommand({
         timeout: parseDuration(args.timeout),
         until: args.until,
       });
-      if (args.logs && !jsonOutput) {
-        const { execution } = await getWorkflowExecution({
-          executionId,
-          workspaceId: args["workspace-id"],
-          profile: args.profile,
-          logs: true,
-        });
-        printExecutionWithLogs(execution);
-      } else if (args.logs) {
-        const { execution } = await getWorkflowExecution({
-          executionId,
-          workspaceId: args["workspace-id"],
-          profile: args.profile,
-          logs: true,
-        });
-        logger.out({ ...result, jobDetails: execution.jobDetails });
-      } else {
-        logger.out(result);
-      }
-      const failure = getWorkflowWaitFailure(result, args.until);
-      if (failure) {
-        throw failure;
-      }
+      await printWorkflowWaitResult(result, {
+        executionId,
+        workspaceId: args["workspace-id"],
+        profile: args.profile,
+        logs: args.logs,
+        jsonOutput,
+        until: args.until,
+      });
     } else {
       logger.out({ executionId });
     }

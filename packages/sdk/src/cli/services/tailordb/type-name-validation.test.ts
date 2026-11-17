@@ -1,15 +1,11 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, expect, test, vi } from "vitest";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import {
   assertUniqueLocalTailorDBTypeNames,
   assertUniqueTailorDBTypeNamesWithExternal,
   fetchExternalTailorDBTypeNameSources,
 } from "./type-name-validation";
-
-type ListTailorDBTypesArgs = {
-  namespaceName: string;
-  pageToken?: string;
-};
 
 type ListTailorDBTypesResult = {
   tailordbTypes: Array<{ name: string }>;
@@ -50,23 +46,78 @@ describe("assertUniqueLocalTailorDBTypeNames", () => {
       assertUniqueLocalTailorDBTypeNames({
         tailorDBServices: [localService("main", ["User"]), localService("analytics", ["User"])],
       }),
-    ).toThrow(/Duplicate TailorDB table names detected/);
+    ).toThrow(
+      expect.objectContaining({
+        code: "DEFINITION_NAME_DUPLICATE",
+        message: expect.stringMatching(
+          /^Duplicate TailorDB type name "User" found:\n {2}- .*User\.ts \(export: user, namespace "analytics"\)\n {2}- .*User\.ts \(export: user, namespace "main"\)$/,
+        ),
+        suggestion:
+          "Give each TailorDB type a name that is unique across all TailorDB namespaces in the application.",
+        context: {
+          kind: "tailordb-type",
+          duplicates: [
+            {
+              name: "User",
+              definitions: [
+                {
+                  file: "/app/analytics/User.ts",
+                  exportName: "user",
+                  source: 'namespace "analytics"',
+                },
+                { file: "/app/main/User.ts", exportName: "user", source: 'namespace "main"' },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+  });
+
+  test("reports every duplicated type name in one error", () => {
     expect(() =>
       assertUniqueLocalTailorDBTypeNames({
-        tailorDBServices: [localService("main", ["User"]), localService("analytics", ["User"])],
+        tailorDBServices: [
+          localService("main", ["User", "Order", "Event"]),
+          localService("analytics", ["User", "Order"]),
+        ],
       }),
-    ).toThrow(/namespace "main".*namespace "analytics"/);
+    ).toThrow(
+      expect.objectContaining({
+        code: "DEFINITION_NAME_DUPLICATE",
+        message: expect.stringMatching(
+          /^Duplicate TailorDB type name "Order" found:\n(?: {2}- .*\n){2}Duplicate TailorDB type name "User" found:\n(?: {2}- .*\n?){2}$/,
+        ),
+        context: {
+          kind: "tailordb-type",
+          duplicates: [
+            {
+              name: "Order",
+              definitions: [
+                expect.objectContaining({ file: "/app/analytics/Order.ts" }),
+                expect.objectContaining({ file: "/app/main/Order.ts" }),
+              ],
+            },
+            {
+              name: "User",
+              definitions: [
+                expect.objectContaining({ file: "/app/analytics/User.ts" }),
+                expect.objectContaining({ file: "/app/main/User.ts" }),
+              ],
+            },
+          ],
+        },
+      }),
+    );
   });
 });
 
 describe("fetchExternalTailorDBTypeNameSources", () => {
   test("fetches all pages for external namespaces", async () => {
-    const client = {
-      listTailorDBTypes: vi
-        .fn()
-        .mockResolvedValueOnce(page(["User"], "next"))
-        .mockResolvedValueOnce(page(["Order"])),
-    };
+    const client = mockOperatorClient({ listTailorDBTypes: {} });
+    client.listTailorDBTypes
+      .mockResolvedValueOnce(page(["User"], "next"))
+      .mockResolvedValueOnce(page(["Order"]));
 
     const result = await fetchExternalTailorDBTypeNameSources({
       client,
@@ -83,14 +134,14 @@ describe("fetchExternalTailorDBTypeNameSources", () => {
 
   test("fetches external namespaces concurrently while keeping each namespace paginated", async () => {
     const pending = new Map<string, (result: ListTailorDBTypesResult) => void>();
-    const client = {
-      listTailorDBTypes: vi.fn((args: ListTailorDBTypesArgs) => {
-        const key = `${args.namespaceName}:${args.pageToken ?? ""}`;
+    const client = mockOperatorClient({
+      listTailorDBTypes: (request) => {
+        const key = `${request.namespaceName}:${request.pageToken ?? ""}`;
         return new Promise<ListTailorDBTypesResult>((resolve) => {
           pending.set(key, resolve);
         });
-      }),
-    };
+      },
+    });
 
     const promise = fetchExternalTailorDBTypeNameSources({
       client,
@@ -122,9 +173,9 @@ describe("fetchExternalTailorDBTypeNameSources", () => {
   });
 
   test("treats a missing external namespace as empty for validation", async () => {
-    const client = {
-      listTailorDBTypes: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
-    };
+    const client = mockOperatorClient({
+      listTailorDBTypes: () => Promise.reject(new ConnectError("not found", Code.NotFound)),
+    });
 
     const result = await fetchExternalTailorDBTypeNameSources({
       client,
@@ -138,9 +189,7 @@ describe("fetchExternalTailorDBTypeNameSources", () => {
 
 describe("assertUniqueTailorDBTypeNamesWithExternal", () => {
   test("rejects duplicate type names between local and external namespaces", async () => {
-    const client = {
-      listTailorDBTypes: vi.fn().mockResolvedValue(page(["User"])),
-    };
+    const client = mockOperatorClient({ listTailorDBTypes: page(["User"]) });
 
     await expect(
       assertUniqueTailorDBTypeNamesWithExternal({
@@ -149,16 +198,31 @@ describe("assertUniqueTailorDBTypeNamesWithExternal", () => {
         tailorDBServices: [localService("main", ["User"])],
         externalTailorDBNamespaces: ["shared"],
       }),
-    ).rejects.toThrow(/Table "User" is defined more than once/);
+    ).rejects.toMatchObject({
+      code: "DEFINITION_NAME_DUPLICATE",
+      message: expect.stringMatching(
+        /^Duplicate TailorDB type name "User" found:\n {2}- external namespace "shared"\n {2}- .*User\.ts \(export: user, namespace "main"\)$/,
+      ),
+      context: {
+        kind: "tailordb-type",
+        duplicates: [
+          {
+            name: "User",
+            definitions: [
+              { source: 'external namespace "shared"' },
+              { file: "/app/main/User.ts", exportName: "user", source: 'namespace "main"' },
+            ],
+          },
+        ],
+      },
+    });
   });
 
   test("rejects duplicate type names between external namespaces", async () => {
-    const client = {
-      listTailorDBTypes: vi
-        .fn()
-        .mockResolvedValueOnce(page(["User"]))
-        .mockResolvedValueOnce(page(["User"])),
-    };
+    const client = mockOperatorClient({ listTailorDBTypes: {} });
+    client.listTailorDBTypes
+      .mockResolvedValueOnce(page(["User"]))
+      .mockResolvedValueOnce(page(["User"]));
 
     await expect(
       assertUniqueTailorDBTypeNamesWithExternal({
@@ -167,13 +231,11 @@ describe("assertUniqueTailorDBTypeNamesWithExternal", () => {
         tailorDBServices: [],
         externalTailorDBNamespaces: ["shared-a", "shared-b"],
       }),
-    ).rejects.toThrow(/external namespace "shared-a".*external namespace "shared-b"/);
+    ).rejects.toThrow(/external namespace "shared-a".*external namespace "shared-b"/s);
   });
 
   test("validates planned external namespaces without fetching remote types", async () => {
-    const client = {
-      listTailorDBTypes: vi.fn(),
-    };
+    const client = mockOperatorClient({ listTailorDBTypes: {} });
 
     await expect(
       assertUniqueTailorDBTypeNamesWithExternal({
@@ -183,7 +245,7 @@ describe("assertUniqueTailorDBTypeNamesWithExternal", () => {
         externalTailorDBNamespaces: ["shared"],
         plannedExternalTailorDBServices: [localService("shared", ["User"])],
       }),
-    ).rejects.toThrow(/namespace "local".*external namespace "shared"/);
+    ).rejects.toThrow(/namespace "local".*external namespace "shared"/s);
     expect(client.listTailorDBTypes).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,7 @@
 import { z } from "zod";
+import { resourceNameSchema } from "#/parser/service/common";
 
 const NAME_PATTERN = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
-const AUTH_NAMESPACE_PATTERN = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
 
 // strip unknown keys
 export const AIGatewaySchema = z.strictObject({
@@ -9,9 +9,7 @@ export const AIGatewaySchema = z.strictObject({
     .string()
     .regex(NAME_PATTERN, "Must be 3-30 lowercase alphanumeric characters or hyphens")
     .describe("AI Gateway name"),
-  authNamespace: z
-    .string()
-    .regex(AUTH_NAMESPACE_PATTERN, "Must be 3-63 lowercase alphanumeric characters or hyphens")
+  authNamespace: resourceNameSchema
     .optional()
     .describe(
       "Auth namespace used to resolve request tokens against the workspace's auth. Defaults to the application's own auth service when omitted; omitting it without an Auth service configured is rejected.",

@@ -59,6 +59,27 @@
         "prefer-rest-params": "error",
         "prefer-spread": "error"
       }
+    },
+    {
+      "files": ["src/**/*.test.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/scripts/transform",
+                  "**/scripts/transform.*",
+                  "**/plugin-export-review"
+                ],
+                "importNames": ["reviewFindings", "reviewFindingsBeforeTransform"],
+                "message": "Call review detectors through reviewThroughRunner, which passes them the content the runner does."
+              }
+            ]
+          }
+        ]
+      }
     }
   ],
   "jsPlugins": ["eslint-plugin-zod", "../../scripts/oxlint/tailor-zod-plugin.cjs"]

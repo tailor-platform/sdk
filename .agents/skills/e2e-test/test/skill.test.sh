@@ -164,6 +164,23 @@ run_runner
 [[ $(<"$test_marker") == "$run_id" ]] || fail "runner did not pass its run ID to the suite"
 [[ $(<"$delete_log") == "$candidate_id" ]] || fail "runner did not clean its exact workspace"
 
+printf '%s\n' '[]' >"$state_file"
+: >"$delete_log"
+rm -f "$test_marker"
+run_id= run_runner >/dev/null 2>&1 || fail "runner rejected its own default run ID"
+[[ $(<"$test_marker") == local-* ]] || fail "runner did not pass its default run ID to the suite"
+
+rm -f "$test_marker"
+set +e
+run_id=test-run-id-25-characters run_runner >/dev/null 2>&1
+long_run_id_status=$?
+set -e
+[[ $long_run_id_status -eq 64 && ! -e "$test_marker" ]] ||
+  fail "runner accepted a run ID that makes e2e workspace names exceed 63 characters"
+
+run_id=test-run-id-24-character run_runner >/dev/null 2>&1 || fail "runner rejected a 24-character run ID"
+[[ $(<"$test_marker") == test-run-id-24-character ]] || fail "runner did not pass a 24-character run ID to the suite"
+
 printf '%s\n' \
   "[{\"id\":\"$candidate_id\",\"name\":\"e2e-ws-$run_id-test-failure\"}]" >"$state_file"
 : >"$delete_log"

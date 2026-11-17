@@ -8,7 +8,6 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import {
   decideAction,
   detectPackageManager,
-  LOCKFILES,
   printTargetNextSteps,
   setupTarget,
   type BranchSetupOptions,
@@ -22,6 +21,7 @@ import {
   ACTIONS_SHA,
   ACTIONS_VERSION,
   AUTOFIX_WORKFLOW_FILE,
+  LOCKFILES,
   TEMPLATE_VERSION,
   renderBranchWorkflow,
   renderPreviewCleanupWorkflow,
@@ -82,6 +82,38 @@ const expandExpressions = (template: string, github: unknown): string =>
       }),
     ),
   );
+
+// Evaluates a generated job's `if:` for a pull request run, mapping the GitHub
+// expression syntax used by the templates onto JavaScript.
+const runsOnPullRequest = (
+  job: { if?: string } | undefined,
+  changes: { result: "success" | "failure" | "cancelled"; relevant: string },
+  pullRequest: { state?: "open" | "closed"; labels?: string[] } = {},
+): boolean => {
+  const expression = String(job?.if)
+    .replaceAll("needs.tailor-changes.", "changes.")
+    .replaceAll("inputs['dry-run']", "false")
+    .replaceAll("labels.*.name", "labels");
+  return Boolean(
+    vm.runInNewContext(expression, {
+      cancelled: () => changes.result === "cancelled",
+      contains: (items: unknown[], item: unknown) => items.includes(item),
+      changes: { result: changes.result, outputs: { relevant: changes.relevant } },
+      github: {
+        event_name: "pull_request",
+        event: {
+          action: "opened",
+          pull_request: {
+            state: pullRequest.state ?? "open",
+            draft: false,
+            head: { repo: { fork: false } },
+            labels: pullRequest.labels ?? [],
+          },
+        },
+      },
+    }),
+  );
+};
 
 describe("detectPackageManager", () => {
   const testDir = path.join(
@@ -1011,30 +1043,6 @@ describe("change detection", () => {
     [job?.needs].flat().includes("tailor-changes") &&
     String(job?.if).includes("needs.tailor-changes.outputs.relevant == 'true'");
 
-  // Evaluates the generated `if:` for a pull request run, mapping the GitHub
-  // expression syntax used by the templates onto JavaScript.
-  const runsOnPullRequest = (
-    job: Job | undefined,
-    changes: { result: "success" | "failure" | "cancelled"; relevant: string },
-  ): boolean => {
-    const expression = String(job?.if)
-      .replaceAll("needs.tailor-changes.", "changes.")
-      .replaceAll("inputs['dry-run']", "false");
-    return Boolean(
-      vm.runInNewContext(expression, {
-        cancelled: () => changes.result === "cancelled",
-        changes: { result: changes.result, outputs: { relevant: changes.relevant } },
-        github: {
-          event_name: "pull_request",
-          event: {
-            action: "opened",
-            pull_request: { draft: false, head: { repo: { fork: false } }, labels: [] },
-          },
-        },
-      }),
-    );
-  };
-
   test("fails every gated job when change detection fails, so a required check blocks merging", () => {
     const branch = renderBranchWorkflow({
       ...branchBase,
@@ -1302,7 +1310,7 @@ describe("deploy job outputs", () => {
     ["branch", () => renderBranchWorkflow(branchBase).content],
     ["tag", () => renderTagWorkflow(tagBase).content],
   ] as const)(
-    "%s workflow's deploy job exposes the deployed workspace id and app URL to user jobs",
+    "%s workflow's deploy job exposes the workspace id and application URL maps to user jobs",
     (_kind, render) => {
       const workflow = parseYAML(render()) as {
         jobs: Record<string, { outputs?: Record<string, string> }>;
@@ -1311,13 +1319,33 @@ describe("deploy job outputs", () => {
       expect(workflow.jobs["tailor-deploy"]?.outputs).toEqual({
         "workspace-id": "${{ steps.tailor-apply.outputs.workspace-id }}",
         "app-url": "${{ steps.tailor-apply.outputs.app-url }}",
+        "app-urls": "${{ steps.tailor-apply.outputs.app-urls }}",
+        "console-urls": "${{ steps.tailor-apply.outputs.console-urls }}",
       });
     },
   );
 });
 
 describe("renderPreviewWorkflow", () => {
-  test("deploy job exposes the preview workspace id, name, and app URL to user jobs", () => {
+  test.each([
+    { scope: "single-directory", apps: undefined },
+    { scope: "multi-directory", apps: [{ dir: "apps/core" }, { dir: "apps/portal" }] },
+  ])("passes application URL maps to the preview comment ($scope)", ({ apps }) => {
+    const workflow = parseYAML(
+      renderPreviewWorkflow({ ...previewBase, apps }).content,
+    ) as GeneratedWorkflow;
+    const comment = workflow.jobs["tailor-preview-deploy"]?.steps.find(
+      (step) => step.id === "tailor-preview-comment",
+    );
+
+    expect(comment?.with).toMatchObject({
+      "app-url": "${{ steps.tailor-preview-deploy.outputs.app-url }}",
+      "app-urls": "${{ steps.tailor-preview-deploy.outputs.app-urls }}",
+      "console-urls": "${{ steps.tailor-preview-deploy.outputs.console-urls }}",
+    });
+  });
+
+  test("deploy job exposes the preview workspace id, name, and application URL maps to user jobs", () => {
     const { content } = renderPreviewWorkflow({
       workspaceName: "my-app",
       branch: "main",
@@ -1333,6 +1361,8 @@ describe("renderPreviewWorkflow", () => {
       "workspace-id": "${{ steps.tailor-preview-deploy.outputs.workspace-id }}",
       "workspace-name": "${{ steps.tailor-preview-deploy.outputs.workspace-name }}",
       "app-url": "${{ steps.tailor-preview-deploy.outputs.app-url }}",
+      "app-urls": "${{ steps.tailor-preview-deploy.outputs.app-urls }}",
+      "console-urls": "${{ steps.tailor-preview-deploy.outputs.console-urls }}",
     });
   });
 
@@ -1374,6 +1404,27 @@ describe("renderPreviewWorkflow", () => {
       expect(workflow.on.pull_request.types).not.toContain("closed");
       expect(Object.keys(workflow.jobs)).not.toContain("tailor-preview-cleanup");
       expect(generatedIds.filter((id) => id.startsWith("tailor-preview-cleanup"))).toEqual([]);
+    },
+  );
+
+  test.each([undefined, "ready", "label"] as const)(
+    "skips the deploy for an event on a closed pull request (require: %s)",
+    (require) => {
+      const { content } = renderPreviewWorkflow({
+        ...previewBase,
+        workingDirectory: "apps/a",
+        require,
+      });
+      const deploy = (parseYAML(content) as GeneratedWorkflow).jobs["tailor-preview-deploy"];
+      const deploysWhen = (state: "open" | "closed") =>
+        runsOnPullRequest(
+          deploy,
+          { result: "success", relevant: "true" },
+          { state, labels: ["tailor:preview"] },
+        );
+
+      expect(deploysWhen("open")).toBe(true);
+      expect(deploysWhen("closed")).toBe(false);
     },
   );
 
@@ -1882,6 +1933,7 @@ describe("Tailor Platform action pins", () => {
     expect(new Set(shared.map(([action]) => action))).toEqual(
       new Set([
         "actions/checkout",
+        "actions/setup-node",
         "actions/upload-artifact",
         "tailor-platform/actions/setup",
         "tailor-platform/actions/install",
@@ -2914,6 +2966,71 @@ export default defineConfig({
     );
   });
 
+  test.each([
+    {
+      splitPlanEnvironment: false,
+      heading: 'the "stg" and "migration-test" environments need',
+      flags: "--environment stg --environment migration-test",
+    },
+    {
+      splitPlanEnvironment: true,
+      heading: 'the "stg" and "stg-plan" and "migration-test" environments need',
+      flags: "--environment stg --environment stg-plan --environment migration-test",
+    },
+  ])(
+    "next steps name the dedicated migration test environment (splitPlanEnvironment=$splitPlanEnvironment)",
+    async ({ splitPlanEnvironment, heading, flags }) => {
+      using log = vi.spyOn(logger, "log").mockImplementation(() => {});
+      printTargetNextSteps(
+        await setupTarget(
+          baseOptions({
+            workspaceName: "my-app",
+            environment: "stg",
+            migrationTest: true,
+            migrationTestEnvironment: "migration-test",
+            loadHasMigrations: async () => true,
+            splitPlanEnvironment,
+          }),
+        ),
+      );
+      const output = log.mock.calls.map(([line]) => line).join("\n");
+
+      expect(output).toContain(heading);
+      expect(output).toMatch(new RegExp(`tailor setup ci env ${flags} +# gh commands`));
+      expect(output).toContain(`tailor setup ci env ${flags} --format terraform`);
+      expect(output).toContain(`tailor setup ci env ${flags} --check`);
+    },
+  );
+
+  test.each(["stg", "STG", "stg-plan", "STG-PLAN"])(
+    "next steps list a shared migration test environment only once (%s)",
+    async (migrationTestEnvironment) => {
+      using log = vi.spyOn(logger, "log").mockImplementation(() => {});
+      printTargetNextSteps(
+        await setupTarget(
+          baseOptions({
+            workspaceName: "my-app",
+            environment: "stg",
+            migrationTest: true,
+            migrationTestEnvironment,
+            loadHasMigrations: async () => true,
+            splitPlanEnvironment: true,
+          }),
+        ),
+      );
+      const output = log.mock.calls.map(([line]) => line).join("\n");
+
+      expect(output).toContain('the "stg" and "stg-plan" environments need');
+      expect(output).toMatch(/tailor setup ci env --environment stg --environment stg-plan +#/);
+      expect(output).toContain(
+        "tailor setup ci env --environment stg --environment stg-plan --format terraform",
+      );
+      expect(output).toContain(
+        "tailor setup ci env --environment stg --environment stg-plan --check",
+      );
+    },
+  );
+
   test("next steps suggest checking with --check what the environment still lacks", async () => {
     using log = vi.spyOn(logger, "log").mockImplementation(() => {});
     printTargetNextSteps(
@@ -3292,53 +3409,75 @@ export default defineConfig({
     });
   });
 
-  test("preview: re-running on a workflow from before the deploy job had outputs adds them and keeps user jobs that read them", async () => {
-    const opts = {
-      kind: "preview",
-      workspaceName: "my-app",
-      region: "us-west",
-      dir: ".",
-      force: false,
-      outputDir: testDir,
-      gitRunner: () => "origin/main",
-      loadConfigName: async () => "my-app",
-      loadConfigId: async () => undefined,
-    } as const;
-    await setupTarget(opts);
-    const wf = path.join(testDir, ".github/workflows/tailor-my-app-preview.yml");
-    const outputsBlock =
-      "    outputs:\n" +
-      "      workspace-id: ${{ steps.tailor-preview-deploy.outputs.workspace-id }}\n" +
-      "      workspace-name: ${{ steps.tailor-preview-deploy.outputs.workspace-name }}\n" +
-      "      app-url: ${{ steps.tailor-preview-deploy.outputs.app-url }}\n";
-    const userJob =
-      "  e2e:\n" +
-      "    needs: tailor-preview-deploy\n" +
-      "    runs-on: ubuntu-latest\n" +
-      "    steps:\n" +
-      "      - run: echo ${{ needs.tailor-preview-deploy.outputs.app-url }}\n";
-    const generated = fs.readFileSync(wf, "utf-8");
-    expect(generated).toContain(outputsBlock);
-    const legacy = generated.replace(outputsBlock, "").concat(userJob);
-    fs.writeFileSync(wf, legacy);
-    const lock = readLock(testDir);
-    const [target] = lock?.targets ?? [];
-    if (!lock || !target) throw new Error("expected a lock target");
-    writeLock(testDir, {
-      ...lock,
-      targets: [
-        {
-          ...target,
-          templateVersion: TEMPLATE_VERSION - 1,
-          contentHash: computeManagedHash(legacy, target.generatedIds),
-        },
-      ],
-    });
+  test.each([false, true])(
+    "preview: updating a released workflow adds URL maps and keeps user jobs (remove outputs: %s)",
+    async (removeOutputs) => {
+      const opts = {
+        kind: "preview",
+        workspaceName: "my-app",
+        region: "us-west",
+        dir: ".",
+        force: false,
+        outputDir: testDir,
+        gitRunner: () => "origin/main",
+        loadConfigName: async () => "my-app",
+        loadConfigId: async () => undefined,
+      } as const;
+      await setupTarget(opts);
+      const wf = path.join(testDir, ".github/workflows/tailor-my-app-preview.yml");
+      const outputsBlock =
+        "    outputs:\n" +
+        "      workspace-id: ${{ steps.tailor-preview-deploy.outputs.workspace-id }}\n" +
+        "      workspace-name: ${{ steps.tailor-preview-deploy.outputs.workspace-name }}\n" +
+        "      app-url: ${{ steps.tailor-preview-deploy.outputs.app-url }}\n";
+      const userJob =
+        "  e2e:\n" +
+        "    needs: tailor-preview-deploy\n" +
+        "    runs-on: ubuntu-latest\n" +
+        "    steps:\n" +
+        "      - run: echo ${{ needs.tailor-preview-deploy.outputs.app-url }}\n";
+      const released = fs.readFileSync(
+        path.join(import.meta.dirname, "test-helpers/fixtures/preview-v0.18.0.yml.fixture"),
+        "utf-8",
+      );
+      expect(released).toContain(outputsBlock);
+      const legacy = (removeOutputs ? released.replace(outputsBlock, "") : released).concat(
+        userJob,
+      );
+      fs.writeFileSync(wf, legacy);
+      const lock = readLock(testDir);
+      const [target] = lock?.targets ?? [];
+      if (!lock || !target) throw new Error("expected a lock target");
+      writeLock(testDir, {
+        ...lock,
+        targets: [
+          {
+            ...target,
+            templateVersion: TEMPLATE_VERSION - 1,
+            contentHash: computeManagedHash(legacy, target.generatedIds),
+          },
+        ],
+      });
 
-    await setupTarget(opts);
+      await setupTarget(opts);
 
-    expect(fs.readFileSync(wf, "utf-8")).toBe(generated.concat(userJob));
-  });
+      const updated = parseYAML(fs.readFileSync(wf, "utf-8")) as {
+        jobs: Record<string, { outputs?: Record<string, string> }>;
+      };
+      expect(updated.jobs["tailor-preview-deploy"]?.outputs).toEqual({
+        "workspace-id": "${{ steps.tailor-preview-deploy.outputs.workspace-id }}",
+        "workspace-name": "${{ steps.tailor-preview-deploy.outputs.workspace-name }}",
+        "app-url": "${{ steps.tailor-preview-deploy.outputs.app-url }}",
+        "app-urls": "${{ steps.tailor-preview-deploy.outputs.app-urls }}",
+        "console-urls": "${{ steps.tailor-preview-deploy.outputs.console-urls }}",
+      });
+      expect(updated.jobs.e2e).toEqual({
+        needs: "tailor-preview-deploy",
+        "runs-on": "ubuntu-latest",
+        steps: [{ run: "echo ${{ needs.tailor-preview-deploy.outputs.app-url }}" }],
+      });
+    },
+  );
 
   describe("preview: re-running on a workflow whose concurrency was on the deploy job", () => {
     const opts = {

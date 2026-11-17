@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, test, expect, vi } from "vitest";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
@@ -6,7 +7,7 @@ import {
   applyFunctionRegistry,
   authHookFunctionName,
   collectFunctionEntries,
-  collectWorkflowJobStates,
+  collectUnchangedWorkflowJobs,
   executorFunctionName,
   planFunctionRegistry,
   resolverFunctionName,
@@ -22,7 +23,7 @@ import type { BundledScripts, FunctionEntry } from "./function-registry";
 // Mock label.ts
 vi.mock("./label", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("./label");
+  const original = await importOriginal<typeof import("./label")>();
   return {
     ...original,
     buildMetaRequest: vi.fn().mockImplementation(async () => ({
@@ -38,7 +39,7 @@ vi.mock("./label", async (importOriginal) => {
 // Mock createChangeSet to suppress output in tests
 vi.mock("./change-set", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("./change-set");
+  const original = await importOriginal<typeof import("./change-set")>();
   return {
     ...original,
     createChangeSet: (title: string) => ({
@@ -166,17 +167,8 @@ describe("planFunctionRegistry", () => {
     });
 
     test.each([
-      ["ownership metadata is missing", {}, { unmanaged: 1, conflicts: 0, forced: false }],
-      [
-        "owned by another app",
-        { label: "other-app" },
-        { unmanaged: 0, conflicts: 1, forced: false },
-      ],
-      [
-        "sdk version differs",
-        { label: appName, sdkVersion: "v0-9-0" },
-        { unmanaged: 0, conflicts: 0, forced: true },
-      ],
+      ["ownership metadata is missing", {}, { unmanaged: 1, conflicts: 0 }],
+      ["owned by another app", { label: "other-app" }, { unmanaged: 0, conflicts: 1 }],
     ] as const)(
       "matching function content is updated when %s",
       async (_desc, existingOverrides, expected) => {
@@ -188,14 +180,61 @@ describe("planFunctionRegistry", () => {
         const result = await planFunctionRegistry(client, workspaceId, appName, undefined, [entry]);
 
         expect(result.changeSet.updates).toHaveLength(1);
-        expect(result.changeSet.updates[0]?.forcedBySdkVersion).toBe(
-          expected.forced ? true : undefined,
-        );
+        expect(result.changeSet.updates[0]).not.toHaveProperty("forcedBySdkVersion");
         expect(result.changeSet.unchanged).toHaveLength(0);
         expect(result.unmanaged).toHaveLength(expected.unmanaged);
         expect(result.conflicts).toHaveLength(expected.conflicts);
       },
     );
+
+    test("matching function content is not uploaded when only the sdk version differs", async () => {
+      const entry = createEntry("resolver/ns/getUser");
+      const client = createMockClient([
+        {
+          name: "resolver/ns/getUser",
+          contentHash: entry.contentHash,
+          label: appName,
+          sdkVersion: "v0-9-0",
+        },
+      ]);
+
+      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, [entry]);
+
+      expect(result.changeSet.updates).toHaveLength(0);
+      expect(result.changeSet.unchanged.map((change) => change.name)).toEqual([
+        "resolver/ns/getUser",
+      ]);
+    });
+
+    test("labels are refreshed for a function whose only difference is the sdk version", async () => {
+      const entry = createEntry("resolver/ns/getUser");
+      const client = createMockClient([
+        {
+          name: "resolver/ns/getUser",
+          contentHash: entry.contentHash,
+          label: appName,
+          sdkVersion: "v0-9-0",
+        },
+      ]);
+
+      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, [entry]);
+
+      expect(result.metadataUpdates.map((update) => update.name)).toEqual(["resolver/ns/getUser"]);
+      expect(result.metadataUpdates[0]!.metaRequest.labels).toMatchObject({
+        "sdk-version": "v1-0-0",
+      });
+    });
+
+    test("labels are left alone when content and sdk version both match", async () => {
+      const entry = createEntry("resolver/ns/getUser");
+      const client = createMockClient([
+        { name: "resolver/ns/getUser", contentHash: entry.contentHash, label: appName },
+      ]);
+
+      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, [entry]);
+
+      expect(result.metadataUpdates).toHaveLength(0);
+    });
 
     test("existing function is updated even when content hash matches", async () => {
       const entry = createEntry("resolver/ns/getUser");
@@ -319,18 +358,12 @@ describe("planFunctionRegistry", () => {
 });
 
 describe("splitFunctionRegistryChanges", () => {
-  test("collects unchanged and SDK-version-forced workflow jobs from the plan", () => {
-    const states = collectWorkflowJobStates({
+  test("collects unchanged workflow jobs from the plan", () => {
+    const unchanged = collectUnchangedWorkflowJobs({
       unchanged: [{ name: "workflow--check-inventory" }, { name: "executor--user-created" }],
-      updates: [
-        { name: "workflow--process-order", forcedBySdkVersion: true },
-        { name: "workflow--send-notification" },
-        { name: "resolver--my-resolver--add", forcedBySdkVersion: true },
-      ],
     });
 
-    expect(states.unchanged).toEqual(new Set(["check-inventory"]));
-    expect(states.forcedBySdkVersion).toEqual(new Set(["process-order"]));
+    expect(unchanged).toEqual(new Set(["check-inventory"]));
   });
 
   test("separates workflow and resolver functions from other function registry entries", () => {
@@ -413,6 +446,7 @@ describe("applyFunctionRegistry phase separation", () => {
         isEmpty: () => false,
         lines: () => [],
       },
+      metadataUpdates: [],
       conflicts: [],
       unmanaged: [],
       resourceOwners: new Set<string>(),
@@ -432,6 +466,45 @@ describe("applyFunctionRegistry phase separation", () => {
     expect(client.setMetadata).toHaveBeenCalledTimes(2);
     // No deletes in create-update phase
     expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
+  });
+
+  test("create-update phase writes only labels for metadata updates without uploading", async () => {
+    const client = createMockClientWithSpies();
+    const planResult = {
+      ...createMockPlanResult(),
+      changeSet: { ...createMockPlanResult().changeSet, creates: [], updates: [] },
+      metadataUpdates: [
+        {
+          name: "resolver/ns/refresh-test",
+          metaRequest: { trn: "trn:refresh", labels: { "sdk-version": "v2-0-0" } },
+        },
+      ],
+    } as unknown as Awaited<ReturnType<typeof planFunctionRegistry>>;
+
+    await applyFunctionRegistry(client, "test-workspace", planResult, "create-update");
+
+    expect(client.createFunctionRegistry).not.toHaveBeenCalled();
+    expect(client.updateFunctionRegistry).not.toHaveBeenCalled();
+    expect(client.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trn: "trn:refresh",
+        labels: expect.objectContaining({ "sdk-version": "v2-0-0" }),
+      }),
+    );
+  });
+
+  test("delete phase does not write labels for metadata updates", async () => {
+    const client = createMockClientWithSpies();
+    const planResult = {
+      ...createMockPlanResult(),
+      metadataUpdates: [
+        { name: "resolver/ns/refresh-test", metaRequest: { trn: "trn:refresh", labels: {} } },
+      ],
+    } as unknown as Awaited<ReturnType<typeof planFunctionRegistry>>;
+
+    await applyFunctionRegistry(client, "test-workspace", planResult, "delete");
+
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("delete phase deletes functions only", async () => {
@@ -494,6 +567,7 @@ describe("applyFunctionRegistry phase separation", () => {
       metaRequest: { trn: `trn:${name}`, labels: { "sdk-name": "test-app" } },
     });
     const planResult = {
+      metadataUpdates: [],
       changeSet: {
         creates: ["create-a", "create-b", "create-c"].map(changeOf),
         updates: ["update-a", "update-b", "update-c"].map(changeOf),
@@ -544,6 +618,7 @@ describe("applyFunctionRegistry phase separation", () => {
       metaRequest: { trn: `trn:${name}`, labels: { "sdk-name": "test-app" } },
     });
     const planResult = {
+      metadataUpdates: [],
       changeSet: {
         creates: ["create-a", "create-b"].map(changeOf),
         updates: ["update-a"].map(changeOf),
@@ -606,6 +681,7 @@ describe("applyFunctionRegistry phase separation", () => {
         metaRequest: { trn: `trn:${name}`, labels: { "sdk-name": "test-app" } },
       });
       const planResult = {
+        metadataUpdates: [],
         changeSet: {
           creates: [],
           updates: ["update-a", "update-b", "update-c", "update-d"].map(changeOf),

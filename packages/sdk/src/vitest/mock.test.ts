@@ -499,13 +499,13 @@ describe("mock", () => {
 
   describe("mockSecretmanager", () => {
     test("records getSecret calls", async () => {
-      using sm = mockSecretmanager();
+      using sm = mockSecretmanager({ secrets: { vault: {} } });
       await (globalThis as any).tailor.secretmanager.getSecret("vault", "key");
       expect(sm.calls).toEqual([{ method: "getSecret", vault: "vault", name: "key" }]);
     });
 
     test("records getSecrets calls", async () => {
-      using sm = mockSecretmanager();
+      using sm = mockSecretmanager({ secrets: { vault: {} } });
       await (globalThis as any).tailor.secretmanager.getSecrets("vault", ["a", "b"]);
       expect(sm.calls).toEqual([{ method: "getSecrets", vault: "vault", names: ["a", "b"] }]);
     });
@@ -537,6 +537,18 @@ describe("mock", () => {
       expect(result).toEqual({ a: "1" });
     });
 
+    test.each([
+      { call: "getSecret", read: (sm: any) => sm.getSecret("missing", "k") },
+      { call: "getSecrets", read: (sm: any) => sm.getSecrets("missing", ["k"]) },
+      { call: "getSecrets with no names", read: (sm: any) => sm.getSecrets("missing", []) },
+    ])("$call rejects for a vault the store does not have", async ({ read }) => {
+      using _sm = mockSecretmanager({ secrets: { other: { k: "v" } } });
+
+      await expect(read((globalThis as any).tailor.secretmanager)).rejects.toThrow(
+        '"vault not found: missing"',
+      );
+    });
+
     test("reset clears store and calls", async () => {
       using sm = mockSecretmanager();
       sm.setSecrets({ v: { k: "val" } });
@@ -544,8 +556,9 @@ describe("mock", () => {
       sm.reset();
 
       expect(sm.calls).toHaveLength(0);
-      const result = await (globalThis as any).tailor.secretmanager.getSecret("v", "k");
-      expect(result).toBeUndefined();
+      await expect((globalThis as any).tailor.secretmanager.getSecret("v", "k")).rejects.toThrow(
+        '"vault not found: v"',
+      );
     });
 
     test("disposal restores the seeded store instead of wiping it", async () => {
@@ -567,9 +580,9 @@ describe("mock", () => {
       } // dispose restores the seeded install
 
       // The per-test override is gone, but the globally seeded secret survives.
-      expect(
-        await (globalThis as any).tailor.secretmanager.getSecret("override", "LOCAL"),
-      ).toBeUndefined();
+      await expect(
+        (globalThis as any).tailor.secretmanager.getSecret("override", "LOCAL"),
+      ).rejects.toThrow('"vault not found: override"');
       expect(await (globalThis as any).tailor.secretmanager.getSecret("seeded", "GLOBAL")).toBe(
         "from-config",
       );

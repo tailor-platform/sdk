@@ -1,5 +1,5 @@
 import { t } from "@tailor-platform/sdk";
-import { defineSchema } from "@tailor-platform/sdk/seed";
+import { defineSchema } from "@tailor-platform/sdk-plugin-seed/schema";
 import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
 import { supplier } from "../../../../../tailordb/supplier";
 

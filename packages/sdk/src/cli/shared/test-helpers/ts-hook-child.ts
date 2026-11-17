@@ -5,16 +5,11 @@ import * as path from "pathe";
 const srcDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
 /**
- * Runs an ES module script in a child Node process that imports TypeScript
- * through the CLI's hook. Inside a Vitest worker vite-node intercepts
- * `import()`, so code that must see the hook and Node's real errors runs here.
- * The script can import SDK sources through the `#/` alias.
- * @param script - Module body that prints its outcome as JSON on its last stdout line
- * @param cwd - Working directory of the child process
- * @returns The parsed last stdout line
+ * Module source that registers the CLI's TypeScript hook and the `#/` alias in a child Node process.
+ * @returns Source to prepend to a child script
  */
-export function runWithTsHook(script: string, cwd: string): unknown {
-  const preamble = `
+export function tsHookPreamble(): string {
+  return `
     import * as mod from "node:module";
     const { resolveSync, loadSync } = await import(${JSON.stringify(pathToFileURL(path.join(srcDir, "cli/ts-hook.mjs")).href)});
     mod.registerHooks({ resolve: resolveSync, load: loadSync });
@@ -28,6 +23,19 @@ export function runWithTsHook(script: string, cwd: string): unknown {
       },
     });
   `;
+}
+
+/**
+ * Runs an ES module script in a child Node process that imports TypeScript
+ * through the CLI's hook. Inside a Vitest worker vite-node intercepts
+ * `import()`, so code that must see the hook and Node's real errors runs here.
+ * The script can import SDK sources through the `#/` alias.
+ * @param script - Module body that prints its outcome as JSON on its last stdout line
+ * @param cwd - Working directory of the child process
+ * @returns The parsed last stdout line
+ */
+export function runWithTsHook(script: string, cwd: string): unknown {
+  const preamble = tsHookPreamble();
   const stdout = execFileSync(process.execPath, ["--input-type=module", "-e", preamble + script], {
     cwd,
     encoding: "utf8",

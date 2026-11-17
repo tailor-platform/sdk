@@ -24,6 +24,22 @@ export default myPlugin; // Required: must be default export
 
 This is required so that other plugins and generation-time hooks can use plugin-generated TailorDB tables via `getGeneratedTable()`.
 
+When a plugin factory rejects its options while loading the config, throw
+`PluginValidationError` from `@tailor-platform/sdk` to give the failure a
+stable code, recovery suggestion, and JSON context. The CLI prints the code,
+message, and suggestion at the config file; `--json` also includes the context.
+
+```typescript
+import { PluginValidationError } from "@tailor-platform/sdk";
+
+throw new PluginValidationError({
+  code: "MY_PLUGIN_OPTIONS_INVALID",
+  message: "The output directory is empty.",
+  suggestion: "Set a non-empty output directory.",
+  context: { pluginId: "@my-company/my-plugin", option: "outputDir" },
+});
+```
+
 ## Plugin Interface
 
 ```typescript
@@ -38,8 +54,8 @@ interface Plugin<TableConfig = unknown, PluginConfig = unknown> {
   onTableLoaded?(
     context: PluginTableProcessContext<TableConfig, PluginConfig>,
   ): TablePluginOutput | Promise<TablePluginOutput>;
-  onNamespaceLoaded?(
-    context: PluginNamespaceProcessContext<PluginConfig>,
+  onTailorDBNamespaceLoaded?(
+    context: TailorDBNamespaceLoadedContext<PluginConfig>,
   ): PluginOutput | Promise<PluginOutput>;
 
   // Generation-time hooks
@@ -90,7 +106,7 @@ interface Plugin<TableConfig = unknown, PluginConfig = unknown> {
 | `executors` | `PluginGeneratedExecutor[]`                     | Additional executors to generate                       |
 | `extends`   | `{ fields?: Record<string, TailorAnyDBField> }` | Fields to add to the source table                      |
 
-Resolvers returned by `onTableLoaded` or `onNamespaceLoaded` are loaded, bundled, and deployed to
+Resolvers returned by `onTableLoaded` or `onTailorDBNamespaceLoaded` are loaded, bundled, and deployed to
 the resolver namespace (a `resolver` key in your config) with the same name as the hook's TailorDB
 namespace (a `db` key). These are separate namespaces that only share the name: with
 `db: { main: ... }` and `resolver: { billing: ... }`, generated resolvers go to a `main` resolver
@@ -103,7 +119,7 @@ an external resolver namespace or duplicating a resolver name within a namespace
 For example, a namespace hook can return a query using `t` field builders:
 
 ```typescript
-onNamespaceLoaded() {
+onTailorDBNamespaceLoaded() {
   return {
     resolvers: [{
       name: "greet",
@@ -141,27 +157,29 @@ that source table's plugin processing.
 onTableLoaded(context) {
   const { table, tableConfig, namespace } = context;
   return {
-    tables: { archive: db.table(`Deleted_${table.name}`, { ... }) },
+    tables: { archive: db.table(`Deleted${table.name}`, { ... }) },
     extends: { fields: { deletedAt: db.datetime({ optional: true }) } },
     executors: [{ name: `${table.name}-on-delete`, resolve: async () => await import("./on-delete"), context: { sourceTable: table, namespace } }],
   };
 },
 ```
 
-### onNamespaceLoaded
+### onTailorDBNamespaceLoaded
 
-**Trigger**: Called once per namespace for plugins that do not require a source table.
+**Trigger**: Called once for each TailorDB namespace (each key under `db` in your config), except external namespaces. Use it for output that does not derive from a specific table.
 
-**Context** (`PluginNamespaceProcessContext`):
+`onNamespaceLoaded` is the deprecated former name of this hook. Plugins that still define it keep working until the next major version, but a plugin that defines both names fails to load.
+
+**Context** (`TailorDBNamespaceLoadedContext`):
 
 | Field          | Type           | Description                                |
 | -------------- | -------------- | ------------------------------------------ |
 | `pluginConfig` | `PluginConfig` | Plugin-level config from `definePlugins()` |
-| `namespace`    | `string`       | Target namespace                           |
+| `namespace`    | `string`       | Target TailorDB namespace                  |
 
 **Returns** (`PluginOutput`):
 
-Same as `TablePluginOutput` but without `extends` (namespace plugins cannot extend a source table).
+Same as `TablePluginOutput` but without `extends` (this hook has no source table to extend).
 
 Tables in `tables` undergo the same validation and support structural copies. If any returned
 table is malformed, the build stops before namespace-generated tables are registered and the
@@ -172,7 +190,7 @@ error identifies the plugin and relevant table output.
 - Generate tables that don't derive from a specific user table (e.g., audit log, settings table)
 
 ```typescript
-onNamespaceLoaded(context) {
+onTailorDBNamespaceLoaded(context) {
   return {
     tables: { auditLog: db.table("AuditLog", { action: db.string(), ... }) },
   };
@@ -309,6 +327,8 @@ same fields. OAuth client secrets are never included.
 
 `ctx.configPath` is the absolute path of the registering config. `ctx.workspaceId`
 and `ctx.pluginConfig` identify the deployment workspace and the plugin's options.
+`ctx.profile` is the profile `tailor deploy` ran with (`--profile`), and is absent when
+the deploy was run without one.
 Use `ctx.logger.info`, `warn`, and `success` for diagnostics; they write to stderr
 and preserve deploy's JSON stdout. A hook that writes to stdout itself, such as
 with `console.log`, makes `tailor deploy --json` output unparseable.
@@ -418,7 +438,7 @@ const DeletedCustomer = await getGeneratedTable(
   "archive",
 );
 
-// Namespace plugin (pass null as sourceTable)
+// Table generated by onTailorDBNamespaceLoaded (pass null as sourceTable)
 const AuditLog = await getGeneratedTable(configPath, "@example/audit-log", null, "auditLog");
 ```
 
@@ -426,7 +446,7 @@ const AuditLog = await getGeneratedTable(configPath, "@example/audit-log", null,
 
 - `configPath`: Path to `tailor.config.ts` (absolute or relative to cwd)
 - `pluginId`: The plugin's unique identifier (e.g., `"@example/soft-delete"`)
-- `sourceTable`: The TailorDB table that the plugin is attached to (`null` for namespace plugins)
+- `sourceTable`: The TailorDB table that the plugin is attached to (`null` for tables generated by `onTailorDBNamespaceLoaded`)
 - `kind`: The generated table kind (e.g., `"archive"`, `"auditLog"`)
 
 **How it works:**
@@ -434,7 +454,7 @@ const AuditLog = await getGeneratedTable(configPath, "@example/audit-log", null,
 1. Loads and caches the config from the given path
 2. Finds the plugin by ID from `definePlugins()` exports
 3. Auto-resolves the namespace from config
-4. Calls the plugin's `onTableLoaded()` or `onNamespaceLoaded()` method
+4. Calls the plugin's `onTableLoaded()` or `onTailorDBNamespaceLoaded()` method
 5. Caches the result to avoid redundant processing
 6. Returns the generated table matching the specified kind
 
@@ -495,7 +515,7 @@ function processSoftDelete(
   context: PluginTableProcessContext<SoftDeleteTableConfig, SoftDeletePluginConfig>,
 ): TablePluginOutput {
   const { table, tableConfig, pluginConfig, namespace } = context;
-  const prefix = pluginConfig?.archiveTablePrefix ?? "Deleted_";
+  const prefix = pluginConfig?.archiveTablePrefix ?? "Deleted";
 
   // Generate archive table
   const archiveTable = db
@@ -599,7 +619,7 @@ import softDeletePlugin from "./plugins/soft-delete";
 
 export const plugins = definePlugins(
   softDeletePlugin({
-    archiveTablePrefix: "Deleted_",
+    archiveTablePrefix: "Deleted",
     defaultRetentionDays: 90,
   }),
 );
@@ -676,7 +696,7 @@ const plugin: Plugin = {
 ### Plugin-level type safety (TableConfig / PluginConfig)
 
 Use TypeScript type parameters on `Plugin<TableConfig, PluginConfig>` to get type-safe config
-in `onTableLoaded` and `onNamespaceLoaded` methods:
+in `onTableLoaded` and `onTailorDBNamespaceLoaded` methods:
 
 ```typescript
 interface MyTableConfig {

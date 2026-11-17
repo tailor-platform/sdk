@@ -1,6 +1,7 @@
 import { defineApplication, type Application } from "#/cli/services/application";
 import { PluginManager } from "#/plugin/manager";
 import { loadConfig, type LoadedConfig } from "./config-loader";
+import { CLIError } from "./errors";
 import { generateUserTypes } from "./type-generator";
 import type { Plugin, TailorDBNamespaceData } from "#/plugin/types";
 
@@ -21,6 +22,14 @@ export interface LoadTailorDBNamespacesOptions {
   configPath?: string;
   /** Namespaces to load. Omit to load all owned namespaces. */
   namespaces?: TailorDBNamespaceSelector;
+}
+
+/**
+ * Options for {@link loadConfigNamespaces}.
+ */
+export interface LoadConfigNamespacesOptions {
+  /** Bundle each table's hook and validator scripts while loading. Defaults to `true`; turn it off when only the table definitions are read. */
+  precompileScripts?: boolean;
 }
 
 /**
@@ -57,15 +66,31 @@ export async function loadApplicationNamespaces(
 
   await generateUserTypes({ config, configPath: config.path });
 
+  return loadConfigNamespaces(config, plugins, options.namespaces);
+}
+
+/**
+ * Load local TailorDB namespaces of an already loaded config, without writing any generated
+ * file.
+ * @param config - Loaded config.
+ * @param plugins - Plugins exported by the config.
+ * @param selector - Namespaces to load. Omit to load all owned namespaces.
+ * @param options - Loading options.
+ * @returns The loaded config, plugins, application, and TailorDB namespace data.
+ */
+export async function loadConfigNamespaces(
+  config: LoadedConfig,
+  plugins: Plugin[],
+  selector?: TailorDBNamespaceSelector,
+  options: LoadConfigNamespacesOptions = {},
+): Promise<LoadedApplicationNamespaces> {
   const pluginManager = plugins.length > 0 ? new PluginManager(plugins) : undefined;
   const application = defineApplication({
     config,
     pluginManager,
+    precompileTailorDBScripts: options.precompileScripts,
   });
-  const namespaceNames =
-    typeof options.namespaces === "function"
-      ? options.namespaces(config, plugins)
-      : options.namespaces;
+  const namespaceNames = typeof selector === "function" ? selector(config, plugins) : selector;
   const namespaceFilter = namespaceNames ? new Set(namespaceNames) : undefined;
   const services = namespaceFilter
     ? application.tailorDBServices.filter((db) => namespaceFilter.has(db.namespace))
@@ -73,12 +98,15 @@ export async function loadApplicationNamespaces(
 
   if (namespaceFilter && services.length !== namespaceFilter.size) {
     const found = new Set(services.map((db) => db.namespace));
-    const missing = [...namespaceFilter].filter((ns) => !found.has(ns)).join(", ");
-    const available = application.tailorDBServices.map((db) => db.namespace).join(", ");
-    throw new Error(
-      `TailorDB namespace "${missing}" not found in local config.db.` +
-        (available ? ` Available owned namespaces: ${available}` : ""),
-    );
+    const missing = [...namespaceFilter].filter((ns) => !found.has(ns));
+    const available = application.tailorDBServices.map((db) => db.namespace);
+    throw CLIError({
+      code: "TAILORDB_NAMESPACE_NOT_FOUND",
+      message:
+        `TailorDB namespace "${missing.join(", ")}" not found in local config.db.` +
+        (available.length > 0 ? ` Available owned namespaces: ${available.join(", ")}` : ""),
+      context: { namespaces: missing, available },
+    });
   }
 
   const namespaces: TailorDBNamespaceData[] = [];

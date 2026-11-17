@@ -13,7 +13,13 @@ import { setupEnv } from "./env";
 import { checkEnv } from "./env-check";
 import { PREVIEW_NAME_MAX_LENGTH, printTargetNextSteps, setupTarget } from "./generate";
 import { setupRenovate } from "./renovate";
-import { AUTOFIX_PROVIDERS, PACKAGE_MANAGERS, PREVIEW_REQUIREMENTS } from "./templates";
+import {
+  AUTOFIX_CODEMODS,
+  AUTOFIX_PROVIDERS,
+  COPILOT_AUTHS,
+  PACKAGE_MANAGERS,
+  PREVIEW_REQUIREMENTS,
+} from "./templates";
 import { setupUpdate } from "./update";
 
 const seedArgs = {
@@ -273,7 +279,7 @@ const previewCommand = defineAppCommand({
 const autofixCommand = defineAppCommand({
   name: "autofix",
   description:
-    "Generate a workflow that runs `tailor generate` on each pull request and commits what it changes to the pull request branch.",
+    "Generate a workflow that runs `tailor generate` on each pull request and commits what it changes to the pull request branch, and with --codemod checks or applies the codemods of an SDK upgrade.",
   args: z.strictObject({
     provider: arg(z.enum(AUTOFIX_PROVIDERS).default("github-token"), {
       description:
@@ -282,6 +288,14 @@ const autofixCommand = defineAppCommand({
     "securefix-server-repository": arg(z.string().min(1).optional(), {
       description:
         "Name of the repository, under the same owner, that runs the securefix server workflow (required with --provider securefix)",
+    }),
+    codemod: arg(z.enum(AUTOFIX_CODEMODS).optional(), {
+      description:
+        "What to do when a pull request upgrades @tailor-platform/sdk: `warn` (annotate what the upgrade's codemods would change), `error` (fail the check on it), `deterministic` (commit what the codemods rewrite and warn about what they leave for review), or `copilot`, `claude`, or `codex` (as `deterministic`, then have that AI coding agent finish what the codemods leave for review). Without it, the workflow runs no codemod",
+    }),
+    "copilot-auth": arg(z.enum(COPILOT_AUTHS).optional(), {
+      description:
+        "How the `copilot` agent authenticates (only with --codemod copilot): `pat` (default; a fine-grained personal access token with the Copilot Requests permission, in the TAILOR_AUTOFIX_COPILOT_TOKEN repository secret) or `github-token` (the workflow token, which needs Copilot CLI billed to the organization)",
     }),
     dir: arg(z.array(z.string().min(1)).default(["."]), {
       alias: "d",
@@ -299,6 +313,8 @@ const autofixCommand = defineAppCommand({
     const result = await setupAutofix({
       provider: args.provider,
       securefixServerRepository: args["securefix-server-repository"],
+      codemod: args.codemod,
+      copilotAuth: args["copilot-auth"],
       dir: args.dir,
       packageManager: args["package-manager"],
       force: args.force,

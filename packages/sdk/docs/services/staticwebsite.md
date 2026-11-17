@@ -185,6 +185,7 @@ const idp = defineIdp("my-idp", {
     delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     sendPasswordResetEmail: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
   },
+  userAuthPolicy: { allowedEmailDomains: ["*"] },
 });
 
 const auth = defineAuth("my-auth", {
@@ -205,7 +206,7 @@ const auth = defineAuth("my-auth", {
 export default defineConfig({
   name: "my-app",
   cors: [website.url],
-  idp: [idp],
+  idp,
   auth,
   staticWebsites: [website],
 });

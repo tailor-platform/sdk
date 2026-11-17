@@ -355,6 +355,7 @@ export function summarizePlanResults(
     delete: 0,
     replace: 0,
     forcedBySdkVersion: 0,
+    labelRefreshes: results.functionRegistry.metadataUpdates.length,
   };
 
   // Count grouped display entries and service-level actions (shown as namespace headers)
@@ -388,8 +389,9 @@ function sumPlanSummaries(summaries: ReadonlyArray<PlanSummary>): PlanSummary {
       delete: acc.delete + summary.delete,
       replace: acc.replace + summary.replace,
       forcedBySdkVersion: acc.forcedBySdkVersion + summary.forcedBySdkVersion,
+      labelRefreshes: acc.labelRefreshes + summary.labelRefreshes,
     }),
-    { create: 0, update: 0, delete: 0, replace: 0, forcedBySdkVersion: 0 },
+    { create: 0, update: 0, delete: 0, replace: 0, forcedBySdkVersion: 0, labelRefreshes: 0 },
   );
 }
 

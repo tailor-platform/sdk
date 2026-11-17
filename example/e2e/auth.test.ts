@@ -1,6 +1,7 @@
 import {
   AuthIDPConfig_AuthType,
   AuthOAuth2Client_GrantType,
+  AuthSCIMConfig_AuthorizationType,
   UserProfileProviderConfig_UserProfileProviderType,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { describe, expect, test } from "vitest";
@@ -99,5 +100,26 @@ describe("controlplane", async () => {
     expect(redirectUris.length).toBe(2);
     expect(redirectUris[0]).toEqual("https://example.com/callback");
     expect(redirectUris[1]).toMatch(/^https:\/\/my-frontend-[\w]+\.web\.erp\.dev\/callback$/);
+  });
+
+  test("scim applied", async () => {
+    const { scimConfig } = await client.getAuthSCIMConfig({ workspaceId, namespaceName });
+    expect(scimConfig).toMatchObject({
+      machineUserName: "manager-machine-user",
+      authorizationType: AuthSCIMConfig_AuthorizationType.OAUTH2,
+    });
+
+    const { scimResources } = await client.getAuthSCIMResources({ workspaceId, namespaceName });
+    expect(scimResources.length).toBe(1);
+    expect(scimResources[0]).toMatchObject({
+      name: "Users",
+      tailorDbNamespace: "tailordb",
+      tailorDbType: "User",
+      attributeMapping: [
+        { tailorDbField: "email", scimPath: "userName" },
+        { tailorDbField: "name", scimPath: "displayName" },
+        { tailorDbField: "role", scimPath: "roles.0.value" },
+      ],
+    });
   });
 });

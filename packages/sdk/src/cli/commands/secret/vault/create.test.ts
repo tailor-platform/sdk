@@ -3,6 +3,7 @@ import { describe, expect, test, vi } from "vitest";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { createCommand } from "./create";
 
@@ -20,9 +21,9 @@ describe("secret vault create", () => {
     ["by option name", ["--name", "api-keys"]],
   ])("prints the created vault under JSON output when named %s", async (_, argv) => {
     vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
-      client: { createSecretManagerVault: vi.fn().mockResolvedValue({}) },
+      client: mockOperatorClient({ createSecretManagerVault: {} }),
       workspaceId: "workspace-1",
-    } as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>);
+    });
     using _json = jsonMode();
     using _logger = silenceLogger("success");
     using stdout = captureStdout();

@@ -12,6 +12,7 @@ import {
 } from "#/cli/commands/deploy/function-registry";
 import { applyIdP, planIdP } from "#/cli/commands/deploy/idp";
 import { applyPipeline, planPipeline } from "#/cli/commands/deploy/resolver";
+import { assertResourcesNotInUse } from "#/cli/commands/deploy/resources-in-use";
 import { applySecretManager, planSecretManager } from "#/cli/commands/deploy/secret-manager";
 import {
   applyStaticWebsite,
@@ -124,6 +125,12 @@ async function execRemove(
   // No cross-deployment pass runs here, and nothing drops these deletes, so the
   // planned deletions are already final.
   assertStaticWebsiteDeletesNotOffered(plans.staticWebsite);
+  await assertResourcesNotInUse({
+    deployments: [{ application, ...plans }],
+    command: "remove",
+    client,
+    workspaceId,
+  });
 
   // Resources carrying this application's sdk-name whose sdk-app-id the config
   // does not match, because it holds a different id or none. They are skipped,

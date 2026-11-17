@@ -161,3 +161,47 @@ describe("processLinesDb", () => {
     expect(() => processLinesDb(type, source)).toThrow("Missing export name for table User");
   });
 });
+
+describe("the import of defineSchema in a generated schema file for", () => {
+  const metadata: LinesDbMetadata = {
+    tableName: "User",
+    exportName: "user",
+    importPath: "../../tailordb/user",
+    optionalFields: ["id"],
+    omitFields: [],
+    foreignKeys: [],
+    indexes: [],
+  };
+  const pluginSource = {
+    exportName: "user",
+    pluginId: "some-plugin",
+    pluginImportPath: "@example/some-plugin",
+    originalFilePath: "",
+    originalExportName: "",
+    generatedTableKind: "kind",
+  };
+  const sources: Record<string, string> = {
+    "a table without plugins": generateLinesDbSchemaFile(metadata, {
+      typeImportPath: "../../tailordb/user",
+    }),
+    "a table with plugins attached": generateLinesDbSchemaFile(metadata, {
+      typeImportPath: "../../tailordb/user",
+      configImportPath: "../../tailor.config.ts",
+    }),
+    "a table a namespace plugin generates": generateLinesDbSchemaFileWithPluginAPI(
+      { ...metadata, pluginSource },
+      { configImportPath: "../../tailor.config.ts" },
+    ),
+    "a table a table-attached plugin generates": generateLinesDbSchemaFileWithPluginAPI(
+      { ...metadata, pluginSource: { ...pluginSource, originalExportName: "user" } },
+      { configImportPath: "../../tailor.config.ts", originalImportPath: "../../tailordb/user" },
+    ),
+  };
+
+  test.each(Object.entries(sources))("%s", (_name, source) => {
+    expect(source).toContain(
+      'import { defineSchema } from "@tailor-platform/sdk-plugin-seed/schema";',
+    );
+    expect(source).not.toContain("@tailor-platform/sdk/seed");
+  });
+});

@@ -2,6 +2,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { isCLIError } from "#/cli/shared/errors";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { resolveDeployWorkspace } from "./workspace";
 import type * as ClientModule from "#/cli/shared/client";
 import type * as ContextModule from "#/cli/shared/context";
@@ -74,11 +75,11 @@ vi.mock("./workspace-context", () => ({
   saveWorkspaceContext: mocks.saveWorkspaceContext,
 }));
 
-const client = {
-  getWorkspace: vi.fn(),
-  listAvailableWorkspaceRegions: vi.fn(),
-  listUserOrganizations: vi.fn(),
-};
+const client = mockOperatorClient({
+  getWorkspace: {},
+  listAvailableWorkspaceRegions: {},
+  listUserOrganizations: {},
+});
 
 const workspace = (id: string, name = "example-workspace", region = "us-west"): WorkspaceInfo => ({
   id,
@@ -107,11 +108,12 @@ describe("resolveDeployWorkspace", () => {
     client.listAvailableWorkspaceRegions.mockResolvedValue({
       regions: ["us-west", "asia-northeast"],
     });
-    client.getWorkspace.mockImplementation(async ({ workspaceId }: { workspaceId: string }) => ({
+    client.getWorkspace.mockImplementation(async (request) => ({
       workspace: {
-        id: workspaceId,
+        id: request.workspaceId,
         name: "explicit-workspace",
         region: "us-west",
+        organizationId: "33333333-3333-4333-8333-333333333333",
       },
     }));
     await runTest();
@@ -169,39 +171,6 @@ describe("resolveDeployWorkspace", () => {
       expect(mocks.createValidatedWorkspaceWithClient).not.toHaveBeenCalled();
     },
   );
-
-  test("does not reuse the personal root when a default organization is set", async () => {
-    const existing = {
-      ...workspace("aaaaaaaa-3333-4333-8333-aaaaaaaaaaaa"),
-      organizationId: undefined,
-      folderId: undefined,
-    };
-    mocks.loadUserWorkspaceDefaults.mockResolvedValue({
-      organizationId: "bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb",
-    });
-    mocks.listWorkspacesWithClient.mockResolvedValue([existing]);
-
-    await expect(
-      resolveDeployWorkspace({
-        createWorkspace: true,
-        workspaceName: existing.name,
-        workspaceRegion: existing.region,
-      }),
-    ).rejects.toMatchObject({
-      code: "WORKSPACE_CREATE_CONFLICT",
-      suggestion: expect.stringContaining(
-        "organization bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb, the default set by `tailor user update`",
-      ),
-      context: {
-        defaultOrganizationId: "bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb",
-        defaultFolderId: null,
-      },
-    });
-    expect(mocks.createValidatedWorkspaceWithClient).not.toHaveBeenCalled();
-    expect(mocks.info).not.toHaveBeenCalledWith(
-      expect.stringContaining("the default set by `tailor user update`"),
-    );
-  });
 
   test("announces the default location before confirming creation in it", async () => {
     const created = workspace("aaaaaaaa-5555-4555-8555-aaaaaaaaaaaa");

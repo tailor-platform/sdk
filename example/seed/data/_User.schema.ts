@@ -1,5 +1,5 @@
 import { t } from "@tailor-platform/sdk";
-import { defineSchema, fillIdpUserPassword } from "@tailor-platform/sdk/seed";
+import { defineSchema, fillIdpUserPassword } from "@tailor-platform/sdk-plugin-seed/schema";
 import { createStandardSchema } from "@tailor-platform/sdk/test";
 
 const schemaType = t.object({

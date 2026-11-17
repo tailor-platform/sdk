@@ -2,8 +2,9 @@ import { createRequire } from "node:module";
 import { dirname, isAbsolute, matchesGlob, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isBlockedModule, getBlockedMessage } from "./blocked-modules";
-import { loadDateDefaultFromConfig } from "./date-default-loader";
+import { loadConfigDefaultsFromConfig } from "./date-default-loader";
 import type { EffectiveDateDefault } from "#/runtime/types";
+import type { ConfigDefaults } from "./date-default-loader";
 import type { Plugin } from "vitest/config";
 
 const DEFAULT_TEST_INCLUDE = ["**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"];
@@ -327,17 +328,24 @@ const CONFIG_ENV_VAR = "__TAILOR_RUNTIME_CONFIG";
 // restrictions. Empty reads as "no config", like CONFIG_ENV_VAR.
 const DATE_DEFAULT_ENV_VAR = "__TAILOR_RUNTIME_DATE_DEFAULT";
 
+// The gate `getDB` of `@tailor-platform/sdk/plugin/kysely-type/db` reads, set from the `temporal`
+// option of the kysely type plugin in that config. It is set here, rather than in setup.ts, so it
+// exists before a user setup file imports `getDB`. Empty reads as "no config".
+const KYSELY_TEMPORAL_ENV_VAR = "__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL";
+
 // An empty value reads as "no config" in setup.ts and, unlike omitting the
 // key, overrides a stale value inherited from the root `test.env`.
 function setConfigEnv(
   target: Record<string, unknown> & { env?: Record<string, string> },
   configAbsPath: string,
   dateDefault: EffectiveDateDefault | "",
+  kyselyTemporal: boolean | "",
 ): void {
   target.env = {
     ...target.env,
     [CONFIG_ENV_VAR]: configAbsPath,
     [DATE_DEFAULT_ENV_VAR]: dateDefault,
+    [KYSELY_TEMPORAL_ENV_VAR]: kyselyTemporal === "" ? "" : String(kyselyTemporal),
   };
 }
 
@@ -347,8 +355,8 @@ export type EnvironmentPluginOptions = {
   config?: string;
 };
 
-/** Reads `defaultDateRepresentation` from an absolute config path. */
-export type DateDefaultLoader = (configAbsPath: string) => Promise<EffectiveDateDefault>;
+/** Reads `defaultDateRepresentation` and the kysely type plugin's `temporal` option from an absolute config path. */
+export type ConfigDefaultsLoader = (configAbsPath: string) => Promise<ConfigDefaults>;
 
 /**
  * Vite plugin that resolves the tailor-runtime environment and injects setup files.
@@ -360,23 +368,23 @@ export type DateDefaultLoader = (configAbsPath: string) => Promise<EffectiveDate
  * `tailor.config.ts`.
  * @param options - Optional configuration
  * @param options.config - Path to tailor.config.ts to load SecretManager values into mock
- * @param loadDateDefault - Reads `defaultDateRepresentation` from a config path; replaced in tests
+ * @param loadConfigDefaults - Reads the date default and the kysely `temporal` option from a config path; replaced in tests
  * @returns Vite plugin
  */
 export function createEnvironmentPlugin(
   options?: EnvironmentPluginOptions,
-  loadDateDefault: DateDefaultLoader = loadDateDefaultFromConfig,
+  loadConfigDefaults: ConfigDefaultsLoader = loadConfigDefaultsFromConfig,
 ): Plugin {
   const currentDir = dirname(fileURLToPath(import.meta.url));
   const environmentPath = resolve(currentDir, "environment.mjs");
   const setupPath = resolve(currentDir, "setup.mjs");
   // Vitest re-runs the config hook per inline project; read each config once.
-  const dateDefaults = new Map<string, Promise<EffectiveDateDefault>>();
-  const dateDefaultOf = (configAbsPath: string): Promise<EffectiveDateDefault> => {
-    let loaded = dateDefaults.get(configAbsPath);
+  const configDefaults = new Map<string, Promise<ConfigDefaults>>();
+  const configDefaultsOf = (configAbsPath: string): Promise<ConfigDefaults> => {
+    let loaded = configDefaults.get(configAbsPath);
     if (!loaded) {
-      loaded = loadDateDefault(configAbsPath);
-      dateDefaults.set(configAbsPath, loaded);
+      loaded = loadConfigDefaults(configAbsPath);
+      configDefaults.set(configAbsPath, loaded);
     }
     return loaded;
   };
@@ -434,7 +442,7 @@ export function createEnvironmentPlugin(
           if (!inheritsRootEnvironment && !selectsTailorRuntime(projectTest.environment)) {
             // Blank the key so a project on another environment cannot pick up
             // the root's value through Vitest's root-into-project env merge.
-            if (options?.config) setConfigEnv(projectTest, "", "");
+            if (options?.config) setConfigEnv(projectTest, "", "", "");
             continue;
           }
           projectTest.environment = environmentPath;
@@ -451,7 +459,8 @@ export function createEnvironmentPlugin(
               config.root ??
               process.cwd();
             const projectConfigPath = resolve(projectRoot, options.config);
-            setConfigEnv(projectTest, projectConfigPath, await dateDefaultOf(projectConfigPath));
+            const { dateDefault, kyselyTemporal } = await configDefaultsOf(projectConfigPath);
+            setConfigEnv(projectTest, projectConfigPath, dateDefault, kyselyTemporal);
           }
         }
       }
@@ -466,10 +475,12 @@ export function createEnvironmentPlugin(
         // resolve a relative options.config against the wrong directory.
         const configRoot = (testConfig.root as string | undefined) ?? config.root ?? process.cwd();
         const rootConfigPath = rootSelectsTailorRuntime ? resolve(configRoot, options.config) : "";
+        const rootDefaults = rootConfigPath ? await configDefaultsOf(rootConfigPath) : undefined;
         setConfigEnv(
           testConfig,
           rootConfigPath,
-          rootConfigPath ? await dateDefaultOf(rootConfigPath) : "",
+          rootDefaults?.dateDefault ?? "",
+          rootDefaults?.kyselyTemporal ?? "",
         );
       }
 

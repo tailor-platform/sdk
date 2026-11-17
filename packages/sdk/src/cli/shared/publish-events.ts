@@ -1,3 +1,5 @@
+import { CLIError } from "./errors";
+
 /** Resource and trigger named in a `publishEvents` opt-out conflict error. */
 export type PublishEventsConflict = {
   /** Resource named in the error, e.g. `TailorDB table "Order"`. */
@@ -52,14 +54,16 @@ export const publishEventsConflict = {
  * Build the error raised when a resource opts out of publishing that a
  * subscribing executor needs.
  * @param conflict - Resource, trigger, and subscription target named in the error
- * @returns Error message
+ * @returns CLIError coded `PUBLISH_EVENTS_CONFLICT`
  */
-function publishEventsConflictError(conflict: PublishEventsConflict): string {
+function publishEventsConflictError(conflict: PublishEventsConflict): CLIError {
   const { resource, trigger, subscribesTo = "it" } = conflict;
-  return (
-    `${resource} has "publishEvents: false", but executors with ${trigger} triggers subscribe to ${subscribesTo}. ` +
-    `Either remove "publishEvents: false" or remove the matching executor triggers.`
-  );
+  return CLIError({
+    code: "PUBLISH_EVENTS_CONFLICT",
+    message: `${resource} has "publishEvents: false", but executors with ${trigger} triggers subscribe to ${subscribesTo}.`,
+    suggestion: 'Either remove "publishEvents: false" or remove the matching executor triggers.',
+    context: { trigger },
+  });
 }
 
 /** The part of an executor that decides whether its triggers need events. */
@@ -101,7 +105,7 @@ export type ResolvePublishEventsParams = {
 export function assertNoPublishEventsConflict(params: ResolvePublishEventsParams): void {
   const { explicit, subscribed, conflict } = params;
   if (explicit === false && subscribed) {
-    throw new Error(publishEventsConflictError(conflict));
+    throw publishEventsConflictError(conflict);
   }
 }
 

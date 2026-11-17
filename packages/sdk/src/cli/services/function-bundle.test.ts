@@ -3,9 +3,11 @@ import * as path from "pathe";
 import { describe, expect, test, vi } from "vitest";
 import { createBundleCache } from "#/cli/cache/bundle-cache";
 import { createCacheStore } from "#/cli/cache/store";
+import { errorToJson } from "#/cli/shared/error-json";
 import { logger } from "#/cli/shared/logger";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
 import { normalizeFilePath, type StartContext } from "#/cli/shared/start-context";
+import { originalPositionAt } from "#/cli/shared/test-helpers/sourcemap";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import { assertDefined } from "#/utils/assert";
 import { buildFunctionBundle, type BuildFunctionBundleOptions } from "./function-bundle";
@@ -53,6 +55,319 @@ function bundle(
     ...options,
   });
 }
+
+function writeUnloadableCliPackage(projectDir: string): void {
+  const packageDir = path.join(projectDir, "node_modules", "@tailor-platform", "sdk");
+  fs.mkdirSync(packageDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(packageDir, "package.json"),
+    JSON.stringify({
+      name: "@tailor-platform/sdk",
+      type: "module",
+      exports: { ".": "./index.mjs", "./cli": "./cli.mjs" },
+    }),
+  );
+  fs.writeFileSync(
+    path.join(packageDir, "index.mjs"),
+    `export const definePlugins = (...plugins) => plugins;\n`,
+  );
+  fs.writeFileSync(
+    path.join(packageDir, "cli.mjs"),
+    `import "./binding.node";\nexport { apiCall, getOAuth2Client as getOAuth2Client, logger, TAILOR_LOCK_FILENAME };\nconst apiCall = () => 1;\nconst getOAuth2Client = () => 2;\nconst logger = { info: () => 3 };\nconst TAILOR_LOCK_FILENAME = "tailor.lock.json";\n`,
+  );
+  fs.writeFileSync(path.join(packageDir, "binding.node"), Buffer.from([0xff, 0xfe, 0x00, 0x80]));
+}
+
+describe("buildFunctionBundle CLI entry point", () => {
+  function writeModules(projectDir: string, modules: Record<string, string>): string {
+    const sourceFile = writeFunction(projectDir, modules["function.ts"] ?? "");
+    for (const [name, source] of Object.entries(modules)) {
+      if (name !== "function.ts")
+        fs.writeFileSync(path.join(path.dirname(sourceFile), name), source);
+    }
+    return sourceFile;
+  }
+
+  test("bundles a function from a source that only mentions the CLI entry point in code that is removed", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-");
+    writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeFunction(
+      tmp.dir,
+      `import { apiCall } from "@tailor-platform/sdk/cli";\n` +
+        `const deployOnly = () => apiCall({ endpoint: "Ping" });\n` +
+        `export default async () => "OWN_SOURCE";\n`,
+    );
+
+    const code = await bundle(sourceFile);
+
+    expect(code).toContain("OWN_SOURCE");
+    expect(code).not.toContain("@tailor-platform/sdk/cli");
+  });
+
+  test("bundles a function that imports several names, one of them renamed, from the CLI entry point", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-names-");
+    writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeFunction(
+      tmp.dir,
+      `import { apiCall, getOAuth2Client as client } from "@tailor-platform/sdk/cli";\n` +
+        `export default async () => "OWN_SOURCE";\n`,
+    );
+
+    await expect(bundle(sourceFile)).resolves.toContain("OWN_SOURCE");
+  });
+
+  test("bundles a function whose helper re-exports names from the CLI entry point", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-reexport-");
+    writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeModules(tmp.dir, {
+      "function.ts":
+        `import { apiCall, getOAuth2Client } from "./helper";\n` +
+        `export default async () => "OWN_SOURCE";\n`,
+      "helper.ts": `export { apiCall, getOAuth2Client as getOAuth2Client } from "@tailor-platform/sdk/cli";\n`,
+    });
+
+    await expect(bundle(sourceFile)).resolves.toContain("OWN_SOURCE");
+  });
+
+  test("bundles modules at different depths that import different names from the CLI entry point", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-depths-");
+    writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeModules(tmp.dir, {
+      "function.ts":
+        `import { apiCall } from "@tailor-platform/sdk/cli";\n` +
+        `import { first } from "./first";\n` +
+        `export default async () => ["OWN_SOURCE", first];\n`,
+      "first.ts": `import { second } from "./second";\nexport const first = second;\n`,
+      "second.ts": `import { getOAuth2Client } from "@tailor-platform/sdk/cli";\nexport const second = 1;\n`,
+    });
+
+    await expect(bundle(sourceFile)).resolves.toContain("OWN_SOURCE");
+  });
+
+  test("bundles a function whose entry imports the CLI entry point by a bare specifier", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-bare-entry-");
+    writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeFunction(tmp.dir, `export default async () => "OWN_SOURCE";\n`);
+
+    const code = await bundle(sourceFile, {
+      entry: (absoluteSourcePath) =>
+        `import { apiCall } from "@tailor-platform/sdk/cli";\n` +
+        `export { default as main } from "${absoluteSourcePath}";\n`,
+    });
+
+    expect(code).toContain("OWN_SOURCE");
+  });
+
+  test.each([
+    [
+      "a call at the top level",
+      {
+        "config.ts": `import { logger } from "@tailor-platform/sdk/cli";\nlogger.info("x");\nexport const config = { name: "N" };\n`,
+      },
+      "config.ts",
+    ],
+    [
+      "a constant at the top level",
+      {
+        "config.ts": `import { TAILOR_LOCK_FILENAME } from "@tailor-platform/sdk/cli";\nexport const config = { name: "N", lock: TAILOR_LOCK_FILENAME + ".bak" };\n`,
+      },
+      "config.ts",
+    ],
+    [
+      "a namespace member at the top level",
+      {
+        "config.ts": `import * as cli from "@tailor-platform/sdk/cli";\ncli.apiCall();\nexport const config = { name: "N" };\n`,
+      },
+      "config.ts",
+    ],
+    [
+      "a re-export of the entry point called at the top level",
+      {
+        "helpers.ts": `export { logger } from "@tailor-platform/sdk/cli";\n`,
+        "config.ts": `import { logger } from "./helpers";\nlogger.info("x");\nexport const config = { name: "N" };\n`,
+      },
+      "helpers.ts",
+    ],
+    [
+      "a call inside a function that runs on the Platform",
+      {
+        "config.ts": `import { apiCall } from "@tailor-platform/sdk/cli";\nexport const config = { name: "N", run: () => apiCall() };\n`,
+      },
+      "config.ts",
+    ],
+    [
+      "a constant compared inside a function that runs on the Platform",
+      {
+        "config.ts": `import { TAILOR_LOCK_VERSION } from "@tailor-platform/sdk/cli";\nexport const config = { name: "N", run: () => TAILOR_LOCK_VERSION === 2 };\n`,
+      },
+      "config.ts",
+    ],
+  ])(
+    "rejects the build and names the module when code that runs on the Platform uses the CLI entry point through %s",
+    async (_label, modules, culprit) => {
+      using tmp = tempCwd("sdk-function-bundle-cli-entry-used-");
+      writeUnloadableCliPackage(tmp.dir);
+      const sourceFile = writeModules(tmp.dir, {
+        "function.ts": `import { config } from "./config";\nexport default async () => config.name;\n`,
+        ...modules,
+      });
+
+      await expect(bundle(sourceFile)).rejects.toThrow(
+        expect.objectContaining({
+          code: "DEPLOY_ONLY_CLI_IMPORT",
+          details: expect.stringContaining(culprit),
+        }),
+      );
+    },
+  );
+
+  const pluginConfig = (registration: string) =>
+    `import { definePlugins } from "@tailor-platform/sdk";\n` +
+    `import { apiCall } from "@tailor-platform/sdk/cli";\n` +
+    `type Definition = { site: string; build: () => unknown };\n` +
+    `const frontend = (...definitions: Definition[]) => {\n` +
+    `  if (definitions.length === 0) throw new Error("frontend requires a definition");\n` +
+    `  return definitions;\n` +
+    `};\n` +
+    registration +
+    `export const config = { name: "OWN_SOURCE" };\n`;
+
+  const pluginRegistrations = {
+    "an arrow function": `export const plugins = definePlugins(frontend({ site: "web", build: () => apiCall() }));\n`,
+    "a function defined next to the registration": `const build = async () => { await apiCall(); };\nexport const plugins = definePlugins(frontend({ site: "web", build }));\n`,
+  };
+
+  test.each(
+    Object.entries(pluginRegistrations).flatMap(([label, registration]) =>
+      [false, true].flatMap((verbatimModuleSyntax) =>
+        [undefined, { annotations: false }].map(
+          (treeshake) => [label, registration, verbatimModuleSyntax, treeshake] as const,
+        ),
+      ),
+    ),
+  )(
+    "bundles a function whose config registers a plugin that uses the CLI entry point in %s (verbatimModuleSyntax %s, treeshake %s)",
+    async (_label, registration, verbatimModuleSyntax, treeshake) => {
+      using tmp = tempCwd("sdk-function-bundle-cli-entry-plugin-");
+      writeUnloadableCliPackage(tmp.dir);
+      const tsconfig = path.join(tmp.dir, "tsconfig.json");
+      fs.writeFileSync(
+        tsconfig,
+        JSON.stringify({
+          compilerOptions: {
+            module: "ESNext",
+            target: "ES2022",
+            moduleResolution: "bundler",
+            ...(verbatimModuleSyntax && { verbatimModuleSyntax }),
+          },
+        }),
+      );
+      const sourceFile = writeModules(tmp.dir, {
+        "function.ts": `import { config } from "./config";\nexport default async () => config.name;\n`,
+        "config.ts": pluginConfig(registration),
+      });
+
+      await expect(bundle(sourceFile, { tsconfig, bundleTreeshake: treeshake })).resolves.toContain(
+        "OWN_SOURCE",
+      );
+    },
+  );
+
+  test("rejects the build instead of dropping a plugins export that other code reads", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-plugins-read-");
+    writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeModules(tmp.dir, {
+      "function.ts": `import { config } from "./config";\nexport default async () => config.count;\n`,
+      "config.ts":
+        pluginConfig(
+          `export const plugins = [frontend({ site: "web", build: () => apiCall() })];\n`,
+        ) + `export const count = plugins.length;\n`,
+    });
+
+    await expect(bundle(sourceFile)).rejects.toThrow(
+      expect.objectContaining({ code: "DEPLOY_ONLY_CLI_IMPORT" }),
+    );
+  });
+
+  test("rejects the build when code that runs on the Platform imports the CLI entry point dynamically", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-dynamic-");
+    writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeFunction(
+      tmp.dir,
+      `export default async () => (await import("@tailor-platform/sdk/cli")).apiCall();\n`,
+    );
+
+    await expect(bundle(sourceFile)).rejects.toThrow(
+      expect.objectContaining({
+        code: "DEPLOY_ONLY_CLI_IMPORT",
+        details: expect.stringContaining("function.ts"),
+      }),
+    );
+  });
+
+  test("keeps a plugins export that another module imports when it is not a plugin registration", async () => {
+    using tmp = tempCwd("sdk-function-bundle-plugins-export-");
+    writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeModules(tmp.dir, {
+      "function.ts": `import { plugins } from "./jobs";\nexport default async () => plugins[0];\n`,
+      "jobs.ts": `export const plugins = ["OWN_SOURCE"];\n`,
+    });
+
+    await expect(bundle(sourceFile)).resolves.toContain("OWN_SOURCE");
+  });
+
+  test("bundles a function whose module only has text, a parameter name and a property name that look like CLI exports", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-lookalike-");
+    writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeFunction(
+      tmp.dir,
+      `import { logger } from "@tailor-platform/sdk/cli";\n` +
+        `const read = (logger: { info: string }) => logger.info;\n` +
+        `const holder = { logger: "OWN_SOURCE" };\n` +
+        `export default async () => [read({ info: holder.logger }), "@tailor-platform/sdk/cli#logger"];\n`,
+    );
+
+    await expect(bundle(sourceFile)).resolves.toContain("OWN_SOURCE");
+  });
+
+  test("bundles a function whose helper re-exports everything from the CLI entry point", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-export-star-");
+    writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeModules(tmp.dir, {
+      "function.ts":
+        `import { apiCall } from "./helper";\n` +
+        `const deployOnly = () => apiCall();\n` +
+        `export default async () => "OWN_SOURCE";\n`,
+      "helper.ts": `export * from "@tailor-platform/sdk/cli";\n`,
+    });
+
+    await expect(bundle(sourceFile)).resolves.toContain("OWN_SOURCE");
+  });
+
+  test("bundles a function that takes the CLI entry point as a namespace or a dynamic import", async () => {
+    using tmp = tempCwd("sdk-function-bundle-cli-entry-namespace-");
+    writeUnloadableCliPackage(tmp.dir);
+    const sourceFile = writeFunction(
+      tmp.dir,
+      `import * as cli from "@tailor-platform/sdk/cli";\n` +
+        `const viaNamespace = () => cli.apiCall();\n` +
+        `const viaDynamic = async () => (await import("@tailor-platform/sdk/cli")).apiCall();\n` +
+        `export default async () => "OWN_SOURCE";\n`,
+    );
+
+    await expect(bundle(sourceFile)).resolves.toContain("OWN_SOURCE");
+  });
+
+  test("still rejects a named import that another module does not export", async () => {
+    using tmp = tempCwd("sdk-function-bundle-missing-export-");
+    const sourceFile = writeModules(tmp.dir, {
+      "function.ts": `import { missing } from "./helper";\nexport default async () => missing;\n`,
+      "helper.ts": "export const present = 1;\n",
+    });
+
+    await expect(bundle(sourceFile)).rejects.toThrow("missing");
+  });
+});
 
 describe("buildFunctionBundle runtime globals", () => {
   test("rejects a function that references a forbidden global, naming the function and its file", async () => {
@@ -130,14 +445,25 @@ describe("buildFunctionBundle runtime globals", () => {
 });
 
 describe("buildFunctionBundle start transform", () => {
-  test("rewrites .start() calls through the start context by default", async () => {
-    using tmp = tempCwd("sdk-function-bundle-start-transform-");
+  test("preserves error positions inside start arguments and normalized options", async () => {
+    using tmp = tempCwd("sdk-function-bundle-start-arguments-");
     const sourceFile = writeFunction(
       tmp.dir,
-      `const flow = { start: () => "UNTRANSFORMED" };\n` +
-        `export default async () => flow.start({});\n`,
+      `const flow = { start: () => "UNTRANSFORMED" };
+export default async (input) => flow.start(
+  (() => {
+    if (input.args) throw new Error("ARGS");
+    return {};
+  })(),
+  (() => {
+    if (input.options) throw new Error("OPTIONS");
+    return { invoker: "admin" };
+  })(),
+);
+`,
     );
     const startContext: StartContext = {
+      authNamespace: "auth",
       modules: new Map([
         [
           normalizeFilePath(sourceFile),
@@ -149,11 +475,87 @@ describe("buildFunctionBundle start transform", () => {
         ],
       ]),
     };
-
-    await expect(bundle(sourceFile, { startContext })).resolves.toMatch(
-      /startWorkflow\(.order-flow./,
-    );
+    const code = await bundle(sourceFile, { startContext, inlineSourcemap: true });
+    const traceMap = assertDefined(extractInlineSourcemap(code), "inline sourcemap missing");
+    for (const [message, line, column] of [
+      ["ARGS", 4, 20],
+      ["OPTIONS", 8, 23],
+    ] as const) {
+      const messageOffset = code.indexOf(message);
+      expect(messageOffset).toBeGreaterThan(-1);
+      expect(
+        originalPositionAt(traceMap, code, code.lastIndexOf("throw", messageOffset)),
+      ).toMatchObject({
+        source: expect.stringContaining("src/function.ts"),
+        line,
+        column,
+      });
+    }
   });
+
+  test("keeps the code of a .start() call the start transform cannot rewrite", async () => {
+    using tmp = tempCwd("sdk-function-bundle-start-undetectable-");
+    const workflowFile = path.join(tmp.dir, "src/flow.ts");
+    const sourceFile = writeFunction(
+      tmp.dir,
+      `import { flow } from "./flow";\nexport default async () => flow.start({});\n`,
+    );
+    fs.writeFileSync(workflowFile, `export const flow = { start: () => "UNTRANSFORMED" };\n`);
+    const startContext: StartContext = {
+      modules: new Map([
+        [
+          normalizeFilePath(workflowFile),
+          { sourceFile: workflowFile, localBindings: new Map(), exports: new Map() },
+        ],
+      ]),
+    };
+
+    const rejection = await bundle(sourceFile, { startContext }).catch((error: unknown) => error);
+
+    expect(errorToJson(rejection)).toMatchObject({
+      error: {
+        code: "WORKFLOW_START_TARGET_UNDETECTABLE",
+        message: expect.stringMatching(/^src\/function\.ts: flow\.start\(\) cannot be rewritten: /),
+        context: { importSource: "./flow", importedName: "flow" },
+      },
+    });
+  });
+  test.each([undefined, "auth"])(
+    "preserves error positions after .start() with auth namespace %s",
+    async (authNamespace) => {
+      using tmp = tempCwd("sdk-function-bundle-start-transform-");
+      const sourceFile = writeFunction(
+        tmp.dir,
+        `const flow = { start: () => "UNTRANSFORMED" };\n` +
+          `export default async () => {\n` +
+          `  await flow.start({}, { invoker: "admin" });\n` +
+          `  throw new Error("AFTER_START");\n` +
+          `};\n`,
+      );
+      const startContext: StartContext = {
+        authNamespace,
+        modules: new Map([
+          [
+            normalizeFilePath(sourceFile),
+            {
+              sourceFile,
+              localBindings: new Map([["flow", { kind: "workflow", name: "order-flow" }]]),
+              exports: new Map(),
+            },
+          ],
+        ]),
+      };
+
+      const code = await bundle(sourceFile, { startContext, inlineSourcemap: true });
+      expect(code).toMatch(/startWorkflow\(.order-flow./);
+      const traceMap = assertDefined(extractInlineSourcemap(code), "inline sourcemap missing");
+      expect(originalPositionAt(traceMap, code, code.indexOf("throw"))).toMatchObject({
+        source: expect.stringContaining("src/function.ts"),
+        line: 4,
+        column: 2,
+      });
+    },
+  );
 });
 
 describe("buildFunctionBundle comments", () => {
@@ -190,6 +592,45 @@ describe("buildFunctionBundle cache", () => {
 
     expect(await bundleEmbedding("FIRST_VALUE")).toContain("FIRST_VALUE");
     expect(await bundleEmbedding("SECOND_VALUE")).toContain("SECOND_VALUE");
+  });
+});
+
+describe("buildFunctionBundle kysely temporal", () => {
+  const GATE = "__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL";
+
+  function writeGateFunction(projectDir: string): string {
+    fs.writeFileSync(
+      path.join(projectDir, "gate.ts"),
+      `export const temporal = globalThis.process?.env.${GATE} === "true";\n`,
+    );
+    return writeFunction(
+      projectDir,
+      `import { temporal } from "../gate";\nexport default async () => temporal;\n`,
+    );
+  }
+
+  test("folds the gate a module the function imports reads", async () => {
+    using tmp = tempCwd("sdk-function-bundle-kysely-temporal-");
+    const sourceFile = writeGateFunction(tmp.dir);
+
+    const withTemporal = await bundle(sourceFile, { kyselyTemporal: true });
+    const withoutTemporal = await bundle(sourceFile);
+
+    expect(withTemporal).not.toContain(GATE);
+    expect(withTemporal).toMatch(/=>\s*(?:true|!0)/);
+    expect(withoutTemporal).not.toContain(GATE);
+    expect(withoutTemporal).toMatch(/=>\s*(?:false|!1)/);
+  });
+
+  test("rebuilds a cached bundle when the plugin's temporal option changes", async () => {
+    using tmp = tempCwd("sdk-function-bundle-kysely-temporal-cache-");
+    const sourceFile = writeGateFunction(tmp.dir);
+    const cache = createBundleCache(createCacheStore({ cacheDir: path.join(tmp.dir, ".cache") }));
+
+    const withoutTemporal = await bundle(sourceFile, { cache });
+    const withTemporal = await bundle(sourceFile, { cache, kyselyTemporal: true });
+
+    expect(withTemporal).not.toBe(withoutTemporal);
   });
 });
 

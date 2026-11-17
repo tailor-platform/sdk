@@ -3,6 +3,10 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync }
 import { fileURLToPath } from "node:url";
 import * as path from "pathe";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import {
+  invalidYAMLPlatformConfig,
+  storedTokenMarker,
+} from "./shared/test-helpers/platform-config";
 import { makeTempDir, tempDir } from "./shared/test-helpers/temp-dir";
 
 const cliEntry = fileURLToPath(new URL("../../bin/tailor.mjs", import.meta.url));
@@ -87,8 +91,8 @@ describe.concurrent("CLI error verbosity", () => {
         true,
       );
       using tmp = tempDir("cli-error-verbosity-");
-      const config = path.join(tmp.dir, "missing.config.ts");
-      expect(existsSync(config)).toBe(false);
+      const config = path.join(tmp.dir, "tailor.config.ts");
+      writeFileSync(config, 'throw new Error("config is broken");\n');
 
       const result = await runCli(
         ["generate", "--json", "--config", config, ...args],
@@ -101,15 +105,84 @@ describe.concurrent("CLI error verbosity", () => {
       const envelope = JSON.parse(result.stderr);
       expect(envelope.error).toMatchObject({
         code: "UNEXPECTED_ERROR",
-        message: `Configuration file not found: ${config}`,
+        message: "tailor.config.ts: config is broken",
       });
-      expect(
-        envelope.error.stack?.includes(`Error: Configuration file not found: ${config}`) ?? false,
-      ).toBe(stack);
+      expect(envelope.error.stack?.includes("Error: config is broken") ?? false).toBe(stack);
       expect(Object.hasOwn(envelope.error, "stack")).toBe(stack);
     },
     20_000,
   );
+});
+
+describe.concurrent("CLI error source location", () => {
+  test("puts the file a plain error points at before its message", async () => {
+    expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
+    using tmp = tempDir("cli-error-location-");
+    writeFileSync(path.join(tmp.dir, "tailor.config.ts"), 'throw new Error("config is broken");\n');
+
+    const result = await runCli(["generate"], tmp.dir);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("tailor.config.ts: config is broken");
+  }, 20_000);
+});
+
+describe.concurrent("platform config that is not valid YAML", () => {
+  function writeConfigWithTokens(dir: string): string {
+    const configPath = path.join(dir, "tailor-platform", "config.yaml");
+    mkdirSync(path.dirname(configPath), { recursive: true });
+    writeFileSync(configPath, invalidYAMLPlatformConfig);
+    return configPath;
+  }
+
+  test("locates the syntax error without echoing stored tokens", async () => {
+    expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
+    using tmp = tempDir("cli-invalid-yaml-");
+    writeConfigWithTokens(tmp.dir);
+
+    const result = await runCli(["profile", "list"], tmp.dir);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "Error [PLATFORM_CONFIG_INVALID]: tailor-platform/config.yaml:6: Failed to parse config file.",
+    );
+    expect(result.stderr).toContain("Details: Invalid YAML at line 6, column 4.");
+    expect(result.stdout + result.stderr).not.toContain(storedTokenMarker);
+  }, 20_000);
+
+  test("annotates the syntax error without echoing stored tokens", async () => {
+    expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
+    using tmp = tempDir("cli-invalid-yaml-annotation-");
+    writeConfigWithTokens(tmp.dir);
+
+    const result = await runCli(["profile", "list"], tmp.dir, {
+      GITHUB_ACTIONS: "true",
+      GITHUB_WORKSPACE: tmp.dir,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "::error title=PLATFORM_CONFIG_INVALID,file=tailor-platform/config.yaml,line=6::",
+    );
+    expect(result.stdout + result.stderr).not.toContain(storedTokenMarker);
+  }, 20_000);
+
+  test("serializes the syntax error position without echoing stored tokens", async () => {
+    expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
+    using tmp = tempDir("cli-invalid-yaml-json-");
+    const configPath = writeConfigWithTokens(tmp.dir);
+
+    const result = await runCli(["profile", "list", "--json"], tmp.dir);
+
+    expect(result.status).toBe(1);
+    expect(JSON.parse(result.stderr).error).toMatchObject({
+      code: "PLATFORM_CONFIG_INVALID",
+      message: "tailor-platform/config.yaml:6: Failed to parse config file.",
+      details: "Invalid YAML at line 6, column 4.",
+      context: { file: configPath, line: 6, column: 4 },
+    });
+    expect(result.stdout + result.stderr).not.toContain(storedTokenMarker);
+  }, 20_000);
 });
 
 describe.concurrent("env files", () => {
@@ -143,7 +216,11 @@ describe.concurrent("env files", () => {
 
     expect(result.status).toBe(1);
     const envelope = JSON.parse(result.stderr.trim().split("\n").at(-1) ?? "");
-    expect(envelope.error.message).toBe("Configuration file not found: from-env-file.config.ts");
+    expect(envelope.error).toMatchObject({
+      code: "CONFIG_NOT_FOUND",
+      message: "Configuration file not found: from-env-file.config.ts",
+      suggestion: "Check the path given with --config or TAILOR_CONFIG_PATH.",
+    });
   }, 20_000);
 
   test("reports a missing --env-file as an argument error", async () => {
@@ -156,6 +233,7 @@ describe.concurrent("env files", () => {
     expect(JSON.parse(result.stderr).error).toMatchObject({
       code: "INVALID_ARGUMENTS",
       message: expect.stringMatching(/^Environment file not found: \/.*\/missing\.env$/),
+      context: { file: expect.stringMatching(/\/missing\.env$/) },
     });
   }, 20_000);
 });

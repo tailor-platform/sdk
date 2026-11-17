@@ -59,6 +59,20 @@ const headerArg = z
     message: "Header name cannot be empty",
   });
 
+type HeaderEntry = z.output<typeof headerArg>;
+
+type TriggerHeaders = Record<string, string | string[]>;
+
+function groupHeaders(entries: HeaderEntry[]): TriggerHeaders {
+  const grouped = new Map<string, string | string[]>();
+  for (const { key, value } of entries) {
+    const name = key.toLowerCase();
+    const current = grouped.get(name);
+    grouped.set(name, current === undefined ? value : [...[current].flat(), value]);
+  }
+  return Object.fromEntries(grouped);
+}
+
 type ManualTrigger = IncomingWebhookTrigger | ScheduleTriggerInput;
 
 type ManualTriggerExecutor<T extends ManualTrigger = ManualTrigger> = T extends ManualTrigger
@@ -77,14 +91,24 @@ type TriggerExecutorBaseOptions<E extends ManualTriggerExecutor> = {
 interface TriggerExecutorByNameOptions {
   executorName: string;
   payload?: JsonObject;
+  headers?: TriggerHeaders;
   workspaceId?: string;
   profile?: string;
 }
 
 export type TriggerExecutorTypedOptions<E extends ManualTriggerExecutor = ManualTriggerExecutor> =
   E extends ManualTriggerExecutor<IncomingWebhookTrigger>
-    ? TriggerExecutorBaseOptions<E> & { payload?: JsonObject }
-    : TriggerExecutorBaseOptions<E> & { payload?: never };
+    ? TriggerExecutorBaseOptions<E> & {
+        /** JSON object the executor receives as `body`. */
+        payload?: JsonObject;
+        /**
+         * Request headers the executor receives as `headers`, keyed by header name.
+         * A value is a string, or a list of strings for a name sent on more than one line.
+         * Unlike `--header`, names are sent as given, and two keys that differ only in letter case are rejected.
+         */
+        headers?: TriggerHeaders;
+      }
+    : TriggerExecutorBaseOptions<E> & { payload?: never; headers?: never };
 
 export interface TriggerExecutorResult {
   jobId?: string;
@@ -103,6 +127,7 @@ async function triggerExecutorByName(
       workspaceId,
       executorName: options.executorName,
       payload: options.payload,
+      headers: options.headers,
     });
 
     return { jobId: response.jobId };
@@ -133,18 +158,23 @@ async function triggerExecutorByName(
 export async function triggerExecutor<E extends ManualTriggerExecutor>(
   options: TriggerExecutorTypedOptions<E>,
 ): Promise<TriggerExecutorResult> {
-  if (options.executor.trigger.kind !== "incomingWebhook" && options.payload !== undefined) {
+  const webhookOnlyOptions = [
+    options.payload !== undefined && "payload",
+    options.headers !== undefined && "headers",
+  ].filter((name) => name !== false);
+  if (options.executor.trigger.kind !== "incomingWebhook" && webhookOnlyOptions.length > 0) {
     throw CLIError({
       code: "EXECUTOR_TRIGGER_UNSUPPORTED",
       message:
         `Executor '${options.executor.name}' has '${options.executor.trigger.kind}' trigger type. ` +
-        `The payload is only available for 'incomingWebhook' trigger type.`,
+        `The ${webhookOnlyOptions.map((name) => `'${name}'`).join(" and ")} ${webhookOnlyOptions.length > 1 ? "options are" : "option is"} only available for 'incomingWebhook' trigger type.`,
     });
   }
 
   return await triggerExecutorByName({
     executorName: options.executor.name,
     payload: options.payload,
+    headers: options.headers,
     workspaceId: options.workspaceId,
     profile: options.profile,
   });
@@ -156,7 +186,9 @@ export const triggerCommand = defineAppCommand({
   notes: `Only executors with \`INCOMING_WEBHOOK\` or \`SCHEDULE\` trigger types can be triggered manually.
 Executors with \`EVENT\` trigger types (such as \`recordCreated\`, \`recordUpdated\`, \`recordDeleted\`) cannot be triggered manually.
 
-The \`--data\` and \`--header\` options are only available for \`INCOMING_WEBHOOK\` trigger type.
+The \`--data\` and \`--header\` options are accepted only for \`INCOMING_WEBHOOK\` trigger type.
+
+The executor receives the \`--data\` JSON as \`body\` and the \`--header\` values as \`headers\`, with no \`rawBody\`. Header names are lower-cased. A header given once reaches the executor as a string, and a header given more than once (names that differ only in letter case are the same header) as an array, as when a request sends it on more than one line. To test an executor that verifies a signature over \`rawBody\`, send the request to its webhook URL, which \`executor webhook list\` shows.
 
 **Downstream Execution Tracking**
 
@@ -174,8 +206,8 @@ The \`--logs\` option displays logs from the downstream execution when available
       desc: "Trigger with data",
     },
     {
-      cmd: 'my-executor -d \'{"message": "hello"}\' -H "X-Custom: value" -H "X-Another: value2"',
-      desc: "Trigger with data and headers",
+      cmd: 'my-executor -d \'{"message": "hello"}\' -H "X-Custom: value" -H "Accept: application/json" -H "Accept: text/html"',
+      desc: "Trigger with data and headers (a repeated name is delivered as an array)",
     },
     { cmd: "my-executor -W", desc: "Trigger and wait for completion" },
     { cmd: "my-executor -W -l", desc: "Trigger, wait, and show logs" },
@@ -193,7 +225,8 @@ The \`--logs\` option displays logs from the downstream execution when available
     header: arg(headerArg.array().optional(), {
       alias: "H",
       overrideBuiltinAlias: true,
-      description: "Request header (format: 'Key: Value', can be specified multiple times)",
+      description:
+        "Request header (format: 'Key: Value', can be specified multiple times; a repeated name is delivered as an array)",
     }),
     wait: arg(z.boolean().default(false), {
       alias: "W",
@@ -255,27 +288,10 @@ The \`--logs\` option displays logs from the downstream execution when available
       });
     }
 
-    let payload: JsonObject | undefined;
-
-    // Build payload if data or headers are provided
-    const body: JsonObject | undefined = args.data;
-    const headers: Record<string, string> = {};
-    if (args.header) {
-      for (const h of args.header) {
-        headers[h.key] = h.value;
-      }
-    }
-
-    if (body !== undefined || Object.keys(headers).length > 0) {
-      payload = {
-        body: body ?? {},
-        headers,
-      };
-    }
-
     const result = await triggerExecutorByName({
       executorName: args.executorName,
-      payload,
+      payload: args.data,
+      headers: args.header ? groupHeaders(args.header) : undefined,
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });

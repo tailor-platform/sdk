@@ -1,12 +1,15 @@
 // eslint-disable-next-line no-restricted-imports -- this module is the wrapper the rule points to
-import { ExitPromptError } from "@inquirer/core";
-// eslint-disable-next-line no-restricted-imports -- this module is the wrapper the rule points to
 import { confirm, input, password, select } from "@inquirer/prompts";
 import { withErrorDiagnostics } from "./error-diagnostics";
 import { CIPromptError, interactiveTerminal, logger } from "./logger";
 
 export function canPrompt(): boolean {
   return interactiveTerminal() && !logger.jsonMode;
+}
+
+// `instanceof` would miss errors thrown by a different installed copy of `@inquirer/core`.
+function isExitPromptError(error: unknown): boolean {
+  return error instanceof Error && error.name === "ExitPromptError";
 }
 
 /**
@@ -28,7 +31,7 @@ function withGuard<Config extends BasePromptConfig, R>(
     try {
       return await fn(config);
     } catch (error) {
-      if (error instanceof ExitPromptError) process.exit(130);
+      if (isExitPromptError(error)) process.exit(130);
       throw error;
     }
   };

@@ -50,9 +50,7 @@ describe("applyTailorDB: env static website URL resolution for migration scripts
 
   function createMockClient() {
     return checkpoint.createMockClient({
-      getStaticWebsite: vi.fn().mockResolvedValue({
-        staticwebsite: { url: "https://my-site.tailor.tech" },
-      }),
+      getStaticWebsite: { staticwebsite: { url: "https://my-site.tailor.tech" } },
     });
   }
 

@@ -127,8 +127,7 @@ function userDefaultsDiagnostics(options: DeployWorkspaceOptions, suggestion: st
 }
 
 function workspaceLabel(workspace: WorkspaceInfo): string {
-  const organization = workspace.organizationId ?? "personal";
-  return `${workspaceDisplayName(workspace)} (${workspace.region}, org: ${organization}, id: ${workspace.id})`;
+  return `${workspaceDisplayName(workspace)} (${workspace.region}, org: ${workspace.organizationId}, id: ${workspace.id})`;
 }
 
 function workspaceMatchesRequestedIdentity(

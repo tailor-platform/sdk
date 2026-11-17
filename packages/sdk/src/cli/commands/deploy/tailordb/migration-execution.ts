@@ -653,10 +653,11 @@ export async function executeSingleMigrationPostPhase(
       });
     }
   } catch (error) {
-    handleOptionalToRequiredError(error, [
-      "This error occurred during post-migration phase. Please check your migration script.",
-      "Ensure all existing records have values for fields being changed to required.",
-    ]);
+    handleOptionalToRequiredError(
+      error,
+      "This error occurred during post-migration phase. Please check your migration script. " +
+        "Ensure all existing records have values for fields being changed to required.",
+    );
   }
 }
 

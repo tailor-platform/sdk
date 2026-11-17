@@ -13,8 +13,12 @@ import {
 } from "#/plugin/builtin/seed/seed-type-processor";
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { getAuthInput } from "./auth-input";
+import { withErrorDiagnostics } from "./error-diagnostics";
+import { CLIError } from "./errors";
 import { loadApplicationNamespaces } from "./tailordb-namespaces";
+import { configIssuesError } from "./validation-errors";
 import type { LoadedConfig } from "./config-loader";
+import type { FlatIssue } from "./zod-issues";
 
 export type { SeedNamespaceConfig };
 
@@ -82,16 +86,23 @@ export async function loadSeedContext(options: LoadSeedContextOptions = {}): Pro
 
   const pluginOptions = resolvePluginConfig(plugins, SeedGeneratorID);
   if (!pluginOptions) {
-    throw new Error(
-      `seedPlugin is not configured in ${config.path}. ` +
-        'Add seedPlugin({ distPath: "./seed" }) from "@tailor-platform/sdk/plugin/seed" to definePlugins().',
+    throw withErrorDiagnostics(
+      CLIError({
+        code: "SEED_PLUGIN_NOT_CONFIGURED",
+        message: "seedPlugin is not configured.",
+        suggestion:
+          'Add seedPlugin({ distPath: "./seed" }) from "@tailor-platform/sdk/plugin/seed" to definePlugins().',
+        context: { file: config.path },
+      }),
+      { location: { file: config.path } },
     );
   }
   if (typeof pluginOptions.distPath !== "string" || pluginOptions.distPath === "") {
-    throw new Error(
-      `seedPlugin in ${config.path} has no distPath option. ` +
-        'Pass seedPlugin({ distPath: "./seed" }) so seed data has a location.',
-    );
+    throw seedOptionsError({
+      file: config.path,
+      issue: { path: ["distPath"], message: "Required so seed data has a location." },
+      suggestion: 'Pass seedPlugin({ distPath: "./seed" }).',
+    });
   }
 
   // userProfile is only populated once auth namespaces are resolved (the
@@ -118,42 +129,68 @@ export async function loadSeedContext(options: LoadSeedContextOptions = {}): Pro
   };
 }
 
+interface SeedOptionsErrorParams {
+  /** Config file that configures seedPlugin. */
+  file: string;
+  /** Rejected option, with its path within the seedPlugin options. */
+  issue: FlatIssue;
+  /** How to fix the option. */
+  suggestion?: string;
+}
+
+function seedOptionsError(params: SeedOptionsErrorParams): CLIError {
+  const { file, issue, suggestion } = params;
+  return configIssuesError({
+    file,
+    exportName: "plugins",
+    subject: "seedPlugin options",
+    issues: [issue],
+    suggestion,
+  });
+}
+
 const DATASET_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
-function assertDatasetName(name: string, configPath: string): void {
+function assertDatasetName(name: string, file: string, issuePath: FlatIssue["path"]): void {
   if (!DATASET_NAME_PATTERN.test(name)) {
-    throw new Error(
-      `Dataset name "${name}" in the seedPlugin datasets option of ${configPath} is invalid. ` +
-        "Use letters, digits, `-` and `_`, starting with a letter or digit.",
-    );
+    throw seedOptionsError({
+      file,
+      issue: { path: issuePath, message: `Dataset name "${name}" is invalid.` },
+      suggestion: "Use letters, digits, `-` and `_`, starting with a letter or digit.",
+    });
   }
 }
 
-function parseDatasets(value: unknown, configPath: string): Record<string, readonly string[]> {
+function parseDatasets(value: unknown, file: string): Record<string, readonly string[]> {
   if (value === undefined) return {};
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error(
-      `seedPlugin datasets must map names to lists of dataset directory names in ${configPath}.`,
-    );
+    throw seedOptionsError({
+      file,
+      issue: {
+        path: ["datasets"],
+        message: "Must map names to lists of dataset directory names.",
+      },
+    });
   }
   const datasets: Record<string, readonly string[]> = {};
   for (const [name, directories] of Object.entries(value)) {
-    assertDatasetName(name, configPath);
-    if (!Array.isArray(directories)) {
-      throw new Error(
-        `seedPlugin datasets.${name} must be an array of dataset directory names in ${configPath}.`,
-      );
-    }
+    const datasetPath = ["datasets", name];
+    assertDatasetName(name, file, datasetPath);
+    const notDirectoryNames = () =>
+      seedOptionsError({
+        file,
+        issue: { path: datasetPath, message: "Must be an array of dataset directory names." },
+      });
+    if (!Array.isArray(directories)) throw notDirectoryNames();
     if (directories.length === 0) {
-      throw new Error(`seedPlugin datasets.${name} lists no dataset directories in ${configPath}.`);
+      throw seedOptionsError({
+        file,
+        issue: { path: datasetPath, message: "Lists no dataset directories." },
+      });
     }
-    for (const directory of directories) {
-      if (typeof directory !== "string") {
-        throw new Error(
-          `seedPlugin datasets.${name} must be an array of dataset directory names in ${configPath}.`,
-        );
-      }
-      assertDatasetName(directory, configPath);
+    for (const [index, directory] of directories.entries()) {
+      if (typeof directory !== "string") throw notDirectoryNames();
+      assertDatasetName(directory, file, [...datasetPath, index]);
     }
     datasets[name] = directories as string[];
   }

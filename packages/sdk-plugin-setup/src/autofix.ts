@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import { logger } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
+import { agentRequirements } from "./env";
 import {
   assertDistinctAppSlugs,
   decideAction,
@@ -12,11 +13,18 @@ import {
 } from "./generate";
 import { LOCK_VERSION, readLock, writeLock } from "./lock";
 import {
+  AGENT_BOT,
   AUTOFIX_WORKFLOW_FILE,
+  codemodLockfiles,
+  isAutofixAgent,
+  LOCKFILES,
   renderAutofixWorkflow,
   TEMPLATE_VERSION,
+  type AutofixCodemod,
+  type AutofixCodemodParams,
   type AutofixProvider,
   type AutofixProviderParams,
+  type CopilotAuth,
   type PackageManager,
 } from "./templates";
 
@@ -24,6 +32,10 @@ export type AutofixSetupOptions = {
   provider: AutofixProvider;
   /** For the `securefix` provider: the repository that runs the securefix server workflow. */
   securefixServerRepository?: string;
+  /** What the workflow does with the codemods of an SDK upgrade; none when undefined. */
+  codemod: AutofixCodemod | undefined;
+  /** For `--codemod copilot`: how the agent authenticates (default `pat`). */
+  copilotAuth?: CopilotAuth;
   /** App directory, or several; `tailor generate` runs in each. */
   dir: string | readonly string[];
   /** Package manager the workflow uses; detected from the repository root when omitted. */
@@ -32,7 +44,7 @@ export type AutofixSetupOptions = {
   outputDir: string;
 };
 
-export type AutofixSetupResult = {
+export type AutofixSetupResult = AutofixCodemodParams & {
   provider: AutofixProvider;
 };
 
@@ -62,6 +74,30 @@ function resolveProvider(options: AutofixSetupOptions): AutofixProviderParams {
   return { provider, securefixServerRepository: name };
 }
 
+function resolveCodemod(options: AutofixSetupOptions): AutofixCodemodParams {
+  const { codemod, copilotAuth } = options;
+  if (codemod === "copilot") return { codemod, copilotAuth: copilotAuth ?? "pat" };
+  if (copilotAuth !== undefined) {
+    throw new Error("--copilot-auth is only used with --codemod copilot.");
+  }
+  return { codemod };
+}
+
+function assertCodemodLockfile(outputDir: string, packageManager: PackageManager): void {
+  const exists = (file: string) => fs.existsSync(path.join(outputDir, file));
+  const readable = codemodLockfiles(packageManager);
+  const unreadable = LOCKFILES.find(
+    ([file, manager]) => manager === packageManager && !readable.includes(file) && exists(file),
+  );
+  if (unreadable && !readable.some(exists)) {
+    throw new Error(
+      `--codemod reads the SDK version of the base branch from ${readable.join(" or ")}, but the ` +
+        `repository root has only ${unreadable[0]}. Switch to bun.lock with ` +
+        "`bun install --save-text-lockfile`, then re-run.",
+    );
+  }
+}
+
 /**
  * Generate the workflow that commits what `tailor generate` changes to the pull request, and
  * record it in the lock file.
@@ -69,13 +105,20 @@ function resolveProvider(options: AutofixSetupOptions): AutofixProviderParams {
  * @returns What was generated, for {@link printAutofixNextSteps}
  */
 export async function setupAutofix(options: AutofixSetupOptions): Promise<AutofixSetupResult> {
-  const { provider, outputDir, force } = options;
+  const { provider, codemod, outputDir, force } = options;
   const dirs = (typeof options.dir === "string" ? [options.dir] : options.dir).map(normalizeDir);
   assertDistinctAppSlugs(dirs);
   for (const dir of dirs) resolveConfigPath(outputDir, dir);
   const providerParams = resolveProvider(options);
+  const codemodParams = resolveCodemod(options);
   const packageManager = resolvePackageManager(outputDir, options.packageManager);
-  const render = renderAutofixWorkflow({ ...providerParams, dirs, packageManager });
+  if (codemod) assertCodemodLockfile(outputDir, packageManager);
+  const render = renderAutofixWorkflow({
+    ...providerParams,
+    ...codemodParams,
+    dirs,
+    packageManager,
+  });
 
   const lock = readLock(outputDir);
   const owner = lock?.targets.find((target) => target.file === AUTOFIX_WORKFLOW_FILE);
@@ -116,6 +159,7 @@ export async function setupAutofix(options: AutofixSetupOptions): Promise<Autofi
         dirs,
         packageManager,
         packageManagerAutoDetected: options.packageManager === undefined,
+        ...(codemod ? codemodParams : {}),
       },
       generatedIds: render.generatedIds,
       contentHash,
@@ -124,7 +168,7 @@ export async function setupAutofix(options: AutofixSetupOptions): Promise<Autofi
   });
   logWritten(decision, AUTOFIX_WORKFLOW_FILE);
 
-  return { provider };
+  return { provider, ...codemodParams };
 }
 
 const SECRETS_STEP = [
@@ -156,6 +200,24 @@ const PROVIDER_STEPS: Record<AutofixProvider, string[]> = {
   ],
 };
 
+function agentSteps(result: AutofixSetupResult): string[] | undefined {
+  if (!isAutofixAgent(result.codemod)) return undefined;
+  const bots = `   Among bots, only ${AGENT_BOT}[bot] can start the agent.`;
+  const secret = agentRequirements(result).find((requirement) => requirement.type === "secret");
+  if (!secret) {
+    return [
+      '2. Allow "Copilot CLI billed to the organization" in the Copilot policies of the',
+      "   organization, so the copilot agent signs in with the workflow token.",
+      bots,
+    ];
+  }
+  return [
+    `2. Set the ${secret.name} repository secret the ${result.codemod} agent signs in with:`,
+    ...SECRETS_STEP,
+    bots,
+  ];
+}
+
 /**
  * Print next-step guidance after generating the autofix workflow.
  * @param result - What {@link setupAutofix} generated
@@ -165,8 +227,13 @@ export function printAutofixNextSteps(result: AutofixSetupResult): void {
   logger.info("Next steps:");
   logger.newline();
   for (const line of PROVIDER_STEPS[result.provider]) logger.log(line);
+  const agent = agentSteps(result);
+  if (agent) {
+    logger.newline();
+    for (const line of agent) logger.log(line);
+  }
   logger.newline();
-  logger.log("2. Commit the generated files:");
+  logger.log(`${agent ? 3 : 2}. Commit the generated files:`);
   logger.log(`   - ${AUTOFIX_WORKFLOW_FILE}`);
   logger.log("   - .github/tailor.lock");
 }

@@ -313,6 +313,38 @@ describe("collectEventSubscriptions", () => {
     },
   );
 
+  test("resolves an idpUser subscription to the peer that owns the IdP without an external declaration", () => {
+    const owner = target({
+      configPath: "backoffice/tailor.config.ts",
+      appId: supplierId,
+      idps: ["backoffice-idp"],
+    });
+    const subscriber = target({
+      configPath: "shop/tailor.config.ts",
+      appId: "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b82",
+      executors: { "sync-user": { kind: "idpUser", idp: "backoffice-idp" } },
+    });
+
+    const subscriptions = collectEventSubscriptions([owner, subscriber]);
+
+    expect(subscriptions).toHaveLength(1);
+    expect(subscriptions[0]?.owner.config.path).toBe("backoffice/tailor.config.ts");
+  });
+
+  test("does not resolve an idpUser subscription that omits idp to a peer's IdP", () => {
+    const owner = target({
+      configPath: "backoffice/tailor.config.ts",
+      appId: supplierId,
+      idps: ["backoffice-idp"],
+    });
+    const subscriber = target({
+      configPath: "shop/tailor.config.ts",
+      executors: { "sync-user": { kind: "idpUser" } },
+    });
+
+    expect(collectEventSubscriptions([owner, subscriber])).toHaveLength(0);
+  });
+
   test("resolves a same-config subscription to the subscriber itself", () => {
     const only = target({
       configPath: "buyer/tailor.config.ts",

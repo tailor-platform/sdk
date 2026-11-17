@@ -6,7 +6,6 @@ import { describe, expect, test, vi } from "vitest";
 import { z } from "zod";
 import { deployCommand } from "#/cli/commands/deploy/index";
 import { commonArgs } from "#/cli/shared/args";
-import { logger } from "#/cli/shared/logger";
 import { runCliCommand } from "#/cli/shared/test-helpers/run-cli-command";
 
 const mocks = vi.hoisted(() => ({
@@ -93,27 +92,26 @@ describe("deployCommand", () => {
       env: { TAILOR_CONFIG_PATH: "a/tailor.config.ts,b/tailor.config.ts" },
       args: [],
       configPath: "a/tailor.config.ts,b/tailor.config.ts",
-      warnings: [],
     },
     {
-      name: "prefers --config over both config path variables",
-      env: {
-        TAILOR_CONFIG_PATH: "new/tailor.config.ts",
-        TAILOR_PLATFORM_SDK_CONFIG_PATH: "old/tailor.config.ts",
-      },
+      name: "prefers --config over TAILOR_CONFIG_PATH",
+      env: { TAILOR_CONFIG_PATH: "env/tailor.config.ts" },
       args: ["--config", "flag/tailor.config.ts"],
       configPath: "flag/tailor.config.ts",
-      warnings: [],
     },
     {
-      name: "uses the default config path when the variables are empty",
-      env: { TAILOR_CONFIG_PATH: "", TAILOR_PLATFORM_SDK_CONFIG_PATH: "" },
+      name: "uses the default config path when TAILOR_CONFIG_PATH is empty",
+      env: { TAILOR_CONFIG_PATH: "" },
       args: [],
       configPath: "tailor.config.ts",
-      warnings: [],
     },
-  ])("$name", async ({ env, args, configPath, warnings }) => {
-    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    {
+      name: "ignores TAILOR_PLATFORM_SDK_CONFIG_PATH",
+      env: { TAILOR_PLATFORM_SDK_CONFIG_PATH: "old/tailor.config.ts" },
+      args: [],
+      configPath: "tailor.config.ts",
+    },
+  ])("$name", async ({ env, args, configPath }) => {
     for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
     try {
       await runCommand(deployCommand, args);
@@ -122,32 +120,16 @@ describe("deployCommand", () => {
         expect.objectContaining({ configPath }),
         expect.any(Object),
       );
-      expect(warnSpy.mock.calls).toEqual(warnings);
     } finally {
       vi.unstubAllEnvs();
     }
   });
 
-  test.each([
-    {
-      name: "TAILOR_CONFIG_PATH",
-      variable: "TAILOR_CONFIG_PATH",
-      warnings: [],
-    },
-    {
-      name: "the deprecated TAILOR_PLATFORM_SDK_CONFIG_PATH",
-      variable: "TAILOR_PLATFORM_SDK_CONFIG_PATH",
-      warnings: [
-        ["TAILOR_PLATFORM_SDK_CONFIG_PATH is deprecated. Please use TAILOR_CONFIG_PATH instead."],
-      ],
-    },
-  ])("reads $name loaded from an env file", async ({ variable, warnings }) => {
-    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+  test("reads TAILOR_CONFIG_PATH loaded from an env file", async () => {
     const dir = fs.mkdtempSync(path.join(tmpdir(), "tailor-deploy-config-"));
     const envFile = path.join(dir, ".env");
     vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
-    vi.stubEnv("TAILOR_PLATFORM_SDK_CONFIG_PATH", undefined);
-    fs.writeFileSync(envFile, `${variable}=env-file/tailor.config.ts\n`);
+    fs.writeFileSync(envFile, "TAILOR_CONFIG_PATH=env-file/tailor.config.ts\n");
     try {
       await runCliCommand(deployCommand, ["--env-file", envFile]);
 
@@ -155,7 +137,6 @@ describe("deployCommand", () => {
         expect.objectContaining({ configPath: "env-file/tailor.config.ts" }),
         expect.any(Object),
       );
-      expect(warnSpy.mock.calls).toEqual(warnings);
     } finally {
       vi.unstubAllEnvs();
       fs.rmSync(dir, { recursive: true, force: true });

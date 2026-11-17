@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 import { loadOperatorWorkspaceContext } from "./operator-context";
+import { mockOperatorClient } from "./test-helpers/operator-client";
 
 const mocks = vi.hoisted(() => ({
   initOperatorClient: vi.fn(),
@@ -18,7 +19,7 @@ vi.mock("./context", () => ({
 
 describe("loadOperatorWorkspaceContext", () => {
   test("loads the token, client, and workspace in order", async () => {
-    const client = { getWorkspace: vi.fn() };
+    const client = mockOperatorClient({ getWorkspace: {} });
     mocks.loadAccessToken.mockResolvedValue("access-token");
     mocks.initOperatorClient.mockResolvedValue(client);
     mocks.loadWorkspaceId.mockResolvedValue("workspace-id");

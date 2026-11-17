@@ -175,6 +175,15 @@ describe("api command body auto-injection", () => {
       expect(getRequestBody().namespaceName).toBe("my-idp");
     });
 
+    test("should inject namespaceName for IdP endpoint when idp is a single config", async () => {
+      vi.mocked(loadWorkspaceId).mockResolvedValue("ws-1");
+      mockConfigWith({ idp: { name: "my-idp" } });
+
+      await runCommand(apiCommand, ["GetIdPService"]);
+
+      expect(getRequestBody().namespaceName).toBe("my-idp");
+    });
+
     test("should inject namespaceName for Pipeline endpoint when single resolver namespace", async () => {
       vi.mocked(loadWorkspaceId).mockResolvedValue("ws-1");
       mockConfigWith({ resolver: { "my-pipeline": { files: [] } } });

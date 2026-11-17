@@ -51,7 +51,7 @@ describe("freshErdExportFailureMessage", () => {
       "⚠ tailordb erd is a beta feature.",
       "",
       JSON.stringify({
-        error: { code: "UNEXPECTED_ERROR", message: "Configuration file not found" },
+        error: { code: "CONFIG_NOT_FOUND", message: "Configuration file not found" },
       }),
     ].join("\n");
 

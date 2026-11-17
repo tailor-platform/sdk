@@ -1,5 +1,8 @@
 import { describe, expect, test, vi } from "vitest";
 import { assertEnvHasNoSecrets, resolveEnvValue, scanEnvForSecrets } from "./env-secret-scan";
+import { getErrorDiagnostics } from "./error-diagnostics";
+import { serializeError } from "./error-json";
+import { isCLIError } from "./errors";
 import { logger } from "./logger";
 
 // Assembled at runtime: spelled out in full, these fixtures are indistinguishable
@@ -9,6 +12,10 @@ const SLACK_TOKEN = ["xoxb", "123456789012", "1234567890123", "AbCdEfGhIjKlMnOpQ
 const GITHUB_TOKEN = ["ghp", "16C7e42F292c6912E7710c838347Ae178B4a"].join("_");
 const AWS_ACCESS_KEY_ID = ["AKIA", "QYLPMN5HGZQ4WXYZ"].join("");
 const AWS_SECRET = ["kR8xNvPq2LmT7wYbZc3JdFgHs", "A1eU5oI9pQrStVw"].join("");
+
+const SECRETLINT_PACKAGES = "https://github.com/secretlint/secretlint/blob/master/packages";
+const SLACK_DOCS_URL = `${SECRETLINT_PACKAGES}/%40secretlint/secretlint-rule-slack/README.md#SLACK_TOKEN`;
+const GITHUB_DOCS_URL = `${SECRETLINT_PACKAGES}/%40secretlint/secretlint-rule-github/README.md#GITHUB_TOKEN`;
 
 async function captureFailure(scan: Promise<void>): Promise<Error> {
   try {
@@ -65,8 +72,8 @@ describe("scanEnvForSecrets", () => {
     const [accessKeyId] = await scanEnvForSecrets({ env: { AWS_ACCESS_KEY_ID } });
 
     expect(accountId?.detector).toBe(accessKeyId?.detector);
-    expect(accountId?.rule).toBe("AWSAccountID");
-    expect(accessKeyId?.rule).toBe("AWSAccessKeyID");
+    expect(accountId).toMatchObject({ rule: "AWSAccountID" });
+    expect(accessKeyId).toMatchObject({ rule: "AWSAccessKeyID" });
   });
 
   test("attributes a match inside a multi-line value to the right key", async () => {
@@ -106,7 +113,7 @@ describe("scanEnvForSecrets", () => {
     expect(findings).toEqual([
       { key: "LEGACY_TOKEN", detector: "high-entropy", severity: "warning" },
     ]);
-    expect(findings[0]?.rule).toBeUndefined();
+    expect(findings[0]).not.toHaveProperty("rule");
   });
 
   test("does not add an entropy warning for a value a provider rule already matched", async () => {
@@ -185,25 +192,55 @@ describe("scanEnvForSecrets", () => {
 });
 
 describe("assertEnvHasNoSecrets", () => {
-  test("fails naming the key and the detector, and pointing at Secret Manager", async () => {
+  test("fails as an invalid config, with an issue per key and the remedies as its suggestion", async () => {
     const error = await captureFailure(
-      assertEnvHasNoSecrets({ env: { SLACK_BOT_TOKEN: SLACK_TOKEN } }),
+      assertEnvHasNoSecrets({
+        env: { SLACK_BOT_TOKEN: SLACK_TOKEN, API_BASE: "https://api.example.com", GITHUB_TOKEN },
+        configPath: "/project/issues.config.ts",
+      }),
     );
 
-    expect(error.message).toContain("env.SLACK_BOT_TOKEN (matched slack: SLACK_TOKEN)");
-    expect(error.message).toContain("secretlint-rule-slack/README.md#SLACK_TOKEN");
-    expect(error.message).toContain("defineSecretManager()");
-    expect(error.message).toContain(
-      'SLACK_BOT_TOKEN: { value: ..., allowSecretReason: "<why this is safe>" }',
+    expect(error.message).toBe(
+      "Invalid Tailor config:\n" +
+        `  - env.SLACK_BOT_TOKEN: Secret detected (matched slack: SLACK_TOKEN). See ${SLACK_DOCS_URL}\n` +
+        `  - env.GITHUB_TOKEN: Secret detected (matched github: GITHUB_TOKEN). See ${GITHUB_DOCS_URL}`,
     );
+    expect(error).toMatchObject({
+      code: "CONFIG_INVALID",
+      details:
+        "'env' values are deployed as plaintext and are readable by anyone who can read the application's configuration.",
+      suggestion:
+        "Define these with defineSecretManager() instead, and read them through Secret Manager at runtime.\n" +
+        "If a value is genuinely safe to keep in 'env', allow it where it is defined: " +
+        'SLACK_BOT_TOKEN: { value: ..., allowSecretReason: "<why this is safe>" }',
+      context: {
+        file: "/project/issues.config.ts",
+        exportName: "default",
+        issues: [
+          {
+            path: ["env", "SLACK_BOT_TOKEN"],
+            message: `Secret detected (matched slack: SLACK_TOKEN). See ${SLACK_DOCS_URL}`,
+          },
+          {
+            path: ["env", "GITHUB_TOKEN"],
+            message: `Secret detected (matched github: GITHUB_TOKEN). See ${GITHUB_DOCS_URL}`,
+          },
+        ],
+      },
+    });
   });
 
   test("never repeats the detected value", async () => {
     const error = await captureFailure(
-      assertEnvHasNoSecrets({ env: { SLACK_BOT_TOKEN: SLACK_TOKEN } }),
+      assertEnvHasNoSecrets({
+        env: { SLACK_BOT_TOKEN: SLACK_TOKEN },
+        configPath: "/project/redacted.config.ts",
+      }),
     );
 
-    expect(error.message).not.toContain(SLACK_TOKEN);
+    expect(isCLIError(error) && error.format()).toContain("env.SLACK_BOT_TOKEN");
+    expect(isCLIError(error) && error.format()).not.toContain(SLACK_TOKEN);
+    expect(serializeError(error)).not.toContain(SLACK_TOKEN);
   });
 
   test("warns without failing when only the entropy heuristic matched", async () => {
@@ -212,13 +249,14 @@ describe("assertEnvHasNoSecrets", () => {
     await expect(
       assertEnvHasNoSecrets({
         env: { LEGACY_TOKEN: "Zk3xQ9pLmVn7WcT2bYr5JdHgSaEuIoPq8FvNzXwCkMj4" },
+        configPath: "/project/warning.config.ts",
       }),
     ).resolves.toBeUndefined();
     expect(warnSpy).toHaveBeenCalledTimes(1);
     expect(warnSpy.mock.calls[0]?.[0]).toContain("env.LEGACY_TOKEN");
   });
 
-  test("names the config the entries came from", async () => {
+  test("points at the config the entries came from, keeping its path out of the message", async () => {
     const error = await captureFailure(
       assertEnvHasNoSecrets({
         env: { SLACK_BOT_TOKEN: SLACK_TOKEN },
@@ -226,7 +264,8 @@ describe("assertEnvHasNoSecrets", () => {
       }),
     );
 
-    expect(error.message).toContain("Secret detected in 'env' in /project/tailor.config.ts");
+    expect(error.message).not.toContain("/project/tailor.config.ts");
+    expect(getErrorDiagnostics(error).location).toEqual({ file: "/project/tailor.config.ts" });
   });
 
   test("warns once when the same entries are scanned repeatedly", async () => {
@@ -243,7 +282,9 @@ describe("assertEnvHasNoSecrets", () => {
   });
 
   test("passes for an application without env", async () => {
-    await expect(assertEnvHasNoSecrets({})).resolves.toBeUndefined();
+    await expect(
+      assertEnvHasNoSecrets({ configPath: "/project/no-env.config.ts" }),
+    ).resolves.toBeUndefined();
   });
 });
 

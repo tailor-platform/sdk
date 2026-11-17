@@ -9,6 +9,7 @@ import {
   type MigrationCommandContext,
 } from "#/cli/commands/tailordb/migrate/hints";
 import {
+  COMPLETED_STEPS_ON_RESUME,
   describeMainRunSettlement,
   formatMigrationResolveHint,
   isStaleMigrationInProgress,
@@ -249,8 +250,7 @@ export async function checkMigrationInProgress(
     throw CLIError({
       code: "MIGRATION_IN_PROGRESS_INVALID",
       message: `Migration ${migrationLabel} was partially applied by its steps, but its migrate.ts no longer exports \`steps\`.`,
-      suggestion:
-        "Keep the migration as `steps` so the deploy can finish it; steps that already completed do not run again.",
+      suggestion: `Keep the migration as \`steps\` so the deploy can finish it; ${COMPLETED_STEPS_ON_RESUME}.`,
     });
   }
   return { kind: "resume", inProgress };

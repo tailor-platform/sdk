@@ -22,6 +22,81 @@ const expectSequentialIndices = (chunks: SeedChunk[]) => {
   }
 };
 
+describe("chunkSeedData size accounting", () => {
+  const withArgBudget = (data: SeedData, order: string[], argBudget: number) => ({
+    data,
+    order,
+    codeByteSize: 0,
+    maxMessageSize: argBudget + 1024,
+  });
+
+  const withSpareBudget = (data: SeedData, order: string[]) =>
+    withArgBudget(data, order, jsonByteSize(data, order) + 10);
+
+  const records = makeRecords(8, 50);
+  const batchByteSize = (count: number) => jsonByteSize({ T: records.slice(0, count) }, ["T"]);
+  const recordCounts = (chunks: SeedChunk[]) => chunks.map((chunk) => chunk.data["T"]!.length);
+
+  test.each([
+    { budget: "one record exactly", argBudget: batchByteSize(1), counts: [1, 1, 1, 1, 1, 1, 1, 1] },
+    { budget: "three records exactly", argBudget: batchByteSize(3), counts: [3, 3, 2] },
+    { budget: "one byte under four records", argBudget: batchByteSize(4) - 1, counts: [3, 3, 2] },
+  ])(
+    "fills each chunk with as many records as fit in a budget of $budget",
+    ({ argBudget, counts }) => {
+      const chunks = chunkSeedData(withArgBudget({ T: records }, ["T"], argBudget));
+
+      expect(recordCounts(chunks)).toEqual(counts);
+    },
+  );
+
+  test("rejects a record whose chunk is one byte over the budget, reporting the record's size", () => {
+    const argBudget = batchByteSize(1) - 1;
+    let error: unknown;
+    try {
+      chunkSeedData(withArgBudget({ T: records }, ["T"], argBudget));
+    } catch (thrown) {
+      error = thrown;
+    }
+    expect(error).toMatchObject({
+      code: "SEED_MESSAGE_SIZE_EXCEEDED",
+      message: `A single record in table "T" (80 bytes) exceeds the message size budget (${argBudget} bytes).`,
+      suggestion: "Increase maxMessageSize or reduce the record size.",
+      context: { type: "T", recordByteSize: 80, argBudget },
+    });
+  });
+
+  test("splits data whose <, > and & characters grow to 6 bytes each once the platform escapes them", () => {
+    const html = Array.from({ length: 8 }, (_, i) => ({ id: `id-${i}`, body: "<&>".repeat(20) }));
+    const data: SeedData = { Page: html };
+
+    const chunks = chunkSeedData(withSpareBudget(data, ["Page"]));
+
+    expect(chunks.length).toBeGreaterThan(1);
+  });
+
+  test("keeps data of the same raw size in one chunk when it has no characters the platform escapes", () => {
+    const plain = Array.from({ length: 8 }, (_, i) => ({ id: `id-${i}`, body: "abc".repeat(20) }));
+    const data: SeedData = { Page: plain };
+
+    const chunks = chunkSeedData(withSpareBudget(data, ["Page"]));
+
+    expect(chunks).toHaveLength(1);
+  });
+
+  test("splits data whose U+2028 and U+2029 characters grow to 6 bytes each once the platform escapes them", () => {
+    const text = Array.from({ length: 4 }, (_, i) => ({
+      id: `id-${i}`,
+      body: "\u2028\u2029".repeat(100),
+    }));
+    const data: SeedData = { Page: text };
+
+    const chunks = chunkSeedData(withSpareBudget(data, ["Page"]));
+
+    expect(chunks.length).toBeGreaterThan(1);
+  });
+});
+
 describe("chunkSeedData", () => {
   test("returns single chunk when data fits within budget", () => {
     const data: SeedData = {
@@ -143,27 +218,23 @@ describe("chunkSeedData", () => {
   });
 
   test("throws error when codeByteSize exceeds maxMessageSize", () => {
-    expect(() =>
+    let error: unknown;
+    try {
       chunkSeedData({
         data: { User: [{ id: "1" }] },
         order: ["User"],
         codeByteSize: 4_000_000,
         maxMessageSize: 3_500_000,
-      }),
-    ).toThrow("Code size (4000000 bytes) exceeds the message size limit (3500000 bytes)");
-  });
-
-  test("throws error when a single record exceeds budget", () => {
-    const hugeRecord = { id: "1", payload: "x".repeat(1_000_000) };
-
-    expect(() =>
-      chunkSeedData({
-        data: { HugeType: [hugeRecord] },
-        order: ["HugeType"],
-        codeByteSize: 1000,
-        maxMessageSize: 100_000,
-      }),
-    ).toThrow(/single record in table "HugeType"/);
+      });
+    } catch (thrown) {
+      error = thrown;
+    }
+    expect(error).toMatchObject({
+      code: "SEED_MESSAGE_SIZE_EXCEEDED",
+      message: "Code size (4000000 bytes) exceeds the message size limit (3500000 bytes).",
+      details: "No space left for seed data.",
+      context: { codeByteSize: 4_000_000, maxMessageSize: 3_500_000 },
+    });
   });
 
   test("uses default maxMessageSize when not specified", () => {

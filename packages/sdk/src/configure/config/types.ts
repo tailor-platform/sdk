@@ -158,21 +158,37 @@ type AllowedSecretEnvValue = {
 export type EnvEntry = EnvValue | AllowedSecretEnvValue;
 
 /** `files`/`ignores` patterns are resolved relative to this config's own directory, not the invocation directory. */
-export type ExecutorServiceConfig = { files: string[]; ignores?: string[] };
+export type ExecutorServiceConfig = {
+  /** Glob patterns for executor files. A pattern starting with `!` excludes the files it matches; for each file, the last matching pattern decides. */
+  files: string[];
+  /** @deprecated since 2.40.0 — write `!`-prefixed patterns in `files` instead. codemod: v3/files-ignores-to-negation */
+  ignores?: string[];
+};
 export type ExecutorServiceInput = ExecutorServiceConfig;
 
 /** `files`/`ignores` patterns are resolved relative to this config's own directory, not the invocation directory. */
-export type HttpAdapterServiceInput = { files: string[]; ignores?: string[] };
+export type HttpAdapterServiceInput = {
+  /** Glob patterns for HTTP adapter files. A pattern starting with `!` excludes the files it matches; for each file, the last matching pattern decides. */
+  files: string[];
+  /** @deprecated since 2.40.0 — write `!`-prefixed patterns in `files` instead. codemod: v3/files-ignores-to-negation */
+  ignores?: string[];
+};
 
 export type ResolverServiceConfig = {
-  /** `files`/`ignores` patterns are resolved relative to this config's own directory, not the invocation directory. */
+  /**
+   * Glob patterns for resolver files, resolved relative to this config's own directory, not the
+   * invocation directory. A pattern starting with `!` excludes the files it matches; for each
+   * file, the last matching pattern decides.
+   */
   files: string[];
+  /** @deprecated since 2.40.0 — write `!`-prefixed patterns in `files` instead. codemod: v3/files-ignores-to-negation */
   ignores?: string[];
   /**
    * Access requirement applied to every resolver in this namespace that
    * declares no `permission` of its own. Takes the same values as a
    * resolver's `permission`, including `"allowAnonymous"` to record that the
-   * namespace is public by design.
+   * namespace is public by design, except that it cannot use an `input`
+   * operand: a namespace has no input to compare.
    *
    * A resolver's own `permission` replaces this default rather than merging
    * with it, so a single resolver opts out with `permission: "allowAnonymous"`.
@@ -185,9 +201,14 @@ export type ResolverServiceInput = {
 };
 
 export type WorkflowServiceConfig = {
-  /** Resolved relative to this config's own directory, not the invocation directory. */
+  /**
+   * Resolved relative to this config's own directory, not the invocation directory. A pattern
+   * starting with `!` excludes the files it matches; for each file, the last matching pattern
+   * decides.
+   */
   files: string[];
   job_files?: string[];
+  /** @deprecated since 2.40.0 — write `!`-prefixed patterns in `files` instead. codemod: v3/files-ignores-to-negation */
   ignores?: string[];
   job_ignores?: string[];
   /** Workspace-level execution policies for workflow job functions. */
@@ -202,14 +223,14 @@ export type WorkflowServiceInput = WorkflowServiceConfig;
  * - `name` (required): Application name
  * - `cors`: Array of allowed origins, e.g. `["https://example.com"]`
  * - `auth`: Single auth config object (not an array)
- * - `idp`: Array of IdP configs, e.g. `[myIdp]`
+ * - `idp`: Single IdP config, e.g. `myIdp`
  * - `staticWebsites`: Array of static website configs, e.g. `[website]`
  * - `aiGateways`: Array of AI Gateway configs, e.g. `[gateway]`
  * - `db`, `resolver`, `executor`, `workflow`, `httpAdapter`: Service configs with file globs (resolved relative to this config file's own directory, not the invocation directory)
  */
 export interface AppConfig<
   Auth extends AuthConfig = AuthConfig,
-  Idp extends IdPConfig[] = IdPConfig[],
+  Idp extends IdPConfig | IdPConfig[] = IdPConfig | IdPConfig[],
   StaticWebsites extends StaticWebsiteConfig[] = StaticWebsiteConfig[],
   AIGateways extends AIGatewayConfig[] = AIGatewayConfig[],
   Env extends Record<string, EnvEntry> = Record<string, EnvEntry>,
@@ -262,7 +283,9 @@ export interface AppConfig<
   db?: TailorDBServiceInput;
   /** Resolver service configuration with resolver files. */
   resolver?: ResolverServiceInput;
-  /** Identity Provider configurations. Must be an array, e.g. `[myIdp]`. */
+  /**
+   * Identity Provider configuration: a single IdP, e.g. `myIdp`. An array of IdPs, e.g. `[myIdp]`, still works but is deprecated and removed in v3.
+   */
   idp?: Idp;
   /** Auth configuration (single object, not an array). */
   auth?: Auth;

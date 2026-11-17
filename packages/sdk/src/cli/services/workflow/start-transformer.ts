@@ -1,6 +1,8 @@
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { walkBindingAware } from "#/cli/shared/binding-aware-walk";
+import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import {
   normalizeFilePath,
@@ -21,8 +23,9 @@ import {
   getNamespaceStartCallInfo,
   getStartCallInfo,
 } from "./ast-utils";
+import type { HookFailures } from "#/cli/services/hook-failures";
 import type { Program } from "@oxc-project/types";
-import type { Plugin } from "rolldown";
+import type { Plugin, RolldownMagicString } from "rolldown";
 
 export interface ResolvedStartCall extends StartCallInfo {
   kind: "job" | "workflow";
@@ -152,14 +155,20 @@ function undetectableStartCallError(
   { importSource, importedName }: UndetectableImport,
 ): Error {
   const exportLabel = importedName === "default" ? "default export" : `export "${importedName}"`;
-  return new Error(
-    `${calleeText}() in ${currentFilePath} cannot be rewritten: ` +
-      `"${importSource}" is a workflow file, but its ${exportLabel} is not a ` +
-      `workflow or job the build can detect. The build rewrites .start() on the file's ` +
-      `default-exported workflow (including one returned from a helper function) and on ` +
-      `workflows and jobs created in that file with createWorkflow({ name: "..." }) or ` +
-      `createWorkflowJob({ name: "...", body }) using a literal name; any other .start() ` +
-      `would fail at runtime after deploy.`,
+  return withErrorDiagnostics(
+    CLIError({
+      code: "WORKFLOW_START_TARGET_UNDETECTABLE",
+      message:
+        `${calleeText}() cannot be rewritten: "${importSource}" is a workflow file, but its ` +
+        `${exportLabel} is not a workflow or job the build can detect.`,
+      details:
+        `The build rewrites .start() on the file's default-exported workflow (including one ` +
+        `returned from a helper function) and on workflows and jobs created in that file with ` +
+        `createWorkflow({ name: "..." }) or createWorkflowJob({ name: "...", body }) using a ` +
+        `literal name; any other .start() would fail at runtime after deploy.`,
+      context: { file: currentFilePath, callee: calleeText, importSource, importedName },
+    }),
+    { location: { file: currentFilePath } },
   );
 }
 
@@ -182,7 +191,7 @@ function assertNoUndetectableStartCalls(
       }
     }
 
-    const startCall = getStartCallInfo(node, sourceText);
+    const startCall = getStartCallInfo(node);
     if (!startCall || shadowedNames.has(startCall.identifierName)) return;
     const undetectable = undetectableImports.get(startCall.identifierName);
     if (!undetectable) return;
@@ -215,7 +224,7 @@ function detectStartCallsWithTargets(
       return;
     }
 
-    const startCall = getStartCallInfo(node, sourceText);
+    const startCall = getStartCallInfo(node);
     if (!startCall || shadowedNames.has(startCall.identifierName)) return;
     const target = targets.get(startCall.identifierName);
     if (target) {
@@ -243,7 +252,7 @@ export function transformStartCalls(
   source: string,
   startContext: StartContext,
   currentFilePath: string,
-): string {
+): RolldownMagicString {
   const { program } = parseSync("input.ts", source);
   const localTargets = collectLocalTargets(program, startContext, currentFilePath);
   assertNoUndetectableStartCalls(program, source, localTargets, currentFilePath);
@@ -274,37 +283,44 @@ export function transformStartCalls(
   let needsNormalizerHelper = false;
 
   for (const call of startCalls) {
-    let transformedCall: string;
-    if (call.kind === "workflow") {
-      let optionsPart = "";
-      if (call.optionsText !== undefined) {
-        if (authNamespace) {
-          optionsPart = `, ${NORMALIZER_IDENTIFIER}(${call.optionsText})`;
-          needsNormalizerHelper = true;
-        } else {
-          optionsPart = `, ${call.optionsText}`;
-        }
-      }
-      transformedCall = `${WORKFLOW_RUNTIME_EXPR}.startWorkflow(${JSON.stringify(call.targetName)}, ${call.argsText || "undefined"}${optionsPart})`;
-    } else {
-      const optionsPart = call.optionsText !== undefined ? `, ${call.optionsText}` : "";
-      transformedCall = `${WORKFLOW_RUNTIME_EXPR}.execJobFunction(${JSON.stringify(call.targetName)}, ${call.argsText || "undefined"}${optionsPart})`;
+    const method = call.kind === "workflow" ? "startWorkflow" : "execJobFunction";
+    const prefix = `${WORKFLOW_RUNTIME_EXPR}.${method}(${JSON.stringify(call.targetName)}, `;
+    const { argsRange, optionsRange, callRange } = call;
+    if (!argsRange) {
+      replacements.push({ ...callRange, text: `${prefix}undefined)` });
+      continue;
     }
     replacements.push({
-      start: call.callRange.start,
-      end: call.callRange.end,
-      text: transformedCall,
+      start: callRange.start,
+      end: argsRange.start,
+      text: prefix,
     });
+    const normalizeOptions = call.kind === "workflow" && authNamespace && optionsRange;
+    if (optionsRange) {
+      replacements.push({
+        start: argsRange.end,
+        end: optionsRange.start,
+        text: normalizeOptions ? `, ${NORMALIZER_IDENTIFIER}(` : ", ",
+      });
+    }
+    replacements.push({
+      start: optionsRange?.end ?? argsRange.end,
+      end: callRange.end,
+      text: normalizeOptions ? "))" : ")",
+    });
+    if (normalizeOptions) needsNormalizerHelper = true;
   }
 
   const transformed = applyReplacements(source, replacements);
-  return needsNormalizerHelper && authNamespace
-    ? buildNormalizerHelperSource(authNamespace) + transformed
-    : transformed;
+  if (needsNormalizerHelper && authNamespace) {
+    transformed.prepend(buildNormalizerHelperSource(authNamespace));
+  }
+  return transformed;
 }
 
 export function createStartTransformPlugin(
   startContext: StartContext | undefined,
+  hookFailures: HookFailures,
 ): Plugin | undefined {
   if (!startContext || startContext.modules.size === 0) return undefined;
 
@@ -314,7 +330,13 @@ export function createStartTransformPlugin(
       filter: { id: { include: [/\.(ts|mts|cts|js|mjs|cjs)$/] } },
       handler(code, id) {
         if (!hasStartCall(code)) return null;
-        return { code: transformStartCalls(code, startContext, id) };
+        return hookFailures.capture(() => {
+          const transformed = transformStartCalls(code, startContext, id);
+          return {
+            code: transformed.toString(),
+            map: transformed.generateMap({ hires: "boundary" }).toString(),
+          };
+        }, null);
       },
     },
   };

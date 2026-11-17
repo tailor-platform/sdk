@@ -4,6 +4,7 @@ import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { releaseVaultOwnership } from "./check-vault-managed";
 import { createSecretCommand } from "./create";
 
@@ -26,13 +27,15 @@ vi.mock("./check-vault-managed", () => ({
   releaseVaultOwnership: vi.fn(),
 }));
 
+function mockContextClient() {
+  const client = mockOperatorClient({ createSecretManagerSecret: {} });
+  vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({ client, workspaceId: "workspace-1" });
+  return client;
+}
+
 describe("secret create command", () => {
   test("fails without creating when releasing a managed vault is declined", async () => {
-    const client = { createSecretManagerSecret: vi.fn().mockResolvedValue({}) };
-    vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
-      client,
-      workspaceId: "workspace-1",
-    } as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>);
+    const client = mockContextClient();
     vi.mocked(prompt.confirm).mockResolvedValue(false);
 
     const result = await runCommand(createSecretCommand, [
@@ -49,17 +52,16 @@ describe("secret create command", () => {
       default: false,
     });
     expect(result.success).toBe(false);
-    expect(result.error).toMatchObject({ code: "SECRET_CREATION_CANCELLED" });
+    expect(result.error).toMatchObject({
+      code: "SECRET_CREATION_CANCELLED",
+      message: "Secret creation cancelled. The vault is still managed by the config.",
+    });
     expect(client.createSecretManagerSecret).not.toHaveBeenCalled();
     expect(releaseVaultOwnership).not.toHaveBeenCalled();
   });
 
   test("creates and releases the vault when the confirmation is accepted", async () => {
-    const client = { createSecretManagerSecret: vi.fn().mockResolvedValue({}) };
-    vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
-      client,
-      workspaceId: "workspace-1",
-    } as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>);
+    const client = mockContextClient();
     vi.mocked(prompt.confirm).mockResolvedValue(true);
 
     const result = await runCommand(createSecretCommand, [
@@ -81,12 +83,8 @@ describe("secret create command", () => {
     expect(releaseVaultOwnership).toHaveBeenCalledTimes(1);
   });
 
-  test("prints the secret and vault under JSON output", async () => {
-    const client = { createSecretManagerSecret: vi.fn().mockResolvedValue({}) };
-    vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
-      client,
-      workspaceId: "workspace-1",
-    } as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>);
+  test("skips the confirmation with --yes and prints the secret and vault under JSON output", async () => {
+    mockContextClient();
     using _json = jsonMode();
     using stdout = captureStdout();
 
@@ -101,6 +99,7 @@ describe("secret create command", () => {
     ]);
 
     expect(result.success).toBe(true);
+    expect(prompt.confirm).not.toHaveBeenCalled();
     expect(JSON.parse(stdout.output)).toEqual({
       changed: true,
       workspaceId: "workspace-1",

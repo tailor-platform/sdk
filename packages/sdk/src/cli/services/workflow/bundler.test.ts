@@ -1,10 +1,13 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { errorToJson } from "#/cli/shared/error-json";
+import { errorSummary } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
 import { buildStartContext, normalizeFilePath } from "#/cli/shared/start-context";
-import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
+import { originalPositionAt } from "#/cli/shared/test-helpers/sourcemap";
+import { makeTempDir, tempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { assertDefined } from "#/utils/assert";
 import {
   bundleWorkflowJobs,
@@ -14,6 +17,69 @@ import {
 } from "./bundler";
 
 describe("bundleWorkflowJobs", () => {
+  test.each([false, true])(
+    "preserves error positions after job removal with start calls %s",
+    async (withStart) => {
+      using tmp = tempDir("workflow-sourcemap-");
+      const sourceFile = path.join(tmp.dir, "workflow.ts");
+      fs.writeFileSync(
+        sourceFile,
+        `import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+export const step = createWorkflowJob({
+  name: "step",
+  body: async () => "step",
+});
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async (input: { fail?: boolean }) => {
+${
+  withStart
+    ? `    await step.start(
+      (() => {
+        if (input.fail) throw new Error("ARGUMENT_POSITION");
+        return {};
+      })(),
+    );`
+    : ""
+}
+    throw new Error("WORKFLOW_POSITION");
+  },
+});
+export default createWorkflow({ name: "flow", mainJob });
+`,
+      );
+      const result = await bundleWorkflowJobs({
+        allJobs: [
+          { name: "step", exportName: "step", sourceFile },
+          { name: "main-job", exportName: "mainJob", sourceFile },
+        ],
+        mainJobNames: ["step", "main-job"],
+        startContext: await buildStartContext({ files: [sourceFile] }),
+        baseDir: tmp.dir,
+        inlineSourcemap: true,
+      });
+      const code = assertDefined(result.bundledCode.get("main-job"), "job missing");
+      const traceMap = assertDefined(extractInlineSourcemap(code), "inline sourcemap missing");
+      const positions = withStart
+        ? ([
+            ["ARGUMENT_POSITION", 11, 34],
+            ["WORKFLOW_POSITION", 15, 14],
+          ] as const)
+        : ([["WORKFLOW_POSITION", 10, 14]] as const);
+      for (const [message, line, column] of positions) {
+        const messageOffset = code.indexOf(message);
+        expect(messageOffset).toBeGreaterThan(-1);
+        expect(
+          originalPositionAt(traceMap, code, code.lastIndexOf("Error", messageOffset)),
+        ).toMatchObject({
+          source: expect.stringContaining("workflow.ts"),
+          line,
+          column,
+        });
+      }
+    },
+  );
+
   test("does not throw when no workflow jobs are provided", async () => {
     await expect(
       bundleWorkflowJobs({
@@ -625,7 +691,18 @@ export default createWorkflow({ name: "workflow", mainJob });
           startContext: context,
           baseDir: dir,
         }),
-      ).rejects.toThrow(/syncWorkflow\.start\(\) .*cannot be rewritten/);
+      ).rejects.toSatisfy((error: unknown) => {
+        expect(errorToJson(error)).toMatchObject({
+          error: {
+            code: "WORKFLOW_START_TARGET_UNDETECTABLE",
+            message: expect.stringMatching(
+              /caller\.ts: syncWorkflow\.start\(\) cannot be rewritten/,
+            ),
+            context: { file: callerFile, importSource: "./sync", importedName: "syncWorkflow" },
+          },
+        });
+        return true;
+      });
     });
 
     test("includes jobs referenced through a namespace import", async () => {
@@ -727,7 +804,12 @@ export default createWorkflow({ name: "workflow", mainJob });
           startContext: context,
           baseDir: dir,
         }),
-      ).rejects.toThrow(/main-job/);
+      ).rejects.toMatchObject({
+        code: "WORKFLOW_JOB_UNDETECTABLE",
+        message: 'Workflow job "main-job" (export "mainJob") could not be statically detected.',
+        suggestion: expect.stringContaining('"name" a string literal'),
+        context: { file: workflowFile, jobName: "main-job", exportName: "mainJob" },
+      });
     });
 
     test("throws a parse error (not a misleading literal-config error) for a syntax error", async () => {
@@ -752,7 +834,11 @@ this is not valid syntax &&&
           startContext: context,
           baseDir: dir,
         }),
-      ).rejects.toThrow(/parse/i);
+      ).rejects.toMatchObject({
+        code: "WORKFLOW_SOURCE_PARSE_FAILED",
+        message: expect.stringMatching(/^Failed to parse workflow source: /),
+        context: { file: workflowFile },
+      });
     });
 
     test("throws when a start() call is factored outside any job body", async () => {
@@ -788,7 +874,10 @@ export default createWorkflow({ name: "workflow", mainJob });
           startContext: context,
           baseDir: dir,
         }),
-      ).rejects.toThrow(/step-a/);
+      ).rejects.toMatchObject({
+        code: "WORKFLOW_JOB_UNDETECTABLE",
+        message: expect.stringMatching(/step-a/),
+      });
     });
 
     test("throws when a start() call is factored into a helper in another file", async () => {
@@ -837,7 +926,10 @@ export default createWorkflow({ name: "workflow", mainJob });
           startContext: context,
           baseDir: dir,
         }),
-      ).rejects.toThrow(/step-a/);
+      ).rejects.toMatchObject({
+        code: "WORKFLOW_JOB_UNDETECTABLE",
+        message: expect.stringMatching(/step-a/),
+      });
     });
 
     test("throws when a factored-out start() call lives in a file outside workflow.files", async () => {
@@ -894,7 +986,10 @@ export default createWorkflow({ name: "workflow", mainJob });
           startContext: context,
           baseDir: dir,
         }),
-      ).rejects.toThrow(/step-a/);
+      ).rejects.toMatchObject({
+        code: "WORKFLOW_JOB_UNDETECTABLE",
+        message: expect.stringMatching(/step-a/),
+      });
     });
 
     test("does not log a success message when bundle-output validation fails", async () => {
@@ -950,7 +1045,10 @@ export default createWorkflow({ name: "workflow", mainJob });
             startContext: context,
             baseDir: dir,
           }),
-        ).rejects.toThrow(/step-a/);
+        ).rejects.toMatchObject({
+          code: "WORKFLOW_JOB_UNDETECTABLE",
+          message: expect.stringMatching(/step-a/),
+        });
 
         expect(logSpy.mock.calls.some(([message]) => message.includes("Bundled"))).toBe(false);
       } finally {
@@ -993,8 +1091,9 @@ export default createWorkflow({ name: "workflow", mainJob });
       }
 
       expect(error).toBeInstanceOf(Error);
-      expect((error as Error).message).toMatch(/worker.*\.start\(/);
-      expect((error as Error).message).not.toMatch(/move.*inside/i);
+      expect(error).toMatchObject({ code: "WORKFLOW_JOB_UNDETECTABLE" });
+      expect(errorSummary(error)).toMatch(/worker.*\.start\(/s);
+      expect(errorSummary(error)).not.toMatch(/move.*inside/i);
     });
 
     test("throws when a job body calls the imported workflow.execJobFunction directly (previously silent)", async () => {
@@ -1027,7 +1126,12 @@ export default createWorkflow({ name: "workflow", mainJob });
           startContext: context,
           baseDir: dir,
         }),
-      ).rejects.toThrow(/worker.*\.start\(/);
+      ).rejects.toMatchObject({
+        code: "WORKFLOW_JOB_UNDETECTABLE",
+        message: expect.stringMatching(/execJobFunction\("worker", \.\.\.\) directly/),
+        suggestion: expect.stringMatching(/"worker" job's \.start\(/),
+        context: { file: workflowFile, targetJobName: "worker" },
+      });
     });
 
     test("throws when a job body calls execJobFunction via an aliased runtime import", async () => {
@@ -1060,7 +1164,12 @@ export default createWorkflow({ name: "workflow", mainJob });
           startContext: context,
           baseDir: dir,
         }),
-      ).rejects.toThrow(/worker.*\.start\(/);
+      ).rejects.toMatchObject({
+        code: "WORKFLOW_JOB_UNDETECTABLE",
+        message: expect.stringMatching(/execJobFunction\("worker", \.\.\.\) directly/),
+        suggestion: expect.stringMatching(/"worker" job's \.start\(/),
+        context: { file: workflowFile, targetJobName: "worker" },
+      });
     });
 
     test("throws with a job-name-can't-be-resolved message when the execJobFunction target isn't a string literal", async () => {
@@ -1088,7 +1197,10 @@ export default createWorkflow({ name: "workflow", mainJob });
           startContext: context,
           baseDir: dir,
         }),
-      ).rejects.toThrow(/isn't a string literal/);
+      ).rejects.toMatchObject({
+        code: "WORKFLOW_JOB_UNDETECTABLE",
+        message: expect.stringMatching(/isn't a string literal/),
+      });
     });
 
     test("does not throw for a user-defined object with its own execJobFunction method", async () => {
@@ -1354,6 +1466,23 @@ export default createWorkflow({
     test("names the caller job when its bundled code fails to parse", () => {
       const bundledCode = new Map([["main-job", "this is not valid js &&&"]]);
       expect(() => validateBundledDependencies(bundledCode, ["main-job"])).toThrow(/main-job/);
+    });
+
+    test("explains a call to a job that was not bundled outside the message", () => {
+      const bundledCode = new Map([
+        ["main-job", "globalThis.tailor.workflow.execJobFunction(`step-a`, void 0)"],
+      ]);
+
+      expect(() => validateBundledDependencies(bundledCode, ["main-job"])).toThrow(
+        expect.objectContaining({
+          code: "WORKFLOW_JOB_UNDETECTABLE",
+          message:
+            'Workflow job "main-job" calls execJobFunction("step-a", ...), but "step-a" was not ' +
+            "detected as a dependency and is not included in the bundle.",
+          details: 'The call is usually the result of a rewritten "step-a" job .start() call.',
+          context: { callerJobName: "main-job", targetJobName: "step-a" },
+        }),
+      );
     });
 
     test("does not throw when every target is bundled", () => {

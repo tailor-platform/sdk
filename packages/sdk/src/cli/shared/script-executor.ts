@@ -5,6 +5,7 @@
  */
 
 import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
+import { CLIError } from "#/cli/shared/errors";
 import {
   isFunctionExecutionTerminalStatus,
   joinFunctionLogMessages,
@@ -40,6 +41,16 @@ export interface ScriptExecutionOptions<T extends Jsonifiable = Jsonifiable> {
   invoker: ScriptInvoker;
   /** Polling interval in milliseconds (default: 1000ms) */
   pollInterval?: number;
+}
+
+/**
+ * Options for {@link executeScriptReportingStart}
+ */
+export interface ReportingScriptExecutionOptions<
+  T extends Jsonifiable = Jsonifiable,
+> extends ScriptExecutionOptions<T> {
+  /** Called with the execution ID once the script is accepted, before waiting for it to finish */
+  onStart?: (executionId: string) => void;
 }
 
 /**
@@ -95,7 +106,11 @@ export async function waitForExecution(
     });
 
     if (!execution) {
-      throw new Error(`Execution '${executionId}' not found.`);
+      throw CLIError({
+        code: "FUNCTION_EXECUTION_NOT_FOUND",
+        message: `Execution '${executionId}' not found.`,
+        context: { executionId },
+      });
     }
 
     // Check for terminal states
@@ -125,7 +140,19 @@ export async function waitForExecution(
 export async function executeScript<T extends Jsonifiable = Jsonifiable>(
   options: ScriptExecutionOptions<T>,
 ): Promise<ScriptExecutionResult> {
-  const { client, workspaceId, name, code, arg, invoker, pollInterval } = options;
+  return await executeScriptReportingStart(options);
+}
+
+/**
+ * Execute a script and wait for completion, like {@link executeScript}, and report the
+ * execution ID as soon as the script is accepted.
+ * @param {ReportingScriptExecutionOptions} options - Execution options
+ * @returns {Promise<ScriptExecutionResult>} Execution result
+ */
+export async function executeScriptReportingStart<T extends Jsonifiable = Jsonifiable>(
+  options: ReportingScriptExecutionOptions<T>,
+): Promise<ScriptExecutionResult> {
+  const { client, workspaceId, name, code, arg, invoker, pollInterval, onStart } = options;
 
   // Execute the script
   const response = await client.execScript({
@@ -136,6 +163,7 @@ export async function executeScript<T extends Jsonifiable = Jsonifiable>(
     invoker,
   });
   const executionId = response.executionId;
+  onStart?.(executionId);
 
   // Wait for completion
   const result = await waitForExecution(client, workspaceId, executionId, pollInterval);

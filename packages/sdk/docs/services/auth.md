@@ -1,5 +1,5 @@
 ---
-description: "Configure authentication and authorization with defineAuth, including user profiles, machine users, OAuth 2.0 clients, identity providers, auth connections, and before-login hooks."
+description: "Configure authentication and authorization with defineAuth, including user profiles, machine users, OAuth 2.0 clients, identity providers, SCIM provisioning, auth connections, before-login hooks, and session events."
 ---
 
 # Auth
@@ -14,7 +14,9 @@ Auth provides:
 - Machine users for service-to-service authentication
 - OAuth 2.0 client configuration
 - Identity provider integration
+- SCIM provisioning of users from an external identity provider
 - Auth connections for external OAuth2 provider integration
+- Session events for executors
 
 For the official Tailor Platform documentation, see [Auth Guide](https://docs.tailor.tech/guides/auth/overview).
 
@@ -109,6 +111,8 @@ userProfile: {
   usernameField: "email",
 },
 ```
+
+`deploy` and `remove` stop with `SERVICE_IN_USE` instead of deleting the table while `userProfile` still names it, including when another application's config defines the table. The same holds for the table that `tenantProvider` or a SCIM resource names.
 
 **usernameField**: The field in the TailorDB table used as the username. This field must have a unique constraint (`.unique()`) since it is used to uniquely identify users.
 
@@ -315,6 +319,10 @@ export default createResolver({
 
 Type narrowing is provided by the generated `tailor.d.ts` (the `MachineUserNameRegistry` interface). Run `tailor generate` (or `deploy`) after defining new machine users to refresh it.
 
+`tailor deploy` checks the string `invoker` of every resolver and executor against the machine users of the Auth service it resolves to, and stops with `INVOKER_MACHINE_USER_NOT_FOUND` when the name does not exist. The `invoker` passed to `workflow.start()` is not checked at deploy time. When a config deployed in the same run defines the Auth service, the machine users it lists are the ones checked, because deploy removes the machine users it no longer lists. When the Auth service is only referenced as external, the machine users that exist in the workspace are checked. `deploy` also stops with `AUTH_MACHINE_USER_NOT_FOUND` when `scim.machineUserName` or `hooks.beforeLogin.invoker` names a machine user that the same `defineAuth` does not list in `machineUsers`. `deploy` and `remove` also stop with `SERVICE_IN_USE` instead of deleting a machine user that an executor or resolver of another application uses as `invoker`.
+
+When the Auth service is an external one (`auth: { name: "...", external: true }`), the machine users are not in your config, so `tailor.d.ts` cannot narrow the invoker type and any string passes type checking. For resolvers and executors, the deploy-time check is what catches a misspelled name in that case.
+
 ## OAuth 2.0 Clients
 
 Configure OAuth 2.0 clients for third-party applications:
@@ -327,8 +335,9 @@ oauth2Clients: {
       `${website.url}/callback`,  // Type-safe URL from StaticWebsite
     ],
     description: "My OAuth2 client",
+    clientType: "public",                // Defaults to "confidential"
     grantTypes: ["authorization_code", "refresh_token"],
-    accessTokenLifetimeSeconds: 3600,    // 1 hour
+    accessTokenLifetimeSeconds: 900,     // 15 minutes
     refreshTokenLifetimeSeconds: 604800, // 7 days
     requireDpop: true,                   // Require DPoP for this client
   },
@@ -340,6 +349,14 @@ Client names must be 3 to 63 lowercase letters, digits, or hyphens, starting and
 **redirectURIs**: Allowed redirect URIs after authentication.
 
 **description**: Optional description of the client.
+
+**clientType**: Optional client type. Defaults to `confidential`.
+
+- `confidential` - Server-side applications that can keep the client secret
+- `public` - Applications that cannot keep a secret, such as mobile apps and single-page apps
+- `browser` - Single-page apps that receive tokens in HTTP-only cookies
+
+A `browser` client cannot set `requireDpop: true`. Changing `clientType` of a deployed client makes `deploy` delete and recreate it instead of updating it. To choose between `public` and `browser` for a single-page app, see [OAuth2 Client Selection for SPAs](https://docs.tailor.tech/guides/auth/spa-oauth2-client).
 
 **grantTypes**: Supported OAuth 2.0 grant types:
 
@@ -362,13 +379,65 @@ tailor oauth2client get <name>
 
 ## Identity Provider
 
-Connect to an external identity provider:
+`idProvider` sets the identity provider that authenticates users. An Auth service takes one, and its `kind` selects the protocol:
+
+- `BuiltInIdP` - The [built-in IdP](./idp.md), written as `idp.provider()`
+- `OIDC` - An external OpenID Connect provider, such as Okta or Microsoft Entra ID
+- `SAML` - An external SAML provider
+- `IDToken` - An external provider, such as Google Cloud Identity Platform or Amazon Cognito, whose ID tokens clients exchange for access tokens without an interactive login
 
 ```typescript
 idProvider: idp.provider("my-provider", "my-client"),
+
+// or an external OIDC provider
+idProvider: {
+  name: "okta",
+  kind: "OIDC",
+  clientID: process.env.OKTA_CLIENT_ID!,
+  clientSecret: { vaultName: "auth-secrets", secretKey: "okta-client-secret" },
+  providerURL: "https://example.okta.com",
+},
+
+// or an external SAML provider
+idProvider: {
+  name: "okta-saml",
+  kind: "SAML",
+  metadataURL: "https://example.okta.com/app/abc123/sso/saml/metadata",
+},
 ```
 
-See [IdP](./idp.md) for configuring identity providers.
+`clientSecret` names a [Secret Manager](./secret.md) secret by `vaultName` and `secretKey`; declare the vault and secret with `defineSecretManager()` or create them with [`tailor secret`](../cli/secret.md). A `SAML` provider sets either `metadataURL` or `rawMetadata`, not both, and receives signed authentication requests only with `enableSignRequest: true`. An `IDToken` provider takes `clientID` and `providerURL` like `OIDC`, without `clientSecret`. See [Register Identity provider with Auth service](https://docs.tailor.tech/tutorials/setup-auth/register-identity-provider) for each kind's settings, and the [Okta](https://docs.tailor.tech/guides/auth/integration/okta) and other integration guides for provider-side setup.
+
+An application that references this Auth service as `external` authenticates with the provider named by `idProvider.name` (the first argument of `idp.provider()`). After a rename, it switches to the new name only in a `deploy` that also includes this config, so `deploy` stops with `SERVICE_IN_USE` instead of deleting the old provider while such an application is left out. Deploy them together or keep the name.
+
+## SCIM Provisioning
+
+Let an external identity provider, such as Okta or Microsoft Entra ID, create, update, and delete users in a TailorDB table through SCIM 2.0:
+
+```typescript
+scim: {
+  machineUserName: "scim-machine-user",
+  authorization: { type: "oauth2" },
+  resources: [
+    {
+      name: "Users",
+      tailorDBNamespace: "main",
+      tailorDBType: user.name,
+      coreSchema: {
+        name: "urn:ietf:params:scim:schemas:core:2.0:User",
+        attributes: [{ type: "string", name: "userName", required: true }],
+      },
+      attributeMapping: [{ tailorDBField: "email", scimPath: "userName" }],
+    },
+  ],
+},
+```
+
+- **machineUserName**: The machine user that SCIM requests run as. List it in [`machineUsers`](#machine-users) of the same `defineAuth()`, since `deploy` deletes the machine users that `machineUsers` does not list.
+- **authorization**: `"oauth2"` uses that machine user's client credentials; `"bearer"` uses a static token in the Secret Manager secret that `bearerSecret: { vaultName, secretKey }` names.
+- **resources**: Each entry maps SCIM attributes onto a TailorDB table. `deploy` accepts a `tailorDBType` that names no table, so check the names yourself. `deploy` and `remove` stop with `SERVICE_IN_USE` instead of deleting a table while an entry still names it.
+
+Removing `scim`, or an entry of `resources`, deletes it on the next `deploy`. See the [SCIM Provisioning guide](https://docs.tailor.tech/guides/auth/scim) for attribute types, path expressions, and the endpoint URL.
 
 ## Auth Connections
 
@@ -552,6 +621,10 @@ hooks: {
   },
 }
 ```
+
+## Session Events
+
+Set `publishSessionEvents: true` in `defineAuth()` to have the Auth service publish an event each time it issues, refreshes, or revokes an access token, including machine user tokens. Executors with an [auth access token trigger](./executor.md#auth-access-token-triggers) run only while it is set; `deploy` does not enable it for them.
 
 ## CLI Commands
 

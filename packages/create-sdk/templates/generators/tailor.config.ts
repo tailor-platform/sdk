@@ -13,6 +13,7 @@ const idp = defineIdp("main-idp", {
     delete: [{ conditions: [[{ user: "role" }, "=", "admin"]], permit: true }],
     sendPasswordResetEmail: [{ conditions: [[{ user: "role" }, "=", "admin"]], permit: true }],
   },
+  userAuthPolicy: { allowedEmailDomains: ["*"] },
 });
 
 export default defineConfig({
@@ -29,7 +30,7 @@ export default defineConfig({
       },
     },
   }),
-  idp: [idp],
+  idp,
   db: { "main-db": { files: ["./src/db/*.ts"] } },
   resolver: {
     "main-resolver": {

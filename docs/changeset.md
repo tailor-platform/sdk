@@ -2,7 +2,7 @@
 
 ## Overview
 
-This project uses [Changesets](https://github.com/changesets/changesets) for versioning and release management. Every PR that changes SDK behavior or non-test source in a package listed in [changeset-check.yml](../.github/workflows/changeset-check.yml), including internal refactoring, must include a changeset with the correct version bump level.
+This project uses [Changesets](https://github.com/changesets/changesets) for versioning and release management. Every PR that changes SDK behavior, non-test source in a package listed in [changeset-check.yml](../.github/workflows/changeset-check.yml) (including internal refactoring), or documentation a package publishes must include a changeset with the correct version bump level.
 
 ```bash
 pnpm changeset
@@ -24,6 +24,13 @@ The key question for choosing a level: **How does this change affect SDK users?*
 
 SDK users must modify their code or configuration to upgrade.
 
+`major` is only accepted on a `v<N>` branch (for example `v3`) or a branch derived from it; the
+`Changeset check` workflow fails any other PR that carries a `major` changeset, so a stray `major`
+cannot bump the release PR to the next major. A breaking change ships in a major release, from a
+`v<N>` branch; see
+[Shipping a breaking change in a minor release](#shipping-a-breaking-change-in-a-minor-release) for
+the exception.
+
 - Removing or renaming a public API (`defineConfig`, `db.table`, `createResolver`, etc.)
 - Changing the signature or behavior of an existing API in an incompatible way
 - Changing `tailor.config.ts` format in a way that requires migration
@@ -36,6 +43,16 @@ external system is not an SDK breaking change when it preserves existing SDK inv
 code, and configuration. If that distinction cannot be established from the repository, confirm the
 expected compatibility with the user before choosing `major`.
 
+#### Shipping a breaking change in a minor release
+
+Only when the impact is clearly known to be very limited may a breaking change ship in a `minor`
+release, as an exception. Its description starts with `**Breaking change**:` followed by the user
+impact and migration steps, and the PR body states:
+
+- who or what breaks, with a concrete example (user, environment, operation)
+- why the impact is limited
+- whether a way to avoid breaking was considered, and why it was not taken
+
 #### Breaking changes to beta features
 
 A feature is beta only when it carries the beta mark itself:
@@ -47,7 +64,10 @@ A feature is beta only when it carries the beta mark itself:
 - Behavior with no symbol or command of its own is beta only when listed here: how the CLI dispatches
   `tailor <name>` to a `tailor-<name>` plugin executable and the environment variables it passes, and
   how `tailor deploy` applies pending TailorDB migrations (schema verification, migration phases,
-  checkpoints, and scripts), including the `migrate.ts` contract.
+  checkpoints, and scripts), including the `migrate.ts` contract; and the content mapper, which is
+  the `typescript.contentMapper` field of the SDK's `package.json` that TypeScript 7.1 runs when
+  `tsconfig.json` lists it under `contentMappers`, together with the types it derives for `.tailor`
+  files.
 
 Where the docs explain or mention an API does not change this; the `(Beta)` in `packages/sdk/docs/`
 only repeats the mark for readers. When a change to a beta API also changes a non-beta one, such as a
@@ -76,10 +96,12 @@ SDK users don't need to know about this change. Their code works exactly the sam
 - Internal refactoring (directory restructure, code cleanup, deduplication)
 - Performance improvements (parallelization, caching)
 - Better error messages
-- Documentation changes
+- Documentation a package publishes, such as `packages/sdk/docs/` and a package's `README.md`
 - CI/CD changes
 - Test additions or improvements
 - Dependency updates (unless they change user-facing behavior)
+
+A change only to documentation a package publishes is `patch`. Docs that come with another change, such as a new feature, take that change's level when both are in the same package; when they are in different packages, the changeset lists both, the docs' package at `patch`.
 
 ## Common Mistakes
 
@@ -97,12 +119,12 @@ SDK users don't need to know about this change. Their code works exactly the sam
 
 Add the `skip-changeset` label to your PR when:
 
-- Documentation-only changes (README, docs/, AGENTS.md)
+- Documentation no package publishes (repository `docs/`, root `README.md`, `AGENTS.md`)
 - CI/CD configuration changes (.github/workflows/)
 - Development tooling changes (eslint, lefthook, etc.)
 - Test-only changes with no source code modifications
 
-Internal refactoring of non-test source in a package listed in [changeset-check.yml](../.github/workflows/changeset-check.yml) still needs a `patch` changeset, even with no observable behavior change; do not use `skip-changeset` for it.
+Internal refactoring of non-test source in a package listed in [changeset-check.yml](../.github/workflows/changeset-check.yml) still needs a `patch` changeset, even with no observable behavior change; do not use `skip-changeset` for it. Documentation a package publishes reaches users only through a release, so it needs a `patch` changeset too; `changeset-check.yml` fails a PR that changes a path in its `published_docs` filter without one, even when it has `skip-changeset`.
 
 ## Writing the Description
 

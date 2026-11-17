@@ -51,13 +51,13 @@ export interface Namespace {
 
     NestedProfile: {
       id: Generated<string>;
-      userInfo: ObjectColumnType<{
+      userInfo: {
         name: string;
         age?: number | null;
         bio?: string | null;
         email: string;
         phone?: string | null;
-      }>;
+      };
       metadata: ObjectColumnType<{
         created: Timestamp;
         lastUpdated?: Timestamp | null;

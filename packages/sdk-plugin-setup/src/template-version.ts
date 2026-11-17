@@ -53,7 +53,11 @@ export function templateVersionDrift(params: {
   const { changedSinceRelease, releasedFingerprint, currentHash } = params;
   const rendersAsReleased = currentHash === releasedFingerprint;
   if (!changedSinceRelease && !rendersAsReleased) {
-    return "The rendered template fingerprint changed since the last release. If the generated templates changed, set `const TEMPLATE_CHANGED_SINCE_RELEASE = true;` in templates.ts so the next release bumps TEMPLATE_VERSION. If you only added renders to `renderedTemplates()` without changing the generated templates, re-record the released fingerprint in templates.ts and keep `const TEMPLATE_CHANGED_SINCE_RELEASE = false;`.";
+    return (
+      "The rendered template fingerprint changed since the last release. If a workflow the released CLI generates now comes out differently, set `const TEMPLATE_CHANGED_SINCE_RELEASE = true;` in templates.ts so the next release bumps TEMPLATE_VERSION. " +
+      `Otherwise, as when you added renders to \`renderedTemplates()\` or changed only the output of options no release has shipped yet (their changeset is still under .changeset/), replace the released fingerprint line in templates.ts with \`// Released template fingerprint: ${currentHash}\` and keep \`const TEMPLATE_CHANGED_SINCE_RELEASE = false;\`. ` +
+      "To see which renders changed, run `TEMPLATES_DUMP_DIR=<absolute dir> pnpm -w setup:templates:dump` on this branch and on the base branch, each into a new directory, and compare the two with `diff -r`."
+    );
   }
   if (changedSinceRelease && rendersAsReleased) {
     return "The generated templates render exactly as last released. Set `const TEMPLATE_CHANGED_SINCE_RELEASE = false;` in templates.ts so the next release does not bump TEMPLATE_VERSION.";

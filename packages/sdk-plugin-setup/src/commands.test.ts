@@ -364,7 +364,7 @@ describe("next steps", () => {
       const result = {
         kind: "branch",
         file: ".github/workflows/tailor-app.yml",
-        environment: "app",
+        environments: ["app"],
         configEdited: false,
       } as const;
       vi.mocked(setupTarget).mockResolvedValue(result);
@@ -422,8 +422,8 @@ describe("setup ci autofix", () => {
     vi.clearAllMocks();
   });
 
-  test("commits with the workflow token by default, in the current directory's app", async () => {
-    const generated = { provider: "github-token" } as const;
+  test("commits with the workflow token by default, in the current directory's app, without codemods", async () => {
+    const generated = { provider: "github-token", codemod: undefined } as const;
     vi.mocked(setupAutofix).mockResolvedValue(generated);
     const result = await runCommand(setupCommand, ["ci", "autofix"]);
 
@@ -431,6 +431,8 @@ describe("setup ci autofix", () => {
     expect(setupAutofix).toHaveBeenCalledWith({
       provider: "github-token",
       securefixServerRepository: undefined,
+      codemod: undefined,
+      copilotAuth: undefined,
       dir: ["."],
       packageManager: undefined,
       force: false,
@@ -439,7 +441,7 @@ describe("setup ci autofix", () => {
     expect(printAutofixNextSteps).toHaveBeenCalledWith(generated);
   });
 
-  test("passes the provider, app directories, and package manager through", async () => {
+  test("passes the provider, codemod mode, app directories, and package manager through", async () => {
     const result = await runCommand(setupCommand, [
       "ci",
       "autofix",
@@ -447,6 +449,8 @@ describe("setup ci autofix", () => {
       "securefix",
       "--securefix-server-repository",
       "securefix-server",
+      "--codemod",
+      "deterministic",
       "--dir",
       "apps/erp",
       "-d",
@@ -460,6 +464,8 @@ describe("setup ci autofix", () => {
     expect(setupAutofix).toHaveBeenCalledWith({
       provider: "securefix",
       securefixServerRepository: "securefix-server",
+      codemod: "deterministic",
+      copilotAuth: undefined,
       dir: ["apps/erp", "apps/users"],
       packageManager: "yarn",
       force: true,
@@ -467,10 +473,32 @@ describe("setup ci autofix", () => {
     });
   });
 
-  test("rejects an unknown provider", async () => {
-    const result = await runCommand(setupCommand, ["ci", "autofix", "--provider", "bot"]);
+  test("passes an agent and its Copilot auth through", async () => {
+    const result = await runCommand(setupCommand, [
+      "ci",
+      "autofix",
+      "--codemod",
+      "copilot",
+      "--copilot-auth",
+      "github-token",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(setupAutofix).toHaveBeenCalledWith(
+      expect.objectContaining({ codemod: "copilot", copilotAuth: "github-token" }),
+    );
+  });
+
+  test.each([
+    ["--provider", "bot"],
+    ["--codemod", "gemini"],
+    ["--codemod", "off"],
+    ["--copilot-auth", "oauth"],
+  ])("rejects %s %s", async (flag, value) => {
+    const result = await runCommand(setupCommand, ["ci", "autofix", flag, value]);
 
     expect(result.success).toBe(false);
+    expect(result.success ? "" : String(result.error)).toContain("Invalid option");
     expect(setupAutofix).not.toHaveBeenCalled();
   });
 });

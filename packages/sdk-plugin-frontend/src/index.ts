@@ -1,8 +1,14 @@
+import { PluginValidationError } from "@tailor-platform/sdk";
 import * as path from "pathe";
 import type { FrontendDefinition } from "./types";
 import type { Plugin } from "@tailor-platform/sdk";
 
-export type { FrontendDefinition, FrontendEnvContext } from "./types";
+export type {
+  FrontendBuildContext,
+  FrontendDefinition,
+  FrontendEnvContext,
+  FrontendExecOptions,
+} from "./types";
 
 /** Unique identifier for the frontend plugin. */
 export const FrontendPluginID = "@tailor-platform/frontend";
@@ -18,17 +24,34 @@ export function frontendPlugin(
   ...frontends: [FrontendDefinition, ...FrontendDefinition[]]
 ): Plugin<unknown, FrontendDefinition[]> {
   if (frontends.length === 0) throw new Error("frontendPlugin requires at least one frontend");
-  const names = new Set<string>();
-  for (const frontend of frontends) {
+  const indicesByName = new Map<string, number[]>();
+  for (const [index, frontend] of frontends.entries()) {
     const name = typeof frontend.site === "string" ? frontend.site : frontend.site.name;
     if (frontend.distDir.length === 0)
       throw new Error(`distDir must not be empty for site "${name}"`);
-    if (frontend.build !== undefined && frontend.build.trim().length === 0)
+    if (typeof frontend.build === "string" && frontend.build.trim().length === 0)
       throw new Error(
         `build must not be blank for site "${name}"; omit it to publish without building`,
       );
-    if (names.has(name)) throw new Error(`Duplicate frontend site "${name}"`);
-    names.add(name);
+    const indices = indicesByName.get(name);
+    if (indices) indices.push(index);
+    else indicesByName.set(name, [index]);
+  }
+  const duplicates = [...indicesByName]
+    .filter(([, indices]) => indices.length > 1)
+    .map(([name, indices]) => ({ name, indices }));
+  if (duplicates.length > 0) {
+    throw new PluginValidationError({
+      code: "FRONTEND_SITE_DUPLICATE",
+      message: duplicates
+        .map(
+          ({ name, indices }) =>
+            `Duplicate frontend site "${name}" at argument indices: ${indices.join(", ")}`,
+        )
+        .join("\n"),
+      suggestion: "Configure each site only once in frontendPlugin().",
+      context: { pluginId: FrontendPluginID, duplicates },
+    });
   }
   return {
     id: FrontendPluginID,
@@ -57,7 +80,29 @@ export function frontendPlugin(
             applications: ctx.applications,
             workspaceId: ctx.workspaceId,
           })) ?? {};
-        if (def.build) {
+        if (typeof def.build === "function") {
+          ctx.logger.info(
+            `Building frontend for site "${name}" (working directory: ${workingDir})`,
+          );
+          await def.build({
+            site,
+            application: ctx.application,
+            applications: ctx.applications,
+            workspaceId: ctx.workspaceId,
+            ...(ctx.profile !== undefined && { profile: ctx.profile }),
+            env,
+            workingDir,
+            distDir,
+            logger: ctx.logger,
+            node: ctx.node,
+            exec: (command, options) =>
+              ctx.exec(command, {
+                ...options,
+                workingDir: path.resolve(workingDir, options?.workingDir ?? "."),
+                env: { ...env, ...options?.env },
+              }),
+          });
+        } else if (def.build) {
           ctx.logger.info(
             `Building frontend for site "${name}": ${def.build} (working directory: ${workingDir})`,
           );

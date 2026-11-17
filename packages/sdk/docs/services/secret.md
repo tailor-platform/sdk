@@ -147,7 +147,7 @@ export default createResolver({
 });
 ```
 
-`getSecret` returns `Promise<string | undefined>`; `getSecrets` returns a `Promise` of a partial record keyed by the requested names, omitting any name that has no value.
+`getSecret` returns `Promise<string | undefined>`, resolving to `undefined` when the vault has no such secret; `getSecrets` returns a `Promise` of a partial record keyed by the requested names, omitting any name that has no value. Both reject with an error containing `vault not found: <vault>` when the vault does not exist; declare the vault in `defineSecretManager()` and deploy, or create it with [`tailor secret vault create`](../cli/secret.md#secret-vault-create).
 
 Import `secretmanager` directly in resolver, executor, and workflow files — never the `secrets` object from `tailor.config.ts` (see [Declarative Configuration](#declarative-configuration) above).
 
@@ -184,7 +184,7 @@ The secret reference format:
 { vault: "vault-name", key: "secret-name" }
 ```
 
-At runtime, these references are replaced with the actual secret values.
+At runtime, these references are replaced with the actual secret values. `deploy` and `remove` stop with `SERVICE_IN_USE` instead of deleting a secret, or the vault that holds it, that a webhook executor in the workspace still names this way, that an Auth service's OIDC `idProvider` or SCIM config still names, or that an [OTLP exporter](https://docs.tailor.tech/guides/opentelemetry) still authenticates with.
 
 ## CLI Management
 

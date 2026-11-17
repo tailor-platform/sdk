@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { create } from "@bufbuild/protobuf";
 import { ExecutorExecutorSchema } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { describe, test, expect, vi } from "vitest";
@@ -28,7 +29,7 @@ const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
 // Mock label.ts
 vi.mock("./label", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("./label");
+  const original = await importOriginal<typeof import("./label")>();
   return {
     ...original,
     buildMetaRequest: vi.fn().mockImplementation(async () => ({
@@ -44,7 +45,7 @@ vi.mock("./label", async (importOriginal) => {
 // Mock createChangeSet to suppress output in tests
 vi.mock("./change-set", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("./change-set");
+  const original = await importOriginal<typeof import("./change-set")>();
   return {
     ...original,
     createChangeSet: (title: string) => ({
@@ -107,11 +108,20 @@ describe("planExecutor", () => {
       resource?: Record<string, unknown>;
       sdkVersion?: string;
     }>,
+    workspaceMachineUsers: string[] = [],
   ): OperatorClient {
     return {
-      listExecutorExecutors: vi.fn().mockResolvedValue({
-        executors: existingExecutors.map((e) => e.resource ?? { name: e.name }),
+      listAuthMachineUsers: vi.fn().mockResolvedValue({
+        machineUsers: workspaceMachineUsers.map((name) => ({ name })),
         nextPageToken: "",
+      }),
+      listExecutorExecutors: vi.fn().mockResolvedValue({
+        executors: existingExecutors.map((e) => ({ name: e.name })),
+        nextPageToken: "",
+      }),
+      getExecutorExecutor: vi.fn().mockImplementation(({ name }: { name: string }) => {
+        const executor = existingExecutors.find((e) => e.name === name);
+        return { executor: executor?.resource ?? { name } };
       }),
       getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
         const name = trn.split(":").pop();
@@ -148,6 +158,7 @@ describe("planExecutor", () => {
       resolverNames?: Record<string, string>;
       idpNames?: ReadonlyArray<string>;
       authName?: string;
+      authMachineUsers?: ReadonlyArray<string>;
       externalAuthName?: string;
     },
   ): Application {
@@ -175,7 +186,16 @@ describe("planExecutor", () => {
       tailorDBServices,
       resolverServices,
       idpServices,
-      authService: options?.authName ? { config: { name: options.authName } } : undefined,
+      authService: options?.authName
+        ? {
+            config: {
+              name: options.authName,
+              machineUsers: Object.fromEntries(
+                (options.authMachineUsers ?? []).map((name) => [name, {}]),
+              ),
+            },
+          }
+        : undefined,
       config: options?.externalAuthName
         ? { auth: { name: options.externalAuthName, external: true } }
         : {},
@@ -305,6 +325,24 @@ describe("planExecutor", () => {
 
       expect(targetConfig.value.variables?.expr).toBe(expectedExpression);
     });
+
+    test.each([
+      ["the executor's own application without appName", undefined, appName],
+      ["the application that appName names", "core", "core"],
+    ])("graphql operation targets %s", async (_description, targetAppName, expectedAppName) => {
+      const executor = createMockExecutor("graphql-executor");
+      executor.operation = { kind: "graphql", appName: targetAppName, query: "query { ok }" };
+
+      const result = await planExecutor(
+        buildPlanContext(createMockApplication([executor]), { client: createMockClient([]) }),
+      );
+      const targetConfig = result.changeSet.creates[0]?.request.executor?.targetConfig?.config;
+      if (targetConfig?.case !== "tailorGraphql") {
+        throw new Error("Expected GraphQL target config");
+      }
+
+      expect(targetConfig.value.appName).toBe(expectedAppName);
+    });
   });
 
   describe("update scenarios", () => {
@@ -346,6 +384,31 @@ describe("planExecutor", () => {
 
       expect(result.changeSet.unchanged).toHaveLength(1);
       expect(result.changeSet.unchanged[0]!.name).toBe("existing-executor");
+      expect(result.changeSet.updates).toHaveLength(0);
+    });
+
+    test("existing executor is compared against its fetched detail, not its list row", async () => {
+      const executor = createMockExecutor("existing-executor");
+      const createResult = await planExecutor(buildPlanContext(createMockApplication([executor])));
+      const desiredExecutor = createResult.changeSet.creates[0]!.request.executor;
+
+      const client = createMockClient([
+        {
+          name: "existing-executor",
+          label: appName,
+          resource: desiredExecutor,
+        },
+      ]);
+
+      const result = await planExecutor(
+        buildPlanContext(createMockApplication([executor]), { client }),
+      );
+
+      expect(client.getExecutorExecutor).toHaveBeenCalledWith({
+        workspaceId: expect.any(String),
+        name: "existing-executor",
+      });
+      expect(result.changeSet.unchanged).toHaveLength(1);
       expect(result.changeSet.updates).toHaveLength(0);
     });
 
@@ -582,43 +645,99 @@ describe("planExecutor", () => {
       expect(variablesExpr).toContain("error: args.failed?.error");
     });
 
-    test("string invoker uses external auth config name", async () => {
-      const client = createMockClient([]);
-      const executor: Executor = {
-        name: "test-executor",
-        description: "Executor test-executor",
-        disabled: false,
-        trigger: {
-          kind: "schedule",
-          timezone: "UTC",
-          cron: "0 * * * *",
-        },
-        operation: {
-          kind: "function",
-          body: () => {},
-          invoker: "batch-user",
-        },
-      };
-      const application = createMockApplication([executor], {
-        externalAuthName: "external-auth",
-      });
+    describe("string invoker", () => {
+      function createInvokerExecutor(invoker: string): Executor {
+        return {
+          name: "test-executor",
+          description: "Executor test-executor",
+          disabled: false,
+          trigger: { kind: "schedule", timezone: "UTC", cron: "0 * * * *" },
+          operation: { kind: "function", body: () => {}, invoker },
+        };
+      }
 
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      });
-
-      const create = result.changeSet.creates[0]!;
-      const targetConfig = create.request.executor?.targetConfig?.config as {
+      type FunctionTarget = {
         case: "function";
         value: { invoker: { namespace: string; machineUserName: string } };
       };
-      expect(targetConfig.value.invoker).toEqual({
-        namespace: "external-auth",
-        machineUserName: "batch-user",
+
+      test("uses external auth config name when the machine user exists in the workspace", async () => {
+        const application = createMockApplication([createInvokerExecutor("batch-user")], {
+          externalAuthName: "external-auth",
+        });
+
+        const result = await planExecutor(
+          buildPlanContext(application, {
+            client: createMockClient([], ["batch-user"]),
+          }),
+        );
+
+        const targetConfig = result.changeSet.creates[0]!.request.executor?.targetConfig
+          ?.config as FunctionTarget;
+        expect(targetConfig.value.invoker).toEqual({
+          namespace: "external-auth",
+          machineUserName: "batch-user",
+        });
+      });
+
+      test("rejects a machine user that exists nowhere in the external auth namespace", async () => {
+        const application = createMockApplication([createInvokerExecutor("batch-usr")], {
+          externalAuthName: "external-auth",
+        });
+
+        await expect(
+          planExecutor(
+            buildPlanContext(application, {
+              client: createMockClient([], ["batch-user"]),
+            }),
+          ),
+        ).rejects.toMatchObject({
+          code: "INVOKER_MACHINE_USER_NOT_FOUND",
+          message: expect.stringContaining('Executor "test-executor"'),
+        });
+      });
+
+      test("accepts a machine user that another config in the same deploy creates", async () => {
+        const application = createMockApplication([createInvokerExecutor("batch-user")], {
+          externalAuthName: "external-auth",
+        });
+
+        const result = await planExecutor(
+          buildPlanContext(application, {
+            plannedMachineUsers: new Map([["external-auth", new Set(["batch-user"])]]),
+          }),
+        );
+
+        expect(result.changeSet.creates).toHaveLength(1);
+      });
+
+      test("accepts a machine user declared in the own auth config before it exists in the workspace", async () => {
+        const application = createMockApplication([createInvokerExecutor("batch-user")], {
+          authName: "my-auth",
+        });
+
+        const result = await planExecutor(
+          buildPlanContext(application, {
+            plannedMachineUsers: new Map([["my-auth", new Set(["batch-user"])]]),
+          }),
+        );
+
+        expect(result.changeSet.creates).toHaveLength(1);
+      });
+
+      test("rejects a machine user that the run removes from the auth config but the workspace still has", async () => {
+        const application = createMockApplication([createInvokerExecutor("legacy")], {
+          authName: "my-auth",
+        });
+
+        await expect(
+          planExecutor(
+            buildPlanContext(application, {
+              client: createMockClient([], ["legacy", "admin"]),
+              plannedMachineUsers: new Map([["my-auth", new Set(["admin"])]]),
+            }),
+          ),
+        ).rejects.toMatchObject({ code: "INVOKER_MACHINE_USER_NOT_FOUND" });
       });
     });
   });
@@ -1132,7 +1251,10 @@ describe("planExecutor", () => {
 
       await expect(
         planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
-      ).rejects.toThrow("No Auth service configured");
+      ).rejects.toMatchObject({
+        code: "AUTH_CONFIG_REQUIRED",
+        message: "No Auth service configured",
+      });
     });
 
     test("multi-event record trigger emits multiple eventTypes", async () => {
@@ -1357,24 +1479,27 @@ describe("planExecutor", () => {
         executors: [{ name: "existing-executor" }],
         nextPageToken: "",
       });
+      const getExecutorExecutor = vi
+        .fn()
+        .mockResolvedValue({ executor: { name: "existing-executor" } });
       const client = {
         listExecutorExecutors,
+        getExecutorExecutor,
         getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
       } as unknown as OperatorClient;
 
       const application = createMockApplication([createMockExecutor("existing-executor")]);
       const first = await planExecutor(buildPlanContext(application, { client }));
       expect(listExecutorExecutors).toHaveBeenCalledTimes(1);
+      expect(getExecutorExecutor).toHaveBeenCalledTimes(1);
       expect(first.changeSet.creates).toHaveLength(0);
       expect(first.changeSet.updates).toHaveLength(1);
 
-      const second = await planExecutor(
-        buildPlanContext(application, { client }),
-        first.existingExecutors,
-      );
+      const second = await planExecutor(buildPlanContext(application, { client }), first);
 
-      // Not called a second time: the platform list is reused as-is.
+      // Not called a second time: the platform list and details are reused as-is.
       expect(listExecutorExecutors).toHaveBeenCalledTimes(1);
+      expect(getExecutorExecutor).toHaveBeenCalledTimes(1);
       expect(second.changeSet.creates).toHaveLength(0);
       expect(second.changeSet.updates).toHaveLength(1);
     });
@@ -1427,11 +1552,11 @@ describe("formatExecutorChangeEntries", () => {
   });
 
   test.each([
-    { name: "keeps", functionForced: true, expected: true },
-    { name: "drops", functionForced: false, expected: false },
+    { name: "keeps", functionUpdated: false, expected: true, labels: ["executor"] },
+    { name: "drops", functionUpdated: true, expected: false, labels: ["executor", "function"] },
   ])(
-    "$name the forced marker when the grouped function update is forced: $functionForced",
-    ({ functionForced, expected }) => {
+    "$name the forced marker when the grouped function is updated: $functionUpdated",
+    ({ functionUpdated, expected, labels }) => {
       const entries = formatExecutorChangeEntries(
         {
           creates: [],
@@ -1449,45 +1574,17 @@ describe("formatExecutorChangeEntries", () => {
         { "user-created": { name: "user-created", targetType: 3 } },
         {
           creates: [],
-          updates: [
-            {
-              name: "executor--user-created",
-              ...(functionForced && { forcedBySdkVersion: true }),
-            },
-          ],
+          updates: functionUpdated ? [{ name: "executor--user-created" }] : [],
           deletes: [],
           replaces: [],
         },
       );
 
       expect(entries).toHaveLength(1);
-      expect(entries[0]?.labels).toEqual(["executor", "function"]);
+      expect(entries[0]?.labels).toEqual(labels);
       expect(entries[0]?.forcedBySdkVersion).toBe(expected ? true : undefined);
     },
   );
-
-  test("keeps the forced marker on an ungrouped function registry update", () => {
-    const entries = formatExecutorChangeEntries(
-      { creates: [], updates: [], deletes: [], replaces: [] },
-      {},
-      {
-        creates: [],
-        updates: [{ name: "executor--user-created", forcedBySdkVersion: true }],
-        deletes: [],
-        replaces: [],
-      },
-    );
-
-    expect(entries).toEqual([
-      {
-        action: "update",
-        symbol: symbols.update,
-        name: "user-created",
-        labels: ["function"],
-        forcedBySdkVersion: true,
-      },
-    ]);
-  });
 
   test("groups function executor deletes with related function registry deletes", () => {
     const entries = formatExecutorChangeEntries(

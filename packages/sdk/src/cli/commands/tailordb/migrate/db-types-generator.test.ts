@@ -872,7 +872,76 @@ export async function rejectedWrites(trx: Transaction): Promise<void> {
       expect(content).toContain("role: ColumnType<string | null, string, string>;");
     });
 
-    test("injects the new table for a rename alongside the old one", async () => {
+    test("declares an optional field the migration adds", async () => {
+      const snapshot = createMockSnapshot({
+        User: { fields: { name: { type: "string", required: true } } },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_added",
+            tableName: "User",
+            fieldName: "nickname",
+            after: { type: "string", required: false },
+          },
+        ],
+      });
+
+      const { content } = await generateContent(snapshot, 1, diff);
+
+      expect(content).toContain("    nickname: string | null;");
+    });
+
+    test("declares a table the migration adds", async () => {
+      const snapshot = createMockSnapshot({
+        User: { fields: { name: { type: "string", required: true } } },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "table_added",
+            tableName: "Order",
+            after: {
+              name: "Order",
+              pluralForm: "Orders",
+              fields: {
+                total: { type: "integer", required: true },
+                memo: { type: "string", required: false },
+              },
+            },
+          },
+        ],
+      });
+
+      const { content } = await generateContent(snapshot, 1, diff);
+
+      expect(content).toContain(
+        "  Order: {\n    id: Generated<string>;\n    total: number;\n    memo: string | null;\n  }",
+      );
+    });
+
+    test("types a field the migration makes optional as nullable", async () => {
+      const snapshot = createMockSnapshot({
+        User: { fields: { email: { type: "string", required: true } } },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_modified",
+            tableName: "User",
+            fieldName: "email",
+            before: { type: "string", required: true },
+            after: { type: "string", required: false },
+          },
+        ],
+      });
+
+      const { content } = await generateContent(snapshot, 1, diff);
+
+      expect(content).toContain("    email: string | null;");
+    });
+
+    test("declares the new table of a rename alongside the old one", async () => {
       const snapshot = createMockSnapshot({
         User: {
           fields: {
@@ -904,14 +973,12 @@ export async function rejectedWrites(trx: Transaction): Promise<void> {
 
       const { content } = await generateContent(snapshot, 1, diff);
 
-      expect(content).toContain("User: {");
-      expect(content).toContain("Person: {");
-      const personBlock = content.slice(content.indexOf("Person: {"));
-      expect(personBlock).toContain("id: Generated<string>;");
-      expect(personBlock).toContain("email: string | null;");
+      const fields = "{\n    id: Generated<string>;\n    email: string | null;\n  }";
+      expect(content).toContain(`  User: ${fields}`);
+      expect(content).toContain(`  Person: ${fields}`);
     });
 
-    test("injects a renamed table even when the previous snapshot is empty", async () => {
+    test("declares a renamed table even when the previous snapshot is empty", async () => {
       const snapshot = createMockSnapshot({}, "tailordb");
       const diff = createMockMigrationDiff({
         changes: [

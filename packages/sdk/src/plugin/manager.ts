@@ -1,5 +1,10 @@
 import { db, type TailorAnyDBType } from "#/configure/services/tailordb/index";
-import { getRawPluginTableName, hasGenerationHooks } from "#/plugin/guards";
+import { resolvePluginConfig } from "#/plugin/get-plugin-config";
+import {
+  getRawPluginTableName,
+  hasGenerationHooks,
+  tailorDBNamespaceHookOf,
+} from "#/plugin/guards";
 import { assertDefined } from "#/utils/assert";
 import type {
   TailorTypePermission,
@@ -13,12 +18,14 @@ import type {
 import type {
   Plugin,
   PluginAttachment,
+  PluginConfigRegistry,
   PluginGeneratedExecutor,
   PluginGeneratedResolver,
   PluginGeneratedTable,
-  PluginNamespaceProcessContext,
   PluginOutput,
   TablePluginOutput,
+  TailorDBNamespaceLoadedContext,
+  TailorDBNamespacePluginOutput,
 } from "#/plugin/types";
 import type { TailorDBTypeRaw } from "#/types/tailordb.generated";
 
@@ -194,7 +201,7 @@ export class PluginManager {
     if (!plugin.onTableLoaded) {
       return {
         success: false,
-        error: `Plugin "${plugin.id}" does not support table-attached processing (missing onTableLoaded method). Use onNamespaceLoaded via definePlugins() instead.`,
+        error: `Plugin "${plugin.id}" does not support table-attached processing (missing onTableLoaded method). Use onTailorDBNamespaceLoaded via definePlugins() instead.`,
       };
     }
 
@@ -261,7 +268,7 @@ export class PluginManager {
 
   /**
    * Process namespace plugins that don't require a source table.
-   * This method is called once per namespace for plugins with onNamespaceLoaded method.
+   * This method is called once per TailorDB namespace for plugins with an onTailorDBNamespaceLoaded hook.
    * @param namespace - The target namespace for generated tables
    * @returns Array of results with plugin outputs and configs
    */
@@ -272,23 +279,22 @@ export class PluginManager {
       [];
 
     for (const [pluginId, plugin] of this.plugins) {
-      // Skip plugins without onNamespaceLoaded method
-      if (!plugin.onNamespaceLoaded) {
+      const hook = tailorDBNamespaceHookOf(plugin);
+      if (!hook) {
         continue;
       }
 
       // Use stored plugin config (from definePlugins)
       const config = plugin.pluginConfig;
 
-      // Execute plugin onNamespaceLoaded
-      const context: PluginNamespaceProcessContext = {
+      const context: TailorDBNamespaceLoadedContext = {
         pluginConfig: config,
         namespace,
       };
 
-      let output: Awaited<ReturnType<NonNullable<Plugin["onNamespaceLoaded"]>>>;
+      let output: TailorDBNamespacePluginOutput;
       try {
-        output = await plugin.onNamespaceLoaded(context);
+        output = await hook(context);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         results.push({
@@ -432,6 +438,17 @@ export class PluginManager {
    */
   getPlugin(pluginId: string): Plugin | undefined {
     return this.plugins.get(pluginId);
+  }
+
+  /**
+   * Get the config of a registered plugin by its ID
+   * @param pluginId - A plugin ID registered on {@link PluginConfigRegistry}
+   * @returns The plugin's config, or undefined if the plugin is not configured
+   */
+  getPluginConfig<Id extends keyof PluginConfigRegistry>(
+    pluginId: Id,
+  ): PluginConfigRegistry[Id] | undefined {
+    return resolvePluginConfig([...this.plugins.values()], pluginId);
   }
 
   /**

@@ -24,12 +24,13 @@ interface ImportBinding {
 export interface ImportTracker {
   track(node: AstImportDeclaration): void;
   callName(call: AstCallExpression): string | null;
+  referenceName(node: AstNode | null | undefined): string | null;
   importedAs(node: AstNode | null | undefined, importedName: string): boolean;
   importedName(node: AstNode | null | undefined): string | null;
   isNamespace(node: AstNode | null | undefined): boolean;
 }
 
-function findVariable(sourceCode: SourceCode, node: AstIdentifier): Scope.Variable | null {
+export function findVariable(sourceCode: SourceCode, node: AstIdentifier): Scope.Variable | null {
   let scope: Scope.Scope | null = sourceCode.getScope(node);
   while (scope !== null) {
     const variable = scope.set.get(node.name);
@@ -103,9 +104,38 @@ export function resolveValue(
   return current;
 }
 
+interface SdkChainRoot {
+  receiver: string;
+  method: string | null;
+  call: AstCallExpression;
+}
+
+export function sdkChainRoot(
+  context: Rule.RuleContext,
+  imports: ImportTracker,
+  node: AstNode | null | undefined,
+): SdkChainRoot | null {
+  let current = resolveValue(context, node);
+  while (current?.type === "CallExpression") {
+    const callee = unwrapExpression(current.callee);
+    if (callee?.type !== "MemberExpression" && callee?.type !== "OptionalMemberExpression") {
+      return null;
+    }
+    const receiver = imports.referenceName(callee.object);
+    if (receiver !== null) return { receiver, method: memberName(callee), call: current };
+    current = resolveValue(context, callee.object);
+  }
+  return null;
+}
+
+interface ImportTrackerOptions {
+  typeImports?: boolean;
+}
+
 function createImportTracker(
   context: Rule.RuleContext,
   modules: ReadonlySet<string>,
+  options: ImportTrackerOptions = {},
 ): ImportTracker {
   const named = new Map<string, ImportBinding>();
   const namespaces = new Map<string, AstIdentifier>();
@@ -122,6 +152,15 @@ function createImportTracker(
     return entry && isBindingReference(context, node, entry.binding) ? entry.imported : null;
   };
 
+  const referenceName = (node: AstNode | null | undefined): string | null => {
+    const value = unwrapExpression(node);
+    if (value?.type === "Identifier") return importedName(value);
+    if (value?.type !== "MemberExpression" && value?.type !== "OptionalMemberExpression") {
+      return null;
+    }
+    return isNamespace(unwrapExpression(value.object)) ? memberName(value) : null;
+  };
+
   return {
     track(node) {
       if (typeof node.source.value !== "string" || !modules.has(node.source.value)) return;
@@ -132,7 +171,7 @@ function createImportTracker(
         }
         if (
           specifier.type !== "ImportSpecifier" ||
-          ("importKind" in specifier && specifier.importKind === "type")
+          (!options.typeImports && "importKind" in specifier && specifier.importKind === "type")
         ) {
           continue;
         }
@@ -144,16 +183,9 @@ function createImportTracker(
       }
     },
 
-    callName(call) {
-      const callee = unwrapExpression(call.callee);
-      if (callee?.type === "Identifier") return importedName(callee);
-      if (callee?.type !== "MemberExpression" && callee?.type !== "OptionalMemberExpression") {
-        return null;
-      }
-      const object = unwrapExpression(callee.object);
-      if (object?.type !== "Identifier" || !isNamespace(object)) return null;
-      return memberName(callee);
-    },
+    callName: (call) => referenceName(call.callee),
+
+    referenceName,
 
     importedAs: (node, name) => importedName(node) === name,
 
@@ -165,6 +197,10 @@ function createImportTracker(
 
 export function configureImportTracker(context: Rule.RuleContext): ImportTracker {
   return createImportTracker(context, new Set([SDK_CONFIGURE_MODULE]));
+}
+
+export function configureTypeImportTracker(context: Rule.RuleContext): ImportTracker {
+  return createImportTracker(context, new Set([SDK_CONFIGURE_MODULE]), { typeImports: true });
 }
 
 export function cliImportTracker(context: Rule.RuleContext): ImportTracker {

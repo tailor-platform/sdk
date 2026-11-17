@@ -1,8 +1,14 @@
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
+import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { importUserModule } from "#/cli/shared/user-modules";
-import { definitionExportError, definitionInvalidError } from "#/cli/shared/validation-errors";
+import {
+  assertUniqueDefinitionNames,
+  atUserModule,
+  definitionExportError,
+  definitionInvalidError,
+} from "#/cli/shared/validation-errors";
 import { type HttpAdapterServiceInput } from "#/configure/config/types";
 import {
   HTTP_METHOD_KEYS,
@@ -89,22 +95,15 @@ async function loadAdapterFiles(
   // Matched files without one (e.g. shared helpers) are skipped.
   const loadResults = await Promise.all(files.map(loadAdapterFromFile));
 
-  const adapters: LoadedHttpAdapter[] = [];
-  const seenNames = new Map<string, string>();
-  for (const result of loadResults) {
-    if (!result) continue;
-    const existing = seenNames.get(result.adapter.name);
-    if (existing) {
-      throw new Error(
-        `Duplicate HTTP adapter name "${result.adapter.name}" found:\n` +
-          `  - ${existing}\n` +
-          `  - ${result.sourceFile}\n` +
-          `Each HTTP adapter must have a unique name.`,
-      );
-    }
-    seenNames.set(result.adapter.name, result.sourceFile);
-    adapters.push(result);
-  }
+  const adapters = loadResults.filter((result) => result !== null);
+  assertUniqueDefinitionNames({
+    kind: "http-adapter",
+    definitions: adapters.map(({ adapter, sourceFile }) => ({
+      name: adapter.name,
+      file: sourceFile,
+      exportName: "default",
+    })),
+  });
 
   return { adapters, fileCount: files.length };
 }
@@ -139,7 +138,7 @@ async function loadAdapterFromFile(filePath: string): Promise<LoadedHttpAdapter 
 
     const adapter = parsed.data;
     const methods = collectMethodKeys(adapter);
-    rejectAsyncHandlers(adapter, methods, filePath);
+    rejectAsyncHandlers(adapter, methods);
 
     return {
       adapter,
@@ -152,8 +151,7 @@ async function loadAdapterFromFile(filePath: string): Promise<LoadedHttpAdapter 
     logger.error(
       `${styles.error("Failed to load HTTP adapter from")} ${styles.errorBright(relativePath)}`,
     );
-    logger.error(String(error));
-    throw error;
+    throw atUserModule(error, filePath);
   }
 }
 
@@ -162,26 +160,25 @@ function collectMethodKeys(adapter: HttpAdapterConfig): HttpMethodKey[] {
   return HTTP_METHOD_KEYS.filter((key) => typeof input[key] === "function");
 }
 
-function rejectAsyncHandlers(
-  adapter: HttpAdapterConfig,
-  methods: HttpMethodKey[],
-  sourceFile: string,
-): void {
+function rejectAsyncHandlers(adapter: HttpAdapterConfig, methods: HttpMethodKey[]): void {
   const input = adapter.input as Partial<Record<HttpMethodKey, unknown>>;
   for (const method of methods) {
     if (isAsyncFunction(input[method])) {
-      throw new Error(
-        `HTTP adapter "${adapter.name}" in ${sourceFile} has an async \`input.${method}\` function. ` +
-          `Handlers must be synchronous; async/await is not supported.`,
-      );
+      throw asyncHandlerError(adapter.name, `input.${method}`);
     }
   }
   if (adapter.output !== undefined && isAsyncFunction(adapter.output)) {
-    throw new Error(
-      `HTTP adapter "${adapter.name}" in ${sourceFile} has an async \`output\` function. ` +
-        `Handlers must be synchronous; async/await is not supported.`,
-    );
+    throw asyncHandlerError(adapter.name, "output");
   }
+}
+
+function asyncHandlerError(name: string, handler: string): CLIError {
+  return CLIError({
+    code: "HTTP_ADAPTER_ASYNC_UNSUPPORTED",
+    message: `HTTP adapter "${name}" has an async \`${handler}\` function.`,
+    suggestion: "Make the handler synchronous; async/await is not supported.",
+    context: { name, kind: handler },
+  });
 }
 
 function isAsyncFunction(fn: unknown): boolean {

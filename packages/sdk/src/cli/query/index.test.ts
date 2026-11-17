@@ -1,4 +1,9 @@
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { CLIError } from "../shared/errors";
+import { logger } from "../shared/logger";
+import { jsonMode } from "../shared/test-helpers/json-mode";
+import { mockOperatorClient } from "../shared/test-helpers/operator-client";
+import { runCliCommand } from "../shared/test-helpers/run-cli-command";
 import {
   getReplHistoryPath,
   query,
@@ -27,10 +32,7 @@ vi.mock("../shared/editor", () => ({
   openInEditor: vi.fn(),
 }));
 
-const mockClient = {
-  getApplication: vi.fn(),
-  getAuthMachineUser: vi.fn(),
-};
+const mockClient = mockOperatorClient({ getApplication: {}, getAuthMachineUser: {} });
 
 vi.mock("../shared/context", () => ({
   loadAccessToken: vi.fn(),
@@ -107,7 +109,7 @@ describe("query", () => {
     vi.mocked(loadAccessToken).mockResolvedValue("access-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
     vi.mocked(loadMachineUserName).mockImplementation(async (opts) => opts?.machineUser ?? "bot");
-    vi.mocked(initOperatorClient).mockResolvedValue(mockClient as never);
+    vi.mocked(initOperatorClient).mockResolvedValue(mockClient);
     vi.mocked(loadConfig).mockResolvedValue({
       config: {
         name: "sample-app",
@@ -218,7 +220,28 @@ describe("query", () => {
         machineUser: "bot",
         query: "   ",
       }),
-    ).rejects.toThrow("Unexpected end of input");
+    ).rejects.toMatchObject({
+      code: "INVALID_SQL",
+      message: "SQL parse error: Unexpected end of input",
+      suggestion:
+        'If your table name is a reserved keyword (e.g. User), wrap it in double quotes: SELECT * FROM "User"',
+      cause: expect.any(Error),
+    });
+  });
+
+  test("passes a local SQL parse error through although it quotes a mapped server message", async () => {
+    await expect(
+      query({
+        workspaceId: "workspace-1",
+        configPath: "tailor.config.ts",
+        engine: "sql",
+        machineUser: "bot",
+        query: 'select "machine user does not exist" from from',
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_SQL",
+      message: expect.stringMatching(/^SQL parse error: /),
+    });
   });
 
   test("throws helpful error when SQL namespace cannot be inferred", async () => {
@@ -236,7 +259,109 @@ describe("query", () => {
         machineUser: "bot",
         query: "select 1;",
       }),
-    ).rejects.toThrow("Could not infer namespace from query. Detected namespaces: crm, sales.");
+    ).rejects.toMatchObject({
+      code: "QUERY_NAMESPACE_UNRESOLVED",
+      message: "Could not infer namespace from query. Detected namespaces: crm, sales.",
+      suggestion: "Reference a TailorDB table in the query; its namespace is resolved from it.",
+      context: { namespaces: ["crm", "sales"] },
+    });
+  });
+
+  test("rejects a SQL query when the config defines no namespace", async () => {
+    const { extractAllNamespaces } = await import("../shared/config");
+    vi.mocked(extractAllNamespaces).mockReturnValue([]);
+
+    await expect(
+      query({
+        workspaceId: "workspace-1",
+        configPath: "tailor.config.ts",
+        engine: "sql",
+        machineUser: "bot",
+        query: "select 1;",
+      }),
+    ).rejects.toMatchObject({
+      code: "TAILORDB_NAMESPACE_NOT_CONFIGURED",
+      message: "No TailorDB namespace is defined in the config.",
+    });
+  });
+
+  test("rejects a SQL query whose tables are in no namespace", async () => {
+    const { extractAllNamespaces } = await import("../shared/config");
+    const { resolveTableNamespaces } = await import("../shared/tailordb-namespace");
+    const { extractTableNamesFromSql } = await import("./sql-type-extractor");
+    vi.mocked(extractAllNamespaces).mockReturnValue(["crm", "sales"]);
+    vi.mocked(extractTableNamesFromSql).mockReturnValue(["User", "Ghost"]);
+    vi.mocked(resolveTableNamespaces).mockResolvedValue(new Map([["User", "sales"]]));
+
+    await expect(
+      query({
+        workspaceId: "workspace-1",
+        configPath: "tailor.config.ts",
+        engine: "sql",
+        machineUser: "bot",
+        query: 'select * from "User", "Ghost";',
+      }),
+    ).rejects.toMatchObject({
+      code: "QUERY_NAMESPACE_UNRESOLVED",
+      message: "Could not find namespace for tables in query: Ghost.",
+      suggestion: "Check the table names against the types deployed in namespaces: crm, sales.",
+      context: { tables: ["Ghost"], namespaces: ["crm", "sales"] },
+    });
+  });
+
+  test("rejects a SQL query whose tables span namespaces", async () => {
+    const { extractAllNamespaces } = await import("../shared/config");
+    const { resolveTableNamespaces } = await import("../shared/tailordb-namespace");
+    const { extractTableNamesFromSql } = await import("./sql-type-extractor");
+    vi.mocked(extractAllNamespaces).mockReturnValue(["crm", "sales"]);
+    vi.mocked(extractTableNamesFromSql).mockReturnValue(["User", "Order"]);
+    vi.mocked(resolveTableNamespaces).mockResolvedValue(
+      new Map([
+        ["User", "crm"],
+        ["Order", "sales"],
+      ]),
+    );
+
+    await expect(
+      query({
+        workspaceId: "workspace-1",
+        configPath: "tailor.config.ts",
+        engine: "sql",
+        machineUser: "bot",
+        query: 'select * from "User", "Order";',
+      }),
+    ).rejects.toMatchObject({
+      code: "QUERY_NAMESPACE_AMBIGUOUS",
+      message: "Query references tables from multiple namespaces: crm, sales.",
+      suggestion: "Query the tables of one namespace at a time.",
+      context: { namespaces: ["crm", "sales"] },
+    });
+  });
+
+  test.each<[QueryEngine, string]>([
+    ["sql", 'select * from "User";'],
+    ["gql", "{ viewer { id } }"],
+  ])("codes an unmapped %s execution failure and keeps its message", async (engine, text) => {
+    const { executeScript } = await import("../shared/script-executor");
+    vi.mocked(executeScript).mockResolvedValue({
+      success: false,
+      logs: "",
+      result: "",
+      error: "permission denied for type User",
+    });
+
+    await expect(
+      query({
+        workspaceId: "workspace-1",
+        configPath: "tailor.config.ts",
+        engine,
+        machineUser: "bot",
+        query: text,
+      }),
+    ).rejects.toMatchObject({
+      code: "QUERY_EXECUTION_FAILED",
+      message: "permission denied for type User",
+    });
   });
 
   test("maps SQL parser errors to CLIError with suggestion", async () => {
@@ -259,8 +384,34 @@ describe("query", () => {
       }),
     ).rejects.toMatchObject({
       name: "CLIError",
+      code: "INVALID_SQL",
       message: "SQL parse error.",
       suggestion: "expected token at line 1",
+    });
+  });
+
+  test("reports a SQL schema loading failure", async () => {
+    const { executeScript } = await import("../shared/script-executor");
+    vi.mocked(executeScript).mockResolvedValue({
+      success: false,
+      logs: "",
+      result: "",
+      error: "sqlaccess error: failed to fetch schema: query returned an unexpected number of rows",
+    });
+
+    await expect(
+      query({
+        workspaceId: "workspace-1",
+        configPath: "tailor.config.ts",
+        engine: "sql",
+        machineUser: "bot",
+        query: "select 1",
+      }),
+    ).rejects.toMatchObject({
+      code: "QUERY_SCHEMA_LOAD_FAILED",
+      message: "Failed to load TailorDB schema for namespace 'tailordb'.",
+      suggestion:
+        "Ensure the query references TailorDB tables from a single namespace and re-apply if needed.",
     });
   });
 
@@ -360,7 +511,10 @@ describe("query", () => {
         machineUser: "bot",
         query: "{ viewer { id } }",
       }),
-    ).rejects.toThrow("Application sample-app does not have an auth configuration.");
+    ).rejects.toMatchObject({
+      code: "AUTH_CONFIG_REQUIRED",
+      message: "Application sample-app does not have an auth configuration.",
+    });
   });
 
   test("throws when machine user does not exist", async () => {
@@ -374,7 +528,10 @@ describe("query", () => {
         machineUser: "missing-user",
         query: "{ viewer { id } }",
       }),
-    ).rejects.toThrow("Machine user missing-user not found.");
+    ).rejects.toMatchObject({
+      code: "MACHINE_USER_NOT_FOUND",
+      message: "Machine user missing-user not found.",
+    });
   });
 
   test("reorders SQL result columns by type field definition order when wildcard is used", async () => {
@@ -585,7 +742,10 @@ describe("query", () => {
         engine: "sql",
         query: 'select * from "User";',
       }),
-    ).rejects.toThrow("Machine user 'profile-bot' was not found.");
+    ).rejects.toMatchObject({
+      code: "MACHINE_USER_NOT_FOUND",
+      message: "Machine user 'profile-bot' was not found.",
+    });
   });
 
   test("throws 'Machine user is required' error when no machine user source resolves", async () => {
@@ -599,7 +759,82 @@ describe("query", () => {
         engine: "sql",
         query: 'select * from "User";',
       }),
-    ).rejects.toThrow("Machine user is required");
+    ).rejects.toMatchObject({
+      code: "MACHINE_USER_REQUIRED",
+      message: "Machine user is required.",
+      suggestion:
+        "Specify --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor profile update <profile> --machine-user <name>'.",
+    });
+  });
+
+  describe("SQL result output", () => {
+    async function runSqlCommand(sql: string, scriptResult: string, ...extraArgs: string[]) {
+      const { executeScript } = await import("../shared/script-executor");
+      vi.mocked(executeScript).mockResolvedValue({ success: true, logs: "", result: scriptResult });
+      using outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+      using infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
+      const result = await runCliCommand(queryCommand, [
+        "--engine",
+        "sql",
+        "-q",
+        sql,
+        ...extraArgs,
+      ]);
+      expect(result.success).toBe(true);
+      return { out: outSpy.mock.calls, info: infoSpy.mock.calls };
+    }
+
+    test.each([
+      [
+        "affected rows of a write",
+        'DELETE FROM "User";',
+        '{"rows":[],"rowCount":3,"affectedRows":3}',
+        { results: [], rowCount: 3, affectedRows: 3 },
+      ],
+      [
+        "empty result of a read",
+        'SELECT * FROM "User";',
+        '{"rows":[],"rowCount":0}',
+        { results: [], rowCount: 0 },
+      ],
+      [
+        "each statement's result",
+        'DELETE FROM "User"; SELECT 1 AS n;',
+        '[{"rows":[],"rowCount":2,"affectedRows":2},{"rows":[{"n":1}],"rowCount":1}]',
+        [
+          { results: [], rowCount: 2, affectedRows: 2 },
+          { results: [{ n: 1 }], rowCount: 1 },
+        ],
+      ],
+    ])("prints %s as JSON", async (_label, sql, scriptResult, expected) => {
+      using _json = jsonMode();
+      const { out } = await runSqlCommand(sql, scriptResult, "--json");
+
+      expect(out).toEqual([[expected]]);
+    });
+
+    test.each([
+      ["3 rows affected.", 'DELETE FROM "User";', '{"rows":[],"rowCount":3,"affectedRows":3}'],
+      ["1 row affected.", 'DELETE FROM "User";', '{"rows":[],"rowCount":1,"affectedRows":1}'],
+      ["0 rows affected.", 'DELETE FROM "User";', '{"rows":[],"rowCount":0,"affectedRows":0}'],
+      ["No rows returned.", 'SELECT * FROM "User";', '{"rows":[],"rowCount":0}'],
+    ])("prints %s for a statement that returns no rows", async (expected, sql, scriptResult) => {
+      const { info } = await runSqlCommand(sql, scriptResult);
+
+      expect(info).toEqual([[expected]]);
+    });
+
+    test("prints the rows to stdout and the row count to stderr", async () => {
+      const result = await runSqlCommand(
+        'SELECT * FROM "User";',
+        '{"rows":[{"id":"1"},{"id":"2"}],"rowCount":2}',
+      );
+
+      expect(result).toEqual({
+        out: [[[{ id: "1" }, { id: "2" }], { showNull: true }]],
+        info: [["rows: 2"]],
+      });
+    });
   });
 });
 
@@ -705,11 +940,30 @@ describe("resolveQueryCommandInput", () => {
 
     vi.mocked(getEditorCommand).mockReturnValue("vim");
     vi.mocked(mkdtemp).mockResolvedValue("/tmp/tailor-query-123");
-    vi.mocked(openInEditor).mockRejectedValue(new Error("spawn editor ENOENT"));
+    const cause = new Error("spawn editor ENOENT");
+    vi.mocked(openInEditor).mockRejectedValue(cause);
 
-    await expect(resolveQueryCommandInput({ edit: true, engine: "sql" })).rejects.toThrow(
-      'Failed to open query editor "vim": spawn editor ENOENT',
-    );
+    await expect(resolveQueryCommandInput({ edit: true, engine: "sql" })).rejects.toMatchObject({
+      code: "EDITOR_FAILED",
+      message: 'Failed to open query editor "vim": spawn editor ENOENT',
+      cause,
+    });
+  });
+
+  test("rethrows a coded editor failure unchanged", async () => {
+    const { mkdtemp } = await import("node:fs/promises");
+    const { getEditorCommand, openInEditor } = await import("../shared/editor");
+
+    vi.mocked(getEditorCommand).mockReturnValue("vim");
+    vi.mocked(mkdtemp).mockResolvedValue("/tmp/tailor-query-123");
+    const failure = CLIError({
+      code: "EDITOR_FAILED",
+      message: 'Editor "vim" exited with code 1.',
+      context: { editor: "vim", exitCode: 1 },
+    });
+    vi.mocked(openInEditor).mockRejectedValue(failure);
+
+    await expect(resolveQueryCommandInput({ edit: true, engine: "sql" })).rejects.toBe(failure);
   });
 
   test("rejects edit mode in non-interactive terminals", async () => {
@@ -720,9 +974,38 @@ describe("resolveQueryCommandInput", () => {
     });
 
     try {
-      await expect(resolveQueryCommandInput({ edit: true, engine: "sql" })).rejects.toThrow(
-        "Non-interactive terminals are not supported. Pass -q/--query or -f/--file to run a query.",
-      );
+      await expect(resolveQueryCommandInput({ edit: true, engine: "sql" })).rejects.toMatchObject({
+        code: "QUERY_INPUT_REQUIRED",
+        message: "Non-interactive terminals are not supported.",
+        suggestion: "Pass -q/--query or -f/--file to run a query.",
+      });
+    } finally {
+      if (stdinDescriptor) {
+        Object.defineProperty(process.stdin, "isTTY", stdinDescriptor);
+      }
+    }
+  });
+});
+
+describe("REPL mode", () => {
+  test("is rejected in non-interactive terminals", async () => {
+    const stdinDescriptor = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
+    Object.defineProperty(process.stdin, "isTTY", {
+      configurable: true,
+      value: false,
+    });
+
+    try {
+      const result = await runCliCommand(queryCommand, ["--engine", "sql"]);
+
+      expect(result).toMatchObject({
+        success: false,
+        error: {
+          code: "QUERY_INPUT_REQUIRED",
+          message: "Non-interactive terminals are not supported.",
+          suggestion: "Pass -q/--query or -f/--file to run a query.",
+        },
+      });
     } finally {
       if (stdinDescriptor) {
         Object.defineProperty(process.stdin, "isTTY", stdinDescriptor);

@@ -76,7 +76,19 @@ remediation exists, the envelope also includes
 `error.suggestion`, `error.help` (the `--help` invocation for the failing command), `error.next` (a
 runnable command), or `error.context`. `UNEXPECTED_ERROR` marks failures without a dedicated code,
 including SDK-internal errors. Diagnostic lines may precede the error envelope, and stdout is not
-guaranteed to contain an error object.
+guaranteed to contain an error object. A failure that points at a file starts its message, in the
+envelope and in plain output, with the file's path relative to the working directory and, when
+known, the line: `tailordb/order.ts:3: Invalid syntax: Expression expected`.
+
+`DEFINITION_NAME_DUPLICATE` reports names shared by multiple TailorDB types, resolvers in one namespace,
+executors, workflow jobs, HTTP adapters, IdPs, static websites, or AI Gateways. `error.context.kind` identifies
+the kind, and `error.context.duplicates` lists each duplicated name and its definitions, including
+`file` and `exportName` when available. For IdPs, static websites, and AI Gateways, each definition also has a
+`path` array identifying the config entry, such as `["staticWebsites", 2]`.
+
+`FRONTEND_SITE_DUPLICATE` means `frontendPlugin()` selects a site more than once.
+`error.context.pluginId` identifies the plugin, and `error.context.duplicates` lists each
+duplicated `name` with its zero-based argument `indices`. Configure each site only once.
 
 The exit code separates a mistyped command from a failed one without parsing output: `0` on success,
 `2` when the CLI rejects the command line itself, such as an unknown option or subcommand, an
@@ -95,10 +107,25 @@ the next step opens login help so you can reuse the original browser or machine-
 connection failures include guidance in `error.suggestion`; API failures also identify the operation
 and affected resources in `error.context`.
 
+A table update that makes a field required while records have no value for it fails with
+`TAILORDB_REQUIRED_FIELD_HAS_NULL_VALUES` in `tailor deploy`, `tailor tailordb migration sync`, and
+`tailor tailordb migration resolve`, and `error.suggestion` says how to proceed. When a deploy
+reports that failure as `MIGRATION_ROLLED_BACK` or `MIGRATION_PARTIALLY_APPLIED` instead (see
+[Migration Error Codes](#migration-error-codes-beta)), the `error.suggestion` of that error ends
+with the same advice.
+
 If deployment fails and saving recovery metadata also fails, `DEPLOY_METADATA_RECOVERY_FAILED`
 includes separate `error.context.apply` and `error.context.recovery` errors, each retaining its code
 and available recovery information. Inspect the current resource state before retrying: some writes
 may have completed. `--verbose --json` additionally includes stack traces for both causes.
+
+When `tailor deploy` finds values the Tailor Platform would reject, it stops before applying
+anything and reports `DEPLOY_VALIDATION_FAILED`. `error.context.issues` lists every rejected
+value across all configs in the run, each with its `application`, `resourceType`, `name`,
+`action`, `fieldPath`, and `message`. `resourceType` is a resource type id such as `idp.client`,
+`action` is `create`, `update`, or `replace`, and `fieldPath` is a dotted field path in the
+request sent to the Platform, such as `tailordb_type.name`. The IdP email-domain check instead
+uses the config field path `userAuthPolicy.allowedEmailDomains`.
 
 Generation hook failures use `PLUGIN_GENERATION_FAILED`. The error includes the failed hook
 and each failing plugin's ID and error in `error.context.failures`; successful plugins are
@@ -186,6 +213,10 @@ read them:
 - `MIGRATION_RESTORE_FAILED`: the settings of some tables, such as their maintenance mode, could not
   be restored after the migrations. When a migration had already failed, the deploy reports that
   failure instead and puts this error in its `error.context.restoration`.
+
+`MIGRATION_FAILED`, `MIGRATION_ROLLED_BACK`, `MIGRATION_PARTIALLY_APPLIED`, and
+`MIGRATION_OUTCOME_UNKNOWN` name the migration in `error.context.namespace` and
+`error.context.migrationNumber`, unless the error carries `error.context.restoration`.
 
 `tailor tailordb migration` commands:
 
@@ -309,12 +340,12 @@ is unchanged. Workflows that already echo their own `::error::` around the CLI k
 those messages describe the workflow's own checks, which can fail even when the CLI succeeds.
 
 When the failure has a known source, the annotation carries it: `seed validate` reports the
-offending JSONL file and line, including a line that is not valid JSON, and a rejected config
-reports its file. A `.ts` or `.mts` file that cannot be parsed — the config, a TailorDB type,
-resolver, executor, workflow, or HTTP adapter file, the file passed to `function run`, or a file one
-of them imports — reports that file and the line it failed on. Locations are written relative to
-`GITHUB_WORKSPACE`; a file outside it is annotated without a location rather than with a path the
-runner cannot resolve.
+offending JSONL file and line, including a line that is not valid JSON, and a rejected config or a
+TailorDB type, resolver, executor, workflow, or HTTP adapter file that fails to load reports its
+file. A `.ts` or `.mts` file that cannot be parsed — one of those files, the file passed to
+`function run`, or a file one of them imports — reports that file and the line it failed on.
+Locations are written relative to `GITHUB_WORKSPACE`; a file outside it is annotated without a
+location rather than with a path the runner cannot resolve.
 
 For a JSONL file containing a blank line, the annotation's line and the line printed in the report
 text differ: the annotation counts every line in the file, while the printed line counts only the
@@ -472,7 +503,10 @@ the plugin does not need to re-implement authentication or re-resolve the active
 | `TAILOR_BIN`                       | Path to the `tailor` executable, for calling back into the CLI           |
 
 The token, workspace ID, and user are best-effort: whatever the current context can resolve is injected,
-and auth-free plugins still run when you are not logged in. A long-running plugin (or one started on its
+and auth-free plugins still run when you are not logged in. The user is not injected when the token comes
+from `TAILOR_PLATFORM_TOKEN`, since that token does not belong to a logged-in user. When the plugin's arguments
+include `--env-file` or `--env-file-if-exists`, the CLI loads those files before resolving the context, so
+the values they set apply as they would to any other command. A long-running plugin (or one started on its
 own) can obtain a fresh token at any time with `tailor auth token`, which prints a valid access token to
 stdout, refreshing it first if it expires within five minutes.
 

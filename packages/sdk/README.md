@@ -89,5 +89,5 @@ See [Create Tailor Platform SDK](https://github.com/tailor-platform/sdk/tree/mai
 
 ## Requirements
 
-- Node.js 22.18.0 or later (or Bun)
+- Node.js 22 (22.22.2 or later), 24 (24.15.0 or later), or 26 and later (or Bun)
 - A Tailor Platform account ([request access](https://www.tailor.tech/demo))

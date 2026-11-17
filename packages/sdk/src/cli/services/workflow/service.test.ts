@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import { createWorkflowService } from "./service";
@@ -36,6 +37,39 @@ export default {
     expect(service.workflows).toEqual({});
   });
 
+  test("rejects two exports declaring the same job name", async () => {
+    using tmp = tempCwd("sdk-workflow-service-");
+    const source = (exportName: string) => `const brand = (value, kind) =>
+  Object.defineProperty(value, Symbol.for("tailor-platform/sdk"), { value: kind });
+export const ${exportName} = brand({ name: "sync", start: () => {}, body: () => {} }, "workflow-job");
+`;
+    const fileA = path.join(tmp.dir, "a.mjs");
+    const fileB = path.join(tmp.dir, "b.mjs");
+    fs.writeFileSync(fileA, source("syncJob"));
+    fs.writeFileSync(fileB, source("retryJob"));
+
+    const service = createWorkflowService({
+      config: { files: ["a.mjs", "b.mjs"] },
+      baseDir: tmp.dir,
+    });
+
+    await expect(service.loadWorkflows()).rejects.toMatchObject({
+      code: "DEFINITION_NAME_DUPLICATE",
+      context: {
+        kind: "workflow-job",
+        duplicates: [
+          {
+            name: "sync",
+            definitions: [
+              { file: fileA, exportName: "syncJob" },
+              { file: fileB, exportName: "retryJob" },
+            ],
+          },
+        ],
+      },
+    });
+  });
+
   test.each([
     {
       case: "a default-exported workflow that fails validation",
@@ -45,7 +79,7 @@ export default brand({ name: 1, mainJob }, "workflow");
 `,
       expected: {
         code: "DEFINITION_INVALID",
-        message: expect.stringMatching(/^Invalid workflow in .*workflow\.mjs:\n {2}- name: /),
+        message: expect.stringMatching(/^Invalid workflow:\n {2}- name: /),
         context: { kind: "workflow", exportName: "default", issues: [{ path: ["name"] }] },
       },
     },
@@ -56,9 +90,7 @@ export const otherJob = brand({ name: 1, start: () => {}, body: () => {} }, "wor
 `,
       expected: {
         code: "DEFINITION_INVALID",
-        message: expect.stringMatching(
-          /^Invalid workflow job `otherJob` in .*workflow\.mjs:\n {2}- name: /,
-        ),
+        message: expect.stringMatching(/^Invalid workflow job `otherJob`:\n {2}- name: /),
         context: { kind: "workflow-job", exportName: "otherJob", issues: [{ path: ["name"] }] },
       },
     },
@@ -71,7 +103,7 @@ export const order = brand({ name: "order", mainJob }, "workflow");
       expected: {
         code: "DEFINITION_EXPORT_INVALID",
         message: expect.stringMatching(
-          /^Workflow in .*workflow\.mjs must not be a named export, but it is exported as `order`\.$/,
+          /^Workflow must not be a named export, but it is exported as `order`\.$/,
         ),
         context: { kind: "workflow", exportName: "order" },
       },
@@ -87,7 +119,7 @@ export default workflow;
       expected: {
         code: "DEFINITION_EXPORT_INVALID",
         message: expect.stringMatching(
-          /^Workflow in .*workflow\.mjs must not be a named export, but it is exported as `alias`\.$/,
+          /^Workflow must not be a named export, but it is exported as `alias`\.$/,
         ),
         context: { kind: "workflow", exportName: "alias" },
       },
@@ -99,9 +131,7 @@ export default brand({ name: "main-job", start: () => {}, body: () => {} }, "wor
 `,
       expected: {
         code: "DEFINITION_EXPORT_INVALID",
-        message: expect.stringMatching(
-          /^Workflow job in .*workflow\.mjs must not be the default export\.$/,
-        ),
+        message: expect.stringMatching(/^Workflow job must not be the default export\.$/),
         context: { kind: "workflow-job", exportName: "default" },
       },
     },
@@ -125,5 +155,8 @@ ${source}`,
       ...expected,
       context: { ...expected.context, file: workflowFile },
     });
+    expect(vi.mocked(logger.error).mock.calls).toEqual([
+      [expect.stringMatching(/Failed to load workflow from.*workflow\.mjs/)],
+    ]);
   });
 });

@@ -12,7 +12,7 @@ import type { TailorEnv } from "#/runtime/types";
 // references, importable type-only from any layer.
 import type { AuthConnectionConfig } from "#/types/auth-connection.generated";
 import type {
-  IdProvider as IdProviderConfig,
+  IdProviderInput,
   OAuth2Client,
   OAuth2ClientInput,
   SCIMAttribute,
@@ -326,10 +326,12 @@ export type AuthServiceInput<
     MachineUser<User, Attributes, AttributeList, MachineUserAttributes>
   >;
   oauth2Clients?: Record<string, OAuth2ClientInput>;
-  idProvider?: IdProviderConfig;
+  idProvider?: IdProviderInput;
+  /** Let an external identity provider provision users into a TailorDB table through SCIM 2.0. */
   scim?: SCIMConfig;
   tenantProvider?: TenantProviderConfig;
   connections?: Record<ConnectionNames, AuthConnectionConfig>;
+  /** Publish access token events for executors with an `authAccessToken*` trigger. */
   publishSessionEvents?: boolean;
 };
 

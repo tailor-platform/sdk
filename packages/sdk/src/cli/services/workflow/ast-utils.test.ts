@@ -10,7 +10,7 @@ describe("applyReplacements", () => {
       { start: 0, end: 3, text: "A" },
     ]);
 
-    expect(result).toBe("A bbb C");
+    expect(result.toString()).toBe("A bbb C");
   });
 
   test("allows adjacent ranges that touch without overlapping", () => {
@@ -21,7 +21,7 @@ describe("applyReplacements", () => {
       { start: 3, end: 6, text: "Y" },
     ]);
 
-    expect(result).toBe("XY");
+    expect(result.toString()).toBe("XY");
   });
 
   test("throws on partially overlapping ranges", () => {

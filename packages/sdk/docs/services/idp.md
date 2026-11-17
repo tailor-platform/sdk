@@ -22,9 +22,10 @@ Configure the Built-in IdP using `defineIdp()`:
 
 **Definition Rules:**
 
-- **Multiple IdPs allowed**: You can define multiple IdP instances in your config file
-- **Configuration location**: Define in `tailor.config.ts` and add to the `idp` array
-- **Uniqueness**: IdP names must be unique across all IdP instances
+- **One IdP per config**: A config takes a single IdP, written as `idp: myIdp`
+- **Configuration location**: Define in `tailor.config.ts` and set it as `idp`
+- **Uniqueness**: IdP names must be unique within a workspace
+- **Arrays are deprecated**: `idp: [myIdp]` still works but is removed in v3, and so is declaring several IdPs in one config. `tailor upgrade` rewrites an array that holds one IdP; an array with several IdPs is reported for you to change by hand.
 
 ```typescript
 import { defineIdp, defineConfig } from "@tailor-platform/sdk";
@@ -38,22 +39,11 @@ const idp = defineIdp("my-idp", {
     delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     sendPasswordResetEmail: [{ conditions: [], permit: false }],
   },
-});
-
-// You can define multiple IdPs
-const anotherIdp = defineIdp("another-idp", {
-  clients: ["another-client"],
-  permission: {
-    create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
-    read: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
-    update: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
-    delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
-    sendPasswordResetEmail: [{ conditions: [], permit: false }],
-  },
+  userAuthPolicy: { allowedEmailDomains: ["*"] },
 });
 
 export default defineConfig({
-  idp: [idp, anotherIdp], // Add all IdPs to the array
+  idp,
 });
 ```
 
@@ -137,13 +127,14 @@ Client names must be 3 to 63 lowercase letters, digits, or hyphens, starting and
 
 ### userAuthPolicy
 
-User authentication policy. Controls password requirements, the identifier used for login, allowed email domains, and social login providers. Every field is optional. The boolean options default to disabled, and the password length fields default to a minimum of 6 and a maximum of 4096.
+User authentication policy. Controls password requirements, the identifier used for login, allowed email domains, and social login providers. Every field is optional except `allowedEmailDomains`, which is required unless `useNonEmailIdentifier` is `true`. The boolean options default to disabled, and the password length fields default to a minimum of 6 and a maximum of 4096.
 
 ```typescript
 defineIdp("my-idp", {
   clients: ["my-client"],
   userAuthPolicy: {
     useNonEmailIdentifier: false,
+    allowedEmailDomains: ["*"],
     allowSelfPasswordReset: true,
     passwordRequireUppercase: true,
     passwordRequireLowercase: true,
@@ -174,9 +165,9 @@ defineIdp("my-idp", {
 
 **Email domains and social login:**
 
-- `allowedEmailDomains` - Restrict registration to these email domains. Each entry is a hostname (`example.com`), matched exactly and case-insensitively, so `example.com` does not cover `sub.example.com`. Up to 100 entries.
+- `allowedEmailDomains` - Restrict registration to these email domains. Required unless `useNonEmailIdentifier` is `true`. Each entry is a hostname (`example.com`), matched exactly and case-insensitively, so `example.com` does not cover `sub.example.com`. Up to 100 entries.
   - A lone `"*"` entry allows every email domain. It cannot be combined with any other entry, and it is the only way to enable `allowGoogleOauth` or `allowMicrosoftOauth` without enumerating domains.
-  - An empty list (the default) also allows every domain today, but that meaning is going away: a future release requires the all-domains state to be spelled out. `tailor deploy` warns while both forms still work, so set `["*"]` to keep allowing every domain, or list the domains you accept.
+  - `tailor deploy` fails, with or without `--dry-run` and before it applies any change, when it would create or update an IdP whose list is empty or omitted, unless `useNonEmailIdentifier` is `true`. With `--no-validate`, `--dry-run` only warns about such an IdP, and `tailor deploy` creates or updates other resources in the same run, such as secrets, static websites, and AI gateways, before it fails at the IdP. An IdP deployed earlier with an empty list keeps working, but deploy fails once it would update that IdP, which happens whenever its configuration changes and on the first deploy after the SDK version changes. Set `["*"]` to keep allowing every domain, or list the domains you accept.
 - `allowGoogleOauth` - Enable the "Sign in with Google" button. Default `false`.
 - `allowMicrosoftOauth` - Enable the "Sign in with Microsoft" button. Default `false`.
 
@@ -190,6 +181,7 @@ const website = defineStaticWebSite("my-frontend", { description: "App frontend"
 defineIdp("my-idp", {
   clients: ["my-client"],
   userAuthPolicy: {
+    allowedEmailDomains: ["*"],
     enableMfa: true,
     requireMfa: false,
     allowedReturnOrigins: [website.url, "https://admin.example.com"],
@@ -349,7 +341,7 @@ defineIdp("my-idp", {
 - `publishEvents: true`: always publish events.
 - `publishEvents: false`: never publish events. `deploy` rejects this with an error if an `idpUser` trigger taking part in the same run targets this IdP — either remove `publishEvents: false` or remove the matching trigger.
 
-**Sharing an IdP across configs:** an executor in another config auto-enables publishing the same way, as long as both configs take part in the same `deploy` (`--config a,b`). `deploy` records that dependency, so deploying the owning config alone later asks for confirmation instead of silently turning publishing off — it fails outright in a non-interactive environment. Set `publishEvents: true` on the IdP to keep it on regardless of which configs take part.
+**Sharing an IdP across configs:** an executor in another config auto-enables publishing the same way, as long as both configs take part in the same `deploy` (`--config a,b`). `deploy` records that dependency, so deploying the owning config alone later asks for confirmation instead of silently turning publishing off — it fails outright in a non-interactive environment. Set `publishEvents: true` on the IdP to keep it on regardless of which configs take part. `deploy` and `remove` stop with `SERVICE_IN_USE` instead of deleting an IdP that another application's executor subscribes to.
 
 ## Using idp.provider()
 
@@ -368,6 +360,7 @@ const idp = defineIdp("my-idp", {
     delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     sendPasswordResetEmail: [{ conditions: [], permit: false }],
   },
+  userAuthPolicy: { allowedEmailDomains: ["*"] },
 });
 
 const auth = defineAuth("my-auth", {
@@ -381,7 +374,7 @@ const auth = defineAuth("my-auth", {
 });
 
 export default defineConfig({
-  idp: [idp],
+  idp,
   auth,
 });
 ```
@@ -395,4 +388,4 @@ idp.provider(
 );
 ```
 
-The second argument only accepts client names that were defined in the `clients` array of the IdP configuration.
+The second argument only accepts client names that were defined in the `clients` array of the IdP configuration. `deploy` and `remove` stop with `SERVICE_IN_USE` instead of deleting a client, or the IdP that holds it, while an Auth service still names it this way, including an Auth service of another application.

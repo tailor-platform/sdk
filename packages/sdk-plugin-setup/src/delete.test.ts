@@ -6,6 +6,7 @@ import { setupAutofix } from "./autofix";
 import { setupDelete } from "./delete";
 import { setupTarget } from "./generate";
 import { readLock } from "./lock";
+import { autofixSetupOptions } from "./test-helpers/autofix";
 
 vi.mock("@tailor-platform/sdk/cli", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tailor-platform/sdk/cli")>()),
@@ -180,7 +181,7 @@ describe("setupDelete", () => {
 
   test("deletes the autofix workflow and its lock entry, keeping the targets", async () => {
     await setupTarget(branchOpts("my-app"));
-    await setupAutofix({ provider: "github-token", dir: ".", force: false, outputDir: testDir });
+    await setupAutofix(autofixSetupOptions(testDir));
 
     await setupDelete({
       files: [".github/workflows/tailor-autofix.yml"],
@@ -195,7 +196,7 @@ describe("setupDelete", () => {
   });
 
   test("deletes the autofix workflow of a lock that records no target", async () => {
-    await setupAutofix({ provider: "github-token", dir: ".", force: false, outputDir: testDir });
+    await setupAutofix(autofixSetupOptions(testDir));
 
     await setupDelete({
       files: [".github/workflows/tailor-autofix.yml"],

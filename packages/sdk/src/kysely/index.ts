@@ -69,7 +69,7 @@ type ResolveSelect<T> = T extends ColumnType<infer S, unknown, unknown> ? S : T;
 type ResolveInsert<T> = T extends ColumnType<unknown, infer I, unknown> ? I : T;
 type ResolveUpdate<T> = T extends ColumnType<unknown, unknown, infer U> ? U : T;
 export type ObjectColumnType<T> = ColumnType<
-  { [K in keyof T]-?: Exclude<ResolveSelect<T[K]>, undefined> },
+  { [K in keyof T]: ResolveSelect<T[K]> },
   { [K in keyof T]: ResolveInsert<T[K]> },
   { [K in keyof T]: ResolveUpdate<T[K]> }
 >;
@@ -205,19 +205,14 @@ type NestedProps<Fields, IsTemporal extends boolean> = {
   >;
 };
 
-// The generator reaches for ObjectColumnType only when the object holds something whose
-// select and insert types differ: a date/datetime field, an optional prop, or a filled-in
-// one. Temporal time fields only differ at the top level.
 type NestedNeedsColumnType<Fields, IsTemporal extends boolean> = true extends {
   [K in keyof Fields]: DBFieldType<Fields[K]> extends "nested"
     ? NestedNeedsColumnType<NestedFieldsOf<Fields[K]>, IsTemporal>
     : ElementColumn<Fields[K], IsTemporal, true> extends ColumnType<unknown, unknown, unknown>
       ? true
-      : null extends output<Fields[K]>
-        ? true
-        : Fields[K] extends TailorAnyDBField
-          ? IsAutoFilledDBField<Fields[K]>
-          : false;
+      : Fields[K] extends TailorAnyDBField
+        ? IsAutoFilledDBField<Fields[K]>
+        : false;
 }[keyof Fields]
   ? true
   : false;

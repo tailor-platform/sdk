@@ -1,8 +1,12 @@
 import { describe, expect, test } from "vitest";
-import transform, { reviewFindings } from "../codemods/v3/relation-toward-table/scripts/transform";
+import transform from "../codemods/v3/relation-toward-table/scripts/transform";
+import { reviewThroughRunner } from "./test-helpers/codemods";
+
+const review = (source: string, relativePath: string) =>
+  reviewThroughRunner("v3/relation-toward-table", source, relativePath);
 
 describe("relation toward.type -> toward.table migration review", () => {
-  test("rewrites a literal toward.type and reports nothing left to review", () => {
+  test("rewrites a literal toward.type and reports nothing left to review", async () => {
     const source = `
 const post = db.table("Post", {
   authorId: db.uuid().relation({
@@ -12,11 +16,13 @@ const post = db.table("Post", {
 });
 `;
 
-    expect(transform(source, "post.ts")).toContain("toward: { table: user }");
-    expect(reviewFindings(source, "post.ts", "post.ts")).toEqual([]);
+    const { transformed, findings } = await review(source, "post.ts");
+
+    expect(transformed).toContain("toward: { table: user }");
+    expect(findings).toEqual([]);
   });
 
-  test("flags relation configs composed with spreads", () => {
+  test("flags relation configs composed with spreads", async () => {
     const source = `
 const primary = db.uuid().relation({
   ...relationConfig,
@@ -24,12 +30,13 @@ const primary = db.uuid().relation({
 });
 `;
 
-    expect(transform(source, "post.ts")).toBeNull();
-    const findings = reviewFindings(source, "post.ts", "post.ts");
+    const { transformed, findings } = await review(source, "post.ts");
+
+    expect(transformed).toBeNull();
     expect(findings).toHaveLength(1);
   });
 
-  test("flags relation configs with computed toward keys", () => {
+  test("flags relation configs with computed toward keys", async () => {
     const source = `
 const author = db.uuid().relation({
   type: "n-1",
@@ -37,12 +44,13 @@ const author = db.uuid().relation({
 });
 `;
 
-    expect(transform(source, "post.ts")).toBeNull();
-    const findings = reviewFindings(source, "post.ts", "post.ts");
+    const { transformed, findings } = await review(source, "post.ts");
+
+    expect(transformed).toBeNull();
     expect(findings).toHaveLength(1);
   });
 
-  test("flags a toward value that isn't a literal object", () => {
+  test("flags a toward value that isn't a literal object", async () => {
     const source = `
 const shared = { type: user };
 const authorId = db.uuid().relation({
@@ -51,23 +59,26 @@ const authorId = db.uuid().relation({
 });
 `;
 
-    expect(transform(source, "post.ts")).toBeNull();
-    const findings = reviewFindings(source, "post.ts", "post.ts");
+    const { transformed, findings } = await review(source, "post.ts");
+
+    expect(transformed).toBeNull();
     expect(findings).toHaveLength(1);
     expect(findings[0]?.message).toContain("toward isn't a literal object");
   });
 
-  test("ignores malformed and unrelated relation-like calls", () => {
+  test("ignores malformed and unrelated relation-like calls", async () => {
     const source = `
 client.relation({ toward: { type: user } });
 const relation = { type: "n-1", toward: { type: user } };
 `;
 
-    expect(transform(source, "post.ts")).toBeNull();
-    expect(reviewFindings(source, "post.ts", "post.ts")).toEqual([]);
+    const { transformed, findings } = await review(source, "post.ts");
+
+    expect(transformed).toBeNull();
+    expect(findings).toEqual([]);
   });
 
-  test("flags a toward that already has both table and type instead of producing a duplicate key", () => {
+  test("flags a toward that already has both table and type instead of producing a duplicate key", async () => {
     const source = `
 const order = db.table("Order", {
   customerId: db.uuid().relation({
@@ -77,8 +88,9 @@ const order = db.table("Order", {
 });
 `;
 
-    expect(transform(source, "order.ts")).toBeNull();
-    const findings = reviewFindings(source, "order.ts", "order.ts");
+    const { transformed, findings } = await review(source, "order.ts");
+
+    expect(transformed).toBeNull();
     expect(findings).toHaveLength(1);
     expect(findings[0]?.message).toContain("duplicate key");
   });

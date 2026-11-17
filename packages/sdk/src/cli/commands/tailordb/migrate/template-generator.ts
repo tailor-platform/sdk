@@ -179,9 +179,6 @@ export async function generateDiffFiles(
     await fs.writeFile(migrateFilePath, scriptContent);
     result.migrateFilePath = migrateFilePath;
 
-    // Generate db.ts with types based on the PREVIOUS schema state
-    // (the state before this migration runs)
-    // Pass diff to generate ColumnType for optional->required fields
     const typeFiles = await writeMigrationTypeFiles({
       previousSnapshot,
       diff: diffWithDescription,

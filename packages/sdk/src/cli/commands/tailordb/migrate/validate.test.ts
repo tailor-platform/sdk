@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { Code, ConnectError } from "@connectrpc/connect";
@@ -281,7 +282,7 @@ describe("tailordb migration validate", () => {
     });
     const { suggestion } = result.error as CLIError;
     expect(suggestion).toContain(
-      "`tailor tailordb migration sync 0000 --namespace tailordb --workspace-id=12345678-1234-4abc-8def-123456789012 --profile=staging`",
+      "`tailor tailordb migration sync 0000 --namespace tailordb --workspace-id=12345678-1234-4abc-8def-123456789012 --profile=staging` to rewrite them to 0000, which removes the fields that 0000 does not have and deletes the tables it does not have together with their data",
     );
     expect(suggestion).toContain(
       "`tailor tailordb migration generate --init --namespace tailordb`",
@@ -955,7 +956,7 @@ describe("tailordb migration validate", () => {
     const result = await runCommand(validateCommand, []);
 
     expect(result.success).toBe(false);
-    expect(String(result.error)).toMatch(/Duplicate TailorDB table names/);
+    expect(String(result.error)).toMatch(/Duplicate TailorDB type name "User"/);
   });
 
   test("rejects an unknown --namespace", async () => {
@@ -1353,7 +1354,7 @@ describe("tailordb migration validate", () => {
         "Migration in progress: Migration tailordb/0001 was partially applied by its steps, but its migrate.ts no longer exports `steps`.",
       );
       expect(stderr.output).toContain(
-        "Keep the migration as `steps` so the deploy can finish it; steps that already completed do not run again.",
+        "Keep the migration as `steps` so the deploy can finish it; steps that already completed do not run again unless you add, remove, or rename a step, change the order the steps run in, or the earlier run was canceled or is no longer available.",
       );
     });
 

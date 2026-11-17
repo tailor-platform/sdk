@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { CLIError } from "./errors";
 
 const DEFAULT_EDITOR = "editor";
 
@@ -30,7 +31,11 @@ function parseEditorCommand(editor: string): {
   const [command, ...args] = editor.trim().split(/\s+/);
 
   if (!command) {
-    throw new Error("Editor command is empty.");
+    throw CLIError({
+      code: "EDITOR_FAILED",
+      message: "Editor command is empty.",
+      suggestion: "Set VISUAL or EDITOR to an editor command.",
+    });
   }
 
   return {
@@ -63,7 +68,13 @@ export async function openInEditor(
         resolve();
         return;
       }
-      reject(new Error(`Editor exited with code ${code}.`));
+      reject(
+        CLIError({
+          code: "EDITOR_FAILED",
+          message: `Editor "${editor}" exited with code ${code}.`,
+          context: { editor, exitCode: code },
+        }),
+      );
     });
   });
 

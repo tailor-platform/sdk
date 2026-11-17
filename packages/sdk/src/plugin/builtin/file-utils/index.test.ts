@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { db } from "#/configure/services/tailordb/index";
 import { parseTypes } from "#/parser/service/tailordb/index";
@@ -91,6 +93,20 @@ describe("FileUtilsPlugin", () => {
       expect(result).not.toContain("FileStreamIterator");
       expect(result).not.toContain("openFileDownloadStream");
       expect(result).not.toContain("openDownloadStream");
+    });
+
+    test("should deprecate the string overload without encoding as the runtime upload does", () => {
+      const runtimeTag = readFileSync(
+        join(import.meta.dirname, "../../../runtime/file.ts"),
+        "utf-8",
+      ).match(/@deprecated since \S+ — pass encoding.*/)?.[0];
+
+      const result = generateUnifiedFileUtils([
+        { namespace: "tailordb", types: [{ name: "User", fileFields: ["avatar"] }] },
+      ]);
+
+      expect(runtimeTag).toMatch(/^@deprecated since 2\.15\.0 /);
+      expect(result).toContain(runtimeTag);
     });
 
     test("should merge types from multiple namespaces", () => {

@@ -86,26 +86,17 @@ function collectApplicationResolverNamespaces(
   );
 }
 
-function* idpNameResources(application: Readonly<Application>): Iterable<VisibleResource> {
-  for (const name of collectApplicationIdpNames(application)) {
-    yield { visibilityKey: name, resourceKey: name };
-  }
-}
-
 export function collectVisibleIdpNames(
   application: Readonly<Application>,
   applications: ReadonlyArray<Readonly<Application>>,
 ): ReadonlySet<string> {
-  return collectVisibleResources({
-    application,
-    applications,
-    visibleKeysOf: collectApplicationIdpNames,
-    resourcesOf: idpNameResources,
-    createResult: () => new Set<string>(),
-    addResource: (names, name) => {
-      names.add(name);
-    },
-  });
+  const names = new Set(collectApplicationIdpNames(application));
+  for (const candidate of applications) {
+    for (const idp of candidate.idpServices) {
+      names.add(idp.name);
+    }
+  }
+  return names;
 }
 
 function* resolverResources(application: Readonly<Application>): Iterable<VisibleResource> {

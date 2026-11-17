@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test } from "vitest";
+import { errorToJson } from "#/cli/shared/error-json";
 import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { bundleHttpAdapters } from "./bundler";
 
@@ -256,12 +257,49 @@ export default createHttpAdapter({
 `,
     });
 
+    const rejection = await bundleHttpAdapters(
+      [{ name: "bad", sourceFile, methods: ["get"], hasOutput: false }],
+      process.cwd(),
+    ).catch((error: unknown) => error);
+
+    expect(errorToJson(rejection)).toMatchObject({
+      error: {
+        code: "HTTP_ADAPTER_NODE_IMPORT_UNSUPPORTED",
+        message: expect.stringMatching(
+          /^HTTP adapter "bad": "node:fs" is not available in the Tailor Platform runtime/,
+        ),
+        context: { name: "bad", specifier: "node:fs" },
+      },
+    });
+  });
+
+  test("rejects a bundle over the size limit", async () => {
+    const sourceFile = writeAdapterFiles({
+      "adapter.ts": `
+import { createHttpAdapter } from "@tailor-platform/sdk";
+
+const filler = ${JSON.stringify("x".repeat(300 * 1024))};
+
+export default createHttpAdapter({
+  name: "large",
+  pathPattern: "/large",
+  input: { get: () => ({ query: filler }) },
+});
+`,
+    });
+
     await expect(
       bundleHttpAdapters(
-        [{ name: "bad", sourceFile, methods: ["get"], hasOutput: false }],
+        [{ name: "large", sourceFile, methods: ["get"], hasOutput: false }],
         process.cwd(),
       ),
-    ).rejects.toThrow(/"node:fs" is not available in the Tailor Platform runtime/);
+    ).rejects.toMatchObject({
+      code: "HTTP_ADAPTER_BUNDLE_TOO_LARGE",
+      message: expect.stringMatching(
+        /^HTTP adapter "large" input script is \d+ bytes, exceeding the 262144 byte limit$/,
+      ),
+      context: { name: "large", kind: "input", byteLength: expect.any(Number), limitBytes: 262144 },
+    });
   });
 
   test("rejects bundles where an imported helper introduces async/await", async () => {
@@ -289,6 +327,12 @@ export default createHttpAdapter({
         [{ name: "async-helper", sourceFile, methods: ["get"], hasOutput: false }],
         process.cwd(),
       ),
-    ).rejects.toThrow(/async\/await, which is unavailable/);
+    ).rejects.toMatchObject({
+      code: "HTTP_ADAPTER_ASYNC_UNSUPPORTED",
+      message:
+        'HTTP adapter "async-helper" input bundle contains async/await, which is unavailable in the gateway runtime.',
+      suggestion: expect.stringContaining("Check imported helper modules"),
+      context: { name: "async-helper", kind: "input" },
+    });
   });
 });

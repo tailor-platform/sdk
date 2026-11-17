@@ -15,7 +15,7 @@ export namespace t {
   export type infer<T> = TailorOutput<T>;
 }
 
-export { type TailorField } from "#/configure/types/type";
+export { type TailorAnyField, type TailorField } from "#/configure/types/type";
 export { type DateRepresentationRegistry } from "#/configure/types/field.types";
 export {
   type TailorPrincipal,
@@ -42,7 +42,9 @@ export {
 
 export * from "#/configure/services/index";
 
+// oxlint-disable-next-line typescript/no-deprecated -- Only the array overload of defineConfig is deprecated, until its removal in v3.
 export { defineConfig, definePlugins } from "#/configure/config/index";
+export { PluginValidationError } from "#/utils/plugin-validation-error";
 
 // Plugin types for custom plugin development
 export type {
@@ -62,8 +64,12 @@ export type {
   PluginFieldExtensions,
   PluginOutput,
   TablePluginOutput,
+  TailorDBNamespacePluginOutput,
+  // oxlint-disable-next-line typescript/no-deprecated -- Stays exported until its removal in v3.
   NamespacePluginOutput,
   PluginTableProcessContext,
+  TailorDBNamespaceLoadedContext,
+  // oxlint-disable-next-line typescript/no-deprecated -- Stays exported until its removal in v3.
   PluginNamespaceProcessContext,
   PluginAttachment,
   PluginGeneratedTable,

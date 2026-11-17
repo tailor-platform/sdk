@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import * as path from "pathe";
 import { describe, expect, test } from "vitest";
@@ -29,6 +30,13 @@ function parseErrorEnvelope(stderr: string): unknown {
   return JSON.parse(envelope ?? "");
 }
 
+function throwingConfig(thrown = 'new Error("config is broken")') {
+  const dir = mkdtempSync(path.join(tmpdir(), "seed-throwing-config-"));
+  const configPath = path.join(dir, "tailor.config.ts");
+  writeFileSync(configPath, `throw ${thrown};\n`);
+  return { configPath, [Symbol.dispose]: () => rmSync(dir, { recursive: true, force: true }) };
+}
+
 describe("seed CLI JSON errors", () => {
   test(
     "serializes a missing configuration error",
@@ -43,8 +51,10 @@ describe("seed CLI JSON errors", () => {
       expect(result.stdout).toBe("");
       expect(parseErrorEnvelope(result.stderr)).toEqual({
         error: {
-          code: "UNEXPECTED_ERROR",
+          code: "CONFIG_NOT_FOUND",
           message: `Configuration file not found: ${path.resolve(configPath)}`,
+          suggestion: "Check the path given with --config or TAILOR_CONFIG_PATH.",
+          context: { file: path.resolve(configPath) },
         },
       });
     },
@@ -59,7 +69,7 @@ describe("seed CLI JSON errors", () => {
       expect(result.status).toBe(1);
       expect(parseErrorEnvelope(result.stderr)).toMatchObject({
         error: {
-          code: "UNEXPECTED_ERROR",
+          code: "CONFIG_NOT_FOUND",
           message: "Configuration file not found: src/__fixtures__/missing.config.ts",
         },
       });
@@ -94,15 +104,15 @@ describe("seed CLI JSON errors", () => {
   test(
     "includes a stack trace in verbose JSON errors",
     () => {
-      const configPath = fileURLToPath(new URL("__fixtures__/missing.config.ts", import.meta.url));
+      using tmp = throwingConfig();
 
-      const result = runCli(["validate", "--json", "--verbose", "--config", configPath]);
+      const result = runCli(["validate", "--json", "--verbose", "--config", tmp.configPath]);
       const envelope = parseErrorEnvelope(result.stderr) as {
         error: { code: string; message: string; stack?: string };
       };
 
       expect(result.status).toBe(1);
-      expect(envelope.error.stack).toContain("Error: Configuration file not found:");
+      expect(envelope.error.stack).toContain("Error: config is broken");
     },
     CLI_TEST_TIMEOUT_MS,
   );
@@ -110,14 +120,14 @@ describe("seed CLI JSON errors", () => {
   test(
     "preserves human-readable errors without JSON mode",
     () => {
-      const configPath = fileURLToPath(new URL("__fixtures__/missing.config.ts", import.meta.url));
+      using tmp = throwingConfig();
 
-      const result = runCli(["validate", "--config", configPath]);
+      const result = runCli(["validate", "--config", tmp.configPath]);
 
       expect(result.status).toBe(1);
       expect(result.stdout).toBe("");
       expect(result.stderr.trim()).toBe(
-        `✖ Configuration file not found: ${path.resolve(configPath)}`,
+        `✖ ${path.relative(packageRoot, tmp.configPath)}: config is broken`,
       );
     },
     CLI_TEST_TIMEOUT_MS,
@@ -142,17 +152,65 @@ describe("seed CLI JSON errors", () => {
   test(
     "annotates the failure once under GitHub Actions",
     () => {
-      const configPath = fileURLToPath(new URL("__fixtures__/missing.config.ts", import.meta.url));
+      using tmp = throwingConfig();
+      const located = `${path.relative(packageRoot, tmp.configPath)}: config is broken`;
 
-      const result = runCli(["validate", "--config", configPath], { GITHUB_ACTIONS: "true" });
+      const result = runCli(["validate", "--config", tmp.configPath], { GITHUB_ACTIONS: "true" });
 
       expect(result.status).toBe(1);
       expect(result.stdout).toBe("");
       expect(result.stderr.match(/^::error/gm)).toHaveLength(1);
       expect(result.stderr.trim().split(/\r?\n/)).toEqual([
-        `✖ Configuration file not found: ${path.resolve(configPath)}`,
-        `::error title=Error::Configuration file not found: ${path.resolve(configPath)}`,
+        `✖ ${located}`,
+        `::error title=Error::${located}`,
       ]);
+    },
+    CLI_TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "puts the file a failure points at before its message",
+    () => {
+      using tmp = throwingConfig();
+
+      const result = runCli(["validate", "--config", tmp.configPath]);
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(
+        `${path.relative(packageRoot, tmp.configPath)}: config is broken`,
+      );
+    },
+    CLI_TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "puts the file before the message of a failure whose format() does not return a string",
+    () => {
+      using tmp = throwingConfig(
+        'Object.assign(new Error("config is broken"), { format: () => ({ _errors: [] }) })',
+      );
+
+      const result = runCli(["validate", "--config", tmp.configPath]);
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(
+        `✖ ${path.relative(packageRoot, tmp.configPath)}: config is broken`,
+      );
+    },
+    CLI_TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "prints a self-formatted failure's report unchanged",
+    () => {
+      using tmp = throwingConfig(
+        'Object.assign(new Error("config is broken"), { format: () => "custom report" })',
+      );
+
+      const result = runCli(["validate", "--config", tmp.configPath]);
+
+      expect(result.status).toBe(1);
+      expect(result.stderr.trim().split(/\r?\n/).at(-1)).toBe("custom report");
     },
     CLI_TEST_TIMEOUT_MS,
   );

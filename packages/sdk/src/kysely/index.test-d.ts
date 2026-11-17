@@ -80,15 +80,16 @@ describe("NamespaceSelectable", () => {
 
     expectTypeOf<ReceiptSelectable["receiptDate"]>().toEqualTypeOf<Date>();
     expectTypeOf<ReceiptSelectable["dueSchedule"]["dueDate"]>().toEqualTypeOf<Date>();
-    // Nullable nested fields should be required in select
-    expectTypeOf<ReceiptSelectable["dueSchedule"]["reminderAt"]>().toEqualTypeOf<Date | null>();
+    expectTypeOf<ReceiptSelectable["dueSchedule"]["reminderAt"]>().toEqualTypeOf<
+      Date | null | undefined
+    >();
   });
 
   test("should return array of resolved objects for ObjectArrayColumnType", () => {
     type ReceiptSelectable = NamespaceSelectable<TestNamespace, "Receipt">;
 
     expectTypeOf<ReceiptSelectable["metadata"]>().toEqualTypeOf<
-      { created: Date; lastUpdated: Date | null; version: number }[]
+      { created: Date; lastUpdated?: Date | null; version: number }[]
     >();
     expectTypeOf<ReceiptSelectable["metadata"][0]["created"]>().toEqualTypeOf<Date>();
   });
@@ -271,21 +272,29 @@ describe("column mapping", () => {
     }>();
   });
 
-  // ObjectColumnType makes an optional nested prop required on read and optional on
-  // write; an unwrapped object would keep it optional on both.
-  test("wraps an object with optional props in ObjectColumnType", () => {
+  test("preserves optional nested keys on read and write", () => {
     const fields = {
       profile: db.object({ name: db.string(), bio: db.string({ optional: true }) }),
     };
 
     expectTypeOf<TailorDBSelectable<typeof fields>["profile"]>().toEqualTypeOf<{
       name: string;
-      bio: string | null;
+      bio?: string | null;
     }>();
+    assertType<TailorDBSelectable<typeof fields>["profile"]>({ name: "Alice" });
+    assertType<TailorDBSelectable<typeof fields>["profile"]>({ name: "Alice", bio: null });
+    assertType<(profile: TailorDBSelectable<typeof fields>["profile"]) => number>((profile) => {
+      if (profile.bio === null) return 0;
+      // @ts-expect-error bio can be omitted even after excluding null
+      return profile.bio.length;
+    });
     expectTypeOf<TailorDBInsertable<typeof fields>["profile"]>().toEqualTypeOf<{
       name: string;
       bio?: string | null;
     }>();
+    expectTypeOf<TailorDBUpdateable<typeof fields>["profile"]>().toEqualTypeOf<
+      { name: string; bio?: string | null } | undefined
+    >();
   });
 
   // The runtime hands back a Date for a nested date/datetime too, so the column type has
@@ -307,7 +316,7 @@ describe("column mapping", () => {
       day: Date;
     }>();
     expectTypeOf<TailorDBSelectable<typeof fields>["events"]>().toEqualTypeOf<
-      { at: Date; label: string | null }[]
+      { at: Date; label?: string | null }[]
     >();
   });
 
@@ -365,6 +374,26 @@ describe("temporal option", () => {
       startTime: string;
       day: Temporal.PlainDate;
     }>();
+  });
+
+  test("preserves optional nested dates in both date modes", () => {
+    const fields = {
+      schedule: db.object({
+        day: db.date({ optional: true }),
+        when: db.datetime({ optional: true }),
+      }),
+    };
+
+    expectTypeOf<TailorDBSelectable<typeof fields>["schedule"]>().toEqualTypeOf<{
+      day?: Date | null;
+      when?: Date | null;
+    }>();
+    expectTypeOf<TailorDBSelectable<typeof fields, true>["schedule"]>().toEqualTypeOf<{
+      day?: Temporal.PlainDate | null;
+      when?: Temporal.Instant | null;
+    }>();
+    assertType<TailorDBSelectable<typeof fields>["schedule"]>({});
+    assertType<TailorDBSelectable<typeof fields, true>["schedule"]>({});
   });
 
   test("wraps arrays of Temporal columns in ArrayColumnType", () => {

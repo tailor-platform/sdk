@@ -15,7 +15,7 @@ import {
   toPageDirection,
   workspaceArgs,
 } from "#/cli/shared/args";
-import { fetchPaged } from "#/cli/shared/client";
+import { fetchAll, fetchPaged, getOrNull } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { CLIError } from "#/cli/shared/errors";
 import { formatKeyValueTable } from "#/cli/shared/format";
@@ -28,6 +28,7 @@ import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { styles, logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { parseProtoEnumName, protoEnumNames } from "#/cli/shared/proto-enum";
+import { resourceNameSchema } from "#/parser/service/common";
 import { waitArgs } from "./args";
 import { type WorkflowWaitUntil } from "./status";
 import {
@@ -100,6 +101,39 @@ function parseStatus(status: string): WorkflowExecution_Status {
   return parsed;
 }
 
+function startOrFinishTime(execution: WorkflowExecutionInfo): number {
+  return (execution.startedAt ?? execution.finishedAt)?.getTime() ?? Infinity;
+}
+
+function precedes(candidate: number, current: number, order: Order): boolean {
+  return order === "asc" ? candidate < current : candidate > current;
+}
+
+function mergeByStartOrFinishTime(
+  lists: WorkflowExecutionInfo[][],
+  order: Order,
+  limit: number | undefined,
+): WorkflowExecutionInfo[] {
+  const cursors = lists.map((items) => ({ items, index: 0 }));
+  const merged: WorkflowExecutionInfo[] = [];
+  while (!limit || merged.length < limit) {
+    let next: { cursor: (typeof cursors)[number]; execution: WorkflowExecutionInfo } | undefined;
+    for (const cursor of cursors) {
+      const execution = cursor.items[cursor.index];
+      if (
+        execution &&
+        (!next || precedes(startOrFinishTime(execution), startOrFinishTime(next.execution), order))
+      ) {
+        next = { cursor, execution };
+      }
+    }
+    if (!next) break;
+    merged.push(next.execution);
+    next.cursor.index++;
+  }
+  return merged;
+}
+
 /**
  * List workflow executions with optional filters.
  *
@@ -107,6 +141,13 @@ function parseStatus(status: string): WorkflowExecution_Status {
  * function pages through every execution. The CLI caps this at 50 by
  * default via `pagedLogArgs`; programmatic callers that want the same
  * cap should pass `limit: 50` explicitly.
+ *
+ * Without `options.workflow`, it lists the executions of every workflow in the
+ * workspace: executions of different workflows are interleaved by start time,
+ * or by finish time for one that finished without starting, while each
+ * workflow's executions keep their creation order. An execution that has
+ * neither started nor finished counts as newer than every started or finished
+ * one.
  * @param options - Workflow execution listing options
  * @returns List of workflow executions
  */
@@ -141,23 +182,44 @@ export async function listWorkflowExecutions<W extends WorkflowLike>(
         })
       : undefined;
 
-  const pageDirection = toPageDirection(options?.order ?? "desc");
-  const executions = await fetchPaged(
-    async (pageToken, pageSize) => {
-      const { executions, nextPageToken } = await client.listWorkflowExecutions({
-        workspaceId,
-        workflowName: workflowName ?? "",
-        pageToken,
-        pageSize,
-        pageDirection,
-        filter,
-      });
-      return [executions, nextPageToken];
-    },
-    { limit: options?.limit },
-  );
+  const order = options?.order ?? "desc";
+  const pageDirection = toPageDirection(order);
+  const listExecutionsOf = async (name: string) => {
+    const executions = await fetchPaged(
+      async (pageToken, pageSize) => {
+        const { executions, nextPageToken } = await client.listWorkflowExecutions({
+          workspaceId,
+          workflowName: name,
+          pageToken,
+          pageSize,
+          pageDirection,
+          filter,
+        });
+        return [executions, nextPageToken];
+      },
+      { limit: options?.limit },
+    );
+    return executions.map(toWorkflowExecutionInfo);
+  };
 
-  return executions.map(toWorkflowExecutionInfo);
+  if (workflowName !== undefined) {
+    return await listExecutionsOf(workflowName);
+  }
+
+  const workflows = await fetchAll(async (pageToken, pageSize) => {
+    const { workflows, nextPageToken } = await client.listWorkflows({
+      workspaceId,
+      pageToken,
+      pageSize,
+    });
+    return [workflows, nextPageToken];
+  });
+  const lists = await Promise.all(
+    workflows.map(
+      async (workflow) => (await getOrNull(() => listExecutionsOf(workflow.name))) ?? [],
+    ),
+  );
+  return mergeByStartOrFinishTime(lists, order, options?.limit);
 }
 
 /**
@@ -320,19 +382,10 @@ export const executionsCommand = defineAppCommand({
       positional: true,
       description: "Execution ID (if provided, shows details)",
     }),
-    "workflow-name": arg(
-      z
-        .string()
-        .regex(
-          /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/,
-          "Must be 3-63 lowercase alphanumeric characters or hyphens, starting and ending with alphanumeric",
-        )
-        .optional(),
-      {
-        alias: "n",
-        description: "Filter by workflow name (list mode only)",
-      },
-    ),
+    "workflow-name": arg(resourceNameSchema.optional(), {
+      alias: "n",
+      description: "Filter by workflow name (list mode only)",
+    }),
     status: arg(z.string().optional(), {
       alias: "s",
       description: "Filter by status (list mode only)",

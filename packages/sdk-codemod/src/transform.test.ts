@@ -60,7 +60,7 @@ async function runFixtureCases(codemodPath: string): Promise<void> {
     ].includes(codemodPath)
       ? path.join(c.caseDir, "tailor.config.ts")
       : inputPath;
-    const result = await transform(input, transformPath);
+    const result = await transform(input, transformPath, c.caseDir);
     const expected = c.expectedFile
       ? await fs.promises.readFile(path.join(c.caseDir, c.expectedFile), "utf-8")
       : null;
@@ -584,5 +584,17 @@ export function read(plugins: unknown) { return generators; }
 
   test("v3/define-config-build-options transforms correctly", async () => {
     await expect(runFixtureCases("v3/define-config-build-options")).resolves.toBeUndefined();
+  });
+
+  test("v3/idp-array-to-single transforms correctly", async () => {
+    await expect(runFixtureCases("v3/idp-array-to-single")).resolves.toBeUndefined();
+  });
+
+  test("v3/files-ignores-to-negation transforms correctly", async () => {
+    await expect(runFixtureCases("v3/files-ignores-to-negation")).resolves.toBeUndefined();
+  });
+
+  test("v3/tailordb-namespace-loaded-rename transforms correctly", async () => {
+    await expect(runFixtureCases("v3/tailordb-namespace-loaded-rename")).resolves.toBeUndefined();
   });
 });

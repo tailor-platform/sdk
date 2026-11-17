@@ -48,10 +48,13 @@ const mockNestedType = db.table("ComplexUser", {
 describe("KyselyTypePlugin integration tests", () => {
   const testDistPath = "/test/dist/kysely-types.ts";
 
+  type PluginOptions = Parameters<typeof kyselyTypePlugin>[0];
+
   function createCtx(
     namespaces: { namespace: string; tables: Record<string, TailorDBType> }[],
     temporal?: boolean,
-  ): TailorDBReadyContext<{ distPath: string; temporal?: boolean }> {
+    pluginConfig: PluginOptions = { distPath: testDistPath, temporal },
+  ): TailorDBReadyContext<PluginOptions> {
     return {
       tailordb: namespaces.map((ns) => ({
         namespace: ns.namespace,
@@ -62,7 +65,7 @@ describe("KyselyTypePlugin integration tests", () => {
       auth: undefined,
       baseDir: "/test",
       configPath: "tailor.config.ts",
-      pluginConfig: { distPath: testDistPath, temporal },
+      pluginConfig,
     };
   }
 
@@ -97,6 +100,33 @@ describe("KyselyTypePlugin integration tests", () => {
       const plugin = kyselyTypePlugin({ distPath: testDistPath });
       expect(plugin.id).toBe(KyselyGeneratorID);
       expect(plugin.description).toBe("Generates Kysely type definitions for TailorDB tables");
+    });
+  });
+
+  describe("option validation", () => {
+    test("rejects both options, neither option, and contentMapper: false at the type level", () => {
+      // @ts-expect-error distPath and contentMapper are mutually exclusive
+      expect(() => kyselyTypePlugin({ distPath: "./db.ts", contentMapper: true })).toThrow(
+        "kyselyTypePlugin accepts either distPath or contentMapper: true, not both.",
+      );
+      // @ts-expect-error one of distPath or contentMapper is required
+      expect(() => kyselyTypePlugin({ temporal: true })).toThrow(
+        "kyselyTypePlugin requires either distPath or contentMapper: true.",
+      );
+      // @ts-expect-error contentMapper only accepts true
+      expect(() => kyselyTypePlugin({ contentMapper: false })).toThrow(
+        "kyselyTypePlugin requires either distPath or contentMapper: true.",
+      );
+    });
+
+    test("rejects an empty distPath, which would generate no types and enable no content mapper", () => {
+      expect(() => kyselyTypePlugin({ distPath: "" })).toThrow(/distPath must not be empty/);
+    });
+
+    test("accepts contentMapper: true alone", () => {
+      expect(kyselyTypePlugin({ contentMapper: true }).pluginConfig).toEqual({
+        contentMapper: true,
+      });
     });
   });
 
@@ -176,6 +206,32 @@ describe("KyselyTypePlugin integration tests", () => {
       expect(content).toContain("export type Selectable<T extends TableName>");
       expect(content).toContain("export type Updateable<T extends TableName>");
       expect(result.errors).toBeUndefined();
+    });
+
+    test("writes no types file when contentMapper is true, because getDB comes from the SDK", async () => {
+      const tables = { User: parseTailorDBType(toSchemaOutput(mockBasicType)) };
+      const plugin = kyselyTypePlugin({ contentMapper: true });
+
+      const result = await plugin.onTailorDBReady!(
+        createCtx([{ namespace: "test-namespace", tables }], undefined, { contentMapper: true }),
+      );
+
+      expect(result.files).toEqual([]);
+    });
+
+    test("still writes the PGlite schema module when contentMapper is true", async () => {
+      const tables = { User: parseTailorDBType(toSchemaOutput(mockBasicType)) };
+      const pgliteSchemaPath = "/test/dist/pglite-schema.ts";
+      const plugin = kyselyTypePlugin({ contentMapper: true, pgliteSchemaPath });
+
+      const result = await plugin.onTailorDBReady!(
+        createCtx([{ namespace: "test-namespace", tables }], undefined, {
+          contentMapper: true,
+          pgliteSchemaPath,
+        }),
+      );
+
+      expect(result.files.map((file) => file.path)).toEqual([pgliteSchemaPath]);
     });
 
     test("bakes temporal: true into the generated getDB when configured", async () => {

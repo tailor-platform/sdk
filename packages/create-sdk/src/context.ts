@@ -32,6 +32,7 @@ export const templateHints: Record<string, string | undefined> = {
   executor: "Executor triggers (record, resolver, IdP, auth token, schedule, webhook)",
   "static-web-site": "Static website with auth and IdP integration",
   generators: "Built-in generation plugins: kysely, enums, files, seed",
+  "content-mapper": "Types from tailor.config.ts without tailor generate (TypeScript 7.1 beta)",
 };
 
 const validateName = (name: string | undefined) => {

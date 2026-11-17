@@ -91,7 +91,7 @@ import { softDeletePlugin } from "./plugins/soft-delete";
 export const plugins = definePlugins(
   // Custom plugin with global config (factory function)
   softDeletePlugin({
-    archiveTablePrefix: "Deleted_",
+    archiveTablePrefix: "Deleted",
     defaultRetentionDays: 90,
   }),
 );
@@ -101,7 +101,7 @@ export const plugins = definePlugins(
 
 Plugins can generate:
 
-- **Tables**: Additional TailorDB tables (e.g., `CustomerHistory`, `Deleted_Customer`)
+- **Tables**: Additional TailorDB tables (e.g., `CustomerHistory`, `DeletedCustomer`)
 - **Resolvers**: Queries and mutations
 - **Executors**: Event handlers triggered by record changes
 - **Field Extensions**: Additional fields added to the source table
@@ -126,8 +126,8 @@ Plugins have definition-time, generation-time, and deploy-time hooks. The genera
 tailor generate
 │
 ├─ Load TailorDB tables
-│   ├─ onTableLoaded       ← per table with .plugin() attached
-│   └─ onNamespaceLoaded   ← once per namespace (namespace plugins)
+│   ├─ onTableLoaded             ← per table with .plugin() attached
+│   └─ onTailorDBNamespaceLoaded ← once per TailorDB namespace
 │
 ├─ Resolve Auth
 │
@@ -144,10 +144,10 @@ tailor generate
 
 ### Definition-time hooks
 
-| Hook                | Trigger                              | Can do                                                            |
-| ------------------- | ------------------------------------ | ----------------------------------------------------------------- |
-| `onTableLoaded`     | Each table with `.plugin()` attached | Generate tables, resolvers, executors; extend source table fields |
-| `onNamespaceLoaded` | Once per namespace                   | Generate tables, resolvers, executors                             |
+| Hook                        | Trigger                                  | Can do                                                            |
+| --------------------------- | ---------------------------------------- | ----------------------------------------------------------------- |
+| `onTableLoaded`             | Each table with `.plugin()` attached     | Generate tables, resolvers, executors; extend source table fields |
+| `onTailorDBNamespaceLoaded` | Once per non-external TailorDB namespace | Generate tables, resolvers, executors                             |
 
 These hooks produce TailorDB tables, resolvers, and executors that become part of the application. Requires `importPath` on the plugin.
 

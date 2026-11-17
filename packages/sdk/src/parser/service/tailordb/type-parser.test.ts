@@ -10,29 +10,6 @@ function withMetadataFlag<F>(field: F, key: "index" | "unique"): F {
 }
 
 describe("parseTypes", () => {
-  test("allows type names that match Object prototype properties", () => {
-    const testType = db.table("toString", {
-      value: db.string(),
-    });
-
-    const result = parseTypes(toSchemaOutputs({ toString: testType }), "test-namespace");
-
-    expect(Object.hasOwn(result, "toString")).toBe(true);
-  });
-
-  test("allows __proto__ as a type name", () => {
-    const testType = db.table("__proto__", {
-      value: db.string(),
-    });
-
-    const result = parseTypes(
-      toSchemaOutputs(Object.fromEntries([["__proto__", testType]])),
-      "test-namespace",
-    );
-
-    expect(Object.hasOwn(result, "__proto__")).toBe(true);
-  });
-
   describe("array field validation", () => {
     test.each([
       ["index", "index cannot be set on array fields"],

@@ -82,7 +82,6 @@ describe("user update", () => {
       "TAILOR_PLATFORM_PROFILE",
       "TAILOR_PLATFORM_URL",
       "TAILOR_PLATFORM_TOKEN",
-      "TAILOR_TOKEN",
       "TAILOR_PLATFORM_ORGANIZATION_ID",
       "TAILOR_PLATFORM_FOLDER_ID",
     ]) {

@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { create } from "@bufbuild/protobuf";
@@ -27,6 +28,7 @@ import { symbols } from "#/cli/shared/logger";
 import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import { sdkNameLabelKey } from "../label";
+import { tailorDBPlanResultContext } from "../test-helpers/plan-results";
 import { logMigrationPlanNotices } from "./migration-validation";
 import {
   gqlPermissionDeletion,
@@ -63,7 +65,7 @@ import type {
 // Mock label.ts
 vi.mock("../label", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("../label");
+  const original = await importOriginal<typeof import("../label")>();
   return {
     ...original,
     buildMetaRequest: vi.fn().mockImplementation(async () => ({
@@ -85,7 +87,7 @@ vi.mock("#/cli/commands/tailordb/migrate/bundler", () => ({
 // Mock createChangeSet to suppress output in tests
 vi.mock("../change-set", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("../change-set");
+  const original = await importOriginal<typeof import("../change-set")>();
   return {
     ...original,
     createChangeSet: (title: string) => ({
@@ -1664,20 +1666,15 @@ describe("applyTailorDB phase separation", () => {
       conflicts: [],
       unmanaged: [],
       resourceOwners: new Set<string>(),
-      context: {
+      context: tailorDBPlanResultContext({
         workspaceId: "test-workspace",
         application: {
           name: "test-app",
           tailorDBServices: [mockTailorDBService],
         } as unknown as Application,
-        tailorDBInputs: [],
         config: mockConfig,
         noSchemaCheck: true, // Skip migration checks in unit tests
-        namespacesWithMigrations: [],
-        migrationFileState: {},
-        checkpointRepairs: [],
-        pendingMigrations: [],
-      },
+      }),
     } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
   }
 
@@ -2483,22 +2480,19 @@ describe("applyTailorDB migration label reconciliation", () => {
       conflicts: [],
       unmanaged: [],
       resourceOwners: new Set<string>(),
-      context: {
+      context: tailorDBPlanResultContext({
         workspaceId: "test-workspace",
         application: {
           name: "test-app",
           tailorDBServices: [mockTailorDBService],
         } as unknown as Application,
-        tailorDBInputs: [],
         config,
         noSchemaCheck,
         namespacesWithMigrations: [{ namespace: "test-tailordb", migrationsDir: tmpDir }],
         migrationFileState: captureMigrationFileState([
           { namespace: "test-tailordb", migrationsDir: tmpDir },
         ]),
-        checkpointRepairs: [],
-        pendingMigrations: [],
-      },
+      }),
     } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
   }
 
@@ -3408,7 +3402,6 @@ describe("applyTailorDB migration label reconciliation", () => {
         types: { User: userWithEmail },
       },
     ];
-    planResult.context.executorUsedTables = new Set();
     addSentinelTypeCreate(planResult);
     const client = schemaVerificationClient(unchangedRemoteSettings());
     await runValidation(client, planResult);
@@ -3991,7 +3984,6 @@ describe("applyTailorDB migration label reconciliation", () => {
     planResult.context.tailorDBInputs = [
       { namespace: "test-tailordb", config: { files: [] }, types: { Post: postSnapshotType() } },
     ];
-    planResult.context.executorUsedTables = new Set();
     planResult.context.migrationFileState = captureMigrationFileState(
       planResult.context.namespacesWithMigrations,
     );
@@ -4053,7 +4045,6 @@ describe("applyTailorDB migration label reconciliation", () => {
       { namespace: "test-tailordb", config: { files: [] }, types: {} },
       { namespace: "other", config: { files: [] }, types: { Post: postSnapshotType() } },
     ];
-    planResult.context.executorUsedTables = new Set();
     addPostCreate(planResult, "other");
     const client = schemaVerificationClient(unchangedRemoteSettings());
     dropUserOnceDeleted(client);
@@ -4364,7 +4355,6 @@ describe("applyTailorDB migration label reconciliation", () => {
         types: { User: userWithEmail },
       },
     ];
-    planResult.context.executorUsedTables = new Set();
     planResult.context.checkpointRepairs = [
       {
         namespace: "test-tailordb",
@@ -4652,7 +4642,6 @@ describe("applyTailorDB migration label reconciliation", () => {
         types: { User: userType },
       },
     ];
-    planResult.context.executorUsedTables = new Set();
 
     await expect(runValidation(client, planResult)).rejects.toThrow(
       "Remote schema verification failed",
@@ -4684,7 +4673,6 @@ describe("applyTailorDB migration label reconciliation", () => {
         types: { User: userType },
       },
     ];
-    planResult.context.executorUsedTables = new Set();
 
     await expect(runValidation(client, planResult)).resolves.toBeDefined();
   });
@@ -4740,18 +4728,12 @@ describe("applyTailorDB table apply concurrency", () => {
       conflicts: [],
       unmanaged: [],
       resourceOwners: new Set<string>(),
-      context: {
+      context: tailorDBPlanResultContext({
         workspaceId: "test-workspace",
         application: { name: "test-app", tailorDBServices: [] } as unknown as Application,
-        tailorDBInputs: [],
-        executorUsedTables: new Set<string>(),
         config: { path: "/nonexistent/tailor.config.ts", name: "test-app", db: {} },
         noSchemaCheck: true,
-        namespacesWithMigrations: [],
-        migrationFileState: {},
-        checkpointRepairs: [],
-        pendingMigrations: [],
-      },
+      }),
     } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
 
     await applyTailorDB(client, planResult, "create-update");

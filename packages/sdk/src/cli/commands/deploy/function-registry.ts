@@ -88,30 +88,19 @@ export function workflowJobFunctionName(jobName: string): string {
   return `${WORKFLOW_PREFIX}${jobName}`;
 }
 
-type WorkflowJobStates = {
-  unchanged: Set<string>;
-  forcedBySdkVersion: Set<string>;
-};
-
 /**
- * Collect the workflow jobs a function registry plan leaves unchanged or
- * updates only because of the SDK version.
+ * Collect the workflow jobs a function registry plan leaves unchanged.
  * @param changeSet - Function registry change set
- * @returns Workflow job names by state
+ * @returns Workflow job names left unchanged
  */
-export function collectWorkflowJobStates(
-  changeSet: Pick<ChangeSet<HasName, HasName, HasName>, "unchanged" | "updates">,
-): WorkflowJobStates {
-  const jobNames = (items: ReadonlyArray<HasName>) =>
-    new Set(
-      items
-        .filter((item) => item.name.startsWith(WORKFLOW_PREFIX))
-        .map((item) => item.name.slice(WORKFLOW_PREFIX.length)),
-    );
-  return {
-    unchanged: jobNames(changeSet.unchanged),
-    forcedBySdkVersion: jobNames(changeSet.updates.filter((item) => item.forcedBySdkVersion)),
-  };
+export function collectUnchangedWorkflowJobs(
+  changeSet: Pick<ChangeSet<HasName, HasName, HasName>, "unchanged">,
+): Set<string> {
+  return new Set(
+    changeSet.unchanged
+      .filter((item) => item.name.startsWith(WORKFLOW_PREFIX))
+      .map((item) => item.name.slice(WORKFLOW_PREFIX.length)),
+  );
 }
 
 /**
@@ -324,6 +313,7 @@ export async function planFunctionRegistry(
     UpdateFunction,
     DeleteFunction
   >("Function registry");
+  const metadataUpdates: Array<{ name: string; metaRequest: MetadataLabelWrite }> = [];
   const ownership = createOwnershipTracker(appName, appId);
 
   const fetchedMap =
@@ -368,16 +358,18 @@ export async function planFunctionRegistry(
       });
 
       const configUnchanged = owned && existing.resource.contentHash === entry.contentHash;
-      if (configUnchanged && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
+      if (configUnchanged) {
         changeSet.unchanged.push({
           name: entry.name,
         });
+        if (!hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
+          metadataUpdates.push({ name: entry.name, metaRequest });
+        }
       } else {
         changeSet.updates.push({
           name: entry.name,
           entry,
           metaRequest,
-          ...(configUnchanged && { forcedBySdkVersion: true }),
         });
       }
       delete existingMap[entry.name];
@@ -409,6 +401,7 @@ export async function planFunctionRegistry(
   } = splitFunctionRegistryChanges(changeSet);
   return {
     changeSet,
+    metadataUpdates,
     workflowJobChanges,
     resolverFunctionChanges,
     executorFunctionChanges,
@@ -507,6 +500,9 @@ export async function applyFunctionRegistry(
           await uploadFunctionScript(client, workspaceId, update.entry, false);
           await writeMetadataLabels(client, update.metaRequest);
         }),
+      ),
+      ...result.metadataUpdates.map((update) =>
+        limitFunction(() => writeMetadataLabels(client, update.metaRequest)),
       ),
     ]);
   } else {

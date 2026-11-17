@@ -1,4 +1,4 @@
-import { isEqual } from "es-toolkit";
+import { isEqual } from "es-toolkit/predicate";
 import { vi } from "vitest";
 import { tailordbRoot, withDispose } from "./shared";
 

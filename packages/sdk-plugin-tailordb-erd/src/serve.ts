@@ -17,7 +17,7 @@ import * as path from "pathe";
 import { z } from "zod";
 import { prepareErdBuildsFromContext, type ErdBuildResult } from "./export";
 import { loadLocalErdSchema, type LocalErdSchemaContext } from "./local-schema";
-import { initErdCommand } from "./utils";
+import { initErdCommand, locatedMessage } from "./utils";
 
 const DEFAULT_ERD_BASE_DIR = ".tailor/erd";
 const LOCAL_HOST = "127.0.0.1";
@@ -396,7 +396,7 @@ async function createErdWatcher(options: WatchOptions): Promise<FSWatcher> {
       logger.error("Failed to rebuild ERD schema. Serving the last successful build.", {
         mode: "stream",
       });
-      logger.error(String(error));
+      logger.error(error instanceof Error ? locatedMessage(error) : String(error));
     } finally {
       rebuilding = false;
       if (pending) {

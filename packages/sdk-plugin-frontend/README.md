@@ -87,6 +87,66 @@ are visible to visitors, so supply only values intended for public use.
 Build commands run in a shell. Their stdout and stderr both go to stderr, keeping
 `tailor deploy --json` stdout available for the JSON result. Builds have no timeout.
 
+## Build with a function
+
+Pass an async function as `build` when the build needs more than a shell command, such
+as writing a runtime configuration file into the assets before they are uploaded:
+
+```typescript
+import { CustomDomainStatus, initOperatorClient, loadAccessToken } from "@tailor-platform/sdk/cli";
+
+frontendPlugin({
+  site: website,
+  workingDir: "../web",
+  distDir: "dist",
+  build: async ({ site, application, workspaceId, profile, distDir, exec, node }) => {
+    await exec("pnpm run build");
+    const client = await initOperatorClient(await loadAccessToken({ profile }));
+    const { customDomains } = await client.listCustomDomains({
+      workspaceId,
+      staticWebsiteName: site.name,
+    });
+    const active = customDomains.find((domain) => domain.status === CustomDomainStatus.ACTIVE);
+    const origin = active ? `https://${active.domain}` : site.url;
+    await node.fs.writeFile(
+      node.path.join(distDir, "config.json"),
+      JSON.stringify({ origin, apiUrl: application.url }),
+    );
+  },
+});
+```
+
+`node.fs` is Node.js's `fs/promises` module, and `node.path` is `pathe`, which works like `path` but uses `/` separators on every OS. `tailor.config.ts` is
+also bundled into functions that run on the Platform, such as auth hooks, so importing
+`node:` modules there fails the bundle. Use `node` instead.
+
+`listCustomDomains` also returns domains that are not usable yet, such as one that is pending or being removed, so the example picks the first domain whose `status` is `CustomDomainStatus.ACTIVE`, which `@tailor-platform/sdk/cli` exports.
+
+The function runs after `env` resolves and before the upload, with the same context `env`
+receives plus `env` (the values it returned), the absolute `workingDir` and `distDir`, a
+`logger`, `node`, and `exec`. `exec` runs a shell command in `workingDir` with those `env` values
+added; pass `workingDir`, `env`, or `output` to override them for one command. When the
+function rejects, the frontend is not uploaded and later frontends and deploy hooks do not
+run, as with a failed build command.
+
+To call the Platform from the function, use the functions exported from
+`@tailor-platform/sdk/cli`, such as `initOperatorClient`, which returns a typed client for the
+Platform API. Pass `loadAccessToken` the `profile` the function receives, which is the profile
+`tailor deploy` ran with (`--profile`), so the client calls the Platform as the same user.
+Without a profile it uses `TAILOR_PLATFORM_TOKEN`, then `TAILOR_PLATFORM_PROFILE`, then the
+logged-in user, as the `tailor` command does. Importing it in `tailor.config.ts` is safe, and using it inside the
+`build` function is what it is for. Code that runs on the Platform, such as a resolver or an
+auth hook, cannot use it, because it only works where `tailor deploy` runs. `tailor.config.ts` is
+bundled into an auth hook, but the plugins you register with `definePlugins` in its `plugins`
+export are left out, so the CLI functions a plugin uses do not reach the bundle. Write the registration
+as `export const plugins = definePlugins(...)`, as the examples do. Any other form is not left out,
+so a plugin that uses the CLI there stops `tailor deploy`. If code that runs on the Platform still uses them, such as a call at
+the top level of `tailor.config.ts`, `tailor deploy` stops with `DEPLOY_ONLY_CLI_IMPORT` and
+names the file.
+
+Running `tailor deploy` again after a failure runs the function again, so write what it
+does to be repeatable: look up or create a resource instead of always creating a new one.
+
 ## Upload existing assets
 
 Omit `build` to upload an existing directory:
@@ -103,6 +163,11 @@ only once. Frontends are built and uploaded sequentially, in argument order. At
 least one frontend is required, and each `distDir` must be non-empty. A `build` that is empty or only whitespace is rejected; omit `build` instead to publish without building.
 
 ## Deploy behavior and failures
+
+Selecting the same site more than once fails while loading the config, including
+during `tailor generate`. With `--json`, the error code is `FRONTEND_SITE_DUPLICATE`;
+`error.context.duplicates` lists every duplicated `name` and its zero-based argument
+`indices` in `frontendPlugin()`. Configure each site only once.
 
 The plugin runs even if no platform resources changed. It does not run during
 dry-run, build-only, generation, or migration test deployments. Dry-run lists the

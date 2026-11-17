@@ -13,6 +13,11 @@ import { createGraphQLClient, createOperatorClient } from "./utils";
 describe("controlplane", async () => {
   const [client, workspaceId] = createOperatorClient();
 
+  const getExecutor = async (name: string) => {
+    const { executor } = await client.getExecutorExecutor({ workspaceId, name });
+    return executor;
+  };
+
   test("executor applied", async () => {
     const { executors } = await client.listExecutorExecutors({ workspaceId });
     expect(executors.length).toBe(9);
@@ -53,6 +58,8 @@ describe("controlplane", async () => {
         },
       },
       targetType: ExecutorTargetType.TAILOR_GRAPHQL,
+    });
+    expect(await getExecutor("sales-order-created")).toMatchObject({
       targetConfig: {
         config: {
           case: "tailorGraphql",
@@ -88,6 +95,8 @@ describe("controlplane", async () => {
         },
       },
       targetType: ExecutorTargetType.WEBHOOK,
+    });
+    expect(await getExecutor("step-chain-executed")).toMatchObject({
       targetConfig: {
         config: {
           case: "webhook",
@@ -165,6 +174,8 @@ describe("controlplane", async () => {
         },
       },
       targetType: ExecutorTargetType.FUNCTION,
+    });
+    expect(await getExecutor("user-created")).toMatchObject({
       targetConfig: {
         config: {
           case: "function",

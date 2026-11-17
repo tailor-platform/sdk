@@ -37,7 +37,7 @@ export type SAMLInput = {
   /** Identity provider name */
   name: string;
   kind: "SAML";
-  /** Enable signing of SAML requests */
+  /** Enable signing of SAML requests (defaults to false) */
   enableSignRequest?: boolean | undefined;
   /** URL to fetch SAML metadata (mutually exclusive with rawMetadata) */
   metadataURL?: string | undefined;
@@ -51,7 +51,7 @@ export type SAML = {
   /** Identity provider name */
   name: string;
   kind: "SAML";
-  /** Enable signing of SAML requests */
+  /** Enable signing of SAML requests (defaults to false) */
   enableSignRequest: boolean;
   /** URL to fetch SAML metadata (mutually exclusive with rawMetadata) */
   metadataURL?: string | undefined;
@@ -221,7 +221,7 @@ export type SCIMResource = {
 export type SCIMResourceInput = SCIMResource;
 
 export type SCIMConfig = {
-  /** Machine user name for SCIM operations */
+  /** Machine user for SCIM operations, one of this Auth service's machineUsers */
   machineUserName: string;
   /** SCIM authorization configuration */
   authorization: SCIMAuthorization;
@@ -321,7 +321,7 @@ export type AuthConfigInput =
             /** Identity provider name */
             name: string;
             kind: "SAML";
-            /** Enable signing of SAML requests */
+            /** Enable signing of SAML requests (defaults to false) */
             enableSignRequest?: boolean | undefined;
             /** URL to fetch SAML metadata (mutually exclusive with rawMetadata) */
             metadataURL?: string | undefined;
@@ -356,7 +356,7 @@ export type AuthConfigInput =
       /** SCIM provisioning configuration */
       scim?:
         | {
-            /** Machine user name for SCIM operations */
+            /** Machine user for SCIM operations, one of this Auth service's machineUsers */
             machineUserName: string;
             /** SCIM authorization configuration */
             authorization: {
@@ -1453,7 +1453,7 @@ export type AuthConfigInput =
             /** Identity provider name */
             name: string;
             kind: "SAML";
-            /** Enable signing of SAML requests */
+            /** Enable signing of SAML requests (defaults to false) */
             enableSignRequest?: boolean | undefined;
             /** URL to fetch SAML metadata (mutually exclusive with rawMetadata) */
             metadataURL?: string | undefined;
@@ -1488,7 +1488,7 @@ export type AuthConfigInput =
       /** SCIM provisioning configuration */
       scim?:
         | {
-            /** Machine user name for SCIM operations */
+            /** Machine user for SCIM operations, one of this Auth service's machineUsers */
             machineUserName: string;
             /** SCIM authorization configuration */
             authorization: {
@@ -1730,7 +1730,7 @@ export type AuthConfig =
             /** Identity provider name */
             name: string;
             kind: "SAML";
-            /** Enable signing of SAML requests */
+            /** Enable signing of SAML requests (defaults to false) */
             enableSignRequest: boolean;
             /** URL to fetch SAML metadata (mutually exclusive with rawMetadata) */
             metadataURL?: string | undefined;
@@ -1765,7 +1765,7 @@ export type AuthConfig =
       /** SCIM provisioning configuration */
       scim?:
         | {
-            /** Machine user name for SCIM operations */
+            /** Machine user for SCIM operations, one of this Auth service's machineUsers */
             machineUserName: string;
             /** SCIM authorization configuration */
             authorization: {
@@ -2936,7 +2936,7 @@ export type AuthConfig =
             /** Identity provider name */
             name: string;
             kind: "SAML";
-            /** Enable signing of SAML requests */
+            /** Enable signing of SAML requests (defaults to false) */
             enableSignRequest: boolean;
             /** URL to fetch SAML metadata (mutually exclusive with rawMetadata) */
             metadataURL?: string | undefined;
@@ -2971,7 +2971,7 @@ export type AuthConfig =
       /** SCIM provisioning configuration */
       scim?:
         | {
-            /** Machine user name for SCIM operations */
+            /** Machine user for SCIM operations, one of this Auth service's machineUsers */
             machineUserName: string;
             /** SCIM authorization configuration */
             authorization: {

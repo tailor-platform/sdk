@@ -15,6 +15,7 @@ describe("control plane", async () => {
     });
     expect(idpService?.userAuthPolicy).toMatchObject({
       useNonEmailIdentifier: false,
+      allowedEmailDomains: ["*"],
       allowSelfPasswordReset: true,
       passwordRequireUppercase: true,
       passwordRequireLowercase: true,

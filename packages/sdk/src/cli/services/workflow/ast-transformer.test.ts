@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { logger } from "#/cli/shared/logger";
 import {
   normalizeFilePath,
@@ -10,6 +11,7 @@ import {
   type StartTarget,
 } from "#/cli/shared/start-context";
 import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
+import { createHookFailures } from "../hook-failures";
 import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import {
@@ -62,7 +64,7 @@ function transformStartCalls(
   }
 
   const context: StartContext = { modules, authNamespace };
-  return transformStartCallsWithContext(source, context, currentFilePath);
+  return transformStartCallsWithContext(source, context, currentFilePath).toString();
 }
 
 function transformWorkflowJobSource(
@@ -77,12 +79,18 @@ function transformWorkflowJobSource(
     targetJobName,
     targetJobExportName,
     otherJobExportNames,
-  );
+  ).toString();
   return transformStartCalls(stripped, new Map(), jobNameMap);
 }
 
 describe("AST Transformer - createWorkflowJob call detection", () => {
   describe("findAllJobs", () => {
+    test("detects jobs whose bodies contain sparse arrays", () => {
+      const source = `import { createWorkflowJob } from "@tailor-platform/sdk";
+export const sparse = createWorkflowJob({ name: "sparse", body: () => [, "value"] });`;
+      expect(findJobs(source)).toMatchObject([{ name: "sparse", exportName: "sparse" }]);
+    });
+
     test("detects createWorkflowJob calls", () => {
       const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";
@@ -568,7 +576,7 @@ const mainJob = createWorkflowJob({
   body: async () => "main"
 });
 `;
-      const result = transformWorkflowSource(source, "main-job");
+      const result = transformWorkflowSource(source, "main-job").toString();
 
       expect(result).toContain("body: () => {}");
       expect(result).not.toContain("nestedJob.start");
@@ -584,7 +592,7 @@ const simpleJob = createWorkflowJob({
   body: () => "simple"
 });
 `;
-      const result = transformWorkflowSource(source, "simple-job");
+      const result = transformWorkflowSource(source, "simple-job").toString();
 
       // no changes
       expect(result).toContain('"simple"');
@@ -603,7 +611,7 @@ export const mainJob = createWorkflowJob({
 });
 `;
 
-      const result = transformWorkflowSource(source, "main-job", "mainJob", ["step"]);
+      const result = transformWorkflowSource(source, "main-job", "mainJob", ["step"]).toString();
 
       expect(result).toContain('const step = { start: async () => "local" }');
       expect(result).toContain("step.start()");
@@ -632,7 +640,7 @@ export default createWorkflow({
 });
 `;
       // When bundling check-inventory job
-      const result = transformWorkflowSource(source, "check-inventory");
+      const result = transformWorkflowSource(source, "check-inventory").toString();
 
       // check-inventory should remain
       expect(result).toContain("check-inventory");
@@ -662,7 +670,7 @@ const workflow = createWorkflow({
 
 export default workflow;
 `;
-      const result = transformWorkflowSource(source, "main-job");
+      const result = transformWorkflowSource(source, "main-job").toString();
 
       // mainJob should remain
       expect(result).toContain("main-job");
@@ -693,7 +701,7 @@ export default createWorkflow({
 `;
       // "caller-job" is the target job being bundled, but it does NOT exist
       // in this file. This file is a dependency imported by the caller.
-      const result = transformWorkflowSource(source, "caller-job");
+      const result = transformWorkflowSource(source, "caller-job").toString();
 
       // The default export must be preserved so that the importing file
       // can resolve `import simpleWorkflow from "./simple"`
@@ -1165,6 +1173,15 @@ export async function run() {
   });
 
   describe("undetectable workflow-file imports", () => {
+    function thrownBy(run: () => unknown): Error {
+      try {
+        run();
+      } catch (error) {
+        return error as Error;
+      }
+      throw new Error("expected a throw");
+    }
+
     const callerFile = path.resolve("src/resolvers/run.ts");
     const syncFile = path.resolve("src/workflow/sync.ts");
     const context: StartContext = {
@@ -1189,11 +1206,18 @@ export async function run() {
 }
 `;
 
-      expect(() => transformStartCallsWithContext(source, context, callerFile)).toThrow(
-        "syncWorkflow.start() in " +
-          callerFile +
-          ' cannot be rewritten: "../workflow/sync" is a workflow file, but its export "syncWorkflow" is not a workflow or job the build can detect.',
-      );
+      const thrown = thrownBy(() => transformStartCallsWithContext(source, context, callerFile));
+      expect(thrown).toMatchObject({
+        code: "WORKFLOW_START_TARGET_UNDETECTABLE",
+        message:
+          'syncWorkflow.start() cannot be rewritten: "../workflow/sync" is a workflow file, but its export "syncWorkflow" is not a workflow or job the build can detect.',
+        context: {
+          file: callerFile,
+          importSource: "../workflow/sync",
+          importedName: "syncWorkflow",
+        },
+      });
+      expect(getErrorDiagnostics(thrown).location).toEqual({ file: callerFile });
     });
 
     test("transforms .start() on a detectable export reached through a namespace import", () => {
@@ -1205,7 +1229,7 @@ export async function run() {
 }
 `;
 
-      expect(transformStartCallsWithContext(source, context, callerFile)).toContain(
+      expect(transformStartCallsWithContext(source, context, callerFile).toString()).toContain(
         'tailor.workflow.execJobFunction("sync-step", { id: 1 })',
       );
     });
@@ -1219,11 +1243,13 @@ export async function run() {
 }
 `;
 
-      expect(() => transformStartCallsWithContext(source, context, callerFile)).toThrow(
-        "sync.default.start() in " +
-          callerFile +
-          ' cannot be rewritten: "../workflow/sync" is a workflow file, but its default export is not a workflow or job the build can detect.',
-      );
+      expect(
+        thrownBy(() => transformStartCallsWithContext(source, context, callerFile)),
+      ).toMatchObject({
+        code: "WORKFLOW_START_TARGET_UNDETECTABLE",
+        message:
+          'sync.default.start() cannot be rewritten: "../workflow/sync" is a workflow file, but its default export is not a workflow or job the build can detect.',
+      });
     });
 
     test("does not throw when the undetectable import is shadowed by a local binding", () => {
@@ -1235,7 +1261,7 @@ export async function run(syncWorkflow: { start(input: unknown): Promise<string>
 }
 `;
 
-      expect(transformStartCallsWithContext(source, context, callerFile)).toContain(
+      expect(transformStartCallsWithContext(source, context, callerFile).toString()).toContain(
         "syncWorkflow.start({ id: 1 })",
       );
     });
@@ -1278,7 +1304,7 @@ export async function run(syncWorkflow: { start(input: unknown): Promise<string>
     ])("does not throw when the undetectable import is shadowed in %s", (_, body) => {
       const source = `import { syncWorkflow } from "../workflow/sync";\n\n${body}\n`;
 
-      expect(transformStartCallsWithContext(source, context, callerFile)).toContain(
+      expect(transformStartCallsWithContext(source, context, callerFile).toString()).toContain(
         "syncWorkflow.start({ id: 1 })",
       );
     });
@@ -1292,7 +1318,7 @@ export async function run(sync: { default: { start(input: unknown): Promise<stri
 }
 `;
 
-      expect(transformStartCallsWithContext(source, context, callerFile)).toContain(
+      expect(transformStartCallsWithContext(source, context, callerFile).toString()).toContain(
         "sync.default.start({ id: 1 })",
       );
     });
@@ -1484,11 +1510,13 @@ describe("AST Transformer - hasStartCall", () => {
 
 describe("AST Transformer - createStartTransformPlugin", () => {
   test("returns undefined when the start context has no workflow bindings", () => {
-    expect(createStartTransformPlugin({ modules: new Map() })).toBeUndefined();
+    expect(
+      createStartTransformPlugin({ modules: new Map() }, createHookFailures()),
+    ).toBeUndefined();
   });
 
   test("returns undefined when no start context is provided", () => {
-    expect(createStartTransformPlugin(undefined)).toBeUndefined();
+    expect(createStartTransformPlugin(undefined, createHookFailures())).toBeUndefined();
   });
 
   test("returns a plugin when the start context has workflow bindings", () => {
@@ -1503,6 +1531,6 @@ describe("AST Transformer - createStartTransformPlugin", () => {
       ],
     ]);
 
-    expect(createStartTransformPlugin({ modules })).toBeDefined();
+    expect(createStartTransformPlugin({ modules }, createHookFailures())).toBeDefined();
   });
 });

@@ -1,4 +1,5 @@
 import { isLogLevel, LOG_LEVELS } from "#/parser/app-config/log-level";
+import { internalError } from "./errors";
 import type { LogLevel, LogLevelInput } from "#/configure/config/types";
 import type { TreeshakingOptions } from "rolldown";
 
@@ -82,7 +83,9 @@ export function resolveBundleLogLevel(configValue?: LogLevelInput): LogLevel {
   const resolved = normalizeBundleLogLevel(configValue);
   if (resolved) return resolved;
 
-  throw new Error(`Invalid logLevel "${configValue}". Expected one of: ${LOG_LEVELS.join(", ")}`);
+  throw internalError(
+    `Invalid logLevel "${configValue}". Expected one of: ${LOG_LEVELS.join(", ")}.`,
+  );
 }
 
 export function manualPureFunctionsForLogLevel(logLevel: LogLevel): readonly string[] {

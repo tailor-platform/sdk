@@ -118,6 +118,16 @@ export function collectImportantResourceDeletions(
       resourceName: del.name,
     });
   }
+  const { app } = results;
+  const keepsApplication = app.creates.length + app.updates.length + app.unchanged.length > 0;
+  if (!keepsApplication) {
+    for (const del of app.deletes) {
+      importantDeletions.push({
+        resourceLabel: "Application",
+        resourceName: del.name,
+      });
+    }
+  }
   return importantDeletions;
 }
 

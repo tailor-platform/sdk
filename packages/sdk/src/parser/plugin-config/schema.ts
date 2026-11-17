@@ -1,5 +1,11 @@
 import { z } from "zod";
 import { functionSchema } from "#/parser/service/common";
+import {
+  BOTH_TAILORDB_NAMESPACE_HOOKS_MESSAGE,
+  DEFINITION_TIME_HOOK_KEYS,
+  definesBothTailorDBNamespaceHooks,
+  hasDefinitionTimeHooks,
+} from "./definition-hooks";
 import type { Plugin } from "#/plugin/types";
 
 // Custom plugin schema (object form)
@@ -13,6 +19,7 @@ export const PluginConfigSchema = z
     tableConfigRequired: z.union([z.boolean(), functionSchema]).optional(),
     // Definition-time hooks
     onTableLoaded: functionSchema.optional(),
+    onTailorDBNamespaceLoaded: functionSchema.optional(),
     onNamespaceLoaded: functionSchema.optional(),
     // Generation-time hooks
     onTailorDBReady: functionSchema.optional(),
@@ -20,17 +27,13 @@ export const PluginConfigSchema = z
     onExecutorReady: functionSchema.optional(),
     onDeployed: functionSchema.optional(),
   })
-  .refine(
-    (p) => {
-      // importPath is required when plugin has definition-time hooks
-      const hasDefineHooks = p.onTableLoaded || p.onNamespaceLoaded;
-      return !hasDefineHooks || !!p.importPath;
-    },
-    {
-      message:
-        "importPath is required when plugin has definition-time hooks (onTableLoaded/onNamespaceLoaded)",
-    },
-  )
+  .refine((p) => !hasDefinitionTimeHooks(p) || !!p.importPath, {
+    message: `importPath is required when plugin has definition-time hooks (${DEFINITION_TIME_HOOK_KEYS.join("/")})`,
+  })
+  .refine((p) => !definesBothTailorDBNamespaceHooks(p), {
+    message: BOTH_TAILORDB_NAMESPACE_HOOKS_MESSAGE,
+    path: ["onNamespaceLoaded"],
+  })
   .transform(
     (plugin) =>
       plugin as Plugin<

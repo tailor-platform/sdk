@@ -1,5 +1,6 @@
 import * as path from "pathe";
 import { describe, expect, test, vi } from "vitest";
+import { getErrorDiagnostics } from "./error-diagnostics";
 import { loadSeedContext } from "./seed-context";
 import type { Application } from "#/cli/services/application";
 import type { TailorDBType } from "#/parser/service/tailordb/types";
@@ -76,9 +77,16 @@ describe("loadSeedContext", () => {
   test("throws an actionable error when seedPlugin is not configured", async () => {
     mockLoadResult({ plugins: [{ id: "@tailor-platform/other" } as Plugin] });
 
-    await expect(loadSeedContext()).rejects.toThrow(
-      /seedPlugin is not configured in \/proj\/tailor\.config\.ts/,
-    );
+    const error = await loadSeedContext().catch((error: unknown) => error);
+
+    expect(error).toMatchObject({
+      code: "SEED_PLUGIN_NOT_CONFIGURED",
+      message: "seedPlugin is not configured.",
+      suggestion: expect.stringContaining('Add seedPlugin({ distPath: "./seed" })'),
+    });
+    expect(getErrorDiagnostics(error as Error).location).toEqual({
+      file: "/proj/tailor.config.ts",
+    });
   });
 
   test("rejects duplicate type names across namespaces", async () => {
@@ -95,7 +103,14 @@ describe("loadSeedContext", () => {
   test("throws when seedPlugin has no distPath", async () => {
     mockLoadResult({ plugins: [seedPluginInstance({})] });
 
-    await expect(loadSeedContext()).rejects.toThrow(/has no distPath option/);
+    const error = await loadSeedContext().catch((error: unknown) => error);
+
+    expect(error).toMatchObject({
+      code: "CONFIG_INVALID",
+      message: "Invalid seedPlugin options:\n  - distPath: Required so seed data has a location.",
+      suggestion: 'Pass seedPlugin({ distPath: "./seed" }).',
+      context: { file: "/proj/tailor.config.ts", exportName: "plugins" },
+    });
   });
 
   test("resolves a relative distPath against the working directory", async () => {
@@ -139,16 +154,56 @@ describe("loadSeedContext", () => {
   });
 
   test.each([
-    { datasets: { "bad/name": ["cogs"] }, message: /Dataset name "bad\/name"/ },
-    { datasets: { preview: ["../cogs"] }, message: /Dataset name "\.\.\/cogs"/ },
-    { datasets: { preview: [".hidden"] }, message: /Dataset name "\.hidden"/ },
-    { datasets: { preview: [] }, message: /datasets\.preview lists no dataset directories/ },
-    { datasets: { preview: "cogs" }, message: /datasets\.preview must be an array/ },
-    { datasets: ["cogs"], message: /datasets must map names to lists/ },
-  ])("rejects an invalid datasets option: $datasets", async ({ datasets, message }) => {
+    {
+      datasets: { "bad/name": ["cogs"] },
+      issue: { path: ["datasets", "bad/name"], message: 'Dataset name "bad/name" is invalid.' },
+    },
+    {
+      datasets: { preview: ["../cogs"] },
+      issue: { path: ["datasets", "preview", 0], message: 'Dataset name "../cogs" is invalid.' },
+    },
+    {
+      datasets: { preview: ["ok", ".hidden"] },
+      issue: { path: ["datasets", "preview", 1], message: 'Dataset name ".hidden" is invalid.' },
+    },
+    {
+      datasets: { preview: [] },
+      issue: { path: ["datasets", "preview"], message: "Lists no dataset directories." },
+    },
+    {
+      datasets: { preview: "cogs" },
+      issue: {
+        path: ["datasets", "preview"],
+        message: "Must be an array of dataset directory names.",
+      },
+    },
+    {
+      datasets: { preview: [1] },
+      issue: {
+        path: ["datasets", "preview"],
+        message: "Must be an array of dataset directory names.",
+      },
+    },
+    {
+      datasets: ["cogs"],
+      issue: {
+        path: ["datasets"],
+        message: "Must map names to lists of dataset directory names.",
+      },
+    },
+  ])("rejects an invalid datasets option: $datasets", async ({ datasets, issue }) => {
     mockLoadResult({ plugins: [seedPluginInstance({ distPath: "./seed", datasets })] });
 
-    await expect(loadSeedContext()).rejects.toThrow(message);
+    const error = await loadSeedContext().catch((error: unknown) => error);
+
+    expect(error).toMatchObject({
+      code: "CONFIG_INVALID",
+      message: `Invalid seedPlugin options:\n  - ${issue.path.join(".")}: ${issue.message}`,
+      context: { file: "/proj/tailor.config.ts", exportName: "plugins", issues: [issue] },
+    });
+    expect(getErrorDiagnostics(error as Error).location).toEqual({
+      file: "/proj/tailor.config.ts",
+    });
   });
 
   test("builds per-namespace seed ordering from relations", async () => {

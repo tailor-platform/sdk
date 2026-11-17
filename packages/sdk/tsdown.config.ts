@@ -76,7 +76,7 @@ export default defineConfig([
     ...sharedOptions,
     name: "dts",
     dts: {
-      emitDtsOnly: true,
+      dtsOnly: true,
       tsc: { eager: true },
     },
     unbundle: true,

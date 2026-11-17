@@ -1,5 +1,41 @@
 # @tailor-platform/create-sdk
 
+## 2.42.0
+
+### Minor Changes
+
+- [#3102](https://github.com/tailor-platform/sdk/pull/3102) [`bfc6357`](https://github.com/tailor-platform/sdk/commit/bfc6357b6b7aef7e88629fadd5d42f2a569b8c8e) Thanks [@dqn](https://github.com/dqn)! - Add the `content-mapper` template. TypeScript derives its types from `tailor.config.ts` through the SDK's content mapper instead of `tailor.d.ts`. It pins `typescript@7.1.0-beta`, since the content mapper needs TypeScript 7.1.
+
+### Patch Changes
+
+- [#3122](https://github.com/tailor-platform/sdk/pull/3122) [`29c786b`](https://github.com/tailor-platform/sdk/commit/29c786bc003eba593f45af816efe3058e58b9b7e) Thanks [@dqn](https://github.com/dqn)! - Fix the deprecation notice on the generated `uploadFile` overload for string data without `encoding`: it now reads `since 2.15.0` instead of `since NEXT_RELEASE`. Run `tailor generate` to update existing helpers.
+
+## 2.41.0
+
+### Minor Changes
+
+- [#3016](https://github.com/tailor-platform/sdk/pull/3016) [`cd01a32`](https://github.com/tailor-platform/sdk/commit/cd01a32754ea877bc1cf979e4450fdd6dd1a4417) Thanks [@dqn](https://github.com/dqn)! - Add the `no-unused-resolver-input` lint rule, which reports a resolver `input` field that `body` never reads, since a caller may expect it to take effect. A field that `permission` compares with the caller or that declares a `validate` counts as used, and a resolver whose `body` passes its input on in a way that hides which fields it reads is not reported. Silence a field kept on purpose with `eslint-disable-next-line`. Enabled in the ESLint `recommended` config and in newly scaffolded projects; existing Oxlint projects add `"tailor-sdk/no-unused-resolver-input": "warn"` to `.oxlintrc.json`.
+
+- [#3015](https://github.com/tailor-platform/sdk/pull/3015) [`0d690dc`](https://github.com/tailor-platform/sdk/commit/0d690dcef12d53582f01a550ffa9739f8f21b072) Thanks [@dqn](https://github.com/dqn)! - Add the `no-unbound-caller-id-input` lint rule, which reports a resolver mutation's `t.uuid()` or `db.uuid()` input named like the caller's ID, such as `approverId`, `requesterId`, or `createdBy`, unless every `permit: true` policy of its `permission` compares the input with the caller; otherwise a caller can act as another user by sending that user's ID. Enabled in newly scaffolded projects and in the ESLint `recommended` config; add `"tailor-sdk/no-unbound-caller-id-input": "warn"` to the `rules` of an existing `.oxlintrc.json` to enable it there.
+
+### Patch Changes
+
+- [#3042](https://github.com/tailor-platform/sdk/pull/3042) [`52bd46a`](https://github.com/tailor-platform/sdk/commit/52bd46ab491069a2e03f1f678f92ae66955dc8f1) Thanks [@dqn](https://github.com/dqn)! - The platform now rejects creating or updating an IdP whose `allowedEmailDomains` is empty or omitted unless `useNonEmailIdentifier` is `true`, so `tailor deploy` fails on such an IdP. That includes an IdP deployed earlier, on the first deploy after upgrading the SDK, which updates every IdP. Add `allowedEmailDomains: ["*"]` to the IdP's `userAuthPolicy` (adding `userAuthPolicy` when the IdP has none) to keep allowing every email domain, or list the domains you accept. Newly scaffolded `executor`, `generators`, and `static-web-site` projects now set `["*"]`, the deploy warning about an empty list now says the platform rejects it, and the IdP docs describe the requirement.
+
+- [#3057](https://github.com/tailor-platform/sdk/pull/3057) [`5fa2f69`](https://github.com/tailor-platform/sdk/commit/5fa2f6903681a87f2c1aab791211bd85b3e1348a) Thanks [@toiroakr](https://github.com/toiroakr)! - The `workflow` template's e2e `globalSetup` now deletes the workspace it created when the deploy or a later setup step fails, instead of relying on the test runner calling `teardown` after a failed setup. A failing workspace delete is logged as a warning and no longer replaces the original error.
+
+## 2.40.0
+
+### Minor Changes
+
+- [#3017](https://github.com/tailor-platform/sdk/pull/3017) [`df8f3e4`](https://github.com/tailor-platform/sdk/commit/df8f3e439b93878c48ffaf6076cf8a1e03deff27) Thanks [@dqn](https://github.com/dqn)! - Add a lint rule (`no-plain-tailor-any-field-param`) that flags a helper parameter typed with `TailorAnyField` itself, such as `field: TailorAnyField` or `fields: Record<string, TailorAnyField>`. When the helper uses a field passed to it to build another field, such as with `t.object()`, that field's output type becomes `any`; constrain a type parameter instead, such as `<F extends TailorAnyField>(field: F)`. Enabled in newly scaffolded projects.
+
+## 2.39.0
+
+### Patch Changes
+
+- [#2985](https://github.com/tailor-platform/sdk/pull/2985) [`0eb5fee`](https://github.com/tailor-platform/sdk/commit/0eb5fee24ab55bae8a099ba8f8a7fe76a4c1b0dd) Thanks [@dqn](https://github.com/dqn)! - The executor template's `external-webhook` executor now verifies an HMAC-SHA256 signature over the request body before processing it. Until the `signing-secret` secret exists in the `webhook` vault, and for any request whose `x-webhook-signature` header is not the HMAC-SHA256 of the body keyed with that secret, the executor job fails without logging the payload, while the webhook URL still responds with success; `tailor executor jobs external-webhook` lists the failed jobs. The template README shows how to create the secret and send a signed request. Projects scaffolded earlier keep their existing `externalWebhook.ts`; to protect them the same way, verify the signature over the base64-decoded `rawBody` before using `body`.
+
 ## 2.38.0
 
 No changes in this release.

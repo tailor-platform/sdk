@@ -20,8 +20,7 @@ jobs:
 
     if: >-
       github.event.pull_request.user.login != 'renovate[bot]' &&
-      github.event.pull_request.head.ref != 'changeset-release/main' &&
-      !contains(github.event.pull_request.labels.*.name, 'skip-changeset')
+      github.event.pull_request.head.ref != 'changeset-release/main'
 
     steps:
       - name: Checkout
@@ -34,6 +33,8 @@ jobs:
         id: filter
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
+          # Under the default `some`, a '!' pattern matches every other file.
+          predicate-quantifier: some-with-excludes
           filters: |
             changeset:
               - '.changeset/*.md'
@@ -48,17 +49,55 @@ jobs:
               - 'packages/sdk-plugin-tailordb-erd/**'
               - 'packages/sdk-plugin-frontend/**'
               - 'packages/tailor-proto/**'
+            published_docs:
+              - 'packages/sdk/docs/**'
+              - '!packages/sdk/docs/**/*.*.md'
+              - 'packages/sdk/agent-skills/**'
+              - 'packages/create-sdk/templates/*/README.md'
+              - 'packages/*/README.md'
+
+      - name: Fail if published docs change without a changeset
+        if: >-
+          steps.filter.outputs.published_docs == 'true' && steps.filter.outputs.changeset != 'true'
+        run: |
+          echo "::error::This PR changes documentation a package publishes but has no changeset."
+          echo ""
+          echo "Add a changeset (patch if only documentation changed) so the next release ships it: pnpm changeset"
+          echo "The 'skip-changeset' label does not apply to published documentation."
+          exit 1
 
       - name: Fail if no changeset
-        if: steps.filter.outputs.packages == 'true' && steps.filter.outputs.changeset != 'true'
+        if: >-
+          steps.filter.outputs.packages == 'true' && steps.filter.outputs.changeset != 'true' &&
+          !contains(github.event.pull_request.labels.*.name, 'skip-changeset')
         run: |
           echo "::error::No changeset file found in this PR."
           echo ""
           echo "Please add a changeset file using: pnpm changeset"
           echo ""
-          echo "If this PR does not require a changeset (e.g., docs-only changes),"
+          echo "If this PR does not require a changeset (e.g., test-only changes),"
           echo "add 'skip-changeset' label to this PR."
           exit 1
+
+      - name: Fail if a major changeset is outside a v<N> branch
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          version_branch='^v[0-9]+([./-].*)?$'
+          if [[ "$BASE_REF" =~ $version_branch || "$HEAD_REF" =~ $version_branch ]]; then
+            exit 0
+          fi
+          majors=$(grep -lE '^"[^"]+": *major *$' .changeset/*.md || true)
+          if [ -n "$majors" ]; then
+            echo "::error::A major changeset is only allowed on a v<N> branch (for example v3) or a branch derived from it."
+            echo ""
+            echo "Major changesets found (base: $BASE_REF, head: $HEAD_REF):"
+            echo "$majors"
+            echo ""
+            echo "Breaking changes ship in a major release, from a v<N> branch. For the narrow exception that allows minor, see docs/changeset.md."
+            exit 1
+          fi
 
       - name: Install Deps
         if: steps.filter.outputs.changeset == 'true'

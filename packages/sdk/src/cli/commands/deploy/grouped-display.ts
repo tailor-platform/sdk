@@ -37,12 +37,6 @@ type RelatedFunctionRegistryNameSets = {
   replaces: Set<string>;
 };
 
-function forcedFunctionUpdateNames(changes?: RelatedFunctionRegistryChanges): Set<string> {
-  return new Set(
-    changes?.updates.filter((item) => item.forcedBySdkVersion).map((item) => item.name) ?? [],
-  );
-}
-
 /**
  * Convert grouped function registry changes into mutable name sets.
  * @param changes - Grouped function registry changes
@@ -136,13 +130,11 @@ function parseFunctionRegistryName(name: string): { displayName: string; namespa
 /**
  * Build function-registry-only entries that were not grouped with a parent resource.
  * @param names - Related function registry names keyed by action
- * @param forcedUpdates - Function registry update names forced by the SDK version
  * @param consumed - Function registry names already grouped with parent resources
  * @returns Display entries for ungrouped function registry changes
  */
 function buildRemainingFunctionRegistryEntries(
   names: RelatedFunctionRegistryNameSets,
-  forcedUpdates: ReadonlySet<string>,
   consumed: RelatedFunctionRegistryNameSets = createRelatedFunctionRegistryNameSets(),
 ): GroupedDisplayEntry[] {
   const actions = [
@@ -163,7 +155,6 @@ function buildRemainingFunctionRegistryEntries(
           name: displayName,
           labels: ["function"],
           namespace,
-          ...(action === "update" && forcedUpdates.has(name) && { forcedBySdkVersion: true }),
         };
       }),
   );
@@ -212,7 +203,6 @@ export function formatChangeEntriesWithFunctionRegistry<
 ): GroupedDisplayEntry[] {
   const { getNamespace, getDisplayName } = options ?? {};
   const functionNames = createRelatedFunctionRegistryNameSets(functionRegistryChanges);
-  const forcedFunctionUpdates = forcedFunctionUpdateNames(functionRegistryChanges);
   const consumed: RelatedFunctionRegistryNameSets = createRelatedFunctionRegistryNameSets();
 
   function processItems(
@@ -228,8 +218,7 @@ export function formatChangeEntriesWithFunctionRegistry<
       for (const name of matchedNames) {
         consumedSet.add(name);
       }
-      const forcedBySdkVersion =
-        item.forcedBySdkVersion && matchedNames.every((name) => forcedFunctionUpdates.has(name));
+      const forcedBySdkVersion = item.forcedBySdkVersion && matchedNames.length === 0;
       return {
         action,
         symbol: ACTION_SYMBOLS[action],
@@ -252,7 +241,7 @@ export function formatChangeEntriesWithFunctionRegistry<
       labels: [resourceLabel],
       namespace: getNamespace?.(item as C | U | D),
     })),
-    ...buildRemainingFunctionRegistryEntries(functionNames, forcedFunctionUpdates, consumed),
+    ...buildRemainingFunctionRegistryEntries(functionNames, consumed),
   ];
 }
 

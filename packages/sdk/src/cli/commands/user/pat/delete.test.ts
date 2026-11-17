@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { deleteCommand } from "./delete";
 import { createPatOperatorClient } from "./user";
 
@@ -12,9 +13,9 @@ vi.mock("./user", () => ({ createPatOperatorClient: vi.fn() }));
 describe("user pat delete", () => {
   beforeEach(() => {
     vi.mocked(assertWritable).mockResolvedValue(undefined);
-    vi.mocked(createPatOperatorClient).mockResolvedValue({
-      deletePersonalAccessToken: vi.fn().mockResolvedValue(undefined),
-    } as unknown as Awaited<ReturnType<typeof createPatOperatorClient>>);
+    vi.mocked(createPatOperatorClient).mockResolvedValue(
+      mockOperatorClient({ deletePersonalAccessToken: {} }),
+    );
   });
 
   test("applies an explicit profile to the readonly guard and operator client", async () => {

@@ -94,7 +94,7 @@ describe("generatePGliteSchemaModule", () => {
         namespace: "other",
         tables: parsed(
           {
-            "Tick`${x}": db.table("Tick`${x}", { v: db.string() }),
+            Tick: db.table("Tick", { v: db.string().default("`${x}") }),
             Cr: db.table("Cr", { v: db.string().default("a\r\nb") }),
           },
           "other",
@@ -115,7 +115,8 @@ describe("generatePGliteSchemaModule", () => {
       'CREATE UNIQUE INDEX IF NOT EXISTS "Invoice_idx_region_email_7fe66af8_idx" ON "Invoice" ("region", "email");',
     );
     expect(content).not.toContain("Invoice_idx_region_invoiceNumber");
-    expect(content).toContain('  "other": `CREATE TABLE IF NOT EXISTS "Tick\\`\\${x}" (');
+    expect(content).toContain('  "other": `CREATE TABLE IF NOT EXISTS "Tick" (');
+    expect(content).toContain("\"v\" text NOT NULL DEFAULT '\\`\\${x}'");
     expect(content).toContain("\"v\" text NOT NULL DEFAULT 'a\\r\nb'");
     expect(content).toMatch(/\n} as const;\n$/);
   });

@@ -16,3 +16,33 @@ export function runRuleTests(name: TailorSdkRuleName, tests: Partial<RuleTester.
     ...tests,
   });
 }
+
+export interface ResolverFixture {
+  prelude?: string;
+  operation?: "query" | "mutation" | { source: string };
+  input?: string;
+  permission?: string;
+  body?: string;
+}
+
+/** A resolver module; string fields other than `operation` are inserted as source. */
+export function resolverSource({
+  prelude = "",
+  operation = "mutation",
+  input,
+  permission,
+  body = "() => 1",
+}: ResolverFixture): string {
+  return [
+    'import { createResolver, db, t } from "@tailor-platform/sdk";',
+    prelude,
+    "export default createResolver({",
+    '  name: "r",',
+    `  operation: ${typeof operation === "string" ? JSON.stringify(operation) : operation.source},`,
+    ...(input === undefined ? [] : [`  input: ${input},`]),
+    ...(permission === undefined ? [] : [`  permission: ${permission},`]),
+    `  ${/^(async )?body\(/.test(body) ? body : `body: ${body}`},`,
+    "  output: t.int(),",
+    "});",
+  ].join("\n");
+}

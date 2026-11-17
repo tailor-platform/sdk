@@ -1,5 +1,7 @@
 import { describe, expect, test } from "vitest";
+import { definePlugins } from "#/configure/config/index";
 import { db } from "#/configure/services/tailordb/index";
+import { KyselyGeneratorID, kyselyTypePlugin } from "#/plugin/builtin/kysely-type/index";
 import { getRawPluginTableName } from "#/plugin/guards";
 import { PluginManager } from "#/plugin/manager";
 import type { Plugin } from "#/plugin/types";
@@ -19,6 +21,21 @@ describe("getRawPluginTableName", () => {
 });
 
 describe("PluginManager", () => {
+  test("getPluginConfig returns the config a registered plugin was created with", () => {
+    const manager = new PluginManager(
+      definePlugins(kyselyTypePlugin({ distPath: "./db.ts", temporal: true })),
+    );
+
+    expect(manager.getPluginConfig(KyselyGeneratorID)).toEqual({
+      distPath: "./db.ts",
+      temporal: true,
+    });
+  });
+
+  test("getPluginConfig returns undefined for a plugin that is not registered", () => {
+    expect(new PluginManager().getPluginConfig(KyselyGeneratorID)).toBeUndefined();
+  });
+
   test("rejects two plugins that share an ID instead of keeping only the last", () => {
     const first: Plugin = { id: "dup", description: "first" };
     const second: Plugin = { id: "dup", description: "second" };
@@ -31,7 +48,7 @@ describe("PluginManager", () => {
       id: "namespace-plugin",
       description: "namespace generator",
       importPath: "@example/namespace",
-      onNamespaceLoaded: () => ({
+      onTailorDBNamespaceLoaded: () => ({
         tables: {
           auditLog: db.table("AuditLog", {
             message: db.string(),
@@ -55,12 +72,49 @@ describe("PluginManager", () => {
     });
   });
 
+  test("still runs a plugin written with the deprecated onNamespaceLoaded", async () => {
+    const plugin: Plugin = {
+      id: "legacy-namespace-plugin",
+      description: "namespace generator",
+      importPath: "@example/legacy-namespace",
+      // oxlint-disable-next-line typescript/no-deprecated -- Plugins written before the rename keep working.
+      onNamespaceLoaded: ({ namespace }) => ({
+        tables: { auditLog: db.table(`AuditLog_${namespace}`, { message: db.string() }) },
+      }),
+    };
+
+    const manager = new PluginManager([plugin]);
+    await manager.processNamespacePlugins("main");
+
+    expect(manager.getPluginGeneratedTables().map((info) => info.table.name)).toEqual([
+      "AuditLog_main",
+    ]);
+  });
+
+  test("calls a method-style namespace hook with the plugin as `this`", async () => {
+    const plugin = {
+      id: "method-plugin",
+      description: "namespace generator",
+      importPath: "@example/method",
+      pluginConfig: { tableName: "Setting" },
+      onTailorDBNamespaceLoaded() {
+        return { tables: { setting: db.table(this.pluginConfig?.tableName ?? "Unset", {}) } };
+      },
+    } satisfies Plugin<unknown, { tableName: string }>;
+
+    const manager = new PluginManager([plugin]);
+    const [result] = await manager.processNamespacePlugins("main");
+
+    expect(result?.result.success).toBe(true);
+    expect(manager.getPluginGeneratedTables().map((info) => info.table.name)).toEqual(["Setting"]);
+  });
+
   test("dedupes namespace plugin-generated outputs across namespaces", async () => {
     const plugin: Plugin = {
       id: "namespace-plugin",
       description: "namespace generator",
       importPath: "@example/namespace",
-      onNamespaceLoaded: () => ({
+      onTailorDBNamespaceLoaded: () => ({
         tables: {
           auditLog: db.table("AuditLog", {
             message: db.string(),

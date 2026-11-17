@@ -35,7 +35,36 @@ describe("triggerExecutor API types", () => {
 
     acceptsOptions({
       executor: incomingWebhookExecutor,
-      payload: { body: { message: "hello" }, headers: { "x-request-id": "req-1" } },
+      payload: { message: "hello" },
+    });
+  });
+
+  test("allows headers for incomingWebhook executors, as a string or a list of strings", () => {
+    const acceptsOptions = (
+      _options: TriggerExecutorTypedOptions<typeof incomingWebhookExecutor>,
+    ): void => {};
+
+    acceptsOptions({
+      executor: incomingWebhookExecutor,
+      headers: { "x-request-id": "req-1", accept: ["application/json", "text/html"] },
+    });
+
+    acceptsOptions({
+      executor: incomingWebhookExecutor,
+      // @ts-expect-error - a header value is a string or a list of strings
+      headers: { "x-request-id": 1 },
+    });
+  });
+
+  test("disallows headers for schedule executors", () => {
+    const acceptsOptions = (
+      _options: TriggerExecutorTypedOptions<typeof scheduleExecutor>,
+    ): void => {};
+
+    acceptsOptions({
+      executor: scheduleExecutor,
+      // @ts-expect-error - schedule trigger does not accept headers
+      headers: { "x-request-id": "req-1" },
     });
   });
 
@@ -49,7 +78,7 @@ describe("triggerExecutor API types", () => {
     acceptsOptions({
       executor: scheduleExecutor,
       // @ts-expect-error - schedule trigger does not accept payload
-      payload: { body: { message: "hello" } },
+      payload: { message: "hello" },
     });
   });
 
@@ -63,7 +92,7 @@ describe("triggerExecutor API types", () => {
 
     acceptsDefaultOptions({
       executor: incomingWebhookExecutor,
-      payload: { body: { message: "hello" }, headers: { "x-request-id": "req-1" } },
+      payload: { message: "hello" },
     });
 
     acceptsDefaultOptions({ executor: scheduleExecutor });
@@ -71,7 +100,7 @@ describe("triggerExecutor API types", () => {
     // @ts-expect-error - payload is not allowed for schedule trigger
     acceptsDefaultOptions({
       executor: scheduleExecutor,
-      payload: { body: { message: "hello" } },
+      payload: { message: "hello" },
     });
   });
 });

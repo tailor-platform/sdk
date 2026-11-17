@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
@@ -30,7 +31,7 @@ describe("getWorkspace", () => {
   ): Awaited<ReturnType<typeof initOperatorClient>> {
     const client = {
       getWorkspace: vi.fn().mockResolvedValue({
-        workspace: { id: workspaceId, name: "ws", region: "us-west" },
+        workspace: { id: workspaceId, name: "ws", region: "us-west", organizationId: "org-1" },
       }),
       getMetadata,
     };

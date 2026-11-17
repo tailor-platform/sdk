@@ -119,7 +119,6 @@ export async function teardown(): Promise<void> {
   }
 
   // Clean up workspaces
-  if (!process.env.TAILOR_PLATFORM_TOKEN) return;
   if (!fs.existsSync(TRACKING_DIR)) return;
 
   const ids = fs.readdirSync(TRACKING_DIR);
@@ -128,8 +127,13 @@ export async function teardown(): Promise<void> {
   fs.rmSync(TRACKING_DIR, { recursive: true, force: true });
 
   console.log(`[globalTeardown] Cleaning up ${ids.length} workspace(s)...`);
-  const token = await loadAccessToken();
-  const client = await initOperatorClient(token);
+  let client: OperatorClient;
+  try {
+    client = await initOperatorClient(await loadAccessToken());
+  } catch (e) {
+    console.warn("[globalTeardown] Skipped workspace cleanup: authentication unavailable", e);
+    return;
+  }
 
   for (const id of ids) {
     try {

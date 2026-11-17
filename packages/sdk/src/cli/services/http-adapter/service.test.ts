@@ -1,6 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { aroundEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
+import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
+import { logger } from "#/cli/shared/logger";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { createHttpAdapterService } from "./service";
 
@@ -59,6 +61,40 @@ export const shared = (value: string) => value.toUpperCase();
     expect(service.adapters[0]!.adapter.name).toBe("adapter");
   });
 
+  test("rejects two files declaring the same adapter name", async () => {
+    const source = `
+import { createHttpAdapter } from "@tailor-platform/sdk";
+export default createHttpAdapter({
+  name: "duplicate",
+  pathPattern: "/a",
+  input: { get: () => ({ query: "{}" }) },
+});
+`;
+    const fileA = writeAdapter("a.ts", source);
+    const fileB = writeAdapter("b.ts", source);
+
+    const service = createHttpAdapterService({
+      config: { files: [fileA, fileB] },
+      baseDir: process.cwd(),
+    });
+
+    await expect(service.loadAdapters()).rejects.toMatchObject({
+      code: "DEFINITION_NAME_DUPLICATE",
+      context: {
+        kind: "http-adapter",
+        duplicates: [
+          {
+            name: "duplicate",
+            definitions: [
+              { file: fileA, exportName: "default" },
+              { file: fileB, exportName: "default" },
+            ],
+          },
+        ],
+      },
+    });
+  });
+
   test("accepts a computed (non-literal) name as long as it is valid at runtime", async () => {
     const file = writeAdapter(
       "dynamic-name.ts",
@@ -115,7 +151,36 @@ export default createHttpAdapter({
     );
 
     const service = createHttpAdapterService({ config: { files: [file] }, baseDir: process.cwd() });
-    await expect(service.loadAdapters()).rejects.toThrow(/async `input\.get` function/);
+    const rejection = await service.loadAdapters().catch((error: unknown) => error);
+    expect(rejection).toMatchObject({
+      code: "HTTP_ADAPTER_ASYNC_UNSUPPORTED",
+      message: 'HTTP adapter "async-input" has an async `input.get` function.',
+      suggestion: "Make the handler synchronous; async/await is not supported.",
+      context: { name: "async-input", kind: "input.get" },
+    });
+    expect(getErrorDiagnostics(rejection as Error).location).toEqual({ file });
+  });
+
+  test("rejects files whose output handler is async", async () => {
+    const file = writeAdapter(
+      "async-output.ts",
+      `
+import { createHttpAdapter } from "@tailor-platform/sdk";
+export default createHttpAdapter({
+  name: "async-output",
+  pathPattern: "/x",
+  input: { get: () => ({ query: "{}" }) },
+  output: async () => ({ status: 200 }),
+});
+`,
+    );
+
+    const service = createHttpAdapterService({ config: { files: [file] }, baseDir: process.cwd() });
+    await expect(service.loadAdapters()).rejects.toMatchObject({
+      code: "HTTP_ADAPTER_ASYNC_UNSUPPORTED",
+      message: 'HTTP adapter "async-output" has an async `output` function.',
+      context: { name: "async-output", kind: "output" },
+    });
   });
 
   test("rejects files where the adapter is only a named export", async () => {
@@ -136,7 +201,7 @@ export const adapter = createHttpAdapter({
     await expect(service.loadAdapters()).rejects.toMatchObject({
       code: "DEFINITION_EXPORT_INVALID",
       message: expect.stringMatching(
-        /^HTTP adapter in .*missing-default\.ts must not be a named export, but it is exported as `adapter`\.$/,
+        /^HTTP adapter must not be a named export, but it is exported as `adapter`\.$/,
       ),
       context: { kind: "http-adapter", file, exportName: "adapter" },
     });
@@ -161,14 +226,44 @@ export default adapter;
     using _logger = silenceLogger("error");
     await expect(service.loadAdapters()).rejects.toMatchObject({
       code: "DEFINITION_INVALID",
-      message: expect.stringMatching(
-        /^Invalid HTTP adapter in .*invalid\.ts:\n {2}- pathPattern: /,
-      ),
+      message: expect.stringMatching(/^Invalid HTTP adapter:\n {2}- pathPattern: /),
       context: {
         kind: "http-adapter",
         file,
         exportName: "default",
         issues: [{ path: ["pathPattern"] }],
+      },
+    });
+    expect(vi.mocked(logger.error).mock.calls).toEqual([
+      [expect.stringMatching(/Failed to load HTTP adapter from.*invalid\.ts/)],
+    ]);
+  });
+
+  test("reports an adapter name the platform rejects", async () => {
+    const file = writeAdapter(
+      "invalid-name.ts",
+      `
+import { createHttpAdapter } from "@tailor-platform/sdk";
+export default createHttpAdapter({
+  name: "My_Adapter",
+  pathPattern: "/x",
+  input: { get: () => ({ query: "{}" }) },
+});
+`,
+    );
+
+    const service = createHttpAdapterService({ config: { files: [file] }, baseDir: process.cwd() });
+    using _logger = silenceLogger("error");
+    await expect(service.loadAdapters()).rejects.toMatchObject({
+      code: "DEFINITION_INVALID",
+      context: {
+        issues: [
+          {
+            path: ["name"],
+            message:
+              "must be 3-63 lowercase letters, digits, or hyphens, starting and ending with a letter or digit",
+          },
+        ],
       },
     });
   });

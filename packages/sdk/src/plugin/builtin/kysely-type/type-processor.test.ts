@@ -2,7 +2,11 @@ import { describe, expect, test } from "vitest";
 import { db } from "#/configure/services/tailordb/schema";
 import { parseTypes } from "#/parser/service/tailordb/index";
 import { toSchemaOutput } from "#/utils/test/internal";
-import { processKyselyFields, processKyselyType } from "./type-processor";
+import {
+  generateKyselyTypesSource,
+  processKyselyFields,
+  processKyselyType,
+} from "./type-processor";
 import type { TailorAnyDBType } from "#/configure/services/tailordb/types";
 import type { TailorDBType } from "#/parser/service/tailordb/types";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
@@ -16,6 +20,15 @@ async function getTypeDef(type: TailorAnyDBType, temporal = false) {
   const result = await processKyselyType(parseTailorDBType(toSchemaOutput(type)), temporal);
   return result.typeDef;
 }
+
+describe("generateKyselyTypesSource", () => {
+  test("exports getDB over no namespaces when no table is defined, so importing it still type-checks", async () => {
+    const source = await generateKyselyTypesSource([{ namespace: "main", tables: {} }], false);
+
+    expect(source).toContain("export interface Namespace {}");
+    expect(source).toContain("export const getDB = createGetDB<Namespace>();");
+  });
+});
 
 describe("Kysely TypeProcessor", () => {
   describe("basic types", () => {
@@ -239,7 +252,7 @@ describe("Kysely TypeProcessor", () => {
       expect(result.name).toBe("SimpleUser");
       expect(result.typeDef).toContain("SimpleUser: ");
       expect(result.typeDef).toContain("profile:");
-      expect(result.typeDef).toContain("ObjectColumnType<");
+      expect(result.typeDef).not.toContain("ObjectColumnType<");
       expect(result.typeDef).toContain("name: string");
       expect(result.typeDef).toContain("email?: string | null");
     });
@@ -263,6 +276,7 @@ describe("Kysely TypeProcessor", () => {
 
       const typeDef = await getTypeDef(deepNestedType);
 
+      expect(typeDef).not.toContain("ObjectColumnType");
       expect(typeDef).toContain("details:");
       expect(typeDef).toContain("address:");
       expect(typeDef).toContain("street: string");
@@ -323,8 +337,9 @@ describe("Kysely TypeProcessor", () => {
         }),
       );
 
-      expect(typeDef).toContain("ArrayColumnType<ObjectColumnType<");
-      expect(typeDef).toContain("| null");
+      expect(typeDef).not.toContain("ColumnType");
+      expect(typeDef).toContain("value?: string | null");
+      expect(typeDef).toContain("}[] | null;");
     });
 
     test("should use plain array syntax for nested objects without ColumnType fields", async () => {
@@ -340,7 +355,6 @@ describe("Kysely TypeProcessor", () => {
         }),
       );
 
-      // Plain object (no Timestamp/optional fields) uses regular array syntax
       expect(typeDef).toContain("}[];");
       expect(typeDef).not.toContain("ArrayColumnType");
     });
@@ -460,10 +474,10 @@ describe("Kysely TypeProcessor", () => {
       {
         name: "ObjectColumnType",
         type: db.table("User", {
-          profile: db.object({ nickname: db.string({ optional: true }) }),
+          profile: db.object({ createdAt: db.datetime() }),
         }),
         expected: {
-          Timestamp: false,
+          Timestamp: true,
           TemporalDate: false,
           TemporalInstant: false,
           TemporalTime: false,

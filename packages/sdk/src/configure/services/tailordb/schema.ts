@@ -1,4 +1,3 @@
-import { cloneDeep } from "es-toolkit";
 import {
   type AllowedValues,
   type AllowedValuesOutput,
@@ -10,6 +9,7 @@ import {
   type FieldParseInternalArgs,
 } from "#/runtime/field-parse";
 import { brandValue } from "#/utils/brand";
+import { cloneDeep } from "./clone-deep";
 import type {
   FieldOptions,
   FieldOutput,
@@ -986,7 +986,7 @@ function createTailorDBFieldRuntime<
       // Create a new field with cloned configuration
       const clonedField = createTailorDBFieldRuntime(type, options, clonedFields, values);
 
-      // Deep copy metadata using cloneDeep (preserves function references)
+      // Deep copy metadata (preserves function references)
       Object.assign(clonedField._metadata, cloneDeep(this._metadata));
 
       // Apply new options if provided
@@ -1408,7 +1408,8 @@ type DBTable<
 /**
  * Creates a new database table with the specified fields.
  * An `id` field (UUID) is automatically added to every table.
- * @param name - The name of the table, or a tuple of [name, pluralForm]
+ * @param name - The name of the table, or a tuple of [name, pluralForm]. The table name must be
+ * 1-63 ASCII letters or digits, starting with an uppercase letter.
  * @param fields - The field definitions for the table
  * @returns A new TailorDB table instance
  * @example
@@ -1429,7 +1430,8 @@ function dbTable<const F extends { id?: never } & Record<string, TailorAnyDBFiel
 /**
  * Creates a new database table with the specified fields and description.
  * An `id` field (UUID) is automatically added to every table.
- * @param name - The name of the table, or a tuple of [name, pluralForm]
+ * @param name - The name of the table, or a tuple of [name, pluralForm]. The table name must be
+ * 1-63 ASCII letters or digits, starting with an uppercase letter.
  * @param description - A description of the table
  * @param fields - The field definitions for the table
  * @returns A new TailorDB table instance

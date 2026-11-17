@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk-plugin-frontend",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Build and deploy frontend assets after Tailor Platform deployments",
   "license": "MIT",
   "repository": {
@@ -40,17 +40,17 @@
   "devDependencies": {
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "26.6.6",
-    "oxlint": "1.90.0",
-    "oxlint-tsgolint": "7.0.2005",
-    "tsdown": "0.23.2",
+    "oxlint": "1.93.0",
+    "oxlint-tsgolint": "7.0.2007",
+    "tsdown": "0.23.7",
     "typescript": "6.0.3",
-    "vitest": "5.0.5"
+    "vitest": "5.1.0"
   },
   "peerDependencies": {
     "@tailor-platform/sdk": "workspace:^"
   },
   "engines": {
     "bun": ">=1.2.0",
-    "node": ">=22.18.0"
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   }
 }

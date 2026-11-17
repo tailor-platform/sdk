@@ -1,7 +1,7 @@
 import type { ResolverConfig } from "#/configure/services/resolver/resolver";
 import type { TailorDBType } from "#/configure/services/tailordb/schema";
 import type { Workflow } from "#/configure/services/workflow/workflow";
-import type { IdpName } from "#/configure/types/idp-name";
+import type { IdpNameRegistry } from "#/configure/types/idp-name";
 import type { TailorEnv, TailorPrincipal } from "#/runtime/types";
 import type {
   TailorDBTrigger as ParserTailorDBTrigger,
@@ -12,6 +12,7 @@ import type {
   WorkflowJobExecutionTrigger as ParserWorkflowJobExecutionTrigger,
 } from "#/types/executor.generated";
 import type { output, SerializeDates } from "#/types/helpers";
+import type { IdpUserTargetFor, IdpUserTriggerOptionsFor } from "./idp-user-target.types";
 
 interface EventArgs {
   workspaceId: string;
@@ -409,19 +410,13 @@ export type IdpUserTrigger<Args> = ParserIdpUserTrigger & {
   __args: Args;
 };
 
-type IdpUserSingleTriggerOptions = {
-  /**
-   * IdP namespace name to subscribe to. Required when the project defines
-   * multiple IdPs; optional when a single IdP exists. Must match an IdP name
-   * declared in `defineConfig({ idp: [...] })`.
-   */
-  idp?: IdpName;
-};
+type IdpUserSingleTriggerOptions = IdpUserTargetFor<IdpNameRegistry>;
 
 /**
  * Create a trigger that fires when an IdP user is created.
  * @param options - Trigger options
  * @param options.idp - IdP namespace name to subscribe to
+ * @param options.external - Set to `true` when `idp` names an IdP owned by another config
  * @returns IdP user created trigger
  */
 export function idpUserCreatedTrigger(
@@ -439,6 +434,7 @@ export function idpUserCreatedTrigger(
  * Create a trigger that fires when an IdP user is updated.
  * @param options - Trigger options
  * @param options.idp - IdP namespace name to subscribe to
+ * @param options.external - Set to `true` when `idp` names an IdP owned by another config
  * @returns IdP user updated trigger
  */
 export function idpUserUpdatedTrigger(
@@ -456,6 +452,7 @@ export function idpUserUpdatedTrigger(
  * Create a trigger that fires when an IdP user is deleted.
  * @param options - Trigger options
  * @param options.idp - IdP namespace name to subscribe to
+ * @param options.external - Set to `true` when `idp` names an IdP owned by another config
  * @returns IdP user deleted trigger
  */
 export function idpUserDeletedTrigger(
@@ -469,15 +466,10 @@ export function idpUserDeletedTrigger(
   };
 }
 
-type IdpUserTriggerOptions<K extends IdpUserEventKind[]> = {
-  events: K;
-  /**
-   * IdP namespace name to subscribe to. Required when the project defines
-   * multiple IdPs; optional when a single IdP exists. Must match an IdP name
-   * declared in `defineConfig({ idp: [...] })`.
-   */
-  idp?: IdpName;
-};
+type IdpUserTriggerOptions<K extends IdpUserEventKind[]> = IdpUserTriggerOptionsFor<
+  K,
+  IdpNameRegistry
+>;
 
 /**
  * Create a trigger that fires on multiple IdP user event types.
@@ -485,6 +477,7 @@ type IdpUserTriggerOptions<K extends IdpUserEventKind[]> = {
  * @param options - Trigger options with events array
  * @param options.events - IdP user event kinds to subscribe to
  * @param options.idp - IdP namespace name to subscribe to
+ * @param options.external - Set to `true` when `idp` names an IdP owned by another config
  * @returns IdP user trigger
  */
 export function idpUserTrigger<const K extends [IdpUserEventKind, ...IdpUserEventKind[]]>(

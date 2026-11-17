@@ -23,7 +23,7 @@ describe("@tailor-platform/sdk/runtime/secretmanager", () => {
   });
 
   test("getSecret returns undefined for missing secret", async () => {
-    using _sm = mockSecretmanager();
+    using _sm = mockSecretmanager({ secrets: { vault: {} } });
     await expect(secretmanager.getSecret("vault", "NOPE")).resolves.toBeUndefined();
   });
 

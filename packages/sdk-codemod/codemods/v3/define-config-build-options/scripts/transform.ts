@@ -1,100 +1,20 @@
 import {
-  callArgument,
+  entryKey,
   excerptOf,
-  findImportStatements,
-  importBindings,
   lineOf,
-  localDeclarationNames,
+  lineStart,
+  objectEntries,
+  ownLineIndent,
+  ownLineRange,
   pairValue,
-  parseRoot,
-  stringValue,
 } from "../../../../src/ast-grep-helpers";
+import { findDefineConfigCalls, type ManualMigration } from "../../../../src/define-config";
 import type { LlmReviewFinding } from "../../../../src/types";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
-const SDK_MODULE = "@tailor-platform/sdk";
-const DEFINE_CONFIG = "defineConfig";
 const GROUP_KEY = "buildOptions";
 const MOVED_KEYS: ReadonlySet<string> = new Set(["inlineSourcemap", "logLevel"]);
 const NESTED_INDENT = "  ";
-const OBJECT_PUNCTUATION: ReadonlySet<string> = new Set(["{", "}", ",", "comment"]);
-
-/** Local names through which a file reaches the SDK's `defineConfig`. */
-type DefineConfigBindings = {
-  /** Names bound by `import { defineConfig } from "@tailor-platform/sdk"`, aliases included. */
-  functions: Set<string>;
-  /** Names bound by `import * as sdk from "@tailor-platform/sdk"`. */
-  namespaces: Set<string>;
-};
-
-function namespaceImportName(statement: SgNode): string | null {
-  const namespaceImport = statement.find({ rule: { kind: "namespace_import" } });
-  const name = namespaceImport?.children().find((child) => child.kind() === "identifier");
-  return name?.text() ?? null;
-}
-
-function defineConfigBindings(root: SgNode): DefineConfigBindings {
-  const bindings: DefineConfigBindings = { functions: new Set(), namespaces: new Set() };
-  for (const statement of findImportStatements(root)) {
-    const namespaceName = namespaceImportName(statement);
-    for (const binding of importBindings(statement)) {
-      if (binding.source !== SDK_MODULE || binding.typeOnly) continue;
-      if (binding.importedName === DEFINE_CONFIG) bindings.functions.add(binding.localName);
-      if (binding.localName === namespaceName) bindings.namespaces.add(binding.localName);
-    }
-  }
-  return bindings;
-}
-
-/**
- * The imported name through which `call` reaches the SDK's `defineConfig`,
- * or null when `call` does not call it.
- */
-function defineConfigCalleeName(call: SgNode, bindings: DefineConfigBindings): string | null {
-  const callee = call.children()[0];
-  if (callee?.kind() === "identifier") {
-    return bindings.functions.has(callee.text()) ? callee.text() : null;
-  }
-  if (callee?.kind() !== "member_expression") return null;
-  const object = callee.children()[0];
-  const property = callee.children().at(-1);
-  if (object?.kind() !== "identifier" || property?.text() !== DEFINE_CONFIG) return null;
-  return bindings.namespaces.has(object.text()) ? object.text() : null;
-}
-
-function objectEntries(object: SgNode): SgNode[] {
-  return object.children().filter((child) => !OBJECT_PUNCTUATION.has(String(child.kind())));
-}
-
-function entryKey(entry: SgNode): string | null {
-  if (entry.kind() === "shorthand_property_identifier") return entry.text();
-  if (entry.kind() !== "pair") return null;
-  const key = entry.children()[0];
-  if (key?.kind() !== "property_identifier" && key?.kind() !== "string") return null;
-  return stringValue(key);
-}
-
-function lineStart(source: string, index: number): number {
-  return source.lastIndexOf("\n", index - 1) + 1;
-}
-
-function ownLineIndent(source: string, node: SgNode): string | null {
-  const start = node.range().start.index;
-  const indent = source.slice(lineStart(source, start), start);
-  return /^[ \t]*$/u.test(indent) ? indent : null;
-}
-
-/** The source range covering `entry`'s whole line(s), including its trailing comma and newline. */
-function ownLineRange(source: string, entry: SgNode): { start: number; end: number } | null {
-  if (ownLineIndent(source, entry) === null) return null;
-  let end = entry.range().end.index;
-  while (source[end] === " " || source[end] === "\t") end += 1;
-  if (source[end] === ",") end += 1;
-  while (source[end] === " " || source[end] === "\t") end += 1;
-  if (source[end] === "\r") end += 1;
-  if (source[end] !== "\n") return null;
-  return { start: lineStart(source, entry.range().start.index), end: end + 1 };
-}
 
 function reindent(text: string, fromIndent: string, toIndent: string): string {
   return text
@@ -114,7 +34,7 @@ function movedEntryLines(source: string, entries: SgNode[], toIndent: string): s
     .join("");
 }
 
-type Analysis = { edits: Edit[] } | { reason: string; node: SgNode } | null;
+type Analysis = { edits: Edit[] } | ManualMigration | null;
 
 function analyzeConfig(source: string, config: SgNode): Analysis {
   const entries = objectEntries(config);
@@ -196,34 +116,14 @@ function analyzeFile(
   source: string,
   filePath: string,
 ): { root: SgNode; results: Exclude<Analysis, null>[] } | null {
-  if (!source.includes(DEFINE_CONFIG)) return null;
-  const root = parseRoot(source, filePath);
-  if (!root) return null;
-  const bindings = defineConfigBindings(root);
-  if (bindings.functions.size === 0 && bindings.namespaces.size === 0) return null;
-  const declaredNames = localDeclarationNames(root);
-
-  const results: Exclude<Analysis, null>[] = [];
-  for (const call of root.findAll({ rule: { kind: "call_expression" } })) {
-    const calleeName = defineConfigCalleeName(call, bindings);
-    if (!calleeName) continue;
-    if (declaredNames.has(calleeName)) {
-      results.push({
-        reason: `\`${calleeName}\` is declared again in this file, so this call may not be the SDK's defineConfig()`,
-        node: call,
-      });
-      continue;
-    }
-    const config = callArgument(call);
-    if (!config) continue;
-    if (config.kind() !== "object") {
-      results.push({ reason: "the defineConfig() argument is not an object literal", node: call });
-      continue;
-    }
-    const result = analyzeConfig(source, config);
-    if (result) results.push(result);
-  }
-  return { root, results };
+  const found = findDefineConfigCalls(source, filePath);
+  if (!found) return null;
+  const results = found.calls.flatMap((call) => {
+    if ("reason" in call) return [call];
+    const result = analyzeConfig(source, call.config);
+    return result ? [result] : [];
+  });
+  return { root: found.root, results };
 }
 
 /**

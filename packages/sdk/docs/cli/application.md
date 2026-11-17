@@ -181,7 +181,23 @@ When multiple configs are provided, `deploy` creates or updates all configured s
 
 Names that identify a resource across the whole workspace, such as application, executor, workflow, and static website names and service namespaces, must be unique across all configs in one deploy. Otherwise, `deploy` fails before planning any changes and lists every duplicate with the config files that define it.
 
-Each config's `files` and `ignores` patterns (see [Service Configuration](../configuration.md#service-configuration)) resolve relative to that config's own directory, not the directory you ran `deploy` from. For example, `apps/buyer/tailor.config.ts` declaring `files: ["db/**/*.ts"]` loads files from `apps/buyer/db/`, independent of where `apps/supplier/tailor.config.ts`'s patterns resolve. If a config's relative patterns match nothing under its own directory, the SDK falls back to the invocation directory and logs a warning (see [Service Configuration](../configuration.md#service-configuration) for details).
+Each config's `files` patterns (see [Service Configuration](../configuration.md#service-configuration)) resolve relative to that config's own directory, not the directory you ran `deploy` from. For example, `apps/buyer/tailor.config.ts` declaring `files: ["db/**/*.ts"]` loads files from `apps/buyer/db/`, independent of where `apps/supplier/tailor.config.ts`'s patterns resolve. If a config's relative patterns match nothing under its own directory, the SDK falls back to the invocation directory and logs a warning (see [Service Configuration](../configuration.md#service-configuration) for details).
+
+**Resources Still in Use:**
+
+`deploy` and `remove` stop with `SERVICE_IN_USE` before changing anything when they would delete a resource that is still in use, including by the application whose config deletes it, and list each use. These uses are checked:
+
+- A TailorDB namespace, resolver namespace, IdP, or Auth service that an application references as `external`
+- The `idProvider` that an application authenticates with through an Auth service it references as `external`
+- An Auth service that an AI gateway sets as its `authNamespace`
+- A machine user that an executor or resolver uses as its `invoker`
+- A TailorDB table, resolver, IdP, Auth service, or workflow that an executor's trigger names, and a workflow that an executor starts
+- An application that an executor's `graphql` operation targets: the one its `appName` names, or the executor's own application without `appName`
+- A Secret Manager secret that a `webhook` operation's `headers` name, that an Auth service's OIDC `idProvider` names as `clientSecret` or its SCIM config names as `bearerSecret`, or that an [OTLP exporter](https://docs.tailor.tech/guides/opentelemetry) authenticates with, including each secret of a vault the run deletes
+- An IdP client that an Auth service's `idProvider` names with `idp.provider()`
+- A TailorDB table that an Auth service's `userProfile`, `tenantProvider`, or SCIM resource names
+
+An application in the `deploy` counts by what the `deploy` writes for it, and any other application by what the workspace has. A disabled executor or OTLP exporter counts too. The `invoker` passed to `workflow.start()` and the secrets and applications that function code reads or queries are not checked. Neither is the machine user that an Auth service's `scim.machineUserName` or `hooks.beforeLogin.invoker` names, but `deploy` stops with `AUTH_MACHINE_USER_NOT_FOUND` unless the same `defineAuth` lists it in `machineUsers`, so it is never deleted while that Auth service names it. For `deploy`, keep the resource in the config that defines it, or deploy the applications that use it so that they stop using it, first or in the same `deploy`. An application that references an Auth service as `external` switches to a renamed `idProvider` only in a `deploy` that also includes the config defining that Auth service, so deploy them together or keep the `idProvider` name. When an executor still targets its own application and its config no longer defines or references a TailorDB namespace, resolver namespace, IdP, or Auth service, add one of them back to that config or remove that executor from it. For `remove`, first remove those applications or deploy them so that they stop using it. An OTLP exporter, or an executor, resolver, AI gateway, or Auth service listed without an application, is not deployed by the SDK, so change or delete it outside the SDK.
 
 **Migration Handling (Beta):**
 
@@ -253,6 +269,7 @@ After printing the plan, `deploy` asks for confirmation before applying when the
 - Resources owned by another application, or tagged with a different application id
 - Existing resources that `tailor` does not manage yet
 - Deletion of TailorDB tables, static websites, AI gateways, OAuth2 clients (including a client type change), Auth connections, Secret Manager vaults, or Secret Manager secrets
+- Deletion of the application of a config that no longer defines or references any TailorDB namespace, resolver namespace, IdP, or Auth service (see [Application Settings](../configuration.md#application-settings))
 
 Declining cancels the deploy. When the plan includes none of these, `deploy` applies it without asking.
 
@@ -268,7 +285,14 @@ Pass the global `--json` / `-j` flag to get machine-readable output.
 
 ```json
 {
-  "summary": { "create": 2, "update": 2, "delete": 0, "replace": 0, "forcedBySdkVersion": 1 },
+  "summary": {
+    "create": 2,
+    "update": 2,
+    "delete": 0,
+    "replace": 0,
+    "forcedBySdkVersion": 1,
+    "labelRefreshes": 0
+  },
   "changes": [
     { "action": "create", "name": "Order", "labels": ["table"], "namespace": "tailordb" },
     {
@@ -289,7 +313,7 @@ Pass the global `--json` / `-j` flag to get machine-readable output.
 }
 ```
 
-- `summary` — counts of each change type. `forcedBySdkVersion` counts the updates forced by the SDK version, which are also included in `update`.
+- `summary` — counts of each change type. `forcedBySdkVersion` counts the updates forced by the SDK version, which are also included in `update`. `labelRefreshes` counts the function scripts that are left as they are while only their SDK version label is rewritten after an SDK upgrade; they are not included in `update`.
 - `changes` — planned resource changes, each with `action`, `name`, and optional `labels` / `namespace`. An update forced by the SDK version also has `forcedBySdkVersion: true`.
 - `warnings` — resources not in config (`type: "unmanaged"`), secrets with missing values (`type: "skippedSecret"`), or applications recorded as depending on this deploy but missing from it (`type: "missingDependentApp"`). Unmanaged resources and missing dependent applications require confirmation in apply mode (apply is cancelled if declined); skipped secrets are non-blocking.
   - A `missingDependentApp` entry names the missing application's `appId`, the `reason` it depends on this deploy, and the resource whose event publishing turns off when applying without it (`resourceType` and `name`, plus `namespace` for a TailorDB table or resolver). An entry about a workflow's jobs rather than the workflow itself has `scope: "jobs"`.
@@ -300,7 +324,14 @@ Pass the global `--json` / `-j` flag to get machine-readable output.
 
 ```json
 {
-  "summary": { "create": 1, "update": 2, "delete": 0, "replace": 0, "forcedBySdkVersion": 0 },
+  "summary": {
+    "create": 1,
+    "update": 2,
+    "delete": 0,
+    "replace": 0,
+    "forcedBySdkVersion": 0,
+    "labelRefreshes": 0
+  },
   "status": "applied",
   "workspaceId": "ws_abc123",
   "applications": [

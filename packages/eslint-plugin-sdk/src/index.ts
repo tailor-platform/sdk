@@ -4,7 +4,10 @@ import noExecuteScriptArgStringify from "./rules/no-execute-script-arg-stringify
 import noJobStartOutsideBody from "./rules/no-job-start-outside-body.js";
 import noNodeBuiltinImports from "./rules/no-node-builtin-imports.js";
 import noNodeOnlyGlobals from "./rules/no-node-only-globals.js";
+import noPlainTailorAnyFieldParam from "./rules/no-plain-tailor-any-field-param.js";
+import noUnboundCallerIdInput from "./rules/no-unbound-caller-id-input.js";
 import noUnconditionalPermit from "./rules/no-unconditional-permit.js";
+import noUnusedResolverInput from "./rules/no-unused-resolver-input.js";
 import validExecutionPolicyDefinition from "./rules/valid-execution-policy-definition.js";
 import validResolverPermission from "./rules/valid-resolver-permission.js";
 import validWorkflowExports from "./rules/valid-workflow-exports.js";
@@ -25,7 +28,10 @@ const rules = defineRules({
   "no-job-start-outside-body": noJobStartOutsideBody,
   "no-node-builtin-imports": noNodeBuiltinImports,
   "no-node-only-globals": noNodeOnlyGlobals,
+  "no-plain-tailor-any-field-param": noPlainTailorAnyFieldParam,
+  "no-unbound-caller-id-input": noUnboundCallerIdInput,
   "no-unconditional-permit": noUnconditionalPermit,
+  "no-unused-resolver-input": noUnusedResolverInput,
   "valid-execution-policy-definition": validExecutionPolicyDefinition,
   "valid-resolver-permission": validResolverPermission,
   "valid-workflow-exports": validWorkflowExports,

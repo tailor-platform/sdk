@@ -1,11 +1,13 @@
 /**
  * Seed data chunker for splitting large seed data into manageable message sizes.
  *
- * When seed data exceeds the gRPC message size limit, this module splits the data
- * into multiple chunks at type boundaries (or record boundaries for large types).
+ * When seed data exceeds the size one script execution can take as its argument,
+ * this module splits the data into multiple chunks at type boundaries (or record
+ * boundaries for large types).
  */
 
 import { assertDefined } from "#/utils/assert";
+import { CLIError } from "./errors";
 import type { JsonObject } from "type-fest";
 
 /**
@@ -31,20 +33,20 @@ export type ChunkSeedDataOptions = {
   data: SeedData;
   /** Ordered list of type names (dependency order) */
   order: string[];
-  /** Byte size of the bundled seed script code */
+  /** Byte size of script code sent in the same message as the data (0 when it is sent apart) */
   codeByteSize: number;
-  /** Maximum gRPC message size in bytes (default: 3.5MB) */
+  /** Maximum message size in bytes (default: 3.5MB) */
   maxMessageSize?: number;
 };
 
-/** Default maximum message size: 3.5MB (conservative limit for gRPC) */
+/** Default maximum message size: 3.5MB (conservative margin under the 4MB limit of a workflow start argument) */
 export const DEFAULT_MAX_MESSAGE_SIZE = 3.5 * 1024 * 1024;
 
 /** Reserved bytes for message metadata overhead */
 const METADATA_OVERHEAD = 1024;
 
 /**
- * Split seed data into chunks that fit within the gRPC message size limit.
+ * Split seed data into chunks that fit within the message size limit.
  *
  * Algorithm:
  * 1. Calculate the available budget for the arg field (maxMessageSize - codeByteSize - overhead)
@@ -62,10 +64,12 @@ export function chunkSeedData(options: ChunkSeedDataOptions): SeedChunk[] {
 
   const argBudget = maxMessageSize - codeByteSize - METADATA_OVERHEAD;
   if (argBudget <= 0) {
-    throw new Error(
-      `Code size (${codeByteSize} bytes) exceeds the message size limit (${maxMessageSize} bytes). ` +
-        `No space left for seed data.`,
-    );
+    throw CLIError({
+      code: "SEED_MESSAGE_SIZE_EXCEEDED",
+      message: `Code size (${codeByteSize} bytes) exceeds the message size limit (${maxMessageSize} bytes).`,
+      details: "No space left for seed data.",
+      context: { codeByteSize, maxMessageSize },
+    });
   }
 
   // Filter to tables that have data
@@ -115,42 +119,35 @@ export function chunkSeedData(options: ChunkSeedDataOptions): SeedChunk[] {
       currentOrder = [];
     }
 
+    const emptyBatchByteSize = byteSize(JSON.stringify({ data: { [type]: [] }, order: [type] }));
     let recordBatch: JsonObject[] = [];
+    let batchByteSize = emptyBatchByteSize;
     for (const record of typeRecords) {
-      if (byteSize(JSON.stringify({ data: { [type]: [record] }, order: [type] })) > argBudget) {
-        const singleRecordSize = byteSize(JSON.stringify(record));
-        throw new Error(
-          `A single record in table "${type}" (${singleRecordSize} bytes) exceeds the message size budget ` +
-            `(${argBudget} bytes). Consider increasing maxMessageSize or reducing the record size.`,
-        );
+      const recordByteSize = byteSize(JSON.stringify(record));
+      if (emptyBatchByteSize + recordByteSize > argBudget) {
+        throw CLIError({
+          code: "SEED_MESSAGE_SIZE_EXCEEDED",
+          message: `A single record in table "${type}" (${recordByteSize} bytes) exceeds the message size budget (${argBudget} bytes).`,
+          suggestion: "Increase maxMessageSize or reduce the record size.",
+          context: { type, recordByteSize, argBudget },
+        });
       }
 
-      const testBatch = [...recordBatch, record];
-      const testData = { ...currentData, [type]: testBatch };
-      const testOrder = currentOrder.includes(type) ? currentOrder : [...currentOrder, type];
-      const testSize = byteSize(JSON.stringify({ data: testData, order: testOrder }));
-
-      if (testSize > argBudget && recordBatch.length > 0) {
-        // Finalize current chunk with accumulated records
-        currentData[type] = recordBatch;
-        if (!currentOrder.includes(type)) {
-          currentOrder.push(type);
-        }
-        chunks.push({ data: currentData, order: currentOrder, index: chunks.length });
-        currentData = {};
-        currentOrder = [];
+      const separatorByteSize = recordBatch.length > 0 ? 1 : 0;
+      if (batchByteSize + separatorByteSize + recordByteSize > argBudget) {
+        chunks.push({ data: { [type]: recordBatch }, order: [type], index: chunks.length });
         recordBatch = [record];
+        batchByteSize = emptyBatchByteSize + recordByteSize;
       } else {
-        recordBatch = testBatch;
+        recordBatch.push(record);
+        batchByteSize += separatorByteSize + recordByteSize;
       }
     }
 
     // Add remaining records
     if (recordBatch.length > 0) {
       currentData[type] = recordBatch;
-      if (!currentOrder.includes(type)) {
-        currentOrder.push(type);
-      }
+      currentOrder.push(type);
     }
   }
 
@@ -163,6 +160,17 @@ export function chunkSeedData(options: ChunkSeedDataOptions): SeedChunk[] {
   return chunks.map((chunk) => ({ ...chunk, total }));
 }
 
-function byteSize(str: string): number {
-  return new TextEncoder().encode(str).length;
+const ESCAPED_BY_PLATFORM = /[<>&\u2028\u2029]/g;
+
+// The platform decodes the start argument and encodes it again before it checks the size, and the
+// encoding writes these characters as \uXXXX (6 bytes each) instead of as themselves.
+function platformEncoded(json: string): string {
+  return json.replace(
+    ESCAPED_BY_PLATFORM,
+    (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`,
+  );
+}
+
+function byteSize(json: string): number {
+  return new TextEncoder().encode(platformEncoded(json)).length;
 }

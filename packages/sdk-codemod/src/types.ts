@@ -108,27 +108,33 @@ export interface LlmReviewFinding {
   file: string;
   /**
    * One-based line number in the final post-transform file content.
-   * Detector-reported lines are remapped through later codemods' rewrites.
+   * Detector-reported lines are remapped through the rewrites made after the
+   * content the detector received.
    */
   line: number;
   /** Short reason this location needs review. */
   message: string;
   /**
    * Trimmed source line or nearby expression for local context, as the
-   * detector saw it — possibly before later codemods' rewrites.
+   * detector saw it — possibly before the rewrites made after the content it
+   * received.
    */
   excerpt: string;
 }
 
 /**
  * Detector exported by a transform module for precise review locations.
- * Receives the file content as of the codemod's position in the transform
- * chain: its own and earlier codemods' transforms applied, later codemods' not.
+ * Exported as `reviewFindings`, it receives the file content as of the
+ * codemod's position in the transform chain: its own and earlier codemods'
+ * transforms applied, later codemods' not. Exported as
+ * `reviewFindingsBeforeTransform`, it receives the content before its own
+ * transform instead.
  */
 export type ReviewFindingsFn = (
   source: string,
   filePath: string,
   relativePath: string,
+  targetPath: string,
 ) => Promise<LlmReviewFinding[]> | LlmReviewFinding[];
 
 /** A batch of files an LLM should review for one codemod, with its prompt. */

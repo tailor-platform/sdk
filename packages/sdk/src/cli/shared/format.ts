@@ -1,6 +1,6 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
-import { formatDistanceToNowStrict } from "date-fns";
 import { renderTable } from "./ascii-table";
+import { formatRelativeTime } from "./relative-time";
 import type { AsciiTableConfig } from "./ascii-table";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 
@@ -86,5 +86,5 @@ export function humanizeRelativeTime(value: Date | string | null): string {
   if (Number.isNaN(date.getTime())) {
     return typeof value === "string" ? value : "N/A";
   }
-  return formatDistanceToNowStrict(date, { addSuffix: true });
+  return formatRelativeTime(date);
 }

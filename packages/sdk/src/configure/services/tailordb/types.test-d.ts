@@ -1,6 +1,7 @@
 import { describe, test, expectTypeOf } from "vitest";
 import { db } from "./index";
-import type { IsAutoFilledDBField, IsReadOnlyDBField } from "./types";
+import type { TailorDBServiceConfigInput } from "#/types/tailordb.generated";
+import type { IsAutoFilledDBField, IsReadOnlyDBField, TailorDBServiceInput } from "./types";
 
 const plain = db.string();
 const defaulted = db.string().default("DRAFT");
@@ -27,5 +28,15 @@ describe("IsAutoFilledDBField", () => {
     expectTypeOf<IsAutoFilledDBField<typeof updateHooked>>().toEqualTypeOf<false>();
     expectTypeOf<IsAutoFilledDBField<typeof serial>>().toEqualTypeOf<false>();
     expectTypeOf<IsAutoFilledDBField<typeof plain>>().toEqualTypeOf<false>();
+  });
+});
+
+describe("TailorDBServiceInput", () => {
+  test("a namespace config accepts the same keys and values as the schema", () => {
+    type NamespaceConfig = Exclude<TailorDBServiceInput[string], { external: true }>;
+    expectTypeOf<keyof NamespaceConfig>().toEqualTypeOf<keyof TailorDBServiceConfigInput>();
+    expectTypeOf<NamespaceConfig["ignores"]>().toEqualTypeOf<
+      TailorDBServiceConfigInput["ignores"]
+    >();
   });
 });

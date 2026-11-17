@@ -111,7 +111,8 @@ describe("ENVIRONMENT_EDITABLE_JOBS", () => {
   });
 
   test("lists no managed job that any template writes with an environment", () => {
-    expect(ENVIRONMENT_EDITABLE_JOBS.filter((jobId) => jobsOf(true).has(jobId))).toEqual([]);
+    const withEnvironment = jobsOf(true);
+    expect(ENVIRONMENT_EDITABLE_JOBS.filter((jobId) => withEnvironment.has(jobId))).toEqual([]);
   });
 });
 
@@ -483,19 +484,14 @@ describe("mergeUserContent", () => {
         return computeManagedHash(edited.toString(), generatedIds) !== hash;
       };
       const keys = Object.keys(parseDocument(content).toJS() as Record<string, unknown>);
-      return { hashed: keys.filter(isHashed), unhashed: keys.filter((key) => !isHashed(key)) };
+      const hashed = keys.filter(isHashed);
+      return { hashed, unhashed: keys.filter((key) => !hashed.includes(key)) };
     };
 
-    test("is only the concurrency of the preview workflows", () => {
-      const unhashed = templates.flatMap((render) =>
-        topLevelKeys(render).unhashed.map((key) => `${render.name}: ${key}`),
-      );
+    test.each(templates)("is only the concurrency of a preview workflow, in $name", (render) => {
+      const preview = render.template === "preview" || render.template === "preview-cleanup";
 
-      expect(unhashed).toEqual(
-        templates
-          .filter(({ template }) => template === "preview" || template === "preview-cleanup")
-          .map(({ name }) => `${name}: concurrency`),
-      );
+      expect(topLevelKeys(render).unhashed).toEqual(preview ? ["concurrency"] : []);
     });
 
     test.each(templates)("leaves the $name header naming exactly the hashed ones", (render) => {

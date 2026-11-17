@@ -15,6 +15,8 @@ import type { TailorDBType, TypeSourceInfoEntry } from "#/parser/service/tailord
 import type { IdProvider as IdProviderConfig, OAuth2Client } from "#/types/auth.generated";
 import type { Executor } from "#/types/executor.generated";
 import type { Resolver } from "#/types/resolver.generated";
+import type * as NodeFs from "node:fs/promises";
+import type * as Pathe from "pathe";
 
 /**
  * A single generated file to write to disk.
@@ -195,14 +197,22 @@ export interface PluginTableProcessContext<TableConfig = unknown, PluginConfig =
 }
 
 /**
- * Context passed to plugin's onNamespaceLoaded hook.
+ * Context passed to plugin's onTailorDBNamespaceLoaded hook.
  *
  * **Beta:** This API may change in future releases.
  */
-export interface PluginNamespaceProcessContext<PluginConfig = unknown> {
+export interface TailorDBNamespaceLoadedContext<PluginConfig = unknown> {
   pluginConfig: PluginConfig;
+  /** TailorDB namespace the hook runs for, and where the returned tables are created */
   namespace: string;
 }
+
+/**
+ * **Beta:** This API may change in future releases.
+ * @deprecated since 2.40.0 — use {@link TailorDBNamespaceLoadedContext} instead. codemod: v3/tailordb-namespace-loaded-rename
+ */
+export type PluginNamespaceProcessContext<PluginConfig = unknown> =
+  TailorDBNamespaceLoadedContext<PluginConfig>;
 
 /**
  * Interface representing a TailorDB table for plugin output.
@@ -343,7 +353,13 @@ export interface TablePluginOutput<
 }
 
 /** **Beta:** This API may change in future releases. */
-export type NamespacePluginOutput = PluginOutput;
+export type TailorDBNamespacePluginOutput = PluginOutput;
+
+/**
+ * **Beta:** This API may change in future releases.
+ * @deprecated since 2.40.0 — use {@link TailorDBNamespacePluginOutput} instead. codemod: v3/tailordb-namespace-loaded-rename
+ */
+export type NamespacePluginOutput = TailorDBNamespacePluginOutput;
 
 /**
  * Plugin interface that all plugins must implement.
@@ -368,9 +384,17 @@ export interface Plugin<
     context: PluginTableProcessContext<TableConfig, PluginConfig>,
   ): TablePluginOutput<FieldExtension> | Promise<TablePluginOutput<FieldExtension>>;
 
+  /** Runs once for each TailorDB namespace in the config, except external ones. */
+  onTailorDBNamespaceLoaded?(
+    context: TailorDBNamespaceLoadedContext<PluginConfig>,
+  ): TailorDBNamespacePluginOutput | Promise<TailorDBNamespacePluginOutput>;
+
+  /**
+   * @deprecated since 2.40.0 — use {@link Plugin.onTailorDBNamespaceLoaded} instead. Defining both is an error. codemod: v3/tailordb-namespace-loaded-rename
+   */
   onNamespaceLoaded?(
-    context: PluginNamespaceProcessContext<PluginConfig>,
-  ): NamespacePluginOutput | Promise<NamespacePluginOutput>;
+    context: TailorDBNamespaceLoadedContext<PluginConfig>,
+  ): TailorDBNamespacePluginOutput | Promise<TailorDBNamespacePluginOutput>;
 
   onTailorDBReady?(
     context: TailorDBReadyContext<PluginConfig>,
@@ -470,6 +494,8 @@ export interface PluginExecResult {
  */
 export interface DeployedContext<PluginConfig = unknown> {
   workspaceId: string;
+  /** Profile `tailor deploy` ran with (`--profile`). Absent when the deploy was run without one. */
+  profile?: string;
   /** Application whose config registers this plugin. Only its static websites can be published. */
   application: DeployedApplication<PublishableStaticWebsite>;
   /** Every application in this deploy run, including the registering one. */
@@ -485,6 +511,14 @@ export interface DeployedContext<PluginConfig = unknown> {
    * @returns Captured output when `options.output` is `"capture"`
    */
   exec(command: string, options: PluginExecOptions): Promise<PluginExecResult>;
+  /**
+   * Node's `fs/promises` module and `pathe` (`path` with `/` separators on every OS), for hooks that read or write files on the machine running `tailor deploy`.
+   * A plugin's own source is bundled into functions that run on the Platform, where `node:` imports cannot be resolved, so a hook uses these instead of importing the modules.
+   */
+  node: {
+    fs: typeof NodeFs;
+    path: typeof Pathe;
+  };
 }
 
 // Symbol keys only: string keys such as `toJSON?: never` would also reject interfaces with a data field of that name.

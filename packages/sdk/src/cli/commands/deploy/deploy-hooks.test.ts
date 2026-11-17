@@ -4,6 +4,7 @@ import { logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import { captureStderr, captureStdoutStream } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { defineStaticWebSite } from "#/configure/services/staticwebsite/index";
 import { emptyPlanResults } from "./test-helpers/plan-results";
@@ -15,12 +16,11 @@ const mocks = vi.hoisted(() => ({
   results: undefined as unknown as PlanResults,
   apply: vi.fn(),
   prerequisite: vi.fn(),
-  getApplication: vi.fn(),
-  getStaticWebsite: vi.fn(),
-  getAIGateway: vi.fn(),
-  listAuthOAuth2Clients: vi.fn(),
   fetchMissingDependentApps: vi.fn(),
   planTailorDB: vi.fn(),
+  dropCrossDeploymentManagedDeletes: vi.fn(),
+  scheduleRenamedAppDeletes: vi.fn(),
+  assertResourcesNotInUse: vi.fn(),
 }));
 vi.mock(import("./deployment-target"), async (original) => ({
   ...(await original()),
@@ -29,21 +29,18 @@ vi.mock(import("./deployment-target"), async (original) => ({
   ],
   buildDeploymentTargets: async () => [mocks.target],
 }));
+const client = mockOperatorClient({
+  getApplication: {},
+  getStaticWebsite: {},
+  getAIGateway: {},
+  listAuthOAuth2Clients: {},
+});
 vi.mock("./workspace", () => ({
-  resolveDeployWorkspace: async () => ({
-    workspaceId: "ws",
-    client: {
-      getApplication: mocks.getApplication,
-      getStaticWebsite: mocks.getStaticWebsite,
-      getAIGateway: mocks.getAIGateway,
-      listAuthOAuth2Clients: mocks.listAuthOAuth2Clients,
-    },
-  }),
+  resolveDeployWorkspace: async () => ({ workspaceId: "ws", client }),
 }));
 vi.mock("./metadata-lookup", () => ({
-  createMetadataLookupClient: async () => ({
-    getMetadata: async () => ({ metadata: { labels: [] } }),
-  }),
+  createMetadataLookupClient: async () =>
+    mockOperatorClient({ getMetadata: { metadata: { labels: {} } } }),
 }));
 vi.mock(import("./dependency-records"), async (original) => ({
   ...(await original()),
@@ -54,6 +51,22 @@ vi.mock(import("./apply-phases"), async (original) => ({
   preflightAllTailorDB: async () => {},
   applyPrerequisiteResources: mocks.prerequisite,
   applyRemainingResources: mocks.apply,
+}));
+vi.mock(import("./managed-resources"), async (original) => {
+  const actual = await original();
+  mocks.dropCrossDeploymentManagedDeletes.mockImplementation(
+    actual.dropCrossDeploymentManagedDeletes,
+  );
+  mocks.scheduleRenamedAppDeletes.mockImplementation(actual.scheduleRenamedAppDeletes);
+  return {
+    ...actual,
+    dropCrossDeploymentManagedDeletes: mocks.dropCrossDeploymentManagedDeletes,
+    scheduleRenamedAppDeletes: mocks.scheduleRenamedAppDeletes,
+  };
+});
+vi.mock(import("./resources-in-use"), async (original) => ({
+  ...(await original()),
+  assertResourcesNotInUse: mocks.assertResourcesNotInUse,
 }));
 vi.mock(import("./function-registry"), async (original) => ({
   ...(await original()),
@@ -135,10 +148,10 @@ beforeEach(() => {
   mocks.planTailorDB.mockImplementation(async () => mocks.results.tailorDB);
   mocks.apply.mockResolvedValue([]);
   mocks.fetchMissingDependentApps.mockResolvedValue([]);
-  mocks.getApplication.mockResolvedValue({ application: { url: "https://app", domain: "app" } });
-  mocks.getStaticWebsite.mockResolvedValue({ staticwebsite: { url: "https://web" } });
-  mocks.getAIGateway.mockResolvedValue({ aigateway: { name: "ai", url: "https://ai" } });
-  mocks.listAuthOAuth2Clients.mockResolvedValue({
+  client.getApplication.mockResolvedValue({ application: { url: "https://app", domain: "app" } });
+  client.getStaticWebsite.mockResolvedValue({ staticwebsite: { url: "https://web" } });
+  client.getAIGateway.mockResolvedValue({ aigateway: { name: "ai", url: "https://ai" } });
+  client.listAuthOAuth2Clients.mockResolvedValue({
     oauth2Clients: [{ name: "web", clientId: "public-id", clientSecret: "private-secret" }],
     nextPageToken: "",
   });
@@ -162,13 +175,35 @@ test("runs a hook once after remaining resources are applied even when the plan 
     }),
   );
 });
+test("lets a hook see the profile the deploy ran with", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  const hook = vi.fn();
+  register(hook);
+  await deploy({ yes: true, noValidate: true, profile: "ci" });
+  expect(hook).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ profile: "ci" }));
+});
+test("checks resources in use after the plan drops claimed deletes and schedules renamed applications' deletes", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  await deploy({ dryRun: true, noValidate: true });
+  expect(mocks.assertResourcesNotInUse).toHaveBeenCalledExactlyOnceWith({
+    deployments: expect.any(Array),
+    command: "deploy",
+    client: expect.objectContaining({ getApplication: client.getApplication }),
+    workspaceId: "ws",
+  });
+  const [checked] = mocks.assertResourcesNotInUse.mock.invocationCallOrder;
+  const [dropped] = mocks.dropCrossDeploymentManagedDeletes.mock.invocationCallOrder;
+  const [scheduledBefore] = mocks.scheduleRenamedAppDeletes.mock.invocationCallOrder;
+  expect(dropped).toBeLessThan(checked!);
+  expect(scheduledBefore).toBeLessThan(checked!);
+});
 test("lists the pending hook during dry-run without executing it", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
   const hook = vi.fn();
   register(hook);
   await deploy({ dryRun: true, noValidate: true });
   expect(hook).not.toHaveBeenCalled();
-  expect(mocks.getApplication).not.toHaveBeenCalled();
+  expect(client.getApplication).not.toHaveBeenCalled();
   expect(logger.info).toHaveBeenCalledWith(expect.stringMatching(/hook.*app/));
 });
 test("includes pending hooks in the JSON dry-run result", async () => {
@@ -179,7 +214,7 @@ test("includes pending hooks in the JSON dry-run result", async () => {
   expect(logger.out).toHaveBeenCalledWith(
     expect.objectContaining({ pendingDeployedHooks: [{ application: "app", pluginId: "hook" }] }),
   );
-  expect(mocks.getApplication).not.toHaveBeenCalled();
+  expect(client.getApplication).not.toHaveBeenCalled();
 });
 test("omits pendingDeployedHooks from the JSON dry-run result without deploy hooks", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
@@ -196,7 +231,7 @@ test("does not execute hooks in build-only mode", async () => {
   register(hook);
   await deploy({ buildOnly: true });
   expect(hook).not.toHaveBeenCalled();
-  expect(mocks.getApplication).not.toHaveBeenCalled();
+  expect(client.getApplication).not.toHaveBeenCalled();
 });
 test("does not execute hooks during a migration baseline deploy", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
@@ -205,7 +240,7 @@ test("does not execute hooks during a migration baseline deploy", async () => {
   register(hook);
   await deployMigrationTestBaseline({ yes: true, noValidate: true }, new Map(), new Map());
   expect(hook).not.toHaveBeenCalled();
-  expect(mocks.getApplication).not.toHaveBeenCalled();
+  expect(client.getApplication).not.toHaveBeenCalled();
 });
 test("does not execute hooks during a migration target deploy", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
@@ -214,7 +249,7 @@ test("does not execute hooks during a migration target deploy", async () => {
   register(hook);
   await deployMigrationTestTarget({ yes: true, noValidate: true }, new Map());
   expect(hook).not.toHaveBeenCalled();
-  expect(mocks.getApplication).not.toHaveBeenCalled();
+  expect(client.getApplication).not.toHaveBeenCalled();
 });
 test("plans a migration target deploy to run the scripts as the given machine user", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
@@ -241,11 +276,11 @@ test("loads application information only once for the JSON result and hooks", as
   using _json = jsonMode();
   register(() => {});
   await deploy({ yes: true, noValidate: true });
-  expect(mocks.getApplication).toHaveBeenCalledExactlyOnceWith({
+  expect(client.getApplication).toHaveBeenCalledExactlyOnceWith({
     workspaceId: "ws",
     applicationName: "app",
   });
-  expect(mocks.getStaticWebsite).toHaveBeenCalledExactlyOnceWith({
+  expect(client.getStaticWebsite).toHaveBeenCalledExactlyOnceWith({
     workspaceId: "ws",
     name: "web",
   });
@@ -266,8 +301,8 @@ test("omits deployedHooks when a hook returns no outputs", async () => {
 test("does not fetch hook context when no deploy hook is registered", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
   await deploy({ yes: true, noValidate: true });
-  expect(mocks.getApplication).not.toHaveBeenCalled();
-  expect(mocks.getStaticWebsite).not.toHaveBeenCalled();
+  expect(client.getApplication).not.toHaveBeenCalled();
+  expect(client.getStaticWebsite).not.toHaveBeenCalled();
 });
 
 function referenceWebsiteUrlFromEnv(onPrerequisite?: () => void) {
@@ -430,7 +465,7 @@ test("includes how long TailorDB migrations kept tables in maintenance mode in J
 test("includes a static website in JSON when the config has no application", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
   using _json = jsonMode();
-  mocks.getApplication.mockRejectedValueOnce(
+  client.getApplication.mockRejectedValueOnce(
     new ConnectError("application not found", Code.NotFound),
   );
 
@@ -480,7 +515,7 @@ test("includes AI Gateway URLs and public OAuth clients without client secrets i
 test("reports that resources were applied when loading the JSON result fails", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
   using _json = jsonMode();
-  mocks.getApplication.mockRejectedValueOnce(new Error("application lookup failed"));
+  client.getApplication.mockRejectedValueOnce(new Error("application lookup failed"));
   await expect(deploy({ yes: true, noValidate: true })).rejects.toMatchObject({
     code: "DEPLOY_RESULT_LOAD_FAILED",
     details: "application lookup failed",
@@ -494,7 +529,7 @@ test("reports skipped hooks when loading their context in JSON mode fails", asyn
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
   using _json = jsonMode();
   register(vi.fn());
-  mocks.getApplication.mockRejectedValueOnce(new Error("application lookup failed"));
+  client.getApplication.mockRejectedValueOnce(new Error("application lookup failed"));
   await expect(deploy({ yes: true, noValidate: true })).rejects.toMatchObject({
     code: "DEPLOYED_HOOK_FAILED",
     message: expect.stringMatching(

@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { Code, ConnectError } from "@connectrpc/connect";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
@@ -54,14 +55,17 @@ describe("workspace transform", () => {
 
   test("omits folderName when the workspace has no folder", async () => {
     const mockClient = client();
-    const info = await workspaceInfoWithFolderName(
-      mockClient,
-      workspace({ organizationId: "", folderId: "" }),
-    );
+    const info = await workspaceInfoWithFolderName(mockClient, workspace({ folderId: "" }));
 
     expect(info).not.toHaveProperty("folderName");
     expect(workspaceDisplayName(info)).toBe("sample-space");
     expect(mockClient.getOrganizationFolder).not.toHaveBeenCalled();
+  });
+
+  test("rejects a workspace without an organization", async () => {
+    await expect(
+      workspaceInfoWithFolderName(client(), workspace({ organizationId: "", folderId: "" })),
+    ).rejects.toMatchObject({ code: "WORKSPACE_ORGANIZATION_MISSING" });
   });
 
   test("omits folderName when the folder lookup is unavailable to the user", async () => {

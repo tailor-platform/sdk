@@ -1,10 +1,11 @@
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
-import { logger, symbols } from "#/cli/shared/logger";
+import { logger, plainRedacted, symbols } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { collectHttpAdapterScripts, mergeBundledScripts } from "./bundled-scripts";
 import {
@@ -13,6 +14,7 @@ import {
   confirmDeploymentPlans,
   collectExpectedLocalStaticWebsiteNamesFromConfigs,
   collectExternalAuthIdpConfigNames,
+  collectPlannedMachineUsers,
   needsEnvRebuild,
   planDeploymentTargets,
   shouldForceApplyAll,
@@ -49,7 +51,6 @@ function plannedDeployment(name: string, results: PlanResults): PlannedDeploymen
 }
 
 describe("shouldForceApplyAll", () => {
-  type Client = Parameters<typeof shouldForceApplyAll>[0];
   type App = Parameters<typeof shouldForceApplyAll>[2];
 
   function minimalApplication(): App {
@@ -71,11 +72,12 @@ describe("shouldForceApplyAll", () => {
 
   test("fetches candidate metadata concurrently", async () => {
     const probe = createConcurrencyProbe();
-    const getMetadata = vi.fn().mockImplementation(async () => {
-      await probe.run();
-      return { metadata: { labels: {} } };
+    const client = mockOperatorClient({
+      getMetadata: async () => {
+        await probe.run();
+        return { metadata: { labels: {} } };
+      },
     });
-    const client = { getMetadata } as unknown as Client;
 
     const result = await shouldForceApplyAll(client, "test-workspace", minimalApplication(), [
       { name: "fn-a" },
@@ -84,15 +86,16 @@ describe("shouldForceApplyAll", () => {
     ]);
 
     expect(result).toBe(false);
-    expect(getMetadata).toHaveBeenCalledTimes(3);
+    expect(client.getMetadata).toHaveBeenCalledTimes(3);
     expect(probe.maxInFlight()).toBeGreaterThan(1);
   });
 
   test("returns true when an owned resource has a different sdk-version", async () => {
-    const getMetadata = vi.fn().mockResolvedValue({
-      metadata: { labels: { "sdk-name": "test-app", "sdk-version": "v0-0-0-other" } },
+    const client = mockOperatorClient({
+      getMetadata: {
+        metadata: { labels: { "sdk-name": "test-app", "sdk-version": "v0-0-0-other" } },
+      },
     });
-    const client = { getMetadata } as unknown as Client;
 
     const result = await shouldForceApplyAll(client, "test-workspace", minimalApplication(), [
       { name: "fn-a" },
@@ -102,13 +105,14 @@ describe("shouldForceApplyAll", () => {
   });
 
   test("prefers a detected sdk-version mismatch over an unrelated fetch failure", async () => {
-    const getMetadata = vi.fn();
-    vi.when(getMetadata, { onUnmatched: () => Promise.reject(new Error("unavailable")) })
+    const client = mockOperatorClient({
+      getMetadata: () => Promise.reject(new Error("unavailable")),
+    });
+    vi.when(client.getMetadata)
       .calledWith(expect.objectContaining({ trn: expect.stringMatching(/:fn-a$/) }))
       .thenResolve({
         metadata: { labels: { "sdk-name": "test-app", "sdk-version": "v0-0-0-other" } },
       });
-    const client = { getMetadata } as unknown as Client;
 
     const result = await shouldForceApplyAll(client, "test-workspace", minimalApplication(), [
       { name: "fn-a" },
@@ -119,8 +123,9 @@ describe("shouldForceApplyAll", () => {
   });
 
   test("propagates a fetch failure when no mismatch was detected", async () => {
-    const getMetadata = vi.fn().mockRejectedValue(new Error("unavailable"));
-    const client = { getMetadata } as unknown as Client;
+    const client = mockOperatorClient({
+      getMetadata: () => Promise.reject(new Error("unavailable")),
+    });
 
     await expect(
       shouldForceApplyAll(client, "test-workspace", minimalApplication(), [{ name: "fn-a" }]),
@@ -149,6 +154,7 @@ describe("summarizePlanResults", () => {
       delete: 1,
       replace: 0,
       forcedBySdkVersion: 0,
+      labelRefreshes: 0,
     });
   });
 
@@ -165,6 +171,7 @@ describe("summarizePlanResults", () => {
       delete: 0,
       replace: 0,
       forcedBySdkVersion: 0,
+      labelRefreshes: 0,
     });
   });
 
@@ -180,6 +187,7 @@ describe("summarizePlanResults", () => {
       delete: 0,
       replace: 0,
       forcedBySdkVersion: 0,
+      labelRefreshes: 0,
     });
   });
 
@@ -204,6 +212,26 @@ describe("summarizePlanResults", () => {
       delete: 0,
       replace: 0,
       forcedBySdkVersion: 0,
+      labelRefreshes: 0,
+    });
+  });
+
+  test("counts function labels refreshed without re-uploading the script", () => {
+    const results = emptyPlanResults();
+    results.functionRegistry.metadataUpdates.push(
+      { name: "resolver--ns--add", metaRequest: { trn: "trn:a", labels: {} } },
+      { name: "executor--user-created", metaRequest: { trn: "trn:b", labels: {} } },
+    );
+
+    const summary = summarizePlanResults(results, [], []);
+
+    expect(summary).toEqual({
+      create: 0,
+      update: 0,
+      delete: 0,
+      replace: 0,
+      forcedBySdkVersion: 0,
+      labelRefreshes: 2,
     });
   });
 
@@ -230,6 +258,7 @@ describe("summarizePlanResults", () => {
       delete: 0,
       replace: 0,
       forcedBySdkVersion: 3,
+      labelRefreshes: 0,
     });
   });
 });
@@ -290,7 +319,6 @@ describe("computeRenamedAppDeletions", () => {
 describe("parseDeployConfigPaths", () => {
   test("preserves default config lookup when no path is provided", () => {
     vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
-    vi.stubEnv("TAILOR_PLATFORM_SDK_CONFIG_PATH", undefined);
     try {
       expect(parseDeployConfigPaths()).toEqual([undefined]);
     } finally {
@@ -304,24 +332,17 @@ describe("parseDeployConfigPaths", () => {
       env: { TAILOR_CONFIG_PATH: "buyer/tailor.config.ts,supplier/tailor.config.ts" },
       configPath: undefined,
       expected: ["buyer/tailor.config.ts", "supplier/tailor.config.ts"],
-      warnings: [],
     },
     {
-      name: "prefers a provided path over both config path variables",
-      env: {
-        TAILOR_CONFIG_PATH: "new/tailor.config.ts",
-        TAILOR_PLATFORM_SDK_CONFIG_PATH: "old/tailor.config.ts",
-      },
+      name: "prefers a provided path over TAILOR_CONFIG_PATH",
+      env: { TAILOR_CONFIG_PATH: "env/tailor.config.ts" },
       configPath: "given/tailor.config.ts",
       expected: ["given/tailor.config.ts"],
-      warnings: [],
     },
-  ])("$name", ({ env, configPath, expected, warnings }) => {
-    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+  ])("$name", ({ env, configPath, expected }) => {
     for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
     try {
       expect(parseDeployConfigPaths(configPath)).toEqual(expected);
-      expect(warnSpy.mock.calls).toEqual(warnings);
     } finally {
       vi.unstubAllEnvs();
     }
@@ -399,7 +420,7 @@ describe("visible same-run namespaces", () => {
     expect(result.has("peer-idp")).toBe(true);
   });
 
-  test("ignores same-run IdPs that the current app does not reference", () => {
+  test("collects IdPs owned by peer configs even when the current app declares none", () => {
     const current = {
       idpServices: [],
       subgraphs: [],
@@ -411,7 +432,7 @@ describe("visible same-run namespaces", () => {
 
     const result = collectVisibleIdpNames(current, [current, peer]);
 
-    expect(result.has("peer-idp")).toBe(false);
+    expect(result.has("peer-idp")).toBe(true);
   });
 });
 
@@ -705,27 +726,56 @@ describe("scheduleRenamedAppDeletes", () => {
 });
 
 describe("confirmDeploymentPlans", () => {
-  test("names a deleted TailorDB table a table", async () => {
+  const appDelete = (name: string) => ({
+    name,
+    request: { workspaceId: "ws", applicationName: name },
+  });
+
+  test.for([
+    {
+      listed: 'TailorDB table "Order"',
+      addDelete: (results: PlanResults) =>
+        results.tailorDB.changeSet.type.deletes.push({ name: "Order", request: {} }),
+    },
+    {
+      listed: 'Application "my-app"',
+      addDelete: (results: PlanResults) => results.app.deletes.push(appDelete("my-app")),
+    },
+  ])("asks before deleting $listed", async ({ listed, addDelete }) => {
     using _logger = silenceLogger("warn", "success", "newline");
-    const logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+    using logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+    using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(true);
     const results = emptyPlanResults();
-    results.tailorDB.changeSet.type.deletes.push({
-      name: "Order",
-      request: {},
-    });
+    addDelete(results);
 
     await confirmDeploymentPlans({
       deployments: [plannedDeployment("my-app", results)],
-      yes: true,
+      yes: false,
     });
 
-    const plain = logSpy.mock.calls
-      .flat()
-      .join("\n")
-      .replace(/\[[0-9;]*m/g, "");
-    expect(plain).toContain('TailorDB table "Order"');
-    logSpy.mockRestore();
+    expect(confirm).toHaveBeenCalledOnce();
+
+    const plain = plainRedacted(logSpy.mock.calls.flat().join("\n"));
+    expect(plain).toContain(listed);
   });
+
+  test.for(["creates", "updates", "unchanged"] as const)(
+    "does not ask before deleting the previous name of a renamed application the plan %s",
+    async (kept) => {
+      using _logger = silenceLogger("warn", "log", "success", "newline");
+      using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(false);
+      const results = emptyPlanResults();
+      results.app[kept].push({ name: "new-app" } as never);
+      results.app.deletes.push(appDelete("old-app"));
+
+      await confirmDeploymentPlans({
+        deployments: [plannedDeployment("new-app", results)],
+        yes: false,
+      });
+
+      expect(confirm).not.toHaveBeenCalled();
+    },
+  );
 
   const confirmationWarnings: Array<{
     warning: string;
@@ -1176,7 +1226,7 @@ describe("printPlanResults", () => {
       summary: { update: number; forcedBySdkVersion: number };
       changes: Array<Record<string, unknown>>;
     };
-    expect(payload.summary).toMatchObject({ update: 2, forcedBySdkVersion: 1 });
+    expect(payload.summary).toMatchObject({ update: 2, forcedBySdkVersion: 1, labelRefreshes: 0 });
     expect(payload.changes).toContainEqual({
       action: "update",
       name: "tailordb",
@@ -1284,7 +1334,7 @@ describe("printPlanResults", () => {
         expect.objectContaining({ name: "my-client", forcedBySdkVersion: true }),
       ]),
     );
-    expect(payload.summary).toMatchObject({ update: 2, forcedBySdkVersion: 2 });
+    expect(payload.summary).toMatchObject({ update: 2, forcedBySdkVersion: 2, labelRefreshes: 0 });
   });
 
   test("does not emit JSON for apply --json; still prints plan to stderr", () => {
@@ -1356,8 +1406,8 @@ describe("printDeploymentPlans", () => {
     const payload = outSpy.mock.calls[0]?.[0] as {
       summary: { update: number; forcedBySdkVersion: number };
     };
-    expect(summary).toMatchObject({ update: 2, forcedBySdkVersion: 2 });
-    expect(payload.summary).toMatchObject({ update: 2, forcedBySdkVersion: 2 });
+    expect(summary).toMatchObject({ update: 2, forcedBySdkVersion: 2, labelRefreshes: 0 });
+    expect(payload.summary).toMatchObject({ update: 2, forcedBySdkVersion: 2, labelRefreshes: 0 });
 
     outSpy.mockRestore();
   });
@@ -1499,7 +1549,7 @@ function fakeTarget(
 
 describe("multi-config deployment orchestration", () => {
   test("forwards client, workspaceId, and expectedLocalStaticWebsiteNames to every config build", async () => {
-    const client = {} as never;
+    const client = mockOperatorClient({});
     const expectedLocalStaticWebsiteNames = new Set(["buyer-site"]);
     const received: unknown[] = [];
 
@@ -1558,7 +1608,7 @@ describe("multi-config deployment orchestration", () => {
     const planPromise = planDeploymentTargets({
       targets: targets,
       runInputs: {} as never,
-      client: {} as never,
+      client: mockOperatorClient({}),
       workspaceId: "workspace-id",
       noSchemaCheck: false,
       planTarget: async (params) => {
@@ -1586,7 +1636,7 @@ describe("multi-config deployment orchestration", () => {
     await planDeploymentTargets({
       targets,
       runInputs: {} as never,
-      client: {} as never,
+      client: mockOperatorClient({}),
       workspaceId: "workspace-id",
       noSchemaCheck: false,
       skip,
@@ -2167,6 +2217,42 @@ describe("collectExternalAuthIdpConfigNames", () => {
         fakeAuthTarget("shared-auth", "my-idp"),
       ]),
     ).not.toThrow();
+  });
+});
+
+describe("collectPlannedMachineUsers", () => {
+  function targetWithMachineUsers(
+    name: string,
+    machineUsers: ReadonlyArray<string>,
+  ): Parameters<typeof collectPlannedMachineUsers>[0][number] {
+    return {
+      application: {
+        authService: {
+          config: { name, machineUsers: Object.fromEntries(machineUsers.map((m) => [m, {}])) },
+        },
+      },
+    } as unknown as Parameters<typeof collectPlannedMachineUsers>[0][number];
+  }
+
+  test("collects the machine users each config declares, keyed by auth namespace", () => {
+    const result = collectPlannedMachineUsers([
+      targetWithMachineUsers("core-auth", ["customer-portal"]),
+      targetWithMachineUsers("other-auth", ["batch"]),
+    ]);
+
+    expect(result.get("core-auth")).toEqual(new Set(["customer-portal"]));
+    expect(result.get("other-auth")).toEqual(new Set(["batch"]));
+  });
+
+  test("ignores configs that only reference an external auth", () => {
+    const externalOnly = {
+      application: {
+        authService: undefined,
+        config: { auth: { name: "core-auth", external: true } },
+      },
+    } as unknown as Parameters<typeof collectPlannedMachineUsers>[0][number];
+
+    expect(collectPlannedMachineUsers([externalOnly]).size).toBe(0);
   });
 });
 

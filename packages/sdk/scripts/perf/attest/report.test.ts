@@ -124,6 +124,10 @@ describe("renderChanges", () => {
     );
   });
 
+  test("ends with a newline so text appended after it starts on its own line", () => {
+    expect(renderChanges([changed()], sources)).toMatch(/<\/details>\n$/);
+  });
+
   test("headlines how many cases changed", () => {
     const results = [
       changed(),

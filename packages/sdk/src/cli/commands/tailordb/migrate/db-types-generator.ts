@@ -2,12 +2,13 @@
  * DB types generator for TailorDB migrations
  *
  * Generates db.ts file containing Kysely Transaction types
- * based on the schema snapshot at a specific migration point.
+ * for the schema a migration script runs against.
  */
 
 import * as fs from "node:fs/promises";
 import { assertDefined } from "#/utils/assert";
 import { COLUMN_TYPE_ALIASES, mapFieldTypeToColumnType } from "#/utils/field-column-type";
+import { buildPreMigrationSnapshot } from "./pre-migration-schema";
 import {
   getMigrationFilePath,
   type SchemaSnapshot,
@@ -33,18 +34,12 @@ interface EnumValueChange {
  * Information about breaking change fields that need special handling
  */
 interface BreakingChangeFieldInfo {
-  /** Map of tableName -> Set of fieldNames that are changing from optional to required */
+  /** Map of tableName -> Set of fieldNames the script must fill before they become required */
   optionalToRequired: Map<string, Set<string>>;
-  /** Map of tableName -> Map of fieldName -> SnapshotFieldConfig for newly added required fields */
-  addedRequiredFields: Map<string, Map<string, SnapshotFieldConfig>>;
   /** Map of tableName -> Map of fieldName -> EnumValueChange for enum value changes */
   enumValueChanges: Map<string, Map<string, EnumValueChange>>;
-  /** Map of tableName -> Map of new fieldName -> SnapshotFieldConfig for renamed fields */
-  renamedFields: Map<string, Map<string, SnapshotFieldConfig>>;
   /** Map of tableName -> Set of fieldNames a conversion script clears */
   clearedFields: Map<string, Set<string>>;
-  /** Map of new tableName -> TailorDBSnapshotType for renamed tables */
-  renamedTypes: Map<string, TailorDBSnapshotType>;
 }
 
 /**
@@ -54,24 +49,20 @@ interface BreakingChangeFieldInfo {
  */
 function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldInfo {
   const optionalToRequired = new Map<string, Set<string>>();
-  const addedRequiredFields = new Map<string, Map<string, SnapshotFieldConfig>>();
   const enumValueChanges = new Map<string, Map<string, EnumValueChange>>();
-  const renamedFields = new Map<string, Map<string, SnapshotFieldConfig>>();
-  const renamedTypes = new Map<string, TailorDBSnapshotType>();
+
+  const markOptionalToRequired = (tableName: string, fieldName: string): void => {
+    const fields = optionalToRequired.get(tableName) ?? new Set<string>();
+    fields.add(fieldName);
+    optionalToRequired.set(tableName, fields);
+  };
 
   for (const change of diff.changes) {
     if (change.kind === "field_modified" || change.kind === "field_type_modified") {
       const { before, after } = change;
 
-      // Check if this is an optional -> required change
       if (!before.required && after.required) {
-        if (!optionalToRequired.has(change.tableName)) {
-          optionalToRequired.set(change.tableName, new Set());
-        }
-        assertDefined(
-          optionalToRequired.get(change.tableName),
-          "optionalToRequired entry missing",
-        ).add(change.fieldName);
+        markOptionalToRequired(change.tableName, change.fieldName);
       }
 
       // Check if this is an enum value change. Snapshots omit allowedValues
@@ -99,58 +90,32 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
           });
         }
       }
-    } else if (change.kind === "field_added") {
-      const { after } = change;
-
-      // Required field added is a breaking change - add it as optional in db.ts
-      // so migration script can set values for existing records
-      if (after.required) {
-        if (!addedRequiredFields.has(change.tableName)) {
-          addedRequiredFields.set(change.tableName, new Map());
-        }
-        assertDefined(
-          addedRequiredFields.get(change.tableName),
-          "addedRequiredFields entry missing",
-        ).set(change.fieldName, after);
+    } else if (change.kind === "field_added" || change.kind === "field_renamed") {
+      if (change.after.required) {
+        markOptionalToRequired(change.tableName, change.fieldName);
       }
-    } else if (change.kind === "field_renamed") {
-      // The new field is missing from the pre-migration snapshot; inject it so
-      // the copy script can write it (the old field stays readable as-is).
-      if (!renamedFields.has(change.tableName)) {
-        renamedFields.set(change.tableName, new Map());
-      }
-      assertDefined(renamedFields.get(change.tableName), "renamedFields entry missing").set(
-        change.fieldName,
-        change.after,
-      );
-    } else if (change.kind === "table_renamed") {
-      // The new table is missing from the pre-migration snapshot; inject it so
-      // the copy script can insert into it (the old type stays readable as-is).
-      renamedTypes.set(change.tableName, change.after);
     }
   }
 
   return {
     optionalToRequired,
-    addedRequiredFields,
     enumValueChanges,
-    renamedFields,
     clearedFields: new Map<string, Set<string>>(),
-    renamedTypes,
   };
 }
 
 /**
- * Generate the complete db.ts file content from a schema snapshot
- * @param {SchemaSnapshot} snapshot - Schema snapshot to generate types from
- * @param {MigrationDiff} [diff] - Optional migration diff for breaking change info
+ * Generate the complete db.ts file content for the schema a migration script runs against
+ * @param {SchemaSnapshot} previousSnapshot - Schema before the migration
+ * @param {MigrationDiff} [diff] - The migration's diff; without one, the types follow
+ * `previousSnapshot`
  * @param expandPlans - Field changes carried through temporary fields
  * @param temporal - Whether date/datetime/time fields resolve to their Temporal column
  * types instead of their `Date`/`string` defaults. Defaults to `false`.
  * @returns {string} Generated db.ts file contents
  */
 function generateDbTypesFromSnapshot(
-  snapshot: SchemaSnapshot,
+  previousSnapshot: SchemaSnapshot,
   diff?: MigrationDiff,
   expandPlans: readonly ExpandContractPlan[] = [],
   temporal = false,
@@ -160,30 +125,21 @@ function generateDbTypesFromSnapshot(
     ? extractBreakingChangeFields(diff)
     : {
         optionalToRequired: new Map(),
-        addedRequiredFields: new Map(),
         enumValueChanges: new Map(),
-        renamedFields: new Map<string, Map<string, SnapshotFieldConfig>>(),
         clearedFields: new Map<string, Set<string>>(),
-        renamedTypes: new Map<string, TailorDBSnapshotType>(),
       };
 
-  // The temporary field is absent from the pre-migration snapshot; inject it so
-  // the conversion script can write it, as a renamed field's new name is.
   for (const plan of expandPlans) {
-    const injected =
-      breakingChangeFields.renamedFields.get(plan.tableName) ??
-      new Map<string, SnapshotFieldConfig>();
-    injected.set(plan.tempFieldName, { ...plan.after, required: false, unique: false });
-    breakingChangeFields.renamedFields.set(plan.tableName, injected);
-
     const cleared = breakingChangeFields.clearedFields.get(plan.tableName) ?? new Set<string>();
     cleared.add(plan.fieldName);
     breakingChangeFields.clearedFields.set(plan.tableName, cleared);
   }
 
-  const tables = [...Object.values(snapshot.tables), ...breakingChangeFields.renamedTypes.values()];
+  const tables = Object.values(
+    (diff ? buildPreMigrationSnapshot(previousSnapshot, diff) : previousSnapshot).tables,
+  );
   if (tables.length === 0) {
-    return generateEmptyDbTypes(snapshot.namespace);
+    return generateEmptyDbTypes(previousSnapshot.namespace);
   }
 
   // Track which utility types are used
@@ -345,9 +301,6 @@ function generateTableType(
   const optionalToRequiredFields =
     breakingChangeFields.optionalToRequired.get(type.name) || new Set();
 
-  // Get newly added required fields for this table
-  const addedRequiredFields = breakingChangeFields.addedRequiredFields.get(type.name) || new Map();
-
   // Get enum value changes for this type
   const enumValueChangesForType = breakingChangeFields.enumValueChanges.get(type.name) || new Map();
 
@@ -376,31 +329,6 @@ function generateTableType(
       (clearable
         ? (clearableResult?.usesTemporalNamespace ?? false)
         : result.usesTemporalNamespace);
-  }
-
-  // Add newly added required fields with ColumnType (same as optional→required)
-  // These fields are added as nullable in pre-migration, then become required in post-migration
-  for (const [fieldName, fieldConfig] of addedRequiredFields) {
-    // Treat as optional→required change (isOptionalToRequired: true)
-    const result = generateFieldType(fieldConfig, true, undefined, temporal);
-    fieldLines.push(`    ${fieldName}: ${result.type};`);
-    if (result.usedUtilityType) usedUtilityTypes.add(result.usedUtilityType);
-    usedColumnType = usedColumnType || result.usedColumnType;
-    usedArrayColumnType = usedArrayColumnType || result.usedArrayColumnType;
-    usesTemporalNamespace = usesTemporalNamespace || result.usesTemporalNamespace;
-  }
-
-  // Add rename target fields, which do not exist in the pre-migration snapshot.
-  // A required target reads as nullable until the copy script fills it in
-  // (same shape as optional→required); an optional target is plainly nullable.
-  const renamedFieldsForType = breakingChangeFields.renamedFields.get(type.name) || new Map();
-  for (const [fieldName, fieldConfig] of renamedFieldsForType) {
-    const result = generateFieldType(fieldConfig, fieldConfig.required, undefined, temporal);
-    fieldLines.push(`    ${fieldName}: ${result.type};`);
-    if (result.usedUtilityType) usedUtilityTypes.add(result.usedUtilityType);
-    usedColumnType = usedColumnType || result.usedColumnType;
-    usedArrayColumnType = usedArrayColumnType || result.usedArrayColumnType;
-    usesTemporalNamespace = usesTemporalNamespace || result.usesTemporalNamespace;
   }
 
   const typeDef = `  ${type.name}: {\n${fieldLines.join("\n")}\n  }`;
@@ -638,24 +566,25 @@ function generateFieldType(
 
 /**
  * Write db.ts file for a migration
- * @param {SchemaSnapshot} snapshot - Schema snapshot to generate types from
+ * @param {SchemaSnapshot} previousSnapshot - Schema before the migration
  * @param {string} migrationsDir - Migrations directory path
  * @param {number} migrationNumber - Migration number
- * @param {MigrationDiff} [diff] - Optional migration diff for breaking change info
+ * @param {MigrationDiff} [diff] - The migration's diff; without one, the types follow
+ * `previousSnapshot`
  * @param expandPlans - Field changes carried through temporary fields
  * @param temporal - Whether date/datetime/time fields resolve to their Temporal column
  * types instead of their `Date`/`string` defaults. Defaults to `false`.
  * @returns {Promise<string>} Path to the written file
  */
 export async function writeDbTypesFile(
-  snapshot: SchemaSnapshot,
+  previousSnapshot: SchemaSnapshot,
   migrationsDir: string,
   migrationNumber: number,
   diff?: MigrationDiff,
   expandPlans: readonly ExpandContractPlan[] = [],
   temporal = false,
 ): Promise<string> {
-  const content = generateDbTypesFromSnapshot(snapshot, diff, expandPlans, temporal);
+  const content = generateDbTypesFromSnapshot(previousSnapshot, diff, expandPlans, temporal);
   const filePath = getMigrationFilePath(migrationsDir, migrationNumber, "db");
   await fs.writeFile(filePath, content);
   return filePath;

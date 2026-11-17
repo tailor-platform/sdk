@@ -15,6 +15,8 @@ npm install -D @tailor-platform/sdk-plugin-seed@next
 
 The Tailor CLI discovers the plugin automatically from `node_modules/.bin` (or your `PATH`). Run `tailor plugin list` to confirm it resolves.
 
+The `seed/data/*.schema.ts` files `tailor generate` writes import `defineSchema` from `@tailor-platform/sdk-plugin-seed/schema`, so a project that uses `seedPlugin` needs this package, and it should be updated at the same time as `@tailor-platform/sdk`.
+
 ## Usage
 
 ```bash
@@ -88,6 +90,8 @@ tailor seed validate --dataset cogs                # base and cogs, checked toge
 A table's rows are the rows of its base file followed by the rows of its file in each selected dataset, and `apply` seeds the tables in dependency order as usual. `validate` checks the selected datasets together with the base data, so a row in `cogs/ItemValuation.jsonl` may reference an `Item` from the base `Item.jsonl`, and every error points at the file and line the row came from.
 
 **A row is defined in exactly one place.** An `id` (or a `_User` `name`) that appears in two of the selected files — the base data and a dataset, or two datasets — is an error in both `validate` and `apply`, never a silent override. A table whose rows differ per environment belongs in the per-environment datasets only, not in the base data.
+
+Within one file, `apply` also refuses a `_User` `name` that appears on more than one row, because users are created several at a time and the IdP can store the same name twice when two requests arrive together. It stops before truncating or writing anything and lists each repeated row, for example `Row 3 (alice@example.com): duplicate of row 1`.
 
 ### IdP user passwords from the environment
 

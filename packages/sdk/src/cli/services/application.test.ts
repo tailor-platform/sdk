@@ -1,16 +1,20 @@
+// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
+import { errorToJson } from "#/cli/shared/error-json";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
-import { defineConfig } from "#/configure/config/index";
+import { defineConfig, definePlugins } from "#/configure/config/index";
 import { defineAIGateway } from "#/configure/services/aigateway/index";
 import { defineAuth } from "#/configure/services/auth/index";
 import { defineIdp } from "#/configure/services/idp/index";
 import { defineSecretManager } from "#/configure/services/secrets/index";
 import { defineStaticWebSite } from "#/configure/services/staticwebsite/index";
 import { db } from "#/configure/services/tailordb/schema";
+import { kyselyTypePlugin } from "#/plugin/builtin/kysely-type/index";
+import { PluginManager } from "#/plugin/manager";
 import { getRegisteredWaitPoints, restoreWaitPointRegistry } from "#/utils/wait-point-registry";
 import { defineApplication, loadApplication } from "./application";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -57,6 +61,7 @@ describe("defineAuth parse wiring", () => {
     });
 
     const config = {
+      // oxlint-disable-next-line typescript/no-deprecated -- Verify the deprecated array form still works until it is removed.
       ...defineConfig({
         name: "testApp",
         idp: [idp],
@@ -68,6 +73,40 @@ describe("defineAuth parse wiring", () => {
 
     expect(application.idpServices).toHaveLength(1);
     expect(application.idpServices[0]?.name).toBe("my-idp");
+  });
+
+  test("accepts a single IdP config instead of an array", () => {
+    const idp = defineIdp("my-idp", {
+      clients: ["default-client"],
+    });
+
+    const config = {
+      ...defineConfig({
+        name: "testApp",
+        idp,
+      }),
+      path: "tailor.config.ts",
+    };
+
+    const application = defineApplication({ config });
+
+    expect(application.idpServices.map((service) => service.name)).toEqual(["my-idp"]);
+    expect(application.subgraphs).toContainEqual({ Type: "idp", Name: "my-idp" });
+  });
+
+  test("accepts a single external IdP config", () => {
+    const config = {
+      ...defineConfig({
+        name: "testApp",
+        idp: { name: "shared-idp", external: true },
+      }),
+      path: "tailor.config.ts",
+    };
+
+    const application = defineApplication({ config });
+
+    expect(application.idpServices).toEqual([]);
+    expect(application.subgraphs).toContainEqual({ Type: "idp", Name: "shared-idp" });
   });
 
   test("accepts defineStaticWebSite helper objects when parsing static websites", () => {
@@ -163,8 +202,60 @@ describe("AI Gateway authNamespace default", () => {
     };
 
     expect(() => defineApplication({ config })).toThrow(
-      /AI Gateway "my-aigateway" has no "authNamespace"/,
+      expect.objectContaining({
+        code: "CONFIG_INVALID",
+        message:
+          "Invalid Tailor config:\n  - aiGateways.0.authNamespace: No Auth service is configured to default to",
+        suggestion: 'Define an Auth service, or set "authNamespace" explicitly.',
+        context: expect.objectContaining({ configKey: "aiGateways", name: "my-aigateway" }),
+      }),
     );
+  });
+
+  test("reports secrets without a value as CONFIG_INVALID", () => {
+    const config = {
+      ...defineConfig({
+        name: "testApp",
+        secrets: defineSecretManager({
+          vault: { first: undefined, second: "set", third: null },
+        } as never),
+      }),
+      path: "tailor.config.ts",
+    };
+
+    expect(() => defineApplication({ config })).toThrow(
+      expect.objectContaining({
+        code: "CONFIG_INVALID",
+        message:
+          "Invalid Tailor config:\n  - secrets.vaults.vault.first: Has no value\n  - secrets.vaults.vault.third: Has no value",
+        suggestion: expect.stringContaining("ignoreNullishValues: true"),
+        context: expect.objectContaining({ configKey: "secrets" }),
+      }),
+    );
+  });
+
+  test("reports a userProfile type no TailorDB namespace defines as CONFIG_INVALID", async () => {
+    const userType = db.table("User", { email: db.string().unique() });
+    const config = {
+      ...defineConfig({
+        name: "testApp",
+        db: { main: { files: [] }, other: { files: [] } },
+        auth: defineAuth("my-auth", {
+          userProfile: { type: userType, usernameField: "email" },
+          machineUsers: {},
+        }),
+      }),
+      path: "tailor.config.ts",
+    };
+
+    await expect(
+      defineApplication({ config }).authService!.resolveNamespaces(),
+    ).rejects.toMatchObject({
+      code: "CONFIG_INVALID",
+      message:
+        'Invalid Tailor config:\n  - auth.userProfile.type: Type "User" not found in any TailorDB namespace',
+      context: { file: "tailor.config.ts", configKey: "auth", name: "my-auth" },
+    });
   });
 });
 
@@ -182,6 +273,109 @@ describe("service config validation", () => {
     throw new Error("expected defineApplication to throw");
   }
 
+  test.each([
+    {
+      configKey: "idp",
+      kind: "idp",
+      label: "IdP",
+      entries: [
+        defineIdp("duplicate", { clients: ["client"] }),
+        { name: "distinct", external: true },
+        { name: "duplicate", external: true },
+        defineIdp("duplicate", { clients: ["other-client"] }),
+      ],
+    },
+    {
+      configKey: "staticWebsites",
+      kind: "staticwebsite",
+      label: "static website",
+      entries: [
+        defineStaticWebSite("duplicate", {}),
+        defineStaticWebSite("distinct", {}),
+        defineStaticWebSite("duplicate", {}),
+        defineStaticWebSite("duplicate", {}),
+      ],
+    },
+    {
+      configKey: "aiGateways",
+      kind: "aigateway",
+      label: "AI Gateway",
+      entries: [
+        defineAIGateway("duplicate", { authNamespace: "my-auth" }),
+        defineAIGateway("distinct", { authNamespace: "my-auth" }),
+        defineAIGateway("duplicate", { authNamespace: "my-auth" }),
+        defineAIGateway("duplicate", { authNamespace: "my-auth" }),
+      ],
+    },
+  ])(
+    "reports all duplicate $configKey entries with their config paths",
+    ({ configKey, kind, label, entries }) => {
+      const error = defineInvalidApplication({ [configKey]: entries });
+      expect(errorToJson(error).error).toMatchObject({
+        code: "DEFINITION_NAME_DUPLICATE",
+        message: [
+          `Duplicate ${label} name "duplicate" found:`,
+          `  - tailor.config.ts (path: ${configKey}.0)`,
+          `  - tailor.config.ts (path: ${configKey}.2)`,
+          `  - tailor.config.ts (path: ${configKey}.3)`,
+        ].join("\n"),
+        context: {
+          kind,
+          duplicates: [
+            {
+              name: "duplicate",
+              definitions: [0, 2, 3].map((index) => ({
+                file: "tailor.config.ts",
+                exportName: "default",
+                path: [configKey, index],
+              })),
+            },
+          ],
+        },
+      });
+    },
+  );
+
+  describe.each([
+    { configKey: "idp", entry: { clients: ["client"] } },
+    { configKey: "staticWebsites", entry: {} },
+    { configKey: "aiGateways", entry: { authNamespace: "my-auth" } },
+  ])("invalid $configKey names", ({ configKey, entry }) => {
+    test.each([{}, { name: null }, { name: 123 }])(
+      "reports repeated invalid names %j as CONFIG_INVALID",
+      (invalidName) => {
+        const invalidEntry = { ...entry, ...invalidName };
+        const error = defineInvalidApplication({ [configKey]: [invalidEntry, invalidEntry] });
+        expect(errorToJson(error).error).toMatchObject({
+          code: "CONFIG_INVALID",
+          context: {
+            file: "tailor.config.ts",
+            configKey,
+            issues: [
+              { path: [configKey, 0, "name"], message: expect.stringContaining("expected string") },
+            ],
+          },
+        });
+      },
+    );
+
+    test("preserves duplicate entry positions after an invalid name", () => {
+      const duplicate = { ...entry, name: "duplicate" };
+      const error = defineInvalidApplication({ [configKey]: [entry, duplicate, duplicate] });
+      expect(errorToJson(error).error).toMatchObject({
+        code: "DEFINITION_NAME_DUPLICATE",
+        context: {
+          duplicates: [
+            {
+              name: "duplicate",
+              definitions: [{ path: [configKey, 1] }, { path: [configKey, 2] }],
+            },
+          ],
+        },
+      });
+    });
+  });
+
   test("names the offending auth field when a machine user attribute is not a db field", () => {
     const error = defineInvalidApplication({
       auth: defineAuth("my-auth", {
@@ -193,7 +387,7 @@ describe("service config validation", () => {
       name: "CLIError",
       code: "CONFIG_INVALID",
       message:
-        'Invalid config for Auth service "my-auth" in tailor.config.ts:\n' +
+        'Invalid config for Auth service "my-auth":\n' +
         "  - auth.machineUserAttributes.role.metadata: Invalid input: expected object, received undefined\n" +
         "  - auth.machineUserAttributes.role.fields: Invalid input: expected record, received undefined",
       context: {
@@ -216,20 +410,43 @@ describe("service config validation", () => {
     expect(getErrorDiagnostics(error as Error).location).toEqual({ file: "tailor.config.ts" });
   });
 
-  test("names an OAuth2 client whose name the platform rejects", () => {
-    const error = defineInvalidApplication({
-      auth: defineAuth("my-auth", {
-        machineUserAttributes: {},
-        oauth2Clients: { c1: { redirectURIs: ["https://example.com/callback"] } },
-      }),
-    });
+  test.each([
+    {
+      label: "an OAuth2 client name",
+      serviceConfig: {
+        auth: defineAuth("my-auth", {
+          machineUserAttributes: {},
+          oauth2Clients: { c1: { redirectURIs: ["https://example.com/callback"] } },
+        }),
+      },
+      path: ["auth", "oauth2Clients", "c1"],
+    },
+    {
+      label: "a secret manager vault name",
+      serviceConfig: { secrets: defineSecretManager({ My_Vault: { key: "value" } }) },
+      path: ["secrets", "vaults", "My_Vault"],
+    },
+    {
+      label: "a secret manager secret name",
+      serviceConfig: { secrets: defineSecretManager({ "my-vault": { My_Key: "value" } }) },
+      path: ["secrets", "vaults", "my-vault", "My_Key"],
+    },
+    {
+      label: "an AI Gateway authNamespace",
+      serviceConfig: {
+        aiGateways: [defineAIGateway("my-gateway", { authNamespace: "My_Auth" })],
+      },
+      path: ["aiGateways", 0, "authNamespace"],
+    },
+  ])("names $label the platform rejects", ({ serviceConfig, path }) => {
+    const error = defineInvalidApplication(serviceConfig);
 
     expect(error).toMatchObject({
       code: "CONFIG_INVALID",
       context: {
         issues: [
           {
-            path: ["auth", "oauth2Clients", "c1"],
+            path,
             message:
               "must be 3-63 lowercase letters, digits, or hyphens, starting and ending with a letter or digit",
           },
@@ -332,6 +549,20 @@ describe("service config validation", () => {
     },
     {
       serviceConfig: {
+        resolver: {
+          main: {
+            files: [],
+            defaultPermission: [{ conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false }],
+          },
+        },
+      },
+      heading: 'resolver namespace "main"',
+      configKey: "resolver",
+      name: "main",
+      path: ["resolver", "main", "defaultPermission"],
+    },
+    {
+      serviceConfig: {
         idp: [
           defineIdp("other-idp", { clients: ["default"] }),
           { ...defineIdp("my-idp", { clients: ["default"] }), clients: "default" },
@@ -341,6 +572,15 @@ describe("service config validation", () => {
       configKey: "idp",
       name: "my-idp",
       path: ["idp", 1, "clients"],
+    },
+    {
+      serviceConfig: {
+        idp: { ...defineIdp("my-idp", { clients: ["default"] }), clients: "default" },
+      },
+      heading: 'IdP "my-idp"',
+      configKey: "idp",
+      name: "my-idp",
+      path: ["idp", "clients"],
     },
     {
       serviceConfig: {
@@ -369,7 +609,7 @@ describe("service config validation", () => {
     "reports an invalid $configKey config as CONFIG_INVALID",
     ({ serviceConfig, heading, configKey, name, path }) => {
       const error = defineInvalidApplication(serviceConfig) as Error;
-      const expectedStart = `Invalid config for ${heading} in tailor.config.ts:\n  - ${path.join(".")}: `;
+      const expectedStart = `Invalid config for ${heading}:\n  - ${path.join(".")}: `;
 
       expect(error.message.slice(0, expectedStart.length)).toBe(expectedStart);
       expect(error).toMatchObject({
@@ -422,9 +662,11 @@ export default createExecutor({
       path: path.join(tmpDir, "tailor.config.ts"),
     };
 
-    await expect(loadApplication({ config })).rejects.toThrow(
-      /Invalid wait point key "needsReview"/,
-    );
+    await expect(loadApplication({ config })).rejects.toMatchObject({
+      code: "WORKFLOW_WAIT_POINT_KEY_INVALID",
+      message: expect.stringMatching(/Invalid wait point key "needsReview"/),
+      context: { failures: [expect.stringMatching(/Invalid wait point key "needsReview"/)] },
+    });
   });
 });
 
@@ -631,6 +873,99 @@ export default createExecutor({
     expect(second.application.executorService).toBe(first.application.executorService);
     expect(second.application.tailorDBServices).toBe(first.application.tailorDBServices);
     expect(second.reusableBuildState).toBe(first.reusableBuildState);
+  });
+});
+
+describe("loadApplication kysely temporal", () => {
+  const GATE = "__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL";
+  let tmpDir: string | undefined;
+
+  afterEach(() => {
+    if (tmpDir) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      tmpDir = undefined;
+    }
+  });
+
+  async function bundledExecutor(options: { temporal?: boolean }): Promise<string> {
+    tmpDir ??= fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
+    const executorFile = path.join(tmpDir, "executor.ts");
+    fs.writeFileSync(
+      executorFile,
+      `
+import { createExecutor, incomingWebhookTrigger } from "@tailor-platform/sdk";
+
+const temporal = globalThis.process?.env.${GATE} === "true";
+
+export default createExecutor({
+  name: "webhook-executor",
+  trigger: incomingWebhookTrigger({ response: () => ({}) }),
+  operation: { kind: "function", body: () => temporal },
+});
+`,
+    );
+    const config = {
+      ...defineConfig({ name: "testApp", executor: { files: [executorFile] } }),
+      path: path.join(tmpDir, "tailor.config.ts"),
+    };
+    const { bundledScripts } = await loadApplication({
+      config,
+      pluginManager: new PluginManager(
+        definePlugins(kyselyTypePlugin({ distPath: "./db.ts", ...options })),
+      ),
+    });
+    return [...bundledScripts.executors.values()].join("\n");
+  }
+
+  test("bundles getDB of @tailor-platform/sdk/plugin/kysely-type/db with the plugin's temporal option", async () => {
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
+    const executorFile = path.join(tmpDir, "executor.ts");
+    fs.writeFileSync(
+      executorFile,
+      `
+import { createExecutor, incomingWebhookTrigger } from "@tailor-platform/sdk";
+import { getDB } from "@tailor-platform/sdk/plugin/kysely-type/db";
+
+export default createExecutor({
+  name: "webhook-executor",
+  trigger: incomingWebhookTrigger({ response: () => ({}) }),
+  operation: { kind: "function", body: () => getDB },
+});
+`,
+    );
+    const config = {
+      ...defineConfig({ name: "testApp", executor: { files: [executorFile] } }),
+      path: path.join(tmpDir, "tailor.config.ts"),
+    };
+    const bundle = async (temporal: boolean) =>
+      [
+        ...(
+          await loadApplication({
+            config,
+            pluginManager: new PluginManager(
+              definePlugins(kyselyTypePlugin({ distPath: "./db.ts", temporal })),
+            ),
+          })
+        ).bundledScripts.executors.values(),
+      ].join("\n");
+
+    const withTemporal = await bundle(true);
+    const withoutTemporal = await bundle(false);
+
+    expect(withTemporal).not.toContain(GATE);
+    expect(withTemporal).toMatch(/temporal:\s*(?:true|!0)/);
+    expect(withoutTemporal).not.toContain(GATE);
+    expect(withoutTemporal).toMatch(/temporal:\s*(?:false|!1)/);
+  });
+
+  test("folds the gate to follow the plugin's temporal option in what it bundles", async () => {
+    const withTemporal = await bundledExecutor({ temporal: true });
+    const withoutTemporal = await bundledExecutor({});
+
+    expect(withTemporal).not.toContain(GATE);
+    expect(withTemporal).toMatch(/=>\s*(?:true|!0)/);
+    expect(withoutTemporal).not.toContain(GATE);
+    expect(withoutTemporal).toMatch(/=>\s*(?:false|!1)/);
   });
 });
 

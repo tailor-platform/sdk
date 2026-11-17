@@ -372,6 +372,7 @@ import {
 const idp = defineIdp("${idpName}", {
   clients: ["default-idp-client"],
   permission: unsafeAllowAllIdPPermission,
+  userAuthPolicy: { allowedEmailDomains: ["*"] },
 });
 
 export default defineConfig({
@@ -379,7 +380,7 @@ export default defineConfig({
   db: {
     "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
   },
-  idp: [idp],
+  idp,
 });
 `;
 
@@ -448,6 +449,7 @@ import {
 const idp = defineIdp("${idpName}", {
   clients: ["default-idp-client"],
   permission: unsafeAllowAllIdPPermission,
+  userAuthPolicy: { allowedEmailDomains: ["*"] },
 });
 
 const auth = defineAuth("${authName}", {
@@ -459,7 +461,7 @@ export default defineConfig({
   db: {
     "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
   },
-  idp: [idp],
+  idp,
   auth,
 });
 `;
@@ -488,6 +490,7 @@ import {
 const idp = defineIdp("${idpName}", {
   clients: ["default-idp-client"],
   permission: unsafeAllowAllIdPPermission,
+  userAuthPolicy: { allowedEmailDomains: ["*"] },
 });
 
 export default defineConfig({
@@ -495,7 +498,7 @@ export default defineConfig({
   db: {
     "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
   },
-  idp: [idp],
+  idp,
 });
 `;
 

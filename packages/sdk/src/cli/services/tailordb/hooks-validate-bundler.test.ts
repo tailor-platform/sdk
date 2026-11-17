@@ -67,6 +67,54 @@ const bindingsMap = (
   );
 
 describe("precompileTailorDBTypeScripts", () => {
+  test("names the table of an async validator, leaving its file to the loader", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-async-validate-"));
+    const sourceFile = join(tempDir, "type.ts");
+    writeFileSync(sourceFile, "");
+    const type = {
+      name: "Order",
+      fields: {},
+      metadata: { typeValidate: async () => [] },
+    } as unknown as TailorDBTypeRaw;
+
+    try {
+      await expect(
+        precompileTailorDBTypeScripts(type, sourceFile, undefined),
+      ).rejects.toMatchObject({
+        code: "TAILORDB_VALIDATOR_ASYNC_UNSUPPORTED",
+        message: 'typeValidate in table "Order" must be synchronous.',
+        suggestion: "Remove the async keyword.",
+        context: { tableName: "Order", kind: "typeValidate" },
+      });
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("names the variables a hook captures that its file does not define", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-unresolved-"));
+    const sourceFile = join(tempDir, "type.ts");
+    writeFileSync(sourceFile, "");
+    const type = {
+      name: "Order",
+      fields: {},
+      // @ts-expect-error missingHelper is deliberately undeclared
+      metadata: { typeValidate: () => missingHelper() },
+    } as unknown as TailorDBTypeRaw;
+
+    try {
+      await expect(
+        precompileTailorDBTypeScripts(type, sourceFile, undefined),
+      ).rejects.toMatchObject({
+        code: "TAILORDB_HOOK_UNRESOLVED_REFERENCE",
+        message: 'typeValidate in table "Order" captures unresolvable variables (missingHelper).',
+        context: { tableName: "Order", kind: "typeValidate", names: ["missingHelper"] },
+      });
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   test("bundles captured declarations with TypeScript syntax", async () => {
     const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-typescript-entry-"));
     const sourceFile = join(tempDir, "type.ts");

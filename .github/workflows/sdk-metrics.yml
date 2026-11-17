@@ -8,7 +8,9 @@ on:
       - package.json
       - pnpm-lock.yaml
       - cccc.toml
+      - scripts/**
       - .github/scripts/complexity-report*.mjs
+      - .github/workflows/securefix.yml
       - .github/workflows/sdk-metrics.yml
   push:
     branches: [main]

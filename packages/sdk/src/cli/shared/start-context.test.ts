@@ -107,7 +107,7 @@ export const step = createWorkflowJob({ name: "step-b", body: async () => "b" })
   }
 
   function transform(source: string, currentFilePath: string, context: StartContext) {
-    return transformStartCalls(source, context, currentFilePath);
+    return transformStartCalls(source, context, currentFilePath).toString();
   }
 
   test("resolves duplicate local export names from the current module", async () => {

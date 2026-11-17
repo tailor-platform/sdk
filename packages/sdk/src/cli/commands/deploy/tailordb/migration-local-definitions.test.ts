@@ -8,6 +8,10 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { reconstructSnapshotFromMigrations } from "#/cli/commands/tailordb/migrate/snapshot";
+import {
+  preconditionFailureError,
+  requiredFieldNullValuesError,
+} from "#/cli/commands/tailordb/migrate/test-helpers/platform-errors";
 import { errorToJson } from "#/cli/shared/error-json";
 import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
 import * as migrationModule from "./migration";
@@ -75,14 +79,16 @@ const restricted = {
 describe("migration flow: local definitions that no pending migration includes", () => {
   let checkpoint: RemoteCheckpoint;
 
-  function createMockClient(existingTableNames = ["User", "Post"]): OperatorClient {
+  type MockClient = ReturnType<typeof createMockClient>;
+
+  function createMockClient(existingTableNames = ["User", "Post"]) {
     return checkpoint.createMockClient({
-      listTailorDBTypes: vi.fn(async () => ({
+      listTailorDBTypes: async () => ({
         tailordbTypes: existingTableNames.map((name) => ({
           name,
           schema: { settings: { bulkUpsert: false, publishRecordEvents: false } },
         })),
-      })),
+      }),
     });
   }
 
@@ -128,30 +134,30 @@ describe("migration flow: local definitions that no pending migration includes",
     after: { type: "string", required: false },
   } as DiffChange;
 
-  function rejectLocalPost(client: OperatorClient, rejection: Error) {
-    vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
+  function rejectLocalPost(client: MockClient, rejection: Error) {
+    client.updateTailorDBType.mockImplementation(async (request) => {
       if (request.tailordbType?.schema?.fields?.body) throw rejection;
-      return {} as never;
+      return {};
     });
   }
 
   function refuseWritesToDeletedTables(
-    client: OperatorClient,
+    client: MockClient,
     refusedDeletion?: { tableName: string; error: Error },
   ) {
     const deleted = new Set<string>();
-    vi.mocked(client.deleteTailorDBType).mockImplementation(async (request) => {
+    client.deleteTailorDBType.mockImplementation(async (request) => {
       const tableName = request.tailordbTypeName ?? "";
       if (refusedDeletion && tableName === refusedDeletion.tableName) throw refusedDeletion.error;
       deleted.add(tableName);
       await new Promise((resolve) => setTimeout(resolve, 0));
-      return {} as never;
+      return {};
     });
-    vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
+    client.updateTailorDBType.mockImplementation(async (request) => {
       if (deleted.has(request.tailordbType?.name ?? "")) {
         throw new ConnectError("table not found", Code.NotFound);
       }
-      return {} as never;
+      return {};
     });
   }
 
@@ -160,14 +166,15 @@ describe("migration flow: local definitions that no pending migration includes",
       0: { User: user, Post: post, Comment: comment },
       1: { User: userWithNickname, Post: post, Comment: comment },
     };
-    mockPending([addNickname]);
-    return createMockPlanResult({
+    const planResult = createMockPlanResult({
       local: [userWithNickname, post],
       updates: ["User"],
       unchanged: ["Post"],
       deletes: ["Comment", "Archive"],
       maintenanceMode: "deploy",
     });
+    planResult.context.pendingMigrations = mockPending([addNickname]);
+    return planResult;
   }
 
   function writesOf(client: OperatorClient, tableName: string) {
@@ -268,10 +275,8 @@ describe("migration flow: local definitions that no pending migration includes",
   test.each([
     ["already_exists", new ConnectError("duplicated key", Code.AlreadyExists)],
     [
-      "failed_precondition with a PreconditionFailure detail",
-      Object.assign(new ConnectError("null values", Code.FailedPrecondition), {
-        details: [{ type: "google.rpc.PreconditionFailure", value: new Uint8Array() }],
-      }),
+      "failed_precondition with a REQUIRED_FIELD_HAS_NULL_VALUES violation",
+      requiredFieldNullValuesError(),
     ],
   ])(
     "fails after the migrations commit when existing records refuse a local definition (%s)",
@@ -320,6 +325,10 @@ describe("migration flow: local definitions that no pending migration includes",
       "failed_precondition without a PreconditionFailure detail",
       new ConnectError("serial state conflict", Code.FailedPrecondition),
     ],
+    [
+      "failed_precondition with another violation type",
+      preconditionFailureError("serial state conflict", "ANOTHER_VIOLATION", "title"),
+    ],
     ["a plain error", new Error("socket hang up")],
   ])(
     "suggests deploying again when a local definition fails for a reason other than existing records (%s)",
@@ -347,11 +356,11 @@ describe("migration flow: local definitions that no pending migration includes",
 
   test("suggests deploying again when a table cannot be created for its local definition", async () => {
     const client = createMockClient();
-    vi.mocked(client.createTailorDBType).mockImplementation(async (request) => {
+    client.createTailorDBType.mockImplementation(async (request) => {
       if (request.tailordbType?.name === "Tag") {
         throw new ConnectError("table exists", Code.AlreadyExists);
       }
-      return {} as never;
+      return {};
     });
     const tag = snapshotTable("Tag", { label: { type: "string", required: true } });
     const planResult = createMockPlanResult({
@@ -541,13 +550,16 @@ describe("migration flow: local definitions that no pending migration includes",
       1: { User: userWithNickname, Post: post, Comment: comment },
     };
     const client = createMockClient(["User", "Post", "Comment", "Draft"]);
-    mockPending([addNickname, { kind: "table_removed", tableName: "Draft" } as DiffChange]);
     const planResult = createMockPlanResult({
       local: [userWithNickname, post],
       updates: ["User"],
       unchanged: ["Post"],
       deletes: ["Comment", "Draft"],
     });
+    planResult.context.pendingMigrations = mockPending([
+      addNickname,
+      { kind: "table_removed", tableName: "Draft" } as DiffChange,
+    ]);
 
     await applyTailorDB(client, planResult, "create-update");
 

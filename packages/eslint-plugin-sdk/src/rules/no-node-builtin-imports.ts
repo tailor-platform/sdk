@@ -1,10 +1,6 @@
-import {
-  describeUnavailable,
-  getNodeBuiltinMessage,
-  isNodeBuiltinImport,
-} from "@tailor-platform/shared/node-builtins";
+import { getNodeBuiltinMessage, isNodeBuiltinImport } from "@tailor-platform/shared/node-builtins";
 import { type AstCallExpression, type AstNode, staticString } from "../lib/ast.js";
-import { platformFunctionFactories, suggestsAlternatives } from "../lib/platform-functions.js";
+import { checkOptionSchema, unavailableDescriber } from "../lib/platform-functions.js";
 import { configureImportTracker } from "../lib/sdk-bindings.js";
 import type { Rule } from "eslint";
 
@@ -32,12 +28,12 @@ const rule = {
     type: "problem",
     docs: {
       description:
-        "Disallow importing Node built-in modules in files that define a resolver, executor, workflow job, or HTTP adapter.",
+        'Disallow importing Node built-in modules in files that define a resolver, executor, workflow job, or HTTP adapter, or in every file with `check: "all-files"`.',
     },
     messages: {
       unavailable: "{{message}}",
     },
-    schema: [],
+    schema: [checkOptionSchema],
   },
   create(context) {
     const imports = configureImportTracker(context);
@@ -61,11 +57,8 @@ const rule = {
       ImportExpression: (node) => addSource(node.source, staticString(node.source)),
       CallExpression: (node) => calls.push(node),
       "Program:exit"() {
-        const factories = platformFunctionFactories(imports, calls);
-        if (factories.size === 0) return;
-        const describe = suggestsAlternatives(factories)
-          ? getNodeBuiltinMessage
-          : describeUnavailable;
+        const describe = unavailableDescriber(context, imports, calls, getNodeBuiltinMessage);
+        if (describe === null) return;
         for (const { node, specifier } of sources) {
           if (!isNodeBuiltinImport(specifier)) continue;
           context.report({

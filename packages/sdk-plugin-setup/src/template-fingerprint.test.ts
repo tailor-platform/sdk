@@ -6,12 +6,15 @@ import {
   fingerprintOf,
   renderedTemplates,
   renderedTemplatesFingerprint,
+  writeRenderedTemplates,
+  type FingerprintedRender,
 } from "./template-fingerprint";
 import {
   readTemplateVersionState,
   resolvePendingTemplateVersion,
   templateVersionDrift,
 } from "./template-version";
+import { tempDir } from "./test-helpers/temp-dir";
 
 const result = (content: string, generatedIds: string[] = ["tailor-plan"]) => ({
   name: "branch",
@@ -55,6 +58,46 @@ describe("renderedTemplates", () => {
   test.each(renderedTemplates())("$name fills every placeholder and parses", ({ content }) => {
     expect(content).not.toMatch(/__[A-Z_]+__/);
     expect(() => parse(content)).not.toThrow();
+  });
+});
+
+describe("writeRenderedTemplates", () => {
+  const renders: FingerprintedRender[] = [
+    {
+      name: "branch/pnpm",
+      content: "name: deploy\n",
+      generatedIds: ["tailor-plan", "tailor-plan/tailor-checkout"],
+    },
+    {
+      name: "autofix/github-token",
+      content: "name: autofix\n",
+      generatedIds: ["tailor-autofix"],
+    },
+  ];
+
+  test("writes each render, its managed ids, and the order of the renders", () => {
+    using tmp = tempDir("template-dump-");
+    const dir = path.join(tmp.dir, "dump");
+
+    writeRenderedTemplates(dir, renders);
+
+    const read = (file: string) => fs.readFileSync(path.join(dir, file), "utf-8");
+    expect(read("branch/pnpm.yml")).toBe("name: deploy\n");
+    expect(read("branch/pnpm.ids")).toBe("tailor-plan\ntailor-plan/tailor-checkout\n");
+    expect(read("autofix/github-token.yml")).toBe("name: autofix\n");
+    expect(read("autofix/github-token.ids")).toBe("tailor-autofix\n");
+    expect(read("renders.txt")).toBe("branch/pnpm\nautofix/github-token\n");
+  });
+
+  test("refuses a relative directory, which pnpm resolves from the package", () => {
+    expect(() => writeRenderedTemplates("dump", renders)).toThrow(/absolute/);
+  });
+
+  test("refuses a directory that already has files, which would keep removed renders", () => {
+    using tmp = tempDir("template-dump-");
+    fs.writeFileSync(path.join(tmp.dir, "stale.yml"), "");
+
+    expect(() => writeRenderedTemplates(tmp.dir, renders)).toThrow(/empty/);
   });
 });
 

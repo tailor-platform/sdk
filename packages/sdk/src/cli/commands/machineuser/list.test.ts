@@ -7,6 +7,7 @@ import { loadConfig } from "#/cli/shared/config-loader";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { listCommand, listMachineUsers, type MachineUserInfo } from "./list";
 
 vi.mock("#/cli/shared/operator-context", () => ({
@@ -30,25 +31,18 @@ const machineUser = create(MachineUserSchema, {
 });
 
 describe("machineuser list", () => {
-  let listAuthMachineUsersMock: ReturnType<typeof vi.fn>;
-
   aroundEach(async (runTest) => {
     vi.mocked(loadConfig).mockResolvedValue({
       config: { name: "my-app" },
     } as Awaited<ReturnType<typeof loadConfig>>);
 
-    listAuthMachineUsersMock = vi
-      .fn()
-      .mockResolvedValue({ machineUsers: [machineUser], nextPageToken: "" });
     vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
       workspaceId: "workspace-1",
-      client: {
-        getApplication: vi.fn().mockResolvedValue({
-          application: { authNamespace: "auth-ns" },
-        }),
-        listAuthMachineUsers: listAuthMachineUsersMock,
-      },
-    } as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>);
+      client: mockOperatorClient({
+        getApplication: { application: { authNamespace: "auth-ns" } },
+        listAuthMachineUsers: { machineUsers: [machineUser], nextPageToken: "" },
+      }),
+    });
 
     await runTest();
   });

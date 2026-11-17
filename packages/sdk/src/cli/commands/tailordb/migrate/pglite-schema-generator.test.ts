@@ -687,6 +687,11 @@ describe("writePgliteSchemaFile", () => {
 
 describe("agreement with db.ts", () => {
   const dir = path.join(TEST_BASE, `parity-${process.pid}`);
+  const order = table("Order", {
+    total: snapshotField("integer", { required: true }),
+    memo: snapshotField("string"),
+  });
+  const session = table("Session", { token: snapshotField("string", { required: true }) });
   const migration = diff([
     {
       kind: "field_added",
@@ -721,15 +726,43 @@ describe("agreement with db.ts", () => {
       fieldName: "score",
       before: snapshotField("integer", { required: true }),
     },
+    { kind: "table_added", tableName: "Order", after: order },
+    { kind: "table_removed", tableName: "Session", before: session },
   ]);
+  const previous = snapshot(user, session);
+
+  async function writeDbTypes(): Promise<string> {
+    fs.mkdirSync(path.join(dir, formatMigrationNumber(1)), { recursive: true });
+    return fs.readFileSync(await writeDbTypesFile(previous, dir, 1, migration), "utf-8");
+  }
+
+  test("db.ts declares exactly the tables and columns the DDL is rendered from", async () => {
+    const dbTypes = await writeDbTypes();
+
+    const declared = Object.fromEntries(
+      [...dbTypes.matchAll(/^ {2}(\w+): \{\n((?: {4}.+\n)+) {2}\}$/gm)].map((m) => [
+        m[1]!,
+        [...m[2]!.matchAll(/^ {4}(\w+): /gm)].map((column) => column[1]!).toSorted(),
+      ]),
+    );
+    expect(declared).toEqual({
+      User: ["email", "handle", "id", "name", "nickname", "note", "region", "score", "status"],
+      Order: ["id", "memo", "total"],
+      Session: ["id", "token"],
+    });
+    expect(declared).toEqual(
+      Object.fromEntries(
+        buildPreMigrationTables(previous, migration).map((t) => [
+          t.name,
+          Object.keys(t.fields).toSorted(),
+        ]),
+      ),
+    );
+  });
 
   test("every db.ts column exists in the DDL, and a nullable read is a nullable column", async () => {
-    fs.mkdirSync(path.join(dir, formatMigrationNumber(1)), { recursive: true });
-    const dbTypes = fs.readFileSync(
-      await writeDbTypesFile(snapshot(user), dir, 1, migration),
-      "utf-8",
-    );
-    const ddl = generateMigrationPgliteSchema(snapshot(user), migration);
+    const dbTypes = await writeDbTypes();
+    const ddl = generateMigrationPgliteSchema(previous, migration);
 
     const dbColumns = [...dbTypes.matchAll(/^ {4}(\w+): (.+);$/gm)].map((m): [string, string] => [
       m[1]!,

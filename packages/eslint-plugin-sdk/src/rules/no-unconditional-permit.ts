@@ -5,9 +5,15 @@ import {
   isValueReference,
   memberName,
   objectProperty,
+  staticBoolean,
   unwrapExpression,
 } from "../lib/ast.js";
-import { configureImportTracker, type ImportTracker, resolveValue } from "../lib/sdk-bindings.js";
+import {
+  configureImportTracker,
+  type ImportTracker,
+  resolveValue,
+  sdkChainRoot,
+} from "../lib/sdk-bindings.js";
 import type { Rule } from "eslint";
 
 type IdentifierNode = Extract<Rule.Node, { type: "Identifier" }>;
@@ -19,32 +25,13 @@ const UNSAFE_CONSTANTS: ReadonlySet<string> = new Set([
   "unsafeAllowAllIdPPermission",
 ]);
 
-function isDbReference(imports: ImportTracker, node: AstNode | null | undefined): boolean {
-  const object = unwrapExpression(node);
-  if (object?.type === "Identifier") return imports.importedAs(object, "db");
-  if (object?.type === "MemberExpression" || object?.type === "OptionalMemberExpression") {
-    return memberName(object) === "db" && imports.isNamespace(unwrapExpression(object.object));
-  }
-  return false;
-}
-
 function isDbTableReceiver(
   context: Rule.RuleContext,
   imports: ImportTracker,
   node: AstNode | null | undefined,
 ): boolean {
-  let current = resolveValue(context, node);
-  while (current?.type === "CallExpression") {
-    const callee = unwrapExpression(current.callee);
-    if (callee?.type !== "MemberExpression" && callee?.type !== "OptionalMemberExpression") {
-      return false;
-    }
-    const method = memberName(callee);
-    if ((method === "type" || method === "table") && isDbReference(imports, callee.object))
-      return true;
-    current = resolveValue(context, callee.object);
-  }
-  return false;
+  const root = sdkChainRoot(context, imports, node);
+  return root?.receiver === "db" && (root.method === "type" || root.method === "table");
 }
 
 function permissionArgument(
@@ -72,12 +59,10 @@ function isUnconditionalObjectEntry(context: Rule.RuleContext, entry: AstNode): 
   const permit = objectProperty(entry, "permit");
   if (conditions === null || permit === null) return false;
   const conditionsValue = resolveValue(context, conditions.value);
-  const permitValue = unwrapExpression(permit.value);
   return (
     conditionsValue?.type === "ArrayExpression" &&
     conditionsValue.elements.length === 0 &&
-    permitValue?.type === "Literal" &&
-    permitValue.value === true
+    staticBoolean(permit.value) === true
   );
 }
 
@@ -85,9 +70,9 @@ function isUnconditionalShorthandEntry(entry: AstArrayExpression): boolean {
   let permit = true;
   for (const element of entry.elements) {
     if (element === null || element.type === "SpreadElement") return false;
-    const value = unwrapExpression(element);
-    if (value?.type !== "Literal" || typeof value.value !== "boolean") return false;
-    permit = value.value;
+    const value = staticBoolean(element);
+    if (value === null) return false;
+    permit = value;
   }
   return permit;
 }

@@ -40,14 +40,14 @@ describe("SecretsSchema validation", () => {
     ["name shorter than 3 characters", { ab: { "my-secret": "value" } }],
     ["name with underscores", { my_vault: { "my-secret": "value" } }],
   ] as const)("rejects %s", (_description, vaults) => {
-    expect(() => SecretsSchema.parse(wrap(vaults))).toThrow(/Invalid string/);
+    expect(() => SecretsSchema.parse(wrap(vaults))).toThrow(/Invalid key in record/);
   });
 
   test("rejects name longer than 63 characters", () => {
     const name = `a${"b".repeat(62)}c`;
     expect(name).toHaveLength(64);
     const invalid = wrap({ [name]: { "my-secret": "value" } });
-    expect(() => SecretsSchema.parse(invalid)).toThrow(/Invalid string/);
+    expect(() => SecretsSchema.parse(invalid)).toThrow(/Invalid key in record/);
   });
 
   test("accepts nullish secret values", () => {

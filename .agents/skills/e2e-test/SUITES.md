@@ -29,7 +29,7 @@ profile, run both checks with the same `TAILOR_PLATFORM_PROFILE` instead of the 
 
 If the workspace is missing or no longer hosts the application:
 
-1. Verify login with `pnpm exec tailor workspace list`.
+1. Verify login with `pnpm exec tailor workspace list --limit 1`.
 2. Resolve existing organization and folder IDs only when they are not saved:
    ```sh
    pnpm exec tailor organization list

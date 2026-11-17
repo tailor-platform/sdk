@@ -1,6 +1,37 @@
-import { assertType, describe, test } from "vitest";
+import { assertType, describe, expectTypeOf, test } from "vitest";
 import type { JsonValue } from "#/types/helpers";
-import type { DeployedHookResult, PluginOutputValue } from "./types";
+import type {
+  DeployedHookResult,
+  NamespacePluginOutput,
+  Plugin,
+  PluginNamespaceProcessContext,
+  PluginOutputValue,
+  TailorDBNamespaceLoadedContext,
+  TailorDBNamespacePluginOutput,
+} from "./types";
+
+describe("onTailorDBNamespaceLoaded", () => {
+  test("receives the plugin config typed by the plugin", () => {
+    assertType<Plugin<unknown, { prefix: string }>>({
+      id: "@example/namespace",
+      description: "namespace generator",
+      importPath: "@example/namespace",
+      onTailorDBNamespaceLoaded(context) {
+        expectTypeOf(context).toEqualTypeOf<TailorDBNamespaceLoadedContext<{ prefix: string }>>();
+        return {};
+      },
+    });
+  });
+
+  test("keeps the deprecated type names as aliases of the new ones", () => {
+    expectTypeOf<
+      // oxlint-disable-next-line typescript/no-deprecated -- The alias is what this test covers.
+      PluginNamespaceProcessContext<{ prefix: string }>
+    >().toEqualTypeOf<TailorDBNamespaceLoadedContext<{ prefix: string }>>();
+    // oxlint-disable-next-line typescript/no-deprecated -- The alias is what this test covers.
+    expectTypeOf<NamespacePluginOutput>().toEqualTypeOf<TailorDBNamespacePluginOutput>();
+  });
+});
 
 interface FrontendResult {
   site: string;

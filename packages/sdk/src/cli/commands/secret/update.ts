@@ -5,11 +5,10 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
-import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
-import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { secretValueArgs, secretValueNotes } from "./args";
-import { checkVaultManaged, releaseVaultOwnership } from "./check-vault-managed";
+import { releaseVaultOwnership } from "./check-vault-managed";
+import { prepareSecretWrite } from "./prepare-write";
 import { resolveSecretValue } from "./value";
 
 export const updateSecretCommand = defineAppCommand({
@@ -25,28 +24,7 @@ export const updateSecretCommand = defineAppCommand({
     const value = await resolveSecretValue(args, process.stdin, "secret update");
     logger.registerSecret(value);
     await assertWritable({ profile: args.profile });
-    const { client, workspaceId } = await loadOperatorWorkspaceContext({
-      profile: args.profile,
-      workspaceId: args["workspace-id"],
-    });
-
-    const managed = await checkVaultManaged({
-      client,
-      workspaceId,
-      vaultName: args["vault-name"],
-    });
-    if (managed.isManaged && !args.yes) {
-      const confirmed = await prompt.confirm({
-        message: "Do you want to proceed?",
-        default: false,
-      });
-      if (!confirmed) {
-        throw CLIError({
-          code: "SECRET_UPDATE_CANCELLED",
-          message: "Secret update cancelled. The vault is still managed by the config.",
-        });
-      }
-    }
+    const { client, workspaceId, managed } = await prepareSecretWrite(args, "update");
     try {
       await client.updateSecretManagerSecret({
         workspaceId,

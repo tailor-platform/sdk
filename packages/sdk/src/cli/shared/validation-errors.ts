@@ -1,6 +1,6 @@
 import * as path from "pathe";
 import { isSyntaxDiagnostic } from "#/utils/syntax-diagnostic";
-import { withErrorDiagnostics } from "./error-diagnostics";
+import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
 import { CLIError, internalError } from "./errors";
 import { flattenZodIssues, formatIssueList, type FlatIssue } from "./zod-issues";
 import type { AppConfig } from "#/configure/config/types";
@@ -14,35 +14,65 @@ interface ConfigServiceRef {
   name?: string;
 }
 
-export interface ConfigInvalidErrorParams {
+interface ConfigErrorTarget {
   /** Config file that failed validation. */
   file: string;
   /** Config module export that failed validation. */
   exportName: "default" | "plugins";
   /** What failed, as it reads after "Invalid", such as `Tailor config`. */
   subject: string;
-  /** Validation error of the failing value. */
-  error: z.ZodError;
-  /** Path of the failing value within `exportName`. */
-  pathPrefix?: FlatIssue["path"];
   /** The service that failed, when a single service config failed. */
   service?: ConfigServiceRef;
 }
 
+export interface ConfigInvalidErrorParams extends ConfigErrorTarget {
+  /** Validation error of the failing value. */
+  error: z.ZodError;
+  /** Path of the failing value within `exportName`. */
+  pathPrefix?: FlatIssue["path"];
+}
+
+export interface ConfigIssuesErrorParams extends ConfigErrorTarget {
+  /** What is wrong, one entry per offending value, with paths within `exportName`. */
+  issues: readonly FlatIssue[];
+  /** Why the values are rejected. */
+  details?: string;
+  /** How to fix the values. */
+  suggestion?: string;
+  /** Failure the issues were derived from. */
+  cause?: unknown;
+}
+
 /**
- * Create the error for a config file that failed validation.
+ * Create the error for a config file that failed schema validation.
  * @param params - Failed config and its validation error
  * @returns CLIError coded `CONFIG_INVALID`, located at the config file
  */
 export function configInvalidError(params: ConfigInvalidErrorParams): CLIError {
-  const { file, exportName, subject, error, pathPrefix, service } = params;
-  const issues = flattenZodIssues(error.issues, pathPrefix);
+  const { error, pathPrefix, ...target } = params;
+  return configIssuesError({
+    ...target,
+    issues: flattenZodIssues(error.issues, pathPrefix),
+    cause: error,
+  });
+}
+
+/**
+ * Create the error for a config file from issues the caller collected, such as values a check
+ * other than its schema rejected.
+ * @param params - Failed config and the issues found in it
+ * @returns CLIError coded `CONFIG_INVALID`, located at the config file
+ */
+export function configIssuesError(params: ConfigIssuesErrorParams): CLIError {
+  const { file, exportName, subject, service, issues, details, suggestion, cause } = params;
   return withErrorDiagnostics(
     CLIError({
       code: "CONFIG_INVALID",
-      message: `Invalid ${subject} in ${relativeFile(file)}:\n${formatIssueList(issues)}`,
+      message: `Invalid ${subject}:\n${formatIssueList(issues)}`,
+      details,
+      suggestion,
       context: { file, exportName, ...service, issues },
-      cause: error,
+      cause,
     }),
     { location: { file } },
   );
@@ -83,7 +113,7 @@ export function definitionInvalidError(params: DefinitionInvalidErrorParams): CL
   return withErrorDiagnostics(
     CLIError({
       code: "DEFINITION_INVALID",
-      message: `Invalid ${DEFINITION_LABELS[kind]}${exportLabel} in ${relativeFile(file)}:\n${formatIssueList(issues)}`,
+      message: `Invalid ${DEFINITION_LABELS[kind]}${exportLabel}:\n${formatIssueList(issues)}`,
       context: { kind, file, exportName, issues },
       cause: error,
     }),
@@ -99,7 +129,7 @@ export function definitionInvalidError(params: DefinitionInvalidErrorParams): CL
 export function definitionExportError(params: DefinitionErrorParams): CLIError {
   const { kind, file, exportName } = params;
   const label = DEFINITION_LABELS[kind];
-  const subject = `${label.charAt(0).toUpperCase()}${label.slice(1)} in ${relativeFile(file)}`;
+  const subject = `${label.charAt(0).toUpperCase()}${label.slice(1)}`;
   const placement =
     exportName === "default"
       ? {
@@ -120,6 +150,101 @@ export function definitionExportError(params: DefinitionErrorParams): CLIError {
   );
 }
 
+const DUPLICATE_NAME_LABELS = {
+  ...DEFINITION_LABELS,
+  idp: "IdP",
+  staticwebsite: "static website",
+  aigateway: "AI Gateway",
+} as const;
+
+interface NamedDefinition {
+  /** Name the definition declares. */
+  name: string;
+  /** Absolute path of the file that exports the definition, when a file does. */
+  file?: string;
+  /** Export the definition was found under, when a file exports it. */
+  exportName?: string;
+  /** Where the definition comes from when its file does not say, such as its namespace or the plugin that generated it. */
+  source?: string;
+  /** Path within the exported config, when the definition is a config entry. */
+  path?: FlatIssue["path"];
+}
+
+export interface UniqueDefinitionNamesParams {
+  /** Kind of definition whose names must be unique. */
+  kind: keyof typeof DUPLICATE_NAME_LABELS;
+  /** Namespace the names must be unique in, when the kind has one. */
+  namespace?: string;
+  /** What the names must be unique across when that spans namespaces, such as "all TailorDB namespaces in the application". */
+  uniqueAcross?: string;
+  /** Loaded definitions to check. */
+  definitions: readonly NamedDefinition[];
+}
+
+function compareCodePoints(a = "", b = ""): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function definitionLine(definition: Omit<NamedDefinition, "name">): string {
+  const { file, exportName, source, path: configPath } = definition;
+  const notes = [
+    exportName === undefined || exportName === "default" ? undefined : `export: ${exportName}`,
+    source,
+  ].filter((note) => note !== undefined);
+  const pathLabel = configPath === undefined ? "" : ` (path: ${configPath.join(".")})`;
+  if (file === undefined) return `  - ${notes.join(", ") || "unknown source"}${pathLabel}`;
+  return `  - ${path.relative(process.cwd(), file)}${notes.length > 0 ? ` (${notes.join(", ")})` : ""}${pathLabel}`;
+}
+
+function uniqueNameSuggestion(label: string, params: UniqueDefinitionNamesParams): string {
+  if (params.uniqueAcross !== undefined) {
+    return `Give each ${label} a name that is unique across ${params.uniqueAcross}.`;
+  }
+  return `Give each ${label} a unique name${params.namespace === undefined ? "" : " within its namespace"}.`;
+}
+
+/**
+ * Assert that no two loaded definitions of a kind declare the same name.
+ * @param params - Loaded definitions and what scopes their names
+ * @throws CLIError coded `DEFINITION_NAME_DUPLICATE`, listing every definition of each duplicated name
+ */
+export function assertUniqueDefinitionNames(params: UniqueDefinitionNamesParams): void {
+  const { kind, namespace, definitions } = params;
+  const sorted = definitions.toSorted(
+    (a, b) =>
+      compareCodePoints(a.name, b.name) ||
+      compareCodePoints(a.file, b.file) ||
+      compareCodePoints(a.exportName, b.exportName) ||
+      compareCodePoints(a.source, b.source),
+  );
+  const duplicates = [...Map.groupBy(sorted, (definition) => definition.name)]
+    .filter(([, sameName]) => sameName.length > 1)
+    .map(([name, sameName]) => ({
+      name,
+      definitions: sameName.map(({ file, exportName, source, path }) => ({
+        file,
+        exportName,
+        ...(source === undefined ? {} : { source }),
+        ...(path === undefined ? {} : { path }),
+      })),
+    }));
+  if (duplicates.length === 0) return;
+
+  const label = DUPLICATE_NAME_LABELS[kind];
+  const scope = namespace === undefined ? "" : ` in namespace "${namespace}"`;
+  throw CLIError({
+    code: "DEFINITION_NAME_DUPLICATE",
+    message: duplicates
+      .flatMap((duplicate) => [
+        `Duplicate ${label} name "${duplicate.name}" found${scope}:`,
+        ...duplicate.definitions.map(definitionLine),
+      ])
+      .join("\n"),
+    suggestion: uniqueNameSuggestion(label, params),
+    context: { kind, namespace, duplicates },
+  });
+}
+
 /**
  * Create the error for a user module whose source does not parse.
  * @param thrown - Value thrown while importing the module
@@ -130,11 +255,10 @@ export function syntaxInvalidError(thrown: unknown): CLIError | undefined {
   if (!isSyntaxDiagnostic(thrown)) return undefined;
   const { message, filename: file, startLine: line } = thrown;
   const location = line === undefined ? { file } : { file, line };
-  const lineSuffix = line === undefined ? "" : `:${line}`;
   return withErrorDiagnostics(
     CLIError({
       code: "SYNTAX_INVALID",
-      message: `Invalid syntax in ${relativeFile(file)}${lineSuffix}: ${message}`,
+      message: `Invalid syntax: ${message}`,
       context: location,
       cause: thrown,
     }),
@@ -155,6 +279,16 @@ export function invalidDataError(subject: string, error: z.ZodError): Error {
   });
 }
 
-function relativeFile(file: string): string {
-  return path.relative(process.cwd(), file);
+/**
+ * Attribute a failure raised while loading a user module to the module's file.
+ *
+ * A failure that already carries a source location, such as a syntax error in a
+ * module the file imports, keeps it.
+ * @param error - Value thrown while loading the module
+ * @param file - Absolute path of the module
+ * @returns The same value, located at `file` when it is an Error without a location
+ */
+export function atUserModule(error: unknown, file: string): unknown {
+  if (!(error instanceof Error) || getErrorDiagnostics(error).location) return error;
+  return withErrorDiagnostics(error, { location: { file } });
 }

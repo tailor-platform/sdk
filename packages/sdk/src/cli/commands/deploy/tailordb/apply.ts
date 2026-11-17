@@ -7,6 +7,7 @@ import {
 import { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-state";
 import {
   formatNamespaceMigrationHint,
+  migrationCommandArgs,
   migrationCommandContext,
   type MigrationCommandContext,
 } from "#/cli/commands/tailordb/migrate/hints";
@@ -15,6 +16,7 @@ import {
   includeTablesDeletedAfterCheckpoint,
 } from "#/cli/commands/tailordb/migrate/pre-migration-schema";
 import {
+  COMPLETED_STEPS_ON_RESUME,
   describeMigrationCheckpoint,
   fetchRemoteMigrationState,
   isCheckpointStillOwned,
@@ -32,10 +34,13 @@ import {
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { generateTailorDBTypeManifestFromSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
-import { handleOptionalToRequiredError } from "#/cli/commands/tailordb/migrate/types";
+import {
+  handleOptionalToRequiredError,
+  isRequiredFieldNullValuesError,
+} from "#/cli/commands/tailordb/migrate/types";
 import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
-import { CLIError, toError } from "#/cli/shared/errors";
+import { CLIError, formatCommandHint, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { withSpan } from "#/cli/telemetry/index";
 import { assertDefined } from "#/utils/assert";
@@ -89,7 +94,11 @@ import {
   type MigrationRestrictionState,
   type RestrictedTables,
 } from "./migration-execution";
-import { assertMigrationSkipSteps, selectSkipStepsOfNamespaces } from "./migration-skip-steps";
+import {
+  assertMigrationSkipSteps,
+  formatMigrationSkipSteps,
+  selectSkipStepsOfNamespaces,
+} from "./migration-skip-steps";
 import {
   formatMaintenanceSummary,
   MaintenanceTimeline,
@@ -740,7 +749,7 @@ async function applyCreateUpdate(
       holdMaintenanceMode: maintenanceMode === "deploy" ? options.holdMaintenanceMode : undefined,
     });
   } else {
-    await applyWithoutMigrations(client, changeSet);
+    await applyWithoutMigrations(client, changeSet, migrationContext);
   }
 
   // Skip when pending migrations ran: each already bumped the label, and
@@ -763,10 +772,30 @@ async function applyCreateUpdate(
   return maintenance;
 }
 
-const OPTIONAL_TO_REQUIRED_SUGGESTIONS = [
-  "Run 'tailor tailordb migration generate' to create migration files.",
-  "Migration scripts allow you to handle existing data before applying the schema change.",
-];
+function optionalToRequiredSuggestion(context: TailorDBPlanResult["context"]): string {
+  const generateCommand = formatCommandHint({
+    command: "tailor",
+    args: migrationCommandArgs(["generate"], { configPath: context.config.path }),
+  });
+  return (
+    "Fill in those records first, for example with `tailor query`, then deploy again. " +
+    `For a namespace with \`migration\` configured, run ${generateCommand} instead to fill them in with a migration script during the deploy.`
+  );
+}
+
+function completedStepsRequiredFieldSuggestion(migration: PendingMigration): string {
+  const steps = migration.scriptForm?.kind === "steps" ? migration.scriptForm.order : [];
+  const skipSteps = assertDefined(
+    formatMigrationSkipSteps(new Map([[migration.namespace, steps]])),
+    `Migration ${migration.namespace}/${formatMigrationNumber(migration.number)} kept a step run without steps.`,
+  );
+  return (
+    "Every step completed, so the next deploy retries only the schema changes and runs the steps again only when you add, remove, or rename a step, change the order the steps run in, or the earlier run is no longer available. " +
+    "Editing a completed step has no effect. " +
+    "To fill in the records without a value, rename the step that should fill them and update the `dependsOn` lists that name it, or add a step that fills them. " +
+    `Every step then runs again from the beginning; to keep the others from running twice, pass --migration-skip-steps ${skipSteps} to that deploy, leaving out a renamed step, which cannot be skipped.`
+  );
+}
 
 interface MigrationApplyInput {
   client: OperatorClient;
@@ -1135,7 +1164,7 @@ async function applyChangesBeforeMigrations(flow: MigrationFlow): Promise<Set<st
       await client.updateTailorDBType(update.request);
     }
   } catch (error) {
-    handleOptionalToRequiredError(error, OPTIONAL_TO_REQUIRED_SUGGESTIONS);
+    handleOptionalToRequiredError(error, optionalToRequiredSuggestion(migrationContext));
   }
   await Promise.all([
     ...changeSet.gqlPermission.creates
@@ -1305,7 +1334,7 @@ async function runPostMigrationPhase(
         attemptedTables,
         gqlPermissionUndo,
       );
-      throw error;
+      handleOptionalToRequiredError(error, completedStepsRequiredFieldSuggestion(migration));
     }
     const failure = await rollbackMigration(flow, attempt, restoration, runLog, error, true);
     if (isRollbackSkippedWithRecord(failure)) {
@@ -1642,7 +1671,7 @@ async function confirmCheckpointAfterUpdateFailure(
       `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} could not be confirmed after its update failed; remote remains at ${describeMigrationCheckpoint(remoteMigrationNumber)}. ` +
         "Leaving the post-migration schema unchanged to avoid rolling back a concurrent deployment. " +
         (resumable
-          ? "Deploy again to resume the migration; unless you add, remove, rename, or reorder steps, steps that already completed do not run again."
+          ? `Deploy again to resume the migration; ${COMPLETED_STEPS_ON_RESUME}.`
           : "Repair the checkpoint before retrying."),
     );
     throw updateError;
@@ -1985,19 +2014,14 @@ function collectLocalDefinitionWrites(flow: MigrationFlow): LocalDefinitionWrite
 
 /**
  * Whether existing records refused a table update. The platform reports a unique index over
- * duplicated values as AlreadyExists, and marks a required field over null values, alone among
- * its FailedPrecondition refusals, with a PreconditionFailure detail.
+ * duplicated values as AlreadyExists.
  * @param error - Failure of the update
  * @returns True when the records refused it
  */
 function isRefusedByRecords(error: unknown): boolean {
-  if (!(error instanceof ConnectError)) return false;
-  if (error.code === Code.AlreadyExists) return true;
   return (
-    error.code === Code.FailedPrecondition &&
-    error.details.some(
-      (detail) => "type" in detail && detail.type === "google.rpc.PreconditionFailure",
-    )
+    (error instanceof ConnectError && error.code === Code.AlreadyExists) ||
+    isRequiredFieldNullValuesError(error)
   );
 }
 
@@ -2222,6 +2246,7 @@ function excludeFromRestoration(restoration: RestorationState, del: TableDeletio
 async function applyWithoutMigrations(
   client: OperatorClient,
   changeSet: TailorDBChangeSet,
+  migrationContext: TailorDBPlanResult["context"],
 ): Promise<void> {
   await executeServicesCreation(client, changeSet);
 
@@ -2242,7 +2267,7 @@ async function applyWithoutMigrations(
       ),
     );
   } catch (error) {
-    handleOptionalToRequiredError(error, OPTIONAL_TO_REQUIRED_SUGGESTIONS);
+    handleOptionalToRequiredError(error, optionalToRequiredSuggestion(migrationContext));
   }
 
   // GQLPermissions

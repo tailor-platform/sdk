@@ -27,6 +27,7 @@ Define TailorDB tables in files matching glob patterns specified in `tailor.conf
 - **Multiple tables per file**: You can define multiple TailorDB tables in a single file
 - **Export method**: Use named exports (`export const`)
 - **Export both value and type**: Always export both the runtime value and TypeScript type
+- **Table names**: Use 1-63 ASCII letters or digits, starting with an uppercase letter
 - **Uniqueness**: Table names must be unique across all TailorDB namespaces in the application
 
 ```typescript
@@ -404,6 +405,8 @@ export const order = db
 
 Add validation rules to fields. Validators run after hooks.
 
+Field-level and table-level validators must be synchronous: do not use `async`/`await`. Validation does not wait for asynchronous work, so issues reported after an `await` would be lost. Async validators are rejected at build time.
+
 **Note:** Custom validators run only when built-in type validation succeeds, so `value` always has the field's declared type. For array fields, the validator is called once with the complete array, not per element:
 
 ```typescript
@@ -614,7 +617,7 @@ db.table("User", {
    });
    ```
 
-**Sharing a table across configs:** an executor in another config auto-enables publishing the same way, as long as both configs take part in the same `deploy` (`--config a,b`). `deploy` records that dependency, so deploying the owning config alone later asks for confirmation instead of silently turning publishing off — it fails outright in a non-interactive environment. Set `publishEvents: true` on the table to keep it on regardless of which configs take part.
+**Sharing a table across configs:** an executor in another config auto-enables publishing the same way, as long as both configs take part in the same `deploy` (`--config a,b`). `deploy` records that dependency, so deploying the owning config alone later asks for confirmation instead of silently turning publishing off — it fails outright in a non-interactive environment. Set `publishEvents: true` on the table to keep it on regardless of which configs take part. `deploy` and `remove` stop with `SERVICE_IN_USE` instead of deleting a table that another application's executor subscribes to.
 
 #### GraphQL Operations
 
