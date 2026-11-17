@@ -58,10 +58,10 @@ type MachineUserOnlyAuthInput<
 
 export type {
   OIDC,
-  SAMLInput as SAML,
+  SAML,
   IDToken,
   BuiltinIdP,
-  IdProviderInput as IdProviderConfig,
+  IdProvider as IdProviderConfig,
   OAuth2ClientInput as OAuth2Client,
   SCIMAuthorization,
   SCIMAttribute,

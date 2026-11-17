@@ -118,8 +118,6 @@ describe("defineAuth", () => {
   });
 
   test("accepts a SAML idProvider without enableSignRequest", () => {
-    type SamlWithoutSignRequest = { name: string; kind: "SAML"; metadataURL: string };
-
     defineAuth("saml", {
       machineUserAttributes: {},
       idProvider: {
@@ -128,8 +126,13 @@ describe("defineAuth", () => {
         metadataURL: "https://example.okta.com/app/abc123/sso/saml/metadata",
       },
     });
-    expectTypeOf<SamlWithoutSignRequest>().toExtend<SAML>();
-    expectTypeOf<SamlWithoutSignRequest>().toExtend<IdProviderConfig>();
+  });
+
+  test("exports SAML types whose enableSignRequest reads as boolean", () => {
+    type SamlProviderConfig = Extract<IdProviderConfig, { kind: "SAML" }>;
+
+    expectTypeOf<SAML["enableSignRequest"]>().toEqualTypeOf<boolean>();
+    expectTypeOf<SamlProviderConfig["enableSignRequest"]>().toEqualTypeOf<boolean>();
   });
 
   test("rejects invalid machine user attributes when machineUsers-only", () => {
