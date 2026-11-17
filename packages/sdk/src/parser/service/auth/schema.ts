@@ -36,7 +36,10 @@ export const SAMLSchema = z
   .strictObject({
     name: z.string().describe("Identity provider name"),
     kind: z.literal("SAML"),
-    enableSignRequest: z.boolean().default(false).describe("Enable signing of SAML requests"),
+    enableSignRequest: z
+      .boolean()
+      .default(false)
+      .describe("Enable signing of SAML requests (defaults to false)"),
     metadataURL: z
       .string()
       .optional()
