@@ -2,6 +2,9 @@ nodeLinker: isolated
 enableGlobalVirtualStore: true
 saveExact: true
 
+lockfile:
+  format: v13
+
 minimumReleaseAge: 4320 # 3 days
 minimumReleaseAgeStrict: true
 minimumReleaseAgeIgnoreMissingTime: false
@@ -39,6 +42,8 @@ allowBuilds:
   unrs-resolver: false
 
 overrides:
+  # lockfile.format v13 cannot write a peer that is also aliased by a dependency (typescript-native); zinfer imports only the alias.
+  zinfer>typescript: "-"
   brace-expansion@>=5.0.5 <5.0.8: 5.0.13
   esbuild@>=0.17.0 <0.28.1: 0.28.2
   glob@>=9.0.0 <=14.0.1: 14.0.6
