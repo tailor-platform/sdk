@@ -34,8 +34,8 @@ export type ExecutionStatus =
 export interface SandboxInfo {
   /** Sandbox ID. */
   id: string;
-  /** Name of a kept sandbox. Absent for an ephemeral sandbox. */
-  name?: string;
+  /** Name of a kept sandbox. Empty for an ephemeral sandbox. */
+  name: string;
   /** Template the sandbox was created from. */
   template: string;
   /** Current lifecycle status. */
@@ -46,8 +46,8 @@ export interface SandboxInfo {
   lastActiveAt: string;
   /** When the sandbox expires. */
   expiresAt: string;
-  /** Why the sandbox failed. Set when `status` is `FAILED`. */
-  failureMessage?: string;
+  /** Why the sandbox failed. Set when `status` is `FAILED`, otherwise `null`. */
+  failureMessage: string | null;
 }
 
 /** Fields describing a command execution. Timestamps are ISO 8601 strings with millisecond precision. */
@@ -58,12 +58,12 @@ export interface ExecutionInfo {
   sandboxId: string;
   /** Current execution status. */
   status: ExecutionStatus;
-  /** Exit code of the command. Set once the command has exited. */
-  exitCode?: number;
+  /** Exit code of the command. `null` until the command has exited. */
+  exitCode: number | null;
   /** When the command started. */
   startedAt: string;
-  /** When the command finished. Absent while it is running. */
-  finishedAt?: string;
+  /** When the command finished. `null` while it is running. */
+  finishedAt: string | null;
   /** Whether the stored output was truncated because it exceeded the size limit. */
   outputTruncated: boolean;
 }

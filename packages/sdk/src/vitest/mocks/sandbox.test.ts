@@ -28,7 +28,7 @@ describe("mockSandbox", () => {
       const box = await sandboxApi().create({ template: "guest" });
 
       expect(box).toMatchObject({ template: "guest", status: "RUNNING" });
-      expect(box.name).toBeUndefined();
+      expect(box.name).toBe("");
       expect(box.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T[\d:]+\.\d{3}Z$/);
     });
 

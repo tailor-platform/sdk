@@ -260,7 +260,9 @@ export function mockSandbox() {
         id,
         sandboxId: sandboxState.sandbox.id,
         status: "RUNNING",
+        exitCode: null,
         startedAt,
+        finishedAt: null,
         outputTruncated: false,
       },
       stdout: new Uint8Array(),
@@ -304,12 +306,13 @@ export function mockSandbox() {
 
     const sandbox: Sandbox = {
       id: nextId("sandbox"),
-      ...(opts.name !== undefined && { name: opts.name }),
+      name: opts.name ?? "",
       template: opts.template,
       status: "RUNNING",
       createdAt,
       lastActiveAt: createdAt,
       expiresAt: new Date(Date.parse(createdAt) + 24 * 60 * 60 * 1000).toISOString(),
+      failureMessage: null,
       async exec(argv, execOpts) {
         const exec = await run(state, argv, execOpts, "exec");
         const result: ExecResult = {
