@@ -407,7 +407,7 @@ idProvider: {
 },
 ```
 
-`clientSecret` names a [Secret Manager](./secret.md) secret by `vaultName` and `secretKey`. A `SAML` provider sets either `metadataURL` or `rawMetadata`, not both. An `IDToken` provider takes `clientID` and `providerURL` like `OIDC`, without `clientSecret`. See [Register Identity provider with Auth service](https://docs.tailor.tech/tutorials/setup-auth/register-identity-provider) for each kind's settings, and the [Okta](https://docs.tailor.tech/guides/auth/integration/okta) and other integration guides for provider-side setup.
+`clientSecret` names a [Secret Manager](./secret.md) secret by `vaultName` and `secretKey`; declare the vault and secret with `defineSecretManager()` or create them with [`tailor secret`](../cli/secret.md). A `SAML` provider sets either `metadataURL` or `rawMetadata`, not both. An `IDToken` provider takes `clientID` and `providerURL` like `OIDC`, without `clientSecret`. See [Register Identity provider with Auth service](https://docs.tailor.tech/tutorials/setup-auth/register-identity-provider) for each kind's settings, and the [Okta](https://docs.tailor.tech/guides/auth/integration/okta) and other integration guides for provider-side setup.
 
 An application that references this Auth service as `external` authenticates with the provider named by `idProvider.name` (the first argument of `idp.provider()`). After a rename, it switches to the new name only in a `deploy` that also includes this config, so `deploy` stops with `SERVICE_IN_USE` instead of deleting the old provider while such an application is left out. Deploy them together or keep the name.
 
