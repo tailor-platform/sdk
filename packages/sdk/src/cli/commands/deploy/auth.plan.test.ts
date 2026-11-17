@@ -10,6 +10,7 @@ import {
   AuthSCIMConfig_AuthorizationType,
   AuthSCIMConfigSchema,
   AuthSCIMResourceSchema,
+  TenantProviderConfig_TenantProviderType,
   TenantProviderConfigSchema,
   UserProfileProviderConfig_UserProfileProviderType,
   UserProfileProviderConfigSchema,
@@ -324,6 +325,17 @@ function createMockApplicationWithTenantProvider(): Application {
   } as unknown as Application;
 }
 
+const tenantProviderConfigFromPlatform = create(TenantProviderConfigSchema, {
+  provider: "TAILORDB",
+  providerType: TenantProviderConfig_TenantProviderType.TAILORDB,
+  config: {
+    config: {
+      case: "tailordb",
+      value: { namespace: "tailordb", type: "Tenant", signatureField: "signature" },
+    },
+  },
+});
+
 type MachineUserReferences = {
   machineUsers: string[];
   scimMachineUser?: string;
@@ -592,21 +604,31 @@ describe("planAuth", () => {
     expect(result.changeSet.userProfileConfig.updates).toHaveLength(0);
   });
 
-  test("marks a tenant provider unchanged when its remote proto materializes defaults", async () => {
-    const application = createMockApplicationWithTenantProvider();
-    const createResult = await planAuth(createContext(createMockClient(), application));
-    const desired = createResult.changeSet.tenantConfig.creates[0]?.request.tenantProviderConfig;
-    expect(desired).toBeDefined();
-    const remote = create(TenantProviderConfigSchema, desired);
+  test("marks a tenant provider unchanged when the Platform returns it as deployed", async () => {
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
-      tenantConfig: { tenantProviderConfig: remote },
+      tenantConfig: { tenantProviderConfig: tenantProviderConfigFromPlatform },
     });
 
-    const result = await planAuth(createContext(client, application));
+    const result = await planAuth(createContext(client, createMockApplicationWithTenantProvider()));
 
     expect(result.changeSet.tenantConfig.unchanged).toHaveLength(1);
     expect(result.changeSet.tenantConfig.updates).toHaveLength(0);
+  });
+
+  test("plans an update that restores a tenant provider the Platform returns cleared", async () => {
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
+      tenantConfig: { tenantProviderConfig: {} },
+    });
+
+    const result = await planAuth(createContext(client, createMockApplicationWithTenantProvider()));
+
+    const updates = result.changeSet.tenantConfig.updates;
+    expect(updates).toHaveLength(1);
+    expect(create(TenantProviderConfigSchema, updates[0]?.request.tenantProviderConfig)).toEqual(
+      tenantProviderConfigFromPlatform,
+    );
   });
 
   test("marks machine user without attributes unchanged when remote attribute map is empty", async () => {
@@ -826,15 +848,14 @@ describe("planAuth", () => {
     const idpConfig = createResult.changeSet.idpConfig.creates[0]?.request.idpConfig;
     const userProfile =
       createResult.changeSet.userProfileConfig.creates[0]?.request.userProfileProviderConfig;
-    const tenant = createResult.changeSet.tenantConfig.creates[0]?.request.tenantProviderConfig;
-    expect(idpConfig && userProfile && tenant).toBeDefined();
+    expect(idpConfig && userProfile).toBeDefined();
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
       authIdPConfigs: [create(AuthIDPConfigSchema, idpConfig)],
       userProfileConfig: {
         userProfileProviderConfig: create(UserProfileProviderConfigSchema, userProfile),
       },
-      tenantConfig: { tenantProviderConfig: create(TenantProviderConfigSchema, tenant) },
+      tenantConfig: { tenantProviderConfig: tenantProviderConfigFromPlatform },
     });
 
     const result = await planAuth({ ...createContext(client, combined), forceApplyAll: true });

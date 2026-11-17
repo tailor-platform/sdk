@@ -1052,6 +1052,7 @@ function protoTenantConfig(
   tenantConfig: TenantProviderConfig,
 ): MessageInitShape<typeof TenantProviderConfigSchema> {
   return {
+    provider: "TAILORDB",
     providerType: TenantProviderConfig_TenantProviderType.TAILORDB,
     config: {
       config: {
