@@ -251,12 +251,14 @@ export interface Sandbox extends SandboxInfo {
   ): Promise<{ bytesWritten: number }>;
   /**
    * Lists a directory.
+   * Not available yet: the call currently fails with a `SandboxError` whose `code` is `UNIMPLEMENTED`.
    * @param path - Absolute directory path under `/workspace`
    * @returns The entries of the directory
    */
   listFiles(path: string): Promise<FileInfo[]>;
   /**
    * Deletes a file.
+   * Not available yet: the call currently fails with a `SandboxError` whose `code` is `UNIMPLEMENTED`.
    * @param path - Absolute path under `/workspace`
    */
   deleteFile(path: string): Promise<void>;
