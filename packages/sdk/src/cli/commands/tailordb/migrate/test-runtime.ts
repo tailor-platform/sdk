@@ -31,6 +31,7 @@ import { buildOptionsOf } from "#/cli/shared/build-options";
 import { getOrNull, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadPlatformClientConfig, loadWorkspaceId } from "#/cli/shared/context";
 import { effectiveDateDefault } from "#/cli/shared/date-default";
+import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { executeScript } from "#/cli/shared/script-executor";
@@ -348,23 +349,33 @@ export function loadSnapshotSeedData(
       try {
         value = JSON.parse(text);
       } catch (error) {
-        throw CLIError({
-          code: "SEED_DATA_INVALID",
-          message: `Invalid JSON in ${jsonlPath} at line ${line}: ${error instanceof Error ? error.message : String(error)}`,
-          cause: error,
-        });
+        throw seedRowInvalidError(
+          jsonlPath,
+          line,
+          `Invalid JSON: ${error instanceof Error ? error.message : String(error)}`,
+          error,
+        );
       }
       if (value === null || typeof value !== "object" || Array.isArray(value)) {
-        throw CLIError({
-          code: "SEED_DATA_INVALID",
-          message: `Invalid seed row in ${jsonlPath} at line ${line}: expected a JSON object`,
-        });
+        throw seedRowInvalidError(jsonlPath, line, "Invalid seed row: expected a JSON object");
       }
       const row = value as JsonObject;
       return [snapshotType ? projectSeedObject(row, snapshotType.fields, new Set(["id"])) : row];
     });
   }
   return data;
+}
+
+function seedRowInvalidError(
+  file: string,
+  line: number,
+  message: string,
+  cause?: unknown,
+): CLIError {
+  return withErrorDiagnostics(
+    CLIError({ code: "SEED_DATA_INVALID", message, context: { file, line }, cause }),
+    { location: { file, line } },
+  );
 }
 
 function projectSeedObject(

@@ -318,7 +318,7 @@ describe("seedApplyCommand", () => {
   test("reads every row before truncating, so unreadable data changes nothing", async () => {
     jsonl.loadSeedData.mockImplementation((_dataDirs: string[], typeNames: string[]) => {
       if (typeNames.includes("_User")) {
-        throw new Error("/seed/data/local/_User.jsonl:1: name is already defined");
+        throw new Error('name "Ada" is already defined at _User.jsonl:1.');
       }
       return { User: [] };
     });
