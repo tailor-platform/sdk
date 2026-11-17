@@ -418,7 +418,7 @@ snapshots:
 				"@enlumine/graphql": "0.2.0",
 				"@enlumine/sql": "0.2.0",
 				"@enlumine/terminal": "0.2.0",
-				"@inquirer/prompts": "8.7.5",
+				"@inquirer/prompts": "8.8.0",
 				"@jridgewell/trace-mapping": "0.3.31",
 				"@napi-rs/keyring": "2.1.2",
 				"@opentelemetry/api": "1.10.0",
@@ -1691,9 +1691,9 @@ snapshots:
 			},
 		},
 
-		"@inquirer/prompts@8.7.5": {
-			"integrity": "sha512-l/IWwC+QhOyXgxkZloOh+n5quGzc1m5ZawyzBmoizCZaxbJeLRdS3pStoqg/JVInJRXaG5aHMhjK6H6oYiBC9A==",
-			"engines": {"node": ">=23.5.0 || ^22.13.0 || ^20.17.0"},
+		"@inquirer/prompts@8.8.0": {
+			"integrity": "sha512-yYVT2Eo3mafb9tnU2Mr3+wh5wLCWyspExqVoPSMCIfBIn3ZUTE4IDfbCMbMgXaOH0tH+JZEhOtfczQhDzOjIGg==",
+			"engines": {"node": "^22.22.2 || ^24.15.0 || >=26.0.0"},
 			"peerDependencies": {
 				"@types/node": {
 					"specifier": ">=18",
@@ -3022,7 +3022,7 @@ snapshots:
 				},
 				"@inquirer/prompts": {
 					"specifier": "^8.3.2",
-					"version": "8.7.5",
+					"version": "8.8.0",
 					"optional": true,
 				},
 				"loculus": {
@@ -3047,7 +3047,7 @@ snapshots:
 				},
 				"@inquirer/prompts": {
 					"specifier": "^8.3.2",
-					"version": "8.7.5",
+					"version": "8.8.0",
 					"optional": true,
 				},
 				"zod": {
@@ -5451,7 +5451,7 @@ snapshots:
 					"below": true,
 				},
 				"@inquirer/prompts": {
-					"version": "8.7.5",
+					"version": "8.8.0",
 					"below": true,
 				},
 				"typescript": {
