@@ -1,12 +1,5 @@
-import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { describe, expect, test } from "vitest";
-
-const packageRoot = path.resolve(import.meta.dirname, "..");
-const oxlintBin = path.join(packageRoot, "node_modules/.bin/oxlint");
-const pluginPath = path.join(packageRoot, "oxlint-plugins/index.js");
+import { lintWithLocalRule } from "./test-helpers/local-rule";
 
 const fixture = [
   'import { CLIError, internalError } from "#/cli/shared/errors";',
@@ -26,34 +19,13 @@ const fixture = [
   "",
 ].join("\n");
 
-type Diagnostic = { code: string; labels: { span: { line: number } }[] };
-
-function lint(level: "error" | "off"): { rule: string; line: number }[] {
-  const dir = mkdtempSync(path.join(tmpdir(), "no-plain-error-"));
-  try {
-    const config = path.join(dir, ".oxlintrc.json");
-    writeFileSync(
-      config,
-      JSON.stringify({
-        plugins: [],
-        jsPlugins: [pluginPath],
-        rules: { "local/no-plain-error": level },
-      }),
-    );
-    const file = path.join(dir, "command.ts");
-    writeFileSync(file, fixture);
-    const result = spawnSync(oxlintBin, ["--config", config, "-f", "json", file], {
-      encoding: "utf8",
-    });
-    expect(result.error).toBeUndefined();
-    const { diagnostics } = JSON.parse(result.stdout) as { diagnostics: Diagnostic[] };
-    return diagnostics.map((diagnostic) => ({
-      rule: diagnostic.code,
-      line: diagnostic.labels[0]?.span.line ?? 0,
-    }));
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
+function lint(level: "error" | "off") {
+  return lintWithLocalRule({
+    rule: "no-plain-error",
+    level,
+    fileName: "command.ts",
+    source: fixture,
+  });
 }
 
 describe("local/no-plain-error", () => {

@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { create } from "@bufbuild/protobuf";
 import {
   FunctionExecution_Status,

@@ -21,7 +21,8 @@ import {
   type OTLPExporterAuthConfigSchema,
   OTLPExporterSchema,
 } from "@tailor-platform/tailor-proto/telemetryrouter_resource_pb";
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { dropCrossDeploymentManagedDeletes } from "./managed-resources";
 import { assertResourcesNotInUse } from "./resources-in-use";
 import { emptyPlanResults } from "./test-helpers/plan-results";
@@ -43,16 +44,20 @@ type WorkspaceApplication = {
 };
 
 function exporterClient(exporters: OTLPExporter[]) {
-  return {
-    listOTLPExporters: vi.fn(async () => ({ otlpExporters: exporters, nextPageToken: "" })),
-  };
+  return mockOperatorClient({
+    listOTLPExporters: { otlpExporters: exporters, nextPageToken: "" },
+  });
 }
 
-function check(deployments: PlannedDeployment[], command: "deploy" | "remove", client = {}) {
+function check(
+  deployments: PlannedDeployment[],
+  command: "deploy" | "remove",
+  client: OperatorClient = exporterClient([]),
+) {
   return assertResourcesNotInUse({
     deployments,
     command,
-    client: { ...exporterClient([]), ...client } as unknown as OperatorClient,
+    client,
     workspaceId: "ws",
   });
 }
@@ -978,14 +983,11 @@ describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", ()
       main: { resource: {} as never, allLabels: { "sdk-name": "core" } },
       billing: { resource: {} as never, allLabels: { "sdk-name": "billing-app" } },
     };
-    const listPipelineResolvers = vi.fn(async () => ({
-      pipelineResolvers: [resolverInvoking("charge")],
-      nextPageToken: "",
-    }));
+    const client = mockOperatorClient({
+      listPipelineResolvers: { pipelineResolvers: [resolverInvoking("charge")], nextPageToken: "" },
+    });
 
-    await expect(
-      check([deployment({ name: "core" }, owner)], "deploy", { listPipelineResolvers }),
-    ).rejects.toThrow(
+    await expect(check([deployment({ name: "core" }, owner)], "deploy", client)).rejects.toThrow(
       inUse(
         [
           `${ADMIN} cannot be deleted: resolver "pay" in namespace "main" of application "core" still uses it.`,
@@ -1005,7 +1007,7 @@ describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", ()
         ],
       ),
     );
-    expect(listPipelineResolvers).toHaveBeenCalledExactlyOnceWith(
+    expect(client.listPipelineResolvers).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({
         workspaceId: "ws",
         namespaceName: "billing",
@@ -1019,15 +1021,15 @@ describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", ()
     owner.pipeline.existingServices = {
       billing: { resource: {} as never, allLabels: { "sdk-name": "billing-app" } },
     };
-    const client = {
-      listPipelineResolvers: vi.fn(),
-      listAuthIDPConfigs: vi.fn(),
-      getAuthSCIMConfig: vi.fn(),
-      listOTLPExporters: vi.fn(),
-      getUserProfileConfig: vi.fn(),
-      getTenantConfig: vi.fn(),
-      getAuthSCIMResources: vi.fn(),
-    };
+    const client = mockOperatorClient({
+      listPipelineResolvers: {},
+      listAuthIDPConfigs: {},
+      getAuthSCIMConfig: {},
+      listOTLPExporters: {},
+      getUserProfileConfig: {},
+      getTenantConfig: {},
+      getAuthSCIMResources: {},
+    });
 
     await expect(
       check([deployment({ name: "core" }, owner)], "deploy", client),
@@ -1077,32 +1079,37 @@ type WorkspaceAuthConfigs = {
   scimResources?: Record<string, ReturnType<typeof scimResourceOn>[]>;
 };
 
-type NamespaceRequest = { namespaceName: string };
-
 function foundOrThrow<T>(value: T | undefined): T {
   if (value === undefined) throw new ConnectError("not found", Code.NotFound);
   return value;
 }
 
+type NamespacedRequest = { namespaceName?: string };
+
+function namespaceOf(request: NamespacedRequest): string {
+  return request.namespaceName ?? "";
+}
+
 function authClient(configs: WorkspaceAuthConfigs) {
-  return {
-    listAuthIDPConfigs: vi.fn(async ({ namespaceName }: NamespaceRequest) => ({
-      idpConfigs: configs.idpConfigs?.[namespaceName] ?? [],
+  return mockOperatorClient({
+    listAuthIDPConfigs: async (request) => ({
+      idpConfigs: configs.idpConfigs?.[namespaceOf(request)] ?? [],
       nextPageToken: "",
-    })),
-    getAuthSCIMConfig: vi.fn(async ({ namespaceName }: NamespaceRequest) => ({
-      scimConfig: foundOrThrow(configs.scimConfigs?.[namespaceName]),
-    })),
-    getUserProfileConfig: vi.fn(async ({ namespaceName }: NamespaceRequest) => ({
-      userProfileProviderConfig: foundOrThrow(configs.userProfileConfigs?.[namespaceName]),
-    })),
-    getTenantConfig: vi.fn(async ({ namespaceName }: NamespaceRequest) => ({
-      tenantProviderConfig: foundOrThrow(configs.tenantConfigs?.[namespaceName]),
-    })),
-    getAuthSCIMResources: vi.fn(async ({ namespaceName }: NamespaceRequest) => ({
-      scimResources: configs.scimResources?.[namespaceName] ?? [],
-    })),
-  };
+    }),
+    getAuthSCIMConfig: async (request) => ({
+      scimConfig: foundOrThrow(configs.scimConfigs?.[namespaceOf(request)]),
+    }),
+    getUserProfileConfig: async (request) => ({
+      userProfileProviderConfig: foundOrThrow(configs.userProfileConfigs?.[namespaceOf(request)]),
+    }),
+    getTenantConfig: async (request) => ({
+      tenantProviderConfig: foundOrThrow(configs.tenantConfigs?.[namespaceOf(request)]),
+    }),
+    getAuthSCIMResources: async (request) => ({
+      scimResources: configs.scimResources?.[namespaceOf(request)] ?? [],
+    }),
+    listOTLPExporters: { otlpExporters: [], nextPageToken: "" },
+  });
 }
 
 const AUTH_CONFIG_USERS = [

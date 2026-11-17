@@ -1,4 +1,5 @@
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import {
   decodeExpiresAt,
   encodeExpiresAt,
@@ -96,24 +97,30 @@ describe("readWorkspaceExpiry", () => {
 
 describe("fetchWorkspaceExpiry", () => {
   test("reads the expiry from the workspace's own TRN", async () => {
-    const getMetadata = vi.fn().mockResolvedValue({
-      metadata: {
-        labels: { [expiresAtLabelKey]: encodeExpiresAt(new Date(NOW.getTime() - 1000)) },
+    const client = mockOperatorClient({
+      getMetadata: {
+        metadata: {
+          labels: { [expiresAtLabelKey]: encodeExpiresAt(new Date(NOW.getTime() - 1000)) },
+        },
       },
+      setMetadata: {},
     });
 
-    const result = await fetchWorkspaceExpiry({ getMetadata, setMetadata: vi.fn() }, "ws-1", NOW);
+    const result = await fetchWorkspaceExpiry(client, "ws-1", NOW);
 
-    expect(getMetadata).toHaveBeenCalledWith({ trn: "trn:v1:workspace:ws-1" });
+    expect(client.getMetadata).toHaveBeenCalledWith({ trn: "trn:v1:workspace:ws-1" });
     expect(result).toEqual({
       expiry: { state: "expired", expiresAt: new Date(NOW.getTime() - 1000) },
     });
   });
 
   test("reports a failed read as an error rather than an absent expiry", async () => {
-    const getMetadata = vi.fn().mockRejectedValue(new Error("permission denied"));
+    const client = mockOperatorClient({
+      getMetadata: () => Promise.reject(new Error("permission denied")),
+      setMetadata: {},
+    });
 
-    const result = await fetchWorkspaceExpiry({ getMetadata, setMetadata: vi.fn() }, "ws-1", NOW);
+    const result = await fetchWorkspaceExpiry(client, "ws-1", NOW);
 
     expect(result).toEqual({ error: new Error("permission denied") });
     expect(result).not.toHaveProperty("expiry");

@@ -541,6 +541,12 @@
       }
     },
     {
+      "files": ["**/*.test.ts", "**/test-helpers/**/*.ts"],
+      "rules": {
+        "local/typed-operator-client-mock": "error"
+      }
+    },
+    {
       "files": ["e2e/**/*.ts"],
       "rules": {
         "no-restricted-imports": [

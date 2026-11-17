@@ -4,15 +4,16 @@ import { CloneOperationStatus } from "@tailor-platform/tailor-proto/application_
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { cloneCommand } from "./clone";
 
 const configLoader = vi.hoisted(() => ({ loadConfig: vi.fn() }));
 
-const client = {
-  getApplication: vi.fn(),
-  cloneApplicationData: vi.fn(),
-  getCloneApplicationDataOperation: vi.fn(),
-};
+const client = mockOperatorClient({
+  getApplication: {},
+  cloneApplicationData: {},
+  getCloneApplicationDataOperation: {},
+});
 
 vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn().mockResolvedValue("mock-token"),

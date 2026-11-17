@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
 import * as path from "pathe";

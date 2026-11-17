@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { runCommand } from "@politty/zod";
 import { describe, test, expect, vi, aroundEach } from "vitest";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";

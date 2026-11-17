@@ -76,7 +76,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     } = {},
   ) {
     return checkpoint.createMockClient({
-      listTailorDBTypes: vi.fn().mockImplementation(async () => {
+      listTailorDBTypes: async () => {
         const tables = snapshotState.tablesByVersion[0];
         const names = options.existingTableNames ?? Object.keys(tables ?? {});
         const tailordbTypes = names.map((name) => {
@@ -102,7 +102,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
           };
         });
         return { tailordbTypes };
-      }),
+      },
     });
   }
 
@@ -379,7 +379,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       if (request.tailordbType?.name === "Future") {
         order.push("create Future");
       }
-      return {} as never;
+      return {};
     });
 
     await applyTailorDB(client, planResult, "create-update");
@@ -408,11 +408,11 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     });
     vi.mocked(client.createTailorDBType).mockImplementation(async (request) => {
       if (request.tailordbType?.name === "Untracked") order.push("create");
-      return {} as never;
+      return {};
     });
     vi.mocked(client.createTailorDBGQLPermission).mockImplementation(async (request) => {
       if (request.typeName === "Untracked") order.push("permission");
-      return {} as never;
+      return {};
     });
 
     await applyTailorDB(client, planResult, "create-update");
@@ -671,7 +671,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
           "sdk-migration-history": "hother",
         },
       },
-    } as never);
+    });
 
     await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
       /advanced concurrently.*history/i,
@@ -699,7 +699,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
           "sdk-migration-history": "hother",
         },
       },
-    } as never);
+    });
 
     await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
       /advanced concurrently.*history/i,
@@ -826,7 +826,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     planResult.context.pendingMigrations = checkpoint.mockPending([mkPendingMigration([])]);
     vi.mocked(client.getMetadata).mockResolvedValueOnce({
       metadata: { labels: { "sdk-migration": "m0002" } },
-    } as never);
+    });
 
     await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
       /advanced concurrently to 0002/i,
@@ -908,7 +908,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         restrictionFailed = true;
         throw new Error("restriction failed");
       }
-      return {} as never;
+      return {};
     });
 
     await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
@@ -1167,7 +1167,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       if (request.tailordbType?.name === "Order" && settings?.disableGqlOperations === undefined) {
         throw new Error("Order restore failed");
       }
-      return {} as never;
+      return {};
     });
 
     await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
@@ -1519,7 +1519,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         vi.mocked(client.setMetadata).mockImplementationOnce(async (request) => {
           clock.mockReturnValue(30_000);
           checkpoint.state.maintenanceMode = request.labels?.["sdk-maintenance-mode"] ?? null;
-          return {} as never;
+          return {};
         });
         const releasedReport = await releases[0]?.(client);
 
