@@ -135,6 +135,8 @@ export type OAuth2Client = {
   )[];
   /** OAuth2 client type */
   clientType?: "browser" | "confidential" | "public" | undefined;
+  /** Require DPoP (Demonstrating Proof-of-Possession) for token requests */
+  requireDpop?: boolean | undefined;
   /** Access token lifetime in seconds (60-86400) */
   accessTokenLifetimeSeconds:
     | {
@@ -156,8 +158,6 @@ export type OAuth2Client = {
         nanos: number;
       }
     | undefined;
-  /** Require DPoP (Demonstrating Proof-of-Possession) for token requests */
-  requireDpop?: boolean | undefined;
 };
 
 export type SCIMAuthorization = {
@@ -1698,6 +1698,8 @@ export type AuthConfig =
               )[];
               /** OAuth2 client type */
               clientType?: "browser" | "confidential" | "public" | undefined;
+              /** Require DPoP (Demonstrating Proof-of-Possession) for token requests */
+              requireDpop?: boolean | undefined;
               /** Access token lifetime in seconds (60-86400) */
               accessTokenLifetimeSeconds:
                 | {
@@ -1719,8 +1721,6 @@ export type AuthConfig =
                     nanos: number;
                   }
                 | undefined;
-              /** Require DPoP (Demonstrating Proof-of-Possession) for token requests */
-              requireDpop?: boolean | undefined;
             };
           }
         | undefined;
@@ -2911,6 +2911,8 @@ export type AuthConfig =
               )[];
               /** OAuth2 client type */
               clientType?: "browser" | "confidential" | "public" | undefined;
+              /** Require DPoP (Demonstrating Proof-of-Possession) for token requests */
+              requireDpop?: boolean | undefined;
               /** Access token lifetime in seconds (60-86400) */
               accessTokenLifetimeSeconds:
                 | {
@@ -2932,8 +2934,6 @@ export type AuthConfig =
                     nanos: number;
                   }
                 | undefined;
-              /** Require DPoP (Demonstrating Proof-of-Possession) for token requests */
-              requireDpop?: boolean | undefined;
             };
           }
         | undefined;

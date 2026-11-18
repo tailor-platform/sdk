@@ -87,8 +87,12 @@ export const OAuth2ClientGrantTypeSchema = z
   .union([z.literal("authorization_code"), z.literal("refresh_token")])
   .describe("OAuth2 grant type");
 
-const DEFAULT_ACCESS_TOKEN_LIFETIME_SECONDS = 86400n;
-const DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS = 604800n;
+function toDuration(seconds: number | undefined) {
+  return seconds ? { seconds: BigInt(seconds), nanos: 0 } : undefined;
+}
+
+const DEFAULT_ACCESS_TOKEN_LIFETIME_SECONDS = 86400;
+const DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS = 604800;
 
 export const OAuth2ClientSchema = z
   .strictObject({
@@ -117,8 +121,7 @@ export const OAuth2ClientSchema = z
       .min(60, "Minimum access token lifetime is 60 seconds")
       .max(86400, "Maximum access token lifetime is 1 day (86400 seconds)")
       .optional()
-      .describe("Access token lifetime in seconds (60-86400)")
-      .transform((val) => (val ? { seconds: BigInt(val), nanos: 0 } : undefined)),
+      .describe("Access token lifetime in seconds (60-86400)"),
     refreshTokenLifetimeSeconds: z
       .number()
       .int()
@@ -127,8 +130,7 @@ export const OAuth2ClientSchema = z
       .optional()
       .describe(
         "Refresh token lifetime in seconds (60-7776000), counted from the first authorization. A value above 604800 requires refreshTokenIdleLifetimeSeconds",
-      )
-      .transform((val) => (val ? { seconds: BigInt(val), nanos: 0 } : undefined)),
+      ),
     refreshTokenIdleLifetimeSeconds: z
       .number()
       .int()
@@ -137,8 +139,7 @@ export const OAuth2ClientSchema = z
       .optional()
       .describe(
         "Refresh token idle lifetime in seconds (60-2592000). A refresh token also expires once it has not been used for this long",
-      )
-      .transform((val) => (val ? { seconds: BigInt(val), nanos: 0 } : undefined)),
+      ),
     requireDpop: z
       .boolean()
       .optional()
@@ -151,7 +152,7 @@ export const OAuth2ClientSchema = z
   })
   .refine(
     (data) =>
-      (data.refreshTokenLifetimeSeconds?.seconds ?? DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS) <=
+      (data.refreshTokenLifetimeSeconds ?? DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS) <=
         DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS || data.refreshTokenIdleLifetimeSeconds != null,
     {
       message:
@@ -162,8 +163,8 @@ export const OAuth2ClientSchema = z
   .refine(
     (data) =>
       data.refreshTokenIdleLifetimeSeconds == null ||
-      data.refreshTokenIdleLifetimeSeconds.seconds <=
-        (data.refreshTokenLifetimeSeconds?.seconds ?? DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS),
+      data.refreshTokenIdleLifetimeSeconds <=
+        (data.refreshTokenLifetimeSeconds ?? DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS),
     {
       message:
         "refreshTokenIdleLifetimeSeconds must be less than or equal to refreshTokenLifetimeSeconds (604800 seconds when not set)",
@@ -173,14 +174,21 @@ export const OAuth2ClientSchema = z
   .refine(
     (data) =>
       data.refreshTokenIdleLifetimeSeconds == null ||
-      data.refreshTokenIdleLifetimeSeconds.seconds >=
-        (data.accessTokenLifetimeSeconds?.seconds ?? DEFAULT_ACCESS_TOKEN_LIFETIME_SECONDS),
+      data.refreshTokenIdleLifetimeSeconds >=
+        (data.accessTokenLifetimeSeconds ?? DEFAULT_ACCESS_TOKEN_LIFETIME_SECONDS),
     {
       message:
         "refreshTokenIdleLifetimeSeconds must be greater than or equal to accessTokenLifetimeSeconds (86400 seconds when not set)",
       path: ["refreshTokenIdleLifetimeSeconds"],
     },
-  );
+  )
+  // Not per field: a field failing its own bounds skips its transform, yet the refinements still run.
+  .transform((data) => ({
+    ...data,
+    accessTokenLifetimeSeconds: toDuration(data.accessTokenLifetimeSeconds),
+    refreshTokenLifetimeSeconds: toDuration(data.refreshTokenLifetimeSeconds),
+    refreshTokenIdleLifetimeSeconds: toDuration(data.refreshTokenIdleLifetimeSeconds),
+  }));
 
 export const SCIMAuthorizationSchema = z.strictObject({
   type: z.union([z.literal("oauth2"), z.literal("bearer")]).describe("SCIM authorization type"),

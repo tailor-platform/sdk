@@ -264,6 +264,26 @@ describe("OAuth2ClientSchema validation", () => {
   });
 
   test.each([
+    [
+      "the idle lifetime",
+      { refreshTokenLifetimeSeconds: 7776000, refreshTokenIdleLifetimeSeconds: 2592001 },
+      "Maximum refresh token idle lifetime is 30 days (2592000 seconds)",
+    ],
+    [
+      "the refresh token lifetime",
+      { refreshTokenLifetimeSeconds: 7776001, refreshTokenIdleLifetimeSeconds: 2592000 },
+      "Maximum refresh token lifetime is 90 days (7776000 seconds)",
+    ],
+  ])("reports only the bound error when %s is out of bounds", (_name, lifetimes, message) => {
+    const result = OAuth2ClientSchema.safeParse({
+      redirectURIs: ["https://example.com/callback"],
+      ...lifetimes,
+    });
+
+    expect(result.error?.issues.map((issue) => issue.message)).toEqual([message]);
+  });
+
+  test.each([
     ["with the default lifetimes", {}, 86400],
     ["at the refresh token lifetime", { refreshTokenLifetimeSeconds: 7776000 }, 2592000],
     [
