@@ -4,15 +4,29 @@ import { arg, defineAppCommand, logger } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { z } from "zod";
 import { discoverTab, type TabSpec } from "./discover-tab";
+import { createFunctionRunHandler } from "./function-run/handler";
+import { createFunctionRunStarter } from "./function-run/process";
 import { openBrowser } from "./open-browser";
 import { startServer } from "./server";
-import { createShellHandler } from "./shell-handler";
+import { createShellHandler, type Tab } from "./shell-handler";
 
 const DEFAULT_PORT = 7777;
 
 const DEFAULT_TABS: readonly TabSpec[] = [
   { id: "tailordb-erd", title: "ERD", packageName: "@tailor-platform/sdk-plugin-tailordb-erd" },
 ];
+
+function functionRunTab(projectDir: string): Tab {
+  return {
+    id: "function-run",
+    title: "Function run",
+    state: "mounted",
+    handler: createFunctionRunHandler({
+      projectDir,
+      startRun: createFunctionRunStarter(projectDir),
+    }),
+  };
+}
 
 const clientDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "client");
 
@@ -32,7 +46,11 @@ export const uiCommand = defineAppCommand({
     logger.warn(
       "The 'studio' command is a beta feature and may introduce breaking changes in future releases.",
     );
-    const tabs = await Promise.all(DEFAULT_TABS.map((spec) => discoverTab(spec, process.cwd())));
+    const projectDir = process.cwd();
+    const tabs = [
+      ...(await Promise.all(DEFAULT_TABS.map((spec) => discoverTab(spec, projectDir)))),
+      functionRunTab(projectDir),
+    ];
     const token = randomBytes(32).toString("hex");
     const server = await startServer({
       port: args.port,

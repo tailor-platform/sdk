@@ -23,6 +23,12 @@ tailor studio --port 8080 --open
 
 The server listens on `127.0.0.1` only. The default tab is the TailorDB ERD viewer from `@tailor-platform/sdk-plugin-tailordb-erd`; without that plugin the tab shows how to install it.
 
+## Function run tab
+
+The Function run tab runs `tailor function run <file> --watch --json` for a function file in the current project and shows each run as a card: status, execution ID, logs, result and error. Enter the file relative to the project (for example `resolvers/add.ts`) and an optional JSON argument, then press Run and watch. The function runs again when you save the file or a file it imports. Stop, or closing the page, ends the watch.
+
+The tab uses the `@tailor-platform/sdk` installed in the project, and only files inside the project can be run. A run starts only from a request that carries the per-run token the shell hands to the page.
+
 ## Mounting a plugin's UI
 
 A plugin that provides a tab declares its UI in `package.json`. The shell currently has one built-in tab, the ERD viewer; discovering the tabs of other plugins is not implemented yet, so this is the contract a plugin's UI has to follow:
