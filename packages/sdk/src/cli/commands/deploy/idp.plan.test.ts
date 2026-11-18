@@ -396,6 +396,45 @@ describe("planIdP", () => {
     expect(result.changeSet.service.updates).toHaveLength(0);
   });
 
+  test.each([
+    { remote: "omits it", permission: undefined },
+    {
+      remote: "returns it with empty lists",
+      permission: {
+        create: [],
+        read: [],
+        update: [],
+        delete: [],
+        sendPasswordResetEmail: [],
+        unenrollMfa: [],
+      },
+    },
+  ])(
+    "marks idp service unchanged when its permission denies every operation with empty lists and remote $remote",
+    async ({ permission }) => {
+      const client = createMockClient({
+        services: [createMatchingRemoteService({ permission })],
+        clients: defaultIdpClientSecret,
+      });
+
+      const context = createContext(client);
+      // oxlint-disable-next-line no-explicit-any
+      (context.application as any).idpServices[0].permission = {
+        create: [],
+        read: [],
+        update: [],
+        delete: [],
+        sendPasswordResetEmail: [],
+        unenrollMfa: [],
+      };
+
+      const result = await planIdP(context);
+
+      expect(result.changeSet.service.unchanged).toHaveLength(1);
+      expect(result.changeSet.service.updates).toHaveLength(0);
+    },
+  );
+
   test("marks idp service unchanged when permission is omitted and remote is empty permission", async () => {
     const client = createMockClient({
       services: [
