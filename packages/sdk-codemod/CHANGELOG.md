@@ -1,5 +1,17 @@
 # @tailor-platform/sdk-codemod
 
+## 0.13.0
+
+### Minor Changes
+
+- [#3107](https://github.com/tailor-platform/sdk/pull/3107) [`eba6ca7`](https://github.com/tailor-platform/sdk/commit/eba6ca7cf04c33bb50cc43eb6543f674398ecadd) Thanks [@dqn](https://github.com/dqn)! - The warnings shown when `files` patterns or the tsconfig fall back to the directory you ran the command from no longer say the fallback is removed before v2: both fallbacks are removed in v3. `tailor upgrade` to v3 runs the `v3/files-config-relative` codemod, which rewrites the `files` and `ignores` patterns, written as string literals or as template literals without substitutions, of a config outside the project directory it runs on (`--path`, the current directory by default) when they match files only from that project directory, so that they name the same files relative to the config's directory. It reports configs it cannot rewrite for review, and prints a notice for the tsconfig fallback.
+
+### Patch Changes
+
+- [#3129](https://github.com/tailor-platform/sdk/pull/3129) [`7055ea6`](https://github.com/tailor-platform/sdk/commit/7055ea6692fd794fe6d61a20ee5830e1d994d27e) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​ast-grep/napi to v0.51.2
+
+- [#3147](https://github.com/tailor-platform/sdk/pull/3147) [`04441c6`](https://github.com/tailor-platform/sdk/commit/04441c685a2034db9b8da32fd08f6cced981dfb3) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​politty/zod to v0.7.3
+
 ## 0.12.1
 
 ### Patch Changes

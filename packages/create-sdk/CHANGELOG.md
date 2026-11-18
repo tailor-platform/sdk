@@ -1,5 +1,11 @@
 # @tailor-platform/create-sdk
 
+## 2.43.0
+
+### Patch Changes
+
+- [#3143](https://github.com/tailor-platform/sdk/pull/3143) [`7ee57a9`](https://github.com/tailor-platform/sdk/commit/7ee57a9fad139911390e0efdf2f58f1d448fc441) Thanks [@toiroakr](https://github.com/toiroakr)! - Mark the content mapper as a beta feature: the `contentMapper` option of `kyselyTypePlugin`, `getDB` from `@tailor-platform/sdk/plugin/kysely-type/db`, the docs, and the `content-mapper` template README now say so. It depends on TypeScript 7.1, which is still in development, and the `contentMappers` option is not final, so its behavior may change in a future release.
+
 ## 2.42.0
 
 ### Minor Changes
