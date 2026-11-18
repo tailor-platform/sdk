@@ -22,7 +22,7 @@ import {
 import {
   collectOwnerConflicts,
   collectUnmanagedResources,
-  plannedNamespaceOf,
+  MANAGED_RESOURCES,
 } from "./managed-resources";
 import { formatResolverChangeEntries } from "./resolver";
 import { formatTailorDBResourceChangeEntries } from "./tailordb";
@@ -127,6 +127,15 @@ function plainChangeSetsOf(results: PlanResults): {
 
 function buildPlanReport(results: PlanResults): PlanReport {
   const plainChangeSets = plainChangeSetsOf(results);
+  const namespacedEntries = (
+    resourceType: Exclude<ManagedResourceType, "workflow_job_function">,
+    label: string,
+  ) => {
+    const resource = MANAGED_RESOURCES[resourceType];
+    return formatChangeSetEntries(resource.changeSetOf(results), [label], (item) =>
+      resource.namespace?.of(item),
+    );
+  };
   const executorEntries = formatExecutorChangeEntries(
     results.executor.changeSet,
     buildPlannedExecutorsByName(results.executor.changeSet),
@@ -170,50 +179,16 @@ function buildPlanReport(results: PlanResults): PlanReport {
     ...checkpointRepairEntries,
   ];
   const pipelineEntries: GroupedDisplayEntry[] = [...resolverEntries];
-  const idpEntries: GroupedDisplayEntry[] = [
-    ...formatChangeSetEntries(
-      results.idp.changeSet.client,
-      ["client"],
-      plannedNamespaceOf("idp.client"),
-    ),
-  ];
+  const idpEntries: GroupedDisplayEntry[] = [...namespacedEntries("idp.client", "client")];
   const authEntries: GroupedDisplayEntry[] = [
-    ...formatChangeSetEntries(
-      results.auth.changeSet.idpConfig,
-      ["idpConfig"],
-      plannedNamespaceOf("auth.idp_config"),
-    ),
-    ...formatChangeSetEntries(
-      results.auth.changeSet.userProfileConfig,
-      ["userProfileConfig"],
-      plannedNamespaceOf("auth.user_profile_config"),
-    ),
-    ...formatChangeSetEntries(
-      results.auth.changeSet.tenantConfig,
-      ["tenantConfig"],
-      plannedNamespaceOf("auth.tenant_config"),
-    ),
-    ...formatChangeSetEntries(
-      results.auth.changeSet.machineUser,
-      ["machineUser"],
-      plannedNamespaceOf("auth.machine_user"),
-    ),
+    ...namespacedEntries("auth.idp_config", "idpConfig"),
+    ...namespacedEntries("auth.user_profile_config", "userProfileConfig"),
+    ...namespacedEntries("auth.tenant_config", "tenantConfig"),
+    ...namespacedEntries("auth.machine_user", "machineUser"),
     ...authHookEntries,
-    ...formatChangeSetEntries(
-      results.auth.changeSet.oauth2Client,
-      ["oauth2Client"],
-      plannedNamespaceOf("auth.oauth2_client"),
-    ),
-    ...formatChangeSetEntries(
-      results.auth.changeSet.scim,
-      ["scimConfig"],
-      plannedNamespaceOf("auth.scim"),
-    ),
-    ...formatChangeSetEntries(
-      results.auth.changeSet.scimResource,
-      ["scimResource"],
-      plannedNamespaceOf("auth.scim_resource"),
-    ),
+    ...namespacedEntries("auth.oauth2_client", "oauth2Client"),
+    ...namespacedEntries("auth.scim", "scimConfig"),
+    ...namespacedEntries("auth.scim_resource", "scimResource"),
     ...formatChangeSetEntries(results.auth.changeSet.connection, ["connection"]),
   ];
 

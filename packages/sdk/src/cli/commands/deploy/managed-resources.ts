@@ -75,44 +75,44 @@ function collectResourceOwners(results: PlanResults): Set<string> {
 type WorkflowJobFunctionItem = { jobFunctionName: string };
 type ManagedResourceItem = HasName | WorkflowJobFunctionItem;
 
-type ManagedResourceChangeSet = {
-  creates: ManagedResourceItem[];
-  updates: ManagedResourceItem[];
-  deletes: ManagedResourceItem[];
-  replaces: ManagedResourceItem[];
-  unchanged: ManagedResourceItem[];
+type ManagedResourceChangeSet<Item = ManagedResourceItem> = {
+  creates: Item[];
+  updates: Item[];
+  deletes: Item[];
+  replaces: Item[];
+  unchanged: Item[];
   lines: () => string[];
 };
 
 /** Items that carry their requests; `unchanged` ones carry only a name. */
-type PlannedItem<C extends ManagedResourceChangeSet> =
+type PlannedItem<C extends ManagedResourceChangeSet<HasName>> =
   | C["creates"][number]
   | C["updates"][number]
   | C["deletes"][number]
   | C["replaces"][number];
 
-type ManagedResource = {
-  changeSetOf: (results: PlanResults) => ManagedResourceChangeSet;
+type ManagedResource<Item = ManagedResourceItem> = {
+  changeSetOf: (results: PlanResults) => ManagedResourceChangeSet<Item>;
   nameOf?: (item: ManagedResourceItem) => string;
   /** The namespace a planned item belongs to, owned by a resource of type `owner`. */
   namespace?: {
     owner: ManagedResourceType;
-    of(item: ManagedResourceItem): string | undefined;
+    of(item: Item): string | undefined;
   };
 };
 
 /** A `ManagedResource` whose namespace accessor reads the items of change set `C`. */
-type ManagedResourceSpec<C extends ManagedResourceChangeSet> = Omit<
-  ManagedResource,
+type ManagedResourceSpec<C extends ManagedResourceChangeSet<HasName>> = Omit<
+  ManagedResource<HasName>,
   "changeSetOf" | "namespace"
 > & {
   changeSetOf: (results: PlanResults) => C;
   namespace?: { owner: ManagedResourceType; of: (item: PlannedItem<C>) => string | undefined };
 };
 
-function managedResource<C extends ManagedResourceChangeSet>(
+function managedResource<C extends ManagedResourceChangeSet<HasName>>(
   resource: ManagedResourceSpec<C>,
-): ManagedResource {
+): ManagedResource<HasName> {
   return resource;
 }
 
@@ -142,7 +142,7 @@ function workflowJobFunctionChangeSet(results: PlanResults): ManagedResourceChan
  * Where each resource type's planned changes live in `PlanResults`, and the
  * namespace each planned item belongs to.
  */
-export const MANAGED_RESOURCES: Record<ManagedResourceType, ManagedResource> = {
+export const MANAGED_RESOURCES = {
   aigateway: managedResource({ changeSetOf: (results) => results.aiGateway.changeSet }),
   application: managedResource({ changeSetOf: (results) => results.app }),
   "auth.connection": managedResource({
@@ -236,26 +236,14 @@ export const MANAGED_RESOURCES: Record<ManagedResourceType, ManagedResource> = {
     namespace: { owner: "tailordb.service", of: (item) => item.request.namespaceName },
   }),
   workflow: managedResource({ changeSetOf: (results) => results.workflow.changeSet }),
-  workflow_job_function: managedResource({
+  workflow_job_function: {
     changeSetOf: workflowJobFunctionChangeSet,
     nameOf: (item) => ("jobFunctionName" in item ? item.jobFunctionName : item.name),
-  }),
+  },
   workflow_job_function_execution_policy: managedResource({
     changeSetOf: (results) => results.workflowExecutionPolicy.changeSet,
   }),
-};
-
-/**
- * Read the namespace of a planned item of a resource type.
- * @param resourceType - Resource type of the item
- * @returns Namespace of a created, updated, deleted, or replaced item, if the type has one
- */
-export function plannedNamespaceOf(
-  resourceType: ManagedResourceType,
-): (item: ManagedResourceItem) => string | undefined {
-  const { namespace } = MANAGED_RESOURCES[resourceType];
-  return (item) => namespace?.of(item);
-}
+} satisfies Record<ManagedResourceType, ManagedResource>;
 
 function managedResourceName(resource: ManagedResource, item: ManagedResourceItem): string {
   return resource.nameOf ? resource.nameOf(item) : (item as HasName).name;
