@@ -335,11 +335,12 @@ oauth2Clients: {
       `${website.url}/callback`,  // Type-safe URL from StaticWebsite
     ],
     description: "My OAuth2 client",
-    clientType: "public",                // Defaults to "confidential"
+    clientType: "public",                    // Defaults to "confidential"
     grantTypes: ["authorization_code", "refresh_token"],
-    accessTokenLifetimeSeconds: 900,     // 15 minutes
-    refreshTokenLifetimeSeconds: 604800, // 7 days
-    requireDpop: true,                   // Require DPoP for this client
+    accessTokenLifetimeSeconds: 900,         // 15 minutes
+    refreshTokenLifetimeSeconds: 2592000,    // 30 days
+    refreshTokenIdleLifetimeSeconds: 604800, // 7 days
+    requireDpop: true,                       // Require DPoP for this client
   },
 },
 ```
@@ -365,7 +366,9 @@ A `browser` client cannot set `requireDpop: true`. Changing `clientType` of a de
 
 **accessTokenLifetimeSeconds**: Optional access token lifetime in seconds. Minimum: 60 seconds, Maximum: 86400 seconds (1 day). If not specified, uses platform default.
 
-**refreshTokenLifetimeSeconds**: Optional refresh token lifetime in seconds. Minimum: 60 seconds, Maximum: 604800 seconds (7 days). If not specified, uses platform default.
+**refreshTokenLifetimeSeconds**: Optional refresh token lifetime in seconds, counted from the first authorization. Refreshing the token does not extend it. Minimum: 60 seconds, Maximum: 7776000 seconds (90 days). If not specified, the lifetime is 604800 seconds (7 days). A value above 604800 seconds requires `refreshTokenIdleLifetimeSeconds`.
+
+**refreshTokenIdleLifetimeSeconds**: Optional refresh token idle lifetime in seconds. When set, a refresh token also expires once it has not been used for this long. Each refresh restarts the count, without going past `refreshTokenLifetimeSeconds`. Minimum: 60 seconds, Maximum: 2592000 seconds (30 days). If not specified, a refresh token has no idle expiry. The value must be between `accessTokenLifetimeSeconds` and `refreshTokenLifetimeSeconds`. When those are not specified, their defaults of 86400 seconds (1 day) and 604800 seconds (7 days) apply to this rule.
 
 **requireDpop**: Optional boolean to require DPoP (Demonstrating Proof of Possession) for this client. When set to `true`, the client must use DPoP tokens for authentication. If not specified, DPoP is not required.
 

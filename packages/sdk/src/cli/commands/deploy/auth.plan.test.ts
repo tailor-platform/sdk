@@ -57,6 +57,7 @@ function remoteOAuth2Client(overrides: {
   redirectUris: string[];
   accessTokenLifetime: { seconds: bigint };
   refreshTokenLifetime: { seconds: bigint };
+  refreshTokenIdleLifetime?: { seconds: bigint };
 }) {
   return {
     name: "sample",
@@ -69,6 +70,7 @@ function remoteOAuth2Client(overrides: {
     clientType: AuthOAuth2Client_ClientType.CONFIDENTIAL,
     accessTokenLifetime: overrides.accessTokenLifetime,
     refreshTokenLifetime: overrides.refreshTokenLifetime,
+    refreshTokenIdleLifetime: overrides.refreshTokenIdleLifetime,
     requireDpop: false,
   };
 }
@@ -388,8 +390,11 @@ type MockClientOptions = {
     clientType: AuthOAuth2Client_ClientType;
     accessTokenLifetime?: { seconds: bigint };
     refreshTokenLifetime?: { seconds: bigint };
+    refreshTokenIdleLifetime?: { seconds: bigint };
     requireDpop: boolean;
+    clientId?: string;
     clientSecret?: string;
+    createdAt?: { seconds: bigint };
   }>;
   authHook?: {
     scriptRef: string;
@@ -522,44 +527,26 @@ describe("planAuth", () => {
     expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
   });
 
-  test("registers an existing machine user's secret fetched during planning", async () => {
+  test("marks an oauth2 client unchanged when the Platform returns its generated credentials and default lifetimes", async () => {
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
-      machineUsers: [managerMachineUserRemote],
-    });
-    using registerSecretSpy = vi.spyOn(logger, "registerSecret").mockImplementation(() => {});
-
-    await planAuth(createContext(client));
-
-    expect(registerSecretSpy).toHaveBeenCalledWith(managerMachineUserRemote.clientSecret);
-  });
-
-  test("registers a deleted auth service's machine user and oauth2 client secrets before scheduling removal", async () => {
-    using registerSecretSpy = vi.spyOn(logger, "registerSecret").mockImplementation(() => {});
-    const client = createMockClient({
-      authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
-      machineUsers: [managerMachineUserRemote],
       oauth2Clients: [
         {
           ...remoteOAuth2Client({
-            redirectUris: ["https://a.example.com/callback"],
+            redirectUris: ["https://a.example.com/callback", "https://b.example.com/callback"],
             accessTokenLifetime: { seconds: 86400n },
             refreshTokenLifetime: { seconds: 604800n },
           }),
-          clientSecret: "removed-oauth2-client-secret",
+          clientId: "sample-client-id",
+          createdAt: { seconds: 1700000000n },
         },
       ],
     });
-    const application = {
-      ...createMockApplication(),
-      authService: undefined,
-    } as unknown as Application;
 
-    const result = await planAuth(createContext(client, application));
+    const result = await planAuth(createContext(client));
 
-    expect(result.changeSet.service.deletes.map((del) => del.name)).toContain("auth-a");
-    expect(registerSecretSpy).toHaveBeenCalledWith(managerMachineUserRemote.clientSecret);
-    expect(registerSecretSpy).toHaveBeenCalledWith("removed-oauth2-client-secret");
+    expect(result.changeSet.oauth2Client.unchanged).toHaveLength(1);
+    expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
   });
 
   test("marks a SAML idpConfig unchanged when its remote proto materializes defaults", async () => {
@@ -941,6 +928,69 @@ describe("planAuth", () => {
     expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
   });
 
+  test.each([
+    ["unchanged when it matches the remote value", 1800, { seconds: 1800n }, []],
+    ["updated when it is added", 1800, undefined, [{ seconds: 1800n, nanos: 0 }]],
+    [
+      "updated when it differs from the remote value",
+      1800,
+      { seconds: 3600n },
+      [{ seconds: 1800n, nanos: 0 }],
+    ],
+    ["updated when it is removed", undefined, { seconds: 1800n }, [undefined]],
+  ] as const)(
+    "marks oauth2 client %s for the refresh token idle lifetime",
+    async (_label, refreshTokenIdleLifetimeSeconds, remoteIdleLifetime, updatedIdleLifetimes) => {
+      const application = defineApplication({
+        config: {
+          ...defineConfig({
+            name: appName,
+            auth: defineAuth("auth-a", {
+              machineUserAttributes: { role: t.string() },
+              oauth2Clients: {
+                sample: {
+                  description: "Sample client",
+                  redirectURIs: ["https://a.example.com/callback"],
+                  accessTokenLifetimeSeconds: 900,
+                  refreshTokenLifetimeSeconds: 7200,
+                  refreshTokenIdleLifetimeSeconds,
+                },
+              },
+            }),
+          }),
+          path: "tailor.config.ts",
+        },
+      });
+
+      const client = createMockClient({
+        authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
+        oauth2Clients: [
+          remoteOAuth2Client({
+            redirectUris: ["https://a.example.com/callback"],
+            accessTokenLifetime: { seconds: 900n },
+            refreshTokenLifetime: { seconds: 7200n },
+            refreshTokenIdleLifetime: remoteIdleLifetime,
+          }),
+        ],
+      });
+
+      const result = await planAuth({
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
+      });
+
+      expect(
+        result.changeSet.oauth2Client.updates.map(
+          (update) => update.request.oauth2Client?.refreshTokenIdleLifetime,
+        ),
+      ).toEqual(updatedIdleLifetimes);
+      expect(result.changeSet.oauth2Client.unchanged).toHaveLength(1 - updatedIdleLifetimes.length);
+    },
+  );
+
   test("marks oauth2 client unchanged when description is omitted locally and remote is empty string", async () => {
     const app = {
       name: appName,
@@ -1106,10 +1156,10 @@ describe("planAuth", () => {
     });
   });
 
-  test("does not mark a forceApplyAll idpConfig update that has nothing to compare against", async () => {
+  test("does not mark a forceApplyAll idpConfig update that has nothing to compare against, and deletes a stale config beside it", async () => {
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
-      authIdPConfigs: [{ name: "default" }],
+      authIdPConfigs: [{ name: "default" }, { name: "stale" }],
     });
 
     const result = await planAuth({
@@ -1119,6 +1169,7 @@ describe("planAuth", () => {
 
     expect(result.changeSet.idpConfig.updates).toHaveLength(1);
     expect(result.changeSet.idpConfig.updates[0]).not.toHaveProperty("forcedBySdkVersion");
+    expect(result.changeSet.idpConfig.deletes.map((del) => del.name)).toEqual(["stale"]);
   });
 
   describe("OAuth2 redirect URI resolution on first deployment (issue #1030)", () => {

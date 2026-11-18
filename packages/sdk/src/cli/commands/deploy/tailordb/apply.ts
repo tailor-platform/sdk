@@ -1,4 +1,6 @@
+import { create } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
+import { TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import * as path from "pathe";
 import {
   getNamespacesWithMigrations,
@@ -44,9 +46,9 @@ import { CLIError, formatCommandHint, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { withSpan } from "#/cli/telemetry/index";
 import { assertDefined } from "#/utils/assert";
-import { areNormalizedEqual } from "../compare";
+import { isRequestUnchanged } from "../compare";
 import { resourceTrn, writeMetadataLabels } from "../label";
-import { normalizeComparableTailorDBType } from "./compare";
+import { tailordbTypeComparison } from "./compare";
 import {
   clearMaintenanceModeRecord,
   clearMigrationCleanupRecord,
@@ -1988,18 +1990,22 @@ function collectLocalDefinitionWrites(flow: MigrationFlow): LocalDefinitionWrite
     );
     if (!input) continue;
     const settledTables = migrationSnapshotCache.load(lastMigration).tables;
-    const comparable = (type: TailorDBSnapshotType) =>
-      normalizeComparableTailorDBType(
-        generateTailorDBTypeManifestFromSnapshot(type, {
-          subscribed: migrationContext.executorUsedTables.has(type.name),
-          namespaceGqlOperations: input.config.gqlOperations,
-        }),
-      );
+    const manifest = (type: TailorDBSnapshotType) =>
+      generateTailorDBTypeManifestFromSnapshot(type, {
+        subscribed: migrationContext.executorUsedTables.has(type.name),
+        namespaceGqlOperations: input.config.gqlOperations,
+      });
     const differing = Object.entries(input.types).filter(([tableName, localType]) => {
       const key = namespacedTableKey(namespaceName, tableName);
       if (createKeys.has(key)) return false;
       const settledType = settledTables[tableName];
-      if (settledType) return !areNormalizedEqual(comparable(localType), comparable(settledType));
+      if (settledType) {
+        return !isRequestUnchanged(
+          tailordbTypeComparison,
+          { tailordbType: manifest(localType) },
+          { tailordbType: create(TailorDBTypeSchema, manifest(settledType)) },
+        );
+      }
       return (
         processedTables.created.has(key) ||
         changeSet.type.updates.some(

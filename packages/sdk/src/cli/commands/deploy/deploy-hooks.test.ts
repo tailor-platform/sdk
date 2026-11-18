@@ -152,7 +152,7 @@ beforeEach(() => {
   client.getStaticWebsite.mockResolvedValue({ staticwebsite: { url: "https://web" } });
   client.getAIGateway.mockResolvedValue({ aigateway: { name: "ai", url: "https://ai" } });
   client.listAuthOAuth2Clients.mockResolvedValue({
-    oauth2Clients: [{ name: "web", clientId: "public-id", clientSecret: "private-secret" }],
+    oauth2Clients: [{ name: "web", clientId: "public-id" }],
     nextPageToken: "",
   });
 });

@@ -26,6 +26,34 @@ function invalidTableName(input: PlanResults): void {
   } as never);
 }
 
+const INVALID_CONNECTION = {
+  name: "INVALID_NAME",
+  type: AuthConnection_Type.OAUTH2,
+  config: {
+    case: "oauth2" as const,
+    value: {
+      providerUrl: "https://provider.example.com",
+      issuerUrl: "https://issuer.example.com",
+      clientId: "client123",
+      clientSecret: "secret123",
+      authUrl: "",
+      tokenUrl: "",
+    },
+  },
+};
+
+function invalidConnectionUpdate(input: PlanResults): void {
+  input.auth.changeSet.connection.updates.push({
+    name: INVALID_CONNECTION.name,
+    request: {
+      workspaceId: WS_ID,
+      connection: INVALID_CONNECTION,
+      updateMask: { paths: ["oauth2.token_url"] },
+    },
+    metaRequest: METADATA,
+  });
+}
+
 function invalidRetryPolicy(input: PlanResults): void {
   input.workflow.changeSet.creates.push({
     name: "my-workflow",
@@ -235,6 +263,16 @@ const validCases: Case<undefined>[] = [
     },
     expected: undefined,
   },
+  {
+    name: "(f2) auth connection update that only writes labels passes",
+    mutate: (input) => {
+      input.auth.changeSet.connection.updates.push({
+        name: "adopted-connection",
+        metaRequest: METADATA,
+      });
+    },
+    expected: undefined,
+  },
 ];
 
 const invalidCases: Case<RegExp>[] = [
@@ -278,27 +316,10 @@ const invalidCases: Case<RegExp>[] = [
     name: "(f) auth connection create with invalid name is rejected",
     mutate: (input) => {
       input.auth.changeSet.connection.creates.push({
-        name: "INVALID_NAME",
-        request: {
-          workspaceId: WS_ID,
-          connection: {
-            name: "INVALID_NAME",
-            type: AuthConnection_Type.OAUTH2,
-            config: {
-              case: "oauth2",
-              value: {
-                providerUrl: "https://provider.example.com",
-                issuerUrl: "https://issuer.example.com",
-                clientId: "client123",
-                clientSecret: "secret123",
-                authUrl: "",
-                tokenUrl: "",
-              },
-            },
-          },
-        },
+        name: INVALID_CONNECTION.name,
+        request: { workspaceId: WS_ID, connection: INVALID_CONNECTION },
         metaRequest: METADATA,
-      } as never);
+      });
     },
     expected: /\d+ validation error\(s\) found in 1 resource\(s\)/,
   },
@@ -408,6 +429,26 @@ const invalidCases: Case<RegExp>[] = [
             requireDpop: true,
             grantTypes: [AuthOAuth2Client_GrantType.AUTHORIZATION_CODE],
             redirectUris: ["https://example.com/callback"],
+          },
+        },
+      });
+    },
+    expected: /1 validation error\(s\) found in 1 resource\(s\)/,
+  },
+  {
+    name: "(o3) OAuth2 client with a refresh token lifetime above 7 days and no idle lifetime is rejected",
+    mutate: (input) => {
+      input.auth.changeSet.oauth2Client.updates.push({
+        name: "default",
+        request: {
+          workspaceId: WS_ID,
+          namespaceName: "my-auth",
+          oauth2Client: {
+            name: "default",
+            clientType: AuthOAuth2Client_ClientType.PUBLIC,
+            grantTypes: [AuthOAuth2Client_GrantType.AUTHORIZATION_CODE],
+            redirectUris: ["https://example.com/callback"],
+            refreshTokenLifetime: { seconds: 604801n },
           },
         },
       });
@@ -573,12 +614,22 @@ describe("validatePlans", () => {
     ]);
   });
 
-  test("evaluates message-level CEL rules instead of warning that they could not run", async () => {
-    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-    const input = emptyPlanResults();
-    input.auth.changeSet.oauth2Client.creates.push({
-      name: "default",
-      request: {
+  test.each([
+    ["without token lifetimes", {}],
+    [
+      "with the longest refresh token lifetimes",
+      {
+        accessTokenLifetime: { seconds: 900n },
+        refreshTokenLifetime: { seconds: 7776000n },
+        refreshTokenIdleLifetime: { seconds: 2592000n },
+      },
+    ],
+  ])(
+    "evaluates message-level CEL rules %s instead of warning that they could not run",
+    async (_label, lifetimes) => {
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const input = emptyPlanResults();
+      const request = {
         workspaceId: WS_ID,
         namespaceName: "my-auth",
         oauth2Client: {
@@ -587,21 +638,55 @@ describe("validatePlans", () => {
           requireDpop: true,
           grantTypes: [AuthOAuth2Client_GrantType.AUTHORIZATION_CODE],
           redirectUris: ["https://example.com/callback"],
+          ...lifetimes,
         },
-      },
-    });
+      };
+      input.auth.changeSet.oauth2Client.creates.push({ name: "default", request });
+      input.auth.changeSet.oauth2Client.updates.push({ name: "default", request });
 
-    await expect(
-      validatePlans([{ application: "my-app", results: input }]),
-    ).resolves.toBeUndefined();
+      await expect(
+        validatePlans([{ application: "my-app", results: input }]),
+      ).resolves.toBeUndefined();
+      expect(warnSpy).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each(validCases)("$name does not warn that a rule could not run", async ({ mutate }) => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const input = emptyPlanResults();
+    mutate(input);
+
+    await validatePlans([{ application: "my-app", results: input }]);
+
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
-  test("carries each violation in the error context", async () => {
+  test.each([
+    {
+      name: "a TailorDB type create",
+      mutate: invalidTableName,
+      issue: {
+        resourceType: "tailordb.type",
+        name: "invalidLowercaseName",
+        action: "create",
+        fieldPath: "tailordb_type.name",
+      },
+    },
+    {
+      name: "an auth connection update",
+      mutate: invalidConnectionUpdate,
+      issue: {
+        resourceType: "auth.connection",
+        name: INVALID_CONNECTION.name,
+        action: "update",
+        fieldPath: "connection.name",
+      },
+    },
+  ])("carries each violation of $name in the error context", async ({ mutate, issue }) => {
     using _errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
     using logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
     const input = emptyPlanResults();
-    invalidTableName(input);
+    mutate(input);
 
     const error = await validatePlans([{ application: "my-app", results: input }]).catch(
       (e: unknown) => e,
@@ -610,16 +695,7 @@ describe("validatePlans", () => {
     expect(error).toMatchObject({
       code: "DEPLOY_VALIDATION_FAILED",
       context: {
-        issues: [
-          {
-            application: "my-app",
-            resourceType: "tailordb.type",
-            name: "invalidLowercaseName",
-            action: "create",
-            fieldPath: "tailordb_type.name",
-            message: expect.any(String),
-          },
-        ],
+        issues: [{ application: "my-app", ...issue, message: expect.any(String) }],
       },
     });
     expect(logSpy.mock.calls.flat().join("\n")).not.toContain("my-app");

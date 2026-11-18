@@ -73,6 +73,7 @@ function colorizeStatus(status: WorkflowExecution_Status): string {
     case WorkflowExecution_Status.PENDING_RESUME:
     case WorkflowExecution_Status.PENDING_RETRY:
     case WorkflowExecution_Status.WAITING:
+    case WorkflowExecution_Status.CANCELING:
       return styles.warning(statusText);
     case WorkflowExecution_Status.RUNNING:
       return styles.info(statusText);

@@ -2,15 +2,15 @@ import { type MessageInitShape } from "@bufbuild/protobuf";
 import {
   type CreateAIGatewayRequestSchema,
   type DeleteAIGatewayRequestSchema,
-  type UpdateAIGatewayRequestSchema,
+  UpdateAIGatewayRequestSchema,
 } from "@tailor-platform/tailor-proto/aigateway_pb";
 import { resolveStaticWebsiteUrls, type OperatorClient } from "#/cli/shared/client";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
-import { areNormalizedEqual } from "./compare";
+import { defineRequestComparison, isRequestUnchanged } from "./compare";
+import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   buildMetaRequest,
-  hasMatchingSdkVersion,
   type MetadataLabelWrite,
   resourceTrn,
   writeMetadataLabels,
@@ -18,7 +18,6 @@ import {
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
 import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
-import type { AIGateway as ProtoAIGateway } from "@tailor-platform/tailor-proto/aigateway_resource_pb";
 
 /**
  * Apply AI Gateway changes for the given phase.
@@ -78,38 +77,23 @@ type DeleteAIGateway = {
   request: MessageInitShape<typeof DeleteAIGatewayRequestSchema>;
 };
 
-type ComparableAIGateway = {
-  authNamespace: string;
-  cors: string[];
+type DesiredAIGateway = {
+  name: string;
+  request: MessageInitShape<typeof CreateAIGatewayRequestSchema> &
+    MessageInitShape<typeof UpdateAIGatewayRequestSchema>;
+  /** The request with its `:url` CORS entries resolved as the plan resolves them. */
+  comparableRequest: MessageInitShape<typeof UpdateAIGatewayRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
-type ComparableAIGatewayInput = {
-  authNamespace?: string;
-  cors?: readonly string[];
-};
-
-function normalizeComparableAIGatewayShape(
-  input: Pick<ComparableAIGateway, "authNamespace" | "cors">,
-): ComparableAIGateway {
-  return {
-    authNamespace: input.authNamespace,
-    cors: input.cors.toSorted(),
-  };
-}
-
-function normalizeComparableAIGateway(input: ComparableAIGatewayInput): ComparableAIGateway {
-  return normalizeComparableAIGatewayShape({
-    authNamespace: input.authNamespace || "",
-    cors: [...(input.cors || [])],
-  });
-}
-
-function areAIGatewaysEqual(existing: ProtoAIGateway, desired: ComparableAIGatewayInput): boolean {
-  return areNormalizedEqual(
-    normalizeComparableAIGateway(existing),
-    normalizeComparableAIGateway(desired),
-  );
-}
+const aiGatewayComparison = defineRequestComparison({
+  schema: UpdateAIGatewayRequestSchema,
+  // The platform keeps `disabled` when the update carries no mask, so deploy leaves it alone.
+  excluded: ["workspaceId", "aigatewayName", "updateMask", "disabled"],
+  normalize: (request) => {
+    request.cors.sort();
+  },
+});
 
 /**
  * Plan AI Gateway changes based on current and desired state.
@@ -123,7 +107,7 @@ export async function planAIGateway(context: PlanContext) {
   );
   const ownership = createOwnershipTracker(application.name, application.id);
 
-  const fetchedGateways = await fetchExistingResourcesWithLabels({
+  const existingGateways = await fetchExistingResourcesWithLabels({
     client,
     fetchPage: async (pageToken, pageSize) => {
       const { aigateways, nextPageToken } = await client.listAIGateways({
@@ -136,14 +120,12 @@ export async function planAIGateway(context: PlanContext) {
     getName: (resource) => resource.name,
     getTrn: (name) => resourceTrn(workspaceId, "aigateway", name),
   });
-  const existingGateways = { ...fetchedGateways };
 
   const aiGatewayServices = forRemoval ? [] : application.aiGatewayServices;
   const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
-  for (const gatewayService of aiGatewayServices) {
-    const config = gatewayService;
-    const name = gatewayService.name;
-    const existing = existingGateways[name];
+  const desired: DesiredAIGateway[] = [];
+  for (const config of aiGatewayServices) {
+    const name = config.name;
     const metaRequest = await buildMetaRequest({
       trn: resourceTrn(workspaceId, "aigateway", name),
       appName: application.name,
@@ -156,52 +138,37 @@ export async function planAIGateway(context: PlanContext) {
       "AIGateway CORS",
       { expectedLocalNames: expectedLocalWebsites },
     );
-    const desired = normalizeComparableAIGateway({ ...config, cors: resolvedCors });
     const request = {
       workspaceId,
       aigatewayName: name,
       authNamespace: config.authNamespace,
       cors: config.cors ? [...config.cors] : [],
     };
-
-    if (existing) {
-      const owned = ownership.ownsDesired(existing.allLabels, {
-        resourceType: "aigateway",
-        resourceLabel: "AIGateway",
-        resourceName: name,
-      });
-
-      const configUnchanged = owned && areAIGatewaysEqual(existing.resource, desired);
-      if (configUnchanged && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
-        changeSet.unchanged.push({ name });
-      } else {
-        changeSet.updates.push({
-          name,
-          request,
-          metaRequest,
-          ...(configUnchanged && { forcedBySdkVersion: true }),
-        });
-      }
-      delete existingGateways[name];
-    } else {
-      changeSet.creates.push({
-        name,
-        request,
-        metaRequest,
-      });
-    }
+    desired.push({
+      name,
+      request,
+      comparableRequest: { ...request, cors: resolvedCors },
+      metaRequest,
+    });
   }
-  Object.entries(existingGateways).forEach(([name, entry]) => {
-    if (ownership.ownsRemaining(entry?.allLabels)) {
-      changeSet.deletes.push({
-        name,
-        request: {
-          workspaceId,
-          aigatewayName: name,
-        },
-      });
-    }
+
+  await diffKeyed({
+    changeSet,
+    desired,
+    existing: Object.entries(existingGateways),
+    keyOf: (gateway) => gateway.name,
+    ...labeledResourceChecks(ownership, (gateway: DesiredAIGateway) => ({
+      resourceType: "aigateway",
+      resourceLabel: "AIGateway",
+      resourceName: gateway.name,
+    })),
+    isConfigUnchanged: (gateway, existing) =>
+      isRequestUnchanged(aiGatewayComparison, gateway.comparableRequest, existing.resource),
+    create: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),
+    update: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),
+    unchanged: ({ name }) => ({ name }),
+    delete: (name) => ({ name, request: { workspaceId, aigatewayName: name } }),
   });
 
-  return { changeSet, ...ownership.result, existingGateways: fetchedGateways };
+  return { changeSet, ...ownership.result, existingGateways };
 }

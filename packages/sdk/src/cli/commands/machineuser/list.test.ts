@@ -1,7 +1,7 @@
 import { create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { runCommand } from "@politty/zod";
-import { MachineUserSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
+import { MachineUserSummarySchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { aroundEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
@@ -21,11 +21,10 @@ vi.mock("#/cli/shared/config-loader", () => ({
 const createdAt = new Date("2024-01-01T00:00:00.000Z");
 const updatedAt = new Date("2024-02-01T00:00:00.000Z");
 
-const machineUser = create(MachineUserSchema, {
+const machineUser = create(MachineUserSummarySchema, {
   id: "9f1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d",
   name: "ci-bot",
   clientId: "client-id",
-  clientSecret: "client-secret",
   createdAt: timestampFromDate(createdAt),
   updatedAt: timestampFromDate(updatedAt),
 });

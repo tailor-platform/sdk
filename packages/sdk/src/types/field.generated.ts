@@ -16,14 +16,14 @@ export type TailorField = {
     | "uuid";
   /** Field metadata configuration */
   metadata: {
-    /** Date value representation; "default" follows defaultDateRepresentation */
-    as?: "date" | "default" | "string" | "temporal" | undefined;
     /** Whether the field is required */
     required?: boolean | undefined;
     /** Whether the field is an array */
     array?: boolean | undefined;
     /** Field description */
     description?: string | undefined;
+    /** Type name for nested or enum fields */
+    typeName?: string | undefined;
     /** Allowed values for enum fields */
     allowedValues?:
       | {
@@ -33,21 +33,48 @@ export type TailorField = {
           description?: string | undefined;
         }[]
       | undefined;
-    /** Lifecycle hooks */
+    /** Whether the field is indexed for faster queries */
+    index?: boolean | undefined;
+    /** Whether the field value must be unique */
+    unique?: boolean | undefined;
+    /** Whether the field is a vector field for similarity search */
+    vector?: boolean | undefined;
+    /** Whether the field is a foreign key */
+    foreignKey?: boolean | undefined;
+    /** Target table name for foreign key relations */
+    foreignKeyType?: string | undefined;
+    /** Target field name for foreign key relations */
+    foreignKeyField?: string | undefined;
+    /** Lifecycle hooks for the field */
     hooks?:
       | {
-          /** Hook function called on creation */
+          /** Hook function called on record creation */
           create?: Function | undefined;
-          /** Hook function called on update */
+          /** Hook function called on record update */
           update?: Function | undefined;
         }
       | undefined;
     /** Validation functions for the field */
     validate?: Function[] | undefined;
-    /** Type name for nested or enum fields */
-    typeName?: string | undefined;
+    /** Serial (auto-increment) configuration */
+    serial?:
+      | {
+          /** Starting value for the serial sequence */
+          start: number;
+          /** Maximum value for the serial sequence */
+          maxValue?: number | undefined;
+          /** Format string for serial value (string type only) */
+          format?: string | undefined;
+          /** Number records without gaps */
+          gapless?: boolean | undefined;
+        }
+      | undefined;
+    /** Decimal scale (number of digits after decimal point, 0-12) */
+    scale?: number | undefined;
     /** Default value for the field on create */
     default?: unknown;
+    /** Date value representation; "default" follows defaultDateRepresentation */
+    as?: "date" | "default" | "string" | "temporal" | undefined;
   };
   fields: {
     [x: string]: TailorField;

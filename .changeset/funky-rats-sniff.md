@@ -1,5 +1,0 @@
----
-"@tailor-platform/sdk": patch
----
-
-`tailor deploy` and `tailor remove` now also stop with `SERVICE_IN_USE` before they change anything when they would delete an IdP client that an Auth service's `idProvider` names with `idp.provider()`, the `idProvider` that an application referencing an Auth service as `external` authenticates with, or a TailorDB table that an Auth service's `userProfile`, `tenantProvider`, or SCIM resource names. Before, they deleted it without reporting that it was still in use, which left the Auth service or application naming an IdP client, provider, or table that no longer exists. To rename an `idProvider` that another application authenticates with, deploy its config together with that application's config in one run, or keep the name. In the error's `context.uses`, these entries carry `resourceType` `idp.client`, `auth.idp_config`, or `tailordb.type`, and `usedBy` can now be an Auth user profile config (`auth.user_profile_config`), tenant config (`auth.tenant_config`), or SCIM resource (`auth.scim_resource`).

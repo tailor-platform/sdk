@@ -3,6 +3,7 @@ import {
   AuthConnection_Status,
   AuthConnection_Type,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
+import { partition } from "es-toolkit";
 import { type AuthService } from "#/cli/services/auth/service";
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
@@ -28,7 +29,10 @@ import type {
   DeleteAuthConnectionRequestSchema,
   UpdateAuthConnectionRequestSchema,
 } from "@tailor-platform/tailor-proto/auth_pb";
-import type { AuthConnection } from "@tailor-platform/tailor-proto/auth_resource_pb";
+import type {
+  AuthConnection,
+  AuthConnectionSchema,
+} from "@tailor-platform/tailor-proto/auth_resource_pb";
 
 type CreateConnection = {
   name: string;
@@ -38,40 +42,38 @@ type CreateConnection = {
 
 type UpdateConnection = {
   name: string;
+  /** Absent when only the connection's metadata labels are written. */
+  request?: MessageInitShape<typeof UpdateAuthConnectionRequestSchema>;
   metaRequest: MetadataLabelWrite;
 };
 
-type MaskedUpdateConnection = {
-  name: string;
-  updateRequest: MessageInitShape<typeof UpdateAuthConnectionRequestSchema>;
-  metaRequest: MetadataLabelWrite;
-};
+type ConfigUpdateConnection = UpdateConnection & Required<Pick<UpdateConnection, "request">>;
+
+function isConfigUpdate(update: UpdateConnection): update is ConfigUpdateConnection {
+  return update.request !== undefined;
+}
 
 type DeleteConnection = {
   name: string;
   request: MessageInitShape<typeof DeleteAuthConnectionRequestSchema>;
 };
 
-function buildConnectionRequest(
-  workspaceId: string,
+function buildConnection(
   name: string,
   config: AuthConnectionConfig,
-): MessageInitShape<typeof CreateAuthConnectionRequestSchema> {
+): MessageInitShape<typeof AuthConnectionSchema> {
   return {
-    workspaceId,
-    connection: {
-      name,
-      type: AuthConnection_Type.OAUTH2,
-      config: {
-        case: "oauth2",
-        value: {
-          providerUrl: config.providerUrl,
-          issuerUrl: config.issuerUrl,
-          clientId: config.clientId,
-          clientSecret: config.clientSecret,
-          authUrl: config.authUrl ?? "",
-          tokenUrl: config.tokenUrl ?? "",
-        },
+    name,
+    type: AuthConnection_Type.OAUTH2,
+    config: {
+      case: "oauth2",
+      value: {
+        providerUrl: config.providerUrl,
+        issuerUrl: config.issuerUrl,
+        clientId: config.clientId,
+        clientSecret: config.clientSecret,
+        authUrl: config.authUrl ?? "",
+        tokenUrl: config.tokenUrl ?? "",
       },
     },
   };
@@ -127,12 +129,9 @@ export async function planAuthConnections(
     applicationId: appId,
     applicationName: appName,
   };
-  const changeSet = createChangeSet<
-    CreateConnection,
-    UpdateConnection,
-    DeleteConnection,
-    MaskedUpdateConnection
-  >("Auth connections");
+  const changeSet = createChangeSet<CreateConnection, UpdateConnection, DeleteConnection>(
+    "Auth connections",
+  );
   const ownership = createOwnershipTracker(appName, appId);
 
   const desiredConnections: Record<string, AuthConnectionConfig> = {};
@@ -185,12 +184,9 @@ export async function planAuthConnections(
       const updateMask = buildUpdateMask(existing.resource, config, secretChanged);
 
       if (updateMask.paths.length > 0) {
-        changeSet.replaces.push({
+        changeSet.updates.push({
           name,
-          updateRequest: {
-            ...buildConnectionRequest(workspaceId, name, config),
-            updateMask,
-          } as MessageInitShape<typeof UpdateAuthConnectionRequestSchema>,
+          request: { workspaceId, connection: buildConnection(name, config), updateMask },
           metaRequest,
         });
       } else if (!owned) {
@@ -208,7 +204,7 @@ export async function planAuthConnections(
     } else {
       changeSet.creates.push({
         name,
-        request: buildConnectionRequest(workspaceId, name, config),
+        request: { workspaceId, connection: buildConnection(name, config) },
         metaRequest,
       });
     }
@@ -249,7 +245,8 @@ export async function applyAuthConnections(
   const { changeSet, stateScope } = result;
 
   if (phase === "create-update") {
-    if (changeSet.creates.length > 0 || changeSet.replaces.length > 0) {
+    const [configUpdates, labelUpdates] = partition(changeSet.updates, isConfigUpdate);
+    if (changeSet.creates.length > 0 || configUpdates.length > 0) {
       await withSecretsStateLock(stateScope, async () => {
         await Promise.all(
           changeSet.creates.map(async (create) => {
@@ -263,22 +260,22 @@ export async function applyAuthConnections(
           }),
         );
 
-        for (const replace of changeSet.replaces) {
-          const resp = await client.updateAuthConnection(replace.updateRequest);
+        for (const update of configUpdates) {
+          const resp = await client.updateAuthConnection(update.request);
           if (resp.connection?.status === AuthConnection_Status.UNAUTHORIZED) {
             logger.warn(
-              `Connection "${replace.name}" requires re-authorization. Authorize with:\n` +
-                `  tailor authconnection authorize --name ${replace.name}\n` +
+              `Connection "${update.name}" requires re-authorization. Authorize with:\n` +
+                `  tailor authconnection authorize --name ${update.name}\n` +
                 `Or via the Console: tailor authconnection open`,
             );
           }
-          await writeMetadataLabels(client, replace.metaRequest);
+          await writeMetadataLabels(client, update.metaRequest);
         }
 
-        const secretReplaces = changeSet.replaces.filter((replace) =>
-          replace.updateRequest.updateMask?.paths?.includes("oauth2.client_secret"),
+        const secretUpdates = configUpdates.filter((update) =>
+          update.request.updateMask?.paths?.includes("oauth2.client_secret"),
         );
-        if (changeSet.creates.length > 0 || secretReplaces.length > 0) {
+        if (changeSet.creates.length > 0 || secretUpdates.length > 0) {
           const state = loadSecretsState(stateScope);
           if (!state.connections) {
             state.connections = {};
@@ -289,10 +286,10 @@ export async function applyAuthConnections(
               state.connections[create.name] = hashValue(conn.config.value.clientSecret ?? "");
             }
           }
-          for (const replace of secretReplaces) {
-            const conn = replace.updateRequest.connection;
+          for (const update of secretUpdates) {
+            const conn = update.request.connection;
             if (conn?.config?.case === "oauth2") {
-              state.connections[replace.name] = hashValue(conn.config.value.clientSecret ?? "");
+              state.connections[update.name] = hashValue(conn.config.value.clientSecret ?? "");
             }
           }
           saveSecretsState(stateScope, state);
@@ -303,7 +300,7 @@ export async function applyAuthConnections(
     // Metadata-only updates: backfill the SDK ownership label on connections
     // whose configuration is otherwise unchanged.
     await Promise.all(
-      changeSet.updates.map(async (update) => {
+      labelUpdates.map(async (update) => {
         await writeMetadataLabels(client, update.metaRequest);
       }),
     );

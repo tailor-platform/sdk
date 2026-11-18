@@ -292,6 +292,10 @@ read them:
 - `MIGRATION_TEST_CLONE_UNAVAILABLE`: data cloning is not enabled on the Platform.
 - `MIGRATION_TEST_CLONE_FAILED`: cloning the source data failed.
 - `MIGRATION_TEST_CLONE_TIMEOUT`: cloning the source data did not finish within `--clone-timeout`.
+- `SEED_DATA_NOT_FOUND`: with `--data seed`, the seed plugin's `data` directory does not exist.
+- `SEED_DATA_INVALID`: with `--data seed`, the seed plugin's `data` path is not a directory, or a
+  line of a `data/*.jsonl` file that the test loads is not valid JSON or not a JSON object. For an
+  invalid line, `error.context.file` and `error.context.line` name it.
 - `MIGRATION_TEST_SEED_FAILED`: the seed script failed.
 - `MIGRATION_TEST_ASSERTION_FAILED`: the assertion script failed.
 - `MIGRATION_TEST_WORKSPACE_CLEANUP_FAILED`: the test passed, but deleting its temporary workspace

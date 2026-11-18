@@ -1,5 +1,34 @@
-import { fromJson, type MessageInitShape } from "@bufbuild/protobuf";
-import { ValueSchema } from "@bufbuild/protobuf/wkt";
+import { create, fromJson, type MessageInitShape } from "@bufbuild/protobuf";
+import { type Duration, DurationSchema, ValueSchema } from "@bufbuild/protobuf/wkt";
+import {
+  type CreateAuthHookRequestSchema,
+  type CreateAuthIDPConfigRequestSchema,
+  type CreateAuthMachineUserRequestSchema,
+  type CreateAuthOAuth2ClientRequestSchema,
+  type CreateAuthSCIMConfigRequestSchema,
+  type CreateAuthSCIMResourceRequestSchema,
+  type CreateAuthServiceRequestSchema,
+  type CreateTenantConfigRequestSchema,
+  type CreateUserProfileConfigRequestSchema,
+  type DeleteAuthHookRequestSchema,
+  type DeleteAuthIDPConfigRequestSchema,
+  type DeleteAuthMachineUserRequestSchema,
+  type DeleteAuthOAuth2ClientRequestSchema,
+  type DeleteAuthSCIMConfigRequestSchema,
+  type DeleteAuthSCIMResourceRequestSchema,
+  type DeleteAuthServiceRequestSchema,
+  type DeleteTenantConfigRequestSchema,
+  type DeleteUserProfileConfigRequestSchema,
+  UpdateAuthHookRequestSchema,
+  UpdateAuthIDPConfigRequestSchema,
+  UpdateAuthMachineUserRequestSchema,
+  UpdateAuthOAuth2ClientRequestSchema,
+  UpdateAuthSCIMConfigRequestSchema,
+  UpdateAuthSCIMResourceRequestSchema,
+  UpdateAuthServiceRequestSchema,
+  UpdateTenantConfigRequestSchema,
+  UpdateUserProfileConfigRequestSchema,
+} from "@tailor-platform/tailor-proto/auth_pb";
 import {
   AuthHookPoint,
   AuthIDPConfig_AuthType,
@@ -12,13 +41,13 @@ import {
   type AuthIDPConfig_ConfigSchema,
   TenantProviderConfig_TenantProviderType,
   UserProfileProviderConfig_UserProfileProviderType,
-  AuthIDPConfigSchema,
-  type AuthOAuth2ClientSchema,
+  type AuthIDPConfigSchema,
+  AuthOAuth2ClientSchema,
   type AuthSCIMAttributeSchema,
-  AuthSCIMConfigSchema,
-  AuthSCIMResourceSchema,
-  TenantProviderConfigSchema,
-  UserProfileProviderConfigSchema,
+  type AuthSCIMConfigSchema,
+  type AuthSCIMResourceSchema,
+  type TenantProviderConfigSchema,
+  type UserProfileProviderConfigSchema,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { type AuthService } from "#/cli/services/auth/service";
 import {
@@ -35,15 +64,14 @@ import {
 } from "#/cli/shared/client";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import {
+  DEFAULT_ACCESS_TOKEN_LIFETIME_SECONDS,
+  DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS,
+} from "#/parser/service/auth/index";
 import { assertDefined } from "#/utils/assert";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
-import {
-  areNormalizedEqual,
-  normalizeProtoConfig,
-  normalizeStringArray,
-  toComparableProtoJson,
-} from "./compare";
+import { defineRequestComparison, isRequestUnchanged } from "./compare";
 import { authHookFunctionName } from "./function-registry";
 import {
   formatChangeEntriesWithFunctionRegistry,
@@ -51,6 +79,7 @@ import {
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
+import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   buildMetaRequest,
   type MetadataLabelWrite,
@@ -70,35 +99,6 @@ import type {
   SCIMResource,
   TenantProvider as TenantProviderConfig,
 } from "#/types/auth.generated";
-import type {
-  CreateAuthHookRequestSchema,
-  CreateAuthIDPConfigRequestSchema,
-  CreateAuthMachineUserRequestSchema,
-  CreateAuthOAuth2ClientRequestSchema,
-  CreateAuthSCIMConfigRequestSchema,
-  CreateAuthSCIMResourceRequestSchema,
-  CreateAuthServiceRequestSchema,
-  CreateTenantConfigRequestSchema,
-  CreateUserProfileConfigRequestSchema,
-  DeleteAuthHookRequestSchema,
-  DeleteAuthIDPConfigRequestSchema,
-  DeleteAuthMachineUserRequestSchema,
-  DeleteAuthOAuth2ClientRequestSchema,
-  DeleteAuthSCIMConfigRequestSchema,
-  DeleteAuthSCIMResourceRequestSchema,
-  DeleteAuthServiceRequestSchema,
-  DeleteTenantConfigRequestSchema,
-  DeleteUserProfileConfigRequestSchema,
-  UpdateAuthHookRequestSchema,
-  UpdateAuthIDPConfigRequestSchema,
-  UpdateAuthMachineUserRequestSchema,
-  UpdateAuthOAuth2ClientRequestSchema,
-  UpdateAuthSCIMConfigRequestSchema,
-  UpdateAuthSCIMResourceRequestSchema,
-  UpdateAuthServiceRequestSchema,
-  UpdateTenantConfigRequestSchema,
-  UpdateUserProfileConfigRequestSchema,
-} from "@tailor-platform/tailor-proto/auth_pb";
 
 type AuthApplyPhase =
   | Exclude<ApplyPhase, "delete">
@@ -368,6 +368,12 @@ function assertAuthMachineUsersDefined(config: Readonly<AuthService>["config"]):
   });
 }
 
+/** An auth namespace whose child resources deploy plans; `auth` is undefined when its service is deleted. */
+type AuthNamespace = {
+  namespaceName: string;
+  auth: Readonly<AuthService> | undefined;
+};
+
 /**
  * Plan auth-related changes based on current and desired state.
  * @param context - Planning context
@@ -395,7 +401,10 @@ export async function planAuth(context: PlanContext) {
     auths,
     forceApplyAll,
   );
-  const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
+  const namespaces: AuthNamespace[] = [
+    ...auths.map((auth) => ({ namespaceName: auth.config.name, auth })),
+    ...serviceChangeSet.deletes.map((del) => ({ namespaceName: del.name, auth: undefined })),
+  ];
   const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
   const [
     idpConfigChangeSet,
@@ -408,21 +417,14 @@ export async function planAuth(context: PlanContext) {
     scimResourceChangeSet,
     connectionResult,
   ] = await Promise.all([
-    planIdPConfigs(client, workspaceId, auths, deletedServices, forceApplyAll),
-    planUserProfileConfigs(client, workspaceId, auths, deletedServices, forceApplyAll),
-    planTenantConfigs(client, workspaceId, auths, deletedServices, forceApplyAll),
-    planMachineUsers(client, workspaceId, auths, deletedServices, forceApplyAll),
-    planAuthHooks(client, workspaceId, auths, deletedServices, forceApplyAll),
-    planOAuth2Clients(
-      client,
-      workspaceId,
-      auths,
-      deletedServices,
-      expectedLocalWebsites,
-      forceApplyAll,
-    ),
-    planSCIMConfigs(client, workspaceId, auths, deletedServices, forceApplyAll),
-    planSCIMResources(client, workspaceId, auths, deletedServices, forceApplyAll),
+    planIdPConfigs(client, workspaceId, namespaces, forceApplyAll),
+    planUserProfileConfigs(client, workspaceId, namespaces, forceApplyAll),
+    planTenantConfigs(client, workspaceId, namespaces, forceApplyAll),
+    planMachineUsers(client, workspaceId, namespaces, forceApplyAll),
+    planAuthHooks(client, workspaceId, namespaces, forceApplyAll),
+    planOAuth2Clients(client, workspaceId, namespaces, expectedLocalWebsites, forceApplyAll),
+    planSCIMConfigs(client, workspaceId, namespaces, forceApplyAll),
+    planSCIMResources(client, workspaceId, namespaces, forceApplyAll),
     planAuthConnections(client, workspaceId, application.name, application.id, auths),
   ]);
   return {
@@ -463,6 +465,18 @@ type DeleteService = {
   request: MessageInitShape<typeof DeleteAuthServiceRequestSchema>;
 };
 
+type DesiredService = {
+  name: string;
+  request: MessageInitShape<typeof CreateAuthServiceRequestSchema> &
+    MessageInitShape<typeof UpdateAuthServiceRequestSchema>;
+  metaRequest: MetadataLabelWrite;
+};
+
+const authServiceComparison = defineRequestComparison({
+  schema: UpdateAuthServiceRequestSchema,
+  excluded: ["workspaceId", "namespaceName"],
+});
+
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
@@ -487,60 +501,40 @@ async function planServices(
     getName: (resource) => resource.namespace?.name,
     getTrn: (name) => resourceTrn(workspaceId, "auth", name),
   });
-  const existingServices = { ...fetchedServices };
 
-  for (const auth of auths) {
-    const { config } = auth;
-    const existing = existingServices[config.name];
-    const metaRequest = await buildMetaRequest({
-      trn: resourceTrn(workspaceId, "auth", config.name),
-      appName,
-      appId,
+  const desired: DesiredService[] = [];
+  for (const { config } of auths) {
+    desired.push({
+      name: config.name,
+      request: {
+        workspaceId,
+        namespaceName: config.name,
+        publishSessionEvents: config.publishSessionEvents,
+      },
+      metaRequest: await buildMetaRequest({
+        trn: resourceTrn(workspaceId, "auth", config.name),
+        appName,
+        appId,
+      }),
     });
-    const request = {
-      workspaceId,
-      namespaceName: config.name,
-      publishSessionEvents: config.publishSessionEvents,
-    };
-    if (existing) {
-      const owned = ownership.ownsDesired(existing.allLabels, {
-        resourceType: "auth.service",
-        resourceLabel: "Auth service",
-        resourceName: config.name,
-      });
-
-      const configUnchanged =
-        owned && existing.resource.publishSessionEvents === (config.publishSessionEvents ?? false);
-      if (!forceApplyAll && configUnchanged) {
-        changeSet.unchanged.push({ name: config.name });
-      } else {
-        changeSet.updates.push({
-          name: config.name,
-          request,
-          metaRequest,
-          ...(configUnchanged && { forcedBySdkVersion: true }),
-        });
-      }
-      delete existingServices[config.name];
-    } else {
-      changeSet.creates.push({
-        name: config.name,
-        request,
-        metaRequest,
-      });
-    }
   }
-  Object.entries(existingServices).forEach(([namespaceName]) => {
-    const entry = existingServices[namespaceName];
-    if (ownership.ownsRemaining(entry?.allLabels)) {
-      changeSet.deletes.push({
-        name: namespaceName,
-        request: {
-          workspaceId,
-          namespaceName,
-        },
-      });
-    }
+  await diffKeyed({
+    changeSet,
+    desired,
+    existing: Object.entries(fetchedServices),
+    keyOf: (service) => service.name,
+    ...labeledResourceChecks(ownership, (service: DesiredService) => ({
+      resourceType: "auth.service",
+      resourceLabel: "Auth service",
+      resourceName: service.name,
+    })),
+    versionMatches: () => !forceApplyAll,
+    isConfigUnchanged: (service, existing) =>
+      isRequestUnchanged(authServiceComparison, service.request, existing.resource),
+    create: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),
+    update: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),
+    unchanged: ({ name }) => ({ name }),
+    delete: (namespaceName) => ({ name: namespaceName, request: { workspaceId, namespaceName } }),
   });
 
   return { changeSet, ...ownership.result, existingServices: fetchedServices };
@@ -563,135 +557,77 @@ type DeleteIdPConfig = {
   request: MessageInitShape<typeof DeleteAuthIDPConfigRequestSchema>;
 };
 
+type DesiredIdPConfig = {
+  name: string;
+  idpConfig: Readonly<IdProviderConfig>;
+  request: MessageInitShape<typeof CreateAuthIDPConfigRequestSchema> &
+    MessageInitShape<typeof UpdateAuthIDPConfigRequestSchema>;
+};
+
+const idpConfigComparison = defineRequestComparison({
+  schema: UpdateAuthIDPConfigRequestSchema,
+  excluded: ["workspaceId", "namespaceName"],
+});
+
 async function planIdPConfigs(
   client: OperatorClient,
   workspaceId: string,
-  auths: ReadonlyArray<Readonly<AuthService>>,
-  deletedServices: ReadonlyArray<string>,
+  namespaces: ReadonlyArray<AuthNamespace>,
   forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateIdPConfig, UpdateIdPConfig, DeleteIdPConfig>(
     "Auth idpConfigs",
   );
 
-  for (const authService of auths) {
-    const { config } = authService;
-    const existingIdPConfigs = await listAuthIDPConfigsTolerant(client, workspaceId, config.name);
-    const existingMap = new Map<string, (typeof existingIdPConfigs)[number]>();
-    existingIdPConfigs.forEach((idpConfig) => {
-      existingMap.set(idpConfig.name, idpConfig);
-    });
-    const idpConfig = config.idProvider;
-    if (idpConfig) {
-      const desired = protoIdPConfig(idpConfig);
-      const existing = existingMap.get(idpConfig.name);
-      if (existing) {
-        const desiredComparable = await protoIdPConfigForComparison(
-          client,
-          workspaceId,
-          idpConfig,
-          desired,
-        );
-        if (!desiredComparable) {
-          changeSet.updates.push({
-            name: idpConfig.name,
-            idpConfig,
-            request: {
-              workspaceId,
-              namespaceName: config.name,
-              idpConfig: desired,
-            },
-          });
-          existingMap.delete(idpConfig.name);
-          continue;
-        }
-        const configUnchanged = areAuthIdPConfigsEqual(existing, desiredComparable);
-        if (!forceApplyAll && configUnchanged) {
-          changeSet.unchanged.push({ name: idpConfig.name });
-        } else {
-          changeSet.updates.push({
-            name: idpConfig.name,
-            idpConfig,
-            request: {
-              workspaceId,
-              namespaceName: config.name,
-              idpConfig: desired,
-            },
-            ...(configUnchanged && { forcedBySdkVersion: true }),
-          });
-        }
-        existingMap.delete(idpConfig.name);
-      } else {
-        changeSet.creates.push({
-          name: idpConfig.name,
-          idpConfig,
-          request: {
-            workspaceId,
-            namespaceName: config.name,
-            idpConfig: desired,
-          },
-        });
-      }
-    }
-    existingMap.forEach((_, name) => {
-      changeSet.deletes.push({
-        name,
-        request: {
-          workspaceId,
-          namespaceName: config.name,
-          name,
-        },
-      });
-    });
-  }
-
-  for (const namespaceName of deletedServices) {
+  for (const { namespaceName, auth } of namespaces) {
     const existingIdPConfigs = await listAuthIDPConfigsTolerant(client, workspaceId, namespaceName);
-    existingIdPConfigs.forEach((idpConfig) => {
-      changeSet.deletes.push({
-        name: idpConfig.name,
-        request: {
-          workspaceId,
-          namespaceName,
-          name: idpConfig.name,
-        },
-      });
+    const idpConfig = auth?.config.idProvider;
+    const desired: DesiredIdPConfig[] = idpConfig
+      ? [
+          {
+            name: idpConfig.name,
+            idpConfig,
+            request: { workspaceId, namespaceName, idpConfig: protoIdPConfig(idpConfig) },
+          },
+        ]
+      : [];
+    await diffKeyed({
+      changeSet,
+      desired,
+      existing: existingIdPConfigs.map((existing) => [existing.name, existing] as const),
+      keyOf: (desired) => desired.name,
+      versionMatches: () => !forceApplyAll,
+      isConfigUnchanged: async (desired, existing) => {
+        const comparable = await comparableIdPConfigRequest(client, workspaceId, desired);
+        return (
+          comparable !== undefined &&
+          isRequestUnchanged(idpConfigComparison, comparable, { idpConfig: existing })
+        );
+      },
+      create: ({ name, idpConfig, request }) => ({ name, idpConfig, request }),
+      update: ({ name, idpConfig, request }) => ({ name, idpConfig, request }),
+      unchanged: ({ name }) => ({ name }),
+      delete: (name) => ({ name, request: { workspaceId, namespaceName, name } }),
     });
   }
   return changeSet;
 }
 
-async function protoIdPConfigForComparison(
+async function comparableIdPConfigRequest(
   client: OperatorClient,
   workspaceId: string,
-  idpConfig: Readonly<IdProviderConfig>,
-  desired: MessageInitShape<typeof AuthIDPConfigSchema>,
-): Promise<MessageInitShape<typeof AuthIDPConfigSchema> | undefined> {
+  desired: DesiredIdPConfig,
+): Promise<MessageInitShape<typeof UpdateAuthIDPConfigRequestSchema> | undefined> {
+  const { idpConfig, request } = desired;
   if (idpConfig.kind !== "BuiltInIdP") {
-    return desired;
+    return request;
   }
-
   const config = await tryProtoBuiltinIdPConfig(client, workspaceId, idpConfig);
-  return config
-    ? {
-        name: desired.name,
-        authType: desired.authType,
-        config,
-      }
-    : undefined;
-}
-
-function normalizeComparableAuthIdPConfig(idpConfig: MessageInitShape<typeof AuthIDPConfigSchema>) {
-  return toComparableProtoJson(AuthIDPConfigSchema, idpConfig);
-}
-
-function areAuthIdPConfigsEqual(
-  existing: MessageInitShape<typeof AuthIDPConfigSchema>,
-  desired: MessageInitShape<typeof AuthIDPConfigSchema>,
-) {
-  return areNormalizedEqual(
-    normalizeComparableAuthIdPConfig(existing),
-    normalizeComparableAuthIdPConfig(desired),
+  return (
+    config && {
+      ...request,
+      idpConfig: { name: request.idpConfig?.name, authType: request.idpConfig?.authType, config },
+    }
   );
 }
 
@@ -854,11 +790,21 @@ export function authUserProfileConfigName(namespaceName: string): string {
   return `${namespaceName}-user-profile-config`;
 }
 
+const userProfileConfigComparison = defineRequestComparison({
+  schema: UpdateUserProfileConfigRequestSchema,
+  excluded: ["workspaceId", "namespaceName"],
+  normalize: ({ userProfileProviderConfig }) => {
+    const config = userProfileProviderConfig?.config?.config;
+    if (config?.case === "tailordb") {
+      config.value.attributesFields.sort();
+    }
+  },
+});
+
 async function planUserProfileConfigs(
   client: OperatorClient,
   workspaceId: string,
-  auths: ReadonlyArray<Readonly<AuthService>>,
-  deletedServices: ReadonlyArray<string>,
+  namespaces: ReadonlyArray<AuthNamespace>,
   forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<
@@ -867,62 +813,32 @@ async function planUserProfileConfigs(
     DeleteUserProfileConfig
   >("Auth userProfileConfigs");
 
-  for (const auth of auths) {
-    const { config } = auth;
-    const name = authUserProfileConfigName(config.name);
-    const existing = await getUserProfileConfigOrNull(client, workspaceId, config.name);
-    if (!existing) {
-      const userProfileForUpdate = auth.userProfile;
-      if (userProfileForUpdate) {
-        changeSet.creates.push({
-          name,
-          request: {
-            workspaceId,
-            namespaceName: config.name,
-            userProfileProviderConfig: protoUserProfileConfig(userProfileForUpdate),
-          },
-        });
-      }
-      continue;
-    }
-
-    const userProfileForUpdate = auth.userProfile;
-    if (userProfileForUpdate) {
-      const desired = protoUserProfileConfig(userProfileForUpdate);
-      const configUnchanged = areUserProfileConfigsEqual(existing, desired);
-      if (!forceApplyAll && configUnchanged) {
-        changeSet.unchanged.push({ name });
-      } else {
-        changeSet.updates.push({
-          name,
-          request: {
-            workspaceId,
-            namespaceName: config.name,
-            userProfileProviderConfig: desired,
-          },
-          ...(configUnchanged && { forcedBySdkVersion: true }),
-        });
-      }
-    } else {
-      changeSet.deletes.push({
-        name,
-        request: {
-          workspaceId,
-          namespaceName: config.name,
-        },
-      });
-    }
-  }
-
-  for (const namespaceName of deletedServices) {
+  for (const { namespaceName, auth } of namespaces) {
+    const name = authUserProfileConfigName(namespaceName);
     const existing = await getUserProfileConfigOrNull(client, workspaceId, namespaceName);
-    if (!existing) continue;
-    changeSet.deletes.push({
-      name: authUserProfileConfigName(namespaceName),
-      request: {
-        workspaceId,
-        namespaceName,
-      },
+    const userProfile = auth?.userProfile;
+    await diffKeyed({
+      changeSet,
+      desired: userProfile
+        ? [
+            {
+              workspaceId,
+              namespaceName,
+              userProfileProviderConfig: protoUserProfileConfig(userProfile),
+            },
+          ]
+        : [],
+      existing: [[name, existing] as const],
+      keyOf: () => name,
+      versionMatches: () => !forceApplyAll,
+      isConfigUnchanged: (request, existing) =>
+        isRequestUnchanged(userProfileConfigComparison, request, {
+          userProfileProviderConfig: existing,
+        }),
+      create: (request) => ({ name, request }),
+      update: (request) => ({ name, request }),
+      unchanged: () => ({ name }),
+      delete: () => ({ name, request: { workspaceId, namespaceName } }),
     });
   }
   return changeSet;
@@ -978,71 +894,39 @@ export function authTenantConfigName(namespaceName: string): string {
   return `${namespaceName}-tenant-config`;
 }
 
+const tenantConfigComparison = defineRequestComparison({
+  schema: UpdateTenantConfigRequestSchema,
+  excluded: ["workspaceId", "namespaceName"],
+});
+
 async function planTenantConfigs(
   client: OperatorClient,
   workspaceId: string,
-  auths: ReadonlyArray<Readonly<AuthService>>,
-  deletedServices: ReadonlyArray<string>,
+  namespaces: ReadonlyArray<AuthNamespace>,
   forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateTenantConfig, UpdateTenantConfig, DeleteTenantConfig>(
     "Auth tenantConfigs",
   );
 
-  for (const auth of auths) {
-    const { config } = auth;
-    const name = authTenantConfigName(config.name);
-    const existing = await getTenantConfigOrNull(client, workspaceId, config.name);
-    if (!existing) {
-      if (config.tenantProvider) {
-        changeSet.creates.push({
-          name,
-          request: {
-            workspaceId,
-            namespaceName: config.name,
-            tenantProviderConfig: protoTenantConfig(config.tenantProvider),
-          },
-        });
-      }
-      continue;
-    }
-
-    if (config.tenantProvider) {
-      const desired = protoTenantConfig(config.tenantProvider);
-      const configUnchanged = areTenantProviderConfigsEqual(existing, desired);
-      if (!forceApplyAll && configUnchanged) {
-        changeSet.unchanged.push({ name });
-      } else {
-        changeSet.updates.push({
-          name,
-          request: {
-            workspaceId,
-            namespaceName: config.name,
-            tenantProviderConfig: desired,
-          },
-          ...(configUnchanged && { forcedBySdkVersion: true }),
-        });
-      }
-    } else {
-      changeSet.deletes.push({
-        name,
-        request: {
-          workspaceId,
-          namespaceName: config.name,
-        },
-      });
-    }
-  }
-
-  for (const namespaceName of deletedServices) {
+  for (const { namespaceName, auth } of namespaces) {
+    const name = authTenantConfigName(namespaceName);
     const existing = await getTenantConfigOrNull(client, workspaceId, namespaceName);
-    if (!existing) continue;
-    changeSet.deletes.push({
-      name: authTenantConfigName(namespaceName),
-      request: {
-        workspaceId,
-        namespaceName,
-      },
+    const tenantProvider = auth?.config.tenantProvider;
+    await diffKeyed({
+      changeSet,
+      desired: tenantProvider
+        ? [{ workspaceId, namespaceName, tenantProviderConfig: protoTenantConfig(tenantProvider) }]
+        : [],
+      existing: [[name, existing] as const],
+      keyOf: () => name,
+      versionMatches: () => !forceApplyAll,
+      isConfigUnchanged: (request, existing) =>
+        isRequestUnchanged(tenantConfigComparison, request, { tenantProviderConfig: existing }),
+      create: (request) => ({ name, request }),
+      update: (request) => ({ name, request }),
+      unchanged: () => ({ name }),
+      delete: () => ({ name, request: { workspaceId, namespaceName } }),
     });
   }
   return changeSet;
@@ -1082,100 +966,68 @@ type DeleteMachineUser = {
   request: MessageInitShape<typeof DeleteAuthMachineUserRequestSchema>;
 };
 
+type DesiredMachineUser = {
+  name: string;
+  request: MessageInitShape<typeof CreateAuthMachineUserRequestSchema> &
+    MessageInitShape<typeof UpdateAuthMachineUserRequestSchema>;
+};
+
+const machineUserComparison = defineRequestComparison({
+  schema: UpdateAuthMachineUserRequestSchema,
+  excluded: ["workspaceId", "authNamespace"],
+  normalize: (request) => {
+    request.attributes.sort();
+  },
+});
+
 async function planMachineUsers(
   client: OperatorClient,
   workspaceId: string,
-  auths: ReadonlyArray<Readonly<AuthService>>,
-  deletedServices: ReadonlyArray<string>,
+  namespaces: ReadonlyArray<AuthNamespace>,
   forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateMachineUser, UpdateMachineUser, DeleteMachineUser>(
     "Auth machineUsers",
   );
 
-  for (const auth of auths) {
-    const { config } = auth;
-    const existingMachineUsers = await listAuthMachineUsersTolerant(
-      client,
-      workspaceId,
-      config.name,
-    );
-    const existingMap = new Map<string, (typeof existingMachineUsers)[number]>();
-    existingMachineUsers.forEach((machineUser) => {
-      existingMap.set(machineUser.name, machineUser);
-      logger.registerSecret(machineUser.clientSecret);
-    });
-    for (const machineUsername of Object.keys(config.machineUsers ?? {})) {
-      const machineUser = config.machineUsers?.[machineUsername];
-      if (!machineUser) {
-        continue;
-      }
-      const desiredMachineUser = {
-        attributes: machineUser.attributeList,
-        attributeMap: machineUser.attributes
-          ? protoMachineUserAttributeMap(machineUser.attributes)
-          : undefined,
-      };
-      const existing = existingMap.get(machineUsername);
-      if (existing) {
-        const configUnchanged = areMachineUsersEqual(existing, desiredMachineUser);
-        if (!forceApplyAll && configUnchanged) {
-          changeSet.unchanged.push({ name: machineUsername });
-        } else {
-          changeSet.updates.push({
-            name: machineUsername,
-            request: {
-              workspaceId,
-              authNamespace: config.name,
-              name: machineUsername,
-              attributes: machineUser.attributeList,
-              attributeMap: desiredMachineUser.attributeMap,
-            },
-            ...(configUnchanged && { forcedBySdkVersion: true }),
-          });
-        }
-        existingMap.delete(machineUsername);
-      } else {
-        changeSet.creates.push({
-          name: machineUsername,
-          request: {
-            workspaceId,
-            authNamespace: config.name,
-            name: machineUsername,
-            attributes: machineUser.attributeList,
-            attributeMap: desiredMachineUser.attributeMap,
-          },
-        });
-      }
-    }
-    existingMap.forEach((_, name) => {
-      changeSet.deletes.push({
-        name,
-        request: {
-          workspaceId,
-          authNamespace: config.name,
-          name,
-        },
-      });
-    });
-  }
-
-  for (const namespaceName of deletedServices) {
+  for (const { namespaceName, auth } of namespaces) {
     const existingMachineUsers = await listAuthMachineUsersTolerant(
       client,
       workspaceId,
       namespaceName,
     );
-    existingMachineUsers.forEach((machineUser) => {
-      logger.registerSecret(machineUser.clientSecret);
-      changeSet.deletes.push({
-        name: machineUser.name,
+    const desired: DesiredMachineUser[] = [];
+    const machineUsers = auth?.config.machineUsers ?? {};
+    for (const name of Object.keys(machineUsers)) {
+      const machineUser = machineUsers[name];
+      if (!machineUser) {
+        continue;
+      }
+      desired.push({
+        name,
         request: {
           workspaceId,
           authNamespace: namespaceName,
-          name: machineUser.name,
+          name,
+          attributes: machineUser.attributeList,
+          attributeMap: machineUser.attributes
+            ? protoMachineUserAttributeMap(machineUser.attributes)
+            : undefined,
         },
       });
+    }
+    await diffKeyed({
+      changeSet,
+      desired,
+      existing: existingMachineUsers.map((existing) => [existing.name, existing] as const),
+      keyOf: (machineUser) => machineUser.name,
+      versionMatches: () => !forceApplyAll,
+      isConfigUnchanged: (machineUser, existing) =>
+        isRequestUnchanged(machineUserComparison, machineUser.request, existing),
+      create: ({ name, request }) => ({ name, request }),
+      update: ({ name, request }) => ({ name, request }),
+      unchanged: ({ name }) => ({ name }),
+      delete: (name) => ({ name, request: { workspaceId, authNamespace: namespaceName, name } }),
     });
   }
   return changeSet;
@@ -1189,160 +1041,6 @@ function protoMachineUserAttributeMap(
     ret[key] = fromJson(ValueSchema, value ?? null);
   }
   return ret;
-}
-
-function normalizeComparableUserProfileConfig(
-  config: MessageInitShape<typeof UserProfileProviderConfigSchema>,
-) {
-  const comparableConfig = config.config?.config;
-  const tailorDBConfig = comparableConfig?.case === "tailordb" ? comparableConfig.value : undefined;
-
-  return toComparableProtoJson(UserProfileProviderConfigSchema, {
-    providerType: config.providerType,
-    config: tailorDBConfig
-      ? {
-          config: {
-            case: "tailordb",
-            value: {
-              ...tailorDBConfig,
-              tenantIdField: tailorDBConfig.tenantIdField || "",
-              attributesFields: normalizeStringArray(tailorDBConfig.attributesFields),
-              attributeMap: normalizeProtoConfig(tailorDBConfig.attributeMap ?? {}),
-            },
-          },
-        }
-      : undefined,
-  });
-}
-
-function areUserProfileConfigsEqual(
-  existing: MessageInitShape<typeof UserProfileProviderConfigSchema>,
-  desired: MessageInitShape<typeof UserProfileProviderConfigSchema>,
-) {
-  return areNormalizedEqual(
-    normalizeComparableUserProfileConfig(existing),
-    normalizeComparableUserProfileConfig(desired),
-  );
-}
-
-function normalizeComparableTenantProviderConfig(
-  config: MessageInitShape<typeof TenantProviderConfigSchema> | undefined,
-) {
-  return toComparableProtoJson(TenantProviderConfigSchema, config ?? {});
-}
-
-function areTenantProviderConfigsEqual(
-  existing: MessageInitShape<typeof TenantProviderConfigSchema> | undefined,
-  desired: MessageInitShape<typeof TenantProviderConfigSchema>,
-) {
-  return areNormalizedEqual(
-    normalizeComparableTenantProviderConfig(existing),
-    normalizeComparableTenantProviderConfig(desired),
-  );
-}
-
-function normalizeComparableMachineUser(input: {
-  attributes?: readonly string[];
-  attributeMap?: Record<string, MessageInitShape<typeof ValueSchema>>;
-}) {
-  return normalizeProtoConfig({
-    attributes: normalizeStringArray(input.attributes),
-    attributeMap: normalizeProtoConfig(input.attributeMap ?? {}),
-  });
-}
-
-function areMachineUsersEqual(
-  existing: {
-    attributes?: readonly string[];
-    attributeMap?: Record<string, MessageInitShape<typeof ValueSchema>>;
-  },
-  desired: {
-    attributes?: readonly string[];
-    attributeMap?: Record<string, MessageInitShape<typeof ValueSchema>>;
-  },
-) {
-  return areNormalizedEqual(
-    normalizeComparableMachineUser(existing),
-    normalizeComparableMachineUser(desired),
-  );
-}
-
-function normalizeComparableOAuth2Client(
-  client:
-    | MessageInitShape<typeof AuthOAuth2ClientSchema>
-    | {
-        name?: string;
-        description?: string;
-        grantTypes?: readonly AuthOAuth2Client_GrantType[];
-        redirectUris?: readonly string[];
-        clientType?: AuthOAuth2Client_ClientType;
-        accessTokenLifetime?: number;
-        refreshTokenLifetime?: number;
-        requireDpop?: boolean;
-      },
-) {
-  const accessTokenLifetime = oauth2LifetimeToSeconds(client.accessTokenLifetime);
-  const refreshTokenLifetime = oauth2LifetimeToSeconds(client.refreshTokenLifetime);
-
-  return normalizeProtoConfig({
-    ...client,
-    // Platform returns an empty string for an unset description; treat it the same as omitted.
-    description: client.description || undefined,
-    redirectUris: normalizeStringArray(client.redirectUris),
-    grantTypes: (client.grantTypes ?? []).toSorted((left, right) => left - right),
-    accessTokenLifetime: accessTokenLifetime ?? 86400,
-    refreshTokenLifetime: refreshTokenLifetime ?? 604800,
-    requireDpop: client.requireDpop ?? false,
-  });
-}
-
-function oauth2LifetimeToSeconds(
-  lifetime:
-    | number
-    | {
-        seconds?: bigint;
-      }
-    | undefined,
-) {
-  if (typeof lifetime === "number") {
-    return lifetime;
-  }
-
-  if (lifetime?.seconds != null) {
-    return Number(lifetime.seconds);
-  }
-
-  return undefined;
-}
-
-function areOAuth2ClientsEqual(
-  existing: {
-    name: string;
-    description?: string;
-    grantTypes?: readonly AuthOAuth2Client_GrantType[];
-    redirectUris?: readonly string[];
-    clientType?: AuthOAuth2Client_ClientType;
-    accessTokenLifetime?: number;
-    refreshTokenLifetime?: number;
-    requireDpop?: boolean;
-  },
-  desired:
-    | MessageInitShape<typeof AuthOAuth2ClientSchema>
-    | {
-        name?: string;
-        description?: string;
-        grantTypes?: readonly AuthOAuth2Client_GrantType[];
-        redirectUris?: readonly string[];
-        clientType?: AuthOAuth2Client_ClientType;
-        accessTokenLifetime?: number;
-        refreshTokenLifetime?: number;
-        requireDpop?: boolean;
-      },
-) {
-  return areNormalizedEqual(
-    normalizeComparableOAuth2Client(existing),
-    normalizeComparableOAuth2Client(desired),
-  );
 }
 
 type CreateOAuth2Clients = {
@@ -1366,11 +1064,49 @@ type ReplaceOAuth2Client = {
   createRequest: MessageInitShape<typeof CreateAuthOAuth2ClientRequestSchema>;
 };
 
+type DesiredOAuth2Client = {
+  name: string;
+  request: MessageInitShape<typeof CreateAuthOAuth2ClientRequestSchema> &
+    MessageInitShape<typeof UpdateAuthOAuth2ClientRequestSchema>;
+  /** The request with its `:url` redirect URIs resolved as the plan resolves them. */
+  comparableRequest: MessageInitShape<typeof UpdateAuthOAuth2ClientRequestSchema>;
+};
+
+const oauth2ClientComparison = defineRequestComparison({
+  schema: UpdateAuthOAuth2ClientRequestSchema,
+  excluded: ["workspaceId", "namespaceName"],
+  normalize: ({ oauth2Client }) => {
+    if (!oauth2Client) return;
+    // The platform generates the credentials and the creation time.
+    oauth2Client.clientId = "";
+    oauth2Client.clientSecret = "";
+    oauth2Client.createdAt = undefined;
+    oauth2Client.grantTypes.sort((left, right) => left - right);
+    oauth2Client.redirectUris.sort();
+    // The platform stores whole seconds, and the parser's defaults for an omitted lifetime.
+    oauth2Client.accessTokenLifetime = wholeSecondsLifetime(
+      oauth2Client.accessTokenLifetime ??
+        create(DurationSchema, { seconds: BigInt(DEFAULT_ACCESS_TOKEN_LIFETIME_SECONDS) }),
+    );
+    oauth2Client.refreshTokenLifetime = wholeSecondsLifetime(
+      oauth2Client.refreshTokenLifetime ??
+        create(DurationSchema, { seconds: BigInt(DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS) }),
+    );
+    // The platform returns no idle lifetime for a client that has none.
+    oauth2Client.refreshTokenIdleLifetime =
+      oauth2Client.refreshTokenIdleLifetime &&
+      wholeSecondsLifetime(oauth2Client.refreshTokenIdleLifetime);
+  },
+});
+
+function wholeSecondsLifetime(lifetime: Duration): Duration {
+  return create(DurationSchema, { seconds: lifetime.seconds });
+}
+
 async function planOAuth2Clients(
   client: OperatorClient,
   workspaceId: string,
-  auths: ReadonlyArray<Readonly<AuthService>>,
-  deletedServices: ReadonlyArray<string>,
+  namespaces: ReadonlyArray<AuthNamespace>,
   expectedLocalWebsites: ReadonlySet<string>,
   forceApplyAll = false,
 ) {
@@ -1393,115 +1129,56 @@ async function planOAuth2Clients(
     });
   };
 
-  for (const auth of auths) {
-    const { config } = auth;
-    const existingOAuth2Clients = await fetchOAuth2Clients(config.name);
-    const existingClientsMap = new Map<string, (typeof existingOAuth2Clients)[number]>();
-    existingOAuth2Clients.forEach((oauth2Client) => {
-      existingClientsMap.set(oauth2Client.name, oauth2Client);
-      logger.registerSecret(oauth2Client.clientSecret);
-    });
-    for (const oauth2ClientName of Object.keys(config.oauth2Clients ?? {})) {
-      const oauth2Client = config.oauth2Clients?.[oauth2ClientName];
-      if (!oauth2Client) {
+  for (const { namespaceName, auth } of namespaces) {
+    const existingOAuth2Clients = await fetchOAuth2Clients(namespaceName);
+    const desired: DesiredOAuth2Client[] = [];
+    const oauth2Clients = auth?.config.oauth2Clients ?? {};
+    for (const name of Object.keys(oauth2Clients)) {
+      const config = oauth2Clients[name];
+      if (!config) {
         continue;
       }
-      const newOAuth2Client = protoOAuth2Client(oauth2ClientName, oauth2Client);
-      const resolvedRedirectUris = await resolveStaticWebsiteUrls(
+      const oauth2Client = protoOAuth2Client(name, config);
+      const redirectUris = await resolveStaticWebsiteUrls(
         client,
         workspaceId,
-        newOAuth2Client.redirectUris ?? [],
+        oauth2Client.redirectUris ?? [],
         "OAuth2 redirect URIs",
         { expectedLocalNames: expectedLocalWebsites },
       );
-      if (existingClientsMap.has(oauth2ClientName)) {
-        const existingClient = assertDefined(
-          existingClientsMap.get(oauth2ClientName),
-          "existingClientsMap missing entry for oauth2ClientName",
-        );
-        if (existingClient.clientType !== newOAuth2Client.clientType) {
-          // Client type changed: need to replace (delete then create)
-          changeSet.replaces.push({
-            name: oauth2ClientName,
-            deleteRequest: {
-              workspaceId,
-              namespaceName: config.name,
-              name: oauth2ClientName,
-            },
-            createRequest: {
-              workspaceId,
-              namespaceName: config.name,
-              oauth2Client: newOAuth2Client,
-            },
-          });
-        } else {
-          const desiredComparable = {
-            ...newOAuth2Client,
-            redirectUris: resolvedRedirectUris,
-            accessTokenLifetime: oauth2LifetimeToSeconds(newOAuth2Client.accessTokenLifetime),
-            refreshTokenLifetime: oauth2LifetimeToSeconds(newOAuth2Client.refreshTokenLifetime),
-          };
-          const existingComparable = {
-            name: existingClient.name,
-            description: existingClient.description,
-            grantTypes: existingClient.grantTypes,
-            redirectUris: existingClient.redirectUris,
-            clientType: existingClient.clientType,
-            accessTokenLifetime: oauth2LifetimeToSeconds(existingClient.accessTokenLifetime),
-            refreshTokenLifetime: oauth2LifetimeToSeconds(existingClient.refreshTokenLifetime),
-            requireDpop: existingClient.requireDpop,
-          };
-          const configUnchanged = areOAuth2ClientsEqual(existingComparable, desiredComparable);
-          if (!forceApplyAll && configUnchanged) {
-            changeSet.unchanged.push({ name: oauth2ClientName });
-          } else {
-            changeSet.updates.push({
-              name: oauth2ClientName,
-              request: {
-                workspaceId,
-                namespaceName: config.name,
-                oauth2Client: newOAuth2Client,
-              },
-              ...(configUnchanged && { forcedBySdkVersion: true }),
-            });
-          }
-        }
-        existingClientsMap.delete(oauth2ClientName);
-      } else {
-        changeSet.creates.push({
-          name: oauth2ClientName,
-          request: {
-            workspaceId,
-            namespaceName: config.name,
-            oauth2Client: newOAuth2Client,
-          },
-        });
-      }
-    }
-    existingClientsMap.forEach((_, name) => {
-      changeSet.deletes.push({
+      const request = { workspaceId, namespaceName, oauth2Client };
+      desired.push({
         name,
-        request: {
-          workspaceId,
-          namespaceName: config.name,
-          name,
-        },
+        request,
+        comparableRequest: { ...request, oauth2Client: { ...oauth2Client, redirectUris } },
       });
-    });
-  }
-
-  for (const namespaceName of deletedServices) {
-    const existingOAuth2Clients = await fetchOAuth2Clients(namespaceName);
-    existingOAuth2Clients.forEach((oauth2Client) => {
-      logger.registerSecret(oauth2Client.clientSecret);
-      changeSet.deletes.push({
-        name: oauth2Client.name,
-        request: {
-          workspaceId,
-          namespaceName,
-          name: oauth2Client.name,
-        },
-      });
+    }
+    await diffKeyed({
+      changeSet,
+      desired,
+      existing: existingOAuth2Clients.map((existing) => [existing.name, existing] as const),
+      keyOf: (oauth2Client) => oauth2Client.name,
+      versionMatches: () => !forceApplyAll,
+      // A client type change is applied by deleting and recreating the client.
+      replace: ({ name, request }, existing) =>
+        existing.clientType === request.oauth2Client?.clientType
+          ? undefined
+          : {
+              name,
+              deleteRequest: { workspaceId, namespaceName, name },
+              createRequest: request,
+            },
+      isConfigUnchanged: ({ comparableRequest }, existing) => {
+        // The listing omits only the client secret, which the comparison clears anyway.
+        const { $typeName: _summary, ...listed } = existing;
+        return isRequestUnchanged(oauth2ClientComparison, comparableRequest, {
+          oauth2Client: create(AuthOAuth2ClientSchema, listed),
+        });
+      },
+      create: ({ name, request }) => ({ name, request }),
+      update: ({ name, request }) => ({ name, request }),
+      unchanged: ({ name }) => ({ name }),
+      delete: (name) => ({ name, request: { workspaceId, namespaceName, name } }),
     });
   }
 
@@ -1539,6 +1216,7 @@ function protoOAuth2Client(
     )[oauth2Client.clientType ?? "confidential"],
     accessTokenLifetime: oauth2Client.accessTokenLifetimeSeconds,
     refreshTokenLifetime: oauth2Client.refreshTokenLifetimeSeconds,
+    refreshTokenIdleLifetime: oauth2Client.refreshTokenIdleLifetimeSeconds,
     requireDpop: oauth2Client.requireDpop,
   };
 }
@@ -1567,81 +1245,40 @@ export function authSCIMConfigName(namespaceName: string): string {
   return `${namespaceName}-scim-config`;
 }
 
+const scimConfigComparison = defineRequestComparison({
+  schema: UpdateAuthSCIMConfigRequestSchema,
+  excluded: ["workspaceId", "namespaceName"],
+});
+
 async function planSCIMConfigs(
   client: OperatorClient,
   workspaceId: string,
-  auths: ReadonlyArray<Readonly<AuthService>>,
-  deletedServices: ReadonlyArray<string>,
+  namespaces: ReadonlyArray<AuthNamespace>,
   forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateSCIMConfig, UpdateSCIMConfig, DeleteSCIMConfig>(
     "Auth scimConfigs",
   );
 
-  for (const auth of auths) {
-    const { config } = auth;
-    const name = authSCIMConfigName(config.name);
-    const existing = await getAuthSCIMConfigOrNull(client, workspaceId, config.name);
-    if (!existing) {
-      if (config.scim) {
-        changeSet.creates.push({
-          name,
-          request: {
-            workspaceId,
-            namespaceName: config.name,
-            scimConfig: protoSCIMConfig(config.scim),
-          },
-        });
-      }
-    } else if (config.scim) {
-      const desired = protoSCIMConfig(config.scim);
-      const configUnchanged = areSCIMConfigsEqual(existing, desired);
-      if (!forceApplyAll && configUnchanged) {
-        changeSet.unchanged.push({ name });
-      } else {
-        changeSet.updates.push({
-          name,
-          request: {
-            workspaceId,
-            namespaceName: config.name,
-            scimConfig: desired,
-          },
-          ...(configUnchanged && { forcedBySdkVersion: true }),
-        });
-      }
-    } else {
-      changeSet.deletes.push({
-        name,
-        request: {
-          workspaceId,
-          namespaceName: config.name,
-        },
-      });
-    }
-  }
-
-  for (const namespaceName of deletedServices) {
+  for (const { namespaceName, auth } of namespaces) {
+    const name = authSCIMConfigName(namespaceName);
     const existing = await getAuthSCIMConfigOrNull(client, workspaceId, namespaceName);
-    if (!existing) continue;
-    changeSet.deletes.push({
-      name: authSCIMConfigName(namespaceName),
-      request: {
-        workspaceId,
-        namespaceName,
-      },
+    const scim = auth?.config.scim;
+    await diffKeyed({
+      changeSet,
+      desired: scim ? [{ workspaceId, namespaceName, scimConfig: protoSCIMConfig(scim) }] : [],
+      existing: [[name, existing] as const],
+      keyOf: () => name,
+      versionMatches: () => !forceApplyAll,
+      isConfigUnchanged: (request, existing) =>
+        isRequestUnchanged(scimConfigComparison, request, { scimConfig: existing }),
+      create: (request) => ({ name, request }),
+      update: (request) => ({ name, request }),
+      unchanged: () => ({ name }),
+      delete: () => ({ name, request: { workspaceId, namespaceName } }),
     });
   }
   return changeSet;
-}
-
-function areSCIMConfigsEqual(
-  existing: MessageInitShape<typeof AuthSCIMConfigSchema>,
-  desired: MessageInitShape<typeof AuthSCIMConfigSchema>,
-) {
-  return areNormalizedEqual(
-    toComparableProtoJson(AuthSCIMConfigSchema, existing),
-    toComparableProtoJson(AuthSCIMConfigSchema, desired),
-  );
 }
 
 function protoSCIMConfig(scimConfig: SCIMConfig): MessageInitShape<typeof AuthSCIMConfigSchema> {
@@ -1681,97 +1318,45 @@ type DeleteSCIMResource = {
   request: MessageInitShape<typeof DeleteAuthSCIMResourceRequestSchema>;
 };
 
+const scimResourceComparison = defineRequestComparison({
+  schema: UpdateAuthSCIMResourceRequestSchema,
+  excluded: ["workspaceId", "namespaceName"],
+});
+
 async function planSCIMResources(
   client: OperatorClient,
   workspaceId: string,
-  auths: ReadonlyArray<Readonly<AuthService>>,
-  deletedServices: ReadonlyArray<string>,
+  namespaces: ReadonlyArray<AuthNamespace>,
   forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateSCIMResource, UpdateSCIMResource, DeleteSCIMResource>(
     "Auth scimResources",
   );
 
-  for (const auth of auths) {
-    const { config } = auth;
-    const existingSCIMResources = await getAuthSCIMResourcesOrEmpty(
-      client,
-      workspaceId,
-      config.name,
-    );
-    const existingMap = new Map(
-      existingSCIMResources.map((scimResource) => [scimResource.name, scimResource]),
-    );
-    for (const scimResource of config.scim?.resources ?? []) {
-      const desired = protoSCIMResource(scimResource);
-      const existing = existingMap.get(scimResource.name);
-      if (existing) {
-        const configUnchanged = areSCIMResourcesEqual(existing, desired);
-        if (!forceApplyAll && configUnchanged) {
-          changeSet.unchanged.push({ name: scimResource.name });
-        } else {
-          changeSet.updates.push({
-            name: scimResource.name,
-            request: {
-              workspaceId,
-              namespaceName: config.name,
-              scimResource: desired,
-            },
-            ...(configUnchanged && { forcedBySdkVersion: true }),
-          });
-        }
-        existingMap.delete(scimResource.name);
-      } else {
-        changeSet.creates.push({
-          name: scimResource.name,
-          request: {
-            workspaceId,
-            namespaceName: config.name,
-            scimResource: desired,
-          },
-        });
-      }
-    }
-    existingMap.forEach((_, name) => {
-      changeSet.deletes.push({
-        name,
-        request: {
-          workspaceId,
-          namespaceName: config.name,
-          name,
-        },
-      });
-    });
-  }
-
-  for (const namespaceName of deletedServices) {
+  for (const { namespaceName, auth } of namespaces) {
     const existingSCIMResources = await getAuthSCIMResourcesOrEmpty(
       client,
       workspaceId,
       namespaceName,
     );
-    existingSCIMResources.forEach((scimResource) => {
-      changeSet.deletes.push({
+    await diffKeyed({
+      changeSet,
+      desired: (auth?.config.scim?.resources ?? []).map((scimResource) => ({
         name: scimResource.name,
-        request: {
-          workspaceId,
-          namespaceName,
-          name: scimResource.name,
-        },
-      });
+        request: { workspaceId, namespaceName, scimResource: protoSCIMResource(scimResource) },
+      })),
+      existing: existingSCIMResources.map((existing) => [existing.name, existing] as const),
+      keyOf: (scimResource) => scimResource.name,
+      versionMatches: () => !forceApplyAll,
+      isConfigUnchanged: ({ request }, existing) =>
+        isRequestUnchanged(scimResourceComparison, request, { scimResource: existing }),
+      create: ({ name, request }) => ({ name, request }),
+      update: ({ name, request }) => ({ name, request }),
+      unchanged: ({ name }) => ({ name }),
+      delete: (name) => ({ name, request: { workspaceId, namespaceName, name } }),
     });
   }
   return changeSet;
-}
-
-function areSCIMResourcesEqual(
-  existing: MessageInitShape<typeof AuthSCIMResourceSchema>,
-  desired: MessageInitShape<typeof AuthSCIMResourceSchema>,
-) {
-  return areNormalizedEqual(
-    toComparableProtoJson(AuthSCIMResourceSchema, existing),
-    toComparableProtoJson(AuthSCIMResourceSchema, desired),
-  );
 }
 
 function protoSCIMResource(
@@ -1874,43 +1459,10 @@ type DeleteAuthHook = {
   request: MessageInitShape<typeof DeleteAuthHookRequestSchema>;
 };
 
-function areAuthHooksEqual(
-  existing: {
-    scriptRef?: string;
-    invoker?: {
-      namespace?: string;
-      machineUserName?: string;
-    };
-  },
-  desired: {
-    scriptRef?: string;
-    invoker?: {
-      namespace?: string;
-      machineUserName?: string;
-    };
-  },
-): boolean {
-  return areNormalizedEqual(
-    {
-      scriptRef: existing.scriptRef ?? "",
-      invoker: existing.invoker
-        ? {
-            namespace: existing.invoker.namespace ?? "",
-            machineUserName: existing.invoker.machineUserName ?? "",
-          }
-        : undefined,
-    },
-    {
-      scriptRef: desired.scriptRef ?? "",
-      invoker: desired.invoker
-        ? {
-            namespace: desired.invoker.namespace ?? "",
-            machineUserName: desired.invoker.machineUserName ?? "",
-          }
-        : undefined,
-    },
-  );
-}
+const authHookComparison = defineRequestComparison({
+  schema: UpdateAuthHookRequestSchema,
+  excluded: ["workspaceId", "namespaceName"],
+});
 
 /**
  * Format auth hook changes for grouped dry-run display.
@@ -1943,96 +1495,50 @@ export function formatAuthHookChangeEntries(
 async function planAuthHooks(
   client: OperatorClient,
   workspaceId: string,
-  auths: ReadonlyArray<Readonly<AuthService>>,
-  deletedServices: ReadonlyArray<string>,
+  namespaces: ReadonlyArray<AuthNamespace>,
   forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateAuthHook, UpdateAuthHook, DeleteAuthHook>("Auth hooks");
 
-  for (const auth of auths) {
-    const { config } = auth;
-    const beforeLogin = config.hooks?.beforeLogin;
-
-    const existingHook:
-      | {
-          scriptRef?: string;
-          invoker?: {
-            namespace?: string;
-            machineUserName?: string;
-          };
-        }
-      | undefined = await getOrNull(async () => {
+  for (const { namespaceName, auth } of namespaces) {
+    const name = `${namespaceName}/before-login`;
+    const existingHook = await getOrNull(async () => {
       const { hook } = await client.getAuthHook({
-        workspaceId,
-        namespaceName: config.name,
-        hookPoint: AuthHookPoint.BEFORE_LOGIN,
-      });
-      return hook;
-    });
-
-    if (beforeLogin) {
-      const hookRequest = {
-        workspaceId,
-        namespaceName: config.name,
-        hook: {
-          hookPoint: AuthHookPoint.BEFORE_LOGIN,
-          scriptRef: authHookFunctionName(config.name, "before-login"),
-          invoker: {
-            namespace: config.name,
-            machineUserName: beforeLogin.invoker,
-          },
-        },
-      };
-
-      if (existingHook) {
-        const configUnchanged = areAuthHooksEqual(existingHook, hookRequest.hook);
-        if (!forceApplyAll && configUnchanged) {
-          changeSet.unchanged.push({
-            name: `${config.name}/before-login`,
-          });
-        } else {
-          changeSet.updates.push({
-            name: `${config.name}/before-login`,
-            request: hookRequest,
-            ...(configUnchanged && { forcedBySdkVersion: true }),
-          });
-        }
-      } else {
-        changeSet.creates.push({
-          name: `${config.name}/before-login`,
-          request: hookRequest,
-        });
-      }
-    } else if (existingHook) {
-      changeSet.deletes.push({
-        name: `${config.name}/before-login`,
-        request: {
-          workspaceId,
-          namespaceName: config.name,
-          hookPoint: AuthHookPoint.BEFORE_LOGIN,
-        },
-      });
-    }
-  }
-
-  for (const namespaceName of deletedServices) {
-    const existingHookResponse = await getOrNull(async () => {
-      return await client.getAuthHook({
         workspaceId,
         namespaceName,
         hookPoint: AuthHookPoint.BEFORE_LOGIN,
       });
+      return hook;
     });
-    if (existingHookResponse) {
-      changeSet.deletes.push({
-        name: `${namespaceName}/before-login`,
-        request: {
-          workspaceId,
-          namespaceName,
-          hookPoint: AuthHookPoint.BEFORE_LOGIN,
-        },
-      });
-    }
+    const beforeLogin = auth?.config.hooks?.beforeLogin;
+    await diffKeyed({
+      changeSet,
+      desired: beforeLogin
+        ? [
+            {
+              workspaceId,
+              namespaceName,
+              hook: {
+                hookPoint: AuthHookPoint.BEFORE_LOGIN,
+                scriptRef: authHookFunctionName(namespaceName, "before-login"),
+                invoker: { namespace: namespaceName, machineUserName: beforeLogin.invoker },
+              },
+            },
+          ]
+        : [],
+      existing: [[name, existingHook] as const],
+      keyOf: () => name,
+      versionMatches: () => !forceApplyAll,
+      isConfigUnchanged: (request, existing) =>
+        isRequestUnchanged(authHookComparison, request, { hook: existing }),
+      create: (request) => ({ name, request }),
+      update: (request) => ({ name, request }),
+      unchanged: () => ({ name }),
+      delete: () => ({
+        name,
+        request: { workspaceId, namespaceName, hookPoint: AuthHookPoint.BEFORE_LOGIN },
+      }),
+    });
   }
 
   return changeSet;

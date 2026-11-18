@@ -101,7 +101,7 @@ export interface ExecutorJobDetailInfo extends ExecutorJobInfo {
 interface WorkflowJobLog {
   jobExecutionId: string;
   /**
-   * @deprecated since NEXT_RELEASE — the Platform is retiring this value, so this is never set; use `kind` for the job function name or wait key and `jobExecutionId` to identify the job instead. codemod: none (no automatic migration exists)
+   * @deprecated since 2.43.0 — the Platform is retiring this value, so this is never set; use `kind` for the job function name or wait key and `jobExecutionId` to identify the job instead. codemod: none (no automatic migration exists)
    */
   jobName?: string;
   kind: WorkflowJobExecutionKindInfo;

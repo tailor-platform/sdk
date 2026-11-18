@@ -67,8 +67,6 @@ function oauth2ClientLoader(client: OperatorClient, workspaceId: string): LoadOA
           pageToken,
           pageSize,
         });
-        for (const oauth2Client of response.oauth2Clients)
-          logger.registerSecret(oauth2Client.clientSecret);
         return [response.oauth2Clients, response.nextPageToken];
       }).then((oauth2Clients) => oauth2Clients.map(({ name, clientId }) => ({ name, clientId })));
       byNamespace.set(namespace, loaded);

@@ -121,15 +121,14 @@ type ViolationEntry = {
 
 type HasRequest = { name: string; request: unknown };
 type HasCreateRequest = { name: string; createRequest: unknown };
-type HasUpdateRequest = { name: string; updateRequest: unknown };
 
 type ValidateItemsParams<Desc extends DescMessage> = {
   application: string;
   schema: Desc;
   resourceType: ValidatedResourceType;
   action: "create" | "update" | "replace";
-  items: ReadonlyArray<HasRequest | HasCreateRequest | HasUpdateRequest>;
-  requestKey: "request" | "createRequest" | "updateRequest";
+  items: ReadonlyArray<HasRequest | HasCreateRequest>;
+  requestKey: "request" | "createRequest";
   violations: ViolationEntry[];
 };
 
@@ -149,6 +148,9 @@ function validatorFor(schema: DescMessage): Validator {
   return validator;
 }
 
+// Reported by collectViolations itself, which also covers a request without userAuthPolicy.
+const SDK_REPORTED_RULE_IDS: ReadonlySet<string> = new Set(["allowed_email_domains_required"]);
+
 function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Desc>): void {
   const { application, schema, resourceType, action, items, requestKey, violations } = params;
   if (items.length === 0) {
@@ -161,6 +163,9 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
     const result = validator.validate(schema, msg);
     if (result.kind === "invalid") {
       for (const v of result.violations) {
+        if (SDK_REPORTED_RULE_IDS.has(v.ruleId)) {
+          continue;
+        }
         violations.push({
           resourceType,
           name: item.name,
@@ -263,22 +268,6 @@ function collectViolations(application: string, results: PlanResults): Violation
       action: "replace",
       items,
       requestKey: "createRequest",
-      violations,
-    });
-  }
-
-  function inPlaceReplaces<Desc extends DescMessage>(
-    schema: Desc,
-    resourceType: ValidatedResourceType,
-    items: ReadonlyArray<HasUpdateRequest>,
-  ): void {
-    validateItems({
-      application,
-      schema,
-      resourceType,
-      action: "replace",
-      items,
-      requestKey: "updateRequest",
       violations,
     });
   }
@@ -697,10 +686,12 @@ function collectViolations(application: string, results: PlanResults): Violation
     "auth.connection",
     auth.changeSet.connection.creates as HasRequest[],
   );
-  inPlaceReplaces(
+  updates(
     UpdateAuthConnectionRequestSchema,
     "auth.connection",
-    auth.changeSet.connection.replaces as HasUpdateRequest[],
+    auth.changeSet.connection.updates.flatMap(({ name, request }) =>
+      request ? [{ name, request }] : [],
+    ),
   );
 
   return violations;

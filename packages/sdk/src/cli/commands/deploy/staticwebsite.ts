@@ -6,7 +6,7 @@ import {
   type DeleteStaticWebsiteRequestSchema,
   type RemoveCustomDomainRequestSchema,
   type RequestCustomDomainTransferRequestSchema,
-  type UpdateStaticWebsiteRequestSchema,
+  UpdateStaticWebsiteRequestSchema,
 } from "@tailor-platform/tailor-proto/staticwebsite_pb";
 import {
   CustomDomainStatus,
@@ -16,10 +16,10 @@ import { fetchAllTolerant, getOrNull, type OperatorClient } from "#/cli/shared/c
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { createChangeSet } from "./change-set";
-import { areNormalizedEqual } from "./compare";
+import { defineRequestComparison, isRequestUnchanged } from "./compare";
+import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   buildMetaRequest,
-  hasMatchingSdkVersion,
   isOwnedByApp,
   type MetadataLabelWrite,
   resourceTrn,
@@ -27,10 +27,7 @@ import {
 } from "./label";
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
-import type {
-  CustomDomainTransfer,
-  StaticWebsite as ProtoStaticWebsite,
-} from "@tailor-platform/tailor-proto/staticwebsite_resource_pb";
+import type { CustomDomainTransfer } from "@tailor-platform/tailor-proto/staticwebsite_resource_pb";
 
 /**
  * Apply static website changes for the given phase.
@@ -166,15 +163,23 @@ export type CustomDomainNote = {
   message: string;
 };
 
-type ComparableStaticWebsite = {
-  description: string;
-  allowedIpAddresses: string[];
+type DesiredStaticWebsite = {
+  name: string;
+  request: MessageInitShape<typeof CreateStaticWebsiteRequestSchema> &
+    MessageInitShape<typeof UpdateStaticWebsiteRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
-type ComparableStaticWebsiteInput = {
-  description?: string;
-  allowedIpAddresses?: readonly string[];
-};
+const staticWebsiteComparison = defineRequestComparison({
+  schema: UpdateStaticWebsiteRequestSchema,
+  excluded: ["workspaceId"],
+  normalize: (request) => {
+    if (!request.staticwebsite) return;
+    // The platform assigns the URL.
+    request.staticwebsite.url = "";
+    request.staticwebsite.allowedIpAddresses.sort();
+  },
+});
 
 function customDomainTrn(workspaceId: string, websiteName: string, domain: string) {
   return `trn:v1:workspace:${workspaceId}:staticwebsite:${websiteName}:custom_domain:${domain}`;
@@ -231,34 +236,6 @@ export function assertStaticWebsiteDeletesNotOffered(plan: StaticWebsiteDeleteCh
   }
 }
 
-function normalizeComparableStaticWebsiteShape(
-  input: Pick<ComparableStaticWebsite, "description" | "allowedIpAddresses">,
-): ComparableStaticWebsite {
-  return {
-    description: input.description,
-    allowedIpAddresses: input.allowedIpAddresses.toSorted(),
-  };
-}
-
-function normalizeComparableStaticWebsite(
-  input: ComparableStaticWebsiteInput,
-): ComparableStaticWebsite {
-  return normalizeComparableStaticWebsiteShape({
-    description: input.description || "",
-    allowedIpAddresses: [...(input.allowedIpAddresses || [])],
-  });
-}
-
-function areStaticWebsitesEqual(
-  existing: ProtoStaticWebsite,
-  desired: ComparableStaticWebsiteInput,
-): boolean {
-  return areNormalizedEqual(
-    normalizeComparableStaticWebsite(existing),
-    normalizeComparableStaticWebsite(desired),
-  );
-}
-
 /**
  * Static website names expected to exist after this deploy run.
  * @param context - Planning context
@@ -308,74 +285,57 @@ export async function planStaticWebsite(context: PlanContext) {
     getTrn: (name) => resourceTrn(workspaceId, "staticwebsite", name),
   });
 
-  // Track owned website names to plan custom domains afterward
-  const ownedWebsiteNames = new Set<string>();
-
   const staticWebsiteServices = forRemoval ? [] : application.staticWebsiteServices;
-  for (const websiteService of staticWebsiteServices) {
-    const config = websiteService;
-    const name = websiteService.name;
-    const existing = existingWebsites[name];
+  const desired: DesiredStaticWebsite[] = [];
+  for (const config of staticWebsiteServices) {
+    const name = config.name;
     const metaRequest = await buildMetaRequest({
       trn: resourceTrn(workspaceId, "staticwebsite", name),
       appName: application.name,
       appId: application.id,
     });
-    const desired = normalizeComparableStaticWebsite(config);
-    const request = {
-      workspaceId,
-      staticwebsite: {
-        name,
-        description: config.description || "",
-        allowedIpAddresses: config.allowedIpAddresses || [],
-      },
-    };
-
-    if (existing) {
-      const owned = ownership.ownsDesired(existing.allLabels, {
-        resourceType: "staticwebsite",
-        resourceLabel: "StaticWebsite",
-        resourceName: name,
-      });
-
-      const configUnchanged = owned && areStaticWebsitesEqual(existing.resource, desired);
-      if (configUnchanged && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
-        changeSet.unchanged.push({ name });
-      } else {
-        changeSet.updates.push({
+    desired.push({
+      name,
+      request: {
+        workspaceId,
+        staticwebsite: {
           name,
-          request,
-          metaRequest,
-          ...(configUnchanged && { forcedBySdkVersion: true }),
-        });
-      }
-
-      if (owned) {
-        ownedWebsiteNames.add(name);
-      }
-      delete existingWebsites[name];
-    } else {
-      changeSet.creates.push({
-        name,
-        request,
-        metaRequest,
-      });
-      // New websites are owned by this app
-      ownedWebsiteNames.add(name);
-    }
-  }
-  Object.entries(existingWebsites).forEach(([name]) => {
-    const entry = existingWebsites[name];
-    if (ownership.ownsRemaining(entry?.allLabels)) {
-      changeSet.deletes.push({
-        name,
-        request: {
-          workspaceId,
-          name,
+          description: config.description || "",
+          allowedIpAddresses: config.allowedIpAddresses || [],
         },
-      });
-    }
+      },
+      metaRequest,
+    });
+  }
+  await diffKeyed({
+    changeSet,
+    desired,
+    existing: Object.entries(existingWebsites),
+    keyOf: (website) => website.name,
+    ...labeledResourceChecks(ownership, (website: DesiredStaticWebsite) => ({
+      resourceType: "staticwebsite",
+      resourceLabel: "StaticWebsite",
+      resourceName: website.name,
+    })),
+    isConfigUnchanged: (website, existing) =>
+      isRequestUnchanged(staticWebsiteComparison, website.request, {
+        staticwebsite: existing.resource,
+      }),
+    create: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),
+    update: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),
+    unchanged: ({ name }) => ({ name }),
+    delete: (name) => ({ name, request: { workspaceId, name } }),
   });
+
+  // New websites and existing ones this app owns get their custom domains planned
+  const ownedWebsiteNames = new Set(
+    staticWebsiteServices
+      .filter(({ name }) => {
+        const existing = existingWebsites[name];
+        return !existing || isOwnedByApp(existing.allLabels, application.name, application.id);
+      })
+      .map(({ name }) => name),
+  );
 
   // Plan custom domain changes for owned websites
   const desiredDomainsByWebsite = new Map<string, Map<string, DesiredCustomDomain>>();
