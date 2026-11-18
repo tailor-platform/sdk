@@ -101,11 +101,18 @@ type ManagedResource = {
   };
 };
 
-function managedResource<C extends ManagedResourceChangeSet>(resource: {
+/** A `ManagedResource` whose namespace accessor reads the items of change set `C`. */
+type ManagedResourceSpec<C extends ManagedResourceChangeSet> = Omit<
+  ManagedResource,
+  "changeSetOf" | "namespace"
+> & {
   changeSetOf: (results: PlanResults) => C;
-  nameOf?: (item: ManagedResourceItem) => string;
   namespace?: { owner: ManagedResourceType; of: (item: PlannedItem<C>) => string | undefined };
-}): ManagedResource {
+};
+
+function managedResource<C extends ManagedResourceChangeSet>(
+  resource: ManagedResourceSpec<C>,
+): ManagedResource {
   return resource;
 }
 
@@ -254,7 +261,7 @@ function managedResourceName(resource: ManagedResource, item: ManagedResourceIte
   return resource.nameOf ? resource.nameOf(item) : (item as HasName).name;
 }
 
-function confirmedDeletes(
+function deletesNeedingConfirmation(
   results: PlanResults,
   resourceType: ManagedResourceType,
 ): ImportantResourceDeletion[] {
@@ -271,18 +278,18 @@ export function collectImportantResourceDeletions(
   const { app } = results;
   const keepsApplication = app.creates.length + app.updates.length + app.unchanged.length > 0;
   return [
-    ...confirmedDeletes(results, "tailordb.type"),
-    ...confirmedDeletes(results, "staticwebsite"),
-    ...confirmedDeletes(results, "aigateway"),
-    ...confirmedDeletes(results, "auth.oauth2_client"),
+    ...deletesNeedingConfirmation(results, "tailordb.type"),
+    ...deletesNeedingConfirmation(results, "staticwebsite"),
+    ...deletesNeedingConfirmation(results, "aigateway"),
+    ...deletesNeedingConfirmation(results, "auth.oauth2_client"),
     ...results.auth.changeSet.oauth2Client.replaces.map((replace) => ({
       resourceLabel: `${MANAGED_RESOURCE_LABELS["auth.oauth2_client"]} (client type change)`,
       resourceName: replace.name,
     })),
-    ...confirmedDeletes(results, "auth.connection"),
-    ...confirmedDeletes(results, "secret.vault"),
-    ...confirmedDeletes(results, "secret.secret"),
-    ...(keepsApplication ? [] : confirmedDeletes(results, "application")),
+    ...deletesNeedingConfirmation(results, "auth.connection"),
+    ...deletesNeedingConfirmation(results, "secret.vault"),
+    ...deletesNeedingConfirmation(results, "secret.secret"),
+    ...(keepsApplication ? [] : deletesNeedingConfirmation(results, "application")),
   ];
 }
 

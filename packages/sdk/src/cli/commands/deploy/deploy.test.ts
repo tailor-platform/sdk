@@ -31,8 +31,7 @@ import {
   emptyPlanResults,
   plannedChangeSets,
   plannedDeleteLists,
-  PLANNED_CHANGE,
-  PLANNED_DELETE,
+  PLANNED_ITEM,
 } from "./test-helpers/plan-results";
 import {
   collectVisibleIdpNames,
@@ -1094,38 +1093,23 @@ describe("printPlanResults", () => {
     expect(workflowSection).toContain(`  ${symbols.delete} orphaned-job (jobFunction)`);
   });
 
-  test.each([...plannedDeleteLists(emptyPlanResults()).keys()])(
-    "reports a planned delete from %s in the text plan, the summary, and JSON changes",
-    (path) => {
-      const results = emptyPlanResults();
-      plannedDeleteLists(results).get(path)!.push(PLANNED_DELETE);
-
-      const summary = printPlanResults(results, { dryRun: true });
-      {
-        using _json = jsonMode();
-        printPlanResults(results, { dryRun: true });
-      }
-
-      expect(String(outSpy.mock.calls[0]?.[0])).toContain(` ${PLANNED_DELETE.name}`);
-      expect(summary).toMatchObject({ create: 0, update: 0, delete: 1, replace: 0 });
-      const payload = outSpy.mock.calls[1]?.[0] as {
-        changes: Array<{ action: string; name: string }>;
-      };
-      expect(payload.changes).toContainEqual(
-        expect.objectContaining({ action: "delete", name: PLANNED_DELETE.name }),
-      );
-    },
-  );
-
-  test.each(
-    [...plannedChangeSets(emptyPlanResults()).keys()].flatMap((path) =>
+  test.each([
+    ...[...plannedDeleteLists(emptyPlanResults()).keys()].map((path) => ({
+      path,
+      action: "delete" as const,
+    })),
+    ...[...plannedChangeSets(emptyPlanResults()).keys()].flatMap((path) =>
       (["create", "update"] as const).map((action) => ({ path, action })),
     ),
-  )(
+  ])(
     "reports a planned $action from $path in the text plan, the summary, and JSON changes",
     ({ path, action }) => {
       const results = emptyPlanResults();
-      plannedChangeSets(results).get(path)![`${action}s`].push(PLANNED_CHANGE);
+      const list =
+        action === "delete"
+          ? plannedDeleteLists(results).get(path)
+          : plannedChangeSets(results).get(path)?.[`${action}s`];
+      list!.push(PLANNED_ITEM);
 
       const summary = printPlanResults(results, { dryRun: true });
       {
@@ -1133,13 +1117,13 @@ describe("printPlanResults", () => {
         printPlanResults(results, { dryRun: true });
       }
 
-      expect(String(outSpy.mock.calls[0]?.[0])).toContain(` ${PLANNED_CHANGE.name}`);
+      expect(String(outSpy.mock.calls[0]?.[0])).toContain(` ${PLANNED_ITEM.name}`);
       expect(summary).toMatchObject({ create: 0, update: 0, delete: 0, replace: 0, [action]: 1 });
       const payload = outSpy.mock.calls[1]?.[0] as {
         changes: Array<{ action: string; name: string }>;
       };
       expect(payload.changes).toContainEqual(
-        expect.objectContaining({ action, name: PLANNED_CHANGE.name }),
+        expect.objectContaining({ action, name: PLANNED_ITEM.name }),
       );
     },
   );

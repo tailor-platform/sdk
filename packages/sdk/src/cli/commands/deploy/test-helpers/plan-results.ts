@@ -2,10 +2,10 @@ import { isPlainObject } from "es-toolkit/predicate";
 import { createChangeSet } from "../change-set";
 import type { PlanResults } from "../apply-phases";
 
-/** A delete that every planned delete list accepts, including workflow job function deletes. */
-export const PLANNED_DELETE = {
-  name: "planned-delete",
-  jobFunctionName: "planned-delete",
+/** An item that every change set and delete list accepts, including workflow job function deletes. */
+export const PLANNED_ITEM = {
+  name: "planned-item",
+  jobFunctionName: "planned-item",
   workspaceId: "workspace-id",
   request: {},
 };
@@ -156,22 +156,14 @@ export function emptyPlanResults(): PlanResults {
   } satisfies PlanResults;
 }
 
-/** A create or update that every planned change set accepts. */
-export const PLANNED_CHANGE = {
-  name: "planned-change",
-  workspaceId: "workspace-id",
-  request: {},
-};
-
 type PlannedChangeSet = { creates: unknown[]; updates: unknown[]; deletes: unknown[] };
 
-function visitPlanResults(
-  results: PlanResults,
-  visitor: {
-    changeSet: (path: string, changeSet: PlannedChangeSet) => void;
-    deleteList: (path: string, list: unknown[]) => void;
-  },
-): void {
+type PlanResultsVisitor = {
+  changeSet: (path: string, changeSet: PlannedChangeSet) => void;
+  deleteList: (path: string, list: unknown[]) => void;
+};
+
+function visitPlanResults(results: PlanResults, visitor: PlanResultsVisitor): void {
   const visit = (value: unknown, path: string) => {
     if (!isPlainObject(value)) return;
     if (Array.isArray(value.deletes) && typeof value.lines === "function") {

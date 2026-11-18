@@ -100,6 +100,12 @@ type ValidateItemsParams<Desc extends DescMessage> = {
   violations: ViolationEntry[];
 };
 
+// IdP client violations are about the Secret Manager names derived from the client.
+function violationLabel(resourceType: ManagedResourceType): string {
+  const label = MANAGED_RESOURCE_LABELS[resourceType];
+  return resourceType === "idp.client" ? `${label} secret` : label;
+}
+
 const validators = new Map<string, Validator>();
 
 // A validator's CEL environment snapshots its registry at construction, leaving types the
@@ -145,7 +151,7 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
     } else if (result.kind === "error") {
       // Evaluator failures must not block deploys; the platform stays the authoritative validator.
       logger.warn(
-        `Application "${application}": Could not validate ${MANAGED_RESOURCE_LABELS[resourceType]} "${item.name}" (${action}): ${result.error.message}`,
+        `Application "${application}": Could not validate ${violationLabel(resourceType)} "${item.name}" (${action}): ${result.error.message}`,
       );
     }
   }
@@ -701,7 +707,7 @@ export async function validatePlans(plans: ReadonlyArray<PlanToValidate>): Promi
       logger.log(`  Application ${styles.info(`"${headedApplication}"`)}:`);
     }
     logger.log(
-      `${indent}${styles.resourceType(MANAGED_RESOURCE_LABELS[v.resourceType])} ${styles.resourceName(v.name)} ` +
+      `${indent}${styles.resourceType(violationLabel(v.resourceType))} ${styles.resourceName(v.name)} ` +
         `(${v.action}) — ${styles.bold(v.fieldPath)}: ${v.message}`,
     );
   }

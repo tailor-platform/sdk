@@ -31,8 +31,8 @@ consumer below; the guard named with it fails while one is missing.
 - `managed-resources.ts`'s `MANAGED_RESOURCES` — map the type to its change set, and an item in a
   service namespace to that namespace and its owner type. Read the namespace from the items' own
   fields, so a renamed request field fails to compile. The cross-config delete filter reads this
-  table. Guard: `managed-resources.test.ts` fails for a change set or `*Deletes` list that is not
-  exactly one entry's.
+  table, skipping the types in `NOT_CLAIMED_ACROSS_CONFIGS`. Guard: `managed-resources.test.ts`
+  fails for a change set or `*Deletes` list that is not exactly one entry's.
 - `managed-resources.ts`'s `GLOBAL_RESOURCE_NAMES` — add a type whose name is workspace-global
   (its TRN carries no namespace or application), so two configs cannot define one name.
 - `managed-resources.ts`'s `collectImportantResourceDeletions` — add a type whose deletion needs

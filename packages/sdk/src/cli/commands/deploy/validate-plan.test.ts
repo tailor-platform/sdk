@@ -726,13 +726,23 @@ describe("validatePlans", () => {
           request: { workspaceId: "not-a-uuid", namespaceName: "main-auth" },
         } as never),
     },
+    {
+      label: "IdP client secret",
+      mutate: (input: PlanResults) =>
+        input.idp.changeSet.client.creates.push({
+          name: "main",
+          request: { workspaceId: WS_ID, namespaceName: "a".repeat(60), client: { name: "main" } },
+        }),
+    },
   ])("names a violation by the resource label $label", async ({ label, mutate }) => {
     using _errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
     using logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
     const input = emptyPlanResults();
     mutate(input);
 
-    await validatePlans([{ application: "my-app", results: input }]).catch(() => {});
+    await expect(validatePlans([{ application: "my-app", results: input }])).rejects.toThrow(
+      /validation error/,
+    );
 
     expect(logSpy.mock.calls.map(([line]) => plainRedacted(line))).toContainEqual(
       expect.stringMatching(new RegExp(`^ {2}${label} main \\(create\\) — `)),
