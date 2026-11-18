@@ -24,6 +24,9 @@ tailor tailordb erd export --namespace my-db
 # Serve the ERD viewer locally with watch reload
 tailor tailordb erd serve --namespace my-db --open
 
+# Show the ERD viewer as a tab of the local web UI (requires @tailor-platform/sdk-plugin-webui)
+tailor webui
+
 # Render an HTML diff between two exported ERD viewers
 tailor tailordb erd diff --base-html base.html --head-html head.html -o diff.html
 
