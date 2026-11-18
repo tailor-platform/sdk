@@ -113,6 +113,22 @@ Names that identify a resource across the whole workspace, such as application, 
 
 Each config's `files` patterns (see [Service Configuration](../configuration.md#service-configuration)) resolve relative to that config's own directory, not the directory you ran `deploy` from. For example, `apps/buyer/tailor.config.ts` declaring `files: ["db/**/*.ts"]` loads files from `apps/buyer/db/`, independent of where `apps/supplier/tailor.config.ts`'s patterns resolve. If a config's relative patterns match nothing under its own directory, the SDK falls back to the invocation directory and logs a warning (see [Service Configuration](../configuration.md#service-configuration) for details).
 
+**Resources Still in Use:**
+
+`deploy` and `remove` stop with `SERVICE_IN_USE` before changing anything when they would delete a resource that is still in use, including by the application whose config deletes it, and list each use. These uses are checked:
+
+- A TailorDB namespace, resolver namespace, IdP, or Auth service that an application references as `external`
+- The `idProvider` that an application authenticates with through an Auth service it references as `external`
+- An Auth service that an AI gateway sets as its `authNamespace`
+- A machine user that an executor or resolver uses as its `invoker`
+- A TailorDB table, resolver, IdP, Auth service, or workflow that an executor's trigger names, and a workflow that an executor starts
+- An application that an executor's `graphql` operation targets: the one its `appName` names, or the executor's own application without `appName`
+- A Secret Manager secret that a `webhook` operation's `headers` name, that an Auth service's OIDC `idProvider` names as `clientSecret` or its SCIM config names as `bearerSecret`, or that an [OTLP exporter](https://docs.tailor.tech/guides/opentelemetry) authenticates with, including each secret of a vault the run deletes
+- An IdP client that an Auth service's `idProvider` names with `idp.provider()`
+- A TailorDB table that an Auth service's `userProfile`, `tenantProvider`, or SCIM resource names
+
+An application in the `deploy` counts by what the `deploy` writes for it, and any other application by what the workspace has. A disabled executor or OTLP exporter counts too. The `invoker` passed to `workflow.start()` and the secrets and applications that function code reads or queries are not checked. Neither is the machine user that an Auth service's `scim.machineUserName` or `hooks.beforeLogin.invoker` names, but `deploy` stops with `AUTH_MACHINE_USER_NOT_FOUND` unless the same `defineAuth` lists it in `machineUsers`, so it is never deleted while that Auth service names it. For `deploy`, keep the resource in the config that defines it, or deploy the applications that use it so that they stop using it, first or in the same `deploy`. An application that references an Auth service as `external` switches to a renamed `idProvider` only in a `deploy` that also includes the config defining that Auth service, so deploy them together or keep the `idProvider` name. When an executor still targets its own application and its config no longer defines or references a TailorDB namespace, resolver namespace, IdP, or Auth service, add one of them back to that config or remove that executor from it. For `remove`, first remove those applications or deploy them so that they stop using it. An OTLP exporter, or an executor, resolver, AI gateway, or Auth service listed without an application, is not deployed by the SDK, so change or delete it outside the SDK.
+
 **Migration Handling (Beta):**
 
 When migrations are configured (`db.<namespace>.migration` in config), the `deploy` command:

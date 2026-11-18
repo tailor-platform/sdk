@@ -580,7 +580,7 @@ jobs:
       - id: tailor-claude
         continue-on-error: true
         timeout-minutes: 20
-        uses: anthropics/claude-code-action@4fa93a88de49bbef68b10eb15aabedf28ca0e1ed # v1.0.271
+        uses: anthropics/claude-code-action@469588f42e6b1e94cd14ad09dccfeaec772ce0fd # v1.0.280
         env:
           ANTHROPIC_MODEL: ${{ vars.TAILOR_AUTOFIX_CLAUDE_MODEL }}
         with:
@@ -594,7 +594,7 @@ jobs:
       - id: tailor-codex
         continue-on-error: true
         timeout-minutes: 20
-        uses: openai/codex-action@bdf19a4a223ec2549a3e2274a0cf61556bc07675 # v1.13
+        uses: openai/codex-action@306c6a196a99dcc6582530c396a19d2672d5e9ec # v1.14
         with:
           openai-api-key: ${{ secrets.TAILOR_AUTOFIX_OPENAI_API_KEY }}
           model: ${{ vars.TAILOR_AUTOFIX_CODEX_MODEL }}

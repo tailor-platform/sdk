@@ -2,6 +2,9 @@ nodeLinker: isolated
 enableGlobalVirtualStore: true
 saveExact: true
 
+lockfile:
+  format: v13
+
 minimumReleaseAge: 4320 # 3 days
 minimumReleaseAgeStrict: true
 minimumReleaseAgeIgnoreMissingTime: false
@@ -39,10 +42,12 @@ allowBuilds:
   unrs-resolver: false
 
 overrides:
-  brace-expansion@>=5.0.5 <5.0.8: 5.0.12
+  # Remove once zinfer drops its typescript peer: lockfile.format v13 cannot write a peer that is also aliased as typescript-native.
+  zinfer@0.5.4>typescript: "-"
+  brace-expansion@>=5.0.5 <5.0.8: 5.0.13
   esbuild@>=0.17.0 <0.28.1: 0.28.2
-  glob@>=9.0.0 <=14.0.1: 14.0.4
-  minimatch@<11.0.1: 11.0.5
+  glob@>=9.0.0 <=14.0.1: 14.0.6
+  minimatch@<11.0.1: 11.0.8
 
 packageExtensions:
   # make-synchronized (via @ark/attest) imports prettier without declaring it.

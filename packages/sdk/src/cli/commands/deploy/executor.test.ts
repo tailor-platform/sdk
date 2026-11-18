@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { create } from "@bufbuild/protobuf";
 import { ExecutorExecutorSchema } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { describe, test, expect, vi } from "vitest";
@@ -28,7 +29,7 @@ const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
 // Mock label.ts
 vi.mock("./label", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("./label");
+  const original = await importOriginal<typeof import("./label")>();
   return {
     ...original,
     buildMetaRequest: vi.fn().mockImplementation(async () => ({
@@ -44,7 +45,7 @@ vi.mock("./label", async (importOriginal) => {
 // Mock createChangeSet to suppress output in tests
 vi.mock("./change-set", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("./change-set");
+  const original = await importOriginal<typeof import("./change-set")>();
   return {
     ...original,
     createChangeSet: (title: string) => ({
@@ -323,6 +324,24 @@ describe("planExecutor", () => {
       }
 
       expect(targetConfig.value.variables?.expr).toBe(expectedExpression);
+    });
+
+    test.each([
+      ["the executor's own application without appName", undefined, appName],
+      ["the application that appName names", "core", "core"],
+    ])("graphql operation targets %s", async (_description, targetAppName, expectedAppName) => {
+      const executor = createMockExecutor("graphql-executor");
+      executor.operation = { kind: "graphql", appName: targetAppName, query: "query { ok }" };
+
+      const result = await planExecutor(
+        buildPlanContext(createMockApplication([executor]), { client: createMockClient([]) }),
+      );
+      const targetConfig = result.changeSet.creates[0]?.request.executor?.targetConfig?.config;
+      if (targetConfig?.case !== "tailorGraphql") {
+        throw new Error("Expected GraphQL target config");
+      }
+
+      expect(targetConfig.value.appName).toBe(expectedAppName);
     });
   });
 

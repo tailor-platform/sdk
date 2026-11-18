@@ -1,21 +1,14 @@
 import { describe, expect, test } from "vitest";
-import transform, {
-  reviewFindings,
-} from "../codemods/v3/define-config-build-options/scripts/transform";
+import { reviewThroughRunner } from "./test-helpers/codemods";
 
 const IMPORT = 'import { defineConfig } from "@tailor-platform/sdk";\n';
 
-const review = (body: string) => {
-  const source = IMPORT + body;
-  return {
-    transformed: transform(source, "tailor.config.ts"),
-    findings: reviewFindings(source, "tailor.config.ts", "tailor.config.ts"),
-  };
-};
+const review = (body: string) =>
+  reviewThroughRunner("v3/define-config-build-options", IMPORT + body);
 
 describe("defineConfig top-level options -> buildOptions migration review", () => {
-  test("rewrites a literal config and reports nothing left to review", () => {
-    const { transformed, findings } = review(
+  test("rewrites a literal config and reports nothing left to review", async () => {
+    const { transformed, findings } = await review(
       'export default defineConfig({\n  name: "my-app",\n  logLevel: "WARN",\n});\n',
     );
 
@@ -23,8 +16,8 @@ describe("defineConfig top-level options -> buildOptions migration review", () =
     expect(findings).toEqual([]);
   });
 
-  test("reports nothing for a config that sets neither option", () => {
-    expect(review('export default defineConfig({\n  name: "my-app",\n});\n')).toEqual({
+  test("reports nothing for a config that sets neither option", async () => {
+    expect(await review('export default defineConfig({\n  name: "my-app",\n});\n')).toEqual({
       transformed: null,
       findings: [],
     });
@@ -66,8 +59,8 @@ describe("defineConfig top-level options -> buildOptions migration review", () =
       'export const build = (defineConfig) =>\n  defineConfig({\n    logLevel: "WARN",\n  });\n',
       "declared again in this file",
     ],
-  ])("leaves %s unchanged and flags it for review", (_name, body, reason) => {
-    const { transformed, findings } = review(body);
+  ])("leaves %s unchanged and flags it for review", async (_name, body, reason) => {
+    const { transformed, findings } = await review(body);
 
     expect(transformed).toBeNull();
     expect(findings).toEqual([

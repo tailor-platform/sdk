@@ -60,7 +60,7 @@ async function runFixtureCases(codemodPath: string): Promise<void> {
     ].includes(codemodPath)
       ? path.join(c.caseDir, "tailor.config.ts")
       : inputPath;
-    const result = await transform(input, transformPath);
+    const result = await transform(input, transformPath, c.caseDir);
     const expected = c.expectedFile
       ? await fs.promises.readFile(path.join(c.caseDir, c.expectedFile), "utf-8")
       : null;

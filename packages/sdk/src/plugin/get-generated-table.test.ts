@@ -173,7 +173,7 @@ export default {
       'throw new Error("Excluded module imported");',
     );
     writeConfig(extendingPlugin("first", "rank", "db.int()"), {
-      files: ["./ignored.test.ts", "./order.mjs"],
+      files: ["./*.ts", "./order.mjs"],
     });
     const order = await loadTable();
 
@@ -331,11 +331,9 @@ export default { db: ${JSON.stringify(namespaces)} };
     test.each(["a.test.ts", "a.spec.ts"])(
       "does not import excluded %s by default",
       async (file) => {
-        const order = await writeNamespaceFixture(
-          { main: { files: [`./tables/${file}`, "./tables/*.ts"] } },
-          "z.ts",
-          [file],
-        );
+        const order = await writeNamespaceFixture({ main: { files: ["./tables/*.ts"] } }, "z.ts", [
+          file,
+        ]);
 
         const table = await getGeneratedTable(configPath, "table-plugin", order, "archive");
 

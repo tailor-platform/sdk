@@ -159,6 +159,8 @@ export type {
   WorkflowInfo,
   WorkflowExecutionInfo,
   WorkflowJobExecutionInfo,
+  WorkflowJobExecutionKindInfo,
+  WorkflowJobExecutionPositionInfo,
 } from "./commands/workflow/transform";
 export type { FunctionLogEntryInfo } from "./shared/function-execution";
 export {
@@ -297,3 +299,4 @@ export {
 } from "./shared/script-workflow";
 export { initOperatorClient, type OperatorClient } from "./shared/client";
 export type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
+export { CustomDomainStatus } from "@tailor-platform/tailor-proto/staticwebsite_resource_pb";

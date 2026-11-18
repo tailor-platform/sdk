@@ -16,6 +16,7 @@ import {
   prompt,
   styles,
   arg,
+  withSourceLocation,
 } from "@tailor-platform/sdk/cli";
 import { sortBySelfReference } from "@tailor-platform/shared/seed-order";
 import * as path from "pathe";
@@ -29,9 +30,15 @@ import {
 } from "./datasets";
 import { selectEntities } from "./entities";
 import { parseExecutionResult } from "./execution-result";
-import { assertSeedDataDirectory, loadSeedData } from "./jsonl";
+import {
+  assertSeedDataDirectory,
+  loadLocatedSeedRows,
+  loadSeedData,
+  relativeRowLocation,
+} from "./jsonl";
 import { topologicalSort } from "./topo-sort";
 import { IDP_SEED_WORKFLOW_KINDS, seedWorkflowName } from "./workflow-name";
+import type { LocatedSeedRow } from "./jsonl";
 import type { SeedWorkflowKind } from "./workflow-name";
 import type {
   OperatorClient,
@@ -267,11 +274,11 @@ async function runIdpScript(
   return { success, parsed, outcomeUnknown };
 }
 
-// The generated IdP scripts upsert or delete users one call at a time (about a
-// second or more per row), so each script execution must carry few enough rows
-// to finish well within a workflow job's execution time limit, and to keep the
-// rows an interrupted chunk may have applied few. Byte-size chunking cannot
-// capture this.
+// The generated IdP scripts upsert or delete users with a bounded number of
+// concurrent calls (about a second per call), so each script execution must
+// carry few enough rows to finish well within a workflow job's execution time
+// limit, and to keep the rows an interrupted chunk may have applied few.
+// Byte-size chunking cannot capture this.
 const IDP_USER_CHUNK_SIZE = 25;
 
 function chunkIdpUsers<T>(rows: T[]): T[][] {
@@ -297,23 +304,52 @@ interface SeedIdpUserParams {
 
 async function hookIdpUserRows(
   schemaDir: string,
-  rows: SeedData[string] | undefined,
-): Promise<SeedData[string]> {
+  source: LocatedSeedRow[],
+): Promise<LocatedSeedRow[]> {
   const { hookSeedRows } = await import("./seed-data");
-  const source = rows ?? [];
   const hooked = (await hookSeedRows({
     schemaDir,
     table: "_User",
-    rows: source,
+    rows: source.map(({ row }) => row),
   })) as SeedData[string];
   // A password the schema hook supplied (not one written in _User.jsonl) only applies when the
   // user is created, so --upsert does not reset the password of a user that already exists.
   return hooked.map((row, index) => {
-    const written = source[index]?.password;
-    if (written !== undefined && written !== null) return row;
+    const { row: written, location } = source[index];
+    if (written.password !== undefined && written.password !== null) return { row, location };
     const { password, ...rest } = row;
-    return password === undefined ? row : { ...rest, initialPassword: password };
+    return {
+      row: password === undefined ? row : { ...rest, initialPassword: password },
+      location,
+    };
   });
+}
+
+function assertUniqueIdpUserNames(rows: LocatedSeedRow[]): void {
+  const firstLocationByName = new Map<string, LocatedSeedRow["location"]>();
+  const duplicates: string[] = [];
+  let firstRepeatLocation: LocatedSeedRow["location"] | undefined;
+  for (const { row, location } of rows) {
+    if (typeof row.name !== "string") continue;
+    const first = firstLocationByName.get(row.name);
+    if (first === undefined) {
+      firstLocationByName.set(row.name, location);
+    } else {
+      firstRepeatLocation ??= location;
+      duplicates.push(
+        `${relativeRowLocation(location)} (${row.name}): duplicate of ${relativeRowLocation(first)}`,
+      );
+    }
+  }
+  if (firstRepeatLocation) {
+    throw withSourceLocation(
+      new Error(
+        `_User has rows that repeat a name, so nothing was applied. ` +
+          `Remove the repeated rows and run the command again.\n${duplicates.join("\n")}`,
+      ),
+      firstRepeatLocation,
+    );
+  }
 }
 
 async function seedIdpUser(
@@ -635,11 +671,9 @@ export const seedApplyCommand = defineAppCommand({
       !args["skip-idp"] &&
       (!selection.entitiesToProcess || selection.entitiesToProcess.includes("_User"));
     const idpUserRows = shouldSeedUser
-      ? await hookIdpUserRows(
-          dataDir,
-          loadSeedData(dataDirs, ["_User"], { keyField: "name" })._User,
-        )
+      ? await hookIdpUserRows(dataDir, loadLocatedSeedRows(dataDirs, "_User", { keyField: "name" }))
       : [];
+    assertUniqueIdpUserNames(idpUserRows);
 
     const appInfo = await show({
       configPath: args.config,
@@ -759,7 +793,7 @@ export const seedApplyCommand = defineAppCommand({
         execution,
         idpNamespace: context.idpUser.idpNamespace,
         scriptCode: context.idpUser.seedScriptCode,
-        rows: idpUserRows,
+        rows: idpUserRows.map(({ row }) => row),
         upsert: args.upsert,
       });
       if (seeded.processed > 0) {

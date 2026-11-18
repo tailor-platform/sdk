@@ -79,6 +79,7 @@ export function emptyPlanResults(): PlanResults {
     aiGateway: {
       changeSet: createChangeSet("AIGateways"),
       ...emptyOwnership(),
+      existingGateways: {},
     },
     idp: {
       changeSet: {
@@ -106,6 +107,7 @@ export function emptyPlanResults(): PlanResults {
         connection: createChangeSet("Auth connections"),
       },
       ...emptyOwnership(),
+      existingServices: {},
     },
     pipeline: {
       changeSet: {

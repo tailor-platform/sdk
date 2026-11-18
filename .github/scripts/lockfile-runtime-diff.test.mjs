@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), "lockfile-runtime-diff.mjs");
 
-const pnpm12Lockfile = (esbuildVersion) => `---
+const pnpm12Lockfile = (esbuildVersion, viteVersion = "8.3.8") => `---
 lockfileVersion: '9.0'
 
 importers:
@@ -51,6 +51,9 @@ importers:
       esbuild:
         specifier: ${esbuildVersion}
         version: ${esbuildVersion}
+      vite:
+        specifier: ^8.0.0
+        version: ${viteVersion}
 
 packages:
 
@@ -58,7 +61,7 @@ packages:
     resolution: {integrity: sha512-x}
 `;
 
-const pnpm11Lockfile = (esbuildVersion) => `lockfileVersion: '9.0'
+const pnpm11Lockfile = (esbuildVersion, viteVersion = "8.3.8") => `lockfileVersion: '9.0'
 
 importers:
 
@@ -73,11 +76,49 @@ importers:
       esbuild:
         specifier: ${esbuildVersion}
         version: ${esbuildVersion}
+      vite:
+        specifier: ^8.0.0
+        version: ${viteVersion}
 
 packages:
 
   esbuild@${esbuildVersion}:
     resolution: {integrity: sha512-x}
+`;
+
+const pnpm12V13Lockfile = (esbuildVersion, viteVersion = "8.3.8") => `---
+lockfileVersion: '9.0'
+
+importers:
+
+  .:
+    configDependencies: {}
+
+---
+{
+\t"lockfileVersion": "13.0",
+
+\t"projects": {
+\t\t".": {
+\t\t\t"devDependencies": {
+\t\t\t\t"typescript": "6.0.3",
+\t\t\t},
+\t\t},
+
+\t\t"packages/foo": {
+\t\t\t"dependencies": {
+\t\t\t\t"esbuild": "${esbuildVersion}",
+\t\t\t\t"vite": { "specifier": "^8.0.0", "version": "${viteVersion}", },
+\t\t\t},
+\t\t},
+\t},
+
+\t"packages": {
+\t\t"esbuild@${esbuildVersion}": {
+\t\t\t"integrity": "sha512-x",
+\t\t},
+\t},
+}
 `;
 
 function setUp() {
@@ -135,5 +176,40 @@ test("reports no changes when the pnpm-11 base and pnpm-12 head have the same de
 test("detects a runtime dependency change between a pnpm-11 base and a pnpm-12 head", () => {
   const dir = setUp();
   const stdout = run(dir, pnpm11Lockfile("0.28.1"), pnpm12Lockfile("0.28.2"));
+  assert.match(stdout, /Runtime dependency changes detected in: @scope\/foo/);
+});
+
+test("detects a runtime dependency change in a pnpm-12 lockfile written with lockfile.format v13", () => {
+  const dir = setUp();
+  const stdout = run(dir, pnpm12V13Lockfile("0.28.1"), pnpm12V13Lockfile("0.28.2"));
+  assert.match(stdout, /Runtime dependency changes detected in: @scope\/foo/);
+});
+
+test("reports no changes for an unchanged v13 lockfile", () => {
+  const dir = setUp();
+  const stdout = run(dir, pnpm12V13Lockfile("0.28.1"), pnpm12V13Lockfile("0.28.1"));
+  assert.match(stdout, /No runtime dependency changes/);
+});
+
+// The v13 migration PR itself compares a v9 base against a v13 head.
+test("reports no changes when the v9 base and v13 head have the same dependencies", () => {
+  const dir = setUp();
+  const stdout = run(dir, pnpm12Lockfile("0.28.1"), pnpm12V13Lockfile("0.28.1"));
+  assert.match(stdout, /No runtime dependency changes/);
+});
+
+test("detects a runtime dependency change between a v9 base and a v13 head", () => {
+  const dir = setUp();
+  const stdout = run(dir, pnpm12Lockfile("0.28.1"), pnpm12V13Lockfile("0.28.2"));
+  assert.match(stdout, /Runtime dependency changes detected in: @scope\/foo/);
+});
+
+test("detects a change in a v13 dependency recorded as a specifier/version object", () => {
+  const dir = setUp();
+  const stdout = run(
+    dir,
+    pnpm12V13Lockfile("0.28.1", "8.3.8"),
+    pnpm12V13Lockfile("0.28.1", "8.3.9"),
+  );
   assert.match(stdout, /Runtime dependency changes detected in: @scope\/foo/);
 });

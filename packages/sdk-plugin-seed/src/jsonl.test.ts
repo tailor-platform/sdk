@@ -1,13 +1,16 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { errorToJson } from "@tailor-platform/sdk/cli";
+import { JsonlReader } from "lines-db";
 import * as path from "pathe";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   appendSeedDataRows,
   assertSeedDataDirectory,
   beginSeedDataWrite,
   commitSeedDataWrite,
   existingSeedDataFiles,
+  loadLocatedSeedRows,
   loadSeedData,
   writeSeedData,
 } from "./jsonl";
@@ -22,7 +25,31 @@ function makeDataDir(files: Record<string, string>): string {
   return tempDir;
 }
 
+function makeDataset(baseDir: string, name: string, files: Record<string, string>): string {
+  const dir = path.join(baseDir, name);
+  mkdirSync(dir);
+  for (const [file, content] of Object.entries(files)) {
+    writeFileSync(path.join(dir, file), content);
+  }
+  return dir;
+}
+
+function thrownBy(load: () => unknown): Error {
+  try {
+    load();
+  } catch (error) {
+    if (error instanceof Error) return error;
+    throw error;
+  }
+  return expect.unreachable("expected the load to throw");
+}
+
+function printed(error: Error): unknown {
+  return errorToJson(error).error.message;
+}
+
 afterEach(() => {
+  vi.restoreAllMocks();
   if (tempDir) {
     rmSync(tempDir, { recursive: true, force: true });
     tempDir = undefined;
@@ -51,6 +78,11 @@ describe("loadSeedData", () => {
     expect(loadSeedData(dir, ["User"])).toEqual({ User: [{ id: 1 }, { id: 2 }] });
   });
 
+  test("skips blank and whitespace-only lines between rows", () => {
+    const dir = makeDataDir({ "User.jsonl": '{"id":1}\n\n \t \n{"id":2}\n' });
+    expect(loadSeedData(dir, ["User"])).toEqual({ User: [{ id: 1 }, { id: 2 }] });
+  });
+
   test("loads missing and empty files as empty lists", () => {
     const dir = makeDataDir({ "Empty.jsonl": "\n" });
     expect(loadSeedData(dir, ["Empty", "Missing"])).toEqual({ Empty: [], Missing: [] });
@@ -68,15 +100,6 @@ describe("loadSeedData", () => {
   });
 
   describe("several data directories", () => {
-    function makeDataset(baseDir: string, name: string, files: Record<string, string>): string {
-      const dir = path.join(baseDir, name);
-      mkdirSync(dir);
-      for (const [file, content] of Object.entries(files)) {
-        writeFileSync(path.join(dir, file), content);
-      }
-      return dir;
-    }
-
     test("concatenates each table's rows in directory order", () => {
       const base = makeDataDir({ "User.jsonl": '{"id":"u1"}\n', "Order.jsonl": '{"id":"o1"}\n' });
       const cogs = makeDataset(base, "cogs", { "User.jsonl": '{"id":"u2"}\n' });
@@ -88,25 +111,25 @@ describe("loadSeedData", () => {
       });
     });
 
-    test("rejects an id defined in two directories, naming both lines", () => {
-      const base = makeDataDir({ "User.jsonl": '{"id":"u1"}\n{"id":"u2"}\n' });
-      const cogs = makeDataset(base, "cogs", { "User.jsonl": '{"id":"u3"}\n{"id":"u2"}\n' });
+    test.each([
+      ["no blank lines", '{"id":"u1"}\n{"id":"u2"}\n', '{"id":"u3"}\n{"id":"u2"}\n', 2, 2],
+      ["blank lines", '\n{"id":"u2"}\n', '{"id":"u3"}\n\n{"id":"u2"}\n', 3, 2],
+    ])(
+      "rejects an id defined in two directories, naming both lines, with %s",
+      (_label, baseContent, cogsContent, cogsLine, baseLine) => {
+        const base = makeDataDir({ "User.jsonl": baseContent });
+        const cogs = makeDataset(base, "cogs", { "User.jsonl": cogsContent });
+        vi.spyOn(process, "cwd").mockReturnValue(base);
 
-      expect(() => loadSeedData([base, cogs], ["User"])).toThrow(
-        `${path.join(cogs, "User.jsonl")}:2: id "u2" is already defined at ${path.join(base, "User.jsonl")}:2.`,
-      );
-    });
+        const error = thrownBy(() => loadSeedData([base, cogs], ["User"]));
 
-    test("identifies rows by the key field it is given", () => {
-      const base = makeDataDir({ "_User.jsonl": '{"name":"ada@example.com","password":"a"}\n' });
-      const local = makeDataset(base, "local", {
-        "_User.jsonl": '{"name":"ada@example.com","password":"b"}\n',
-      });
-
-      expect(() => loadSeedData([base, local], ["_User"], { keyField: "name" })).toThrow(
-        /local\/_User\.jsonl:1: name "ada@example\.com" is already defined/,
-      );
-    });
+        expect(error.message).toBe(
+          `id "u2" is already defined at User.jsonl:${baseLine}. ` +
+            "A row can be defined in only one of the data directories applied together.",
+        );
+        expect(printed(error)).toBe(`cogs/User.jsonl:${cogsLine}: ${error.message}`);
+      },
+    );
 
     test("leaves duplicates within a single directory to the database", () => {
       const base = makeDataDir({ "User.jsonl": '{"id":"u1"}\n{"id":"u1"}\n' });
@@ -124,28 +147,44 @@ describe("loadSeedData", () => {
     });
   });
 
-  test("names the file and line for malformed JSON lines", () => {
-    const dir = makeDataDir({ "Bad.jsonl": '{"ok":true}\nnot-json\n' });
-    expect(() => loadSeedData(dir, ["Bad"])).toThrow(/Bad\.jsonl at line 2/);
+  test.each([
+    ["a malformed row", '{"ok":true}\nnot-json\n', 2],
+    ["a malformed row after blank lines", '\n\n{"ok":true}\nnot-json\n', 4],
+    ["a second byte order mark", '\uFEFF\uFEFF{"id":1}\n{"id":2}\n', 1],
+    ["a no-break space before the first row", '\u00A0{"id":1}\n{"id":2}\n', 1],
+    ["a no-break space after the last row", '{"id":1}\n{"id":2}\u00A0\n', 2],
+  ])("rejects a file with %s at the line the validator rejects", async (_label, content, line) => {
+    const dir = makeDataDir({ "User.jsonl": content });
+    expect(await JsonlReader.read(path.join(dir, "User.jsonl"))).toMatchObject({
+      ok: false,
+      error: { line },
+    });
+    vi.spyOn(process, "cwd").mockReturnValue(dir);
+    const error = thrownBy(() => loadSeedData(dir, ["User"]));
+    expect(error.message).toMatch(/^Invalid JSON: /);
+    expect(printed(error)).toBe(`User.jsonl:${line}: ${error.message}`);
   });
 
   test.each(["null", "[]", '"text"', "42"])("rejects non-object JSON rows: %s", (row) => {
     const dir = makeDataDir({ "Bad.jsonl": `${row}\n` });
-    expect(() => loadSeedData(dir, ["Bad"])).toThrow(
-      /Invalid seed row in .*Bad\.jsonl at line 1: expected a JSON object/,
-    );
+    vi.spyOn(process, "cwd").mockReturnValue(dir);
+    const error = thrownBy(() => loadSeedData(dir, ["Bad"]));
+    expect(error.message).toBe("Invalid seed row: expected a JSON object");
+    expect(printed(error)).toBe(`Bad.jsonl:1: ${error.message}`);
   });
 
   test.each([
     ["missing", '{"name":"Alice"}\n', 1],
     ["null", '{"id":"customer-1"}\n{"id":null,"name":"Bob"}\n', 2],
+    ["missing", '\n\n{"name":"Alice"}\n', 3],
   ])(
-    "rejects an %s id with the file and line number when requireId is set",
+    "rejects an %s id in %j with the file and line number when requireId is set",
     (_label, content, line) => {
       const dir = makeDataDir({ "Customer.jsonl": content });
-      expect(() => loadSeedData(dir, ["Customer"], { requireId: true })).toThrow(
-        new RegExp(`Customer\\.jsonl:${line}: \`id\` is required with --upsert`),
-      );
+      vi.spyOn(process, "cwd").mockReturnValue(dir);
+      const error = thrownBy(() => loadSeedData(dir, ["Customer"], { requireId: true }));
+      expect(error.message).toMatch(/^`id` is required with --upsert/);
+      expect(printed(error)).toBe(`Customer.jsonl:${line}: ${error.message}`);
     },
   );
 
@@ -168,12 +207,46 @@ describe("loadSeedData", () => {
         '{"id":"customer-2","name":"Bob"}\n',
     });
 
-    expect(() =>
+    vi.spyOn(process, "cwd").mockReturnValue(dir);
+
+    const error = thrownBy(() =>
       loadSeedData(dir, ["Customer"], {
         requireId: true,
         requiredFieldsByType: { Customer: ["name", "email"] },
       }),
-    ).toThrow(/Customer\.jsonl:2: field `email` is required with --upsert/);
+    );
+
+    expect(error.message).toBe("field `email` is required with --upsert");
+    expect(printed(error)).toBe(`Customer.jsonl:2: ${error.message}`);
+  });
+});
+
+describe("loadLocatedSeedRows", () => {
+  test("locates each row at its file and physical line", () => {
+    const base = makeDataDir({ "_User.jsonl": '{"name":"a"}\n\n{"name":"b"}\n' });
+    const local = makeDataset(base, "local", { "_User.jsonl": '{"name":"c"}\n' });
+
+    expect(loadLocatedSeedRows([base, local], "_User")).toEqual([
+      { row: { name: "a" }, location: { file: path.join(base, "_User.jsonl"), line: 1 } },
+      { row: { name: "b" }, location: { file: path.join(base, "_User.jsonl"), line: 3 } },
+      { row: { name: "c" }, location: { file: path.join(local, "_User.jsonl"), line: 1 } },
+    ]);
+  });
+
+  test("identifies rows by the key field it is given", () => {
+    const base = makeDataDir({ "_User.jsonl": '{"name":"ada@example.com","password":"a"}\n' });
+    const local = makeDataset(base, "local", {
+      "_User.jsonl": '{"name":"ada@example.com","password":"b"}\n',
+    });
+
+    vi.spyOn(process, "cwd").mockReturnValue(base);
+
+    const error = thrownBy(() => loadLocatedSeedRows([base, local], "_User", { keyField: "name" }));
+
+    expect(error.message).toMatch(
+      /^name "ada@example\.com" is already defined at _User\.jsonl:1\./,
+    );
+    expect(printed(error)).toBe(`local/_User.jsonl:1: ${error.message}`);
   });
 });
 

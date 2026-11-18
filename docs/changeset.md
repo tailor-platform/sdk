@@ -26,8 +26,10 @@ SDK users must modify their code or configuration to upgrade.
 
 `major` is only accepted on a `v<N>` branch (for example `v3`) or a branch derived from it; the
 `Changeset check` workflow fails any other PR that carries a `major` changeset, so a stray `major`
-cannot bump the release PR to the next major. On `main`, a breaking change is `minor` and its
-description starts with `**Breaking change**:` followed by the user impact and migration steps.
+cannot bump the release PR to the next major. A breaking change ships in a major release, from a
+`v<N>` branch; see
+[Shipping a breaking change in a minor release](#shipping-a-breaking-change-in-a-minor-release) for
+the exception.
 
 - Removing or renaming a public API (`defineConfig`, `db.table`, `createResolver`, etc.)
 - Changing the signature or behavior of an existing API in an incompatible way
@@ -41,6 +43,16 @@ external system is not an SDK breaking change when it preserves existing SDK inv
 code, and configuration. If that distinction cannot be established from the repository, confirm the
 expected compatibility with the user before choosing `major`.
 
+#### Shipping a breaking change in a minor release
+
+Only when the impact is clearly known to be very limited may a breaking change ship in a `minor`
+release, as an exception. Its description starts with `**Breaking change**:` followed by the user
+impact and migration steps, and the PR body states:
+
+- who or what breaks, with a concrete example (user, environment, operation)
+- why the impact is limited
+- whether a way to avoid breaking was considered, and why it was not taken
+
 #### Breaking changes to beta features
 
 A feature is beta only when it carries the beta mark itself:
@@ -52,7 +64,10 @@ A feature is beta only when it carries the beta mark itself:
 - Behavior with no symbol or command of its own is beta only when listed here: how the CLI dispatches
   `tailor <name>` to a `tailor-<name>` plugin executable and the environment variables it passes, and
   how `tailor deploy` applies pending TailorDB migrations (schema verification, migration phases,
-  checkpoints, and scripts), including the `migrate.ts` contract.
+  checkpoints, and scripts), including the `migrate.ts` contract; and the content mapper, which is
+  the `typescript.contentMapper` field of the SDK's `package.json` that TypeScript 7.1 runs when
+  `tsconfig.json` lists it under `contentMappers`, together with the types it derives for `.tailor`
+  files.
 
 Where the docs explain or mention an API does not change this; the `(Beta)` in `packages/sdk/docs/`
 only repeats the mark for readers. When a change to a beta API also changes a non-beta one, such as a

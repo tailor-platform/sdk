@@ -43,6 +43,10 @@ import { formatWaitError, isRetryableWaitError } from "#/cli/shared/wait-error";
 import { getWorkflowExecution } from "../workflow/executions";
 import { waitForExecution } from "../workflow/start";
 import {
+  type WorkflowJobExecutionKindInfo,
+  workflowJobExecutionLabel,
+} from "../workflow/transform";
+import {
   classifyExecutorJobStatus,
   colorizeExecutorJobStatus,
   EXECUTOR_JOB_STATUS_FILTER_NAMES,
@@ -95,7 +99,12 @@ export interface ExecutorJobDetailInfo extends ExecutorJobInfo {
 }
 
 interface WorkflowJobLog {
-  jobName: string;
+  jobExecutionId: string;
+  /**
+   * @deprecated since 2.43.0 — the Platform is retiring this value, so this is never set; use `kind` for the job function name or wait key and `jobExecutionId` to identify the job instead. codemod: none (no automatic migration exists)
+   */
+  jobName?: string;
+  kind: WorkflowJobExecutionKindInfo;
   logs?: string;
   logEntries?: FunctionLogEntryInfo[];
   result?: string;
@@ -467,7 +476,8 @@ export async function watchExecutorJob<E extends ExecutorLike>(
                   workflowJobLogs = execWithLogs.jobDetails
                     .filter((job) => job.logs || job.result)
                     .map((job) => ({
-                      jobName: job.stackedJobName || job.id,
+                      jobExecutionId: job.id,
+                      kind: job.kind,
                       logs: job.logs,
                       logEntries: job.logEntries,
                       result: job.result,
@@ -739,7 +749,10 @@ export function printDownstreamExecution(result: WatchExecutorJobResult): void {
     }
     if (result.workflowJobLogs && result.workflowJobLogs.length > 0) {
       for (const jobLog of result.workflowJobLogs) {
-        logger.log(styles.bold(`\n  Job: ${jobLog.jobName}`));
+        const name = workflowJobExecutionLabel({ id: jobLog.jobExecutionId, kind: jobLog.kind });
+        const heading =
+          jobLog.kind.type === "unknown" ? name : `${name} (${jobLog.jobExecutionId})`;
+        logger.log(styles.bold(`\n  Job: ${heading}`));
         const logs = formatFunctionLogMessages(jobLog.logEntries);
         if (logs) {
           logger.log(styles.dim("    Logs:"));

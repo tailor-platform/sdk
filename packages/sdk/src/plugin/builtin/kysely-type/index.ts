@@ -52,7 +52,7 @@ export const DEFAULT_KYSELY_TYPES_DIST_PATH = "./generated/tailordb.ts";
  * Plugin that generates Kysely type definitions for TailorDB tables.
  * @param options - Plugin options
  * @param options.distPath - Output file path for generated types; set either this or `contentMapper`, not both
- * @param options.contentMapper - When `true`, no types file is generated and you import `getDB` from `@tailor-platform/sdk/plugin/kysely-type/db` instead; set either this or `distPath`, not both
+ * @param options.contentMapper - **Beta:** When `true`, no types file is generated and you import `getDB` from `@tailor-platform/sdk/plugin/kysely-type/db` instead; set either this or `distPath`, not both
  * @param options.pgliteSchemaPath - Output file path for the PGlite `CREATE TABLE` script module; omit to skip it
  * @param options.temporal - When `true`, generated tables map date/datetime fields and
  * top-level time fields to their `Temporal.PlainDate`/`Temporal.Instant`/

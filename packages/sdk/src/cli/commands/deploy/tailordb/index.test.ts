@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { create } from "@bufbuild/protobuf";
@@ -64,7 +65,7 @@ import type {
 // Mock label.ts
 vi.mock("../label", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("../label");
+  const original = await importOriginal<typeof import("../label")>();
   return {
     ...original,
     buildMetaRequest: vi.fn().mockImplementation(async () => ({
@@ -86,7 +87,7 @@ vi.mock("#/cli/commands/tailordb/migrate/bundler", () => ({
 // Mock createChangeSet to suppress output in tests
 vi.mock("../change-set", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("../change-set");
+  const original = await importOriginal<typeof import("../change-set")>();
   return {
     ...original,
     createChangeSet: (title: string) => ({

@@ -184,7 +184,7 @@ The secret reference format:
 { vault: "vault-name", key: "secret-name" }
 ```
 
-At runtime, these references are replaced with the actual secret values.
+At runtime, these references are replaced with the actual secret values. `deploy` and `remove` stop with `SERVICE_IN_USE` instead of deleting a secret, or the vault that holds it, that a webhook executor in the workspace still names this way, that an Auth service's OIDC `idProvider` or SCIM config still names, or that an [OTLP exporter](https://docs.tailor.tech/guides/opentelemetry) still authenticates with.
 
 ## CLI Management
 

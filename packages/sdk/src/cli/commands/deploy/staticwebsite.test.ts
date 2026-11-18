@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
   CustomDomainStatus,
@@ -15,7 +16,7 @@ import type { OperatorClient } from "#/cli/shared/client";
 import type { PlanContext } from "./types";
 
 vi.mock("./label", async (importOriginal) => {
-  const original = (await importOriginal()) as Record<string, unknown>;
+  const original = await importOriginal<Record<string, unknown>>();
   return {
     ...original,
     buildMetaRequest: vi.fn().mockImplementation(({ trn }: { trn: string }) => ({

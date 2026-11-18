@@ -9,6 +9,8 @@ import { describe, expect, test, vi } from "vitest";
 import { errorToJson } from "#/cli/shared/error-json";
 import { CLIError } from "#/cli/shared/errors";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { listSourceFiles } from "#/cli/shared/test-helpers/source-files";
 import { AppConfigSchema } from "#/parser/app-config/schema";
 import {
   buildMetaRequest,
@@ -20,7 +22,7 @@ import {
   withMetadataWriteBatch,
   writeMetadataLabels,
 } from "./label";
-import type { MetadataLabelBulkClient, MetadataLabelClient } from "./label";
+import type { MetadataLabelClient } from "./label";
 
 describe("isOwnedByApp", () => {
   test("returns false when labels are undefined", () => {
@@ -74,13 +76,7 @@ describe("hasMatchingSdkVersion", () => {
 
 describe("buildMetaRequest", () => {
   function createClient(labels: Record<string, string>) {
-    return {
-      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels } }),
-      setMetadata: vi.fn().mockResolvedValue({}),
-    } satisfies MetadataLabelClient & {
-      getMetadata: ReturnType<typeof vi.fn>;
-      setMetadata: ReturnType<typeof vi.fn>;
-    };
+    return mockOperatorClient({ getMetadata: { metadata: { labels } }, setMetadata: {} });
   }
 
   test("drops an app id left over from a previous deploy when the config has none", async () => {
@@ -191,13 +187,10 @@ describe("config metadata against the platform's label rules", () => {
 
 describe("writeMetadataLabels", () => {
   function createClient(labels: Record<string, string> | undefined) {
-    return {
-      getMetadata: vi.fn().mockResolvedValue(labels ? { metadata: { labels } } : {}),
-      setMetadata: vi.fn().mockResolvedValue({}),
-    } satisfies MetadataLabelClient & {
-      getMetadata: ReturnType<typeof vi.fn>;
-      setMetadata: ReturnType<typeof vi.fn>;
-    };
+    return mockOperatorClient({
+      getMetadata: labels ? { metadata: { labels } } : {},
+      setMetadata: {},
+    });
   }
 
   test("keeps labels the caller did not mention", async () => {
@@ -283,11 +276,11 @@ describe("writeMetadataLabels", () => {
 
 describe("withMetadataWriteBatch", () => {
   function createClient(labels: Record<string, string> = {}) {
-    return {
-      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels } }),
-      setMetadata: vi.fn().mockResolvedValue({}),
-      bulkSetMetadata: vi.fn().mockResolvedValue({ results: [] }),
-    } satisfies MetadataLabelBulkClient;
+    return mockOperatorClient({
+      getMetadata: { metadata: { labels } },
+      setMetadata: {},
+      bulkSetMetadata: { results: [] },
+    });
   }
 
   function createStatefulClient(
@@ -299,24 +292,25 @@ describe("withMetadataWriteBatch", () => {
   ) {
     const client = createClient();
     let bulkCall = 0;
-    client.getMetadata.mockImplementation(async ({ trn }: { trn: string }) => {
+    client.getMetadata.mockImplementation(async (request) => {
+      const trn = request.trn ?? "";
       hooks.beforeGet?.(trn);
       return { metadata: { labels: { ...labelsByTrn.get(trn) } } };
     });
-    client.bulkSetMetadata.mockImplementation(
-      async ({ requests }: Parameters<MetadataLabelBulkClient["bulkSetMetadata"]>[0]) => {
-        if (!requests) throw new Error("BulkSetMetadata test request is missing requests");
-        bulkCall += 1;
-        for (const request of requests) {
-          if (!request.trn || !request.labels) {
-            throw new Error("BulkSetMetadata test entry is missing trn or labels");
-          }
-          labelsByTrn.set(request.trn, { ...request.labels });
+    client.bulkSetMetadata.mockImplementation(async (bulkRequest) => {
+      if (!bulkRequest.requests) {
+        throw new Error("BulkSetMetadata test request is missing requests");
+      }
+      bulkCall += 1;
+      for (const request of bulkRequest.requests) {
+        if (!request.trn || !request.labels) {
+          throw new Error("BulkSetMetadata test entry is missing trn or labels");
         }
-        hooks.afterBulkWrite?.(bulkCall);
-        return { results: [] };
-      },
-    );
+        labelsByTrn.set(request.trn, { ...request.labels });
+      }
+      hooks.afterBulkWrite?.(bulkCall);
+      return { results: [] };
+    });
     return client;
   }
 
@@ -363,7 +357,7 @@ describe("withMetadataWriteBatch", () => {
     expect(client.getMetadata).toHaveBeenCalledTimes(101);
     expect(client.setMetadata).not.toHaveBeenCalled();
     expect(client.bulkSetMetadata).toHaveBeenCalledTimes(2);
-    expect(client.bulkSetMetadata.mock.calls.map(([request]) => request.requests.length)).toEqual([
+    expect(client.bulkSetMetadata.mock.calls.map(([request]) => request.requests?.length)).toEqual([
       100, 1,
     ]);
   });
@@ -436,17 +430,17 @@ describe("withMetadataWriteBatch", () => {
 
   test("packs changed TRNs across read waves", async () => {
     const client = createClient();
-    client.getMetadata.mockImplementation(async ({ trn }: { trn: string }) => ({
-      metadata: {
-        labels: Number(trn.slice(-3)) % 3 === 0 ? {} : { mine: "value" },
-      },
-    }));
+    client.getMetadata.mockImplementation(async (request) => {
+      const labels: Record<string, string> =
+        Number(request.trn?.slice(-3)) % 3 === 0 ? {} : { mine: "value" };
+      return { metadata: { labels } };
+    });
 
     await withMetadataWriteBatch(client, (batchClient) => queueMetadataWrites(batchClient, 301));
 
     expect(client.getMetadata).toHaveBeenCalledTimes(401);
     expect(client.bulkSetMetadata).toHaveBeenCalledTimes(2);
-    expect(client.bulkSetMetadata.mock.calls.map(([request]) => request.requests.length)).toEqual([
+    expect(client.bulkSetMetadata.mock.calls.map(([request]) => request.requests?.length)).toEqual([
       100, 1,
     ]);
   });
@@ -454,14 +448,13 @@ describe("withMetadataWriteBatch", () => {
   test("keeps later metadata reads in parallel when a batch is nearly full", async () => {
     const client = createClient();
     const probe = createConcurrencyProbe();
-    client.getMetadata.mockImplementation(async ({ trn }: { trn: string }) => {
-      const index = Number(trn.slice(-3));
+    client.getMetadata.mockImplementation(async (request) => {
+      const index = Number(request.trn?.slice(-3));
       if (index >= 100) {
         await probe.run();
       }
-      return {
-        metadata: { labels: index < 99 ? {} : { mine: "value" } },
-      };
+      const labels: Record<string, string> = index < 99 ? {} : { mine: "value" };
+      return { metadata: { labels } };
     });
 
     await withMetadataWriteBatch(client, (batchClient) => queueMetadataWrites(batchClient, 200));
@@ -493,18 +486,18 @@ describe("withMetadataWriteBatch", () => {
 
     expect(labelsByTrn.get("trn:101")).toEqual({ external: "value", mine: "value" });
     expect(client.bulkSetMetadata).toHaveBeenCalledTimes(2);
-    expect(client.bulkSetMetadata.mock.calls.map(([request]) => request.requests.length)).toEqual([
+    expect(client.bulkSetMetadata.mock.calls.map(([request]) => request.requests?.length)).toEqual([
       100, 100,
     ]);
   });
 
   test("does not reread changes that only appear in the final read wave", async () => {
     const client = createClient();
-    client.getMetadata.mockImplementation(async ({ trn }: { trn: string }) => ({
-      metadata: {
-        labels: Number(trn.slice(-3)) < 100 ? { mine: "value" } : {},
-      },
-    }));
+    client.getMetadata.mockImplementation(async (request) => {
+      const labels: Record<string, string> =
+        Number(request.trn?.slice(-3)) < 100 ? { mine: "value" } : {};
+      return { metadata: { labels } };
+    });
 
     await withMetadataWriteBatch(client, (batchClient) => queueMetadataWrites(batchClient, 200));
 
@@ -706,32 +699,16 @@ describe("withMetadataWriteBatch", () => {
 describe("setMetadata call sites", () => {
   const srcDir = path.resolve(__dirname, "../../..");
 
-  function sourceFiles(dir: string): string[] {
-    return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-      // Service tests create and delete temporary source trees while this runs;
-      // they are fixtures, not production call sites.
-      if (entry.name.startsWith(".") || entry.name.startsWith("__test_")) return [];
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) return sourceFiles(full);
-      return entry.isFile() && full.endsWith(".ts") && !full.endsWith(".test.ts") ? [full] : [];
-    });
-  }
-
   function callsSetMetadata(file: string): boolean {
-    try {
-      // \s so a call the formatter wrapped across lines still counts.
-      return /\.\s*setMetadata\s*\(/.test(fs.readFileSync(file, "utf-8"));
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
-      throw error;
-    }
+    // \s so a call the formatter wrapped across lines still counts.
+    return /\.\s*setMetadata\s*\(/.test(fs.readFileSync(file, "utf-8"));
   }
 
   test("only the helper calls setMetadata directly", () => {
     // SetMetadata replaces the whole label map, so a call that does not re-read
     // first can delete labels written since this process last looked. Route new
     // writes through writeMetadataLabels instead of adding a call site here.
-    const files = sourceFiles(srcDir);
+    const files = listSourceFiles(srcDir);
     const relativeFiles = files.map((file) => path.relative(srcDir, file));
     expect(relativeFiles).toContain("cli/commands/deploy/label.ts");
 

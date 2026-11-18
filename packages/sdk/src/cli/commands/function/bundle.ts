@@ -9,11 +9,13 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import * as rolldown from "rolldown";
+import { createHookFailures } from "#/cli/services/hook-failures";
 import { createBundleLog } from "#/cli/shared/bundle-log";
 import {
   createLogLevelTreeshakeOptions,
   resolveBundleLogLevel,
 } from "#/cli/shared/bundle-log-level";
+import { createCliEntryExternalPlugin } from "#/cli/shared/cli-entry-external";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import {
   composeFunctionTreeshakeOptions,
@@ -131,46 +133,50 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
   const tsconfig = await resolveTSConfigWithFallback(baseDir);
 
   const bundleLog = createBundleLog({ tsconfig });
-  const buildResult = await rolldown.build({
-    plugins: [
-      createGeneratedEntryResolverPlugin(entryPath, baseDir),
-      createTsconfigPathsPlugin(),
-      createPlatformBundleDefinePlugin(
-        detected.type === "resolver"
-          ? resolverDateRepresentations(detected.fields, dateDefault)
-          : { date: true, temporal: true },
-        dateDefault,
-        kyselyTemporal,
-      ),
-      createSdkBuilderPurePlugin(),
-    ],
-    input: entryPath,
-    write: false,
-    output: {
-      format: "esm",
-      sourcemap: true,
-      minify: inlineSourcemap
-        ? {
-            mangle: {
-              keepNames: true,
-            },
-          }
-        : true,
-      comments: FUNCTION_BUNDLE_COMMENT_OPTIONS,
-      codeSplitting: false,
-      // Emit sourcemap `sources` relative to cwd so stack traces resolve
-      // back to paths a user can open (e.g. `resolvers/add.ts`), not the
-      // rolldown-default virtual output dir which produces spurious `..`
-      // segments.
-      dir: process.cwd(),
-    },
-    tsconfig,
-    treeshake: composeFunctionTreeshakeOptions([
-      createLogLevelTreeshakeOptions(bundleLogLevel),
-      createUserTreeshakeOptions(options.treeshake),
-    ]),
-    ...bundleLog.options,
-  } as rolldown.BuildOptions);
+  const hookFailures = createHookFailures();
+  const buildResult = await hookFailures.run(() =>
+    rolldown.build({
+      plugins: [
+        createCliEntryExternalPlugin(hookFailures),
+        createGeneratedEntryResolverPlugin(entryPath, baseDir),
+        createTsconfigPathsPlugin(),
+        createPlatformBundleDefinePlugin(
+          detected.type === "resolver"
+            ? resolverDateRepresentations(detected.fields, dateDefault)
+            : { date: true, temporal: true },
+          dateDefault,
+          kyselyTemporal,
+        ),
+        createSdkBuilderPurePlugin(),
+      ],
+      input: entryPath,
+      write: false,
+      output: {
+        format: "esm",
+        sourcemap: true,
+        minify: inlineSourcemap
+          ? {
+              mangle: {
+                keepNames: true,
+              },
+            }
+          : true,
+        comments: FUNCTION_BUNDLE_COMMENT_OPTIONS,
+        codeSplitting: false,
+        // Emit sourcemap `sources` relative to cwd so stack traces resolve
+        // back to paths a user can open (e.g. `resolvers/add.ts`), not the
+        // rolldown-default virtual output dir which produces spurious `..`
+        // segments.
+        dir: process.cwd(),
+      },
+      tsconfig,
+      treeshake: composeFunctionTreeshakeOptions([
+        createLogLevelTreeshakeOptions(bundleLogLevel),
+        createUserTreeshakeOptions(options.treeshake),
+      ]),
+      ...bundleLog.options,
+    } as rolldown.BuildOptions),
+  );
   bundleLog.assertAllResolved();
 
   const chunk = buildResult.output[0];

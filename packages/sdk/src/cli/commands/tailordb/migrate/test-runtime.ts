@@ -31,6 +31,7 @@ import { buildOptionsOf } from "#/cli/shared/build-options";
 import { getOrNull, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadPlatformClientConfig, loadWorkspaceId } from "#/cli/shared/context";
 import { effectiveDateDefault } from "#/cli/shared/date-default";
+import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { executeScript } from "#/cli/shared/script-executor";
@@ -331,7 +332,7 @@ export function loadSnapshotSeedData(
     const jsonlPath = path.join(dataDir, `${tableName}.jsonl`);
     let content: string;
     try {
-      content = fs.readFileSync(jsonlPath, "utf8").trim();
+      content = fs.readFileSync(jsonlPath, "utf8");
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         data[tableName] = [];
@@ -339,30 +340,42 @@ export function loadSnapshotSeedData(
       }
       throw error;
     }
-    data[tableName] = content
-      ? content.split("\n").map((line, index) => {
-          let value: unknown;
-          try {
-            value = JSON.parse(line);
-          } catch (error) {
-            throw CLIError({
-              code: "SEED_DATA_INVALID",
-              message: `Invalid JSON in ${jsonlPath} at line ${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
-              cause: error,
-            });
-          }
-          if (value === null || typeof value !== "object" || Array.isArray(value)) {
-            throw CLIError({
-              code: "SEED_DATA_INVALID",
-              message: `Invalid seed row in ${jsonlPath} at line ${index + 1}: expected a JSON object`,
-            });
-          }
-          const row = value as JsonObject;
-          return snapshotType ? projectSeedObject(row, snapshotType.fields, new Set(["id"])) : row;
-        })
-      : [];
+    const lines = (content.startsWith("\uFEFF") ? content.slice(1) : content).split("\n");
+    data[tableName] = lines.flatMap((raw, index) => {
+      const text = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
+      if (text.trim().length === 0) return [];
+      const line = index + 1;
+      let value: unknown;
+      try {
+        value = JSON.parse(text);
+      } catch (error) {
+        throw seedRowInvalidError(
+          jsonlPath,
+          line,
+          `Invalid JSON: ${error instanceof Error ? error.message : String(error)}`,
+          error,
+        );
+      }
+      if (value === null || typeof value !== "object" || Array.isArray(value)) {
+        throw seedRowInvalidError(jsonlPath, line, "Invalid seed row: expected a JSON object");
+      }
+      const row = value as JsonObject;
+      return [snapshotType ? projectSeedObject(row, snapshotType.fields, new Set(["id"])) : row];
+    });
   }
   return data;
+}
+
+function seedRowInvalidError(
+  file: string,
+  line: number,
+  message: string,
+  cause?: unknown,
+): CLIError {
+  return withErrorDiagnostics(
+    CLIError({ code: "SEED_DATA_INVALID", message, context: { file, line }, cause }),
+    { location: { file, line } },
+  );
 }
 
 function projectSeedObject(

@@ -15,7 +15,7 @@ import {
   toPageDirection,
   workspaceArgs,
 } from "#/cli/shared/args";
-import { fetchPaged } from "#/cli/shared/client";
+import { fetchAll, fetchPaged, getOrNull } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { CLIError } from "#/cli/shared/errors";
 import { formatKeyValueTable } from "#/cli/shared/format";
@@ -36,6 +36,7 @@ import {
   type WorkflowJobExecutionInfo,
   toWorkflowExecutionInfo,
   toWorkflowJobExecutionInfo,
+  workflowJobExecutionLabel,
 } from "./transform";
 import {
   getWorkflowWaitFailure,
@@ -101,6 +102,39 @@ function parseStatus(status: string): WorkflowExecution_Status {
   return parsed;
 }
 
+function startOrFinishTime(execution: WorkflowExecutionInfo): number {
+  return (execution.startedAt ?? execution.finishedAt)?.getTime() ?? Infinity;
+}
+
+function precedes(candidate: number, current: number, order: Order): boolean {
+  return order === "asc" ? candidate < current : candidate > current;
+}
+
+function mergeByStartOrFinishTime(
+  lists: WorkflowExecutionInfo[][],
+  order: Order,
+  limit: number | undefined,
+): WorkflowExecutionInfo[] {
+  const cursors = lists.map((items) => ({ items, index: 0 }));
+  const merged: WorkflowExecutionInfo[] = [];
+  while (!limit || merged.length < limit) {
+    let next: { cursor: (typeof cursors)[number]; execution: WorkflowExecutionInfo } | undefined;
+    for (const cursor of cursors) {
+      const execution = cursor.items[cursor.index];
+      if (
+        execution &&
+        (!next || precedes(startOrFinishTime(execution), startOrFinishTime(next.execution), order))
+      ) {
+        next = { cursor, execution };
+      }
+    }
+    if (!next) break;
+    merged.push(next.execution);
+    next.cursor.index++;
+  }
+  return merged;
+}
+
 /**
  * List workflow executions with optional filters.
  *
@@ -108,6 +142,13 @@ function parseStatus(status: string): WorkflowExecution_Status {
  * function pages through every execution. The CLI caps this at 50 by
  * default via `pagedLogArgs`; programmatic callers that want the same
  * cap should pass `limit: 50` explicitly.
+ *
+ * Without `options.workflow`, it lists the executions of every workflow in the
+ * workspace: executions of different workflows are interleaved by start time,
+ * or by finish time for one that finished without starting, while each
+ * workflow's executions keep their creation order. An execution that has
+ * neither started nor finished counts as newer than every started or finished
+ * one.
  * @param options - Workflow execution listing options
  * @returns List of workflow executions
  */
@@ -142,23 +183,44 @@ export async function listWorkflowExecutions<W extends WorkflowLike>(
         })
       : undefined;
 
-  const pageDirection = toPageDirection(options?.order ?? "desc");
-  const executions = await fetchPaged(
-    async (pageToken, pageSize) => {
-      const { executions, nextPageToken } = await client.listWorkflowExecutions({
-        workspaceId,
-        workflowName: workflowName ?? "",
-        pageToken,
-        pageSize,
-        pageDirection,
-        filter,
-      });
-      return [executions, nextPageToken];
-    },
-    { limit: options?.limit },
-  );
+  const order = options?.order ?? "desc";
+  const pageDirection = toPageDirection(order);
+  const listExecutionsOf = async (name: string) => {
+    const executions = await fetchPaged(
+      async (pageToken, pageSize) => {
+        const { executions, nextPageToken } = await client.listWorkflowExecutions({
+          workspaceId,
+          workflowName: name,
+          pageToken,
+          pageSize,
+          pageDirection,
+          filter,
+        });
+        return [executions, nextPageToken];
+      },
+      { limit: options?.limit },
+    );
+    return executions.map(toWorkflowExecutionInfo);
+  };
 
-  return executions.map(toWorkflowExecutionInfo);
+  if (workflowName !== undefined) {
+    return await listExecutionsOf(workflowName);
+  }
+
+  const workflows = await fetchAll(async (pageToken, pageSize) => {
+    const { workflows, nextPageToken } = await client.listWorkflows({
+      workspaceId,
+      pageToken,
+      pageSize,
+    });
+    return [workflows, nextPageToken];
+  });
+  const lists = await Promise.all(
+    workflows.map(
+      async (workflow) => (await getOrNull(() => listExecutionsOf(workflow.name))) ?? [],
+    ),
+  );
+  return mergeByStartOrFinishTime(lists, order, options?.limit);
 }
 
 /**
@@ -285,7 +347,10 @@ export function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): 
   if (execution.jobDetails && execution.jobDetails.length > 0) {
     logger.log(styles.bold("\nJob Executions:"));
     for (const job of execution.jobDetails) {
-      logger.log(styles.info(`\n--- ${job.stackedJobName} ---`));
+      logger.log(styles.info(`\n--- ${workflowJobExecutionLabel(job)} ---`));
+      if (job.kind.type !== "unknown") {
+        logger.log(`  ID: ${job.id}`);
+      }
       logger.log(`  Status: ${job.status}`);
       logger.log(`  Started: ${formatDate(job.startedAt)}`);
       logger.log(`  Finished: ${formatDate(job.finishedAt)}`);

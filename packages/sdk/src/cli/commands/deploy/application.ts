@@ -8,6 +8,7 @@ import {
 import {
   fetchAllTolerant,
   getOrNull,
+  listAuthIDPConfigsTolerant,
   resolveStaticWebsiteUrls,
   type OperatorClient,
 } from "#/cli/shared/client";
@@ -364,18 +365,7 @@ export async function planApplication(
     if (context.externalAuthIdpConfigNames?.has(authNamespace)) {
       authIdpConfigName = context.externalAuthIdpConfigNames.get(authNamespace);
     } else {
-      const idpConfigs = await fetchAllTolerant(async (pageToken, maxPageSize) => {
-        const { idpConfigs, nextPageToken } = await client.listAuthIDPConfigs({
-          workspaceId,
-          namespaceName: assertDefined(
-            authNamespace,
-            "authNamespace must be set before listing IDP configs",
-          ),
-          pageToken,
-          pageSize: maxPageSize,
-        });
-        return [idpConfigs, nextPageToken];
-      });
+      const idpConfigs = await listAuthIDPConfigsTolerant(client, workspaceId, authNamespace);
       if (idpConfigs.length > 0) {
         const [firstConfig] = idpConfigs;
         if (firstConfig) {

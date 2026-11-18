@@ -5,6 +5,7 @@ import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { revokeAuthConnectionCommand } from "./revoke";
 
 vi.mock("#/cli/shared/operator-context", () => ({
@@ -21,13 +22,15 @@ vi.mock("#/cli/shared/readonly-guard", () => ({
   assertWritable: vi.fn(),
 }));
 
+function mockContextClient() {
+  const client = mockOperatorClient({ revokeAuthConnection: {} });
+  vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({ client, workspaceId: "workspace-1" });
+  return client;
+}
+
 describe("authconnection revoke command", () => {
   test("fails without revoking when the entered name does not match", async () => {
-    const client = { revokeAuthConnection: vi.fn().mockResolvedValue({}) };
-    vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
-      client,
-      workspaceId: "workspace-1",
-    } as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>);
+    const client = mockContextClient();
     vi.mocked(prompt.text).mockResolvedValue("other");
 
     const result = await runCommand(revokeAuthConnectionCommand, ["--name", "google"]);
@@ -42,11 +45,7 @@ describe("authconnection revoke command", () => {
   });
 
   test("revokes when the entered name matches", async () => {
-    const client = { revokeAuthConnection: vi.fn().mockResolvedValue({}) };
-    vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
-      client,
-      workspaceId: "workspace-1",
-    } as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>);
+    const client = mockContextClient();
     vi.mocked(prompt.text).mockResolvedValue("google");
 
     const result = await runCommand(revokeAuthConnectionCommand, ["--name", "google"]);
@@ -59,11 +58,7 @@ describe("authconnection revoke command", () => {
   });
 
   test("prints the revoked connection under JSON output", async () => {
-    const client = { revokeAuthConnection: vi.fn().mockResolvedValue({}) };
-    vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
-      client,
-      workspaceId: "workspace-1",
-    } as unknown as Awaited<ReturnType<typeof loadOperatorWorkspaceContext>>);
+    mockContextClient();
     using _json = jsonMode();
     using stdout = captureStdout();
 

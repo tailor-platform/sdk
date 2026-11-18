@@ -1,5 +1,21 @@
 # @tailor-platform/create-sdk
 
+## 2.43.0
+
+### Patch Changes
+
+- [#3143](https://github.com/tailor-platform/sdk/pull/3143) [`7ee57a9`](https://github.com/tailor-platform/sdk/commit/7ee57a9fad139911390e0efdf2f58f1d448fc441) Thanks [@toiroakr](https://github.com/toiroakr)! - Mark the content mapper as a beta feature: the `contentMapper` option of `kyselyTypePlugin`, `getDB` from `@tailor-platform/sdk/plugin/kysely-type/db`, the docs, and the `content-mapper` template README now say so. It depends on TypeScript 7.1, which is still in development, and the `contentMappers` option is not final, so its behavior may change in a future release.
+
+## 2.42.0
+
+### Minor Changes
+
+- [#3102](https://github.com/tailor-platform/sdk/pull/3102) [`bfc6357`](https://github.com/tailor-platform/sdk/commit/bfc6357b6b7aef7e88629fadd5d42f2a569b8c8e) Thanks [@dqn](https://github.com/dqn)! - Add the `content-mapper` template. TypeScript derives its types from `tailor.config.ts` through the SDK's content mapper instead of `tailor.d.ts`. It pins `typescript@7.1.0-beta`, since the content mapper needs TypeScript 7.1.
+
+### Patch Changes
+
+- [#3122](https://github.com/tailor-platform/sdk/pull/3122) [`29c786b`](https://github.com/tailor-platform/sdk/commit/29c786bc003eba593f45af816efe3058e58b9b7e) Thanks [@dqn](https://github.com/dqn)! - Fix the deprecation notice on the generated `uploadFile` overload for string data without `encoding`: it now reads `since 2.15.0` instead of `since NEXT_RELEASE`. Run `tailor generate` to update existing helpers.
+
 ## 2.41.0
 
 ### Minor Changes

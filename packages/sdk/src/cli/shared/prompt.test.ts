@@ -257,4 +257,57 @@ describe("prompt", () => {
       }
     });
   });
+
+  describe("cancellation", () => {
+    aroundEach(async (runTest) => {
+      vi.resetModules();
+      vi.doMock("std-env", () => ({ isCI: false }));
+      const stdin = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
+      const stdout = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
+      Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: true });
+      Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: true });
+      try {
+        await runTest();
+      } finally {
+        vi.restoreAllMocks();
+        if (stdin) Object.defineProperty(process.stdin, "isTTY", stdin);
+        if (stdout) Object.defineProperty(process.stdout, "isTTY", stdout);
+      }
+    });
+
+    async function askWithRejection(error: Error) {
+      vi.doMock("@inquirer/prompts", () => ({
+        confirm: vi.fn(),
+        input: vi.fn(),
+        select: vi.fn(),
+        password: vi.fn().mockRejectedValue(error),
+      }));
+      const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+      const { prompt } = await import("./prompt");
+      const result = await prompt.password({ message: "secret" }).then(
+        () => undefined,
+        (e: unknown) => e,
+      );
+      return { exit, result };
+    }
+
+    test("exits with 130 for an ExitPromptError raised by another copy of @inquirer/core", async () => {
+      class ExitPromptError extends Error {
+        override name = "ExitPromptError";
+      }
+
+      const { exit } = await askWithRejection(new ExitPromptError("User force closed the prompt"));
+
+      expect(exit).toHaveBeenCalledWith(130);
+    });
+
+    test("rethrows an error that is not an interruption", async () => {
+      const failure = new Error("boom");
+
+      const { exit, result } = await askWithRejection(failure);
+
+      expect(exit).not.toHaveBeenCalled();
+      expect(result).toBe(failure);
+    });
+  });
 });

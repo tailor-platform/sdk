@@ -1,4 +1,5 @@
-import { createCommonArgs, runCommand } from "@tailor-platform/sdk/cli";
+import { createCommonArgs, errorToJson, runCommand } from "@tailor-platform/sdk/cli";
+import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { z } from "zod";
 import { seedApplyCommand } from "./apply";
@@ -23,6 +24,7 @@ const workflow = vi.hoisted(() => ({
 
 const jsonl = vi.hoisted(() => ({
   assertSeedDataDirectory: vi.fn(),
+  loadLocatedSeedRows: vi.fn(),
   loadSeedData: vi.fn(),
 }));
 
@@ -51,7 +53,10 @@ vi.mock("@tailor-platform/sdk/cli", async (importOriginal) => ({
   logger,
 }));
 vi.mock("./seed-data", () => seedModule);
-vi.mock("./jsonl", () => jsonl);
+vi.mock("./jsonl", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./jsonl")>()),
+  ...jsonl,
+}));
 vi.mock("./datasets", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./datasets")>()),
   ...datasets,
@@ -108,10 +113,9 @@ beforeEach(() => {
     }),
   );
   jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
-    Object.fromEntries(
-      typeNames.map((typeName) => [typeName, typeName === "_User" ? [{ name: "Ada" }] : []]),
-    ),
+    Object.fromEntries(typeNames.map((typeName) => [typeName, []])),
   );
+  jsonl.loadLocatedSeedRows.mockReturnValue(locatedUserRows([{ name: "Ada" }]));
 });
 
 afterEach(() => {
@@ -137,6 +141,13 @@ function idpScriptResult(name: string, users: IdpUserRef[], chunk?: unknown[]): 
     return JSON.stringify({ success: true, deleted: total, notFound: 0, total, errors: [] });
   }
   return '{"success":true,"processed":1}';
+}
+
+function locatedUserRows(rows: Record<string, unknown>[]) {
+  return rows.map((row, index) => ({
+    row,
+    location: { file: "/seed/data/_User.jsonl", line: index + 1 },
+  }));
 }
 
 function runApplyCommand(args: string[]) {
@@ -167,7 +178,7 @@ describe("seedApplyCommand", () => {
     expect(datasets.selectDatasets).toHaveBeenCalledWith(expect.anything(), [], true);
     const dirs = [...(noBase ? [] : ["/seed/data"]), "/seed/data/cogs", "/seed/data/local"];
     expect(jsonl.loadSeedData).toHaveBeenCalledWith(dirs, ["User"], expect.anything());
-    expect(jsonl.loadSeedData).toHaveBeenCalledWith(dirs, ["_User"], { keyField: "name" });
+    expect(jsonl.loadLocatedSeedRows).toHaveBeenCalledWith(dirs, "_User", { keyField: "name" });
     expect(sdk.truncate).toHaveBeenCalledWith({
       configPath: "tailor.config.ts",
       profile: undefined,
@@ -180,13 +191,6 @@ describe("seedApplyCommand", () => {
   });
 
   describe("_User password", () => {
-    const rowsWithoutPassword = () =>
-      jsonl.loadSeedData.mockImplementation((_dirs: string[], typeNames: string[]) =>
-        Object.fromEntries(
-          typeNames.map((typeName) => [typeName, typeName === "_User" ? [{ name: "Ada" }] : []]),
-        ),
-      );
-
     test("passes the rows through the _User schema hook from the base data directory", async () => {
       await runApply(["_User"]);
       expect(seedModule.hookSeedRows).toHaveBeenCalledWith({
@@ -197,13 +201,8 @@ describe("seedApplyCommand", () => {
     });
 
     test("sends a password the hook supplied as initialPassword and keeps one written in the file", async () => {
-      jsonl.loadSeedData.mockImplementation((_dirs: string[], typeNames: string[]) =>
-        Object.fromEntries(
-          typeNames.map((typeName) => [
-            typeName,
-            typeName === "_User" ? [{ name: "Ada" }, { name: "Bob", password: "own" }] : [],
-          ]),
-        ),
+      jsonl.loadLocatedSeedRows.mockReturnValue(
+        locatedUserRows([{ name: "Ada" }, { name: "Bob", password: "own" }]),
       );
       await runApply(["--upsert", "_User"]);
       expect(workflow.runScript).toHaveBeenCalledWith(
@@ -220,7 +219,6 @@ describe("seedApplyCommand", () => {
     });
 
     test("still sends a row without password when the environment has none", async () => {
-      rowsWithoutPassword();
       seedModule.hookSeedRows.mockImplementation(async ({ rows }: { rows: unknown[] }) => rows);
       await runApply(["_User"]);
       expect(workflow.runScript).toHaveBeenCalledWith(
@@ -264,7 +262,7 @@ describe("seedApplyCommand", () => {
       requireId: false,
       requiredFieldsByType: {},
     });
-    expect(jsonl.loadSeedData).toHaveBeenCalledWith(["/seed/data"], ["_User"], {
+    expect(jsonl.loadLocatedSeedRows).toHaveBeenCalledWith(["/seed/data"], "_User", {
       keyField: "name",
     });
   });
@@ -284,7 +282,9 @@ describe("seedApplyCommand", () => {
     );
     const dataDirs = ["/seed/data", "/seed/data/cogs", "/seed/data/local"];
     expect(jsonl.loadSeedData).toHaveBeenCalledWith(dataDirs, ["User"], expect.anything());
-    expect(jsonl.loadSeedData).toHaveBeenCalledWith(dataDirs, ["_User"], { keyField: "name" });
+    expect(jsonl.loadLocatedSeedRows).toHaveBeenCalledWith(dataDirs, "_User", {
+      keyField: "name",
+    });
     expect(logger.out).toHaveBeenCalledWith(
       expect.objectContaining({ success: true, datasets: ["cogs", "local"] }),
     );
@@ -313,19 +313,50 @@ describe("seedApplyCommand", () => {
     expect(String(result.error)).toContain("--no-base needs at least one --dataset");
     expect(sdk.show).not.toHaveBeenCalled();
     expect(jsonl.loadSeedData).not.toHaveBeenCalled();
+    expect(jsonl.loadLocatedSeedRows).not.toHaveBeenCalled();
   });
 
   test("reads every row before truncating, so unreadable data changes nothing", async () => {
-    jsonl.loadSeedData.mockImplementation((_dataDirs: string[], typeNames: string[]) => {
-      if (typeNames.includes("_User")) {
-        throw new Error("/seed/data/local/_User.jsonl:1: name is already defined");
-      }
-      return { User: [] };
+    jsonl.loadLocatedSeedRows.mockImplementation(() => {
+      throw new Error('name "Ada" is already defined at _User.jsonl:1.');
     });
 
     const result = await runApplyCommand(["--machine-user", "manager", "--truncate", "--yes"]);
 
     expect(result.exitCode).toBe(1);
+    expect(sdk.show).not.toHaveBeenCalled();
+    expect(sdk.truncate).not.toHaveBeenCalled();
+    expect(workflow.runScript).not.toHaveBeenCalled();
+  });
+
+  test("rejects _User rows that repeat a name at their lines before truncating or applying anything", async () => {
+    datasets.selectDatasets.mockReturnValue({ names: ["local"], dirs: ["/seed/data/local"] });
+    const base = path.join(process.cwd(), "seed/data/_User.jsonl");
+    const local = path.join(process.cwd(), "seed/data/local/_User.jsonl");
+    jsonl.loadLocatedSeedRows.mockReturnValue([
+      { row: { name: "Ada" }, location: { file: base, line: 1 } },
+      { row: { name: "Bob" }, location: { file: base, line: 2 } },
+      { row: { name: "Ada" }, location: { file: base, line: 4 } },
+      { row: { name: "Carol" }, location: { file: local, line: 1 } },
+      { row: { name: "Carol" }, location: { file: local, line: 2 } },
+    ]);
+
+    const result = await runApplyCommand([
+      "--machine-user",
+      "manager",
+      "--dataset",
+      "local",
+      "--truncate",
+      "--yes",
+    ]);
+
+    expect(result.exitCode).toBe(1);
+    expect(errorToJson(result.error).error.message).toBe(
+      "seed/data/_User.jsonl:4: _User has rows that repeat a name, so nothing was applied. " +
+        "Remove the repeated rows and run the command again.\n" +
+        "seed/data/_User.jsonl:4 (Ada): duplicate of seed/data/_User.jsonl:1\n" +
+        "seed/data/local/_User.jsonl:2 (Carol): duplicate of seed/data/local/_User.jsonl:1",
+    );
     expect(sdk.show).not.toHaveBeenCalled();
     expect(sdk.truncate).not.toHaveBeenCalled();
     expect(workflow.runScript).not.toHaveBeenCalled();
@@ -577,9 +608,7 @@ describe("seedApplyCommand", () => {
 
   test("splits _User rows into row-count chunks and aggregates processed counts", async () => {
     const rows = Array.from({ length: 51 }, (_, i) => ({ name: `user-${i}` }));
-    jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
-      Object.fromEntries(typeNames.map((typeName) => [typeName, typeName === "_User" ? rows : []])),
-    );
+    jsonl.loadLocatedSeedRows.mockReturnValue(locatedUserRows(rows));
     workflow.runScript.mockImplementation(
       ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) =>
         Promise.resolve({
@@ -622,9 +651,7 @@ describe("seedApplyCommand", () => {
 
   test("reports the processed counts before rethrowing when the _User workflow cannot be registered", async () => {
     const rows = Array.from({ length: 3 }, (_, i) => ({ name: `user-${i}` }));
-    jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
-      Object.fromEntries(typeNames.map((typeName) => [typeName, typeName === "_User" ? rows : []])),
-    );
+    jsonl.loadLocatedSeedRows.mockReturnValue(locatedUserRows(rows));
     const setupError = new Error("permission denied: create workflow");
     sdk.withScriptWorkflow.mockRejectedValue(setupError);
 
@@ -637,9 +664,7 @@ describe("seedApplyCommand", () => {
 
   test("reports confirmed progress before rethrowing a _User chunk transport error", async () => {
     const rows = Array.from({ length: 30 }, (_, i) => ({ name: `user-${i}` }));
-    jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
-      Object.fromEntries(typeNames.map((typeName) => [typeName, typeName === "_User" ? rows : []])),
-    );
+    jsonl.loadLocatedSeedRows.mockReturnValue(locatedUserRows(rows));
     const transportError = new Error("[deadline_exceeded] context deadline exceeded");
     let idpCallCount = 0;
     workflow.runScript.mockImplementation(
@@ -689,9 +714,7 @@ describe("seedApplyCommand", () => {
 
   test("continues after a known _User row failure and reports confirmed totals", async () => {
     const rows = Array.from({ length: 51 }, (_, i) => ({ name: `user-${i}` }));
-    jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
-      Object.fromEntries(typeNames.map((typeName) => [typeName, typeName === "_User" ? rows : []])),
-    );
+    jsonl.loadLocatedSeedRows.mockReturnValue(locatedUserRows(rows));
     let idpCallCount = 0;
     workflow.runScript.mockImplementation(
       ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) => {
@@ -732,9 +755,7 @@ describe("seedApplyCommand", () => {
 
   test("stops and reports progress when a _User chunk execution fails without a result", async () => {
     const rows = Array.from({ length: 51 }, (_, i) => ({ name: `user-${i}` }));
-    jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
-      Object.fromEntries(typeNames.map((typeName) => [typeName, typeName === "_User" ? rows : []])),
-    );
+    jsonl.loadLocatedSeedRows.mockReturnValue(locatedUserRows(rows));
     let idpCallCount = 0;
     workflow.runScript.mockImplementation(
       ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) => {
@@ -787,9 +808,7 @@ describe("seedApplyCommand", () => {
 
   test("stops and reports progress when a _User chunk returns an unparseable result", async () => {
     const rows = Array.from({ length: 51 }, (_, i) => ({ name: `user-${i}` }));
-    jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
-      Object.fromEntries(typeNames.map((typeName) => [typeName, typeName === "_User" ? rows : []])),
-    );
+    jsonl.loadLocatedSeedRows.mockReturnValue(locatedUserRows(rows));
     let idpCallCount = 0;
     workflow.runScript.mockImplementation(
       ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) => {
@@ -836,12 +855,7 @@ describe("seedApplyCommand", () => {
 
   test("passes --upsert through to the TailorDB and IdP seed scripts", async () => {
     jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
-      Object.fromEntries(
-        typeNames.map((typeName) => [
-          typeName,
-          typeName === "_User" ? [{ name: "Ada" }] : [{ id: "u1" }],
-        ]),
-      ),
+      Object.fromEntries(typeNames.map((typeName) => [typeName, [{ id: "u1" }]])),
     );
     sdk.bundleSeedScript.mockResolvedValue({
       bundledCode: "code",

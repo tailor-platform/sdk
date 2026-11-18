@@ -34,7 +34,7 @@ workflows:
         - 'pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1'
     '.github/workflows/docs-consistency-check.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'anthropics/claude-code-action@4fa93a88de49bbef68b10eb15aabedf28ca0e1ed'
+        - 'anthropics/claude-code-action@469588f42e6b1e94cd14ad09dccfeaec772ce0fd'
     '.github/workflows/erd-schema.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1'
@@ -82,7 +82,7 @@ workflows:
         - 'pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1'
     '.github/workflows/renovate-auto-review.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'anthropics/claude-code-action@4fa93a88de49bbef68b10eb15aabedf28ca0e1ed'
+        - 'anthropics/claude-code-action@469588f42e6b1e94cd14ad09dccfeaec772ce0fd'
     '.github/workflows/renovate-policy-check.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     '.github/workflows/sdk-e2e.yml':
@@ -101,7 +101,7 @@ workflows:
         - 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333'
         - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
         - 'aquaproj/aqua-installer@611554c6f0137ba41c8dd15aca8bee82504ea461'
-        - 'csm-actions/securefix-action@75f446c03c22cc2cfc1c944577dfd0dac5111738'
+        - 'csm-actions/securefix-action@ebb1c87f14e7c20a81a8557d087d75f470aae886'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
         - 'pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1'
     '.github/workflows/skills-sync-check.yml':
@@ -154,9 +154,9 @@ dependencies:
         commit: 'sha1-cf430e030ddbb5b0abf93d22962f4752f3646cd9'
         owner_id: 44036562
         repo_id: 192625955
-    'anthropics/claude-code-action@4fa93a88de49bbef68b10eb15aabedf28ca0e1ed':
-        ref: 'v1.0.271'
-        commit: 'sha1-4fa93a88de49bbef68b10eb15aabedf28ca0e1ed'
+    'anthropics/claude-code-action@469588f42e6b1e94cd14ad09dccfeaec772ce0fd':
+        ref: 'v1.0.280'
+        commit: 'sha1-469588f42e6b1e94cd14ad09dccfeaec772ce0fd'
         owner_id: 76263028
         repo_id: 986421638
         uses:
@@ -171,9 +171,9 @@ dependencies:
         commit: 'sha1-ae32849d5ba541f9ae29e40e22a623bc13562f51'
         owner_id: 51163350
         repo_id: 202093906
-    'csm-actions/securefix-action@75f446c03c22cc2cfc1c944577dfd0dac5111738':
-        ref: 'v0.7.0'
-        commit: 'sha1-75f446c03c22cc2cfc1c944577dfd0dac5111738'
+    'csm-actions/securefix-action@ebb1c87f14e7c20a81a8557d087d75f470aae886':
+        ref: 'v0.7.1'
+        commit: 'sha1-ebb1c87f14e7c20a81a8557d087d75f470aae886'
         owner_id: 210189905
         repo_id: 947590271
     'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d':

@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import { stripVTControlCharacters } from "node:util";
 import { Code, ConnectError } from "@connectrpc/connect";
@@ -7,9 +8,9 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import {
   loadAccessToken,
+  loadPlatformClientConfig,
   loadStoredAccessTokenWithoutRefresh,
   platformConfigExists,
-  readEnvironmentToken,
 } from "#/cli/shared/context";
 import { CLIError } from "#/cli/shared/errors";
 import { CIPromptError, logger, setJsonDefaultAgent } from "#/cli/shared/logger";
@@ -41,7 +42,6 @@ vi.mock("#/cli/shared/context", async (importOriginal) => ({
   loadStoredAccessTokenWithoutRefresh: vi.fn(),
   loadPlatformClientConfig: vi.fn().mockResolvedValue(undefined),
   platformConfigExists: vi.fn(),
-  readEnvironmentToken: vi.fn(),
 }));
 
 function setTTY(value: boolean): Disposable {
@@ -101,7 +101,6 @@ describe("notification banner", () => {
     tty = setTTY(true);
     resetNotificationLookupForTests();
     ciState.isCI = false;
-    vi.mocked(readEnvironmentToken).mockReturnValue(undefined);
     vi.mocked(platformConfigExists).mockReturnValue(true);
     vi.mocked(loadStoredAccessTokenWithoutRefresh).mockResolvedValue({
       accessToken: "stored-token",
@@ -156,7 +155,14 @@ describe("notification banner", () => {
     expect(fs.existsSync(stateFile())).toBe(false);
   });
 
-  test("uses the stored login when no environment token is set", async () => {
+  test.each([
+    { name: "no environment token is set", token: undefined },
+    { name: "the environment token is empty", token: "" },
+  ])("uses the stored login when $name", async ({ token }) => {
+    vi.stubEnv("TAILOR_PLATFORM_TOKEN", token);
+    resolved([warning("a", "Region degraded")]);
+    using stderr = captureStderr();
+
     await run(["workspace", "list", "--profile", "staging"]);
 
     expect(loadStoredAccessTokenWithoutRefresh).toHaveBeenCalledWith({ profile: "staging" });
@@ -164,6 +170,7 @@ describe("notification banner", () => {
     expect(initOperatorClient).toHaveBeenCalledWith("stored-token", undefined, {
       renewToken: false,
     });
+    expect(stderr.text()).toContain("Region degraded");
   });
 
   test("uses the profile the command will use: the last one, in any spelling", async () => {
@@ -256,19 +263,24 @@ describe("notification banner", () => {
     expect(stderr.text()).toContain("unread notification");
   });
 
-  test("never reads the login when there is no token and no config file", async () => {
+  test.each([
+    { name: "no token", token: undefined },
+    { name: "an empty token", token: "" },
+  ])("reads no login or config when there is $name and no config file", async ({ token }) => {
+    vi.stubEnv("TAILOR_PLATFORM_TOKEN", token);
     vi.mocked(platformConfigExists).mockReturnValue(false);
 
     await run(["workspace", "list"]);
 
     expect(loadStoredAccessTokenWithoutRefresh).not.toHaveBeenCalled();
+    expect(loadPlatformClientConfig).not.toHaveBeenCalled();
     expect(initOperatorClient).not.toHaveBeenCalled();
     expect(fs.existsSync(stateFile())).toBe(false);
   });
 
   test("uses an environment token without touching the config", async () => {
     vi.mocked(platformConfigExists).mockReturnValue(false);
-    vi.mocked(readEnvironmentToken).mockReturnValue("env-token");
+    vi.stubEnv("TAILOR_PLATFORM_TOKEN", "env-token");
 
     await run(["workspace", "list"]);
 

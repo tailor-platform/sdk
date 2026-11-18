@@ -34,7 +34,7 @@ export async function runWithConcurrency<T>(
   worker: (item: T) => Promise<void>,
 ): Promise<void> {
   let nextIndex = 0;
-  let firstError: unknown;
+  let firstError: { error: unknown } | undefined;
   async function loop(): Promise<void> {
     while (nextIndex < items.length) {
       if (firstError !== undefined) {
@@ -45,13 +45,14 @@ export async function runWithConcurrency<T>(
       try {
         await worker(item);
       } catch (error) {
-        firstError ??= error;
+        firstError ??= { error };
       }
     }
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => loop()));
   if (firstError !== undefined) {
-    throw firstError instanceof Error ? firstError : new Error(String(firstError));
+    const { error } = firstError;
+    throw error instanceof Error ? error : new Error(String(error));
   }
 }
 

@@ -7,6 +7,7 @@ import * as path from "pathe";
 import picomatch from "picomatch";
 import { nodeRangeKey, sourceArrayElements, sourceStaticStringContent } from "./source-strings";
 import { TAILOR_CLI_VALUE_FLAG_SET } from "./tailor-cli-tokens";
+import { shouldSkipDirectory, SOURCE_EXTENSIONS, walkFiles } from "./walk-files";
 import type {
   CodemodPackage,
   CodemodPattern,
@@ -18,8 +19,9 @@ import type {
 import type { SgNode } from "@ast-grep/napi";
 
 /**
- * A transform function that receives source text and file path,
- * and returns modified source or null if no changes are needed.
+ * A transform function that receives source text, its absolute file path, and
+ * the absolute project directory being transformed, and returns modified
+ * source or null if no changes are needed.
  *
  * For AST-based transforms, parse with ast-grep:
  * ```typescript
@@ -42,6 +44,7 @@ import type { SgNode } from "@ast-grep/napi";
 export type TransformFn = (
   source: string,
   filePath: string,
+  targetPath: string,
 ) => Promise<string | null> | string | null;
 
 /** Result of running codemods on a project. */
@@ -58,10 +61,6 @@ export interface CodemodRunResult {
 /** Default file patterns for TypeScript files. */
 const DEFAULT_FILE_PATTERNS = ["**/*.{ts,tsx,mts,cts}"];
 
-/** Directory names always excluded from file scanning. */
-const EXCLUDE_DIRS = new Set(["node_modules", "dist", ".git"]);
-const ALLOWED_DOT_DIRS = new Set([".github", ".circleci"]);
-const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
 const SOURCE_STRING_FRAGMENT_SEPARATOR = "\0";
 const MASKED_SOURCE_NODE_KINDS: ReadonlySet<ReturnType<SgNode["kind"]>> = new Set([
   "comment",
@@ -73,30 +72,15 @@ const MASKED_SOURCE_NODE_KINDS: ReadonlySet<ReturnType<SgNode["kind"]>> = new Se
 const SOURCE_CLI_BINARY_RE =
   /^(?:(?:.*[\\/])?tailor(?:\.(?:cmd|ps1|exe))?|(?:.*[\\/])?tailor-sdk(?:@[^\s'"`;|&)]+)?(?:\.(?:cmd|ps1|exe))?|@tailor-platform\/sdk(?:@[^\s'"`;|&)]+)?)$/;
 
-function shouldSkipDirectory(name: string): boolean {
-  return EXCLUDE_DIRS.has(name) || (name.startsWith(".") && !ALLOWED_DOT_DIRS.has(name));
-}
-
-async function* walkFiles(root: string, relativeDir = ""): AsyncGenerator<string> {
-  const absoluteDir = path.join(root, relativeDir);
-  let entries: fs.Dirent[];
-  try {
-    entries = await fs.promises.readdir(absoluteDir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-
-  for (const entry of entries) {
-    const relative = relativeDir ? path.join(relativeDir, entry.name) : entry.name;
-    if (entry.isDirectory()) {
-      if (shouldSkipDirectory(entry.name)) continue;
-      yield* walkFiles(root, relative);
-      continue;
-    }
-    if (entry.isFile()) {
-      yield relative;
-    }
-  }
+/**
+ * Matches the target-relative paths of the files `runCodemods` applies `codemod` to.
+ * @param codemod - Codemod whose file patterns decide
+ * @returns Whether a target-relative path is one of those files
+ */
+export function codemodFileMatcher(codemod: CodemodPackage): (relativePath: string) => boolean {
+  const matches = picomatch(codemod.filePatterns ?? DEFAULT_FILE_PATTERNS, { dot: true });
+  return (relativePath) =>
+    !relativePath.split("/").slice(0, -1).some(shouldSkipDirectory) && matches(relativePath);
 }
 
 function writeDiffLine(line: string, style?: StyleFn): void {
@@ -138,11 +122,13 @@ function printDiff(filePath: string, before: string, after: string): void {
  * Load a transform module from a TypeScript file path.
  * Expects the module to have a default export that is a TransformFn.
  * @param scriptPath - Absolute path to the transform script
- * @returns The transform function and optional review detector
+ * @returns The transform function and optional review detectors
  */
-async function loadTransformModule(
-  scriptPath: string,
-): Promise<{ transform: TransformFn; reviewFindings?: ReviewFindingsFn }> {
+async function loadTransformModule(scriptPath: string): Promise<{
+  transform: TransformFn;
+  reviewFindings?: ReviewFindingsFn;
+  reviewFindingsBeforeTransform?: ReviewFindingsFn;
+}> {
   const mod = await import(url.pathToFileURL(scriptPath).href);
   if (typeof mod.default !== "function") {
     throw new Error(`Transform at ${scriptPath} does not have a default export function`);
@@ -153,6 +139,10 @@ async function loadTransformModule(
       typeof mod.reviewFindings === "function"
         ? (mod.reviewFindings as ReviewFindingsFn)
         : undefined,
+    reviewFindingsBeforeTransform:
+      typeof mod.reviewFindingsBeforeTransform === "function"
+        ? (mod.reviewFindingsBeforeTransform as ReviewFindingsFn)
+        : undefined,
   };
 }
 
@@ -162,6 +152,7 @@ interface LoadedTransform {
   /** Undefined for codemod-less ("manual") entries that ship only guidance. */
   transform?: TransformFn;
   reviewFindings?: ReviewFindingsFn;
+  reviewFindingsBeforeTransform?: ReviewFindingsFn;
   matches: (relativePath: string) => boolean;
   legacyPatterns: CodemodPatternGroup[];
   sourceStringLegacyPatterns: CodemodPatternGroup[];
@@ -517,13 +508,13 @@ export async function runCodemods(
   // Load all transform functions with their file matchers
   const loaded: LoadedTransform[] = [];
   for (const { codemod, scriptPath } of codemods) {
-    const patterns = codemod.filePatterns ?? DEFAULT_FILE_PATTERNS;
     const loadedModule = scriptPath ? await loadTransformModule(scriptPath) : undefined;
     loaded.push({
       id: codemod.id,
       transform: loadedModule?.transform,
       reviewFindings: loadedModule?.reviewFindings,
-      matches: picomatch(patterns, { dot: true }),
+      reviewFindingsBeforeTransform: loadedModule?.reviewFindingsBeforeTransform,
+      matches: codemodFileMatcher(codemod),
       legacyPatterns: codemod.legacyPatterns ?? [],
       sourceStringLegacyPatterns: codemod.sourceStringLegacyPatterns ?? [],
       sourceTextLegacyPatterns: codemod.sourceTextLegacyPatterns ?? [],
@@ -534,6 +525,7 @@ export async function runCodemods(
     });
   }
 
+  const absoluteTargetPath = path.resolve(targetPath);
   const filesModified: string[] = [];
   const warnings: string[] = [];
   const appliedCodemodIds = new Set<string>();
@@ -557,16 +549,17 @@ export async function runCodemods(
     }
 
     let current = original;
-    const reviewTargets: Array<{ lt: LoadedTransform; snapshot: string }> = [];
+    const reviewTargets: Array<{ lt: LoadedTransform; input: string; snapshot: string }> = [];
     for (const lt of matchedTransforms) {
+      const input = current;
       if (lt.transform) {
-        const result = await lt.transform(current, absolute);
+        const result = await lt.transform(current, absolute, absoluteTargetPath);
         if (result != null) {
           current = result;
           appliedCodemodIds.add(lt.id);
         }
       }
-      if (lt.prompt) reviewTargets.push({ lt, snapshot: current });
+      if (lt.prompt) reviewTargets.push({ lt, input, snapshot: current });
     }
 
     if (current !== original) {
@@ -603,7 +596,7 @@ export async function runCodemods(
       ),
     );
 
-    for (const { lt, snapshot } of reviewTargets) {
+    for (const { lt, input, snapshot } of reviewTargets) {
       const filesForReview = (): Set<string> => {
         let files = suspiciousByCodemod.get(lt.id);
         if (!files) {
@@ -612,10 +605,15 @@ export async function runCodemods(
         }
         return files;
       };
-      if (lt.reviewFindings) {
-        let findings = await lt.reviewFindings(snapshot, absolute, relative);
-        if (snapshot !== current && findings.length > 0) {
-          const remap = lineRemapper(snapshot, current);
+      const detectors = [
+        { detect: lt.reviewFindingsBeforeTransform, reviewed: input },
+        { detect: lt.reviewFindings, reviewed: snapshot },
+      ];
+      for (const { detect, reviewed } of detectors) {
+        if (!detect) continue;
+        let findings = await detect(reviewed, absolute, relative, absoluteTargetPath);
+        if (reviewed !== current && findings.length > 0) {
+          const remap = lineRemapper(reviewed, current);
           findings = findings.map((finding) => ({ ...finding, line: remap(finding.line) }));
         }
         if (findings.length > 0) {
@@ -655,7 +653,8 @@ export async function runCodemods(
     if (
       lt.suspiciousPatterns.length > 0 ||
       lt.sourceStringSuspiciousPatterns.length > 0 ||
-      lt.reviewFindings
+      lt.reviewFindings ||
+      lt.reviewFindingsBeforeTransform
     ) {
       // File-scoped: only surface when a suspicious pattern actually matched.
       const files = suspiciousByCodemod.get(lt.id);

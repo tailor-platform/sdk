@@ -2,6 +2,7 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import { CLIError } from "../shared/errors";
 import { logger } from "../shared/logger";
 import { jsonMode } from "../shared/test-helpers/json-mode";
+import { mockOperatorClient } from "../shared/test-helpers/operator-client";
 import { runCliCommand } from "../shared/test-helpers/run-cli-command";
 import {
   getReplHistoryPath,
@@ -31,10 +32,7 @@ vi.mock("../shared/editor", () => ({
   openInEditor: vi.fn(),
 }));
 
-const mockClient = {
-  getApplication: vi.fn(),
-  getAuthMachineUser: vi.fn(),
-};
+const mockClient = mockOperatorClient({ getApplication: {}, getAuthMachineUser: {} });
 
 vi.mock("../shared/context", () => ({
   loadAccessToken: vi.fn(),
@@ -111,7 +109,7 @@ describe("query", () => {
     vi.mocked(loadAccessToken).mockResolvedValue("access-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
     vi.mocked(loadMachineUserName).mockImplementation(async (opts) => opts?.machineUser ?? "bot");
-    vi.mocked(initOperatorClient).mockResolvedValue(mockClient as never);
+    vi.mocked(initOperatorClient).mockResolvedValue(mockClient);
     vi.mocked(loadConfig).mockResolvedValue({
       config: {
         name: "sample-app",

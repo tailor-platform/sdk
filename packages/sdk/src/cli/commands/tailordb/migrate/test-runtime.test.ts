@@ -1,10 +1,13 @@
+// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { CloneOperationStatus } from "@tailor-platform/tailor-proto/application_pb";
+import { JsonlReader, unwrap } from "lines-db";
 import * as path from "pathe";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { verifyRemoteSchema } from "#/cli/commands/tailordb/migrate/schema-checks";
+import { errorToJson } from "#/cli/shared/error-json";
 import { getNamespacesWithMigrations } from "./config";
 import { normalizeSchemaSnapshot } from "./snapshot";
 import {
@@ -27,21 +30,32 @@ import type { RemoteSchemaVerificationResult } from "./types";
 
 vi.mock("./config", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("./config");
+  const original = await importOriginal<typeof import("./config")>();
   return { ...original, getNamespacesWithMigrations: vi.fn() };
 });
 
 vi.mock("#/cli/commands/tailordb/migrate/schema-checks", async (importOriginal) => {
   const original =
     // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-    (await importOriginal()) as typeof import("#/cli/commands/tailordb/migrate/schema-checks");
+    await importOriginal<typeof import("#/cli/commands/tailordb/migrate/schema-checks")>();
   return { ...original, verifyRemoteSchema: vi.fn() };
 });
+
+function thrownBy(run: () => unknown): Error {
+  try {
+    run();
+  } catch (error) {
+    if (error instanceof Error) return error;
+    throw error;
+  }
+  return expect.unreachable("expected the call to throw");
+}
 
 describe("migration test runtime", () => {
   const temporaryDirectories: string[] = [];
 
   afterEach(() => {
+    vi.restoreAllMocks();
     for (const directory of temporaryDirectories.splice(0)) {
       fs.rmSync(directory, { recursive: true, force: true });
     }
@@ -219,12 +233,70 @@ describe("migration test runtime", () => {
     expect(client.listTailorDBTypes).toHaveBeenCalledTimes(1);
   });
 
-  test("rejects malformed baseline seed rows with their file and line", () => {
+  test.each([
+    ["an interior blank line", '{"id":1}\n\n{"id":2}\n'],
+    ["whitespace-only lines", '{"id":1}\n \t \n{"id":2}\n'],
+    ["leading blank lines", '\n\n{"id":1}\n{"id":2}\n'],
+    ["CRLF endings and a blank line", '{"id":1}\r\n\r\n{"id":2}\r\n'],
+    ["a byte order mark", '\uFEFF{"id":1}\n{"id":2}\n'],
+  ])(
+    "reads the baseline seed rows the validator reads from a file with %s",
+    async (_label, content) => {
+      const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "migration-test-seed-"));
+      temporaryDirectories.push(dataDir);
+      fs.writeFileSync(path.join(dataDir, "Customer.jsonl"), content);
+      const validatorRows = unwrap(await JsonlReader.read(path.join(dataDir, "Customer.jsonl")));
+
+      expect(validatorRows).toEqual([{ id: 1 }, { id: 2 }]);
+      expect(loadSnapshotSeedData(dataDir, ["Customer"])).toEqual({ Customer: validatorRows });
+    },
+  );
+
+  test.each([
+    ["a malformed row", "not-json\n", 1],
+    ["a malformed row after blank lines", '\n\n{"id":1}\nnot-json\n', 4],
+    ["a second byte order mark", '\uFEFF\uFEFF{"id":1}\n{"id":2}\n', 1],
+    ["a no-break space before the first row", '\u00A0{"id":1}\n{"id":2}\n', 1],
+    ["a no-break space after the last row", '{"id":1}\n{"id":2}\u00A0\n', 2],
+  ])(
+    "rejects a baseline seed file with %s at the line the validator rejects",
+    async (_label, content, line) => {
+      const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "migration-test-seed-"));
+      temporaryDirectories.push(dataDir);
+      fs.writeFileSync(path.join(dataDir, "Customer.jsonl"), content);
+
+      const file = path.join(dataDir, "Customer.jsonl");
+      expect(await JsonlReader.read(file)).toMatchObject({
+        ok: false,
+        error: { line },
+      });
+      vi.spyOn(process, "cwd").mockReturnValue(dataDir);
+      const error = thrownBy(() => loadSnapshotSeedData(dataDir, ["Customer"]));
+      expect(error.message).toMatch(/^Invalid JSON: /);
+      expect(errorToJson(error).error).toEqual({
+        code: "SEED_DATA_INVALID",
+        message: `Customer.jsonl:${line}: ${error.message}`,
+        context: { file, line },
+      });
+    },
+  );
+
+  test("rejects a baseline seed row that is not a JSON object at its line", () => {
     const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "migration-test-seed-"));
     temporaryDirectories.push(dataDir);
-    fs.writeFileSync(path.join(dataDir, "Customer.jsonl"), "not-json\n");
+    const file = path.join(dataDir, "Customer.jsonl");
+    fs.writeFileSync(file, '{"id":1}\n[]\n');
 
-    expect(() => loadSnapshotSeedData(dataDir, ["Customer"])).toThrow(/Customer\.jsonl.*line 1/);
+    vi.spyOn(process, "cwd").mockReturnValue(dataDir);
+
+    const error = thrownBy(() => loadSnapshotSeedData(dataDir, ["Customer"]));
+
+    expect(error.message).toBe("Invalid seed row: expected a JSON object");
+    expect(errorToJson(error).error).toEqual({
+      code: "SEED_DATA_INVALID",
+      message: "Customer.jsonl:2: Invalid seed row: expected a JSON object",
+      context: { file, line: 2 },
+    });
   });
 
   test("polls a clone operation until it completes", async () => {

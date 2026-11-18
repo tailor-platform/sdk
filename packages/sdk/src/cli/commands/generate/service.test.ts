@@ -29,11 +29,11 @@ vi.mock("node:fs", () => {
 });
 
 vi.mock("#/cli/shared/logger", async (importOriginal) => {
-  const actual = (await importOriginal()) as {
+  const actual = await importOriginal<{
     logger?: Record<string, unknown>;
     styles?: Record<string, unknown>;
     symbols?: Record<string, unknown>;
-  };
+  }>();
   return {
     ...actual,
     logger: {

@@ -13,7 +13,11 @@ Ask: **Does this change affect SDK users?**
 
 - `major`: Users must change their code, configuration, or automation to upgrade (API removal,
   incompatible behavior change). Only on a `v<N>` branch or a branch derived from it; on `main`
-  the CI check rejects it, so use `minor` with a `**Breaking change**:` description instead
+  the CI check rejects it. Breaking changes ship in a major release, from a `v<N>` branch. Only when
+  the impact is clearly known to be very limited, `minor` with a `**Breaking change**:` description
+  is an exception, and the PR body must state what breaks, why the impact is limited, and whether a
+  way to avoid breaking was considered and why it was not taken; see
+  [docs/changeset.md](../../docs/changeset.md#shipping-a-breaking-change-in-a-minor-release)
 - `minor`: Users can do something new (new command, new field type, new config option, new API)
 - `patch`: Invisible to users (bug fix, refactoring, perf, docs, tests, CI)
 

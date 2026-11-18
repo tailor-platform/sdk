@@ -341,7 +341,7 @@ defineIdp("my-idp", {
 - `publishEvents: true`: always publish events.
 - `publishEvents: false`: never publish events. `deploy` rejects this with an error if an `idpUser` trigger taking part in the same run targets this IdP — either remove `publishEvents: false` or remove the matching trigger.
 
-**Sharing an IdP across configs:** an executor in another config auto-enables publishing the same way, as long as both configs take part in the same `deploy` (`--config a,b`). `deploy` records that dependency, so deploying the owning config alone later asks for confirmation instead of silently turning publishing off — it fails outright in a non-interactive environment. Set `publishEvents: true` on the IdP to keep it on regardless of which configs take part.
+**Sharing an IdP across configs:** an executor in another config auto-enables publishing the same way, as long as both configs take part in the same `deploy` (`--config a,b`). `deploy` records that dependency, so deploying the owning config alone later asks for confirmation instead of silently turning publishing off — it fails outright in a non-interactive environment. Set `publishEvents: true` on the IdP to keep it on regardless of which configs take part. `deploy` and `remove` stop with `SERVICE_IN_USE` instead of deleting an IdP that another application's executor subscribes to.
 
 ## Using idp.provider()
 
@@ -388,4 +388,4 @@ idp.provider(
 );
 ```
 
-The second argument only accepts client names that were defined in the `clients` array of the IdP configuration.
+The second argument only accepts client names that were defined in the `clients` array of the IdP configuration. `deploy` and `remove` stop with `SERVICE_IN_USE` instead of deleting a client, or the IdP that holds it, while an Auth service still names it this way, including an Auth service of another application.

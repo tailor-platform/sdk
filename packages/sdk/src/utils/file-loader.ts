@@ -6,7 +6,7 @@ export interface FileLoadConfig {
   ignores?: string[];
 }
 
-const DEFAULT_IGNORE_PATTERNS = ["**/*.test.ts", "**/*.spec.ts"];
+const TEST_FILE_SUFFIXES = [".test.ts", ".spec.ts"];
 
 // Deduplicate compatibility warnings per destination, directory, and pattern set.
 const warnedFallbacks = new WeakMap<(message: string) => void, Set<string>>();
@@ -15,7 +15,8 @@ const warnedFallbacks = new WeakMap<(message: string) => void, Set<string>>();
  * Load files matching the given patterns, excluding files that match ignore patterns.
  * A `files` entry starting with `!` excludes the files it matches; for each file, the last
  * `files` entry that matches it decides. Each file is returned once.
- * By default, test files (*.test.ts, *.spec.ts) are excluded unless ignores is explicitly specified.
+ * Unless ignores is specified, test files (*.test.ts, *.spec.ts) are excluded by default:
+ * a `files` entry that does not end in `.test.ts` or `.spec.ts` matches no test files.
  * @param config - Configuration with files patterns and optional ignores patterns
  * @param baseDir - Directory relative patterns are resolved against
  * @param warn - Reports glob errors and compatibility warnings
@@ -46,8 +47,6 @@ export function loadFilesWithIgnores(
   // resolution is meant to prevent. Also skipped when every non-`!` pattern
   // is already absolute, since baseDir can't change an absolute pattern's
   // resolution — re-running against cwd would just repeat the same glob.
-  // Remove this fallback in v2, once such configs are expected to have
-  // migrated.
   const fallbackKey = `${baseDir}\0${config.files.join("\0")}`;
   let warned = warnedFallbacks.get(warn);
   if (!warned) {
@@ -58,8 +57,8 @@ export function loadFilesWithIgnores(
     warned.add(fallbackKey);
     warn(
       `No files matched "${config.files.join(", ")}" relative to "${baseDir}"; falling back to ` +
-        `process.cwd(). Update this config's file patterns to be relative to its own directory ` +
-        `before v2, when this fallback will be removed.`,
+        `process.cwd(). Update this config's file patterns to be relative to its own directory; ` +
+        `this fallback will be removed in v3.`,
     );
   }
   return resolveFiles(config, process.cwd(), warn).files;
@@ -76,16 +75,9 @@ function resolveFiles(
   baseDir: string,
   warn: (message: string) => void,
 ): ResolvedFiles {
-  // Use user-provided patterns if specified, otherwise use defaults. Default
-  // patterns are left unanchored ("**/*.test.ts") so they match a test file
-  // regardless of which directory a `files` pattern's matches actually came
-  // from — this matters when a pattern is absolute or otherwise escapes
-  // baseDir. User-provided patterns are baseDir-relative, matching `files`.
-  const isDefaultIgnores = config.ignores === undefined;
-  const ignorePatterns = config.ignores ?? DEFAULT_IGNORE_PATTERNS;
-  const resolvedIgnorePatterns = isDefaultIgnores
-    ? ignorePatterns
-    : ignorePatterns.map((ignorePattern) => path.resolve(baseDir, ignorePattern));
+  const resolvedIgnorePatterns = (config.ignores ?? []).map((ignorePattern) =>
+    path.resolve(baseDir, ignorePattern),
+  );
 
   const rules = config.files.map((pattern) => parseFilePattern(pattern, baseDir));
   // Map insertion order keeps each file at the position its first match produced.
@@ -98,7 +90,9 @@ function resolveFiles(
       if (matchedFiles.length > 0) {
         matchedAnyPattern = true;
       }
+      const skipsTestFiles = config.ignores === undefined && !hasTestFileSuffix(rule.pattern);
       for (const file of matchedFiles) {
+        if (skipsTestFiles && hasTestFileSuffix(file)) continue;
         lastPositiveRuleIndex.set(file, ruleIndex);
       }
     } catch (error) {
@@ -139,4 +133,8 @@ function parseFilePattern(pattern: string, baseDir: string): FilePatternRule {
   const negated = pattern.startsWith("!");
   const glob = negated ? pattern.slice(1) : pattern;
   return { pattern, negated, absolutePattern: path.resolve(baseDir, glob) };
+}
+
+function hasTestFileSuffix(patternOrFile: string): boolean {
+  return TEST_FILE_SUFFIXES.some((suffix) => patternOrFile.endsWith(suffix));
 }

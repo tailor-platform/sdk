@@ -1,3 +1,4 @@
+// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { AuthConnection_Status } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
@@ -23,7 +24,7 @@ const mockLoadSecretsState = vi.fn();
 
 vi.mock("./secrets-state", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const actual = (await importOriginal()) as typeof import("./secrets-state");
+  const actual = await importOriginal<typeof import("./secrets-state")>();
   return {
     ...actual,
     loadSecretsState: (...args: unknown[]) => mockLoadSecretsState(...args),
@@ -36,7 +37,7 @@ vi.mock("./secrets-state", async (importOriginal) => {
 
 vi.mock("#/cli/shared/client", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const actual = (await importOriginal()) as typeof import("#/cli/shared/client");
+  const actual = await importOriginal<typeof import("#/cli/shared/client")>();
   return {
     ...actual,
     fetchAll: async <T>(fn: (pageToken: string, maxPageSize: number) => Promise<[T[], string]>) => {
@@ -48,7 +49,7 @@ vi.mock("#/cli/shared/client", async (importOriginal) => {
 
 vi.mock("./label", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const actual = (await importOriginal()) as typeof import("./label");
+  const actual = await importOriginal<typeof import("./label")>();
   return {
     ...actual,
     buildMetaRequest: vi

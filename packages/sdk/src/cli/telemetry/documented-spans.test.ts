@@ -1,6 +1,7 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import * as path from "pathe";
 import { describe, expect, test } from "vitest";
+import { listSourceFiles } from "#/cli/shared/test-helpers/source-files";
 
 const cliDir = path.join(import.meta.dirname, "..");
 const docPath = path.join(import.meta.dirname, "../../../../../docs/telemetry.md");
@@ -11,23 +12,12 @@ const docPath = path.join(import.meta.dirname, "../../../../../docs/telemetry.md
  */
 function emittedSpanNames(): Set<string> {
   const names = new Set<string>();
-  const walk = (dir: string): void => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      // Fixture trees are written by sibling suites while this one walks.
-      if (entry.name.startsWith("__test") || entry.name.startsWith(".")) continue;
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        walk(full);
-        continue;
-      }
-      if (!entry.name.endsWith(".ts") || entry.name.endsWith(".test.ts")) continue;
-      // `step()` in apply-phases.ts opens a span too, so both spellings count.
-      for (const match of readFileSync(full, "utf8").matchAll(/(?:withSpan|step)\("([^"]+)"/g)) {
-        names.add(match[1]!);
-      }
+  for (const file of listSourceFiles(cliDir)) {
+    // `step()` in apply-phases.ts opens a span too, so both spellings count.
+    for (const match of readFileSync(file, "utf8").matchAll(/(?:withSpan|step)\("([^"]+)"/g)) {
+      names.add(match[1]!);
     }
-  };
-  walk(cliDir);
+  }
   // The doc draws the deploy tree only; `generate.*` has no documented tree yet.
   return new Set([...names].filter((name) => !name.startsWith("generate")));
 }

@@ -2,21 +2,10 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
-import { allCodemods } from "./registry";
 import { runCodemods } from "./runner";
+import { runnableCodemod } from "./test-helpers/codemods";
 
-const CODEMODS_DIR = path.resolve(__dirname, "../codemods");
-
-const principalUnify = allCodemods.find((codemod) => codemod.id === "v2/principal-unify");
-
-if (!principalUnify?.scriptPath) {
-  throw new Error("v2/principal-unify codemod is not registered with a script");
-}
-
-const principalUnifyEntry = {
-  codemod: principalUnify,
-  scriptPath: path.join(CODEMODS_DIR, principalUnify.scriptPath.replace(/\.js$/, ".ts")),
-};
+const principalUnifyEntry = runnableCodemod("v2/principal-unify");
 
 describe("principal-unify review findings", () => {
   let tmpDir: string | undefined;

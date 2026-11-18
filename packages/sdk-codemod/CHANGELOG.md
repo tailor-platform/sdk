@@ -1,5 +1,29 @@
 # @tailor-platform/sdk-codemod
 
+## 0.13.0
+
+### Minor Changes
+
+- [#3107](https://github.com/tailor-platform/sdk/pull/3107) [`eba6ca7`](https://github.com/tailor-platform/sdk/commit/eba6ca7cf04c33bb50cc43eb6543f674398ecadd) Thanks [@dqn](https://github.com/dqn)! - The warnings shown when `files` patterns or the tsconfig fall back to the directory you ran the command from no longer say the fallback is removed before v2: both fallbacks are removed in v3. `tailor upgrade` to v3 runs the `v3/files-config-relative` codemod, which rewrites the `files` and `ignores` patterns, written as string literals or as template literals without substitutions, of a config outside the project directory it runs on (`--path`, the current directory by default) when they match files only from that project directory, so that they name the same files relative to the config's directory. It reports configs it cannot rewrite for review, and prints a notice for the tsconfig fallback.
+
+### Patch Changes
+
+- [#3129](https://github.com/tailor-platform/sdk/pull/3129) [`7055ea6`](https://github.com/tailor-platform/sdk/commit/7055ea6692fd794fe6d61a20ee5830e1d994d27e) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​ast-grep/napi to v0.51.2
+
+- [#3147](https://github.com/tailor-platform/sdk/pull/3147) [`04441c6`](https://github.com/tailor-platform/sdk/commit/04441c685a2034db9b8da32fd08f6cced981dfb3) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​politty/zod to v0.7.3
+
+## 0.12.1
+
+### Patch Changes
+
+- [#3113](https://github.com/tailor-platform/sdk/pull/3113) [`b573c2b`](https://github.com/tailor-platform/sdk/commit/b573c2bbbfd14cb6b802e8581ab0c22781d12cb9) Thanks [@dqn](https://github.com/dqn)! - **Breaking change**: A service `files` pattern ending in `.test.ts` or `.spec.ts` now includes the test files it matches, wherever it sits in `files`, so including them no longer needs the deprecated `ignores: []`. Test files stay excluded by default: a pattern that does not end in `.test.ts` or `.spec.ts` matches no test files. A config without `ignores` that already lists a pattern ending in `.test.ts` or `.spec.ts` now loads the files it matches, and the next `tailor deploy` deploys them; remove the pattern to keep them excluded. The v3 codemod writes `!**/*.test.ts` and `!**/*.spec.ts` after the last pattern that neither starts with `!` nor ends in `.test.ts` or `.spec.ts`, and flags a pattern ending in `.test.ts` or `.spec.ts` placed before that point for a manual migration.
+
+- [#3104](https://github.com/tailor-platform/sdk/pull/3104) [`34cef36`](https://github.com/tailor-platform/sdk/commit/34cef366b27c11b19882facfd50f635934f33cdb) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​clack/prompts to v1.9.0
+
+- [#3121](https://github.com/tailor-platform/sdk/pull/3121) [`515842d`](https://github.com/tailor-platform/sdk/commit/515842d1149be85c2fa217bbee7be6fa01ee81f7) Thanks [@dqn](https://github.com/dqn)! - Fix `v3/files-ignores-to-negation` reporting configs it can migrate: `files` and `ignores` patterns written as template literals without `${}`, and `db` or `resolver` namespaces with a computed key such as `[sharedDb]`, are now migrated instead of flagged for manual review, and the test-file exclusion is no longer appended again when `files` already writes it as a template literal. Projects created from the hello-world, inventory-management, and multi-application templates no longer get these findings from `tailor upgrade`.
+
+- [#3141](https://github.com/tailor-platform/sdk/pull/3141) [`edd0fd8`](https://github.com/tailor-platform/sdk/commit/edd0fd8f2572fa55bbcd08766b167cb66ebf47f2) Thanks [@dqn](https://github.com/dqn)! - Update the Node.js requirement in the v2 migration notice to Node.js 22 (22.22.2 or later), 24 (24.15.0 or later), or 26 and later.
+
 ## 0.12.0
 
 ### Minor Changes
