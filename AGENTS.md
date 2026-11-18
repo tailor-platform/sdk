@@ -109,3 +109,4 @@ Before writing code that uses the SDK, read its rules in the matching user doc u
 
 - Linting is oxlint-only, with standard (`oxlint --type-aware .`) and Vitest-specific (`oxlint --config oxlint.vitest.json .`) passes.
 - Lefthook runs pre-commit checks (lint, format, typecheck) and post-commit signature verification.
+
