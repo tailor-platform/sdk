@@ -91,7 +91,7 @@ A table's rows are the rows of its base file followed by the rows of its file in
 
 **A row is defined in exactly one place.** An `id` (or a `_User` `name`) that appears in two of the selected files — the base data and a dataset, or two datasets — is an error in both `validate` and `apply`, never a silent override. A table whose rows differ per environment belongs in the per-environment datasets only, not in the base data.
 
-Within one file, `apply` also refuses a `_User` `name` that appears on more than one row, because users are created several at a time and the IdP can store the same name twice when two requests arrive together. It stops before truncating or writing anything and lists each repeated row, for example `Row 3 (alice@example.com): duplicate of row 1`.
+Within one file, `apply` also refuses a `_User` `name` that appears on more than one row, because users are created several at a time and the IdP can store the same name twice when two requests arrive together. It stops before truncating or writing anything and lists each repeated row at its file and line, for example `seed/data/_User.jsonl:3 (alice@example.com): duplicate of seed/data/_User.jsonl:1`.
 
 ### IdP user passwords from the environment
 
