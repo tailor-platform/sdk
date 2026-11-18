@@ -32,6 +32,7 @@ describe("protoEnumNames", () => {
       "PENDING_RETRY",
       "WAITING",
       "CANCELED",
+      "CANCELING",
     ]);
   });
 });
@@ -71,6 +72,7 @@ describe("protoEnumLookup", () => {
     [WorkflowExecution_Status.PENDING_RETRY]: "pending-retry",
     [WorkflowExecution_Status.WAITING]: "waiting",
     [WorkflowExecution_Status.CANCELED]: "canceled",
+    [WorkflowExecution_Status.CANCELING]: "canceling",
   } satisfies Record<WorkflowExecution_Status, string>;
 
   test("returns the mapped value of a known member", () => {
@@ -92,6 +94,7 @@ describe("protoEnumLookup", () => {
       [WorkflowExecution_Status.PENDING_RETRY]: "pending-retry",
       [WorkflowExecution_Status.WAITING]: "waiting",
       [WorkflowExecution_Status.CANCELED]: "canceled",
+      [WorkflowExecution_Status.CANCELING]: "canceling",
     } satisfies Record<WorkflowExecution_Status, string | undefined>;
     expect(
       protoEnumLookup<WorkflowExecution_Status, string | undefined>(

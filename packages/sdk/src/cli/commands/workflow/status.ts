@@ -24,6 +24,7 @@ const WORKFLOW_EXECUTION_STATUS_CLASS = {
   [WorkflowExecution_Status.PENDING_RETRY]: "transient",
   [WorkflowExecution_Status.WAITING]: "suspended",
   [WorkflowExecution_Status.CANCELED]: "failure",
+  [WorkflowExecution_Status.CANCELING]: "transient",
 } satisfies Record<WorkflowExecution_Status, WorkflowExecutionStatusClass>;
 
 function classifyStatus(status: WorkflowExecution_Status): WorkflowExecutionStatusClass {

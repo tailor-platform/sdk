@@ -28,6 +28,7 @@ const EXPECTED_CLASS = {
   PENDING_RETRY: "transient",
   WAITING: "suspended",
   CANCELED: "failure",
+  CANCELING: "transient",
 } as const;
 
 const EXPECTED_JOB_SUSPENDED = {
