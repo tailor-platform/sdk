@@ -1,10 +1,10 @@
 import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { arg, defineAppCommand, logger } from "@tailor-platform/sdk/cli";
-import open from "open";
 import * as path from "pathe";
 import { z } from "zod";
 import { discoverTab, type TabSpec } from "./discover-tab";
+import { openBrowser } from "./open-browser";
 import { startServer } from "./server";
 import { createShellHandler } from "./shell-handler";
 
@@ -49,7 +49,7 @@ export const uiCommand = defineAppCommand({
         }),
     });
     logger.success(`Tailor Studio is running at ${server.url}`);
-    if (args.open) await open(server.url);
+    if (args.open) await openBrowser(server.url);
 
     await new Promise<void>((resolve) => {
       process.once("SIGINT", resolve);
