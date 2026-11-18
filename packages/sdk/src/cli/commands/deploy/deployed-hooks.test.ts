@@ -3,7 +3,6 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test, vi } from "vitest";
-import { logger } from "#/cli/shared/logger";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { loadDeployedApplications, runDeployedHooks } from "./deployed-hooks";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -477,12 +476,6 @@ describe("deployed hooks", () => {
     });
     outputs.value = "changed";
     expect(stored?.outputs).toEqual({ value: "validated" });
-  });
-  test("registers fetched OAuth client secrets for redaction", async () => {
-    using registerSecret = vi.spyOn(logger, "registerSecret");
-    const { client } = clientMock();
-    await runDeployedHooks({ client, workspaceId: "ws", targets: [target([plugin(vi.fn())])] });
-    expect(registerSecret).toHaveBeenCalledWith("secret");
   });
   test("fails when a configured AI Gateway is missing after deploy", async () => {
     const { client, methods } = clientMock();

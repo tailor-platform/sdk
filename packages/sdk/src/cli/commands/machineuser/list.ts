@@ -9,7 +9,7 @@ import { CLIError } from "#/cli/shared/errors";
 import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
-import type { MachineUser } from "@tailor-platform/tailor-proto/auth_resource_pb";
+import type { MachineUserSummary } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
 export interface ListMachineUsersOptions {
   workspaceId?: string;
@@ -31,11 +31,11 @@ export interface MachineUserInfo {
 }
 
 /**
- * Map a MachineUser protobuf message to CLI-friendly info.
+ * Map a MachineUserSummary protobuf message to CLI-friendly info.
  * @param user - Machine user resource
  * @returns Flattened machine user info
  */
-function machineUserInfo(user: MachineUser): MachineUserInfo {
+function machineUserInfo(user: MachineUserSummary): MachineUserInfo {
   return {
     id: user.id,
     name: user.name,

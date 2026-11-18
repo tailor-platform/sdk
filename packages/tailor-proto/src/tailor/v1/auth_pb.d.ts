@@ -4,7 +4,7 @@
 
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
-import type { AuthConnection, AuthHook, AuthHookPoint, AuthIDPConfig, AuthOAuth2Client, AuthSCIMConfig, AuthSCIMResource, AuthService, ControlplaneMachineUser, MachineUser, PATScope, PersonalAccessToken, TenantProviderConfig, UserProfileProviderConfig } from "./auth_resource_pb";
+import type { AuthConnection, AuthHook, AuthHookPoint, AuthIDPConfig, AuthOAuth2Client, AuthOAuth2ClientSummary, AuthSCIMConfig, AuthSCIMResource, AuthService, ControlplaneMachineUser, ControlplaneMachineUserSummary, MachineUser, MachineUserSummary, PATScope, PersonalAccessToken, TenantProviderConfig, UserProfileProviderConfig } from "./auth_resource_pb";
 import type { PageDirection } from "./resource_pb";
 import type { FieldMask, Timestamp, Value } from "@bufbuild/protobuf/wkt";
 
@@ -1104,9 +1104,9 @@ export declare const ListAuthMachineUsersRequestSchema: GenMessage<ListAuthMachi
  */
 export declare type ListAuthMachineUsersResponse = Message<"tailor.v1.ListAuthMachineUsersResponse"> & {
   /**
-   * @generated from field: repeated tailor.v1.MachineUser machine_users = 1;
+   * @generated from field: repeated tailor.v1.MachineUserSummary machine_users = 1;
    */
-  machineUsers: MachineUser[];
+  machineUsers: MachineUserSummary[];
 
   /**
    * @generated from field: string next_page_token = 2;
@@ -2143,9 +2143,9 @@ export declare const ListAuthOAuth2ClientsRequestSchema: GenMessage<ListAuthOAut
  */
 export declare type ListAuthOAuth2ClientsResponse = Message<"tailor.v1.ListAuthOAuth2ClientsResponse"> & {
   /**
-   * @generated from field: repeated tailor.v1.AuthOAuth2Client oauth2_clients = 1;
+   * @generated from field: repeated tailor.v1.AuthOAuth2ClientSummary oauth2_clients = 1;
    */
-  oauth2Clients: AuthOAuth2Client[];
+  oauth2Clients: AuthOAuth2ClientSummary[];
 
   /**
    * @generated from field: string next_page_token = 2;
@@ -2388,9 +2388,9 @@ export declare const ListControlplaneMachineUsersRequestSchema: GenMessage<ListC
  */
 export declare type ListControlplaneMachineUsersResponse = Message<"tailor.v1.ListControlplaneMachineUsersResponse"> & {
   /**
-   * @generated from field: repeated tailor.v1.ControlplaneMachineUser machine_users = 1;
+   * @generated from field: repeated tailor.v1.ControlplaneMachineUserSummary machine_users = 1;
    */
-  machineUsers: ControlplaneMachineUser[];
+  machineUsers: ControlplaneMachineUserSummary[];
 
   /**
    * @generated from field: string next_page_token = 2;

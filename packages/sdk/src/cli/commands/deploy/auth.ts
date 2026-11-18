@@ -1103,7 +1103,6 @@ async function planMachineUsers(
     const existingMap = new Map<string, (typeof existingMachineUsers)[number]>();
     existingMachineUsers.forEach((machineUser) => {
       existingMap.set(machineUser.name, machineUser);
-      logger.registerSecret(machineUser.clientSecret);
     });
     for (const machineUsername of Object.keys(config.machineUsers ?? {})) {
       const machineUser = config.machineUsers?.[machineUsername];
@@ -1167,7 +1166,6 @@ async function planMachineUsers(
       namespaceName,
     );
     existingMachineUsers.forEach((machineUser) => {
-      logger.registerSecret(machineUser.clientSecret);
       changeSet.deletes.push({
         name: machineUser.name,
         request: {
@@ -1399,7 +1397,6 @@ async function planOAuth2Clients(
     const existingClientsMap = new Map<string, (typeof existingOAuth2Clients)[number]>();
     existingOAuth2Clients.forEach((oauth2Client) => {
       existingClientsMap.set(oauth2Client.name, oauth2Client);
-      logger.registerSecret(oauth2Client.clientSecret);
     });
     for (const oauth2ClientName of Object.keys(config.oauth2Clients ?? {})) {
       const oauth2Client = config.oauth2Clients?.[oauth2ClientName];
@@ -1493,7 +1490,6 @@ async function planOAuth2Clients(
   for (const namespaceName of deletedServices) {
     const existingOAuth2Clients = await fetchOAuth2Clients(namespaceName);
     existingOAuth2Clients.forEach((oauth2Client) => {
-      logger.registerSecret(oauth2Client.clientSecret);
       changeSet.deletes.push({
         name: oauth2Client.name,
         request: {

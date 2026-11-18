@@ -8,7 +8,7 @@ import type { AddOrganizationTeamMemberRequestSchema, AddOrganizationTeamMemberR
 import type { CreateOrganizationSecurityFindingMuteRequestSchema, CreateOrganizationSecurityFindingMuteResponseSchema, DeleteOrganizationSecurityFindingMuteRequestSchema, DeleteOrganizationSecurityFindingMuteResponseSchema, ListOrganizationSecurityChecksRequestSchema, ListOrganizationSecurityChecksResponseSchema, ListOrganizationSecurityFindingMutesRequestSchema, ListOrganizationSecurityFindingMutesResponseSchema, ListOrganizationSecurityFindingsRequestSchema, ListOrganizationSecurityFindingsResponseSchema } from "./security_pb";
 import type { CloneApplicationDataRequestSchema, CloneApplicationDataResponseSchema, CreateApplicationRequestSchema, CreateApplicationResponseSchema, DeleteApplicationRequestSchema, DeleteApplicationResponseSchema, GetApplicationRequestSchema, GetApplicationResponseSchema, GetApplicationSchemaHealthRequestSchema, GetApplicationSchemaHealthResponseSchema, GetCloneApplicationDataOperationRequestSchema, GetCloneApplicationDataOperationResponseSchema, ListApplicationsRequestSchema, ListApplicationsResponseSchema, UpdateApplicationRequestSchema, UpdateApplicationResponseSchema } from "./application_pb";
 import type { CreateAIGatewayRequestSchema, CreateAIGatewayResponseSchema, DeleteAIGatewayRequestSchema, DeleteAIGatewayResponseSchema, GetAIGatewayRequestSchema, GetAIGatewayResponseSchema, ListAIGatewaysRequestSchema, ListAIGatewaysResponseSchema, UpdateAIGatewayRequestSchema, UpdateAIGatewayResponseSchema } from "./aigateway_pb";
-import type { ComposeTailorDBSDLRequestSchema, ComposeTailorDBSDLResponseSchema, CreateTailorDBGQLPermissionRequestSchema, CreateTailorDBGQLPermissionResponseSchema, CreateTailorDBServiceRequestSchema, CreateTailorDBServiceResponseSchema, CreateTailorDBTypeRequestSchema, CreateTailorDBTypeResponseSchema, DeleteTailorDBGQLPermissionRequestSchema, DeleteTailorDBGQLPermissionResponseSchema, DeleteTailorDBServiceRequestSchema, DeleteTailorDBServiceResponseSchema, DeleteTailorDBTypeRequestSchema, DeleteTailorDBTypeResponseSchema, GetTailorDBGQLPermissionRequestSchema, GetTailorDBGQLPermissionResponseSchema, GetTailorDBServiceRequestSchema, GetTailorDBServiceResponseSchema, GetTailorDBTypeRequestSchema, GetTailorDBTypeResponseSchema, ListTailorDBGQLPermissionsRequestSchema, ListTailorDBGQLPermissionsResponseSchema, ListTailorDBServicesRequestSchema, ListTailorDBServicesResponseSchema, ListTailorDBTypesRequestSchema, ListTailorDBTypesResponseSchema, TruncateTailorDBTypeRequestSchema, TruncateTailorDBTypeResponseSchema, TruncateTailorDBTypesRequestSchema, TruncateTailorDBTypesResponseSchema, UpdateTailorDBGQLPermissionRequestSchema, UpdateTailorDBGQLPermissionResponseSchema, UpdateTailorDBServiceRequestSchema, UpdateTailorDBServiceResponseSchema, UpdateTailorDBTypeRequestSchema, UpdateTailorDBTypeResponseSchema } from "./tailordb_pb";
+import type { ComposeTailorDBSDLRequestSchema, ComposeTailorDBSDLResponseSchema, CreateTailorDBGQLPermissionRequestSchema, CreateTailorDBGQLPermissionResponseSchema, CreateTailorDBReplicationDestinationRequestSchema, CreateTailorDBReplicationDestinationResponseSchema, CreateTailorDBReplicationRequestSchema, CreateTailorDBReplicationResponseSchema, CreateTailorDBServiceRequestSchema, CreateTailorDBServiceResponseSchema, CreateTailorDBTypeRequestSchema, CreateTailorDBTypeResponseSchema, DeleteTailorDBGQLPermissionRequestSchema, DeleteTailorDBGQLPermissionResponseSchema, DeleteTailorDBReplicationDestinationRequestSchema, DeleteTailorDBReplicationDestinationResponseSchema, DeleteTailorDBReplicationRequestSchema, DeleteTailorDBReplicationResponseSchema, DeleteTailorDBServiceRequestSchema, DeleteTailorDBServiceResponseSchema, DeleteTailorDBTypeRequestSchema, DeleteTailorDBTypeResponseSchema, GetTailorDBGQLPermissionRequestSchema, GetTailorDBGQLPermissionResponseSchema, GetTailorDBReplicationDestinationRequestSchema, GetTailorDBReplicationDestinationResponseSchema, GetTailorDBReplicationRequestSchema, GetTailorDBReplicationResponseSchema, GetTailorDBReplicationStatusRequestSchema, GetTailorDBReplicationStatusResponseSchema, GetTailorDBServiceRequestSchema, GetTailorDBServiceResponseSchema, GetTailorDBTypeRequestSchema, GetTailorDBTypeResponseSchema, ListTailorDBGQLPermissionsRequestSchema, ListTailorDBGQLPermissionsResponseSchema, ListTailorDBReplicationDestinationsRequestSchema, ListTailorDBReplicationDestinationsResponseSchema, ListTailorDBReplicationsRequestSchema, ListTailorDBReplicationsResponseSchema, ListTailorDBServicesRequestSchema, ListTailorDBServicesResponseSchema, ListTailorDBTypesRequestSchema, ListTailorDBTypesResponseSchema, TruncateTailorDBTypeRequestSchema, TruncateTailorDBTypeResponseSchema, TruncateTailorDBTypesRequestSchema, TruncateTailorDBTypesResponseSchema, UpdateTailorDBGQLPermissionRequestSchema, UpdateTailorDBGQLPermissionResponseSchema, UpdateTailorDBReplicationRequestSchema, UpdateTailorDBReplicationResponseSchema, UpdateTailorDBServiceRequestSchema, UpdateTailorDBServiceResponseSchema, UpdateTailorDBTypeRequestSchema, UpdateTailorDBTypeResponseSchema, VerifyTailorDBReplicationDestinationRequestSchema, VerifyTailorDBReplicationDestinationResponseSchema } from "./tailordb_pb";
 import type { ComposePipelineSDLRequestSchema, ComposePipelineSDLResponseSchema, CreatePipelineResolverRequestSchema, CreatePipelineResolverResponseSchema, CreatePipelineServiceRequestSchema, CreatePipelineServiceResponseSchema, DeletePipelineResolverRequestSchema, DeletePipelineResolverResponseSchema, DeletePipelineServiceRequestSchema, DeletePipelineServiceResponseSchema, GetPipelineResolverExecutionResultRequestSchema, GetPipelineResolverExecutionResultResponseSchema, GetPipelineResolverRequestSchema, GetPipelineResolverResponseSchema, GetPipelineServiceRequestSchema, GetPipelineServiceResponseSchema, ListPipelineResolverExecutionResultsRequestSchema, ListPipelineResolverExecutionResultsResponseSchema, ListPipelineResolversRequestSchema, ListPipelineResolversResponseSchema, ListPipelineServicesRequestSchema, ListPipelineServicesResponseSchema, RestartPipelineResolverRequestSchema, RestartPipelineResolverResponseSchema, UpdatePipelineResolverRequestSchema, UpdatePipelineResolverResponseSchema, UpdatePipelineServiceRequestSchema, UpdatePipelineServiceResponseSchema } from "./pipeline_pb";
 import type { CreateStateflowServiceRequestSchema, CreateStateflowServiceResponseSchema, DeleteStateflowServiceRequestSchema, DeleteStateflowServiceResponseSchema, GetStateflowServiceRequestSchema, GetStateflowServiceResponseSchema, ListStateflowServicesRequestSchema, ListStateflowServicesResponseSchema, UpdateStateflowServiceRequestSchema, UpdateStateflowServiceResponseSchema } from "./stateflow_pb";
 import type { CreateExecutorExecutorRequestSchema, CreateExecutorExecutorResponseSchema, DeleteExecutorExecutorRequestSchema, DeleteExecutorExecutorResponseSchema, GetExecutorExecutorRequestSchema, GetExecutorExecutorResponseSchema, GetExecutorIncomingWebhookRequestSchema, GetExecutorIncomingWebhookResponseSchema, GetExecutorJobRequestSchema, GetExecutorJobResponseSchema, ListExecutorExecutorsRequestSchema, ListExecutorExecutorsResponseSchema, ListExecutorIncomingWebhooksRequestSchema, ListExecutorIncomingWebhooksResponseSchema, ListExecutorJobAttemptsRequestSchema, ListExecutorJobAttemptsResponseSchema, ListExecutorJobsRequestSchema, ListExecutorJobsResponseSchema, TriggerExecutorRequestSchema, TriggerExecutorResponseSchema, UpdateExecutorExecutorRequestSchema, UpdateExecutorExecutorResponseSchema } from "./executor_pb";
@@ -21,7 +21,8 @@ import type { ListMeterAITokenUsagesRequestSchema, ListMeterAITokenUsagesRespons
 import type { CreateIdPClientRequestSchema, CreateIdPClientResponseSchema, CreateIdPServiceRequestSchema, CreateIdPServiceResponseSchema, DeleteIdPClientRequestSchema, DeleteIdPClientResponseSchema, DeleteIdPServiceRequestSchema, DeleteIdPServiceResponseSchema, GetIdPClientRequestSchema, GetIdPClientResponseSchema, GetIdPServiceRequestSchema, GetIdPServiceResponseSchema, ListIdPClientsRequestSchema, ListIdPClientsResponseSchema, ListIdPServicesRequestSchema, ListIdPServicesResponseSchema, UpdateIdPServiceRequestSchema, UpdateIdPServiceResponseSchema } from "./idp_pb";
 import type { AcceptCustomDomainTransferRequestSchema, AcceptCustomDomainTransferResponseSchema, AddCustomDomainRequestSchema, AddCustomDomainResponseSchema, CancelCustomDomainTransferRequestSchema, CancelCustomDomainTransferResponseSchema, CreateDeploymentRequestSchema, CreateDeploymentResponseSchema, CreateStaticWebsiteRequestSchema, CreateStaticWebsiteResponseSchema, DeleteStaticWebsiteRequestSchema, DeleteStaticWebsiteResponseSchema, GetCustomDomainRequestSchema, GetCustomDomainResponseSchema, GetCustomDomainTransferRequestSchema, GetCustomDomainTransferResponseSchema, GetStaticWebsiteRequestSchema, GetStaticWebsiteResponseSchema, ListCustomDomainsRequestSchema, ListCustomDomainsResponseSchema, ListCustomDomainTransfersRequestSchema, ListCustomDomainTransfersResponseSchema, ListStaticWebsitesRequestSchema, ListStaticWebsitesResponseSchema, PublishDeploymentRequestSchema, PublishDeploymentResponseSchema, RemoveCustomDomainRequestSchema, RemoveCustomDomainResponseSchema, RequestCustomDomainTransferRequestSchema, RequestCustomDomainTransferResponseSchema, UpdateStaticWebsiteRequestSchema, UpdateStaticWebsiteResponseSchema, UploadFileRequestSchema, UploadFileResponseSchema } from "./staticwebsite_pb";
 import type { CancelWorkflowExecutionRequestSchema, CancelWorkflowExecutionResponseSchema, CreateWorkflowJobFunctionExecutionPolicyRequestSchema, CreateWorkflowJobFunctionExecutionPolicyResponseSchema, CreateWorkflowJobFunctionRequestSchema, CreateWorkflowJobFunctionResponseSchema, CreateWorkflowRequestSchema, CreateWorkflowResponseSchema, DeleteWorkflowJobFunctionExecutionPolicyRequestSchema, DeleteWorkflowJobFunctionExecutionPolicyResponseSchema, DeleteWorkflowJobFunctionRequestSchema, DeleteWorkflowJobFunctionResponseSchema, DeleteWorkflowRequestSchema, DeleteWorkflowResponseSchema, GetWorkflowByNameRequestSchema, GetWorkflowByNameResponseSchema, GetWorkflowExecutionRequestSchema, GetWorkflowExecutionResponseSchema, GetWorkflowJobFunctionByNameRequestSchema, GetWorkflowJobFunctionByNameResponseSchema, GetWorkflowJobFunctionExecutionPolicyByKeyRequestSchema, GetWorkflowJobFunctionExecutionPolicyByKeyResponseSchema, GetWorkflowJobFunctionExecutionPolicyRequestSchema, GetWorkflowJobFunctionExecutionPolicyResponseSchema, GetWorkflowJobFunctionRequestSchema, GetWorkflowJobFunctionResponseSchema, GetWorkflowRequestSchema, GetWorkflowResponseSchema, ListWorkflowExecutionsRequestSchema, ListWorkflowExecutionsResponseSchema, ListWorkflowJobFunctionExecutionPoliciesRequestSchema, ListWorkflowJobFunctionExecutionPoliciesResponseSchema, ListWorkflowJobFunctionsRequestSchema, ListWorkflowJobFunctionsResponseSchema, ListWorkflowsRequestSchema, ListWorkflowsResponseSchema, ResumeWorkflowExecutionRequestSchema, ResumeWorkflowExecutionResponseSchema, StartWorkflowRequestSchema, StartWorkflowResponseSchema, TestResumeWorkflowRequestSchema, TestResumeWorkflowResponseSchema, TestStartWorkflowRequestSchema, TestStartWorkflowResponseSchema, UpdateWorkflowJobFunctionExecutionPolicyRequestSchema, UpdateWorkflowJobFunctionExecutionPolicyResponseSchema, UpdateWorkflowJobFunctionRequestSchema, UpdateWorkflowJobFunctionResponseSchema, UpdateWorkflowRequestSchema, UpdateWorkflowResponseSchema } from "./workflow_pb";
-import type { BulkSetMetadataRequestSchema, BulkSetMetadataResponseSchema, GetMetadataRequestSchema, GetMetadataResponseSchema, ListMetadataRequestSchema, ListMetadataResponseSchema, SetMetadataRequestSchema, SetMetadataResponseSchema } from "./metadata_pb";
+import type { DestroySandboxRequestSchema, DestroySandboxResponseSchema, GetSandboxExecutionRequestSchema, GetSandboxExecutionResponseSchema, GetSandboxRequestSchema, GetSandboxResponseSchema, ListSandboxesRequestSchema, ListSandboxesResponseSchema, ListSandboxExecutionsRequestSchema, ListSandboxExecutionsResponseSchema, ListSandboxTemplatesRequestSchema, ListSandboxTemplatesResponseSchema } from "./sandbox_pb";
+import type { BulkSetMetadataRequestSchema, BulkSetMetadataResponseSchema, GetMetadataRequestSchema, GetMetadataResponseSchema, ListMetadataRequestSchema, ListMetadataResponseSchema, ListResourcesRequestSchema, ListResourcesResponseSchema, SetMetadataRequestSchema, SetMetadataResponseSchema } from "./metadata_pb";
 import type { CreateOTLPExporterRequestSchema, CreateOTLPExporterResponseSchema, CreateResourceAttributesConfigRequestSchema, CreateResourceAttributesConfigResponseSchema, DeleteOTLPExporterRequestSchema, DeleteOTLPExporterResponseSchema, DeleteResourceAttributesConfigRequestSchema, DeleteResourceAttributesConfigResponseSchema, GetOTLPExporterRequestSchema, GetOTLPExporterResponseSchema, GetResourceAttributesConfigRequestSchema, GetResourceAttributesConfigResponseSchema, ListOTLPExportersRequestSchema, ListOTLPExportersResponseSchema, TestOTLPExporterRequestSchema, TestOTLPExporterResponseSchema, UpdateOTLPExporterRequestSchema, UpdateOTLPExporterResponseSchema, UpdateResourceAttributesConfigRequestSchema, UpdateResourceAttributesConfigResponseSchema } from "./telemetryrouter_pb";
 import type { CountMyUnreadNotificationsRequestSchema, CountMyUnreadNotificationsResponseSchema, DismissMyNotificationRequestSchema, DismissMyNotificationResponseSchema, GetMyNotificationRequestSchema, GetMyNotificationResponseSchema, ListMyNotificationsRequestSchema, ListMyNotificationsResponseSchema, MarkMyNotificationsReadRequestSchema, MarkMyNotificationsReadResponseSchema } from "./notification_pb";
 
@@ -1418,6 +1419,185 @@ export declare const OperatorService: GenService<{
     output: typeof DeleteTailorDBGQLPermissionResponseSchema;
   },
   /**
+   * CreateTailorDBReplicationDestination registers an external data warehouse
+   * that replications in the workspace can write into. The response carries
+   * the workspace's replication service account, shared by every destination
+   * in the workspace, for the customer to grant access to the destination.
+   *
+   * [Errors]
+   * - InvalidArgument: request is invalid
+   * - NotFound: workspace does not exist or can not be accessed
+   * - AlreadyExists: a destination with the same name, or for the same dataset, already exists
+   * - FailedPrecondition: replication is not available
+   * - ResourceExhausted: the workspace reached its destination limit
+   * - Aborted: a concurrent change released the replication service account; retry
+   *
+   * @generated from rpc tailor.v1.OperatorService.CreateTailorDBReplicationDestination
+   */
+  createTailorDBReplicationDestination: {
+    methodKind: "unary";
+    input: typeof CreateTailorDBReplicationDestinationRequestSchema;
+    output: typeof CreateTailorDBReplicationDestinationResponseSchema;
+  },
+  /**
+   * GetTailorDBReplicationDestination returns a destination with its grant status.
+   *
+   * [Errors]
+   * - InvalidArgument: request is invalid
+   * - NotFound: destination does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.GetTailorDBReplicationDestination
+   */
+  getTailorDBReplicationDestination: {
+    methodKind: "unary";
+    input: typeof GetTailorDBReplicationDestinationRequestSchema;
+    output: typeof GetTailorDBReplicationDestinationResponseSchema;
+  },
+  /**
+   * ListTailorDBReplicationDestinations lists the destinations in a workspace.
+   *
+   * [Errors]
+   * - InvalidArgument: request is invalid
+   * - NotFound: workspace does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.ListTailorDBReplicationDestinations
+   */
+  listTailorDBReplicationDestinations: {
+    methodKind: "unary";
+    input: typeof ListTailorDBReplicationDestinationsRequestSchema;
+    output: typeof ListTailorDBReplicationDestinationsResponseSchema;
+  },
+  /**
+   * VerifyTailorDBReplicationDestination re-checks the destination's grant now
+   * and records the result as its status, e.g. right after the customer grants
+   * the service account. A transient failure leaves the status unchanged.
+   *
+   * [Errors]
+   * - InvalidArgument: request is invalid
+   * - NotFound: destination does not exist or can not be accessed
+   * - FailedPrecondition: replication is not available
+   *
+   * @generated from rpc tailor.v1.OperatorService.VerifyTailorDBReplicationDestination
+   */
+  verifyTailorDBReplicationDestination: {
+    methodKind: "unary";
+    input: typeof VerifyTailorDBReplicationDestinationRequestSchema;
+    output: typeof VerifyTailorDBReplicationDestinationResponseSchema;
+  },
+  /**
+   * DeleteTailorDBReplicationDestination deletes a destination. Data already
+   * replicated to it is left intact.
+   *
+   * [Errors]
+   * - InvalidArgument: request is invalid
+   * - NotFound: destination does not exist or can not be accessed
+   * - FailedPrecondition: a replication still writes into the destination
+   *
+   * @generated from rpc tailor.v1.OperatorService.DeleteTailorDBReplicationDestination
+   */
+  deleteTailorDBReplicationDestination: {
+    methodKind: "unary";
+    input: typeof DeleteTailorDBReplicationDestinationRequestSchema;
+    output: typeof DeleteTailorDBReplicationDestinationResponseSchema;
+  },
+  /**
+   * CreateTailorDBReplication starts replicating the listed types of a
+   * namespace into a destination.
+   *
+   * [Errors]
+   * - InvalidArgument: request is invalid
+   * - NotFound: workspace does not exist or can not be accessed
+   * - AlreadyExists: a replication with the same name already exists
+   * - FailedPrecondition: replication is not available, the namespace, a type,
+   *   a field or the destination does not exist, or another replication already
+   *   writes one of the tables
+   * - ResourceExhausted: the workspace reached its replication or replicated-type limit
+   *
+   * @generated from rpc tailor.v1.OperatorService.CreateTailorDBReplication
+   */
+  createTailorDBReplication: {
+    methodKind: "unary";
+    input: typeof CreateTailorDBReplicationRequestSchema;
+    output: typeof CreateTailorDBReplicationResponseSchema;
+  },
+  /**
+   * GetTailorDBReplication returns a replication.
+   *
+   * [Errors]
+   * - InvalidArgument: request is invalid
+   * - NotFound: replication does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.GetTailorDBReplication
+   */
+  getTailorDBReplication: {
+    methodKind: "unary";
+    input: typeof GetTailorDBReplicationRequestSchema;
+    output: typeof GetTailorDBReplicationResponseSchema;
+  },
+  /**
+   * ListTailorDBReplications lists the replications in a workspace.
+   *
+   * [Errors]
+   * - InvalidArgument: request is invalid
+   * - NotFound: workspace does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.ListTailorDBReplications
+   */
+  listTailorDBReplications: {
+    methodKind: "unary";
+    input: typeof ListTailorDBReplicationsRequestSchema;
+    output: typeof ListTailorDBReplicationsResponseSchema;
+  },
+  /**
+   * UpdateTailorDBReplication applies the masked fields to the stored
+   * replication and validates the result; an empty mask replaces it whole.
+   * The source namespace can not be changed.
+   *
+   * [Errors]
+   * - InvalidArgument: request or resulting replication is invalid, or it changes the source namespace
+   * - NotFound: replication does not exist or can not be accessed
+   * - FailedPrecondition: a type, a field or the destination does not exist,
+   *   or another replication already writes one of the tables
+   * - ResourceExhausted: the workspace reached its replicated-type limit
+   *
+   * @generated from rpc tailor.v1.OperatorService.UpdateTailorDBReplication
+   */
+  updateTailorDBReplication: {
+    methodKind: "unary";
+    input: typeof UpdateTailorDBReplicationRequestSchema;
+    output: typeof UpdateTailorDBReplicationResponseSchema;
+  },
+  /**
+   * DeleteTailorDBReplication stops a replication. Data already replicated to
+   * the destination is left intact.
+   *
+   * [Errors]
+   * - InvalidArgument: request is invalid
+   * - NotFound: replication does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.DeleteTailorDBReplication
+   */
+  deleteTailorDBReplication: {
+    methodKind: "unary";
+    input: typeof DeleteTailorDBReplicationRequestSchema;
+    output: typeof DeleteTailorDBReplicationResponseSchema;
+  },
+  /**
+   * GetTailorDBReplicationStatus returns the live per-table state of a replication.
+   *
+   * [Errors]
+   * - InvalidArgument: request is invalid
+   * - NotFound: replication does not exist or can not be accessed
+   * - Unimplemented: replication status is not available yet
+   *
+   * @generated from rpc tailor.v1.OperatorService.GetTailorDBReplicationStatus
+   */
+  getTailorDBReplicationStatus: {
+    methodKind: "unary";
+    input: typeof GetTailorDBReplicationStatusRequestSchema;
+    output: typeof GetTailorDBReplicationStatusResponseSchema;
+  },
+  /**
    * CreatePipelineService creates a new pipeline service in a given workspace.
    *
    * [Errors]
@@ -1852,10 +2032,18 @@ export declare const OperatorService: GenService<{
   },
   /**
    * TriggerExecutor triggers an executor.
+   * For an incoming webhook executor, payload is delivered as the body and headers as the request headers
+   * (names lower-cased, as for a request to the webhook URL). A header is a string, or a list of strings for a
+   * name sent on more than one line; a list of one is delivered as a string, as the webhook handler does.
    *
    * [Errors]
    * - Unauthenticated: token is missing, expired, or invalid
-   * - InvalidArgument: request is invalid
+   * - InvalidArgument: request is invalid, headers is set for an executor that is not an incoming webhook,
+   *   a header name is not allowed (the edge sets or strips it, it describes the connection, or it carries
+   *   trace context: tailor-*, x-tailor-*, fastly-*, x-forwarded-*, x-envoy-*, x-b3-*, proxy-*, forwarded,
+   *   via, cdn-loop, true-client-ip, x-real-ip, b3, traceparent, tracestate, baggage, x-cloud-trace-context,
+   *   host, connection, content-length, transfer-encoding, te, upgrade, keep-alive),
+   *   or the names and values of headers add up to more than 64 KiB
    *
    * @generated from rpc tailor.v1.OperatorService.TriggerExecutor
    */
@@ -2337,6 +2525,8 @@ export declare const OperatorService: GenService<{
   },
   /**
    * ListAuthMachineUsers lists all machine users.
+   * Returns MachineUserSummary, which omits client_secret. GetAuthMachineUser
+   * returns it instead.
    *
    * @generated from rpc tailor.v1.OperatorService.ListAuthMachineUsers
    */
@@ -2587,6 +2777,8 @@ export declare const OperatorService: GenService<{
   },
   /**
    * ListAuthOAuth2Client lists auth OAuth2 clients.
+   * Returns AuthOAuth2ClientSummary, which omits client_secret.
+   * GetAuthOAuth2Client returns it instead.
    *
    * @generated from rpc tailor.v1.OperatorService.ListAuthOAuth2Clients
    */
@@ -2931,6 +3123,8 @@ export declare const OperatorService: GenService<{
   },
   /**
    * ListIdPClients lists all clients for the idp namespace.
+   * Returns IdPClientSummary, which omits client_secret. GetIdPClient returns it
+   * instead.
    *
    * [Errors]
    * - Unauthenticated: token is missing, expired, or invalid
@@ -3667,6 +3861,100 @@ export declare const OperatorService: GenService<{
     output: typeof ListWorkflowJobFunctionExecutionPoliciesResponseSchema;
   },
   /**
+   * ListSandboxTemplates returns the platform-curated sandbox templates.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - NotFound: workspace does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.ListSandboxTemplates
+   */
+  listSandboxTemplates: {
+    methodKind: "unary";
+    input: typeof ListSandboxTemplatesRequestSchema;
+    output: typeof ListSandboxTemplatesResponseSchema;
+  },
+  /**
+   * ListSandboxes returns sandboxes in a given workspace.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - NotFound: workspace does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.ListSandboxes
+   */
+  listSandboxes: {
+    methodKind: "unary";
+    input: typeof ListSandboxesRequestSchema;
+    output: typeof ListSandboxesResponseSchema;
+  },
+  /**
+   * GetSandbox returns a sandbox.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - NotFound: workspace does not exist or can not be accessed
+   * - NotFound: sandbox does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.GetSandbox
+   */
+  getSandbox: {
+    methodKind: "unary";
+    input: typeof GetSandboxRequestSchema;
+    output: typeof GetSandboxResponseSchema;
+  },
+  /**
+   * DestroySandbox destroys a sandbox and its snapshot.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - NotFound: workspace does not exist or can not be accessed
+   * - NotFound: sandbox does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.DestroySandbox
+   */
+  destroySandbox: {
+    methodKind: "unary";
+    input: typeof DestroySandboxRequestSchema;
+    output: typeof DestroySandboxResponseSchema;
+  },
+  /**
+   * ListSandboxExecutions returns the executions of a sandbox.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - NotFound: workspace does not exist or can not be accessed
+   * - NotFound: sandbox does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.ListSandboxExecutions
+   */
+  listSandboxExecutions: {
+    methodKind: "unary";
+    input: typeof ListSandboxExecutionsRequestSchema;
+    output: typeof ListSandboxExecutionsResponseSchema;
+  },
+  /**
+   * GetSandboxExecution returns a sandbox execution.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - NotFound: workspace does not exist or can not be accessed
+   * - NotFound: execution does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.GetSandboxExecution
+   */
+  getSandboxExecution: {
+    methodKind: "unary";
+    input: typeof GetSandboxExecutionRequestSchema;
+    output: typeof GetSandboxExecutionResponseSchema;
+  },
+  /**
    * SetMetadata sets metadata labels for a resource.
    *
    * [Errors]
@@ -3728,6 +4016,24 @@ export declare const OperatorService: GenService<{
     methodKind: "unary";
     input: typeof ListMetadataRequestSchema;
     output: typeof ListMetadataResponseSchema;
+  },
+  /**
+   * ListResources lists resources in a workspace with their metadata labels,
+   * optionally narrowed to those whose labels match all of the given
+   * key-value pairs and to the given resource types. Results come from a
+   * resource index kept in sync from controlplane events, so a newly created
+   * or deleted resource may take a few seconds to be reflected.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   *
+   * @generated from rpc tailor.v1.OperatorService.ListResources
+   */
+  listResources: {
+    methodKind: "unary";
+    input: typeof ListResourcesRequestSchema;
+    output: typeof ListResourcesResponseSchema;
   },
   /**
    * CreateControlplaneMachineUser creates a Controlplane Machine User for organization or folder.
@@ -3796,6 +4102,8 @@ export declare const OperatorService: GenService<{
   },
   /**
    * ListControlplaneMachineUsers lists Controlplane Machine Users in organization or folder.
+   * Returns ControlplaneMachineUserSummary, which omits client_secret.
+   * GetControlplaneMachineUser returns it instead.
    *
    * [Errors]
    * - Unauthenticated: token is missing, expired, or invalid

@@ -36,7 +36,7 @@ type ListAuthOAuth2Clients = (args: {
   pageToken: string;
   pageSize: number;
 }) => Promise<{
-  oauth2Clients: { name: string; clientId: string; clientSecret: string }[];
+  oauth2Clients: { name: string; clientId: string }[];
   nextPageToken: string;
 }>;
 
@@ -269,9 +269,9 @@ describe("show", () => {
       mockConfig({ auth: { name: "local-auth", oauth2Clients } });
       listAuthOAuth2ClientsMock.mockResolvedValue({
         oauth2Clients: [
-          { name: "mobile", clientId: "mobile-id", clientSecret: "mobile-secret" },
-          { name: "unmanaged", clientId: "unmanaged-id", clientSecret: "unmanaged-secret" },
-          { name: "web", clientId: "web-id", clientSecret: "web-secret" },
+          { name: "mobile", clientId: "mobile-id" },
+          { name: "unmanaged", clientId: "unmanaged-id" },
+          { name: "web", clientId: "web-id" },
         ],
         nextPageToken: "",
       });
@@ -287,31 +287,17 @@ describe("show", () => {
       );
     });
 
-    test("never returns client secrets and redacts them from diagnostics", async () => {
-      using registerSecretSpy = vi.spyOn(logger, "registerSecret").mockImplementation(() => {});
-      mockConfig({ auth: { name: "local-auth", oauth2Clients } });
-      listAuthOAuth2ClientsMock.mockResolvedValue({
-        oauth2Clients: [{ name: "web", clientId: "web-id", clientSecret: "web-secret" }],
-        nextPageToken: "",
-      });
-
-      const info = await show();
-
-      expect(JSON.stringify(info)).not.toContain("web-secret");
-      expect(registerSecretSpy).toHaveBeenCalledWith("web-secret");
-    });
-
     test("reads every page of OAuth2 clients", async () => {
       mockConfig({ auth: { name: "local-auth", oauth2Clients } });
       vi.when(listAuthOAuth2ClientsMock)
         .calledWith(expect.objectContaining({ pageToken: "" }))
         .thenResolve({
-          oauth2Clients: [{ name: "web", clientId: "web-id", clientSecret: "web-secret" }],
+          oauth2Clients: [{ name: "web", clientId: "web-id" }],
           nextPageToken: "page-2",
         })
         .calledWith(expect.objectContaining({ pageToken: "page-2" }))
         .thenResolve({
-          oauth2Clients: [{ name: "mobile", clientId: "mobile-id", clientSecret: "mobile-secret" }],
+          oauth2Clients: [{ name: "mobile", clientId: "mobile-id" }],
           nextPageToken: "",
         });
 
@@ -327,7 +313,7 @@ describe("show", () => {
     test("omits OAuth2 clients that have not been deployed yet", async () => {
       mockConfig({ auth: { name: "local-auth", oauth2Clients } });
       listAuthOAuth2ClientsMock.mockResolvedValue({
-        oauth2Clients: [{ name: "web", clientId: "web-id", clientSecret: "web-secret" }],
+        oauth2Clients: [{ name: "web", clientId: "web-id" }],
         nextPageToken: "",
       });
 
