@@ -49,7 +49,7 @@ jobs:
 
       - name: Check docs-implementation consistency
         if: steps.reuse.outputs.reuse == 'false'
-        uses: anthropics/claude-code-action@f3b070c88125d33dbae5653df5f143101d4ea9dc # v1.0.276
+        uses: anthropics/claude-code-action@469588f42e6b1e94cd14ad09dccfeaec772ce0fd # v1.0.280
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           # Allow PRs opened by the tailor-bobbin GitHub App to run this check
@@ -257,7 +257,7 @@ jobs:
 
       - name: Fix Recommended Actions heading with Claude
         if: always() && steps.reuse.outputs.reuse == 'false' && steps.validate-heading.outputs.needs_fix == 'true'
-        uses: anthropics/claude-code-action@f3b070c88125d33dbae5653df5f143101d4ea9dc # v1.0.276
+        uses: anthropics/claude-code-action@469588f42e6b1e94cd14ad09dccfeaec772ce0fd # v1.0.280
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           # Allow PRs opened by the tailor-bobbin GitHub App to run this check
