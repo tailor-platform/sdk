@@ -121,15 +121,14 @@ type ViolationEntry = {
 
 type HasRequest = { name: string; request: unknown };
 type HasCreateRequest = { name: string; createRequest: unknown };
-type HasUpdateRequest = { name: string; updateRequest: unknown };
 
 type ValidateItemsParams<Desc extends DescMessage> = {
   application: string;
   schema: Desc;
   resourceType: ValidatedResourceType;
   action: "create" | "update" | "replace";
-  items: ReadonlyArray<HasRequest | HasCreateRequest | HasUpdateRequest>;
-  requestKey: "request" | "createRequest" | "updateRequest";
+  items: ReadonlyArray<HasRequest | HasCreateRequest>;
+  requestKey: "request" | "createRequest";
   violations: ViolationEntry[];
 };
 
@@ -263,22 +262,6 @@ function collectViolations(application: string, results: PlanResults): Violation
       action: "replace",
       items,
       requestKey: "createRequest",
-      violations,
-    });
-  }
-
-  function inPlaceReplaces<Desc extends DescMessage>(
-    schema: Desc,
-    resourceType: ValidatedResourceType,
-    items: ReadonlyArray<HasUpdateRequest>,
-  ): void {
-    validateItems({
-      application,
-      schema,
-      resourceType,
-      action: "replace",
-      items,
-      requestKey: "updateRequest",
       violations,
     });
   }
@@ -697,10 +680,12 @@ function collectViolations(application: string, results: PlanResults): Violation
     "auth.connection",
     auth.changeSet.connection.creates as HasRequest[],
   );
-  inPlaceReplaces(
+  updates(
     UpdateAuthConnectionRequestSchema,
     "auth.connection",
-    auth.changeSet.connection.replaces as HasUpdateRequest[],
+    auth.changeSet.connection.updates.flatMap(({ name, request }) =>
+      request ? [{ name, request }] : [],
+    ),
   );
 
   return violations;

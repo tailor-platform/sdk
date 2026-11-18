@@ -189,13 +189,14 @@ describe("planAuthConnections", () => {
       connections: [{ name: "adopted-connection" }],
     });
 
-    const { changeSet, unmanaged } = await planAuthConnections(
+    const result = await planAuthConnections(
       client,
       workspaceId,
       appName,
       undefined,
       authsWith(["adopted-connection"]),
     );
+    const { changeSet, unmanaged } = result;
 
     expect(unmanaged).toEqual([
       {
@@ -206,7 +207,15 @@ describe("planAuthConnections", () => {
     ]);
     expect(changeSet.updates.map((u) => u.name)).toEqual(["adopted-connection"]);
     expect(changeSet.unchanged.map((u) => u.name)).toEqual([]);
-    expect(changeSet.replaces.map((r) => r.name)).toEqual([]);
+
+    await applyAuthConnections(client, result, "create-update");
+
+    expect(client.updateAuthConnection).not.toHaveBeenCalled();
+    expect(client.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trn: `trn:v1:workspace:${workspaceId}:auth_connection:adopted-connection`,
+      }),
+    );
   });
 
   test("re-tags an unchanged connection whose recorded id does not match", async () => {
@@ -270,11 +279,10 @@ describe("planAuthConnections", () => {
       { name: "auth-a", connections: { conn: ciConfig } } as unknown as AuthService,
     ]);
 
-    expect(changeSet.replaces.map((r) => r.name)).toEqual(["conn"]);
-    const [replace] = changeSet.replaces;
-    expect(replace).toBeDefined();
-    expect(replace!.updateRequest.updateMask?.paths).toContain("oauth2.provider_url");
-    expect(replace!.updateRequest.updateMask?.paths).not.toContain("oauth2.client_secret");
+    expect(changeSet.updates.map((u) => u.name)).toEqual(["conn"]);
+    const [update] = changeSet.updates;
+    expect(update?.request?.updateMask?.paths).toContain("oauth2.provider_url");
+    expect(update?.request?.updateMask?.paths).not.toContain("oauth2.client_secret");
   });
 
   test("updates an existing same-name connection when state belongs to another workspace", async () => {
@@ -305,10 +313,8 @@ describe("planAuthConnections", () => {
     expect(resultA.changeSet.unchanged.map((connection) => connection.name)).toEqual([
       "shared-connection",
     ]);
-    expect(resultB.changeSet.replaces.map((replace) => replace.name)).toEqual([
-      "shared-connection",
-    ]);
-    expect(resultB.changeSet.replaces[0]?.updateRequest.updateMask?.paths).toContain(
+    expect(resultB.changeSet.updates.map((update) => update.name)).toEqual(["shared-connection"]);
+    expect(resultB.changeSet.updates[0]?.request?.updateMask?.paths).toContain(
       "oauth2.client_secret",
     );
     expect(mockLoadSecretsState).toHaveBeenCalledWith({
@@ -360,7 +366,7 @@ describe("applyAuthConnections", () => {
     });
   });
 
-  test("replace updates the connection in-place without deleting it", async () => {
+  test("updates the connection in-place without deleting it", async () => {
     const client = createMockClient({
       connections: [{ name: "conn", ownerLabel: appName }],
     });
@@ -371,7 +377,7 @@ describe("applyAuthConnections", () => {
       undefined,
       authsWith(["conn"]),
     );
-    expect(result.changeSet.replaces.map((r) => r.name)).toEqual(["conn"]);
+    expect(result.changeSet.updates.map((u) => u.name)).toEqual(["conn"]);
 
     await applyAuthConnections(client, result, "create-update");
 
@@ -382,6 +388,7 @@ describe("applyAuthConnections", () => {
         updateMask: { paths: ["oauth2.client_secret"] },
       }),
     );
+    expect(client.setMetadata).toHaveBeenCalledTimes(1);
     expect(client.deleteAuthConnection).not.toHaveBeenCalled();
     expect(client.createAuthConnection).not.toHaveBeenCalled();
   });
@@ -399,9 +406,9 @@ describe("applyAuthConnections", () => {
     const result = await planAuthConnections(client, workspaceId, appName, undefined, [
       { name: "auth-a", connections: { conn: ciConfig } } as unknown as AuthService,
     ]);
-    expect(result.changeSet.replaces.map((r) => r.name)).toEqual(["conn"]);
-    const [replace] = result.changeSet.replaces;
-    expect(replace!.updateRequest.updateMask?.paths).not.toContain("oauth2.client_secret");
+    expect(result.changeSet.updates.map((u) => u.name)).toEqual(["conn"]);
+    const [update] = result.changeSet.updates;
+    expect(update?.request?.updateMask?.paths).not.toContain("oauth2.client_secret");
 
     mockLoadSecretsState.mockClear();
     mockSaveSecretsState.mockClear();
