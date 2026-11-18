@@ -87,6 +87,9 @@ export const OAuth2ClientGrantTypeSchema = z
   .union([z.literal("authorization_code"), z.literal("refresh_token")])
   .describe("OAuth2 grant type");
 
+const DEFAULT_ACCESS_TOKEN_LIFETIME_SECONDS = 86400n;
+const DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS = 604800n;
+
 export const OAuth2ClientSchema = z
   .strictObject({
     description: z.string().optional().describe("Client description"),
@@ -120,9 +123,21 @@ export const OAuth2ClientSchema = z
       .number()
       .int()
       .min(60, "Minimum refresh token lifetime is 60 seconds")
-      .max(604800, "Maximum refresh token lifetime is 7 days (604800 seconds)")
+      .max(7776000, "Maximum refresh token lifetime is 90 days (7776000 seconds)")
       .optional()
-      .describe("Refresh token lifetime in seconds (60-604800)")
+      .describe(
+        "Refresh token lifetime in seconds (60-7776000), counted from the first authorization. A value above 604800 requires refreshTokenIdleLifetimeSeconds",
+      )
+      .transform((val) => (val ? { seconds: BigInt(val), nanos: 0 } : undefined)),
+    refreshTokenIdleLifetimeSeconds: z
+      .number()
+      .int()
+      .min(60, "Minimum refresh token idle lifetime is 60 seconds")
+      .max(2592000, "Maximum refresh token idle lifetime is 30 days (2592000 seconds)")
+      .optional()
+      .describe(
+        "Refresh token idle lifetime in seconds (60-2592000). A refresh token also expires once it has not been used for this long",
+      )
       .transform((val) => (val ? { seconds: BigInt(val), nanos: 0 } : undefined)),
     requireDpop: z
       .boolean()
@@ -133,7 +148,39 @@ export const OAuth2ClientSchema = z
   .refine((data) => !(data.clientType === "browser" && data.requireDpop === true), {
     message: "requireDpop cannot be set to true for browser clients as they don't support DPoP",
     path: ["requireDpop"],
-  });
+  })
+  .refine(
+    (data) =>
+      (data.refreshTokenLifetimeSeconds?.seconds ?? DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS) <=
+        DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS || data.refreshTokenIdleLifetimeSeconds != null,
+    {
+      message:
+        "refreshTokenLifetimeSeconds above 7 days (604800 seconds) requires refreshTokenIdleLifetimeSeconds",
+      path: ["refreshTokenIdleLifetimeSeconds"],
+    },
+  )
+  .refine(
+    (data) =>
+      data.refreshTokenIdleLifetimeSeconds == null ||
+      data.refreshTokenIdleLifetimeSeconds.seconds <=
+        (data.refreshTokenLifetimeSeconds?.seconds ?? DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS),
+    {
+      message:
+        "refreshTokenIdleLifetimeSeconds must be less than or equal to refreshTokenLifetimeSeconds (604800 seconds when not set)",
+      path: ["refreshTokenIdleLifetimeSeconds"],
+    },
+  )
+  .refine(
+    (data) =>
+      data.refreshTokenIdleLifetimeSeconds == null ||
+      data.refreshTokenIdleLifetimeSeconds.seconds >=
+        (data.accessTokenLifetimeSeconds?.seconds ?? DEFAULT_ACCESS_TOKEN_LIFETIME_SECONDS),
+    {
+      message:
+        "refreshTokenIdleLifetimeSeconds must be greater than or equal to accessTokenLifetimeSeconds (86400 seconds when not set)",
+      path: ["refreshTokenIdleLifetimeSeconds"],
+    },
+  );
 
 export const SCIMAuthorizationSchema = z.strictObject({
   type: z.union([z.literal("oauth2"), z.literal("bearer")]).describe("SCIM authorization type"),

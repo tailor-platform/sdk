@@ -57,6 +57,7 @@ function remoteOAuth2Client(overrides: {
   redirectUris: string[];
   accessTokenLifetime: { seconds: bigint };
   refreshTokenLifetime: { seconds: bigint };
+  refreshTokenIdleLifetime?: { seconds: bigint };
 }) {
   return {
     name: "sample",
@@ -69,6 +70,7 @@ function remoteOAuth2Client(overrides: {
     clientType: AuthOAuth2Client_ClientType.CONFIDENTIAL,
     accessTokenLifetime: overrides.accessTokenLifetime,
     refreshTokenLifetime: overrides.refreshTokenLifetime,
+    refreshTokenIdleLifetime: overrides.refreshTokenIdleLifetime,
     requireDpop: false,
   };
 }
@@ -388,6 +390,7 @@ type MockClientOptions = {
     clientType: AuthOAuth2Client_ClientType;
     accessTokenLifetime?: { seconds: bigint };
     refreshTokenLifetime?: { seconds: bigint };
+    refreshTokenIdleLifetime?: { seconds: bigint };
     requireDpop: boolean;
     clientSecret?: string;
   }>;
@@ -900,6 +903,69 @@ describe("planAuth", () => {
     expect(result.changeSet.oauth2Client.unchanged[0]?.name).toBe("sample");
     expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
   });
+
+  test.each([
+    ["unchanged when it matches the remote value", 1800, { seconds: 1800n }, []],
+    ["updated when it is added", 1800, undefined, [{ seconds: 1800n, nanos: 0 }]],
+    [
+      "updated when it differs from the remote value",
+      1800,
+      { seconds: 3600n },
+      [{ seconds: 1800n, nanos: 0 }],
+    ],
+    ["updated when it is removed", undefined, { seconds: 1800n }, [undefined]],
+  ] as const)(
+    "marks oauth2 client %s for the refresh token idle lifetime",
+    async (_label, refreshTokenIdleLifetimeSeconds, remoteIdleLifetime, updatedIdleLifetimes) => {
+      const application = defineApplication({
+        config: {
+          ...defineConfig({
+            name: appName,
+            auth: defineAuth("auth-a", {
+              machineUserAttributes: { role: t.string() },
+              oauth2Clients: {
+                sample: {
+                  description: "Sample client",
+                  redirectURIs: ["https://a.example.com/callback"],
+                  accessTokenLifetimeSeconds: 900,
+                  refreshTokenLifetimeSeconds: 7200,
+                  refreshTokenIdleLifetimeSeconds,
+                },
+              },
+            }),
+          }),
+          path: "tailor.config.ts",
+        },
+      });
+
+      const client = createMockClient({
+        authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
+        oauth2Clients: [
+          remoteOAuth2Client({
+            redirectUris: ["https://a.example.com/callback"],
+            accessTokenLifetime: { seconds: 900n },
+            refreshTokenLifetime: { seconds: 7200n },
+            refreshTokenIdleLifetime: remoteIdleLifetime,
+          }),
+        ],
+      });
+
+      const result = await planAuth({
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
+      });
+
+      expect(
+        result.changeSet.oauth2Client.updates.map(
+          (update) => update.request.oauth2Client?.refreshTokenIdleLifetime,
+        ),
+      ).toEqual(updatedIdleLifetimes);
+      expect(result.changeSet.oauth2Client.unchanged).toHaveLength(1 - updatedIdleLifetimes.length);
+    },
+  );
 
   test("marks oauth2 client unchanged when description is omitted locally and remote is empty string", async () => {
     const app = {

@@ -415,6 +415,26 @@ const invalidCases: Case<RegExp>[] = [
     expected: /1 validation error\(s\) found in 1 resource\(s\)/,
   },
   {
+    name: "(o3) OAuth2 client with a refresh token lifetime above 7 days and no idle lifetime is rejected",
+    mutate: (input) => {
+      input.auth.changeSet.oauth2Client.updates.push({
+        name: "default",
+        request: {
+          workspaceId: WS_ID,
+          namespaceName: "my-auth",
+          oauth2Client: {
+            name: "default",
+            clientType: AuthOAuth2Client_ClientType.PUBLIC,
+            grantTypes: [AuthOAuth2Client_GrantType.AUTHORIZATION_CODE],
+            redirectUris: ["https://example.com/callback"],
+            refreshTokenLifetime: { seconds: 604801n },
+          },
+        },
+      });
+    },
+    expected: /1 validation error\(s\) found in 1 resource\(s\)/,
+  },
+  {
     name: "(e) violations from multiple resources are aggregated into one error",
     mutate: (input) => {
       input.tailorDB.changeSet.type.creates.push({
@@ -573,12 +593,22 @@ describe("validatePlans", () => {
     ]);
   });
 
-  test("evaluates message-level CEL rules instead of warning that they could not run", async () => {
-    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-    const input = emptyPlanResults();
-    input.auth.changeSet.oauth2Client.creates.push({
-      name: "default",
-      request: {
+  test.each([
+    ["without token lifetimes", {}],
+    [
+      "with the longest refresh token lifetimes",
+      {
+        accessTokenLifetime: { seconds: 900n },
+        refreshTokenLifetime: { seconds: 7776000n },
+        refreshTokenIdleLifetime: { seconds: 2592000n },
+      },
+    ],
+  ])(
+    "evaluates message-level CEL rules %s instead of warning that they could not run",
+    async (_label, lifetimes) => {
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const input = emptyPlanResults();
+      const request = {
         workspaceId: WS_ID,
         namespaceName: "my-auth",
         oauth2Client: {
@@ -587,13 +617,26 @@ describe("validatePlans", () => {
           requireDpop: true,
           grantTypes: [AuthOAuth2Client_GrantType.AUTHORIZATION_CODE],
           redirectUris: ["https://example.com/callback"],
+          ...lifetimes,
         },
-      },
-    });
+      };
+      input.auth.changeSet.oauth2Client.creates.push({ name: "default", request });
+      input.auth.changeSet.oauth2Client.updates.push({ name: "default", request });
 
-    await expect(
-      validatePlans([{ application: "my-app", results: input }]),
-    ).resolves.toBeUndefined();
+      await expect(
+        validatePlans([{ application: "my-app", results: input }]),
+      ).resolves.toBeUndefined();
+      expect(warnSpy).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each(validCases)("$name does not warn that a rule could not run", async ({ mutate }) => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const input = emptyPlanResults();
+    mutate(input);
+
+    await validatePlans([{ application: "my-app", results: input }]);
+
     expect(warnSpy).not.toHaveBeenCalled();
   });
 

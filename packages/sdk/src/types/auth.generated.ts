@@ -113,8 +113,10 @@ export type OAuth2ClientInput = {
   clientType?: "browser" | "confidential" | "public" | undefined;
   /** Access token lifetime in seconds (60-86400) */
   accessTokenLifetimeSeconds?: number | undefined;
-  /** Refresh token lifetime in seconds (60-604800) */
+  /** Refresh token lifetime in seconds (60-7776000), counted from the first authorization. A value above 604800 requires refreshTokenIdleLifetimeSeconds */
   refreshTokenLifetimeSeconds?: number | undefined;
+  /** Refresh token idle lifetime in seconds (60-2592000). A refresh token also expires once it has not been used for this long */
+  refreshTokenIdleLifetimeSeconds?: number | undefined;
   /** Require DPoP (Demonstrating Proof-of-Possession) for token requests */
   requireDpop?: boolean | undefined;
 };
@@ -140,8 +142,15 @@ export type OAuth2Client = {
         nanos: number;
       }
     | undefined;
-  /** Refresh token lifetime in seconds (60-604800) */
+  /** Refresh token lifetime in seconds (60-7776000), counted from the first authorization. A value above 604800 requires refreshTokenIdleLifetimeSeconds */
   refreshTokenLifetimeSeconds:
+    | {
+        seconds: bigint;
+        nanos: number;
+      }
+    | undefined;
+  /** Refresh token idle lifetime in seconds (60-2592000). A refresh token also expires once it has not been used for this long */
+  refreshTokenIdleLifetimeSeconds:
     | {
         seconds: bigint;
         nanos: number;
@@ -288,8 +297,10 @@ export type AuthConfigInput =
               clientType?: "browser" | "confidential" | "public" | undefined;
               /** Access token lifetime in seconds (60-86400) */
               accessTokenLifetimeSeconds?: number | undefined;
-              /** Refresh token lifetime in seconds (60-604800) */
+              /** Refresh token lifetime in seconds (60-7776000), counted from the first authorization. A value above 604800 requires refreshTokenIdleLifetimeSeconds */
               refreshTokenLifetimeSeconds?: number | undefined;
+              /** Refresh token idle lifetime in seconds (60-2592000). A refresh token also expires once it has not been used for this long */
+              refreshTokenIdleLifetimeSeconds?: number | undefined;
               /** Require DPoP (Demonstrating Proof-of-Possession) for token requests */
               requireDpop?: boolean | undefined;
             };
@@ -1420,8 +1431,10 @@ export type AuthConfigInput =
               clientType?: "browser" | "confidential" | "public" | undefined;
               /** Access token lifetime in seconds (60-86400) */
               accessTokenLifetimeSeconds?: number | undefined;
-              /** Refresh token lifetime in seconds (60-604800) */
+              /** Refresh token lifetime in seconds (60-7776000), counted from the first authorization. A value above 604800 requires refreshTokenIdleLifetimeSeconds */
               refreshTokenLifetimeSeconds?: number | undefined;
+              /** Refresh token idle lifetime in seconds (60-2592000). A refresh token also expires once it has not been used for this long */
+              refreshTokenIdleLifetimeSeconds?: number | undefined;
               /** Require DPoP (Demonstrating Proof-of-Possession) for token requests */
               requireDpop?: boolean | undefined;
             };
@@ -1692,8 +1705,15 @@ export type AuthConfig =
                     nanos: number;
                   }
                 | undefined;
-              /** Refresh token lifetime in seconds (60-604800) */
+              /** Refresh token lifetime in seconds (60-7776000), counted from the first authorization. A value above 604800 requires refreshTokenIdleLifetimeSeconds */
               refreshTokenLifetimeSeconds:
+                | {
+                    seconds: bigint;
+                    nanos: number;
+                  }
+                | undefined;
+              /** Refresh token idle lifetime in seconds (60-2592000). A refresh token also expires once it has not been used for this long */
+              refreshTokenIdleLifetimeSeconds:
                 | {
                     seconds: bigint;
                     nanos: number;
@@ -2898,8 +2918,15 @@ export type AuthConfig =
                     nanos: number;
                   }
                 | undefined;
-              /** Refresh token lifetime in seconds (60-604800) */
+              /** Refresh token lifetime in seconds (60-7776000), counted from the first authorization. A value above 604800 requires refreshTokenIdleLifetimeSeconds */
               refreshTokenLifetimeSeconds:
+                | {
+                    seconds: bigint;
+                    nanos: number;
+                  }
+                | undefined;
+              /** Refresh token idle lifetime in seconds (60-2592000). A refresh token also expires once it has not been used for this long */
+              refreshTokenIdleLifetimeSeconds:
                 | {
                     seconds: bigint;
                     nanos: number;
