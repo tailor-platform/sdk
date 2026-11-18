@@ -91,8 +91,8 @@ function toDuration(seconds: number | undefined) {
   return seconds ? { seconds: BigInt(seconds), nanos: 0 } : undefined;
 }
 
-const DEFAULT_ACCESS_TOKEN_LIFETIME_SECONDS = 86400;
-const DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS = 604800;
+export const DEFAULT_ACCESS_TOKEN_LIFETIME_SECONDS = 86400;
+export const DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS = 604800;
 
 export const OAuth2ClientSchema = z
   .strictObject({

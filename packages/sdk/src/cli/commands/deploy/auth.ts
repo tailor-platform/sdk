@@ -35,6 +35,10 @@ import {
 } from "#/cli/shared/client";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import {
+  DEFAULT_ACCESS_TOKEN_LIFETIME_SECONDS,
+  DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS,
+} from "#/parser/service/auth/index";
 import { assertDefined } from "#/utils/assert";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
@@ -1289,8 +1293,8 @@ function normalizeComparableOAuth2Client(
     description: client.description || undefined,
     redirectUris: normalizeStringArray(client.redirectUris),
     grantTypes: (client.grantTypes ?? []).toSorted((left, right) => left - right),
-    accessTokenLifetime: accessTokenLifetime ?? 86400,
-    refreshTokenLifetime: refreshTokenLifetime ?? 604800,
+    accessTokenLifetime: accessTokenLifetime ?? DEFAULT_ACCESS_TOKEN_LIFETIME_SECONDS,
+    refreshTokenLifetime: refreshTokenLifetime ?? DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS,
     refreshTokenIdleLifetime: oauth2LifetimeToSeconds(client.refreshTokenIdleLifetime),
     requireDpop: client.requireDpop ?? false,
   });
