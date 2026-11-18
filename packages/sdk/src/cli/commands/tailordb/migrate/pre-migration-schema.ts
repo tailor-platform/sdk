@@ -14,8 +14,9 @@
  *   new member of a confirmed nested rename is relaxed to optional until the
  *   copy script has filled it. Required additions, requiredness changes, and
  *   enum removals inside nested fields are relaxed until Post-phase. A foreign
- *   key added to a top-level field is withheld until Post-phase, so
- *   migrate.ts can update rows whose values point at no record.
+ *   key added to a top-level field, or moved to another table or key (also on
+ *   a nested member), is withheld until Post-phase, so migrate.ts can update
+ *   rows whose values point at no record of the target.
  * - `field_renamed`: keep the old field (readable by migrate.ts) and relax
  *   the new field's required/unique constraints until Post-phase.
  * - `field_type_modified`: keep the complete previous field config until
@@ -40,7 +41,7 @@
 import { assertDefined } from "#/utils/assert";
 import { collectNestedMemberChanges, getNestedMember } from "./nested-members";
 import { applyDiffToSnapshot, isBreakingIndexChange } from "./snapshot";
-import { addsForeignKey } from "./snapshot-comparison";
+import { addsForeignKey, changesForeignKeyTarget } from "./snapshot-comparison";
 import {
   convertFieldConfigToProto,
   convertIndexToProto,
@@ -195,9 +196,9 @@ function buildPreMigrationChangesMapFromDiffs(
  * - Removed fields are re-inserted using their pre-migration config.
  * - Newly added required fields are relaxed to optional.
  * - Modified fields keep the looser side of unique/required/enum, a foreign
- *   key added to a top-level field is withheld, members removed from a
- *   nested field are re-inserted, and the new member of a confirmed nested
- *   rename is relaxed to optional.
+ *   key added to a top-level field or moved to another target is withheld,
+ *   members removed from a nested field are re-inserted, and the new member
+ *   of a confirmed nested rename is relaxed to optional.
  *
  * @param {Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>>} fields - Field map to adjust (mutated in place)
  * @param {Map<string, FieldDiffChange>} typeChanges - Changes for this table, keyed by fieldName
@@ -341,16 +342,21 @@ function relaxFieldsForPreMigration<F extends PreMigrationField>(
         if (member.after.required) target.required = false;
       } else {
         relaxModifiedFieldConstraints(target, member.before, member.after);
+        if (changesForeignKeyTarget(member.before, member.after)) withholdForeignKey(target);
       }
     }
 
     relaxModifiedFieldConstraints(relaxed, before, after);
-    if (addsForeignKey(before, after)) {
-      delete relaxed.foreignKey;
-      delete relaxed.foreignKeyType;
-      delete relaxed.foreignKeyField;
+    if (addsForeignKey(before, after) || changesForeignKeyTarget(before, after)) {
+      withholdForeignKey(relaxed);
     }
   }
+}
+
+function withholdForeignKey(field: PreMigrationField): void {
+  delete field.foreignKey;
+  delete field.foreignKeyType;
+  delete field.foreignKeyField;
 }
 
 function relaxModifiedFieldConstraints(

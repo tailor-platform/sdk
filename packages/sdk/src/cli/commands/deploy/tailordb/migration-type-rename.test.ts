@@ -231,9 +231,8 @@ describe("applyTailorDB: type rename migration flow", () => {
 
     await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow("copy failed");
 
-    // Order must be restored to its prior schema (pointing back at User)
-    // before Person is deleted, or the delete would be rejected while Order
-    // still references Person.
+    // Order is restored to its prior schema (pointing back at User) before
+    // Person is deleted, so no table is left referring to a deleted one.
     const restoreIndex = order.lastIndexOf("update:Order");
     const deleteIndex = order.indexOf("delete-type:Person");
     expect(restoreIndex).toBeGreaterThan(-1);
