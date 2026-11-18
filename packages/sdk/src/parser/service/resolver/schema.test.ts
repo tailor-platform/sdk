@@ -1,4 +1,6 @@
 import { describe, expect, test } from "vitest";
+import { db } from "#/configure/services/tailordb/schema";
+import { t } from "#/configure/types/type";
 import { PluginResolverSchema, ResolverPermissionSchema, ResolverSchema } from "./schema";
 import type { ZodError } from "zod";
 
@@ -39,6 +41,24 @@ describe("ResolverSchema", () => {
         }),
       ]),
     );
+  });
+
+  test("accepts TailorDB fields as input and output", () => {
+    const fields = {
+      code: db.string().unique(),
+      name: db.string().index(),
+      embedding: db.string().vector(),
+      seq: db.int().serial({ start: 1 }),
+      amount: db.decimal({ scale: 2 }),
+    };
+
+    const result = ResolverSchema.safeParse({
+      ...validResolver,
+      input: fields,
+      output: t.object(fields),
+    });
+
+    expect(result.error?.issues).toBeUndefined();
   });
 
   describe("input operands in permission", () => {

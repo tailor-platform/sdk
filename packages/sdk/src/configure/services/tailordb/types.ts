@@ -42,19 +42,9 @@ export type SerialConfig<T extends "string" | "integer" = "string" | "integer"> 
     : object)
 >;
 
-export interface DBFieldMetadata extends FieldMetadata {
-  index?: boolean;
-  unique?: boolean;
-  vector?: boolean;
-  foreignKey?: boolean;
-  foreignKeyType?: string;
-  foreignKeyField?: string;
-  /** Lifecycle hooks for the field */
-  hooks?: DBFieldMetadataGenerated["hooks"];
+export interface DBFieldMetadata extends Omit<DBFieldMetadataGenerated, "validate" | "serial"> {
+  validate?: FieldMetadata["validate"];
   serial?: SerialConfig;
-  relation?: boolean;
-  scale?: number;
-  default?: unknown;
 }
 
 export interface DefinedDBFieldMetadata extends DefinedFieldMetadata {

@@ -193,6 +193,18 @@ describe("AuthConfigSchema machine user attribute normalization", () => {
     const result = AuthConfigSchema.parse(config);
     expect(result.machineUsers?.admin?.attributes).toBeUndefined();
   });
+
+  test("accepts TailorDB fields as machineUserAttributes", () => {
+    const result = AuthConfigSchema.safeParse({
+      name: "my-auth",
+      machineUserAttributes: {
+        code: db.string().unique(),
+        seq: db.int().serial({ start: 1 }),
+      },
+    });
+
+    expect(result.error?.issues).toBeUndefined();
+  });
 });
 
 describe("OAuth2ClientSchema validation", () => {

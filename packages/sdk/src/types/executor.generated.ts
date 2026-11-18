@@ -189,6 +189,26 @@ export type GqlOperation = {
     | undefined;
 };
 
+export type WebhookOperationInput = {
+  kind: "webhook";
+  /** Function returning the webhook URL */
+  url: Function;
+  /** Function to compute the request body */
+  requestBody?: Function | undefined;
+  /** HTTP headers for the webhook request */
+  headers?:
+    | {
+        [x: string]:
+          | string
+          | {
+              vault: string;
+              key: string;
+            }
+          | undefined;
+      }
+    | undefined;
+};
+
 export type WebhookOperation = {
   kind: "webhook";
   /** Function returning the webhook URL */
@@ -207,7 +227,6 @@ export type WebhookOperation = {
       }
     | undefined;
 };
-export type WebhookOperationInput = WebhookOperation;
 
 export type JsonValue =
   | string
@@ -313,7 +332,7 @@ export type WorkflowOperation =
 export type OperationInput =
   | FunctionOperation
   | GqlOperationInput
-  | WebhookOperation
+  | WebhookOperationInput
   | WorkflowOperationInput;
 
 export type Operation = FunctionOperation | GqlOperation | WebhookOperation | WorkflowOperation;

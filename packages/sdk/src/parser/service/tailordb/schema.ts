@@ -42,8 +42,8 @@ export const GqlOperationsSchema = z
   .transform((val) => normalizeGqlOperations(val));
 
 const AllowedValueSchema = z.strictObject({
-  value: z.string(),
-  description: z.string().optional(),
+  value: z.string().describe("The allowed value"),
+  description: z.string().optional().describe("Description of the allowed value"),
 });
 
 export const DBFieldMetadataSchema = z.strictObject({
