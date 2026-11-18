@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { AuthConnectionConfigSchema } from "#/parser/service/auth-connection/index";
-import { resourceNameSchema } from "#/parser/service/common";
+import { omitNullishValues, resourceNameSchema } from "#/parser/service/common";
 import { TailorFieldSchema } from "#/parser/service/field/schema";
 import { stripTailorDBTypeBuilderHelpers } from "#/parser/service/tailordb/builder-helpers";
 import { TailorDBTypeSchema } from "#/parser/service/tailordb/index";
@@ -282,13 +282,7 @@ const MachineUserSchema = z.strictObject({
   // downstream (deploy, drift diff) only ever sees concrete values.
   attributes: z
     .record(z.string(), ValueOperandSchema.nullish())
-    .transform((attributes): Record<string, ValueOperand> =>
-      Object.fromEntries(
-        Object.entries(attributes).filter(
-          (entry): entry is [string, ValueOperand] => entry[1] != null,
-        ),
-      ),
-    )
+    .transform((attributes) => omitNullishValues(attributes))
     .optional(),
   attributeList: z.array(z.uuid()).optional(),
 });

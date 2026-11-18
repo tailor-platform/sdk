@@ -10,6 +10,19 @@ export const functionSchema: z.ZodType<Function, Function> = z.custom<Function>(
   (val) => typeof val === "function",
 );
 
+/**
+ * Drop the entries of a record whose value is `null` or `undefined`.
+ * @param record - Record to filter
+ * @returns The record without those entries
+ */
+export function omitNullishValues<V>(
+  record: Record<string, V | null | undefined>,
+): Record<string, V> {
+  return Object.fromEntries(
+    Object.entries(record).filter((entry): entry is [string, V] => entry[1] != null),
+  );
+}
+
 export const resourceNameSchema = z
   .string()
   .regex(
