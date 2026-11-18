@@ -62,6 +62,26 @@ describe("guardRequest", () => {
     );
   });
 
+  describe("Sec-Fetch-Site on read requests", () => {
+    const host = `127.0.0.1:${PORT}`;
+
+    test.each(["none", "same-origin"])("GET marked %s is allowed", (site) => {
+      expect(guard(request("GET", { host, "sec-fetch-site": site }))).toBeUndefined();
+    });
+
+    test.each(["cross-site", "same-site"])(
+      "GET marked %s is 403 so another page cannot make the browser trigger a tab's work",
+      (site) => {
+        expect(guard(request("GET", { host, "sec-fetch-site": site }))?.status).toBe(403);
+        expect(guard(request("HEAD", { host, "sec-fetch-site": site }))?.status).toBe(403);
+      },
+    );
+
+    test("GET without the header (a non-browser client) is allowed", () => {
+      expect(guard(request("GET", { host }))).toBeUndefined();
+    });
+  });
+
   test("read requests need no token", () => {
     expect(guard(request("GET", { host: `127.0.0.1:${PORT}` }))).toBeUndefined();
     expect(guard(request("HEAD", { host: `127.0.0.1:${PORT}` }))).toBeUndefined();

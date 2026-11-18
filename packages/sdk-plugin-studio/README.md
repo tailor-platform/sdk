@@ -44,6 +44,7 @@ export default handler;
 
 - The shell serves the handler under `/plugins/<id>/`. The request URL it receives has that prefix removed, and `basePath` is the prefix. Reference assets and APIs with relative URLs.
 - Requests other than `GET` / `HEAD` are checked by the shell. The plugin's page must send `context.token` in the `x-tailor-studio-token` header.
+- Requests a browser marks `Sec-Fetch-Site: cross-site` or `same-site` are rejected, so another page cannot make the browser call a handler. Opening the UI from the address bar, a bookmark or `--open` is unaffected.
 - A handler may return a streaming `text/event-stream` response.
 - `id` is the tab's route (`/<id>`), so `api`, `plugins` and `assets` are rejected.
 - Only `kind: "module"` is supported. `kind: "process"` is reserved for plugins that run as a separate process and is rejected for now.

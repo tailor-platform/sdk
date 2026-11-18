@@ -4,6 +4,8 @@ const TOKEN_HEADER = "x-tailor-studio-token";
 
 const READ_METHODS = new Set(["GET", "HEAD"]);
 
+const LOCAL_FETCH_SITES = new Set(["none", "same-origin"]);
+
 export interface GuardOptions {
   port: number;
   token: string;
@@ -30,6 +32,10 @@ export function guardRequest(request: Request, options: GuardOptions): Response 
   const allowedHosts = [`127.0.0.1:${options.port}`, `localhost:${options.port}`];
   if (!allowedHosts.includes(request.headers.get("host") ?? "")) {
     return forbidden("unexpected Host header");
+  }
+  const fetchSite = request.headers.get("sec-fetch-site");
+  if (fetchSite !== null && !LOCAL_FETCH_SITES.has(fetchSite)) {
+    return forbidden("request from another site");
   }
   if (READ_METHODS.has(request.method.toUpperCase())) return undefined;
 
