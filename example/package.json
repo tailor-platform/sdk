@@ -23,7 +23,7 @@
     "lint:fix": "oxlint --type-aware . --fix",
     "typecheck": "pnpm generate && pnpm run typecheck:generated",
     "typecheck:generated": "tsc --noEmit",
-    "typecheck:rs": "node ../packages/sdk/scripts/typecheck-native.ts"
+    "typecheck:rs": "tsrs --noEmit --tsBuildInfoFile ./.tsrs.tsbuildinfo"
   },
   "dependencies": {
     "@tailor-platform/sdk": "workspace:^",
@@ -44,9 +44,8 @@
     "multiline-ts": "4.0.1",
     "oxfmt": "0.78.0",
     "oxlint": "1.93.0",
-    "oxlint-tsgolint": "7.0.2007",
     "tsdown": "0.23.7",
-    "tsrs": "0.16.0-ts7.1.0-dev.20260929",
+    "tsrs": "0.25.0-ts7.1.0-beta",
     "tsx": "4.23.15",
     "typescript": "6.0.3",
     "vitest": "5.1.0"
