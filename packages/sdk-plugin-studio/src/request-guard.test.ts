@@ -38,16 +38,16 @@ describe("guardRequest", () => {
     });
 
     test("POST with the token is allowed", () => {
-      expect(guard(request("POST", { host, "x-tailor-webui-token": TOKEN }))).toBeUndefined();
+      expect(guard(request("POST", { host, "x-tailor-studio-token": TOKEN }))).toBeUndefined();
     });
 
     test("POST with a wrong token is 403", () => {
-      expect(guard(request("POST", { host, "x-tailor-webui-token": "nope" }))?.status).toBe(403);
+      expect(guard(request("POST", { host, "x-tailor-studio-token": "nope" }))?.status).toBe(403);
     });
 
     test("POST from a foreign Origin is 403 even with the token", () => {
       const res = guard(
-        request("POST", { host, origin: "http://evil.example", "x-tailor-webui-token": TOKEN }),
+        request("POST", { host, origin: "http://evil.example", "x-tailor-studio-token": TOKEN }),
       );
       expect(res?.status).toBe(403);
     });
@@ -56,7 +56,7 @@ describe("guardRequest", () => {
       "POST from Origin %s with the token is allowed",
       (origin) => {
         expect(
-          guard(request("POST", { host, origin, "x-tailor-webui-token": TOKEN })),
+          guard(request("POST", { host, origin, "x-tailor-studio-token": TOKEN })),
         ).toBeUndefined();
       },
     );

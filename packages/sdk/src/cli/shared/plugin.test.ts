@@ -564,23 +564,23 @@ describe("dispatchPluginWithInstallHint", () => {
     );
   });
 
-  test("prints an install hint for the top-level webui plugin", async () => {
+  test("prints an install hint for the top-level studio plugin", async () => {
     const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
     const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
 
     const code = await dispatchPluginWithInstallHint({
       commandPath: [],
-      name: "webui",
+      name: "studio",
       args: [],
       cliName: CLI,
     });
 
     expect(code).toBe(1);
     expect(errorSpy).toHaveBeenCalledWith(
-      `"${CLI} webui" is provided by the @tailor-platform/sdk-plugin-webui CLI plugin, which is not installed.`,
+      `"${CLI} studio" is provided by the @tailor-platform/sdk-plugin-studio CLI plugin, which is not installed.`,
     );
     expect(infoSpy).toHaveBeenCalledWith(
-      "Install it with: npm install -D @tailor-platform/sdk-plugin-webui",
+      "Install it with: npm install -D @tailor-platform/sdk-plugin-studio",
     );
   });
 

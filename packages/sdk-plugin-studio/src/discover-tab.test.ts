@@ -9,7 +9,7 @@ const SPEC = { id: "fake", title: "Fake", packageName: "@scope/sdk-plugin-fake" 
 let project: string;
 
 beforeEach(() => {
-  project = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-webui-"));
+  project = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-studio-"));
 });
 
 afterEach(() => {

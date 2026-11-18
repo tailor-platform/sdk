@@ -52,7 +52,7 @@ async function main() {
 
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
-      <AppShell title="Tailor UI" modules={modules}>
+      <AppShell title="Tailor Studio" modules={modules}>
         <SidebarLayout />
       </AppShell>
     </StrictMode>,

@@ -17,7 +17,7 @@ const DEFAULT_TABS: readonly TabSpec[] = [
 const clientDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "client");
 
 export const uiCommand = defineAppCommand({
-  name: "webui",
+  name: "studio",
   description: "Serve the local web UI shell that hosts CLI plugin UIs. (beta)",
   args: z.strictObject({
     port: arg(z.coerce.number().int().min(0).max(65535).default(DEFAULT_PORT), {
@@ -30,7 +30,7 @@ export const uiCommand = defineAppCommand({
   }),
   run: async (args) => {
     logger.warn(
-      "The 'webui' command is a beta feature and may introduce breaking changes in future releases.",
+      "The 'studio' command is a beta feature and may introduce breaking changes in future releases.",
     );
     const tabs = await Promise.all(DEFAULT_TABS.map((spec) => discoverTab(spec, process.cwd())));
     const token = randomBytes(32).toString("hex");
@@ -48,7 +48,7 @@ export const uiCommand = defineAppCommand({
             ),
         }),
     });
-    logger.success(`Tailor UI is running at ${server.url}`);
+    logger.success(`Tailor Studio is running at ${server.url}`);
     if (args.open) await open(server.url);
 
     await new Promise<void>((resolve) => {

@@ -1,15 +1,15 @@
 {
-  "name": "@tailor-platform/sdk-plugin-webui",
+  "name": "@tailor-platform/sdk-plugin-studio",
   "version": "0.0.0",
-  "description": "Tailor CLI plugin providing the `tailor webui` command (local web UI shell for CLI plugins)",
+  "description": "Tailor CLI plugin providing the `tailor studio` command (local web UI shell for CLI plugins)",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tailor-platform/sdk.git",
-    "directory": "packages/sdk-plugin-webui"
+    "directory": "packages/sdk-plugin-studio"
   },
   "bin": {
-    "tailor-webui": "./bin/cli.mjs"
+    "tailor-studio": "./bin/cli.mjs"
   },
   "files": [
     "bin",

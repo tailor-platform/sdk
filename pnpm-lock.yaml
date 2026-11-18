@@ -576,31 +576,7 @@ snapshots:
 			},
 		},
 
-		"packages/sdk-plugin-tailordb-erd": {
-			"name": "@tailor-platform/sdk-plugin-tailordb-erd",
-			"dependencies": {
-				"@politty/zod": "0.7.3",
-				"chokidar": "5.0.0",
-				"mime-types": "3.0.2",
-				"open": "11.0.4",
-				"pathe": "2.0.3",
-				"pkg-types": "2.4.0",
-				"zod": "4.6.7",
-			},
-			"devDependencies": {
-				"@tailor-platform/sdk": "workspace:^",
-				"@tailor-platform/shared": "workspace:^",
-				"@types/mime-types": "3.0.1",
-				"@types/node": "26.6.6",
-				"oxlint": "1.93.0",
-				"oxlint-tsgolint": "7.0.2007",
-				"tsdown": "0.23.7",
-				"typescript": "6.0.3",
-				"vitest": "5.1.0",
-			},
-		},
-
-		"packages/sdk-plugin-webui": {
+		"packages/sdk-plugin-studio": {
 			"dependencies": {
 				"@politty/zod": "0.7.3",
 				"open": "11.0.4",
@@ -623,6 +599,30 @@ snapshots:
 				"tsdown": "0.23.7",
 				"typescript": "6.0.3",
 				"vite": "8.3.8",
+				"vitest": "5.1.0",
+			},
+		},
+
+		"packages/sdk-plugin-tailordb-erd": {
+			"name": "@tailor-platform/sdk-plugin-tailordb-erd",
+			"dependencies": {
+				"@politty/zod": "0.7.3",
+				"chokidar": "5.0.0",
+				"mime-types": "3.0.2",
+				"open": "11.0.4",
+				"pathe": "2.0.3",
+				"pkg-types": "2.4.0",
+				"zod": "4.6.7",
+			},
+			"devDependencies": {
+				"@tailor-platform/sdk": "workspace:^",
+				"@tailor-platform/shared": "workspace:^",
+				"@types/mime-types": "3.0.1",
+				"@types/node": "26.6.6",
+				"oxlint": "1.93.0",
+				"oxlint-tsgolint": "7.0.2007",
+				"tsdown": "0.23.7",
+				"typescript": "6.0.3",
 				"vitest": "5.1.0",
 			},
 		},

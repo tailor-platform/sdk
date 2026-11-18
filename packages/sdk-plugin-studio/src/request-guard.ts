@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 
-const TOKEN_HEADER = "x-tailor-webui-token";
+const TOKEN_HEADER = "x-tailor-studio-token";
 
 const READ_METHODS = new Set(["GET", "HEAD"]);
 

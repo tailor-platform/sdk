@@ -8,7 +8,7 @@ let root: string;
 let outside: string;
 
 beforeEach(() => {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-webui-static-"));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-studio-static-"));
   root = path.join(base, "client");
   outside = path.join(base, "secret.txt");
   fs.mkdirSync(path.join(root, "assets"), { recursive: true });

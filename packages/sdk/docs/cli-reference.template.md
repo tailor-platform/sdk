@@ -319,7 +319,7 @@ encoded, so the annotation is a single line.
 
 Exactly one annotation is written per failed command, and only for the failure that ends it.
 Warnings and individually reported problems stay plain stderr output. The bundled CLI plugins
-(`seed`, `setup`, `tailordb-erd`, `webui`) annotate their failures the same way. A command that exits
+(`seed`, `setup`, `tailordb-erd`, `studio`) annotate their failures the same way. A command that exits
 without reporting through the CLI's error path, such as one relaying a failed remote execution,
 writes no annotation.
 

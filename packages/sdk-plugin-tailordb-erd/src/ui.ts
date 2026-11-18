@@ -29,7 +29,7 @@ async function buildViewerHtmlFromProject(): Promise<string> {
 }
 
 /**
- * Create the handler that `tailor webui` mounts as the ERD tab.
+ * Create the handler that `tailor studio` mounts as the ERD tab.
  * @param options - Viewer builder, replaceable for tests
  * @returns A Web-standard request handler
  */

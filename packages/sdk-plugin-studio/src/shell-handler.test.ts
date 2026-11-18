@@ -117,7 +117,7 @@ describe("createShellHandler", () => {
   });
 
   test("serves the built client for everything outside /api and /plugins", async () => {
-    const clientDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-webui-client-"));
+    const clientDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-studio-client-"));
     fs.writeFileSync(path.join(clientDir, "index.html"), "<html>client</html>");
     const handler = createShellHandler({ tabs: [], port: PORT, token: TOKEN, clientDir });
     expect(await (await get(handler, "/erd")).text()).toBe("<html>client</html>");

@@ -24,7 +24,7 @@ const KNOWN_PLUGIN_PACKAGES: Record<string, string> = {
   seed: "@tailor-platform/sdk-plugin-seed",
   setup: "@tailor-platform/sdk-plugin-setup",
   "tailordb-erd": "@tailor-platform/sdk-plugin-tailordb-erd",
-  webui: "@tailor-platform/sdk-plugin-webui",
+  studio: "@tailor-platform/sdk-plugin-studio",
 };
 
 /**

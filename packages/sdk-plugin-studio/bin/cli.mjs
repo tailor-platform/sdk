@@ -6,7 +6,7 @@
 // (Node >= 22.8.0; silent no-op otherwise).
 try {
   const { enableCompileCache } = await import("@politty/zod/compile-cache");
-  enableCompileCache("tailor-webui");
+  enableCompileCache("tailor-studio");
 } catch {
   // @politty/zod/compile-cache is not resolvable from here (e.g. a fully
   // bundled CLI) — start without the compile cache rather than failing
