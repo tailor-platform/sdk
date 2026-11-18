@@ -113,6 +113,20 @@ export function isRequestUnchanged<
 }
 
 /**
+ * The policy list of each action of a permission message, whose members are all policy lists.
+ * @param schema - Permission message schema
+ * @param permission - Permission message
+ * @returns The message's own lists, so sorting one reorders the message
+ */
+export function actionPolicyLists<Desc extends DescMessage>(
+  schema: Desc,
+  permission: MessageShape<Desc> | undefined,
+): Array<MessageShape<Desc>[MemberName<Desc>]> {
+  if (!permission) return [];
+  return schema.members.map((action) => permission[action.localName as MemberName<Desc>]);
+}
+
+/**
  * Treat a submessage with no field set as unset, for a Platform that returns
  * an empty submessage where the SDK sends none.
  * @param schema - Submessage schema

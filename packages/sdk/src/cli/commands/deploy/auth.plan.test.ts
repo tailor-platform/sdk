@@ -1156,10 +1156,10 @@ describe("planAuth", () => {
     });
   });
 
-  test("does not mark a forceApplyAll idpConfig update that has nothing to compare against", async () => {
+  test("does not mark a forceApplyAll idpConfig update that has nothing to compare against, and deletes a stale config beside it", async () => {
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
-      authIdPConfigs: [{ name: "default" }],
+      authIdPConfigs: [{ name: "default" }, { name: "stale" }],
     });
 
     const result = await planAuth({
@@ -1169,6 +1169,7 @@ describe("planAuth", () => {
 
     expect(result.changeSet.idpConfig.updates).toHaveLength(1);
     expect(result.changeSet.idpConfig.updates[0]).not.toHaveProperty("forcedBySdkVersion");
+    expect(result.changeSet.idpConfig.deletes.map((del) => del.name)).toEqual(["stale"]);
   });
 
   describe("OAuth2 redirect URI resolution on first deployment (issue #1030)", () => {

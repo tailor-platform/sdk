@@ -396,37 +396,39 @@ describe("planIdP", () => {
     expect(result.changeSet.service.updates).toHaveLength(0);
   });
 
+  const denyAllPermission = {
+    create: [],
+    read: [],
+    update: [],
+    delete: [],
+    sendPasswordResetEmail: [],
+    unenrollMfa: [],
+  };
+
   test.each([
-    { remote: "omits it", permission: undefined },
+    { case: "denies every operation and remote omits it", local: denyAllPermission },
     {
-      remote: "returns it with empty lists",
-      permission: {
-        create: [],
-        read: [],
-        update: [],
-        delete: [],
-        sendPasswordResetEmail: [],
-        unenrollMfa: [],
-      },
+      case: "denies every operation and remote returns empty lists",
+      local: denyAllPermission,
+      remote: denyAllPermission,
     },
+    { case: "is omitted and remote returns empty lists", remote: denyAllPermission },
   ])(
-    "marks idp service unchanged when its permission denies every operation with empty lists and remote $remote",
-    async ({ permission }) => {
+    "marks idp service unchanged when its permission $case",
+    async ({
+      local,
+      remote,
+    }: {
+      local?: Record<string, unknown>;
+      remote?: typeof denyAllPermission;
+    }) => {
       const client = createMockClient({
-        services: [createMatchingRemoteService({ permission })],
+        services: [createMatchingRemoteService({ permission: remote })],
         clients: defaultIdpClientSecret,
       });
-
       const context = createContext(client);
       // oxlint-disable-next-line no-explicit-any
-      (context.application as any).idpServices[0].permission = {
-        create: [],
-        read: [],
-        update: [],
-        delete: [],
-        sendPasswordResetEmail: [],
-        unenrollMfa: [],
-      };
+      (context.application as any).idpServices[0].permission = local;
 
       const result = await planIdP(context);
 
@@ -434,29 +436,6 @@ describe("planIdP", () => {
       expect(result.changeSet.service.updates).toHaveLength(0);
     },
   );
-
-  test("marks idp service unchanged when permission is omitted and remote is empty permission", async () => {
-    const client = createMockClient({
-      services: [
-        createMatchingRemoteService({
-          permission: {
-            create: [],
-            read: [],
-            update: [],
-            delete: [],
-            sendPasswordResetEmail: [],
-            unenrollMfa: [],
-          },
-        }),
-      ],
-      clients: defaultIdpClientSecret,
-    });
-
-    const result = await planIdP(createContext(client));
-
-    expect(result.changeSet.service.unchanged).toHaveLength(1);
-    expect(result.changeSet.service.updates).toHaveLength(0);
-  });
 
   test("creates idp client when it does not exist remotely", async () => {
     const client = createMockClient({

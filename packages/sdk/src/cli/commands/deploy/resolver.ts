@@ -462,8 +462,23 @@ async function planResolvers(
     const existingResolvers = await fetchResolvers(namespaceName);
     const cachedDetails = previousExisting?.get(namespaceName)?.existingResolverDetails;
     const existingResolverDetails = new Map<string, ExistingPipelineResolverDetail>();
+    const existingNames = new Set(existingResolvers.map((resolver) => resolver.name));
     const desired: DesiredResolver[] = [];
     for (const resolver of resolvers) {
+      if (existingNames.has(resolver.name)) {
+        existingResolverDetails.set(
+          resolver.name,
+          cachedDetails?.has(resolver.name)
+            ? cachedDetails.get(resolver.name)
+            : (
+                await client.getPipelineResolver({
+                  workspaceId,
+                  namespaceName,
+                  resolverName: resolver.name,
+                })
+              ).pipelineResolver,
+        );
+      }
       desired.push({
         name: resolver.name,
         request: {
@@ -487,17 +502,8 @@ async function planResolvers(
       existing: existingResolvers.map((resolver) => [resolver.name, resolver] as const),
       keyOf: (resolver) => resolver.name,
       versionMatches: () => !forceApplyAll,
-      isConfigUnchanged: async (resolver) => {
-        const detail = cachedDetails?.has(resolver.name)
-          ? cachedDetails.get(resolver.name)
-          : (
-              await client.getPipelineResolver({
-                workspaceId,
-                namespaceName,
-                resolverName: resolver.name,
-              })
-            ).pipelineResolver;
-        existingResolverDetails.set(resolver.name, detail);
+      isConfigUnchanged: (resolver) => {
+        const detail = existingResolverDetails.get(resolver.name);
         return (
           !!detail &&
           isRequestUnchanged(pipelineResolverComparison, resolver.request, {

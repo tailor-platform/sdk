@@ -17,7 +17,6 @@ import {
   IdPUserAuthPolicySchema,
   type IdPPermissionConditionSchema as ProtoIdPPermissionConditionSchema,
   type IdPPermissionOperandSchema as ProtoIdPPermissionOperandSchema,
-  type IdPPermission,
   type IdPPermissionPolicySchema as ProtoIdPPermissionPolicySchema,
 } from "@tailor-platform/tailor-proto/idp_resource_pb";
 import {
@@ -39,7 +38,12 @@ import {
 } from "#/parser/service/idp/permission";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
-import { defineRequestComparison, emptyMessageAsUnset, isRequestUnchanged } from "./compare";
+import {
+  actionPolicyLists,
+  defineRequestComparison,
+  emptyMessageAsUnset,
+  isRequestUnchanged,
+} from "./compare";
 import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   addDependencyRecords,
@@ -309,8 +313,6 @@ type UnchangedService = {
   metaRequest?: MetadataLabelWrite;
 };
 
-type IdPPermissionAction = Exclude<keyof IdPPermission, "$typeName" | "$unknown">;
-
 type DesiredService = {
   name: string;
   request: MessageInitShape<typeof CreateIdPServiceRequestSchema> &
@@ -327,24 +329,23 @@ const idpServiceComparison = defineRequestComparison({
     if (request.lang === IdPLang.UNSPECIFIED) {
       request.lang = IdPLang.EN;
     }
-    const policy = (request.userAuthPolicy ??= create(IdPUserAuthPolicySchema));
+    const userAuthPolicy = (request.userAuthPolicy ??= create(IdPUserAuthPolicySchema));
     // The platform stores 6 and 4096 for an omitted or zero password length.
-    policy.passwordMinLength ||= 6;
-    policy.passwordMaxLength ||= 4096;
+    userAuthPolicy.passwordMinLength ||= 6;
+    userAuthPolicy.passwordMaxLength ||= 4096;
     // The platform lowercases and deduplicates domains before storing them.
-    policy.allowedEmailDomains = [
-      ...new Set(policy.allowedEmailDomains.map((domain) => domain.toLowerCase())),
+    userAuthPolicy.allowedEmailDomains = [
+      ...new Set(userAuthPolicy.allowedEmailDomains.map((domain) => domain.toLowerCase())),
     ].toSorted();
-    policy.allowedReturnOrigins.sort();
+    userAuthPolicy.allowedReturnOrigins.sort();
     request.disableGqlOperations = emptyMessageAsUnset(
       IdPDisableGqlOperationsSchema,
       request.disableGqlOperations,
     );
     request.emailConfig = emptyMessageAsUnset(IdPEmailConfigSchema, request.emailConfig);
     request.permission = emptyMessageAsUnset(ProtoIdPPermissionSchema, request.permission);
-    const { permission } = request;
-    for (const action of ProtoIdPPermissionSchema.fields) {
-      for (const policy of permission?.[action.localName as IdPPermissionAction] ?? []) {
+    for (const policies of actionPolicyLists(ProtoIdPPermissionSchema, request.permission)) {
+      for (const policy of policies) {
         // The platform returns an empty string for an unset description.
         policy.description ||= undefined;
       }

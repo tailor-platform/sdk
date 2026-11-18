@@ -63,6 +63,7 @@ import type { TailorDBType } from "#/parser/service/tailordb/types";
 import type { PlanContext } from "../types";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type {
+  TailorDBType as TailorDBTypeMessage,
   TailorDBType_FieldConfigSchema,
   TailorDBType_IndexSchema,
 } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
@@ -1007,20 +1008,21 @@ describe("planTailorDB (service level)", () => {
       expect(result.changeSet.type.updates).toHaveLength(0);
     });
 
+    const invoiceType = (gql?: TailorDBType["permissions"]["gql"]): TailorDBType => ({
+      name: "Invoice",
+      pluralForm: "Invoices",
+      description: "Invoice table",
+      fields: {
+        code: { name: "code", config: { type: "string", required: true } },
+      },
+      forwardRelationships: {},
+      backwardRelationships: {},
+      settings: {},
+      permissions: gql ? { gql } : {},
+      files: {},
+    });
+
     describe("forceApplyAll markers", () => {
-      const invoiceType = (gql?: TailorDBType["permissions"]["gql"]): TailorDBType => ({
-        name: "Invoice",
-        pluralForm: "Invoices",
-        description: "Invoice table",
-        fields: {
-          code: { name: "code", config: { type: "string", required: true } },
-        },
-        forwardRelationships: {},
-        backwardRelationships: {},
-        settings: {},
-        permissions: gql ? { gql } : {},
-        files: {},
-      });
       const readPolicy = {
         conditions: [],
         actions: ["read"],
@@ -1114,66 +1116,21 @@ describe("planTailorDB (service level)", () => {
       });
     });
 
-    test("treats a remote gqlPermission carrying its platform-assigned id as unchanged", async () => {
+    /**
+     * Plan the invoice table once, then again against a remote that echoes what the first
+     * plan creates, as changed by `echo`.
+     * @param type - Local table
+     * @param echo - Changes to the echoed remote table and GraphQL permission
+     * @param echo.type - Rewrites the echoed table in place
+     * @param echo.permissionId - Platform-assigned id of the echoed GraphQL permission
+     * @returns The second plan
+     */
+    async function planAgainstEcho(
+      type: TailorDBType,
+      echo: { type?: (remote: TailorDBTypeMessage) => void; permissionId?: string },
+    ) {
       const tailorDBService = createMockTailorDBService("test-tailordb");
-      const invoiceType: TailorDBType = {
-        name: "Invoice",
-        pluralForm: "Invoices",
-        description: "Invoice table",
-        fields: { code: { name: "code", config: { type: "string", required: true } } },
-        forwardRelationships: {},
-        backwardRelationships: {},
-        settings: {},
-        permissions: { gql: [{ conditions: [], actions: ["read"], permit: "allow" }] },
-        files: {},
-      };
-      Object.defineProperty(tailorDBService, "types", { value: { Invoice: invoiceType } });
-      const plan = (client: OperatorClient) =>
-        planTailorDB({
-          client,
-          workspaceId,
-          application: createMockApplication([tailorDBService]),
-          forRemoval: false,
-          config: mockConfig,
-          noSchemaCheck: true,
-        });
-      const firstPlan = await plan(createMockClient([]));
-      const permission = firstPlan.changeSet.gqlPermission.creates[0]!.request.permission!;
-      const client = mockOperatorClient({
-        listTailorDBServices: { tailordbServices: [{ namespace: { name: "test-tailordb" } }] },
-        listTailorDBTypes: { tailordbTypes: [] },
-        listTailorDBGQLPermissions: {
-          permissions: [
-            { typeName: "Invoice", permission: { ...permission, id: "permission-id" } },
-          ],
-        },
-        getMetadata: {
-          metadata: { labels: { [sdkNameLabelKey]: appName, "sdk-version": "v1-0-0" } },
-        },
-      });
-
-      const result = await plan(client);
-
-      expect(result.changeSet.gqlPermission.unchanged.map((entry) => entry.name)).toEqual([
-        "Invoice",
-      ]);
-      expect(result.changeSet.gqlPermission.updates).toHaveLength(0);
-    });
-
-    test("ignores the legacy permissions and directives a remote type carries", async () => {
-      const tailorDBService = createMockTailorDBService("test-tailordb");
-      const invoiceType: TailorDBType = {
-        name: "Invoice",
-        pluralForm: "Invoices",
-        description: "Invoice table",
-        fields: { code: { name: "code", config: { type: "string", required: true } } },
-        forwardRelationships: {},
-        backwardRelationships: {},
-        settings: {},
-        permissions: {},
-        files: {},
-      };
-      Object.defineProperty(tailorDBService, "types", { value: { Invoice: invoiceType } });
+      Object.defineProperty(tailorDBService, "types", { value: { [type.name]: type } });
       const plan = (client: OperatorClient) =>
         planTailorDB({
           client,
@@ -1188,27 +1145,57 @@ describe("planTailorDB (service level)", () => {
         TailorDBTypeSchema,
         firstPlan.changeSet.type.creates[0]!.request.tailordbType,
       );
+      echo.type?.(remoteType);
+      const permission = firstPlan.changeSet.gqlPermission.creates[0]?.request.permission;
+      return plan(
+        mockOperatorClient({
+          listTailorDBServices: { tailordbServices: [{ namespace: { name: "test-tailordb" } }] },
+          listTailorDBTypes: { tailordbTypes: [remoteType] },
+          listTailorDBGQLPermissions: {
+            permissions: permission
+              ? [
+                  {
+                    typeName: type.name,
+                    permission: { ...permission, id: echo.permissionId ?? "" },
+                  },
+                ]
+              : [],
+          },
+          getMetadata: {
+            metadata: { labels: { [sdkNameLabelKey]: appName, "sdk-version": "v1-0-0" } },
+          },
+        }),
+      );
+    }
+
+    test("treats a remote gqlPermission carrying its platform-assigned id as unchanged", async () => {
+      const result = await planAgainstEcho(
+        invoiceType([{ conditions: [], actions: ["read"], permit: "allow" }]),
+        { permissionId: "permission-id" },
+      );
+
+      expect(result.changeSet.gqlPermission.unchanged.map((entry) => entry.name)).toEqual([
+        "Invoice",
+      ]);
+      expect(result.changeSet.gqlPermission.updates).toHaveLength(0);
+    });
+
+    test("ignores the legacy permissions and directives a remote type carries", async () => {
       const legacy = create(TailorDBType_TypeConfigSchema, {
         typePermission: { read: [{ permit: TailorDBType_PermitAction.ALLOW, ids: ["role"] }] },
         recordPermission: { read: [{ permit: TailorDBType_PermitAction.ALLOW, ids: ["role"] }] },
         extends: true,
         directives: [{ name: "legacy" }],
       });
-      const remoteSchema = remoteType.schema!;
-      remoteSchema.typePermission = legacy.typePermission;
-      remoteSchema.recordPermission = legacy.recordPermission;
-      remoteSchema.extends = legacy.extends;
-      remoteSchema.directives = legacy.directives;
-      const client = mockOperatorClient({
-        listTailorDBServices: { tailordbServices: [{ namespace: { name: "test-tailordb" } }] },
-        listTailorDBTypes: { tailordbTypes: [remoteType] },
-        listTailorDBGQLPermissions: { permissions: [] },
-        getMetadata: {
-          metadata: { labels: { [sdkNameLabelKey]: appName, "sdk-version": "v1-0-0" } },
+      const result = await planAgainstEcho(invoiceType(), {
+        type: (remote) => {
+          const schema = remote.schema!;
+          schema.typePermission = legacy.typePermission;
+          schema.recordPermission = legacy.recordPermission;
+          schema.extends = legacy.extends;
+          schema.directives = legacy.directives;
         },
       });
-
-      const result = await plan(client);
 
       expect(result.changeSet.type.unchanged.map((entry) => entry.name)).toEqual(["Invoice"]);
       expect(result.changeSet.type.updates).toHaveLength(0);

@@ -535,11 +535,15 @@ async function planGqlPermissions(
     });
   };
 
-  const namespaces: ReadonlyArray<Pick<TailorDBDeployInput, "namespace" | "types">> = [
-    ...tailordbs,
-    ...deletedServices.map((namespace) => ({ namespace, types: {} })),
-  ];
-  for (const { namespace: namespaceName, types } of namespaces) {
+  const namespaces: ReadonlyArray<{ namespaceName: string; types: TailorDBDeployInput["types"] }> =
+    [
+      ...tailordbs.map((tailordb) => ({
+        namespaceName: tailordb.namespace,
+        types: tailordb.types,
+      })),
+      ...deletedServices.map((namespaceName) => ({ namespaceName, types: {} })),
+    ];
+  for (const { namespaceName, types } of namespaces) {
     const existingGqlPermissions = await fetchGqlPermissions(namespaceName);
     const desired: DesiredGqlPermission[] = Object.entries(types).flatMap(
       ([typeName, typeEntry]) => {

@@ -2,7 +2,6 @@ import { toJsonString } from "@bufbuild/protobuf";
 import { UpdateTailorDBTypeRequestSchema } from "@tailor-platform/tailor-proto/tailordb_pb";
 import {
   TailorDBType_DisableGqlOperationsSchema,
-  type TailorDBType_Permission,
   type TailorDBType_Permission_Policy,
   TailorDBType_Permission_PolicySchema,
   TailorDBType_PermissionSchema,
@@ -10,9 +9,7 @@ import {
   TailorDBType_TypeSettingSchema,
   TailorDBType_TypeValidateSchema,
 } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
-import { defineRequestComparison, emptyMessageAsUnset } from "../compare";
-
-type PermissionAction = Exclude<keyof TailorDBType_Permission, "$typeName" | "$unknown">;
+import { actionPolicyLists, defineRequestComparison, emptyMessageAsUnset } from "../compare";
 
 function comparePolicies(
   left: TailorDBType_Permission_Policy,
@@ -51,9 +48,7 @@ export const tailordbTypeComparison = defineRequestComparison({
     schema.typeHook = emptyMessageAsUnset(TailorDBType_TypeHookSchema, schema.typeHook);
     schema.typeValidate = emptyMessageAsUnset(TailorDBType_TypeValidateSchema, schema.typeValidate);
     schema.permission = emptyMessageAsUnset(TailorDBType_PermissionSchema, schema.permission);
-    const { permission } = schema;
-    for (const action of TailorDBType_PermissionSchema.fields) {
-      const policies = permission?.[action.localName as PermissionAction] ?? [];
+    for (const policies of actionPolicyLists(TailorDBType_PermissionSchema, schema.permission)) {
       for (const policy of policies) {
         // The platform returns an empty string for an unset description.
         policy.description ||= undefined;
