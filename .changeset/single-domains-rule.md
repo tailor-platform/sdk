@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-`tailor deploy` keeps reporting an IdP whose `userAuthPolicy` leaves `allowedEmailDomains` empty once. The Platform API now carries the same rule, which would have listed the same problem twice.
+Follow the Platform API for IdP. Its list response for IdP clients no longer carries a client secret, and it now carries the rule that `userAuthPolicy.allowedEmailDomains` must be set, which `tailor deploy` already checked. `tailor deploy` behaves as before and still reports a missing `allowedEmailDomains` once.
