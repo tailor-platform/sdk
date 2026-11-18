@@ -668,7 +668,6 @@ async function planClients(
     const existingNames = new Set<string>();
     existingClients.forEach((client) => {
       existingNames.add(client.name);
-      logger.registerSecret(client.clientSecret);
     });
     for (const name of idp.clients) {
       if (existingNames.has(name)) {
@@ -724,7 +723,6 @@ async function planClients(
       deletedClientsByService[i],
       "deletedClientsByService missing entry for service index",
     ).forEach((client) => {
-      logger.registerSecret(client.clientSecret);
       changeSet.deletes.push({
         name: client.name,
         request: {

@@ -149,6 +149,9 @@ function validatorFor(schema: DescMessage): Validator {
   return validator;
 }
 
+// Reported by collectViolations itself, which also covers a request without userAuthPolicy.
+const SDK_REPORTED_RULE_IDS: ReadonlySet<string> = new Set(["allowed_email_domains_required"]);
+
 function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Desc>): void {
   const { application, schema, resourceType, action, items, requestKey, violations } = params;
   if (items.length === 0) {
@@ -161,6 +164,9 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
     const result = validator.validate(schema, msg);
     if (result.kind === "invalid") {
       for (const v of result.violations) {
+        if (SDK_REPORTED_RULE_IDS.has(v.ruleId)) {
+          continue;
+        }
         violations.push({
           resourceType,
           name: item.name,
