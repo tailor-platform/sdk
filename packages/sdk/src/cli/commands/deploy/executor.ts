@@ -215,7 +215,6 @@ export async function planExecutor(
     keyOf: (executor) => executor.name,
     ...labeledResourceChecks(ownership, (executor: DesiredExecutor) => ({
       resourceType: "executor",
-      resourceLabel: "Executor",
       resourceName: executor.name,
     })),
     isConfigUnchanged: (executor) => {

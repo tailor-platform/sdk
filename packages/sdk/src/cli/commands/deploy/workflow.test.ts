@@ -1188,7 +1188,7 @@ describe("planWorkflow", () => {
       expect(deleteWorkflow).toHaveBeenCalledTimes(2);
       expect(deleteWorkflowJobFunction).toHaveBeenCalledTimes(3);
       expect(warn).toHaveBeenCalledWith(
-        'Skipped deleting workflow job function "job-a" because it is still referenced.',
+        'Skipped deleting Workflow job "job-a" because it is still referenced.',
       );
       warn.mockRestore();
     });

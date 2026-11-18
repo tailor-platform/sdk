@@ -1,11 +1,8 @@
 import { describe, expect, test } from "vitest";
 import { createOwnershipTracker } from "./owned-resource";
 
-const resource = {
-  resourceType: "executor",
-  resourceLabel: "Executor",
-  resourceName: "my-executor",
-} as const;
+const resource = { resourceType: "pipeline.service", resourceName: "my-service" } as const;
+const recorded = { ...resource, resourceLabel: "Resolver namespace" };
 
 describe("createOwnershipTracker", () => {
   describe("ownsDesired", () => {
@@ -30,8 +27,8 @@ describe("createOwnershipTracker", () => {
       ).toBe(false);
       expect(ownership.result).toEqual({
         conflicts: [
-          { ...resource, currentOwner: "other-app" },
-          { ...resource, currentOwner: "my-app" },
+          { ...recorded, currentOwner: "other-app" },
+          { ...recorded, currentOwner: "my-app" },
         ],
         unmanaged: [],
         resourceOwners: new Set(),
@@ -45,7 +42,7 @@ describe("createOwnershipTracker", () => {
       expect(ownership.ownsDesired({ "sdk-name": "" }, resource)).toBe(false);
       expect(ownership.result).toEqual({
         conflicts: [],
-        unmanaged: [resource, resource],
+        unmanaged: [recorded, recorded],
         resourceOwners: new Set(),
       });
     });

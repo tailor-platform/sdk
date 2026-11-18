@@ -671,7 +671,7 @@ describe("scheduleRenamedAppDeletes", () => {
     const renamedTarget = emptyPlanResults();
     renamedTarget.tailorDB.conflicts.push({
       resourceType: "tailordb.service",
-      resourceLabel: "TailorDB service",
+      resourceLabel: "TailorDB namespace",
       resourceName: "shared",
       currentOwner: "old-app",
     });
@@ -691,14 +691,14 @@ describe("scheduleRenamedAppDeletes", () => {
     const first = emptyPlanResults();
     first.tailorDB.conflicts.push({
       resourceType: "tailordb.service",
-      resourceLabel: "TailorDB service",
+      resourceLabel: "TailorDB namespace",
       resourceName: "shared",
       currentOwner: "old-app",
     });
     const second = emptyPlanResults();
     second.pipeline.conflicts.push({
       resourceType: "pipeline.service",
-      resourceLabel: "Pipeline service",
+      resourceLabel: "Resolver namespace",
       resourceName: "shared-pipeline",
       currentOwner: "old-app",
     });
@@ -717,7 +717,7 @@ describe("scheduleRenamedAppDeletes", () => {
     const results = emptyPlanResults();
     results.tailorDB.conflicts.push({
       resourceType: "tailordb.service",
-      resourceLabel: "TailorDB service",
+      resourceLabel: "TailorDB namespace",
       resourceName: "shared",
       currentOwner: "old-app",
     });
@@ -829,7 +829,7 @@ describe("confirmDeploymentPlans", () => {
         const results = emptyPlanResults();
         results.tailorDB.conflicts.push({
           resourceType: "tailordb.service",
-          resourceLabel: "TailorDB service",
+          resourceLabel: "TailorDB namespace",
           resourceName: "shared",
           currentOwner: "old-app",
         });
@@ -842,7 +842,7 @@ describe("confirmDeploymentPlans", () => {
         const results = emptyPlanResults();
         results.tailorDB.unmanaged.push({
           resourceType: "tailordb.service",
-          resourceLabel: "TailorDB service",
+          resourceLabel: "TailorDB namespace",
           resourceName: "legacy",
         });
         return { deployments: [plannedDeployment("my-app", results)] };
@@ -902,7 +902,7 @@ describe("confirmDeploymentPlans", () => {
       const results = emptyPlanResults();
       results.tailorDB.conflicts.push({
         resourceType: "tailordb.service",
-        resourceLabel: "TailorDB service",
+        resourceLabel: "TailorDB namespace",
         resourceName: "shared",
         currentOwner: "old-app",
       });
@@ -974,7 +974,7 @@ describe("printPlanResults", () => {
     results.tailorDB.unmanaged = [
       {
         resourceType: "tailordb.service",
-        resourceLabel: "TailorDB service",
+        resourceLabel: "TailorDB namespace",
         resourceName: "legacy",
       },
     ];
@@ -998,7 +998,7 @@ describe("printPlanResults", () => {
     results.tailorDB.conflicts = [
       {
         resourceType: "tailordb.service",
-        resourceLabel: "TailorDB service",
+        resourceLabel: "TailorDB namespace",
         resourceName: "tailordb",
         currentOwner: "other-app",
       },

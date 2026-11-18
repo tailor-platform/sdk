@@ -314,7 +314,6 @@ export async function planStaticWebsite(context: PlanContext) {
     keyOf: (website) => website.name,
     ...labeledResourceChecks(ownership, (website: DesiredStaticWebsite) => ({
       resourceType: "staticwebsite",
-      resourceLabel: "StaticWebsite",
       resourceName: website.name,
     })),
     isConfigUnchanged: (website, existing) =>
@@ -485,7 +484,6 @@ export async function planStaticWebsite(context: PlanContext) {
 
       const owned = ownership.ownsDesired(existing.allLabels, {
         resourceType: "staticwebsite.custom_domain",
-        resourceLabel: "StaticWebsite custom domain",
         resourceName: domain,
       });
       if (owned) {

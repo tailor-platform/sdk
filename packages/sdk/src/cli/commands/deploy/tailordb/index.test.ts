@@ -509,7 +509,7 @@ describe("planTailorDB (service level)", () => {
       expect(result.unmanaged).toEqual([
         {
           resourceType: "tailordb.service",
-          resourceLabel: "TailorDB service",
+          resourceLabel: "TailorDB namespace",
           resourceName: "my-tailordb",
         },
       ]);

@@ -353,7 +353,6 @@ export async function planFunctionRegistry(
     if (existing) {
       const owned = ownership.ownsDesired(existing.allLabels, {
         resourceType: "function_registry",
-        resourceLabel: "Function registry",
         resourceName: entry.name,
       });
 
