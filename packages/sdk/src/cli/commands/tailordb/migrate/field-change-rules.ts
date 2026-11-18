@@ -1,10 +1,9 @@
 /**
- * The changes to a field's contract that rows stored under the previous
- * schema can break. Each rule says, in one place, why the change is breaking,
- * how the Pre-phase loosens the field while `migrate.ts` runs, and which
- * statement the generated script runs for it. Rules are listed in the order a
- * field's breaking changes are reported and its statements run: references
- * are repaired before the fixups that rewrite those rows.
+ * Field changes that rows stored under the previous schema can break, with
+ * the Pre-phase relaxation and the `migrate.ts` statement each one needs.
+ * Rules are listed in the order a field's breaking changes are reported and
+ * its statements run: references are repaired before the fixups that rewrite
+ * those rows.
  */
 
 import { formatForeignKeyTarget } from "./diff-calculator";
@@ -34,7 +33,7 @@ export interface FieldRuleInput {
   before: SnapshotFieldConfig | undefined;
   after: SnapshotFieldConfig;
   nestedMember: boolean;
-  /** Confirmed table renames (old name → new name). */
+  /** Confirmed table renames (old name → new name); the Pre-phase does not know them, so no relaxation may depend on them. */
   typeRenameTargets: ReadonlyMap<string, string> | undefined;
 }
 
@@ -262,12 +261,12 @@ const FIELD_CHANGE_RULES: readonly FieldChangeRule[] = [
   },
 ];
 
-interface BoundRule {
+interface EvaluatedRule {
   breakage: Breakage | undefined;
   relax: ((field: PreMigrationField) => void) | undefined;
 }
 
-function bind<I extends FieldRuleInput>(rule: Rule<I, never>, input: I): BoundRule {
+function evaluateRule<I extends FieldRuleInput>(rule: Rule<I, never>, input: I): EvaluatedRule {
   const breakage = rule.breaks(input);
   const { relax } = rule;
   const relaxes = relax && (relax.when ? relax.when(input) : breakage !== undefined);
@@ -277,11 +276,13 @@ function bind<I extends FieldRuleInput>(rule: Rule<I, never>, input: I): BoundRu
   };
 }
 
-function bindRules(input: FieldRuleInput): BoundRule[] {
+function evaluateRules(input: FieldRuleInput): EvaluatedRule[] {
   const { before } = input;
   return FIELD_CHANGE_RULES.flatMap((rule) => {
-    if (rule.on === "added") return before === undefined ? [bind(rule, { ...input, before })] : [];
-    return before === undefined ? [] : [bind(rule, { ...input, before })];
+    if (rule.on === "added") {
+      return before === undefined ? [evaluateRule(rule, { ...input, before })] : [];
+    }
+    return before === undefined ? [] : [evaluateRule(rule, { ...input, before })];
   });
 }
 
@@ -302,7 +303,7 @@ export function collectBreakingFieldChanges(
   location: BreakingFieldLocation,
   input: FieldRuleInput,
 ): BreakingChangeInfo[] {
-  return bindRules(input).flatMap(({ breakage }) =>
+  return evaluateRules(input).flatMap(({ breakage }) =>
     breakage
       ? [
           {
@@ -322,7 +323,7 @@ export function collectBreakingFieldChanges(
  * @param input - The changed field
  */
 export function relaxFieldForPreMigration(field: PreMigrationField, input: FieldRuleInput): void {
-  for (const { relax } of bindRules(input)) relax?.(field);
+  for (const { relax } of evaluateRules(input)) relax?.(field);
 }
 
 /**
@@ -337,15 +338,20 @@ export function scaffoldFieldChange(
 ): string[] {
   const base = { after: change.after, nestedMember: false, typeRenameTargets };
   return FIELD_CHANGE_RULES.flatMap((rule) => {
-    if (rule.on === "added") {
-      if (change.kind !== "field_added") return [];
-      const input = { ...base, before: undefined };
-      return rule.scaffold && rule.breaks(input) ? [rule.scaffold(change)] : [];
-    }
-    if (change.kind === "field_added") return [];
-    const input = { ...base, before: change.before };
-    return rule.scaffold && rule.breaks(input) ? [rule.scaffold(change)] : [];
+    const statement =
+      rule.on === "added"
+        ? change.kind === "field_added"
+          ? scaffoldRule(rule, change, { ...base, before: undefined })
+          : undefined
+        : change.kind === "field_added"
+          ? undefined
+          : scaffoldRule(rule, change, { ...base, before: change.before });
+    return statement === undefined ? [] : [statement];
   });
+}
+
+function scaffoldRule<I, C>(rule: Rule<I, C>, change: C, input: I): string | undefined {
+  return rule.scaffold && rule.breaks(input) ? rule.scaffold(change) : undefined;
 }
 
 function generatePopulateScript(change: FieldAddedChange): string {
