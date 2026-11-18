@@ -423,7 +423,7 @@ snapshots:
 				"@napi-rs/keyring": "2.1.2",
 				"@opentelemetry/api": "1.10.0",
 				"@opentelemetry/context-async-hooks": "3.1.1",
-				"@opentelemetry/exporter-trace-otlp-proto": "0.301.1",
+				"@opentelemetry/exporter-trace-otlp-proto": "0.301.2",
 				"@opentelemetry/resources": "3.1.1",
 				"@opentelemetry/sdk-trace": "3.1.1",
 				"@opentelemetry/semantic-conventions": "1.45.0",
@@ -2049,8 +2049,8 @@ snapshots:
 			},
 		},
 
-		"@opentelemetry/exporter-trace-otlp-proto@0.301.1": {
-			"integrity": "sha512-Ek6428nXwwow1bsC5vUxYdOd0CEMLRBcC3Y8ZIPXO56C1CdPnkh9nnt1L1eubp+2Q0KFsKxg9fszpL+AjTN/oQ==",
+		"@opentelemetry/exporter-trace-otlp-proto@0.301.2": {
+			"integrity": "sha512-3MOk/LZJI/5D5Wq6F1B0+TclRwyLZI4hoqOnAl4PcPBfbaBZND5IplOD4tWLV4QtwobYeCyZwP9DpeKBLPWviw==",
 			"engines": {"node": ">=22.15.0"},
 			"peerDependencies": {
 				"@opentelemetry/api": {
@@ -2059,14 +2059,14 @@ snapshots:
 				},
 			},
 			"dependencies": {
-				"@opentelemetry/otlp-exporter-base": "0.301.1",
-				"@opentelemetry/otlp-transformer": "0.301.1",
+				"@opentelemetry/otlp-exporter-base": "0.301.2",
+				"@opentelemetry/otlp-transformer": "0.301.2",
 				"@opentelemetry/sdk-trace": "3.1.1",
 			},
 		},
 
-		"@opentelemetry/otlp-exporter-base@0.301.1": {
-			"integrity": "sha512-FKgY0SJAkMnWunU/BH1s+VQRSQaGbXjAxzZWoc+p8nBd+tH0a+rV3UD1tIn4TA9BqP1BG8TDTUK+4aWqSuDpxw==",
+		"@opentelemetry/otlp-exporter-base@0.301.2": {
+			"integrity": "sha512-XlC8Mqeqk5vY9/jXU2No4tAPDO4g7d3QqgxznctJrM1wzF/xKUiBvQwlQguGL98nEBweq2NCkXMGj4QIGSpplg==",
 			"engines": {"node": ">=22.15.0"},
 			"peerDependencies": {
 				"@opentelemetry/api": {
@@ -2076,12 +2076,12 @@ snapshots:
 			},
 			"dependencies": {
 				"@opentelemetry/core": "3.1.1",
-				"@opentelemetry/otlp-transformer": "0.301.1",
+				"@opentelemetry/otlp-transformer": "0.301.2",
 			},
 		},
 
-		"@opentelemetry/otlp-transformer@0.301.1": {
-			"integrity": "sha512-3oNEm6He+NfE0LCbDjq0byKLhC4WcQ1fUrIF5Cvh/D4OHs0YkTqf06OOsPg5DnqqhxB6iJTIP5ZqdLerOFDp9g==",
+		"@opentelemetry/otlp-transformer@0.301.2": {
+			"integrity": "sha512-Ap4MhVvrta1YAXoLKLdX9KuEy8zfupMRaDmbOFm0afxPqe56dAo2cCe52TDN6t175E6i4hnrBMzDXpnDR843eg==",
 			"engines": {"node": ">=22.15.0"},
 			"peerDependencies": {
 				"@opentelemetry/api": {
