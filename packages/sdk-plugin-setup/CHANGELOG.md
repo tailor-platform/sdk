@@ -1,5 +1,19 @@
 # @tailor-platform/sdk-plugin-setup
 
+## 0.19.1
+
+### Patch Changes
+
+- [#3147](https://github.com/tailor-platform/sdk/pull/3147) [`04441c6`](https://github.com/tailor-platform/sdk/commit/04441c685a2034db9b8da32fd08f6cced981dfb3) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​politty/zod to v0.7.3
+
+- [#3160](https://github.com/tailor-platform/sdk/pull/3160) [`2cbce70`](https://github.com/tailor-platform/sdk/commit/2cbce70442489eebee082efd18c992e9a1d5c4ea) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency anthropics/claude-code-action to v1.0.280
+
+- [#3163](https://github.com/tailor-platform/sdk/pull/3163) [`062d74e`](https://github.com/tailor-platform/sdk/commit/062d74eaddbc35559bd38e90d7e660b8756c9ded) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency openai/codex-action to v1.14
+
+- [#3167](https://github.com/tailor-platform/sdk/pull/3167) [`bff0078`](https://github.com/tailor-platform/sdk/commit/bff0078689282edfa251e348439bbd1ffe0705d7) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency csm-actions/securefix-action to v0.7.1
+- Updated dependencies [[`1ff6995`](https://github.com/tailor-platform/sdk/commit/1ff69955109a76dda6f8dd9135c3f6f6563005bb), [`eba6ca7`](https://github.com/tailor-platform/sdk/commit/eba6ca7cf04c33bb50cc43eb6543f674398ecadd), [`71080f6`](https://github.com/tailor-platform/sdk/commit/71080f6346545af099b15f8ce150c595ecba4705), [`7ee57a9`](https://github.com/tailor-platform/sdk/commit/7ee57a9fad139911390e0efdf2f58f1d448fc441), [`00a2e07`](https://github.com/tailor-platform/sdk/commit/00a2e070bf5796f57d006f44f8cca00d4a5bedb8), [`f47cd59`](https://github.com/tailor-platform/sdk/commit/f47cd59f76f44b3683d22c9d0bcd83926e8e2376), [`cc7cc20`](https://github.com/tailor-platform/sdk/commit/cc7cc20e7fe8282b2a00aad8fa7f1263b7d5bc45), [`90482bf`](https://github.com/tailor-platform/sdk/commit/90482bf36c08bceae5ca262f9a10534a6dd16a9e), [`fbb8720`](https://github.com/tailor-platform/sdk/commit/fbb87206068a56563b2a4e17e99575d3fc7b634a), [`8a9d0bd`](https://github.com/tailor-platform/sdk/commit/8a9d0bd712960f014912524486c764ace7603b54), [`df41ba2`](https://github.com/tailor-platform/sdk/commit/df41ba2518a028dfe6e8a801f0074f38ca0a607d), [`1266ca6`](https://github.com/tailor-platform/sdk/commit/1266ca6a1ad5ab3e3ad585158abb63f87660adb0), [`00e25ba`](https://github.com/tailor-platform/sdk/commit/00e25baeee27bae7ab81f9d9e56ee465b16ff66d), [`688d737`](https://github.com/tailor-platform/sdk/commit/688d73771fc28d5b61a58d8a2cc65261a011c00b), [`04441c6`](https://github.com/tailor-platform/sdk/commit/04441c685a2034db9b8da32fd08f6cced981dfb3), [`2ac68a9`](https://github.com/tailor-platform/sdk/commit/2ac68a9dac1c5c8cecf1865a5d081cb009414f5d), [`20aa96f`](https://github.com/tailor-platform/sdk/commit/20aa96f7925bebd6fbe632335bc908a654739aea), [`eee037c`](https://github.com/tailor-platform/sdk/commit/eee037cc3fdd3b955d99dc7d548f45d66e8464b2), [`a569fcf`](https://github.com/tailor-platform/sdk/commit/a569fcf7608ceb29a3ec59c47da7682f9db95608), [`11b53ca`](https://github.com/tailor-platform/sdk/commit/11b53cab731f586f6f8ab968a07d55385108bb85), [`a66d481`](https://github.com/tailor-platform/sdk/commit/a66d481fc9531825e1082dd9d045c9e00905ae30)]:
+  - @tailor-platform/sdk@2.43.0
+
 ## 0.19.0
 
 ### Minor Changes
