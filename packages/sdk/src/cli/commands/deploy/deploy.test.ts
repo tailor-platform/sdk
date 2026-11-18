@@ -27,7 +27,13 @@ import {
   scheduleRenamedAppDeletes,
 } from "./managed-resources";
 import { printDeploymentPlans, printPlanResults, summarizePlanResults } from "./plan-report";
-import { emptyPlanResults, plannedDeleteLists, PLANNED_DELETE } from "./test-helpers/plan-results";
+import {
+  emptyPlanResults,
+  plannedChangeSets,
+  plannedDeleteLists,
+  PLANNED_CHANGE,
+  PLANNED_DELETE,
+} from "./test-helpers/plan-results";
 import {
   collectVisibleIdpNames,
   collectVisibleResolverNamespaces,
@@ -1111,6 +1117,57 @@ describe("printPlanResults", () => {
     },
   );
 
+  test.each(
+    [...plannedChangeSets(emptyPlanResults()).keys()].flatMap((path) =>
+      (["create", "update"] as const).map((action) => ({ path, action })),
+    ),
+  )(
+    "reports a planned $action from $path in the text plan, the summary, and JSON changes",
+    ({ path, action }) => {
+      const results = emptyPlanResults();
+      plannedChangeSets(results).get(path)![`${action}s`].push(PLANNED_CHANGE);
+
+      const summary = printPlanResults(results, { dryRun: true });
+      {
+        using _json = jsonMode();
+        printPlanResults(results, { dryRun: true });
+      }
+
+      expect(String(outSpy.mock.calls[0]?.[0])).toContain(` ${PLANNED_CHANGE.name}`);
+      expect(summary).toMatchObject({ create: 0, update: 0, delete: 0, replace: 0, [action]: 1 });
+      const payload = outSpy.mock.calls[1]?.[0] as {
+        changes: Array<{ action: string; name: string }>;
+      };
+      expect(payload.changes).toContainEqual(
+        expect.objectContaining({ action, name: PLANNED_CHANGE.name }),
+      );
+    },
+  );
+
+  test("reports an OAuth2 client replacement under its Auth service", () => {
+    using _json = jsonMode();
+    const results = emptyPlanResults();
+    results.auth.changeSet.oauth2Client.replaces.push({
+      name: "web",
+      deleteRequest: { workspaceId: "ws", namespaceName: "main-auth", name: "web" },
+      createRequest: {
+        workspaceId: "ws",
+        namespaceName: "main-auth",
+        oauth2Client: { name: "web" },
+      },
+    });
+
+    printPlanResults(results, { dryRun: true });
+
+    const payload = outSpy.mock.calls[0]?.[0] as { changes: unknown[] };
+    expect(payload.changes).toContainEqual({
+      action: "replace",
+      name: "web",
+      labels: ["oauth2Client"],
+      namespace: "main-auth",
+    });
+  });
+
   test("reports unmanaged resources and owner conflicts of every plan kind", () => {
     const results = emptyPlanResults();
     const kinds = Object.keys(results) as Array<keyof PlanResults>;
@@ -1967,8 +2024,8 @@ describe("assertUniqueGlobalResourceNames", () => {
           '  - Executor "recompute-on-role-permissions-updated": apps/erp/tailor.config.ts, apps/user-management/tailor.config.ts',
           '  - StaticWebsite "default-web": apps/erp/tailor.config.ts, apps/user-management/tailor.config.ts',
           '  - TailorDB namespace "main-db": apps/erp/tailor.config.ts, apps/user-management/tailor.config.ts',
-          '  - Auth namespace "default": apps/erp/tailor.config.ts, apps/user-management/tailor.config.ts',
-          '  - IdP namespace "default": apps/erp/tailor.config.ts, apps/user-management/tailor.config.ts',
+          '  - Auth service "default": apps/erp/tailor.config.ts, apps/user-management/tailor.config.ts',
+          '  - IdP service "default": apps/erp/tailor.config.ts, apps/user-management/tailor.config.ts',
         ].join("\n"),
         suggestion:
           "Rename the duplicates so each name is defined once across all configs in a single deploy. " +
@@ -2206,7 +2263,7 @@ describe("collectExternalAuthIdpConfigNames", () => {
         fakeAuthTarget("shared-auth", "idp-b"),
       ]),
     ).toThrow(
-      'Auth namespace "shared-auth" is defined by multiple config files with different IdP configs. Auth namespace names must be unique across all configs in a single deploy.',
+      'Auth service "shared-auth" is defined by multiple config files with different IdP configs. Auth service names must be unique across all configs in a single deploy.',
     );
   });
 

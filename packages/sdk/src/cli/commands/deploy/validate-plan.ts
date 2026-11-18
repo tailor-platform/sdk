@@ -73,46 +73,14 @@ import { logger, styles } from "#/cli/shared/logger";
 import { STATIC_WEBSITE_ORIGIN_PLACEHOLDER_PATTERN } from "#/parser/service/common";
 import { ALL_EMAIL_DOMAINS, hasImplicitAllEmailDomains } from "#/parser/service/idp/email-domains";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
+import { MANAGED_RESOURCE_LABELS, type ManagedResourceType } from "./managed-resource-type";
 import { secretCreateRequest, secretUpdateRequest, vaultCreateRequest } from "./secret-manager";
 import { buildWorkflowValidationShape } from "./workflow";
 import { toPlatformExecutionPolicyKey } from "./workflow-execution-policy";
 import type { PlanResults } from "./apply-phases";
-import type { ManagedResourceType } from "./managed-resource-type";
-
-const RESOURCE_LABELS = {
-  "tailordb.service": "TailorDB service",
-  "tailordb.type": "TailorDB table",
-  staticwebsite: "StaticWebsite",
-  "staticwebsite.custom_domain": "StaticWebsite custom domain",
-  "staticwebsite.custom_domain_transfer": "StaticWebsite custom domain transfer",
-  aigateway: "AIGateway",
-  "idp.service": "IdP service",
-  "idp.client": "IdP client secret",
-  "auth.service": "Auth service",
-  "auth.idp_config": "Auth IDP config",
-  "auth.user_profile_config": "Auth user profile config",
-  "auth.tenant_config": "Auth tenant config",
-  "auth.machine_user": "Auth machine user",
-  "auth.hook": "Auth hook",
-  "auth.scim": "Auth SCIM config",
-  "auth.scim_resource": "Auth SCIM resource",
-  "auth.oauth2_client": "OAuth2 client",
-  "pipeline.service": "Pipeline service",
-  "pipeline.resolver": "Resolver",
-  executor: "Executor",
-  workflow: "Workflow",
-  workflow_job_function: "Workflow job function",
-  workflow_job_function_execution_policy: "Workflow execution policy",
-  "secret.vault": "Secret Manager vault",
-  "secret.secret": "Secret Manager secret",
-  application: "Application",
-  "auth.connection": "Auth connection",
-} as const satisfies Partial<Record<ManagedResourceType, string>>;
-
-type ValidatedResourceType = keyof typeof RESOURCE_LABELS;
 
 type ViolationEntry = {
-  resourceType: ValidatedResourceType;
+  resourceType: ManagedResourceType;
   name: string;
   action: "create" | "update" | "replace";
   fieldPath: string;
@@ -125,7 +93,7 @@ type HasCreateRequest = { name: string; createRequest: unknown };
 type ValidateItemsParams<Desc extends DescMessage> = {
   application: string;
   schema: Desc;
-  resourceType: ValidatedResourceType;
+  resourceType: ManagedResourceType;
   action: "create" | "update" | "replace";
   items: ReadonlyArray<HasRequest | HasCreateRequest>;
   requestKey: "request" | "createRequest";
@@ -177,7 +145,7 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
     } else if (result.kind === "error") {
       // Evaluator failures must not block deploys; the platform stays the authoritative validator.
       logger.warn(
-        `Application "${application}": Could not validate ${RESOURCE_LABELS[resourceType]} "${item.name}" (${action}): ${result.error.message}`,
+        `Application "${application}": Could not validate ${MANAGED_RESOURCE_LABELS[resourceType]} "${item.name}" (${action}): ${result.error.message}`,
       );
     }
   }
@@ -226,7 +194,7 @@ function collectViolations(application: string, results: PlanResults): Violation
 
   function creates<Desc extends DescMessage>(
     schema: Desc,
-    resourceType: ValidatedResourceType,
+    resourceType: ManagedResourceType,
     items: ReadonlyArray<HasRequest>,
   ): void {
     validateItems({
@@ -242,7 +210,7 @@ function collectViolations(application: string, results: PlanResults): Violation
 
   function updates<Desc extends DescMessage>(
     schema: Desc,
-    resourceType: ValidatedResourceType,
+    resourceType: ManagedResourceType,
     items: ReadonlyArray<HasRequest>,
   ): void {
     validateItems({
@@ -258,7 +226,7 @@ function collectViolations(application: string, results: PlanResults): Violation
 
   function replaces<Desc extends DescMessage>(
     schema: Desc,
-    resourceType: ValidatedResourceType,
+    resourceType: ManagedResourceType,
     items: ReadonlyArray<HasCreateRequest>,
   ): void {
     validateItems({
@@ -733,7 +701,7 @@ export async function validatePlans(plans: ReadonlyArray<PlanToValidate>): Promi
       logger.log(`  Application ${styles.info(`"${headedApplication}"`)}:`);
     }
     logger.log(
-      `${indent}${styles.resourceType(RESOURCE_LABELS[v.resourceType])} ${styles.resourceName(v.name)} ` +
+      `${indent}${styles.resourceType(MANAGED_RESOURCE_LABELS[v.resourceType])} ${styles.resourceName(v.name)} ` +
         `(${v.action}) — ${styles.bold(v.fieldPath)}: ${v.message}`,
     );
   }

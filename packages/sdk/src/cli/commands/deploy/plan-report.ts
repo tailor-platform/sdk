@@ -5,6 +5,7 @@ import { formatAuthHookChangeEntries } from "./auth";
 import {
   formatPlanSummary,
   summarizeChangeSets,
+  type ChangeSet,
   type HasName,
   type PlanSummary,
 } from "./change-set";
@@ -18,7 +19,11 @@ import {
   type GroupedDisplayEntry,
   type NamespaceAction,
 } from "./grouped-display";
-import { collectOwnerConflicts, collectUnmanagedResources } from "./managed-resources";
+import {
+  collectOwnerConflicts,
+  collectUnmanagedResources,
+  plannedNamespaceOf,
+} from "./managed-resources";
 import { formatResolverChangeEntries } from "./resolver";
 import { formatTailorDBResourceChangeEntries } from "./tailordb";
 import { formatWorkflowChangeEntries } from "./workflow";
@@ -85,7 +90,43 @@ type PlanReport = {
   lines: string[];
 };
 
+type PlainChangeSet = {
+  changeSet: Pick<
+    ChangeSet<HasName, HasName, HasName, HasName>,
+    "creates" | "updates" | "deletes" | "replaces" | "lines"
+  >;
+  label: string;
+};
+
+/**
+ * List the change sets the plan reports without grouping them by service.
+ * @param results - Planned results across all services
+ * @returns Change sets the text plan lists before and after the grouped sections
+ */
+function plainChangeSetsOf(results: PlanResults): {
+  beforeGroups: PlainChangeSet[];
+  afterGroups: PlainChangeSet[];
+} {
+  return {
+    beforeGroups: [
+      { changeSet: results.staticWebsite.changeSet, label: "staticWebsite" },
+      { changeSet: results.staticWebsite.customDomainChangeSet, label: "customDomain" },
+      {
+        changeSet: results.staticWebsite.customDomainTransferChangeSet,
+        label: "customDomainTransfer",
+      },
+      { changeSet: results.aiGateway.changeSet, label: "aiGateway" },
+      { changeSet: results.app, label: "application" },
+    ],
+    afterGroups: [
+      { changeSet: results.secretManager.vaultChangeSet, label: "vault" },
+      { changeSet: results.secretManager.secretChangeSet, label: "secret" },
+    ],
+  };
+}
+
 function buildPlanReport(results: PlanResults): PlanReport {
+  const plainChangeSets = plainChangeSetsOf(results);
   const executorEntries = formatExecutorChangeEntries(
     results.executor.changeSet,
     buildPlannedExecutorsByName(results.executor.changeSet),
@@ -129,44 +170,51 @@ function buildPlanReport(results: PlanResults): PlanReport {
     ...checkpointRepairEntries,
   ];
   const pipelineEntries: GroupedDisplayEntry[] = [...resolverEntries];
-  const namespaceOf = (item: HasName) => {
-    if (
-      "request" in item &&
-      item.request &&
-      typeof item.request === "object" &&
-      "namespaceName" in item.request
-    ) {
-      return item.request.namespaceName as string;
-    }
-    if ("namespaceName" in item) {
-      return item.namespaceName as string;
-    }
-    return undefined;
-  };
-  const authNamespaceOf = (item: HasName) =>
-    "request" in item &&
-    item.request &&
-    typeof item.request === "object" &&
-    "authNamespace" in item.request
-      ? (item.request.authNamespace as string)
-      : undefined;
   const idpEntries: GroupedDisplayEntry[] = [
-    ...formatChangeSetEntries(results.idp.changeSet.client, ["client"], namespaceOf),
+    ...formatChangeSetEntries(
+      results.idp.changeSet.client,
+      ["client"],
+      plannedNamespaceOf("idp.client"),
+    ),
   ];
   const authEntries: GroupedDisplayEntry[] = [
-    ...formatChangeSetEntries(results.auth.changeSet.idpConfig, ["idpConfig"], namespaceOf),
+    ...formatChangeSetEntries(
+      results.auth.changeSet.idpConfig,
+      ["idpConfig"],
+      plannedNamespaceOf("auth.idp_config"),
+    ),
     ...formatChangeSetEntries(
       results.auth.changeSet.userProfileConfig,
       ["userProfileConfig"],
-      namespaceOf,
+      plannedNamespaceOf("auth.user_profile_config"),
     ),
-    ...formatChangeSetEntries(results.auth.changeSet.tenantConfig, ["tenantConfig"], namespaceOf),
-    ...formatChangeSetEntries(results.auth.changeSet.machineUser, ["machineUser"], authNamespaceOf),
+    ...formatChangeSetEntries(
+      results.auth.changeSet.tenantConfig,
+      ["tenantConfig"],
+      plannedNamespaceOf("auth.tenant_config"),
+    ),
+    ...formatChangeSetEntries(
+      results.auth.changeSet.machineUser,
+      ["machineUser"],
+      plannedNamespaceOf("auth.machine_user"),
+    ),
     ...authHookEntries,
-    ...formatChangeSetEntries(results.auth.changeSet.oauth2Client, ["oauth2Client"], namespaceOf),
-    ...formatChangeSetEntries(results.auth.changeSet.scim, ["scimConfig"], namespaceOf),
-    ...formatChangeSetEntries(results.auth.changeSet.scimResource, ["scimResource"], namespaceOf),
-    ...formatChangeSetEntries(results.auth.changeSet.connection, ["connection"], namespaceOf),
+    ...formatChangeSetEntries(
+      results.auth.changeSet.oauth2Client,
+      ["oauth2Client"],
+      plannedNamespaceOf("auth.oauth2_client"),
+    ),
+    ...formatChangeSetEntries(
+      results.auth.changeSet.scim,
+      ["scimConfig"],
+      plannedNamespaceOf("auth.scim"),
+    ),
+    ...formatChangeSetEntries(
+      results.auth.changeSet.scimResource,
+      ["scimResource"],
+      plannedNamespaceOf("auth.scim_resource"),
+    ),
+    ...formatChangeSetEntries(results.auth.changeSet.connection, ["connection"]),
   ];
 
   const { otherChanges: otherFunctionRegistryChanges } = splitFunctionRegistryChanges(
@@ -209,15 +257,9 @@ function buildPlanReport(results: PlanResults): PlanReport {
     ...serviceEntries(idpServiceActions, "idp"),
     ...serviceEntries(authServiceActions, "auth"),
     ...formatChangeSetEntries(otherFunctionRegistryChanges),
-    ...formatChangeSetEntries(results.staticWebsite.changeSet, ["staticWebsite"]),
-    ...formatChangeSetEntries(results.staticWebsite.customDomainChangeSet, ["customDomain"]),
-    ...formatChangeSetEntries(results.staticWebsite.customDomainTransferChangeSet, [
-      "customDomainTransfer",
-    ]),
-    ...formatChangeSetEntries(results.aiGateway.changeSet, ["aiGateway"]),
-    ...formatChangeSetEntries(results.app, ["application"]),
-    ...formatChangeSetEntries(results.secretManager.vaultChangeSet, ["vault"]),
-    ...formatChangeSetEntries(results.secretManager.secretChangeSet, ["secret"]),
+    ...[...plainChangeSets.beforeGroups, ...plainChangeSets.afterGroups].flatMap(
+      ({ changeSet, label }) => formatChangeSetEntries(changeSet, [label]),
+    ),
   ];
   const changes = allEntries.map(({ action, name, labels, namespace, forcedBySdkVersion }) => ({
     action,
@@ -249,19 +291,14 @@ function buildPlanReport(results: PlanResults): PlanReport {
       results.functionRegistry.changeSet.title,
       formatChangeSetEntries(otherFunctionRegistryChanges),
     ),
-    ...results.staticWebsite.changeSet.lines(),
-    ...results.staticWebsite.customDomainChangeSet.lines(),
-    ...results.staticWebsite.customDomainTransferChangeSet.lines(),
-    ...results.aiGateway.changeSet.lines(),
-    ...results.app.lines(),
+    ...plainChangeSets.beforeGroups.flatMap(({ changeSet }) => changeSet.lines()),
     ...buildGroupedDisplayLines("TailorDB", tailorDBEntries, tailorDBServiceActions),
     ...buildGroupedDisplayLines("Resolver", pipelineEntries, pipelineServiceActions),
     ...buildGroupedDisplayLines("Executor", executorEntries),
     ...buildGroupedDisplayLines("Workflow", workflowEntries),
     ...buildGroupedDisplayLines("IdP", idpEntries, idpServiceActions),
     ...buildGroupedDisplayLines("Auth", authEntries, authServiceActions),
-    ...results.secretManager.vaultChangeSet.lines(),
-    ...results.secretManager.secretChangeSet.lines(),
+    ...plainChangeSets.afterGroups.flatMap(({ changeSet }) => changeSet.lines()),
   ];
 
   if (allUnmanaged.length > 0) {
@@ -366,17 +403,11 @@ export function summarizePlanResults(
     }
   }
 
-  // Count non-grouped changesets (staticWebsite, app, secretManager, functionRegistry other)
   const { otherChanges } = splitFunctionRegistryChanges(results.functionRegistry.changeSet);
+  const { beforeGroups, afterGroups } = plainChangeSetsOf(results);
   const nonGrouped = summarizeChangeSets([
     otherChanges,
-    results.staticWebsite.changeSet,
-    results.staticWebsite.customDomainChangeSet,
-    results.staticWebsite.customDomainTransferChangeSet,
-    results.aiGateway.changeSet,
-    results.app,
-    results.secretManager.vaultChangeSet,
-    results.secretManager.secretChangeSet,
+    ...[...beforeGroups, ...afterGroups].map(({ changeSet }) => changeSet),
   ]);
 
   return sumPlanSummaries([summary, nonGrouped]);
