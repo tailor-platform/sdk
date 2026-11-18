@@ -5,7 +5,7 @@
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 import type { PageDirection } from "./resource_pb";
-import type { IdPClient, IdPDisableGqlOperations, IdPEmailConfig, IdPLang, IdPPermission, IdPService, IdPUserAuthPolicy } from "./idp_resource_pb";
+import type { IdPClient, IdPClientSummary, IdPDisableGqlOperations, IdPEmailConfig, IdPLang, IdPPermission, IdPService, IdPUserAuthPolicy } from "./idp_resource_pb";
 
 /**
  * Describes the file tailor/v1/idp.proto.
@@ -341,9 +341,9 @@ export declare const ListIdPClientsRequestSchema: GenMessage<ListIdPClientsReque
  */
 export declare type ListIdPClientsResponse = Message<"tailor.v1.ListIdPClientsResponse"> & {
   /**
-   * @generated from field: repeated tailor.v1.IdPClient clients = 1;
+   * @generated from field: repeated tailor.v1.IdPClientSummary clients = 1;
    */
-  clients: IdPClient[];
+  clients: IdPClientSummary[];
 
   /**
    * @generated from field: string next_page_token = 2;

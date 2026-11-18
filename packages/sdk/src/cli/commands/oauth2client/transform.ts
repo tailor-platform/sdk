@@ -2,6 +2,7 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import {
   type AuthOAuth2Client,
   AuthOAuth2Client_GrantType,
+  type AuthOAuth2ClientSummary,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { logger } from "#/cli/shared/logger";
 import { protoEnumLookup } from "#/cli/shared/proto-enum";
@@ -35,11 +36,11 @@ export interface OAuth2ClientCredentials {
 }
 
 /**
- * Transform an AuthOAuth2Client into CLI-friendly OAuth2 client info.
- * @param client - OAuth2 client resource
+ * Transform an AuthOAuth2ClientSummary into CLI-friendly OAuth2 client info.
+ * @param client - OAuth2 client summary
  * @returns Flattened OAuth2 client info
  */
-export function toOAuth2ClientInfo(client: AuthOAuth2Client): OAuth2ClientInfo {
+export function toOAuth2ClientInfo(client: AuthOAuth2ClientSummary): OAuth2ClientInfo {
   return {
     name: client.name,
     description: client.description,

@@ -4,7 +4,7 @@
 
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
-import type { TailorDBGQLPermission, TailorDBService, TailorDBType } from "./tailordb_resource_pb";
+import type { TailorDBGQLPermission, TailorDBReplication, TailorDBReplicationDestination, TailorDBReplicationTableStatus, TailorDBService, TailorDBType } from "./tailordb_resource_pb";
 import type { Filter, PageDirection } from "./resource_pb";
 import type { FieldMask } from "@bufbuild/protobuf/wkt";
 
@@ -820,4 +820,451 @@ export declare type DeleteTailorDBGQLPermissionResponse = Message<"tailor.v1.Del
  * Use `create(DeleteTailorDBGQLPermissionResponseSchema)` to create a new message.
  */
 export declare const DeleteTailorDBGQLPermissionResponseSchema: GenMessage<DeleteTailorDBGQLPermissionResponse>;
+
+/**
+ * @generated from message tailor.v1.CreateTailorDBReplicationDestinationRequest
+ */
+export declare type CreateTailorDBReplicationDestinationRequest = Message<"tailor.v1.CreateTailorDBReplicationDestinationRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: tailor.v1.TailorDBReplicationDestination destination = 2;
+   */
+  destination?: TailorDBReplicationDestination;
+};
+
+/**
+ * Describes the message tailor.v1.CreateTailorDBReplicationDestinationRequest.
+ * Use `create(CreateTailorDBReplicationDestinationRequestSchema)` to create a new message.
+ */
+export declare const CreateTailorDBReplicationDestinationRequestSchema: GenMessage<CreateTailorDBReplicationDestinationRequest>;
+
+/**
+ * @generated from message tailor.v1.CreateTailorDBReplicationDestinationResponse
+ */
+export declare type CreateTailorDBReplicationDestinationResponse = Message<"tailor.v1.CreateTailorDBReplicationDestinationResponse"> & {
+  /**
+   * @generated from field: tailor.v1.TailorDBReplicationDestination destination = 1;
+   */
+  destination?: TailorDBReplicationDestination;
+};
+
+/**
+ * Describes the message tailor.v1.CreateTailorDBReplicationDestinationResponse.
+ * Use `create(CreateTailorDBReplicationDestinationResponseSchema)` to create a new message.
+ */
+export declare const CreateTailorDBReplicationDestinationResponseSchema: GenMessage<CreateTailorDBReplicationDestinationResponse>;
+
+/**
+ * @generated from message tailor.v1.GetTailorDBReplicationDestinationRequest
+ */
+export declare type GetTailorDBReplicationDestinationRequest = Message<"tailor.v1.GetTailorDBReplicationDestinationRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message tailor.v1.GetTailorDBReplicationDestinationRequest.
+ * Use `create(GetTailorDBReplicationDestinationRequestSchema)` to create a new message.
+ */
+export declare const GetTailorDBReplicationDestinationRequestSchema: GenMessage<GetTailorDBReplicationDestinationRequest>;
+
+/**
+ * @generated from message tailor.v1.GetTailorDBReplicationDestinationResponse
+ */
+export declare type GetTailorDBReplicationDestinationResponse = Message<"tailor.v1.GetTailorDBReplicationDestinationResponse"> & {
+  /**
+   * @generated from field: tailor.v1.TailorDBReplicationDestination destination = 1;
+   */
+  destination?: TailorDBReplicationDestination;
+};
+
+/**
+ * Describes the message tailor.v1.GetTailorDBReplicationDestinationResponse.
+ * Use `create(GetTailorDBReplicationDestinationResponseSchema)` to create a new message.
+ */
+export declare const GetTailorDBReplicationDestinationResponseSchema: GenMessage<GetTailorDBReplicationDestinationResponse>;
+
+/**
+ * @generated from message tailor.v1.ListTailorDBReplicationDestinationsRequest
+ */
+export declare type ListTailorDBReplicationDestinationsRequest = Message<"tailor.v1.ListTailorDBReplicationDestinationsRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string page_token = 2;
+   */
+  pageToken: string;
+
+  /**
+   * @generated from field: uint32 page_size = 3;
+   */
+  pageSize: number;
+
+  /**
+   * @generated from field: tailor.v1.PageDirection page_direction = 4;
+   */
+  pageDirection: PageDirection;
+};
+
+/**
+ * Describes the message tailor.v1.ListTailorDBReplicationDestinationsRequest.
+ * Use `create(ListTailorDBReplicationDestinationsRequestSchema)` to create a new message.
+ */
+export declare const ListTailorDBReplicationDestinationsRequestSchema: GenMessage<ListTailorDBReplicationDestinationsRequest>;
+
+/**
+ * @generated from message tailor.v1.ListTailorDBReplicationDestinationsResponse
+ */
+export declare type ListTailorDBReplicationDestinationsResponse = Message<"tailor.v1.ListTailorDBReplicationDestinationsResponse"> & {
+  /**
+   * @generated from field: repeated tailor.v1.TailorDBReplicationDestination destinations = 1;
+   */
+  destinations: TailorDBReplicationDestination[];
+
+  /**
+   * @generated from field: string next_page_token = 2;
+   */
+  nextPageToken: string;
+
+  /**
+   * @generated from field: int64 total_count = 3;
+   */
+  totalCount: bigint;
+};
+
+/**
+ * Describes the message tailor.v1.ListTailorDBReplicationDestinationsResponse.
+ * Use `create(ListTailorDBReplicationDestinationsResponseSchema)` to create a new message.
+ */
+export declare const ListTailorDBReplicationDestinationsResponseSchema: GenMessage<ListTailorDBReplicationDestinationsResponse>;
+
+/**
+ * @generated from message tailor.v1.VerifyTailorDBReplicationDestinationRequest
+ */
+export declare type VerifyTailorDBReplicationDestinationRequest = Message<"tailor.v1.VerifyTailorDBReplicationDestinationRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message tailor.v1.VerifyTailorDBReplicationDestinationRequest.
+ * Use `create(VerifyTailorDBReplicationDestinationRequestSchema)` to create a new message.
+ */
+export declare const VerifyTailorDBReplicationDestinationRequestSchema: GenMessage<VerifyTailorDBReplicationDestinationRequest>;
+
+/**
+ * @generated from message tailor.v1.VerifyTailorDBReplicationDestinationResponse
+ */
+export declare type VerifyTailorDBReplicationDestinationResponse = Message<"tailor.v1.VerifyTailorDBReplicationDestinationResponse"> & {
+  /**
+   * @generated from field: tailor.v1.TailorDBReplicationDestination destination = 1;
+   */
+  destination?: TailorDBReplicationDestination;
+};
+
+/**
+ * Describes the message tailor.v1.VerifyTailorDBReplicationDestinationResponse.
+ * Use `create(VerifyTailorDBReplicationDestinationResponseSchema)` to create a new message.
+ */
+export declare const VerifyTailorDBReplicationDestinationResponseSchema: GenMessage<VerifyTailorDBReplicationDestinationResponse>;
+
+/**
+ * @generated from message tailor.v1.DeleteTailorDBReplicationDestinationRequest
+ */
+export declare type DeleteTailorDBReplicationDestinationRequest = Message<"tailor.v1.DeleteTailorDBReplicationDestinationRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message tailor.v1.DeleteTailorDBReplicationDestinationRequest.
+ * Use `create(DeleteTailorDBReplicationDestinationRequestSchema)` to create a new message.
+ */
+export declare const DeleteTailorDBReplicationDestinationRequestSchema: GenMessage<DeleteTailorDBReplicationDestinationRequest>;
+
+/**
+ * @generated from message tailor.v1.DeleteTailorDBReplicationDestinationResponse
+ */
+export declare type DeleteTailorDBReplicationDestinationResponse = Message<"tailor.v1.DeleteTailorDBReplicationDestinationResponse"> & {
+};
+
+/**
+ * Describes the message tailor.v1.DeleteTailorDBReplicationDestinationResponse.
+ * Use `create(DeleteTailorDBReplicationDestinationResponseSchema)` to create a new message.
+ */
+export declare const DeleteTailorDBReplicationDestinationResponseSchema: GenMessage<DeleteTailorDBReplicationDestinationResponse>;
+
+/**
+ * @generated from message tailor.v1.CreateTailorDBReplicationRequest
+ */
+export declare type CreateTailorDBReplicationRequest = Message<"tailor.v1.CreateTailorDBReplicationRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: tailor.v1.TailorDBReplication replication = 2;
+   */
+  replication?: TailorDBReplication;
+};
+
+/**
+ * Describes the message tailor.v1.CreateTailorDBReplicationRequest.
+ * Use `create(CreateTailorDBReplicationRequestSchema)` to create a new message.
+ */
+export declare const CreateTailorDBReplicationRequestSchema: GenMessage<CreateTailorDBReplicationRequest>;
+
+/**
+ * @generated from message tailor.v1.CreateTailorDBReplicationResponse
+ */
+export declare type CreateTailorDBReplicationResponse = Message<"tailor.v1.CreateTailorDBReplicationResponse"> & {
+  /**
+   * @generated from field: tailor.v1.TailorDBReplication replication = 1;
+   */
+  replication?: TailorDBReplication;
+};
+
+/**
+ * Describes the message tailor.v1.CreateTailorDBReplicationResponse.
+ * Use `create(CreateTailorDBReplicationResponseSchema)` to create a new message.
+ */
+export declare const CreateTailorDBReplicationResponseSchema: GenMessage<CreateTailorDBReplicationResponse>;
+
+/**
+ * @generated from message tailor.v1.GetTailorDBReplicationRequest
+ */
+export declare type GetTailorDBReplicationRequest = Message<"tailor.v1.GetTailorDBReplicationRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message tailor.v1.GetTailorDBReplicationRequest.
+ * Use `create(GetTailorDBReplicationRequestSchema)` to create a new message.
+ */
+export declare const GetTailorDBReplicationRequestSchema: GenMessage<GetTailorDBReplicationRequest>;
+
+/**
+ * @generated from message tailor.v1.GetTailorDBReplicationResponse
+ */
+export declare type GetTailorDBReplicationResponse = Message<"tailor.v1.GetTailorDBReplicationResponse"> & {
+  /**
+   * @generated from field: tailor.v1.TailorDBReplication replication = 1;
+   */
+  replication?: TailorDBReplication;
+};
+
+/**
+ * Describes the message tailor.v1.GetTailorDBReplicationResponse.
+ * Use `create(GetTailorDBReplicationResponseSchema)` to create a new message.
+ */
+export declare const GetTailorDBReplicationResponseSchema: GenMessage<GetTailorDBReplicationResponse>;
+
+/**
+ * @generated from message tailor.v1.ListTailorDBReplicationsRequest
+ */
+export declare type ListTailorDBReplicationsRequest = Message<"tailor.v1.ListTailorDBReplicationsRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string page_token = 2;
+   */
+  pageToken: string;
+
+  /**
+   * @generated from field: uint32 page_size = 3;
+   */
+  pageSize: number;
+
+  /**
+   * @generated from field: tailor.v1.PageDirection page_direction = 4;
+   */
+  pageDirection: PageDirection;
+};
+
+/**
+ * Describes the message tailor.v1.ListTailorDBReplicationsRequest.
+ * Use `create(ListTailorDBReplicationsRequestSchema)` to create a new message.
+ */
+export declare const ListTailorDBReplicationsRequestSchema: GenMessage<ListTailorDBReplicationsRequest>;
+
+/**
+ * @generated from message tailor.v1.ListTailorDBReplicationsResponse
+ */
+export declare type ListTailorDBReplicationsResponse = Message<"tailor.v1.ListTailorDBReplicationsResponse"> & {
+  /**
+   * @generated from field: repeated tailor.v1.TailorDBReplication replications = 1;
+   */
+  replications: TailorDBReplication[];
+
+  /**
+   * @generated from field: string next_page_token = 2;
+   */
+  nextPageToken: string;
+
+  /**
+   * @generated from field: int64 total_count = 3;
+   */
+  totalCount: bigint;
+};
+
+/**
+ * Describes the message tailor.v1.ListTailorDBReplicationsResponse.
+ * Use `create(ListTailorDBReplicationsResponseSchema)` to create a new message.
+ */
+export declare const ListTailorDBReplicationsResponseSchema: GenMessage<ListTailorDBReplicationsResponse>;
+
+/**
+ * @generated from message tailor.v1.UpdateTailorDBReplicationRequest
+ */
+export declare type UpdateTailorDBReplicationRequest = Message<"tailor.v1.UpdateTailorDBReplicationRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * Validated after the masked fields are applied to the stored replication,
+   * so a partial update need not carry every required field.
+   *
+   * @generated from field: tailor.v1.TailorDBReplication replication = 2;
+   */
+  replication?: TailorDBReplication;
+
+  /**
+   * @generated from field: google.protobuf.FieldMask update_mask = 100;
+   */
+  updateMask?: FieldMask;
+};
+
+/**
+ * Describes the message tailor.v1.UpdateTailorDBReplicationRequest.
+ * Use `create(UpdateTailorDBReplicationRequestSchema)` to create a new message.
+ */
+export declare const UpdateTailorDBReplicationRequestSchema: GenMessage<UpdateTailorDBReplicationRequest>;
+
+/**
+ * @generated from message tailor.v1.UpdateTailorDBReplicationResponse
+ */
+export declare type UpdateTailorDBReplicationResponse = Message<"tailor.v1.UpdateTailorDBReplicationResponse"> & {
+  /**
+   * @generated from field: tailor.v1.TailorDBReplication replication = 1;
+   */
+  replication?: TailorDBReplication;
+};
+
+/**
+ * Describes the message tailor.v1.UpdateTailorDBReplicationResponse.
+ * Use `create(UpdateTailorDBReplicationResponseSchema)` to create a new message.
+ */
+export declare const UpdateTailorDBReplicationResponseSchema: GenMessage<UpdateTailorDBReplicationResponse>;
+
+/**
+ * @generated from message tailor.v1.DeleteTailorDBReplicationRequest
+ */
+export declare type DeleteTailorDBReplicationRequest = Message<"tailor.v1.DeleteTailorDBReplicationRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message tailor.v1.DeleteTailorDBReplicationRequest.
+ * Use `create(DeleteTailorDBReplicationRequestSchema)` to create a new message.
+ */
+export declare const DeleteTailorDBReplicationRequestSchema: GenMessage<DeleteTailorDBReplicationRequest>;
+
+/**
+ * @generated from message tailor.v1.DeleteTailorDBReplicationResponse
+ */
+export declare type DeleteTailorDBReplicationResponse = Message<"tailor.v1.DeleteTailorDBReplicationResponse"> & {
+};
+
+/**
+ * Describes the message tailor.v1.DeleteTailorDBReplicationResponse.
+ * Use `create(DeleteTailorDBReplicationResponseSchema)` to create a new message.
+ */
+export declare const DeleteTailorDBReplicationResponseSchema: GenMessage<DeleteTailorDBReplicationResponse>;
+
+/**
+ * @generated from message tailor.v1.GetTailorDBReplicationStatusRequest
+ */
+export declare type GetTailorDBReplicationStatusRequest = Message<"tailor.v1.GetTailorDBReplicationStatusRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message tailor.v1.GetTailorDBReplicationStatusRequest.
+ * Use `create(GetTailorDBReplicationStatusRequestSchema)` to create a new message.
+ */
+export declare const GetTailorDBReplicationStatusRequestSchema: GenMessage<GetTailorDBReplicationStatusRequest>;
+
+/**
+ * @generated from message tailor.v1.GetTailorDBReplicationStatusResponse
+ */
+export declare type GetTailorDBReplicationStatusResponse = Message<"tailor.v1.GetTailorDBReplicationStatusResponse"> & {
+  /**
+   * @generated from field: repeated tailor.v1.TailorDBReplicationTableStatus tables = 1;
+   */
+  tables: TailorDBReplicationTableStatus[];
+};
+
+/**
+ * Describes the message tailor.v1.GetTailorDBReplicationStatusResponse.
+ * Use `create(GetTailorDBReplicationStatusResponseSchema)` to create a new message.
+ */
+export declare const GetTailorDBReplicationStatusResponseSchema: GenMessage<GetTailorDBReplicationStatusResponse>;
 

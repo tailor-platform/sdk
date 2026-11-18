@@ -35,6 +35,10 @@ import {
 } from "#/cli/shared/client";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import {
+  DEFAULT_ACCESS_TOKEN_LIFETIME_SECONDS,
+  DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS,
+} from "#/parser/service/auth/index";
 import { assertDefined } from "#/utils/assert";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
@@ -1103,7 +1107,6 @@ async function planMachineUsers(
     const existingMap = new Map<string, (typeof existingMachineUsers)[number]>();
     existingMachineUsers.forEach((machineUser) => {
       existingMap.set(machineUser.name, machineUser);
-      logger.registerSecret(machineUser.clientSecret);
     });
     for (const machineUsername of Object.keys(config.machineUsers ?? {})) {
       const machineUser = config.machineUsers?.[machineUsername];
@@ -1167,7 +1170,6 @@ async function planMachineUsers(
       namespaceName,
     );
     existingMachineUsers.forEach((machineUser) => {
-      logger.registerSecret(machineUser.clientSecret);
       changeSet.deletes.push({
         name: machineUser.name,
         request: {
@@ -1278,6 +1280,7 @@ function normalizeComparableOAuth2Client(
         clientType?: AuthOAuth2Client_ClientType;
         accessTokenLifetime?: number;
         refreshTokenLifetime?: number;
+        refreshTokenIdleLifetime?: number;
         requireDpop?: boolean;
       },
 ) {
@@ -1290,8 +1293,9 @@ function normalizeComparableOAuth2Client(
     description: client.description || undefined,
     redirectUris: normalizeStringArray(client.redirectUris),
     grantTypes: (client.grantTypes ?? []).toSorted((left, right) => left - right),
-    accessTokenLifetime: accessTokenLifetime ?? 86400,
-    refreshTokenLifetime: refreshTokenLifetime ?? 604800,
+    accessTokenLifetime: accessTokenLifetime ?? DEFAULT_ACCESS_TOKEN_LIFETIME_SECONDS,
+    refreshTokenLifetime: refreshTokenLifetime ?? DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS,
+    refreshTokenIdleLifetime: oauth2LifetimeToSeconds(client.refreshTokenIdleLifetime),
     requireDpop: client.requireDpop ?? false,
   });
 }
@@ -1324,6 +1328,7 @@ function areOAuth2ClientsEqual(
     clientType?: AuthOAuth2Client_ClientType;
     accessTokenLifetime?: number;
     refreshTokenLifetime?: number;
+    refreshTokenIdleLifetime?: number;
     requireDpop?: boolean;
   },
   desired:
@@ -1336,6 +1341,7 @@ function areOAuth2ClientsEqual(
         clientType?: AuthOAuth2Client_ClientType;
         accessTokenLifetime?: number;
         refreshTokenLifetime?: number;
+        refreshTokenIdleLifetime?: number;
         requireDpop?: boolean;
       },
 ) {
@@ -1399,7 +1405,6 @@ async function planOAuth2Clients(
     const existingClientsMap = new Map<string, (typeof existingOAuth2Clients)[number]>();
     existingOAuth2Clients.forEach((oauth2Client) => {
       existingClientsMap.set(oauth2Client.name, oauth2Client);
-      logger.registerSecret(oauth2Client.clientSecret);
     });
     for (const oauth2ClientName of Object.keys(config.oauth2Clients ?? {})) {
       const oauth2Client = config.oauth2Clients?.[oauth2ClientName];
@@ -1440,6 +1445,9 @@ async function planOAuth2Clients(
             redirectUris: resolvedRedirectUris,
             accessTokenLifetime: oauth2LifetimeToSeconds(newOAuth2Client.accessTokenLifetime),
             refreshTokenLifetime: oauth2LifetimeToSeconds(newOAuth2Client.refreshTokenLifetime),
+            refreshTokenIdleLifetime: oauth2LifetimeToSeconds(
+              newOAuth2Client.refreshTokenIdleLifetime,
+            ),
           };
           const existingComparable = {
             name: existingClient.name,
@@ -1449,6 +1457,9 @@ async function planOAuth2Clients(
             clientType: existingClient.clientType,
             accessTokenLifetime: oauth2LifetimeToSeconds(existingClient.accessTokenLifetime),
             refreshTokenLifetime: oauth2LifetimeToSeconds(existingClient.refreshTokenLifetime),
+            refreshTokenIdleLifetime: oauth2LifetimeToSeconds(
+              existingClient.refreshTokenIdleLifetime,
+            ),
             requireDpop: existingClient.requireDpop,
           };
           const configUnchanged = areOAuth2ClientsEqual(existingComparable, desiredComparable);
@@ -1493,7 +1504,6 @@ async function planOAuth2Clients(
   for (const namespaceName of deletedServices) {
     const existingOAuth2Clients = await fetchOAuth2Clients(namespaceName);
     existingOAuth2Clients.forEach((oauth2Client) => {
-      logger.registerSecret(oauth2Client.clientSecret);
       changeSet.deletes.push({
         name: oauth2Client.name,
         request: {
@@ -1539,6 +1549,7 @@ function protoOAuth2Client(
     )[oauth2Client.clientType ?? "confidential"],
     accessTokenLifetime: oauth2Client.accessTokenLifetimeSeconds,
     refreshTokenLifetime: oauth2Client.refreshTokenLifetimeSeconds,
+    refreshTokenIdleLifetime: oauth2Client.refreshTokenIdleLifetimeSeconds,
     requireDpop: oauth2Client.requireDpop,
   };
 }

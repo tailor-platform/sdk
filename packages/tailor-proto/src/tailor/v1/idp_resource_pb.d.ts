@@ -333,6 +333,32 @@ export declare type IdPClient = Message<"tailor.v1.IdPClient"> & {
 export declare const IdPClientSchema: GenMessage<IdPClient>;
 
 /**
+ * IdPClientSummary is the projection of IdPClient returned by list endpoints.
+ * Field tags are intentionally aligned with IdPClient so clients generated
+ * against either message can decode the other on the wire. The `client_secret`
+ * (tag 3) field is omitted; callers that need it must use GetIdPClient.
+ *
+ * @generated from message tailor.v1.IdPClientSummary
+ */
+export declare type IdPClientSummary = Message<"tailor.v1.IdPClientSummary"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * @generated from field: string client_id = 2;
+   */
+  clientId: string;
+};
+
+/**
+ * Describes the message tailor.v1.IdPClientSummary.
+ * Use `create(IdPClientSummarySchema)` to create a new message.
+ */
+export declare const IdPClientSummarySchema: GenMessage<IdPClientSummary>;
+
+/**
  * @generated from message tailor.v1.IdPUserAuthPolicy
  */
 export declare type IdPUserAuthPolicy = Message<"tailor.v1.IdPUserAuthPolicy"> & {
@@ -387,8 +413,10 @@ export declare type IdPUserAuthPolicy = Message<"tailor.v1.IdPUserAuthPolicy"> &
    * A single "*" entry allows every email domain, and cannot be combined with
    * other entries. This is the only way to enable Google/Microsoft OAuth without
    * enumerating domains, since those require allowed_email_domains to be set.
-   * Empty list means all domains are allowed (backward compatible)
-   * Cannot be set when use_non_email_identifier is true
+   * Must list at least one entry unless use_non_email_identifier is true, in
+   * which case it cannot be set. Namespaces created before the list became
+   * required may still hold an empty list, which keeps meaning "all domains
+   * allowed" for their existing sign-in paths.
    *
    * @generated from field: repeated string allowed_email_domains = 9;
    */
