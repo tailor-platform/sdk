@@ -25,6 +25,15 @@ function makeDataDir(files: Record<string, string>): string {
   return tempDir;
 }
 
+function makeDataset(baseDir: string, name: string, files: Record<string, string>): string {
+  const dir = path.join(baseDir, name);
+  mkdirSync(dir);
+  for (const [file, content] of Object.entries(files)) {
+    writeFileSync(path.join(dir, file), content);
+  }
+  return dir;
+}
+
 function thrownBy(load: () => unknown): Error {
   try {
     load();
@@ -91,15 +100,6 @@ describe("loadSeedData", () => {
   });
 
   describe("several data directories", () => {
-    function makeDataset(baseDir: string, name: string, files: Record<string, string>): string {
-      const dir = path.join(baseDir, name);
-      mkdirSync(dir);
-      for (const [file, content] of Object.entries(files)) {
-        writeFileSync(path.join(dir, file), content);
-      }
-      return dir;
-    }
-
     test("concatenates each table's rows in directory order", () => {
       const base = makeDataDir({ "User.jsonl": '{"id":"u1"}\n', "Order.jsonl": '{"id":"o1"}\n' });
       const cogs = makeDataset(base, "cogs", { "User.jsonl": '{"id":"u2"}\n' });
@@ -109,17 +109,6 @@ describe("loadSeedData", () => {
         User: [{ id: "u1" }, { id: "u2" }, { id: "u3" }],
         Order: [{ id: "o1" }],
       });
-    });
-
-    test("locates each row at its file and physical line", () => {
-      const base = makeDataDir({ "_User.jsonl": '{"name":"a"}\n\n{"name":"b"}\n' });
-      const local = makeDataset(base, "local", { "_User.jsonl": '{"name":"c"}\n' });
-
-      expect(loadLocatedSeedRows([base, local], "_User")).toEqual([
-        { row: { name: "a" }, location: { file: path.join(base, "_User.jsonl"), line: 1 } },
-        { row: { name: "b" }, location: { file: path.join(base, "_User.jsonl"), line: 3 } },
-        { row: { name: "c" }, location: { file: path.join(local, "_User.jsonl"), line: 1 } },
-      ]);
     });
 
     test.each([
@@ -141,24 +130,6 @@ describe("loadSeedData", () => {
         expect(printed(error)).toBe(`cogs/User.jsonl:${cogsLine}: ${error.message}`);
       },
     );
-
-    test("identifies rows by the key field it is given", () => {
-      const base = makeDataDir({ "_User.jsonl": '{"name":"ada@example.com","password":"a"}\n' });
-      const local = makeDataset(base, "local", {
-        "_User.jsonl": '{"name":"ada@example.com","password":"b"}\n',
-      });
-
-      vi.spyOn(process, "cwd").mockReturnValue(base);
-
-      const error = thrownBy(() =>
-        loadLocatedSeedRows([base, local], "_User", { keyField: "name" }),
-      );
-
-      expect(error.message).toMatch(
-        /^name "ada@example\.com" is already defined at _User\.jsonl:1\./,
-      );
-      expect(printed(error)).toBe(`local/_User.jsonl:1: ${error.message}`);
-    });
 
     test("leaves duplicates within a single directory to the database", () => {
       const base = makeDataDir({ "User.jsonl": '{"id":"u1"}\n{"id":"u1"}\n' });
@@ -247,6 +218,35 @@ describe("loadSeedData", () => {
 
     expect(error.message).toBe("field `email` is required with --upsert");
     expect(printed(error)).toBe(`Customer.jsonl:2: ${error.message}`);
+  });
+});
+
+describe("loadLocatedSeedRows", () => {
+  test("locates each row at its file and physical line", () => {
+    const base = makeDataDir({ "_User.jsonl": '{"name":"a"}\n\n{"name":"b"}\n' });
+    const local = makeDataset(base, "local", { "_User.jsonl": '{"name":"c"}\n' });
+
+    expect(loadLocatedSeedRows([base, local], "_User")).toEqual([
+      { row: { name: "a" }, location: { file: path.join(base, "_User.jsonl"), line: 1 } },
+      { row: { name: "b" }, location: { file: path.join(base, "_User.jsonl"), line: 3 } },
+      { row: { name: "c" }, location: { file: path.join(local, "_User.jsonl"), line: 1 } },
+    ]);
+  });
+
+  test("identifies rows by the key field it is given", () => {
+    const base = makeDataDir({ "_User.jsonl": '{"name":"ada@example.com","password":"a"}\n' });
+    const local = makeDataset(base, "local", {
+      "_User.jsonl": '{"name":"ada@example.com","password":"b"}\n',
+    });
+
+    vi.spyOn(process, "cwd").mockReturnValue(base);
+
+    const error = thrownBy(() => loadLocatedSeedRows([base, local], "_User", { keyField: "name" }));
+
+    expect(error.message).toMatch(
+      /^name "ada@example\.com" is already defined at _User\.jsonl:1\./,
+    );
+    expect(printed(error)).toBe(`local/_User.jsonl:1: ${error.message}`);
   });
 });
 

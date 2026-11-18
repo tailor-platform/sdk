@@ -53,7 +53,10 @@ vi.mock("@tailor-platform/sdk/cli", async (importOriginal) => ({
   logger,
 }));
 vi.mock("./seed-data", () => seedModule);
-vi.mock("./jsonl", () => jsonl);
+vi.mock("./jsonl", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./jsonl")>()),
+  ...jsonl,
+}));
 vi.mock("./datasets", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./datasets")>()),
   ...datasets,

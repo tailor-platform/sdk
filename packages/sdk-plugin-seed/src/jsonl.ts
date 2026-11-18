@@ -77,7 +77,16 @@ export function loadSeedData(
  */
 export interface LocatedSeedRow {
   row: SeedData[string][number];
-  location: { file: string; line: number };
+  location: Required<ErrorSourceLocation>;
+}
+
+/**
+ * Format where a seed row was read from, as error messages name it.
+ * @param location - File and line the row was read from
+ * @returns `<file>:<line>`, with the file relative to the working directory
+ */
+export function relativeRowLocation(location: LocatedSeedRow["location"]): string {
+  return `${path.relative(process.cwd(), location.file)}:${location.line}`;
 }
 
 /**
@@ -99,22 +108,22 @@ export function loadLocatedSeedRows(
   for (const dataDir of dataDirs) {
     const jsonlPath = path.join(dataDir, `${typeName}.jsonl`);
     for (const { row, line } of readSeedRows(jsonlPath, typeName, options)) {
+      const location = { file: jsonlPath, line };
       const key = row[keyField];
       if (dataDirs.length > 1 && key !== undefined && key !== null) {
         const keyText = JSON.stringify(key);
         const first = firstDefinitions.get(keyText);
         if (!first) {
-          firstDefinitions.set(keyText, { file: jsonlPath, line });
+          firstDefinitions.set(keyText, location);
         } else if (first.file !== jsonlPath) {
-          const firstFile = path.relative(process.cwd(), first.file);
           throw rowError(
-            { file: jsonlPath, line },
-            `${keyField} ${keyText} is already defined at ${firstFile}:${first.line}. ` +
+            location,
+            `${keyField} ${keyText} is already defined at ${relativeRowLocation(first)}. ` +
               "A row can be defined in only one of the data directories applied together.",
           );
         }
       }
-      rows.push({ row, location: { file: jsonlPath, line } });
+      rows.push({ row, location });
     }
   }
   return rows;

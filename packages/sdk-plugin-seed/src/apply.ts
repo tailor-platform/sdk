@@ -30,7 +30,12 @@ import {
 } from "./datasets";
 import { selectEntities } from "./entities";
 import { parseExecutionResult } from "./execution-result";
-import { assertSeedDataDirectory, loadLocatedSeedRows, loadSeedData } from "./jsonl";
+import {
+  assertSeedDataDirectory,
+  loadLocatedSeedRows,
+  loadSeedData,
+  relativeRowLocation,
+} from "./jsonl";
 import { topologicalSort } from "./topo-sort";
 import { IDP_SEED_WORKFLOW_KINDS, seedWorkflowName } from "./workflow-name";
 import type { LocatedSeedRow } from "./jsonl";
@@ -320,33 +325,29 @@ async function hookIdpUserRows(
   });
 }
 
-function relativeLocation(location: LocatedSeedRow["location"]): string {
-  return `${path.relative(process.cwd(), location.file)}:${location.line}`;
-}
-
 function assertUniqueIdpUserNames(rows: LocatedSeedRow[]): void {
   const firstLocationByName = new Map<string, LocatedSeedRow["location"]>();
   const duplicates: string[] = [];
-  let firstDuplicate: LocatedSeedRow["location"] | undefined;
+  let firstRepeatLocation: LocatedSeedRow["location"] | undefined;
   for (const { row, location } of rows) {
     if (typeof row.name !== "string") continue;
     const first = firstLocationByName.get(row.name);
     if (first === undefined) {
       firstLocationByName.set(row.name, location);
     } else {
-      firstDuplicate ??= location;
+      firstRepeatLocation ??= location;
       duplicates.push(
-        `${relativeLocation(location)} (${row.name}): duplicate of ${relativeLocation(first)}`,
+        `${relativeRowLocation(location)} (${row.name}): duplicate of ${relativeRowLocation(first)}`,
       );
     }
   }
-  if (firstDuplicate) {
+  if (firstRepeatLocation) {
     throw withSourceLocation(
       new Error(
         `_User has rows that repeat a name, so nothing was applied. ` +
           `Remove the repeated rows and run the command again.\n${duplicates.join("\n")}`,
       ),
-      firstDuplicate,
+      firstRepeatLocation,
     );
   }
 }
