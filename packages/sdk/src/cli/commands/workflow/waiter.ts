@@ -17,8 +17,16 @@ import {
   type WorkflowExecutionStatusClass,
   type WorkflowWaitUntil,
 } from "./status";
-import { type WorkflowExecutionInfo, toWorkflowExecutionInfo } from "./transform";
-import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import {
+  type WorkflowExecutionInfo,
+  toWorkflowExecutionInfo,
+  toWorkflowJobExecutionInfo,
+  workflowJobExecutionLabel,
+} from "./transform";
+import type {
+  WorkflowExecution,
+  WorkflowJobExecution,
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 const DEFAULT_WORKFLOW_WAIT_INTERVAL_MS = 3000;
 
@@ -78,16 +86,13 @@ function colorizeStatus(status: WorkflowExecution_Status): string {
   }
 }
 
-function getActiveJobs(execution: WorkflowExecution): string {
-  return execution.jobExecutions
-    .filter(
-      (job) =>
-        job.status === WorkflowJobExecution_Status.RUNNING ||
-        job.status === WorkflowJobExecution_Status.SUSPEND ||
-        job.status === WorkflowJobExecution_Status.WAITING,
-    )
-    .map((job) => job.stackedJobName)
-    .join(", ");
+function getActiveJobs(execution: WorkflowExecution): WorkflowJobExecution[] {
+  return execution.jobExecutions.filter(
+    (job) =>
+      job.status === WorkflowJobExecution_Status.RUNNING ||
+      job.status === WorkflowJobExecution_Status.SUSPEND ||
+      job.status === WorkflowJobExecution_Status.WAITING,
+  );
 }
 
 interface CreateWorkflowWaitResultOptions {
@@ -146,7 +151,7 @@ export async function waitForWorkflowExecution(
   let lastExecution: WorkflowExecution | undefined;
   let lastError: string | null = null;
   let lastStatus: WorkflowExecution_Status | undefined;
-  let lastActiveJobs: string | undefined;
+  let lastActiveJobIds: string | undefined;
 
   try {
     // oxlint-disable-next-line typescript/no-unnecessary-condition
@@ -200,16 +205,20 @@ export async function waitForWorkflowExecution(
 
         if (options.trackJobs) {
           const activeJobs = getActiveJobs(execution);
-          if (activeJobs && activeJobs !== lastActiveJobs) {
+          const activeJobIds = activeJobs.map((job) => job.id).join(",");
+          if (activeJobIds && activeJobIds !== lastActiveJobIds) {
             if (options.showProgress) {
+              const names = activeJobs
+                .map((job) => workflowJobExecutionLabel(toWorkflowJobExecutionInfo(job)))
+                .join(", ");
               sp?.stop();
-              logger.info(`Job | ${activeJobs}: ${coloredStatus}`, {
+              logger.info(`Job | ${names}: ${coloredStatus}`, {
                 mode: "stream",
                 indent: 2,
               });
               sp?.start("Waiting for workflow to complete...");
             }
-            lastActiveJobs = activeJobs;
+            lastActiveJobIds = activeJobIds;
           }
         }
 

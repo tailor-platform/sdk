@@ -159,6 +159,8 @@ export type {
   WorkflowInfo,
   WorkflowExecutionInfo,
   WorkflowJobExecutionInfo,
+  WorkflowJobExecutionKindInfo,
+  WorkflowJobExecutionPositionInfo,
 } from "./commands/workflow/transform";
 export type { FunctionLogEntryInfo } from "./shared/function-execution";
 export {

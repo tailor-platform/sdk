@@ -36,6 +36,7 @@ import {
   type WorkflowJobExecutionInfo,
   toWorkflowExecutionInfo,
   toWorkflowJobExecutionInfo,
+  workflowJobExecutionLabel,
 } from "./transform";
 import {
   getWorkflowWaitFailure,
@@ -346,7 +347,10 @@ export function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): 
   if (execution.jobDetails && execution.jobDetails.length > 0) {
     logger.log(styles.bold("\nJob Executions:"));
     for (const job of execution.jobDetails) {
-      logger.log(styles.info(`\n--- ${job.stackedJobName} ---`));
+      logger.log(styles.info(`\n--- ${workflowJobExecutionLabel(job)} ---`));
+      if (job.kind.type !== "unknown") {
+        logger.log(`  ID: ${job.id}`);
+      }
       logger.log(`  Status: ${job.status}`);
       logger.log(`  Started: ${formatDate(job.startedAt)}`);
       logger.log(`  Finished: ${formatDate(job.finishedAt)}`);
