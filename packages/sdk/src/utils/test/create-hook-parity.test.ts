@@ -5,10 +5,12 @@ import { createTailorDBHook } from "./index";
 
 const now = new Date("2026-04-15T01:02:03.004Z");
 
+type TableHookArgs = { input: object };
+
 // Deployed scripts embed hooks by their source, so this must not reference outer bindings.
-const describeInput = ({ input }: { input: object }) => ({
+const describeInput = (args: TableHookArgs) => ({
   info: JSON.stringify(
-    Object.entries(input)
+    Object.entries(args.input)
       .map(
         ([key, value]) =>
           `${key}:${value instanceof Date ? "Date" : value === null ? "null" : typeof value}`,
@@ -50,15 +52,21 @@ const stamp = db.table("Stamp", {
 
 type Table = typeof order | typeof memo | typeof stamp;
 
-// The Platform merges the script's result onto the create input and assigns an id the input lacks.
+// The Platform merges the script's result onto the create input.
 function deployedCreate(table: Table, row: Record<string, unknown>) {
   const expr = buildTableScripts(table).typeHook?.create?.expr;
-  const result: unknown = expr
-    ? new Function("_input", "_oldRecord", "user", `return ${expr}`)(row, null, null)
-    : {};
+  if (!expr) {
+    throw new Error(`${table.name} has no create hook script`);
+  }
+  const result: unknown = new Function("_input", "_oldRecord", "user", `return ${expr}`)(
+    row,
+    null,
+    null,
+  );
   return { ...row, ...(result as object) };
 }
 
+// Each side assigns its own id to a row without one.
 function stored(record: object, row: Record<string, unknown>) {
   const { id, ...rest } = JSON.parse(JSON.stringify(record)) as Record<string, unknown>;
   return Object.hasOwn(row, "id") ? { id, ...rest } : rest;

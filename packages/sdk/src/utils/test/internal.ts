@@ -43,7 +43,7 @@ export function toSchemaOutputs(
 }
 
 /**
- * Builds the table-level hook and validate scripts a deploy sends for a db.table() result.
+ * Compiles a db.table() result's hooks, defaults, and validators into table-level scripts.
  * @param type - The db.table() result to compile
  * @returns The table's hook and validate scripts
  */
