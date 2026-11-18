@@ -392,7 +392,9 @@ type MockClientOptions = {
     refreshTokenLifetime?: { seconds: bigint };
     refreshTokenIdleLifetime?: { seconds: bigint };
     requireDpop: boolean;
+    clientId?: string;
     clientSecret?: string;
+    createdAt?: { seconds: bigint };
   }>;
   authHook?: {
     scriptRef: string;
@@ -522,6 +524,28 @@ describe("planAuth", () => {
     expect(result.changeSet.oauth2Client.unchanged).toHaveLength(1);
     expect(result.changeSet.service.updates).toHaveLength(0);
     expect(result.changeSet.machineUser.updates).toHaveLength(0);
+    expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
+  });
+
+  test("marks an oauth2 client unchanged when the Platform returns its generated credentials and default lifetimes", async () => {
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
+      oauth2Clients: [
+        {
+          ...remoteOAuth2Client({
+            redirectUris: ["https://a.example.com/callback", "https://b.example.com/callback"],
+            accessTokenLifetime: { seconds: 86400n },
+            refreshTokenLifetime: { seconds: 604800n },
+          }),
+          clientId: "sample-client-id",
+          createdAt: { seconds: 1700000000n },
+        },
+      ],
+    });
+
+    const result = await planAuth(createContext(client));
+
+    expect(result.changeSet.oauth2Client.unchanged).toHaveLength(1);
     expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
   });
 

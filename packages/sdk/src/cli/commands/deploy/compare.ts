@@ -160,15 +160,6 @@ export function normalizeProtoConfig<T>(value: T): T {
 }
 
 /**
- * Sort a string array for order-insensitive comparison.
- * @param values - Values to sort
- * @returns Sorted values
- */
-export function normalizeStringArray(values: readonly string[] | undefined): string[] {
-  return (values ?? []).toSorted();
-}
-
-/**
  * Compare two values after proto normalization.
  * @param left - Left value
  * @param right - Right value
