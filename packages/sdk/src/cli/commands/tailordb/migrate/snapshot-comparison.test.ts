@@ -5,7 +5,6 @@ import {
   SCHEMA_SNAPSHOT_VERSION,
   type SchemaSnapshot,
 } from "./snapshot";
-import { isBreakingForeignKeyRetarget } from "./snapshot-comparison";
 import { compareRawSnapshots, createMockType } from "./test-helpers/snapshot-test";
 import type { TailorDBType } from "#/parser/service/tailordb/types";
 import type { RelationshipAddedChange } from "./diff-calculator";
@@ -133,6 +132,74 @@ describe("snapshot", () => {
 
       expect(diff.changes[0]).toMatchObject({ kind: "field_added", fieldName: "email" });
       expect(diff.hasBreakingChanges).toBe(false);
+    });
+
+    test.each<[string, SnapshotFieldConfig]>([
+      ["unique", { type: "string", required: false, unique: true }],
+      ["array", { type: "string", required: false, array: true }],
+      ["enum", { type: "enum", required: false, allowedValues: [{ value: "a" }] }],
+      ["decimal", { type: "decimal", required: false, scale: 2 }],
+      [
+        "relation",
+        {
+          type: "uuid",
+          required: false,
+          foreignKey: true,
+          foreignKeyType: "User",
+          foreignKeyField: "id",
+        },
+      ],
+    ])("does not flag an added optional %s field as breaking", (_, added) => {
+      const user = (fields: Record<string, SnapshotFieldConfig>): SchemaSnapshot => ({
+        ...createEmptySnapshot(),
+        tables: {
+          User: { name: "User", pluralForm: "Users", fields: { id: idField, ...fields } },
+        },
+      });
+      const idField: SnapshotFieldConfig = { type: "uuid", required: true };
+
+      const diff = compareRawSnapshots(user({}), user({ added }));
+
+      expect(diff.changes[0]).toMatchObject({ kind: "field_added", fieldName: "added" });
+      expect(diff.breakingChanges).toEqual([]);
+    });
+
+    test("lists a field's breaking changes in the order its migration script handles them", () => {
+      const withOwner = (target: string, required: boolean): SchemaSnapshot => ({
+        ...createEmptySnapshot(),
+        tables: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+          },
+          Account: {
+            name: "Account",
+            pluralForm: "Accounts",
+            fields: { id: { type: "uuid", required: true } },
+          },
+          Order: {
+            name: "Order",
+            pluralForm: "Orders",
+            fields: {
+              ownerId: {
+                type: "uuid",
+                required,
+                foreignKey: true,
+                foreignKeyType: target,
+                foreignKeyField: "id",
+              },
+            },
+          },
+        },
+      });
+
+      const diff = compareRawSnapshots(withOwner("User", false), withOwner("Account", true));
+
+      expect(diff.breakingChanges.map(({ reason }) => reason)).toEqual([
+        "Foreign key target changed from User.id to Account.id",
+        "Field changed from optional to required",
+      ]);
     });
 
     test("detects field addition (required - breaking change)", () => {
@@ -1178,8 +1245,8 @@ describe("snapshot", () => {
 
         expect(diff.breakingChanges.map(({ reason }) => reason)).toEqual([
           "Field changed from optional to required",
-          "Unique constraint added to field",
           "Decimal scale changed from 4 to 2",
+          "Unique constraint added to field",
         ]);
       });
 
@@ -1873,42 +1940,5 @@ describe("snapshot", () => {
       expect(diff.changes.length).toBe(1);
       expect(diff.changes[0]).toMatchObject({ kind: "field_added", fieldName: "email" });
     });
-  });
-});
-
-describe("isBreakingForeignKeyRetarget", () => {
-  const fk = (target: string, field?: string): SnapshotFieldConfig => ({
-    type: "uuid",
-    required: false,
-    foreignKey: true,
-    foreignKeyType: target,
-    ...(field !== undefined && { foreignKeyField: field }),
-  });
-  const renames = new Map([["User", "Person"]]);
-
-  test("suppresses a retarget that follows a confirmed rename", () => {
-    expect(isBreakingForeignKeyRetarget(fk("User"), fk("Person"), renames)).toBe(false);
-    expect(isBreakingForeignKeyRetarget(fk("User", "id"), fk("Person", "id"), renames)).toBe(false);
-  });
-
-  test("flags a retarget whose referenced field also changes", () => {
-    expect(isBreakingForeignKeyRetarget(fk("User", "id"), fk("Person", "slug"), renames)).toBe(
-      true,
-    );
-  });
-
-  test("flags a retarget to another key of the same table", () => {
-    expect(isBreakingForeignKeyRetarget(fk("User", "id"), fk("User", "email"), renames)).toBe(true);
-  });
-
-  test("flags a retarget unrelated to any rename", () => {
-    expect(isBreakingForeignKeyRetarget(fk("Team"), fk("Org"), renames)).toBe(true);
-    expect(isBreakingForeignKeyRetarget(fk("Team"), fk("Org"))).toBe(true);
-  });
-
-  test("ignores fields without a foreign key target change", () => {
-    const plain: SnapshotFieldConfig = { type: "string", required: false };
-    expect(isBreakingForeignKeyRetarget(fk("User"), fk("User"), renames)).toBe(false);
-    expect(isBreakingForeignKeyRetarget(plain, plain, renames)).toBe(false);
   });
 });

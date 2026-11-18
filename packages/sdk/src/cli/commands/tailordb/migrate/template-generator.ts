@@ -17,7 +17,12 @@ import {
   type ForeignKeyTargetField,
 } from "#/utils/foreign-key-targets";
 import { isMigrationStepName } from "#/utils/migration-steps";
-import { formatForeignKeyTarget } from "./diff-calculator";
+import {
+  addsForeignKey,
+  changesForeignKeyTarget,
+  generateUniqueDedupeScript,
+  scaffoldFieldChange,
+} from "./field-change-rules";
 import { formatFieldShape, isSingleValueToArrayChange } from "./field-type-change";
 import { writeMigrationTypeFiles } from "./pglite-schema-generator";
 import {
@@ -27,19 +32,13 @@ import {
   isBreakingIndexChange,
   type SchemaSnapshot,
 } from "./snapshot";
-import {
-  addsForeignKey,
-  changesForeignKeyTarget,
-  collectBreakingNestedMemberChanges,
-  isBreakingForeignKeyRetarget,
-} from "./snapshot-comparison";
+import { collectBreakingNestedMemberChanges } from "./snapshot-comparison";
 import type { EffectiveDateDefault } from "#/runtime/types";
 import type {
   MigrationDiff,
   DiffChange,
   FieldModifiedChange,
   FieldRenamedChange,
-  FieldTypeModifiedChange,
   TableRenamedChange,
 } from "./diff-calculator";
 import type { ExpandContractPlan } from "./expand-contract";
@@ -504,36 +503,6 @@ const touchesOverlap = (a: readonly FieldTouch[], b: readonly FieldTouch[]): boo
   );
 
 /**
- * The statements of one change, in the order they must run.
- * @param change - Diff change to generate statements for
- * @param typeRenameTargets - Confirmed type renames (old name → new name)
- * @param finishedExpansions - Conversions whose temporary field this migration renames back
- * @returns Statements, or an empty array when the change needs no data migration
- */
-function generateChangeStatements(
-  change: DiffChange,
-  typeRenameTargets: ReadonlyMap<string, string>,
-  finishedExpansions: readonly ExpandContractPlan[],
-): string[] {
-  const decimalScaleScript = generateDecimalScaleChangeScript(change);
-  const statements = generateChangeScripts(
-    change,
-    decimalScaleScript !== null,
-    typeRenameTargets,
-    finishedExpansions,
-  );
-  if (decimalScaleScript) {
-    statements.push(decimalScaleScript);
-
-    const uniqueConstraintScript = generateUniqueConstraintScript(change);
-    if (uniqueConstraintScript) {
-      statements.push(uniqueConstraintScript);
-    }
-  }
-  return statements;
-}
-
-/**
  * Split a migration into one step per change that needs a data migration. A
  * step depends on every earlier step that touches the same field, so the
  * order the changes are listed in stays the order the steps run in. A step
@@ -847,18 +816,16 @@ ${
 }
 
 /**
- * Generate scripts for a single change
- * @param {DiffChange} change - Diff change to generate script for
- * @param {boolean} deferUniqueConstraint - Generate the unique check after decimal re-serialization
- * @param {ReadonlyMap<string, string>} [typeRenameTargets] - Confirmed type renames (old name → new name)
+ * The statements of one change, in the order they must run.
+ * @param change - Diff change to generate statements for
+ * @param typeRenameTargets - Confirmed type renames (old name → new name)
  * @param finishedExpansions - Conversions whose temporary field this migration renames back
- * @returns {string[]} Script contents, or an empty array if no script is needed
+ * @returns Statements, or an empty array when the change needs no data migration
  */
-function generateChangeScripts(
+function generateChangeStatements(
   change: DiffChange,
-  deferUniqueConstraint = false,
-  typeRenameTargets?: ReadonlyMap<string, string>,
-  finishedExpansions: readonly ExpandContractPlan[] = [],
+  typeRenameTargets: ReadonlyMap<string, string>,
+  finishedExpansions: readonly ExpandContractPlan[],
 ): string[] {
   if (change.kind === "index_added" || change.kind === "index_modified") {
     const before = change.kind === "index_modified" ? change.before : undefined;
@@ -897,19 +864,7 @@ function generateChangeScripts(
   }
 
   if (change.kind === "field_added") {
-    const field = change.after;
-    if (field.required) {
-      return [
-        `  // Populate ${change.fieldName} for existing ${change.tableName} records
-  await trx
-    .updateTable("${change.tableName}")
-    .set({
-      ${change.fieldName}: TODO("set the value ${change.tableName}.${change.fieldName} takes in existing records"),
-    })
-    .execute();`,
-      ];
-    }
-    return [];
+    return scaffoldFieldChange(change, typeRenameTargets);
   }
 
   if (change.kind === "field_renamed") {
@@ -944,159 +899,20 @@ function generateChangeScripts(
     return [];
   }
 
-  const { before, after } = change;
   const scripts: string[] = [];
-
-  if (change.kind === "field_type_modified") {
-    scripts.push(generateFieldTypeChangeScript(change));
-  }
 
   if (change.kind === "field_modified") {
     for (const memberChange of collectBreakingNestedMemberChanges(change, typeRenameTargets)) {
       const message = `migrate ${memberChange.tableName}.${memberChange.fieldName}: ${memberChange.reason}`;
       scripts.push(`  void TODO(${JSON.stringify(message)});`);
     }
-  }
-
-  if (change.kind === "field_modified" && change.memberRenames?.length) {
-    scripts.push(generateNestedMemberRenameCopyScript(change));
-  }
-
-  // Foreign key moved to another table or key
-  if (isBreakingForeignKeyRetarget(before, after, typeRenameTargets)) {
-    scripts.push(
-      generateUnmatchedReferenceScript(
-        change,
-        `Migrate ${change.fieldName} references from ${formatForeignKeyTarget(before)} to ${formatForeignKeyTarget(after)}`,
-      ),
-    );
-  } else if (addsForeignKey(before, after)) {
-    scripts.push(
-      generateUnmatchedReferenceScript(
-        change,
-        `Check existing ${change.fieldName} values against the new foreign key to ${after.foreignKeyType}`,
-      ),
-    );
-  }
-
-  // Optional to required
-  if (!before.required && after.required) {
-    scripts.push(`  // Set ${change.fieldName} for ${change.tableName} records where it is null
-  await trx
-    .updateTable("${change.tableName}")
-    .set({
-      ${change.fieldName}: TODO("set the value ${change.tableName}.${change.fieldName} takes where it is null"),
-    })
-    .where("${change.fieldName}", "is", null)
-    .execute();`);
-  }
-
-  // Note: Array to single value change is rejected in generate.ts
-  // No script generation needed here
-
-  // Unique constraint added
-  if (!deferUniqueConstraint) {
-    const uniqueConstraintScript = generateUniqueConstraintScript(change);
-    if (uniqueConstraintScript) {
-      scripts.push(uniqueConstraintScript);
+    if (change.memberRenames?.length) {
+      scripts.push(generateNestedMemberRenameCopyScript(change));
     }
   }
 
-  // Enum values removed
-  if (before.type === "enum" && after.type === "enum") {
-    const beforeValues = (before.allowedValues ?? []).map((v) => v.value);
-    const afterValues = (after.allowedValues ?? []).map((v) => v.value);
-    const removedValues = beforeValues.filter((v) => !afterValues.includes(v));
-    if (removedValues.length > 0) {
-      const choices = afterValues.length > 0 ? ` (${afterValues.join(", ")})` : "";
-      const replacement = `TODO(${JSON.stringify(`choose the ${change.tableName}.${change.fieldName} value that replaces ${removedValues.join(", ")}${choices}`)})`;
-      if (before.array) {
-        const table = JSON.stringify(change.tableName);
-        const column = JSON.stringify(change.fieldName);
-        scripts.push(`  // Migrate array elements with removed enum values: ${removedValues.join(", ")}
-  {
-    let lastId: string | undefined;
-    while (true) {
-      let query = trx
-        .selectFrom(${table})
-        .select(["id", ${column}])
-        .orderBy("id", "asc")
-        .limit(100);
-      if (lastId) {
-        query = query.where("id", ">", lastId);
-      }
-      const rows = await query.execute();
-      if (rows.length === 0) break;
-
-      for (const row of rows) {
-        const values = row[${column}];
-        if (values === null) continue;
-        let changed = false;
-        const converted = values.map((value) => {
-          switch (value) {
-${removedValues.map((value) => `            case ${JSON.stringify(value)}:`).join("\n")}
-              changed = true;
-              return ${replacement};
-            default:
-              return value;
-          }
-        });
-        if (!changed) continue;
-        await trx
-          .updateTable(${table})
-          .set({ [${column}]: converted })
-          .where("id", "=", row.id)
-          .execute();
-      }
-      lastId = rows[rows.length - 1]!.id;
-    }
-  }`);
-      } else {
-        scripts.push(`  // Migrate records with removed enum values: ${removedValues.join(", ")}
-  await trx
-    .updateTable("${change.tableName}")
-    .set({ ${change.fieldName}: ${replacement} })
-    .where("${change.fieldName}", "in", [${removedValues.map((v) => JSON.stringify(v)).join(", ")}])
-    .execute();`);
-      }
-    }
-  }
-
+  scripts.push(...scaffoldFieldChange(change, typeRenameTargets));
   return scripts;
-}
-
-function generateUnmatchedReferenceScript(
-  change: FieldModifiedChange | FieldTypeModifiedChange,
-  heading: string,
-): string {
-  const { tableName, fieldName, after } = change;
-  const target = after.foreignKeyType;
-  if (after.array) {
-    const message = `resolve the ${tableName}.${fieldName} elements that point at no ${target} record`;
-    return `  // ${heading}
-  void TODO(${JSON.stringify(message)});`;
-  }
-  // Aliased so that a relation to its own table can join it a second time.
-  const alias = `${tableName}Target`;
-  const key = after.foreignKeyField ?? "id";
-  return `  // ${heading}
-  // Find records that don't have a valid reference in ${target}
-  {
-    const orphanedRecords = await trx
-      .selectFrom("${tableName}")
-      .leftJoin("${target} as ${alias}", "${tableName}.${fieldName}", "${alias}.${key}")
-      .select(["${tableName}.id", "${tableName}.${fieldName}"])
-      .where("${alias}.${key}", "is", null)
-      .where("${tableName}.${fieldName}", "is not", null)
-      .execute();
-    for (const record of orphanedRecords) {
-      await trx
-        .updateTable("${tableName}")
-        .set({ ${fieldName}: TODO("set the ${target} reference for ${tableName}.${fieldName}") })
-        .where("id", "=", record.id)
-        .execute();
-    }
-  }`;
 }
 
 function renameCopyCanCollapseValues(change: FieldRenamedChange): boolean {
@@ -1374,41 +1190,6 @@ function generateTypeRenameCopyScript(change: TableRenamedChange): string {
   }${selfRefBackfill}`;
 }
 
-function generateFieldTypeChangeScript(
-  change: Extract<DiffChange, { kind: "field_type_modified" }>,
-): string {
-  return `  // Normalize ${change.tableName}.${change.fieldName} from ${change.before.type} to ${change.after.type} while the previous type is still active
-  {
-    let lastId: string | undefined;
-    while (true) {
-      let query = trx
-        .selectFrom("${change.tableName}")
-        .select(["id", "${change.fieldName}"])
-        .where("${change.fieldName}", "is not", null)
-        .orderBy("id", "asc")
-        .limit(100);
-      if (lastId) {
-        query = query.where("id", ">", lastId);
-      }
-      const rows = await query.execute();
-      if (rows.length === 0) break;
-
-      for (const row of rows) {
-        const sourceValue = row.${change.fieldName};
-        if (sourceValue === null) continue;
-        const normalizedValue = TODO("normalize ${change.tableName}.${change.fieldName} to a value the active ${change.before.type} type accepts and the ${change.after.type} type can cast");
-        if (Object.is(normalizedValue, sourceValue)) continue;
-        await trx
-          .updateTable("${change.tableName}")
-          .set({ [${JSON.stringify(change.fieldName)}]: normalizedValue })
-          .where("id", "=", row.id)
-          .execute();
-      }
-      lastId = rows[rows.length - 1]!.id;
-    }
-  }`;
-}
-
 /**
  * Lines that derive the value the conversion writes into the temporary field.
  *
@@ -1459,108 +1240,6 @@ ${generateExpandConversionValue(plan)}
             [${JSON.stringify(plan.fieldName)}]: null,
           })
           .where("id", "=", row.id)
-          .execute();
-      }
-      lastId = rows[rows.length - 1]!.id;
-    }
-  }`;
-}
-
-function generateUniqueConstraintScript(change: DiffChange): string | null {
-  if (change.kind !== "field_modified" && change.kind !== "field_type_modified") return null;
-
-  const { before, after } = change;
-  if ((before.unique ?? false) || !(after.unique ?? false)) return null;
-
-  return generateUniqueDedupeScript(
-    change.tableName,
-    change.fieldName,
-    change.kind === "field_type_modified" ? "throw" : "suffix",
-  );
-}
-
-function generateUniqueDedupeScript(
-  tableName: string,
-  fieldName: string,
-  resolution: "suffix" | "throw",
-): string {
-  const duplicateResolution =
-    resolution === "throw"
-      ? `      if (records.length > 1) {
-        TODO("resolve the duplicate ${tableName}.${fieldName} values before the unique constraint is added");
-      }`
-      : `      // Keep the first record and give the others a new value
-      for (let i = 1; i < records.length; i++) {
-        await trx
-          .updateTable("${tableName}")
-          .set({ ${fieldName}: TODO("set a unique ${tableName}.${fieldName} value for the duplicates") })
-          .where("id", "=", records[i].id)
-          .execute();
-      }`;
-
-  return `  // Ensure ${fieldName} values are unique before adding constraint
-  {
-    const duplicates = await trx
-      .selectFrom("${tableName}")
-      .select(["${fieldName}"])
-      .groupBy("${fieldName}")
-      .having((eb) => eb.fn.count("id"), ">", 1)
-      .execute();
-    for (const dup of duplicates) {
-      // Load every record in this duplicate group before resolving it
-      const records = await trx
-        .selectFrom("${tableName}")
-        .select(["id", "${fieldName}"])
-        .where("${fieldName}", "=", dup.${fieldName})
-        .execute();
-${duplicateResolution}
-    }
-  }`;
-}
-
-function generateDecimalScaleChangeScript(change: DiffChange): string | null {
-  if (change.kind !== "field_modified") return null;
-
-  const { before, after } = change;
-  if (before.type !== "decimal" || after.type !== "decimal" || before.scale === after.scale)
-    return null;
-
-  const valueExpression =
-    !before.required && after.required ? `row.${change.fieldName}!` : `row.${change.fieldName}`;
-  const beforeScale = before.scale ?? DEFAULT_DECIMAL_SCALE;
-  const afterScale = after.scale ?? DEFAULT_DECIMAL_SCALE;
-  const roundingWarning =
-    afterScale < beforeScale
-      ? `
-  // WARNING: Values that exceed the new scale may be rounded half-up, so
-  // review the resulting precision before deploying.`
-      : "";
-
-  return `  // Re-save existing ${change.tableName} rows so ${change.fieldName} is stored under the new scale.
-  // This is a workaround for a platform-side gap where rows written under the
-  // previous scale could fail on later updates until re-saved. Keep it unless
-  // your platform is confirmed to handle stored values across scale changes.${roundingWarning}
-  {
-    let lastId: string | undefined;
-    while (true) {
-      let query = trx
-        .selectFrom("${change.tableName}")
-        .select(["id", "${change.fieldName}"])
-        .where("${change.fieldName}", "is not", null)
-        .orderBy("id", "asc")
-        .limit(100);
-      if (lastId) {
-        query = query.where("id", ">", lastId);
-      }
-      const rows = await query.execute();
-      if (rows.length === 0) break;
-
-      for (const row of rows) {
-        await trx
-          .updateTable("${change.tableName}")
-          .set({ ${change.fieldName}: ${valueExpression} })
-          .where("id", "=", row.id)
-          .where("${change.fieldName}", "=", ${valueExpression})
           .execute();
       }
       lastId = rows[rows.length - 1]!.id;

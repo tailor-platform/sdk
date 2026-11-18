@@ -39,9 +39,13 @@
  */
 
 import { assertDefined } from "#/utils/assert";
+import {
+  relaxFieldForPreMigration,
+  type FieldRuleInput,
+  type PreMigrationField,
+} from "./field-change-rules";
 import { collectNestedMemberChanges, getNestedMember } from "./nested-members";
 import { applyDiffToSnapshot, isBreakingIndexChange } from "./snapshot";
-import { addsForeignKey, changesForeignKeyTarget } from "./snapshot-comparison";
 import {
   convertFieldConfigToProto,
   convertIndexToProto,
@@ -247,17 +251,6 @@ function applyPreMigrationFieldAdjustmentsToSnapshot(
   });
 }
 
-/** The properties the Pre-phase relaxes, shared by the proto and snapshot field shapes. */
-interface PreMigrationField {
-  required?: boolean;
-  unique?: boolean;
-  foreignKey?: boolean;
-  foreignKeyType?: string;
-  foreignKeyField?: string;
-  allowedValues?: { value?: string; description?: string }[];
-  fields?: Record<string, PreMigrationField>;
-}
-
 interface PreMigrationFieldStrategy<F extends PreMigrationField> {
   /** Build the field to re-insert from its snapshot config. */
   toField: (config: SnapshotFieldConfig) => F;
@@ -314,12 +307,8 @@ function relaxFieldsForPreMigration<F extends PreMigrationField>(
     const field = fields[fieldName];
     if (!field) continue;
 
-    const relaxed: PreMigrationField = field;
-
     if (change.kind === "field_added") {
-      if (change.after.required) {
-        relaxed.required = false;
-      }
+      relaxFieldForPreMigration(field, ruleInput(undefined, change.after));
       continue;
     }
 
@@ -338,60 +327,22 @@ function relaxFieldsForPreMigration<F extends PreMigrationField>(
         field,
       );
       if (!target) continue;
-      if (member.kind === "added") {
-        if (member.after.required) target.required = false;
-      } else {
-        relaxModifiedFieldConstraints(target, member.before, member.after);
-        if (changesForeignKeyTarget(member.before, member.after)) withholdForeignKey(target);
-      }
+      relaxFieldForPreMigration(
+        target,
+        ruleInput(member.kind === "added" ? undefined : member.before, member.after, true),
+      );
     }
 
-    relaxModifiedFieldConstraints(relaxed, before, after);
-    if (addsForeignKey(before, after) || changesForeignKeyTarget(before, after)) {
-      withholdForeignKey(relaxed);
-    }
+    relaxFieldForPreMigration(field, ruleInput(before, after));
   }
 }
 
-function withholdForeignKey(field: PreMigrationField): void {
-  delete field.foreignKey;
-  delete field.foreignKeyType;
-  delete field.foreignKeyField;
-}
-
-function relaxModifiedFieldConstraints(
-  relaxed: PreMigrationField,
-  before: SnapshotFieldConfig,
+function ruleInput(
+  before: SnapshotFieldConfig | undefined,
   after: SnapshotFieldConfig,
-): void {
-  if (!before.required && after.required) {
-    relaxed.required = false;
-  }
-
-  if (!(before.unique ?? false) && (after.unique ?? false)) {
-    relaxed.unique = false;
-  }
-
-  // Snapshots omit allowedValues when an enum has no values left.
-  const beforeAllowed = before.allowedValues ?? [];
-  const afterAllowed = after.allowedValues ?? [];
-  const afterValues = new Set(afterAllowed.map((v) => v.value));
-  const removedValues = beforeAllowed.filter((v) => !afterValues.has(v.value));
-  if (removedValues.length > 0) {
-    const valueMap = new Map<string, string>();
-    for (const v of beforeAllowed) {
-      valueMap.set(v.value, v.description ?? "");
-    }
-    for (const v of afterAllowed) {
-      if (!valueMap.has(v.value)) {
-        valueMap.set(v.value, v.description ?? "");
-      }
-    }
-    relaxed.allowedValues = Array.from(valueMap.entries()).map(([value, description]) => ({
-      value,
-      description,
-    }));
-  }
+  nestedMember = false,
+): FieldRuleInput {
+  return { before, after, nestedMember, typeRenameTargets: undefined };
 }
 
 type ProtoFieldConfig = MessageInitShape<typeof TailorDBType_FieldConfigSchema>;

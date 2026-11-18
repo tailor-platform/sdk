@@ -872,6 +872,31 @@ export async function rejectedWrites(trx: Transaction): Promise<void> {
       expect(content).toContain("role: ColumnType<string | null, string, string>;");
     });
 
+    test("generates ColumnType for the new name of a required field the migration renames", async () => {
+      const snapshot = createMockSnapshot({
+        User: { fields: { name: { type: "string", required: true } } },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_renamed",
+            tableName: "User",
+            fieldName: "fullName",
+            previousFieldName: "name",
+            before: { type: "string", required: true },
+            after: { type: "string", required: true },
+          },
+        ],
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
+
+      const { content } = await generateContent(snapshot, 1, diff);
+
+      expect(content).toContain("    name: string;");
+      expect(content).toContain("fullName: ColumnType<string | null, string, string>;");
+    });
+
     test("declares an optional field the migration adds", async () => {
       const snapshot = createMockSnapshot({
         User: { fields: { name: { type: "string", required: true } } },
