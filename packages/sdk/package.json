@@ -175,7 +175,7 @@
     "check:import-cycles": "node --experimental-strip-types scripts/check-import-cycles.ts",
     "lint:fix": "oxlint --type-aware . --fix",
     "typecheck": "tsc --noEmit",
-    "typecheck:rs": "node scripts/typecheck-native.ts",
+    "typecheck:rs": "tsrs --noEmit --tsBuildInfoFile ./.tsrs.tsbuildinfo",
     "perf:attest": "tsx scripts/perf/attest/run.ts",
     "perf:runtime": "bash scripts/perf/runtime-perf.sh",
     "prepublishOnly": "pnpm run build",

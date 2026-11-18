@@ -23,7 +23,7 @@
     "lint:fix": "oxlint --type-aware . --fix",
     "typecheck": "pnpm generate && pnpm run typecheck:generated",
     "typecheck:generated": "tsc --noEmit",
-    "typecheck:rs": "node ../packages/sdk/scripts/typecheck-native.ts"
+    "typecheck:rs": "tsrs --noEmit --tsBuildInfoFile ./.tsrs.tsbuildinfo"
   },
   "dependencies": {
     "@tailor-platform/sdk": "workspace:^",
