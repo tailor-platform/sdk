@@ -27,11 +27,11 @@ The server listens on `127.0.0.1` only. The default tab is the TailorDB ERD view
 
 The Function run tab runs `tailor function run <file> --watch --json` for a function file in the current project and shows each run as a card: status, execution ID, logs, result and error. Enter the file relative to the project (for example `resolvers/add.ts`) and an optional JSON argument, then press Run and watch. The function runs again when you save the file or a file it imports. Stop, or closing the page, ends the watch.
 
-The tab uses the `@tailor-platform/sdk` installed in the project, and only files inside the project can be run. A run starts only from a request that carries the per-run token the shell hands to the page.
+The tab uses the `@tailor-platform/sdk` installed in the project. Only files inside the project can be run (symbolic links that lead outside it are refused), and a file can be watched by one page at a time, so a second page gets a 409 until the first stops. A run starts only from a request that carries the per-run token the shell hands to the page.
 
 ## Mounting a plugin's UI
 
-A plugin that provides a tab declares its UI in `package.json`. The shell currently has one built-in tab, the ERD viewer; discovering the tabs of other plugins is not implemented yet, so this is the contract a plugin's UI has to follow:
+A plugin that provides a tab declares its UI in `package.json`. The shell currently has two built-in tabs, the ERD viewer and Function run; discovering the tabs of other plugins is not implemented yet, so this is the contract a plugin's UI has to follow:
 
 ```json
 {

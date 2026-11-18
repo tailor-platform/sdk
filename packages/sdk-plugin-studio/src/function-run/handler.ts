@@ -1,3 +1,4 @@
+import * as fs from "node:fs";
 import * as path from "pathe";
 import { renderPage } from "./page";
 import type { UiHandler } from "../shell-handler";
@@ -41,6 +42,14 @@ function isValidJson(text: string): boolean {
   }
 }
 
+function canonical(target: string): string | undefined {
+  try {
+    return path.resolve(fs.realpathSync(target));
+  } catch {
+    return undefined;
+  }
+}
+
 function parseRunInput(body: unknown, projectDir: string): RunInput | string {
   if (typeof body !== "object" || body === null) return "Expected a JSON object.";
   const { file, arg } = body as { file?: unknown; arg?: unknown };
@@ -48,12 +57,22 @@ function parseRunInput(body: unknown, projectDir: string): RunInput | string {
   if (arg !== undefined && typeof arg !== "string") return "`arg` must be a string.";
   if (arg !== undefined && arg !== "" && !isValidJson(arg)) return "`arg` must be valid JSON.";
 
-  const resolved = path.resolve(projectDir, file);
-  if (!resolved.startsWith(`${projectDir}/`)) return "`file` must be inside the project.";
-  return { file: resolved, arg: arg === "" ? undefined : arg };
+  const root = canonical(projectDir);
+  const target = root === undefined ? undefined : canonical(path.resolve(root, file));
+  if (root === undefined || target === undefined) return "`file` was not found in the project.";
+  const relative = path.relative(root, target);
+  if (
+    relative === "" ||
+    relative === ".." ||
+    relative.startsWith("../") ||
+    path.isAbsolute(relative)
+  ) {
+    return "`file` must be inside the project.";
+  }
+  return { file: target, arg: arg === "" ? undefined : arg };
 }
 
-function streamRun(handle: RunHandle, signal: AbortSignal): Response {
+function streamRun(handle: RunHandle, signal: AbortSignal, onEnd: () => void): Response {
   let stopped = false;
   const stop = () => {
     if (stopped) return;
@@ -70,6 +89,7 @@ function streamRun(handle: RunHandle, signal: AbortSignal): Response {
           controller.enqueue(sseFrame(event));
         }
       } finally {
+        onEnd();
         try {
           controller.close();
         } catch {
@@ -91,6 +111,8 @@ function streamRun(handle: RunHandle, signal: AbortSignal): Response {
  * @returns A Web-standard request handler for the shell
  */
 export function createFunctionRunHandler(options: FunctionRunHandlerOptions): UiHandler {
+  const watching = new Set<string>();
+
   return async (request, { token }) => {
     const { pathname } = new URL(request.url);
     const method = request.method.toUpperCase();
@@ -118,14 +140,20 @@ export function createFunctionRunHandler(options: FunctionRunHandlerOptions): Ui
     const input = parseRunInput(body, options.projectDir);
     if (typeof input === "string") return badRequest(input);
 
+    if (watching.has(input.file)) {
+      return new Response("That file is already being watched.\n", { status: 409 });
+    }
+    watching.add(input.file);
+
     let handle: RunHandle;
     try {
       handle = options.startRun(input);
     } catch (error) {
+      watching.delete(input.file);
       return new Response(`${error instanceof Error ? error.message : String(error)}\n`, {
         status: 500,
       });
     }
-    return streamRun(handle, request.signal);
+    return streamRun(handle, request.signal, () => watching.delete(input.file));
   };
 }
