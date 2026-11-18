@@ -72,11 +72,12 @@ export function addsForeignKey(before: SnapshotFieldConfig, after: SnapshotField
 }
 
 /**
- * Whether a field's foreign key points at another table or key, so its stored values may point at
- * no record of the new target until a migration script repairs them or a table rename copies them.
- * @param before - Field configuration before the change
- * @param after - Field configuration after the change
- * @returns True if the change moves an existing foreign key to another target
+ * Whether a field's foreign key moves to another table or key, so its stored
+ * values may point at no record of the new target until a migration script
+ * repairs them or a table rename copies them.
+ * @param {SnapshotFieldConfig} before - Field configuration before the change
+ * @param {SnapshotFieldConfig} after - Field configuration after the change
+ * @returns {boolean} True if the change moves an existing foreign key
  */
 export function changesForeignKeyTarget(
   before: SnapshotFieldConfig,

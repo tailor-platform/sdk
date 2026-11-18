@@ -123,29 +123,24 @@ describe.each(["deploy", "snapshot"])("%s Pre-phase nested constraints", (mode) 
 describe.each(["deploy", "snapshot"])("%s Pre-phase foreign keys", (mode) => {
   const reference = { foreignKey: true, foreignKeyType: "User", foreignKeyField: "id" } as const;
   const ownerId: SnapshotFieldConfig = { type: "uuid", required: false };
+  const owner = { ...ownerId, ...reference };
 
-  test("withholds a foreign key the migration adds to an existing field", () => {
-    const after = { ...ownerId, ...reference };
-    const pre = preField(mode, after, ownerId);
-
-    expect(pre).toMatchObject({ type: "uuid" });
-    expect(pre).not.toHaveProperty("foreignKey");
-    expect(pre).not.toHaveProperty("foreignKeyType");
-    expect(pre).not.toHaveProperty("foreignKeyField");
-    expect(after).toMatchObject(reference);
-  });
+  function expectWithheld(field: object | undefined) {
+    expect(field).toMatchObject({ type: "uuid" });
+    for (const key of ["foreignKey", "foreignKeyType", "foreignKeyField"]) {
+      expect(field).not.toHaveProperty(key);
+    }
+  }
 
   test.each([
-    ["another table", { foreignKeyType: "Account" }],
-    ["another key of the same table", { foreignKeyField: "email" }],
-  ])("withholds a foreign key the migration retargets to %s", (_, target) => {
-    const after = { ...ownerId, ...reference, ...target };
-    const pre = preField(mode, after, { ...ownerId, ...reference });
+    ["adds to an existing field", ownerId, owner],
+    ["retargets to another table", owner, { ...owner, foreignKeyType: "Account" }],
+    ["retargets to another key of the same table", owner, { ...owner, foreignKeyField: "email" }],
+  ])("withholds a foreign key the migration %s", (_, previous, after) => {
+    const target = structuredClone(after);
 
-    expect(pre).toMatchObject({ type: "uuid" });
-    expect(pre).not.toHaveProperty("foreignKey");
-    expect(pre).not.toHaveProperty("foreignKeyType");
-    expect(pre).not.toHaveProperty("foreignKeyField");
+    expectWithheld(preField(mode, after, previous));
+    expect(after).toEqual(target);
   });
 
   test("withholds a foreign key a nested member retargets to a renamed table and keeps the other members' foreign keys", () => {
@@ -161,10 +156,7 @@ describe.each(["deploy", "snapshot"])("%s Pre-phase foreign keys", (mode) => {
 
     const pre = preField(mode, nested("Person"), nested("User"));
 
-    expect(pre?.fields?.owner).toMatchObject({ type: "uuid" });
-    expect(pre?.fields?.owner).not.toHaveProperty("foreignKey");
-    expect(pre?.fields?.owner).not.toHaveProperty("foreignKeyType");
-    expect(pre?.fields?.owner).not.toHaveProperty("foreignKeyField");
+    expectWithheld(pre?.fields?.owner);
     expect(pre?.fields?.team).toMatchObject(team);
   });
 

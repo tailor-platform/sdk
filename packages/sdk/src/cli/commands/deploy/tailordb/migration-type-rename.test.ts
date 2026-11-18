@@ -213,14 +213,17 @@ describe("applyTailorDB: type rename migration flow", () => {
     planResult.context.pendingMigrations = setPendingMigrations([
       mkTypeRenameMigration(1, { withOrderRetarget: true }),
     ]);
-    vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
-      new Error("rpc error: code = Aborted desc = copy failed"),
-    );
+    vi.mocked(migrationModule.executeMigrations).mockResolvedValue();
 
     const order: string[] = [];
     vi.mocked(client.updateTailorDBType).mockImplementation(async (req: unknown) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      order.push(`update:${(req as any)?.tailordbType?.name}`);
+      const name = (req as any)?.tailordbType?.name;
+      order.push(`update:${name}`);
+      // The Post-phase update, the first to point Order at Person, may have been applied when it fails.
+      if (name === "Order" && order.filter((entry) => entry === "update:Order").length === 2) {
+        throw new Error("post-phase failed");
+      }
       return {} as never;
     });
     vi.mocked(client.deleteTailorDBType).mockImplementation(async (req: unknown) => {
@@ -229,14 +232,18 @@ describe("applyTailorDB: type rename migration flow", () => {
       return {} as never;
     });
 
-    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow("copy failed");
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      "post-phase failed",
+    );
 
-    // Order is restored to its prior schema (pointing back at User) before
-    // Person is deleted, so no table is left referring to a deleted one.
-    const restoreIndex = order.lastIndexOf("update:Order");
-    const deleteIndex = order.indexOf("delete-type:Person");
-    expect(restoreIndex).toBeGreaterThan(-1);
-    expect(deleteIndex).toBeGreaterThan(restoreIndex);
-    expect(order.filter((entry) => entry === "delete-type:User")).toEqual([]);
+    // Order must be restored to its prior schema (pointing back at User)
+    // before Person is deleted, or the delete would be rejected while Order
+    // still references Person.
+    expect(order).toEqual([
+      "update:Order", // Pre-phase
+      "update:Order", // Post-phase, failed
+      "update:Order", // rollback restore
+      "delete-type:Person",
+    ]);
   });
 });
