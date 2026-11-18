@@ -10,6 +10,7 @@ import {
   beginSeedDataWrite,
   commitSeedDataWrite,
   existingSeedDataFiles,
+  loadLocatedSeedRows,
   loadSeedData,
   writeSeedData,
 } from "./jsonl";
@@ -110,6 +111,17 @@ describe("loadSeedData", () => {
       });
     });
 
+    test("locates each row at its file and physical line", () => {
+      const base = makeDataDir({ "_User.jsonl": '{"name":"a"}\n\n{"name":"b"}\n' });
+      const local = makeDataset(base, "local", { "_User.jsonl": '{"name":"c"}\n' });
+
+      expect(loadLocatedSeedRows([base, local], "_User")).toEqual([
+        { row: { name: "a" }, location: { file: path.join(base, "_User.jsonl"), line: 1 } },
+        { row: { name: "b" }, location: { file: path.join(base, "_User.jsonl"), line: 3 } },
+        { row: { name: "c" }, location: { file: path.join(local, "_User.jsonl"), line: 1 } },
+      ]);
+    });
+
     test.each([
       ["no blank lines", '{"id":"u1"}\n{"id":"u2"}\n', '{"id":"u3"}\n{"id":"u2"}\n', 2, 2],
       ["blank lines", '\n{"id":"u2"}\n', '{"id":"u3"}\n\n{"id":"u2"}\n', 3, 2],
@@ -138,7 +150,9 @@ describe("loadSeedData", () => {
 
       vi.spyOn(process, "cwd").mockReturnValue(base);
 
-      const error = thrownBy(() => loadSeedData([base, local], ["_User"], { keyField: "name" }));
+      const error = thrownBy(() =>
+        loadLocatedSeedRows([base, local], "_User", { keyField: "name" }),
+      );
 
       expect(error.message).toMatch(
         /^name "ada@example\.com" is already defined at _User\.jsonl:1\./,
