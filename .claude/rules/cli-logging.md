@@ -171,4 +171,4 @@ factories, `atUserModule()`, `withSourceLocation()`), and its `message` leaves t
 printers put `<file>[:<line>]: ` before the message through `locatedMessage()`.
 
 The terminal error printer is the `cleanup` in `cli/main.ts`, and the `cleanup` of each CLI plugin
-(`packages/sdk-plugin-{seed,setup,tailordb-erd}`) mirrors it; change them together.
+(`packages/sdk-plugin-{seed,setup,tailordb-erd,webui}`) mirrors it; change them together.

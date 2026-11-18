@@ -1,0 +1,69 @@
+{
+  "name": "@tailor-platform/sdk-plugin-webui",
+  "version": "0.0.0",
+  "description": "Tailor CLI plugin providing the `tailor webui` command (local web UI shell for CLI plugins)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tailor-platform/sdk.git",
+    "directory": "packages/sdk-plugin-webui"
+  },
+  "bin": {
+    "tailor-webui": "./bin/cli.mjs"
+  },
+  "files": [
+    "bin",
+    "CHANGELOG.md",
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsdown && vite build && politty generate-shim --entry ../dist/cli.js",
+    "lint": "oxlint --type-aware .",
+    "lint:fix": "oxlint --type-aware . --fix",
+    "knip": "knip",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "prepack": "pnpm run build",
+    "publint": "publint --strict"
+  },
+  "dependencies": {
+    "@politty/zod": "0.7.3",
+    "open": "11.0.4",
+    "pathe": "2.0.3",
+    "pkg-types": "2.4.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@tailor-platform/app-shell": "1.20.0",
+    "@tailor-platform/sdk": "workspace:^",
+    "@tailor-platform/shared": "workspace:^",
+    "@types/node": "26.6.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.3.0",
+    "oxlint": "1.93.0",
+    "oxlint-tsgolint": "7.0.2007",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "tsdown": "0.23.7",
+    "typescript": "6.0.3",
+    "vite": "8.3.8",
+    "vitest": "5.1.0"
+  },
+  "peerDependencies": {
+    "@tailor-platform/sdk": "workspace:^"
+  },
+  "engines": {
+    "bun": ">=1.2.0",
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+  }
+}
