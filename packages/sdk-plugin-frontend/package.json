@@ -41,8 +41,8 @@
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "26.6.6",
     "oxlint": "1.93.0",
-    "oxlint-tsgolint": "7.0.2007",
     "tsdown": "0.23.7",
+    "tsrs": "0.25.0-ts7.1.0-beta",
     "typescript": "6.0.3",
     "vitest": "5.1.0"
   },

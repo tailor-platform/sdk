@@ -17,7 +17,7 @@ trustPolicyExclude:
   # Pre-existing transitive version without provenance attestation.
   - "@swc/core@1.12.11"
   # npm name transferred to oxc-project/tsrs; this release has its provenance.
-  - "tsrs@0.16.0-ts7.1.0-dev.20260929"
+  - "tsrs@0.25.0-ts7.1.0-beta"
 
 packages:
   - packages/*
