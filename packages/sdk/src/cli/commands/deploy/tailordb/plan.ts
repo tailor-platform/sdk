@@ -6,7 +6,7 @@ import {
   type DeleteTailorDBGQLPermissionRequestSchema,
   type DeleteTailorDBServiceRequestSchema,
   type DeleteTailorDBTypeRequestSchema,
-  type UpdateTailorDBGQLPermissionRequestSchema,
+  UpdateTailorDBGQLPermissionRequestSchema,
   type UpdateTailorDBTypeRequestSchema,
 } from "@tailor-platform/tailor-proto/tailordb_pb";
 import * as path from "pathe";
@@ -30,23 +30,19 @@ import {
   subscribesToEvents,
 } from "#/cli/shared/publish-events";
 import { createChangeSet } from "../change-set";
-import { areNormalizedEqual } from "../compare";
+import { defineRequestComparison, isRequestUnchanged } from "../compare";
+import { diffKeyed, labeledResourceChecks } from "../keyed-diff";
 import {
   addDependencyRecords,
   buildMetaRequest,
   type DependentAppsByResource,
   eventSourceKey,
-  hasMatchingSdkVersion,
   type MetadataLabelWrite,
   resourceTrn,
   tailorDBTypeTrn,
 } from "../label";
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "../owned-resource";
-import {
-  areTailorDBServicesEqual,
-  normalizeComparableGqlPermission,
-  normalizeComparableTailorDBType,
-} from "./compare";
+import { tailordbTypeComparison } from "./compare";
 import { assertPendingMigrationsRunnable } from "./migration";
 import { selectSkipStepsOfNamespaces } from "./migration-skip-steps";
 import { logMigrationPlanNotices, validateAndDetectMigrations } from "./migration-validation";
@@ -249,6 +245,11 @@ type DeleteService = {
   request: MessageInitShape<typeof DeleteTailorDBServiceRequestSchema>;
 };
 
+type DesiredService = {
+  name: string;
+  metaRequest: MetadataLabelWrite;
+};
+
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
@@ -275,55 +276,43 @@ async function planServices(
     getTrn: (name) => resourceTrn(workspaceId, "tailordb", name),
   });
 
+  const desired: DesiredService[] = [];
   for (const tailordb of tailordbs) {
-    const existing = existingServices[tailordb.namespace];
-    const metaRequest = await buildMetaRequest({
-      trn: resourceTrn(workspaceId, "tailordb", tailordb.namespace),
-      appName,
-      appId,
+    desired.push({
+      name: tailordb.namespace,
+      metaRequest: await buildMetaRequest({
+        trn: resourceTrn(workspaceId, "tailordb", tailordb.namespace),
+        appName,
+        appId,
+      }),
     });
-    if (existing) {
-      const owned = ownership.ownsDesired(existing.allLabels, {
-        resourceType: "tailordb.service",
-        resourceLabel: "TailorDB service",
-        resourceName: tailordb.namespace,
-      });
-
-      const configUnchanged = owned && areTailorDBServicesEqual(existing.resource, tailordb);
-      if (configUnchanged && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
-        changeSet.unchanged.push({ name: tailordb.namespace });
-      } else {
-        changeSet.updates.push({
-          name: tailordb.namespace,
-          metaRequest,
-          ...(configUnchanged && { forcedBySdkVersion: true }),
-        });
-      }
-      delete existingServices[tailordb.namespace];
-    } else {
-      changeSet.creates.push({
-        name: tailordb.namespace,
-        request: {
-          workspaceId,
-          namespaceName: tailordb.namespace,
-          // Keep generated TailorDB services aligned with Terraform defaults.
-          defaultTimezone: "UTC",
-        },
-        metaRequest,
-      });
-    }
   }
-  Object.entries(existingServices).forEach(([namespaceName]) => {
-    const entry = existingServices[namespaceName];
-    if (ownership.ownsRemaining(entry?.allLabels)) {
-      changeSet.deletes.push({
-        name: namespaceName,
-        request: {
-          workspaceId,
-          namespaceName,
-        },
-      });
-    }
+
+  await diffKeyed({
+    changeSet,
+    desired,
+    existing: Object.entries(existingServices),
+    keyOf: (service) => service.name,
+    ...labeledResourceChecks(ownership, (service: DesiredService) => ({
+      resourceType: "tailordb.service",
+      resourceLabel: "TailorDB service",
+      resourceName: service.name,
+    })),
+    // An update writes only the labels, so no setting of the service can differ from it.
+    isConfigUnchanged: () => true,
+    create: ({ name, metaRequest }) => ({
+      name,
+      request: {
+        workspaceId,
+        namespaceName: name,
+        // Keep generated TailorDB services aligned with Terraform defaults.
+        defaultTimezone: "UTC",
+      },
+      metaRequest,
+    }),
+    update: ({ name, metaRequest }) => ({ name, metaRequest }),
+    unchanged: ({ name }) => ({ name }),
+    delete: (namespaceName) => ({ name: namespaceName, request: { workspaceId, namespaceName } }),
   });
 
   return { changeSet, ...ownership.result };
@@ -361,6 +350,13 @@ type TypeRecordInputs = {
 type DeleteType = {
   name: string;
   request: MessageInitShape<typeof DeleteTailorDBTypeRequestSchema>;
+};
+
+type DesiredType = {
+  name: string;
+  request: MessageInitShape<typeof CreateTailorDBTypeRequestSchema> &
+    MessageInitShape<typeof UpdateTailorDBTypeRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 async function planTypes(
@@ -424,76 +420,56 @@ async function planTypes(
     }
   }
 
-  for (const tailordb of tailordbs) {
-    const existingTypes = await fetchTypes(tailordb.namespace);
-    const existingTypesMap = new Map(existingTypes.map((type) => [type.name, type]));
-
-    // Use filtered tables if provided, otherwise use local tables
-    const types = filteredTypesByNamespace?.get(tailordb.namespace) ?? tailordb.types;
-    const typeMeta = (tableName: string) =>
-      typeMetaRequest(tailordb.namespace, tableName, types[tableName]?.settings?.publishEvents);
-
-    for (const [tableName, tailordbTypeSnapshot] of Object.entries(types)) {
-      const tailordbType = generateTailorDBTypeManifestFromSnapshot(tailordbTypeSnapshot, {
-        subscribed: executorUsedTables.has(tableName),
-        namespaceGqlOperations: tailordb.config.gqlOperations,
-      });
-      const existingType = existingTypesMap.get(tableName);
-      if (existingType) {
-        const configUnchanged = areNormalizedEqual(
-          normalizeComparableTailorDBType(existingType),
-          normalizeComparableTailorDBType(tailordbType),
-        );
-        if (!forceApplyAll && configUnchanged) {
-          // The schema matches, but the records may not, so the labels still go.
-          changeSet.unchanged.push({ name: tableName, metaRequest: await typeMeta(tableName) });
-        } else {
-          changeSet.updates.push({
-            name: tableName,
-            request: {
-              workspaceId,
-              namespaceName: tailordb.namespace,
-              tailordbType,
-            },
-            metaRequest: await typeMeta(tableName),
-            ...(configUnchanged && { forcedBySdkVersion: true }),
-          });
-        }
-        existingTypesMap.delete(tableName);
-      } else {
-        changeSet.creates.push({
-          name: tableName,
-          request: {
-            workspaceId,
-            namespaceName: tailordb.namespace,
-            tailordbType,
-          },
-          metaRequest: await typeMeta(tableName),
-        });
-      }
-    }
-    existingTypesMap.forEach((_type, name) => {
-      changeSet.deletes.push({
-        name,
-        request: {
-          workspaceId,
-          namespaceName: tailordb.namespace,
-          tailordbTypeName: name,
-        },
-      });
-    });
-  }
-  for (const namespaceName of deletedServices) {
+  const namespaces = [
+    ...tailordbs.map((tailordb) => ({
+      namespaceName: tailordb.namespace,
+      // Use filtered tables if provided, otherwise use local tables
+      types: filteredTypesByNamespace?.get(tailordb.namespace) ?? tailordb.types,
+      gqlOperations: tailordb.config.gqlOperations,
+    })),
+    ...deletedServices.map((namespaceName) => ({
+      namespaceName,
+      types: {},
+      gqlOperations: undefined,
+    })),
+  ];
+  for (const { namespaceName, types, gqlOperations } of namespaces) {
     const existingTypes = await fetchTypes(namespaceName);
-    existingTypes.forEach((typ) => {
-      changeSet.deletes.push({
-        name: typ.name,
+    const desired: DesiredType[] = [];
+    for (const [tableName, tailordbTypeSnapshot] of Object.entries(types)) {
+      desired.push({
+        name: tableName,
         request: {
           workspaceId,
           namespaceName,
-          tailordbTypeName: typ.name,
+          tailordbType: generateTailorDBTypeManifestFromSnapshot(tailordbTypeSnapshot, {
+            subscribed: executorUsedTables.has(tableName),
+            namespaceGqlOperations: gqlOperations,
+          }),
         },
+        metaRequest: await typeMetaRequest(
+          namespaceName,
+          tableName,
+          tailordbTypeSnapshot.settings?.publishEvents,
+        ),
       });
+    }
+    await diffKeyed({
+      changeSet,
+      desired,
+      existing: existingTypes.map((type) => [type.name, type] as const),
+      keyOf: (type) => type.name,
+      versionMatches: () => !forceApplyAll,
+      isConfigUnchanged: (type, existing) =>
+        isRequestUnchanged(tailordbTypeComparison, type.request, { tailordbType: existing }),
+      create: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),
+      update: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),
+      // The schema matches, but the records may not, so the labels still go.
+      unchanged: ({ name, metaRequest }) => ({ name, metaRequest }),
+      delete: (tailordbTypeName) => ({
+        name: tailordbTypeName,
+        request: { workspaceId, namespaceName, tailordbTypeName },
+      }),
     });
   }
   return changeSet;
@@ -516,6 +492,25 @@ type DeleteGqlPermission = {
   name: string;
   request: MessageInitShape<typeof DeleteTailorDBGQLPermissionRequestSchema>;
 };
+
+type DesiredGqlPermission = {
+  name: string;
+  request: MessageInitShape<typeof CreateTailorDBGQLPermissionRequestSchema> &
+    MessageInitShape<typeof UpdateTailorDBGQLPermissionRequestSchema>;
+};
+
+const gqlPermissionComparison = defineRequestComparison({
+  schema: UpdateTailorDBGQLPermissionRequestSchema,
+  excluded: ["workspaceId", "namespaceName", "typeName"],
+  normalize: ({ permission }) => {
+    if (!permission) return;
+    // The platform assigns the id.
+    permission.id = "";
+    for (const policy of permission.policies) {
+      policy.actions.sort((left, right) => left - right);
+    }
+  },
+});
 
 async function planGqlPermissions(
   client: OperatorClient,
@@ -540,80 +535,40 @@ async function planGqlPermissions(
     });
   };
 
-  for (const tailordb of tailordbs) {
-    const existingGqlPermissions = await fetchGqlPermissions(tailordb.namespace);
-    const existingNameSet = new Set<string>();
-    existingGqlPermissions.forEach((gqlPermission) => {
-      existingNameSet.add(gqlPermission.typeName);
-    });
-
-    const types = tailordb.types;
-    for (const [tableName, typeEntry] of Object.entries(types)) {
-      const gqlPermission = typeEntry.permissions?.gql;
-      if (!gqlPermission) {
-        continue;
-      }
-      const desiredPermission = protoGqlPermission(gqlPermission);
-      const existingPermission = existingGqlPermissions.find(
-        (entry) => entry.typeName === tableName,
-      );
-      if (existingNameSet.has(tableName)) {
-        const configUnchanged =
-          !!existingPermission &&
-          areNormalizedEqual(
-            normalizeComparableGqlPermission(existingPermission.permission),
-            normalizeComparableGqlPermission(desiredPermission),
-          );
-        if (!forceApplyAll && configUnchanged) {
-          changeSet.unchanged.push({ name: tableName });
-        } else {
-          changeSet.updates.push({
-            name: tableName,
-            request: {
-              workspaceId,
-              namespaceName: tailordb.namespace,
-              typeName: tableName,
-              permission: desiredPermission,
-            },
-            previousPermission: existingPermission?.permission,
-            ...(configUnchanged && { forcedBySdkVersion: true }),
-          });
-        }
-        existingNameSet.delete(tableName);
-      } else {
-        changeSet.creates.push({
-          name: tableName,
-          request: {
-            workspaceId,
-            namespaceName: tailordb.namespace,
-            typeName: tableName,
-            permission: desiredPermission,
-          },
-        });
-      }
-    }
-    existingNameSet.forEach((name) => {
-      changeSet.deletes.push({
-        name,
-        request: {
-          workspaceId,
-          namespaceName: tailordb.namespace,
-          typeName: name,
-        },
-      });
-    });
-  }
-  for (const namespaceName of deletedServices) {
+  const namespaces: ReadonlyArray<{ namespaceName: string; types: TailorDBDeployInput["types"] }> =
+    [
+      ...tailordbs.map((tailordb) => ({
+        namespaceName: tailordb.namespace,
+        types: tailordb.types,
+      })),
+      ...deletedServices.map((namespaceName) => ({ namespaceName, types: {} })),
+    ];
+  for (const { namespaceName, types } of namespaces) {
     const existingGqlPermissions = await fetchGqlPermissions(namespaceName);
-    existingGqlPermissions.forEach((gqlPermission) => {
-      changeSet.deletes.push({
-        name: gqlPermission.typeName,
-        request: {
-          workspaceId,
-          namespaceName,
-          typeName: gqlPermission.typeName,
-        },
-      });
+    const desired: DesiredGqlPermission[] = Object.entries(types).flatMap(
+      ([typeName, typeEntry]) => {
+        const gqlPermission = typeEntry.permissions?.gql;
+        if (!gqlPermission) return [];
+        const permission = protoGqlPermission(gqlPermission);
+        return [{ name: typeName, request: { workspaceId, namespaceName, typeName, permission } }];
+      },
+    );
+    await diffKeyed({
+      changeSet,
+      desired,
+      existing: existingGqlPermissions.map((entry) => [entry.typeName, entry] as const),
+      keyOf: (gqlPermission) => gqlPermission.name,
+      versionMatches: () => !forceApplyAll,
+      isConfigUnchanged: (gqlPermission, existing) =>
+        isRequestUnchanged(gqlPermissionComparison, gqlPermission.request, existing),
+      create: ({ name, request }) => ({ name, request }),
+      update: ({ name, request }, existing) => ({
+        name,
+        request,
+        previousPermission: existing.permission,
+      }),
+      unchanged: ({ name }) => ({ name }),
+      delete: (typeName) => ({ name: typeName, request: { workspaceId, namespaceName, typeName } }),
     });
   }
   return changeSet;

@@ -1,21 +1,23 @@
-import { fromJson, type MessageInitShape } from "@bufbuild/protobuf";
+import { create, fromJson, type MessageInitShape } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
 import {
   type CreateIdPClientRequestSchema,
   type CreateIdPServiceRequestSchema,
   type DeleteIdPClientRequestSchema,
   type DeleteIdPServiceRequestSchema,
-  type UpdateIdPServiceRequestSchema,
+  UpdateIdPServiceRequestSchema,
 } from "@tailor-platform/tailor-proto/idp_pb";
 import {
+  IdPDisableGqlOperationsSchema,
+  IdPEmailConfigSchema,
   IdPLang,
   IdPPermissionOperator,
   IdPPermissionPermit,
+  IdPPermissionSchema as ProtoIdPPermissionSchema,
+  IdPUserAuthPolicySchema,
   type IdPPermissionConditionSchema as ProtoIdPPermissionConditionSchema,
   type IdPPermissionOperandSchema as ProtoIdPPermissionOperandSchema,
   type IdPPermissionPolicySchema as ProtoIdPPermissionPolicySchema,
-  type IdPPermissionSchema as ProtoIdPPermissionSchema,
-  type IdPService as ProtoIdPService,
 } from "@tailor-platform/tailor-proto/idp_resource_pb";
 import {
   fetchAllTolerant,
@@ -36,13 +38,18 @@ import {
 } from "#/parser/service/idp/permission";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
-import { areNormalizedEqual } from "./compare";
+import {
+  actionPolicyLists,
+  defineRequestComparison,
+  emptyMessageAsUnset,
+  isRequestUnchanged,
+} from "./compare";
+import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   addDependencyRecords,
   buildMetaRequest,
   type DependentAppsByResource,
   eventSourceKey,
-  hasMatchingSdkVersion,
   type MetadataLabelWrite,
   resourceTrn,
   writeMetadataLabels,
@@ -306,144 +313,45 @@ type UnchangedService = {
   metaRequest?: MetadataLabelWrite;
 };
 
-type ComparableIdPService = {
-  authorization: string | undefined;
-  lang: IdPLang;
-  userAuthPolicy: Record<string, unknown> | undefined;
-  publishEvents: boolean;
-  disableGqlOperations: Record<string, boolean> | undefined;
-  emailConfig: Record<string, string> | undefined;
-  permission: MessageInitShape<typeof ProtoIdPPermissionSchema> | undefined;
+type DesiredService = {
+  name: string;
+  request: MessageInitShape<typeof CreateIdPServiceRequestSchema> &
+    MessageInitShape<typeof UpdateIdPServiceRequestSchema>;
+  /** The request with its `:url` return origins resolved as the plan resolves them. */
+  comparableRequest: MessageInitShape<typeof UpdateIdPServiceRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
-function normalizeComparableUserAuthPolicy(
-  policy: ProtoIdPService["userAuthPolicy"] | IdP["userAuthPolicy"] | undefined,
-): Record<string, unknown> | undefined {
-  return {
-    useNonEmailIdentifier: policy?.useNonEmailIdentifier ?? false,
-    allowSelfPasswordReset: policy?.allowSelfPasswordReset ?? false,
-    passwordRequireUppercase: policy?.passwordRequireUppercase ?? false,
-    passwordRequireLowercase: policy?.passwordRequireLowercase ?? false,
-    passwordRequireNonAlphanumeric: policy?.passwordRequireNonAlphanumeric ?? false,
-    passwordRequireNumeric: policy?.passwordRequireNumeric ?? false,
-    // The platform fills an omitted policy with password_min_length 6 and
-    // password_max_length 4096 and echoes those back; it also coerces an
-    // explicit 0 to the same defaults, which is why these use || (not ??) —
-    // every falsy local value must compare equal to the stored defaults.
-    passwordMinLength: policy?.passwordMinLength || 6,
-    passwordMaxLength: policy?.passwordMaxLength || 4096,
-    // The platform lowercases and deduplicates domains before storing and echoes
-    // the normalized list back, so comparing the raw local list would report a
-    // permanent diff for an entry written in mixed case.
-    allowedEmailDomains: [
-      ...new Set((policy?.allowedEmailDomains ?? []).map((domain) => domain.toLowerCase())),
-    ].toSorted(),
-    allowGoogleOauth: policy?.allowGoogleOauth ?? false,
-    disablePasswordAuth: policy?.disablePasswordAuth ?? false,
-    allowMicrosoftOauth: policy?.allowMicrosoftOauth ?? false,
-    enableMfa: policy?.enableMfa ?? false,
-    requireMfa: policy?.requireMfa ?? false,
-    allowedReturnOrigins: (policy?.allowedReturnOrigins ?? []).toSorted(),
-    mfaIssuer: policy?.mfaIssuer ?? "",
-  };
-}
-
-function normalizeComparableDisableGqlOperations(
-  value: ProtoIdPService["disableGqlOperations"] | Record<string, boolean> | undefined,
-): Record<string, boolean> | undefined {
-  return {
-    create: value?.create ?? false,
-    update: value?.update ?? false,
-    delete: value?.delete ?? false,
-    read: value?.read ?? false,
-    sendPasswordResetEmail: value?.sendPasswordResetEmail ?? false,
-    requestMfaSettingsUrl: value?.requestMfaSettingsUrl ?? false,
-    unenrollMfa: value?.unenrollMfa ?? false,
-  };
-}
-
-function normalizeComparableEmailConfig(
-  value: ProtoIdPService["emailConfig"] | Record<string, string> | undefined,
-): Record<string, string> | undefined {
-  return {
-    fromName: value?.fromName ?? "",
-    passwordResetSubject: value?.passwordResetSubject ?? "",
-  };
-}
-
-function normalizeComparableIdPService(
-  input: Pick<
-    ComparableIdPService,
-    | "authorization"
-    | "lang"
-    | "userAuthPolicy"
-    | "publishEvents"
-    | "disableGqlOperations"
-    | "emailConfig"
-    | "permission"
-  >,
-): ComparableIdPService {
-  return {
-    authorization: input.authorization || undefined,
-    lang: input.lang === IdPLang.UNSPECIFIED ? IdPLang.EN : input.lang,
-    userAuthPolicy: input.userAuthPolicy,
-    publishEvents: input.publishEvents,
-    disableGqlOperations: input.disableGqlOperations,
-    emailConfig: input.emailConfig,
-    permission: input.permission,
-  };
-}
-
-function normalizeComparablePermission(
-  permission: ProtoIdPService["permission"],
-): MessageInitShape<typeof ProtoIdPPermissionSchema> | undefined {
-  if (!permission) {
-    return undefined;
-  }
-  if (
-    permission.create.length === 0 &&
-    permission.read.length === 0 &&
-    permission.update.length === 0 &&
-    permission.delete.length === 0 &&
-    permission.sendPasswordResetEmail.length === 0 &&
-    permission.unenrollMfa.length === 0
-  ) {
-    return undefined;
-  }
-  const normalizePolicy = (policy: (typeof permission.create)[number]) => ({
-    conditions: policy.conditions.map((c) => ({
-      left: c.left ? { kind: c.left.kind } : undefined,
-      operator: c.operator,
-      right: c.right ? { kind: c.right.kind } : undefined,
-    })),
-    permit: policy.permit,
-    // Platform returns an empty string for an unset description; treat it the same as omitted.
-    description: policy.description || undefined,
-  });
-  return {
-    create: permission.create.map(normalizePolicy),
-    read: permission.read.map(normalizePolicy),
-    update: permission.update.map(normalizePolicy),
-    delete: permission.delete.map(normalizePolicy),
-    sendPasswordResetEmail: permission.sendPasswordResetEmail.map(normalizePolicy),
-    unenrollMfa: permission.unenrollMfa.map(normalizePolicy),
-  };
-}
-
-function areIdPServicesEqual(existing: ProtoIdPService, desired: ComparableIdPService): boolean {
-  return areNormalizedEqual(
-    normalizeComparableIdPService({
-      authorization: existing.authorization,
-      lang: existing.lang,
-      userAuthPolicy: normalizeComparableUserAuthPolicy(existing.userAuthPolicy),
-      publishEvents: existing.publishUserEvents,
-      disableGqlOperations: normalizeComparableDisableGqlOperations(existing.disableGqlOperations),
-      emailConfig: normalizeComparableEmailConfig(existing.emailConfig),
-      permission: normalizeComparablePermission(existing.permission),
-    }),
-    desired,
-  );
-}
+const idpServiceComparison = defineRequestComparison({
+  schema: UpdateIdPServiceRequestSchema,
+  excluded: ["workspaceId", "namespaceName"],
+  normalize: (request) => {
+    if (request.lang === IdPLang.UNSPECIFIED) {
+      request.lang = IdPLang.EN;
+    }
+    const userAuthPolicy = (request.userAuthPolicy ??= create(IdPUserAuthPolicySchema));
+    // The platform stores 6 and 4096 for an omitted or zero password length.
+    userAuthPolicy.passwordMinLength ||= 6;
+    userAuthPolicy.passwordMaxLength ||= 4096;
+    // The platform lowercases and deduplicates domains before storing them.
+    userAuthPolicy.allowedEmailDomains = [
+      ...new Set(userAuthPolicy.allowedEmailDomains.map((domain) => domain.toLowerCase())),
+    ].toSorted();
+    userAuthPolicy.allowedReturnOrigins.sort();
+    request.disableGqlOperations = emptyMessageAsUnset(
+      IdPDisableGqlOperationsSchema,
+      request.disableGqlOperations,
+    );
+    request.emailConfig = emptyMessageAsUnset(IdPEmailConfigSchema, request.emailConfig);
+    request.permission = emptyMessageAsUnset(ProtoIdPPermissionSchema, request.permission);
+    for (const policies of actionPolicyLists(ProtoIdPPermissionSchema, request.permission)) {
+      for (const policy of policies) {
+        // The platform returns an empty string for an unset description.
+        policy.description ||= undefined;
+      }
+    }
+  },
+});
 
 async function planServices(
   client: OperatorClient,
@@ -481,9 +389,9 @@ async function planServices(
     getTrn: (name) => resourceTrn(workspaceId, "idp", name),
   });
 
+  const desired: DesiredService[] = [];
   for (const idp of idps) {
     const namespaceName = idp.name;
-    const existing = existingServices[namespaceName];
     const metaRequest = addDependencyRecords(
       await buildMetaRequest({
         trn: resourceTrn(workspaceId, "idp", namespaceName),
@@ -543,27 +451,13 @@ async function planServices(
     }
     const parsedPermission = parseIdPPermission(idp.permission);
     const protoPermission = parsedPermission ? protoIdPPermission(parsedPermission) : undefined;
-    const resolvedReturnOrigins = await resolveStaticWebsiteUrls(
+    const allowedReturnOrigins = await resolveStaticWebsiteUrls(
       client,
       workspaceId,
       userAuthPolicy?.allowedReturnOrigins ? [...userAuthPolicy.allowedReturnOrigins] : [],
       `IdP service "${namespaceName}" allowedReturnOrigins`,
       { expectedLocalNames: expectedLocalWebsites },
     );
-    const userAuthPolicyForCompare = userAuthPolicy
-      ? { ...userAuthPolicy, allowedReturnOrigins: resolvedReturnOrigins }
-      : userAuthPolicy;
-    const desired = normalizeComparableIdPService({
-      authorization,
-      lang,
-      userAuthPolicy: normalizeComparableUserAuthPolicy(userAuthPolicyForCompare),
-      publishEvents,
-      disableGqlOperations: normalizeComparableDisableGqlOperations(
-        convertGqlOperationsToDisable(idp.gqlOperations),
-      ),
-      emailConfig: normalizeComparableEmailConfig(emailConfig),
-      permission: protoPermission,
-    });
     const request = {
       workspaceId,
       namespaceName,
@@ -575,44 +469,32 @@ async function planServices(
       emailConfig,
       permission: protoPermission,
     };
-
-    if (existing) {
-      const owned = ownership.ownsDesired(existing.allLabels, {
-        resourceType: "idp.service",
-        resourceLabel: "IdP service",
-        resourceName: idp.name,
-      });
-      const configUnchanged = owned && areIdPServicesEqual(existing.resource, desired);
-      if (configUnchanged && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
-        changeSet.unchanged.push({ name: namespaceName, metaRequest });
-      } else {
-        changeSet.updates.push({
-          name: namespaceName,
-          request,
-          metaRequest,
-          ...(configUnchanged && { forcedBySdkVersion: true }),
-        });
-      }
-      delete existingServices[namespaceName];
-    } else {
-      changeSet.creates.push({
-        name: namespaceName,
-        request,
-        metaRequest,
-      });
-    }
+    desired.push({
+      name: namespaceName,
+      request,
+      comparableRequest: userAuthPolicy
+        ? { ...request, userAuthPolicy: { ...userAuthPolicy, allowedReturnOrigins } }
+        : request,
+      metaRequest,
+    });
   }
-  Object.entries(existingServices).forEach(([namespaceName]) => {
-    const entry = existingServices[namespaceName];
-    if (ownership.ownsRemaining(entry?.allLabels)) {
-      changeSet.deletes.push({
-        name: namespaceName,
-        request: {
-          workspaceId,
-          namespaceName,
-        },
-      });
-    }
+
+  await diffKeyed({
+    changeSet,
+    desired,
+    existing: Object.entries(existingServices),
+    keyOf: (service) => service.name,
+    ...labeledResourceChecks(ownership, (service: DesiredService) => ({
+      resourceType: "idp.service",
+      resourceLabel: "IdP service",
+      resourceName: service.name,
+    })),
+    isConfigUnchanged: (service, existing) =>
+      isRequestUnchanged(idpServiceComparison, service.comparableRequest, existing.resource),
+    create: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),
+    update: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),
+    unchanged: ({ name, metaRequest }) => ({ name, metaRequest }),
+    delete: (namespaceName) => ({ name: namespaceName, request: { workspaceId, namespaceName } }),
   });
 
   return { changeSet, ...ownership.result };
@@ -658,80 +540,40 @@ async function planClients(
 
   const isDeletableName = (name: string) => resourceNameSchema.safeParse(name).success;
 
-  const clientsByIdp = await Promise.all(idps.map((idp) => fetchClients(idp.name)));
-  for (const [i, idp] of idps.entries()) {
-    const namespaceName = idp.name;
+  const namespaces = [
+    ...idps.map((idp) => ({ namespaceName: idp.name, clients: idp.clients, deleted: false })),
+    ...deletedServices.map((namespaceName) => ({ namespaceName, clients: [], deleted: true })),
+  ];
+  const existingByNamespace = await Promise.all(
+    namespaces.map(({ namespaceName }) => fetchClients(namespaceName)),
+  );
+  for (const [i, { namespaceName, clients, deleted }] of namespaces.entries()) {
     const existingClients = assertDefined(
-      clientsByIdp[i],
-      "clientsByIdp missing entry for idp index",
+      existingByNamespace[i],
+      "existingByNamespace missing entry for namespace index",
     );
-    const existingNames = new Set<string>();
-    existingClients.forEach((client) => {
-      existingNames.add(client.name);
-    });
-    for (const name of idp.clients) {
-      if (existingNames.has(name)) {
-        if (forceApplyAll) {
-          changeSet.updates.push({
-            name,
-            workspaceId,
-            namespaceName,
-            forcedBySdkVersion: true,
-          });
-        } else {
-          changeSet.unchanged.push({
-            name,
-          });
-        }
-        existingNames.delete(name);
-      } else {
-        changeSet.creates.push({
-          name,
-          request: {
-            workspaceId,
-            namespaceName,
-            client: {
-              name,
-            },
-          },
-        });
-      }
-    }
-    existingNames.forEach((name) => {
-      if (!isDeletableName(name)) {
+    await diffKeyed({
+      changeSet,
+      desired: clients,
+      existing: existingClients.map((client) => [client.name, client] as const),
+      keyOf: (name) => name,
+      versionMatches: () => !forceApplyAll,
+      isConfigUnchanged: () => true,
+      create: (name) => ({
+        name,
+        request: { workspaceId, namespaceName, client: { name } },
+      }),
+      update: (name) => ({ name, workspaceId, namespaceName }),
+      unchanged: (name) => ({ name }),
+      delete: (name) => {
+        const request = { workspaceId, namespaceName, name };
+        if (isDeletableName(name)) return { name, request };
+        if (deleted) return { name, request, vaultOnly: true };
         logger.warn(
           `IdP client "${name}" in "${namespaceName}" will not be deleted, because the platform cannot delete a client with this name. The client and its secret vault stay in the workspace. Both are deleted when that IdP is removed.`,
         );
-        return;
-      }
-      changeSet.deletes.push({
-        name,
-        request: {
-          workspaceId,
-          namespaceName,
-          name,
-        },
-      });
-    });
-  }
-
-  const deletedClientsByService = await Promise.all(
-    deletedServices.map((namespaceName) => fetchClients(namespaceName)),
-  );
-  for (const [i, namespaceName] of deletedServices.entries()) {
-    assertDefined(
-      deletedClientsByService[i],
-      "deletedClientsByService missing entry for service index",
-    ).forEach((client) => {
-      changeSet.deletes.push({
-        name: client.name,
-        request: {
-          workspaceId,
-          namespaceName,
-          name: client.name,
-        },
-        ...(!isDeletableName(client.name) && { vaultOnly: true }),
-      });
+        return undefined;
+      },
     });
   }
   return changeSet;
