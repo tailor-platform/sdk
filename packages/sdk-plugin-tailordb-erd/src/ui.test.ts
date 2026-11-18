@@ -1,12 +1,30 @@
+import * as fs from "node:fs";
+import * as path from "pathe";
 import { describe, expect, test } from "vitest";
 import { createErdUiHandler } from "./ui";
 
 const context = { basePath: "/plugins/tailordb-erd", token: "t" };
 const root = "http://127.0.0.1:7777/";
 
+function exportViewer(html: (outputDir: string) => string) {
+  const outputDirs: string[] = [];
+  return {
+    outputDirs,
+    run: async (outputDir: string) => {
+      outputDirs.push(outputDir);
+      const distDir = path.join(outputDir, "main", "dist");
+      fs.mkdirSync(distDir, { recursive: true });
+      fs.writeFileSync(path.join(distDir, "index.html"), html(outputDir));
+      return [{ namespace: "main", distDir }];
+    },
+  };
+}
+
 describe("createErdUiHandler", () => {
-  test("serves the built viewer as HTML at the root", async () => {
-    const handler = createErdUiHandler({ buildViewerHtml: async () => "<html>viewer</html>" });
+  test("serves the exported viewer as HTML at the root", async () => {
+    const handler = createErdUiHandler({
+      exportViewer: exportViewer(() => "<html>viewer</html>").run,
+    });
 
     const response = await handler(new Request(root), context);
 
@@ -15,32 +33,61 @@ describe("createErdUiHandler", () => {
     expect(await response.text()).toBe("<html>viewer</html>");
   });
 
-  test("rebuilds on every request so a reload shows edited definitions", async () => {
-    const builds = ["first", "second"];
-    const handler = createErdUiHandler({ buildViewerHtml: async () => builds.shift()! });
+  test("exports into a directory of its own per request, so overlapping loads cannot delete each other's output", async () => {
+    const exporter = exportViewer((outputDir) => outputDir);
+    const handler = createErdUiHandler({ exportViewer: exporter.run });
 
-    const first = await handler(new Request(root), context);
-    const second = await handler(new Request(root), context);
+    await Promise.all([handler(new Request(root), context), handler(new Request(root), context)]);
 
-    expect([await first.text(), await second.text()]).toEqual(["first", "second"]);
+    expect(new Set(exporter.outputDirs).size).toBe(2);
   });
 
-  test("answers HEAD without building or sending a body", async () => {
-    let builds = 0;
+  test("removes the export directory once the page is read, leaving the project's own .tailor/erd untouched", async () => {
+    const exporter = exportViewer(() => "<html></html>");
+    const handler = createErdUiHandler({ exportViewer: exporter.run });
+
+    await handler(new Request(root), context);
+
+    expect(fs.existsSync(exporter.outputDirs[0]!)).toBe(false);
+  });
+
+  test("removes the export directory when the export fails", async () => {
+    const outputDirs: string[] = [];
     const handler = createErdUiHandler({
-      buildViewerHtml: async () => {
-        builds += 1;
-        return "<html></html>";
+      exportViewer: async (outputDir) => {
+        outputDirs.push(outputDir);
+        throw new Error("export failed");
       },
     });
 
+    await expect(handler(new Request(root), context)).rejects.toThrow("export failed");
+
+    expect(fs.existsSync(outputDirs[0]!)).toBe(false);
+  });
+
+  test("fails with a clear message when the project has no TailorDB namespace", async () => {
+    const handler = createErdUiHandler({ exportViewer: async () => [] });
+
+    await expect(handler(new Request(root), context)).rejects.toThrow(
+      "No TailorDB namespaces found",
+    );
+  });
+
+  test("answers HEAD without exporting or sending a body", async () => {
+    const exporter = exportViewer(() => "<html></html>");
+    const handler = createErdUiHandler({ exportViewer: exporter.run });
+
     const response = await handler(new Request(root, { method: "HEAD" }), context);
 
-    expect([response.status, await response.text(), builds]).toEqual([200, "", 0]);
+    expect([response.status, await response.text(), exporter.outputDirs.length]).toEqual([
+      200,
+      "",
+      0,
+    ]);
   });
 
   test("rejects methods that change state", async () => {
-    const handler = createErdUiHandler({ buildViewerHtml: async () => "" });
+    const handler = createErdUiHandler({ exportViewer: exportViewer(() => "").run });
 
     const response = await handler(new Request(root, { method: "POST" }), context);
 
@@ -48,7 +95,7 @@ describe("createErdUiHandler", () => {
   });
 
   test("returns 404 for any path other than the root", async () => {
-    const handler = createErdUiHandler({ buildViewerHtml: async () => "" });
+    const handler = createErdUiHandler({ exportViewer: exportViewer(() => "").run });
 
     const response = await handler(new Request(`${root}other`), context);
 

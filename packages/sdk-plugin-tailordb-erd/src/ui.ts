@@ -1,9 +1,10 @@
 import * as fs from "node:fs";
+import * as os from "node:os";
 import { fileURLToPath } from "node:url";
 import * as path from "pathe";
 import { runFreshErdExport } from "./serve";
+import type { ErdBuildResult } from "./export";
 
-const OUTPUT_DIR = ".tailor/erd";
 const CLI_ENTRY = fileURLToPath(new URL("../bin/cli.mjs", import.meta.url));
 
 interface UiHandlerContext {
@@ -14,23 +15,16 @@ interface UiHandlerContext {
 type UiHandler = (request: Request, context: UiHandlerContext) => Promise<Response>;
 
 interface ErdUiHandlerOptions {
-  buildViewerHtml: () => Promise<string>;
+  exportViewer: (outputDir: string) => Promise<ErdBuildResult[]>;
 }
 
-async function buildViewerHtmlFromProject(): Promise<string> {
-  const [primary] = await runFreshErdExport({
-    cliEntry: CLI_ENTRY,
-    outputDir: path.resolve(process.cwd(), OUTPUT_DIR),
-  });
-  if (!primary) {
-    throw new Error("No TailorDB namespaces found in config.");
-  }
-  return fs.readFileSync(path.join(primary.distDir, "index.html"), "utf8");
+function exportViewerFromProject(outputDir: string): Promise<ErdBuildResult[]> {
+  return runFreshErdExport({ cliEntry: CLI_ENTRY, outputDir });
 }
 
 /**
  * Create the handler that `tailor studio` mounts as the ERD tab.
- * @param options - Viewer builder, replaceable for tests
+ * @param options - Viewer exporter, replaceable for tests
  * @returns A Web-standard request handler
  */
 export function createErdUiHandler(options: ErdUiHandlerOptions): UiHandler {
@@ -46,8 +40,19 @@ export function createErdUiHandler(options: ErdUiHandlerOptions): UiHandler {
     if (request.method === "HEAD") {
       return new Response(null, { status: 200, headers });
     }
-    return new Response(await options.buildViewerHtml(), { status: 200, headers });
+
+    const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-erd-"));
+    try {
+      const [primary] = await options.exportViewer(outputDir);
+      if (!primary) {
+        throw new Error("No TailorDB namespaces found in config.");
+      }
+      const html = fs.readFileSync(path.join(primary.distDir, "index.html"), "utf8");
+      return new Response(html, { status: 200, headers });
+    } finally {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+    }
   };
 }
 
-export default createErdUiHandler({ buildViewerHtml: buildViewerHtmlFromProject });
+export default createErdUiHandler({ exportViewer: exportViewerFromProject });
