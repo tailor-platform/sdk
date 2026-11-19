@@ -429,20 +429,16 @@ async function createErdWatcher(options: WatchOptions): Promise<FSWatcher> {
   return watcher;
 }
 
-async function waitForShutdown(server: http.Server, watcher: FSWatcher): Promise<void> {
-  return await new Promise<void>((resolve) => {
-    const shutdown = () => {
-      void watcher.close().finally(() => {
-        server.close(() => {
-          logger.info("ERD server stopped.");
-          resolve();
-        });
-      });
-    };
-
-    process.once("SIGINT", shutdown);
-    process.once("SIGTERM", shutdown);
-  });
+async function stopServer(server: http.Server, watcher: FSWatcher): Promise<void> {
+  try {
+    await watcher.close();
+  } finally {
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+      server.closeAllConnections();
+    });
+  }
+  logger.info("ERD server stopped.");
 }
 
 export const erdServeCommand = defineAppCommand({
@@ -461,7 +457,11 @@ export const erdServeCommand = defineAppCommand({
       description: "Open the ERD viewer in the default browser",
     }),
   }),
+  gracefulShutdown: true,
   run: async (args) => {
+    const stopRequested = new Promise<void>((resolve) => {
+      args.$signal?.addEventListener("abort", () => resolve(), { once: true });
+    });
     initErdCommand();
 
     const outputDir = path.resolve(process.cwd(), DEFAULT_ERD_BASE_DIR);
@@ -508,6 +508,7 @@ export const erdServeCommand = defineAppCommand({
       }
     }
 
-    await waitForShutdown(server, watcher);
+    await stopRequested;
+    await stopServer(server, watcher);
   },
 });
