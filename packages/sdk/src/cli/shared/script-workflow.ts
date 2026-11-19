@@ -295,10 +295,36 @@ export function liveMainJobExecutionId(execution: WorkflowExecution): string | u
   return main.executionId;
 }
 
+function isEndedWithoutResult(status: WorkflowJobExecution_Status): boolean {
+  return (
+    status === WorkflowJobExecution_Status.FAILED || status === WorkflowJobExecution_Status.CANCELED
+  );
+}
+
+/**
+ * Tell whether a job's result is the record of a call it suspended in, not a result of its own.
+ * @param result - Result text of a function execution
+ * @returns True when it has the fields of that record
+ */
+export function isSuspendedCallRecord(result: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(result);
+    return (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "arg_hash" in parsed &&
+      "call_index" in parsed &&
+      "job_name" in parsed
+    );
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Pick the job whose function execution tells how a finished run ended. A run that
  * succeeded ended with its main job. In a run that failed, the main job only reports that
- * a job it started did not return, so the cause is in the deepest job that failed.
+ * a job it started did not return, so the cause is in the deepest job that failed or was canceled.
  * @param execution - Workflow execution in a terminal state
  * @returns Function execution id of that job, or undefined when no job was recorded
  */
@@ -306,7 +332,7 @@ export function outcomeJobExecutionId(execution: WorkflowExecution): string | un
   if (execution.status !== WorkflowExecution_Status.SUCCESS) {
     let deepest: WorkflowJobExecution | undefined;
     for (const job of execution.jobExecutions) {
-      if (job.kind.case === "wait" || job.status !== WorkflowJobExecution_Status.FAILED) continue;
+      if (job.kind.case === "wait" || !isEndedWithoutResult(job.status)) continue;
       if (deepest === undefined || (job.position?.depth ?? 0) >= (deepest.position?.depth ?? 0)) {
         deepest = job;
       }
@@ -402,9 +428,17 @@ export async function readOutcome(params: ReadOutcomeParams): Promise<ScriptWork
   const rows = execution.jobExecutions.filter((row) => row.kind.case !== "wait");
   let logs: string;
   if (rows.length > 1) {
+    // The logs of the other jobs are a courtesy: failing to read one must not hide the outcome.
+    const rowJobs = await Promise.all(
+      rows.map((row) =>
+        row.executionId === executionId
+          ? Promise.resolve(job)
+          : read(row.executionId).catch(() => undefined),
+      ),
+    );
     const blocks: string[] = [];
-    for (const row of rows) {
-      const rowJob = row.executionId === executionId ? job : await read(row.executionId);
+    for (const [index, row] of rows.entries()) {
+      const rowJob = rowJobs[index];
       const text = rowJob ? joinFunctionLogMessages(rowJob.logEntries) : "";
       if (!text) continue;
       const name = row.kind.case === "jobFunction" ? row.kind.value.name : row.executionId;
@@ -437,7 +471,7 @@ export async function readOutcome(params: ReadOutcomeParams): Promise<ScriptWork
   const canceled = execution.status === WorkflowExecution_Status.CANCELED;
   const error =
     job?.error?.message.trim() ||
-    result.trim() ||
+    (isSuspendedCallRecord(result) ? "" : result.trim()) ||
     (canceled ? "Script execution was canceled" : "Script execution failed with unknown error");
   return { success: false, logs, result, error, jobFunctionName };
 }

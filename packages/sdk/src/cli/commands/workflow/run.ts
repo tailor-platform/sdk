@@ -22,6 +22,7 @@ import {
   assertPollInterval,
   assertWorkflowArg,
   awaitWorkflowRun,
+  cleanupHint,
   reclaimFinishedWorkflowRuns,
   startWorkflowRun,
   workflowRunHints,
@@ -192,7 +193,7 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
     if (swept && swept.keptUnlabeled.length > 0) {
       logger.warn(
         `${swept.keptUnlabeled.length} resource(s) named \`tmp-run-…\` carry no \`workflow run\` label and were left in place. ` +
-          "If they are leftovers of an interrupted run, `tailor workflow cleanup --include-unlabeled` removes them.",
+          `If they are leftovers of an interrupted run, ${cleanupHint({ workspaceId, profile: args.profile, includeUnlabeled: true })} removes them.`,
       );
     }
 

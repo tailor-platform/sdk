@@ -16,6 +16,7 @@ import {
   reclaimFinishedWorkflowRuns,
   reclaimWorkflowRuns,
   startWorkflowRun,
+  cleanupHint,
   workflowRunHints,
 } from "./workflow-run";
 import { createRunId, workflowRunJobFunctionName, workflowRunLabels } from "./workflow-run-labels";
@@ -106,6 +107,7 @@ describe("startWorkflowRun", () => {
       runId,
       name: `tmp-run-${runId}`,
       functionNames: [`tmp-run-${runId}`],
+      jobNames: {},
       workflowId: "wf-1",
       executionId: "exec-1",
     });
@@ -1515,4 +1517,24 @@ describe("assertWorkflowArg", () => {
       expect(() => assertWorkflowArg(value as never)).toThrow(/JSON object/);
     },
   );
+});
+
+describe("cleanupHint", () => {
+  test("names the workspace and profile the run used, also with --include-unlabeled", () => {
+    expect(
+      cleanupHint({ workspaceId: "ws-1", profile: "staging", includeUnlabeled: true }),
+    ).toContain("tailor workflow cleanup --include-unlabeled");
+    expect(
+      cleanupHint({ workspaceId: "ws-1", profile: "staging", includeUnlabeled: true }),
+    ).toMatch(/ws-1/);
+    expect(
+      cleanupHint({ workspaceId: "ws-1", profile: "staging", includeUnlabeled: true }),
+    ).toMatch(/staging/);
+  });
+
+  test("leaves out --include-unlabeled unless asked", () => {
+    expect(cleanupHint({ workspaceId: "ws-1", profile: undefined })).not.toContain(
+      "--include-unlabeled",
+    );
+  });
 });

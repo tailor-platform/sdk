@@ -18,6 +18,7 @@ import { joinFunctionLogMessages } from "#/cli/shared/function-execution";
 import { logger } from "#/cli/shared/logger";
 import {
   assertMachineUserExists,
+  isSuspendedCallRecord,
   liveMainJobExecutionId,
   readOutcome,
   type ScriptWorkflowOutcome,
@@ -97,6 +98,8 @@ export interface StartedWorkflowRun {
   name: string;
   /** Names of the run's functions; each function has a job function of the same name */
   functionNames: string[];
+  /** Workflow job each function runs, by function name; empty for a whole-file run */
+  jobNames?: Record<string, string>;
   workflowId: string;
   executionId: string;
 }
@@ -185,7 +188,13 @@ export async function startWorkflowRun(
       authInvoker: params.invoker,
       arg: params.arg === undefined ? undefined : JSON.stringify(params.arg),
     });
-    return { runId, name, functionNames, workflowId, executionId };
+    const jobNames =
+      params.kind === "job"
+        ? Object.fromEntries(
+            params.jobs.map(({ jobName }) => [workflowRunJobFunctionName(runId, jobName), jobName]),
+          )
+        : {};
+    return { runId, name, functionNames, jobNames, workflowId, executionId };
   } catch (error) {
     if (startSent && !isStartRefused(error)) {
       logger.warn(
@@ -284,7 +293,9 @@ export async function awaitWorkflowRun(
       workspaceId,
       execution,
       pollInterval,
-      jobLabel: (name) => (name.startsWith(jobPrefix) ? name.slice(jobPrefix.length) : name),
+      jobLabel: (name) =>
+        started.jobNames?.[name] ??
+        (name.startsWith(jobPrefix) ? name.slice(jobPrefix.length) : name),
       deadline: Date.now() + (params.outcomeTimeoutMs ?? OUTCOME_READ_TIMEOUT_MS),
     });
   } catch (error) {
@@ -323,26 +334,6 @@ interface OutcomeAfterRemovalParams {
   pollInterval: number;
   /** Epoch milliseconds after which reading stops */
   deadline: number;
-}
-
-/**
- * Tell whether a job's result is the record of a call it suspended in, not a result of its own.
- * @param result - Result text of a function execution
- * @returns True when it has the fields of that record
- */
-function isSuspendedCallRecord(result: string): boolean {
-  try {
-    const parsed: unknown = JSON.parse(result);
-    return (
-      typeof parsed === "object" &&
-      parsed !== null &&
-      "arg_hash" in parsed &&
-      "call_index" in parsed &&
-      "job_name" in parsed
-    );
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -755,9 +746,30 @@ export function workflowRunHints(params: WorkflowRunHintsParams): {
       command: "tailor",
       args: ["workflow", "executions", params.executionId, "--logs", ...context],
     }),
-    cleanup: formatCommandHint({
-      command: "tailor",
-      args: ["workflow", "cleanup", ...context],
-    }),
+    cleanup: cleanupHint({ workspaceId: params.workspaceId, profile: params.profile }),
   };
+}
+
+interface CleanupHintParams {
+  workspaceId: string;
+  profile: string | undefined;
+  /** Remove the resources that carry no run label as well */
+  includeUnlabeled?: boolean;
+}
+
+/**
+ * The `workflow cleanup` command line that selects the workspace and profile a run used.
+ * @param params - Workspace, profile, and whether to remove unlabeled resources too
+ * @returns Command line for a hint
+ */
+export function cleanupHint(params: CleanupHintParams): string {
+  return formatCommandHint({
+    command: "tailor",
+    args: [
+      "workflow",
+      "cleanup",
+      ...(params.includeUnlabeled ? ["--include-unlabeled"] : []),
+      ...recoveryContextArgs({ workspaceId: params.workspaceId, profile: params.profile }),
+    ],
+  });
 }

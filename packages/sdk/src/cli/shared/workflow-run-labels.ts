@@ -1,3 +1,5 @@
+import * as crypto from "node:crypto";
+
 /**
  * Labels that mark the temporary resources of `workflow run`
  *
@@ -63,6 +65,10 @@ export function readWorkflowRunMarker(
 
 const RESOURCE_PREFIX = "tmp-run-";
 
+/** Longest name the Platform accepts for a job function. */
+const MAX_NAME_LENGTH = 63;
+const SUFFIX_LENGTH = 8;
+
 /**
  * Name of the workflow of one run, and of the function and job function of a
  * whole-file run.
@@ -76,13 +82,18 @@ export function workflowRunResourceName(runId: string): string {
 /**
  * Name of the job function and function a run registers for one workflow job.
  * Job function names are shared by the whole workspace, so the name of the job
- * alone would collide with the deployed job of the same name.
+ * alone would collide with the deployed job of the same name. A name that would
+ * pass the length the Platform accepts is cut short and ends with a hash of the
+ * job name, so that two long names stay apart.
  * @param runId - Id of the run
  * @param jobName - Name of the workflow job
  * @returns Resource name
  */
 export function workflowRunJobFunctionName(runId: string, jobName: string): string {
-  return `${workflowRunResourceName(runId)}-${jobName}`;
+  const full = `${workflowRunResourceName(runId)}-${jobName}`;
+  if (full.length <= MAX_NAME_LENGTH) return full;
+  const suffix = crypto.createHash("sha256").update(jobName).digest("hex").slice(0, SUFFIX_LENGTH);
+  return `${full.slice(0, MAX_NAME_LENGTH - SUFFIX_LENGTH - 1).replace(/-+$/, "")}-${suffix}`;
 }
 
 /**

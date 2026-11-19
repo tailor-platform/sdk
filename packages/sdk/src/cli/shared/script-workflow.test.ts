@@ -537,6 +537,62 @@ describe("the job a finished run's outcome is read from", () => {
       expect(outcome).toMatchObject({ success: false, error: "boom" });
     });
 
+    test("still reports the outcome when the log of another job cannot be read", async () => {
+      const client = {
+        getFunctionExecution: vi.fn(async (request: { executionId: string }) => {
+          if (request.executionId === "fn-child") throw new Error("lookup failed");
+          return { execution: { logEntries: [{ message: "main line" }], result: '"main"' } };
+        }),
+      };
+
+      const outcome = await readOutcome({
+        client: client as unknown as OperatorClient,
+        workspaceId: "ws",
+        execution: succeeded,
+        pollInterval: 1,
+        jobLabel: (name) => name.replace("run-", ""),
+      });
+
+      expect(outcome).toEqual({
+        success: true,
+        logs: "[main] main line",
+        result: '"main"',
+        jobFunctionName: "run-main",
+      });
+    });
+
+    test("reads the logs of the jobs it started at the same time", async () => {
+      let inFlight = 0;
+      let peak = 0;
+      const client = {
+        getFunctionExecution: vi.fn(async () => {
+          inFlight += 1;
+          peak = Math.max(peak, inFlight);
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          inFlight -= 1;
+          return { execution: { logEntries: [{ message: "x" }], result: '"r"' } };
+        }),
+      };
+      const manyJobs = {
+        status: WorkflowExecution_Status.SUCCESS,
+        jobExecutions: [
+          named("fn-main", 0, SUCCESS, "run-main"),
+          named("fn-a", 1, SUCCESS, "run-a"),
+          named("fn-b", 1, SUCCESS, "run-b"),
+          named("fn-c", 1, SUCCESS, "run-c"),
+        ],
+      } as unknown as WorkflowExecution;
+
+      await readOutcome({
+        client: client as unknown as OperatorClient,
+        workspaceId: "ws",
+        execution: manyJobs,
+        pollInterval: 1,
+      });
+
+      expect(peak).toBe(3);
+    });
+
     test("names the job function the outcome was read from", async () => {
       const outcome = await readOutcome({
         client: logsOf({}) as unknown as OperatorClient,
@@ -546,6 +602,41 @@ describe("the job a finished run's outcome is read from", () => {
       });
 
       expect(outcome.jobFunctionName).toBe("run-main");
+    });
+  });
+
+  describe("for a run that was canceled while its main job waited for a job it started", () => {
+    const { CANCELED } = WorkflowJobExecution_Status;
+    const canceledRun = (...rows: ReturnType<typeof job>[]) =>
+      ({
+        status: WorkflowExecution_Status.CANCELED,
+        jobExecutions: rows,
+      }) as unknown as WorkflowExecution;
+    const callRecord = '{"arg":{},"arg_hash":"abc","call_index":0,"job_name":"child"}';
+
+    test("is the job that was canceled, not the main job that only holds the record of its call", () => {
+      expect(
+        outcomeJobExecutionId(
+          canceledRun(job("fn-main", 0, SUCCESS), job("fn-child", 1, CANCELED)),
+        ),
+      ).toBe("fn-child");
+    });
+
+    test("reports a cancellation, not the record of the suspended call, as the error", async () => {
+      const client = {
+        getFunctionExecution: vi.fn(async () => ({
+          execution: { logEntries: [], result: callRecord },
+        })),
+      };
+
+      const outcome = await readOutcome({
+        client: client as unknown as OperatorClient,
+        workspaceId: "ws",
+        execution: canceledRun(job("fn-main", 0, CANCELED)),
+        pollInterval: 1,
+      });
+
+      expect(outcome).toMatchObject({ success: false, error: "Script execution was canceled" });
     });
   });
 

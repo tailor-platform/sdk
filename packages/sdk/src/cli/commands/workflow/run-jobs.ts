@@ -128,14 +128,26 @@ export async function bundleWorkflowRunJobs(
   }
 
   const tsconfigCache = createTsconfigLookupCache();
-  const workflowSources = [...fileService.workflowSources, ...(appService?.workflowSources ?? [])];
-  const baseStartContext = await buildStartContext(
-    { files: [...(config.workflow?.files ?? []), literalPattern(filePath)] },
+  // The application's files are read with its ignore rules, and the selected file on its own,
+  // so that a file the config leaves out is not scanned just because a run goes through it.
+  const appStartContext = await buildStartContext(
+    config.workflow ?? { files: [] },
     target.authNamespace,
     baseDir,
-    workflowSources,
+    appService?.workflowSources ?? [],
     tsconfigCache,
   );
+  const fileStartContext = await buildStartContext(
+    { files: [literalPattern(filePath)] },
+    target.authNamespace,
+    baseDir,
+    fileService.workflowSources,
+    tsconfigCache,
+  );
+  const baseStartContext = {
+    ...appStartContext,
+    modules: new Map([...appStartContext.modules, ...fileStartContext.modules]),
+  };
   const startContext = {
     ...baseStartContext,
     jobFunctionName: (name: string) => workflowRunJobFunctionName(runId, name),

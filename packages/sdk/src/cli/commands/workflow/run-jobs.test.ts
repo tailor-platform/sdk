@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import { tempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { beginUserModuleRun } from "#/cli/shared/user-modules";
 import { bundleWorkflowRunJobs } from "./run-jobs";
@@ -172,5 +173,24 @@ export const one = createWorkflowJob({ name: "one-job", body: () => "from jobs1"
 
     expect(bundled.jobs.map((job) => job.jobName)).toEqual(["bracket-job"]);
     expect(bundled.jobs[0]?.code).toContain("from jobs[1]");
+  });
+
+  test("does not scan a file the application's config ignores", async () => {
+    using tmp = tempDir("workflow-run-jobs-");
+    fs.mkdirSync(path.join(tmp.dir, "helpers"));
+    const { target } = setup(tmp.dir, { "helpers/broken.ts": "export const = ;" });
+    (target.config as { workflow?: unknown }).workflow = {
+      files: ["helpers/*.ts"],
+      ignores: ["helpers/broken.ts"],
+    };
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    await bundleWorkflowRunJobs({ target, runId: "r1", jobName: "lonely" });
+
+    expect(warn).not.toHaveBeenCalledWith(
+      expect.stringContaining("Failed to parse workflow file"),
+      expect.anything(),
+    );
+    warn.mockRestore();
   });
 });

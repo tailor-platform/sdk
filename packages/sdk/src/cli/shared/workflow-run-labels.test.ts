@@ -96,6 +96,40 @@ describe("workflowRunJobFunctionName", () => {
   test("differs between runs of the same job", () => {
     expect(workflowRunJobFunctionName("r1", "a")).not.toBe(workflowRunJobFunctionName("r2", "a"));
   });
+
+  describe("for a job name too long to fit the length the Platform accepts", () => {
+    const runId = createRunId(new Date("2026-11-18T13:00:00Z"), "aaaaaa");
+    const long = (tail: string) => `send-the-quarterly-compliance-report-to-every-${tail}`;
+    const PLATFORM_NAME = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
+
+    test("is cut to a name the Platform accepts", () => {
+      expect(workflowRunJobFunctionName(runId, long("region"))).toMatch(PLATFORM_NAME);
+    });
+
+    test("keeps the run's prefix, so a sweep still finds it with the run", () => {
+      expect(workflowRunJobFunctionName(runId, long("region"))).toMatch(
+        new RegExp(`^${workflowRunResourceName(runId)}-`),
+      );
+    });
+
+    test("keeps two long names that start alike apart", () => {
+      expect(workflowRunJobFunctionName(runId, long("region-a"))).not.toBe(
+        workflowRunJobFunctionName(runId, long("region-b")),
+      );
+    });
+
+    test("gives the same name each time, so registration and the rewritten calls agree", () => {
+      expect(workflowRunJobFunctionName(runId, long("region"))).toBe(
+        workflowRunJobFunctionName(runId, long("region")),
+      );
+    });
+
+    test("leaves a name that fits as it is", () => {
+      expect(workflowRunJobFunctionName(runId, "validate-order")).toBe(
+        `tmp-run-${runId}-validate-order`,
+      );
+    });
+  });
 });
 
 describe("runIdStartedAt", () => {
