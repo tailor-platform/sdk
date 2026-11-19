@@ -28,7 +28,7 @@ export function Editor({ value, onChange, dark }: EditorProps) {
           javascript({ typescript: true }),
           theme.current.of(latest.current.dark ? oneDark : []),
           EditorView.theme({
-            "&": { fontSize: "0.8125rem", maxHeight: "28rem", borderRadius: "0.375rem" },
+            "&": { fontSize: "0.8125rem", height: "100%" },
             ".cm-scroller": { overflow: "auto", fontFamily: "ui-monospace, monospace" },
           }),
           EditorView.updateListener.of((update) => {
@@ -46,5 +46,11 @@ export function Editor({ value, onChange, dark }: EditorProps) {
     view.current?.dispatch({ effects: theme.current.reconfigure(dark ? oneDark : []) });
   }, [dark]);
 
-  return <div ref={host} className="astw:overflow-hidden astw:rounded-md astw:border" />;
+  return (
+    <div
+      ref={host}
+      className="astw:overflow-hidden astw:rounded-md astw:border"
+      style={{ height: "100%" }}
+    />
+  );
 }

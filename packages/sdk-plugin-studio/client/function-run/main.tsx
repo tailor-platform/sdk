@@ -9,6 +9,7 @@ import { segments } from "../../src/function-run/segments";
 import { parseFrame, splitFrames, type RunRecord } from "../../src/function-run/stream";
 import { scopeTheme } from "../../src/function-run/theme";
 import { Editor } from "./Editor";
+import "./style.css";
 
 type EntryBody = { type: "run"; record: RunRecord } | { type: "failure" | "note"; text: string };
 type Entry = EntryBody & { id: number };
@@ -206,61 +207,70 @@ function App() {
 
   const watching = status === "watching";
   return (
-    <div className="astw:mx-auto astw:grid astw:gap-4 astw:p-4" style={{ maxWidth: "48rem" }}>
+    <form
+      className="fr-root"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void run();
+      }}
+    >
       <style>{themeCss}</style>
-      <form
-        className="astw:grid astw:gap-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void run();
-        }}
-      >
-        <div className="astw:grid astw:gap-1 astw:text-sm astw:font-medium">
-          Function
-          <Editor value={code} onChange={setCode} dark={dark} />
-        </div>
-        <label className="astw:grid astw:gap-1 astw:text-sm astw:font-medium">
-          Argument (JSON, optional)
+      <div className="fr-bar">
+        <Button type="submit" disabled={watching}>
+          Run and watch
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={!watching}
+          onClick={() => controller.current?.abort()}
+        >
+          Stop
+        </Button>
+        <Badge variant={watching ? "info" : "neutral"} className="astw:ml-auto">
+          {watching ? "Watching" : status === "stopped" ? "Stopped" : "Idle"}
+        </Badge>
+      </div>
+      <div className="fr-main">
+        <div className="fr-pane">
+          <div className="fr-label">Function</div>
+          <div className="fr-editor">
+            <Editor value={code} onChange={setCode} dark={dark} />
+          </div>
+          <label className="fr-label" htmlFor="argument">
+            Argument (JSON, optional)
+          </label>
           <Textarea
+            id="argument"
             value={arg}
             onChange={(event) => setArg(event.target.value)}
             placeholder='{"a": 1, "b": 2}'
-            rows={3}
+            rows={4}
             disabled={watching}
             className="astw:font-mono"
           />
-        </label>
-        <div className="astw:flex astw:items-center astw:gap-2">
-          <Button type="submit" disabled={watching}>
-            Run and watch
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={!watching}
-            onClick={() => controller.current?.abort()}
-          >
-            Stop
-          </Button>
-          <Badge variant={watching ? "info" : "neutral"} className="astw:ml-auto">
-            {watching ? "Watching" : status === "stopped" ? "Stopped" : "Idle"}
-          </Badge>
         </div>
-      </form>
-      <div className="astw:grid astw:gap-3">
-        {entries.map((entry) =>
-          entry.type === "run" ? (
-            <RunCard key={entry.id} record={entry.record} />
-          ) : (
-            <Alert.Root key={entry.id} variant={entry.type === "failure" ? "error" : "neutral"}>
-              <Alert.Description>
-                <span className="astw:whitespace-pre-wrap">{entry.text}</span>
-              </Alert.Description>
-            </Alert.Root>
-          ),
-        )}
+        <div className="fr-pane">
+          <div className="fr-label">Output</div>
+          <div className="fr-output">
+            {entries.length === 0 ? (
+              <div className="fr-empty">Run the function to see its output here.</div>
+            ) : null}
+            {entries.map((entry) =>
+              entry.type === "run" ? (
+                <RunCard key={entry.id} record={entry.record} />
+              ) : (
+                <Alert.Root key={entry.id} variant={entry.type === "failure" ? "error" : "neutral"}>
+                  <Alert.Description>
+                    <span className="astw:whitespace-pre-wrap">{entry.text}</span>
+                  </Alert.Description>
+                </Alert.Root>
+              ),
+            )}
+          </div>
+        </div>
       </div>
-    </div>
+    </form>
   );
 }
 
