@@ -630,17 +630,16 @@ describe("resolveDeployWorkspace", () => {
     });
   });
 
-  test("automatically selects the only workspace", async () => {
+  test("does not select the only workspace non-interactively", async () => {
     const only = workspace("55555555-5555-4555-8555-555555555555");
     mocks.listWorkspacesWithClient.mockResolvedValue([only]);
 
-    await expect(resolveDeployWorkspace()).resolves.toEqual({
-      client,
-      workspaceId: only.id,
+    await expect(resolveDeployWorkspace()).rejects.toMatchObject({
+      name: "CLIError",
+      code: "WORKSPACE_SELECTION_REQUIRED",
+      next: { command: "tailor", args: ["deploy", "--workspace-id", "<workspace-id>"] },
     });
-    expect(mocks.select).not.toHaveBeenCalled();
-    expect(mocks.saveWorkspaceContext).toHaveBeenCalledOnce();
-    expect(mocks.info).toHaveBeenCalledWith(expect.stringContaining(only.id));
+    expect(mocks.saveWorkspaceContext).not.toHaveBeenCalled();
   });
 
   test("rejects workspace creation options without --create-workspace", async () => {
@@ -685,20 +684,22 @@ describe("resolveDeployWorkspace", () => {
     expect(client.getWorkspace).toHaveBeenCalledWith({ workspaceId });
   });
 
-  test("does not persist an automatically selected workspace during dry-run", async () => {
-    const only = workspace("19191919-1919-4919-8919-191919191919");
-    mocks.listWorkspacesWithClient.mockResolvedValue([only]);
+  test("does not persist an explicit workspace during dry-run", async () => {
+    const id = "19191919-1919-4919-8919-191919191919";
+    mocks.tryLoadWorkspaceId.mockResolvedValue(id);
 
-    await expect(resolveDeployWorkspace({ dryRun: true })).resolves.toEqual({
+    await expect(resolveDeployWorkspace({ workspaceId: id, dryRun: true })).resolves.toEqual({
       client,
-      workspaceId: only.id,
+      workspaceId: id,
     });
     expect(mocks.saveWorkspaceContext).not.toHaveBeenCalled();
   });
 
   test("stores independent context files beside every deployed config", async () => {
     const only = workspace("23232323-2323-4323-8323-232323232323");
+    mocks.canPrompt.mockReturnValue(true);
     mocks.listWorkspacesWithClient.mockResolvedValue([only]);
+    mocks.select.mockResolvedValue(only.id);
 
     await resolveDeployWorkspace({
       contextTargets: contextTargets("/apps/a/tailor.config.ts", "/apps/b/tailor.config.ts"),
@@ -1202,7 +1203,9 @@ describe("resolveDeployWorkspace", () => {
 
   test("stops when a multi-config workspace selection is only partially saved", async () => {
     const available = workspace("f2f2f2f2-f2f2-42f2-82f2-f2f2f2f2f2f2");
+    mocks.canPrompt.mockReturnValue(true);
     mocks.listWorkspacesWithClient.mockResolvedValue([available]);
+    mocks.select.mockResolvedValue(available.id);
     mocks.saveWorkspaceContext
       .mockResolvedValueOnce(undefined)
       .mockRejectedValueOnce(new Error("read-only filesystem"));
@@ -1235,7 +1238,9 @@ describe("resolveDeployWorkspace", () => {
 
   test("treats duplicate config paths as one context save target", async () => {
     const available = workspace("39393939-3939-4939-8939-393939393939");
+    mocks.canPrompt.mockReturnValue(true);
     mocks.listWorkspacesWithClient.mockResolvedValue([available]);
+    mocks.select.mockResolvedValue(available.id);
     mocks.saveWorkspaceContext.mockRejectedValue(new Error("read-only filesystem"));
 
     await expect(
