@@ -1026,6 +1026,45 @@ export async function deletePlannedTables(
 }
 
 /**
+ * Delete the tables this deploy created that a migration removes, though the plan holds no deletion
+ * for them: the workspace lacked them and the final schema omits them. Each is forgotten as
+ * created, with its GraphQL permission, so a later migration that adds the same name creates both
+ * again.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param namespace - Namespace of the tables
+ * @param tableNames - Tables the migration removes
+ */
+export async function deleteTablesCreatedByDeploy(
+  client: OperatorClient,
+  workspaceId: string,
+  namespace: string,
+  tableNames: ReadonlySet<string>,
+): Promise<void> {
+  const tableKey = (tableName: string) => namespacedTableKey(namespace, tableName);
+  for (const tableName of tableNames) {
+    if (!processedTables.created.has(tableKey(tableName))) continue;
+    if (processedTables.gqlPermissionsProcessed.has(tableKey(tableName))) {
+      await client.deleteTailorDBGQLPermission({
+        workspaceId,
+        namespaceName: namespace,
+        typeName: tableName,
+      });
+      processedTables.gqlPermissionsProcessed.delete(tableKey(tableName));
+    }
+    if (!deletedResources.types.has(tableKey(tableName))) {
+      await client.deleteTailorDBType({
+        workspaceId,
+        namespaceName: namespace,
+        tailordbTypeName: tableName,
+      });
+      deletedResources.types.add(tableKey(tableName));
+    }
+    processedTables.created.delete(tableKey(tableName));
+  }
+}
+
+/**
  * Revert a single migration's Pre-phase DDL to the prior checkpoint's schema.
  * @param client - Operator client instance
  * @param migration - The migration whose Pre-phase DDL must be reverted

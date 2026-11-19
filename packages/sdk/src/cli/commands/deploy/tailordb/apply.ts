@@ -40,7 +40,11 @@ import {
   handleOptionalToRequiredError,
   isRequiredFieldNullValuesError,
 } from "#/cli/commands/tailordb/migrate/types";
-import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
+import {
+  fetchAllTolerant,
+  resolveStaticWebsiteUrlsInEnv,
+  type OperatorClient,
+} from "#/cli/shared/client";
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError, formatCommandHint, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
@@ -74,6 +78,7 @@ import {
   captureMigrationRestrictionState,
   deletedResources,
   deletePlannedTables,
+  deleteTablesCreatedByDeploy,
   executeSingleMigrationPostPhase,
   executeSingleMigrationPrePhase,
   generateMigrationPhaseManifest,
@@ -1116,7 +1121,10 @@ function isOutsideMigrations(flow: MigrationFlow, namespaceName: string | undefi
  * and run here too, built from that snapshot so scripts see the checkpoint state rather
  * than the final schema. Every other planned create and update in a migrating namespace
  * waits until every migration has committed: enforcing the final schema earlier could
- * apply a change whose migration has not run. Deletes are irreversible and stay last.
+ * apply a change whose migration has not run. Tables a pending migration removes or
+ * renames away have no planned create, so the workspace lacks them on a fresh replay;
+ * they are created here from the snapshot too, and the migration that removes them
+ * deletes them again. Planned deletes are irreversible and stay last.
  * @param flow - Migration flow
  * @returns `<namespace>/<table>` of the GraphQL permissions to apply once migrations settle
  */
@@ -1147,11 +1155,6 @@ async function applyChangesBeforeMigrations(flow: MigrationFlow): Promise<Set<st
       if (!namespaceName || !tableName) continue;
       const priorTable = flow.preMigrationSnapshots.get(namespaceName)?.tables[tableName];
       if (!priorTable) continue;
-      // A type some pending migration removes or renames away is created
-      // only when its re-adding migration runs; materializing it early
-      // would erase the removal boundary (the plan holds no delete entry
-      // for a name its final state keeps).
-      if (pending.deletedTables.get(namespaceName)?.has(tableName)) continue;
       // Recorded so the pre-phase GQL-permission fallback does not create
       // the type a second time.
       processedTables.created.add(namespacedTableKey(namespaceName, tableName));
@@ -1160,6 +1163,9 @@ async function applyChangesBeforeMigrations(flow: MigrationFlow): Promise<Set<st
         namespaceName,
         tailordbType: generateMigrationPhaseManifest(priorTable, namespaceName, phaseSettings),
       });
+    }
+    for (const [namespaceName, removedTables] of pending.deletedTables) {
+      await createRemovedBaselineTables(flow, namespaceName, removedTables);
     }
     for (const update of changeSet.type.updates) {
       if (!isOutsideMigrations(flow, update.request.namespaceName)) continue;
@@ -1177,6 +1183,53 @@ async function applyChangesBeforeMigrations(flow: MigrationFlow): Promise<Set<st
       .map((update) => client.updateTailorDBGQLPermission(update.request)),
   ]);
   return deferredGqlPermissionKeys;
+}
+
+/**
+ * Create the checkpoint's tables that a pending migration removes or renames away and the
+ * workspace lacks, which the plan does not create because the final schema omits them. A
+ * script that runs before the removing migration needs them, and so does every foreign key
+ * that references them.
+ * @param flow - Migration flow
+ * @param namespaceName - Migrating namespace
+ * @param removedTables - Tables some pending migration of the namespace removes or renames away
+ */
+async function createRemovedBaselineTables(
+  flow: MigrationFlow,
+  namespaceName: string,
+  removedTables: ReadonlySet<string>,
+): Promise<void> {
+  const { client, migrationContext, phaseSettings } = flow;
+  const snapshot = flow.preMigrationSnapshots.get(namespaceName);
+  const candidates = [...removedTables].filter(
+    (tableName) =>
+      snapshot?.tables[tableName] !== undefined &&
+      !processedTables.created.has(namespacedTableKey(namespaceName, tableName)),
+  );
+  if (!snapshot || candidates.length === 0) return;
+  const remoteTables = new Set(
+    (
+      await fetchAllTolerant(async (pageToken, maxPageSize) => {
+        const { tailordbTypes, nextPageToken } = await client.listTailorDBTypes({
+          workspaceId: migrationContext.workspaceId,
+          namespaceName,
+          pageToken,
+          pageSize: maxPageSize,
+        });
+        return [tailordbTypes, nextPageToken];
+      })
+    ).map((type) => type.name),
+  );
+  for (const tableName of candidates) {
+    const priorTable = snapshot.tables[tableName];
+    if (!priorTable || remoteTables.has(tableName)) continue;
+    processedTables.created.add(namespacedTableKey(namespaceName, tableName));
+    await client.createTailorDBType({
+      workspaceId: migrationContext.workspaceId,
+      namespaceName,
+      tailordbType: generateMigrationPhaseManifest(priorTable, namespaceName, phaseSettings),
+    });
+  }
 }
 
 async function runPendingMigrations(
@@ -1570,6 +1623,12 @@ async function commitMigration(
 
   try {
     await deletePlannedTables(client, changeSet, migration.namespace, deletedTables);
+    await deleteTablesCreatedByDeploy(
+      client,
+      migrationContext.workspaceId,
+      migration.namespace,
+      deletedTables,
+    );
   } catch (error) {
     const syncHint = formatNamespaceMigrationHint({
       ...deployCommandContext(migrationContext),
