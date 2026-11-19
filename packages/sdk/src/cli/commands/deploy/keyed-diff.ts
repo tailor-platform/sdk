@@ -1,7 +1,6 @@
 import { hasMatchingSdkVersion, type MetadataLabelWrite } from "./label";
 import type { UpdateAnnotation } from "./change-set";
-import type { UnmanagedResource } from "./confirm";
-import type { OwnershipTracker } from "./owned-resource";
+import type { OwnershipTracker, TrackedResource } from "./owned-resource";
 
 /** Ownership checks for a planner whose resources carry SDK labels. */
 export interface KeyedDiffOwnership<Desired, Existing> {
@@ -28,7 +27,7 @@ export function labeledResourceChecks<
   Existing extends { allLabels?: Record<string, string> },
 >(
   tracker: OwnershipTracker,
-  describe: (desired: Desired) => UnmanagedResource,
+  describe: (desired: Desired) => TrackedResource,
 ): LabeledResourceChecks<Desired, Existing> {
   return {
     ownership: {

@@ -3,7 +3,6 @@ import { applyAIGateway, planAIGateway } from "#/cli/commands/deploy/aigateway";
 import { findAppIdLock, resolveLockedAppIds } from "#/cli/commands/deploy/app-id-lock";
 import { applyApplication, planApplication } from "#/cli/commands/deploy/application";
 import { applyAuth, planAuth } from "#/cli/commands/deploy/auth";
-import { createChangeSet, type HasName } from "#/cli/commands/deploy/change-set";
 import { warnMissingAppId } from "#/cli/commands/deploy/config-id-injector";
 import { applyExecutor, planExecutor } from "#/cli/commands/deploy/executor";
 import {
@@ -11,6 +10,7 @@ import {
   planFunctionRegistry,
 } from "#/cli/commands/deploy/function-registry";
 import { applyIdP, planIdP } from "#/cli/commands/deploy/idp";
+import { MANAGED_RESOURCES } from "#/cli/commands/deploy/managed-resources";
 import { applyPipeline, planPipeline } from "#/cli/commands/deploy/resolver";
 import { assertResourcesNotInUse } from "#/cli/commands/deploy/resources-in-use";
 import { applySecretManager, planSecretManager } from "#/cli/commands/deploy/secret-manager";
@@ -38,6 +38,7 @@ import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import ml from "#/utils/multiline";
 import type { PlanResults } from "#/cli/commands/deploy/apply-phases";
+import type { ManagedResourceType } from "#/cli/commands/deploy/managed-resource-type";
 import type { PlanContext } from "#/cli/commands/deploy/types";
 
 export interface RemoveOptions {
@@ -77,6 +78,37 @@ async function loadOptions(options?: RemoveOptions) {
     config,
   };
 }
+
+// Planned deletions in the same order as apply dry-run. Removal never plans custom domains.
+const REMOVAL_LISTING_ORDER: ReadonlyArray<ManagedResourceType> = [
+  "function_registry",
+  "staticwebsite",
+  "aigateway",
+  "application",
+  "tailordb.service",
+  "tailordb.type",
+  "tailordb.gql_permission",
+  "pipeline.service",
+  "pipeline.resolver",
+  "executor",
+  "workflow",
+  "workflow_job_function",
+  "workflow_job_function_execution_policy",
+  "idp.service",
+  "idp.client",
+  "auth.service",
+  "auth.idp_config",
+  "auth.user_profile_config",
+  "auth.tenant_config",
+  "auth.machine_user",
+  "auth.oauth2_client",
+  "auth.hook",
+  "auth.scim",
+  "auth.scim_resource",
+  "auth.connection",
+  "secret.vault",
+  "secret.secret",
+];
 
 async function execRemove(
   client: OperatorClient,
@@ -139,41 +171,9 @@ async function execRemove(
     (plan) => "resourceOwners" in plan && plan.resourceOwners.has(application.name),
   );
 
-  const workflowJobFunctions = createChangeSet<HasName, HasName, HasName>("Workflow job functions");
-  workflowJobFunctions.deletes.push(
-    ...plans.workflow.jobFunctionDeletes.map((del) => ({ name: del.jobFunctionName })),
+  const deletions = REMOVAL_LISTING_ORDER.map((resourceType) =>
+    MANAGED_RESOURCES[resourceType].changeSetOf(plans),
   );
-
-  // Planned deletions in the same order as apply dry-run
-  const deletions = [
-    plans.functionRegistry.changeSet,
-    plans.staticWebsite.changeSet,
-    plans.aiGateway.changeSet,
-    plans.app,
-    plans.tailorDB.changeSet.service,
-    plans.tailorDB.changeSet.type,
-    plans.tailorDB.changeSet.gqlPermission,
-    plans.pipeline.changeSet.service,
-    plans.pipeline.changeSet.resolver,
-    plans.executor.changeSet,
-    plans.workflow.changeSet,
-    workflowJobFunctions,
-    plans.workflowExecutionPolicy.changeSet,
-    plans.idp.changeSet.service,
-    plans.idp.changeSet.client,
-    plans.auth.changeSet.service,
-    plans.auth.changeSet.idpConfig,
-    plans.auth.changeSet.userProfileConfig,
-    plans.auth.changeSet.tenantConfig,
-    plans.auth.changeSet.machineUser,
-    plans.auth.changeSet.oauth2Client,
-    plans.auth.changeSet.authHook,
-    plans.auth.changeSet.scim,
-    plans.auth.changeSet.scimResource,
-    plans.auth.changeSet.connection,
-    plans.secretManager.vaultChangeSet,
-    plans.secretManager.secretChangeSet,
-  ];
   const removeLines = deletions.flatMap((changeSet) => changeSet.lines());
   if (removeLines.length > 0) logger.log(removeLines.join("\n"));
 
@@ -201,7 +201,7 @@ async function execRemove(
   await applyIdP(client, plans.idp, "delete-services");
   await applyTailorDB(client, plans.tailorDB, "delete-resources");
   await applyTailorDB(client, plans.tailorDB, "delete-services");
-  await applyFunctionRegistry(client, workspaceId, plans.functionRegistry, "delete");
+  await applyFunctionRegistry(client, plans.functionRegistry, "delete");
   await applySecretManager(client, plans.secretManager, "delete");
 
   return { removed: true, leftBehind };

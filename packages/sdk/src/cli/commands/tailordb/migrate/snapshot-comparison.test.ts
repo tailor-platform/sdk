@@ -414,7 +414,7 @@ describe("snapshot", () => {
       expect(diff.breakingChanges[0]!.reason).toContain("Unique constraint");
     });
 
-    describe("foreign key added", () => {
+    describe("foreign key added or moved", () => {
       const ownerReference = {
         foreignKey: true,
         foreignKeyType: "User",
@@ -442,6 +442,28 @@ describe("snapshot", () => {
             tableName: "Order",
             fieldName: "ownerId",
             reason: "Foreign key to User added to field",
+          },
+        ]);
+        expect(diff.requiresMigrationScript).toBe(true);
+      });
+
+      test("requires a migration script when a relation moves to another key of the same table", () => {
+        const ownerCode = (key: string): SnapshotFieldConfig => ({
+          type: "string",
+          required: false,
+          ...ownerReference,
+          foreignKeyField: key,
+        });
+        const diff = compareRawSnapshots(
+          withOrderFields({ ownerCode: ownerCode("code") }),
+          withOrderFields({ ownerCode: ownerCode("email") }),
+        );
+
+        expect(diff.breakingChanges).toEqual([
+          {
+            tableName: "Order",
+            fieldName: "ownerCode",
+            reason: "Foreign key target changed from User.code to User.email",
           },
         ]);
         expect(diff.requiresMigrationScript).toBe(true);
@@ -543,6 +565,11 @@ describe("snapshot", () => {
           "scale",
           { type: "decimal", required: false, scale: 2 },
           { type: "decimal", required: false, scale: 4 },
+        ],
+        [
+          "relation key",
+          { ...str, foreignKey: true, foreignKeyType: "User", foreignKeyField: "code" },
+          { ...str, foreignKey: true, foreignKeyType: "User", foreignKeyField: "email" },
         ],
       ])("rejects nested %s changes even inside object arrays", (_name, before, after) => {
         const diff = compareRawSnapshots(
@@ -1069,7 +1096,9 @@ describe("snapshot", () => {
 
         expect(
           diff.breakingChanges.some(
-            (bc) => bc.tableName === "Order" && bc.reason.includes("Foreign key target type"),
+            (bc) =>
+              bc.tableName === "Order" &&
+              bc.reason === "Foreign key target changed from Team.id to Team2.id",
           ),
         ).toBe(true);
       });
@@ -1148,8 +1177,8 @@ describe("snapshot", () => {
 
         expect(diff.breakingChanges.map(({ reason }) => reason)).toEqual([
           "Field changed from optional to required",
-          "Unique constraint added to field",
           "Decimal scale changed from 4 to 2",
+          "Unique constraint added to field",
         ]);
       });
 

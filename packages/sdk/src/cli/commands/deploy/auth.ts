@@ -525,7 +525,6 @@ async function planServices(
     keyOf: (service) => service.name,
     ...labeledResourceChecks(ownership, (service: DesiredService) => ({
       resourceType: "auth.service",
-      resourceLabel: "Auth service",
       resourceName: service.name,
     })),
     versionMatches: () => !forceApplyAll,

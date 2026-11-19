@@ -946,32 +946,6 @@ export function assertValidTypeRenames(
   }
 }
 
-/**
- * Whether a field's foreign key target changed in a way that is not explained
- * by a confirmed table rename. Such a retarget is breaking (stored references
- * may become invalid) and needs a reference fixup script; a retarget that
- * follows a rename does not, because record ids are preserved by the copy —
- * provided the referenced field is unchanged, since the copy only guarantees
- * that the same ids exist under the new table name.
- * @param {SnapshotFieldConfig} before - Field configuration before the change
- * @param {SnapshotFieldConfig} after - Field configuration after the change
- * @param {ReadonlyMap<string, string>} [typeRenameTargets] - Confirmed table renames (old name → new name)
- * @returns {boolean} True if the retarget is breaking
- */
-export function isBreakingForeignKeyRetarget(
-  before: SnapshotFieldConfig,
-  after: SnapshotFieldConfig,
-  typeRenameTargets?: ReadonlyMap<string, string>,
-): boolean {
-  return Boolean(
-    before.foreignKeyType &&
-    after.foreignKeyType &&
-    before.foreignKeyType !== after.foreignKeyType &&
-    (typeRenameTargets?.get(before.foreignKeyType) !== after.foreignKeyType ||
-      (before.foreignKeyField ?? "") !== (after.foreignKeyField ?? "")),
-  );
-}
-
 const TYPE_RENAME_OPTION_PATTERN = /^([^.:\s]+):([^.:\s]+)$/;
 
 /**

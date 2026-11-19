@@ -1,6 +1,10 @@
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { isOwnedByApp, sdkNameLabelKey, type WithLabel } from "./label";
+import { MANAGED_RESOURCE_LABELS } from "./managed-resource-type";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
+
+/** The kind and name of a resource whose ownership a planner checks. */
+export type TrackedResource = Pick<UnmanagedResource, "resourceType" | "resourceName">;
 
 type ResourcePageFetcher<T> = (pageToken: string, maxPageSize: number) => Promise<[T[], string]>;
 
@@ -58,7 +62,7 @@ export interface OwnershipTracker {
    * @param resource - Resource kind and name for confirmation messages
    * @returns True when the resource is owned by the current app
    */
-  ownsDesired(labels: Record<string, string> | undefined, resource: UnmanagedResource): boolean;
+  ownsDesired(labels: Record<string, string> | undefined, resource: TrackedResource): boolean;
   /**
    * Determine whether a remote-only resource is still owned by this app.
    * Also records other SDK owners so renamed-empty applications can be handled.
@@ -83,11 +87,15 @@ export function createOwnershipTracker(
     result,
     ownsDesired(labels, resource) {
       if (isOwnedByApp(labels, appName, appId)) return true;
+      const described = {
+        ...resource,
+        resourceLabel: MANAGED_RESOURCE_LABELS[resource.resourceType],
+      };
       const currentOwner = labels?.[sdkNameLabelKey];
       if (currentOwner) {
-        result.conflicts.push({ ...resource, currentOwner });
+        result.conflicts.push({ ...described, currentOwner });
       } else {
-        result.unmanaged.push(resource);
+        result.unmanaged.push(described);
       }
       return false;
     },

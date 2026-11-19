@@ -278,9 +278,9 @@ describe("executeMigrationStepsAsWorkflow", () => {
 
     const workflowLabel = vi
       .mocked(writeMetadataLabelsDirect)
-      .mock.calls.map(([, write]) => write as { trn: string; metadata?: Record<string, string> })
+      .mock.calls.map(([, write]) => write)
       .find((write) => write.trn === `trn:v1:workspace:ws-1:workflow:${NAME}`);
-    expect(workflowLabel?.metadata).toEqual({
+    expect(workflowLabel?.labels).toEqual({
       "sdk-migration-plan": migrationPlanFingerprint(ORDER),
     });
   });

@@ -1,5 +1,13 @@
 # @tailor-platform/sdk-plugin-seed
 
+## 0.10.2
+
+### Patch Changes
+
+- [#3178](https://github.com/tailor-platform/sdk/pull/3178) [`20ab4f2`](https://github.com/tailor-platform/sdk/commit/20ab4f2c2046312569b56d4b74d5d96a2d78ecc3) Thanks [@dqn](https://github.com/dqn)! - `tailor seed apply` now lists each `_User` row that repeats a `name` at its file and line, for example `seed/data/_User.jsonl:3 (alice): duplicate of seed/data/_User.jsonl:1`, instead of by its position among the loaded rows (`Row 2 (alice): duplicate of row 1`), which did not match the line in the file after a blank line or for a row in a dataset file. The GitHub Actions error annotation now links to the first repeated row.
+- Updated dependencies [[`42245d5`](https://github.com/tailor-platform/sdk/commit/42245d5b975a919f45d226f7e25a5a0bc3d298d8), [`48cc087`](https://github.com/tailor-platform/sdk/commit/48cc08707c9b16d6b3292e6ba5c23226565b50cc), [`59e8786`](https://github.com/tailor-platform/sdk/commit/59e878647eede2bfb4ba1a21ab92bc8b88de749d), [`f57cd39`](https://github.com/tailor-platform/sdk/commit/f57cd3946662eed486b8568015a89ba7f3ca7e03), [`dd55ff2`](https://github.com/tailor-platform/sdk/commit/dd55ff25a9ed76cd48d339c1b0e8d8a054019a0b), [`55286e0`](https://github.com/tailor-platform/sdk/commit/55286e042a802c784299c8f75e655330f1e672c1), [`8137b34`](https://github.com/tailor-platform/sdk/commit/8137b346fc9fa098b62c369923dd7640a9da0cbe), [`6e9e004`](https://github.com/tailor-platform/sdk/commit/6e9e0042136c8e8b27f566420eb6a0b7f5cbf9bc), [`e9b6ca4`](https://github.com/tailor-platform/sdk/commit/e9b6ca47f5424c5a320c7b6d5b901158c86198ea), [`f820cde`](https://github.com/tailor-platform/sdk/commit/f820cde123dc7294138074cee0924e64fc7ddbcc), [`824fc17`](https://github.com/tailor-platform/sdk/commit/824fc1747a9520337a4ce653f060fc8b4472baa8), [`5f41199`](https://github.com/tailor-platform/sdk/commit/5f411997a48c73648f93b41d08eab80cbfeb2430), [`bdb7a6e`](https://github.com/tailor-platform/sdk/commit/bdb7a6e39e8abfd3b74bd3f4e8d79612649cd4fc)]:
+  - @tailor-platform/sdk@2.44.0
+
 ## 0.10.1
 
 ### Patch Changes

@@ -3,12 +3,15 @@
 // This is a pure type module: type declarations only, no zod/schema
 // references, importable type-only from any layer.
 import type { AIGatewayConfig } from "#/configure/services/aigateway/types";
-import type { AuthConfig } from "#/configure/services/auth/types";
-import type { IdPConfig } from "#/configure/services/idp/types";
+import type { AuthConfig, AuthOwnConfig } from "#/configure/services/auth/types";
+import type { IdPConfig, IdPOwnConfig } from "#/configure/services/idp/types";
 import type { ResolverPermission } from "#/configure/services/resolver/permission";
 import type { SecretsConfig } from "#/configure/services/secrets/types";
 import type { StaticWebsiteConfig } from "#/configure/services/staticwebsite/types";
-import type { TailorDBServiceInput } from "#/configure/services/tailordb/types";
+import type {
+  TailorDBOwnServiceConfigInput,
+  TailorDBServiceInput,
+} from "#/configure/services/tailordb/types";
 import type { ExecutionPolicyInstance } from "#/configure/services/workflow/execution-policy.types";
 import type { LogLevelEnum } from "#/types/app-config.generated";
 
@@ -271,12 +274,14 @@ export interface AppConfig<
    *
    * Keys must match `^[a-z][a-z0-9_-]{0,62}$` and must not start with `sdk-`.
    * Values must be empty or match `^[a-z][a-z0-9_-]{0,62}$`, so a version like
-   * `1.2.3` is written as `v1-2-3`. At most 17 entries can be set.
+   * `1.2.3` is written as `v1-2-3`.
    *
    * Entries are only added or overwritten: an entry removed from this config
    * keeps its last deployed value on the platform. Those retained labels count
-   * towards the platform's limit of 20 labels per resource, so `deploy` stops
-   * before changing the application when the total would exceed it.
+   * towards the platform's limit on labels per application. When the labels
+   * exceed it, `deploy` applies the rest of its changes, runs plugins'
+   * `onDeployed` hooks, and fails with `DEPLOY_LABEL_LIMIT_EXCEEDED`, writing
+   * the SDK's own labels without these entries when those fit.
    */
   metadata?: Record<string, string>;
   /** TailorDB service configuration with table definition files. */
@@ -351,3 +356,112 @@ export interface AppConfig<
    */
   maintenanceMode?: false | "migration" | "deploy";
 }
+
+/** Settings of an application apart from the services it exposes. */
+export type ApplicationSettings = Pick<
+  AppConfig,
+  "cors" | "allowedIpAddresses" | "disableIntrospection" | "metadata"
+>;
+
+/** Settings that apply to a whole workspace, apart from its services and applications. */
+export type WorkspaceSettings = Pick<
+  AppConfig,
+  | "httpAdapter"
+  | "staticWebsites"
+  | "aiGateways"
+  | "secrets"
+  | "buildOptions"
+  | "defaultDateRepresentation"
+  | "maintenanceMode"
+>;
+
+/**
+ * Values that a service namespace's functions receive in place of the root `env` values with the
+ * same keys. Only keys of the root `env` can be overridden.
+ */
+export type WorkspaceEnvOverride<Env> = [keyof Env] extends [never]
+  ? Record<string, never>
+  : { [Key in keyof Env]?: EnvEntry };
+
+/** An application of `defineWorkspace()`: the workspace services it exposes, by name, and its own settings. */
+export interface WorkspaceApplicationConfig<
+  Db extends string,
+  Resolver extends string,
+  Auth extends string,
+  Idp extends string,
+> extends ApplicationSettings {
+  /** TailorDB namespaces exposed in this application's GraphQL API. A namespace no application lists is reachable only through SQL. */
+  db?: Db[];
+  /** Resolver namespaces exposed in this application's GraphQL API. */
+  resolver?: Resolver[];
+  /** Auth service of this application. */
+  auth?: Auth;
+  /** IdP whose user management operations this application's GraphQL API exposes. At most one. */
+  idp?: [] | [Idp];
+}
+
+/**
+ * Workspace configuration for `defineWorkspace()`. The workspace owns every service, keyed by
+ * name, and each entry of `apps` lists the services that application exposes.
+ */
+export interface WorkspaceConfig<
+  Env extends Record<string, EnvEntry> = Record<string, EnvEntry>,
+  Db extends string = string,
+  Resolver extends string = string,
+  Auth extends string = string,
+  Idp extends string = string,
+> extends WorkspaceSettings {
+  /**
+   * Environment variables every function of the workspace receives, as `context.env` in
+   * resolvers and the second argument `{ env }` in workflow job bodies. A resolver namespace,
+   * the executors, the workflows, and an auth service can override the value of a key declared
+   * here.
+   *
+   * A value that looks like a credential is rejected, since `env` is deployed
+   * as plaintext. When the detection is wrong about a value, wrap it as
+   * `{ value, allowSecretReason }` to allow it and record why it is safe. Real
+   * credentials belong in `defineSecretManager()`.
+   */
+  env?: Env;
+  /** TailorDB namespaces with their table definition files. */
+  db?: { [Namespace in Db]: TailorDBOwnServiceConfigInput };
+  /** Resolver namespaces with their resolver files. */
+  resolver?: {
+    [Namespace in Resolver]: ResolverServiceConfig & { env?: WorkspaceEnvOverride<NoInfer<Env>> };
+  };
+  /** Executor files. */
+  executor?: ExecutorServiceConfig & { env?: WorkspaceEnvOverride<NoInfer<Env>> };
+  /** Workflow files. */
+  workflow?: WorkflowServiceConfig & { env?: WorkspaceEnvOverride<NoInfer<Env>> };
+  /** Auth services, each keyed by its name. */
+  auth?: { [Name in Auth]: AuthOwnConfig & { name: Name } };
+  /** IdPs, each keyed by its name. */
+  idp?: { [Name in Idp]: IdPOwnConfig };
+  /** Applications, keyed by name. */
+  apps: {
+    [name: string]: WorkspaceApplicationConfig<
+      NoInfer<Db>,
+      NoInfer<Resolver>,
+      NoInfer<Auth>,
+      NoInfer<Idp>
+    >;
+  };
+}
+
+/**
+ * Single-application configuration for `defineApp()`: the shape of `defineConfig()` without
+ * `id`, without services marked `external`, and with a single IdP.
+ */
+export type AppDefinition = Omit<
+  AppConfig,
+  "id" | "db" | "resolver" | "auth" | "idp" | "inlineSourcemap" | "logLevel"
+> & {
+  /** TailorDB service configuration with table definition files. */
+  db?: { [namespace: string]: TailorDBOwnServiceConfigInput };
+  /** Resolver service configuration with resolver files. */
+  resolver?: { [namespace: string]: ResolverServiceConfig };
+  /** Auth configuration (single object, not an array). */
+  auth?: AuthOwnConfig;
+  /** Identity Provider configuration: a single IdP, e.g. `myIdp`. */
+  idp?: IdPOwnConfig;
+};

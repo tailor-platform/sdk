@@ -47,6 +47,8 @@ const scans = new Map<string, Promise<void>>();
 interface ProviderFinding {
   /** `env` key holding the value. */
   readonly key: string;
+  /** Path of the service whose `env` override holds the value; absent for the root `env`. */
+  readonly servicePath?: readonly string[];
   /** Short name of what matched, e.g. `slack`, `aws`. */
   readonly detector: string;
   /**
@@ -65,6 +67,8 @@ interface ProviderFinding {
 interface EntropyFinding {
   /** `env` key holding the value. */
   readonly key: string;
+  /** Path of the service whose `env` override holds the value; absent for the root `env`. */
+  readonly servicePath?: readonly string[];
   /** The heuristic matches no named pattern, so it has neither a rule nor documentation. */
   readonly detector: typeof HIGH_ENTROPY_DETECTOR;
   /** A value that only looks randomly generated is reported without failing the command. */
@@ -73,9 +77,19 @@ interface EntropyFinding {
 
 type EnvSecretFinding = ProviderFinding | EntropyFinding;
 
+/** `env` entries that override the root `env` for one service, such as `resolver.<namespace>.env`. */
+interface EnvOverrideScanInput {
+  /** Path of the service that holds the override, e.g. `["resolver", "shop-api"]`. */
+  readonly servicePath: readonly string[];
+  /** Entries as written in the config. */
+  readonly env: Readonly<Record<string, EnvEntry>>;
+}
+
 interface EnvSecretScanInput {
   /** `env` entries as written in the config, before `{ value, allowSecretReason }` wrappers are resolved. */
   readonly env?: Readonly<Record<string, EnvEntry>>;
+  /** `env` overrides of services, scanned together with `env`. */
+  readonly overrides?: readonly EnvOverrideScanInput[];
 }
 
 interface EnvSecretAssertInput extends EnvSecretScanInput {
@@ -83,10 +97,13 @@ interface EnvSecretAssertInput extends EnvSecretScanInput {
   readonly configPath: string;
 }
 
-type ScannedEntry = readonly [key: string, value: EnvValue];
-
-type EntryRange = {
+type ScannedEntry = {
   readonly key: string;
+  readonly servicePath?: readonly string[];
+  readonly value: EnvValue;
+};
+
+type EntryRange = Omit<ScannedEntry, "value"> & {
   readonly start: number;
   readonly end: number;
 };
@@ -110,24 +127,48 @@ export function resolveEnvValue(entry: EnvEntry): EnvValue {
  * @returns Provider matches first, then entropy warnings; empty when nothing matched
  */
 export async function scanEnvForSecrets(input: EnvSecretScanInput): Promise<EnvSecretFinding[]> {
-  const entries: ScannedEntry[] = Object.entries(input.env ?? {})
-    .filter(([, entry]) => !isAllowedSecret(entry))
-    .map(([key, entry]) => [key, resolveEnvValue(entry)]);
+  const sources: { servicePath?: readonly string[]; env: Readonly<Record<string, EnvEntry>> }[] = [
+    { env: input.env ?? {} },
+    ...(input.overrides ?? []),
+  ];
+  const entries: ScannedEntry[] = sources.flatMap(({ servicePath, env }) =>
+    Object.entries(env)
+      .filter(([, entry]) => !isAllowedSecret(entry))
+      .map(([key, entry]) => ({
+        key,
+        ...(servicePath ? { servicePath } : {}),
+        value: resolveEnvValue(entry),
+      })),
+  );
   if (entries.length === 0) {
     return [];
   }
 
   const findings: EnvSecretFinding[] = await scanWithProviderRules(entries);
-  const alreadyFound = new Set(findings.map((finding) => finding.key));
+  const alreadyFound = new Set(findings.map(formatFindingPath));
 
-  for (const [key, value] of entries) {
-    if (alreadyFound.has(key) || typeof value !== "string") continue;
+  for (const { key, servicePath, value } of entries) {
+    if (alreadyFound.has(formatFindingPath({ key, servicePath })) || typeof value !== "string")
+      continue;
     if (looksRandomlyGenerated(value)) {
-      findings.push({ key, detector: HIGH_ENTROPY_DETECTOR, severity: "warning" });
+      findings.push({
+        key,
+        ...(servicePath ? { servicePath } : {}),
+        detector: HIGH_ENTROPY_DETECTOR,
+        severity: "warning",
+      });
     }
   }
 
   return findings;
+}
+
+function findingPath(finding: Pick<ScannedEntry, "key" | "servicePath">): string[] {
+  return [...(finding.servicePath ?? []), "env", finding.key];
+}
+
+function formatFindingPath(finding: Pick<ScannedEntry, "key" | "servicePath">): string {
+  return findingPath(finding).join(".");
 }
 
 /**
@@ -141,7 +182,7 @@ export async function scanEnvForSecrets(input: EnvSecretScanInput): Promise<EnvS
  */
 export async function assertEnvHasNoSecrets(input: EnvSecretAssertInput): Promise<void> {
   const key = createHash("sha256")
-    .update(JSON.stringify([input.configPath, input.env ?? {}]))
+    .update(JSON.stringify([input.configPath, input.env ?? {}, input.overrides ?? []]))
     .digest("hex");
   const pending = scans.get(key);
   if (pending) {
@@ -164,7 +205,7 @@ async function reportEnvSecrets(input: EnvSecretAssertInput): Promise<void> {
   for (const finding of findings) {
     if (finding.severity !== "warning") continue;
     logger.warn(
-      `env.${finding.key} looks like a randomly generated credential. ` +
+      `${formatFindingPath(finding)} looks like a randomly generated credential. ` +
         `If it is one, move it to Secret Manager; otherwise allow it with ${styles.bold("allowSecretReason")}.`,
     );
   }
@@ -182,7 +223,7 @@ async function reportEnvSecrets(input: EnvSecretAssertInput): Promise<void> {
     issues: errors.map((error) => {
       const reference = error.docsUrl ? ` See ${error.docsUrl}` : "";
       return {
-        path: ["env", error.key],
+        path: findingPath(error),
         message: `Secret detected (matched ${error.detector}: ${error.rule}).${reference}`,
       };
     }),
@@ -208,16 +249,21 @@ async function reportEnvSecrets(input: EnvSecretAssertInput): Promise<void> {
 async function scanWithProviderRules(
   entries: ReadonlyArray<ScannedEntry>,
 ): Promise<ProviderFinding[]> {
-  const [{ lintSource }, { rules }] = await Promise.all([
+  const [{ lintSource }, { recommendedRules: rules }] = await Promise.all([
     import("@secretlint/core"),
-    import("@secretlint/secretlint-rule-preset-recommend"),
+    import("@secretlint/core/builtin"),
   ]);
 
   const ranges: EntryRange[] = [];
   let content = "";
-  for (const [key, value] of entries) {
+  for (const { key, servicePath, value } of entries) {
     const line = `${key}=${String(value)}`;
-    ranges.push({ key, start: content.length, end: content.length + line.length });
+    ranges.push({
+      key,
+      ...(servicePath ? { servicePath } : {}),
+      start: content.length,
+      end: content.length + line.length,
+    });
     content += `${line}\n`;
   }
 
@@ -254,13 +300,14 @@ async function scanWithProviderRules(
     const detector = message.ruleId.startsWith(RULE_ID_PREFIX)
       ? message.ruleId.slice(RULE_ID_PREFIX.length)
       : message.ruleId;
-    const dedupeKey = JSON.stringify([entry.key, detector, message.messageId]);
+    const dedupeKey = JSON.stringify([formatFindingPath(entry), detector, message.messageId]);
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
 
     // The message text embeds the matched value; the identifiers do not.
     findings.push({
       key: entry.key,
+      ...(entry.servicePath ? { servicePath: entry.servicePath } : {}),
       detector,
       rule: message.messageId,
       ...(message.docsUrl ? { docsUrl: message.docsUrl } : {}),

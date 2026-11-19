@@ -430,7 +430,7 @@ function referencedColumnType(
  * @param field - A field config
  * @returns The field with its foreign key settings removed
  */
-export function withoutReference(field: DDLFieldConfig): DDLFieldConfig {
+function withoutReference(field: DDLFieldConfig): DDLFieldConfig {
   const {
     foreignKey: _foreignKey,
     foreignKeyType: _type,

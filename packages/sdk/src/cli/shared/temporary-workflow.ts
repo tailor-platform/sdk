@@ -15,6 +15,7 @@ import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow
 import {
   buildMetaRequest,
   resourceTrn,
+  withExtraLabels,
   writeMetadataLabelsDirect,
 } from "#/cli/commands/deploy/label";
 import { isWorkflowExecutionFailureStatus } from "#/cli/commands/workflow/status";
@@ -51,12 +52,10 @@ async function temporaryLabelWrite(
 ): Promise<MetadataLabelWrite> {
   const metadata = { ...owner.labels, ...extraLabels };
   if (owner.appName === undefined) return { trn, labels: metadata };
-  return await buildMetaRequest({
-    trn,
-    appName: owner.appName,
-    appId: owner.appId,
-    ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
-  });
+  return withExtraLabels(
+    await buildMetaRequest({ trn, appName: owner.appName, appId: owner.appId }),
+    metadata,
+  );
 }
 
 export interface UploadTemporaryFunctionParams extends TemporaryResourceOwner {

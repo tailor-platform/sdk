@@ -22,8 +22,6 @@ export const LogLevelSchema = z.enum(LOG_LEVELS);
 const METADATA_KEY_PATTERN = /^[a-z][a-z0-9_-]{0,62}$/;
 const METADATA_VALUE_PATTERN = /^$|^[a-z][a-z0-9_-]{0,62}$/;
 const RESERVED_METADATA_KEY_PREFIX = "sdk-";
-// The platform stores at most 20 labels per resource; deploy writes three of its own.
-const MAX_METADATA_ENTRIES = 17;
 
 const metadataValueSchema = z.string().regex(METADATA_VALUE_PATTERN, {
   message: `'metadata' values must match ${METADATA_VALUE_PATTERN.source}.`,
@@ -32,14 +30,7 @@ const metadataValueSchema = z.string().regex(METADATA_VALUE_PATTERN, {
 // A key schema on `z.record` reports a generic "Invalid key in record", so the
 // keys are checked here to name the offending key and the constraint.
 const metadataSchema = z.record(z.string(), metadataValueSchema).superRefine((metadata, ctx) => {
-  const keys = Object.keys(metadata);
-  if (keys.length > MAX_METADATA_ENTRIES) {
-    ctx.addIssue({
-      code: "custom",
-      message: `'metadata' can hold at most ${MAX_METADATA_ENTRIES} entries.`,
-    });
-  }
-  for (const key of keys) {
+  for (const key of Object.keys(metadata)) {
     if (!METADATA_KEY_PATTERN.test(key)) {
       ctx.addIssue({
         code: "custom",
@@ -95,6 +86,43 @@ const buildOptionsSchema = z.strictObject({
 
 const MOVED_TO_BUILD_OPTIONS = ["inlineSourcemap", "logLevel"] as const;
 
+const envSchema = z.record(z.string(), envEntrySchema);
+
+const serviceRecordSchema = z.record(z.string(), z.unknown());
+
+const appConfigObjectSchema = z.strictObject({
+  id: z.uuid({ message: "'id' must be a UUID." }).optional(),
+  name: z.string().min(1, { message: "'name' must be a non-empty string." }),
+  env: envSchema.optional(),
+  cors: z.array(z.string()).optional(),
+  allowedIpAddresses: z.array(z.string()).optional(),
+  disableIntrospection: z.boolean().optional(),
+  inlineSourcemap: z.boolean().optional(),
+  logLevel: logLevelSchema.optional(),
+  buildOptions: buildOptionsSchema.optional(),
+  defaultDateRepresentation: z
+    .enum(["temporal", "date"], {
+      message: `'defaultDateRepresentation' must be "temporal" or "date".`,
+    })
+    .optional(),
+  maintenanceMode: z
+    .union([z.literal(false), z.enum(["migration", "deploy"])], {
+      message: `'maintenanceMode' must be false, "migration", or "deploy".`,
+    })
+    .optional(),
+  metadata: metadataSchema.optional(),
+  db: z.unknown().optional(),
+  resolver: z.unknown().optional(),
+  idp: z.unknown().optional(),
+  auth: z.unknown().optional(),
+  executor: z.unknown().optional(),
+  workflow: z.unknown().optional(),
+  httpAdapter: z.unknown().optional(),
+  staticWebsites: z.unknown().optional(),
+  aiGateways: z.unknown().optional(),
+  secrets: z.unknown().optional(),
+});
+
 /**
  * Structural validation schema for `defineConfig({...})`. Validates only
  * top-level fields with platform-side constraints (notably `id`); fields
@@ -106,47 +134,209 @@ const MOVED_TO_BUILD_OPTIONS = ["inlineSourcemap", "logLevel"] as const;
  * label-compatible prefix is added at the metadata boundary, so user-facing
  * configs only need to carry a UUID.
  */
-export const AppConfigSchema = z
-  .strictObject({
-    id: z.uuid({ message: "'id' must be a UUID." }).optional(),
-    name: z.string().min(1, { message: "'name' must be a non-empty string." }),
-    env: z.record(z.string(), envEntrySchema).optional(),
-    cors: z.array(z.string()).optional(),
-    allowedIpAddresses: z.array(z.string()).optional(),
-    disableIntrospection: z.boolean().optional(),
-    inlineSourcemap: z.boolean().optional(),
-    logLevel: logLevelSchema.optional(),
-    buildOptions: buildOptionsSchema.optional(),
-    defaultDateRepresentation: z
-      .enum(["temporal", "date"], {
-        message: `'defaultDateRepresentation' must be "temporal" or "date".`,
+export const AppConfigSchema = appConfigObjectSchema.superRefine((config, ctx) => {
+  for (const field of MOVED_TO_BUILD_OPTIONS) {
+    if (config[field] !== undefined && config.buildOptions?.[field] !== undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: [field],
+        message: `'${field}' is set both at the top level and in 'buildOptions.${field}'. Keep only 'buildOptions.${field}'.`,
+      });
+    }
+  }
+});
+
+const EXTERNAL_MESSAGE =
+  "'external' is only accepted by defineConfig(). Declare the service in this config instead.";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function entriesOf(value: unknown): [string, unknown][] {
+  return isRecord(value) ? Object.entries(value) : [];
+}
+
+function rejectExternal(entry: unknown, path: PropertyKey[], ctx: z.RefinementCtx): void {
+  if (isRecord(entry) && entry.external === true) {
+    ctx.addIssue({ code: "custom", path: [...path, "external"], message: EXTERNAL_MESSAGE });
+  }
+}
+
+function requireNamedObject(
+  value: unknown,
+  field: "auth" | "idp",
+  expected: string,
+  ctx: z.RefinementCtx,
+): void {
+  if (value === undefined || (isRecord(value) && typeof value.name === "string")) return;
+  ctx.addIssue({ code: "custom", path: [field], message: `'${field}' must be ${expected}.` });
+}
+
+function rejectEnvOverride(entry: unknown, path: string[], ctx: z.RefinementCtx): void {
+  if (isRecord(entry) && entry.env !== undefined) {
+    ctx.addIssue({
+      code: "custom",
+      path: [...path, "env"],
+      message: `'${path.join(".")}.env' is only accepted by defineWorkspace().`,
+    });
+  }
+}
+
+/**
+ * Structural validation schema for `defineApp({...})`: the fields of
+ * `defineConfig` without `id` and the deprecated top-level build options,
+ * with services marked `external` rejected.
+ */
+export const AppDefinitionSchema = appConfigObjectSchema
+  .omit({ id: true, inlineSourcemap: true, logLevel: true })
+  .extend({ db: serviceRecordSchema.optional(), resolver: serviceRecordSchema.optional() })
+  .superRefine((config, ctx) => {
+    for (const [namespace, entry] of entriesOf(config.db)) {
+      rejectExternal(entry, ["db", namespace], ctx);
+    }
+    for (const [namespace, entry] of entriesOf(config.resolver)) {
+      rejectExternal(entry, ["resolver", namespace], ctx);
+      rejectEnvOverride(entry, ["resolver", namespace], ctx);
+    }
+    rejectEnvOverride(config.executor, ["executor"], ctx);
+    rejectEnvOverride(config.workflow, ["workflow"], ctx);
+    requireNamedObject(config.auth, "auth", "an auth service defined with defineAuth()", ctx);
+    rejectExternal(config.auth, ["auth"], ctx);
+    checkEnvOverride(config.auth, ["auth"], config.env ?? {}, ctx);
+    requireNamedObject(config.idp, "idp", "a single IdP defined with defineIdp()", ctx);
+    rejectExternal(config.idp, ["idp"], ctx);
+  });
+
+const workspaceApplicationSchema = appConfigObjectSchema
+  .pick({ cors: true, allowedIpAddresses: true, disableIntrospection: true, metadata: true })
+  .extend({
+    db: z.array(z.string()).optional(),
+    resolver: z.array(z.string()).optional(),
+    auth: z.string().optional(),
+    idp: z
+      .array(z.string())
+      .max(1, {
+        message:
+          "An application can expose at most one IdP. Call idp.Client({ namespace }) from function code to use the others.",
       })
       .optional(),
-    maintenanceMode: z
-      .union([z.literal(false), z.enum(["migration", "deploy"])], {
-        message: `'maintenanceMode' must be false, "migration", or "deploy".`,
-      })
-      .optional(),
-    metadata: metadataSchema.optional(),
-    db: z.unknown().optional(),
-    resolver: z.unknown().optional(),
-    idp: z.unknown().optional(),
-    auth: z.unknown().optional(),
-    executor: z.unknown().optional(),
-    workflow: z.unknown().optional(),
-    httpAdapter: z.unknown().optional(),
-    staticWebsites: z.unknown().optional(),
-    aiGateways: z.unknown().optional(),
-    secrets: z.unknown().optional(),
+  });
+
+function checkEnvOverride(
+  entry: unknown,
+  path: string[],
+  rootEnv: Record<string, unknown>,
+  ctx: z.RefinementCtx,
+): void {
+  if (!isRecord(entry) || entry.env === undefined) return;
+  const parsed = envSchema.safeParse(entry.env);
+  if (!parsed.success) {
+    for (const issue of parsed.error.issues) {
+      ctx.addIssue({ ...issue, path: [...path, "env", ...issue.path] });
+    }
+    return;
+  }
+  for (const key of Object.keys(parsed.data)) {
+    if (!Object.hasOwn(rootEnv, key)) {
+      ctx.addIssue({
+        code: "custom",
+        path: [...path, "env", key],
+        message: `'${path.join(".")}.env' overrides "${key}", which the root 'env' does not declare.`,
+      });
+    }
+  }
+}
+
+function checkKeyedByName(
+  record: unknown,
+  service: "auth" | "idp",
+  label: string,
+  ctx: z.RefinementCtx,
+): void {
+  for (const [key, entry] of entriesOf(record)) {
+    if (isRecord(entry) && entry.name !== key) {
+      ctx.addIssue({
+        code: "custom",
+        path: [service, key, "name"],
+        message: `'${service}.${key}' holds the ${label} named "${String(entry.name)}". Key it by its name.`,
+      });
+    }
+  }
+}
+
+/**
+ * Structural validation schema for `defineWorkspace({...})`. The workspace
+ * owns the services, keyed by name, and each application lists the names of
+ * the services it exposes. Service entries are opaque as in `AppConfigSchema`,
+ * except for what the workspace adds to them: an `env` that overrides root
+ * `env` values, and the rejection of `external`.
+ */
+export const WorkspaceConfigSchema = appConfigObjectSchema
+  .pick({
+    env: true,
+    buildOptions: true,
+    defaultDateRepresentation: true,
+    maintenanceMode: true,
+    executor: true,
+    workflow: true,
+    httpAdapter: true,
+    staticWebsites: true,
+    aiGateways: true,
+    secrets: true,
+  })
+  .extend({
+    db: serviceRecordSchema.optional(),
+    resolver: serviceRecordSchema.optional(),
+    auth: serviceRecordSchema.optional(),
+    idp: serviceRecordSchema.optional(),
+    apps: z.record(z.string(), workspaceApplicationSchema),
   })
   .superRefine((config, ctx) => {
-    for (const field of MOVED_TO_BUILD_OPTIONS) {
-      if (config[field] !== undefined && config.buildOptions?.[field] !== undefined) {
+    const rootEnv = config.env ?? {};
+    for (const service of ["db", "resolver", "auth", "idp"] as const) {
+      for (const [name, entry] of entriesOf(config[service])) {
+        rejectExternal(entry, [service, name], ctx);
+      }
+    }
+    for (const [namespace, entry] of entriesOf(config.resolver)) {
+      checkEnvOverride(entry, ["resolver", namespace], rootEnv, ctx);
+    }
+    checkEnvOverride(config.executor, ["executor"], rootEnv, ctx);
+    checkEnvOverride(config.workflow, ["workflow"], rootEnv, ctx);
+    for (const [name, entry] of entriesOf(config.auth)) {
+      checkEnvOverride(entry, ["auth", name], rootEnv, ctx);
+    }
+    checkKeyedByName(config.auth, "auth", "auth", ctx);
+    checkKeyedByName(config.idp, "idp", "IdP", ctx);
+
+    const declared = {
+      db: new Set(Object.keys(config.db ?? {})),
+      resolver: new Set(Object.keys(config.resolver ?? {})),
+      auth: new Set(Object.keys(config.auth ?? {})),
+      idp: new Set(Object.keys(config.idp ?? {})),
+    };
+    for (const [appName, app] of Object.entries(config.apps)) {
+      const checkListed = (service: "db" | "resolver" | "idp") => {
+        for (const [index, name] of (app[service] ?? []).entries()) {
+          if (!declared[service].has(name)) {
+            ctx.addIssue({
+              code: "custom",
+              path: ["apps", appName, service, index],
+              message: `'apps.${appName}.${service}' lists "${name}", which is not a key of '${service}'.`,
+            });
+          }
+        }
+      };
+      checkListed("db");
+      checkListed("resolver");
+      if (app.auth !== undefined && !declared.auth.has(app.auth)) {
         ctx.addIssue({
           code: "custom",
-          path: [field],
-          message: `'${field}' is set both at the top level and in 'buildOptions.${field}'. Keep only 'buildOptions.${field}'.`,
+          path: ["apps", appName, "auth"],
+          message: `'apps.${appName}.auth' is "${app.auth}", which is not a key of 'auth'.`,
         });
       }
+      checkListed("idp");
     }
   });
