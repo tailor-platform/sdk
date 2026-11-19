@@ -389,6 +389,12 @@ describe("the main job of a workflow execution", () => {
     expect(mainJobExecutionId(executionOf(row("fn-child", 1), row("fn-main", 0)))).toBe("fn-main");
   });
 
+  test("is the last row at depth 0 when the main job was recorded more than once", () => {
+    expect(
+      mainJobExecutionId(executionOf(row("fn-first", 0), row("fn-child", 1), row("fn-last", 0))),
+    ).toBe("fn-last");
+  });
+
   test("is never a wait checkpoint, which runs no function", () => {
     expect(mainJobExecutionId(executionOf(row("nil", 0, "wait"), row("fn-main", 0)))).toBe(
       "fn-main",

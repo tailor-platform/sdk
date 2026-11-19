@@ -553,11 +553,16 @@ export async function reclaimWorkflowRuns(
       if (startedMs !== undefined && now.getTime() - startedMs < NOT_STARTED_GRACE_MS) continue;
     }
     if (!params.ignoreFinishedGrace && finishedWithin(executions, now, FINISHED_GRACE_MS)) continue;
+    // A workflow that lost its label is not this sweep's to remove unless asked, and the job functions it uses stay with it.
+    const stray = run.workflow
+      ? undefined
+      : unlabeled.find((item) => item.kind === "workflow" && item.name === name);
+    if (stray && !params.includeUnlabeled) continue;
     const gone = await teardownTemporaryWorkflow({
       client,
       workspaceId,
       name,
-      workflowId: run.workflow?.id,
+      workflowId: run.workflow?.id ?? stray?.id,
       jobFunctionNames: run.jobFunctions.map((item) => item.name),
       functionNames: run.functions.map((item) => item.name),
       subject: SUBJECT,
@@ -565,6 +570,10 @@ export async function reclaimWorkflowRuns(
       ...(warn ? { warn } : {}),
     });
     if (gone) result.removed.push(name);
+    if (stray) {
+      unlabeled.splice(unlabeled.indexOf(stray), 1);
+      if (gone) result.removedUnlabeled.push({ kind: stray.kind, name: stray.name });
+    }
   }
 
   const byKind = (kind: RunResourceKind) => unlabeled.filter((item) => item.kind === kind);

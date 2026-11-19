@@ -394,6 +394,22 @@ describe("function run --json", () => {
       expect(stderr.output).not.toContain("workflow run");
     });
 
+    test("keeps --allow-schema-drift, so the suggested run is not refused for the drift the user accepted", () => {
+      expect(
+        workflowRunSuggestion({
+          file: "scripts/backfill.ts",
+          job: undefined,
+          arg: undefined,
+          argFile: undefined,
+          machineUser: undefined,
+          allowSchemaDrift: true,
+          config: "tailor.config.ts",
+          workspaceId: undefined,
+          profile: undefined,
+        }),
+      ).toContain("`tailor workflow run scripts/backfill.ts --allow-schema-drift`");
+    });
+
     test("names --name as --job, and leaves out options at their defaults", () => {
       expect(
         workflowRunSuggestion({
@@ -402,6 +418,7 @@ describe("function run --json", () => {
           arg: undefined,
           argFile: "args/report.json",
           machineUser: "admin",
+          allowSchemaDrift: false,
           config: "tailor.config.ts",
           workspaceId: undefined,
           profile: undefined,

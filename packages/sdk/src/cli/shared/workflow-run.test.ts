@@ -1270,6 +1270,52 @@ describe("reclaimWorkflowRuns for a workflow that is still running", () => {
     expect(result.removed).toEqual([]);
   });
 
+  describe("when a finished run's workflow has no run label", () => {
+    const name = `tmp-run-${runId}`;
+    const remote = (): Remote[] => [
+      { name, labels: {}, executions: [WorkflowExecution_Status.SUCCESS] },
+      {
+        kind: "jobFunction",
+        name: `${name}-main`,
+        labels: workflowRunLabels({ kind: "job", runId }),
+      },
+      { kind: "function", name: `${name}-main`, labels: workflowRunLabels({ kind: "job", runId }) },
+    ];
+
+    test("keeps the workflow's job functions and functions along with the workflow", async () => {
+      const client = createSweepClient(remote());
+
+      const result = await reclaimWorkflowRuns({
+        client: asClient(client),
+        workspaceId: "ws",
+        now: old,
+      });
+
+      expect(client.deleteWorkflowJobFunction).not.toHaveBeenCalled();
+      expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
+      expect(client.deleteWorkflow).not.toHaveBeenCalled();
+      expect(result.removed).toEqual([]);
+      expect(result.keptUnlabeled).toEqual([{ kind: "workflow", name }]);
+    });
+
+    test("removes the workflow together with its job functions and functions when asked", async () => {
+      const client = createSweepClient(remote());
+
+      const result = await reclaimWorkflowRuns({
+        client: asClient(client),
+        workspaceId: "ws",
+        now: old,
+        includeUnlabeled: true,
+      });
+
+      expect(client.deleteWorkflow).toHaveBeenCalledTimes(1);
+      expect(client.deleteWorkflowJobFunction).toHaveBeenCalledTimes(1);
+      expect(client.deleteFunctionRegistry).toHaveBeenCalledTimes(1);
+      expect(result.removed).toEqual([name]);
+      expect(result.removedUnlabeled).toEqual([{ kind: "workflow", name }]);
+    });
+  });
+
   test("keeps the job functions and functions of an unlabeled running workflow even with the flag", async () => {
     const client = createSweepClient([
       { name: "tmp-run-r00zzz", labels: {}, executions: [WorkflowExecution_Status.RUNNING] },

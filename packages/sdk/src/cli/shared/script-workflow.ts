@@ -249,11 +249,11 @@ export async function assertNoActiveScriptWorkflow(
  * Pick the execution of the main job out of a workflow execution's rows. A run that
  * starts other jobs also records theirs, and a wait checkpoint runs no function.
  * @param execution - Workflow execution
- * @returns Function execution id of the main job, or undefined when no job was recorded
+ * @returns Function execution id of the main job's last row, or undefined when no job was recorded
  */
 export function mainJobExecutionId(execution: WorkflowExecution): string | undefined {
   const jobs = execution.jobExecutions.filter((job) => job.kind.case !== "wait");
-  const main = jobs.find(
+  const main = jobs.findLast(
     (job) => (job.position?.depth ?? 0) === 0 && !job.position?.parentWorkflowJobExecutionId,
   );
   return (main ?? jobs.at(-1))?.executionId;

@@ -217,6 +217,7 @@ A function run is stopped by the Platform when it takes too long. Its error is t
           arg: args.arg,
           argFile: args["arg-file"],
           machineUser: args["machine-user"],
+          allowSchemaDrift: args["allow-schema-drift"],
           config: args.config,
           workspaceId: args["workspace-id"],
           profile: args.profile,
@@ -262,6 +263,8 @@ interface WorkflowRunSuggestionParams {
   argFile: string | undefined;
   /** `--machine-user` value */
   machineUser: string | undefined;
+  /** `--allow-schema-drift` value */
+  allowSchemaDrift: boolean;
   /** `--config` value */
   config: string;
   /** `--workspace-id` value */
@@ -281,6 +284,7 @@ export function workflowRunSuggestion(params: WorkflowRunSuggestionParams): stri
   if (params.arg !== undefined) args.push("--arg", params.arg);
   if (params.argFile !== undefined) args.push("--arg-file", params.argFile);
   if (params.machineUser !== undefined) args.push(`--machine-user=${params.machineUser}`);
+  if (params.allowSchemaDrift) args.push("--allow-schema-drift");
   if (params.config !== DEFAULT_CONFIG_PATH) args.push(`--config=${params.config}`);
   if (params.workspaceId !== undefined) args.push(`--workspace-id=${params.workspaceId}`);
   if (params.profile !== undefined) args.push(`--profile=${params.profile}`);
