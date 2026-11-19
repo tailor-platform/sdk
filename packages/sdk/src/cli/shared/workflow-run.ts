@@ -8,6 +8,7 @@
 
 import { timestampMs } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
+import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { resourceTrn, sdkAppIdLabelKey, sdkNameLabelKey } from "#/cli/commands/deploy/label";
 import { recoveryContextArgs } from "#/cli/shared/args";
 import { fetchPaged, getOrNull } from "#/cli/shared/client";
@@ -204,6 +205,10 @@ export async function awaitWorkflowRun(
       state: "outcomeUnavailable",
       reason: error instanceof Error ? error.message : String(error),
     };
+  }
+  // A succeeded workflow whose script is reported as failed only means the job result was unreadable.
+  if (execution.status === WorkflowExecution_Status.SUCCESS && !result.success) {
+    return { state: "outcomeUnavailable", reason: result.error ?? "the job result is missing" };
   }
   await teardownTemporaryWorkflow({
     client,

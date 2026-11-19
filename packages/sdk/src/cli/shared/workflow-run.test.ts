@@ -292,6 +292,58 @@ describe("awaitWorkflowRun when the result of a finished run cannot be read", ()
   });
 });
 
+describe("awaitWorkflowRun when a succeeded run has no readable job result", () => {
+  test("keeps the resources and reports the outcome as unavailable, not as a failure", async () => {
+    const client = createClient();
+    client.getFunctionExecution.mockRejectedValue(new ConnectError("gone", Code.NotFound));
+
+    const outcome = await awaitWorkflowRun({
+      client: asClient(client),
+      workspaceId: "ws",
+      started,
+      pollInterval: 1,
+      timeoutMs: 1000,
+    });
+
+    expect(outcome.state).toBe("outcomeUnavailable");
+    expect(client.deleteWorkflow).not.toHaveBeenCalled();
+    expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
+  });
+
+  test("does the same when the finished execution lists no job execution at all", async () => {
+    const client = createClient();
+    client.getWorkflowExecution.mockResolvedValue({
+      execution: { status: WorkflowExecution_Status.SUCCESS, jobExecutions: [] },
+    });
+
+    const outcome = await awaitWorkflowRun({
+      client: asClient(client),
+      workspaceId: "ws",
+      started,
+      pollInterval: 1,
+      timeoutMs: 1000,
+    });
+
+    expect(outcome.state).toBe("outcomeUnavailable");
+    expect(client.deleteWorkflow).not.toHaveBeenCalled();
+  });
+
+  test("still treats a failed run as finished and removes its resources", async () => {
+    const client = createClient({ status: WorkflowExecution_Status.FAILED });
+
+    const outcome = await awaitWorkflowRun({
+      client: asClient(client),
+      workspaceId: "ws",
+      started,
+      pollInterval: 1,
+      timeoutMs: 1000,
+    });
+
+    expect(outcome.state).toBe("finished");
+    expect(client.deleteWorkflow).toHaveBeenCalledOnce();
+  });
+});
+
 describe("awaitWorkflowRun deadline", () => {
   test("stops waiting at the deadline even when every poll fails transiently", async () => {
     const client = createClient();
