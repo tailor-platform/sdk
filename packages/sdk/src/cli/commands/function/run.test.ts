@@ -14,7 +14,7 @@ import { definePlugins } from "#/configure/config/index";
 import { kyselyTypePlugin } from "#/plugin/builtin/kysely-type/index";
 import { bundleForRun } from "./bundle";
 import { detectFunctionType } from "./detect";
-import { runFunctionCommand } from "./run";
+import { runFunctionCommand, workflowRunSuggestion } from "./run";
 import { checkScriptSchemaSnapshot } from "./script-scaffold";
 import { startFunctionRunWatch } from "./watch";
 import { functionCommand } from "./index";
@@ -334,6 +334,82 @@ describe("function run --json", () => {
     expect(stderr.output).toContain(
       '--arg is ignored because this resolver has no input schema. Define "input" in your resolver to use --arg.',
     );
+  });
+
+  describe("when the Platform stops the run for taking too long", () => {
+    test("points to workflow run with the file and argument that were given", async () => {
+      vi.mocked(executeScriptReportingStart).mockResolvedValueOnce({
+        success: false,
+        logs: "",
+        result: "",
+        error: "Execution timed out after 60 seconds",
+      });
+      const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+      using _stdout = captureStdout();
+      using stderr = captureStderr();
+
+      await runCommand(runFunctionCommand, [
+        scriptPath,
+        "--arg",
+        '{"from":"2026-01-01"}',
+        "--machine-user",
+        "admin",
+      ]);
+
+      expect(stderr.output).toContain("tailor workflow run");
+      expect(stderr.output).toContain('--arg \'{"from":"2026-01-01"}\'');
+      expect(exit).toHaveBeenCalledWith(1);
+    });
+
+    test("reports the same hint as suggestion in --json output", async () => {
+      vi.mocked(executeScriptReportingStart).mockResolvedValueOnce({
+        success: false,
+        logs: "",
+        result: "",
+        error: "Execution timed out after 60 seconds",
+      });
+      vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+      using stdout = captureStdout();
+      using _stderr = captureStderr();
+      using _json = jsonMode();
+
+      await runCommand(runFunctionCommand, [scriptPath, "--machine-user", "admin"]);
+
+      expect(JSON.parse(stdout.output).suggestion).toContain("tailor workflow run");
+    });
+
+    test("stays silent when the run failed for another reason", async () => {
+      vi.mocked(executeScriptReportingStart).mockResolvedValueOnce({
+        success: false,
+        logs: "",
+        result: "",
+        error: "TypeError: x is not a function",
+      });
+      vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+      using _stdout = captureStdout();
+      using stderr = captureStderr();
+
+      await runCommand(runFunctionCommand, [scriptPath, "--machine-user", "admin"]);
+
+      expect(stderr.output).not.toContain("workflow run");
+    });
+
+    test("names --name as --job, and leaves out options at their defaults", () => {
+      expect(
+        workflowRunSuggestion({
+          file: "workflows/jobs.ts",
+          job: "send-report",
+          arg: undefined,
+          argFile: "args/report.json",
+          machineUser: "admin",
+          config: "tailor.config.ts",
+          workspaceId: undefined,
+          profile: undefined,
+        }),
+      ).toContain(
+        "`tailor workflow run workflows/jobs.ts --job send-report --arg-file args/report.json --machine-user=admin`",
+      );
+    });
   });
 
   describe("--arg-file", () => {

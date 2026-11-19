@@ -142,6 +142,8 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "workflow/get.ts",
   "workflow/list.ts",
   "workflow/resume.ts",
+  // Scaffolds local files; only --remote reads the deployed schema.
+  "workflow/script.ts",
   "workflow/start.ts",
   "workflow/wait.ts",
   // Workspace (read-only branches)

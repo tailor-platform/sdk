@@ -133,6 +133,59 @@ export function generateScriptSkeleton(options: ScriptSkeletonOptions): string {
   ].join("\n");
 }
 
+/**
+ * Generate the skeleton of a script that `workflow run` executes in pieces.
+ * @param options - Skeleton options
+ * @returns Skeleton file contents
+ */
+export function generateWorkflowScriptSkeleton(options: ScriptSkeletonOptions): string {
+  const { getDBImportPath, namespace } = options;
+  return [
+    "/**",
+    " * Long-running script. Run it past the synchronous time limit:",
+    " *",
+    " *   tailor workflow run <this file>",
+    " *",
+    " * The Platform ends a run that takes too long, so this script works through",
+    " * the table in batches and stops before the limit. It returns where it",
+    " * stopped; run it again with that value as --arg to continue:",
+    " *",
+    ` *   tailor workflow run <this file> --arg '{"after":"<value of next.after>"}'`,
+    " */",
+    "",
+    `import { getDB } from ${JSON.stringify(getDBImportPath)};`,
+    "",
+    "interface Arg {",
+    "  /** Primary key of the last row handled by the previous run */",
+    "  after?: string;",
+    "}",
+    "",
+    "const TIME_BUDGET_MS = 4 * 60 * 1000;",
+    "",
+    "export default async function main(arg: Arg = {}) {",
+    `  const db = getDB(${JSON.stringify(namespace)});`,
+    "  const deadline = Date.now() + TIME_BUDGET_MS;",
+    "  let after = arg.after;",
+    "",
+    "  while (Date.now() < deadline) {",
+    "    // A transaction rolls every change of one batch back when any statement fails.",
+    "    const lastId = await db.transaction().execute(async (trx) => {",
+    '      // e.g. const rows = await trx.selectFrom("MyTable").select("id").orderBy("id").limit(500)',
+    '      //   .$if(after !== undefined, (query) => query.where("id", ">", after as string)).execute();',
+    "      // ...update the rows, then return the last one:",
+    "      // return rows[rows.length - 1]?.id;",
+    "      return undefined as string | undefined;",
+    "    });",
+    "    if (lastId === undefined) return { done: true };",
+    "    after = lastId;",
+    "  }",
+    "",
+    "  return { done: false, next: { after } };",
+    "}",
+    "",
+  ].join("\n");
+}
+
 /** A schema snapshot sidecar found next to a script. */
 export interface ScriptSchemaSnapshotSidecar {
   /** Path of the snapshot file */

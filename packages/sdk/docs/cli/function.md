@@ -226,6 +226,8 @@ Each run prints a `-->` line when the Platform accepts it and a `<--` line with 
 
 Changes to `tailor.config.ts`, `tsconfig.json`, `package.json`, env files, and installed packages are not picked up; restart the command after changing them.
 
+A function run is stopped by the Platform when it takes too long. Its error is then followed by the `workflow run` command line that runs the same file as an asynchronous job, which may run longer.
+
 `test-run` is a deprecated alias of this command and will be removed in v3.
 
 > [!WARNING]

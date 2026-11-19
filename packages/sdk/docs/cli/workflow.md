@@ -28,6 +28,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 | [`workflow get`](#workflow-get)               | Get workflow details.                                                  |
 | [`workflow start`](#workflow-start)           | Start a workflow execution.                                            |
 | [`workflow run`](#workflow-run)               | Run a script as a temporary workflow, past the synchronous time limit. |
+| [`workflow script`](#workflow-script)         | Scaffold a long-running script to run with `workflow run`.             |
 | [`workflow cleanup`](#workflow-cleanup)       | Remove the temporary resources that `workflow run` left behind.        |
 | [`workflow wait`](#workflow-wait)             | Wait for a workflow execution.                                         |
 | [`workflow executions`](#workflow-executions) | List or get workflow executions.                                       |
@@ -176,13 +177,63 @@ $ tailor workflow run workflows/jobs.ts --job send-report --arg '{"id":"42"}'
 
 The script runs as an asynchronous workflow job, so it is not bound by the time limit of `function run`. The command waits for it to finish and removes the temporary resources afterwards.
 
-`--timeout` limits how long this command waits, not how long the script may run. The Platform ends a workflow job that runs longer than 5 minutes and the run is reported as failed with a timeout error; a script that needs longer has to be split so that it can be run again from where it stopped.
+`--timeout` limits how long this command waits, not how long the script may run. The Platform ends a workflow job that runs longer than 5 minutes and the run is reported as failed with a timeout error; a script that needs longer has to be split so that it can be run again from where it stopped. `tailor workflow script` scaffolds such a script.
 
 Without `--job`, the whole file runs: export `main(arg)` from a plain script, or pass a resolver, executor, or workflow job file. With `--job`, the workflow job of that name runs as the first job of the temporary workflow, with `--arg` as its input. A job it starts with `.start()` is registered with it, so those calls work; they run the jobs of your files, not the ones already deployed under the same names. The argument must be a JSON object (`null` is accepted too): unlike `function run`, a number, string, boolean, or array is refused before anything is created.
 
 A script scaffolded by `function script` with a generated `db.ts` is checked against its `db.snapshot.json` before it runs and refused on schema drift, as with `function run`; pass `--allow-schema-drift` to run it anyway.
 
 When the wait stops (`--timeout` elapsed), the script keeps running and its temporary resources stay in place. The command prints the run ID; read the outcome with `tailor workflow executions`. `tailor workflow cleanup` removes the resources of runs that have finished, and the next `workflow run` does the same before it starts. A run that finished within the last few minutes is left alone by that automatic sweep (and by `tailor deploy`), so the command still waiting for it can read its result; `tailor workflow cleanup` removes it at once.
+
+### workflow script
+
+Scaffold a long-running script to run with `workflow run`.
+
+**Usage**
+
+```
+tailor workflow script [options] <file>
+```
+
+**Arguments**
+
+| Argument | Description                                      | Required |
+| -------- | ------------------------------------------------ | -------- |
+| `file`   | Path to create the script at (must end with .ts) | Yes      |
+
+**Options**
+
+| Option                          | Alias | Description                                                           | Required | Default              | Env                            |
+| ------------------------------- | ----- | --------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                          | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                     | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                            | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
+| `--namespace <NAMESPACE>`       | -     | Target TailorDB namespace (required when the config does not pin one) | No       | -                    | -                              |
+| `--remote`                      | -     | Generate script-scoped DB types from the deployed schema              | No       | `false`              | -                              |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Examples**
+
+**Scaffold a long-running script (single-namespace project)**
+
+```bash
+$ tailor workflow script scripts/backfill.ts
+```
+
+**Scaffold a script targeting a specific namespace**
+
+```bash
+$ tailor workflow script scripts/backfill.ts --namespace tailordb
+```
+
+**Notes**
+
+The scaffolded script is a default-exported `main(arg)` function; execute it with `tailor workflow run <file>`. `workflow run` passes `--arg` to `main` as its argument and prints what `main` returns.
+
+The Platform ends a workflow job that runs too long, so the skeleton handles a bounded batch of rows per run: it stops before the limit and returns where it stopped (`{ done: false, next: { after } }`). Run it again with `--arg '{"after":"…"}'` to continue from there, until it returns `{ done: true }`.
+
+Database types are generated the same way as in `function script`: the skeleton imports `getDB()` from the `kyselyTypePlugin` types when the project configures the plugin, and otherwise writes a script-scoped `db.ts` plus a `db.snapshot.json` next to the script. `workflow run` refuses to run the script when that snapshot no longer matches the table and field structure; pass `--allow-schema-drift` to run it anyway. Pass `--remote` to generate them from the deployed schema. Re-running the command refreshes `db.ts` and `db.snapshot.json` and leaves the script itself untouched.
 
 ### workflow cleanup
 

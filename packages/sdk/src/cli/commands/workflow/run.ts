@@ -90,7 +90,7 @@ export const runCommand = defineAppCommand({
   }),
   notes: `The script runs as an asynchronous workflow job, so it is not bound by the time limit of \`function run\`. The command waits for it to finish and removes the temporary resources afterwards.
 
-\`--timeout\` limits how long this command waits, not how long the script may run. The Platform ends a workflow job that runs longer than 5 minutes and the run is reported as failed with a timeout error; a script that needs longer has to be split so that it can be run again from where it stopped.
+\`--timeout\` limits how long this command waits, not how long the script may run. The Platform ends a workflow job that runs longer than 5 minutes and the run is reported as failed with a timeout error; a script that needs longer has to be split so that it can be run again from where it stopped. \`tailor workflow script\` scaffolds such a script.
 
 Without \`--job\`, the whole file runs: export \`main(arg)\` from a plain script, or pass a resolver, executor, or workflow job file. With \`--job\`, the workflow job of that name runs as the first job of the temporary workflow, with \`--arg\` as its input. A job it starts with \`.start()\` is registered with it, so those calls work; they run the jobs of your files, not the ones already deployed under the same names. The argument must be a JSON object (\`null\` is accepted too): unlike \`function run\`, a number, string, boolean, or array is refused before anything is created.
 
