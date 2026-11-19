@@ -9,6 +9,7 @@ import {
   type SnapshotTypeSettingsState,
   type TypeScriptsState,
   type WarningChangeInfo,
+  formatForeignKeyTarget,
   SCHEMA_SNAPSHOT_VERSION,
 } from "./diff-calculator";
 import { supportsInPlaceFieldTypeChange } from "./field-type-change";
@@ -17,7 +18,6 @@ import {
   assertValidFieldRenames,
   assertValidNestedMemberRenames,
   assertValidTypeRenames,
-  isBreakingForeignKeyRetarget,
   type FieldRenameSpec,
   type NestedMemberRenameSpec,
   type TypeRenameSpec,
@@ -92,6 +92,29 @@ export function changesForeignKeyTarget(
 }
 
 /**
+ * Whether a field's foreign key moves to another table or key in a way that
+ * is not explained by a confirmed table rename. Such a retarget is breaking
+ * (stored references may become invalid) and needs a reference fixup script;
+ * a retarget that follows a rename and keeps the key does not, because record
+ * ids are preserved by the copy.
+ * @param {SnapshotFieldConfig} before - Field configuration before the change
+ * @param {SnapshotFieldConfig} after - Field configuration after the change
+ * @param {ReadonlyMap<string, string>} [typeRenameTargets] - Confirmed table renames (old name → new name)
+ * @returns {boolean} True if the retarget is breaking
+ */
+export function isBreakingForeignKeyRetarget(
+  before: SnapshotFieldConfig,
+  after: SnapshotFieldConfig,
+  typeRenameTargets?: ReadonlyMap<string, string>,
+): boolean {
+  return (
+    changesForeignKeyTarget(before, after) &&
+    (before.foreignKeyField !== after.foreignKeyField ||
+      typeRenameTargets?.get(before.foreignKeyType ?? "") !== after.foreignKeyType)
+  );
+}
+
+/**
  * Collect breaking changes for a field change
  * @param {string} tableName - Name of the table containing the field
  * @param {string} fieldName - Name of the field being changed
@@ -156,14 +179,12 @@ function getBreakingFieldChanges(
     });
   }
 
-  // Foreign key relationship changed - breaking (existing references may become
-  // invalid), unless it retargets a confirmed table rename: record ids are
-  // preserved by the rename copy, so the stored references stay valid.
+  // Foreign key moved to another table or key - breaking (existing references may become invalid)
   if (oldField && newField && isBreakingForeignKeyRetarget(oldField, newField, typeRenameTargets)) {
     breakingChanges.push({
       tableName,
       fieldName,
-      reason: `Foreign key target type changed from ${oldField.foreignKeyType} to ${newField.foreignKeyType}`,
+      reason: `Foreign key target changed from ${formatForeignKeyTarget(oldField)} to ${formatForeignKeyTarget(newField)}`,
       ...(nestedMember && { unsupported: true, showThreeStepHint: true }),
     });
   }

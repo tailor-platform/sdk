@@ -577,32 +577,49 @@ describe("template-generator", () => {
       expect(script).toContain('updateOrderOwnerId: { dependsOn: ["copyUserToPerson"]');
     });
 
-    test("orders the check of an added relation after the change to the key it points at", () => {
+    test.each<{ change: string; before: SnapshotFieldConfig; heading: string }>([
+      {
+        change: "the check of an added relation",
+        before: { type: "string", required: false },
+        heading: "// Check existing ownerEmail values against the new foreign key to User",
+      },
+      {
+        change: "the repair of a relation moved to another key",
+        before: {
+          type: "string",
+          required: false,
+          foreignKeyType: "User",
+          foreignKeyField: "code",
+        },
+        heading: "// Migrate ownerEmail references from User.code to User.email",
+      },
+    ])("orders $change after the change to the key it points at", ({ before, heading }) => {
       const script = generateMigrationScript(
         stepsDiff(
           {
             kind: "field_modified",
             tableName: "User",
-            fieldName: "code",
+            fieldName: "email",
             before: { type: "string", required: true },
             after: { type: "string", required: true, unique: true },
           },
           {
             kind: "field_modified",
             tableName: "Order",
-            fieldName: "ownerCode",
-            before: { type: "string", required: false },
+            fieldName: "ownerEmail",
+            before,
             after: {
               type: "string",
               required: false,
               foreignKeyType: "User",
-              foreignKeyField: "code",
+              foreignKeyField: "email",
             },
           },
         ),
       );
 
-      expect(script).toContain('updateOrderOwnerCode: { dependsOn: ["updateUserCode"]');
+      expect(script).toContain(heading);
+      expect(script).toContain('updateOrderOwnerEmail: { dependsOn: ["updateUserEmail"]');
     });
 
     test("orders an index's duplicate resolution after the changes to the fields it covers", () => {
@@ -2364,6 +2381,10 @@ describe("template-generator", () => {
         pluralForm: "Users",
         fields: { code: { type: "string", required: true, unique: true } },
       } as const;
+      const userWithEmail = {
+        ...user,
+        fields: { ...user.fields, email: { type: "string", required: true, unique: true } },
+      } as const;
       const order = (ownerId: SnapshotFieldConfig) => ({
         name: "Order",
         pluralForm: "Orders",
@@ -2420,6 +2441,20 @@ describe("template-generator", () => {
           fixtures: `INSERT INTO "User" (id, code) VALUES ('${missing}', 'a');
             INSERT INTO "Order" (id, "ownerId") VALUES ('${first}', NULL), ('${second}', '${first}'), ('${third}', '${missing}');`,
           expected: [null, first, null],
+        },
+        {
+          change: "a relation moved to another key of the same table",
+          previous: {
+            User: userWithEmail,
+            Order: order({ ...string, ...reference("User", "code") }),
+          },
+          current: {
+            User: userWithEmail,
+            Order: order({ ...string, ...reference("User", "email") }),
+          },
+          fixtures: `INSERT INTO "User" (id, code, email) VALUES ('${first}', 'a', 'a@example.com');
+            INSERT INTO "Order" (id, "ownerId") VALUES ('${first}', 'a@example.com'), ('${second}', 'a'), ('${third}', NULL);`,
+          expected: ["a@example.com", null, null],
         },
       ])(
         "clears the values that point at no record after $change",

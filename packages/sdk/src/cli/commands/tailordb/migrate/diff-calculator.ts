@@ -616,7 +616,7 @@ function formatNestedMemberChange(change: NestedMemberChange): string {
  * @param {SnapshotFieldConfig} field - Field configuration
  * @returns {string} `<table>.<key>`, or `none` when the field has no foreign key
  */
-function formatForeignKeyTarget(field: SnapshotFieldConfig): string {
+export function formatForeignKeyTarget(field: SnapshotFieldConfig): string {
   return field.foreignKeyType ? `${field.foreignKeyType}.${field.foreignKeyField ?? "id"}` : "none";
 }
 

@@ -17,9 +17,9 @@ import {
   type ForeignKeyTargetField,
 } from "#/utils/foreign-key-targets";
 import { isMigrationStepName } from "#/utils/migration-steps";
+import { formatForeignKeyTarget } from "./diff-calculator";
 import { formatFieldShape, isSingleValueToArrayChange } from "./field-type-change";
 import { writeMigrationTypeFiles } from "./pglite-schema-generator";
-import { isBreakingForeignKeyRetarget } from "./rename-detection";
 import {
   DEFAULT_DECIMAL_SCALE,
   getMigrationDirPath,
@@ -27,7 +27,12 @@ import {
   isBreakingIndexChange,
   type SchemaSnapshot,
 } from "./snapshot";
-import { addsForeignKey, collectBreakingNestedMemberChanges } from "./snapshot-comparison";
+import {
+  addsForeignKey,
+  changesForeignKeyTarget,
+  collectBreakingNestedMemberChanges,
+  isBreakingForeignKeyRetarget,
+} from "./snapshot-comparison";
 import type { EffectiveDateDefault } from "#/runtime/types";
 import type {
   MigrationDiff,
@@ -445,13 +450,14 @@ function describeChange(change: DiffChange): { preferredName: string; touches: F
       };
     case "field_modified":
     case "field_type_modified": {
-      const target = change.after.foreignKeyType;
+      const { before, after } = change;
       return {
         preferredName: `update${table}${capitalize(change.fieldName)}`,
         touches: [
           { table: change.tableName, field: change.fieldName },
-          ...(target && target !== change.before.foreignKeyType
-            ? [{ table: target, field: change.after.foreignKeyField ?? "id" }]
+          ...(after.foreignKeyType &&
+          (addsForeignKey(before, after) || changesForeignKeyTarget(before, after))
+            ? [{ table: after.foreignKeyType, field: after.foreignKeyField ?? "id" }]
             : []),
         ],
       };
@@ -956,13 +962,12 @@ function generateChangeScripts(
     scripts.push(generateNestedMemberRenameCopyScript(change));
   }
 
-  // Foreign key relationship changed. A retarget that follows a confirmed
-  // type rename needs no fixup: record ids are preserved by the rename copy.
+  // Foreign key moved to another table or key
   if (isBreakingForeignKeyRetarget(before, after, typeRenameTargets)) {
     scripts.push(
       generateUnmatchedReferenceScript(
         change,
-        `Migrate ${change.fieldName} references from ${before.foreignKeyType} to ${after.foreignKeyType}`,
+        `Migrate ${change.fieldName} references from ${formatForeignKeyTarget(before)} to ${formatForeignKeyTarget(after)}`,
       ),
     );
   } else if (addsForeignKey(before, after)) {
