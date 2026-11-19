@@ -294,14 +294,14 @@ export function resolveArgOptions(options: ArgOptions): ResolvedArgOptions {
     });
   }
   if (options.arg !== undefined) {
-    return { arg: parseArgOption(options.arg), argFile: undefined };
+    return { arg: parseArgOption(options.arg, options.command), argFile: undefined };
   }
   if (options.argFile === undefined) {
     return { arg: undefined, argFile: undefined };
   }
   const argFile = path.resolve(options.argFile);
   if (!options.watch) {
-    return { arg: readFunctionArgFile(argFile), argFile };
+    return { arg: readFunctionArgFile(argFile, options.command), argFile };
   }
   if (!fs.existsSync(argFile)) {
     throw argFileNotFoundError(argFile);

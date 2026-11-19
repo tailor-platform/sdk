@@ -91,23 +91,34 @@ export function displayPath(filePath: string): string {
 
 const ARG_FLAG = "--arg";
 
+/** Commands that take the argument options. */
+export type ArgCommandName = "function run" | "workflow run";
+
+function argErrorCode(command: ArgCommandName, kind: "INVALID" | "FILE_UNREADABLE"): string {
+  return `${command === "function run" ? "FUNCTION" : "WORKFLOW_RUN"}_ARG_${kind}`;
+}
+
 /**
  * Parse the JSON given with `--arg`.
  * @param text - JSON text
+ * @param command - Command whose error guidance a failure carries
  * @returns Parsed argument
  */
-export function parseArgOption(text: string): FunctionArg {
-  return { value: parseArgJson(text, `Invalid ${ARG_FLAG} JSON`), label: ARG_FLAG };
+export function parseArgOption(
+  text: string,
+  command: ArgCommandName = "function run",
+): FunctionArg {
+  return { value: parseArgJson(text, `Invalid ${ARG_FLAG} JSON`, command), label: ARG_FLAG };
 }
 
-function parseArgJson(text: string, failure: string): Jsonifiable {
+function parseArgJson(text: string, failure: string, command: ArgCommandName): Jsonifiable {
   try {
     return JSON.parse(text) as Jsonifiable;
   } catch (error) {
     throw CLIError({
-      code: "FUNCTION_ARG_INVALID",
+      code: argErrorCode(command, "INVALID"),
       message: `${failure}: ${error instanceof Error ? error.message : error}`,
-      command: "function run",
+      command,
       cause: error,
     });
   }
@@ -130,9 +141,13 @@ export function argFileNotFoundError(filePath: string, cause?: unknown): CLIErro
 /**
  * Read and parse an argument file.
  * @param filePath - Absolute path of the argument file
+ * @param command - Command whose error guidance a failure carries
  * @returns Parsed argument
  */
-export function readFunctionArgFile(filePath: string): FunctionArg {
+export function readFunctionArgFile(
+  filePath: string,
+  command: ArgCommandName = "function run",
+): FunctionArg {
   const label = displayPath(filePath);
   let text: string;
   try {
@@ -142,12 +157,13 @@ export function readFunctionArgFile(filePath: string): FunctionArg {
       throw argFileNotFoundError(filePath, error);
     }
     throw CLIError({
-      code: "FUNCTION_ARG_FILE_UNREADABLE",
+      code: argErrorCode(command, "FILE_UNREADABLE"),
       message: `Cannot read argument file ${filePath}: ${error instanceof Error ? error.message : error}`,
+      command,
       cause: error,
     });
   }
-  return { value: parseArgJson(text, `Invalid JSON in ${label}`), label };
+  return { value: parseArgJson(text, `Invalid JSON in ${label}`, command), label };
 }
 
 /**

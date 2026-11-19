@@ -260,10 +260,9 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
     }
     if (!result.success) {
       // Exiting at once would cut off what is still queued for a pipe.
+      const queued = [process.stdout, process.stderr].filter((stream) => stream.writableLength > 0);
       await Promise.all(
-        [process.stdout, process.stderr].map(
-          (stream) => new Promise<void>((resolve) => stream.write("", () => resolve())),
-        ),
+        queued.map((stream) => new Promise<void>((resolve) => stream.write("", () => resolve()))),
       );
       process.exit(1);
     }
