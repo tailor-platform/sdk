@@ -58,7 +58,6 @@ import type {
   FieldModifiedChange,
   IndexDiffChange,
   MigrationDiff,
-  NestedMemberRename,
   TableScriptsModifiedChange,
 } from "./diff-calculator";
 import type {
@@ -213,9 +212,8 @@ export function applyPreMigrationFieldAdjustments(
 ): void {
   relaxFieldsForPreMigration(fields, typeChanges, {
     toField: convertFieldConfigToProto,
-    adjustNestedMembers: (field, change) => {
+    restoreRemovedNestedMembers: (field, change) => {
       restoreRemovedNestedMembers(field, change.before, change.after);
-      relaxRenamedNestedMembers(field, change.memberRenames ?? []);
     },
   });
 }
@@ -232,20 +230,15 @@ function applyPreMigrationFieldAdjustmentsToSnapshot(
 ): void {
   relaxFieldsForPreMigration(fields, typeChanges, {
     toField: (config) => structuredClone(config),
-    adjustNestedMembers: (field, change) => {
+    restoreRemovedNestedMembers: (field, change) => {
       for (const member of collectNestedMemberChanges(change.before, change.after)) {
         if (member.kind !== "removed") continue;
         const parentMembers = getNestedMember(field, member.path.slice(0, -1))?.fields;
         const memberName = member.path.at(-1);
         if (!parentMembers || memberName === undefined) continue;
         const restored = structuredClone(member.before);
-        relaxMemberUnique(restored);
+        relaxUniqueRecursively(restored);
         defineRecordEntry(parentMembers, memberName, restored);
-      }
-      for (const rename of change.memberRenames ?? []) {
-        const renamed = getNestedMember(field, rename.path);
-        if (renamed?.required) renamed.required = false;
-        if (renamed) relaxMemberUnique(renamed);
       }
     },
   });
@@ -254,13 +247,26 @@ function applyPreMigrationFieldAdjustmentsToSnapshot(
 interface PreMigrationFieldStrategy<F extends PreMigrationField> {
   /** Build the field to re-insert from its snapshot config. */
   toField: (config: SnapshotFieldConfig) => F;
-  /** Apply nested-member relaxations to a modified field. */
-  adjustNestedMembers?: (field: F, change: FieldModifiedChange) => void;
+  /** Re-insert the members a modified field removes. */
+  restoreRemovedNestedMembers: (field: F, change: FieldModifiedChange) => void;
 }
 
-function relaxMemberUnique(member: PreMigrationField): void {
-  if (member.unique) member.unique = false;
-  relaxNestedUnique(member);
+function getPreMigrationMember(
+  field: PreMigrationField,
+  path: readonly string[],
+): PreMigrationField | undefined {
+  return path.reduce<PreMigrationField | undefined>(
+    (current, segment) =>
+      current?.fields && Object.hasOwn(current.fields, segment)
+        ? current.fields[segment]
+        : undefined,
+    field,
+  );
+}
+
+function relaxUniqueRecursively(field: PreMigrationField): void {
+  if (field.unique) field.unique = false;
+  relaxNestedUnique(field);
 }
 
 function relaxNestedUnique(field: PreMigrationField): void {
@@ -288,7 +294,7 @@ function relaxFieldsForPreMigration<F extends PreMigrationField>(
     }
 
     if (change.kind === "field_renamed") {
-      // Expand the rename into "keep the old field + relax the new field":
+      // Expand the rename into "keep the old field + add the new field":
       // the copy script reads the old field while both coexist, and the
       // Post-phase drops the old field and enforces the new field's
       // constraints. Unique is always deferred because stored values of a
@@ -297,9 +303,8 @@ function relaxFieldsForPreMigration<F extends PreMigrationField>(
       defineRecordEntry(fields, change.previousFieldName, restoreField(change.before));
       const newField: PreMigrationField | undefined = fields[fieldName];
       if (newField) {
-        if (change.after.required) newField.required = false;
-        if (change.after.unique ?? false) newField.unique = false;
-        relaxNestedUnique(newField);
+        relaxFieldForPreMigration(newField, ruleInput(undefined, change.after));
+        relaxUniqueRecursively(newField);
       }
       continue;
     }
@@ -319,18 +324,20 @@ function relaxFieldsForPreMigration<F extends PreMigrationField>(
 
     const { before, after } = change;
 
-    strategy.adjustNestedMembers?.(field, change);
+    strategy.restoreRemovedNestedMembers(field, change);
     for (const member of collectNestedMemberChanges(before, after)) {
       if (member.kind === "removed") continue;
-      const target = member.path.reduce<PreMigrationField | undefined>(
-        (current, segment) => current?.fields?.[segment],
-        field,
-      );
+      const target = getPreMigrationMember(field, member.path);
       if (!target) continue;
       relaxFieldForPreMigration(
         target,
         ruleInput(member.kind === "added" ? undefined : member.before, member.after, true),
       );
+    }
+    // A renamed member is reported as added; like a renamed field, it also defers unique.
+    for (const rename of change.memberRenames ?? []) {
+      const renamed = getPreMigrationMember(field, rename.path);
+      if (renamed) relaxUniqueRecursively(renamed);
     }
 
     relaxFieldForPreMigration(field, ruleInput(before, after));
@@ -387,26 +394,8 @@ function restoreRemovedNestedMembers(
       processNestedFieldsFromSnapshot({ [memberName]: change.before })[memberName],
       `restored nested member "${memberPath}" missing`,
     );
-    relaxMemberUnique(restored);
+    relaxUniqueRecursively(restored);
     defineRecordEntry(parentMembers, memberName, restored);
-  }
-}
-
-/**
- * Relax the new member of each confirmed nested rename to optional and
- * non-unique; the Post-phase enforces both after the copy script has filled
- * it.
- * @param {ProtoFieldConfig} field - Pre-phase proto field to adjust (mutated in place)
- * @param {readonly NestedMemberRename[]} memberRenames - Confirmed renames inside the field
- */
-function relaxRenamedNestedMembers(
-  field: ProtoFieldConfig,
-  memberRenames: readonly NestedMemberRename[],
-): void {
-  for (const rename of memberRenames) {
-    const member = getProtoNestedMember(field, rename.path);
-    if (member?.required) member.required = false;
-    if (member) relaxMemberUnique(member);
   }
 }
 

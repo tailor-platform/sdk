@@ -126,7 +126,7 @@ export interface FieldRemovedChange extends DiffChangeBase {
  * A member inside a nested field was renamed. `previousPath` and `path` are
  * relative to the top-level field and share the same parent.
  */
-export interface NestedMemberRename {
+interface NestedMemberRename {
   previousPath: string[];
   path: string[];
 }
