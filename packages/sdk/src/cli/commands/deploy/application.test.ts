@@ -901,8 +901,9 @@ describe("applyApplication label writes", () => {
   });
 
   test("writes the SDK labels without metadata when the platform rejects the label count", async () => {
+    const storedMetadata = { "key-0": "v1", "key-1": "v0" };
     const { client, stored } = labelStore(
-      { ...sdkLabels, "sdk-version": "v0-9-0" },
+      { ...sdkLabels, "sdk-version": "v0-9-0", ...storedMetadata },
       // Another tool writes a label while the first write is being rejected.
       (labels) => ({ ...labels, team: "billing" }),
     );
@@ -910,14 +911,14 @@ describe("applyApplication label writes", () => {
 
     const rejections = await applyApplication(client, updateWith(metadata));
 
-    expect(stored()).toEqual({ ...sdkLabels, team: "billing" });
+    expect(stored()).toEqual({ ...sdkLabels, ...storedMetadata, team: "billing" });
     expect(rejections).toEqual([
       {
         name: appName,
         violation: "map must be at most 20 entries",
         sdkLabelsInPlace: true,
-        unwrittenMetadata: Object.keys(metadata),
-        otherLabels: ["team"],
+        unwrittenMetadata: Object.keys(metadata).filter((key) => key !== "key-0"),
+        otherLabels: ["key-0", "key-1", "team"],
       },
     ]);
     expect(applicationLabelLimitError(rejections)).toMatchObject({

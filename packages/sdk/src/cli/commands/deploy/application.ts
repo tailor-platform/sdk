@@ -140,9 +140,7 @@ async function writeApplicationLabels(
     name,
     violation,
     sdkLabelsInPlace,
-    unwrittenMetadata: Object.keys(metadata).filter(
-      (key) => !Object.hasOwn(stored, key) || stored[key] !== metadata[key],
-    ),
+    unwrittenMetadata: Object.keys(metadata).filter((key) => stored[key] !== metadata[key]),
     otherLabels: Object.keys(stored)
       .filter((key) => !sdkKeys.has(key))
       .toSorted(),
