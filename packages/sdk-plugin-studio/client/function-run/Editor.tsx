@@ -30,6 +30,13 @@ export function Editor({ value, onChange, dark }: EditorProps) {
           EditorView.theme({
             "&": { fontSize: "0.8125rem", height: "100%" },
             ".cm-scroller": { overflow: "auto", fontFamily: "ui-monospace, monospace" },
+            "&.cm-editor": { backgroundColor: "var(--card)" },
+            ".cm-gutters": {
+              backgroundColor: "var(--card)",
+              borderRight: "1px solid var(--border)",
+              color: "var(--muted-foreground)",
+            },
+            ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "var(--muted)" },
           }),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) latest.current.onChange(update.state.doc.toString());

@@ -1,0 +1,100 @@
+:root {
+  color-scheme: light;
+
+  --primary: #0e7490;
+  --primary-foreground: #ffffff;
+  --secondary: #ede5d2;
+  --secondary-foreground: #0f172a;
+  --accent: #efe8d6;
+  --accent-foreground: #0f172a;
+
+  --shell-gradient-base: #f5efdf;
+  --shell-gradient-tint: #fbf7ec;
+
+  --background: #f8f3e4;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --muted: #f1eada;
+  --muted-foreground: #475569;
+  --border: rgba(15, 23, 42, 0.12);
+  --input: rgba(15, 23, 42, 0.5);
+  --sidebar: #f3eddc;
+  --sidebar-foreground: #0f172a;
+  --sidebar-border: rgba(15, 23, 42, 0.1);
+
+  --destructive: #b91c1c;
+  --radius: 0.5rem;
+  --chart-1: #0891b2;
+  --chart-2: #059669;
+  --chart-3: #4c1d95;
+  --chart-4: #334155;
+  --chart-5: #475569;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --primary: #22d3ee;
+  --primary-foreground: #04222b;
+  --secondary: #2a2f5c;
+  --secondary-foreground: #f8fafc;
+  --accent: #262b54;
+  --accent-foreground: #f8fafc;
+
+  --shell-gradient-base: #0a0b1e;
+  --shell-gradient-tint: #10122b;
+
+  --background: #10122b;
+  --foreground: #f8fafc;
+  --card: #191c3a;
+  --card-foreground: #f8fafc;
+  --popover: #20244a;
+  --popover-foreground: #f8fafc;
+  --muted: #1a1e40;
+  --muted-foreground: #aab4cc;
+  --border: rgba(196, 181, 253, 0.14);
+  --input: rgba(196, 181, 253, 0.5);
+  --sidebar: #0c0e22;
+  --sidebar-foreground: #f8fafc;
+  --sidebar-border: rgba(196, 181, 253, 0.12);
+
+  --destructive: #f87171;
+  --radius: 0.5rem;
+  --chart-1: #22d3ee;
+  --chart-2: #34d399;
+  --chart-3: #c4b5fd;
+  --chart-4: #67e8f9;
+  --chart-5: #cbd5e1;
+}
+
+html {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background-color: var(--shell-gradient-base);
+  background-image: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--shell-gradient-base) 60%, var(--shell-gradient-tint)) 0%,
+    color-mix(in srgb, var(--shell-gradient-base) 25%, var(--shell-gradient-tint)) 45%,
+    var(--shell-gradient-tint) 75%,
+    var(--shell-gradient-tint) 100%
+  );
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+
+html body,
+html [data-slot="sidebar-wrapper"],
+html [data-slot="sidebar-inner"],
+html main[data-slot="sidebar-inset"] {
+  background-color: transparent;
+  background-image: none;
+}
+
+html :where(h1, h2, h3, h4) {
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}

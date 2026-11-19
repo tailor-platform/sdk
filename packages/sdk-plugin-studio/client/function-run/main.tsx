@@ -1,4 +1,5 @@
 import "@tailor-platform/app-shell/styles";
+import "../theme-tailor.css";
 import dark from "@enlumine/html/themes/dark";
 import light from "@enlumine/html/themes/light";
 import json from "@enlumine/json";
