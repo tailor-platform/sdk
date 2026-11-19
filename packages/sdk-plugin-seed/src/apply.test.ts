@@ -180,7 +180,7 @@ describe("seedApplyCommand", () => {
     expect(jsonl.loadSeedData).toHaveBeenCalledWith(dirs, ["User"], expect.anything());
     expect(jsonl.loadLocatedSeedRows).toHaveBeenCalledWith(dirs, "_User", { keyField: "name" });
     expect(sdk.truncate).toHaveBeenCalledWith({
-      configPath: "tailor.config.ts",
+      configPath: undefined,
       profile: undefined,
       workspaceId: undefined,
       all: true,
@@ -432,7 +432,7 @@ describe("seedApplyCommand", () => {
 
     expect(sdk.truncate).toHaveBeenCalledWith({
       all: true,
-      configPath: "tailor.config.ts",
+      configPath: undefined,
       profile: undefined,
       workspaceId: undefined,
     });
@@ -500,7 +500,7 @@ describe("seedApplyCommand", () => {
     await runApply(["--truncate", "--yes", "--namespace", "tailordb"]);
 
     expect(sdk.truncate).toHaveBeenCalledWith({
-      configPath: "tailor.config.ts",
+      configPath: undefined,
       namespace: "tailordb",
       profile: undefined,
       workspaceId: undefined,
@@ -512,7 +512,7 @@ describe("seedApplyCommand", () => {
     await runApply(["--truncate", "--yes", "User"]);
 
     expect(sdk.truncate).toHaveBeenCalledWith({
-      configPath: "tailor.config.ts",
+      configPath: undefined,
       profile: undefined,
       tables: ["User"],
       workspaceId: undefined,
