@@ -34,8 +34,8 @@ type DefinedSecrets<T extends SecretsVaultsInputNullish> = SecretsDefinition<T> 
 /**
  * Define secrets configuration for the Tailor SDK.
  * Each key is a vault name, and its value is a record of secret name to secret value.
- * A string value is written on every deploy. A `{ create: value }` value is written only
- * when the secret does not exist yet, and an existing secret keeps its value.
+ * A string value replaces the stored value when it changes. A `{ create: value }` value is
+ * written only when the secret does not exist yet, and an existing secret keeps its value.
  * @param config - Secrets configuration mapping vault names to their secrets
  * @returns Defined secrets with typed runtime access methods
  */

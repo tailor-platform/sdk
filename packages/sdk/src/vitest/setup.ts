@@ -8,6 +8,7 @@
  */
 import { pathToFileURL } from "node:url";
 import { afterAll, beforeAll } from "vitest";
+import { readSecretEntry } from "#/utils/secret-entry";
 import { applyDateDefault } from "./date-representation";
 import { RUNTIME_FLAG_KEY, mockSecretmanager } from "./mock";
 import type { SecretsInput } from "#/types/secrets.generated";
@@ -42,9 +43,9 @@ export function extractVaultStore(secrets: unknown): Record<string, Record<strin
   for (const [vaultName, vaultData] of Object.entries(source)) {
     if (typeof vaultData === "object" && vaultData !== null) {
       store[vaultName] = Object.fromEntries(
-        Object.entries(vaultData as SecretsInput["vaults"][string]).map(([name, value]) => [
+        Object.entries(vaultData as SecretsInput["vaults"][string]).map(([name, entry]) => [
           name,
-          typeof value === "object" && value !== null ? value.create : value,
+          readSecretEntry(entry).value,
         ]),
       ) as Record<string, string>;
     }
