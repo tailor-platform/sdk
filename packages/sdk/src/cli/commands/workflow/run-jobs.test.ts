@@ -155,4 +155,22 @@ export const aJob = createWorkflowJob({
     const bundled = await bundleWorkflowRunJobs({ target, runId: "r1", jobName: "a-job" });
     expect(bundled.jobs.map((j) => j.jobName).toSorted()).toEqual(["a-job", "b-job"]);
   });
+
+  test("reads the file it was given, not another one its name matches as a pattern", async () => {
+    using tmp = tempDir("workflow-run-jobs-");
+    const { target } = setup(tmp.dir, {
+      "jobs[1].ts": `import { createWorkflowJob } from "@tailor-platform/sdk";
+export const bracket = createWorkflowJob({ name: "bracket-job", body: () => "from jobs[1]" });
+`,
+      "jobs1.ts": `import { createWorkflowJob } from "@tailor-platform/sdk";
+export const one = createWorkflowJob({ name: "one-job", body: () => "from jobs1" });
+`,
+    });
+    (target as { filePath: string }).filePath = path.join(tmp.dir, "jobs[1].ts");
+
+    const bundled = await bundleWorkflowRunJobs({ target, runId: "r1", jobName: "bracket-job" });
+
+    expect(bundled.jobs.map((job) => job.jobName)).toEqual(["bracket-job"]);
+    expect(bundled.jobs[0]?.code).toContain("from jobs[1]");
+  });
 });

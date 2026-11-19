@@ -30,6 +30,13 @@ interface BundledWorkflowRunJobs {
   jobs: Array<{ jobName: string; code: string }>;
 }
 
+// A file path is given to the workflow service as a pattern, so each character the pattern
+// reads as syntax is put in a bracket, which matches it as it is. A backslash does not
+// work here: pathe turns it into a slash.
+function literalPattern(filePath: string): string {
+  return filePath.replace(/[*?[{}()]/g, (char) => `[${char}]`);
+}
+
 function realPath(filePath: string): string {
   try {
     return fs.realpathSync(filePath);
@@ -82,7 +89,10 @@ export async function bundleWorkflowRunJobs(
   const { config, filePath } = target;
   const baseDir = path.dirname(config.path);
 
-  const fileService = createWorkflowService({ config: { files: [filePath] }, baseDir });
+  const fileService = createWorkflowService({
+    config: { files: [literalPattern(filePath)] },
+    baseDir,
+  });
   await fileService.loadWorkflows();
   const appService = config.workflow
     ? createWorkflowService({ config: config.workflow, baseDir })
@@ -120,7 +130,7 @@ export async function bundleWorkflowRunJobs(
   const tsconfigCache = createTsconfigLookupCache();
   const workflowSources = [...fileService.workflowSources, ...(appService?.workflowSources ?? [])];
   const baseStartContext = await buildStartContext(
-    { files: [...(config.workflow?.files ?? []), filePath] },
+    { files: [...(config.workflow?.files ?? []), literalPattern(filePath)] },
     target.authNamespace,
     baseDir,
     workflowSources,
