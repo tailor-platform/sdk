@@ -1,4 +1,5 @@
-import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
+import { Code, ConnectError, createContextValues } from "@connectrpc/connect";
+import { alreadyExistsExpected, fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
@@ -43,6 +44,7 @@ type CreateSecret = {
   workspaceId: string;
   vaultName: string;
   value: string;
+  createOnly: boolean;
 };
 
 type UpdateSecret = {
@@ -88,6 +90,28 @@ export function secretCreateRequest(
     secretmanagerSecretName: create.secretName,
     secretmanagerSecretValue: create.value,
   };
+}
+
+/**
+ * Create a planned secret. A create-only secret that already exists keeps its value.
+ * @param client - Operator client instance
+ * @param create - Planned secret create
+ * @returns The create response, or undefined when a create-only secret already existed
+ */
+async function createSecret(client: OperatorClient, create: CreateSecret) {
+  if (!create.createOnly) {
+    return await client.createSecretManagerSecret(secretCreateRequest(create));
+  }
+  try {
+    return await client.createSecretManagerSecret(secretCreateRequest(create), {
+      contextValues: createContextValues().set(alreadyExistsExpected, true),
+    });
+  } catch (error) {
+    if (error instanceof ConnectError && error.code === Code.AlreadyExists) {
+      return undefined;
+    }
+    throw error;
+  }
 }
 
 /**
@@ -239,6 +263,8 @@ export async function planSecretManager(context: PlanContext) {
         logger.registerSecret(secret.value);
 
         if (existingSet.has(secret.name)) {
+          existingSet.delete(secret.name);
+          if (secret.createOnly) continue;
           const stored = state.vaults[vaultName]?.[secret.name];
           const remoteUpdateTime = existingSecretTimes.get(secret.name);
           // Skip only when the stored hash matches and the remote updateTime
@@ -258,7 +284,6 @@ export async function planSecretManager(context: PlanContext) {
               ...(unchanged && { forcedBySdkVersion: true }),
             });
           }
-          existingSet.delete(secret.name);
         } else {
           secretChangeSet.creates.push({
             name: `${vaultName}/${secret.name}`,
@@ -266,6 +291,7 @@ export async function planSecretManager(context: PlanContext) {
             workspaceId,
             vaultName,
             value: secret.value,
+            createOnly: secret.createOnly,
           });
         }
       }
@@ -373,11 +399,16 @@ export async function applySecretManager(
         // Evidence must come from this deploy's own mutation responses; pairing
         // the hash with a re-listed timestamp could adopt another writer's.
         const appliedUpdateTimes = new Map<string, string | undefined>();
+        const keptSecrets = new Set<string>();
 
         // Create new secrets
         await Promise.all(
           secretChangeSet.creates.map(async (create) => {
-            const response = await client.createSecretManagerSecret(secretCreateRequest(create));
+            const response = await createSecret(client, create);
+            if (response === undefined) {
+              keptSecrets.add(create.name);
+              return;
+            }
             appliedUpdateTimes.set(create.name, serializeUpdateTime(response.secret?.updateTime));
           }),
         );
@@ -393,6 +424,7 @@ export async function applySecretManager(
         if (application) {
           const state = loadSecretsState(stateScope);
           for (const secret of secretHashUpdates) {
+            if (keptSecrets.has(secret.name)) continue;
             if (!Object.hasOwn(state.vaults, secret.vaultName)) {
               state.vaults[secret.vaultName] = {};
             }

@@ -6,6 +6,7 @@ import {
   Code,
   ConnectError,
   createClient,
+  createContextKey,
   type Interceptor,
   type StreamResponse,
   type Transport,
@@ -554,7 +555,8 @@ async function currentAccessToken(source: AccessTokenSource): Promise<string> {
  * allowlisted Create (see `RETRY_SAFE_CREATE_METHODS`) is treated as success,
  * since it means a prior attempt already committed the resource server-side, and
  * an `AlreadyExists` from such a Create that no prior attempt could have committed
- * is routed to crash/error reporting before it surfaces.
+ * is routed to crash/error reporting before it surfaces, unless the call sets
+ * `alreadyExistsExpected`.
  * @internal
  * @param options - Client options that control `AlreadyExists` handling
  * @returns Retry interceptor
@@ -589,8 +591,10 @@ export function retryInterceptor(
             return synthesizeEmptyUnaryResponse(req);
           }
           // The top-level handler skips ConnectError, so report it before it surfaces.
-          const { reportCrash } = await import("#/cli/crashreport/index");
-          await reportCrash(error, "handledError");
+          if (!req.contextValues.get(alreadyExistsExpected)) {
+            const { reportCrash } = await import("#/cli/crashreport/index");
+            await reportCrash(error, "handledError");
+          }
         }
         const unsentRequest = isUnsentRequest(error);
         if (unsentRequest || isRetriable(error, req.method)) {
@@ -698,6 +702,16 @@ export const RETRY_SAFE_CREATE_METHODS: ReadonlySet<string> = new Set([
   "CreateWorkflow",
   "CreateWorkflowJobFunctionExecutionPolicy",
 ]);
+
+/**
+ * Per-call context value marking a retry-safe Create whose caller handles
+ * `AlreadyExists` as an expected outcome, so `retryInterceptor` surfaces it
+ * without routing it to error tracking.
+ * @internal
+ */
+export const alreadyExistsExpected = createContextKey(false, {
+  description: "AlreadyExists is an expected outcome of this Create",
+});
 
 /**
  * Whether an error is an `AlreadyExists` from a retry-safe Create RPC.

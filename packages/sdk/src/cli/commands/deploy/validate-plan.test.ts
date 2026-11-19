@@ -382,6 +382,7 @@ const invalidCases: Case<RegExp>[] = [
         workspaceId: WS_ID,
         vaultName: "my-vault",
         value: "my-value",
+        createOnly: false,
       });
     },
     expected: /\d+ validation error\(s\) found in 1 resource\(s\)/,

@@ -10,6 +10,7 @@ import { pathToFileURL } from "node:url";
 import { afterAll, beforeAll } from "vitest";
 import { applyDateDefault } from "./date-representation";
 import { RUNTIME_FLAG_KEY, mockSecretmanager } from "./mock";
+import type { SecretsInput } from "#/types/secrets.generated";
 
 export { applyDateDefault };
 
@@ -23,7 +24,7 @@ function isTailorRuntime(): boolean {
  * `defineSecretManager()` returns `{ vaults, options, get, getAll }` (get/getAll
  * are non-enumerable). When that shape is present, the actual vaults live
  * under `.vaults`. Otherwise fall back to treating the object itself as the
- * vault map (for plain object configs).
+ * vault map (for plain object configs). A `{ create: value }` secret stores its `value`.
  * @param secrets - Value from `appConfig.secrets` or `config.secrets`
  * @returns Vault store, or null if the value is unusable
  */
@@ -40,7 +41,12 @@ export function extractVaultStore(secrets: unknown): Record<string, Record<strin
   const store: Record<string, Record<string, string>> = {};
   for (const [vaultName, vaultData] of Object.entries(source)) {
     if (typeof vaultData === "object" && vaultData !== null) {
-      store[vaultName] = { ...(vaultData as Record<string, string>) };
+      store[vaultName] = Object.fromEntries(
+        Object.entries(vaultData as SecretsInput["vaults"][string]).map(([name, value]) => [
+          name,
+          typeof value === "object" && value !== null ? value.create : value,
+        ]),
+      ) as Record<string, string>;
     }
   }
   return Object.keys(store).length > 0 ? store : null;

@@ -1,5 +1,7 @@
 // oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
+import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, test, expect, vi, aroundEach } from "vitest";
+import { alreadyExistsExpected } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { applySecretManager, planSecretManager } from "./secret-manager";
 import { hashValue } from "./secrets-state";
@@ -93,11 +95,15 @@ function createMockPlanClient(
   } as unknown as OperatorClient;
 }
 
+type DeclaredSecret = Application["secrets"][number]["secrets"][number];
+
 function createPlanContext(
   client: OperatorClient,
   secrets: Array<{
     vaultName: string;
-    secrets: Array<{ name: string; value: string | null | undefined }>;
+    secrets: Array<
+      Omit<DeclaredSecret, "createOnly"> & Partial<Pick<DeclaredSecret, "createOnly">>
+    >;
   }>,
   overrides: {
     appName?: string;
@@ -113,7 +119,10 @@ function createPlanContext(
     application: {
       name: overrides.appName ?? "test-app",
       id: overrides.appId ?? "app-1",
-      secrets,
+      secrets: secrets.map((vault) => ({
+        ...vault,
+        secrets: vault.secrets.map((secret) => ({ createOnly: false, ...secret })),
+      })),
       idpServices: overrides.idpServices ?? [],
     } as unknown as Application,
     forRemoval: overrides.forRemoval ?? false,
@@ -515,6 +524,167 @@ describe("applySecretManager update-time evidence persistence", () => {
     const savedState = mockSaveSecretsState.mock.calls[0]![1];
     expect(savedState.vaults["my-vault"]["secret-a"]).toEqual({ hash: hashValue("value-a") });
     expect(savedState.vaults["my-vault"]["secret-b"]).toEqual({ hash: hashValue("value-b") });
+  });
+});
+
+describe("planSecretManager create-only secrets", () => {
+  aroundEach(async (runTest) => {
+    mockLoadSecretsState.mockReturnValue({ vaults: {} });
+    await runTest();
+  });
+
+  const createOnlySecret = { name: "key", value: "generated", createOnly: true };
+
+  test.each([
+    { case: "the vault exists without the secret", vaults: [{ name: "my-vault" }] },
+    { case: "the vault does not exist", vaults: [] },
+  ])("plans a create-only create when $case", async ({ vaults }) => {
+    const client = {
+      ...createMockPlanClient(),
+      listSecretManagerVaults: vi.fn().mockResolvedValue({ vaults, nextPageToken: "" }),
+    } as unknown as OperatorClient;
+    const ctx = createPlanContext(client, [{ vaultName: "my-vault", secrets: [createOnlySecret] }]);
+
+    const result = await planSecretManager(ctx);
+
+    expect(result.secretChangeSet.creates).toEqual([
+      {
+        name: "my-vault/key",
+        secretName: "key",
+        workspaceId: "ws-1",
+        vaultName: "my-vault",
+        value: "generated",
+        createOnly: true,
+      },
+    ]);
+  });
+
+  test.each([
+    { case: "no stored state", stored: {}, forceApplyAll: false },
+    {
+      case: "a stored hash of another value",
+      stored: { key: { hash: hashValue("other"), updateTime: "100.5" } },
+      forceApplyAll: false,
+    },
+    {
+      case: "forceApplyAll and matching evidence",
+      stored: { key: { hash: hashValue("generated"), updateTime: "100.5" } },
+      forceApplyAll: true,
+    },
+  ])(
+    "leaves an existing create-only secret as is with $case",
+    async ({ stored, forceApplyAll }) => {
+      mockLoadSecretsState.mockReturnValue({ vaults: { "my-vault": stored } });
+      const client = createMockPlanClient([
+        { name: "key", updateTime: { seconds: 100n, nanos: 5 } },
+      ]);
+      const ctx = {
+        ...createPlanContext(client, [{ vaultName: "my-vault", secrets: [createOnlySecret] }]),
+        forceApplyAll,
+      };
+
+      const result = await planSecretManager(ctx);
+
+      expect(result.secretChangeSet.creates).toEqual([]);
+      expect(result.secretChangeSet.updates).toEqual([]);
+      expect(result.secretChangeSet.deletes).toEqual([]);
+    },
+  );
+});
+
+describe("applySecretManager create-only secrets", () => {
+  aroundEach(async (runTest) => {
+    mockLoadSecretsState.mockReturnValue({ vaults: {} });
+    await runTest();
+  });
+
+  const createOnlyCreate = {
+    name: "my-vault/key",
+    secretName: "key",
+    workspaceId: "ws-1",
+    vaultName: "my-vault",
+    value: "generated",
+    createOnly: true,
+  };
+  const plainCreate = {
+    name: "my-vault/plain",
+    secretName: "plain",
+    workspaceId: "ws-1",
+    vaultName: "my-vault",
+    value: "plain-value",
+    createOnly: false,
+  };
+
+  function createPlanResult(creates: Array<typeof createOnlyCreate>) {
+    return {
+      stateScope,
+      vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
+      secretChangeSet: { creates, updates: [], deletes: [], replaces: [] },
+    } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
+  }
+
+  function rejectAlreadyExistsFor(secretName: string) {
+    return vi.fn((request: { secretmanagerSecretName: string }) =>
+      request.secretmanagerSecretName === secretName
+        ? Promise.reject(
+            new ConnectError(`secret with name ${secretName} already exists`, Code.AlreadyExists),
+          )
+        : Promise.resolve({}),
+    );
+  }
+
+  const application = { secrets: [] } as unknown as Application;
+
+  test("keeps the existing value when a create-only create returns AlreadyExists", async () => {
+    const client = {
+      ...createMockApplyClient(),
+      createSecretManagerSecret: rejectAlreadyExistsFor("key"),
+    } as unknown as OperatorClient;
+
+    await applySecretManager(
+      client,
+      createPlanResult([createOnlyCreate, plainCreate]),
+      "create-update",
+      application,
+    );
+
+    const savedState = mockSaveSecretsState.mock.calls[0]![1];
+    expect(savedState.vaults["my-vault"]).toEqual({
+      plain: { hash: hashValue("plain-value") },
+    });
+  });
+
+  test("fails a plain create that returns AlreadyExists", async () => {
+    const client = {
+      ...createMockApplyClient(),
+      createSecretManagerSecret: rejectAlreadyExistsFor("plain"),
+    } as unknown as OperatorClient;
+
+    await expect(
+      applySecretManager(
+        client,
+        createPlanResult([createOnlyCreate, plainCreate]),
+        "create-update",
+        application,
+      ),
+    ).rejects.toThrow("secret with name plain already exists");
+  });
+
+  test("tells the client that only a create-only create expects AlreadyExists", async () => {
+    const client = createMockApplyClient();
+
+    await applySecretManager(
+      client,
+      createPlanResult([createOnlyCreate, plainCreate]),
+      "create-update",
+      application,
+    );
+
+    const calls = vi.mocked(client.createSecretManagerSecret).mock.calls;
+    const optionsFor = (secretName: string) =>
+      calls.find(([request]) => request.secretmanagerSecretName === secretName)?.[1];
+    expect(optionsFor("key")?.contextValues?.get(alreadyExistsExpected)).toBe(true);
+    expect(optionsFor("plain")).toBeUndefined();
   });
 });
 

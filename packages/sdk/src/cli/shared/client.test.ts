@@ -2,11 +2,19 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { MethodOptions_IdempotencyLevel } from "@bufbuild/protobuf/wkt";
-import { Code, ConnectError, type Transport, type UnaryRequest } from "@connectrpc/connect";
+import {
+  Code,
+  ConnectError,
+  createContextValues,
+  type ContextValues,
+  type Transport,
+  type UnaryRequest,
+} from "@connectrpc/connect";
 import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 import { aroundEach, describe, test, expect, vi } from "vitest";
 import { reportCrash } from "#/cli/crashreport/index";
 import {
+  alreadyExistsExpected,
   closeConnectionPool,
   concurrencyLimitInterceptor,
   createPooledStreamTransport,
@@ -1012,10 +1020,12 @@ describe("retryInterceptor", () => {
    * Build a minimal unary request bound to a real OperatorService method so the
    * interceptor can read `method.name`/`method.output`/`method.idempotency`.
    * @param method - OperatorService method descriptor to bind the request to
+   * @param contextValues - Per-call context values the request carries
    * @returns A minimal unary request usable by the interceptor under test
    */
   function makeUnaryReq(
     method: (typeof OperatorService.method)[keyof typeof OperatorService.method],
+    contextValues: ContextValues = createContextValues(),
   ) {
     return {
       stream: false,
@@ -1023,6 +1033,7 @@ describe("retryInterceptor", () => {
       method,
       header: new Headers(),
       message: {},
+      contextValues,
     } as unknown as UnaryRequest;
   }
 
@@ -1391,6 +1402,20 @@ describe("retryInterceptor", () => {
       settle(plannedRetry(next)(makeUnaryReq(OperatorService.method.createIdPClient))),
     ).rejects.toThrow("already exists");
     expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  test("surfaces a first-attempt AlreadyExists the call expects without error tracking", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("secret already exists", Code.AlreadyExists));
+    const req = makeUnaryReq(
+      OperatorService.method.createSecretManagerSecret,
+      createContextValues().set(alreadyExistsExpected, true),
+    );
+
+    await expect(settle(retryInterceptor()(next)(req))).rejects.toThrow("secret already exists");
+    expect(vi.mocked(reportCrash)).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledTimes(1);
   });
 
   test.each([

@@ -78,7 +78,11 @@ import type { z } from "zod";
 
 type SecretVault = {
   readonly vaultName: string;
-  readonly secrets: ReadonlyArray<{ name: string; value: string | null | undefined }>;
+  readonly secrets: ReadonlyArray<{
+    name: string;
+    value: string | null | undefined;
+    createOnly: boolean;
+  }>;
 };
 
 export type Application = {
@@ -519,7 +523,11 @@ function parseSecretManager(
 
   const secrets = Object.entries(parsed.vaults).map(([vaultName, vaultSecrets]) => ({
     vaultName,
-    secrets: Object.entries(vaultSecrets).map(([name, value]) => ({ name, value })),
+    secrets: Object.entries(vaultSecrets).map(([name, entry]) =>
+      typeof entry === "object" && entry !== null
+        ? { name, value: entry.create, createOnly: true }
+        : { name, value: entry, createOnly: false },
+    ),
   }));
 
   // Defensive check: error if nullish values exist without ignoreNullishValues

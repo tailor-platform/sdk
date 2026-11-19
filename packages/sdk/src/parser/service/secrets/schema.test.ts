@@ -1,10 +1,8 @@
 import { describe, expect, test } from "vitest";
 import { SecretsSchema } from "./schema";
+import type { SecretsInput } from "#/types/secrets.generated";
 
-function wrap(
-  vaults: Record<string, Record<string, string | null | undefined>>,
-  ignoreNullishValues = false,
-) {
+function wrap(vaults: SecretsInput["vaults"], ignoreNullishValues = false) {
   return { vaults, options: { ignoreNullishValues } };
 }
 
@@ -61,6 +59,17 @@ describe("SecretsSchema validation", () => {
       true,
     );
     expect(() => SecretsSchema.parse(valid)).not.toThrow();
+  });
+
+  test("keeps create entries, including nullish ones", () => {
+    const vaults = {
+      "my-vault": {
+        "my-secret": { create: "value" },
+        "missing-secret": { create: undefined },
+        "null-secret": { create: null },
+      },
+    };
+    expect(SecretsSchema.parse(wrap(vaults, true)).vaults).toEqual(vaults);
   });
 
   test("accepts ignoreNullishValues option", () => {

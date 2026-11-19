@@ -217,7 +217,13 @@ describe("AI Gateway authNamespace default", () => {
       ...defineConfig({
         name: "testApp",
         secrets: defineSecretManager({
-          vault: { first: undefined, second: "set", third: null },
+          vault: {
+            first: undefined,
+            second: "set",
+            third: null,
+            fourth: { create: undefined },
+            fifth: { create: "set" },
+          },
         } as never),
       }),
       path: "tailor.config.ts",
@@ -227,11 +233,37 @@ describe("AI Gateway authNamespace default", () => {
       expect.objectContaining({
         code: "CONFIG_INVALID",
         message:
-          "Invalid Tailor config:\n  - secrets.vaults.vault.first: Has no value\n  - secrets.vaults.vault.third: Has no value",
+          "Invalid Tailor config:\n  - secrets.vaults.vault.first: Has no value\n  - secrets.vaults.vault.third: Has no value\n  - secrets.vaults.vault.fourth: Has no value",
         suggestion: expect.stringContaining("ignoreNullishValues: true"),
         context: expect.objectContaining({ configKey: "secrets" }),
       }),
     );
+  });
+
+  test("marks secrets declared as { create } as create-only", () => {
+    const config = {
+      ...defineConfig({
+        name: "testApp",
+        secrets: defineSecretManager(
+          {
+            vault: { plain: "value", created: { create: "key" }, missing: { create: undefined } },
+          },
+          { ignoreNullishValues: true },
+        ),
+      }),
+      path: "tailor.config.ts",
+    };
+
+    expect(defineApplication({ config }).secrets).toEqual([
+      {
+        vaultName: "vault",
+        secrets: [
+          { name: "plain", value: "value", createOnly: false },
+          { name: "created", value: "key", createOnly: true },
+          { name: "missing", value: undefined, createOnly: true },
+        ],
+      },
+    ]);
   });
 
   test("reports a userProfile type no TailorDB namespace defines as CONFIG_INVALID", async () => {
