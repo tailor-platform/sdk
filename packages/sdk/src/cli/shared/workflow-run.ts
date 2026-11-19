@@ -234,3 +234,22 @@ export async function reclaimWorkflowRuns(params: ReclaimWorkflowRunsParams): Pr
   }
   return removed;
 }
+
+/**
+ * Remove the resources of finished runs for a caller that must not fail
+ * because of it, such as `tailor deploy`.
+ * @param params - Workspace to sweep
+ * @returns How many runs were removed; 0 when the sweep failed
+ */
+export async function reclaimFinishedWorkflowRuns(
+  params: ReclaimWorkflowRunsParams,
+): Promise<number> {
+  try {
+    return (await reclaimWorkflowRuns(params)).length;
+  } catch (error) {
+    logger.debug(
+      `Could not sweep finished workflow runs: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return 0;
+  }
+}

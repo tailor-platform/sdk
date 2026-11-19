@@ -3,7 +3,12 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { writeMetadataLabelsDirect } from "#/cli/commands/deploy/label";
-import { awaitWorkflowRun, reclaimWorkflowRuns, startWorkflowRun } from "./workflow-run";
+import {
+  awaitWorkflowRun,
+  reclaimFinishedWorkflowRuns,
+  reclaimWorkflowRuns,
+  startWorkflowRun,
+} from "./workflow-run";
 import { createRunId, workflowRunLabels } from "./workflow-run-labels";
 import type { OperatorClient } from "./client";
 import type { ScriptInvoker } from "./script-executor";
@@ -320,5 +325,36 @@ describe("reclaimWorkflowRuns", () => {
     await reclaimWorkflowRuns({ client: asClient(client), workspaceId: "ws", now: old });
 
     expect(client.getMetadata).not.toHaveBeenCalled();
+  });
+});
+
+describe("reclaimFinishedWorkflowRuns", () => {
+  const old = new Date(now.getTime() + 60 * 60 * 1000);
+
+  test("removes finished runs and reports how many", async () => {
+    const client = createSweepClient([
+      {
+        name: `tmp-${runId}`,
+        labels: workflowRunLabels({ kind: "script", runId }),
+        executions: [WorkflowExecution_Status.SUCCESS],
+      },
+    ]);
+
+    const removed = await reclaimFinishedWorkflowRuns({
+      client: asClient(client),
+      workspaceId: "ws",
+      now: old,
+    });
+
+    expect(removed).toBe(1);
+  });
+
+  test("does not fail the caller when the sweep itself fails", async () => {
+    const client = createSweepClient([]);
+    client.listWorkflows.mockRejectedValueOnce(new ConnectError("down", Code.Unavailable));
+
+    await expect(
+      reclaimFinishedWorkflowRuns({ client: asClient(client), workspaceId: "ws", now: old }),
+    ).resolves.toBe(0);
   });
 });
