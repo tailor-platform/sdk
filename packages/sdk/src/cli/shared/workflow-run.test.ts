@@ -2,7 +2,10 @@
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
-import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import {
+  WorkflowExecution_Status,
+  WorkflowJobExecution_Status,
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { writeMetadataLabelsDirect } from "#/cli/commands/deploy/label";
 import { logger } from "./logger";
@@ -587,6 +590,65 @@ describe("awaitWorkflowRun when a sweep removes the workflow while it waits", ()
     expect(outcome).toEqual({
       state: "finished",
       result: { success: true, logs: "", result: '"main"' },
+    });
+  });
+
+  describe("when the main job was suspended waiting for a job it started", () => {
+    const withMain = (status: WorkflowJobExecution_Status) => ({
+      execution: {
+        status: WorkflowExecution_Status.RUNNING,
+        jobExecutions: [
+          {
+            executionId: "fn-suspended",
+            status,
+            kind: { case: "jobFunction", value: { name: "job" } },
+            position: { depth: 0, parentWorkflowJobExecutionId: "" },
+          },
+        ],
+      },
+    });
+    const callRecord = '{"arg":{},"arg_hash":"abc","call_index":0,"job_name":"child"}';
+
+    test("does not follow the suspended call, whose result is only a record of it", async () => {
+      const client = createClient();
+      client.getWorkflowExecution
+        .mockResolvedValueOnce(withMain(WorkflowJobExecution_Status.SUSPEND))
+        .mockRejectedValue(gone);
+
+      const outcome = await awaitWorkflowRun({
+        client: asClient(client),
+        workspaceId: "ws",
+        started,
+        pollInterval: 1,
+        timeoutMs: 1000,
+      });
+
+      expect(outcome).toMatchObject({ state: "outcomeUnavailable", workflowRemoved: true });
+      expect(client.getFunctionExecution).not.toHaveBeenCalled();
+    });
+
+    test("does not report a call record as the result when the job it follows had suspended by then", async () => {
+      const client = createClient();
+      client.getWorkflowExecution
+        .mockResolvedValueOnce(withMain(WorkflowJobExecution_Status.RUNNING))
+        .mockRejectedValue(gone);
+      client.getFunctionExecution.mockResolvedValue({
+        execution: {
+          status: FunctionExecution_Status.SUCCESS,
+          logEntries: [],
+          result: callRecord,
+        },
+      } as never);
+
+      const outcome = await awaitWorkflowRun({
+        client: asClient(client),
+        workspaceId: "ws",
+        started,
+        pollInterval: 1,
+        timeoutMs: 1000,
+      });
+
+      expect(outcome).toMatchObject({ state: "outcomeUnavailable", workflowRemoved: true });
     });
   });
 

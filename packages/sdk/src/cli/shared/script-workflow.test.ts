@@ -8,6 +8,7 @@ import { describe, expect, test, vi } from "vitest";
 import { logger } from "./logger";
 import {
   assertNoActiveScriptWorkflow,
+  liveMainJobExecutionId,
   mainJobExecutionId,
   outcomeJobExecutionId,
   readOutcome,
@@ -565,5 +566,36 @@ describe("the job a finished run's outcome is read from", () => {
     });
 
     expect(outcome).toMatchObject({ success: false, error: "boom-from-child" });
+  });
+});
+
+describe("the main job of a run that is going", () => {
+  const row = (executionId: string, depth: number, status: WorkflowJobExecution_Status) => ({
+    executionId,
+    status,
+    kind: { case: "jobFunction", value: { name: "job" } },
+    position: { depth, parentWorkflowJobExecutionId: depth === 0 ? "" : "job-main" },
+  });
+  const running = (...rows: ReturnType<typeof row>[]) =>
+    ({
+      status: WorkflowExecution_Status.RUNNING,
+      jobExecutions: rows,
+    }) as unknown as WorkflowExecution;
+  const { RUNNING, SUSPEND, WAITING } = WorkflowJobExecution_Status;
+
+  test("has no execution id while it is suspended waiting for a job it started, which holds only a record of the call", () => {
+    expect(
+      liveMainJobExecutionId(running(row("fn-first", 0, SUSPEND), row("fn-child", 1, RUNNING))),
+    ).toBe(undefined);
+  });
+
+  test("has no execution id while it waits at a wait point", () => {
+    expect(liveMainJobExecutionId(running(row("fn-first", 0, WAITING)))).toBe(undefined);
+  });
+
+  test("is the execution it was run again as, once the job it waited for has finished", () => {
+    expect(
+      liveMainJobExecutionId(running(row("fn-again", 0, RUNNING), row("fn-child", 1, RUNNING))),
+    ).toBe("fn-again");
   });
 });

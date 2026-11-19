@@ -18,7 +18,7 @@ import { joinFunctionLogMessages } from "#/cli/shared/function-execution";
 import { logger } from "#/cli/shared/logger";
 import {
   assertMachineUserExists,
-  mainJobExecutionId,
+  liveMainJobExecutionId,
   readOutcome,
   type ScriptWorkflowOutcome,
 } from "#/cli/shared/script-workflow";
@@ -256,7 +256,7 @@ export async function awaitWorkflowRun(
       deadline,
       options: {
         onActive: (active) => {
-          jobExecutionId = mainJobExecutionId(active) ?? jobExecutionId;
+          jobExecutionId = liveMainJobExecutionId(active);
           params.onActive?.();
         },
       },
@@ -326,6 +326,26 @@ interface OutcomeAfterRemovalParams {
 }
 
 /**
+ * Tell whether a job's result is the record of a call it suspended in, not a result of its own.
+ * @param result - Result text of a function execution
+ * @returns True when it has the fields of that record
+ */
+function isSuspendedCallRecord(result: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(result);
+    return (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "arg_hash" in parsed &&
+      "call_index" in parsed &&
+      "job_name" in parsed
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Read the result of a run whose workflow was removed while this command waited,
  * following the job's own execution until it ends.
  * @param params - Job execution to follow and how long to follow it
@@ -359,6 +379,11 @@ async function outcomeAfterWorkflowRemoved(
       const logs = joinFunctionLogMessages(job.logEntries);
       const result = job.result;
       if (job.status === FunctionExecution_Status.SUCCESS) {
+        if (isSuspendedCallRecord(result)) {
+          return unavailable(
+            "the job was suspended while it waited for a job it started, and its result was not read before the workflow was removed",
+          );
+        }
         return { state: "finished", result: { success: true, logs, result } };
       }
       if (

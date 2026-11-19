@@ -272,6 +272,30 @@ export function mainJobExecutionId(execution: WorkflowExecution): string | undef
 }
 
 /**
+ * Pick the function execution of the main job while a run is going. A main job that waits for a job
+ * it started is suspended, and is later run again as a function execution of its own; the one
+ * it is suspended in only holds a record of the call, so no id is given while it waits.
+ * @param execution - Workflow execution that has not finished
+ * @returns Function execution id of the main job as it runs, or undefined while it is suspended
+ */
+export function liveMainJobExecutionId(execution: WorkflowExecution): string | undefined {
+  const main = execution.jobExecutions.findLast(
+    (job) =>
+      job.kind.case !== "wait" &&
+      (job.position?.depth ?? 0) === 0 &&
+      !job.position?.parentWorkflowJobExecutionId,
+  );
+  if (!main) return undefined;
+  if (
+    main.status === WorkflowJobExecution_Status.SUSPEND ||
+    main.status === WorkflowJobExecution_Status.WAITING
+  ) {
+    return undefined;
+  }
+  return main.executionId;
+}
+
+/**
  * Pick the job whose function execution tells how a finished run ended. A run that
  * succeeded ended with its main job. In a run that failed, the main job only reports that
  * a job it started did not return, so the cause is in the deepest job that failed.
