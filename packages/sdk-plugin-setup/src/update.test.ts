@@ -2,10 +2,23 @@ import * as fs from "node:fs";
 import { logger, withSourceLocation } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
-import { setupAutofix } from "./autofix";
+import { setupAutofix, type AutofixSetupInputs } from "./autofix";
 import { checkGitHub } from "./check";
-import { setupTarget, type SetupTargetOptions } from "./generate";
-import { LOCK_VERSION, readLock, writeLock, type LockInputs, type LockTarget } from "./lock";
+import {
+  setupTarget,
+  type BranchSetupInputs,
+  type PreviewSetupInputs,
+  type SetupTargetOptions,
+  type TagSetupInputs,
+} from "./generate";
+import {
+  LOCK_VERSION,
+  managedWorkflows,
+  readLock,
+  writeLock,
+  type LockInputs,
+  type LockTarget,
+} from "./lock";
 import { AUTOFIX_WORKFLOW_FILE, TEMPLATE_VERSION } from "./templates";
 import { autofixSetupOptions } from "./test-helpers/autofix";
 import { tempDir } from "./test-helpers/temp-dir";
@@ -35,58 +48,6 @@ const lockTarget = (
 });
 
 describe("planUpdate", () => {
-  test("branch: carries the recorded migration test options into the regeneration", () => {
-    const plan = planUpdate(
-      lockTarget("branch", "my-app", {
-        migrationTest: true,
-        migrationTestLabel: "run-migration-test",
-        migrationTestEnvironment: "prod-source",
-      }),
-      common,
-    );
-
-    expect(plan).toMatchObject({
-      kind: "branch",
-      migrationTest: true,
-      migrationTestLabel: "run-migration-test",
-      migrationTestEnvironment: "prod-source",
-    });
-  });
-
-  test("branch: keeps the plan job in its own environment when the lock records it", () => {
-    const plan = planUpdate(lockTarget("branch", "my-app", { splitPlanEnvironment: true }), common);
-
-    expect(plan).toMatchObject({ kind: "branch", splitPlanEnvironment: true });
-  });
-
-  test("branch: regenerates with the recorded name, dir, environment, branch and flags", () => {
-    const plan = planUpdate(
-      lockTarget("branch", "my-app", {
-        branch: "release",
-        branchAutoDetected: false,
-        environment: "production",
-        dir: "apps/api",
-        erdPreview: true,
-        ghes: true,
-        restrictDispatch: true,
-      }),
-      common,
-    );
-
-    expect(plan).toEqual({
-      kind: "branch",
-      workspaceName: "my-app",
-      dir: "apps/api",
-      environment: "production",
-      branch: "release",
-      erdPreview: true,
-      ghes: true,
-      restrictDispatch: true,
-      force: false,
-      outputDir: "/repo",
-    });
-  });
-
   test("branch: regenerates for github.com when the entry has no ghes", () => {
     const plan = planUpdate(lockTarget("branch", "my-app", { erdPreview: true }), common);
 
@@ -108,61 +69,10 @@ describe("planUpdate", () => {
     expect(plan).toMatchObject({ kind: "branch", branch: "staging" });
   });
 
-  test("tag: regenerates with the recorded tag pattern, guard branch and restrict-dispatch", () => {
-    const plan = planUpdate(
-      lockTarget("tag", "my-app", {
-        tagPattern: "release-*",
-        branch: "main",
-        restrictDispatch: true,
-        environment: "production",
-        dir: "apps/api",
-      }),
-      common,
-    );
-
-    expect(plan).toEqual({
-      kind: "tag",
-      workspaceName: "my-app",
-      dir: "apps/api",
-      environment: "production",
-      tagPattern: "release-*",
-      branch: "main",
-      restrictDispatch: true,
-      force: false,
-      outputDir: "/repo",
-    });
-  });
-
   test("tag: keeps the tag unguarded when no branch was recorded", () => {
     const plan = planUpdate(lockTarget("tag", "my-app", { tagPattern: "v*" }), common);
 
     expect(plan).toMatchObject({ kind: "tag", branch: undefined });
-  });
-
-  test("preview: regenerates with the recorded region, requirement and branch", () => {
-    const plan = planUpdate(
-      lockTarget("preview", "my-app", {
-        branch: "develop",
-        branchAutoDetected: false,
-        region: "asia-northeast",
-        require: "label",
-        environment: "preview",
-        dir: "apps/api",
-      }),
-      common,
-    );
-
-    expect(plan).toEqual({
-      kind: "preview",
-      workspaceName: "my-app",
-      dir: "apps/api",
-      environment: "preview",
-      branch: "develop",
-      region: "asia-northeast",
-      require: "label",
-      force: false,
-      outputDir: "/repo",
-    });
   });
 
   test.each([null, "ready", "label"] as const)(
@@ -202,22 +112,10 @@ describe("planUpdate", () => {
     },
   );
 
-  test.each(["branch", "tag", "preview"] as const)(
-    "%s: regenerates with the recorded seed datasets",
-    (kind) => {
-      const plan = planUpdate(
-        lockTarget(kind, "my-app", { seed: { datasets: ["preview"] } }),
-        common,
-      );
-
-      expect(plan).toMatchObject({ kind, seed: { datasets: ["preview"] } });
-    },
-  );
-
   test("leaves seeding off for a target recorded without it", () => {
     const plan = planUpdate(lockTarget("branch", "my-app", {}), common);
 
-    expect(plan).not.toHaveProperty("seed");
+    expect(plan.seed).toBeUndefined();
   });
 
   test("preview: re-detects the default branch when it was auto-detected", () => {
@@ -250,18 +148,6 @@ describe("planUpdate", () => {
         dir: ["apps/erp/backend", "apps/users/backend"],
         extraPaths: ["modules/**"],
       });
-    },
-  );
-
-  test.each(["branch", "tag", "preview"] as const)(
-    "%s: keeps a package manager that was passed with --package-manager",
-    (kind) => {
-      const plan = planUpdate(
-        lockTarget(kind, "my-app", { packageManager: "yarn", packageManagerAutoDetected: false }),
-        common,
-      );
-
-      expect(plan).toMatchObject({ kind, packageManager: "yarn" });
     },
   );
 
@@ -337,6 +223,24 @@ describe("setupUpdate", () => {
     } as SetupTargetOptions);
   };
 
+  const writeSeedData = () => {
+    fs.mkdirSync(path.join(testDir, "apps/api/seed/data/cogs"), { recursive: true });
+    return {
+      machineUserName: "admin",
+      datasets: { preview: ["cogs"] },
+      dataDir: path.join(testDir, "apps/api/seed/data"),
+    };
+  };
+
+  const readGenerated = () => {
+    const lock = readLock(testDir);
+    if (!lock) throw new Error("Expected a lock file.");
+    const files = managedWorkflows(lock).map(({ file }) =>
+      fs.readFileSync(path.join(testDir, file), "utf-8"),
+    );
+    return { lock, files };
+  };
+
   const ageLock = (): void => {
     const lock = readLock(testDir);
     if (!lock) throw new Error("Expected a lock file.");
@@ -393,6 +297,73 @@ describe("setupUpdate", () => {
     }
   });
 
+  // Every value differs from what setup uses when the option is left out.
+  const targetsWithEveryOption = [
+    {
+      kind: "branch",
+      workspaceName: "api",
+      dir: "apps/api",
+      environment: "production",
+      packageManager: "yarn",
+      seed: { datasets: ["preview"] },
+      branch: "release",
+      extraPaths: ["modules/**"],
+      erdPreview: true,
+      ghes: true,
+      restrictDispatch: true,
+      migrationTest: true,
+      migrationTestLabel: "run-migration-test",
+      migrationTestEnvironment: "migration-source",
+      splitPlanEnvironment: true,
+    } satisfies Required<BranchSetupInputs>,
+    {
+      kind: "tag",
+      workspaceName: "api",
+      dir: "apps/api",
+      environment: "production",
+      packageManager: "yarn",
+      seed: { datasets: ["preview"] },
+      tagPattern: "release-*",
+      branch: "release",
+      restrictDispatch: true,
+    } satisfies Required<TagSetupInputs>,
+    {
+      kind: "preview",
+      workspaceName: "api",
+      dir: "apps/api",
+      environment: "preview",
+      packageManager: "yarn",
+      seed: { datasets: ["preview"] },
+      branch: "release",
+      extraPaths: ["modules/**"],
+      region: "asia-northeast",
+      require: "label",
+    } satisfies Required<PreviewSetupInputs>,
+  ];
+
+  test.each(targetsWithEveryOption)(
+    "$kind: regenerates a target with every option from what the lock records",
+    async (inputs) => {
+      writeAppConfig("apps/api");
+      const seedSettings = writeSeedData();
+      const run = {
+        ...loaders,
+        loadHasMigrations: async () => true,
+        loadSeedSettings: async () => seedSettings,
+      };
+      await setupTarget({ ...inputs, force: false, outputDir: testDir, ...run });
+      const generated = readGenerated();
+      const [target] = generated.lock.targets;
+      if (!target) throw new Error("Expected a lock target.");
+
+      expect(planUpdate(target, common)).toEqual({ ...inputs, ...common });
+
+      await setupUpdate({ force: false, outputDir: testDir, ...run });
+
+      expect(readGenerated()).toEqual(generated);
+    },
+  );
+
   test("keeps the app directories and extra paths of multi-directory branch and preview targets", async () => {
     writeAppConfig("apps/erp/backend");
     writeAppConfig("apps/users/backend");
@@ -407,26 +378,19 @@ describe("setupUpdate", () => {
     };
     await generate({ kind: "branch", erdPreview: false, ...multi });
     await generate({ kind: "preview", region: "us-west", ...multi });
-    const before = readLock(testDir)?.targets.map((t) => t.inputs);
+    const generated = readGenerated();
     ageLock();
 
     await setupUpdate({ force: false, outputDir: testDir, ...loaders });
 
-    const after = readLock(testDir)?.targets.map((t) => t.inputs);
-    expect(after?.map((inputs) => [inputs.apps, inputs.paths])).toEqual(
-      before?.map((inputs) => [inputs.apps, inputs.paths]),
-    );
-    expect(after?.[0]?.apps?.map((app) => app.dir)).toEqual(multi.dir);
+    const updated = readGenerated();
+    expect(updated).toEqual(generated);
+    expect(updated.lock.targets[0]?.inputs.apps?.map((app) => app.dir)).toEqual(multi.dir);
   });
 
   test("keeps seeding a target, and reports it once its dataset no longer resolves", async () => {
     writeAppConfig("apps/api");
-    fs.mkdirSync(path.join(testDir, "apps/api/seed/data/cogs"), { recursive: true });
-    const settings = {
-      machineUserName: "admin",
-      datasets: { preview: ["cogs"] },
-      dataDir: path.join(testDir, "apps/api/seed/data"),
-    };
+    const settings = writeSeedData();
     await generate({
       kind: "branch",
       workspaceName: "api",
@@ -687,32 +651,25 @@ describe("setupUpdate", () => {
     expect(successSpy).toHaveBeenLastCalledWith(expect.stringMatching(/^Updated 1 workflow\(s\)/));
   });
 
-  test("keeps the agent and its Copilot auth", async () => {
+  test("regenerates the autofix workflow with every option from what the lock records", async () => {
     writeAppConfig("apps/api");
-    await setupAutofix(
-      autofixSetupOptions(testDir, {
-        dir: "apps/api",
-        codemod: "copilot",
-        copilotAuth: "github-token",
-      }),
-    );
-    const lock = readLock(testDir);
-    if (!lock?.autofix) throw new Error("Expected an autofix entry.");
-    writeLock(testDir, {
-      ...lock,
-      autofix: { ...lock.autofix, templateVersion: TEMPLATE_VERSION - 1 },
-    });
+    writeAppConfig("apps/web");
+    // Every value differs from what setup uses when the option is left out.
+    const inputs = {
+      provider: "securefix",
+      securefixServerRepository: "securefix-server",
+      codemod: "copilot",
+      copilotAuth: "github-token",
+      dir: ["apps/api", "apps/web"],
+      packageManager: "yarn",
+    } satisfies Required<AutofixSetupInputs>;
+    await setupAutofix({ ...inputs, force: false, outputDir: testDir });
+    const generated = readGenerated();
     using _successSpy = vi.spyOn(logger, "success").mockImplementation(() => {});
 
     await setupUpdate({ force: false, outputDir: testDir, ...loaders });
 
-    expect(readLock(testDir)?.autofix?.inputs).toMatchObject({
-      codemod: "copilot",
-      copilotAuth: "github-token",
-    });
-    expect(fs.readFileSync(path.join(testDir, AUTOFIX_WORKFLOW_FILE), "utf-8")).toContain(
-      "copilot-requests: write",
-    );
+    expect(readGenerated()).toEqual(generated);
   });
 
   test("refuses a Copilot auth it does not know", async () => {

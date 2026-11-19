@@ -1,6 +1,5 @@
 import * as fs from "node:fs";
 import {
-  extractOwnedNamespaces,
   findAppIdLock,
   loadConfig,
   logger,
@@ -10,9 +9,13 @@ import {
   TAILOR_LOCK_FILENAME,
   WORKSPACE_NAME_MAX_LENGTH,
   workspaceNameSchema,
-  getNamespacesWithMigrations,
 } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
+import {
+  defaultLoadErdNamespaces,
+  defaultLoadHasMigrations,
+  defaultLoadHasSeeds,
+} from "./config-loaders";
 import { detectDefaultBranch, type GitRunner } from "./git";
 import {
   findTarget,
@@ -42,6 +45,7 @@ import {
   moveJob,
   userJobsCheckingClosed,
 } from "./managed";
+import { escapesRoot } from "./repo-path";
 import {
   defaultLoadSeedSettings,
   SEED_DATASET_NAME,
@@ -66,15 +70,16 @@ import {
   type RenderSeed,
 } from "./templates";
 
-type CommonSetupOptions = {
-  workspaceName?: string;
-  /** App directory, or several deployed together in one multi-config run. */
-  dir: string | readonly string[];
-  environment?: string;
-  /** Package manager the workflow uses; detected from the repository root when omitted. */
-  packageManager?: PackageManager;
+export type SetupOutput = {
   force: boolean;
   outputDir: string;
+};
+
+/**
+ * What a setup run takes besides its inputs. `.github/tailor.lock` records none of it, so an
+ * option `setup update` must reproduce belongs in the inputs types instead.
+ */
+export type SetupRun = SetupOutput & {
   /** Injectable git runner, for testing. */
   gitRunner?: GitRunner;
   /** Injectable config-name loader, for testing. Defaults to loading the config. */
@@ -87,13 +92,22 @@ type CommonSetupOptions = {
   loadHasMigrations?: (configPath: string) => Promise<boolean>;
   /** Injectable seed plugin detector, for testing. Defaults to loading the config. */
   loadHasSeeds?: (configPath: string) => Promise<boolean>;
-  /** Seed the workspace after each deploy (`--seed` / `--seed-dataset`). */
-  seed?: RenderSeed;
   /** Injectable seedPlugin settings loader, for testing. Defaults to loading the config. */
   loadSeedSettings?: (configPath: string) => Promise<SeedSettings | null>;
 };
 
-export type BranchSetupOptions = CommonSetupOptions & {
+type CommonSetupInputs = {
+  workspaceName?: string;
+  /** App directory, or several deployed together in one multi-config run. */
+  dir: string | readonly string[];
+  environment?: string;
+  /** Package manager the workflow uses; detected from the repository root when omitted. */
+  packageManager?: PackageManager;
+  /** Seed the workspace after each deploy (`--seed` / `--seed-dataset`). */
+  seed?: RenderSeed;
+};
+
+export type BranchSetupInputs = CommonSetupInputs & {
   kind: "branch";
   branch?: string;
   /** Extra `paths` filter patterns beyond the app directories. */
@@ -112,14 +126,14 @@ export type BranchSetupOptions = CommonSetupOptions & {
   splitPlanEnvironment?: boolean;
 };
 
-type TagSetupOptions = CommonSetupOptions & {
+export type TagSetupInputs = CommonSetupInputs & {
   kind: "tag";
   tagPattern: string;
   branch?: string;
   restrictDispatch?: boolean;
 };
 
-type PreviewSetupOptions = CommonSetupOptions & {
+export type PreviewSetupInputs = CommonSetupInputs & {
   kind: "preview";
   branch?: string;
   /** Extra `paths` filter patterns beyond the app directories. */
@@ -134,7 +148,10 @@ type PreviewSetupOptions = CommonSetupOptions & {
   require?: PreviewRequirement;
 };
 
-export type SetupTargetOptions = BranchSetupOptions | TagSetupOptions | PreviewSetupOptions;
+export type BranchSetupOptions = BranchSetupInputs & SetupRun;
+
+export type SetupTargetOptions = (BranchSetupInputs | TagSetupInputs | PreviewSetupInputs) &
+  SetupRun;
 
 async function defaultLoadConfigName(configPath: string): Promise<string | undefined> {
   const { config } = await loadConfig(configPath);
@@ -144,20 +161,6 @@ async function defaultLoadConfigName(configPath: string): Promise<string | undef
 async function defaultLoadConfigId(configPath: string): Promise<string | undefined> {
   const { config } = await loadConfig(configPath);
   return config.id;
-}
-
-async function defaultLoadErdNamespaces(configPath: string): Promise<string[]> {
-  const { config } = await loadConfig(configPath);
-  return extractOwnedNamespaces(config);
-}
-
-async function defaultLoadHasMigrations(configPath: string): Promise<boolean> {
-  const { config } = await loadConfig(configPath);
-  return getNamespacesWithMigrations(config, path.dirname(configPath)).length > 0;
-}
-
-async function defaultLoadHasSeeds(configPath: string): Promise<boolean> {
-  return (await defaultLoadSeedSettings(configPath)) !== null;
 }
 
 async function assertSeedable(
@@ -365,14 +368,6 @@ function validateErdNamespaces(namespaces: readonly string[]): void {
       );
     }
   }
-}
-
-// `rel` is "" for the root itself, ".." or "../foo" for an escape. Guard on
-// the path segment so a sibling-prefixed name like "..foo" is not rejected.
-function escapesRoot(rel: string): boolean {
-  return (
-    rel === ".." || rel.startsWith(`..${path.sep}`) || rel.startsWith("../") || path.isAbsolute(rel)
-  );
 }
 
 /**
@@ -838,7 +833,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     restrictDispatch:
       kind === "branch" || kind === "tag" ? (options.restrictDispatch ?? false) : undefined,
     seed: options.seed ? { datasets: [...options.seed.datasets] } : undefined,
-  };
+  } satisfies Record<Exclude<keyof LockInputs, "requirePreviewLabel">, unknown>;
 
   return {
     kind,
