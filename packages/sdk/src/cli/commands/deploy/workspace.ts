@@ -554,7 +554,9 @@ export async function resolveDeployWorkspace(
     allowMissingProfile: explicitWorkspaceId !== undefined,
   });
   const platformUrl = getPlatformBaseUrl(platformConfig);
-  const client = await initOperatorClient(accessToken, platformConfig);
+  const client = await initOperatorClient(accessToken, platformConfig, {
+    createsPlannedResources: true,
+  });
 
   if (explicitWorkspaceId) {
     const workspaceNotFoundError = () => {

@@ -286,6 +286,9 @@ describe("tailordb migration resolve", () => {
     const result = await runCommand(resolveCommand, ["--complete", "--yes"]);
 
     expect(result.success).toBe(true);
+    expect(initOperatorClient).toHaveBeenCalledWith("mock-token", undefined, {
+      createsPlannedResources: true,
+    });
     expect(
       state.updateTailorDBType.mock.calls.map(([call]) => call.tailordbType.name).toSorted(),
     ).toEqual(["Comment", "Post", "User"]);

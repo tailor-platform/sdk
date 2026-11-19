@@ -28,11 +28,14 @@ describe("loadOperatorWorkspaceContext", () => {
       loadOperatorWorkspaceContext({
         profile: "development",
         workspaceId: "requested-workspace-id",
+        clientOptions: { createsPlannedResources: true },
       }),
     ).resolves.toEqual({ client, workspaceId: "workspace-id" });
 
     expect(mocks.loadAccessToken).toHaveBeenCalledWith({ profile: "development" });
-    expect(mocks.initOperatorClient).toHaveBeenCalledWith("access-token");
+    expect(mocks.initOperatorClient).toHaveBeenCalledWith("access-token", undefined, {
+      createsPlannedResources: true,
+    });
     expect(mocks.loadWorkspaceId).toHaveBeenCalledWith({
       profile: "development",
       workspaceId: "requested-workspace-id",
