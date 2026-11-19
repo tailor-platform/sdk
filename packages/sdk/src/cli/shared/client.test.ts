@@ -658,6 +658,7 @@ describe("requests through the operator client", () => {
       method: options.method ?? OperatorService.method.getWorkflowExecution,
       header: new Headers(),
       message: {},
+      contextValues: createContextValues(),
     } as unknown as UnaryRequest);
   }
 
@@ -1413,7 +1414,7 @@ describe("retryInterceptor", () => {
       createContextValues().set(alreadyExistsExpected, true),
     );
 
-    await expect(settle(retryInterceptor()(next)(req))).rejects.toThrow("secret already exists");
+    await expect(settle(plannedRetry(next)(req))).rejects.toThrow("secret already exists");
     expect(vi.mocked(reportCrash)).not.toHaveBeenCalled();
     expect(next).toHaveBeenCalledTimes(1);
   });
