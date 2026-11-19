@@ -246,7 +246,7 @@ export async function assertNoActiveScriptWorkflow(
 /** Reads of the job's function execution tried through transient errors. */
 const READ_ATTEMPTS = 3;
 
-interface ReadOutcomeParams {
+export interface ReadOutcomeParams {
   client: OperatorClient;
   workspaceId: string;
   /** Workflow execution in a terminal state */
@@ -263,7 +263,7 @@ interface ReadOutcomeParams {
  * @param params - Execution to read the outcome of
  * @returns Result in the shape synchronous execution reports
  */
-async function readOutcome(params: ReadOutcomeParams): Promise<ScriptExecutionResult> {
+export async function readOutcome(params: ReadOutcomeParams): Promise<ScriptExecutionResult> {
   const { client, workspaceId, execution, pollInterval } = params;
   const executionId = execution.jobExecutions.at(-1)?.executionId;
   let job: FunctionExecution | undefined;

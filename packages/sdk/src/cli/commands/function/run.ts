@@ -323,7 +323,7 @@ function resolveArgOptions(options: ArgOptions): ResolvedArgOptions {
  * @param authConfig - Auth configuration from tailor.config.ts
  * @returns Resolved auth namespace
  */
-function resolveAuthNamespace(
+export function resolveAuthNamespace(
   authConfig: { name: string; external?: boolean } | undefined,
 ): string {
   if (authConfig?.name) {
@@ -351,7 +351,9 @@ type ResolveMachineUserNameOptions = {
  * @param options - Resolution options
  * @returns Resolved machine user name
  */
-async function resolveMachineUserName(options: ResolveMachineUserNameOptions): Promise<string> {
+export async function resolveMachineUserName(
+  options: ResolveMachineUserNameOptions,
+): Promise<string> {
   const { cliMachineUser, cliMachineUserSource, profile, authConfig } = options;
 
   const resolved = await loadMachineUserName({
@@ -395,7 +397,7 @@ interface ResolveMachineUserOptions {
  * @param options - Options for resolving machine user
  * @returns Resolved machine user with id, attributes, and attributeList
  */
-async function resolveMachineUser(
+export async function resolveMachineUser(
   options: ResolveMachineUserOptions,
 ): Promise<ResolvedMachineUser> {
   const { client, workspaceId, authNamespace, machineUserName, authConfig } = options;

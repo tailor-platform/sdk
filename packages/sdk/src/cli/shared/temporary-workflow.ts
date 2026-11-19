@@ -22,6 +22,7 @@ import { getOrNull, isNotFoundError } from "#/cli/shared/client";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { isRetryableWaitError } from "#/cli/shared/wait-error";
+import type { MetadataLabelWrite } from "#/cli/commands/deploy/label";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type {
@@ -32,10 +33,30 @@ import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_r
 
 const CHUNK_SIZE = 64 * 1024;
 
-/** Owning application recorded in the labels of every temporary resource. */
+/**
+ * Owning application recorded in the labels of every temporary resource. With no
+ * `appName` the resources carry only `labels`, so a deploy never claims them.
+ */
 interface TemporaryResourceOwner {
-  appName: string;
+  appName: string | undefined;
   appId: string | undefined;
+  /** Labels written to every resource besides the owner's. */
+  labels?: Record<string, string>;
+}
+
+async function temporaryLabelWrite(
+  owner: TemporaryResourceOwner,
+  trn: string,
+  extraLabels?: Record<string, string>,
+): Promise<MetadataLabelWrite> {
+  const metadata = { ...owner.labels, ...extraLabels };
+  if (owner.appName === undefined) return { trn, labels: metadata };
+  return await buildMetaRequest({
+    trn,
+    appName: owner.appName,
+    appId: owner.appId,
+    ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
+  });
 }
 
 export interface UploadTemporaryFunctionParams extends TemporaryResourceOwner {
@@ -60,7 +81,7 @@ export interface UploadTemporaryFunctionParams extends TemporaryResourceOwner {
 export async function uploadTemporaryFunction(
   params: UploadTemporaryFunctionParams,
 ): Promise<void> {
-  const { client, workspaceId, name, code, description, appName, appId, mode = "create" } = params;
+  const { client, workspaceId, name, code, description, mode = "create" } = params;
   const content = `${params.prelude ?? ""}${code}`;
   const buffer = Buffer.from(content, "utf-8");
   const info = {
@@ -94,11 +115,7 @@ export async function uploadTemporaryFunction(
   }
   await writeMetadataLabelsDirect(
     client,
-    await buildMetaRequest({
-      trn: resourceTrn(workspaceId, "function_registry", name),
-      appName,
-      appId,
-    }),
+    await temporaryLabelWrite(params, resourceTrn(workspaceId, "function_registry", name)),
   );
 }
 
@@ -243,7 +260,7 @@ export async function createTemporaryWorkflow(
   params: CreateTemporaryWorkflowParams,
   created: CreatedTemporaryWorkflow,
 ): Promise<string> {
-  const { client, workspaceId, name, appName, appId, subject } = params;
+  const { client, workspaceId, name, subject } = params;
   const versions: Record<string, bigint> = {};
   for (const jobFunctionName of params.jobFunctionNames) {
     const { jobFunction } = await client.createWorkflowJobFunction({
@@ -254,11 +271,10 @@ export async function createTemporaryWorkflow(
     });
     await writeMetadataLabelsDirect(
       client,
-      await buildMetaRequest({
-        trn: resourceTrn(workspaceId, "workflow_job_function", jobFunctionName),
-        appName,
-        appId,
-      }),
+      await temporaryLabelWrite(
+        params,
+        resourceTrn(workspaceId, "workflow_job_function", jobFunctionName),
+      ),
     );
     const version = jobFunction?.version;
     if (version === undefined) {
@@ -282,12 +298,11 @@ export async function createTemporaryWorkflow(
   created.workflowId = workflowId;
   await writeMetadataLabelsDirect(
     client,
-    await buildMetaRequest({
-      trn: resourceTrn(workspaceId, "workflow", name),
-      appName,
-      appId,
-      ...(params.workflowLabels ? { metadata: params.workflowLabels } : {}),
-    }),
+    await temporaryLabelWrite(
+      params,
+      resourceTrn(workspaceId, "workflow", name),
+      params.workflowLabels,
+    ),
   );
   return workflowId;
 }

@@ -22,14 +22,15 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Commands**
 
-| Command                                       | Description                                    |
-| --------------------------------------------- | ---------------------------------------------- |
-| [`workflow list`](#workflow-list)             | List all workflows in the workspace.           |
-| [`workflow get`](#workflow-get)               | Get workflow details.                          |
-| [`workflow start`](#workflow-start)           | Start a workflow execution.                    |
-| [`workflow wait`](#workflow-wait)             | Wait for a workflow execution.                 |
-| [`workflow executions`](#workflow-executions) | List or get workflow executions.               |
-| [`workflow resume`](#workflow-resume)         | Resume a failed or pending workflow execution. |
+| Command                                       | Description                                                            |
+| --------------------------------------------- | ---------------------------------------------------------------------- |
+| [`workflow list`](#workflow-list)             | List all workflows in the workspace.                                   |
+| [`workflow get`](#workflow-get)               | Get workflow details.                                                  |
+| [`workflow start`](#workflow-start)           | Start a workflow execution.                                            |
+| `workflow run`                                | Run a script as a temporary workflow, past the synchronous time limit. |
+| [`workflow wait`](#workflow-wait)             | Wait for a workflow execution.                                         |
+| [`workflow executions`](#workflow-executions) | List or get workflow executions.                                       |
+| [`workflow resume`](#workflow-resume)         | Resume a failed or pending workflow execution.                         |
 
 ### workflow list
 
