@@ -88,4 +88,25 @@ describe("bundleWorkflowRunJobs", () => {
       details: expect.stringContaining("validate-order"),
     });
   });
+
+  test("refuses a job name that a configured workflow file defines too, rather than running the other file's body", async () => {
+    using tmp = tempDir("workflow-run-jobs-");
+    const { target } = setup(tmp.dir, {
+      "other.ts": `import { createWorkflowJob } from "@tailor-platform/sdk";
+
+export const lonelyElsewhere = createWorkflowJob({
+  name: "lonely",
+  body: () => "from another file",
+});
+`,
+    });
+    (target.config as { workflow?: unknown }).workflow = { files: ["other.ts"] };
+
+    await expect(
+      bundleWorkflowRunJobs({ target, runId: "r1", jobName: "lonely" }),
+    ).rejects.toMatchObject({
+      code: "DEFINITION_NAME_DUPLICATE",
+      message: expect.stringContaining("other.ts"),
+    });
+  });
 });

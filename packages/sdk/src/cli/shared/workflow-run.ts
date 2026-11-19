@@ -16,7 +16,11 @@ import { fetchPaged, getOrNull, isNotFoundError } from "#/cli/shared/client";
 import { CLIError, formatCommandHint, isCLIError } from "#/cli/shared/errors";
 import { joinFunctionLogMessages } from "#/cli/shared/function-execution";
 import { logger } from "#/cli/shared/logger";
-import { assertMachineUserExists, readOutcome } from "#/cli/shared/script-workflow";
+import {
+  assertMachineUserExists,
+  mainJobExecutionId,
+  readOutcome,
+} from "#/cli/shared/script-workflow";
 import {
   createTemporaryWorkflow,
   isExecutionActive,
@@ -26,6 +30,7 @@ import {
   pollUntilTerminal,
   teardownTemporaryWorkflow,
   uploadTemporaryFunction,
+  type CreatedTemporaryWorkflow,
 } from "#/cli/shared/temporary-workflow";
 import { isRetryableWaitError } from "#/cli/shared/wait-error";
 import {
@@ -136,11 +141,11 @@ export async function startWorkflowRun(
     appId: undefined,
     labels: workflowRunLabels({ kind, runId }),
   };
-  const created: { workflowId?: string } = {};
+  const created: CreatedTemporaryWorkflow = {};
+  const uploaded: string[] = [];
   let startSent = false;
-  const state = { collided: false };
   try {
-    for (const [index, item] of functions.entries()) {
+    for (const item of functions) {
       try {
         await uploadTemporaryFunction({
           ...owner,
@@ -151,12 +156,13 @@ export async function startWorkflowRun(
           description: params.description,
         });
       } catch (error) {
-        // The first name belongs to another run, so there is nothing of ours to roll back.
-        if (index === 0 && error instanceof ConnectError && error.code === Code.AlreadyExists) {
-          state.collided = true;
+        // A name that already exists belongs to something else, which a rollback must not remove.
+        if (!(error instanceof ConnectError && error.code === Code.AlreadyExists)) {
+          uploaded.push(item.name);
         }
         throw error;
       }
+      uploaded.push(item.name);
     }
     const workflowId = await createTemporaryWorkflow(
       {
@@ -180,7 +186,6 @@ export async function startWorkflowRun(
     });
     return { runId, name, functionNames, workflowId, executionId };
   } catch (error) {
-    if (state.collided) throw error;
     if (startSent && !isStartRefused(error)) {
       logger.warn(
         `Could not confirm that run ${runId} was not started, so its resources were kept. ` +
@@ -193,8 +198,8 @@ export async function startWorkflowRun(
       workspaceId,
       name,
       workflowId: created.workflowId,
-      jobFunctionNames: functionNames,
-      functionNames,
+      jobFunctionNames: created.jobFunctionNames ?? [],
+      functionNames: uploaded,
       subject: SUBJECT,
       leftoverNote: LEFTOVER_NOTE,
     });
@@ -250,7 +255,7 @@ export async function awaitWorkflowRun(
       deadline,
       options: {
         onActive: (active) => {
-          jobExecutionId = active.jobExecutions.at(-1)?.executionId ?? jobExecutionId;
+          jobExecutionId = mainJobExecutionId(active) ?? jobExecutionId;
           params.onActive?.();
         },
       },
@@ -535,11 +540,9 @@ export async function reclaimWorkflowRuns(
 
   for (const [runId, run] of [...runs].toSorted(([a], [b]) => a.localeCompare(b))) {
     const name = workflowRunResourceName(runId);
-    let executions: WorkflowExecution[] = [];
-    if (run.workflow) {
-      executions = await listTemporaryWorkflowExecutions(client, workspaceId, name);
-      if (executions.some(isExecutionActive)) continue;
-    }
+    // The workflow may have lost its label while the functions kept theirs, so ask by name.
+    const executions = await listTemporaryWorkflowExecutions(client, workspaceId, name);
+    if (executions.some(isExecutionActive)) continue;
     if (executions.length === 0) {
       const createdMs = latestCreatedMs([
         ...(run.workflow ? [run.workflow] : []),
@@ -565,21 +568,30 @@ export async function reclaimWorkflowRuns(
   }
 
   const byKind = (kind: RunResourceKind) => unlabeled.filter((item) => item.kind === kind);
+  // The job functions and functions of a workflow that is kept are kept with it.
+  const keptWorkflows: string[] = [];
+  const dependsOnKeptWorkflow = (name: string) =>
+    keptWorkflows.some((workflow) => name === workflow || name.startsWith(`${workflow}-`));
   // A workflow goes before the job functions it uses, and those before their functions.
   for (const resource of [
     ...byKind("workflow"),
     ...byKind("job function"),
     ...byKind("function"),
   ]) {
+    if (resource.kind !== "workflow" && dependsOnKeptWorkflow(resource.name)) continue;
     if (
       resource.createdMs !== undefined &&
       now.getTime() - resource.createdMs < NOT_STARTED_GRACE_MS
     ) {
+      if (resource.kind === "workflow") keptWorkflows.push(resource.name);
       continue;
     }
     if (resource.kind === "workflow") {
       const executions = await listTemporaryWorkflowExecutions(client, workspaceId, resource.name);
-      if (executions.some(isExecutionActive)) continue;
+      if (executions.some(isExecutionActive)) {
+        keptWorkflows.push(resource.name);
+        continue;
+      }
     }
     const listed = { kind: resource.kind, name: resource.name };
     if (!params.includeUnlabeled) {

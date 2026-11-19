@@ -266,13 +266,15 @@ export interface CreateTemporaryWorkflowParams extends TemporaryResourceOwner {
 /** Ids of the resources {@link createTemporaryWorkflow} created, as soon as each exists. */
 export interface CreatedTemporaryWorkflow {
   workflowId?: string;
+  /** Job functions this call created, so a failure rolls back only those */
+  jobFunctionNames?: string[];
 }
 
 /**
  * Create the job functions and the workflow for an uploaded function,
  * labeling each as it is created.
  * @param params - Resources to create
- * @param created - Receives the workflow id before labeling, so teardown can remove it
+ * @param created - Receives the workflow id and the job function names before labeling, so teardown can remove them
  * @returns Workflow id
  */
 export async function createTemporaryWorkflow(
@@ -288,6 +290,7 @@ export async function createTemporaryWorkflow(
       scriptRef: params.scriptRefs?.[jobFunctionName] ?? name,
       publishExecutionEvents: false,
     });
+    (created.jobFunctionNames ??= []).push(jobFunctionName);
     await writeMetadataLabelsDirect(
       client,
       await temporaryLabelWrite(

@@ -15,7 +15,7 @@ import {
   startWorkflowRun,
   workflowRunHints,
 } from "./workflow-run";
-import { createRunId, workflowRunLabels } from "./workflow-run-labels";
+import { createRunId, workflowRunJobFunctionName, workflowRunLabels } from "./workflow-run-labels";
 import type { OperatorClient } from "./client";
 import type { ScriptInvoker } from "./script-executor";
 
@@ -62,7 +62,13 @@ function createClient(options: ClientOptions = {}) {
       async (_request?: unknown, _options?: { signal?: AbortSignal }) => ({
         execution: {
           status: options.status ?? WorkflowExecution_Status.SUCCESS,
-          jobExecutions: [{ executionId: "fn-1" }],
+          jobExecutions: [
+            {
+              executionId: "fn-1",
+              kind: { case: "jobFunction" },
+              position: { depth: 0, parentWorkflowJobExecutionId: "" },
+            },
+          ],
         },
       }),
     ),
@@ -72,8 +78,8 @@ function createClient(options: ClientOptions = {}) {
       }),
     ),
     deleteWorkflow: vi.fn(async () => ({})),
-    deleteWorkflowJobFunction: vi.fn(async () => ({})),
-    deleteFunctionRegistry: vi.fn(async () => ({})),
+    deleteWorkflowJobFunction: vi.fn(async (_request: { jobFunctionName: string }) => ({})),
+    deleteFunctionRegistry: vi.fn(async (_request: { name: string }) => ({})),
   };
 }
 
@@ -280,6 +286,57 @@ describe("startWorkflowRun with a machine user that does not exist", () => {
   });
 });
 
+describe("startWorkflowRun when a later name is already taken", () => {
+  const jobRun = (client: ReturnType<typeof createClient>) =>
+    startWorkflowRun({
+      client: asClient(client),
+      workspaceId: "ws",
+      runId,
+      kind: "job",
+      mainJobName: "process-order",
+      jobs: [
+        { jobName: "process-order", code: "// parent" },
+        { jobName: "validate-order", code: "// child" },
+      ],
+      description: "d",
+      invoker,
+      arg: undefined,
+    });
+  const parent = workflowRunJobFunctionName(runId, "process-order");
+  const child = workflowRunJobFunctionName(runId, "validate-order");
+
+  test("removes the function it registered but not the one that already existed", async () => {
+    const client = createClient();
+    client.createFunctionRegistry
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(new ConnectError("exists", Code.AlreadyExists));
+
+    await expect(jobRun(client)).rejects.toThrow("exists");
+
+    expect(client.deleteFunctionRegistry.mock.calls).toEqual([
+      [{ workspaceId: "ws", name: parent }],
+    ]);
+    expect(client.deleteWorkflowJobFunction).not.toHaveBeenCalled();
+    expect(client.deleteWorkflow).not.toHaveBeenCalled();
+  });
+
+  test("removes the job function it created but not the one that already existed", async () => {
+    const client = createClient();
+    client.createWorkflowJobFunction
+      .mockResolvedValueOnce({ jobFunction: { version: 1n } })
+      .mockRejectedValueOnce(new ConnectError("exists", Code.AlreadyExists));
+
+    await expect(jobRun(client)).rejects.toThrow("exists");
+
+    expect(client.deleteWorkflowJobFunction.mock.calls).toEqual([
+      [{ workspaceId: "ws", jobFunctionName: parent }],
+    ]);
+    expect(
+      client.deleteFunctionRegistry.mock.calls.map(([request]) => request.name).toSorted(),
+    ).toEqual([child, parent].toSorted());
+  });
+});
+
 describe("startWorkflowRun when the run name is already taken", () => {
   test("removes nothing, because this invocation created nothing", async () => {
     const client = createClient();
@@ -448,7 +505,13 @@ describe("awaitWorkflowRun when a sweep removes the workflow while it waits", ()
   const running = {
     execution: {
       status: WorkflowExecution_Status.RUNNING,
-      jobExecutions: [{ executionId: "fn-1" }],
+      jobExecutions: [
+        {
+          executionId: "fn-1",
+          kind: { case: "jobFunction" },
+          position: { depth: 0, parentWorkflowJobExecutionId: "" },
+        },
+      ],
     },
   };
   const gone = new ConnectError("workflow not found", Code.NotFound);
@@ -475,6 +538,55 @@ describe("awaitWorkflowRun when a sweep removes the workflow while it waits", ()
     expect(outcome).toEqual({
       state: "finished",
       result: { success: true, logs: "hello", result: '{"ok":true}' },
+    });
+  });
+
+  test("follows the main job rather than a job it started when the workflow is removed", async () => {
+    const client = createClient();
+    client.getWorkflowExecution
+      .mockResolvedValueOnce({
+        execution: {
+          status: WorkflowExecution_Status.RUNNING,
+          jobExecutions: [
+            {
+              executionId: "fn-main",
+              kind: { case: "jobFunction" },
+              position: { depth: 0, parentWorkflowJobExecutionId: "" },
+            },
+            {
+              executionId: "fn-child",
+              kind: { case: "jobFunction" },
+              position: { depth: 1, parentWorkflowJobExecutionId: "job-main" },
+            },
+          ],
+        },
+      })
+      .mockRejectedValue(gone);
+    client.getFunctionExecution.mockImplementation(
+      async (request) =>
+        ({
+          execution: {
+            status: FunctionExecution_Status.SUCCESS,
+            logEntries: [],
+            result:
+              (request as { executionId: string } | undefined)?.executionId === "fn-main"
+                ? '"main"'
+                : '"child"',
+          },
+        }) as never,
+    );
+
+    const outcome = await awaitWorkflowRun({
+      client: asClient(client),
+      workspaceId: "ws",
+      started,
+      pollInterval: 1,
+      timeoutMs: 1000,
+    });
+
+    expect(outcome).toEqual({
+      state: "finished",
+      result: { success: true, logs: "", result: '"main"' },
     });
   });
 
@@ -1131,6 +1243,53 @@ describe("reclaimWorkflowRuns with resources that carry no run label", () => {
 
     expect(result.keptUnlabeled).toEqual([]);
     expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
+  });
+});
+
+describe("reclaimWorkflowRuns for a workflow that is still running", () => {
+  const old = new Date(now.getTime() + 60 * 60 * 1000);
+
+  test("keeps the functions of a run whose workflow lost its run label", async () => {
+    const name = `tmp-run-${runId}`;
+    const client = createSweepClient([
+      { name, labels: {}, executions: [WorkflowExecution_Status.RUNNING] },
+      {
+        kind: "function",
+        name: `${name}-main`,
+        labels: workflowRunLabels({ kind: "job", runId }),
+      },
+    ]);
+
+    const result = await reclaimWorkflowRuns({
+      client: asClient(client),
+      workspaceId: "ws",
+      now: old,
+    });
+
+    expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
+    expect(result.removed).toEqual([]);
+  });
+
+  test("keeps the job functions and functions of an unlabeled running workflow even with the flag", async () => {
+    const client = createSweepClient([
+      { name: "tmp-run-r00zzz", labels: {}, executions: [WorkflowExecution_Status.RUNNING] },
+      { kind: "jobFunction", name: "tmp-run-r00zzz-main", labels: {} },
+      { kind: "function", name: "tmp-run-r00zzz-main", labels: {} },
+      { kind: "function", name: "tmp-run-r00aaa-other", labels: {} },
+    ]);
+
+    const result = await reclaimWorkflowRuns({
+      client: asClient(client),
+      workspaceId: "ws",
+      now: old,
+      includeUnlabeled: true,
+    });
+
+    expect(client.deleteWorkflowJobFunction).not.toHaveBeenCalled();
+    expect(client.deleteFunctionRegistry.mock.calls).toEqual([
+      [{ workspaceId: "ws", name: "tmp-run-r00aaa-other" }],
+    ]);
+    expect(result.removedUnlabeled).toEqual([{ kind: "function", name: "tmp-run-r00aaa-other" }]);
   });
 });
 

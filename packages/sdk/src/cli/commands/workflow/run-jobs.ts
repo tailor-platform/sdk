@@ -9,6 +9,7 @@ import { CLIError } from "#/cli/shared/errors";
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { buildStartContext } from "#/cli/shared/start-context";
 import { createTsconfigLookupCache } from "#/cli/shared/tsconfig-paths-plugin";
+import { assertUniqueDefinitionNames } from "#/cli/shared/validation-errors";
 import { workflowRunJobFunctionName } from "#/cli/shared/workflow-run-labels";
 import type { FunctionRunTarget } from "../function/run-function";
 
@@ -69,6 +70,14 @@ export async function bundleWorkflowRunJobs(
       (job) => !seen.has(`${realPath(job.sourceFile)}\0${job.name}`),
     ),
   ];
+  assertUniqueDefinitionNames({
+    kind: "workflow-job",
+    definitions: allJobs.map(({ name, sourceFile, exportName }) => ({
+      name,
+      file: sourceFile,
+      exportName,
+    })),
+  });
   if (!inFile.some((job) => job.name === jobName)) {
     const available = inFile.map((job) => `  - "${job.name}" (export: ${job.exportName})`);
     throw CLIError({

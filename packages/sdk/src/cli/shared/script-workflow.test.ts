@@ -3,9 +3,15 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { logger } from "./logger";
-import { assertNoActiveScriptWorkflow, withScriptWorkflow } from "./script-workflow";
+import {
+  assertNoActiveScriptWorkflow,
+  mainJobExecutionId,
+  readOutcome,
+  withScriptWorkflow,
+} from "./script-workflow";
 import type { OperatorClient } from "./client";
 import type { ScriptInvoker } from "./script-executor";
+import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 vi.mock(import("#/cli/shared/logger"), async (importOriginal) => {
   const actual = await importOriginal();
@@ -78,7 +84,13 @@ function createMockClient(options: MockClientOptions = {}) {
       Promise.resolve({
         execution: {
           status: options.status ?? WorkflowExecution_Status.SUCCESS,
-          jobExecutions: [{ executionId: "fn-1" }],
+          jobExecutions: [
+            {
+              executionId: "fn-1",
+              kind: { case: "jobFunction" },
+              position: { depth: 0, parentWorkflowJobExecutionId: "" },
+            },
+          ],
         },
       }),
     ),
@@ -350,5 +362,56 @@ describe("assertNoActiveScriptWorkflow", () => {
     await expect(
       assertNoActiveScriptWorkflow({ client, workspaceId: "ws", names: ["a"] }),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe("the main job of a workflow execution", () => {
+  const row = (
+    executionId: string,
+    depth: number,
+    kind: "jobFunction" | "wait" = "jobFunction",
+  ) => ({
+    executionId,
+    kind: { case: kind },
+    position: { depth, parentWorkflowJobExecutionId: depth === 0 ? "" : "job-main" },
+  });
+  const executionOf = (...rows: ReturnType<typeof row>[]) =>
+    ({
+      status: WorkflowExecution_Status.SUCCESS,
+      jobExecutions: rows,
+    }) as unknown as WorkflowExecution;
+
+  test("is the job at depth 0 even when the jobs it started are listed after it", () => {
+    expect(mainJobExecutionId(executionOf(row("fn-main", 0), row("fn-child", 1)))).toBe("fn-main");
+  });
+
+  test("is the job at depth 0 even when the jobs it started are listed before it", () => {
+    expect(mainJobExecutionId(executionOf(row("fn-child", 1), row("fn-main", 0)))).toBe("fn-main");
+  });
+
+  test("is never a wait checkpoint, which runs no function", () => {
+    expect(mainJobExecutionId(executionOf(row("nil", 0, "wait"), row("fn-main", 0)))).toBe(
+      "fn-main",
+    );
+  });
+
+  test("is read for the result, not the job it started", async () => {
+    const client = {
+      getFunctionExecution: vi.fn(async (request: { executionId: string }) => ({
+        execution: {
+          logEntries: [],
+          result: request.executionId === "fn-main" ? '"main"' : '"child"',
+        },
+      })),
+    };
+
+    const outcome = await readOutcome({
+      client: client as unknown as OperatorClient,
+      workspaceId: "ws",
+      execution: executionOf(row("fn-main", 0), row("fn-child", 1)),
+      pollInterval: 1,
+    });
+
+    expect(outcome).toEqual({ success: true, logs: "", result: '"main"' });
   });
 });
