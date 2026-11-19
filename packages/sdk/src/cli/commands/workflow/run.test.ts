@@ -1,5 +1,8 @@
+import { extractFields } from "@politty/zod";
 import { describe, expect, test } from "vitest";
-import { assertSelectedJob } from "./run";
+import { z } from "zod";
+import { commonArgs } from "#/cli/shared/args";
+import { assertSelectedJob, runCommand } from "./run";
 
 describe("assertSelectedJob", () => {
   test("accepts the workflow job that was asked for", () => {
@@ -30,5 +33,16 @@ describe("assertSelectedJob", () => {
     expect(() =>
       assertSelectedJob({ job: "greet", functionType: undefined, functionName: undefined }),
     ).toThrow(/pre-bundled|\.ts/);
+  });
+});
+
+describe("runCommand options", () => {
+  test("take no short alias that a global option already owns, so -j still means --json", () => {
+    const own = extractFields(runCommand.args).fields.flatMap((field) => field.alias ?? []);
+    const global = extractFields(z.strictObject(commonArgs)).fields.flatMap(
+      (field) => field.alias ?? [],
+    );
+
+    expect(own.filter((alias) => global.includes(alias))).toEqual([]);
   });
 });

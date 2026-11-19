@@ -56,7 +56,6 @@ export const runCommand = defineAppCommand({
       description: "Path to the script file (not needed with --cleanup)",
     }),
     job: arg(z.string().optional(), {
-      alias: "j",
       description: "Workflow job name to run (matches the `name` field of createWorkflowJob)",
     }),
     arg: arg(z.string().optional(), {

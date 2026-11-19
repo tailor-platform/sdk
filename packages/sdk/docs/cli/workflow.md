@@ -146,7 +146,7 @@ tailor workflow run [options] [file]
 | ------------------------------- | ----- | ---------------------------------------------------------------------------------------------- | -------- | -------------------- | ----------------------------------- |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                   | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`      |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                              | No       | -                    | `TAILOR_PLATFORM_PROFILE`           |
-| `--job <JOB>`                   | `-j`  | Workflow job name to run (matches the `name` field of createWorkflowJob)                       | No       | -                    | -                                   |
+| `--job <JOB>`                   | -     | Workflow job name to run (matches the `name` field of createWorkflowJob)                       | No       | -                    | -                                   |
 | `--arg <ARG>`                   | `-a`  | JSON object to pass to the script as its argument                                              | No       | -                    | -                                   |
 | `--arg-file <ARG_FILE>`         | -     | Path to a JSON file holding the object to pass to the script as its argument                   | No       | -                    | -                                   |
 | `--machine-user <MACHINE_USER>` | `-m`  | Machine user name for authentication. Falls back to the active profile's default machine user. | No       | -                    | `TAILOR_PLATFORM_MACHINE_USER_NAME` |
