@@ -1,7 +1,13 @@
 import { logger } from "#/cli/shared/logger";
 import { withSpan } from "#/cli/telemetry/index";
 import { applyAIGateway, type planAIGateway } from "./aigateway";
-import { applyApplication, recomposeApplication, type planApplication } from "./application";
+import {
+  applicationLabelLimitError,
+  applyApplication,
+  recomposeApplication,
+  type ApplicationLabelRejection,
+  type planApplication,
+} from "./application";
 import { applyAuth, type planAuth } from "./auth";
 import { applyExecutor, type planExecutor } from "./executor";
 import { applyFunctionRegistry, type planFunctionRegistry } from "./function-registry";
@@ -196,20 +202,32 @@ async function releaseMaintenanceModes(
   return maintenance;
 }
 
+/** What {@link applyRemainingResources} returns after applying the remaining resources. */
+export type RemainingApplyResult = {
+  /** Maintenance windows of the applications whose TailorDB migrations ran, in deploy order. */
+  maintenance: TailorDBMaintenance[];
+  /** Applications whose labels the platform rejected for their count. */
+  labelRejections: ApplicationLabelRejection[];
+};
+
 /**
  * Apply every resource kind not covered by {@link applyPrerequisiteResources}.
  * @param client - Operator client instance
  * @param deployments - Planned deployments to apply
- * @returns Maintenance windows of the applications whose TailorDB migrations ran, in deploy order
+ * @returns Maintenance windows and rejected application labels
  */
 export async function applyRemainingResources(
   client: OperatorClient,
   deployments: ReadonlyArray<PlannedDeployment>,
-): Promise<TailorDBMaintenance[]> {
+): Promise<RemainingApplyResult> {
   const held: HeldMaintenanceMode[] = [];
+  const labelRejections: ApplicationLabelRejection[] = [];
   let maintenance: TailorDBMaintenance[];
   try {
-    maintenance = await applyRemainingResourcesHoldingMaintenanceMode(client, deployments, held);
+    maintenance = await applyRemainingResourcesHoldingMaintenanceMode(client, deployments, {
+      held,
+      labelRejections,
+    });
   } catch (error) {
     await releaseMaintenanceModes(client, held, true);
     throw error;
@@ -218,16 +236,25 @@ export async function applyRemainingResources(
   const order = new Map(
     deployments.map((deployment, index) => [deployment.application.name, index]),
   );
-  return [...maintenance, ...released].toSorted(
-    (a, b) => (order.get(a.application) ?? 0) - (order.get(b.application) ?? 0),
-  );
+  return {
+    maintenance: [...maintenance, ...released].toSorted(
+      (a, b) => (order.get(a.application) ?? 0) - (order.get(b.application) ?? 0),
+    ),
+    labelRejections,
+  };
 }
+
+type RemainingApplyOutcomes = {
+  held: HeldMaintenanceMode[];
+  labelRejections: ApplicationLabelRejection[];
+};
 
 async function applyRemainingResourcesHoldingMaintenanceMode(
   client: OperatorClient,
   deployments: ReadonlyArray<PlannedDeployment>,
-  held: HeldMaintenanceMode[],
+  outcomes: RemainingApplyOutcomes,
 ): Promise<TailorDBMaintenance[]> {
+  const { held, labelRejections } = outcomes;
   const step = makeStep(deployments);
   const maintenance: TailorDBMaintenance[] = [];
 
@@ -261,9 +288,9 @@ async function applyRemainingResourcesHoldingMaintenanceMode(
     });
 
     await withSpan("apply.createUpdateApplication", async () => {
-      await forEachDeployment(deployments, (d) =>
-        applyApplication(applyClient, d.app, "create-update"),
-      );
+      await forEachDeployment(deployments, async (d) => {
+        labelRejections.push(...(await applyApplication(applyClient, d.app, "create-update")));
+      });
     });
 
     await withSpan("apply.createUpdateDependentServices", async () => {
@@ -338,5 +365,6 @@ export async function applyDeploymentPlans(
 ): Promise<void> {
   await preflightAllTailorDB(client, deployments);
   await applyPrerequisiteResources(client, deployments);
-  await applyRemainingResources(client, deployments);
+  const { labelRejections } = await applyRemainingResources(client, deployments);
+  if (labelRejections.length > 0) throw applicationLabelLimitError(labelRejections);
 }

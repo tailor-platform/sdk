@@ -10,6 +10,7 @@ import {
 } from "./apply-phases";
 import { writeMetadataLabels } from "./label";
 import { MaintenanceTimeline } from "./tailordb/migration-timing";
+import { applicationLabelRejection } from "./test-helpers/label-count-rejection";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { MaintenanceModeRelease } from "./tailordb";
 
@@ -47,9 +48,10 @@ const mocks = vi.hoisted(() => {
     applyPipeline: vi.fn(async (_client, result, phase) => {
       calls.push(`pipeline:${marker(result)}:${String(phase)}`);
     }),
-    applyApplication: vi.fn(async (client, result, phase) => {
+    applyApplication: vi.fn(async (client, result, phase): Promise<unknown[]> => {
       calls.push(`application:${marker(result)}:${String(phase)}`);
       if (phase === "create-update") await state.onApplicationApply?.(client);
+      return [];
     }),
     recomposeApplication: vi.fn(async (_client, result) => {
       calls.push(`recompose:${marker(result)}`);
@@ -81,7 +83,8 @@ vi.mock("./tailordb", () => ({
 }));
 vi.mock("./auth", () => ({ applyAuth: mocks.applyAuth }));
 vi.mock("./resolver", () => ({ applyPipeline: mocks.applyPipeline }));
-vi.mock("./application", () => ({
+vi.mock("./application", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   applyApplication: mocks.applyApplication,
   recomposeApplication: mocks.recomposeApplication,
 }));
@@ -290,7 +293,7 @@ describe("applyDeploymentPlans", () => {
       .mockImplementationOnce(async () => undefined)
       .mockImplementationOnce(async () => report as never);
 
-    const maintenance = await applyRemainingResources(mockOperatorClient({}), [
+    const { maintenance } = await applyRemainingResources(mockOperatorClient({}), [
       deployment("supplier"),
       deployment("buyer"),
     ]);
@@ -356,6 +359,27 @@ describe("applyDeploymentPlans", () => {
     ]);
   });
 
+  test("returns rejected application labels once every phase is applied", async () => {
+    mocks.calls.length = 0;
+    const rejection = applicationLabelRejection("supplier");
+    mocks.applyApplication.mockResolvedValueOnce([rejection]);
+
+    const { labelRejections } = await applyRemainingResources(mockOperatorClient({}), [
+      deployment("supplier"),
+    ]);
+
+    expect(labelRejections).toEqual([rejection]);
+    expect(mocks.calls.at(-1)).toBe("function:supplier-function:delete");
+  });
+
+  test("fails the one-shot apply on rejected application labels", async () => {
+    mocks.applyApplication.mockResolvedValueOnce([applicationLabelRejection("supplier")]);
+
+    await expect(
+      applyDeploymentPlans(mockOperatorClient({}), [deployment("supplier")]),
+    ).rejects.toMatchObject({ code: "DEPLOY_LABEL_LIMIT_EXCEEDED" });
+  });
+
   test.each(Object.values(PLAN_MARKERS))(
     "applies the %s plan in a create-update phase and a delete phase",
     async (marker) => {
@@ -417,7 +441,7 @@ describe("applyDeploymentPlans", () => {
     });
     mocks.state.onApplicationApply = async (applyClient) => {
       await writeMetadataLabels(applyClient, {
-        trn: "trn:v1:workspace:workspace-id:application:supplier",
+        trn: "trn:v1:workspace:workspace-id:pipeline:supplier",
         labels: { "sdk-name": "supplier" },
       });
     };
@@ -443,7 +467,7 @@ describe("applyDeploymentPlans", () => {
     });
     mocks.state.onApplicationApply = async (applyClient) => {
       await writeMetadataLabels(applyClient, {
-        trn: "trn:v1:workspace:workspace-id:application:supplier",
+        trn: "trn:v1:workspace:workspace-id:pipeline:supplier",
         labels: { "sdk-name": "supplier" },
       });
     };
@@ -475,7 +499,7 @@ describe("applyRemainingResources with a held maintenance mode", () => {
     );
     mocks.applyTailorDB.mockImplementationOnce(async () => immediate as never);
 
-    const maintenance = await applyRemainingResources(mockOperatorClient({}), [
+    const { maintenance } = await applyRemainingResources(mockOperatorClient({}), [
       deployment("supplier"),
       deployment("buyer"),
     ]);

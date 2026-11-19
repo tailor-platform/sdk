@@ -7,14 +7,15 @@ import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { defineStaticWebSite } from "#/configure/services/staticwebsite/index";
+import { applicationLabelRejection } from "./test-helpers/label-count-rejection";
 import { emptyPlanResults } from "./test-helpers/plan-results";
 import type { Plugin } from "#/plugin/types";
-import type { PlanResults } from "./apply-phases";
+import type { applyRemainingResources, PlanResults } from "./apply-phases";
 import type { BuiltDeploymentTarget } from "./deployment-target";
 const mocks = vi.hoisted(() => ({
   target: undefined as unknown as BuiltDeploymentTarget,
   results: undefined as unknown as PlanResults,
-  apply: vi.fn(),
+  apply: vi.fn<typeof applyRemainingResources>(),
   prerequisite: vi.fn(),
   fetchMissingDependentApps: vi.fn(),
   planTailorDB: vi.fn(),
@@ -146,7 +147,7 @@ beforeEach(() => {
   } as unknown as BuiltDeploymentTarget;
   mocks.results = emptyPlanResults();
   mocks.planTailorDB.mockImplementation(async () => mocks.results.tailorDB);
-  mocks.apply.mockResolvedValue([]);
+  mocks.apply.mockResolvedValue({ maintenance: [], labelRejections: [] });
   mocks.fetchMissingDependentApps.mockResolvedValue([]);
   client.getApplication.mockResolvedValue({ application: { url: "https://app", domain: "app" } });
   client.getStaticWebsite.mockResolvedValue({ staticwebsite: { url: "https://web" } });
@@ -346,7 +347,7 @@ test("applies a renamed application's cleanup delete from the plan the URL rebui
   await deploy({ yes: true, noValidate: true });
 
   const [, applied] = mocks.apply.mock.calls[0]!;
-  expect(applied[0].app.deletes.map((del: { name: string }) => del.name)).toEqual(["old-app"]);
+  expect(applied[0]!.app.deletes.map((del) => del.name)).toEqual(["old-app"]);
 });
 
 function planPrintedAt(): number | undefined {
@@ -422,6 +423,55 @@ test("does not execute hooks after resource application fails", async () => {
   expect(hook).not.toHaveBeenCalled();
 });
 
+function rejectApplicationLabels() {
+  mocks.apply.mockResolvedValueOnce({
+    maintenance: [],
+    labelRejections: [applicationLabelRejection("app")],
+  });
+}
+
+test("runs hooks before failing on application labels the platform rejected", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  const hook = vi.fn();
+  register(hook);
+  rejectApplicationLabels();
+  await expect(deploy({ yes: true, noValidate: true })).rejects.toMatchObject({
+    code: "DEPLOY_LABEL_LIMIT_EXCEEDED",
+  });
+  expect(hook).toHaveBeenCalledOnce();
+  expect(logger.success).not.toHaveBeenCalled();
+});
+
+test("fails a JSON deploy on rejected application labels without loading the result", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  using _json = jsonMode();
+  rejectApplicationLabels();
+  await expect(deploy({ yes: true, noValidate: true })).rejects.toMatchObject({
+    code: "DEPLOY_LABEL_LIMIT_EXCEEDED",
+  });
+  expect(client.getApplication).not.toHaveBeenCalled();
+  expect(logger.out).not.toHaveBeenCalledWith(expect.objectContaining({ status: "applied" }));
+});
+
+test("fails a migration target deploy on rejected application labels", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  rejectApplicationLabels();
+  await expect(
+    deployMigrationTestTarget({ yes: true, noValidate: true }, new Map()),
+  ).rejects.toMatchObject({ code: "DEPLOY_LABEL_LIMIT_EXCEEDED" });
+});
+
+test("reports a failing hook over application labels the platform rejected", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  register(() => {
+    throw new Error("publish failed");
+  });
+  rejectApplicationLabels();
+  await expect(deploy({ yes: true, noValidate: true })).rejects.toMatchObject({
+    code: "DEPLOYED_HOOK_FAILED",
+  });
+});
+
 test("includes deployed application and website URLs in JSON without registering a hook", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
   using _json = jsonMode();
@@ -450,10 +500,21 @@ test("includes how long TailorDB migrations kept tables in maintenance mode in J
     application: "app",
     namespaces: ["tailordb"],
     maintenanceMs: 1_010_000,
-    phases: { waitingToStart: 902_000, running: 101_000 },
+    phases: {
+      restrict: 0,
+      preMigration: 0,
+      jobSetup: 0,
+      waitingToStart: 902_000,
+      running: 101_000,
+      waitingOrRunning: 0,
+      jobCleanup: 0,
+      postMigration: 0,
+      remainingDeploy: 7_000,
+      restore: 0,
+    },
     migrations: [],
   };
-  mocks.apply.mockResolvedValueOnce([maintenance]);
+  mocks.apply.mockResolvedValueOnce({ maintenance: [maintenance], labelRejections: [] });
 
   await deploy({ yes: true, noValidate: true });
 

@@ -35,10 +35,11 @@ import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   buildMetaRequest,
   isOwnedByApp,
-  MAX_RESOURCE_LABELS,
+  labelCountViolation,
   type MetadataLabelWrite,
   resourceTrn,
-  writeMetadataLabels,
+  withExtraLabels,
+  writeMetadataLabelsDirect,
 } from "./label";
 import { createOwnershipTracker } from "./owned-resource";
 import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
@@ -51,18 +52,18 @@ import type { HttpAdapterBundleResult } from "#/cli/services/http-adapter/bundle
  * @param client - Operator client instance
  * @param changeSet - Planned application changes
  * @param phase - Apply phase
- * @returns Promise that resolves when applications are applied
+ * @returns Applications whose labels the platform rejected for their count
  */
 export async function applyApplication(
   client: OperatorClient,
   changeSet: Awaited<ReturnType<typeof planApplication>>,
   phase: Extract<ApplyPhase, "create-update" | "delete"> = "create-update",
-) {
+): Promise<ApplicationLabelRejection[]> {
   if (phase === "create-update") {
     // Re-issue updateApplication for unchanged apps too, so the platform
     // re-composes the gateway schema synchronously on every deploy.
     const updates = [...changeSet.updates, ...changeSet.unchanged];
-    await Promise.all([
+    const rejections = await Promise.all([
       ...changeSet.creates.map(async (create) => {
         create.request.cors = await resolveStaticWebsiteUrls(
           client,
@@ -71,7 +72,7 @@ export async function applyApplication(
           "CORS",
         );
         await client.createApplication(create.request);
-        await writeMetadataLabels(client, create.metaRequest);
+        return writeApplicationLabels(client, create);
       }),
       ...updates.map(async (update) => {
         update.request.cors = await resolveStaticWebsiteUrls(
@@ -81,18 +82,127 @@ export async function applyApplication(
           "CORS",
         );
         await client.updateApplication(update.request);
-        await writeMetadataLabels(client, update.metaRequest);
+        return writeApplicationLabels(client, update);
       }),
     ]);
-  } else {
-    // Delete in reverse order of dependencies
-    // Applications
-    await Promise.all(
-      changeSet.deletes.map(async (del) => {
-        await client.deleteApplication(del.request);
-      }),
-    );
+    return rejections.filter((rejection) => rejection !== undefined);
   }
+  // Delete in reverse order of dependencies
+  // Applications
+  await Promise.all(
+    changeSet.deletes.map(async (del) => {
+      await client.deleteApplication(del.request);
+    }),
+  );
+  return [];
+}
+
+/** An application whose labels the platform rejected for their count. */
+export type ApplicationLabelRejection = {
+  name: string;
+  /** The platform's violation message, which states its limit. */
+  violation: string;
+  /** Whether the SDK's own labels are stored, which keeps the application under SDK management. */
+  sdkLabelsInPlace: boolean;
+  /** `metadata` keys whose value is not stored. */
+  unwrittenMetadata: string[];
+  /** Stored label keys other than the SDK's own. */
+  otherLabels: string[];
+};
+
+type ApplicationLabels = Pick<CreateApplication, "name" | "metaRequest" | "metadata">;
+
+/**
+ * Write an application's labels on their own rather than in a batch, so the
+ * platform rejecting their count fails no other resource's labels. On that
+ * rejection the SDK's own labels are written without `metadata`.
+ * @param client - Operator client instance
+ * @param entry - Application with its SDK labels and config `metadata`
+ * @returns The rejection, or undefined when the labels were written
+ */
+async function writeApplicationLabels(
+  client: OperatorClient,
+  entry: ApplicationLabels,
+): Promise<ApplicationLabelRejection | undefined> {
+  const { name, metaRequest, metadata = {} } = entry;
+  const violation = await labelCountViolationOf(() =>
+    writeMetadataLabelsDirect(client, withExtraLabels(metaRequest, metadata)),
+  );
+  if (violation === undefined) return undefined;
+  const sdkLabelsInPlace =
+    Object.keys(metadata).length > 0 &&
+    (await labelCountViolationOf(() => writeMetadataLabelsDirect(client, metaRequest))) ===
+      undefined;
+  const current = await getOrNull(() => client.getMetadata({ trn: metaRequest.trn }));
+  const stored = current?.metadata?.labels ?? {};
+  const sdkKeys = new Set(Object.keys(metaRequest.labels ?? {}));
+  return {
+    name,
+    violation,
+    sdkLabelsInPlace,
+    unwrittenMetadata: Object.keys(metadata).filter((key) => stored[key] !== metadata[key]),
+    otherLabels: Object.keys(stored)
+      .filter((key) => !sdkKeys.has(key))
+      .toSorted(),
+  };
+}
+
+/**
+ * Run a metadata write, turning the platform's label-count rejection into its violation message.
+ * @param write - Metadata write to run
+ * @returns The violation, or undefined when the write succeeded
+ */
+async function labelCountViolationOf(write: () => Promise<unknown>): Promise<string | undefined> {
+  try {
+    await write();
+    return undefined;
+  } catch (error) {
+    const violation = labelCountViolation(error);
+    if (violation === undefined) throw error;
+    return violation;
+  }
+}
+
+/**
+ * Build the failure for applications whose labels the platform rejected for
+ * their count.
+ * @param rejections - Rejected applications, as {@link applyApplication} returns them
+ * @returns Error reporting every rejected application
+ */
+export function applicationLabelLimitError(
+  rejections: ReadonlyArray<ApplicationLabelRejection>,
+): CLIError {
+  const howToDelete =
+    "`tailor api GetMetadata` reads an application's labels and `tailor api SetMetadata` writes back the ones to keep";
+  return CLIError({
+    code: "DEPLOY_LABEL_LIMIT_EXCEEDED",
+    message: rejections
+      .map(
+        ({ name, violation }) =>
+          `The platform rejected the labels of application '${name}': ${violation}`,
+      )
+      .join("\n"),
+    details: [
+      ...rejections.map(describeLabelRejection),
+      "Every other change of the deploy was applied.",
+    ].join("\n"),
+    suggestion: rejections.some(({ sdkLabelsInPlace }) => sdkLabelsInPlace)
+      ? `Remove unwritten entries from 'metadata', or delete labels the application no longer needs, then deploy again; removing an entry already stored does not delete its label (${howToDelete}).`
+      : `Delete labels the application no longer needs, then deploy again (${howToDelete}).`,
+    context: {
+      resourceType: "application",
+      applications: rejections.map((rejection) => ({ ...rejection })),
+    },
+  });
+}
+
+function describeLabelRejection(rejection: ApplicationLabelRejection): string {
+  const { name, sdkLabelsInPlace, unwrittenMetadata, otherLabels } = rejection;
+  const outcome = sdkLabelsInPlace
+    ? `the SDK's own labels are in place, but the 'metadata' entries ${unwrittenMetadata.join(", ")} were not written.`
+    : "the SDK's own labels could not be written, because the labels already stored leave no room for them.";
+  const stored = otherLabels.length > 0 ? ` Other labels stored: ${otherLabels.join(", ")}.` : "";
+  return `Application '${name}': ${outcome}${stored}`;
 }
 
 /**
@@ -119,6 +229,8 @@ type CreateApplication = {
   name: string;
   request: MessageInitShape<typeof CreateApplicationRequestSchema>;
   metaRequest: MetadataLabelWrite;
+  /** Labels from the config's `metadata`, left out when the platform rejects the label count. */
+  metadata?: Record<string, string>;
   /** Per-adapter diff lines shown indented beneath the application entry. */
   details?: string[];
 };
@@ -127,6 +239,8 @@ type UpdateApplication = {
   name: string;
   request: MessageInitShape<typeof UpdateApplicationRequestSchema>;
   metaRequest: MetadataLabelWrite;
+  /** Labels from the config's `metadata`, left out when the platform rejects the label count. */
+  metadata?: Record<string, string>;
   /** Per-adapter diff lines shown indented beneath the application entry. */
   details?: string[];
 };
@@ -143,6 +257,7 @@ type DesiredApplication = {
   /** The request with its `:url` CORS entries resolved as the plan resolves them. */
   comparableRequest: MessageInitShape<typeof UpdateApplicationRequestSchema>;
   metaRequest: MetadataLabelWrite;
+  metadata?: Record<string, string>;
 };
 
 function normalizeHttpAdapter(adapter: HttpAdapter): void {
@@ -284,16 +399,15 @@ export async function planApplication(
     trn: resourceTrn(workspaceId, "application", application.name),
     appName: application.name,
     appId: application.id,
-    metadata: application.config.metadata,
   });
+  const { metadata } = application.config;
   // `previous.existingLabels` can legitimately be `undefined` (no metadata
   // found on the first fetch), so branch on `previous` itself -- `??` would
   // treat that cached `undefined` as a cache miss and re-fetch needlessly.
   const existingLabels = previous
     ? previous.existingLabels
     : await fetchAppLabels(client, workspaceId, application.name);
-  assertLabelBudget(application.name, existingLabels, metaRequest);
-  const metadataDetails = diffMetadataDisplay(existingLabels, application.config.metadata);
+  const metadataDetails = diffMetadataDisplay(existingLabels, metadata);
   const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
   const resolvedCors = await resolveStaticWebsiteUrls(
     client,
@@ -334,6 +448,7 @@ export async function planApplication(
         request,
         comparableRequest: { ...request, cors: resolvedCors },
         metaRequest,
+        metadata,
       },
     ],
     existing: existing
@@ -347,21 +462,27 @@ export async function planApplication(
     isConfigUnchanged: (app, { resource }) =>
       metadataDetails.length === 0 &&
       isRequestUnchanged(applicationComparison, app.comparableRequest, resource),
-    create: ({ name, request, metaRequest }) => ({
+    create: ({ name, request, metaRequest, metadata }) => ({
       name,
       request,
       metaRequest,
+      metadata,
       details: nonEmpty([...diffHttpAdapterDisplay(undefined, httpAdapters), ...metadataDetails]),
     }),
-    update: ({ name, request, metaRequest }, { resource }) => {
+    update: ({ name, request, metaRequest, metadata }, { resource }) => {
       const details = nonEmpty([
         ...diffHttpAdapterDisplay(resource.httpAdapters, httpAdapters),
         ...metadataDetails,
       ]);
-      return { name, request, metaRequest, ...(details && { details }) };
+      return { name, request, metaRequest, metadata, ...(details && { details }) };
     },
     // Plan display shows this as unchanged, but apply still re-issues it.
-    unchanged: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),
+    unchanged: ({ name, request, metaRequest, metadata }) => ({
+      name,
+      request,
+      metaRequest,
+      metadata,
+    }),
     // Other applications are deleted only by the rename and removal paths above.
     delete: () => undefined,
   });
@@ -423,43 +544,6 @@ export function diffHttpAdapterDisplay(
   return entries
     .toSorted((left, right) => left.name.localeCompare(right.name))
     .map((entry) => `${entry.symbol} ${entry.name} (httpAdapter)`);
-}
-
-/**
- * Fail the plan when the labels this deploy would leave behind exceed the
- * platform's per-resource limit.
- *
- * The `metadata` cap alone cannot catch this: a write keeps every stored label
- * it does not name, so labels from another tool or an earlier config push are
- * merged on top of the entries being written. Reporting it here fails the run
- * before the application is created or updated, rather than leaving a bare
- * `SetMetadata` rejection after the resource has already changed.
- * @param appName - Application the labels belong to
- * @param existingLabels - Labels currently stored on the application
- * @param write - The metadata write planned for the application
- */
-function assertLabelBudget(
-  appName: string,
-  existingLabels: Record<string, string> | undefined,
-  write: MetadataLabelWrite,
-): void {
-  const merged = new Set([
-    ...Object.keys(existingLabels ?? {}),
-    ...Object.keys(write.labels ?? {}),
-  ]);
-  for (const key of write.remove ?? []) {
-    merged.delete(key);
-  }
-  if (merged.size <= MAX_RESOURCE_LABELS) return;
-  const named = new Set(Object.keys(write.labels ?? {}));
-  const retained = [...merged].filter((key) => !named.has(key)).toSorted();
-  throw CLIError({
-    code: "DEPLOY_LABEL_LIMIT_EXCEEDED",
-    message: `Application '${appName}' would store ${merged.size} labels, over the platform's limit of ${MAX_RESOURCE_LABELS}.`,
-    details: `${named.size} come from this deploy and ${retained.length} are kept from earlier deploys or other tools${retained.length ? ` (${retained.join(", ")})` : ""}.`,
-    suggestion:
-      "Remove entries from 'metadata' in the config, or delete labels the application no longer needs.",
-  });
 }
 
 /**
