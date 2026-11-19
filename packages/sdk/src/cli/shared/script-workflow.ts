@@ -151,7 +151,13 @@ export async function withScriptWorkflow<T>(
       pollInterval,
       subject: "Script",
     });
-    return await readOutcome({ client, workspaceId, execution, pollInterval });
+    const { jobFunctionName: _jobFunctionName, ...outcome } = await readOutcome({
+      client,
+      workspaceId,
+      execution,
+      pollInterval,
+    });
+    return outcome;
   };
 
   try {
@@ -298,19 +304,26 @@ export interface ReadOutcomeParams {
   pollInterval: number;
   /** Epoch milliseconds after which reading stops with an error; no limit when omitted */
   deadline?: number;
+  /** Names a job function in the logs of a run that started other jobs (default: its name) */
+  jobLabel?: (jobFunctionName: string) => string;
 }
 
-/**
- * Read the logs and result of the job that ran the script. A workflow
- * execution carries neither; both live on the job's function execution, and
- * the run's outcome is lost if they cannot be read, so a transient error is
- * retried.
- * @param params - Execution to read the outcome of
- * @returns Result in the shape synchronous execution reports
- */
-export async function readOutcome(params: ReadOutcomeParams): Promise<ScriptExecutionResult> {
-  const { client, workspaceId, execution, pollInterval, deadline } = params;
-  const executionId = outcomeJobExecutionId(execution);
+/** What a finished run reported, and which job it was read from. */
+export interface ScriptWorkflowOutcome extends ScriptExecutionResult {
+  /** Job function the result and error were read from; its bundle maps the error's stack */
+  jobFunctionName?: string;
+}
+
+interface ReadJobParams {
+  client: OperatorClient;
+  workspaceId: string;
+  executionId: string;
+  pollInterval: number;
+  deadline: number | undefined;
+}
+
+async function readJobExecution(params: ReadJobParams): Promise<FunctionExecution | undefined> {
+  const { client, workspaceId, executionId, pollInterval, deadline } = params;
   const throwIfPastDeadline = (expired = false) => {
     if (deadline === undefined || (!expired && Date.now() < deadline)) return;
     throw CLIError({
@@ -318,28 +331,71 @@ export async function readOutcome(params: ReadOutcomeParams): Promise<ScriptExec
       message: `Reading the result of execution '${executionId}' did not finish in time.`,
     });
   };
-  let job: FunctionExecution | undefined;
-  for (let attempt = 1; executionId && attempt <= READ_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= READ_ATTEMPTS; attempt++) {
     let signal: AbortSignal | undefined;
     try {
       throwIfPastDeadline();
       const request = { workspaceId, executionId };
       if (deadline !== undefined) signal = AbortSignal.timeout(Math.max(1, deadline - Date.now()));
-      ({ execution: job } = await (signal
+      const { execution } = await (signal
         ? client.getFunctionExecution(request, { signal })
-        : client.getFunctionExecution(request)));
-      break;
+        : client.getFunctionExecution(request));
+      return execution;
     } catch (error) {
       // The signal fires on the deadline, but its timer can run a few milliseconds ahead of the clock.
       throwIfPastDeadline(signal?.aborted);
-      if (error instanceof ConnectError && error.code === Code.NotFound) break;
+      if (error instanceof ConnectError && error.code === Code.NotFound) return undefined;
       if (attempt === READ_ATTEMPTS || !isRetryableWaitError(error)) throw error;
       const wait =
         deadline === undefined ? pollInterval : Math.min(pollInterval, deadline - Date.now());
       await new Promise((resolve) => setTimeout(resolve, wait));
     }
   }
-  const logs = job ? joinFunctionLogMessages(job.logEntries) : "";
+  return undefined;
+}
+
+/**
+ * Read the logs and result of a finished run. A workflow execution carries
+ * neither; both live on the function executions of its jobs, and the run's
+ * outcome is lost if they cannot be read, so a transient error is retried.
+ * The result and error come from the job {@link outcomeJobExecutionId} picks;
+ * a run that started other jobs reports the logs of every one of them, each
+ * line marked with its job, since teardown removes the workflow they could
+ * otherwise be read through.
+ * @param params - Execution to read the outcome of
+ * @returns Result in the shape synchronous execution reports
+ */
+export async function readOutcome(params: ReadOutcomeParams): Promise<ScriptWorkflowOutcome> {
+  const { client, workspaceId, execution, pollInterval, deadline } = params;
+  const executionId = outcomeJobExecutionId(execution);
+  const read = (id: string) =>
+    readJobExecution({ client, workspaceId, executionId: id, pollInterval, deadline });
+  const job = executionId ? await read(executionId) : undefined;
+  const outcomeRow = execution.jobExecutions.find((row) => row.executionId === executionId);
+  const jobFunctionName =
+    outcomeRow?.kind.case === "jobFunction" ? outcomeRow.kind.value.name : undefined;
+
+  const rows = execution.jobExecutions.filter((row) => row.kind.case !== "wait");
+  let logs: string;
+  if (rows.length > 1) {
+    const blocks: string[] = [];
+    for (const row of rows) {
+      const rowJob = row.executionId === executionId ? job : await read(row.executionId);
+      const text = rowJob ? joinFunctionLogMessages(rowJob.logEntries) : "";
+      if (!text) continue;
+      const name = row.kind.case === "jobFunction" ? row.kind.value.name : row.executionId;
+      const label = params.jobLabel?.(name) ?? name;
+      blocks.push(
+        text
+          .split("\n")
+          .map((line) => `[${label}] ${line}`)
+          .join("\n"),
+      );
+    }
+    logs = blocks.join("\n");
+  } else {
+    logs = job ? joinFunctionLogMessages(job.logEntries) : "";
+  }
   const result = job?.result ?? "";
 
   if (execution.status === WorkflowExecution_Status.SUCCESS) {
@@ -352,12 +408,12 @@ export async function readOutcome(params: ReadOutcomeParams): Promise<ScriptExec
           "The workflow finished, but the result of its job could not be read, so it is unknown whether the script's changes were applied",
       };
     }
-    return { success: true, logs, result };
+    return { success: true, logs, result, jobFunctionName };
   }
   const canceled = execution.status === WorkflowExecution_Status.CANCELED;
   const error =
     job?.error?.message.trim() ||
     result.trim() ||
     (canceled ? "Script execution was canceled" : "Script execution failed with unknown error");
-  return { success: false, logs, result, error };
+  return { success: false, logs, result, error, jobFunctionName };
 }

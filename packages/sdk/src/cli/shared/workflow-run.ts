@@ -20,6 +20,7 @@ import {
   assertMachineUserExists,
   mainJobExecutionId,
   readOutcome,
+  type ScriptWorkflowOutcome,
 } from "#/cli/shared/script-workflow";
 import {
   createTemporaryWorkflow,
@@ -42,7 +43,7 @@ import {
   workflowRunResourceName,
 } from "#/cli/shared/workflow-run-labels";
 import type { OperatorClient } from "#/cli/shared/client";
-import type { ScriptExecutionResult, ScriptInvoker } from "#/cli/shared/script-executor";
+import type { ScriptInvoker } from "#/cli/shared/script-executor";
 import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import type { Jsonifiable } from "type-fest";
 
@@ -222,7 +223,7 @@ export interface AwaitWorkflowRunParams {
 }
 
 export type WorkflowRunOutcome =
-  | { state: "finished"; result: ScriptExecutionResult }
+  | { state: "finished"; result: ScriptWorkflowOutcome }
   | { state: "timedOut" }
   /** The run ended, but its result could not be read; the resources are kept */
   | {
@@ -275,13 +276,15 @@ export async function awaitWorkflowRun(
     }
     throw error;
   }
-  let result: ScriptExecutionResult;
+  const jobPrefix = `${started.name}-`;
+  let result: ScriptWorkflowOutcome;
   try {
     result = await readOutcome({
       client,
       workspaceId,
       execution,
       pollInterval,
+      jobLabel: (name) => (name.startsWith(jobPrefix) ? name.slice(jobPrefix.length) : name),
       deadline: Date.now() + (params.outcomeTimeoutMs ?? OUTCOME_READ_TIMEOUT_MS),
     });
   } catch (error) {

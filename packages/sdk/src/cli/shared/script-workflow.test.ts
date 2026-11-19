@@ -91,7 +91,7 @@ function createMockClient(options: MockClientOptions = {}) {
           jobExecutions: [
             {
               executionId: "fn-1",
-              kind: { case: "jobFunction" },
+              kind: { case: "jobFunction", value: { name: "job" } },
               position: { depth: 0, parentWorkflowJobExecutionId: "" },
             },
           ],
@@ -376,7 +376,7 @@ describe("the main job of a workflow execution", () => {
     kind: "jobFunction" | "wait" = "jobFunction",
   ) => ({
     executionId,
-    kind: { case: kind },
+    kind: { case: kind, value: { name: "job" } },
     position: { depth, parentWorkflowJobExecutionId: depth === 0 ? "" : "job-main" },
   });
   const executionOf = (...rows: ReturnType<typeof row>[]) =>
@@ -422,7 +422,12 @@ describe("the main job of a workflow execution", () => {
       pollInterval: 1,
     });
 
-    expect(outcome).toEqual({ success: true, logs: "", result: '"main"' });
+    expect(outcome).toEqual({
+      success: true,
+      logs: "",
+      result: '"main"',
+      jobFunctionName: "job",
+    });
   });
 });
 
@@ -430,7 +435,7 @@ describe("the job a finished run's outcome is read from", () => {
   const job = (executionId: string, depth: number, status: WorkflowJobExecution_Status) => ({
     executionId,
     status,
-    kind: { case: "jobFunction" },
+    kind: { case: "jobFunction", value: { name: "job" } },
     position: { depth, parentWorkflowJobExecutionId: depth === 0 ? "" : "job-main" },
   });
   const failedRun = (...rows: ReturnType<typeof job>[]) =>
@@ -459,6 +464,87 @@ describe("the job a finished run's outcome is read from", () => {
     } as unknown as WorkflowExecution;
 
     expect(outcomeJobExecutionId(run)).toBe("fn-main");
+  });
+
+  describe("for a run that started other jobs", () => {
+    const named = (
+      executionId: string,
+      depth: number,
+      status: WorkflowJobExecution_Status,
+      name: string,
+    ) => ({
+      ...job(executionId, depth, status),
+      kind: { case: "jobFunction", value: { name } },
+    });
+    const logsOf = (logs: Record<string, string>) => ({
+      getFunctionExecution: vi.fn(async (request: { executionId: string }) => ({
+        execution: {
+          logEntries: logs[request.executionId] ? [{ message: logs[request.executionId] }] : [],
+          result: request.executionId === "fn-main" ? '"main"' : '"child"',
+        },
+      })),
+    });
+    const succeeded = {
+      status: WorkflowExecution_Status.SUCCESS,
+      jobExecutions: [
+        named("fn-main", 0, SUCCESS, "run-main"),
+        named("fn-child", 1, SUCCESS, "run-child"),
+      ],
+    } as unknown as WorkflowExecution;
+
+    test("reports the logs of every job, each line marked with its job", async () => {
+      const client = logsOf({ "fn-main": "main line 1\nmain line 2", "fn-child": "child line" });
+
+      const outcome = await readOutcome({
+        client: client as unknown as OperatorClient,
+        workspaceId: "ws",
+        execution: succeeded,
+        pollInterval: 1,
+        jobLabel: (name) => name.replace("run-", ""),
+      });
+
+      expect(outcome.logs).toBe("[main] main line 1\n[main] main line 2\n[child] child line");
+      expect(outcome.result).toBe('"main"');
+    });
+
+    test("reports the logs of the parent too when a child failed, and the error of the child", async () => {
+      const failed = {
+        status: WorkflowExecution_Status.FAILED,
+        jobExecutions: [
+          named("fn-main", 0, FAILED, "run-main"),
+          named("fn-child", 1, FAILED, "run-child"),
+        ],
+      } as unknown as WorkflowExecution;
+      const client = {
+        getFunctionExecution: vi.fn(async (request: { executionId: string }) => ({
+          execution:
+            request.executionId === "fn-child"
+              ? { logEntries: [{ message: "child log" }], result: "", error: { message: "boom" } }
+              : { logEntries: [{ message: "parent log" }], result: "" },
+        })),
+      };
+
+      const outcome = await readOutcome({
+        client: client as unknown as OperatorClient,
+        workspaceId: "ws",
+        execution: failed,
+        pollInterval: 1,
+      });
+
+      expect(outcome.logs).toBe("[run-main] parent log\n[run-child] child log");
+      expect(outcome).toMatchObject({ success: false, error: "boom" });
+    });
+
+    test("names the job function the outcome was read from", async () => {
+      const outcome = await readOutcome({
+        client: logsOf({}) as unknown as OperatorClient,
+        workspaceId: "ws",
+        execution: succeeded,
+        pollInterval: 1,
+      });
+
+      expect(outcome.jobFunctionName).toBe("run-main");
+    });
   });
 
   test("gives the error of the job that failed, not the main job's bookkeeping, when read", async () => {

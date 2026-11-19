@@ -262,7 +262,18 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
     } else {
       if (result.success) logger.success("Execution succeeded");
       else logger.error("Execution failed");
-      printExecutionDetails(prepared, result);
+      printExecutionDetails(
+        {
+          ...prepared,
+          bundledCode: outcomeBundle({
+            source,
+            runId: started.runId,
+            jobFunctionName: result.jobFunctionName,
+            fallback: prepared.bundledCode,
+          }),
+        },
+        result,
+      );
     }
     if (!result.success) {
       // Exiting at once would cut off what is still queued for a pipe.
@@ -278,6 +289,30 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
 type RunSource =
   | { kind: "script"; code: string }
   | { kind: "job"; mainJobName: string; jobs: Array<{ jobName: string; code: string }> };
+
+interface OutcomeBundleParams {
+  /** What the run registered */
+  source: RunSource;
+  /** Id of the run, which names the job functions */
+  runId: string;
+  /** Job function the outcome was read from */
+  jobFunctionName: string | undefined;
+  /** Bundle to use when the job is not one of the registered ones */
+  fallback: string;
+}
+
+/**
+ * Pick the bundle of the job an outcome was read from, whose sourcemap maps the stack of its error.
+ * @param params - What the run registered and which job reported
+ * @returns Bundled code of that job
+ */
+export function outcomeBundle(params: OutcomeBundleParams): string {
+  if (params.source.kind !== "job") return params.fallback;
+  const match = params.source.jobs.find(
+    (job) => workflowRunJobFunctionName(params.runId, job.jobName) === params.jobFunctionName,
+  );
+  return match?.code ?? params.fallback;
+}
 
 interface JobSourceParams {
   /** Absolute path of the file */

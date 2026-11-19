@@ -20,7 +20,7 @@ import {
 import { bundleForRun } from "../function/bundle";
 import { detectFunctionType } from "../function/detect";
 import { checkScriptSchemaSnapshot } from "../function/script-scaffold";
-import { assertJobSource, runCommand } from "./run";
+import { assertJobSource, outcomeBundle, runCommand } from "./run";
 import { bundleWorkflowRunJobs } from "./run-jobs";
 
 vi.mock("#/cli/shared/config-loader", () => ({ loadConfig: vi.fn() }));
@@ -390,5 +390,44 @@ describe("workflow run", () => {
       code: "WORKFLOW_RUN_ARG_FILE_UNREADABLE",
       command: "workflow run",
     });
+  });
+});
+
+describe("outcomeBundle", () => {
+  const source = {
+    kind: "job" as const,
+    mainJobName: "parent-job",
+    jobs: [
+      { jobName: "parent-job", code: "// parent bundle" },
+      { jobName: "child-job", code: "// child bundle" },
+    ],
+  };
+
+  test("is the bundle of the job the outcome was read from, so a child's stack maps through the child's sourcemap", () => {
+    expect(
+      outcomeBundle({
+        source,
+        runId: "r1",
+        jobFunctionName: "tmp-run-r1-child-job",
+        fallback: "// main",
+      }),
+    ).toBe("// child bundle");
+  });
+
+  test("falls back to the main bundle when the job is not one the run registered", () => {
+    expect(
+      outcomeBundle({ source, runId: "r1", jobFunctionName: "other", fallback: "// main" }),
+    ).toBe("// main");
+  });
+
+  test("is the script's own bundle for a script run", () => {
+    expect(
+      outcomeBundle({
+        source: { kind: "script", code: "// script" },
+        runId: "r1",
+        jobFunctionName: "tmp-run-r1",
+        fallback: "// script",
+      }),
+    ).toBe("// script");
   });
 });

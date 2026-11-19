@@ -65,7 +65,7 @@ function createClient(options: ClientOptions = {}) {
           jobExecutions: [
             {
               executionId: "fn-1",
-              kind: { case: "jobFunction" },
+              kind: { case: "jobFunction", value: { name: "job" } },
               position: { depth: 0, parentWorkflowJobExecutionId: "" },
             },
           ],
@@ -383,7 +383,7 @@ describe("awaitWorkflowRun", () => {
 
     expect(outcome).toEqual({
       state: "finished",
-      result: { success: true, logs: "hello", result: '{"ok":true}' },
+      result: { success: true, logs: "hello", result: '{"ok":true}', jobFunctionName: "job" },
     });
     expect(client.deleteWorkflow).toHaveBeenCalledOnce();
     expect(client.deleteFunctionRegistry).toHaveBeenCalledOnce();
@@ -508,7 +508,7 @@ describe("awaitWorkflowRun when a sweep removes the workflow while it waits", ()
       jobExecutions: [
         {
           executionId: "fn-1",
-          kind: { case: "jobFunction" },
+          kind: { case: "jobFunction", value: { name: "job" } },
           position: { depth: 0, parentWorkflowJobExecutionId: "" },
         },
       ],
@@ -550,12 +550,12 @@ describe("awaitWorkflowRun when a sweep removes the workflow while it waits", ()
           jobExecutions: [
             {
               executionId: "fn-main",
-              kind: { case: "jobFunction" },
+              kind: { case: "jobFunction", value: { name: "job" } },
               position: { depth: 0, parentWorkflowJobExecutionId: "" },
             },
             {
               executionId: "fn-child",
-              kind: { case: "jobFunction" },
+              kind: { case: "jobFunction", value: { name: "job" } },
               position: { depth: 1, parentWorkflowJobExecutionId: "job-main" },
             },
           ],
@@ -695,7 +695,7 @@ describe("awaitWorkflowRun when a sweep removes the workflow while it waits", ()
       workspaceId: "ws",
       started,
       pollInterval: 1,
-      timeoutMs: 150,
+      timeoutMs: 1000,
     });
 
     expect(outcome).toMatchObject({ state: "outcomeUnavailable", workflowRemoved: true });
