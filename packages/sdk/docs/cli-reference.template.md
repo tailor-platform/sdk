@@ -359,12 +359,12 @@ printed with the line an editor shows, so both agree.
 
 The following options are available for most commands:
 
-| Option           | Short | Description                            |
-| ---------------- | ----- | -------------------------------------- |
-| `--workspace-id` | `-w`  | Workspace ID (for deployment commands) |
-| `--profile`      | `-p`  | Workspace profile                      |
-| `--config`       | `-c`  | Path to Tailor config file             |
-| `--yes`          | `-y`  | Skip confirmation prompts              |
+| Option           | Short | Description                                                                                               |
+| ---------------- | ----- | --------------------------------------------------------------------------------------------------------- |
+| `--workspace-id` | `-w`  | Workspace ID (for deployment commands)                                                                    |
+| `--profile`      | `-p`  | Workspace profile                                                                                         |
+| `--config`       | `-c`  | Path to Tailor config file (default: the nearest `tailor.config.ts` in the current or a parent directory) |
+| `--yes`          | `-y`  | Skip confirmation prompts                                                                                 |
 
 ### Environment File Loading
 

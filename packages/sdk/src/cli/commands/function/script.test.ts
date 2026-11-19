@@ -179,7 +179,7 @@ describe("function script", () => {
     expect(snapshot.namespace).toBe("tailordb");
     expect(snapshot.source).toBe("local");
     expect(loadTailorDBNamespaces).toHaveBeenCalledWith({
-      configPath: "tailor.config.ts",
+      configPath: undefined,
       namespaces: ["tailordb"],
     });
     expect(loadAccessToken).not.toHaveBeenCalled();
@@ -422,7 +422,7 @@ describe("function script", () => {
     await runCommand(scriptCommand, ["scripts/fix.ts"]);
 
     expect(loadTailorDBNamespaces).toHaveBeenCalledWith({
-      configPath: "tailor.config.ts",
+      configPath: undefined,
       namespaces: ["tailordb"],
     });
     expect(fetchRemoteSchemaSnapshot).not.toHaveBeenCalled();
@@ -515,7 +515,7 @@ describe("function script", () => {
     );
     expect(snapshot.source).toBe("local");
     expect(loadTailorDBNamespaces).toHaveBeenCalledWith({
-      configPath: "tailor.config.ts",
+      configPath: undefined,
       namespaces: ["tailordb"],
     });
     expect(fetchRemoteSchemaSnapshot).not.toHaveBeenCalled();

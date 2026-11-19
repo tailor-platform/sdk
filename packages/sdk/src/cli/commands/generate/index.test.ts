@@ -13,10 +13,10 @@ vi.mock("#/cli/telemetry/index", () => ({ initTelemetry: mocks.initTelemetry }))
 describe("generateCommand", () => {
   test.each([
     {
-      name: "uses the default config path when TAILOR_CONFIG_PATH is unset",
+      name: "leaves the config path to the default lookup when TAILOR_CONFIG_PATH is unset",
       env: {},
       args: [],
-      configPath: "tailor.config.ts",
+      configPath: undefined,
     },
     {
       name: "reads the config path from TAILOR_CONFIG_PATH",

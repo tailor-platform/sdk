@@ -528,7 +528,7 @@ export const workspaceArgs = {
 } satisfies ArgsShape;
 
 /**
- * Default config file path used when --config is not passed
+ * Config file name searched for, from the current directory upward, when neither --config nor TAILOR_CONFIG_PATH is given
  */
 export const DEFAULT_CONFIG_PATH = "tailor.config.ts";
 
@@ -583,9 +583,9 @@ export function profileUpdateArgs(profile: string, options: readonly string[]): 
  * Shared config arg for commands that accept a config file path
  */
 export const configArg = {
-  config: arg(z.string().default(DEFAULT_CONFIG_PATH), {
+  config: arg(z.string().optional(), {
     alias: "c",
-    description: "Path to Tailor config file",
+    description: `Path to Tailor config file (default: the nearest ${DEFAULT_CONFIG_PATH} in the current or a parent directory)`,
     env: "TAILOR_CONFIG_PATH",
     completion: { type: "file", extensions: ["ts"] },
   }),
@@ -595,10 +595,9 @@ export const configArg = {
  * Shared config arg for commands that accept one or more comma-separated config file paths
  */
 export const multiConfigArg = {
-  config: arg(z.string().default(DEFAULT_CONFIG_PATH), {
+  config: arg(z.string().optional(), {
     alias: "c",
-    description:
-      "Path to SDK config file. Use comma-separated paths to deploy multiple apps together.",
+    description: `Path to SDK config file (default: the nearest ${DEFAULT_CONFIG_PATH} in the current or a parent directory). Use comma-separated paths to deploy multiple apps together.`,
     env: "TAILOR_CONFIG_PATH",
     completion: { type: "file", extensions: ["ts"] },
   }),

@@ -4,7 +4,7 @@ description: "Configure your application in tailor.config.ts, including applicat
 
 # Configuration
 
-The SDK uses TypeScript for configuration files. By default, it uses `tailor.config.ts` in the project root. You can specify a different path using the `--config` option.
+The SDK uses TypeScript for configuration files. By default, CLI commands use the nearest `tailor.config.ts`, looking in the current directory and then in each parent directory, so they also work from a subdirectory of your project. You can specify a different path using the `--config` option or the `TAILOR_CONFIG_PATH` environment variable.
 
 For service-specific documentation, see:
 

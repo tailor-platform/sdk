@@ -26,7 +26,6 @@ import {
   type SchemaSnapshot,
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
-import { DEFAULT_CONFIG_PATH } from "#/cli/shared/args";
 import { extractOwnedNamespaces } from "#/cli/shared/config";
 import { CLIError, formatCommandHint, internalError } from "#/cli/shared/errors";
 import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
@@ -209,7 +208,7 @@ export interface VerifyScriptSchemaSnapshotOptions {
   /** Loaded config */
   config: LoadedConfig;
   /** Config path as passed on the command line (threaded into hints) */
-  configArgValue: string;
+  configArgValue: string | undefined;
   /** Script path as passed on the command line (threaded into hints) */
   scriptArgValue: string;
   /** Profile as passed on the command line, when any (threaded into hints) */
@@ -348,9 +347,7 @@ function schemaDriftError(
   options: VerifyScriptSchemaSnapshotOptions,
 ): Error {
   const contextFlags = [
-    ...(options.configArgValue !== DEFAULT_CONFIG_PATH
-      ? [`--config=${options.configArgValue}`]
-      : []),
+    ...(options.configArgValue !== undefined ? [`--config=${options.configArgValue}`] : []),
     `--workspace-id=${options.workspaceId}`,
     ...(options.profileArgValue !== undefined ? [`--profile=${options.profileArgValue}`] : []),
   ];

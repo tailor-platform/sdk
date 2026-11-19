@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
-import { findUpSync } from "find-up-simple";
 import * as path from "pathe";
 import { DEFAULT_CONFIG_PATH } from "#/cli/shared/args";
 import { loadConfig } from "#/cli/shared/config-loader";
+import { findConfigFile } from "#/cli/shared/context";
 import { errorSummary } from "#/cli/shared/errors";
 import { readPackageJson } from "#/cli/shared/package-json";
 import { KYSELY_FILE_NAME, REGISTRY_FILE_NAME } from "#/cli/shared/tailor-file-extension";
@@ -113,7 +113,7 @@ async function loadProject(
   evaluate: EvaluateConfig,
 ): Promise<Omit<Project, "identity"> & { configPath?: string }> {
   const searchFrom = path.dirname(tsconfigPath);
-  const configPath = findUpSync(DEFAULT_CONFIG_PATH, { cwd: searchFrom });
+  const configPath = findConfigFile(searchFrom);
   if (!configPath) {
     return {
       error: `No ${DEFAULT_CONFIG_PATH} found in ${searchFrom} or its parent directories`,

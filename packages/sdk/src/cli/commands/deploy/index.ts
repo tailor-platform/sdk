@@ -4,7 +4,6 @@ import { deployFromCLI } from "#/cli/commands/deploy/deploy";
 import { parseMigrationSkipSteps } from "#/cli/commands/deploy/tailordb/migration-skip-steps";
 import {
   confirmationArgs,
-  DEFAULT_CONFIG_PATH,
   readEnvFileArgs,
   locationIds,
   multiConfigArg,
@@ -69,10 +68,7 @@ export const deployCommand = defineAppCommand({
       {
         workspaceId: args["workspace-id"],
         profile: args.profile,
-        configPath:
-          args.$source?.("config") === "cli"
-            ? args.config
-            : (readDeployConfigPathEnv() ?? DEFAULT_CONFIG_PATH),
+        configPath: args.$source?.("config") === "cli" ? args.config : readDeployConfigPathEnv(),
         dryRun: args["dry-run"],
         yes: args.yes,
         createWorkspace: args["create-workspace"],
