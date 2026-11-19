@@ -10,7 +10,7 @@ import { timestampMs } from "@bufbuild/protobuf/wkt";
 import { resourceTrn, sdkAppIdLabelKey, sdkNameLabelKey } from "#/cli/commands/deploy/label";
 import { recoveryContextArgs } from "#/cli/shared/args";
 import { fetchPaged } from "#/cli/shared/client";
-import { formatCommandHint, isCLIError } from "#/cli/shared/errors";
+import { CLIError, formatCommandHint, isCLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { readOutcome } from "#/cli/shared/script-workflow";
 import {
@@ -44,7 +44,10 @@ const LEFTOVER_NOTE =
 const NOT_STARTED_GRACE_MS = 60_000;
 
 /** A run that finished is kept this long, so the command waiting for it can still read the outcome. */
-const FINISHED_GRACE_MS = 120_000;
+const FINISHED_GRACE_MS = 5 * 60_000;
+
+/** Longest poll interval a waiter may use: it must poll again well within {@link FINISHED_GRACE_MS}. */
+const MAX_POLL_INTERVAL_MS = 60_000;
 
 export interface StartWorkflowRunParams {
   client: OperatorClient;
@@ -269,6 +272,23 @@ export async function reclaimFinishedWorkflowRuns(
   }
 }
 
+/**
+ * Refuse a poll interval so long that a finished run could be removed before
+ * its waiter polls again.
+ * @param intervalMs - Poll interval in milliseconds
+ */
+export function assertPollInterval(intervalMs: number): void {
+  if (intervalMs <= MAX_POLL_INTERVAL_MS) return;
+  throw CLIError({
+    code: "WORKFLOW_RUN_INTERVAL_TOO_LONG",
+    message: `The poll interval must not exceed ${MAX_POLL_INTERVAL_MS / 1000}s.`,
+    suggestion:
+      "Use a shorter --interval: a finished run is only kept for a few minutes, " +
+      "so a waiter polling less often could lose its result.",
+    command: "workflow run",
+  });
+}
+
 export interface WorkflowRunHintsParams {
   executionId: string;
   workspaceId: string;
@@ -289,7 +309,7 @@ export function workflowRunHints(params: WorkflowRunHintsParams): {
   return {
     inspect: formatCommandHint({
       command: "tailor",
-      args: ["workflow", "executions", params.executionId, ...context],
+      args: ["workflow", "executions", params.executionId, "--logs", ...context],
     }),
     cleanup: formatCommandHint({
       command: "tailor",

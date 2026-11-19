@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { writeMetadataLabelsDirect } from "#/cli/commands/deploy/label";
 import { logger } from "./logger";
 import {
+  assertPollInterval,
   awaitWorkflowRun,
   reclaimFinishedWorkflowRuns,
   reclaimWorkflowRuns,
@@ -382,6 +383,20 @@ describe("reclaimWorkflowRuns", () => {
     expect(client.deleteWorkflow).not.toHaveBeenCalled();
   });
 
+  test("keeps a run for the whole window a waiter polling at the longest allowed interval may need", async () => {
+    const client = createSweepClient([
+      {
+        name: `tmp-${runId}`,
+        labels: run(runId),
+        executions: [WorkflowExecution_Status.SUCCESS],
+        finishedAt: new Date(old.getTime() - 3 * 60_000),
+      },
+    ]);
+    await reclaimWorkflowRuns({ client: asClient(client), workspaceId: "ws", now: old });
+
+    expect(client.deleteWorkflow).not.toHaveBeenCalled();
+  });
+
   test("removes a run that finished long ago", async () => {
     const client = createSweepClient([
       {
@@ -497,10 +512,21 @@ describe("workflowRunHints", () => {
     });
 
     expect(hints.inspect).toContain("tailor workflow executions exec-1");
+    expect(hints.inspect).toContain("--logs");
     expect(hints.inspect).toContain("ws-1");
     expect(hints.inspect).toContain("staging");
     expect(hints.cleanup).toContain("tailor workflow run --cleanup");
     expect(hints.cleanup).toContain("ws-1");
     expect(hints.cleanup).toContain("staging");
+  });
+});
+
+describe("assertPollInterval", () => {
+  test("accepts the longest interval a finished run is protected for", () => {
+    expect(() => assertPollInterval(60_000)).not.toThrow();
+  });
+
+  test("rejects a longer interval, since the run could be removed before the next poll", () => {
+    expect(() => assertPollInterval(60_001)).toThrow(/interval/i);
   });
 });

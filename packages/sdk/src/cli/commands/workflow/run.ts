@@ -19,6 +19,7 @@ import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import {
+  assertPollInterval,
   awaitWorkflowRun,
   reclaimFinishedWorkflowRuns,
   reclaimWorkflowRuns,
@@ -72,7 +73,7 @@ export const runCommand = defineAppCommand({
     }),
     interval: arg(durationArg.default("3s"), {
       alias: "i",
-      description: "Polling interval when waiting (e.g., '3s', '500ms', '1m')",
+      description: "Polling interval when waiting, at most 1m (e.g., '3s', '500ms', '1m')",
     }),
     timeout: arg(durationArg.default("10m"), {
       alias: "t",
@@ -87,7 +88,7 @@ export const runCommand = defineAppCommand({
 
 Without \`--job\`, the whole file runs: export \`main(arg)\` from a plain script, or pass a resolver, executor, or workflow job file. With \`--job\`, only the workflow job of that name runs, with \`--arg\` as its input.
 
-When the wait stops (\`--timeout\` elapsed), the script keeps running and its temporary resources stay in place. The command prints the run ID; read the outcome with \`tailor workflow executions\`. \`${CLEANUP_COMMAND}\` removes the resources of runs that have finished, and the next \`workflow run\` does the same before it starts.`,
+When the wait stops (\`--timeout\` elapsed), the script keeps running and its temporary resources stay in place. The command prints the run ID; read the outcome with \`tailor workflow executions\`. \`${CLEANUP_COMMAND}\` removes the resources of runs that have finished, and the next \`workflow run\` does the same before it starts. A run that finished within the last few minutes is left alone by that automatic sweep (and by \`tailor deploy\`), so the command still waiting for it can read its result; \`--cleanup\` removes it at once.`,
   examples: [
     { cmd: 'scripts/backfill.ts --arg \'{"from":"2026-01-01"}\'', desc: "Run a long script" },
     { cmd: "workflows/sample.ts --job validate-order", desc: "Run one workflow job" },
@@ -95,6 +96,8 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
   ],
   run: async (args) => {
     await assertWritable({ profile: args.profile });
+    const pollInterval = parseDuration(args.interval);
+    assertPollInterval(pollInterval);
     const { client, workspaceId } = await loadOperatorWorkspaceContext({
       profile: args.profile,
       workspaceId: args["workspace-id"],
@@ -197,7 +200,7 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
       client,
       workspaceId,
       started,
-      pollInterval: parseDuration(args.interval),
+      pollInterval,
       timeoutMs: parseDuration(args.timeout),
     }).finally(() => process.off("SIGINT", onInterrupt));
 
