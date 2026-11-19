@@ -251,6 +251,7 @@ describe("workflow run", () => {
     vi.mocked(awaitWorkflowRun).mockResolvedValue({
       state: "outcomeUnavailable",
       reason: "the job result is missing",
+      workflowRemoved: false,
     });
     using _stdout = captureStdout();
     using _stderr = captureStderr();
@@ -264,6 +265,28 @@ describe("workflow run", () => {
     });
     expect(result.error).toMatchObject({
       suggestion: expect.stringContaining("workflow run --cleanup"),
+    });
+  });
+
+  test("says the script runs to its end, and does not send to the workflow, when it was removed", async () => {
+    vi.mocked(awaitWorkflowRun).mockResolvedValue({
+      state: "outcomeUnavailable",
+      reason: "the workflow was removed before the job of the run was seen",
+      workflowRemoved: true,
+    });
+    using _stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    const result = await invoke(runCommand, [scriptPath, "-m", "admin"]);
+
+    expect(result.error).toMatchObject({
+      code: "WORKFLOW_RUN_OUTCOME_UNAVAILABLE",
+      message: expect.stringContaining("removed"),
+      suggestion: expect.stringContaining("runs to its end"),
+    });
+    expect(result.error).not.toMatchObject({
+      suggestion: expect.stringContaining("workflow executions"),
     });
   });
 

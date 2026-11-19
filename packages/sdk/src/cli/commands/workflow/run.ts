@@ -240,8 +240,12 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
     if (outcome.state === "outcomeUnavailable") {
       throw CLIError({
         code: "WORKFLOW_RUN_OUTCOME_UNAVAILABLE",
-        message: `Run ${started.runId} finished, but its result could not be read: ${outcome.reason}`,
-        suggestion: `Read it with ${hints.inspect}. Afterwards, ${hints.cleanup} removes the temporary resources.`,
+        message: outcome.workflowRemoved
+          ? `The temporary workflow of run ${started.runId} was removed, so its result could not be read: ${outcome.reason}`
+          : `Run ${started.runId} finished, but its result could not be read: ${outcome.reason}`,
+        suggestion: outcome.workflowRemoved
+          ? "The script itself runs to its end, but its execution can no longer be read through the workflow."
+          : `Read it with ${hints.inspect}. Afterwards, ${hints.cleanup} removes the temporary resources.`,
         context: { runId: started.runId, executionId: started.executionId },
       });
     }

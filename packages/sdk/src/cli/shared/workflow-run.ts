@@ -8,11 +8,13 @@
 
 import { timestampMs } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
+import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { resourceTrn, sdkAppIdLabelKey, sdkNameLabelKey } from "#/cli/commands/deploy/label";
 import { recoveryContextArgs } from "#/cli/shared/args";
-import { fetchPaged, getOrNull } from "#/cli/shared/client";
+import { fetchPaged, getOrNull, isNotFoundError } from "#/cli/shared/client";
 import { CLIError, formatCommandHint, isCLIError } from "#/cli/shared/errors";
+import { joinFunctionLogMessages } from "#/cli/shared/function-execution";
 import { logger } from "#/cli/shared/logger";
 import { assertMachineUserExists, readOutcome } from "#/cli/shared/script-workflow";
 import {
@@ -25,6 +27,7 @@ import {
   teardownTemporaryWorkflow,
   uploadTemporaryFunction,
 } from "#/cli/shared/temporary-workflow";
+import { isRetryableWaitError } from "#/cli/shared/wait-error";
 import {
   readWorkflowRunMarker,
   runIdStartedAt,
@@ -163,7 +166,12 @@ export type WorkflowRunOutcome =
   | { state: "finished"; result: ScriptExecutionResult }
   | { state: "timedOut" }
   /** The run ended, but its result could not be read; the resources are kept */
-  | { state: "outcomeUnavailable"; reason: string };
+  | {
+      state: "outcomeUnavailable";
+      reason: string;
+      /** Whether the workflow was removed, so its execution can no longer be read through it */
+      workflowRemoved: boolean;
+    };
 
 /**
  * Wait for a started run. A finished run's resources are removed; a run whose
@@ -177,6 +185,7 @@ export async function awaitWorkflowRun(
   const { client, workspaceId, started, pollInterval, timeoutMs } = params;
   const deadline = Date.now() + timeoutMs;
   let execution;
+  let jobExecutionId: string | undefined;
   try {
     execution = await pollUntilTerminal({
       client,
@@ -185,10 +194,26 @@ export async function awaitWorkflowRun(
       pollInterval,
       subject: "Script",
       deadline,
-      options: { onActive: () => params.onActive?.() },
+      options: {
+        onActive: (active) => {
+          jobExecutionId = active.jobExecutions.at(-1)?.executionId ?? jobExecutionId;
+          params.onActive?.();
+        },
+      },
     });
   } catch (error) {
     if (isCLIError(error) && error.code === POLL_DEADLINE_EXCEEDED) return { state: "timedOut" };
+    // A sweep may remove the workflow of a finished run before this waiter looks again. The job's
+    // own execution outlives it, so the result is still there if its id was seen while waiting.
+    if (isNotFoundError(error)) {
+      return await outcomeAfterWorkflowRemoved({
+        client,
+        workspaceId,
+        jobExecutionId,
+        pollInterval,
+        deadline,
+      });
+    }
     throw error;
   }
   let result: ScriptExecutionResult;
@@ -204,11 +229,16 @@ export async function awaitWorkflowRun(
     return {
       state: "outcomeUnavailable",
       reason: error instanceof Error ? error.message : String(error),
+      workflowRemoved: false,
     };
   }
   // A succeeded workflow whose script is reported as failed only means the job result was unreadable.
   if (execution.status === WorkflowExecution_Status.SUCCESS && !result.success) {
-    return { state: "outcomeUnavailable", reason: result.error ?? "the job result is missing" };
+    return {
+      state: "outcomeUnavailable",
+      reason: result.error ?? "the job result is missing",
+      workflowRemoved: false,
+    };
   }
   await teardownTemporaryWorkflow({
     client,
@@ -219,6 +249,72 @@ export async function awaitWorkflowRun(
     leftoverNote: LEFTOVER_NOTE,
   });
   return { state: "finished", result };
+}
+
+interface OutcomeAfterRemovalParams {
+  client: OperatorClient;
+  workspaceId: string;
+  jobExecutionId: string | undefined;
+  /** Wait between reads in milliseconds */
+  pollInterval: number;
+  /** Epoch milliseconds after which reading stops */
+  deadline: number;
+}
+
+/**
+ * Read the result of a run whose workflow was removed while this command waited,
+ * following the job's own execution until it ends.
+ * @param params - Job execution to follow and how long to follow it
+ * @returns The result, or that it is unavailable because the workflow is gone
+ */
+async function outcomeAfterWorkflowRemoved(
+  params: OutcomeAfterRemovalParams,
+): Promise<WorkflowRunOutcome> {
+  const { client, workspaceId, jobExecutionId, pollInterval, deadline } = params;
+  const unavailable = (reason: string): WorkflowRunOutcome => ({
+    state: "outcomeUnavailable",
+    reason,
+    workflowRemoved: true,
+  });
+  if (!jobExecutionId) {
+    return unavailable("the workflow was removed before the job of the run was seen");
+  }
+  // loop exits when the job reaches a terminal status or the deadline passes
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
+  while (true) {
+    try {
+      const { execution: job } = await client.getFunctionExecution({
+        workspaceId,
+        executionId: jobExecutionId,
+      });
+      if (!job) return unavailable("the job execution of the run could not be found");
+      const logs = joinFunctionLogMessages(job.logEntries);
+      const result = job.result;
+      if (job.status === FunctionExecution_Status.SUCCESS) {
+        return { state: "finished", result: { success: true, logs, result } };
+      }
+      if (
+        job.status === FunctionExecution_Status.FAILED ||
+        job.status === FunctionExecution_Status.CANCELED
+      ) {
+        const canceled = job.status === FunctionExecution_Status.CANCELED;
+        const error =
+          job.error?.message.trim() ||
+          result.trim() ||
+          (canceled
+            ? "Script execution was canceled"
+            : "Script execution failed with unknown error");
+        return { state: "finished", result: { success: false, logs, result, error } };
+      }
+    } catch (error) {
+      if (!isRetryableWaitError(error)) {
+        return unavailable(error instanceof Error ? error.message : String(error));
+      }
+    }
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return unavailable("the job was still running when the wait ended");
+    await new Promise((resolve) => setTimeout(resolve, Math.min(pollInterval, remaining)));
+  }
 }
 
 export interface ReclaimWorkflowRunsParams {

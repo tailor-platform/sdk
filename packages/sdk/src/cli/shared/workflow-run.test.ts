@@ -1,6 +1,7 @@
 // oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
+import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { writeMetadataLabelsDirect } from "#/cli/commands/deploy/label";
@@ -341,6 +342,129 @@ describe("awaitWorkflowRun when a succeeded run has no readable job result", () 
 
     expect(outcome.state).toBe("finished");
     expect(client.deleteWorkflow).toHaveBeenCalledOnce();
+  });
+});
+
+describe("awaitWorkflowRun when a sweep removes the workflow while it waits", () => {
+  const running = {
+    execution: {
+      status: WorkflowExecution_Status.RUNNING,
+      jobExecutions: [{ executionId: "fn-1" }],
+    },
+  };
+  const gone = new ConnectError("workflow not found", Code.NotFound);
+
+  test("reads the result from the job's own execution, which outlives the workflow", async () => {
+    const client = createClient();
+    client.getWorkflowExecution.mockResolvedValueOnce(running).mockRejectedValue(gone);
+    client.getFunctionExecution.mockResolvedValue({
+      execution: {
+        status: FunctionExecution_Status.SUCCESS,
+        logEntries: [{ message: "hello" }],
+        result: '{"ok":true}',
+      },
+    } as never);
+
+    const outcome = await awaitWorkflowRun({
+      client: asClient(client),
+      workspaceId: "ws",
+      started,
+      pollInterval: 1,
+      timeoutMs: 1000,
+    });
+
+    expect(outcome).toEqual({
+      state: "finished",
+      result: { success: true, logs: "hello", result: '{"ok":true}' },
+    });
+  });
+
+  test("reports a job that failed as a failed script", async () => {
+    const client = createClient();
+    client.getWorkflowExecution.mockResolvedValueOnce(running).mockRejectedValue(gone);
+    client.getFunctionExecution.mockResolvedValue({
+      execution: {
+        status: FunctionExecution_Status.FAILED,
+        logEntries: [],
+        result: "",
+        error: { message: "boom" },
+      },
+    } as never);
+
+    const outcome = await awaitWorkflowRun({
+      client: asClient(client),
+      workspaceId: "ws",
+      started,
+      pollInterval: 1,
+      timeoutMs: 1000,
+    });
+
+    expect(outcome).toEqual({
+      state: "finished",
+      result: { success: false, logs: "", result: "", error: "boom" },
+    });
+  });
+
+  test("reports the outcome as unavailable when the job's execution was never seen", async () => {
+    const client = createClient();
+    client.getWorkflowExecution.mockRejectedValue(gone);
+
+    const outcome = await awaitWorkflowRun({
+      client: asClient(client),
+      workspaceId: "ws",
+      started,
+      pollInterval: 1,
+      timeoutMs: 1000,
+    });
+
+    expect(outcome).toMatchObject({ state: "outcomeUnavailable", workflowRemoved: true });
+  });
+
+  test("keeps reading the job's execution until it ends when the workflow is removed mid-run", async () => {
+    const client = createClient();
+    client.getWorkflowExecution.mockResolvedValueOnce(running).mockRejectedValue(gone);
+    client.getFunctionExecution
+      .mockResolvedValueOnce({
+        execution: { status: FunctionExecution_Status.RUNNING, logEntries: [], result: "" },
+      } as never)
+      .mockResolvedValue({
+        execution: {
+          status: FunctionExecution_Status.SUCCESS,
+          logEntries: [{ message: "done" }],
+          result: '{"ok":true}',
+        },
+      } as never);
+
+    const outcome = await awaitWorkflowRun({
+      client: asClient(client),
+      workspaceId: "ws",
+      started,
+      pollInterval: 1,
+      timeoutMs: 1000,
+    });
+
+    expect(outcome).toEqual({
+      state: "finished",
+      result: { success: true, logs: "done", result: '{"ok":true}' },
+    });
+  });
+
+  test("reports the outcome as unavailable, saying the workflow is gone, when the job outlasts the wait", async () => {
+    const client = createClient();
+    client.getWorkflowExecution.mockResolvedValueOnce(running).mockRejectedValue(gone);
+    client.getFunctionExecution.mockResolvedValue({
+      execution: { status: FunctionExecution_Status.RUNNING, logEntries: [], result: "" },
+    } as never);
+
+    const outcome = await awaitWorkflowRun({
+      client: asClient(client),
+      workspaceId: "ws",
+      started,
+      pollInterval: 1,
+      timeoutMs: 30,
+    });
+
+    expect(outcome).toMatchObject({ state: "outcomeUnavailable", workflowRemoved: true });
   });
 });
 
