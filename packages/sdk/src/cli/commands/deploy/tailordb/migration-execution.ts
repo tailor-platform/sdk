@@ -1058,7 +1058,6 @@ export async function deleteTablesCreatedByDeploy(
         namespaceName: namespace,
         tailordbTypeName: tableName,
       });
-      deletedResources.types.add(tableKey(tableName));
     }
     processedTables.created.delete(tableKey(tableName));
   }

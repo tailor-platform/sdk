@@ -161,6 +161,51 @@ describe("migration flow: replaying a history that removes tables into a fresh w
     expect(table[0]).toBeLessThan(reAddCreate!);
   });
 
+  test("deletes a table at each removal when a later migration removes and re-adds it twice", async () => {
+    const audit = snapshotTable("Audit", nameField);
+    const draft = snapshotTable("Draft", nameField);
+    snapshotState.tablesByVersion = {
+      0: { Audit: audit, Draft: draft },
+      1: { Audit: audit, Draft: draft },
+      2: { Audit: audit },
+      3: { Audit: audit, Draft: draft },
+      4: { Audit: audit },
+      5: { Audit: audit, Draft: draft },
+    };
+    const planResult = createPlanResult({
+      type: { creates: [typeEntry("Draft"), typeEntry("Audit")] },
+    });
+    planResult.context.pendingMigrations = checkpoint.mockPending([
+      mkPendingMigration([]),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      mkPendingMigration([{ kind: "table_removed", tableName: "Draft", before: draft } as any], {
+        number: 2,
+        hasScript: false,
+      }),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      mkPendingMigration([{ kind: "table_added", tableName: "Draft" } as any], {
+        number: 3,
+        hasScript: false,
+      }),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      mkPendingMigration([{ kind: "table_removed", tableName: "Draft", before: draft } as any], {
+        number: 4,
+        hasScript: false,
+      }),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      mkPendingMigration([{ kind: "table_added", tableName: "Draft" } as any], {
+        number: 5,
+        hasScript: false,
+      }),
+    ]);
+    const client = checkpoint.createMockClient();
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    expect(createOrdersOf(client, "Draft")).toHaveLength(3);
+    expect(deleteOrders(client, NAMESPACE, "Draft").table).toHaveLength(2);
+  });
+
   test("creates a baseline table that a later migration renames away, and deletes it after the renaming migration's checkpoint", async () => {
     const oldTable = snapshotTable("Old", nameField);
     const newTable = snapshotTable("New", nameField);
