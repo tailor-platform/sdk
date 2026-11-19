@@ -1,5 +1,42 @@
 # @tailor-platform/sdk
 
+## 2.44.0
+
+### Minor Changes
+
+- [#3175](https://github.com/tailor-platform/sdk/pull/3175) [`dd55ff2`](https://github.com/tailor-platform/sdk/commit/dd55ff25a9ed76cd48d339c1b0e8d8a054019a0b) Thanks [@k1LoW](https://github.com/k1LoW)! - OAuth2 clients can keep refresh tokens for up to 90 days. `refreshTokenLifetimeSeconds` in `oauth2Clients` now accepts up to 7776000 seconds (90 days), and the new `refreshTokenIdleLifetimeSeconds` (60 seconds to 30 days) expires a refresh token once it has not been used for that long. A `refreshTokenLifetimeSeconds` above 7 days requires `refreshTokenIdleLifetimeSeconds`, which must be between `accessTokenLifetimeSeconds` and `refreshTokenLifetimeSeconds`.
+
+- [#3187](https://github.com/tailor-platform/sdk/pull/3187) [`55286e0`](https://github.com/tailor-platform/sdk/commit/55286e042a802c784299c8f75e655330f1e672c1) Thanks [@dqn](https://github.com/dqn)! - **Breaking change**: Remove `relation` and `as` from the type of a TailorDB field's `metadata`. The SDK never set either key on a TailorDB field, so reading them always returned `undefined`; delete any code that reads them
+
+### Patch Changes
+
+- [#3175](https://github.com/tailor-platform/sdk/pull/3175) [`42245d5`](https://github.com/tailor-platform/sdk/commit/42245d5b975a919f45d226f7e25a5a0bc3d298d8) Thanks [@k1LoW](https://github.com/k1LoW)! - Recognize the `CANCELING` workflow execution status, which an execution holds between a cancel request and `CANCELED`. `tailor workflow executions --status CANCELING` filters by it, and commands that wait for an execution keep waiting through it.
+
+- [#3182](https://github.com/tailor-platform/sdk/pull/3182) [`48cc087`](https://github.com/tailor-platform/sdk/commit/48cc08707c9b16d6b3292e6ba5c23226565b50cc) Thanks [@dqn](https://github.com/dqn)! - Report a configuration change to an Auth connection in the `tailor deploy` plan as an update instead of a replacement. The plan marks it `~` instead of `±`, `--json` reports `"action": "update"` and counts it in `summary.update` instead of `summary.replace`, and pre-flight validation errors label it `(update)`. Deploy still updates the connection in place, as before.
+
+- [#3186](https://github.com/tailor-platform/sdk/pull/3186) [`59e8786`](https://github.com/tailor-platform/sdk/commit/59e878647eede2bfb4ba1a21ab92bc8b88de749d) Thanks [@dqn](https://github.com/dqn)! - Fix `createTailorDBHook` so a table-level `create` hook receives the same `input` as when deployed: the `id` only when the data has one, only the fields the data carries or a field hook or default fills, and the dates that field hooks and `"now"` defaults produce as `Date` objects rather than ISO strings. A table hook that computes values from its input, run in unit tests or through `tailor seed validate` and `tailor seed fill`, now gets the same result as when deployed.
+
+- [#3189](https://github.com/tailor-platform/sdk/pull/3189) [`f57cd39`](https://github.com/tailor-platform/sdk/commit/f57cd3946662eed486b8568015a89ba7f3ca7e03) Thanks [@dqn](https://github.com/dqn)! - Stop `tailor deploy` from planning an update on every run for an IdP whose `permission` denies every operation with empty lists
+
+- [#3177](https://github.com/tailor-platform/sdk/pull/3177) [`8137b34`](https://github.com/tailor-platform/sdk/commit/8137b346fc9fa098b62c369923dd7640a9da0cbe) Thanks [@dqn](https://github.com/dqn)! - Document the `SEED_DATA_NOT_FOUND` and `SEED_DATA_INVALID` error codes of `tailor tailordb migration test`
+
+- [#3187](https://github.com/tailor-platform/sdk/pull/3187) [`6e9e004`](https://github.com/tailor-platform/sdk/commit/6e9e0042136c8e8b27f566420eb6a0b7f5cbf9bc) Thanks [@dqn](https://github.com/dqn)! - Fix webhook executors whose `headers` has an `undefined` value, which failed to load; that header is now left out of the request
+
+- [#3175](https://github.com/tailor-platform/sdk/pull/3175) [`e9b6ca4`](https://github.com/tailor-platform/sdk/commit/e9b6ca47f5424c5a320c7b6d5b901158c86198ea) Thanks [@k1LoW](https://github.com/k1LoW)! - Follow the Platform API, whose list responses for machine users and OAuth2 clients no longer carry a client secret. `tailor deploy`, `tailor show`, `tailor machineuser list` and `tailor oauth2client list` behave as before.
+
+- [#3185](https://github.com/tailor-platform/sdk/pull/3185) [`f820cde`](https://github.com/tailor-platform/sdk/commit/f820cde123dc7294138074cee0924e64fc7ddbcc) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​secretlint/core to v14
+
+- [#3188](https://github.com/tailor-platform/sdk/pull/3188) [`824fc17`](https://github.com/tailor-platform/sdk/commit/824fc1747a9520337a4ce653f060fc8b4472baa8) Thanks [@dqn](https://github.com/dqn)! - Show an OAuth2 client that `tailor deploy` replaces for a client type change under its Auth service in the plan, with that service as its `namespace` in `--dry-run --json`. Change how these deploy messages name resource types:
+  
+  - The duplicate-name and Auth IdP config conflict errors say "Auth service" and "IdP service" instead of "Auth namespace" and "IdP namespace".
+  - Pre-flight validation says "TailorDB namespace", "Resolver namespace", "Auth IdP config", and "Workflow job" instead of "TailorDB service", "Pipeline service", "Auth IDP config", and "Workflow job function".
+  - The owner-conflict and unmanaged-resource lists of the plan and its confirmation prompts say "TailorDB namespace", "Resolver namespace", and "Function" instead of "TailorDB service", "Pipeline service", and "Function registry".
+  - The warning about a workflow job left undeleted because a workflow still references it says "Workflow job" instead of "workflow job function".
+
+- [#3175](https://github.com/tailor-platform/sdk/pull/3175) [`5f41199`](https://github.com/tailor-platform/sdk/commit/5f411997a48c73648f93b41d08eab80cbfeb2430) Thanks [@k1LoW](https://github.com/k1LoW)! - Follow the Platform API for IdP. Its list response for IdP clients no longer carries a client secret, and it now carries the rule that `userAuthPolicy.allowedEmailDomains` must be set, which `tailor deploy` already checked. `tailor deploy` behaves as before and still reports a missing `allowedEmailDomains` once.
+
+- [#3187](https://github.com/tailor-platform/sdk/pull/3187) [`bdb7a6e`](https://github.com/tailor-platform/sdk/commit/bdb7a6e39e8abfd3b74bd3f4e8d79612649cd4fc) Thanks [@dqn](https://github.com/dqn)! - Fix resolvers and `machineUserAttributes` that use a TailorDB field defined with `.unique()`, `.index()`, `.vector()`, `.serial()`, or a decimal `scale`: they failed to load with an unrecognized key error
+
 ## 2.43.0
 
 ### Minor Changes
