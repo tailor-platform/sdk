@@ -23,7 +23,6 @@ import {
   assertWorkflowArg,
   awaitWorkflowRun,
   reclaimFinishedWorkflowRuns,
-  reclaimWorkflowRuns,
   startWorkflowRun,
   workflowRunHints,
 } from "#/cli/shared/workflow-run";
@@ -45,16 +44,16 @@ import {
 } from "../function/run-function";
 import { checkScriptSchemaSnapshot } from "../function/script-scaffold";
 
-const CLEANUP_COMMAND = "tailor workflow run --cleanup";
+const CLEANUP_COMMAND = "tailor workflow cleanup";
 
 export const runCommand = defineAppCommand({
   name: "run",
   description: "Run a script as a temporary workflow, past the synchronous time limit.",
   args: z.strictObject({
     ...workspaceArgs,
-    file: arg(z.string().optional(), {
+    file: arg(z.string(), {
       positional: true,
-      description: "Path to the script file (not needed with --cleanup)",
+      description: "Path to the script file",
     }),
     job: arg(z.string().optional(), {
       description: "Workflow job name to run (matches the `name` field of createWorkflowJob)",
@@ -84,9 +83,6 @@ export const runCommand = defineAppCommand({
     "allow-schema-drift": arg(z.boolean().default(false), {
       description: "Run a scaffolded script even when its schema snapshot no longer matches",
     }),
-    cleanup: arg(z.boolean().default(false), {
-      description: "Remove the temporary resources of runs that have finished, then exit",
-    }),
     ...configArg,
   }),
   notes: `The script runs as an asynchronous workflow job, so it is not bound by the time limit of \`function run\`. The command waits for it to finish and removes the temporary resources afterwards.
@@ -97,7 +93,7 @@ Without \`--job\`, the whole file runs: export \`main(arg)\` from a plain script
 
 A script scaffolded by \`function script\` with a generated \`db.ts\` is checked against its \`db.snapshot.json\` before it runs and refused on schema drift, as with \`function run\`; pass \`--allow-schema-drift\` to run it anyway.
 
-When the wait stops (\`--timeout\` elapsed), the script keeps running and its temporary resources stay in place. The command prints the run ID; read the outcome with \`tailor workflow executions\`. \`${CLEANUP_COMMAND}\` removes the resources of runs that have finished, and the next \`workflow run\` does the same before it starts. A run that finished within the last few minutes is left alone by that automatic sweep (and by \`tailor deploy\`), so the command still waiting for it can read its result; \`--cleanup\` removes it at once.
+When the wait stops (\`--timeout\` elapsed), the script keeps running and its temporary resources stay in place. The command prints the run ID; read the outcome with \`tailor workflow executions\`. \`${CLEANUP_COMMAND}\` removes the resources of runs that have finished, and the next \`workflow run\` does the same before it starts. A run that finished within the last few minutes is left alone by that automatic sweep (and by \`tailor deploy\`), so the command still waiting for it can read its result; \`${CLEANUP_COMMAND}\` removes it at once.
 
 > [!WARNING]
 > Only the selected job is registered, so a job that starts other jobs with \`.start()\` fails at that call. Run such a workflow from its own entry point instead.`,
@@ -107,7 +103,6 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
       cmd: 'workflows/jobs.ts --job send-report --arg \'{"id":"42"}\'',
       desc: "Run one workflow job that does not start other jobs",
     },
-    { cmd: "--cleanup", desc: "Remove the resources of finished runs" },
   ],
   run: async (args) => {
     await assertWritable({ profile: args.profile });
@@ -118,26 +113,6 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
       workspaceId: args["workspace-id"],
     });
 
-    if (args.cleanup) {
-      const removed = await reclaimWorkflowRuns({
-        client,
-        workspaceId,
-        now: new Date(),
-        ignoreFinishedGrace: true,
-      });
-      if (logger.jsonMode) logger.out({ removed });
-      else logger.success(`Removed ${removed.length} finished run(s).`);
-      return;
-    }
-
-    if (!args.file) {
-      throw CLIError({
-        code: "WORKFLOW_RUN_FILE_REQUIRED",
-        message: "A script file is required.",
-        suggestion: "Pass the path of the script to run, or use --cleanup.",
-        command: "workflow run",
-      });
-    }
     const filePath = path.resolve(args.file);
     if (!fs.existsSync(filePath)) {
       throw CLIError({ code: "FILE_NOT_FOUND", message: `File not found: ${filePath}` });
@@ -194,7 +169,13 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
       functionName: prepared.functionName,
     });
 
-    await reclaimFinishedWorkflowRuns({ client, workspaceId, now: new Date() });
+    const swept = await reclaimFinishedWorkflowRuns({ client, workspaceId, now: new Date() });
+    if (swept && swept.keptUnlabeled.length > 0) {
+      logger.warn(
+        `${swept.keptUnlabeled.length} resource(s) named \`tmp-run-…\` carry no \`workflow run\` label and were left in place. ` +
+          "If they are leftovers of an interrupted run, `tailor workflow cleanup --include-unlabeled` removes them.",
+      );
+    }
 
     const kind = args.job ? "job" : "script";
     const started = await startWorkflowRun({

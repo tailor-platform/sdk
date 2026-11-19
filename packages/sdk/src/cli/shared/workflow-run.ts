@@ -29,6 +29,7 @@ import {
 } from "#/cli/shared/temporary-workflow";
 import { isRetryableWaitError } from "#/cli/shared/wait-error";
 import {
+  isWorkflowRunResourceName,
   readWorkflowRunMarker,
   runIdStartedAt,
   workflowRunLabels,
@@ -41,9 +42,7 @@ import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_r
 import type { Jsonifiable } from "type-fest";
 
 const SUBJECT = "workflow run";
-const LEFTOVER_NOTE =
-  "`tailor workflow run --cleanup` retries the removal while the workflow exists; " +
-  "a function or job function left after the workflow is gone has to be removed by hand.";
+const LEFTOVER_NOTE = "`tailor workflow cleanup` retries the removal once the run has finished.";
 
 /** A run that has not started is kept this long, since another process may be about to start it. */
 const NOT_STARTED_GRACE_MS = 60_000;
@@ -132,7 +131,7 @@ export async function startWorkflowRun(
     if (startSent && !isStartRefused(error)) {
       logger.warn(
         `Could not confirm that run ${runId} was not started, so its resources were kept. ` +
-          "`tailor workflow run --cleanup` removes them once the run has finished.",
+          "`tailor workflow cleanup` removes them once the run has finished.",
       );
       throw error;
     }
@@ -327,63 +326,228 @@ export interface ReclaimWorkflowRunsParams {
   client: OperatorClient;
   workspaceId: string;
   now: Date;
-  /** Also remove a run that finished moments ago (an explicit `--cleanup`) */
+  /** Also remove a run that finished moments ago (an explicit `workflow cleanup`) */
   ignoreFinishedGrace?: boolean;
+  /** Also remove resources named like a run's that carry no run label */
+  includeUnlabeled?: boolean;
   /** Send the warning for a failed removal to the debug output only */
   quiet?: boolean;
 }
 
+/** Kind of a resource a run registers. */
+type RunResourceKind = "workflow" | "job function" | "function";
+
+/** A resource in the namespace of the temporary resources that carries no run label. */
+interface UnlabeledResource {
+  kind: RunResourceKind;
+  name: string;
+}
+
+export interface ReclaimResult {
+  /** Names of the runs whose resources were removed */
+  removed: string[];
+  /** Unlabeled resources found and left in place */
+  keptUnlabeled: UnlabeledResource[];
+  /** Unlabeled resources removed because `includeUnlabeled` was set */
+  removedUnlabeled: UnlabeledResource[];
+}
+
+interface RunResource {
+  kind: RunResourceKind;
+  name: string;
+  /** Workflow id; only a workflow has one */
+  id?: string;
+  createdMs: number | undefined;
+  labels: Record<string, string>;
+}
+
+interface RunResources {
+  workflow?: RunResource;
+  jobFunctions: RunResource[];
+  functions: RunResource[];
+}
+
+const METADATA_KIND: Record<
+  RunResourceKind,
+  "workflow" | "workflow_job_function" | "function_registry"
+> = {
+  workflow: "workflow",
+  "job function": "workflow_job_function",
+  function: "function_registry",
+};
+
+async function listRunResources(client: OperatorClient, workspaceId: string) {
+  const [workflows, jobFunctions, functions] = await Promise.all([
+    fetchPaged(async (pageToken, pageSize) => {
+      const { workflows, nextPageToken } = await client.listWorkflows({
+        workspaceId,
+        pageToken,
+        pageSize,
+      });
+      return [workflows, nextPageToken];
+    }, {}),
+    fetchPaged(async (pageToken, pageSize) => {
+      const { jobFunctions, nextPageToken } = await client.listWorkflowJobFunctions({
+        workspaceId,
+        pageToken,
+        pageSize,
+      });
+      return [jobFunctions, nextPageToken];
+    }, {}),
+    fetchPaged(async (pageToken, pageSize) => {
+      const { functions, nextPageToken } = await client.listFunctionRegistries({
+        workspaceId,
+        pageToken,
+        pageSize,
+      });
+      return [functions, nextPageToken];
+    }, {}),
+  ]);
+  const listed: Omit<RunResource, "labels">[] = [
+    ...workflows.map((item) => ({
+      kind: "workflow" as const,
+      name: item.name,
+      id: item.id,
+      createdMs: item.createdAt ? timestampMs(item.createdAt) : undefined,
+    })),
+    ...jobFunctions.map((item) => ({
+      kind: "job function" as const,
+      name: item.name,
+      createdMs: item.createdAt ? timestampMs(item.createdAt) : undefined,
+    })),
+    ...functions.map((item) => ({
+      kind: "function" as const,
+      name: item.name,
+      createdMs: item.createdAt ? timestampMs(item.createdAt) : undefined,
+    })),
+  ].filter((item) => isWorkflowRunResourceName(item.name));
+
+  const resources: RunResource[] = [];
+  for (const item of listed) {
+    const response = await getOrNull(() =>
+      client.getMetadata({ trn: resourceTrn(workspaceId, METADATA_KIND[item.kind], item.name) }),
+    );
+    if (!response) continue;
+    resources.push({ ...item, labels: response.metadata?.labels ?? {} });
+  }
+  return resources;
+}
+
+function belongsToRun(resource: RunResource, runId: string): boolean {
+  const runName = workflowRunResourceName(runId);
+  if (resource.kind === "workflow") return resource.name === runName;
+  return resource.name === runName || resource.name.startsWith(`${runName}-`);
+}
+
 /**
  * Remove the resources of runs that have finished. Runs still executing, and
- * runs created moments ago that have not started, are kept.
+ * runs created moments ago that have not started, are kept. Resources in the
+ * namespace of the temporary resources that carry no run label are reported,
+ * and removed only when asked.
  * @param params - Workspace to sweep
- * @returns Names of the runs removed
+ * @returns The runs removed and the unlabeled resources found
  */
-export async function reclaimWorkflowRuns(params: ReclaimWorkflowRunsParams): Promise<string[]> {
+export async function reclaimWorkflowRuns(
+  params: ReclaimWorkflowRunsParams,
+): Promise<ReclaimResult> {
   const { client, workspaceId, now } = params;
-  const workflows = await fetchPaged(async (pageToken, pageSize) => {
-    const { workflows, nextPageToken } = await client.listWorkflows({
-      workspaceId,
-      pageToken,
-      pageSize,
-    });
-    return [workflows, nextPageToken];
-  }, {});
+  const warn = params.quiet ? (message: string) => logger.debug(message) : undefined;
+  const result: ReclaimResult = { removed: [], keptUnlabeled: [], removedUnlabeled: [] };
 
-  const removed: string[] = [];
-  for (const workflow of workflows) {
-    if (!workflow.name.startsWith(workflowRunResourceName("r"))) continue;
-    const response = await getOrNull(() =>
-      client.getMetadata({ trn: resourceTrn(workspaceId, "workflow", workflow.name) }),
-    );
-    const labels = response?.metadata?.labels;
-    const marker = readWorkflowRunMarker(labels);
-    if (!marker || workflow.name !== workflowRunResourceName(marker.runId)) continue;
-    if (labels?.[sdkNameLabelKey] !== undefined || labels?.[sdkAppIdLabelKey] !== undefined) {
+  const runs = new Map<string, RunResources>();
+  const unlabeled: RunResource[] = [];
+  for (const resource of await listRunResources(client, workspaceId)) {
+    if (
+      resource.labels[sdkNameLabelKey] !== undefined ||
+      resource.labels[sdkAppIdLabelKey] !== undefined
+    ) {
       continue;
     }
+    const marker = readWorkflowRunMarker(resource.labels);
+    if (!marker) {
+      unlabeled.push(resource);
+      continue;
+    }
+    if (!belongsToRun(resource, marker.runId)) continue;
+    const run = runs.get(marker.runId) ?? { jobFunctions: [], functions: [] };
+    if (resource.kind === "workflow") run.workflow = resource;
+    else if (resource.kind === "job function") run.jobFunctions.push(resource);
+    else run.functions.push(resource);
+    runs.set(marker.runId, run);
+  }
 
-    const executions = await listTemporaryWorkflowExecutions(client, workspaceId, workflow.name);
-    if (executions.some(isExecutionActive)) continue;
+  for (const [runId, run] of [...runs].toSorted(([a], [b]) => a.localeCompare(b))) {
+    const name = workflowRunResourceName(runId);
+    let executions: WorkflowExecution[] = [];
+    if (run.workflow) {
+      executions = await listTemporaryWorkflowExecutions(client, workspaceId, name);
+      if (executions.some(isExecutionActive)) continue;
+    }
     if (executions.length === 0) {
-      const createdMs = workflow.createdAt
-        ? timestampMs(workflow.createdAt)
-        : runIdStartedAt(marker.runId)?.getTime();
-      if (createdMs !== undefined && now.getTime() - createdMs < NOT_STARTED_GRACE_MS) continue;
+      const createdMs = latestCreatedMs([
+        ...(run.workflow ? [run.workflow] : []),
+        ...run.jobFunctions,
+        ...run.functions,
+      ]);
+      const startedMs = createdMs ?? runIdStartedAt(runId)?.getTime();
+      if (startedMs !== undefined && now.getTime() - startedMs < NOT_STARTED_GRACE_MS) continue;
     }
     if (!params.ignoreFinishedGrace && finishedWithin(executions, now, FINISHED_GRACE_MS)) continue;
     const gone = await teardownTemporaryWorkflow({
       client,
       workspaceId,
-      name: workflow.name,
-      workflowId: workflow.id,
+      name,
+      workflowId: run.workflow?.id,
+      jobFunctionNames: run.jobFunctions.map((item) => item.name),
+      functionNames: run.functions.map((item) => item.name),
       subject: SUBJECT,
       leftoverNote: LEFTOVER_NOTE,
-      ...(params.quiet ? { warn: (message: string) => logger.debug(message) } : {}),
+      ...(warn ? { warn } : {}),
     });
-    if (gone) removed.push(workflow.name);
+    if (gone) result.removed.push(name);
   }
-  return removed;
+
+  const byKind = (kind: RunResourceKind) => unlabeled.filter((item) => item.kind === kind);
+  // A workflow goes before the job functions it uses, and those before their functions.
+  for (const resource of [
+    ...byKind("workflow"),
+    ...byKind("job function"),
+    ...byKind("function"),
+  ]) {
+    if (
+      resource.createdMs !== undefined &&
+      now.getTime() - resource.createdMs < NOT_STARTED_GRACE_MS
+    ) {
+      continue;
+    }
+    if (resource.kind === "workflow") {
+      const executions = await listTemporaryWorkflowExecutions(client, workspaceId, resource.name);
+      if (executions.some(isExecutionActive)) continue;
+    }
+    const listed = { kind: resource.kind, name: resource.name };
+    if (!params.includeUnlabeled) {
+      result.keptUnlabeled.push(listed);
+      continue;
+    }
+    const gone = await teardownTemporaryWorkflow({
+      client,
+      workspaceId,
+      name: resource.name,
+      workflowId: resource.id,
+      jobFunctionNames: resource.kind === "job function" ? [resource.name] : [],
+      functionNames: resource.kind === "function" ? [resource.name] : [],
+      subject: SUBJECT,
+      leftoverNote: LEFTOVER_NOTE,
+      ...(warn ? { warn } : {}),
+    });
+    if (gone) result.removedUnlabeled.push(listed);
+  }
+  return result;
+}
+
+function latestCreatedMs(resources: readonly RunResource[]): number | undefined {
+  const times = resources.flatMap((item) => (item.createdMs === undefined ? [] : [item.createdMs]));
+  return times.length === 0 ? undefined : Math.max(...times);
 }
 
 function finishedWithin(executions: WorkflowExecution[], now: Date, graceMs: number): boolean {
@@ -397,18 +561,18 @@ function finishedWithin(executions: WorkflowExecution[], now: Date, graceMs: num
  * Remove the resources of finished runs for a caller that must not fail
  * because of it, such as `tailor deploy`.
  * @param params - Workspace to sweep
- * @returns How many runs were removed; 0 when the sweep failed
+ * @returns What the sweep found and removed; undefined when the sweep failed
  */
 export async function reclaimFinishedWorkflowRuns(
   params: ReclaimWorkflowRunsParams,
-): Promise<number> {
+): Promise<ReclaimResult | undefined> {
   try {
-    return (await reclaimWorkflowRuns({ ...params, quiet: true })).length;
+    return await reclaimWorkflowRuns({ ...params, quiet: true });
   } catch (error) {
     logger.debug(
       `Could not sweep finished workflow runs: ${error instanceof Error ? error.message : String(error)}`,
     );
-    return 0;
+    return undefined;
   }
 }
 
@@ -471,7 +635,7 @@ export function workflowRunHints(params: WorkflowRunHintsParams): {
     }),
     cleanup: formatCommandHint({
       command: "tailor",
-      args: ["workflow", "run", "--cleanup", ...context],
+      args: ["workflow", "cleanup", ...context],
     }),
   };
 }

@@ -128,6 +128,8 @@ export interface TeardownTemporaryWorkflowParams {
   workflowId: string | undefined;
   /** Job functions created under the shared name. */
   jobFunctionNames?: readonly string[];
+  /** Functions registered under the shared name (default: the shared name). */
+  functionNames?: readonly string[];
   /** What the resources run, used in warnings (e.g. `migration`). */
   subject: string;
   /** Sentence of the warning telling how a resource left behind gets removed. */
@@ -162,7 +164,13 @@ export async function teardownTemporaryWorkflow(
       () => client.deleteWorkflowJobFunction({ workspaceId, jobFunctionName }),
     ]);
   }
-  steps.push(["function", name, () => client.deleteFunctionRegistry({ workspaceId, name })]);
+  for (const functionName of params.functionNames ?? [name]) {
+    steps.push([
+      "function",
+      functionName,
+      () => client.deleteFunctionRegistry({ workspaceId, name: functionName }),
+    ]);
+  }
 
   let removedAll = true;
   for (const [label, resource, run] of steps) {

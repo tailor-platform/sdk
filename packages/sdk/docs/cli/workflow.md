@@ -28,6 +28,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 | [`workflow get`](#workflow-get)               | Get workflow details.                                                  |
 | [`workflow start`](#workflow-start)           | Start a workflow execution.                                            |
 | [`workflow run`](#workflow-run)               | Run a script as a temporary workflow, past the synchronous time limit. |
+| [`workflow cleanup`](#workflow-cleanup)       | Remove the temporary resources that `workflow run` left behind.        |
 | [`workflow wait`](#workflow-wait)             | Wait for a workflow execution.                                         |
 | [`workflow executions`](#workflow-executions) | List or get workflow executions.                                       |
 | [`workflow resume`](#workflow-resume)         | Resume a failed or pending workflow execution.                         |
@@ -131,14 +132,14 @@ Run a script as a temporary workflow, past the synchronous time limit.
 **Usage**
 
 ```
-tailor workflow run [options] [file]
+tailor workflow run [options] <file>
 ```
 
 **Arguments**
 
-| Argument | Description                                         | Required |
-| -------- | --------------------------------------------------- | -------- |
-| `file`   | Path to the script file (not needed with --cleanup) | No       |
+| Argument | Description             | Required |
+| -------- | ----------------------- | -------- |
+| `file`   | Path to the script file | Yes      |
 
 **Options**
 
@@ -153,7 +154,6 @@ tailor workflow run [options] [file]
 | `--interval <INTERVAL>`         | `-i`  | Polling interval when waiting, at most 1m (e.g., '3s', '500ms', '1m')                          | No       | `"3s"`               | -                                   |
 | `--timeout <TIMEOUT>`           | `-t`  | Maximum time to wait for the script, not a limit on its run (e.g., '30s', '10m')               | No       | `"10m"`              | -                                   |
 | `--allow-schema-drift`          | -     | Run a scaffolded script even when its schema snapshot no longer matches                        | No       | `false`              | -                                   |
-| `--cleanup`                     | -     | Remove the temporary resources of runs that have finished, then exit                           | No       | `false`              | -                                   |
 | `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                                                     | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`                |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -172,12 +172,6 @@ $ tailor workflow run scripts/backfill.ts --arg '{"from":"2026-01-01"}'
 $ tailor workflow run workflows/jobs.ts --job send-report --arg '{"id":"42"}'
 ```
 
-**Remove the resources of finished runs**
-
-```bash
-$ tailor workflow run --cleanup
-```
-
 **Notes**
 
 The script runs as an asynchronous workflow job, so it is not bound by the time limit of `function run`. The command waits for it to finish and removes the temporary resources afterwards.
@@ -188,10 +182,50 @@ Without `--job`, the whole file runs: export `main(arg)` from a plain script, or
 
 A script scaffolded by `function script` with a generated `db.ts` is checked against its `db.snapshot.json` before it runs and refused on schema drift, as with `function run`; pass `--allow-schema-drift` to run it anyway.
 
-When the wait stops (`--timeout` elapsed), the script keeps running and its temporary resources stay in place. The command prints the run ID; read the outcome with `tailor workflow executions`. `tailor workflow run --cleanup` removes the resources of runs that have finished, and the next `workflow run` does the same before it starts. A run that finished within the last few minutes is left alone by that automatic sweep (and by `tailor deploy`), so the command still waiting for it can read its result; `--cleanup` removes it at once.
+When the wait stops (`--timeout` elapsed), the script keeps running and its temporary resources stay in place. The command prints the run ID; read the outcome with `tailor workflow executions`. `tailor workflow cleanup` removes the resources of runs that have finished, and the next `workflow run` does the same before it starts. A run that finished within the last few minutes is left alone by that automatic sweep (and by `tailor deploy`), so the command still waiting for it can read its result; `tailor workflow cleanup` removes it at once.
 
 > [!WARNING]
 > Only the selected job is registered, so a job that starts other jobs with `.start()` fails at that call. Run such a workflow from its own entry point instead.
+
+### workflow cleanup
+
+Remove the temporary resources that `workflow run` left behind.
+
+**Usage**
+
+```
+tailor workflow cleanup [options]
+```
+
+**Options**
+
+| Option                          | Alias | Description                                                                                                                | Required | Default | Env                            |
+| ------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                                               | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                                          | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--include-unlabeled`           | -     | Also remove resources named `tmp-run-…` that carry no `workflow run` label (a run that was cut off before it labeled them) | No       | `false` | -                              |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Examples**
+
+**Remove the resources of finished runs**
+
+```bash
+$ tailor workflow cleanup
+```
+
+**Also remove `tmp-run-…` resources that have no label**
+
+```bash
+$ tailor workflow cleanup --include-unlabeled
+```
+
+**Notes**
+
+Removes the workflow, job functions and functions of every `workflow run` that has finished, at once. A run that is still executing is left alone.
+
+A resource whose name starts with `tmp-run-` but that carries no `workflow run` label is reported and left in place, because the name alone does not prove `workflow run` created it. When it is a leftover of an interrupted run, `--include-unlabeled` removes it.
 
 ### workflow wait
 

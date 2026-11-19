@@ -673,6 +673,7 @@ Commands for managing workflows and executions.
 | [workflow get](./cli/workflow.md#workflow-get)               | Get workflow details.                                                  |
 | [workflow start](./cli/workflow.md#workflow-start)           | Start a workflow execution.                                            |
 | [workflow run](./cli/workflow.md#workflow-run)               | Run a script as a temporary workflow, past the synchronous time limit. |
+| [workflow cleanup](./cli/workflow.md#workflow-cleanup)       | Remove the temporary resources that `workflow run` left behind.        |
 | [workflow wait](./cli/workflow.md#workflow-wait)             | Wait for a workflow execution.                                         |
 | [workflow executions](./cli/workflow.md#workflow-executions) | List or get workflow executions.                                       |
 | [workflow resume](./cli/workflow.md#workflow-resume)         | Resume a failed or pending workflow execution.                         |

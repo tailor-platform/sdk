@@ -14,7 +14,6 @@ import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import {
   awaitWorkflowRun,
   reclaimFinishedWorkflowRuns,
-  reclaimWorkflowRuns,
   startWorkflowRun,
 } from "#/cli/shared/workflow-run";
 import { bundleForRun } from "../function/bundle";
@@ -39,7 +38,6 @@ vi.mock("#/cli/shared/workflow-run", async (importActual) => ({
   ...(await importActual<object>()),
   startWorkflowRun: vi.fn(),
   awaitWorkflowRun: vi.fn(),
-  reclaimWorkflowRuns: vi.fn(),
   reclaimFinishedWorkflowRuns: vi.fn(),
 }));
 
@@ -59,7 +57,7 @@ vi.mock("../function/script-scaffold", async (importActual) => ({
 const WORKSPACE_ID = "12345678-1234-4abc-8def-123456789012";
 const started = {
   runId: "r00abc-xyz",
-  name: "tmp-r00abc-xyz",
+  name: "tmp-run-r00abc-xyz",
   workflowId: "wf-1",
   executionId: "exec-1",
 };
@@ -141,8 +139,9 @@ describe("workflow run", () => {
         state: "finished",
         result: { success: true, logs: "", result: '{"ok":true}' },
       });
-    vi.mocked(reclaimWorkflowRuns).mockReset().mockResolvedValue([]);
-    vi.mocked(reclaimFinishedWorkflowRuns).mockReset().mockResolvedValue(0);
+    vi.mocked(reclaimFinishedWorkflowRuns)
+      .mockReset()
+      .mockResolvedValue({ removed: [], keptUnlabeled: [], removedUnlabeled: [] });
     vi.mocked(bundleForRun).mockClear();
     exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
     await runTest();
@@ -150,7 +149,7 @@ describe("workflow run", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  test("asks for a script file unless it is only cleaning up", async () => {
+  test("asks for a script file", async () => {
     using _stdout = captureStdout();
     using _stderr = captureStderr();
     using _json = jsonMode();
@@ -158,22 +157,20 @@ describe("workflow run", () => {
     const result = await invoke(runCommand, ["--machine-user", "admin"]);
 
     expect(result.success).toBe(false);
-    expect(result.error).toMatchObject({ code: "WORKFLOW_RUN_FILE_REQUIRED" });
   });
 
-  test("--cleanup removes finished runs at once and lists them", async () => {
-    vi.mocked(reclaimWorkflowRuns).mockResolvedValue(["tmp-r1", "tmp-r2"]);
-    using stdout = captureStdout();
-    using _stderr = captureStderr();
-    using _json = jsonMode();
+  test("warns about unlabeled tmp-run resources the sweep before the run left in place", async () => {
+    vi.mocked(reclaimFinishedWorkflowRuns).mockResolvedValue({
+      removed: [],
+      keptUnlabeled: [{ kind: "function", name: "tmp-run-r1" }],
+      removedUnlabeled: [],
+    });
+    using _stdout = captureStdout();
+    using stderr = captureStderr();
 
-    await invoke(runCommand, ["--cleanup"]);
+    await invoke(runCommand, [scriptPath, "-m", "admin"]);
 
-    expect(reclaimWorkflowRuns).toHaveBeenCalledWith(
-      expect.objectContaining({ workspaceId: WORKSPACE_ID, ignoreFinishedGrace: true }),
-    );
-    expect(JSON.parse(stdout.output)).toEqual({ removed: ["tmp-r1", "tmp-r2"] });
-    expect(startWorkflowRun).not.toHaveBeenCalled();
+    expect(stderr.output).toContain("tailor workflow cleanup --include-unlabeled");
   });
 
   test("runs the script once with its argument and prints the result with the run ids", async () => {
@@ -243,7 +240,7 @@ describe("workflow run", () => {
     });
     expect(result.error).toMatchObject({ suggestion: expect.stringContaining(WORKSPACE_ID) });
     expect(result.error).toMatchObject({
-      suggestion: expect.stringContaining("workflow run --cleanup"),
+      suggestion: expect.stringContaining("tailor workflow cleanup"),
     });
   });
 
@@ -264,7 +261,7 @@ describe("workflow run", () => {
       suggestion: expect.stringContaining("--logs"),
     });
     expect(result.error).toMatchObject({
-      suggestion: expect.stringContaining("workflow run --cleanup"),
+      suggestion: expect.stringContaining("tailor workflow cleanup"),
     });
   });
 

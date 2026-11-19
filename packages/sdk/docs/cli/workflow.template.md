@@ -41,6 +41,8 @@ tailor workflow start my-workflow -m admin -W
 
 {{politty:command:workflow run}}
 
+{{politty:command:workflow cleanup}}
+
 {{politty:command:workflow wait}}
 
 **Shell automation**

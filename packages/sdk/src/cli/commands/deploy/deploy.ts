@@ -1141,12 +1141,10 @@ async function deployInternal(
           profile: options?.profile,
         });
 
-    const reclaimedRuns = await reclaimFinishedWorkflowRuns({
-      client,
-      workspaceId,
-      now: new Date(),
-    });
-    if (reclaimedRuns > 0) {
+    const reclaimedRuns = (
+      await reclaimFinishedWorkflowRuns({ client, workspaceId, now: new Date() })
+    )?.removed.length;
+    if (reclaimedRuns) {
       logger.info(`Removed the resources of ${reclaimedRuns} finished \`workflow run\` run(s).`);
     }
 

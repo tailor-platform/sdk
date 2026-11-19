@@ -1,4 +1,5 @@
 import { defineCommand } from "@politty/zod";
+import { cleanupCommand } from "./cleanup";
 import { executionsCommand } from "./executions";
 import { getCommand } from "./get";
 import { listCommand } from "./list";
@@ -15,6 +16,7 @@ export const workflowCommand = defineCommand({
     get: getCommand,
     start: startCommand,
     run: runCommand,
+    cleanup: cleanupCommand,
     wait: waitCommand,
     executions: executionsCommand,
     resume: resumeCommand,

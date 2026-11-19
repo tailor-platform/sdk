@@ -3,6 +3,8 @@ import {
   createRunId,
   readWorkflowRunMarker,
   runIdStartedAt,
+  isWorkflowRunResourceName,
+  workflowRunJobFunctionName,
   workflowRunLabels,
   workflowRunResourceName,
 } from "./workflow-run-labels";
@@ -76,6 +78,23 @@ describe("readWorkflowRunMarker", () => {
 describe("workflowRunResourceName", () => {
   test("derives a distinct name from the run id", () => {
     expect(workflowRunResourceName("r1")).not.toBe(workflowRunResourceName("r2"));
+  });
+
+  test("starts with tmp-run-, the prefix a cleanup looks for", () => {
+    expect(workflowRunResourceName("r1")).toBe("tmp-run-r1");
+    expect(isWorkflowRunResourceName("tmp-run-r1")).toBe(true);
+    expect(isWorkflowRunResourceName("tmp-r1")).toBe(false);
+    expect(isWorkflowRunResourceName("validate-order")).toBe(false);
+  });
+});
+
+describe("workflowRunJobFunctionName", () => {
+  test("keeps the job name apart from the names of deployed jobs of the same name", () => {
+    expect(workflowRunJobFunctionName("r1", "validate-order")).toBe("tmp-run-r1-validate-order");
+  });
+
+  test("differs between runs of the same job", () => {
+    expect(workflowRunJobFunctionName("r1", "a")).not.toBe(workflowRunJobFunctionName("r2", "a"));
   });
 });
 

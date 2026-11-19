@@ -61,13 +61,37 @@ export function readWorkflowRunMarker(
   return undefined;
 }
 
+const RESOURCE_PREFIX = "tmp-run-";
+
 /**
- * Name shared by the function, job function and workflow of one run.
+ * Name of the workflow of one run, and of the function and job function of a
+ * whole-file run.
  * @param runId - Id of the run
  * @returns Resource name
  */
 export function workflowRunResourceName(runId: string): string {
-  return `tmp-${runId}`;
+  return `${RESOURCE_PREFIX}${runId}`;
+}
+
+/**
+ * Name of the job function and function a run registers for one workflow job.
+ * Job function names are shared by the whole workspace, so the name of the job
+ * alone would collide with the deployed job of the same name.
+ * @param runId - Id of the run
+ * @param jobName - Name of the workflow job
+ * @returns Resource name
+ */
+export function workflowRunJobFunctionName(runId: string, jobName: string): string {
+  return `${workflowRunResourceName(runId)}-${jobName}`;
+}
+
+/**
+ * Whether a resource name is in the namespace `workflow run` creates its resources in.
+ * @param name - Resource name
+ * @returns True for a name that starts with the prefix of the temporary resources
+ */
+export function isWorkflowRunResourceName(name: string): boolean {
+  return name.startsWith(RESOURCE_PREFIX);
 }
 
 /**
