@@ -188,7 +188,7 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
     });
     const onInterrupt = () => {
       logger.warn(
-        `Stopped waiting. Run ${started.runId} keeps running; read it with '${hints.inspect}', then '${hints.cleanup}'.`,
+        `Stopped waiting. Run ${started.runId} keeps running; read it with ${hints.inspect}, then ${hints.cleanup}.`,
       );
       process.exit(130);
     };
@@ -205,7 +205,7 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
       throw CLIError({
         code: "WORKFLOW_RUN_WAIT_TIMEOUT",
         message: `Stopped waiting for run ${started.runId}; the script is still running.`,
-        suggestion: `Read the outcome with '${hints.inspect}'. Afterwards, '${hints.cleanup}' removes the temporary resources.`,
+        suggestion: `Read the outcome with ${hints.inspect}. Afterwards, ${hints.cleanup} removes the temporary resources.`,
         context: { runId: started.runId, executionId: started.executionId },
       });
     }
