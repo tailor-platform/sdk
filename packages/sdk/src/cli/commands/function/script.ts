@@ -14,7 +14,7 @@ import {
   createSnapshotFromLocalTypes,
   type NormalizedSchemaSnapshot,
 } from "#/cli/commands/tailordb/migrate/snapshot";
-import { workspaceArgs, configArg } from "#/cli/shared/args";
+import { workspaceArgs, configArg, formatConfigArg } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { extractAllNamespaces, extractOwnedNamespaces } from "#/cli/shared/config";
 import { loadConfig, type LoadedConfig } from "#/cli/shared/config-loader";
@@ -219,8 +219,9 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
 
     const relScript = path.relative(process.cwd(), filePath);
     const runArgs = ["function", "run", relScript];
-    if (args.config !== undefined) {
-      runArgs.push(`--config=${args.config}`);
+    const configHint = formatConfigArg(args.config);
+    if (configHint !== undefined) {
+      runArgs.push(configHint);
     }
     const workspaceIdForHint = resolvedWorkspaceId ?? args["workspace-id"];
     if (workspaceIdForHint !== undefined) {

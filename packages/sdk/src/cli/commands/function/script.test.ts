@@ -12,6 +12,7 @@ import {
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
 import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
@@ -157,6 +158,30 @@ describe("function script", () => {
     expect(result.success).toBe(false);
     expect(result.error?.message).toMatch(/without a distPath or contentMapper: true/);
   });
+
+  test.each([
+    { args: [], configHints: [] },
+    {
+      args: ["--config", "apps/shop/tailor.config.ts"],
+      configHints: ["--config=apps/shop/tailor.config.ts"],
+    },
+  ])(
+    "names --config in the next-step hint only when it was given ($args)",
+    async ({ args, configHints }) => {
+      using tmp = tempCwd("sdk-function-script-");
+      using _logger = silenceLogger("info", "success", "warn");
+      mockConfig(tmp.dir);
+
+      await runCommand(scriptCommand, ["scripts/fix.ts", ...args]);
+
+      const nextHint = vi
+        .mocked(logger.info)
+        .mock.calls.map(([message]) => String(message))
+        .find((message) => message.startsWith("Next:"));
+      expect(nextHint).toContain("function run scripts/fix.ts");
+      expect(nextHint?.match(/--config=[^\s`]+/g) ?? []).toEqual(configHints);
+    },
+  );
 
   test("generates db.ts and db.snapshot.json from local definitions without authentication by default", async () => {
     using tmp = tempCwd("sdk-function-script-");

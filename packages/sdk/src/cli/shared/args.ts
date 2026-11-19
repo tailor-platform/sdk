@@ -527,22 +527,20 @@ export const workspaceArgs = {
   }),
 } satisfies ArgsShape;
 
-/**
- * Config file name searched for, from the current directory upward, when neither --config nor TAILOR_CONFIG_PATH is given
- */
-export const DEFAULT_CONFIG_PATH = "tailor.config.ts";
+/** File name of the Tailor config */
+export const CONFIG_FILE_NAME = "tailor.config.ts";
 
 /**
  * Format the --config argument for remediation command hints so they target
  * the same config the current run used. The `--config=<value>` form keeps a
  * leading-hyphen path bound as the option value.
  * @param {string} [configPath] - Config path the current run used, if any
- * @returns {string | undefined} `--config=<path>` argument, or undefined when the default config is in use
+ * @returns {string | undefined} `--config=<path>` argument, or undefined when the config is `tailor.config.ts` in the current directory
  */
 export function formatConfigArg(configPath?: string): string | undefined {
   if (!configPath) return undefined;
   const relativeConfigPath = path.relative(process.cwd(), configPath);
-  if (relativeConfigPath === DEFAULT_CONFIG_PATH) return undefined;
+  if (relativeConfigPath === CONFIG_FILE_NAME) return undefined;
   return `--config=${relativeConfigPath}`;
 }
 
@@ -585,7 +583,7 @@ export function profileUpdateArgs(profile: string, options: readonly string[]): 
 export const configArg = {
   config: arg(z.string().optional(), {
     alias: "c",
-    description: `Path to Tailor config file (default: the nearest ${DEFAULT_CONFIG_PATH} in the current or a parent directory)`,
+    description: `Path to Tailor config file (default: the nearest ${CONFIG_FILE_NAME} in the current or a parent directory)`,
     env: "TAILOR_CONFIG_PATH",
     completion: { type: "file", extensions: ["ts"] },
   }),
@@ -597,7 +595,7 @@ export const configArg = {
 export const multiConfigArg = {
   config: arg(z.string().optional(), {
     alias: "c",
-    description: `Path to SDK config file (default: the nearest ${DEFAULT_CONFIG_PATH} in the current or a parent directory). Use comma-separated paths to deploy multiple apps together.`,
+    description: `Path to SDK config file (default: the nearest ${CONFIG_FILE_NAME} in the current or a parent directory). Use comma-separated paths to deploy multiple apps together.`,
     env: "TAILOR_CONFIG_PATH",
     completion: { type: "file", extensions: ["ts"] },
   }),

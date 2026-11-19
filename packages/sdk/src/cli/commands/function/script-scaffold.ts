@@ -26,6 +26,7 @@ import {
   type SchemaSnapshot,
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
+import { formatConfigArg } from "#/cli/shared/args";
 import { extractOwnedNamespaces } from "#/cli/shared/config";
 import { CLIError, formatCommandHint, internalError } from "#/cli/shared/errors";
 import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
@@ -346,8 +347,9 @@ function schemaDriftError(
   diff: MigrationDiff,
   options: VerifyScriptSchemaSnapshotOptions,
 ): Error {
+  const configHint = formatConfigArg(options.configArgValue);
   const contextFlags = [
-    ...(options.configArgValue !== undefined ? [`--config=${options.configArgValue}`] : []),
+    ...(configHint !== undefined ? [configHint] : []),
     `--workspace-id=${options.workspaceId}`,
     ...(options.profileArgValue !== undefined ? [`--profile=${options.profileArgValue}`] : []),
   ];

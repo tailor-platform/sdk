@@ -8,7 +8,7 @@ import { z } from "zod";
 import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
 import {
-  DEFAULT_CONFIG_PATH,
+  CONFIG_FILE_NAME,
   type MachineUserInputSource,
   profileUpdateArgs,
   recoveryContextArgs,
@@ -1616,8 +1616,8 @@ function createStoredTokenSource(init: StoredTokenSourceInit): AccessTokenSource
  * @param cwd - Directory to start the search from
  * @returns Path of the config file, or undefined when none is found
  */
-export function findConfigFile(cwd: string = process.cwd()): string | undefined {
-  return findUpSync(DEFAULT_CONFIG_PATH, { cwd });
+export function findConfigFile(cwd: string): string | undefined {
+  return findUpSync(CONFIG_FILE_NAME, { cwd });
 }
 
 /**
@@ -1634,5 +1634,5 @@ export function loadConfigPath(configPath?: string): string | undefined {
   if (process.env.TAILOR_CONFIG_PATH) {
     return process.env.TAILOR_CONFIG_PATH;
   }
-  return findConfigFile();
+  return findConfigFile(process.cwd());
 }
