@@ -378,6 +378,22 @@ describe("function run --json", () => {
       expect(JSON.parse(stdout.output).suggestion).toContain("tailor workflow run");
     });
 
+    test("stays silent when the function's own error merely mentions a timeout", async () => {
+      vi.mocked(executeScriptReportingStart).mockResolvedValueOnce({
+        success: false,
+        logs: "",
+        result: "",
+        error: "Error: Request timeout while calling the payment API",
+      });
+      vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+      using _stdout = captureStdout();
+      using stderr = captureStderr();
+
+      await runCommand(runFunctionCommand, [scriptPath, "--machine-user", "admin"]);
+
+      expect(stderr.output).not.toContain("workflow run");
+    });
+
     test("stays silent when the run failed for another reason", async () => {
       vi.mocked(executeScriptReportingStart).mockResolvedValueOnce({
         success: false,

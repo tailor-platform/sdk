@@ -1270,6 +1270,50 @@ describe("reclaimWorkflowRuns for a workflow that is still running", () => {
     expect(result.removed).toEqual([]);
   });
 
+  test("keeps an unlabeled job function of a running labeled workflow even with the flag", async () => {
+    const name = `tmp-run-${runId}`;
+    const client = createSweepClient([
+      {
+        name,
+        labels: workflowRunLabels({ kind: "job", runId }),
+        executions: [WorkflowExecution_Status.RUNNING],
+      },
+      { kind: "jobFunction", name: `${name}-main`, labels: {} },
+    ]);
+
+    const result = await reclaimWorkflowRuns({
+      client: asClient(client),
+      workspaceId: "ws",
+      now: old,
+      includeUnlabeled: true,
+    });
+
+    expect(client.deleteWorkflowJobFunction).not.toHaveBeenCalled();
+    expect(result.removedUnlabeled).toEqual([]);
+  });
+
+  test("keeps an unlabeled function of a labeled run that finished moments ago, even with the flag", async () => {
+    const name = `tmp-run-${runId}`;
+    const client = createSweepClient([
+      {
+        name,
+        labels: workflowRunLabels({ kind: "job", runId }),
+        executions: [WorkflowExecution_Status.SUCCESS],
+        finishedAt: new Date(old.getTime() - 1000),
+      },
+      { kind: "function", name: `${name}-main`, labels: {} },
+    ]);
+
+    await reclaimWorkflowRuns({
+      client: asClient(client),
+      workspaceId: "ws",
+      now: old,
+      includeUnlabeled: true,
+    });
+
+    expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
+  });
+
   describe("when a finished run's workflow has no run label", () => {
     const name = `tmp-run-${runId}`;
     const remote = (): Remote[] => [

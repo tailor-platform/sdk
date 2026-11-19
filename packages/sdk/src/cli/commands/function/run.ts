@@ -241,7 +241,7 @@ A function run is stopped by the Platform when it takes too long. Its error is t
   },
 });
 
-const TIMEOUT_ERROR = /timed out|timeout/i;
+const TIMEOUT_ERROR = /Execution timed out after \d+ seconds?/i;
 
 /**
  * Tell whether the Platform stopped the run because it took too long.

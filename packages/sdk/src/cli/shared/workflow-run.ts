@@ -538,11 +538,22 @@ export async function reclaimWorkflowRuns(
     runs.set(marker.runId, run);
   }
 
+  // The job functions and functions of a workflow that is kept are kept with it, labeled or not.
+  const keptWorkflows: string[] = [];
+  const keep = (name: string) => {
+    keptWorkflows.push(name);
+  };
+  const dependsOnKeptWorkflow = (name: string) =>
+    keptWorkflows.some((workflow) => name === workflow || name.startsWith(`${workflow}-`));
+
   for (const [runId, run] of [...runs].toSorted(([a], [b]) => a.localeCompare(b))) {
     const name = workflowRunResourceName(runId);
     // The workflow may have lost its label while the functions kept theirs, so ask by name.
     const executions = await listTemporaryWorkflowExecutions(client, workspaceId, name);
-    if (executions.some(isExecutionActive)) continue;
+    if (executions.some(isExecutionActive)) {
+      keep(name);
+      continue;
+    }
     if (executions.length === 0) {
       const createdMs = latestCreatedMs([
         ...(run.workflow ? [run.workflow] : []),
@@ -550,14 +561,23 @@ export async function reclaimWorkflowRuns(
         ...run.functions,
       ]);
       const startedMs = createdMs ?? runIdStartedAt(runId)?.getTime();
-      if (startedMs !== undefined && now.getTime() - startedMs < NOT_STARTED_GRACE_MS) continue;
+      if (startedMs !== undefined && now.getTime() - startedMs < NOT_STARTED_GRACE_MS) {
+        keep(name);
+        continue;
+      }
     }
-    if (!params.ignoreFinishedGrace && finishedWithin(executions, now, FINISHED_GRACE_MS)) continue;
+    if (!params.ignoreFinishedGrace && finishedWithin(executions, now, FINISHED_GRACE_MS)) {
+      keep(name);
+      continue;
+    }
     // A workflow that lost its label is not this sweep's to remove unless asked, and the job functions it uses stay with it.
     const stray = run.workflow
       ? undefined
       : unlabeled.find((item) => item.kind === "workflow" && item.name === name);
-    if (stray && !params.includeUnlabeled) continue;
+    if (stray && !params.includeUnlabeled) {
+      keep(name);
+      continue;
+    }
     const gone = await teardownTemporaryWorkflow({
       client,
       workspaceId,
@@ -577,10 +597,6 @@ export async function reclaimWorkflowRuns(
   }
 
   const byKind = (kind: RunResourceKind) => unlabeled.filter((item) => item.kind === kind);
-  // The job functions and functions of a workflow that is kept are kept with it.
-  const keptWorkflows: string[] = [];
-  const dependsOnKeptWorkflow = (name: string) =>
-    keptWorkflows.some((workflow) => name === workflow || name.startsWith(`${workflow}-`));
   // A workflow goes before the job functions it uses, and those before their functions.
   for (const resource of [
     ...byKind("workflow"),
@@ -592,13 +608,13 @@ export async function reclaimWorkflowRuns(
       resource.createdMs !== undefined &&
       now.getTime() - resource.createdMs < NOT_STARTED_GRACE_MS
     ) {
-      if (resource.kind === "workflow") keptWorkflows.push(resource.name);
+      if (resource.kind === "workflow") keep(resource.name);
       continue;
     }
     if (resource.kind === "workflow") {
       const executions = await listTemporaryWorkflowExecutions(client, workspaceId, resource.name);
       if (executions.some(isExecutionActive)) {
-        keptWorkflows.push(resource.name);
+        keep(resource.name);
         continue;
       }
     }
