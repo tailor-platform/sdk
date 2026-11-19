@@ -6,7 +6,7 @@
  * deploy never claims them while a run is going.
  */
 
-import { resourceTrn } from "#/cli/commands/deploy/label";
+import { resourceTrn, sdkAppIdLabelKey, sdkNameLabelKey } from "#/cli/commands/deploy/label";
 import { fetchPaged } from "#/cli/shared/client";
 import { CLIError, isCLIError } from "#/cli/shared/errors";
 import { readOutcome } from "#/cli/shared/script-workflow";
@@ -195,8 +195,12 @@ export async function reclaimWorkflowRuns(params: ReclaimWorkflowRunsParams): Pr
     const { metadata } = await client.getMetadata({
       trn: resourceTrn(workspaceId, "workflow", workflow.name),
     });
-    const marker = readWorkflowRunMarker(metadata?.labels);
-    if (!marker) continue;
+    const labels = metadata?.labels;
+    const marker = readWorkflowRunMarker(labels);
+    if (!marker || workflow.name !== workflowRunResourceName(marker.runId)) continue;
+    if (labels?.[sdkNameLabelKey] !== undefined || labels?.[sdkAppIdLabelKey] !== undefined) {
+      continue;
+    }
 
     const executions = await listTemporaryWorkflowExecutions(client, workspaceId, workflow.name);
     if (executions.some(isExecutionActive)) continue;

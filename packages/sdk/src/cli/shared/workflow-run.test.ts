@@ -17,6 +17,8 @@ vi.mock(import("#/cli/shared/logger"), async (importOriginal) => {
 vi.mock("#/cli/commands/deploy/label", () => ({
   resourceTrn: (workspaceId: string, kind: string, name: string) =>
     `trn:v1:workspace:${workspaceId}:${kind}:${name}`,
+  sdkNameLabelKey: "sdk-name",
+  sdkAppIdLabelKey: "sdk-app-id",
   writeMetadataLabelsDirect: vi.fn(),
   buildMetaRequest: vi.fn(async (params: unknown) => params),
 }));
@@ -243,6 +245,29 @@ describe("reclaimWorkflowRuns", () => {
       {
         name: "nightly",
         labels: { "sdk-name": "app" },
+        executions: [WorkflowExecution_Status.SUCCESS],
+      },
+    ]);
+    await reclaimWorkflowRuns({ client: asClient(client), workspaceId: "ws", now: old });
+
+    expect(client.deleteWorkflow).not.toHaveBeenCalled();
+  });
+
+  test("leaves a workflow alone when its name is not the one a run gives its resources", async () => {
+    const client = createSweepClient([
+      { name: "orders", labels: run(runId), executions: [WorkflowExecution_Status.SUCCESS] },
+    ]);
+    await reclaimWorkflowRuns({ client: asClient(client), workspaceId: "ws", now: old });
+
+    expect(client.deleteWorkflow).not.toHaveBeenCalled();
+    expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
+  });
+
+  test("leaves a workflow alone when an app owns it, whatever else it is labeled", async () => {
+    const client = createSweepClient([
+      {
+        name: `tmp-${runId}`,
+        labels: { ...run(runId), "sdk-name": "app" },
         executions: [WorkflowExecution_Status.SUCCESS],
       },
     ]);
