@@ -162,7 +162,7 @@ export async function withScriptWorkflow<T>(
   }
 }
 
-interface AssertMachineUserExistsParams {
+export interface AssertMachineUserExistsParams {
   client: OperatorClient;
   workspaceId: string;
   invoker: ScriptInvoker;
@@ -173,7 +173,9 @@ interface AssertMachineUserExistsParams {
  * start anyway and ends the execution before any job runs, which leaves no message naming the cause.
  * @param params - Machine user the script runs as
  */
-async function assertMachineUserExists(params: AssertMachineUserExistsParams): Promise<void> {
+export async function assertMachineUserExists(
+  params: AssertMachineUserExistsParams,
+): Promise<void> {
   const { client, workspaceId, invoker } = params;
   const machineUser = await client
     .getAuthMachineUser({

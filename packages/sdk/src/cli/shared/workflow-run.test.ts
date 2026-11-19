@@ -7,6 +7,7 @@ import { writeMetadataLabelsDirect } from "#/cli/commands/deploy/label";
 import { logger } from "./logger";
 import {
   assertPollInterval,
+  assertWorkflowArg,
   awaitWorkflowRun,
   reclaimFinishedWorkflowRuns,
   reclaimWorkflowRuns,
@@ -47,6 +48,7 @@ interface ClientOptions {
 
 function createClient(options: ClientOptions = {}) {
   return {
+    getAuthMachineUser: vi.fn(async () => ({ machineUser: {} })),
     createFunctionRegistry: vi.fn(async () => ({})),
     createWorkflowJobFunction: vi.fn(async () => ({ jobFunction: { version: 1n } })),
     createWorkflow: vi.fn(async () => ({ workflow: { id: "wf-1" } })),
@@ -157,6 +159,28 @@ describe("startWorkflowRun when the start outcome is unknown", () => {
     ).rejects.toThrow("reset");
     expect(client.deleteWorkflow).not.toHaveBeenCalled();
     expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
+  });
+});
+
+describe("startWorkflowRun with a machine user that does not exist", () => {
+  test("fails before anything is registered, naming the machine user", async () => {
+    const client = createClient();
+    client.getAuthMachineUser.mockRejectedValueOnce(new ConnectError("nope", Code.NotFound));
+
+    await expect(
+      startWorkflowRun({
+        client: asClient(client),
+        workspaceId: "ws",
+        runId,
+        kind: "script",
+        code: "",
+        description: "d",
+        invoker,
+        arg: undefined,
+      }),
+    ).rejects.toThrow(/runner/);
+    expect(client.createFunctionRegistry).not.toHaveBeenCalled();
+    expect(client.startWorkflow).not.toHaveBeenCalled();
   });
 });
 
@@ -596,4 +620,17 @@ describe("assertPollInterval", () => {
   test("rejects a longer interval, since the run could be removed before the next poll", () => {
     expect(() => assertPollInterval(60_001)).toThrow(/interval/i);
   });
+});
+
+describe("assertWorkflowArg", () => {
+  test.each([undefined, null, {}, { a: [1] }])("accepts %j", (value) => {
+    expect(() => assertWorkflowArg(value as never)).not.toThrow();
+  });
+
+  test.each([5, "text", true, [1, 2]])(
+    "rejects %j, which the platform ends without a message after the start",
+    (value) => {
+      expect(() => assertWorkflowArg(value as never)).toThrow(/JSON object/);
+    },
+  );
 });

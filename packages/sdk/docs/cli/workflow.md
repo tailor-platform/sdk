@@ -147,8 +147,8 @@ tailor workflow run [options] [file]
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                   | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`      |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                              | No       | -                    | `TAILOR_PLATFORM_PROFILE`           |
 | `--job <JOB>`                   | `-j`  | Workflow job name to run (matches the `name` field of createWorkflowJob)                       | No       | -                    | -                                   |
-| `--arg <ARG>`                   | `-a`  | JSON argument to pass to the script                                                            | No       | -                    | -                                   |
-| `--arg-file <ARG_FILE>`         | -     | Path to a JSON file holding the argument to pass to the script                                 | No       | -                    | -                                   |
+| `--arg <ARG>`                   | `-a`  | JSON object to pass to the script as its argument                                              | No       | -                    | -                                   |
+| `--arg-file <ARG_FILE>`         | -     | Path to a JSON file holding the object to pass to the script as its argument                   | No       | -                    | -                                   |
 | `--machine-user <MACHINE_USER>` | `-m`  | Machine user name for authentication. Falls back to the active profile's default machine user. | No       | -                    | `TAILOR_PLATFORM_MACHINE_USER_NAME` |
 | `--interval <INTERVAL>`         | `-i`  | Polling interval when waiting, at most 1m (e.g., '3s', '500ms', '1m')                          | No       | `"3s"`               | -                                   |
 | `--timeout <TIMEOUT>`           | `-t`  | Maximum time to wait (e.g., '30s', '10m')                                                      | No       | `"10m"`              | -                                   |
@@ -181,7 +181,7 @@ $ tailor workflow run --cleanup
 
 The script runs as an asynchronous workflow job, so it is not bound by the time limit of `function run`. The command waits for it to finish and removes the temporary resources afterwards.
 
-Without `--job`, the whole file runs: export `main(arg)` from a plain script, or pass a resolver, executor, or workflow job file. With `--job`, only the workflow job of that name runs, with `--arg` as its input.
+Without `--job`, the whole file runs: export `main(arg)` from a plain script, or pass a resolver, executor, or workflow job file. With `--job`, only the workflow job of that name runs, with `--arg` as its input. The argument must be a JSON object (`null` is accepted too): unlike `function run`, a number, string, boolean, or array is refused before anything is created.
 
 When the wait stops (`--timeout` elapsed), the script keeps running and its temporary resources stay in place. The command prints the run ID; read the outcome with `tailor workflow executions`. `tailor workflow run --cleanup` removes the resources of runs that have finished, and the next `workflow run` does the same before it starts. A run that finished within the last few minutes is left alone by that automatic sweep (and by `tailor deploy`), so the command still waiting for it can read its result; `--cleanup` removes it at once.
 

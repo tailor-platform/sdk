@@ -13,7 +13,7 @@ import { recoveryContextArgs } from "#/cli/shared/args";
 import { fetchPaged, getOrNull } from "#/cli/shared/client";
 import { CLIError, formatCommandHint, isCLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
-import { readOutcome } from "#/cli/shared/script-workflow";
+import { assertMachineUserExists, readOutcome } from "#/cli/shared/script-workflow";
 import {
   createTemporaryWorkflow,
   isExecutionActive,
@@ -81,6 +81,7 @@ export async function startWorkflowRun(
   params: StartWorkflowRunParams,
 ): Promise<StartedWorkflowRun> {
   const { client, workspaceId, runId, kind } = params;
+  await assertMachineUserExists({ client, workspaceId, invoker: params.invoker });
   const name = workflowRunResourceName(runId);
   const owner = {
     appName: undefined,
@@ -296,6 +297,24 @@ export function assertPollInterval(intervalMs: number): void {
     suggestion:
       "Use a shorter --interval: a finished run is only kept for a few minutes, " +
       "so a waiter polling less often could lose its result.",
+    command: "workflow run",
+  });
+}
+
+/**
+ * Refuse an argument the platform cannot start a workflow with: it accepts a
+ * JSON object or `null`, and ends the execution without a message otherwise.
+ * @param value - Argument parsed from `--arg` or `--arg-file`
+ */
+export function assertWorkflowArg(value: Jsonifiable | undefined): void {
+  if (value === undefined || value === null) return;
+  if (typeof value === "object" && !Array.isArray(value)) return;
+  throw CLIError({
+    code: "WORKFLOW_RUN_ARG_NOT_OBJECT",
+    message: "The argument of a workflow run must be a JSON object.",
+    suggestion:
+      "Wrap the value in an object, for example --arg '{\"value\":5}'. " +
+      "`function run` accepts any JSON value; `workflow run` does not.",
     command: "workflow run",
   });
 }

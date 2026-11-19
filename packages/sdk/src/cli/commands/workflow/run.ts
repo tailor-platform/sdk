@@ -20,6 +20,7 @@ import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import {
   assertPollInterval,
+  assertWorkflowArg,
   awaitWorkflowRun,
   reclaimFinishedWorkflowRuns,
   reclaimWorkflowRuns,
@@ -60,10 +61,10 @@ export const runCommand = defineAppCommand({
     }),
     arg: arg(z.string().optional(), {
       alias: "a",
-      description: "JSON argument to pass to the script",
+      description: "JSON object to pass to the script as its argument",
     }),
     "arg-file": arg(z.string().optional(), {
-      description: "Path to a JSON file holding the argument to pass to the script",
+      description: "Path to a JSON file holding the object to pass to the script as its argument",
     }),
     "machine-user": arg(z.string().optional(), {
       alias: "m",
@@ -86,7 +87,7 @@ export const runCommand = defineAppCommand({
   }),
   notes: `The script runs as an asynchronous workflow job, so it is not bound by the time limit of \`function run\`. The command waits for it to finish and removes the temporary resources afterwards.
 
-Without \`--job\`, the whole file runs: export \`main(arg)\` from a plain script, or pass a resolver, executor, or workflow job file. With \`--job\`, only the workflow job of that name runs, with \`--arg\` as its input.
+Without \`--job\`, the whole file runs: export \`main(arg)\` from a plain script, or pass a resolver, executor, or workflow job file. With \`--job\`, only the workflow job of that name runs, with \`--arg\` as its input. The argument must be a JSON object (\`null\` is accepted too): unlike \`function run\`, a number, string, boolean, or array is refused before anything is created.
 
 When the wait stops (\`--timeout\` elapsed), the script keeps running and its temporary resources stay in place. The command prints the run ID; read the outcome with \`tailor workflow executions\`. \`${CLEANUP_COMMAND}\` removes the resources of runs that have finished, and the next \`workflow run\` does the same before it starts. A run that finished within the last few minutes is left alone by that automatic sweep (and by \`tailor deploy\`), so the command still waiting for it can read its result; \`--cleanup\` removes it at once.
 
@@ -139,6 +140,7 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
       watch: false,
       command: "workflow run",
     });
+    assertWorkflowArg(functionArg?.value);
 
     const { config, plugins } = await loadConfig(args.config);
     const authNamespace = resolveAuthNamespace(config.auth);
