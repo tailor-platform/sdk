@@ -72,7 +72,7 @@ const agentHelp = `AI coding agent detected:
 - Full command reference: \`${cliReferencePath}\``;
 
 function defaultSkillsRunToAdd(command: AnyCommand): AnyCommand {
-  const { run: _run, ...rest } = command;
+  const { run: _run, gracefulShutdown: _gracefulShutdown, ...rest } = command;
   return { ...rest, defaultSubCommand: "add" };
 }
 
