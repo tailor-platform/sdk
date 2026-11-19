@@ -225,6 +225,19 @@ const jobFunctionCheck = requestCheck(
   { action: "create" },
 );
 
+const applicationUpdateCheck = requestCheck(
+  UpdateApplicationRequestSchema,
+  (item: ManagedChangeSetOf<"application">["unchanged"][number]) => withoutCors(item.request),
+);
+
+// A replace deletes the policy and creates it again.
+const executionPolicyCreateCheck = requestCheck(
+  CreateWorkflowJobFunctionExecutionPolicyRequestSchema,
+  (item: ManagedChangeSetOf<"workflow_job_function_execution_policy">["creates"][number]) =>
+    executionPolicyCreateRequest(item.workspaceId, item.policy),
+  { action: "create" },
+);
+
 /** The requests of each resource type that pre-flight validation checks. */
 export const REQUEST_CHECKS = {
   "tailordb.service": {
@@ -343,23 +356,13 @@ export const REQUEST_CHECKS = {
     unchanged: [jobFunctionCheck],
   },
   workflow_job_function_execution_policy: {
-    creates: [
-      requestCheck(CreateWorkflowJobFunctionExecutionPolicyRequestSchema, (item) =>
-        executionPolicyCreateRequest(item.workspaceId, item.policy),
-      ),
-    ],
+    creates: [executionPolicyCreateCheck],
     updates: [
       requestCheck(UpdateWorkflowJobFunctionExecutionPolicyRequestSchema, (item) =>
         executionPolicyUpdateRequest(item.workspaceId, item.policy),
       ),
     ],
-    replaces: [
-      requestCheck(
-        CreateWorkflowJobFunctionExecutionPolicyRequestSchema,
-        (item) => executionPolicyCreateRequest(item.workspaceId, item.policy),
-        { action: "create" },
-      ),
-    ],
+    replaces: [executionPolicyCreateCheck],
   },
   "secret.vault": {
     creates: [requestCheck(CreateSecretManagerVaultRequestSchema, vaultCreateRequest)],
@@ -372,9 +375,9 @@ export const REQUEST_CHECKS = {
   },
   application: {
     creates: [requestCheck(CreateApplicationRequestSchema, (item) => withoutCors(item.request))],
-    updates: [requestCheck(UpdateApplicationRequestSchema, (item) => withoutCors(item.request))],
+    updates: [applicationUpdateCheck],
     // Apply sends an unchanged application's update again.
-    unchanged: [requestCheck(UpdateApplicationRequestSchema, (item) => withoutCors(item.request))],
+    unchanged: [applicationUpdateCheck],
   },
   "auth.connection": {
     creates: [requestCheck(CreateAuthConnectionRequestSchema, (item) => item.request)],

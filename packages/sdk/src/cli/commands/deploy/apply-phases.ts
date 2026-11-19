@@ -199,24 +199,17 @@ async function releaseMaintenanceModes(
 /**
  * Apply every resource kind not covered by {@link applyPrerequisiteResources}.
  * @param client - Operator client instance
- * @param workspaceId - Target workspace ID
  * @param deployments - Planned deployments to apply
  * @returns Maintenance windows of the applications whose TailorDB migrations ran, in deploy order
  */
 export async function applyRemainingResources(
   client: OperatorClient,
-  workspaceId: string,
   deployments: ReadonlyArray<PlannedDeployment>,
 ): Promise<TailorDBMaintenance[]> {
   const held: HeldMaintenanceMode[] = [];
   let maintenance: TailorDBMaintenance[];
   try {
-    maintenance = await applyRemainingResourcesHoldingMaintenanceMode(
-      client,
-      workspaceId,
-      deployments,
-      held,
-    );
+    maintenance = await applyRemainingResourcesHoldingMaintenanceMode(client, deployments, held);
   } catch (error) {
     await releaseMaintenanceModes(client, held, true);
     throw error;
@@ -232,7 +225,6 @@ export async function applyRemainingResources(
 
 async function applyRemainingResourcesHoldingMaintenanceMode(
   client: OperatorClient,
-  workspaceId: string,
   deployments: ReadonlyArray<PlannedDeployment>,
   held: HeldMaintenanceMode[],
 ): Promise<TailorDBMaintenance[]> {
@@ -338,15 +330,13 @@ async function applyRemainingResourcesHoldingMaintenanceMode(
  * separately instead, so it can rebuild between the last two when a static
  * website was just created.
  * @param client - Operator client instance
- * @param workspaceId - Target workspace ID
  * @param deployments - Planned deployments to apply
  */
 export async function applyDeploymentPlans(
   client: OperatorClient,
-  workspaceId: string,
   deployments: ReadonlyArray<PlannedDeployment>,
 ): Promise<void> {
   await preflightAllTailorDB(client, deployments);
   await applyPrerequisiteResources(client, deployments);
-  await applyRemainingResources(client, workspaceId, deployments);
+  await applyRemainingResources(client, deployments);
 }

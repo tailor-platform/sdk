@@ -1104,9 +1104,9 @@ async function deployInternal(
         deployments: rebuilt.deployments,
         confirmedDeployments: deployments,
       });
-      tailordbMaintenance = await applyRemainingResources(client, workspaceId, rebuilt.deployments);
+      tailordbMaintenance = await applyRemainingResources(client, rebuilt.deployments);
     } else {
-      tailordbMaintenance = await applyRemainingResources(client, workspaceId, deployments);
+      tailordbMaintenance = await applyRemainingResources(client, deployments);
     }
 
     const applications =
