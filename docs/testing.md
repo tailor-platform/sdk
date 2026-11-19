@@ -83,11 +83,11 @@ pnpm docs:update
 
 ```bash
 cd example
-pnpm test                          # Generator output tests
+pnpm test                          # Generator tests
 pnpm test:e2e                      # E2E tests
-pnpm test:generator:update-expects # Update test fixtures after intentional changes
+pnpm test:generator:update-expects # Regenerate the expected fixtures (build first, see below)
 ```
 
-Generator tests compare output against expected fixtures in `example/tests/fixtures/`. After intentional changes to code generation, update the fixtures with `test:generator:update-expects`.
+`pnpm test` writes generated files and bundles to `tests/fixtures/plugins/`, then runs the bundled-execution tests against them, along with the PGlite and migration tests. No Vitest test reads `tests/fixtures/expected/`; only `tests/kysely-parity.ts` type-checks against its `db.ts`. The `generate.yml` workflow regenerates the example's files and these fixtures and fails if that changes a file. On a pull request from this repository, the `securefix.yml` workflow also pushes the regenerated files as a `chore: apply automated fixes` commit, after which the check passes, so review that commit's diff. After changing code generation, run `pnpm generate` at the repository root (it builds the packages first), then `pnpm --filter example run test:generator:update-expects`, and commit the result when the diff is intended.
 
 To show that a change leaves bundled resolvers, executors, workflow jobs, auth hooks, and HTTP adapters unchanged, run `pnpm snapshot:bundles <outDir>` in `example/` of two built checkouts, your branch and its base commit (for example `git worktree add <dir> <base>`, then `pnpm install && pnpm build` there), and `diff -r` the two directories. Check out the base at the same depth as your branch (for example a sibling directory of the same parent): inline sourcemaps record relative source paths, so a checkout at a different depth makes some inline-true outputs differ. The script bundles `tailor.config.ts` and `tests/tailor.config.plugins-compat.ts` with inline sourcemaps on and off, bypassing the bundle cache. The cache manifest is not included: its input hashes and dependency paths depend on where the checkout is, and the dependency paths also vary between runs of the same build.
