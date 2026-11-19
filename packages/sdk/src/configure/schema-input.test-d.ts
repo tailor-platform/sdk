@@ -1,5 +1,5 @@
 import { describe, expectTypeOf, test } from "vitest";
-import type { AppConfig } from "#/configure/config/types";
+import type { AppConfig, AppDefinition, EnvEntry, WorkspaceConfig } from "#/configure/config/types";
 import type { AIGatewayServiceInput } from "#/configure/services/aigateway/types";
 import type { AuthOwnConfig } from "#/configure/services/auth/types";
 import type { Operation } from "#/configure/services/executor/operation";
@@ -18,7 +18,11 @@ import type { FieldMetadata, TailorFieldType } from "#/configure/types/field.typ
 import type { TailorDBFieldOutput } from "#/parser/service/tailordb/types";
 import type { Plugin } from "#/plugin/types";
 import type { AIGatewayInput } from "#/types/aigateway.generated";
-import type { AppConfigParsedInput } from "#/types/app-config.generated";
+import type {
+  AppConfigParsedInput,
+  AppDefinitionParsedInput,
+  WorkspaceConfigParsedInput,
+} from "#/types/app-config.generated";
 import type { AuthConfigInput } from "#/types/auth.generated";
 import type { OperationInput, TriggerInput } from "#/types/executor.generated";
 import type { TailorFieldInput } from "#/types/field.generated";
@@ -132,6 +136,17 @@ describe("configure input types are accepted by the schema that parses them", ()
   test("defineConfig", () => {
     expectTypeOf<AppConfig>().toExtend<AppConfigParsedInput>();
     expectTypeOf<ExtraKeyPaths<AppConfig, AppConfigParsedInput>>().toEqualTypeOf<never>();
+  });
+
+  test("defineApp", () => {
+    expectTypeOf<AppDefinition>().toExtend<AppDefinitionParsedInput>();
+    expectTypeOf<ExtraKeyPaths<AppDefinition, AppDefinitionParsedInput>>().toEqualTypeOf<never>();
+  });
+
+  test("defineWorkspace", () => {
+    type Configure = WorkspaceConfig<Record<string, EnvEntry>, string, string, string, string>;
+    expectTypeOf<Configure>().toExtend<WorkspaceConfigParsedInput>();
+    expectTypeOf<ExtraKeyPaths<Configure, WorkspaceConfigParsedInput>>().toEqualTypeOf<never>();
   });
 
   test("defineAuth", () => {

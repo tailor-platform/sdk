@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { AppConfigSchema } from "#/parser/app-config/schema";
+import { parseConfigExport } from "#/parser/app-config/workspace";
 import { PluginConfigSchema } from "#/parser/plugin-config/index";
 import { isPluginValidationError } from "#/utils/plugin-validation-error";
 import { loadConfigPath } from "./context";
@@ -17,7 +17,8 @@ import {
   syntaxInvalidError,
 } from "./validation-errors";
 import { flattenZodIssues, type FlatIssue } from "./zod-issues";
-import type { AppConfig, EnvValue } from "#/configure/config/types";
+import type { AppConfig, EnvEntry, EnvValue } from "#/configure/config/types";
+import type { ParsedWorkspaceConfig } from "#/parser/app-config/types";
 import type { Plugin } from "#/plugin/types";
 
 /**
@@ -32,6 +33,14 @@ export type ResolvedEnvAppConfig = Omit<AppConfig, "env"> & {
 
 /** Loaded configuration with resolved path. */
 export type LoadedConfig = ResolvedEnvAppConfig & { path: string };
+
+/** A `defineWorkspace()` or `defineApp()` config with its `env` values resolved, and its path. */
+export type LoadedWorkspaceConfig = ParsedWorkspaceConfig<EnvValue> & { path: string };
+
+/** A loaded config file, told apart by the function that defined its default export. */
+export type LoadedConfigFile =
+  | { kind: "config"; config: LoadedConfig; plugins: Plugin[] }
+  | { kind: "workspace"; workspace: LoadedWorkspaceConfig; plugins: Plugin[] };
 
 const CONFIG_NOT_FOUND_SUGGESTION =
   "Run the command from the app directory, or pass the config file with --config.";
@@ -51,6 +60,42 @@ export async function loadConfig(
   configPath?: string,
   options: LoadConfigOptions = {},
 ): Promise<{ config: LoadedConfig; plugins: Plugin[] }> {
+  const loaded = await loadConfigFile(configPath, options);
+  if (loaded.kind === "workspace") {
+    throw atUserModule(
+      CLIError({
+        code: "CONFIG_KIND_UNSUPPORTED",
+        message:
+          "This command does not support a config defined with defineWorkspace() or defineApp().",
+      }),
+      loaded.workspace.path,
+    );
+  }
+  return { config: loaded.config, plugins: loaded.plugins };
+}
+
+function resolveEnv(env: Record<string, EnvEntry>): Record<string, EnvValue> {
+  return Object.fromEntries(
+    Object.entries(env).map(([key, entry]) => [key, resolveEnvValue(entry)]),
+  );
+}
+
+function resolveEnvRecords(
+  records: Record<string, Record<string, EnvEntry>>,
+): Record<string, Record<string, EnvValue>> {
+  return Object.fromEntries(Object.entries(records).map(([name, env]) => [name, resolveEnv(env)]));
+}
+
+/**
+ * Load a Tailor configuration file of any kind and its plugins.
+ * @param configPath - Optional explicit config path
+ * @param options - Optional module import behavior.
+ * @returns The `defineConfig()` config, or the workspace a `defineWorkspace()` or `defineApp()` config describes, with its plugins
+ */
+export async function loadConfigFile(
+  configPath?: string,
+  options: LoadConfigOptions = {},
+): Promise<LoadedConfigFile> {
   installCliTailordbStub();
   const foundPath = loadConfigPath(configPath);
   if (!foundPath) {
@@ -98,23 +143,37 @@ export async function loadConfig(
     });
   }
 
-  const validated = AppConfigSchema.safeParse(configModule.default);
-  if (!validated.success) {
+  const parsed = parseConfigExport(configModule.default);
+  if (!parsed.success) {
     throw configInvalidError({
       file: resolvedPath,
       exportName: "default",
       subject: "Tailor config",
-      error: validated.error,
+      error: parsed.error,
     });
   }
 
-  const appConfig = configModule.default as AppConfig;
-  await assertEnvHasNoSecrets({ env: appConfig.env, configPath: resolvedPath });
-  const env = appConfig.env
-    ? Object.fromEntries(
-        Object.entries(appConfig.env).map(([key, entry]) => [key, resolveEnvValue(entry)]),
-      )
-    : undefined;
+  if (parsed.data.kind === "config") {
+    await assertEnvHasNoSecrets({ env: parsed.data.config.env, configPath: resolvedPath });
+  } else {
+    const { env, envOverrides } = parsed.data.workspace;
+    await assertEnvHasNoSecrets({
+      env,
+      overrides: [
+        ...Object.entries(envOverrides.resolver).map(([name, overrides]) => ({
+          owner: ["resolver", name],
+          env: overrides,
+        })),
+        ...(envOverrides.executor ? [{ owner: ["executor"], env: envOverrides.executor }] : []),
+        ...(envOverrides.workflow ? [{ owner: ["workflow"], env: envOverrides.workflow }] : []),
+        ...Object.entries(envOverrides.auth).map(([name, overrides]) => ({
+          owner: ["auth", name],
+          env: overrides,
+        })),
+      ],
+      configPath: resolvedPath,
+    });
+  }
 
   const allPlugins: Plugin[] = [];
   if (Object.hasOwn(configModule, "plugins")) {
@@ -162,12 +221,33 @@ export async function loadConfig(
     }
   }
 
+  if (parsed.data.kind === "config") {
+    const appConfig: AppConfig = parsed.data.config;
+    return {
+      kind: "config",
+      config: {
+        ...appConfig,
+        ...(appConfig.env ? { env: resolveEnv(appConfig.env) } : {}),
+        path: resolvedPath,
+      } as LoadedConfig,
+      plugins: allPlugins,
+    };
+  }
+  const { workspace } = parsed.data;
+  const { executor, workflow, resolver, auth } = workspace.envOverrides;
   return {
-    config: {
-      ...appConfig,
-      ...(env ? { env } : {}),
+    kind: "workspace",
+    workspace: {
+      ...workspace,
+      env: resolveEnv(workspace.env),
+      envOverrides: {
+        resolver: resolveEnvRecords(resolver),
+        ...(executor ? { executor: resolveEnv(executor) } : {}),
+        ...(workflow ? { workflow: resolveEnv(workflow) } : {}),
+        auth: resolveEnvRecords(auth),
+      },
       path: resolvedPath,
-    } as LoadedConfig,
+    },
     plugins: allPlugins,
   };
 }
