@@ -10,6 +10,7 @@ minimumReleaseAgeStrict: true
 minimumReleaseAgeIgnoreMissingTime: false
 minimumReleaseAgeExclude:
   - "@tailor-platform/*"
+  - "@enlumine/*"
 
 blockExoticSubdeps: true
 trustPolicy: no-downgrade

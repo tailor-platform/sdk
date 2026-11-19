@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { arg, defineAppCommand, logger } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
@@ -16,6 +17,8 @@ const DEFAULT_TABS: readonly TabSpec[] = [
   { id: "tailordb-erd", title: "ERD", packageName: "@tailor-platform/sdk-plugin-tailordb-erd" },
 ];
 
+const clientDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "client");
+
 function functionRunTab(projectDir: string): Tab {
   return {
     id: "function-run",
@@ -24,11 +27,10 @@ function functionRunTab(projectDir: string): Tab {
     handler: createFunctionRunHandler({
       projectDir,
       startRun: createFunctionRunStarter(projectDir),
+      loadPage: () => readFile(path.join(clientDir, "function-run.html"), "utf8"),
     }),
   };
 }
-
-const clientDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "client");
 
 export const uiCommand = defineAppCommand({
   name: "studio",

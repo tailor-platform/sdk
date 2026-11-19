@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { createFunctionRunHandler, type RunEvent, type RunHandle, type RunInput } from "./handler";
 
 const context = { basePath: "/plugins/function-run/", token: "tok-123" };
@@ -9,19 +9,16 @@ const root = "http://127.0.0.1:7777";
 
 let base: string;
 let projectDir: string;
+let scratchRoot: string;
 
 beforeAll(() => {
   base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "studio-run-")));
   projectDir = path.join(base, "app");
-  const outside = path.join(base, "outside");
-  fs.mkdirSync(path.join(projectDir, "resolvers"), { recursive: true });
-  fs.mkdirSync(outside);
-  fs.writeFileSync(path.join(projectDir, "a.ts"), "");
-  fs.writeFileSync(path.join(projectDir, "b.ts"), "");
-  fs.writeFileSync(path.join(projectDir, "resolvers", "add.ts"), "");
-  fs.writeFileSync(path.join(outside, "secret.ts"), "");
-  fs.symlinkSync(path.join(outside, "secret.ts"), path.join(projectDir, "link.ts"));
-  fs.symlinkSync(outside, path.join(projectDir, "linkdir"));
+  fs.mkdirSync(path.join(projectDir, "node_modules"), { recursive: true });
+});
+
+beforeEach(() => {
+  scratchRoot = fs.mkdtempSync(path.join(base, "scratch-"));
 });
 
 afterAll(() => {
@@ -54,8 +51,13 @@ function endlessRun() {
   return { handle, stop };
 }
 
-function handlerWith(startRun: (input: RunInput) => RunHandle) {
-  return createFunctionRunHandler({ projectDir, startRun });
+const pageTemplate = "<html><head><title>Function run</title></head></html>";
+
+function handlerWith(
+  startRun: (input: RunInput) => RunHandle,
+  loadPage: () => Promise<string> = async () => pageTemplate,
+) {
+  return createFunctionRunHandler({ projectDir, scratchRoot, startRun, loadPage });
 }
 
 function post(body: unknown, signal?: AbortSignal) {
@@ -67,13 +69,37 @@ function post(body: unknown, signal?: AbortSignal) {
   });
 }
 
+function save(body: unknown) {
+  return new Request(`${root}/save`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+function scratchEntries(): string[] {
+  return fs.readdirSync(scratchRoot);
+}
+
 describe("createFunctionRunHandler", () => {
   describe("page", () => {
-    test("GET / serves an HTML page that carries the token the shell passed in", async () => {
+    test("GET / serves the built page with the token the shell passed in", async () => {
       const response = await handlerWith(vi.fn())(new Request(`${root}/`), context);
 
       expect(response.headers.get("content-type")).toBe("text/html; charset=utf-8");
-      expect(await response.text()).toContain("tok-123");
+      expect(await response.text()).toBe(
+        '<html><head><meta name="tailor-studio-token" content="tok-123"><title>Function run</title></head></html>',
+      );
+    });
+
+    test("GET / answers 500 with the reason when the built page cannot be read", async () => {
+      const handler = handlerWith(vi.fn(), async () => {
+        throw new Error("page is missing");
+      });
+
+      const response = await handler(new Request(`${root}/`), context);
+
+      expect([response.status, await response.text()]).toEqual([500, "page is missing\n"]);
     });
 
     test("HEAD / answers without a body", async () => {
@@ -106,7 +132,7 @@ describe("createFunctionRunHandler", () => {
         { type: "exit", code: 0 },
       ]);
 
-      const response = await handlerWith(() => handle)(post({ file: "a.ts" }), context);
+      const response = await handlerWith(() => handle)(post({ code: "export default 1" }), context);
 
       expect(response.headers.get("content-type")).toBe("text/event-stream");
       expect(await response.text()).toBe(
@@ -118,60 +144,41 @@ describe("createFunctionRunHandler", () => {
       );
     });
 
-    test("starts the run with the file resolved against the project directory and the argument", async () => {
-      const startRun = vi.fn(() => fakeRun([]).handle);
+    test("runs the typed code from a scratch file outside the project that can import the project's packages", async () => {
+      const startRun = vi.fn((_input: RunInput) => endlessRun().handle);
 
-      await handlerWith(startRun)(post({ file: "resolvers/add.ts", arg: '{"a":1}' }), context);
+      await handlerWith(startRun)(post({ code: "export const main = () => 1;" }), context);
 
-      expect(startRun).toHaveBeenCalledWith({
-        file: path.join(projectDir, "resolvers", "add.ts"),
-        arg: '{"a":1}',
-      });
+      const { file } = startRun.mock.calls[0]![0];
+      expect([
+        path.dirname(file).startsWith(scratchRoot),
+        fs.readFileSync(file, "utf8"),
+        fs.realpathSync(path.join(path.dirname(file), "node_modules")),
+      ]).toEqual([true, "export const main = () => 1;", path.join(projectDir, "node_modules")]);
     });
 
-    test("omits the argument when none is given", async () => {
-      const startRun = vi.fn(() => fakeRun([]).handle);
+    test("passes the argument and omits it when none is given", async () => {
+      const startRun = vi.fn((_input: RunInput) => fakeRun([]).handle);
+      const handler = handlerWith(startRun);
 
-      await handlerWith(startRun)(post({ file: "a.ts", arg: "" }), context);
+      await handler(post({ code: "x", arg: '{"a":1}' }), context);
+      await handler(post({ code: "x", arg: "" }), context);
 
-      expect(startRun).toHaveBeenCalledWith({
-        file: path.join(projectDir, "a.ts"),
-        arg: undefined,
-      });
+      expect(startRun.mock.calls.map(([input]) => input.arg)).toEqual(['{"a":1}', undefined]);
     });
 
-    test.each([
-      ["a path above the project", "../secret.ts"],
-      ["an absolute path elsewhere", "/etc/passwd"],
-      ["a path that climbs out and back", "a/../../b.ts"],
-      ["a symlink to a file outside the project", "link.ts"],
-      ["a path through a symlinked directory", "linkdir/secret.ts"],
-    ])(
-      "rejects %s with 400 and starts nothing, so a run cannot reach outside the project",
-      async (_name, file) => {
-        const startRun = vi.fn(() => fakeRun([]).handle);
+    test("tells the browser the run's id so it can save the code again", async () => {
+      const response = await handlerWith(() => endlessRun().handle)(post({ code: "x" }), context);
 
-        const response = await handlerWith(startRun)(post({ file }), context);
-
-        expect([response.status, startRun.mock.calls.length]).toEqual([400, 0]);
-      },
-    );
-
-    test("rejects a file that does not exist with 400 and starts nothing", async () => {
-      const startRun = vi.fn(() => fakeRun([]).handle);
-
-      const response = await handlerWith(startRun)(post({ file: "missing.ts" }), context);
-
-      expect([response.status, startRun.mock.calls.length]).toEqual([400, 0]);
+      expect(response.headers.get("x-run-id")).toMatch(/^[0-9a-f-]{36}$/);
     });
 
     test.each([
       ["a body that is not JSON", "not json"],
-      ["no file", {}],
-      ["an empty file", { file: "" }],
-      ["a file that is not a string", { file: 1 }],
-      ["an argument that is not valid JSON", { file: "a.ts", arg: "{oops" }],
-      ["an argument that is not a string", { file: "a.ts", arg: 1 }],
+      ["no code", {}],
+      ["code that is not a string", { code: 1 }],
+      ["an argument that is not valid JSON", { code: "x", arg: "{oops" }],
+      ["an argument that is not a string", { code: "x", arg: 1 }],
     ])("rejects %s with 400 and starts nothing", async (_name, body) => {
       const startRun = vi.fn(() => fakeRun([]).handle);
 
@@ -184,10 +191,7 @@ describe("createFunctionRunHandler", () => {
       const { handle, stop } = endlessRun();
       const abort = new AbortController();
 
-      const response = await handlerWith(() => handle)(
-        post({ file: "a.ts" }, abort.signal),
-        context,
-      );
+      const response = await handlerWith(() => handle)(post({ code: "x" }, abort.signal), context);
       abort.abort();
       await response.text();
 
@@ -197,7 +201,7 @@ describe("createFunctionRunHandler", () => {
     test("stops the run when the response is cancelled", async () => {
       const { handle, stop } = endlessRun();
 
-      const response = await handlerWith(() => handle)(post({ file: "a.ts" }), context);
+      const response = await handlerWith(() => handle)(post({ code: "x" }), context);
       await response.body!.cancel();
 
       expect(stop).toHaveBeenCalledTimes(1);
@@ -208,7 +212,7 @@ describe("createFunctionRunHandler", () => {
         throw new Error("cannot find the tailor CLI");
       });
 
-      const response = await handler(post({ file: "a.ts" }), context);
+      const response = await handler(post({ code: "x" }), context);
 
       expect([response.status, await response.text()]).toEqual([
         500,
@@ -217,58 +221,75 @@ describe("createFunctionRunHandler", () => {
     });
   });
 
-  describe("one watch per file", () => {
-    test("refuses a second run of a file that is already being watched, so one save cannot run it twice", async () => {
-      const first = endlessRun();
-      const startRun = vi.fn(() => first.handle);
-      const handler = handlerWith(startRun);
+  describe("scratch files", () => {
+    test("removes the scratch files once the last run has ended", async () => {
+      const handler = handlerWith(() => fakeRun([{ type: "exit", code: 0 }]).handle);
 
-      await handler(post({ file: "a.ts" }), context);
-      const second = await handler(post({ file: "a.ts" }), context);
+      const response = await handler(post({ code: "x" }), context);
+      await response.text();
 
-      expect([second.status, startRun.mock.calls.length]).toEqual([409, 1]);
+      expect(scratchEntries()).toEqual([]);
     });
 
-    test("allows watching a different file at the same time", async () => {
-      const startRun = vi.fn(() => endlessRun().handle);
-      const handler = handlerWith(startRun);
+    test("removes the scratch files when the run cannot be started", async () => {
+      const handler = handlerWith(() => {
+        throw new Error("boom");
+      });
 
-      await handler(post({ file: "a.ts" }), context);
-      const other = await handler(post({ file: "b.ts" }), context);
+      await handler(post({ code: "x" }), context);
 
-      expect([other.status, startRun.mock.calls.length]).toEqual([200, 2]);
+      expect(scratchEntries()).toEqual([]);
     });
 
-    test("allows the file again once its run has ended", async () => {
-      const first = endlessRun();
-      const startRun = vi
-        .fn<(input: RunInput) => RunHandle>()
-        .mockReturnValueOnce(first.handle)
-        .mockReturnValue(fakeRun([]).handle);
-      const handler = handlerWith(startRun);
+    test("keeps the scratch directory while another run is still going", async () => {
+      const handler = handlerWith(() => endlessRun().handle);
       const abort = new AbortController();
+      const first = await handler(post({ code: "a" }, abort.signal), context);
+      await handler(post({ code: "b" }), context);
 
-      const running = await handler(post({ file: "a.ts" }, abort.signal), context);
       abort.abort();
-      await running.text();
-      const again = await handler(post({ file: "a.ts" }), context);
+      await first.text();
 
-      expect(again.status).toBe(200);
+      expect(scratchEntries().length).toBe(1);
+    });
+  });
+
+  describe("POST /save", () => {
+    test("rewrites the scratch file of a running run so its watch runs the new code", async () => {
+      const startRun = vi.fn((_input: RunInput) => endlessRun().handle);
+      const handler = handlerWith(startRun);
+      const started = await handler(post({ code: "old" }), context);
+
+      const saved = await handler(
+        save({ id: started.headers.get("x-run-id"), code: "new" }),
+        context,
+      );
+
+      expect([saved.status, fs.readFileSync(startRun.mock.calls[0]![0].file, "utf8")]).toEqual([
+        204,
+        "new",
+      ]);
     });
 
-    test("allows the file again after a run failed to start", async () => {
-      const startRun = vi
-        .fn<(input: RunInput) => RunHandle>()
-        .mockImplementationOnce(() => {
-          throw new Error("boom");
-        })
-        .mockReturnValue(fakeRun([]).handle);
-      const handler = handlerWith(startRun);
+    test("answers 404 for a run that is not running", async () => {
+      const saved = await handlerWith(vi.fn())(save({ id: "nope", code: "x" }), context);
 
-      await handler(post({ file: "a.ts" }), context);
-      const again = await handler(post({ file: "a.ts" }), context);
+      expect(saved.status).toBe(404);
+    });
 
-      expect(again.status).toBe(200);
+    test.each([
+      ["code that is not a string", { id: "i", code: 1 }],
+      ["no id", { code: "x" }],
+    ])("rejects %s with 400", async (_name, body) => {
+      const saved = await handlerWith(vi.fn())(save(body), context);
+
+      expect(saved.status).toBe(400);
+    });
+
+    test("is 405 unless it is a POST", async () => {
+      const response = await handlerWith(vi.fn())(new Request(`${root}/save`), context);
+
+      expect([response.status, response.headers.get("allow")]).toEqual([405, "POST"]);
     });
   });
 });
