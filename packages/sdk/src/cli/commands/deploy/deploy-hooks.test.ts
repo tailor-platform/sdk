@@ -345,7 +345,7 @@ test("applies a renamed application's cleanup delete from the plan the URL rebui
 
   await deploy({ yes: true, noValidate: true });
 
-  const [, , applied] = mocks.apply.mock.calls[0]!;
+  const [, applied] = mocks.apply.mock.calls[0]!;
   expect(applied[0].app.deletes.map((del: { name: string }) => del.name)).toEqual(["old-app"]);
 });
 
