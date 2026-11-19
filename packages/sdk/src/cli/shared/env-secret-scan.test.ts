@@ -116,6 +116,27 @@ describe("scanEnvForSecrets", () => {
     expect(findings[0]).not.toHaveProperty("rule");
   });
 
+  test("reports findings in env overrides with the service that holds them", async () => {
+    const findings = await scanEnvForSecrets({
+      env: { SLACK_BOT_TOKEN: SLACK_TOKEN },
+      overrides: [
+        { servicePath: ["resolver", "shop-api"], env: { SLACK_BOT_TOKEN: SLACK_TOKEN } },
+        {
+          servicePath: ["executor"],
+          env: { LEGACY_TOKEN: "Zk3xQ9pLmVn7WcT2bYr5JdHgSaEuIoPq8FvNzXwCkMj4" },
+        },
+      ],
+    });
+
+    expect(
+      findings.map(({ key, servicePath, severity }) => ({ key, servicePath, severity })),
+    ).toEqual([
+      { key: "SLACK_BOT_TOKEN", servicePath: undefined, severity: "error" },
+      { key: "SLACK_BOT_TOKEN", servicePath: ["resolver", "shop-api"], severity: "error" },
+      { key: "LEGACY_TOKEN", servicePath: ["executor"], severity: "warning" },
+    ]);
+  });
+
   test("does not add an entropy warning for a value a provider rule already matched", async () => {
     const findings = await scanEnvForSecrets({ env: { SLACK_BOT_TOKEN: SLACK_TOKEN } });
 
@@ -254,6 +275,33 @@ describe("assertEnvHasNoSecrets", () => {
     ).resolves.toBeUndefined();
     expect(warnSpy).toHaveBeenCalledTimes(1);
     expect(warnSpy.mock.calls[0]?.[0]).toContain("env.LEGACY_TOKEN");
+  });
+
+  test("names the override a warning or a rejection comes from", async () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    const error = await captureFailure(
+      assertEnvHasNoSecrets({
+        overrides: [
+          {
+            servicePath: ["executor"],
+            env: { LEGACY_TOKEN: "Zk3xQ9pLmVn7WcT2bYr5JdHgSaEuIoPq8FvNzXwCkMj4" },
+          },
+          { servicePath: ["auth", "corp-auth"], env: { SLACK_BOT_TOKEN: SLACK_TOKEN } },
+        ],
+        configPath: "/project/override.config.ts",
+      }),
+    );
+
+    expect(warnSpy.mock.calls[0]?.[0]).toMatch(/^executor\.env\.LEGACY_TOKEN /);
+    expect(error).toMatchObject({
+      code: "CONFIG_INVALID",
+      context: {
+        issues: [
+          expect.objectContaining({ path: ["auth", "corp-auth", "env", "SLACK_BOT_TOKEN"] }),
+        ],
+      },
+    });
   });
 
   test("points at the config the entries came from, keeping its path out of the message", async () => {
