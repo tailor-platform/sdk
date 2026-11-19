@@ -276,9 +276,9 @@ export interface AppConfig<
    * Entries are only added or overwritten: an entry removed from this config
    * keeps its last deployed value on the platform. Those retained labels count
    * towards the platform's limit on labels per application. When the labels
-   * exceed it, `deploy` applies the rest of its changes and fails with
-   * `DEPLOY_LABEL_LIMIT_EXCEEDED`, writing the SDK's own labels without these
-   * entries when those fit.
+   * exceed it, `deploy` applies the rest of its changes, runs plugins'
+   * `onDeployed` hooks, and fails with `DEPLOY_LABEL_LIMIT_EXCEEDED`, writing
+   * the SDK's own labels without these entries when those fit.
    */
   metadata?: Record<string, string>;
   /** TailorDB service configuration with table definition files. */

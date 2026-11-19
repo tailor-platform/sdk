@@ -12,7 +12,10 @@ import {
   recomposeApplication,
 } from "./application";
 import { withMetadataWriteBatch } from "./label";
-import { labelCountRejection } from "./test-helpers/label-count-rejection";
+import {
+  applicationLabelRejection,
+  labelCountRejection,
+} from "./test-helpers/label-count-rejection";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { PlanContext } from "./types";
@@ -973,16 +976,11 @@ describe("applyApplication label writes", () => {
 });
 
 describe("applicationLabelLimitError", () => {
-  const rejection = (name: string, sdkLabelsInPlace: boolean) => ({
-    name,
-    violation: "map must be at most 20 entries",
-    sdkLabelsInPlace,
-    unwrittenMetadata: ["key-0"],
-    otherLabels: [],
-  });
-
   test("suggests trimming metadata while any application kept its SDK labels", () => {
-    const error = applicationLabelLimitError([rejection("a", true), rejection("b", false)]);
+    const error = applicationLabelLimitError([
+      applicationLabelRejection("a", true),
+      applicationLabelRejection("b", false),
+    ]);
 
     expect(error.message.split("\n")).toHaveLength(2);
     expect(error.suggestion).toContain("Remove unwritten entries from 'metadata'");

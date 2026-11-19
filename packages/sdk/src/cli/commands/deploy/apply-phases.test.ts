@@ -10,6 +10,7 @@ import {
 } from "./apply-phases";
 import { writeMetadataLabels } from "./label";
 import { MaintenanceTimeline } from "./tailordb/migration-timing";
+import { applicationLabelRejection } from "./test-helpers/label-count-rejection";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { MaintenanceModeRelease } from "./tailordb";
 
@@ -292,7 +293,7 @@ describe("applyDeploymentPlans", () => {
       .mockImplementationOnce(async () => undefined)
       .mockImplementationOnce(async () => report as never);
 
-    const maintenance = await applyRemainingResources(mockOperatorClient({}), [
+    const { maintenance } = await applyRemainingResources(mockOperatorClient({}), [
       deployment("supplier"),
       deployment("buyer"),
     ]);
@@ -358,26 +359,25 @@ describe("applyDeploymentPlans", () => {
     ]);
   });
 
-  test("reports rejected application labels once every phase is applied", async () => {
+  test("returns rejected application labels once every phase is applied", async () => {
     mocks.calls.length = 0;
-    mocks.applyApplication.mockResolvedValueOnce([
-      {
-        name: "supplier",
-        violation: "map must be at most 20 entries",
-        sdkLabelsInPlace: true,
-        unwrittenMetadata: ["key-0"],
-        otherLabels: [],
-      },
+    const rejection = applicationLabelRejection("supplier");
+    mocks.applyApplication.mockResolvedValueOnce([rejection]);
+
+    const { labelRejections } = await applyRemainingResources(mockOperatorClient({}), [
+      deployment("supplier"),
     ]);
 
-    await expect(
-      applyRemainingResources(mockOperatorClient({}), [deployment("supplier")]),
-    ).rejects.toMatchObject({
-      code: "DEPLOY_LABEL_LIMIT_EXCEEDED",
-      message: expect.stringContaining("application 'supplier'"),
-    });
-
+    expect(labelRejections).toEqual([rejection]);
     expect(mocks.calls.at(-1)).toBe("function:supplier-function:delete");
+  });
+
+  test("fails the one-shot apply on rejected application labels", async () => {
+    mocks.applyApplication.mockResolvedValueOnce([applicationLabelRejection("supplier")]);
+
+    await expect(
+      applyDeploymentPlans(mockOperatorClient({}), [deployment("supplier")]),
+    ).rejects.toMatchObject({ code: "DEPLOY_LABEL_LIMIT_EXCEEDED" });
   });
 
   test.each(Object.values(PLAN_MARKERS))(
@@ -499,7 +499,7 @@ describe("applyRemainingResources with a held maintenance mode", () => {
     );
     mocks.applyTailorDB.mockImplementationOnce(async () => immediate as never);
 
-    const maintenance = await applyRemainingResources(mockOperatorClient({}), [
+    const { maintenance } = await applyRemainingResources(mockOperatorClient({}), [
       deployment("supplier"),
       deployment("buyer"),
     ]);

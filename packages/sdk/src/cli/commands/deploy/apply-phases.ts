@@ -202,18 +202,24 @@ async function releaseMaintenanceModes(
   return maintenance;
 }
 
+/** What {@link applyRemainingResources} returns after applying the remaining resources. */
+export type RemainingApplyResult = {
+  /** Maintenance windows of the applications whose TailorDB migrations ran, in deploy order. */
+  maintenance: TailorDBMaintenance[];
+  /** Applications whose labels the platform rejected for their count. */
+  labelRejections: ApplicationLabelRejection[];
+};
+
 /**
  * Apply every resource kind not covered by {@link applyPrerequisiteResources}.
- * An application whose label count the platform rejected fails the call only
- * after every other change is applied.
  * @param client - Operator client instance
  * @param deployments - Planned deployments to apply
- * @returns Maintenance windows of the applications whose TailorDB migrations ran, in deploy order
+ * @returns Maintenance windows and rejected application labels
  */
 export async function applyRemainingResources(
   client: OperatorClient,
   deployments: ReadonlyArray<PlannedDeployment>,
-): Promise<TailorDBMaintenance[]> {
+): Promise<RemainingApplyResult> {
   const held: HeldMaintenanceMode[] = [];
   const labelRejections: ApplicationLabelRejection[] = [];
   let maintenance: TailorDBMaintenance[];
@@ -227,13 +233,15 @@ export async function applyRemainingResources(
     throw error;
   }
   const released = await releaseMaintenanceModes(client, held, false);
-  if (labelRejections.length > 0) throw applicationLabelLimitError(labelRejections);
   const order = new Map(
     deployments.map((deployment, index) => [deployment.application.name, index]),
   );
-  return [...maintenance, ...released].toSorted(
-    (a, b) => (order.get(a.application) ?? 0) - (order.get(b.application) ?? 0),
-  );
+  return {
+    maintenance: [...maintenance, ...released].toSorted(
+      (a, b) => (order.get(a.application) ?? 0) - (order.get(b.application) ?? 0),
+    ),
+    labelRejections,
+  };
 }
 
 type RemainingApplyOutcomes = {
@@ -357,5 +365,6 @@ export async function applyDeploymentPlans(
 ): Promise<void> {
   await preflightAllTailorDB(client, deployments);
   await applyPrerequisiteResources(client, deployments);
-  await applyRemainingResources(client, deployments);
+  const { labelRejections } = await applyRemainingResources(client, deployments);
+  if (labelRejections.length > 0) throw applicationLabelLimitError(labelRejections);
 }

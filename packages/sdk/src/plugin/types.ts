@@ -408,7 +408,7 @@ export interface Plugin<
     context: ExecutorReadyContext<PluginConfig>,
   ): GeneratorResult | Promise<GeneratorResult>;
 
-  /** Runs after a successful deploy, including deploys with no resource changes. */
+  /** Runs after a deploy applies its resources, including deploys with no resource changes. */
   onDeployed?(
     context: DeployedContext<PluginConfig>,
   ): void | DeployedHookResult | Promise<void | DeployedHookResult>;
