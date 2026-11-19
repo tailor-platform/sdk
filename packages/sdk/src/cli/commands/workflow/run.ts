@@ -78,7 +78,8 @@ export const runCommand = defineAppCommand({
     }),
     timeout: arg(durationArg.default("10m"), {
       alias: "t",
-      description: "Maximum time to wait (e.g., '30s', '10m')",
+      description:
+        "Maximum time to wait for the script, not a limit on its run (e.g., '30s', '10m')",
     }),
     "allow-schema-drift": arg(z.boolean().default(false), {
       description: "Run a scaffolded script even when its schema snapshot no longer matches",
@@ -89,6 +90,8 @@ export const runCommand = defineAppCommand({
     ...configArg,
   }),
   notes: `The script runs as an asynchronous workflow job, so it is not bound by the time limit of \`function run\`. The command waits for it to finish and removes the temporary resources afterwards.
+
+\`--timeout\` limits how long this command waits, not how long the script may run. The Platform ends a workflow job that runs longer than 5 minutes and the run is reported as failed with a timeout error; a script that needs longer has to be split so that it can be run again from where it stopped.
 
 Without \`--job\`, the whole file runs: export \`main(arg)\` from a plain script, or pass a resolver, executor, or workflow job file. With \`--job\`, only the workflow job of that name runs, with \`--arg\` as its input. The argument must be a JSON object (\`null\` is accepted too): unlike \`function run\`, a number, string, boolean, or array is refused before anything is created.
 
@@ -176,6 +179,7 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
     const target: FunctionRunTarget = {
       filePath,
       jobName: args.job,
+      jobFlag: "--job",
       config,
       kyselyTemporal: resolvePluginConfig(plugins, KyselyGeneratorID)?.temporal ?? false,
       client,

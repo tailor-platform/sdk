@@ -24,6 +24,8 @@ export interface FunctionRunTarget {
   filePath: string;
   /** Workflow job name to run */
   jobName: string | undefined;
+  /** Flag the command selects the job with, named when detection asks for one (default: `--name`) */
+  jobFlag?: string;
   /** Loaded application config */
   config: LoadedConfig;
   kyselyTemporal?: boolean;
@@ -189,7 +191,11 @@ export async function prepareFunction(options: PrepareFunctionOptions): Promise<
   }
 
   progress(`Detecting function type from ${styles.path(displayPath(filePath))}`);
-  const detected = await detectFunctionType({ filePath, jobName: target.jobName });
+  const detected = await detectFunctionType({
+    filePath,
+    jobName: target.jobName,
+    ...(target.jobFlag === undefined ? {} : { jobFlag: target.jobFlag }),
+  });
   progress(`Detected: ${styles.bold(detected.type)} ${styles.info(`"${detected.name}"`)}`);
 
   progress("Bundling...");

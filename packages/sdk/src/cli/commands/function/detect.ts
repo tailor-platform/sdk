@@ -56,6 +56,8 @@ interface DetectFunctionOptions {
   filePath: string;
   /** Workflow job name to select (matches the `name` field of createWorkflowJob) */
   jobName?: string;
+  /** Flag the asking command selects a job with, named in the hint (default: `--name`) */
+  jobFlag?: string;
 }
 
 /**
@@ -66,7 +68,7 @@ interface DetectFunctionOptions {
 export async function detectFunctionType(
   options: DetectFunctionOptions,
 ): Promise<DetectedFunction> {
-  const { filePath, jobName } = options;
+  const { filePath, jobName, jobFlag = "--name" } = options;
 
   const module = await importUserModule(filePath);
 
@@ -104,7 +106,7 @@ export async function detectFunctionType(
   }
 
   // 3. Check workflow jobs (scan all named exports)
-  const workflowJobResult = detectWorkflowJob(module, jobName);
+  const workflowJobResult = detectWorkflowJob(module, jobName, jobFlag);
   if (workflowJobResult) {
     return workflowJobResult;
   }
@@ -135,11 +137,13 @@ export async function detectFunctionType(
  * If multiple jobs exist, throw an error with the list.
  * @param module - The imported module
  * @param jobName - Workflow job name to select
+ * @param jobFlag - Flag the asking command selects a job with, named in the hint
  * @returns Detected function or null if no workflow jobs found
  */
 function detectWorkflowJob(
   module: Record<string, unknown>,
-  jobName?: string,
+  jobName: string | undefined,
+  jobFlag: string,
 ): DetectedFunction | null {
   const jobs: Array<{ name: string; exportName: string }> = [];
 
@@ -183,7 +187,7 @@ function detectWorkflowJob(
     code: "WORKFLOW_JOB_AMBIGUOUS",
     message: "Multiple workflow jobs found.",
     details: `Available jobs:\n${available}`,
-    suggestion: "Specify one with --name.",
+    suggestion: `Specify one with ${jobFlag}.`,
   });
 }
 

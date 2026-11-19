@@ -319,6 +319,16 @@ describe("workflow run", () => {
     expect(startWorkflowRun).not.toHaveBeenCalled();
   });
 
+  test("asks detection to name --job, not --name, when the file holds several jobs", async () => {
+    using _stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    await invoke(runCommand, [scriptPath, "-m", "admin"]);
+
+    expect(detectFunctionType).toHaveBeenCalledWith(expect.objectContaining({ jobFlag: "--job" }));
+  });
+
   test("refuses --job when the file has no such job, before creating anything", async () => {
     using _stdout = captureStdout();
     using _stderr = captureStderr();
