@@ -7,6 +7,26 @@ import * as path from "pathe";
 import { defaultLoadSeedSettings } from "./seed-settings";
 
 /**
+ * Read the name an app's config sets.
+ * @param configPath - Absolute path to the app's tailor.config.ts
+ * @returns The config's name, if it sets one
+ */
+export async function defaultLoadConfigName(configPath: string): Promise<string | undefined> {
+  const { config } = await loadConfig(configPath);
+  return config.name;
+}
+
+/**
+ * Read the id an app's config sets.
+ * @param configPath - Absolute path to the app's tailor.config.ts
+ * @returns The config's id, if it sets one
+ */
+export async function defaultLoadConfigId(configPath: string): Promise<string | undefined> {
+  const { config } = await loadConfig(configPath);
+  return config.id;
+}
+
+/**
  * List the TailorDB namespaces an app's config owns.
  * @param configPath - Absolute path to the app's tailor.config.ts
  * @returns The owned namespaces

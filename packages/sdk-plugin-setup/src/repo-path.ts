@@ -7,7 +7,5 @@ import * as path from "pathe";
  * @returns Whether the path is absolute or climbs out of the root
  */
 export function escapesRoot(rel: string): boolean {
-  return (
-    rel === ".." || rel.startsWith(`..${path.sep}`) || rel.startsWith("../") || path.isAbsolute(rel)
-  );
+  return rel === ".." || rel.startsWith("../") || path.isAbsolute(rel);
 }

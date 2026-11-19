@@ -298,6 +298,14 @@ describe("setupUpdate", () => {
   });
 
   // Every value differs from what setup uses when the option is left out.
+  const autofixWithEveryOption = {
+    provider: "securefix",
+    securefixServerRepository: "securefix-server",
+    codemod: "copilot",
+    copilotAuth: "github-token",
+    dir: ["apps/api", "apps/web"],
+    packageManager: "yarn",
+  } satisfies Required<AutofixSetupInputs>;
   const targetsWithEveryOption = [
     {
       kind: "branch",
@@ -654,16 +662,7 @@ describe("setupUpdate", () => {
   test("regenerates the autofix workflow with every option from what the lock records", async () => {
     writeAppConfig("apps/api");
     writeAppConfig("apps/web");
-    // Every value differs from what setup uses when the option is left out.
-    const inputs = {
-      provider: "securefix",
-      securefixServerRepository: "securefix-server",
-      codemod: "copilot",
-      copilotAuth: "github-token",
-      dir: ["apps/api", "apps/web"],
-      packageManager: "yarn",
-    } satisfies Required<AutofixSetupInputs>;
-    await setupAutofix({ ...inputs, force: false, outputDir: testDir });
+    await setupAutofix(autofixSetupOptions(testDir, autofixWithEveryOption));
     const generated = readGenerated();
     using _successSpy = vi.spyOn(logger, "success").mockImplementation(() => {});
 

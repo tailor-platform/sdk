@@ -1,7 +1,6 @@
 import * as fs from "node:fs";
 import {
   findAppIdLock,
-  loadConfig,
   logger,
   planAppIds,
   removeAdoptedConfigIds,
@@ -12,6 +11,8 @@ import {
 } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import {
+  defaultLoadConfigId,
+  defaultLoadConfigName,
   defaultLoadErdNamespaces,
   defaultLoadHasMigrations,
   defaultLoadHasSeeds,
@@ -152,16 +153,6 @@ export type BranchSetupOptions = BranchSetupInputs & SetupRun;
 
 export type SetupTargetOptions = (BranchSetupInputs | TagSetupInputs | PreviewSetupInputs) &
   SetupRun;
-
-async function defaultLoadConfigName(configPath: string): Promise<string | undefined> {
-  const { config } = await loadConfig(configPath);
-  return config.name;
-}
-
-async function defaultLoadConfigId(configPath: string): Promise<string | undefined> {
-  const { config } = await loadConfig(configPath);
-  return config.id;
-}
 
 async function assertSeedable(
   options: SetupTargetOptions,

@@ -91,7 +91,7 @@ export function planUpdate(target: LockTarget, common: SetupOutput): SetupTarget
     dir,
     environment: inputs.environment,
     packageManager: recordedPackageManagerUnlessDetected(inputs),
-    seed: inputs.seed,
+    seed: inputs.seed || undefined,
     ...common,
   };
 
