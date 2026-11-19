@@ -695,7 +695,7 @@ describe("awaitWorkflowRun when a sweep removes the workflow while it waits", ()
       workspaceId: "ws",
       started,
       pollInterval: 1,
-      timeoutMs: 30,
+      timeoutMs: 150,
     });
 
     expect(outcome).toMatchObject({ state: "outcomeUnavailable", workflowRemoved: true });

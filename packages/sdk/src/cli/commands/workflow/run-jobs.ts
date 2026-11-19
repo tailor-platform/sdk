@@ -1,7 +1,8 @@
 import * as fs from "node:fs";
+import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { bundleWorkflowJobs } from "#/cli/services/workflow/bundler";
-import { createWorkflowService } from "#/cli/services/workflow/service";
+import { createWorkflowService, type CollectedJob } from "#/cli/services/workflow/service";
 import { buildOptionsOf, projectSourcesOf } from "#/cli/shared/build-options";
 import { resolveBundleLogLevel } from "#/cli/shared/bundle-log-level";
 import { effectiveDateDefault } from "#/cli/shared/date-default";
@@ -38,6 +39,33 @@ function realPath(filePath: string): string {
 }
 
 /**
+ * Drop a job that another entry of the list declares again as the very same definition, as a
+ * file does when it re-exports a job of another file. The later entry stays.
+ * @param jobs - Jobs of the file and of the application's workflow files
+ * @returns The jobs without the repeated definitions
+ */
+async function withoutReExports(jobs: CollectedJob[]): Promise<CollectedJob[]> {
+  // Imported without a user-module run nonce, which a file's own imports never carry:
+  // a re-exporting file and the file it re-exports from then share one instance.
+  const definitions = await Promise.all(
+    jobs.map(async (job) => {
+      const module: Record<string, unknown> = await import(pathToFileURL(job.sourceFile).href);
+      return module[job.exportName];
+    }),
+  );
+  return jobs.filter(
+    (job, index) =>
+      !jobs.some(
+        (other, later) =>
+          later > index &&
+          other.name === job.name &&
+          definitions[later] !== undefined &&
+          definitions[later] === definitions[index],
+      ),
+  );
+}
+
+/**
  * Bundle the selected workflow job together with the jobs it starts with
  * `.start()`, the way a deploy bundles a workflow, so that those calls work in
  * the temporary workflow. The jobs may come from the file or from the
@@ -64,12 +92,12 @@ export async function bundleWorkflowRunJobs(
   const ownFile = realPath(filePath);
   const inFile = fileService.jobs;
   const seen = new Set(inFile.map((job) => `${realPath(job.sourceFile)}\0${job.name}`));
-  const allJobs = [
+  const allJobs = await withoutReExports([
     ...inFile,
     ...(appService?.jobs ?? []).filter(
       (job) => !seen.has(`${realPath(job.sourceFile)}\0${job.name}`),
     ),
-  ];
+  ]);
   assertUniqueDefinitionNames({
     kind: "workflow-job",
     definitions: allJobs.map(({ name, sourceFile, exportName }) => ({

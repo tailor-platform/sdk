@@ -1,11 +1,15 @@
 // oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { Code, ConnectError } from "@connectrpc/connect";
-import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import {
+  WorkflowExecution_Status,
+  WorkflowJobExecution_Status,
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { logger } from "./logger";
 import {
   assertNoActiveScriptWorkflow,
   mainJobExecutionId,
+  outcomeJobExecutionId,
   readOutcome,
   withScriptWorkflow,
 } from "./script-workflow";
@@ -419,5 +423,61 @@ describe("the main job of a workflow execution", () => {
     });
 
     expect(outcome).toEqual({ success: true, logs: "", result: '"main"' });
+  });
+});
+
+describe("the job a finished run's outcome is read from", () => {
+  const job = (executionId: string, depth: number, status: WorkflowJobExecution_Status) => ({
+    executionId,
+    status,
+    kind: { case: "jobFunction" },
+    position: { depth, parentWorkflowJobExecutionId: depth === 0 ? "" : "job-main" },
+  });
+  const failedRun = (...rows: ReturnType<typeof job>[]) =>
+    ({
+      status: WorkflowExecution_Status.FAILED,
+      jobExecutions: rows,
+    }) as unknown as WorkflowExecution;
+  const { FAILED, SUCCESS } = WorkflowJobExecution_Status;
+
+  test("is the deepest job that failed, since the main job only reports that a job it started did not return", () => {
+    expect(
+      outcomeJobExecutionId(failedRun(job("fn-main", 0, FAILED), job("fn-child", 1, FAILED))),
+    ).toBe("fn-child");
+  });
+
+  test("is the main job when it failed on its own and the jobs it started succeeded", () => {
+    expect(
+      outcomeJobExecutionId(failedRun(job("fn-main", 0, FAILED), job("fn-child", 1, SUCCESS))),
+    ).toBe("fn-main");
+  });
+
+  test("is the main job of a run that succeeded", () => {
+    const run = {
+      status: WorkflowExecution_Status.SUCCESS,
+      jobExecutions: [job("fn-main", 0, SUCCESS), job("fn-child", 1, FAILED)],
+    } as unknown as WorkflowExecution;
+
+    expect(outcomeJobExecutionId(run)).toBe("fn-main");
+  });
+
+  test("gives the error of the job that failed, not the main job's bookkeeping, when read", async () => {
+    const client = {
+      getFunctionExecution: vi.fn(async (request: { executionId: string }) => ({
+        execution:
+          request.executionId === "fn-child"
+            ? { logEntries: [], result: "", error: { message: "boom-from-child" } }
+            : { logEntries: [], result: '{"call_index":0,"job_name":"child"}' },
+      })),
+    };
+
+    const outcome = await readOutcome({
+      client: client as unknown as OperatorClient,
+      workspaceId: "ws",
+      execution: failedRun(job("fn-main", 0, FAILED), job("fn-child", 1, FAILED)),
+      pollInterval: 1,
+    });
+
+    expect(outcome).toMatchObject({ success: false, error: "boom-from-child" });
   });
 });

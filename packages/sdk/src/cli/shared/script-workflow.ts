@@ -9,7 +9,10 @@
  */
 
 import { Code, ConnectError } from "@connectrpc/connect";
-import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import {
+  WorkflowExecution_Status,
+  WorkflowJobExecution_Status,
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { recoveryContextArgs } from "#/cli/shared/args";
 import { CLIError, formatCommandHint } from "#/cli/shared/errors";
 import { joinFunctionLogMessages } from "#/cli/shared/function-execution";
@@ -27,7 +30,10 @@ import type { OperatorClient } from "#/cli/shared/client";
 import type { ScriptExecutionResult, ScriptInvoker } from "#/cli/shared/script-executor";
 import type { CreatedTemporaryWorkflow } from "#/cli/shared/temporary-workflow";
 import type { FunctionExecution } from "@tailor-platform/tailor-proto/function_resource_pb";
-import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import type {
+  WorkflowExecution,
+  WorkflowJobExecution,
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import type { Jsonifiable } from "type-fest";
 
 /** Poll interval while waiting for a started script to finish. */
@@ -259,6 +265,27 @@ export function mainJobExecutionId(execution: WorkflowExecution): string | undef
   return (main ?? jobs.at(-1))?.executionId;
 }
 
+/**
+ * Pick the job whose function execution tells how a finished run ended. A run that
+ * succeeded ended with its main job. In a run that failed, the main job only reports that
+ * a job it started did not return, so the cause is in the deepest job that failed.
+ * @param execution - Workflow execution in a terminal state
+ * @returns Function execution id of that job, or undefined when no job was recorded
+ */
+export function outcomeJobExecutionId(execution: WorkflowExecution): string | undefined {
+  if (execution.status !== WorkflowExecution_Status.SUCCESS) {
+    let deepest: WorkflowJobExecution | undefined;
+    for (const job of execution.jobExecutions) {
+      if (job.kind.case === "wait" || job.status !== WorkflowJobExecution_Status.FAILED) continue;
+      if (deepest === undefined || (job.position?.depth ?? 0) >= (deepest.position?.depth ?? 0)) {
+        deepest = job;
+      }
+    }
+    if (deepest) return deepest.executionId;
+  }
+  return mainJobExecutionId(execution);
+}
+
 /** Reads of the job's function execution tried through transient errors. */
 const READ_ATTEMPTS = 3;
 
@@ -283,7 +310,7 @@ export interface ReadOutcomeParams {
  */
 export async function readOutcome(params: ReadOutcomeParams): Promise<ScriptExecutionResult> {
   const { client, workspaceId, execution, pollInterval, deadline } = params;
-  const executionId = mainJobExecutionId(execution);
+  const executionId = outcomeJobExecutionId(execution);
   const throwIfPastDeadline = (expired = false) => {
     if (deadline === undefined || (!expired && Date.now() < deadline)) return;
     throw CLIError({
