@@ -40,11 +40,7 @@ import {
   printExecutionDetails,
   readFunctionArgFile,
 } from "./run-function";
-import {
-  SCRIPT_SNAPSHOT_FILE_NAME,
-  loadScriptSchemaSnapshot,
-  verifyScriptSchemaSnapshot,
-} from "./script-scaffold";
+import { checkScriptSchemaSnapshot } from "./script-scaffold";
 
 export const runFunctionCommand = defineAppCommand({
   name: "run",
@@ -170,27 +166,16 @@ Changes to \`tailor.config.ts\`, \`tsconfig.json\`, \`package.json\`, env files,
     });
 
     // 4. Check a scaffolded script's schema snapshot
-    if (!filePath.endsWith(".js")) {
-      if (args["allow-schema-drift"]) {
-        if (fs.existsSync(path.join(path.dirname(filePath), SCRIPT_SNAPSHOT_FILE_NAME))) {
-          logger.warn("Skipping the schema snapshot check (--allow-schema-drift).");
-        }
-      } else {
-        const sidecar = loadScriptSchemaSnapshot(filePath);
-        if (sidecar) {
-          logger.info("Checking the script's schema snapshot for drift...");
-          await verifyScriptSchemaSnapshot({
-            client,
-            workspaceId,
-            config,
-            configArgValue: args.config,
-            scriptArgValue: args.file,
-            profileArgValue: args.profile,
-            sidecar,
-          });
-        }
-      }
-    }
+    await checkScriptSchemaSnapshot({
+      filePath,
+      allowDrift: args["allow-schema-drift"],
+      client,
+      workspaceId,
+      config,
+      configArgValue: args.config,
+      scriptArgValue: args.file,
+      ...(args.profile === undefined ? {} : { profileArgValue: args.profile }),
+    });
 
     const target: FunctionRunTarget = {
       filePath,

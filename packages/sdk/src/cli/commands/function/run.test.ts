@@ -15,7 +15,7 @@ import { kyselyTypePlugin } from "#/plugin/builtin/kysely-type/index";
 import { bundleForRun } from "./bundle";
 import { detectFunctionType } from "./detect";
 import { runFunctionCommand } from "./run";
-import { loadScriptSchemaSnapshot, verifyScriptSchemaSnapshot } from "./script-scaffold";
+import { checkScriptSchemaSnapshot } from "./script-scaffold";
 import { startFunctionRunWatch } from "./watch";
 import { functionCommand } from "./index";
 
@@ -56,8 +56,7 @@ vi.mock("./script-scaffold", async (importActual) => {
   const actual = await importActual<object>();
   return {
     ...actual,
-    loadScriptSchemaSnapshot: vi.fn().mockReturnValue(null),
-    verifyScriptSchemaSnapshot: vi.fn(),
+    checkScriptSchemaSnapshot: vi.fn(),
   };
 });
 
@@ -76,8 +75,7 @@ describe("function run --json", () => {
     vi.mocked(executeScriptReportingStart).mockClear();
     vi.mocked(loadConfig).mockClear();
     vi.mocked(startFunctionRunWatch).mockClear();
-    vi.mocked(verifyScriptSchemaSnapshot).mockReset();
-    vi.mocked(loadScriptSchemaSnapshot).mockReset().mockReturnValue(null);
+    vi.mocked(checkScriptSchemaSnapshot).mockReset();
     vi.mocked(loadMachineUserName).mockResolvedValue(undefined);
     vi.mocked(loadConfig).mockResolvedValue({
       config: {
@@ -245,27 +243,25 @@ describe("function run --json", () => {
     expect(bundleForRun).toHaveBeenCalledWith(expect.objectContaining({ kyselyTemporal: true }));
   });
 
-  test("verifies the schema snapshot of a scaffolded script before executing", async () => {
-    const sidecar = { snapshotPath: "/tmp/db.snapshot.json", snapshot: { namespace: "tailordb" } };
-    vi.mocked(loadScriptSchemaSnapshot).mockReturnValueOnce(sidecar as never);
+  test("checks the schema snapshot of the script before executing", async () => {
     using stdout = captureStdout();
     using _stderr = captureStderr();
     using _json = jsonMode();
 
     await runCommand(runFunctionCommand, [tsScriptPath, "--machine-user", "admin"]);
 
-    expect(verifyScriptSchemaSnapshot).toHaveBeenCalledWith(
-      expect.objectContaining({ sidecar, workspaceId: "12345678-1234-4abc-8def-123456789012" }),
+    expect(checkScriptSchemaSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: tsScriptPath,
+        allowDrift: false,
+        workspaceId: "12345678-1234-4abc-8def-123456789012",
+      }),
     );
     expect(JSON.parse(stdout.output)).toMatchObject({ success: true });
   });
 
   test("refuses to run when the schema snapshot check reports drift", async () => {
-    vi.mocked(loadScriptSchemaSnapshot).mockReturnValueOnce({
-      snapshotPath: "/tmp/db.snapshot.json",
-      snapshot: { namespace: "tailordb" },
-    } as never);
-    vi.mocked(verifyScriptSchemaSnapshot).mockRejectedValueOnce(new Error("Schema drift detected"));
+    vi.mocked(checkScriptSchemaSnapshot).mockRejectedValueOnce(new Error("Schema drift detected"));
     using _stdout = captureStdout();
     using _stderr = captureStderr();
     using _json = jsonMode();
@@ -277,13 +273,9 @@ describe("function run --json", () => {
     expect(executeScriptReportingStart).not.toHaveBeenCalled();
   });
 
-  test("skips the schema snapshot check with --allow-schema-drift, even when the sidecar cannot be loaded", async () => {
-    fs.writeFileSync(path.join(path.dirname(tsScriptPath), "db.snapshot.json"), "{broken");
-    vi.mocked(loadScriptSchemaSnapshot).mockImplementation(() => {
-      throw new Error("Failed to parse schema snapshot");
-    });
+  test("passes --allow-schema-drift on to the snapshot check", async () => {
     using stdout = captureStdout();
-    using stderr = captureStderr();
+    using _stderr = captureStderr();
     using _json = jsonMode();
 
     await runCommand(runFunctionCommand, [
@@ -293,9 +285,9 @@ describe("function run --json", () => {
       "--allow-schema-drift",
     ]);
 
-    expect(loadScriptSchemaSnapshot).not.toHaveBeenCalled();
-    expect(verifyScriptSchemaSnapshot).not.toHaveBeenCalled();
-    expect(stderr.output).toContain("Skipping the schema snapshot check");
+    expect(checkScriptSchemaSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({ allowDrift: true }),
+    );
     expect(JSON.parse(stdout.output)).toMatchObject({ success: true });
   });
 

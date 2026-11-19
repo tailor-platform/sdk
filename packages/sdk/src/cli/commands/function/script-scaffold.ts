@@ -29,6 +29,7 @@ import {
 import { DEFAULT_CONFIG_PATH } from "#/cli/shared/args";
 import { extractOwnedNamespaces } from "#/cli/shared/config";
 import { CLIError, formatCommandHint, internalError } from "#/cli/shared/errors";
+import { logger } from "#/cli/shared/logger";
 import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
 import {
   generateUnifiedKyselyTypes,
@@ -216,6 +217,8 @@ export interface VerifyScriptSchemaSnapshotOptions {
   profileArgValue?: string;
   /** The snapshot sidecar found next to the script */
   sidecar: ScriptSchemaSnapshotSidecar;
+  /** Command that runs the script, named in the hint to run anyway (default: `function run`) */
+  runCommand?: readonly string[];
 }
 
 /**
@@ -269,6 +272,40 @@ export async function verifyScriptSchemaSnapshot(
   if (hasChanges(remoteDiff)) {
     throw schemaDriftError("the deployed schema", remoteDiff, options);
   }
+}
+
+/** Options for {@link checkScriptSchemaSnapshot}. */
+export interface CheckScriptSchemaSnapshotOptions extends Omit<
+  VerifyScriptSchemaSnapshotOptions,
+  "sidecar"
+> {
+  /** Absolute path of the script about to run */
+  filePath: string;
+  /** Run without the check (`--allow-schema-drift`) */
+  allowDrift: boolean;
+}
+
+/**
+ * Check the schema snapshot a scaffolded script carries before it runs.
+ * Pre-bundled `.js` files and scripts without a snapshot are not checked.
+ * @param options - Script, how it is run and the workspace it runs in
+ * @throws When the snapshot cannot be read or no longer matches
+ */
+export async function checkScriptSchemaSnapshot(
+  options: CheckScriptSchemaSnapshotOptions,
+): Promise<void> {
+  const { filePath, allowDrift, ...verifyOptions } = options;
+  if (filePath.endsWith(".js")) return;
+  if (allowDrift) {
+    if (fs.existsSync(path.join(path.dirname(filePath), SCRIPT_SNAPSHOT_FILE_NAME))) {
+      logger.warn("Skipping the schema snapshot check (--allow-schema-drift).");
+    }
+    return;
+  }
+  const sidecar = loadScriptSchemaSnapshot(filePath);
+  if (!sidecar) return;
+  logger.info("Checking the script's schema snapshot for drift...");
+  await verifyScriptSchemaSnapshot({ ...verifyOptions, sidecar });
 }
 
 /**
@@ -366,7 +403,12 @@ function schemaDriftError(
   });
   const override = formatCommandHint({
     command: "tailor",
-    args: ["function", "run", options.scriptArgValue, "--allow-schema-drift", ...contextFlags],
+    args: [
+      ...(options.runCommand ?? ["function", "run"]),
+      options.scriptArgValue,
+      "--allow-schema-drift",
+      ...contextFlags,
+    ],
   });
   return CLIError({
     code: "SCRIPT_SCHEMA_DRIFT",
