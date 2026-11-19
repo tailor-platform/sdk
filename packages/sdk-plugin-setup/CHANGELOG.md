@@ -1,5 +1,17 @@
 # @tailor-platform/sdk-plugin-setup
 
+## 0.19.2
+
+### Patch Changes
+
+- [#3184](https://github.com/tailor-platform/sdk/pull/3184) [`d5d9c93`](https://github.com/tailor-platform/sdk/commit/d5d9c93ef109074b50748ef5e87a7e1d990bd487) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency anthropics/claude-code-action to v1.0.281
+
+- [#3197](https://github.com/tailor-platform/sdk/pull/3197) [`fe06f1d`](https://github.com/tailor-platform/sdk/commit/fe06f1d847fff0504cb1d0135201c6626f84a1d8) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency anthropics/claude-code-action to v1.0.283
+
+- [#3198](https://github.com/tailor-platform/sdk/pull/3198) [`04ca837`](https://github.com/tailor-platform/sdk/commit/04ca8372c14a94ba0107b10f2b0a3e4e1b8d1604) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency actions/create-github-app-token to v3.4.0
+- Updated dependencies [[`42245d5`](https://github.com/tailor-platform/sdk/commit/42245d5b975a919f45d226f7e25a5a0bc3d298d8), [`48cc087`](https://github.com/tailor-platform/sdk/commit/48cc08707c9b16d6b3292e6ba5c23226565b50cc), [`59e8786`](https://github.com/tailor-platform/sdk/commit/59e878647eede2bfb4ba1a21ab92bc8b88de749d), [`f57cd39`](https://github.com/tailor-platform/sdk/commit/f57cd3946662eed486b8568015a89ba7f3ca7e03), [`dd55ff2`](https://github.com/tailor-platform/sdk/commit/dd55ff25a9ed76cd48d339c1b0e8d8a054019a0b), [`55286e0`](https://github.com/tailor-platform/sdk/commit/55286e042a802c784299c8f75e655330f1e672c1), [`8137b34`](https://github.com/tailor-platform/sdk/commit/8137b346fc9fa098b62c369923dd7640a9da0cbe), [`6e9e004`](https://github.com/tailor-platform/sdk/commit/6e9e0042136c8e8b27f566420eb6a0b7f5cbf9bc), [`e9b6ca4`](https://github.com/tailor-platform/sdk/commit/e9b6ca47f5424c5a320c7b6d5b901158c86198ea), [`f820cde`](https://github.com/tailor-platform/sdk/commit/f820cde123dc7294138074cee0924e64fc7ddbcc), [`824fc17`](https://github.com/tailor-platform/sdk/commit/824fc1747a9520337a4ce653f060fc8b4472baa8), [`5f41199`](https://github.com/tailor-platform/sdk/commit/5f411997a48c73648f93b41d08eab80cbfeb2430), [`bdb7a6e`](https://github.com/tailor-platform/sdk/commit/bdb7a6e39e8abfd3b74bd3f4e8d79612649cd4fc)]:
+  - @tailor-platform/sdk@2.44.0
+
 ## 0.19.1
 
 ### Patch Changes
