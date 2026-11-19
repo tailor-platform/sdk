@@ -38,6 +38,7 @@ import {
   staticWebsiteNameFromPlaceholder,
   type AccessTokenSource,
   type OperatorClient,
+  type OperatorClientOptions,
 } from "./client";
 import { errorToJson } from "./error-json";
 import { CLIError } from "./errors";
@@ -622,7 +623,7 @@ describe("requests through the operator client", () => {
   type CallOptions = {
     stream?: boolean;
     method?: (typeof OperatorService.method)[keyof typeof OperatorService.method];
-    clientOptions?: Parameters<typeof initOperatorClient>[2];
+    clientOptions?: OperatorClientOptions;
   };
 
   aroundEach(async (runTest) => {
@@ -765,7 +766,7 @@ describe("requests through the operator client", () => {
     { case: "unreported by default", clientOptions: undefined, reports: 0 },
     {
       case: "reported when enabled",
-      clientOptions: { reportUnexpectedAlreadyExists: true },
+      clientOptions: { createsPlannedResources: true },
       reports: 1,
     },
   ])(
@@ -1048,6 +1049,7 @@ describe("retryInterceptor", () => {
   }
 
   const okResponse = { stream: false, message: {} };
+  const plannedRetry = retryInterceptor({ createsPlannedResources: true });
 
   test("retries on Unavailable then succeeds", async () => {
     const next = vi
@@ -1343,7 +1345,7 @@ describe("retryInterceptor", () => {
       .mockRejectedValueOnce(new ConnectError("duplicated key not allowed", Code.AlreadyExists));
 
     const res = await settle(
-      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType)),
+      plannedRetry(next)(makeUnaryReq(OperatorService.method.createTailorDBType)),
     );
 
     expect(next).toHaveBeenCalledTimes(2);
@@ -1352,15 +1354,17 @@ describe("retryInterceptor", () => {
     expect((res as { message: unknown }).message).toBeTruthy();
   });
 
-  test("does not swallow a first-attempt AlreadyExists (genuine conflict)", async () => {
+  test("surfaces a post-retry AlreadyExists from a client that does not create planned resources", async () => {
     const next = vi
       .fn()
-      .mockRejectedValueOnce(new ConnectError("already exists", Code.AlreadyExists));
+      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
+      .mockRejectedValueOnce(new ConnectError("duplicated key not allowed", Code.AlreadyExists));
 
     await expect(
       settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType))),
-    ).rejects.toThrow("already exists");
-    expect(next).toHaveBeenCalledTimes(1);
+    ).rejects.toThrow("duplicated key not allowed");
+    expect(next).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(reportCrash)).not.toHaveBeenCalled();
   });
 
   test("does not treat AlreadyExists as success for non-Create methods", async () => {
@@ -1370,7 +1374,7 @@ describe("retryInterceptor", () => {
       .mockRejectedValueOnce(new ConnectError("already exists", Code.AlreadyExists));
 
     await expect(
-      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.updateTailorDBType))),
+      settle(plannedRetry(next)(makeUnaryReq(OperatorService.method.updateTailorDBType))),
     ).rejects.toThrow("already exists");
     expect(next).toHaveBeenCalledTimes(2);
   });
@@ -1384,7 +1388,7 @@ describe("retryInterceptor", () => {
       .mockRejectedValueOnce(new ConnectError("already exists", Code.AlreadyExists));
 
     await expect(
-      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createIdPClient))),
+      settle(plannedRetry(next)(makeUnaryReq(OperatorService.method.createIdPClient))),
     ).rejects.toThrow("already exists");
     expect(next).toHaveBeenCalledTimes(2);
   });
@@ -1401,11 +1405,7 @@ describe("retryInterceptor", () => {
         .mockRejectedValueOnce(new ConnectError("duplicated key not allowed", Code.AlreadyExists));
 
       await expect(
-        settle(
-          retryInterceptor({ reportUnexpectedAlreadyExists: true })(next)(
-            makeUnaryReq(OperatorService.method.createTailorDBType),
-          ),
-        ),
+        settle(plannedRetry(next)(makeUnaryReq(OperatorService.method.createTailorDBType))),
       ).rejects.toThrow("duplicated key not allowed");
       expect(vi.mocked(reportCrash)).toHaveBeenCalledTimes(1);
       expect(next).toHaveBeenCalledTimes(2);
@@ -1420,9 +1420,7 @@ describe("retryInterceptor", () => {
       .mockRejectedValueOnce(new ConnectError("duplicated key not allowed", Code.AlreadyExists));
 
     const res = await settle(
-      retryInterceptor({ reportUnexpectedAlreadyExists: true })(next)(
-        makeUnaryReq(OperatorService.method.createTailorDBType),
-      ),
+      plannedRetry(next)(makeUnaryReq(OperatorService.method.createTailorDBType)),
     );
 
     expect(res.stream).toBe(false);
@@ -1437,9 +1435,7 @@ describe("retryInterceptor", () => {
       .mockRejectedValueOnce(new ConnectError("duplicated key not allowed", Code.AlreadyExists));
 
     const res = await settle(
-      retryInterceptor({ reportUnexpectedAlreadyExists: true })(next)(
-        makeUnaryReq(OperatorService.method.createTailorDBType),
-      ),
+      plannedRetry(next)(makeUnaryReq(OperatorService.method.createTailorDBType)),
     );
 
     expect(res.stream).toBe(false);

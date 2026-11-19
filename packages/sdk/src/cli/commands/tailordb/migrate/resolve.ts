@@ -178,6 +178,7 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
   const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options.profile,
     workspaceId: options.workspaceId,
+    clientOptions: { createsPlannedResources: true },
   });
   const commandContext = migrationCommandContext({
     configPath: options.configPath,

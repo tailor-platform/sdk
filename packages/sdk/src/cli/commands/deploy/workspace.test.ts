@@ -317,7 +317,7 @@ describe("resolveDeployWorkspace", () => {
       allowMissingProfile: true,
     });
     expect(mocks.initOperatorClient).toHaveBeenCalledWith("access-token", undefined, {
-      reportUnexpectedAlreadyExists: true,
+      createsPlannedResources: true,
     });
     expect(mocks.saveWorkspaceContext).toHaveBeenCalledWith({
       version: 1,

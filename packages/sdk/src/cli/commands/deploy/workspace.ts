@@ -555,7 +555,7 @@ export async function resolveDeployWorkspace(
   });
   const platformUrl = getPlatformBaseUrl(platformConfig);
   const client = await initOperatorClient(accessToken, platformConfig, {
-    reportUnexpectedAlreadyExists: true,
+    createsPlannedResources: true,
   });
 
   if (explicitWorkspaceId) {

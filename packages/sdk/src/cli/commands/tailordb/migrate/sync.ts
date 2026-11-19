@@ -218,6 +218,7 @@ async function sync(options: SyncOptions): Promise<SyncResult> {
   const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options.profile,
     workspaceId: options.workspaceId,
+    clientOptions: { createsPlannedResources: true },
   });
 
   const trn = resourceTrn(workspaceId, "tailordb", target.namespace);
