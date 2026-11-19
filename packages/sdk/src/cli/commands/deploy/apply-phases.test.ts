@@ -47,9 +47,10 @@ const mocks = vi.hoisted(() => {
     applyPipeline: vi.fn(async (_client, result, phase) => {
       calls.push(`pipeline:${marker(result)}:${String(phase)}`);
     }),
-    applyApplication: vi.fn(async (client, result, phase) => {
+    applyApplication: vi.fn(async (client, result, phase): Promise<unknown[]> => {
       calls.push(`application:${marker(result)}:${String(phase)}`);
       if (phase === "create-update") await state.onApplicationApply?.(client);
+      return [];
     }),
     recomposeApplication: vi.fn(async (_client, result) => {
       calls.push(`recompose:${marker(result)}`);
@@ -81,7 +82,8 @@ vi.mock("./tailordb", () => ({
 }));
 vi.mock("./auth", () => ({ applyAuth: mocks.applyAuth }));
 vi.mock("./resolver", () => ({ applyPipeline: mocks.applyPipeline }));
-vi.mock("./application", () => ({
+vi.mock("./application", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   applyApplication: mocks.applyApplication,
   recomposeApplication: mocks.recomposeApplication,
 }));
@@ -356,6 +358,31 @@ describe("applyDeploymentPlans", () => {
     ]);
   });
 
+  test("reports rejected application labels once every phase is applied", async () => {
+    mocks.calls.length = 0;
+    mocks.applyApplication.mockImplementationOnce(async (_client, result, phase) => {
+      mocks.calls.push(`application:${(result as { marker: string }).marker}:${String(phase)}`);
+      return [
+        {
+          name: "supplier",
+          violation: "map must be at most 20 entries",
+          sdkLabelsInPlace: true,
+          unwrittenMetadata: ["key-0"],
+          otherLabels: [],
+        },
+      ];
+    });
+
+    await expect(
+      applyRemainingResources(mockOperatorClient({}), "workspace-id", [deployment("supplier")]),
+    ).rejects.toMatchObject({
+      code: "DEPLOY_LABEL_LIMIT_EXCEEDED",
+      message: expect.stringContaining("application 'supplier'"),
+    });
+
+    expect(mocks.calls.at(-1)).toBe("function:supplier-function:delete");
+  });
+
   test.each(Object.values(PLAN_MARKERS))(
     "applies the %s plan in a create-update phase and a delete phase",
     async (marker) => {
@@ -417,7 +444,7 @@ describe("applyDeploymentPlans", () => {
     });
     mocks.state.onApplicationApply = async (applyClient) => {
       await writeMetadataLabels(applyClient, {
-        trn: "trn:v1:workspace:workspace-id:application:supplier",
+        trn: "trn:v1:workspace:workspace-id:pipeline:supplier",
         labels: { "sdk-name": "supplier" },
       });
     };
@@ -443,7 +470,7 @@ describe("applyDeploymentPlans", () => {
     });
     mocks.state.onApplicationApply = async (applyClient) => {
       await writeMetadataLabels(applyClient, {
-        trn: "trn:v1:workspace:workspace-id:application:supplier",
+        trn: "trn:v1:workspace:workspace-id:pipeline:supplier",
         labels: { "sdk-name": "supplier" },
       });
     };

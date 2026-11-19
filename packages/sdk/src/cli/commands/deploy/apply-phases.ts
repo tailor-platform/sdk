@@ -1,7 +1,13 @@
 import { logger } from "#/cli/shared/logger";
 import { withSpan } from "#/cli/telemetry/index";
 import { applyAIGateway, type planAIGateway } from "./aigateway";
-import { applyApplication, recomposeApplication, type planApplication } from "./application";
+import {
+  applicationLabelLimitError,
+  applyApplication,
+  recomposeApplication,
+  type ApplicationLabelRejection,
+  type planApplication,
+} from "./application";
 import { applyAuth, type planAuth } from "./auth";
 import { applyExecutor, type planExecutor } from "./executor";
 import { applyFunctionRegistry, type planFunctionRegistry } from "./function-registry";
@@ -198,6 +204,8 @@ async function releaseMaintenanceModes(
 
 /**
  * Apply every resource kind not covered by {@link applyPrerequisiteResources}.
+ * An application whose label count the platform rejected fails the call only
+ * after every other change is applied.
  * @param client - Operator client instance
  * @param deployments - Planned deployments to apply
  * @returns Maintenance windows of the applications whose TailorDB migrations ran, in deploy order
@@ -207,14 +215,19 @@ export async function applyRemainingResources(
   deployments: ReadonlyArray<PlannedDeployment>,
 ): Promise<TailorDBMaintenance[]> {
   const held: HeldMaintenanceMode[] = [];
+  const labelRejections: ApplicationLabelRejection[] = [];
   let maintenance: TailorDBMaintenance[];
   try {
-    maintenance = await applyRemainingResourcesHoldingMaintenanceMode(client, deployments, held);
+    maintenance = await applyRemainingResourcesHoldingMaintenanceMode(client, deployments, {
+      held,
+      labelRejections,
+    });
   } catch (error) {
     await releaseMaintenanceModes(client, held, true);
     throw error;
   }
   const released = await releaseMaintenanceModes(client, held, false);
+  if (labelRejections.length > 0) throw applicationLabelLimitError(labelRejections);
   const order = new Map(
     deployments.map((deployment, index) => [deployment.application.name, index]),
   );
@@ -223,11 +236,17 @@ export async function applyRemainingResources(
   );
 }
 
+type RemainingApplyOutcomes = {
+  held: HeldMaintenanceMode[];
+  labelRejections: ApplicationLabelRejection[];
+};
+
 async function applyRemainingResourcesHoldingMaintenanceMode(
   client: OperatorClient,
   deployments: ReadonlyArray<PlannedDeployment>,
-  held: HeldMaintenanceMode[],
+  outcomes: RemainingApplyOutcomes,
 ): Promise<TailorDBMaintenance[]> {
+  const { held, labelRejections } = outcomes;
   const step = makeStep(deployments);
   const maintenance: TailorDBMaintenance[] = [];
 
@@ -261,9 +280,9 @@ async function applyRemainingResourcesHoldingMaintenanceMode(
     });
 
     await withSpan("apply.createUpdateApplication", async () => {
-      await forEachDeployment(deployments, (d) =>
-        applyApplication(applyClient, d.app, "create-update"),
-      );
+      await forEachDeployment(deployments, async (d) => {
+        labelRejections.push(...(await applyApplication(applyClient, d.app, "create-update")));
+      });
     });
 
     await withSpan("apply.createUpdateDependentServices", async () => {
