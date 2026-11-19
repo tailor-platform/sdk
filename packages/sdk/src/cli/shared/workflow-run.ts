@@ -6,15 +6,18 @@
  * deploy never claims them while a run is going.
  */
 
+import { timestampMs } from "@bufbuild/protobuf/wkt";
 import { resourceTrn, sdkAppIdLabelKey, sdkNameLabelKey } from "#/cli/commands/deploy/label";
+import { recoveryContextArgs } from "#/cli/shared/args";
 import { fetchPaged } from "#/cli/shared/client";
-import { CLIError, isCLIError } from "#/cli/shared/errors";
+import { formatCommandHint, isCLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { readOutcome } from "#/cli/shared/script-workflow";
 import {
   createTemporaryWorkflow,
   isExecutionActive,
   isStartRefused,
+  POLL_DEADLINE_EXCEEDED,
   listTemporaryWorkflowExecutions,
   pollUntilTerminal,
   teardownTemporaryWorkflow,
@@ -29,6 +32,7 @@ import {
 } from "#/cli/shared/workflow-run-labels";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { ScriptExecutionResult, ScriptInvoker } from "#/cli/shared/script-executor";
+import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import type { Jsonifiable } from "type-fest";
 
 const SUBJECT = "workflow run";
@@ -38,6 +42,9 @@ const LEFTOVER_NOTE =
 
 /** A run that has not started is kept this long, since another process may be about to start it. */
 const NOT_STARTED_GRACE_MS = 60_000;
+
+/** A run that finished is kept this long, so the command waiting for it can still read the outcome. */
+const FINISHED_GRACE_MS = 120_000;
 
 export interface StartWorkflowRunParams {
   client: OperatorClient;
@@ -135,8 +142,6 @@ export type WorkflowRunOutcome =
   | { state: "finished"; result: ScriptExecutionResult }
   | { state: "timedOut" };
 
-const WAIT_STOPPED = "WORKFLOW_RUN_WAIT_STOPPED";
-
 /**
  * Wait for a started run. A finished run's resources are removed; a run whose
  * wait ran out is left going with its resources in place.
@@ -156,16 +161,11 @@ export async function awaitWorkflowRun(
       executionId: started.executionId,
       pollInterval,
       subject: "Script",
-      options: {
-        onActive: () => {
-          if (Date.now() >= deadline)
-            throw CLIError({ code: WAIT_STOPPED, message: "The wait ran out." });
-          params.onActive?.();
-        },
-      },
+      deadline,
+      options: { onActive: () => params.onActive?.() },
     });
   } catch (error) {
-    if (isCLIError(error) && error.code === WAIT_STOPPED) return { state: "timedOut" };
+    if (isCLIError(error) && error.code === POLL_DEADLINE_EXCEEDED) return { state: "timedOut" };
     throw error;
   }
   const result = await readOutcome({ client, workspaceId, execution, pollInterval });
@@ -184,6 +184,10 @@ export interface ReclaimWorkflowRunsParams {
   client: OperatorClient;
   workspaceId: string;
   now: Date;
+  /** Also remove a run that finished moments ago (an explicit `--cleanup`) */
+  ignoreFinishedGrace?: boolean;
+  /** Send the warning for a failed removal to the debug output only */
+  quiet?: boolean;
 }
 
 /**
@@ -219,9 +223,12 @@ export async function reclaimWorkflowRuns(params: ReclaimWorkflowRunsParams): Pr
     const executions = await listTemporaryWorkflowExecutions(client, workspaceId, workflow.name);
     if (executions.some(isExecutionActive)) continue;
     if (executions.length === 0) {
-      const startedAt = runIdStartedAt(marker.runId);
-      if (startedAt && now.getTime() - startedAt.getTime() < NOT_STARTED_GRACE_MS) continue;
+      const createdMs = workflow.createdAt
+        ? timestampMs(workflow.createdAt)
+        : runIdStartedAt(marker.runId)?.getTime();
+      if (createdMs !== undefined && now.getTime() - createdMs < NOT_STARTED_GRACE_MS) continue;
     }
+    if (!params.ignoreFinishedGrace && finishedWithin(executions, now, FINISHED_GRACE_MS)) continue;
     const gone = await teardownTemporaryWorkflow({
       client,
       workspaceId,
@@ -229,10 +236,18 @@ export async function reclaimWorkflowRuns(params: ReclaimWorkflowRunsParams): Pr
       workflowId: workflow.id,
       subject: SUBJECT,
       leftoverNote: LEFTOVER_NOTE,
+      ...(params.quiet ? { warn: (message: string) => logger.debug(message) } : {}),
     });
     if (gone) removed.push(workflow.name);
   }
   return removed;
+}
+
+function finishedWithin(executions: WorkflowExecution[], now: Date, graceMs: number): boolean {
+  return executions.some(
+    (execution) =>
+      execution.finishedAt && now.getTime() - timestampMs(execution.finishedAt) < graceMs,
+  );
 }
 
 /**
@@ -245,11 +260,40 @@ export async function reclaimFinishedWorkflowRuns(
   params: ReclaimWorkflowRunsParams,
 ): Promise<number> {
   try {
-    return (await reclaimWorkflowRuns(params)).length;
+    return (await reclaimWorkflowRuns({ ...params, quiet: true })).length;
   } catch (error) {
     logger.debug(
       `Could not sweep finished workflow runs: ${error instanceof Error ? error.message : String(error)}`,
     );
     return 0;
   }
+}
+
+export interface WorkflowRunHintsParams {
+  executionId: string;
+  workspaceId: string;
+  profile: string | undefined;
+}
+
+/**
+ * Commands that read a run's outcome and remove its resources, written so they
+ * select the workspace and profile the run used.
+ * @param params - Run and the context it ran in
+ * @returns The two commands, ready to copy
+ */
+export function workflowRunHints(params: WorkflowRunHintsParams): {
+  inspect: string;
+  cleanup: string;
+} {
+  const context = recoveryContextArgs({ workspaceId: params.workspaceId, profile: params.profile });
+  return {
+    inspect: formatCommandHint({
+      command: "tailor",
+      args: ["workflow", "executions", params.executionId, ...context],
+    }),
+    cleanup: formatCommandHint({
+      command: "tailor",
+      args: ["workflow", "run", "--cleanup", ...context],
+    }),
+  };
 }

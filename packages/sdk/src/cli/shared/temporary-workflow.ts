@@ -132,6 +132,8 @@ export interface TeardownTemporaryWorkflowParams {
   subject: string;
   /** Sentence of the warning telling how a resource left behind gets removed. */
   leftoverNote: string;
+  /** Receives the warning for a resource that could not be removed (default: `logger.warn`) */
+  warn?: (message: string) => void;
 }
 
 /**
@@ -147,6 +149,7 @@ export async function teardownTemporaryWorkflow(
   params: TeardownTemporaryWorkflowParams,
 ): Promise<boolean> {
   const { client, workspaceId, name, workflowId, subject, leftoverNote } = params;
+  const warn = params.warn ?? ((message: string) => logger.warn(message));
   const jobFunctionNames = params.jobFunctionNames ?? [name];
   const steps: [label: string, resource: string, run: () => Promise<unknown>][] = [];
   if (workflowId) {
@@ -170,7 +173,7 @@ export async function teardownTemporaryWorkflow(
       // leaves a resource behind and has to stay diagnosable.
       if (isNotFoundError(error)) continue;
       removedAll = false;
-      logger.warn(
+      warn(
         `Could not remove the temporary ${subject} ${label} '${resource}': ` +
           `${error instanceof Error ? error.message : String(error)}. ${leftoverNote}`,
       );
@@ -311,6 +314,9 @@ export async function createTemporaryWorkflow(
   return workflowId;
 }
 
+/** Code of the error {@link pollUntilTerminal} throws when its deadline passes. */
+export const POLL_DEADLINE_EXCEEDED = "WORKFLOW_POLL_DEADLINE_EXCEEDED";
+
 export interface PollExecutionOptions {
   /** Called with each polled execution that is still active. */
   onActive?: (execution: WorkflowExecution) => void | Promise<void>;
@@ -326,6 +332,8 @@ export interface PollUntilTerminalParams {
   pollInterval: number;
   /** What the execution runs, used in errors (e.g. `Migration`). */
   subject: string;
+  /** Epoch milliseconds after which polling stops with {@link POLL_DEADLINE_EXCEEDED} */
+  deadline?: number;
   options?: PollExecutionOptions;
 }
 
@@ -338,7 +346,29 @@ export interface PollUntilTerminalParams {
 export async function pollUntilTerminal(
   params: PollUntilTerminalParams,
 ): Promise<WorkflowExecution> {
-  const { client, workspaceId, executionId, pollInterval, subject, options = {} } = params;
+  const {
+    client,
+    workspaceId,
+    executionId,
+    pollInterval,
+    subject,
+    deadline,
+    options = {},
+  } = params;
+  const sleepUntilNextPoll = async () => {
+    if (deadline === undefined) {
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+      return;
+    }
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
+      throw CLIError({
+        code: POLL_DEADLINE_EXCEEDED,
+        message: `${subject} workflow execution '${executionId}' did not finish in time.`,
+      });
+    }
+    await new Promise((resolve) => setTimeout(resolve, Math.min(pollInterval, remaining)));
+  };
   // loop exits when the workflow execution reaches a terminal status
   // oxlint-disable-next-line typescript/no-unnecessary-condition
   while (true) {
@@ -348,7 +378,7 @@ export async function pollUntilTerminal(
     } catch (error) {
       if (!isRetryableWaitError(error)) throw error;
       options.onPollFailed?.();
-      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+      await sleepUntilNextPoll();
       continue;
     }
     if (!execution) {
@@ -359,7 +389,7 @@ export async function pollUntilTerminal(
     }
     if (!isExecutionActive(execution)) return execution;
     await options.onActive?.(execution);
-    await new Promise((resolve) => setTimeout(resolve, pollInterval));
+    await sleepUntilNextPoll();
   }
 }
 

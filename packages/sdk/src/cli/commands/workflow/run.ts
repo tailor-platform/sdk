@@ -20,9 +20,10 @@ import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import {
   awaitWorkflowRun,
+  reclaimFinishedWorkflowRuns,
   reclaimWorkflowRuns,
   startWorkflowRun,
-  type StartedWorkflowRun,
+  workflowRunHints,
 } from "#/cli/shared/workflow-run";
 import { createRunId } from "#/cli/shared/workflow-run-labels";
 import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
@@ -100,7 +101,12 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
     });
 
     if (args.cleanup) {
-      const removed = await reclaimWorkflowRuns({ client, workspaceId, now: new Date() });
+      const removed = await reclaimWorkflowRuns({
+        client,
+        workspaceId,
+        now: new Date(),
+        ignoreFinishedGrace: true,
+      });
       if (logger.jsonMode) logger.out({ removed });
       else logger.success(`Removed ${removed.length} finished run(s).`);
       return;
@@ -151,14 +157,13 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
       machineUser,
     };
     const prepared = await prepareFunction({ target, progress: (message) => logger.info(message) });
+    assertSelectedJob({
+      job: args.job,
+      functionType: prepared.functionType,
+      functionName: prepared.functionName,
+    });
 
-    try {
-      await reclaimWorkflowRuns({ client, workspaceId, now: new Date() });
-    } catch (error) {
-      logger.debug(
-        `Could not sweep earlier runs: ${error instanceof Error ? error.message : error}`,
-      );
-    }
+    await reclaimFinishedWorkflowRuns({ client, workspaceId, now: new Date() });
 
     const kind = args.job ? "job" : "script";
     const started = await startWorkflowRun({
@@ -176,8 +181,15 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
     });
     logger.info(`Run ID: ${started.runId}  Execution ID: ${started.executionId}`);
 
+    const hints = workflowRunHints({
+      executionId: started.executionId,
+      workspaceId,
+      profile: args.profile,
+    });
     const onInterrupt = () => {
-      reportLeftBehind(started);
+      logger.warn(
+        `Stopped waiting. Run ${started.runId} keeps running; read it with '${hints.inspect}', then '${hints.cleanup}'.`,
+      );
       process.exit(130);
     };
     process.once("SIGINT", onInterrupt);
@@ -193,7 +205,7 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
       throw CLIError({
         code: "WORKFLOW_RUN_WAIT_TIMEOUT",
         message: `Stopped waiting for run ${started.runId}; the script is still running.`,
-        suggestion: `Read the outcome with 'tailor workflow executions ${started.executionId}'. Afterwards, '${CLEANUP_COMMAND}' removes the temporary resources.`,
+        suggestion: `Read the outcome with '${hints.inspect}'. Afterwards, '${hints.cleanup}' removes the temporary resources.`,
         context: { runId: started.runId, executionId: started.executionId },
       });
     }
@@ -214,8 +226,37 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
   },
 });
 
-function reportLeftBehind(started: StartedWorkflowRun): void {
-  logger.warn(
-    `Stopped waiting. Run ${started.runId} keeps running; read it with 'tailor workflow executions ${started.executionId}', then '${CLEANUP_COMMAND}'.`,
-  );
+interface SelectedJobParams {
+  /** `--job` value */
+  job: string | undefined;
+  /** Type detected from the file; undefined for a pre-bundled `.js` file */
+  functionType: string | undefined;
+  /** Name detected from the file; undefined for a pre-bundled `.js` file */
+  functionName: string | undefined;
+}
+
+/**
+ * Refuse `--job` unless the file's detected function is that workflow job:
+ * otherwise a missing job would silently run the script's own `main`.
+ * @param params - `--job` and what detection found
+ */
+export function assertSelectedJob(params: SelectedJobParams): void {
+  const { job, functionType, functionName } = params;
+  if (job === undefined) return;
+  if (functionType === undefined) {
+    throw CLIError({
+      code: "WORKFLOW_RUN_JOB_NOT_FOUND",
+      message: `Workflow job "${job}" cannot be selected in a pre-bundled file.`,
+      suggestion: "Pass the TypeScript source (.ts) that exports the workflow job.",
+      command: "workflow run",
+    });
+  }
+  if (functionType !== "workflow-job" || functionName !== job) {
+    throw CLIError({
+      code: "WORKFLOW_RUN_JOB_NOT_FOUND",
+      message: `Workflow job "${job}" not found in the file.`,
+      suggestion: "Export a createWorkflowJob with that name from the file, or run without --job.",
+      command: "workflow run",
+    });
+  }
 }
