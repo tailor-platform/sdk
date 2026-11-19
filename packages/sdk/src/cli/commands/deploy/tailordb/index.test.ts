@@ -4134,6 +4134,47 @@ describe("applyTailorDB migration label reconciliation", () => {
     );
   });
 
+  test("deletes a table again that a later migration removes after the unfinished deletion's table was recreated", async () => {
+    using _stderr = captureStderr();
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+    writeUserRemovalMigration(userType);
+    writeMigrationDiff(2, [{ kind: "table_added", tableName: "User", after: userType }]);
+    writeMigrationDiff(3, [{ kind: "table_removed", tableName: "User", before: userType }]);
+    writeMigrationDiff(4, [{ kind: "table_added", tableName: "User", after: userType }]);
+    const planResult = planUserDeletion();
+    planResult.context.tailorDBInputs = [
+      { namespace: "test-tailordb", config: { files: [] }, types: { User: userType } },
+    ];
+    planResult.context.migrationFileState = captureMigrationFileState(
+      planResult.context.namespacesWithMigrations,
+    );
+    planResult.context.pendingMigrations = [2, 3, 4].map((number) => ({
+      namespace: "test-tailordb",
+      number,
+    }));
+    planResult.changeSet.type.creates.push({
+      name: "User",
+      request: {
+        workspaceId: "test-workspace",
+        namespaceName: "test-tailordb",
+        tailordbType: generateTailorDBTypeManifestFromSnapshot(userType, { subscribed: false }),
+      },
+      metaRequest: typeMetaRequest("User", "test-tailordb"),
+    });
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    dropUserOnceDeleted(client);
+    storeLabels(client, { [NAMESPACE_TRN]: { ...UNFINISHED_CLEANUP_LABELS } });
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    const userCreates = vi
+      .mocked(client.createTailorDBType)
+      .mock.calls.filter(([request]) => request.tailordbType?.name === "User");
+    expect(vi.mocked(client.deleteTailorDBType)).toHaveBeenCalledTimes(2);
+    expect(userCreates).toHaveLength(2);
+  });
+
   test("refuses to apply a plan that deletes and recreates a table once the unfinished deletion no longer exists", async () => {
     using _stderr = captureStderr();
     const userType = userSnapshotType();

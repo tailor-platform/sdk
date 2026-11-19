@@ -763,6 +763,14 @@ async function applyCreateUpdate(
   for (const [namespace, { tableNames }] of unfinishedRemovals) {
     await deletePlannedTables(client, changeSet, namespace, new Set(tableNames));
     await clearCleanupRecord(client, migrationContext.workspaceId, namespace);
+    for (const tableName of tableNames) {
+      if (!isRecreated(changeSet, { name: tableName, request: { namespaceName: namespace } })) {
+        continue;
+      }
+      // The deletion is done; a later migration that removes the recreated table deletes it again.
+      deletedResources.types.delete(namespacedTableKey(namespace, tableName));
+      deletedResources.gqlPermissions.delete(namespacedTableKey(namespace, tableName));
+    }
   }
 
   const migratingNamespaceNames = new Set(pendingMigrations.map((m) => m.namespace));
@@ -2303,6 +2311,23 @@ function isDeleted(
   return deleted.has(`${del.request.namespaceName}/${del.name}`);
 }
 
+/**
+ * Whether the plan deletes a table and creates it again: the deletion runs before the
+ * migrations, so the closing deletions leave the table the migrations created.
+ * @param changeSet - TailorDB change set
+ * @param del - A planned deletion
+ * @returns Whether the plan also creates a table of that name in the namespace
+ */
+function isRecreated(
+  changeSet: TailorDBChangeSet,
+  del: { name: string; request: { namespaceName?: string } },
+): boolean {
+  return changeSet.type.creates.some(
+    (create) =>
+      create.name === del.name && create.request.namespaceName === del.request.namespaceName,
+  );
+}
+
 type TableDeletion = TailorDBChangeSet["type"]["deletes"][number];
 
 /**
@@ -2319,11 +2344,18 @@ async function applyRemainingDeletions(
   await Promise.all(
     changeSet.gqlPermission.deletes
       .filter((del) => !isDeleted(deletedResources.gqlPermissions, del))
+      .filter(
+        (del) =>
+          !changeSet.type.deletes.some(
+            (typeDel) => typeDel.name === del.name && isRecreated(changeSet, typeDel),
+          ),
+      )
       .map((del) => client.deleteTailorDBGQLPermission(del.request)),
   );
   await awaitAllSettledOrThrow(
     changeSet.type.deletes
       .filter((del) => !isDeleted(deletedResources.types, del))
+      .filter((del) => !isRecreated(changeSet, del))
       .map(async (del) => {
         await client.deleteTailorDBType(del.request);
         onTableDeleted(del);
