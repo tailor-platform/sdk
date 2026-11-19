@@ -587,9 +587,9 @@ snapshots:
 				"@codemirror/state": "6.7.6",
 				"@codemirror/theme-one-dark": "6.1.3",
 				"@codemirror/view": "6.43.15",
-				"@enlumine/core": "0.2.1",
 				"@enlumine/html": "0.1.0",
 				"@enlumine/json": "0.1.2",
+				"@enlumine/react": "0.1.0",
 				"@tailor-platform/app-shell": "1.20.0",
 				"@tailor-platform/sdk": "workspace:^",
 				"@tailor-platform/shared": "workspace:^",
@@ -1396,6 +1396,24 @@ snapshots:
 		"@enlumine/json@0.1.2": {
 			"integrity": "sha512-vcfHitdVP//ORpjRe2cGDSbRaTcUMjpDEjfc3IuXnujYTy4raOVofmKZ7tn+z6Mm1biCPZBIgLT0pB3Y6qfa2g==",
 			"engines": {"node": ">=22"},
+			"dependencies": {
+				"@enlumine/core": "0.2.1",
+			},
+		},
+
+		"@enlumine/react@0.1.0": {
+			"integrity": "sha512-WQR03rhsCKUy6OQ5Bw+AjmauMIRfHBT0gWIxX9RwFQwqlqnqdkwvMSXfKFc+7ZVkWUvclotYnH9jrzUzTwgi3g==",
+			"peerDependencies": {
+				"@types/react": {
+					"specifier": "^18 || ^19",
+					"version": "19.3.0",
+					"optional": true,
+				},
+				"react": {
+					"specifier": "^18 || ^19",
+					"version": "19.3.1",
+				},
+			},
 			"dependencies": {
 				"@enlumine/core": "0.2.1",
 			},
