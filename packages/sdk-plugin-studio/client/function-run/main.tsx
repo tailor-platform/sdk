@@ -1,11 +1,11 @@
 import "@tailor-platform/app-shell/styles";
-import { highlight } from "@enlumine/html";
 import dark from "@enlumine/html/themes/dark";
 import light from "@enlumine/html/themes/light";
 import json from "@enlumine/json";
 import { Alert, Badge, Button, Card, Textarea } from "@tailor-platform/app-shell";
 import { StrictMode, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { segments } from "../../src/function-run/segments";
 import { parseFrame, splitFrames, type RunRecord } from "../../src/function-run/stream";
 import { scopeTheme } from "../../src/function-run/theme";
 import { Editor } from "./Editor";
@@ -70,16 +70,18 @@ function prettyJson(text: string): string {
 }
 
 function Code({ text, language }: { text: string; language: "json" | "plain" }) {
-  const html = useMemo(
-    () => highlight(text, { tokenizer: language === "json" ? json : null }),
-    [text, language],
-  );
+  const parts = useMemo(() => segments(text, language === "json" ? json : null), [text, language]);
   return (
     <pre
       className="enlumine astw:m-0 astw:overflow-x-auto astw:rounded-md astw:bg-muted astw:p-3"
       style={{ fontSize: "0.75rem" }}
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
+    >
+      {parts.map((part, index) => (
+        <span key={index} className={`enl-${part.kind}`}>
+          {part.text}
+        </span>
+      ))}
+    </pre>
   );
 }
 
