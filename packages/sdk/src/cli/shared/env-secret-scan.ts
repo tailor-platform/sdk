@@ -208,9 +208,9 @@ async function reportEnvSecrets(input: EnvSecretAssertInput): Promise<void> {
 async function scanWithProviderRules(
   entries: ReadonlyArray<ScannedEntry>,
 ): Promise<ProviderFinding[]> {
-  const [{ lintSource }, { rules }] = await Promise.all([
+  const [{ lintSource }, { recommendedRules: rules }] = await Promise.all([
     import("@secretlint/core"),
-    import("@secretlint/secretlint-rule-preset-recommend"),
+    import("@secretlint/core/builtin"),
   ]);
 
   const ranges: EntryRange[] = [];

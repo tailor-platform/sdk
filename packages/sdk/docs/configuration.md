@@ -519,7 +519,7 @@ export async function main(trx: Transaction, { env }: MigrationContext): Promise
 
 ```
 Error [CONFIG_INVALID]: tailor.config.ts: Invalid Tailor config:
-  - env.SLACK_BOT_TOKEN: Secret detected (matched slack: SLACK_TOKEN). See https://github.com/secretlint/secretlint/blob/master/packages/%40secretlint/secretlint-rule-slack/README.md#SLACK_TOKEN
+  - env.SLACK_BOT_TOKEN: Secret detected (matched slack: SLACK_TOKEN). See https://github.com/secretlint/secretlint/blob/HEAD/docs/rules/slack.md#SLACK_TOKEN
   Details: 'env' values are deployed as plaintext and are readable by anyone who can read the application's configuration.
   Suggestion: Define these with defineSecretManager() instead, and read them through Secret Manager at runtime.
   If a value is genuinely safe to keep in 'env', allow it where it is defined: SLACK_BOT_TOKEN: { value: ..., allowSecretReason: "<why this is safe>" }
