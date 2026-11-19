@@ -47,6 +47,9 @@ const NOT_STARTED_GRACE_MS = 60_000;
 /** A run that finished is kept this long, so the command waiting for it can still read the outcome. */
 const FINISHED_GRACE_MS = 5 * 60_000;
 
+/** Longest time spent reading the result of a run that has already finished. */
+const OUTCOME_READ_TIMEOUT_MS = 60_000;
+
 /** Longest poll interval a waiter may use: it must poll again well within {@link FINISHED_GRACE_MS}. */
 const MAX_POLL_INTERVAL_MS = 60_000;
 
@@ -151,11 +154,15 @@ export interface AwaitWorkflowRunParams {
   timeoutMs: number;
   /** Called with each poll that finds the run still going */
   onActive?: () => void;
+  /** Longest time in milliseconds to spend reading the result of a finished run */
+  outcomeTimeoutMs?: number;
 }
 
 export type WorkflowRunOutcome =
   | { state: "finished"; result: ScriptExecutionResult }
-  | { state: "timedOut" };
+  | { state: "timedOut" }
+  /** The run ended, but its result could not be read; the resources are kept */
+  | { state: "outcomeUnavailable"; reason: string };
 
 /**
  * Wait for a started run. A finished run's resources are removed; a run whose
@@ -183,7 +190,21 @@ export async function awaitWorkflowRun(
     if (isCLIError(error) && error.code === POLL_DEADLINE_EXCEEDED) return { state: "timedOut" };
     throw error;
   }
-  const result = await readOutcome({ client, workspaceId, execution, pollInterval });
+  let result: ScriptExecutionResult;
+  try {
+    result = await readOutcome({
+      client,
+      workspaceId,
+      execution,
+      pollInterval,
+      deadline: Date.now() + (params.outcomeTimeoutMs ?? OUTCOME_READ_TIMEOUT_MS),
+    });
+  } catch (error) {
+    return {
+      state: "outcomeUnavailable",
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
   await teardownTemporaryWorkflow({
     client,
     workspaceId,

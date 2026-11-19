@@ -255,6 +255,8 @@ export interface ReadOutcomeParams {
   execution: WorkflowExecution;
   /** Wait between reads in milliseconds */
   pollInterval: number;
+  /** Epoch milliseconds after which reading stops with an error; no limit when omitted */
+  deadline?: number;
 }
 
 /**
@@ -266,17 +268,34 @@ export interface ReadOutcomeParams {
  * @returns Result in the shape synchronous execution reports
  */
 export async function readOutcome(params: ReadOutcomeParams): Promise<ScriptExecutionResult> {
-  const { client, workspaceId, execution, pollInterval } = params;
+  const { client, workspaceId, execution, pollInterval, deadline } = params;
   const executionId = execution.jobExecutions.at(-1)?.executionId;
+  const throwIfPastDeadline = (expired = false) => {
+    if (deadline === undefined || (!expired && Date.now() < deadline)) return;
+    throw CLIError({
+      code: "SCRIPT_OUTCOME_READ_TIMEOUT",
+      message: `Reading the result of execution '${executionId}' did not finish in time.`,
+    });
+  };
   let job: FunctionExecution | undefined;
   for (let attempt = 1; executionId && attempt <= READ_ATTEMPTS; attempt++) {
+    let signal: AbortSignal | undefined;
     try {
-      ({ execution: job } = await client.getFunctionExecution({ workspaceId, executionId }));
+      throwIfPastDeadline();
+      const request = { workspaceId, executionId };
+      if (deadline !== undefined) signal = AbortSignal.timeout(Math.max(1, deadline - Date.now()));
+      ({ execution: job } = await (signal
+        ? client.getFunctionExecution(request, { signal })
+        : client.getFunctionExecution(request)));
       break;
     } catch (error) {
+      // The signal fires on the deadline, but its timer can run a few milliseconds ahead of the clock.
+      throwIfPastDeadline(signal?.aborted);
       if (error instanceof ConnectError && error.code === Code.NotFound) break;
       if (attempt === READ_ATTEMPTS || !isRetryableWaitError(error)) throw error;
-      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+      const wait =
+        deadline === undefined ? pollInterval : Math.min(pollInterval, deadline - Date.now());
+      await new Promise((resolve) => setTimeout(resolve, wait));
     }
   }
   const logs = job ? joinFunctionLogMessages(job.logEntries) : "";

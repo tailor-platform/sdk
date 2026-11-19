@@ -61,9 +61,11 @@ function createClient(options: ClientOptions = {}) {
         },
       }),
     ),
-    getFunctionExecution: vi.fn(async () => ({
-      execution: { logEntries: [{ message: "hello" }], result: options.result ?? '{"ok":true}' },
-    })),
+    getFunctionExecution: vi.fn(
+      async (_request?: unknown, _options?: { signal?: AbortSignal }) => ({
+        execution: { logEntries: [{ message: "hello" }], result: options.result ?? '{"ok":true}' },
+      }),
+    ),
     deleteWorkflow: vi.fn(async () => ({})),
     deleteWorkflowJobFunction: vi.fn(async () => ({})),
     deleteFunctionRegistry: vi.fn(async () => ({})),
@@ -243,6 +245,50 @@ describe("awaitWorkflowRun", () => {
     expect(outcome).toEqual({ state: "timedOut" });
     expect(client.deleteWorkflow).not.toHaveBeenCalled();
     expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
+  });
+});
+
+describe("awaitWorkflowRun when the result of a finished run cannot be read", () => {
+  test("reports that the outcome is unavailable when the read never answers, and keeps the resources", async () => {
+    const client = createClient();
+    client.getFunctionExecution.mockImplementation(
+      (_request?: unknown, options?: { signal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          options?.signal?.addEventListener("abort", () =>
+            reject(new ConnectError("canceled", Code.Canceled)),
+          );
+        }) as never,
+    );
+
+    const outcome = await awaitWorkflowRun({
+      client: asClient(client),
+      workspaceId: "ws",
+      started,
+      pollInterval: 5,
+      timeoutMs: 1000,
+      outcomeTimeoutMs: 40,
+    });
+
+    expect(outcome.state).toBe("outcomeUnavailable");
+    expect(client.deleteWorkflow).not.toHaveBeenCalled();
+    expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
+  });
+
+  test("reports it as unavailable, not as an error, when every read fails transiently", async () => {
+    const client = createClient();
+    client.getFunctionExecution.mockRejectedValue(new ConnectError("down", Code.Unavailable));
+
+    const outcome = await awaitWorkflowRun({
+      client: asClient(client),
+      workspaceId: "ws",
+      started,
+      pollInterval: 1,
+      timeoutMs: 1000,
+      outcomeTimeoutMs: 1000,
+    });
+
+    expect(outcome.state).toBe("outcomeUnavailable");
+    expect(client.deleteWorkflow).not.toHaveBeenCalled();
   });
 });
 

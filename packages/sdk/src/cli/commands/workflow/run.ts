@@ -220,6 +220,15 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
       });
     }
 
+    if (outcome.state === "outcomeUnavailable") {
+      throw CLIError({
+        code: "WORKFLOW_RUN_OUTCOME_UNAVAILABLE",
+        message: `Run ${started.runId} finished, but its result could not be read: ${outcome.reason}`,
+        suggestion: `Read it with ${hints.inspect}. Afterwards, ${hints.cleanup} removes the temporary resources.`,
+        context: { runId: started.runId, executionId: started.executionId },
+      });
+    }
+
     const { result } = outcome;
     if (logger.jsonMode) {
       logger.out({
