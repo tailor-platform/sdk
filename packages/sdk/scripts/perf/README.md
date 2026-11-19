@@ -33,7 +33,7 @@ To add a case, write `bench("<name>", () => …).types()` in the file of its are
 
 ## CI
 
-The `Type Performance` job of `.github/workflows/sdk-metrics.yml` runs the same command. A change in a count never fails CI; a bench that crashes does, so the broken measurement is noticed.
+The `Type Performance` job of `.github/workflows/test.yml` runs the same command. A change in a count never fails CI; a bench that crashes does, so the broken measurement is noticed.
 
 - The measured counts go to octocov as the `type-performance` custom metric and to the step summary, so the PR comment shows the difference from `main`.
 - In pull requests, the job also runs the bench files, copied from the pull request, against the base commit's `packages/sdk`. The cases whose count differs are listed in the PR comment and the step summary, in the order above, each with the measured code.

@@ -22,6 +22,8 @@ jobs:
     timeout-minutes: 5
     outputs:
       should_run: ${{ steps.filter.outputs.changes }}
+      # octocov compares the metrics with the report stored from main
+      should_measure: ${{ (github.event_name == 'push' || github.base_ref == 'main') && steps.filter.outputs.metrics || 'false' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -29,17 +31,26 @@ jobs:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
+          # The coverage in the metrics report comes from the test job, so `changes` includes `metrics`.
           filters: |
-            changes:
+            metrics: &metrics
               - .github/workflows/test.yml
-              - .github/actions/**
+              - .github/actions/install-deps/**
+              - .github/scripts/complexity-report*.mjs
               - packages/**
               - example/**
-              - llm-challenge/**
+              - scripts/measure-bundle-size-sonda.js
+              - cccc.toml
               - package.json
               - tsconfig.json
-              - pnpm-workspace.yaml
               - pnpm-lock.yaml
+            changes:
+              - *metrics
+              - .github/actions/**
+              - .github/workflows/securefix.yml
+              - llm-challenge/**
+              - scripts/**
+              - pnpm-workspace.yaml
 
   test:
     needs: changes
@@ -51,11 +62,19 @@ jobs:
         shard: [1, 2, 3, 4]
         # Must equal the number of `shard` values.
         shard-total: [4]
+        # Coverage artifacts are named by shard alone, so only one Node version may collect coverage.
+        include:
+          - node: 24
+            coverage: true
     runs-on: ubuntu-latest
     name: Test (Node ${{ matrix.node }}, shard ${{ matrix.shard }}/${{ matrix.shard-total }})
     timeout-minutes: 15
     permissions:
       contents: read
+    outputs:
+      shard-total: ${{ matrix.shard-total }}
+    env:
+      COVERAGE: ${{ matrix.coverage == true && needs.changes.outputs.should_measure == 'true' }}
 
     steps:
       - name: Checkout
@@ -72,10 +91,27 @@ jobs:
         run: pnpm -r --filter '!@tailor-platform/sdk' run build
 
       - name: Run SDK tests
-        run: pnpm --filter @tailor-platform/sdk run test --project 'unit*' --shard="${SHARD}/${SHARD_TOTAL}"
+        working-directory: packages/sdk
+        run: |
+          coverage=()
+          if [[ "$COVERAGE" == "true" ]]; then
+            coverage=(--coverage --coverage.reporter=lcovonly)
+          fi
+          pnpm exec vitest run --project 'unit*' --project integration --project scripts --shard="${SHARD}/${SHARD_TOTAL}" "${coverage[@]}"
         env:
           SHARD: ${{ matrix.shard }}
           SHARD_TOTAL: ${{ matrix.shard-total }}
+
+      # Only the metrics report, which is not a required check, reads the coverage.
+      - name: Upload coverage report
+        if: env.COVERAGE == 'true'
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-lcov-${{ matrix.shard }}
+          path: packages/sdk/coverage/lcov.info
+          if-no-files-found: error
+          retention-days: 1
 
       # More concurrent packages push eslint-plugin-sdk's oxlint-spawning tests past their 5s timeout.
       - name: Run other package tests
@@ -146,3 +182,258 @@ jobs:
             exit 1
           fi
           echo "All test jobs succeeded"
+
+  bundle-size:
+    needs: changes
+    if: needs.changes.outputs.should_measure == 'true'
+    name: Bundle Size
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install deps
+        uses: $/.github/actions/install-deps
+
+      - name: Measure bundle size
+        run: pnpm --filter @tailor-platform/sdk measure:bundle
+
+      - name: Upload results
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bundle-size-results
+          path: packages/sdk/bundle-size.json
+
+  type-performance:
+    needs: changes
+    if: needs.changes.outputs.should_measure == 'true'
+    name: Type Performance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      changes: ${{ steps.attest-report.outputs.changes }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Fetches the base commit, the first parent of the pull request merge commit
+          fetch-depth: 2
+
+      - name: Install deps
+        uses: $/.github/actions/install-deps
+
+      - name: Prepare the base commit
+        if: github.event_name == 'pull_request'
+        run: |
+          base_dir="${RUNNER_TEMP}/attest-base"
+          mkdir -p "${base_dir}"
+          git archive HEAD^1 tsconfig.json packages/sdk | tar -x -C "${base_dir}"
+          ln -s "${PWD}/node_modules" "${base_dir}/node_modules"
+          ln -s "${PWD}/packages/sdk/node_modules" "${base_dir}/packages/sdk/node_modules"
+
+      - name: Run type instantiation benches
+        run: |
+          base_root=()
+          if [ -d "${RUNNER_TEMP}/attest-base" ]; then
+            base_root=(--base-root "${RUNNER_TEMP}/attest-base/packages/sdk")
+          fi
+          pnpm --filter @tailor-platform/sdk perf:attest "${base_root[@]}"
+
+      - name: Report instantiation changes
+        id: attest-report
+        run: |
+          delimiter="EOF_$(openssl rand -hex 16)"
+          {
+            echo "changes<<${delimiter}"
+            if [ -s packages/sdk/attest-changes.md ]; then
+              echo ""
+              cat packages/sdk/attest-changes.md
+              echo ""
+            fi
+            echo "${delimiter}"
+          } >> "${GITHUB_OUTPUT}"
+          cat packages/sdk/attest-changes.md >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload results
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: type-perf-results
+          path: |
+            packages/sdk/attest-metrics.json
+
+  runtime-performance:
+    needs: changes
+    if: needs.changes.outputs.should_measure == 'true'
+    name: Runtime Performance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install deps
+        uses: $/.github/actions/install-deps
+
+      - name: Run runtime performance
+        run: pnpm --filter @tailor-platform/sdk perf:runtime
+
+      - name: Upload results
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: runtime-perf-results
+          path: |
+            packages/sdk/runtime-perf.json
+            packages/sdk/runtime-perf-summary.json
+
+  complexity:
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.should_measure == 'true'
+    name: Code Complexity
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      changes: ${{ steps.report.outputs.changes }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Fetches the base commit, the first parent of the pull request merge commit
+          fetch-depth: 2
+
+      - name: Test complexity report
+        run: node --test .github/scripts/complexity-report.test.mjs
+
+      - name: Install cccc
+        uses: moznion/cccc-action@1d5313811f8451953e46a268c61791a01e40b7df # v1.1.2
+        with:
+          version: v1.8.3
+
+      - name: Measure complexity
+        run: |
+          measure() { cccc --config "${GITHUB_WORKSPACE}/cccc.toml" packages/*/src; }
+          measure > "${RUNNER_TEMP}/head.json"
+          git worktree add --detach "${RUNNER_TEMP}/base" HEAD^1
+          git diff --name-status -M HEAD^1 HEAD > "${RUNNER_TEMP}/renames.txt"
+          cd "${RUNNER_TEMP}/base"
+          measure > "${RUNNER_TEMP}/base.json"
+
+      - name: Report changed functions
+        id: report
+        run: |
+          node .github/scripts/complexity-report.mjs \
+            --base "${RUNNER_TEMP}/base.json" \
+            --head "${RUNNER_TEMP}/head.json" \
+            --renames "${RUNNER_TEMP}/renames.txt" \
+            --out "${RUNNER_TEMP}/changes.md"
+          delimiter="EOF_$(openssl rand -hex 16)"
+          {
+            echo "changes<<${delimiter}"
+            cat "${RUNNER_TEMP}/changes.md"
+            # Keeps the trailing newline that separates the message from octocov's tables
+            echo
+            echo "${delimiter}"
+          } >> "${GITHUB_OUTPUT}"
+
+  report-metrics:
+    name: Report Metrics
+    # Code Complexity runs only on pull requests, and its failure must not drop the rest of the report
+    if: >-
+      ${{ !cancelled() &&
+      needs.changes.outputs.should_measure == 'true' &&
+      needs.test.result == 'success' &&
+      needs.bundle-size.result == 'success' &&
+      needs.type-performance.result == 'success' &&
+      needs.runtime-performance.result == 'success' }}
+    needs: [changes, test, bundle-size, type-performance, runtime-performance, complexity]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read # checkout and read coverage artifacts
+      pull-requests: write # octocov posts the metrics report on the PR
+      actions: write # octocov manages the coverage report artifact
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: artifacts/
+
+      - name: Prepare coverage
+        env:
+          SHARD_TOTAL: ${{ needs.test.outputs.shard-total }}
+        run: |
+          shopt -s nullglob
+          shards=(artifacts/coverage-lcov-*/lcov.info)
+          if [[ "${#shards[@]}" -ne "$SHARD_TOTAL" ]]; then
+            echo "::error::Expected ${SHARD_TOTAL} coverage reports, found ${#shards[@]}"
+            exit 1
+          fi
+          mkdir -p packages/sdk/coverage
+          for shard in "${shards[@]}"; do
+            cp "$shard" "packages/sdk/coverage/lcov-$(basename "$(dirname "$shard")" | sed 's/coverage-lcov-//').info"
+          done
+          ls -l packages/sdk/coverage/
+
+      - name: Display summary
+        run: |
+          {
+            echo "# SDK Metrics Summary"
+            echo ""
+
+            echo "## Coverage"
+            echo ""
+            echo "See octocov report below for coverage details."
+            echo ""
+
+            echo "## Bundle Size"
+            echo ""
+            echo "| Metric | Value |"
+            echo "|--------|------:|"
+            jq -r '.metrics[] | "| \(.name) | \(.value) \(.unit) |"' artifacts/bundle-size-results/bundle-size.json
+            echo ""
+
+            echo "## Type Performance (instantiations)"
+            echo ""
+            echo "| Case | Instantiations |"
+            echo "|------|---------------:|"
+            jq -r '.metrics[] | "| \(.name) | \(.value) |"' artifacts/type-perf-results/attest-metrics.json
+            echo ""
+
+            echo "## Runtime Performance"
+            echo ""
+            echo "| Command | Max | Median |"
+            echo "|---------|----:|-------:|"
+            jq -r '"| generate | \(.generate.max)ms | \(.generate.median)ms |"' artifacts/runtime-perf-results/runtime-perf-summary.json
+            jq -r '"| apply (build) | \(."apply-build".max)ms | \(."apply-build".median)ms |"' artifacts/runtime-perf-results/runtime-perf-summary.json
+            echo ""
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Run octocov
+        uses: k1LoW/octocov-action@a167dc0dee441b7ffc45e1b862ab55ec0d87f278 # v1.5.2
+        with:
+          config: packages/sdk/.octocov.yml
+        env:
+          OCTOCOV_CUSTOM_METRICS_TYPE_PERFORMANCE: artifacts/type-perf-results/attest-metrics.json
+          OCTOCOV_CUSTOM_METRICS_BUNDLE_SIZE: artifacts/bundle-size-results/bundle-size.json
+          OCTOCOV_CUSTOM_METRICS_RUNTIME_PERFORMANCE: artifacts/runtime-perf-results/runtime-perf.json
+          SDK_COMPLEXITY_CHANGES: ${{ needs.complexity.outputs.changes }}
+          SDK_TYPE_PERF_CHANGES: ${{ needs.type-performance.outputs.changes }}

@@ -38,7 +38,7 @@ describe("test environment isolation", () => {
 
     expect(projectTests.length).toBeGreaterThan(0);
     for (const projectTest of projectTests) {
-      if (String(projectTest.name).startsWith("e2e")) continue;
+      if (projectTest.name === "e2e") continue;
       expect(projectTest.setupFiles, `project "${String(projectTest.name)}"`).toContain(
         "./vitest.setup.ts",
       );
