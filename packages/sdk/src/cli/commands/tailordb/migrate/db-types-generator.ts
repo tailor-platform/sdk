@@ -10,6 +10,7 @@ import { assertDefined } from "#/utils/assert";
 import { COLUMN_TYPE_ALIASES, mapFieldTypeToColumnType } from "#/utils/field-column-type";
 import { buildPreMigrationSnapshot } from "./pre-migration-schema";
 import {
+  applyDiffToSnapshot,
   getMigrationFilePath,
   type SchemaSnapshot,
   type SnapshotFieldConfig,
@@ -44,26 +45,32 @@ interface BreakingChangeFieldInfo {
 
 /**
  * Extract breaking change field information from diff
+ * @param {SchemaSnapshot} preMigration - Schema the migration script runs against
+ * @param {SchemaSnapshot} target - Schema after the migration
  * @param {MigrationDiff} diff - Migration diff
  * @returns {BreakingChangeFieldInfo} Breaking change field information
  */
-function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldInfo {
+function extractBreakingChangeFields(
+  preMigration: SchemaSnapshot,
+  target: SchemaSnapshot,
+  diff: MigrationDiff,
+): BreakingChangeFieldInfo {
   const optionalToRequired = new Map<string, Set<string>>();
   const enumValueChanges = new Map<string, Map<string, EnumValueChange>>();
 
-  const markOptionalToRequired = (tableName: string, fieldName: string): void => {
-    const fields = optionalToRequired.get(tableName) ?? new Set<string>();
-    fields.add(fieldName);
-    optionalToRequired.set(tableName, fields);
-  };
+  for (const table of Object.values(target.tables)) {
+    const relaxed = Object.entries(table.fields).filter(([fieldName, field]) => {
+      const preMigrationField = preMigration.tables[table.name]?.fields[fieldName];
+      return field.required && preMigrationField !== undefined && !preMigrationField.required;
+    });
+    if (relaxed.length > 0) {
+      optionalToRequired.set(table.name, new Set(relaxed.map(([fieldName]) => fieldName)));
+    }
+  }
 
   for (const change of diff.changes) {
     if (change.kind === "field_modified" || change.kind === "field_type_modified") {
       const { before, after } = change;
-
-      if (!before.required && after.required) {
-        markOptionalToRequired(change.tableName, change.fieldName);
-      }
 
       // Check if this is an enum value change. Snapshots omit allowedValues
       // when an enum has no values left, so a missing list is an empty one.
@@ -89,10 +96,6 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
             afterRequired: after.required,
           });
         }
-      }
-    } else if (change.kind === "field_added" || change.kind === "field_renamed") {
-      if (change.after.required) {
-        markOptionalToRequired(change.tableName, change.fieldName);
       }
     }
   }
@@ -120,9 +123,9 @@ function generateDbTypesFromSnapshot(
   expandPlans: readonly ExpandContractPlan[] = [],
   temporal = false,
 ): string {
-  // Extract breaking change field information
+  const preMigration = diff ? buildPreMigrationSnapshot(previousSnapshot, diff) : previousSnapshot;
   const breakingChangeFields = diff
-    ? extractBreakingChangeFields(diff)
+    ? extractBreakingChangeFields(preMigration, applyDiffToSnapshot(previousSnapshot, diff), diff)
     : {
         optionalToRequired: new Map(),
         enumValueChanges: new Map(),
@@ -135,9 +138,7 @@ function generateDbTypesFromSnapshot(
     breakingChangeFields.clearedFields.set(plan.tableName, cleared);
   }
 
-  const tables = Object.values(
-    (diff ? buildPreMigrationSnapshot(previousSnapshot, diff) : previousSnapshot).tables,
-  );
+  const tables = Object.values(preMigration.tables);
   if (tables.length === 0) {
     return generateEmptyDbTypes(previousSnapshot.namespace);
   }
