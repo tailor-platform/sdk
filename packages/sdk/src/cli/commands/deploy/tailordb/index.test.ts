@@ -3990,32 +3990,28 @@ describe("applyTailorDB migration label reconciliation", () => {
     expect(result.unfinishedRemovals).toEqual(new Map());
   });
 
-  test.each([
-    ["no unfinished deletion", { "sdk-migration": "m0001" }],
-    ["an unfinished deletion", UNFINISHED_CLEANUP_LABELS],
-  ])(
-    "rejects a stale removed table before a pending migration re-adds the same name while the namespace records %s",
-    async (_label, labels) => {
-      const userType = userSnapshotType();
-      writeUserSchemaSnapshot(userType);
-      writeUserRemovalMigration(userType);
-      writeMigrationDiff(2, [{ kind: "table_added", tableName: "User", after: userType }]);
-      const planResult = makePlanResult();
-      planResult.context.tailorDBInputs = [
-        {
-          namespace: "test-tailordb",
-          config: { files: [] },
-          types: { User: userType },
-        },
-      ];
-      const client = schemaVerificationClient(unchangedRemoteSettings());
-      vi.mocked(client.getMetadata).mockResolvedValue({ metadata: { labels } } as never);
+  test("rejects a removed table before a pending migration re-adds the same name while the namespace records no unfinished deletion", async () => {
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+    writeUserRemovalMigration(userType);
+    writeMigrationDiff(2, [{ kind: "table_added", tableName: "User", after: userType }]);
+    const planResult = makePlanResult();
+    planResult.context.tailorDBInputs = [
+      {
+        namespace: "test-tailordb",
+        config: { files: [] },
+        types: { User: userType },
+      },
+    ];
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    vi.mocked(client.getMetadata).mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0001" } },
+    } as never);
 
-      await expect(runValidation(client, planResult)).rejects.toThrow(
-        "Remote schema verification failed",
-      );
-    },
-  );
+    await expect(runValidation(client, planResult)).rejects.toThrow(
+      "Remote schema verification failed",
+    );
+  });
 
   test("deletes the tables the checkpoint's migration left behind, then clears the record of the pending deletion", async () => {
     using _stderr = captureStderr();
@@ -4094,6 +4090,48 @@ describe("applyTailorDB migration label reconciliation", () => {
         .mock.calls.filter(([request]) => request.tailordbType?.name === "User"),
     ).toEqual([]);
     expect(labels[NAMESPACE_TRN]).toEqual({ "sdk-migration": "m0002" });
+  });
+
+  test("deletes a table the checkpoint's migration left behind, then creates it again for the next migration that adds it back", async () => {
+    using _stderr = captureStderr();
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+    writeUserRemovalMigration(userType);
+    writeMigrationDiff(2, [{ kind: "table_added", tableName: "User", after: userType }]);
+    const planResult = planUserDeletion();
+    planResult.context.tailorDBInputs = [
+      { namespace: "test-tailordb", config: { files: [] }, types: { User: userType } },
+    ];
+    planResult.context.migrationFileState = captureMigrationFileState(
+      planResult.context.namespacesWithMigrations,
+    );
+    planResult.context.pendingMigrations = [{ namespace: "test-tailordb", number: 2 }];
+    planResult.changeSet.type.creates.push({
+      name: "User",
+      request: {
+        workspaceId: "test-workspace",
+        namespaceName: "test-tailordb",
+        tailordbType: generateTailorDBTypeManifestFromSnapshot(userType, { subscribed: false }),
+      },
+      metaRequest: typeMetaRequest("User", "test-tailordb"),
+    });
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    dropUserOnceDeleted(client);
+    storeLabels(client, { [NAMESPACE_TRN]: { ...UNFINISHED_CLEANUP_LABELS } });
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    expectUserDeletedOnce(client);
+    const creates = vi
+      .mocked(client.createTailorDBType)
+      .mock.invocationCallOrder.filter(
+        (_order, index) =>
+          vi.mocked(client.createTailorDBType).mock.calls[index]?.[0].tailordbType?.name === "User",
+      );
+    expect(creates).toHaveLength(1);
+    expect(creates[0]).toBeGreaterThan(
+      vi.mocked(client.deleteTailorDBType).mock.invocationCallOrder[0]!,
+    );
   });
 
   test("deletes the tables another namespace's checkpoint left behind once while this one migrates", async () => {
