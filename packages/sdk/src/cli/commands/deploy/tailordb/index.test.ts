@@ -4115,13 +4115,22 @@ describe("applyTailorDB migration label reconciliation", () => {
       },
       metaRequest: typeMetaRequest("User", "test-tailordb"),
     });
+    planResult.changeSet.gqlPermission.deletes.push(
+      gqlPermissionDeletion("User", "other-tailordb"),
+    );
     const client = schemaVerificationClient(unchangedRemoteSettings());
     dropUserOnceDeleted(client);
     storeLabels(client, { [NAMESPACE_TRN]: { ...UNFINISHED_CLEANUP_LABELS } });
 
     await applyTailorDB(client, planResult, "create-update");
 
-    expectUserDeletedOnce(client);
+    expect(vi.mocked(client.deleteTailorDBGQLPermission).mock.calls).toEqual([
+      [gqlPermissionDeletion("User", "test-tailordb").request],
+      [gqlPermissionDeletion("User", "other-tailordb").request],
+    ]);
+    expect(vi.mocked(client.deleteTailorDBType).mock.calls).toEqual([
+      [typeDeletion("User", "test-tailordb").request],
+    ]);
     const creates = vi
       .mocked(client.createTailorDBType)
       .mock.invocationCallOrder.filter(
@@ -4134,7 +4143,7 @@ describe("applyTailorDB migration label reconciliation", () => {
     );
   });
 
-  test("deletes a table again that a later migration removes after the unfinished deletion's table was recreated", async () => {
+  test("deletes a table and its permission at every removal of a repeated remove and re-add after an unfinished deletion", async () => {
     using _stderr = captureStderr();
     const userType = userSnapshotType();
     writeUserSchemaSnapshot(userType);
@@ -4142,6 +4151,8 @@ describe("applyTailorDB migration label reconciliation", () => {
     writeMigrationDiff(2, [{ kind: "table_added", tableName: "User", after: userType }]);
     writeMigrationDiff(3, [{ kind: "table_removed", tableName: "User", before: userType }]);
     writeMigrationDiff(4, [{ kind: "table_added", tableName: "User", after: userType }]);
+    writeMigrationDiff(5, [{ kind: "table_removed", tableName: "User", before: userType }]);
+    writeMigrationDiff(6, [{ kind: "table_added", tableName: "User", after: userType }]);
     const planResult = planUserDeletion();
     planResult.context.tailorDBInputs = [
       { namespace: "test-tailordb", config: { files: [] }, types: { User: userType } },
@@ -4149,7 +4160,7 @@ describe("applyTailorDB migration label reconciliation", () => {
     planResult.context.migrationFileState = captureMigrationFileState(
       planResult.context.namespacesWithMigrations,
     );
-    planResult.context.pendingMigrations = [2, 3, 4].map((number) => ({
+    planResult.context.pendingMigrations = [2, 3, 4, 5, 6].map((number) => ({
       namespace: "test-tailordb",
       number,
     }));
@@ -4162,6 +4173,15 @@ describe("applyTailorDB migration label reconciliation", () => {
       },
       metaRequest: typeMetaRequest("User", "test-tailordb"),
     });
+    planResult.changeSet.gqlPermission.creates.push({
+      name: "User",
+      request: {
+        workspaceId: "test-workspace",
+        namespaceName: "test-tailordb",
+        typeName: "User",
+        permission: { policies: [] },
+      },
+    });
     const client = schemaVerificationClient(unchangedRemoteSettings());
     dropUserOnceDeleted(client);
     storeLabels(client, { [NAMESPACE_TRN]: { ...UNFINISHED_CLEANUP_LABELS } });
@@ -4171,8 +4191,9 @@ describe("applyTailorDB migration label reconciliation", () => {
     const userCreates = vi
       .mocked(client.createTailorDBType)
       .mock.calls.filter(([request]) => request.tailordbType?.name === "User");
-    expect(vi.mocked(client.deleteTailorDBType)).toHaveBeenCalledTimes(2);
-    expect(userCreates).toHaveLength(2);
+    expect(vi.mocked(client.deleteTailorDBType)).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(client.deleteTailorDBGQLPermission)).toHaveBeenCalledTimes(3);
+    expect(userCreates).toHaveLength(3);
   });
 
   test("refuses to apply a plan that deletes and recreates a table once the unfinished deletion no longer exists", async () => {

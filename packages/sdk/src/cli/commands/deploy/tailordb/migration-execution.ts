@@ -1073,13 +1073,14 @@ function describeUnrestored(unrestored: readonly RestrictedTables[]): string {
  * @param changeSet - Planned TailorDB changes
  * @param namespace - Namespace of the tables
  * @param tableNames - Tables to delete; those without a planned deletion are skipped
+ * @returns The tables this call deleted
  */
 export async function deletePlannedTables(
   client: OperatorClient,
   changeSet: TailorDBChangeSet,
   namespace: string,
   tableNames: ReadonlySet<string>,
-): Promise<void> {
+): Promise<ReadonlySet<string>> {
   const tableKey = (tableName: string) => namespacedTableKey(namespace, tableName);
   const gqlPermissionsToDelete = entriesOfNamespace(
     changeSet.gqlPermission.deletes,
@@ -1099,6 +1100,37 @@ export async function deletePlannedTables(
     await client.deleteTailorDBType(del.request);
     deletedResources.types.add(tableKey(del.name));
   }
+
+  const deletedNow = new Set([
+    ...gqlPermissionsToDelete.map((del) => del.name),
+    ...typesToDelete.map((del) => del.name),
+  ]);
+  for (const tableName of deletedNow) {
+    // A table the plan also creates is deleted again at each later removal.
+    if (!isRecreated(changeSet, { name: tableName, request: { namespaceName: namespace } })) {
+      continue;
+    }
+    deletedResources.types.delete(tableKey(tableName));
+    deletedResources.gqlPermissions.delete(tableKey(tableName));
+  }
+  return deletedNow;
+}
+
+/**
+ * Whether the plan deletes a table and creates it again: the deletion runs before the
+ * migrations, so the closing deletions leave the table the migrations created.
+ * @param changeSet - TailorDB change set
+ * @param del - A planned deletion
+ * @returns Whether the plan also creates a table of that name in the namespace
+ */
+export function isRecreated(
+  changeSet: TailorDBChangeSet,
+  del: { name: string; request: { namespaceName?: string } },
+): boolean {
+  return changeSet.type.creates.some(
+    (create) =>
+      create.name === del.name && create.request.namespaceName === del.request.namespaceName,
+  );
 }
 
 /**
@@ -1110,26 +1142,30 @@ export async function deletePlannedTables(
  * @param workspaceId - Workspace ID
  * @param namespace - Namespace of the tables
  * @param tableNames - Tables the migration removes
+ * @param deletedNow - Tables the planned deletions of this migration already deleted
  */
 export async function deleteTablesCreatedByDeploy(
   client: OperatorClient,
   workspaceId: string,
   namespace: string,
   tableNames: ReadonlySet<string>,
+  deletedNow: ReadonlySet<string> = new Set(),
 ): Promise<void> {
   const tableKey = (tableName: string) => namespacedTableKey(namespace, tableName);
   for (const tableName of tableNames) {
     if (!processedTables.created.has(tableKey(tableName))) continue;
     if (processedTables.gqlPermissionsProcessed.has(tableKey(tableName))) {
-      await client.deleteTailorDBGQLPermission({
-        workspaceId,
-        namespaceName: namespace,
-        typeName: tableName,
-      });
+      if (!deletedNow.has(tableName)) {
+        await client.deleteTailorDBGQLPermission({
+          workspaceId,
+          namespaceName: namespace,
+          typeName: tableName,
+        });
+      }
       processedTables.gqlPermissionsProcessed.delete(tableKey(tableName));
       processedTables.gqlPermissionsRemovedByCleanup.add(tableKey(tableName));
     }
-    if (!deletedResources.types.has(tableKey(tableName))) {
+    if (!deletedNow.has(tableName) && !deletedResources.types.has(tableKey(tableName))) {
       await client.deleteTailorDBType({
         workspaceId,
         namespaceName: namespace,
