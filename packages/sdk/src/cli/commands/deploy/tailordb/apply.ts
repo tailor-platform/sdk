@@ -79,7 +79,7 @@ import {
   deletedResources,
   deletePlannedTables,
   isRecreated,
-  deleteTablesCreatedByDeploy,
+  deleteRemovedTables,
   executeSingleMigrationPostPhase,
   executeSingleMigrationPrePhase,
   generateMigrationPhaseManifest,
@@ -1656,18 +1656,12 @@ async function commitMigration(
   if (!capturedSettingsAreEarlierRestrictions) settleRestorationSettings();
 
   try {
-    const deletedNow = await deletePlannedTables(
+    await deleteRemovedTables(
       client,
       changeSet,
-      migration.namespace,
-      deletedTables,
-    );
-    await deleteTablesCreatedByDeploy(
-      client,
       migrationContext.workspaceId,
       migration.namespace,
       deletedTables,
-      deletedNow,
     );
   } catch (error) {
     const syncHint = formatNamespaceMigrationHint({

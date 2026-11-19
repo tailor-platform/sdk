@@ -1070,9 +1070,10 @@ function describeUnrestored(unrestored: readonly RestrictedTables[]): string {
 /**
  * Delete the tables that have a planned deletion, each with its GraphQL permission first, and record them in {@link deletedResources}.
  * @param client - Operator client instance
- * @param changeSet - Planned TailorDB changes
+ * @param changeSet - TailorDB change set
  * @param namespace - Namespace of the tables
  * @param tableNames - Tables to delete; those without a planned deletion are skipped
+ * @param permissionsDeletedByDeploy - Permissions the deploy's own cleanup already deleted
  * @returns The tables this call deleted
  */
 export async function deletePlannedTables(
@@ -1080,13 +1081,26 @@ export async function deletePlannedTables(
   changeSet: TailorDBChangeSet,
   namespace: string,
   tableNames: ReadonlySet<string>,
+  permissionsDeletedByDeploy: ReadonlySet<string> = new Set(),
 ): Promise<ReadonlySet<string>> {
   const tableKey = (tableName: string) => namespacedTableKey(namespace, tableName);
+  const isKept = (name: string) =>
+    isRecreated(changeSet, { name, request: { namespaceName: namespace } });
+  // The closing deletions skip a planned permission deletion the deploy's own cleanup already
+  // made, unless the plan creates the table again and a later removal must delete it once more.
+  for (const del of entriesOfNamespace(changeSet.gqlPermission.deletes, namespace)) {
+    if (permissionsDeletedByDeploy.has(del.name) && !isKept(del.name)) {
+      deletedResources.gqlPermissions.add(tableKey(del.name));
+    }
+  }
   const gqlPermissionsToDelete = entriesOfNamespace(
     changeSet.gqlPermission.deletes,
     namespace,
   ).filter(
-    (del) => tableNames.has(del.name) && !deletedResources.gqlPermissions.has(tableKey(del.name)),
+    (del) =>
+      tableNames.has(del.name) &&
+      !permissionsDeletedByDeploy.has(del.name) &&
+      !deletedResources.gqlPermissions.has(tableKey(del.name)),
   );
   for (const del of gqlPermissionsToDelete) {
     await client.deleteTailorDBGQLPermission(del.request);
@@ -1101,19 +1115,16 @@ export async function deletePlannedTables(
     deletedResources.types.add(tableKey(del.name));
   }
 
-  const deletedNow = new Set([
+  for (const tableName of new Set([
     ...gqlPermissionsToDelete.map((del) => del.name),
     ...typesToDelete.map((del) => del.name),
-  ]);
-  for (const tableName of deletedNow) {
+  ])) {
     // A table the plan also creates is deleted again at each later removal.
-    if (!isRecreated(changeSet, { name: tableName, request: { namespaceName: namespace } })) {
-      continue;
-    }
+    if (!isKept(tableName)) continue;
     deletedResources.types.delete(tableKey(tableName));
     deletedResources.gqlPermissions.delete(tableKey(tableName));
   }
-  return deletedNow;
+  return new Set(typesToDelete.map((del) => del.name));
 }
 
 /**
@@ -1134,38 +1145,54 @@ export function isRecreated(
 }
 
 /**
- * Delete the tables this deploy created that a migration removes, though the plan holds no deletion
- * for them: the workspace lacked them and the final schema omits them. Each is forgotten as
- * created, with its GraphQL permission, so a later migration that adds the same name creates both
- * again.
+ * Delete the tables a migration removes, once its checkpoint is committed: first the GraphQL
+ * permissions the deploy created for them, then the planned deletions, then the tables the deploy
+ * created that the plan holds no deletion for (the workspace lacked them and the final schema
+ * omits them). Each table the deploy created is forgotten as created, with its permission, so a
+ * later migration that adds the same name creates both again.
  * @param client - Operator client instance
+ * @param changeSet - TailorDB change set
  * @param workspaceId - Workspace ID
  * @param namespace - Namespace of the tables
  * @param tableNames - Tables the migration removes
- * @param deletedNow - Tables the planned deletions of this migration already deleted
  */
-export async function deleteTablesCreatedByDeploy(
+export async function deleteRemovedTables(
   client: OperatorClient,
+  changeSet: TailorDBChangeSet,
   workspaceId: string,
   namespace: string,
   tableNames: ReadonlySet<string>,
-  deletedNow: ReadonlySet<string> = new Set(),
 ): Promise<void> {
   const tableKey = (tableName: string) => namespacedTableKey(namespace, tableName);
-  for (const tableName of tableNames) {
-    if (!processedTables.created.has(tableKey(tableName))) continue;
-    if (processedTables.gqlPermissionsProcessed.has(tableKey(tableName))) {
-      if (!deletedNow.has(tableName)) {
-        await client.deleteTailorDBGQLPermission({
-          workspaceId,
-          namespaceName: namespace,
-          typeName: tableName,
-        });
-      }
-      processedTables.gqlPermissionsProcessed.delete(tableKey(tableName));
-      processedTables.gqlPermissionsRemovedByCleanup.add(tableKey(tableName));
+  const createdByDeploy = [...tableNames].filter((tableName) =>
+    processedTables.created.has(tableKey(tableName)),
+  );
+
+  const permissionsDeleted = new Set<string>();
+  for (const tableName of createdByDeploy) {
+    if (!processedTables.gqlPermissionsProcessed.has(tableKey(tableName))) continue;
+    if (!deletedResources.gqlPermissions.has(tableKey(tableName))) {
+      await client.deleteTailorDBGQLPermission({
+        workspaceId,
+        namespaceName: namespace,
+        typeName: tableName,
+      });
+      permissionsDeleted.add(tableName);
     }
-    if (!deletedNow.has(tableName) && !deletedResources.types.has(tableKey(tableName))) {
+    processedTables.gqlPermissionsProcessed.delete(tableKey(tableName));
+    processedTables.gqlPermissionsRemovedByCleanup.add(tableKey(tableName));
+  }
+
+  const typesDeleted = await deletePlannedTables(
+    client,
+    changeSet,
+    namespace,
+    tableNames,
+    permissionsDeleted,
+  );
+
+  for (const tableName of createdByDeploy) {
+    if (!typesDeleted.has(tableName) && !deletedResources.types.has(tableKey(tableName))) {
       await client.deleteTailorDBType({
         workspaceId,
         namespaceName: namespace,
