@@ -18,7 +18,7 @@ const execFileAsync = promisify(execFile);
 
 const { values } = parseArgs({
   options: {
-    timeout: { type: "string", default: "300" },
+    timeout: { type: "string", default: "900" },
     interval: { type: "string", default: "10" },
   },
 });
