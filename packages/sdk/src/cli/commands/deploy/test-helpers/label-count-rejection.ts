@@ -1,6 +1,7 @@
+import { base64Decode } from "@bufbuild/protobuf/wire";
 import { Code, ConnectError } from "@connectrpc/connect";
 
-// The `buf.validate.Violations` detail the platform returned for a SetMetadata with 21 labels.
+// `buf.validate.Violations` detail of a SetMetadata the platform rejected for holding 21 labels.
 const capturedViolations =
   "Cl0SDW1hcC5tYXhfcGFpcnMaHm1hcCBtdXN0IGJlIGF0IG1vc3QgMjAgZW50cmllcyoOCgwIAhIGbGFiZWxzGAsyHAoJCBMSA21hcBgLCg8IAhIJbWF4X3BhaXJzGAQ";
 
@@ -15,7 +16,7 @@ export function labelCountRejection(): ConnectError {
   );
   error.details.push({
     type: "buf.validate.Violations",
-    value: Buffer.from(capturedViolations, "base64"),
+    value: base64Decode(capturedViolations),
   });
   return error;
 }

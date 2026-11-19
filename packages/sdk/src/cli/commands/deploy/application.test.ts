@@ -42,6 +42,8 @@ vi.mock("./label", async (importOriginal) => {
 vi.mock("./change-set", async (importOriginal) => importOriginal());
 
 const workspaceId = "test-workspace";
+const labelEntries = (prefix: string, count: number) =>
+  Object.fromEntries(Array.from({ length: count }, (_, index) => [`${prefix}-${index}`, "v1"]));
 const appName = "test-app";
 const matchingSubgraphs = [
   { serviceType: Subgraph_ServiceType.TAILORDB, serviceNamespace: "tailordb-a" },
@@ -296,10 +298,9 @@ describe("planApplication", () => {
 
     test("plans labels past the platform's limit, leaving the count to the platform", async () => {
       // sdk-name and sdk-version are stored, so the config's id adds a 21st label.
-      const retained = Object.fromEntries(
-        Array.from({ length: 18 }, (_, index) => [`other-${index}`, "v1"]),
-      );
-      const client = createMockClient([{ ...matchingApplication, extraLabels: retained }]);
+      const client = createMockClient([
+        { ...matchingApplication, extraLabels: labelEntries("other", 18) },
+      ]);
 
       const result = await planApplication(
         createContext(client, createMockApplication({ id: "id-1", metadata: { team: "billing" } })),
@@ -846,8 +847,9 @@ describe("recomposeApplication", () => {
 describe("applyApplication label writes", () => {
   const trn = `trn:v1:workspace:${workspaceId}:application:${appName}`;
   const sdkLabels = { "sdk-name": appName, "sdk-version": "v1-0-0", "sdk-app-id": "app-id-1" };
-  const entries = (prefix: string, count: number) =>
-    Object.fromEntries(Array.from({ length: count }, (_, index) => [`${prefix}-${index}`, "v1"]));
+  // 20 labels, so the SDK's sdk-app-id makes a 21st.
+  const { "sdk-app-id": _, ...withoutAppId } = sdkLabels;
+  const fullWithoutAppId = { ...withoutAppId, ...labelEntries("other", 18) };
 
   function labelStore(
     initial: Record<string, string>,
@@ -901,7 +903,7 @@ describe("applyApplication label writes", () => {
       // Another tool writes a label while the first write is being rejected.
       (labels) => ({ ...labels, team: "billing" }),
     );
-    const metadata = entries("key", 18);
+    const metadata = labelEntries("key", 18);
 
     const rejections = await applyApplication(client, updateWith(metadata));
 
@@ -919,24 +921,17 @@ describe("applyApplication label writes", () => {
       code: "DEPLOY_LABEL_LIMIT_EXCEEDED",
       message: `The platform rejected the labels of application '${appName}': map must be at most 20 entries`,
       suggestion: expect.stringContaining("Remove unwritten entries from 'metadata'"),
-      context: {
-        resourceType: "application",
-        applications: [
-          { name: appName, sdkLabelsInPlace: true, unwrittenMetadata: Object.keys(metadata) },
-        ],
-      },
+      context: { resourceType: "application", applications: rejections },
     });
   });
 
   test("reports the SDK labels missing when the platform rejects them too", async () => {
-    const { "sdk-app-id": _, ...withoutAppId } = sdkLabels;
-    const initial = { ...withoutAppId, ...entries("other", 18) };
-    const { client, stored } = labelStore(initial);
+    const { client, stored } = labelStore(fullWithoutAppId);
 
     const rejections = await applyApplication(client, updateWith({ extra: "v1" }));
 
     expect(client.setMetadata).toHaveBeenCalledTimes(2);
-    expect(stored()).toEqual(initial);
+    expect(stored()).toEqual(fullWithoutAppId);
     expect(rejections).toMatchObject([
       { name: appName, sdkLabelsInPlace: false, unwrittenMetadata: ["extra"] },
     ]);
@@ -946,8 +941,7 @@ describe("applyApplication label writes", () => {
   });
 
   test("tries once when there is no metadata to leave out", async () => {
-    const { "sdk-app-id": _, ...withoutAppId } = sdkLabels;
-    const { client } = labelStore({ ...withoutAppId, ...entries("other", 18) });
+    const { client } = labelStore(fullWithoutAppId);
 
     const rejections = await applyApplication(client, updateWith(undefined));
 
@@ -975,5 +969,23 @@ describe("applyApplication label writes", () => {
 
     expect(client.setMetadata).toHaveBeenCalledTimes(1);
     expect(client.bulkSetMetadata).not.toHaveBeenCalled();
+  });
+});
+
+describe("applicationLabelLimitError", () => {
+  const rejection = (name: string, sdkLabelsInPlace: boolean) => ({
+    name,
+    violation: "map must be at most 20 entries",
+    sdkLabelsInPlace,
+    unwrittenMetadata: ["key-0"],
+    otherLabels: [],
+  });
+
+  test("suggests trimming metadata while any application kept its SDK labels", () => {
+    const error = applicationLabelLimitError([rejection("a", true), rejection("b", false)]);
+
+    expect(error.message.split("\n")).toHaveLength(2);
+    expect(error.suggestion).toContain("Remove unwritten entries from 'metadata'");
+    expect(error.details).toContain("Every other change of the deploy was applied.");
   });
 });

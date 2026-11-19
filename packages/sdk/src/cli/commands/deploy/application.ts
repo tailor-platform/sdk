@@ -125,13 +125,14 @@ async function writeApplicationLabels(
   entry: ApplicationLabels,
 ): Promise<ApplicationLabelRejection | undefined> {
   const { name, metaRequest, metadata = {} } = entry;
-  const violation = await labelCountRejected(() =>
+  const violation = await labelCountViolationOf(() =>
     writeMetadataLabelsDirect(client, withConfigMetadata(metaRequest, metadata)),
   );
   if (violation === undefined) return undefined;
   const sdkLabelsInPlace =
     Object.keys(metadata).length > 0 &&
-    (await labelCountRejected(() => writeMetadataLabelsDirect(client, metaRequest))) === undefined;
+    (await labelCountViolationOf(() => writeMetadataLabelsDirect(client, metaRequest))) ===
+      undefined;
   const current = await getOrNull(() => client.getMetadata({ trn: metaRequest.trn }));
   const stored = current?.metadata?.labels ?? {};
   const sdkKeys = new Set(Object.keys(metaRequest.labels ?? {}));
@@ -148,7 +149,12 @@ async function writeApplicationLabels(
   };
 }
 
-async function labelCountRejected(write: () => Promise<unknown>): Promise<string | undefined> {
+/**
+ * Run a metadata write, turning the platform's label-count rejection into its violation message.
+ * @param write - Metadata write to run
+ * @returns The violation, or undefined when the write succeeded
+ */
+async function labelCountViolationOf(write: () => Promise<unknown>): Promise<string | undefined> {
   try {
     await write();
     return undefined;
@@ -178,17 +184,16 @@ export function applicationLabelLimitError(
           `The platform rejected the labels of application '${name}': ${violation}`,
       )
       .join("\n"),
-    details: rejections.map(describeLabelRejection).join("\n"),
-    suggestion: rejections.every(({ sdkLabelsInPlace }) => sdkLabelsInPlace)
+    details: [
+      ...rejections.map(describeLabelRejection),
+      "Every other change of the deploy was applied.",
+    ].join("\n"),
+    suggestion: rejections.some(({ sdkLabelsInPlace }) => sdkLabelsInPlace)
       ? `Remove unwritten entries from 'metadata', or delete labels the application no longer needs, then deploy again; removing an entry already stored does not delete its label (${howToDelete}).`
       : `Delete labels the application no longer needs, then deploy again (${howToDelete}).`,
     context: {
       resourceType: "application",
-      applications: rejections.map(({ name, sdkLabelsInPlace, unwrittenMetadata }) => ({
-        name,
-        sdkLabelsInPlace,
-        unwrittenMetadata,
-      })),
+      applications: rejections.map((rejection) => ({ ...rejection })),
     },
   });
 }

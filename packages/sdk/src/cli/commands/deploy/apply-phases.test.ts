@@ -360,18 +360,15 @@ describe("applyDeploymentPlans", () => {
 
   test("reports rejected application labels once every phase is applied", async () => {
     mocks.calls.length = 0;
-    mocks.applyApplication.mockImplementationOnce(async (_client, result, phase) => {
-      mocks.calls.push(`application:${(result as { marker: string }).marker}:${String(phase)}`);
-      return [
-        {
-          name: "supplier",
-          violation: "map must be at most 20 entries",
-          sdkLabelsInPlace: true,
-          unwrittenMetadata: ["key-0"],
-          otherLabels: [],
-        },
-      ];
-    });
+    mocks.applyApplication.mockResolvedValueOnce([
+      {
+        name: "supplier",
+        violation: "map must be at most 20 entries",
+        sdkLabelsInPlace: true,
+        unwrittenMetadata: ["key-0"],
+        otherLabels: [],
+      },
+    ]);
 
     await expect(
       applyRemainingResources(mockOperatorClient({}), "workspace-id", [deployment("supplier")]),

@@ -374,7 +374,7 @@ export async function buildMetaRequest(
  */
 export function withConfigMetadata(
   write: MetadataLabelWrite,
-  metadata: Record<string, string> | undefined,
+  metadata: Record<string, string>,
 ): MetadataLabelWrite {
   return { ...write, labels: { ...metadata, ...write.labels } };
 }
