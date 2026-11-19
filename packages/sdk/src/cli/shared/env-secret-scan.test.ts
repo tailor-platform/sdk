@@ -13,9 +13,9 @@ const GITHUB_TOKEN = ["ghp", "16C7e42F292c6912E7710c838347Ae178B4a"].join("_");
 const AWS_ACCESS_KEY_ID = ["AKIA", "QYLPMN5HGZQ4WXYZ"].join("");
 const AWS_SECRET = ["kR8xNvPq2LmT7wYbZc3JdFgHs", "A1eU5oI9pQrStVw"].join("");
 
-const SECRETLINT_PACKAGES = "https://github.com/secretlint/secretlint/blob/master/packages";
-const SLACK_DOCS_URL = `${SECRETLINT_PACKAGES}/%40secretlint/secretlint-rule-slack/README.md#SLACK_TOKEN`;
-const GITHUB_DOCS_URL = `${SECRETLINT_PACKAGES}/%40secretlint/secretlint-rule-github/README.md#GITHUB_TOKEN`;
+const SECRETLINT_RULE_DOCS = "https://github.com/secretlint/secretlint/blob/HEAD/docs/rules";
+const SLACK_DOCS_URL = `${SECRETLINT_RULE_DOCS}/slack.md#SLACK_TOKEN`;
+const GITHUB_DOCS_URL = `${SECRETLINT_RULE_DOCS}/github.md#GITHUB_TOKEN`;
 
 async function captureFailure(scan: Promise<void>): Promise<Error> {
   try {
@@ -35,7 +35,7 @@ describe("scanEnvForSecrets", () => {
         key: "SLACK_BOT_TOKEN",
         detector: "slack",
         rule: "SLACK_TOKEN",
-        docsUrl: expect.stringContaining("secretlint-rule-slack"),
+        docsUrl: expect.stringContaining("docs/rules/slack.md"),
         severity: "error",
       },
     ]);
