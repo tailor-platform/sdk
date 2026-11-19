@@ -371,7 +371,7 @@ describe("applyDeploymentPlans", () => {
     ]);
 
     await expect(
-      applyRemainingResources(mockOperatorClient({}), "workspace-id", [deployment("supplier")]),
+      applyRemainingResources(mockOperatorClient({}), [deployment("supplier")]),
     ).rejects.toMatchObject({
       code: "DEPLOY_LABEL_LIMIT_EXCEEDED",
       message: expect.stringContaining("application 'supplier'"),
