@@ -1,4 +1,9 @@
-import { create, createRegistry, type DescMessage } from "@bufbuild/protobuf";
+import {
+  create,
+  createRegistry,
+  type DescMessage,
+  type MessageInitShape,
+} from "@bufbuild/protobuf";
 import { pathToString, usedTypes } from "@bufbuild/protobuf/reflect";
 import { createValidator, type Validator } from "@bufbuild/protovalidate";
 import {
@@ -36,6 +41,10 @@ import {
   UpdateExecutorExecutorRequestSchema,
 } from "@tailor-platform/tailor-proto/executor_pb";
 import {
+  CreateFunctionRegistryRequestSchema,
+  UpdateFunctionRegistryRequestSchema,
+} from "@tailor-platform/tailor-proto/function_registry_pb";
+import {
   CreateIdPServiceRequestSchema,
   UpdateIdPServiceRequestSchema,
 } from "@tailor-platform/tailor-proto/idp_pb";
@@ -57,8 +66,10 @@ import {
   UpdateStaticWebsiteRequestSchema,
 } from "@tailor-platform/tailor-proto/staticwebsite_pb";
 import {
+  CreateTailorDBGQLPermissionRequestSchema,
   CreateTailorDBServiceRequestSchema,
   CreateTailorDBTypeRequestSchema,
+  UpdateTailorDBGQLPermissionRequestSchema,
   UpdateTailorDBTypeRequestSchema,
 } from "@tailor-platform/tailor-proto/tailordb_pb";
 import {
@@ -72,33 +83,308 @@ import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { STATIC_WEBSITE_ORIGIN_PLACEHOLDER_PATTERN } from "#/parser/service/common";
 import { ALL_EMAIL_DOMAINS, hasImplicitAllEmailDomains } from "#/parser/service/idp/email-domains";
+import { functionUploadInfoMessage } from "./function-registry";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { MANAGED_RESOURCE_LABELS, type ManagedResourceType } from "./managed-resource-type";
+import { MANAGED_RESOURCES, type ManagedChangeSetOf } from "./managed-resources";
 import { secretCreateRequest, secretUpdateRequest, vaultCreateRequest } from "./secret-manager";
 import { buildWorkflowValidationShape } from "./workflow";
-import { toPlatformExecutionPolicyKey } from "./workflow-execution-policy";
+import {
+  executionPolicyCreateRequest,
+  executionPolicyUpdateRequest,
+} from "./workflow-execution-policy";
 import type { PlanResults } from "./apply-phases";
+import type { HasName } from "./change-set";
+
+type Action = "create" | "update" | "replace";
 
 type ViolationEntry = {
   resourceType: ManagedResourceType;
   name: string;
-  action: "create" | "update" | "replace";
+  action: Action;
   fieldPath: string;
   message: string;
 };
 
-type HasRequest = { name: string; request: unknown };
-type HasCreateRequest = { name: string; createRequest: unknown };
-
-type ValidateItemsParams<Desc extends DescMessage> = {
-  application: string;
-  schema: Desc;
-  resourceType: ManagedResourceType;
-  action: "create" | "update" | "replace";
-  items: ReadonlyArray<HasRequest | HasCreateRequest>;
-  requestKey: "request" | "createRequest";
-  violations: ViolationEntry[];
+/** How pre-flight validation checks the items of one change-set list. */
+type RequestCheck<Item> = {
+  schema: DescMessage;
+  /** The request the item sends, or undefined when it sends none. */
+  request(item: Item, results: PlanResults): object | undefined;
+  /** The action its violations name, when it differs from the list's own. */
+  action?: Action;
 };
+
+type RequestCheckOptions = Pick<RequestCheck<never>, "action">;
+
+function requestCheck<Desc extends DescMessage, Item>(
+  schema: Desc,
+  request: (item: Item, results: PlanResults) => MessageInitShape<Desc> | undefined,
+  options: RequestCheckOptions = {},
+): RequestCheck<Item> {
+  return { schema, request, ...options };
+}
+
+type CheckedList = "creates" | "updates" | "replaces" | "unchanged";
+
+const LIST_ACTIONS = {
+  creates: "create",
+  updates: "update",
+  replaces: "replace",
+  unchanged: "update",
+} as const satisfies Record<CheckedList, Action>;
+
+type CheckedChangeSet = Record<CheckedList, ReadonlyArray<HasName>>;
+
+/**
+ * The checks of each list a change set can plan. A list whose items send no request with rules
+ * declares no checks; `unchanged` items are checked only where deploy sends them again.
+ */
+type ResourceChecks<C extends CheckedChangeSet> = {
+  [L in Exclude<CheckedList, "unchanged"> as C[L][number] extends never ? never : L]: ReadonlyArray<
+    RequestCheck<C[L][number]>
+  >;
+} & { unchanged?: ReadonlyArray<RequestCheck<C["unchanged"][number]>> };
+
+// Static-website URL placeholders in cors are resolved at apply time.
+function withoutCors<Request extends { cors?: string[] }>(request: Request): Request {
+  return { ...request, cors: undefined };
+}
+
+const PLACEHOLDER_ORIGIN = "https://placeholder.invalid";
+
+type IdPServiceRequestInit = Pick<
+  MessageInitShape<typeof CreateIdPServiceRequestSchema>,
+  "userAuthPolicy"
+>;
+
+// `<name>:url` placeholders resolve at apply time; a dummy origin keeps the origin pattern and the
+// `enable_mfa` rule checking the rest of the request.
+function withPlaceholderOrigins<Request extends IdPServiceRequestInit>(request: Request): Request {
+  const origins = request.userAuthPolicy?.allowedReturnOrigins;
+  if (!origins?.length) {
+    return request;
+  }
+  return {
+    ...request,
+    userAuthPolicy: {
+      ...request.userAuthPolicy,
+      allowedReturnOrigins: origins.map((origin) =>
+        STATIC_WEBSITE_ORIGIN_PLACEHOLDER_PATTERN.test(origin) ? PLACEHOLDER_ORIGIN : origin,
+      ),
+    },
+  };
+}
+
+type IdPClientSecretNames = { workspaceId: string; namespaceName: string; clientName: string };
+
+// A valid client name can still derive a vault or secret name over the 63-character limit.
+function idpClientSecretChecks<Item>(
+  namesOf: (item: Item) => IdPClientSecretNames,
+): ReadonlyArray<RequestCheck<Item>> {
+  const createsSecrets = { action: "create" } as const;
+  return [
+    requestCheck(
+      CreateSecretManagerVaultRequestSchema,
+      (item: Item) => {
+        const { workspaceId, namespaceName, clientName } = namesOf(item);
+        return {
+          workspaceId,
+          secretmanagerVaultName: idpClientVaultName(namespaceName, clientName),
+        };
+      },
+      createsSecrets,
+    ),
+    requestCheck(
+      CreateSecretManagerSecretRequestSchema,
+      (item: Item) => {
+        const { workspaceId, namespaceName, clientName } = namesOf(item);
+        return {
+          workspaceId,
+          secretmanagerVaultName: idpClientVaultName(namespaceName, clientName),
+          secretmanagerSecretName: idpClientSecretName(namespaceName, clientName),
+        };
+      },
+      createsSecrets,
+    ),
+  ];
+}
+
+// Job functions are registered, in the workspace of the first workflow written, only when a
+// workflow is created or updated.
+const jobFunctionCheck = requestCheck(
+  CreateWorkflowJobFunctionRequestSchema,
+  (item: HasName, results) => {
+    const { creates, updates } = results.workflow.changeSet;
+    const workspaceId = creates[0]?.workspaceId ?? updates[0]?.workspaceId;
+    if (!workspaceId) {
+      return undefined;
+    }
+    return { workspaceId, jobFunctionName: item.name, scriptRef: item.name };
+  },
+  { action: "create" },
+);
+
+/** The requests of each resource type that pre-flight validation checks. */
+export const REQUEST_CHECKS = {
+  "tailordb.service": {
+    creates: [requestCheck(CreateTailorDBServiceRequestSchema, (item) => item.request)],
+    // An update writes only the namespace's labels.
+    updates: [],
+  },
+  "tailordb.type": {
+    creates: [requestCheck(CreateTailorDBTypeRequestSchema, (item) => item.request)],
+    updates: [requestCheck(UpdateTailorDBTypeRequestSchema, (item) => item.request)],
+  },
+  "tailordb.gql_permission": {
+    creates: [requestCheck(CreateTailorDBGQLPermissionRequestSchema, (item) => item.request)],
+    updates: [requestCheck(UpdateTailorDBGQLPermissionRequestSchema, (item) => item.request)],
+  },
+  staticwebsite: {
+    creates: [requestCheck(CreateStaticWebsiteRequestSchema, (item) => item.request)],
+    updates: [requestCheck(UpdateStaticWebsiteRequestSchema, (item) => item.request)],
+  },
+  "staticwebsite.custom_domain": {
+    creates: [requestCheck(AddCustomDomainRequestSchema, (item) => item.request)],
+    // An update adopts the domain by writing only its labels.
+    updates: [],
+  },
+  "staticwebsite.custom_domain_transfer": {
+    creates: [requestCheck(RequestCustomDomainTransferRequestSchema, (item) => item.request)],
+  },
+  aigateway: {
+    creates: [requestCheck(CreateAIGatewayRequestSchema, (item) => withoutCors(item.request))],
+    updates: [requestCheck(UpdateAIGatewayRequestSchema, (item) => withoutCors(item.request))],
+  },
+  "idp.service": {
+    creates: [
+      requestCheck(CreateIdPServiceRequestSchema, (item) => withPlaceholderOrigins(item.request)),
+    ],
+    updates: [
+      requestCheck(UpdateIdPServiceRequestSchema, (item) => withPlaceholderOrigins(item.request)),
+    ],
+  },
+  "idp.client": {
+    creates: idpClientSecretChecks((item) => ({
+      workspaceId: item.request.workspaceId ?? "",
+      namespaceName: item.request.namespaceName ?? "",
+      clientName: item.request.client?.name ?? "",
+    })),
+    updates: idpClientSecretChecks((item) => ({
+      workspaceId: item.workspaceId,
+      namespaceName: item.namespaceName,
+      clientName: item.name,
+    })),
+  },
+  "auth.service": {
+    creates: [requestCheck(CreateAuthServiceRequestSchema, (item) => item.request)],
+    updates: [requestCheck(UpdateAuthServiceRequestSchema, (item) => item.request)],
+  },
+  "auth.idp_config": {
+    creates: [requestCheck(CreateAuthIDPConfigRequestSchema, (item) => item.request)],
+    updates: [requestCheck(UpdateAuthIDPConfigRequestSchema, (item) => item.request)],
+  },
+  "auth.user_profile_config": {
+    creates: [requestCheck(CreateUserProfileConfigRequestSchema, (item) => item.request)],
+    updates: [requestCheck(UpdateUserProfileConfigRequestSchema, (item) => item.request)],
+  },
+  "auth.tenant_config": {
+    creates: [requestCheck(CreateTenantConfigRequestSchema, (item) => item.request)],
+    updates: [requestCheck(UpdateTenantConfigRequestSchema, (item) => item.request)],
+  },
+  "auth.machine_user": {
+    creates: [requestCheck(CreateAuthMachineUserRequestSchema, (item) => item.request)],
+    updates: [requestCheck(UpdateAuthMachineUserRequestSchema, (item) => item.request)],
+  },
+  "auth.hook": {
+    creates: [requestCheck(CreateAuthHookRequestSchema, (item) => item.request)],
+    updates: [requestCheck(UpdateAuthHookRequestSchema, (item) => item.request)],
+  },
+  "auth.scim": {
+    creates: [requestCheck(CreateAuthSCIMConfigRequestSchema, (item) => item.request)],
+    updates: [requestCheck(UpdateAuthSCIMConfigRequestSchema, (item) => item.request)],
+  },
+  "auth.scim_resource": {
+    creates: [requestCheck(CreateAuthSCIMResourceRequestSchema, (item) => item.request)],
+    updates: [requestCheck(UpdateAuthSCIMResourceRequestSchema, (item) => item.request)],
+  },
+  "auth.oauth2_client": {
+    creates: [requestCheck(CreateAuthOAuth2ClientRequestSchema, (item) => item.request)],
+    updates: [requestCheck(UpdateAuthOAuth2ClientRequestSchema, (item) => item.request)],
+    replaces: [requestCheck(CreateAuthOAuth2ClientRequestSchema, (item) => item.createRequest)],
+  },
+  "pipeline.service": {
+    creates: [requestCheck(CreatePipelineServiceRequestSchema, (item) => item.request)],
+    updates: [requestCheck(UpdatePipelineServiceRequestSchema, (item) => item.request)],
+  },
+  "pipeline.resolver": {
+    creates: [requestCheck(CreatePipelineResolverRequestSchema, (item) => item.request)],
+    updates: [requestCheck(UpdatePipelineResolverRequestSchema, (item) => item.request)],
+  },
+  executor: {
+    creates: [requestCheck(CreateExecutorExecutorRequestSchema, (item) => item.request)],
+    updates: [requestCheck(UpdateExecutorExecutorRequestSchema, (item) => item.request)],
+  },
+  workflow: {
+    creates: [
+      requestCheck(CreateWorkflowRequestSchema, (item) =>
+        buildWorkflowValidationShape(item.workspaceId, item.workflow),
+      ),
+    ],
+    updates: [
+      requestCheck(UpdateWorkflowRequestSchema, (item) =>
+        buildWorkflowValidationShape(item.workspaceId, item.workflow),
+      ),
+    ],
+  },
+  workflow_job_function: {
+    creates: [jobFunctionCheck],
+    updates: [jobFunctionCheck],
+    unchanged: [jobFunctionCheck],
+  },
+  workflow_job_function_execution_policy: {
+    creates: [
+      requestCheck(CreateWorkflowJobFunctionExecutionPolicyRequestSchema, (item) =>
+        executionPolicyCreateRequest(item.workspaceId, item.policy),
+      ),
+    ],
+    updates: [
+      requestCheck(UpdateWorkflowJobFunctionExecutionPolicyRequestSchema, (item) =>
+        executionPolicyUpdateRequest(item.workspaceId, item.policy),
+      ),
+    ],
+    replaces: [
+      requestCheck(
+        CreateWorkflowJobFunctionExecutionPolicyRequestSchema,
+        (item) => executionPolicyCreateRequest(item.workspaceId, item.policy),
+        { action: "create" },
+      ),
+    ],
+  },
+  "secret.vault": {
+    creates: [requestCheck(CreateSecretManagerVaultRequestSchema, vaultCreateRequest)],
+    // An update writes only the vault's labels.
+    updates: [],
+  },
+  "secret.secret": {
+    creates: [requestCheck(CreateSecretManagerSecretRequestSchema, secretCreateRequest)],
+    updates: [requestCheck(UpdateSecretManagerSecretRequestSchema, secretUpdateRequest)],
+  },
+  application: {
+    creates: [requestCheck(CreateApplicationRequestSchema, (item) => withoutCors(item.request))],
+    updates: [requestCheck(UpdateApplicationRequestSchema, (item) => withoutCors(item.request))],
+    // Apply sends an unchanged application's update again.
+    unchanged: [requestCheck(UpdateApplicationRequestSchema, (item) => withoutCors(item.request))],
+  },
+  "auth.connection": {
+    creates: [requestCheck(CreateAuthConnectionRequestSchema, (item) => item.request)],
+    updates: [requestCheck(UpdateAuthConnectionRequestSchema, (item) => item.request)],
+  },
+  function_registry: {
+    creates: [requestCheck(CreateFunctionRegistryRequestSchema, functionUploadInfoMessage)],
+    updates: [requestCheck(UpdateFunctionRegistryRequestSchema, functionUploadInfoMessage)],
+  },
+} satisfies { [T in ManagedResourceType]: ResourceChecks<ManagedChangeSetOf<T>> };
 
 // IdP client violations are about the Secret Manager names derived from the client.
 function violationLabel(resourceType: ManagedResourceType): string {
@@ -122,19 +408,30 @@ function validatorFor(schema: DescMessage): Validator {
   return validator;
 }
 
-// Reported by collectViolations itself, which also covers a request without userAuthPolicy.
+// Reported by idpEmailDomainViolations, which also covers a request without userAuthPolicy.
 const SDK_REPORTED_RULE_IDS: ReadonlySet<string> = new Set(["allowed_email_domains_required"]);
 
-function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Desc>): void {
-  const { application, schema, resourceType, action, items, requestKey, violations } = params;
-  if (items.length === 0) {
-    return;
-  }
-  const validator = validatorFor(schema);
+type ValidateItemsParams = {
+  application: string;
+  results: PlanResults;
+  resourceType: ManagedResourceType;
+  action: Action;
+  check: RequestCheck<HasName>;
+  items: ReadonlyArray<HasName>;
+  violations: ViolationEntry[];
+};
+
+function validateItems(params: ValidateItemsParams): void {
+  const { application, results, resourceType, action, check, items, violations } = params;
   for (const item of items) {
-    const init = (item as Record<string, unknown>)[requestKey];
-    const msg = create(schema, init as never);
-    const result = validator.validate(schema, msg);
+    const init = check.request(item, results);
+    if (init === undefined) {
+      continue;
+    }
+    const result = validatorFor(check.schema).validate(
+      check.schema,
+      create(check.schema, init as never),
+    );
     if (result.kind === "invalid") {
       for (const v of result.violations) {
         if (SDK_REPORTED_RULE_IDS.has(v.ruleId)) {
@@ -157,517 +454,49 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
   }
 }
 
+function idpEmailDomainViolations(results: PlanResults): ViolationEntry[] {
+  const { service } = results.idp.changeSet;
+  return (["creates", "updates"] as const).flatMap((list) =>
+    service[list]
+      .filter((item) => hasImplicitAllEmailDomains(item.request.userAuthPolicy))
+      .map((item) => ({
+        resourceType: "idp.service" as const,
+        name: item.name,
+        action: LIST_ACTIONS[list],
+        fieldPath: "userAuthPolicy.allowedEmailDomains",
+        message: `must be set unless useNonEmailIdentifier is true; use ["${ALL_EMAIL_DOMAINS}"] to allow every email domain, or list the domains you accept`,
+      })),
+  );
+}
+
 /**
- * Validate all plan-time create/update requests against buf.validate constraints embedded in the
- * generated proto descriptors.
- *
- * Collections not validated: idp client (only its derived secret names are), tailorDB
- * gqlPermission, functionRegistry — no buf.validate annotations.
- * Application cors, AIGateway cors, and IdP userAuthPolicy.allowedReturnOrigins receive
- * special handling: static-website URL placeholders are resolved at apply time, so the
- * relevant origin/URL constraints would false-positive on `<name>:url` entries
- * here. Application cors and AIGateway cors are dropped entirely, forgoing their
- * per-item URL/origin constraints for the whole list rather than substituting
- * placeholders; IdP `allowedReturnOrigins` instead substitutes placeholder entries
- * with a dummy origin so the per-item regex and the cross-field `enable_mfa requires
- * ≥1 origin` rule still get exercised on the rest of the payload.
- * Workflow jobFunctions map excluded: versions are registered at apply time (registerJobFunctions)
- * and the map field carries no min_items constraint. Job names are validated separately via
- * CreateWorkflowJobFunctionRequestSchema using usedJobNames from the workflow change set.
- * auth idpConfig.config (provider oneof) is absent at plan time for BuiltInIdP but carries no
- * required constraint — the request is validated as-is from the changeset.
- *
+ * Validate the requests that a deployment's plan sends against the buf.validate rules embedded
+ * in the generated proto descriptors, and the SDK's own IdP email-domain rule.
  * @param application - Application the plan belongs to
  * @param results - Plan results of one deployment
  * @returns Violations found in the deployment's requests
  */
 function collectViolations(application: string, results: PlanResults): ViolationEntry[] {
-  const {
-    tailorDB,
-    staticWebsite,
-    aiGateway,
-    idp,
-    auth,
-    pipeline,
-    app,
-    executor,
-    workflow,
-    workflowExecutionPolicy,
-    secretManager,
-  } = results;
-
   const violations: ViolationEntry[] = [];
-
-  function creates<Desc extends DescMessage>(
-    schema: Desc,
-    resourceType: ManagedResourceType,
-    items: ReadonlyArray<HasRequest>,
-  ): void {
-    validateItems({
-      application,
-      schema,
-      resourceType,
-      action: "create",
-      items,
-      requestKey: "request",
-      violations,
-    });
-  }
-
-  function updates<Desc extends DescMessage>(
-    schema: Desc,
-    resourceType: ManagedResourceType,
-    items: ReadonlyArray<HasRequest>,
-  ): void {
-    validateItems({
-      application,
-      schema,
-      resourceType,
-      action: "update",
-      items,
-      requestKey: "request",
-      violations,
-    });
-  }
-
-  function replaces<Desc extends DescMessage>(
-    schema: Desc,
-    resourceType: ManagedResourceType,
-    items: ReadonlyArray<HasCreateRequest>,
-  ): void {
-    validateItems({
-      application,
-      schema,
-      resourceType,
-      action: "replace",
-      items,
-      requestKey: "createRequest",
-      violations,
-    });
-  }
-
-  // TailorDB service creates (UpdateService has no request field — only metaRequest)
-  creates(
-    CreateTailorDBServiceRequestSchema,
-    "tailordb.service",
-    tailorDB.changeSet.service.creates as HasRequest[],
-  );
-
-  creates(
-    CreateTailorDBTypeRequestSchema,
-    "tailordb.type",
-    tailorDB.changeSet.type.creates as HasRequest[],
-  );
-  updates(
-    UpdateTailorDBTypeRequestSchema,
-    "tailordb.type",
-    tailorDB.changeSet.type.updates as HasRequest[],
-  );
-
-  creates(
-    CreateStaticWebsiteRequestSchema,
-    "staticwebsite",
-    staticWebsite.changeSet.creates as HasRequest[],
-  );
-  updates(
-    UpdateStaticWebsiteRequestSchema,
-    "staticwebsite",
-    staticWebsite.changeSet.updates as HasRequest[],
-  );
-  creates(
-    AddCustomDomainRequestSchema,
-    "staticwebsite.custom_domain",
-    staticWebsite.customDomainChangeSet.creates as HasRequest[],
-  );
-  creates(
-    RequestCustomDomainTransferRequestSchema,
-    "staticwebsite.custom_domain_transfer",
-    staticWebsite.customDomainTransferChangeSet.creates as HasRequest[],
-  );
-
-  // cors is excluded: static-website URL placeholders are resolved at apply time.
-  creates(
-    CreateAIGatewayRequestSchema,
-    "aigateway",
-    (aiGateway.changeSet.creates as HasRequest[]).map((item) => ({
-      name: item.name,
-      request: { ...(item.request as Record<string, unknown>), cors: undefined },
-    })),
-  );
-  updates(
-    UpdateAIGatewayRequestSchema,
-    "aigateway",
-    (aiGateway.changeSet.updates as HasRequest[]).map((item) => ({
-      name: item.name,
-      request: { ...(item.request as Record<string, unknown>), cors: undefined },
-    })),
-  );
-
-  // userAuthPolicy.allowedReturnOrigins: static-website URL placeholders
-  // (`<name>:url`) are resolved at apply time. Substitute them with a dummy
-  // origin so the per-item origin regex passes and the cross-field
-  // `enable_mfa requires ≥1 origin` rule still sees a non-empty list; real
-  // (non-placeholder) entries pass through unchanged.
-  const placeholderOriginReplacement = "https://placeholder.invalid";
-  const substituteIdpReturnOrigins = (item: HasRequest): HasRequest => {
-    const request = item.request as { userAuthPolicy?: Record<string, unknown> };
-    const origins = request.userAuthPolicy?.allowedReturnOrigins;
-    if (!Array.isArray(origins) || origins.length === 0) {
-      return item;
-    }
-    const substituted = origins.map((origin) =>
-      typeof origin === "string" && STATIC_WEBSITE_ORIGIN_PLACEHOLDER_PATTERN.test(origin)
-        ? placeholderOriginReplacement
-        : origin,
-    );
-    return {
-      ...item,
-      request: {
-        ...request,
-        userAuthPolicy: { ...request.userAuthPolicy, allowedReturnOrigins: substituted },
-      },
-    };
-  };
-  creates(
-    CreateIdPServiceRequestSchema,
-    "idp.service",
-    (idp.changeSet.service.creates as HasRequest[]).map(substituteIdpReturnOrigins),
-  );
-  updates(
-    UpdateIdPServiceRequestSchema,
-    "idp.service",
-    (idp.changeSet.service.updates as HasRequest[]).map(substituteIdpReturnOrigins),
-  );
-  for (const [action, items] of [
-    ["create", idp.changeSet.service.creates],
-    ["update", idp.changeSet.service.updates],
-  ] as const) {
-    for (const item of items) {
-      if (hasImplicitAllEmailDomains(item.request.userAuthPolicy)) {
-        violations.push({
-          resourceType: "idp.service",
-          name: item.name,
-          action,
-          fieldPath: "userAuthPolicy.allowedEmailDomains",
-          message: `must be set unless useNonEmailIdentifier is true; use ["${ALL_EMAIL_DOMAINS}"] to allow every email domain, or list the domains you accept`,
+  for (const resourceType of Object.keys(REQUEST_CHECKS) as ManagedResourceType[]) {
+    const checks: Partial<Record<CheckedList, ReadonlyArray<RequestCheck<HasName>>>> =
+      REQUEST_CHECKS[resourceType];
+    const changeSet: CheckedChangeSet = MANAGED_RESOURCES[resourceType].changeSetOf(results);
+    for (const list of Object.keys(LIST_ACTIONS) as CheckedList[]) {
+      for (const check of checks[list] ?? []) {
+        validateItems({
+          application,
+          results,
+          resourceType,
+          action: check.action ?? LIST_ACTIONS[list],
+          check,
+          items: changeSet[list],
+          violations,
         });
       }
     }
   }
-
-  // Validate Secret Manager vault/secret names derived from IdP client creates and updates.
-  // The client name itself may be valid while the derived vault/secret name exceeds 63 chars.
-  const idpClientVaultItems = [
-    ...idp.changeSet.client.creates.map((c) => ({
-      clientName: c.request.client?.name ?? "",
-      namespaceName: c.request.namespaceName ?? "",
-      workspaceId: c.request.workspaceId ?? "",
-    })),
-    ...idp.changeSet.client.updates.map((u) => ({
-      clientName: u.name,
-      namespaceName: u.namespaceName,
-      workspaceId: u.workspaceId,
-    })),
-  ];
-  creates(
-    CreateSecretManagerVaultRequestSchema,
-    "idp.client",
-    idpClientVaultItems.map((item) => ({
-      name: item.clientName,
-      request: {
-        workspaceId: item.workspaceId,
-        secretmanagerVaultName: idpClientVaultName(item.namespaceName, item.clientName),
-      },
-    })),
-  );
-  creates(
-    CreateSecretManagerSecretRequestSchema,
-    "idp.client",
-    idpClientVaultItems.map((item) => ({
-      name: item.clientName,
-      request: {
-        workspaceId: item.workspaceId,
-        secretmanagerVaultName: idpClientVaultName(item.namespaceName, item.clientName),
-        secretmanagerSecretName: idpClientSecretName(item.namespaceName, item.clientName),
-      },
-    })),
-  );
-
-  creates(
-    CreateAuthServiceRequestSchema,
-    "auth.service",
-    auth.changeSet.service.creates as HasRequest[],
-  );
-  updates(
-    UpdateAuthServiceRequestSchema,
-    "auth.service",
-    auth.changeSet.service.updates as HasRequest[],
-  );
-
-  creates(
-    CreateAuthIDPConfigRequestSchema,
-    "auth.idp_config",
-    auth.changeSet.idpConfig.creates as HasRequest[],
-  );
-  updates(
-    UpdateAuthIDPConfigRequestSchema,
-    "auth.idp_config",
-    auth.changeSet.idpConfig.updates as HasRequest[],
-  );
-
-  creates(
-    CreateUserProfileConfigRequestSchema,
-    "auth.user_profile_config",
-    auth.changeSet.userProfileConfig.creates as HasRequest[],
-  );
-  updates(
-    UpdateUserProfileConfigRequestSchema,
-    "auth.user_profile_config",
-    auth.changeSet.userProfileConfig.updates as HasRequest[],
-  );
-
-  creates(
-    CreateTenantConfigRequestSchema,
-    "auth.tenant_config",
-    auth.changeSet.tenantConfig.creates as HasRequest[],
-  );
-  updates(
-    UpdateTenantConfigRequestSchema,
-    "auth.tenant_config",
-    auth.changeSet.tenantConfig.updates as HasRequest[],
-  );
-
-  creates(
-    CreateAuthMachineUserRequestSchema,
-    "auth.machine_user",
-    auth.changeSet.machineUser.creates as HasRequest[],
-  );
-  updates(
-    UpdateAuthMachineUserRequestSchema,
-    "auth.machine_user",
-    auth.changeSet.machineUser.updates as HasRequest[],
-  );
-
-  creates(
-    CreateAuthHookRequestSchema,
-    "auth.hook",
-    auth.changeSet.authHook.creates as HasRequest[],
-  );
-  updates(
-    UpdateAuthHookRequestSchema,
-    "auth.hook",
-    auth.changeSet.authHook.updates as HasRequest[],
-  );
-
-  creates(
-    CreateAuthSCIMConfigRequestSchema,
-    "auth.scim",
-    auth.changeSet.scim.creates as HasRequest[],
-  );
-  updates(
-    UpdateAuthSCIMConfigRequestSchema,
-    "auth.scim",
-    auth.changeSet.scim.updates as HasRequest[],
-  );
-
-  creates(
-    CreateAuthSCIMResourceRequestSchema,
-    "auth.scim_resource",
-    auth.changeSet.scimResource.creates as HasRequest[],
-  );
-  updates(
-    UpdateAuthSCIMResourceRequestSchema,
-    "auth.scim_resource",
-    auth.changeSet.scimResource.updates as HasRequest[],
-  );
-
-  creates(
-    CreateAuthOAuth2ClientRequestSchema,
-    "auth.oauth2_client",
-    auth.changeSet.oauth2Client.creates as HasRequest[],
-  );
-  updates(
-    UpdateAuthOAuth2ClientRequestSchema,
-    "auth.oauth2_client",
-    auth.changeSet.oauth2Client.updates as HasRequest[],
-  );
-  replaces(
-    CreateAuthOAuth2ClientRequestSchema,
-    "auth.oauth2_client",
-    auth.changeSet.oauth2Client.replaces as HasCreateRequest[],
-  );
-
-  creates(
-    CreatePipelineServiceRequestSchema,
-    "pipeline.service",
-    pipeline.changeSet.service.creates as HasRequest[],
-  );
-  updates(
-    UpdatePipelineServiceRequestSchema,
-    "pipeline.service",
-    pipeline.changeSet.service.updates as HasRequest[],
-  );
-  creates(
-    CreatePipelineResolverRequestSchema,
-    "pipeline.resolver",
-    pipeline.changeSet.resolver.creates as HasRequest[],
-  );
-  updates(
-    UpdatePipelineResolverRequestSchema,
-    "pipeline.resolver",
-    pipeline.changeSet.resolver.updates as HasRequest[],
-  );
-
-  creates(
-    CreateExecutorExecutorRequestSchema,
-    "executor",
-    executor.changeSet.creates as HasRequest[],
-  );
-  updates(
-    UpdateExecutorExecutorRequestSchema,
-    "executor",
-    executor.changeSet.updates as HasRequest[],
-  );
-
-  creates(
-    CreateWorkflowRequestSchema,
-    "workflow",
-    workflow.changeSet.creates.map((item) => ({
-      name: item.name,
-      request: buildWorkflowValidationShape(item.workspaceId, item.workflow),
-    })),
-  );
-  updates(
-    UpdateWorkflowRequestSchema,
-    "workflow",
-    workflow.changeSet.updates.map((item) => ({
-      name: item.name,
-      request: buildWorkflowValidationShape(item.workspaceId, item.workflow),
-    })),
-  );
-
-  // Validate job function names using the first workspace that defines them.
-  const workflowJobNameWorkspaceId =
-    workflow.changeSet.creates[0]?.workspaceId ?? workflow.changeSet.updates[0]?.workspaceId ?? "";
-  if (workflowJobNameWorkspaceId) {
-    const allJobNames = new Set<string>();
-    for (const item of [...workflow.changeSet.creates, ...workflow.changeSet.updates]) {
-      for (const jobName of item.usedJobNames) {
-        allJobNames.add(jobName);
-      }
-    }
-    for (const jobName of workflow.unchangedWorkflowJobNames) {
-      allJobNames.add(jobName);
-    }
-    creates(
-      CreateWorkflowJobFunctionRequestSchema,
-      "workflow_job_function",
-      [...allJobNames].map((jobName) => ({
-        name: jobName,
-        request: {
-          workspaceId: workflowJobNameWorkspaceId,
-          jobFunctionName: jobName,
-          scriptRef: jobName,
-        },
-      })),
-    );
-  }
-
-  creates(
-    CreateWorkflowJobFunctionExecutionPolicyRequestSchema,
-    "workflow_job_function_execution_policy",
-    // Replaces re-create the resource after deleting it (execution_policy_key is
-    // immutable), so their Create-shaped request must clear validation too.
-    [
-      ...workflowExecutionPolicy.changeSet.creates,
-      ...workflowExecutionPolicy.changeSet.replaces,
-    ].map((item) => ({
-      name: item.name,
-      request: {
-        workspaceId: item.workspaceId,
-        executionPolicyName: item.policy.name,
-        executionPolicyKey: toPlatformExecutionPolicyKey(item.policy),
-        ...(item.policy.concurrencyPolicy && {
-          concurrencyPolicy: {
-            maxConcurrentExecutions: item.policy.concurrencyPolicy.maxConcurrentExecutions,
-          },
-        }),
-      },
-    })),
-  );
-  updates(
-    UpdateWorkflowJobFunctionExecutionPolicyRequestSchema,
-    "workflow_job_function_execution_policy",
-    workflowExecutionPolicy.changeSet.updates.map((item) => ({
-      name: item.name,
-      request: {
-        workspaceId: item.workspaceId,
-        executionPolicyName: item.policy.name,
-        ...(item.policy.concurrencyPolicy && {
-          concurrencyPolicy: {
-            maxConcurrentExecutions: item.policy.concurrencyPolicy.maxConcurrentExecutions,
-          },
-        }),
-      },
-    })),
-  );
-
-  creates(
-    CreateSecretManagerVaultRequestSchema,
-    "secret.vault",
-    secretManager.vaultChangeSet.creates.map((item) => ({
-      name: item.name,
-      request: vaultCreateRequest(item),
-    })),
-  );
-  creates(
-    CreateSecretManagerSecretRequestSchema,
-    "secret.secret",
-    secretManager.secretChangeSet.creates.map((item) => ({
-      name: item.name,
-      request: secretCreateRequest(item),
-    })),
-  );
-  updates(
-    UpdateSecretManagerSecretRequestSchema,
-    "secret.secret",
-    secretManager.secretChangeSet.updates.map((item) => ({
-      name: item.name,
-      request: secretUpdateRequest(item),
-    })),
-  );
-
-  // cors is excluded: static-website URL placeholders are resolved at apply time.
-  creates(
-    CreateApplicationRequestSchema,
-    "application",
-    app.creates.map((item) => ({
-      name: item.name,
-      request: { ...item.request, cors: undefined },
-    })),
-  );
-  updates(
-    UpdateApplicationRequestSchema,
-    "application",
-    [...app.updates, ...app.unchanged].map((item) => ({
-      name: item.name,
-      request: { ...item.request, cors: undefined },
-    })),
-  );
-
-  creates(
-    CreateAuthConnectionRequestSchema,
-    "auth.connection",
-    auth.changeSet.connection.creates as HasRequest[],
-  );
-  updates(
-    UpdateAuthConnectionRequestSchema,
-    "auth.connection",
-    auth.changeSet.connection.updates.flatMap(({ name, request }) =>
-      request ? [{ name, request }] : [],
-    ),
-  );
-
+  violations.push(...idpEmailDomainViolations(results));
   return violations;
 }
 

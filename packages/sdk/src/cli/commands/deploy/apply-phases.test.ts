@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => {
     applySecretManager: vi.fn(async (_client, result, phase) => {
       calls.push(`secret:${marker(result)}:${String(phase)}`);
     }),
-    applyFunctionRegistry: vi.fn(async (_client, _workspaceId, result, phase) => {
+    applyFunctionRegistry: vi.fn(async (_client, result, phase) => {
       calls.push(`function:${marker(result)}:${String(phase)}`);
     }),
     applyStaticWebsite: vi.fn(async (_client, result, phase) => {

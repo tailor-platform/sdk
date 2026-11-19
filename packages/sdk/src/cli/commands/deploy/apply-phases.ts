@@ -242,7 +242,7 @@ async function applyRemainingResourcesHoldingMaintenanceMode(
   await withMetadataWriteBatch(client, async (applyClient) => {
     await withSpan("apply.createUpdateServices", async () => {
       await step("apply.functionRegistry.createUpdate", (d) =>
-        applyFunctionRegistry(applyClient, workspaceId, d.functionRegistry, "create-update"),
+        applyFunctionRegistry(applyClient, d.functionRegistry, "create-update"),
       );
       await step("apply.tailorDB.createUpdate", async (d) => {
         const report = await applyTailorDB(applyClient, d.tailorDB, "create-update", {
@@ -325,7 +325,7 @@ async function applyRemainingResourcesHoldingMaintenanceMode(
 
   await withSpan("apply.cleanup", async () => {
     await forEachDeployment(deployments, (d) =>
-      applyFunctionRegistry(client, workspaceId, d.functionRegistry, "delete"),
+      applyFunctionRegistry(client, d.functionRegistry, "delete"),
     );
   });
   return maintenance;

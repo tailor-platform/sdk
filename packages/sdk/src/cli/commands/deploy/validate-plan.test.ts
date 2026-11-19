@@ -3,11 +3,14 @@ import {
   AuthOAuth2Client_ClientType,
   AuthOAuth2Client_GrantType,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
+import { TailorDBGQLPermission_Permit } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { logger, plainRedacted } from "#/cli/shared/logger";
-import { emptyPlanResults } from "./test-helpers/plan-results";
-import { validatePlans } from "./validate-plan";
+import { MANAGED_RESOURCES } from "./managed-resources";
+import { emptyPlanResults, PLANNED_ITEM } from "./test-helpers/plan-results";
+import { REQUEST_CHECKS, validatePlans } from "./validate-plan";
 import type { PlanResults } from "./apply-phases";
+import type { ManagedResourceType } from "./managed-resource-type";
 
 const WS_ID = "00000000-0000-0000-0000-000000000001";
 const METADATA = { trn: "", labels: {} };
@@ -531,6 +534,40 @@ const invalidCases: Case<RegExp>[] = [
     expected: /1 validation error\(s\) found in 1 resource\(s\)/,
   },
   {
+    name: "(p) TailorDB GraphQL permission whose policy lists no actions is rejected",
+    mutate: (input) => {
+      input.tailorDB.changeSet.gqlPermission.creates.push({
+        name: "Item",
+        request: {
+          workspaceId: WS_ID,
+          namespaceName: "main",
+          typeName: "Item",
+          permission: {
+            policies: [{ actions: [], permit: TailorDBGQLPermission_Permit.ALLOW }],
+          },
+        },
+      });
+    },
+    expected: /1 validation error\(s\) found in 1 resource\(s\)/,
+  },
+  {
+    name: "(q) function whose script exceeds the 20 MiB upload limit is rejected",
+    mutate: (input) => {
+      input.functionRegistry.changeSet.updates.push({
+        name: "resolver--main--big",
+        workspaceId: WS_ID,
+        entry: {
+          name: "resolver--main--big",
+          scriptContent: "x".repeat(20 * 1024 * 1024 + 1),
+          contentHash: "0".repeat(64),
+          description: "",
+        },
+        metaRequest: METADATA,
+      });
+    },
+    expected: /1 validation error\(s\) found in 1 resource\(s\)/,
+  },
+  {
     name: "(l8) IdP service create whose userAuthPolicy omits allowedEmailDomains is rejected",
     mutate: (input) => {
       input.idp.changeSet.service.creates.push({
@@ -547,7 +584,96 @@ const invalidCases: Case<RegExp>[] = [
   },
 ];
 
+const LIST_ACTIONS = {
+  creates: "create",
+  updates: "update",
+  replaces: "replace",
+  unchanged: "update",
+} as const;
+
+type CheckedList = keyof typeof LIST_ACTIONS;
+
+/** Every field a request check reads, with a workspace ID that is not a UUID. */
+const ITEM_OF_ANY_LIST = {
+  ...PLANNED_ITEM,
+  request: { workspaceId: PLANNED_ITEM.workspaceId },
+  createRequest: { workspaceId: PLANNED_ITEM.workspaceId },
+  metaRequest: METADATA,
+  namespaceName: "main",
+  vaultName: "vault",
+  secretName: "secret",
+  value: "value",
+  workflow: { name: "workflow", mainJob: { name: "job" } },
+  usedJobNames: ["job"],
+  policy: { name: "policy", key: "policy" },
+  entry: {
+    name: "function",
+    scriptContent: "// script",
+    contentHash: "0".repeat(64),
+    description: "",
+  },
+};
+
+function planItem(results: PlanResults, resourceType: ManagedResourceType, list: CheckedList) {
+  if (resourceType !== "workflow_job_function") {
+    (MANAGED_RESOURCES[resourceType].changeSetOf(results)[list] as unknown[]).push(
+      ITEM_OF_ANY_LIST,
+    );
+    return;
+  }
+  // Job functions are listed from the workflows that use them.
+  const workflows = results.workflow.changeSet;
+  const usedJobNames = list === "unchanged" ? [] : ITEM_OF_ANY_LIST.usedJobNames;
+  (list === "updates" ? workflows.updates : workflows.creates).push({
+    ...ITEM_OF_ANY_LIST,
+    usedJobNames,
+  } as never);
+  if (list === "unchanged") {
+    results.workflow.unchangedWorkflowJobNames.add("job");
+  }
+}
+
+const CHECKED_LISTS = Object.entries(REQUEST_CHECKS).flatMap(([resourceType, checks]) =>
+  (Object.keys(LIST_ACTIONS) as CheckedList[]).flatMap((list) => {
+    const listChecks: ReadonlyArray<{ action?: string }> =
+      (checks as Partial<Record<CheckedList, ReadonlyArray<{ action?: string }>>>)[list] ?? [];
+    const actions = [...new Set(listChecks.map((check) => check.action ?? LIST_ACTIONS[list]))];
+    return actions.map((action) => ({
+      resourceType: resourceType as ManagedResourceType,
+      list,
+      action,
+    }));
+  }),
+);
+
 describe("validatePlans", () => {
+  test.each(CHECKED_LISTS)(
+    "validates each $resourceType in $list as a $action",
+    async ({ resourceType, list, action }) => {
+      using _errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
+      using _logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+      const results = emptyPlanResults();
+      planItem(results, resourceType, list);
+
+      const error = await validatePlans([{ application: "my-app", results }]).catch(
+        (e: unknown) => e,
+      );
+
+      expect(error).toMatchObject({
+        code: "DEPLOY_VALIDATION_FAILED",
+        context: {
+          issues: expect.arrayContaining([
+            expect.objectContaining({
+              resourceType,
+              action,
+              fieldPath: expect.stringMatching(/(^|\.)workspace_id$/),
+            }),
+          ]),
+        },
+      });
+    },
+  );
+
   test.each(validCases)("$name", async ({ mutate }) => {
     const input = emptyPlanResults();
     mutate(input);

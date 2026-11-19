@@ -10,6 +10,7 @@ paths:
   - "packages/sdk/src/cli/commands/deploy/deploy.test.ts"
   - "packages/sdk/src/cli/commands/deploy/plan-report.ts"
   - "packages/sdk/src/cli/commands/deploy/validate-plan.ts"
+  - "packages/sdk/src/cli/commands/deploy/validate-plan.test.ts"
   - "packages/sdk/src/cli/commands/deploy/managed-resources.ts"
   - "packages/sdk/src/cli/commands/deploy/managed-resources.test.ts"
   - "packages/sdk/src/cli/commands/deploy/resources-in-use.ts"
@@ -46,8 +47,11 @@ consumer below; the guard named with it fails while one is missing.
 - `plan-report.ts` — add the change set to a grouped section of `buildPlanReport` or to
   `plainChangeSetsOf`.
 - `remove.ts` — add the type to `REMOVAL_LISTING_ORDER`.
-- `validate-plan.ts`'s `collectViolations` — add `creates`/`updates` calls with the new requests'
-  proto schemas.
+- `validate-plan.ts`'s `REQUEST_CHECKS` — check the request that each item of the type's
+  `creates`, `updates`, and `replaces` sends against its proto schema, and give a list whose items
+  send none an empty array (guard: `satisfies`, which requires each list the change set can hold).
+  Check `unchanged` items only when deploy sends them again. `validate-plan.test.ts` plans an item
+  whose workspace ID is not a UUID into each list with checks and expects a violation.
 - `resources-in-use.ts`'s `CHECKED_RESOURCES` — add a type that other resources reference, so
   deleting it while referenced fails.
 

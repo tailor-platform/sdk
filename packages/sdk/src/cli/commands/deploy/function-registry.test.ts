@@ -424,6 +424,7 @@ describe("applyFunctionRegistry phase separation", () => {
         creates: [
           {
             name: "resolver/ns/create-test",
+            workspaceId: "test-workspace",
             entry,
             metaRequest: { trn: "trn:test", labels: { "sdk-name": "test-app" } },
           },
@@ -431,6 +432,7 @@ describe("applyFunctionRegistry phase separation", () => {
         updates: [
           {
             name: "resolver/ns/update-test",
+            workspaceId: "test-workspace",
             entry,
             metaRequest: { trn: "trn:test", labels: { "sdk-name": "test-app" } },
           },
@@ -457,7 +459,7 @@ describe("applyFunctionRegistry phase separation", () => {
     const client = createMockClientWithSpies();
     const planResult = createMockPlanResult();
 
-    await applyFunctionRegistry(client, "test-workspace", planResult, "create-update");
+    await applyFunctionRegistry(client, planResult, "create-update");
 
     // Creates should call createFunctionRegistry + setMetadata
     expect(client.createFunctionRegistry).toHaveBeenCalledTimes(1);
@@ -481,7 +483,7 @@ describe("applyFunctionRegistry phase separation", () => {
       ],
     } as unknown as Awaited<ReturnType<typeof planFunctionRegistry>>;
 
-    await applyFunctionRegistry(client, "test-workspace", planResult, "create-update");
+    await applyFunctionRegistry(client, planResult, "create-update");
 
     expect(client.createFunctionRegistry).not.toHaveBeenCalled();
     expect(client.updateFunctionRegistry).not.toHaveBeenCalled();
@@ -502,7 +504,7 @@ describe("applyFunctionRegistry phase separation", () => {
       ],
     } as unknown as Awaited<ReturnType<typeof planFunctionRegistry>>;
 
-    await applyFunctionRegistry(client, "test-workspace", planResult, "delete");
+    await applyFunctionRegistry(client, planResult, "delete");
 
     expect(client.setMetadata).not.toHaveBeenCalled();
   });
@@ -511,7 +513,7 @@ describe("applyFunctionRegistry phase separation", () => {
     const client = createMockClientWithSpies();
     const planResult = createMockPlanResult();
 
-    await applyFunctionRegistry(client, "test-workspace", planResult, "delete");
+    await applyFunctionRegistry(client, planResult, "delete");
 
     expect(client.deleteFunctionRegistry).toHaveBeenCalledTimes(1);
     expect(client.deleteFunctionRegistry).toHaveBeenCalledWith({
@@ -531,7 +533,7 @@ describe("applyFunctionRegistry phase separation", () => {
     );
 
     await expect(
-      applyFunctionRegistry(client, "test-workspace", createMockPlanResult(), "delete"),
+      applyFunctionRegistry(client, createMockPlanResult(), "delete"),
     ).resolves.toBeUndefined();
   });
 
@@ -541,9 +543,9 @@ describe("applyFunctionRegistry phase separation", () => {
       new ConnectError("denied", Code.PermissionDenied),
     );
 
-    await expect(
-      applyFunctionRegistry(client, "test-workspace", createMockPlanResult(), "delete"),
-    ).rejects.toThrow("denied");
+    await expect(applyFunctionRegistry(client, createMockPlanResult(), "delete")).rejects.toThrow(
+      "denied",
+    );
   });
 
   test("uploads functions concurrently in the create-update phase", async () => {
@@ -558,6 +560,7 @@ describe("applyFunctionRegistry phase separation", () => {
 
     const changeOf = (name: string) => ({
       name,
+      workspaceId: "test-workspace",
       entry: {
         name,
         scriptContent: "// script",
@@ -582,7 +585,7 @@ describe("applyFunctionRegistry phase separation", () => {
       resourceOwners: new Set<string>(),
     } as unknown as Awaited<ReturnType<typeof planFunctionRegistry>>;
 
-    await applyFunctionRegistry(client, "test-workspace", planResult, "create-update");
+    await applyFunctionRegistry(client, planResult, "create-update");
 
     expect(client.createFunctionRegistry).toHaveBeenCalledTimes(3);
     expect(client.updateFunctionRegistry).toHaveBeenCalledTimes(3);
@@ -609,6 +612,7 @@ describe("applyFunctionRegistry phase separation", () => {
     } as unknown as OperatorClient;
     const changeOf = (name: string) => ({
       name,
+      workspaceId: "test-workspace",
       entry: {
         name,
         scriptContent: "// script",
@@ -633,12 +637,7 @@ describe("applyFunctionRegistry phase separation", () => {
       resourceOwners: new Set<string>(),
     } as unknown as Awaited<ReturnType<typeof planFunctionRegistry>>;
 
-    const applyPromise = applyFunctionRegistry(
-      client,
-      "test-workspace",
-      planResult,
-      "create-update",
-    );
+    const applyPromise = applyFunctionRegistry(client, planResult, "create-update");
 
     await vi.waitFor(() => expect(createFunctionRegistry).toHaveBeenCalledTimes(2));
     releaseFirstCreate();
@@ -672,6 +671,7 @@ describe("applyFunctionRegistry phase separation", () => {
 
       const changeOf = (name: string) => ({
         name,
+        workspaceId: "test-workspace",
         entry: {
           name,
           scriptContent: "// script",
@@ -696,7 +696,7 @@ describe("applyFunctionRegistry phase separation", () => {
         resourceOwners: new Set<string>(),
       } as unknown as Awaited<ReturnType<typeof planFunctionRegistry>>;
 
-      await applyFunctionRegistry(client, "test-workspace", planResult, "create-update");
+      await applyFunctionRegistry(client, planResult, "create-update");
 
       expect(client.updateFunctionRegistry).toHaveBeenCalledTimes(4);
       expect(probe.maxInFlight()).toBeLessThanOrEqual(2);
