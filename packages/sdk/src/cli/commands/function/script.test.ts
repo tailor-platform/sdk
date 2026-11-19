@@ -119,6 +119,19 @@ describe("function script", () => {
     vi.unstubAllEnvs();
   });
 
+  test("resolves the generated types' distPath against the config's directory", async () => {
+    using tmp = tempCwd("sdk-function-script-");
+    using _logger = silenceLogger("info", "success", "warn");
+    mockConfig(tmp.dir, { plugins: [kyselyPluginStub] });
+    fs.mkdirSync(path.join(tmp.dir, "sub"));
+    process.chdir(path.join(tmp.dir, "sub"));
+
+    await runCommand(scriptCommand, ["scripts/fix.ts", "--namespace", "tailordb"]);
+
+    const script = fs.readFileSync(path.join(tmp.dir, "sub/scripts/fix.ts"), "utf-8");
+    expect(script).toContain('import { getDB } from "../../generated/tailordb";');
+  });
+
   test("scaffolds a skeleton importing the project's generated types when kyselyTypePlugin is configured", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");

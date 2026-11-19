@@ -432,12 +432,19 @@ export async function generate(options?: GenerateOptions) {
       pluginManager = new PluginManager(plugins);
     }
 
-    // Create a lightweight application (tables not yet loaded)
-    const application = defineApplication({ config, pluginManager });
+    // Relative output paths in plugin options are relative to the config's directory.
+    const invocationDir = process.cwd();
+    process.chdir(path.dirname(config.path));
+    try {
+      // Create a lightweight application (tables not yet loaded)
+      const application = defineApplication({ config, pluginManager });
 
-    rootSpan.setAttribute("app.name", application.config.name);
+      rootSpan.setAttribute("app.name", application.config.name);
 
-    const manager = createGenerationManager({ application, config, pluginManager });
-    await manager.generate();
+      const manager = createGenerationManager({ application, config, pluginManager });
+      await manager.generate();
+    } finally {
+      process.chdir(invocationDir);
+    }
   });
 }

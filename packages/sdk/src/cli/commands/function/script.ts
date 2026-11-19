@@ -145,7 +145,11 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
             "It imports the project's generated Kysely types, so there is nothing to refresh.",
         });
       }
-      const { specifier, generatedFile } = resolveKyselyTypesImport(plugins, scriptDir);
+      const { specifier, generatedFile } = resolveKyselyTypesImport(
+        plugins,
+        config.path,
+        scriptDir,
+      );
       getDBImportPath = specifier;
       if (generatedFile !== undefined && !fs.existsSync(generatedFile)) {
         logger.warn(
@@ -320,14 +324,16 @@ const SDK_KYSELY_DB_SPECIFIER = "@tailor-platform/sdk/plugin/kysely-type/db";
 
 /**
  * Resolve where a script imports `getDB()` from when the project configures `kyselyTypePlugin`.
- * A configured `distPath` is a generated types file, which resolves against the working
+ * A configured `distPath` is a generated types file, which resolves against the config's
  * directory like where `tailor generate` writes it; with `contentMapper: true`, the SDK provides `getDB()`.
  * @param plugins - The project's configured plugins
+ * @param configPath - Path of the config that configures the plugins
  * @param scriptDir - Directory the script is written to
  * @returns The import specifier, and the generated types file it points at when there is one
  */
 function resolveKyselyTypesImport(
   plugins: readonly Plugin[],
+  configPath: string,
   scriptDir: string,
 ): { specifier: string; generatedFile?: string } {
   const options = resolvePluginConfig(plugins, KyselyGeneratorID);
@@ -340,7 +346,7 @@ function resolveKyselyTypesImport(
         "kyselyTypePlugin is configured without a distPath or contentMapper: true; cannot locate getDB().",
     });
   }
-  const generatedFile = path.resolve(distPath);
+  const generatedFile = path.resolve(path.dirname(configPath), distPath);
   return {
     specifier: toImportSpecifier(path.relative(scriptDir, generatedFile)),
     generatedFile,

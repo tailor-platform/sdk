@@ -7,6 +7,16 @@ import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 
 const CONFIG_SOURCE = `export default { name: "app" };\n`;
 
+const PLUGIN_CONFIG_SOURCE = `export default { name: "app" };
+export const plugins = [
+  {
+    id: "test-output",
+    description: "Writes a file to a relative path",
+    onTailorDBReady: () => ({ files: [{ path: "./generated/out.txt", content: "out" }] }),
+  },
+];
+`;
+
 describe("generate config discovery", () => {
   test.each([
     {
@@ -72,4 +82,37 @@ describe("generate config discovery", () => {
       .filter((dts) => fs.existsSync(path.join(tmp.dir, dts)));
     expect(writtenTypes).toEqual([path.join(path.dirname(used), "tailor.d.ts")]);
   });
+
+  test.each([
+    { name: "found in a parent directory", cwd: "app/sub", args: [] },
+    {
+      name: "given with --config from another directory",
+      cwd: "other",
+      args: ["--config", "../app/tailor.config.ts"],
+    },
+  ])(
+    "writes plugin outputs relative to the config's directory when the config is $name",
+    async ({ cwd, args }) => {
+      using tmp = tempCwd("tailor-config-discovery-");
+      const appDir = path.join(tmp.dir, "app");
+      fs.mkdirSync(path.join(appDir, "sub"), { recursive: true });
+      fs.mkdirSync(path.join(tmp.dir, "other"));
+      fs.writeFileSync(path.join(appDir, "tailor.config.ts"), PLUGIN_CONFIG_SOURCE);
+      const invocationDir = path.join(tmp.dir, cwd);
+      process.chdir(invocationDir);
+      vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
+      vi.stubEnv("TAILOR_DTS_PATH", undefined);
+
+      try {
+        const result = await runCliCommand(generateCommand, args);
+        expect(result.error).toBeUndefined();
+      } finally {
+        vi.unstubAllEnvs();
+      }
+
+      expect(fs.readFileSync(path.join(appDir, "generated", "out.txt"), "utf-8")).toBe("out");
+      expect(fs.existsSync(path.join(invocationDir, "generated"))).toBe(false);
+      expect(fs.realpathSync(process.cwd())).toBe(fs.realpathSync(invocationDir));
+    },
+  );
 });
