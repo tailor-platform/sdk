@@ -355,7 +355,14 @@ export interface AppConfig<
   maintenanceMode?: false | "migration" | "deploy";
 }
 
-type WorkspaceSettings = Pick<
+/** Settings of an application apart from the services it exposes. */
+export type ApplicationSettings = Pick<
+  AppConfig,
+  "cors" | "allowedIpAddresses" | "disableIntrospection" | "metadata"
+>;
+
+/** Settings that apply to a whole workspace, apart from its services and applications. */
+export type WorkspaceSettings = Pick<
   AppConfig,
   | "httpAdapter"
   | "staticWebsites"
@@ -380,7 +387,7 @@ export interface WorkspaceApplicationConfig<
   Resolver extends string,
   Auth extends string,
   Idp extends string,
-> extends Pick<AppConfig, "cors" | "allowedIpAddresses" | "disableIntrospection" | "metadata"> {
+> extends ApplicationSettings {
   /** TailorDB namespaces exposed in this application's GraphQL API. A namespace no application lists is reachable only through SQL. */
   db?: Db[];
   /** Resolver namespaces exposed in this application's GraphQL API. */

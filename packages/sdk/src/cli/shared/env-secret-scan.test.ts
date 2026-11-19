@@ -120,18 +120,20 @@ describe("scanEnvForSecrets", () => {
     const findings = await scanEnvForSecrets({
       env: { SLACK_BOT_TOKEN: SLACK_TOKEN },
       overrides: [
-        { owner: ["resolver", "shop-api"], env: { SLACK_BOT_TOKEN: SLACK_TOKEN } },
+        { servicePath: ["resolver", "shop-api"], env: { SLACK_BOT_TOKEN: SLACK_TOKEN } },
         {
-          owner: ["executor"],
+          servicePath: ["executor"],
           env: { LEGACY_TOKEN: "Zk3xQ9pLmVn7WcT2bYr5JdHgSaEuIoPq8FvNzXwCkMj4" },
         },
       ],
     });
 
-    expect(findings.map(({ key, owner, severity }) => ({ key, owner, severity }))).toEqual([
-      { key: "SLACK_BOT_TOKEN", owner: undefined, severity: "error" },
-      { key: "SLACK_BOT_TOKEN", owner: ["resolver", "shop-api"], severity: "error" },
-      { key: "LEGACY_TOKEN", owner: ["executor"], severity: "warning" },
+    expect(
+      findings.map(({ key, servicePath, severity }) => ({ key, servicePath, severity })),
+    ).toEqual([
+      { key: "SLACK_BOT_TOKEN", servicePath: undefined, severity: "error" },
+      { key: "SLACK_BOT_TOKEN", servicePath: ["resolver", "shop-api"], severity: "error" },
+      { key: "LEGACY_TOKEN", servicePath: ["executor"], severity: "warning" },
     ]);
   });
 
@@ -282,10 +284,10 @@ describe("assertEnvHasNoSecrets", () => {
       assertEnvHasNoSecrets({
         overrides: [
           {
-            owner: ["executor"],
+            servicePath: ["executor"],
             env: { LEGACY_TOKEN: "Zk3xQ9pLmVn7WcT2bYr5JdHgSaEuIoPq8FvNzXwCkMj4" },
           },
-          { owner: ["auth", "corp-auth"], env: { SLACK_BOT_TOKEN: SLACK_TOKEN } },
+          { servicePath: ["auth", "corp-auth"], env: { SLACK_BOT_TOKEN: SLACK_TOKEN } },
         ],
         configPath: "/project/override.config.ts",
       }),

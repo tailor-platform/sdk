@@ -41,36 +41,44 @@ function brandedDefault(kind: string, source: string): string {
   return `export default Object.defineProperty(${source}, Symbol.for("tailor-platform/sdk"), { value: ${JSON.stringify(kind)} });`;
 }
 
+const allowedSlackToken = `{ value: ${JSON.stringify(SLACK_TOKEN)}, allowSecretReason: "demo workspace" }`;
+
 describe("loadConfigFile", () => {
-  test("loads a defineWorkspace config as a workspace with its env values resolved", async () => {
+  test("loads a defineWorkspace config as a workspace with every env value resolved", async () => {
     const configPath = writeConfig(
       brandedDefault(
         "workspace-config",
         `{
-          env: { APP_ENV: "DEV", SLACK_BOT_TOKEN: "placeholder" },
-          resolver: {
-            "shop-api": {
-              files: ["./resolvers/**/*.ts"],
-              env: { SLACK_BOT_TOKEN: { value: ${JSON.stringify(SLACK_TOKEN)}, allowSecretReason: "demo workspace" } },
-            },
-          },
-          apps: { shop: { resolver: ["shop-api"] } },
+          env: { APP_ENV: "DEV", SLACK_BOT_TOKEN: ${allowedSlackToken} },
+          resolver: { "shop-api": { files: [], env: { SLACK_BOT_TOKEN: ${allowedSlackToken} } } },
+          executor: { files: [], env: { SLACK_BOT_TOKEN: ${allowedSlackToken} } },
+          workflow: { files: [], env: { SLACK_BOT_TOKEN: ${allowedSlackToken} } },
+          auth: { "corp-auth": { name: "corp-auth", env: { SLACK_BOT_TOKEN: ${allowedSlackToken} } } },
+          apps: { shop: { resolver: ["shop-api"], auth: "corp-auth" } },
         }`,
       ) + `\nexport const plugins = [{ id: "first", description: "First plugin" }];`,
     );
 
     const loaded = await loadConfigFile(configPath);
 
+    const resolved = { SLACK_BOT_TOKEN: SLACK_TOKEN };
     expect(loaded).toEqual({
       kind: "workspace",
       workspace: {
-        env: { APP_ENV: "DEV", SLACK_BOT_TOKEN: "placeholder" },
+        env: { APP_ENV: "DEV", SLACK_BOT_TOKEN: SLACK_TOKEN },
         db: {},
-        resolver: { "shop-api": { files: ["./resolvers/**/*.ts"] } },
-        auth: {},
+        resolver: { "shop-api": { files: [] } },
+        executor: { files: [] },
+        workflow: { files: [] },
+        auth: { "corp-auth": { name: "corp-auth" } },
         idp: {},
-        envOverrides: { resolver: { "shop-api": { SLACK_BOT_TOKEN: SLACK_TOKEN } }, auth: {} },
-        apps: { shop: { db: [], resolver: ["shop-api"] } },
+        envOverrides: {
+          resolver: { "shop-api": resolved },
+          executor: resolved,
+          workflow: resolved,
+          auth: { "corp-auth": resolved },
+        },
+        apps: { shop: { db: [], resolver: ["shop-api"], auth: "corp-auth" } },
         path: configPath,
       },
       plugins: [{ id: "first", description: "First plugin" }],
@@ -96,55 +104,11 @@ describe("loadConfigFile", () => {
     });
   });
 
-  test.each([
-    {
-      name: "an application listing a namespace the workspace does not declare",
-      kind: "workspace-config",
-      source: `{ db: { "customer-db": { files: [] } }, apps: { shop: { db: ["typo"] } } }`,
-      issue: {
-        path: ["apps", "shop", "db", 0],
-        message: `'apps.shop.db' lists "typo", which is not a key of 'db'.`,
-      },
-    },
-    {
-      name: "an id in defineApp",
-      kind: "app-config",
-      source: `{ id: "c98794dd-9bf1-480f-a5c9-bf92b3679d42", name: "shop" }`,
-      issue: { path: [], message: 'Unrecognized key: "id"' },
-    },
-    {
-      name: "an external namespace in defineApp",
-      kind: "app-config",
-      source: `{ name: "shop", db: { "shared-db": { external: true } } }`,
-      issue: {
-        path: ["db", "shared-db", "external"],
-        message:
-          "'external' is only accepted by defineConfig(). Declare the service in this config instead.",
-      },
-    },
-  ])(
-    "reports $name, a value the types would reject, as CONFIG_INVALID",
-    async ({ kind, source, issue }) => {
-      const configPath = writeConfig(brandedDefault(kind, source));
-
-      const error = await rejectionOf(loadConfigFile(configPath));
-
-      expect(error).toMatchObject({
-        code: "CONFIG_INVALID",
-        context: { file: configPath, exportName: "default", issues: [issue] },
-      });
-    },
-  );
-
-  test("rejects a credential in an env override at the path of the override", async () => {
+  test("reports a value the types would reject as CONFIG_INVALID", async () => {
     const configPath = writeConfig(
       brandedDefault(
         "workspace-config",
-        `{
-          env: { SLACK_BOT_TOKEN: "placeholder" },
-          executor: { files: [], env: { SLACK_BOT_TOKEN: ${JSON.stringify(SLACK_TOKEN)} } },
-          apps: {},
-        }`,
+        `{ db: { "customer-db": { files: [] } }, apps: { shop: { db: ["typo"] } } }`,
       ),
     );
 
@@ -154,26 +118,76 @@ describe("loadConfigFile", () => {
       code: "CONFIG_INVALID",
       context: {
         file: configPath,
-        issues: [expect.objectContaining({ path: ["executor", "env", "SLACK_BOT_TOKEN"] })],
+        exportName: "default",
+        issues: [
+          {
+            path: ["apps", "shop", "db", 0],
+            message: `'apps.shop.db' lists "typo", which is not a key of 'db'.`,
+          },
+        ],
       },
     });
   });
+
+  test.each([
+    {
+      name: "defineWorkspace",
+      kind: "workspace-config",
+      source: `{
+        env: { SLACK_BOT_TOKEN: "placeholder" },
+        resolver: { "shop-api": { files: [], env: { SLACK_BOT_TOKEN: ${JSON.stringify(SLACK_TOKEN)} } } },
+        executor: { files: [], env: { SLACK_BOT_TOKEN: ${JSON.stringify(SLACK_TOKEN)} } },
+        workflow: { files: [], env: { SLACK_BOT_TOKEN: ${JSON.stringify(SLACK_TOKEN)} } },
+        auth: { "corp-auth": { name: "corp-auth", env: { SLACK_BOT_TOKEN: ${JSON.stringify(SLACK_TOKEN)} } } },
+        apps: {},
+      }`,
+      paths: [
+        ["resolver", "shop-api", "env", "SLACK_BOT_TOKEN"],
+        ["executor", "env", "SLACK_BOT_TOKEN"],
+        ["workflow", "env", "SLACK_BOT_TOKEN"],
+        ["auth", "corp-auth", "env", "SLACK_BOT_TOKEN"],
+      ],
+    },
+    {
+      name: "defineApp",
+      kind: "app-config",
+      source: `{
+        name: "shop",
+        env: { SLACK_BOT_TOKEN: "placeholder" },
+        auth: { name: "corp-auth", env: { SLACK_BOT_TOKEN: ${JSON.stringify(SLACK_TOKEN)} } },
+      }`,
+      paths: [["auth", "env", "SLACK_BOT_TOKEN"]],
+    },
+  ])(
+    "rejects credentials in the env overrides of a $name config at the paths written",
+    async ({ kind, source, paths }) => {
+      const configPath = writeConfig(brandedDefault(kind, source));
+
+      const error = await rejectionOf(loadConfigFile(configPath));
+
+      expect(error).toMatchObject({
+        code: "CONFIG_INVALID",
+        context: {
+          file: configPath,
+          issues: paths.map((issuePath) => expect.objectContaining({ path: issuePath })),
+        },
+      });
+    },
+  );
 });
 
 describe("loadConfig", () => {
-  test.each(["workspace-config", "app-config"])(
-    "rejects a %s config, which commands do not support yet",
-    async (kind) => {
-      const configPath = writeConfig(
-        brandedDefault(kind, kind === "app-config" ? `{ name: "shop" }` : `{ apps: {} }`),
-      );
+  test.each([
+    { kind: "workspace-config", source: `{ apps: {} }` },
+    { kind: "app-config", source: `{ name: "shop" }` },
+  ])("rejects a $kind config, which commands do not support yet", async ({ kind, source }) => {
+    const configPath = writeConfig(brandedDefault(kind, source));
 
-      const error = await rejectionOf(loadConfig(configPath));
+    const error = await rejectionOf(loadConfig(configPath));
 
-      expect(error).toMatchObject({ code: "CONFIG_KIND_UNSUPPORTED" });
-      expect(getErrorDiagnostics(error).location).toEqual({ file: configPath });
-    },
-  );
+    expect(error).toMatchObject({ code: "CONFIG_KIND_UNSUPPORTED" });
+    expect(getErrorDiagnostics(error).location).toEqual({ file: configPath });
+  });
 
   test("reports a config path that does not exist as CONFIG_NOT_FOUND", async () => {
     const configPath = path.join(os.tmpdir(), "tailor-config-missing", "tailor.config.ts");

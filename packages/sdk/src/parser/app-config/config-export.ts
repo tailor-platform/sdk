@@ -1,17 +1,66 @@
 import { isSdkBranded } from "#/utils/brand";
 import { AppConfigSchema, AppDefinitionSchema, WorkspaceConfigSchema } from "./schema";
-import type { AppConfig, AppDefinition, WorkspaceConfig } from "#/configure/config/types";
-import type { EnvOverride, ParsedWorkspaceConfig, WorkspaceApplication } from "./types";
+import type { AppConfig, AppDefinition, EnvEntry, WorkspaceConfig } from "#/configure/config/types";
+import type { WorkspaceApplication, WorkspaceRepresentation } from "./types";
 import type { z } from "zod";
 
 /** The default export of `tailor.config.ts`, told apart by the function that defined it. */
 export type ParsedConfigExport =
   | { kind: "config"; config: AppConfig }
-  | { kind: "workspace"; workspace: ParsedWorkspaceConfig };
+  | {
+      kind: "workspace";
+      definedBy: "defineWorkspace" | "defineApp";
+      workspace: WorkspaceRepresentation;
+    };
+
+type EnvOverride = Record<string, EnvEntry>;
 
 type ParseResult =
   | { success: true; data: ParsedConfigExport }
   | { success: false; error: z.ZodError };
+
+type WorkspaceExport = Extract<ParsedConfigExport, { kind: "workspace" }>;
+
+/**
+ * List the `env` overrides of a workspace with the path of the service that holds each, as the
+ * config spells it.
+ * @param parsed - Parsed workspace config and the function that defined it
+ * @returns Each override with its service path, e.g. `["resolver", "shop-api"]`
+ */
+export function envOverrideEntries<Value>(
+  parsed: Pick<WorkspaceExport, "definedBy"> & { workspace: WorkspaceRepresentation<Value> },
+): { servicePath: string[]; env: Record<string, Value> }[] {
+  const { resolver, executor, workflow, auth } = parsed.workspace.envOverrides;
+  return [
+    ...Object.entries(resolver).map(([name, env]) => ({ servicePath: ["resolver", name], env })),
+    ...(executor ? [{ servicePath: ["executor"], env: executor }] : []),
+    ...(workflow ? [{ servicePath: ["workflow"], env: workflow }] : []),
+    ...Object.entries(auth).map(([name, env]) => ({
+      servicePath: parsed.definedBy === "defineApp" ? ["auth"] : ["auth", name],
+      env,
+    })),
+  ];
+}
+
+/**
+ * Map every `env` override of a workspace to new values.
+ * @param overrides - The workspace's `env` overrides
+ * @param map - Maps one service's override to its new values
+ * @returns The overrides with mapped values
+ */
+export function mapEnvOverrides<From, To>(
+  overrides: WorkspaceRepresentation<From>["envOverrides"],
+  map: (env: Record<string, From>) => Record<string, To>,
+): WorkspaceRepresentation<To>["envOverrides"] {
+  const mapEach = (records: Record<string, Record<string, From>>) =>
+    Object.fromEntries(Object.entries(records).map(([name, env]) => [name, map(env)]));
+  return {
+    resolver: mapEach(overrides.resolver),
+    ...(overrides.executor ? { executor: map(overrides.executor) } : {}),
+    ...(overrides.workflow ? { workflow: map(overrides.workflow) } : {}),
+    auth: mapEach(overrides.auth),
+  };
+}
 
 function withoutEnv<Entry extends object>(entry: Entry): [Omit<Entry, "env">, EnvOverride?] {
   if (!("env" in entry)) return [entry];
@@ -32,7 +81,7 @@ function splitEnv<Entry extends object>(
   return [services, overrides];
 }
 
-function toWorkspace(config: WorkspaceConfig): ParsedWorkspaceConfig {
+function toWorkspace(config: WorkspaceConfig): WorkspaceRepresentation {
   const { env, db, resolver, executor, workflow, auth, idp, apps, ...settings } = config;
   const [resolverServices, resolverOverrides] = splitEnv(resolver ?? {});
   const [authServices, authOverrides] = splitEnv(auth ?? {});
@@ -91,10 +140,10 @@ function appToWorkspace(app: AppDefinition): WorkspaceConfig {
     ...(idp ? { idp: { [idp.name]: idp } } : {}),
     apps: {
       [name]: {
-        cors,
-        allowedIpAddresses,
-        disableIntrospection,
-        metadata,
+        ...(cors ? { cors } : {}),
+        ...(allowedIpAddresses ? { allowedIpAddresses } : {}),
+        ...(disableIntrospection !== undefined ? { disableIntrospection } : {}),
+        ...(metadata ? { metadata } : {}),
         db: Object.keys(db ?? {}),
         resolver: Object.keys(resolver ?? {}),
         ...(auth ? { auth: auth.name } : {}),
@@ -116,7 +165,11 @@ export function parseConfigExport(value: unknown): ParseResult {
     if (!result.success) return result;
     return {
       success: true,
-      data: { kind: "workspace", workspace: toWorkspace(value as WorkspaceConfig) },
+      data: {
+        kind: "workspace",
+        definedBy: "defineWorkspace",
+        workspace: toWorkspace(value as WorkspaceConfig),
+      },
     };
   }
   if (isSdkBranded(value, "app-config")) {
@@ -124,7 +177,11 @@ export function parseConfigExport(value: unknown): ParseResult {
     if (!result.success) return result;
     return {
       success: true,
-      data: { kind: "workspace", workspace: toWorkspace(appToWorkspace(value as AppDefinition)) },
+      data: {
+        kind: "workspace",
+        definedBy: "defineApp",
+        workspace: toWorkspace(appToWorkspace(value as AppDefinition)),
+      },
     };
   }
   const result = AppConfigSchema.safeParse(value);

@@ -1,7 +1,11 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { parseConfigExport } from "#/parser/app-config/workspace";
+import {
+  envOverrideEntries,
+  mapEnvOverrides,
+  parseConfigExport,
+} from "#/parser/app-config/config-export";
 import { PluginConfigSchema } from "#/parser/plugin-config/index";
 import { isPluginValidationError } from "#/utils/plugin-validation-error";
 import { loadConfigPath } from "./context";
@@ -18,7 +22,7 @@ import {
 } from "./validation-errors";
 import { flattenZodIssues, type FlatIssue } from "./zod-issues";
 import type { AppConfig, EnvEntry, EnvValue } from "#/configure/config/types";
-import type { ParsedWorkspaceConfig } from "#/parser/app-config/types";
+import type { WorkspaceRepresentation } from "#/parser/app-config/types";
 import type { Plugin } from "#/plugin/types";
 
 /**
@@ -35,7 +39,7 @@ export type ResolvedEnvAppConfig = Omit<AppConfig, "env"> & {
 export type LoadedConfig = ResolvedEnvAppConfig & { path: string };
 
 /** A `defineWorkspace()` or `defineApp()` config with its `env` values resolved, and its path. */
-export type LoadedWorkspaceConfig = ParsedWorkspaceConfig<EnvValue> & { path: string };
+export type LoadedWorkspaceConfig = WorkspaceRepresentation<EnvValue> & { path: string };
 
 /** A loaded config file, told apart by the function that defined its default export. */
 export type LoadedConfigFile =
@@ -67,6 +71,7 @@ export async function loadConfig(
         code: "CONFIG_KIND_UNSUPPORTED",
         message:
           "This command does not support a config defined with defineWorkspace() or defineApp().",
+        suggestion: "Define the config with defineConfig() to use this command.",
       }),
       loaded.workspace.path,
     );
@@ -78,12 +83,6 @@ function resolveEnv(env: Record<string, EnvEntry>): Record<string, EnvValue> {
   return Object.fromEntries(
     Object.entries(env).map(([key, entry]) => [key, resolveEnvValue(entry)]),
   );
-}
-
-function resolveEnvRecords(
-  records: Record<string, Record<string, EnvEntry>>,
-): Record<string, Record<string, EnvValue>> {
-  return Object.fromEntries(Object.entries(records).map(([name, env]) => [name, resolveEnv(env)]));
 }
 
 /**
@@ -156,21 +155,9 @@ export async function loadConfigFile(
   if (parsed.data.kind === "config") {
     await assertEnvHasNoSecrets({ env: parsed.data.config.env, configPath: resolvedPath });
   } else {
-    const { env, envOverrides } = parsed.data.workspace;
     await assertEnvHasNoSecrets({
-      env,
-      overrides: [
-        ...Object.entries(envOverrides.resolver).map(([name, overrides]) => ({
-          owner: ["resolver", name],
-          env: overrides,
-        })),
-        ...(envOverrides.executor ? [{ owner: ["executor"], env: envOverrides.executor }] : []),
-        ...(envOverrides.workflow ? [{ owner: ["workflow"], env: envOverrides.workflow }] : []),
-        ...Object.entries(envOverrides.auth).map(([name, overrides]) => ({
-          owner: ["auth", name],
-          env: overrides,
-        })),
-      ],
+      env: parsed.data.workspace.env,
+      overrides: envOverrideEntries(parsed.data),
       configPath: resolvedPath,
     });
   }
@@ -234,18 +221,12 @@ export async function loadConfigFile(
     };
   }
   const { workspace } = parsed.data;
-  const { executor, workflow, resolver, auth } = workspace.envOverrides;
   return {
     kind: "workspace",
     workspace: {
       ...workspace,
       env: resolveEnv(workspace.env),
-      envOverrides: {
-        resolver: resolveEnvRecords(resolver),
-        ...(executor ? { executor: resolveEnv(executor) } : {}),
-        ...(workflow ? { workflow: resolveEnv(workflow) } : {}),
-        auth: resolveEnvRecords(auth),
-      },
+      envOverrides: mapEnvOverrides(workspace.envOverrides, resolveEnv),
       path: resolvedPath,
     },
     plugins: allPlugins,

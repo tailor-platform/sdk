@@ -1,17 +1,13 @@
 import { describe, expect, test } from "vitest";
-import { SDK_BRAND } from "#/utils/brand";
-import { parseConfigExport } from "./workspace";
+import { brandValue } from "#/utils/brand";
+import { parseConfigExport } from "./config-export";
 
 const corpAuth = { name: "corp-auth", machineUsers: { "db-seeder": {} } };
 const corpIdp = { name: "corp-idp", clients: ["web"] };
 const partnerIdp = { name: "partner-idp", clients: ["web"] };
 
-function branded<T extends object>(value: T, kind: string): T {
-  return Object.defineProperty({ ...value }, SDK_BRAND, { value: kind });
-}
-
-const workspace = (value: object) => branded(value, "workspace-config");
-const app = (value: object) => branded(value, "app-config");
+const workspace = (value: object) => brandValue({ ...value }, "workspace-config");
+const app = (value: object) => brandValue({ ...value }, "app-config");
 
 function issuesOf(value: unknown) {
   const result = parseConfigExport(value);
@@ -61,6 +57,7 @@ describe("parseConfigExport", () => {
       success: true,
       data: {
         kind: "workspace",
+        definedBy: "defineWorkspace",
         workspace: {
           env: { APP_ENV: "DEV", CHECKOUT_URL: "https://example.com/checkout" },
           maintenanceMode: "deploy",
@@ -129,8 +126,13 @@ describe("parseConfigExport", () => {
       }),
     );
 
-    expect(fromApp.success).toBe(true);
-    expect(fromApp).toEqual(fromWorkspace);
+    if (!fromApp.success || !fromWorkspace.success)
+      throw new Error("expected both configs to parse");
+    expect(fromApp.data).toMatchObject({ kind: "workspace", definedBy: "defineApp" });
+    expect(fromWorkspace.data).toMatchObject({ kind: "workspace", definedBy: "defineWorkspace" });
+    const workspaceOf = (data: typeof fromApp.data) =>
+      data.kind === "workspace" ? data.workspace : undefined;
+    expect(workspaceOf(fromApp.data)).toStrictEqual(workspaceOf(fromWorkspace.data));
   });
 
   test.each([
@@ -272,6 +274,19 @@ describe("parseConfigExport", () => {
             "'external' is only accepted by defineConfig(). Declare the service in this config instead.",
         },
       ],
+    },
+    {
+      name: "an IdP array and an auth without a name in defineApp",
+      value: app({ name: "shop", auth: {}, idp: [corpIdp] }),
+      issues: [
+        { path: ["auth"], message: "'auth' must be an auth service defined with defineAuth()." },
+        { path: ["idp"], message: "'idp' must be a single IdP defined with defineIdp()." },
+      ],
+    },
+    {
+      name: "a db that is not keyed by namespace in defineApp",
+      value: app({ name: "shop", db: "./db/**/*.ts" }),
+      issues: [{ path: ["db"], message: "Invalid input: expected record, received string" }],
     },
     {
       name: "env overrides in defineApp other than the auth's",

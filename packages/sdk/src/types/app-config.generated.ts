@@ -4,14 +4,8 @@ export type LogLevelEnum = "DEBUG" | "ERROR" | "INFO" | "SILENT" | "WARN";
 export type LogLevelEnumInput = LogLevelEnum;
 
 export type AppConfigParsed = {
-  cors?: string[] | undefined;
-  allowedIpAddresses?: string[] | undefined;
-  disableIntrospection?: boolean | undefined;
-  metadata?:
-    | {
-        [x: string]: string;
-      }
-    | undefined;
+  id?: string | undefined;
+  name: string;
   env?:
     | {
         [x: string]:
@@ -24,6 +18,11 @@ export type AppConfigParsed = {
             };
       }
     | undefined;
+  cors?: string[] | undefined;
+  allowedIpAddresses?: string[] | undefined;
+  disableIntrospection?: boolean | undefined;
+  inlineSourcemap?: boolean | undefined;
+  logLevel?: string | undefined;
   buildOptions?:
     | {
         inlineSourcemap?: boolean | undefined;
@@ -52,32 +51,26 @@ export type AppConfigParsed = {
     | undefined;
   defaultDateRepresentation?: "date" | "temporal" | undefined;
   maintenanceMode?: "deploy" | "migration" | false | undefined;
+  metadata?:
+    | {
+        [x: string]: string;
+      }
+    | undefined;
+  db?: unknown;
+  resolver?: unknown;
+  idp?: unknown;
+  auth?: unknown;
   executor?: unknown;
   workflow?: unknown;
   httpAdapter?: unknown;
   staticWebsites?: unknown;
   aiGateways?: unknown;
   secrets?: unknown;
-  name: string;
-  db?: unknown;
-  resolver?: unknown;
-  idp?: unknown;
-  auth?: unknown;
-  id?: string | undefined;
-  inlineSourcemap?: boolean | undefined;
-  logLevel?: string | undefined;
 };
 export type AppConfigParsedInput = AppConfigParsed;
 
 export type AppDefinitionParsed = {
-  cors?: string[] | undefined;
-  allowedIpAddresses?: string[] | undefined;
-  disableIntrospection?: boolean | undefined;
-  metadata?:
-    | {
-        [x: string]: string;
-      }
-    | undefined;
+  name: string;
   env?:
     | {
         [x: string]:
@@ -90,6 +83,9 @@ export type AppDefinitionParsed = {
             };
       }
     | undefined;
+  cors?: string[] | undefined;
+  allowedIpAddresses?: string[] | undefined;
+  disableIntrospection?: boolean | undefined;
   buildOptions?:
     | {
         inlineSourcemap?: boolean | undefined;
@@ -118,17 +114,29 @@ export type AppDefinitionParsed = {
     | undefined;
   defaultDateRepresentation?: "date" | "temporal" | undefined;
   maintenanceMode?: "deploy" | "migration" | false | undefined;
+  metadata?:
+    | {
+        [x: string]: string;
+      }
+    | undefined;
+  idp?: unknown;
+  auth?: unknown;
   executor?: unknown;
   workflow?: unknown;
   httpAdapter?: unknown;
   staticWebsites?: unknown;
   aiGateways?: unknown;
   secrets?: unknown;
-  name: string;
-  db?: unknown;
-  resolver?: unknown;
-  idp?: unknown;
-  auth?: unknown;
+  db?:
+    | {
+        [x: string]: unknown;
+      }
+    | undefined;
+  resolver?:
+    | {
+        [x: string]: unknown;
+      }
+    | undefined;
 };
 export type AppDefinitionParsedInput = AppDefinitionParsed;
 

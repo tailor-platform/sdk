@@ -97,43 +97,40 @@ const MOVED_TO_BUILD_OPTIONS = ["inlineSourcemap", "logLevel"] as const;
 
 const envSchema = z.record(z.string(), envEntrySchema);
 
-const defaultDateRepresentationSchema = z.enum(["temporal", "date"], {
-  message: `'defaultDateRepresentation' must be "temporal" or "date".`,
-});
+const serviceRecordSchema = z.record(z.string(), z.unknown());
 
-const maintenanceModeSchema = z.union([z.literal(false), z.enum(["migration", "deploy"])], {
-  message: `'maintenanceMode' must be false, "migration", or "deploy".`,
-});
-
-const applicationSettingsShape = {
+const appConfigObjectSchema = z.strictObject({
+  id: z.uuid({ message: "'id' must be a UUID." }).optional(),
+  name: z.string().min(1, { message: "'name' must be a non-empty string." }),
+  env: envSchema.optional(),
   cors: z.array(z.string()).optional(),
   allowedIpAddresses: z.array(z.string()).optional(),
   disableIntrospection: z.boolean().optional(),
-  metadata: metadataSchema.optional(),
-};
-
-const workspaceSettingsShape = {
-  env: envSchema.optional(),
+  inlineSourcemap: z.boolean().optional(),
+  logLevel: logLevelSchema.optional(),
   buildOptions: buildOptionsSchema.optional(),
-  defaultDateRepresentation: defaultDateRepresentationSchema.optional(),
-  maintenanceMode: maintenanceModeSchema.optional(),
+  defaultDateRepresentation: z
+    .enum(["temporal", "date"], {
+      message: `'defaultDateRepresentation' must be "temporal" or "date".`,
+    })
+    .optional(),
+  maintenanceMode: z
+    .union([z.literal(false), z.enum(["migration", "deploy"])], {
+      message: `'maintenanceMode' must be false, "migration", or "deploy".`,
+    })
+    .optional(),
+  metadata: metadataSchema.optional(),
+  db: z.unknown().optional(),
+  resolver: z.unknown().optional(),
+  idp: z.unknown().optional(),
+  auth: z.unknown().optional(),
   executor: z.unknown().optional(),
   workflow: z.unknown().optional(),
   httpAdapter: z.unknown().optional(),
   staticWebsites: z.unknown().optional(),
   aiGateways: z.unknown().optional(),
   secrets: z.unknown().optional(),
-};
-
-const singleApplicationShape = {
-  name: z.string().min(1, { message: "'name' must be a non-empty string." }),
-  ...applicationSettingsShape,
-  ...workspaceSettingsShape,
-  db: z.unknown().optional(),
-  resolver: z.unknown().optional(),
-  idp: z.unknown().optional(),
-  auth: z.unknown().optional(),
-};
+});
 
 /**
  * Structural validation schema for `defineConfig({...})`. Validates only
@@ -146,24 +143,17 @@ const singleApplicationShape = {
  * label-compatible prefix is added at the metadata boundary, so user-facing
  * configs only need to carry a UUID.
  */
-export const AppConfigSchema = z
-  .strictObject({
-    id: z.uuid({ message: "'id' must be a UUID." }).optional(),
-    ...singleApplicationShape,
-    inlineSourcemap: z.boolean().optional(),
-    logLevel: logLevelSchema.optional(),
-  })
-  .superRefine((config, ctx) => {
-    for (const field of MOVED_TO_BUILD_OPTIONS) {
-      if (config[field] !== undefined && config.buildOptions?.[field] !== undefined) {
-        ctx.addIssue({
-          code: "custom",
-          path: [field],
-          message: `'${field}' is set both at the top level and in 'buildOptions.${field}'. Keep only 'buildOptions.${field}'.`,
-        });
-      }
+export const AppConfigSchema = appConfigObjectSchema.superRefine((config, ctx) => {
+  for (const field of MOVED_TO_BUILD_OPTIONS) {
+    if (config[field] !== undefined && config.buildOptions?.[field] !== undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: [field],
+        message: `'${field}' is set both at the top level and in 'buildOptions.${field}'. Keep only 'buildOptions.${field}'.`,
+      });
     }
-  });
+  }
+});
 
 const EXTERNAL_MESSAGE =
   "'external' is only accepted by defineConfig(). Declare the service in this config instead.";
@@ -182,6 +172,16 @@ function rejectExternal(entry: unknown, path: PropertyKey[], ctx: z.RefinementCt
   }
 }
 
+function requireNamedObject(
+  value: unknown,
+  field: "auth" | "idp",
+  expected: string,
+  ctx: z.RefinementCtx,
+): void {
+  if (value === undefined || (isRecord(value) && typeof value.name === "string")) return;
+  ctx.addIssue({ code: "custom", path: [field], message: `'${field}' must be ${expected}.` });
+}
+
 function rejectEnvOverride(entry: unknown, path: string[], ctx: z.RefinementCtx): void {
   if (isRecord(entry) && entry.env !== undefined) {
     ctx.addIssue({
@@ -197,8 +197,9 @@ function rejectEnvOverride(entry: unknown, path: string[], ctx: z.RefinementCtx)
  * `defineConfig` without `id` and the deprecated top-level build options,
  * with services marked `external` rejected.
  */
-export const AppDefinitionSchema = z
-  .strictObject(singleApplicationShape)
+export const AppDefinitionSchema = appConfigObjectSchema
+  .omit({ id: true, inlineSourcemap: true, logLevel: true })
+  .extend({ db: serviceRecordSchema.optional(), resolver: serviceRecordSchema.optional() })
   .superRefine((config, ctx) => {
     for (const [namespace, entry] of entriesOf(config.db)) {
       rejectExternal(entry, ["db", namespace], ctx);
@@ -209,26 +210,27 @@ export const AppDefinitionSchema = z
     }
     rejectEnvOverride(config.executor, ["executor"], ctx);
     rejectEnvOverride(config.workflow, ["workflow"], ctx);
+    requireNamedObject(config.auth, "auth", "an auth service defined with defineAuth()", ctx);
     rejectExternal(config.auth, ["auth"], ctx);
     checkEnvOverride(config.auth, ["auth"], config.env ?? {}, ctx);
+    requireNamedObject(config.idp, "idp", "a single IdP defined with defineIdp()", ctx);
     rejectExternal(config.idp, ["idp"], ctx);
   });
 
-const workspaceApplicationSchema = z.strictObject({
-  ...applicationSettingsShape,
-  db: z.array(z.string()).optional(),
-  resolver: z.array(z.string()).optional(),
-  auth: z.string().optional(),
-  idp: z
-    .array(z.string())
-    .max(1, {
-      message:
-        "An application can expose at most one IdP. Call idp.Client({ namespace }) from function code to use the others.",
-    })
-    .optional(),
-});
-
-const serviceRecordSchema = z.record(z.string(), z.unknown());
+const workspaceApplicationSchema = appConfigObjectSchema
+  .pick({ cors: true, allowedIpAddresses: true, disableIntrospection: true, metadata: true })
+  .extend({
+    db: z.array(z.string()).optional(),
+    resolver: z.array(z.string()).optional(),
+    auth: z.string().optional(),
+    idp: z
+      .array(z.string())
+      .max(1, {
+        message:
+          "An application can expose at most one IdP. Call idp.Client({ namespace }) from function code to use the others.",
+      })
+      .optional(),
+  });
 
 function checkEnvOverride(
   entry: unknown,
@@ -279,9 +281,20 @@ function checkKeyedByName(
  * except for what the workspace adds to them: an `env` that overrides root
  * `env` values, and the rejection of `external`.
  */
-export const WorkspaceConfigSchema = z
-  .strictObject({
-    ...workspaceSettingsShape,
+export const WorkspaceConfigSchema = appConfigObjectSchema
+  .pick({
+    env: true,
+    buildOptions: true,
+    defaultDateRepresentation: true,
+    maintenanceMode: true,
+    executor: true,
+    workflow: true,
+    httpAdapter: true,
+    staticWebsites: true,
+    aiGateways: true,
+    secrets: true,
+  })
+  .extend({
     db: serviceRecordSchema.optional(),
     resolver: serviceRecordSchema.optional(),
     auth: serviceRecordSchema.optional(),

@@ -48,7 +48,7 @@ interface ProviderFinding {
   /** `env` key holding the value. */
   readonly key: string;
   /** Path of the service whose `env` override holds the value; absent for the root `env`. */
-  readonly owner?: readonly string[];
+  readonly servicePath?: readonly string[];
   /** Short name of what matched, e.g. `slack`, `aws`. */
   readonly detector: string;
   /**
@@ -68,7 +68,7 @@ interface EntropyFinding {
   /** `env` key holding the value. */
   readonly key: string;
   /** Path of the service whose `env` override holds the value; absent for the root `env`. */
-  readonly owner?: readonly string[];
+  readonly servicePath?: readonly string[];
   /** The heuristic matches no named pattern, so it has neither a rule nor documentation. */
   readonly detector: typeof HIGH_ENTROPY_DETECTOR;
   /** A value that only looks randomly generated is reported without failing the command. */
@@ -80,7 +80,7 @@ type EnvSecretFinding = ProviderFinding | EntropyFinding;
 /** `env` entries that override the root `env` for one service, such as `resolver.<namespace>.env`. */
 interface EnvOverrideScanInput {
   /** Path of the service that holds the override, e.g. `["resolver", "shop-api"]`. */
-  readonly owner: readonly string[];
+  readonly servicePath: readonly string[];
   /** Entries as written in the config. */
   readonly env: Readonly<Record<string, EnvEntry>>;
 }
@@ -99,7 +99,7 @@ interface EnvSecretAssertInput extends EnvSecretScanInput {
 
 type ScannedEntry = {
   readonly key: string;
-  readonly owner?: readonly string[];
+  readonly servicePath?: readonly string[];
   readonly value: EnvValue;
 };
 
@@ -127,28 +127,33 @@ export function resolveEnvValue(entry: EnvEntry): EnvValue {
  * @returns Provider matches first, then entropy warnings; empty when nothing matched
  */
 export async function scanEnvForSecrets(input: EnvSecretScanInput): Promise<EnvSecretFinding[]> {
-  const sources: { owner?: readonly string[]; env: Readonly<Record<string, EnvEntry>> }[] = [
+  const sources: { servicePath?: readonly string[]; env: Readonly<Record<string, EnvEntry>> }[] = [
     { env: input.env ?? {} },
     ...(input.overrides ?? []),
   ];
-  const entries: ScannedEntry[] = sources.flatMap(({ owner, env }) =>
+  const entries: ScannedEntry[] = sources.flatMap(({ servicePath, env }) =>
     Object.entries(env)
       .filter(([, entry]) => !isAllowedSecret(entry))
-      .map(([key, entry]) => ({ key, ...(owner ? { owner } : {}), value: resolveEnvValue(entry) })),
+      .map(([key, entry]) => ({
+        key,
+        ...(servicePath ? { servicePath } : {}),
+        value: resolveEnvValue(entry),
+      })),
   );
   if (entries.length === 0) {
     return [];
   }
 
   const findings: EnvSecretFinding[] = await scanWithProviderRules(entries);
-  const alreadyFound = new Set(findings.map(findingLocation));
+  const alreadyFound = new Set(findings.map(formatFindingPath));
 
-  for (const { key, owner, value } of entries) {
-    if (alreadyFound.has(findingLocation({ key, owner })) || typeof value !== "string") continue;
+  for (const { key, servicePath, value } of entries) {
+    if (alreadyFound.has(formatFindingPath({ key, servicePath })) || typeof value !== "string")
+      continue;
     if (looksRandomlyGenerated(value)) {
       findings.push({
         key,
-        ...(owner ? { owner } : {}),
+        ...(servicePath ? { servicePath } : {}),
         detector: HIGH_ENTROPY_DETECTOR,
         severity: "warning",
       });
@@ -158,11 +163,11 @@ export async function scanEnvForSecrets(input: EnvSecretScanInput): Promise<EnvS
   return findings;
 }
 
-function findingPath(finding: Pick<ScannedEntry, "key" | "owner">): string[] {
-  return [...(finding.owner ?? []), "env", finding.key];
+function findingPath(finding: Pick<ScannedEntry, "key" | "servicePath">): string[] {
+  return [...(finding.servicePath ?? []), "env", finding.key];
 }
 
-function findingLocation(finding: Pick<ScannedEntry, "key" | "owner">): string {
+function formatFindingPath(finding: Pick<ScannedEntry, "key" | "servicePath">): string {
   return findingPath(finding).join(".");
 }
 
@@ -200,7 +205,7 @@ async function reportEnvSecrets(input: EnvSecretAssertInput): Promise<void> {
   for (const finding of findings) {
     if (finding.severity !== "warning") continue;
     logger.warn(
-      `${findingLocation(finding)} looks like a randomly generated credential. ` +
+      `${formatFindingPath(finding)} looks like a randomly generated credential. ` +
         `If it is one, move it to Secret Manager; otherwise allow it with ${styles.bold("allowSecretReason")}.`,
     );
   }
@@ -251,11 +256,11 @@ async function scanWithProviderRules(
 
   const ranges: EntryRange[] = [];
   let content = "";
-  for (const { key, owner, value } of entries) {
+  for (const { key, servicePath, value } of entries) {
     const line = `${key}=${String(value)}`;
     ranges.push({
       key,
-      ...(owner ? { owner } : {}),
+      ...(servicePath ? { servicePath } : {}),
       start: content.length,
       end: content.length + line.length,
     });
@@ -295,14 +300,14 @@ async function scanWithProviderRules(
     const detector = message.ruleId.startsWith(RULE_ID_PREFIX)
       ? message.ruleId.slice(RULE_ID_PREFIX.length)
       : message.ruleId;
-    const dedupeKey = JSON.stringify([findingLocation(entry), detector, message.messageId]);
+    const dedupeKey = JSON.stringify([formatFindingPath(entry), detector, message.messageId]);
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
 
     // The message text embeds the matched value; the identifiers do not.
     findings.push({
       key: entry.key,
-      ...(entry.owner ? { owner: entry.owner } : {}),
+      ...(entry.servicePath ? { servicePath: entry.servicePath } : {}),
       detector,
       rule: message.messageId,
       ...(message.docsUrl ? { docsUrl: message.docsUrl } : {}),
