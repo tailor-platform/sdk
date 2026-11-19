@@ -233,7 +233,15 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
       else logger.error("Execution failed");
       printExecutionDetails(prepared, result);
     }
-    if (!result.success) process.exit(1);
+    if (!result.success) {
+      // Exiting at once would cut off what is still queued for a pipe.
+      await Promise.all(
+        [process.stdout, process.stderr].map(
+          (stream) => new Promise<void>((resolve) => stream.write("", () => resolve())),
+        ),
+      );
+      process.exit(1);
+    }
   },
 });
 
