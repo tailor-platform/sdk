@@ -22,6 +22,7 @@ import type * as Pathe from "pathe";
  * A single generated file to write to disk.
  */
 interface GeneratedFile {
+  /** Output path; a relative path resolves against the directory of tailor.config.ts. */
   path: string;
   content: string;
   skipIfExists?: boolean;

@@ -12,19 +12,13 @@ export const plugins = [
   {
     id: "test-output",
     description: "Writes a file to a relative path",
-    onTailorDBReady: () => ({ files: [{ path: "./generated/out.txt", content: "out" }] }),
-  },
-];
-`;
-
-const FAILING_PLUGIN_CONFIG_SOURCE = `export default { name: "app" };
-export const plugins = [
-  {
-    id: "test-failure",
-    description: "Fails while generating",
-    onTailorDBReady: () => {
-      throw new Error("plugin failed");
-    },
+    onTailorDBReady: (ctx) => ({
+      files: [
+        { path: \`\${ctx.baseDir}/base.txt\`, content: "base" },
+        { path: "./generated/cwd.txt", content: process.cwd() },
+        { path: "./generated/kept.txt", content: "new", skipIfExists: true },
+      ],
+    }),
   },
 ];
 `;
@@ -103,17 +97,20 @@ describe("generate config discovery", () => {
       args: ["--config", "../app/tailor.config.ts"],
     },
   ])(
-    "writes plugin outputs relative to the config's directory when the config is $name",
+    "resolves plugin output paths without changing the working directory when the config is $name",
     async ({ cwd, args }) => {
       using tmp = tempCwd("tailor-config-discovery-");
       const appDir = path.join(tmp.dir, "app");
       fs.mkdirSync(path.join(appDir, "sub"), { recursive: true });
       fs.mkdirSync(path.join(tmp.dir, "other"));
       fs.writeFileSync(path.join(appDir, "tailor.config.ts"), PLUGIN_CONFIG_SOURCE);
+      fs.mkdirSync(path.join(appDir, "generated"));
+      fs.writeFileSync(path.join(appDir, "generated", "kept.txt"), "old");
       const invocationDir = path.join(tmp.dir, cwd);
       process.chdir(invocationDir);
       vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
       vi.stubEnv("TAILOR_DTS_PATH", undefined);
+      vi.stubEnv("TAILOR_BUILD_OUTPUT_DIR", ".tailor");
 
       try {
         const result = await runCliCommand(generateCommand, args);
@@ -122,27 +119,14 @@ describe("generate config discovery", () => {
         vi.unstubAllEnvs();
       }
 
-      expect(fs.readFileSync(path.join(appDir, "generated", "out.txt"), "utf-8")).toBe("out");
+      const baseFile = path.join(".tailor", "generated", "test-output", "base.txt");
+      expect(fs.readFileSync(path.join(invocationDir, baseFile), "utf-8")).toBe("base");
+      expect(fs.existsSync(path.join(appDir, baseFile))).toBe(false);
+      expect(fs.readFileSync(path.join(appDir, "generated", "cwd.txt"), "utf-8")).toBe(
+        invocationDir,
+      );
+      expect(fs.readFileSync(path.join(appDir, "generated", "kept.txt"), "utf-8")).toBe("old");
       expect(fs.existsSync(path.join(invocationDir, "generated"))).toBe(false);
-      expect(fs.realpathSync(process.cwd())).toBe(fs.realpathSync(invocationDir));
     },
   );
-
-  test("restores the working directory when a plugin fails", async () => {
-    using tmp = tempCwd("tailor-config-discovery-");
-    fs.mkdirSync(path.join(tmp.dir, "sub"));
-    fs.writeFileSync(path.join(tmp.dir, "tailor.config.ts"), FAILING_PLUGIN_CONFIG_SOURCE);
-    process.chdir(path.join(tmp.dir, "sub"));
-    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
-    vi.stubEnv("TAILOR_DTS_PATH", undefined);
-
-    try {
-      const result = await runCliCommand(generateCommand, []);
-      expect(result.error?.message).toContain("Plugin generation failed");
-    } finally {
-      vi.unstubAllEnvs();
-    }
-
-    expect(fs.realpathSync(process.cwd())).toBe(fs.realpathSync(path.join(tmp.dir, "sub")));
-  });
 });

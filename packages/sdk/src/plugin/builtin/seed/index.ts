@@ -85,6 +85,7 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
 
     async onTailorDBReady(ctx: TailorDBReadyContext<SeedPluginOptions>): Promise<GeneratorResult> {
       const files: GeneratorResult["files"] = [];
+      const outputDir = path.resolve(path.dirname(ctx.configPath), ctx.pluginConfig.distPath);
 
       // Process IdP user early so we can add reverse FK to the user profile type
       const idpUser = ctx.auth ? (processIdpUser(ctx.auth) ?? null) : null;
@@ -115,16 +116,12 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
 
           // Generate empty JSONL data file
           files.push({
-            path: path.join(ctx.pluginConfig.distPath, "data", `${linesDb.tableName}.jsonl`),
+            path: path.join(outputDir, "data", `${linesDb.tableName}.jsonl`),
             content: "",
             skipIfExists: true,
           });
 
-          const schemaOutputPath = path.join(
-            ctx.pluginConfig.distPath,
-            "data",
-            `${linesDb.tableName}.schema.ts`,
-          );
+          const schemaOutputPath = path.join(outputDir, "data", `${linesDb.tableName}.schema.ts`);
 
           // Plugin-generated table: use getGeneratedTable API
           if (linesDb.pluginSource && linesDb.pluginSource.pluginImportPath) {
@@ -182,14 +179,14 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
       if (idpUser) {
         // Generate empty JSONL data file
         files.push({
-          path: path.join(ctx.pluginConfig.distPath, idpUser.dataFile),
+          path: path.join(outputDir, idpUser.dataFile),
           content: "",
           skipIfExists: true,
         });
 
         // Generate schema file with foreign key (opt-out via disableIdpUserSync.idpToUser: true)
         files.push({
-          path: path.join(ctx.pluginConfig.distPath, "data", `${idpUser.name}.schema.ts`),
+          path: path.join(outputDir, "data", `${idpUser.name}.schema.ts`),
           content: generateIdpUserSchemaFile({
             usernameField: idpUser.schema.usernameField,
             userTableName: idpUser.schema.userTableName,
