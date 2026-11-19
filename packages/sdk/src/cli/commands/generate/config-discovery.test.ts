@@ -17,6 +17,18 @@ export const plugins = [
 ];
 `;
 
+const FAILING_PLUGIN_CONFIG_SOURCE = `export default { name: "app" };
+export const plugins = [
+  {
+    id: "test-failure",
+    description: "Fails while generating",
+    onTailorDBReady: () => {
+      throw new Error("plugin failed");
+    },
+  },
+];
+`;
+
 describe("generate config discovery", () => {
   test.each([
     {
@@ -115,4 +127,22 @@ describe("generate config discovery", () => {
       expect(fs.realpathSync(process.cwd())).toBe(fs.realpathSync(invocationDir));
     },
   );
+
+  test("restores the working directory when a plugin fails", async () => {
+    using tmp = tempCwd("tailor-config-discovery-");
+    fs.mkdirSync(path.join(tmp.dir, "sub"));
+    fs.writeFileSync(path.join(tmp.dir, "tailor.config.ts"), FAILING_PLUGIN_CONFIG_SOURCE);
+    process.chdir(path.join(tmp.dir, "sub"));
+    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
+    vi.stubEnv("TAILOR_DTS_PATH", undefined);
+
+    try {
+      const result = await runCliCommand(generateCommand, []);
+      expect(result.error?.message).toContain("Plugin generation failed");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+
+    expect(fs.realpathSync(process.cwd())).toBe(fs.realpathSync(path.join(tmp.dir, "sub")));
+  });
 });

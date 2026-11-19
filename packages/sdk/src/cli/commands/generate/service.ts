@@ -64,7 +64,8 @@ export function createGenerationManager(params: {
   pluginManager?: PluginManager;
 }): GenerationManager {
   const { application, config, pluginManager } = params;
-  const baseDir = path.join(getDistDir(), "generated");
+  const invocationDir = process.cwd();
+  const baseDir = path.resolve(getDistDir(), "generated");
   fs.mkdirSync(baseDir, { recursive: true });
 
   const services: {
@@ -235,19 +236,17 @@ export function createGenerationManager(params: {
       result.files.map(async (file) => {
         fs.mkdirSync(path.dirname(file.path), { recursive: true });
         return new Promise<void>((resolve, reject) => {
+          const relativePath = path.relative(invocationDir, path.resolve(file.path));
           if (file.skipIfExists && fs.existsSync(file.path)) {
-            const relativePath = path.relative(process.cwd(), file.path);
             logger.debug(`${sourceId} | skip existing: ${relativePath}`);
             return resolve();
           }
 
           fs.writeFile(file.path, file.content, (err) => {
             if (err) {
-              const relativePath = path.relative(process.cwd(), file.path);
               logger.error(`Error writing file ${styles.bold(relativePath)}`);
               reject(err);
             } else {
-              const relativePath = path.relative(process.cwd(), file.path);
               logger.debug(`${sourceId} | generate: ${styles.success(relativePath)}`);
               resolve();
             }
@@ -410,7 +409,9 @@ export function createGenerationManager(params: {
 }
 
 /**
- * Run code generation using the Tailor configuration.
+ * Run code generation using the Tailor configuration. Plugins generate their files with the
+ * config's directory as the working directory, so do not run it concurrently with other code
+ * that depends on the working directory.
  * @param options - Generation options
  * @returns Promise that resolves when generation completes
  */
@@ -432,19 +433,30 @@ export async function generate(options?: GenerateOptions) {
       pluginManager = new PluginManager(plugins);
     }
 
-    // Relative output paths in plugin options are relative to the config's directory.
-    const invocationDir = process.cwd();
-    process.chdir(path.dirname(config.path));
-    try {
-      // Create a lightweight application (tables not yet loaded)
-      const application = defineApplication({ config, pluginManager });
+    // Create a lightweight application (tables not yet loaded)
+    const application = defineApplication({ config, pluginManager });
 
-      rootSpan.setAttribute("app.name", application.config.name);
+    rootSpan.setAttribute("app.name", application.config.name);
 
-      const manager = createGenerationManager({ application, config, pluginManager });
-      await manager.generate();
-    } finally {
-      process.chdir(invocationDir);
-    }
+    const manager = createGenerationManager({ application, config, pluginManager });
+    await inDirectory(path.dirname(config.path), () => manager.generate());
   });
+}
+
+/**
+ * Run a task with a directory as the working directory, so relative output paths in plugin
+ * options resolve against it, and restore the working directory afterwards.
+ * @param directory - Directory to run the task in
+ * @param task - Task to run
+ * @returns The task's result
+ */
+async function inDirectory<T>(directory: string, task: () => Promise<T>): Promise<T> {
+  const invocationDir = process.cwd();
+  if (path.resolve(directory) === invocationDir) return task();
+  process.chdir(directory);
+  try {
+    return await task();
+  } finally {
+    process.chdir(invocationDir);
+  }
 }

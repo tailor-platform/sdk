@@ -606,7 +606,7 @@ export const plugins = definePlugins(
 );
 ```
 
-A relative `distPath` is resolved against the directory of `tailor.config.ts`, so `tailor generate` writes to the same place from any directory.
+Relative output paths in plugin options, such as `distPath`, are resolved against the directory of `tailor.config.ts`, so `tailor generate` writes to the same place from any directory.
 
 `kyselyTypePlugin` requires either `distPath` or `contentMapper: true`, and accepts only one of them. With `contentMapper: true`, `tailor generate` writes no types file, and you import `getDB()` from the SDK instead:
 
