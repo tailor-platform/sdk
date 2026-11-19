@@ -415,7 +415,7 @@ export async function bundleWorkflowJobs(
   // misleading "Bundled" message right before throwing.
   validateBundledDependencies(
     bundledCode,
-    usedJobs.map((job) => job.name),
+    usedJobs.map((job) => startContext.jobFunctionName?.(job.name) ?? job.name),
   );
 
   logger.log(`${styles.success("Bundled")} ${styles.info('"workflow-job"')}`);

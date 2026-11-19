@@ -431,6 +431,38 @@ const mainJob = createWorkflowJob({
       expect(result).not.toContain("const fetchData");
     });
 
+    test("starts the job under the name the context gives its job function", () => {
+      const source = `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+
+const fetchData = createWorkflowJob({ name: "fetch-data", body: async () => ({}) });
+
+const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async (input) => await fetchData.start({ id: input.id }),
+});
+`;
+      const file = path.resolve("test.ts");
+      const target = { kind: "job", name: "fetch-data" } as const;
+      const context: StartContext = {
+        modules: new Map([
+          [
+            normalizeFilePath(file),
+            {
+              sourceFile: file,
+              localBindings: new Map([["fetchData", target]]),
+              exports: new Map([["fetchData", target]]),
+            },
+          ],
+        ]),
+        jobFunctionName: (jobName) => `tmp-run-r1-${jobName}`,
+      };
+
+      const result = transformStartCallsWithContext(source, context, file).toString();
+
+      expect(result).toContain('tailor.workflow.execJobFunction("tmp-run-r1-fetch-data", ');
+    });
+
     test("forwards a second options argument to execJobFunction", () => {
       const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";

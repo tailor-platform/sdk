@@ -166,7 +166,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 $ tailor workflow run scripts/backfill.ts --arg '{"from":"2026-01-01"}'
 ```
 
-**Run one workflow job that does not start other jobs**
+**Run one workflow job together with the jobs it starts**
 
 ```bash
 $ tailor workflow run workflows/jobs.ts --job send-report --arg '{"id":"42"}'
@@ -178,14 +178,11 @@ The script runs as an asynchronous workflow job, so it is not bound by the time 
 
 `--timeout` limits how long this command waits, not how long the script may run. The Platform ends a workflow job that runs longer than 5 minutes and the run is reported as failed with a timeout error; a script that needs longer has to be split so that it can be run again from where it stopped.
 
-Without `--job`, the whole file runs: export `main(arg)` from a plain script, or pass a resolver, executor, or workflow job file. With `--job`, only the workflow job of that name runs, with `--arg` as its input. The argument must be a JSON object (`null` is accepted too): unlike `function run`, a number, string, boolean, or array is refused before anything is created.
+Without `--job`, the whole file runs: export `main(arg)` from a plain script, or pass a resolver, executor, or workflow job file. With `--job`, the workflow job of that name runs as the first job of the temporary workflow, with `--arg` as its input. A job it starts with `.start()` is registered with it, so those calls work; they run the jobs of your files, not the ones already deployed under the same names. The argument must be a JSON object (`null` is accepted too): unlike `function run`, a number, string, boolean, or array is refused before anything is created.
 
 A script scaffolded by `function script` with a generated `db.ts` is checked against its `db.snapshot.json` before it runs and refused on schema drift, as with `function run`; pass `--allow-schema-drift` to run it anyway.
 
 When the wait stops (`--timeout` elapsed), the script keeps running and its temporary resources stay in place. The command prints the run ID; read the outcome with `tailor workflow executions`. `tailor workflow cleanup` removes the resources of runs that have finished, and the next `workflow run` does the same before it starts. A run that finished within the last few minutes is left alone by that automatic sweep (and by `tailor deploy`), so the command still waiting for it can read its result; `tailor workflow cleanup` removes it at once.
-
-> [!WARNING]
-> Only the selected job is registered, so a job that starts other jobs with `.start()` fails at that call. Run such a workflow from its own entry point instead.
 
 ### workflow cleanup
 

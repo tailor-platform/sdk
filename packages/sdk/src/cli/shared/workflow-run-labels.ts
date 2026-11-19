@@ -10,7 +10,7 @@
 const workflowRunLabelKey = "sdk-workflow-run";
 const workflowRunJobLabelKey = "sdk-workflow-run-job";
 
-export type WorkflowRunKind = "script" | "job";
+type WorkflowRunKind = "script" | "job";
 
 export interface WorkflowRunMarker {
   kind: WorkflowRunKind;

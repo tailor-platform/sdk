@@ -32,9 +32,9 @@ import {
   isWorkflowRunResourceName,
   readWorkflowRunMarker,
   runIdStartedAt,
+  workflowRunJobFunctionName,
   workflowRunLabels,
   workflowRunResourceName,
-  type WorkflowRunKind,
 } from "#/cli/shared/workflow-run-labels";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { ScriptExecutionResult, ScriptInvoker } from "#/cli/shared/script-executor";
@@ -56,31 +56,71 @@ const OUTCOME_READ_TIMEOUT_MS = 60_000;
 /** Longest poll interval a waiter may use: it must poll again well within {@link FINISHED_GRACE_MS}. */
 const MAX_POLL_INTERVAL_MS = 60_000;
 
-export interface StartWorkflowRunParams {
+interface StartWorkflowRunBaseParams {
   client: OperatorClient;
   workspaceId: string;
   runId: string;
-  kind: WorkflowRunKind;
-  /** Bundled script code exporting `main` */
-  code: string;
-  /** Description recorded on the registered function */
+  /** Description recorded on the registered functions */
   description: string;
   invoker: ScriptInvoker;
   arg: Jsonifiable | undefined;
 }
 
+/** A script that exports `main`, run whole. */
+interface ScriptRunParams extends StartWorkflowRunBaseParams {
+  kind: "script";
+  /** Bundled script code exporting `main` */
+  code: string;
+}
+
+/** A workflow job together with the jobs it starts. */
+interface JobRunParams extends StartWorkflowRunBaseParams {
+  kind: "job";
+  /** Job the workflow starts with */
+  mainJobName: string;
+  /** Every job the run needs, the main one included, each bundled to start the others by their run names */
+  jobs: readonly { jobName: string; code: string }[];
+}
+
+export type StartWorkflowRunParams = ScriptRunParams | JobRunParams;
+
 /** A run the platform has accepted. */
 export interface StartedWorkflowRun {
   runId: string;
-  /** Name shared by the run's function, job function and workflow */
+  /** Name of the run's workflow */
   name: string;
+  /** Names of the run's functions; each function has a job function of the same name */
+  functionNames: string[];
   workflowId: string;
   executionId: string;
 }
 
+interface RunFunction {
+  name: string;
+  code: string;
+}
+
+function runFunctions(params: StartWorkflowRunParams): {
+  functions: RunFunction[];
+  mainFunctionName: string;
+} {
+  if (params.kind === "script") {
+    const name = workflowRunResourceName(params.runId);
+    return { functions: [{ name, code: params.code }], mainFunctionName: name };
+  }
+  return {
+    functions: params.jobs.map(({ jobName, code }) => ({
+      name: workflowRunJobFunctionName(params.runId, jobName),
+      code,
+    })),
+    mainFunctionName: workflowRunJobFunctionName(params.runId, params.mainJobName),
+  };
+}
+
 /**
- * Register the script as a temporary workflow and start it once.
- * @param params - Script, run id and argument
+ * Register the script, or the job and the jobs it starts, as a temporary
+ * workflow and start it once.
+ * @param params - Script or jobs, run id and argument
  * @returns The started run
  */
 export async function startWorkflowRun(
@@ -89,6 +129,8 @@ export async function startWorkflowRun(
   const { client, workspaceId, runId, kind } = params;
   await assertMachineUserExists({ client, workspaceId, invoker: params.invoker });
   const name = workflowRunResourceName(runId);
+  const { functions, mainFunctionName } = runFunctions(params);
+  const functionNames = functions.map((item) => item.name);
   const owner = {
     appName: undefined,
     appId: undefined,
@@ -98,24 +140,35 @@ export async function startWorkflowRun(
   let startSent = false;
   const state = { collided: false };
   try {
-    try {
-      await uploadTemporaryFunction({
+    for (const [index, item] of functions.entries()) {
+      try {
+        await uploadTemporaryFunction({
+          ...owner,
+          client,
+          workspaceId,
+          name: item.name,
+          code: item.code,
+          description: params.description,
+        });
+      } catch (error) {
+        // The first name belongs to another run, so there is nothing of ours to roll back.
+        if (index === 0 && error instanceof ConnectError && error.code === Code.AlreadyExists) {
+          state.collided = true;
+        }
+        throw error;
+      }
+    }
+    const workflowId = await createTemporaryWorkflow(
+      {
         ...owner,
         client,
         workspaceId,
         name,
-        code: params.code,
-        description: params.description,
-      });
-    } catch (error) {
-      // The name belongs to another run, so there is nothing of ours to roll back.
-      if (error instanceof ConnectError && error.code === Code.AlreadyExists) {
-        state.collided = true;
-      }
-      throw error;
-    }
-    const workflowId = await createTemporaryWorkflow(
-      { ...owner, client, workspaceId, name, jobFunctionNames: [name], subject: SUBJECT },
+        jobFunctionNames: functionNames,
+        scriptRefs: Object.fromEntries(functionNames.map((item) => [item, item])),
+        mainJobFunctionName: mainFunctionName,
+        subject: SUBJECT,
+      },
       created,
     );
     startSent = true;
@@ -125,7 +178,7 @@ export async function startWorkflowRun(
       authInvoker: params.invoker,
       arg: params.arg === undefined ? undefined : JSON.stringify(params.arg),
     });
-    return { runId, name, workflowId, executionId };
+    return { runId, name, functionNames, workflowId, executionId };
   } catch (error) {
     if (state.collided) throw error;
     if (startSent && !isStartRefused(error)) {
@@ -140,6 +193,8 @@ export async function startWorkflowRun(
       workspaceId,
       name,
       workflowId: created.workflowId,
+      jobFunctionNames: functionNames,
+      functionNames,
       subject: SUBJECT,
       leftoverNote: LEFTOVER_NOTE,
     });
@@ -244,6 +299,8 @@ export async function awaitWorkflowRun(
     workspaceId,
     name: started.name,
     workflowId: started.workflowId,
+    jobFunctionNames: started.functionNames,
+    functionNames: started.functionNames,
     subject: SUBJECT,
     leftoverNote: LEFTOVER_NOTE,
   });

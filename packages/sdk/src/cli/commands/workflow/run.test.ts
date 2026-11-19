@@ -9,6 +9,7 @@ import { commonArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadMachineUserName } from "#/cli/shared/context";
+import { CLIError } from "#/cli/shared/errors";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import {
@@ -19,7 +20,8 @@ import {
 import { bundleForRun } from "../function/bundle";
 import { detectFunctionType } from "../function/detect";
 import { checkScriptSchemaSnapshot } from "../function/script-scaffold";
-import { assertSelectedJob, runCommand } from "./run";
+import { assertJobSource, runCommand } from "./run";
+import { bundleWorkflowRunJobs } from "./run-jobs";
 
 vi.mock("#/cli/shared/config-loader", () => ({ loadConfig: vi.fn() }));
 
@@ -41,6 +43,8 @@ vi.mock("#/cli/shared/workflow-run", async (importActual) => ({
   reclaimFinishedWorkflowRuns: vi.fn(),
 }));
 
+vi.mock("./run-jobs", () => ({ bundleWorkflowRunJobs: vi.fn() }));
+
 vi.mock("../function/detect", () => ({
   detectFunctionType: vi.fn(),
 }));
@@ -58,39 +62,18 @@ const WORKSPACE_ID = "12345678-1234-4abc-8def-123456789012";
 const started = {
   runId: "r00abc-xyz",
   name: "tmp-run-r00abc-xyz",
+  functionNames: ["tmp-run-r00abc-xyz"],
   workflowId: "wf-1",
   executionId: "exec-1",
 };
 
-describe("assertSelectedJob", () => {
-  test("accepts the workflow job that was asked for", () => {
-    expect(() =>
-      assertSelectedJob({ job: "greet", functionType: "workflow-job", functionName: "greet" }),
-    ).not.toThrow();
-  });
-
-  test("accepts a run without --job whatever the file holds", () => {
-    expect(() =>
-      assertSelectedJob({ job: undefined, functionType: "plain", functionName: "slow" }),
-    ).not.toThrow();
-  });
-
-  test("rejects --job when the file exports no workflow jobs and would run its main", () => {
-    expect(() =>
-      assertSelectedJob({ job: "missing", functionType: "plain", functionName: "slow" }),
-    ).toThrow(/WORKFLOW_RUN_JOB_NOT_FOUND|Workflow job "missing"/);
-  });
-
-  test("rejects --job when a resolver was detected first", () => {
-    expect(() =>
-      assertSelectedJob({ job: "greet", functionType: "resolver", functionName: "add" }),
-    ).toThrow(/Workflow job "greet"/);
+describe("assertJobSource", () => {
+  test("accepts a TypeScript source, which can export workflow jobs", () => {
+    expect(() => assertJobSource({ filePath: "/p/jobs.ts", job: "greet" })).not.toThrow();
   });
 
   test("rejects --job for a pre-bundled file, which has no jobs to choose from", () => {
-    expect(() =>
-      assertSelectedJob({ job: "greet", functionType: undefined, functionName: undefined }),
-    ).toThrow(/pre-bundled|\.ts/);
+    expect(() => assertJobSource({ filePath: "/p/slow.js", job: "greet" })).toThrow(/pre-bundled/);
   });
 });
 
@@ -143,6 +126,7 @@ describe("workflow run", () => {
       .mockReset()
       .mockResolvedValue({ removed: [], keptUnlabeled: [], removedUnlabeled: [] });
     vi.mocked(bundleForRun).mockClear();
+    vi.mocked(detectFunctionType).mockClear();
     exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
     await runTest();
     vi.restoreAllMocks();
@@ -196,11 +180,13 @@ describe("workflow run", () => {
     expect(exit).not.toHaveBeenCalled();
   });
 
-  test("labels a --job run as a job run", async () => {
-    vi.mocked(detectFunctionType).mockResolvedValue({
-      type: "workflow-job",
-      name: "greet",
-      exportName: "greet",
+  test("runs --job as a job run that registers the jobs it starts, without bundling the file as a script", async () => {
+    vi.mocked(bundleWorkflowRunJobs).mockResolvedValue({
+      mainJobName: "greet",
+      jobs: [
+        { jobName: "greet", code: "// greet" },
+        { jobName: "wave", code: "// wave" },
+      ],
     });
     using _stdout = captureStdout();
     using _stderr = captureStderr();
@@ -208,7 +194,18 @@ describe("workflow run", () => {
 
     await invoke(runCommand, [scriptPath, "--job", "greet", "-m", "admin"]);
 
-    expect(startWorkflowRun).toHaveBeenCalledWith(expect.objectContaining({ kind: "job" }));
+    expect(startWorkflowRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "job",
+        mainJobName: "greet",
+        jobs: [
+          { jobName: "greet", code: "// greet" },
+          { jobName: "wave", code: "// wave" },
+        ],
+      }),
+    );
+    expect(bundleForRun).not.toHaveBeenCalled();
+    expect(detectFunctionType).not.toHaveBeenCalled();
   });
 
   test("exits 1 and still prints the result of a script that failed", async () => {
@@ -327,6 +324,9 @@ describe("workflow run", () => {
   });
 
   test("refuses --job when the file has no such job, before creating anything", async () => {
+    vi.mocked(bundleWorkflowRunJobs).mockRejectedValue(
+      CLIError({ code: "WORKFLOW_RUN_JOB_NOT_FOUND", message: "Workflow job not found." }),
+    );
     using _stdout = captureStdout();
     using _stderr = captureStderr();
     using _json = jsonMode();

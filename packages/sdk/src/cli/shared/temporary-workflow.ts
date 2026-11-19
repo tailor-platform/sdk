@@ -253,6 +253,10 @@ export interface CreateTemporaryWorkflowParams extends TemporaryResourceOwner {
   name: string;
   /** Job functions to create on the uploaded function, the main one included. */
   jobFunctionNames: readonly string[];
+  /** Function each job function runs, by job function name (default: the shared name). */
+  scriptRefs?: Readonly<Record<string, string>>;
+  /** Main job function of the workflow (default: the shared name). */
+  mainJobFunctionName?: string;
   /** What the resources run, used in errors (e.g. `migration`). */
   subject: string;
   /** Extra labels for the workflow. */
@@ -281,7 +285,7 @@ export async function createTemporaryWorkflow(
     const { jobFunction } = await client.createWorkflowJobFunction({
       workspaceId,
       jobFunctionName,
-      scriptRef: name,
+      scriptRef: params.scriptRefs?.[jobFunctionName] ?? name,
       publishExecutionEvents: false,
     });
     await writeMetadataLabelsDirect(
@@ -303,7 +307,7 @@ export async function createTemporaryWorkflow(
   const { workflow } = await client.createWorkflow({
     workspaceId,
     workflowName: name,
-    mainJobFunctionName: name,
+    mainJobFunctionName: params.mainJobFunctionName ?? name,
     jobFunctions: versions,
   });
   const workflowId = workflow?.id;

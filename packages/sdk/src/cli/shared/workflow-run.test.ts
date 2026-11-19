@@ -51,8 +51,12 @@ function createClient(options: ClientOptions = {}) {
   return {
     getAuthMachineUser: vi.fn(async () => ({ machineUser: {} })),
     createFunctionRegistry: vi.fn(async () => ({})),
-    createWorkflowJobFunction: vi.fn(async () => ({ jobFunction: { version: 1n } })),
-    createWorkflow: vi.fn(async () => ({ workflow: { id: "wf-1" } })),
+    createWorkflowJobFunction: vi.fn(
+      async (_request: { jobFunctionName: string; scriptRef: string }) => ({
+        jobFunction: { version: 1n },
+      }),
+    ),
+    createWorkflow: vi.fn(async (_request: object) => ({ workflow: { id: "wf-1" } })),
     startWorkflow: vi.fn(async (_request: { arg: string }) => ({ executionId: "exec-1" })),
     getWorkflowExecution: vi.fn(
       async (_request?: unknown, _options?: { signal?: AbortSignal }) => ({
@@ -92,6 +96,7 @@ describe("startWorkflowRun", () => {
     expect(started).toEqual({
       runId,
       name: `tmp-run-${runId}`,
+      functionNames: [`tmp-run-${runId}`],
       workflowId: "wf-1",
       executionId: "exec-1",
     });
@@ -104,7 +109,7 @@ describe("startWorkflowRun", () => {
       client: asClient(client),
       workspaceId: "ws",
       runId,
-      kind: "job",
+      kind: "script",
       code: "",
       description: "d",
       invoker,
@@ -118,8 +123,96 @@ describe("startWorkflowRun", () => {
       "workflow",
     ]);
     for (const write of writes) {
-      expect(write.labels).toEqual(workflowRunLabels({ kind: "job", runId }));
+      expect(write.labels).toEqual(workflowRunLabels({ kind: "script", runId }));
     }
+  });
+
+  describe("for a workflow job and the jobs it starts", () => {
+    const jobRun = (client: ReturnType<typeof createClient>) =>
+      startWorkflowRun({
+        client: asClient(client),
+        workspaceId: "ws",
+        runId,
+        kind: "job",
+        mainJobName: "process-order",
+        jobs: [
+          { jobName: "process-order", code: "// parent" },
+          { jobName: "validate-order", code: "// child" },
+        ],
+        description: "d",
+        invoker,
+        arg: { id: "1" },
+      });
+
+    test("registers one function and job function per job under names no deployed job has", async () => {
+      const client = createClient();
+      await jobRun(client);
+
+      expect(client.createWorkflowJobFunction.mock.calls.map(([request]) => request)).toEqual([
+        expect.objectContaining({
+          jobFunctionName: `tmp-run-${runId}-process-order`,
+          scriptRef: `tmp-run-${runId}-process-order`,
+        }),
+        expect.objectContaining({
+          jobFunctionName: `tmp-run-${runId}-validate-order`,
+          scriptRef: `tmp-run-${runId}-validate-order`,
+        }),
+      ]);
+      expect(client.createFunctionRegistry).toHaveBeenCalledTimes(2);
+    });
+
+    test("makes the selected job the main job of the workflow and lists every job in it", async () => {
+      const client = createClient();
+      await jobRun(client);
+
+      expect(client.createWorkflow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workflowName: `tmp-run-${runId}`,
+          mainJobFunctionName: `tmp-run-${runId}-process-order`,
+          jobFunctions: {
+            [`tmp-run-${runId}-process-order`]: 1n,
+            [`tmp-run-${runId}-validate-order`]: 1n,
+          },
+        }),
+      );
+    });
+
+    test("labels every resource with the job key and no owner", async () => {
+      const client = createClient();
+      await jobRun(client);
+
+      const writes = vi.mocked(writeMetadataLabelsDirect).mock.calls.map(([, write]) => write);
+      expect(writes).toHaveLength(5);
+      for (const write of writes) {
+        expect(write.labels).toEqual(workflowRunLabels({ kind: "job", runId }));
+      }
+    });
+
+    test("removes every function and job function it registered when the start is refused", async () => {
+      const client = createClient();
+      client.startWorkflow.mockRejectedValueOnce(new ConnectError("denied", Code.PermissionDenied));
+
+      await expect(jobRun(client)).rejects.toThrow("denied");
+
+      expect(client.deleteWorkflowJobFunction).toHaveBeenCalledTimes(2);
+      expect(client.deleteFunctionRegistry).toHaveBeenCalledTimes(2);
+    });
+
+    test("removes all of them once the run finishes", async () => {
+      const client = createClient();
+      const started = await jobRun(client);
+
+      await awaitWorkflowRun({
+        client: asClient(client),
+        workspaceId: "ws",
+        started,
+        pollInterval: 1,
+        timeoutMs: 1000,
+      });
+
+      expect(client.deleteWorkflowJobFunction).toHaveBeenCalledTimes(2);
+      expect(client.deleteFunctionRegistry).toHaveBeenCalledTimes(2);
+    });
   });
 
   test("removes what it registered when the start is refused", async () => {
@@ -212,7 +305,13 @@ describe("startWorkflowRun when the run name is already taken", () => {
   });
 });
 
-const started = { runId, name: `tmp-run-${runId}`, workflowId: "wf-1", executionId: "exec-1" };
+const started = {
+  runId,
+  name: `tmp-run-${runId}`,
+  functionNames: [`tmp-run-${runId}`],
+  workflowId: "wf-1",
+  executionId: "exec-1",
+};
 
 describe("awaitWorkflowRun", () => {
   test("reports the script's result and removes the resources once it finishes", async () => {

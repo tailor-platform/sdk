@@ -256,7 +256,7 @@ export function transformStartCalls(
   const { program } = parseSync("input.ts", source);
   const localTargets = collectLocalTargets(program, startContext, currentFilePath);
   assertNoUndetectableStartCalls(program, source, localTargets, currentFilePath);
-  const { authNamespace } = startContext;
+  const { authNamespace, jobFunctionName } = startContext;
   const allStartCalls = detectStartCallsWithTargets(program, source, localTargets);
   const nestedStartCalls: Array<{ call: ResolvedStartCall; parent: ResolvedStartCall }> = [];
   const startCalls = allStartCalls.filter((call) => {
@@ -284,7 +284,9 @@ export function transformStartCalls(
 
   for (const call of startCalls) {
     const method = call.kind === "workflow" ? "startWorkflow" : "execJobFunction";
-    const prefix = `${WORKFLOW_RUNTIME_EXPR}.${method}(${JSON.stringify(call.targetName)}, `;
+    const target =
+      call.kind === "job" && jobFunctionName ? jobFunctionName(call.targetName) : call.targetName;
+    const prefix = `${WORKFLOW_RUNTIME_EXPR}.${method}(${JSON.stringify(target)}, `;
     const { argsRange, optionsRange, callRange } = call;
     if (!argsRange) {
       replacements.push({ ...callRange, text: `${prefix}undefined)` });
