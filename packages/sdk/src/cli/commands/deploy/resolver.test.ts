@@ -1,6 +1,6 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { describe, test, expect, vi } from "vitest";
 import { symbols } from "#/cli/shared/logger";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { buildMetaRequest, sdkNameLabelKey } from "./label";
 import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./resolver";
 import type { Application } from "#/cli/services/application";
@@ -10,6 +10,12 @@ import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { Resolver } from "#/types/resolver.generated";
 import type { PlanContext } from "./types";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { MachineUserSummarySchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
+import type {
+  PipelineResolverSchema,
+  PipelineServiceSchema,
+} from "@tailor-platform/tailor-proto/pipeline_resource_pb";
 
 const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
 
@@ -76,53 +82,51 @@ function createMockApplication(
 
 function createMockClient(
   existingServices: Array<{ name: string; label?: string; sdkVersion?: string }>,
-  existingResolvers: Record<string, Array<Record<string, unknown>>> = {},
-  resolverDetails: Record<string, Record<string, unknown>> = {},
+  existingResolvers: Record<string, Array<MessageInitShape<typeof PipelineResolverSchema>>> = {},
+  resolverDetails: Record<string, MessageInitShape<typeof PipelineResolverSchema>> = {},
   workspaceMachineUsers: string[] = [],
 ): OperatorClient {
-  return {
-    listAuthMachineUsers: vi.fn().mockResolvedValue({
-      machineUsers: workspaceMachineUsers.map((name) => ({ name })),
+  return mockOperatorClient({
+    listAuthMachineUsers: {
+      machineUsers: workspaceMachineUsers.map(
+        (name): MessageInitShape<typeof MachineUserSummarySchema> => ({ name }),
+      ),
       nextPageToken: "",
-    }),
-    listPipelineServices: vi.fn().mockResolvedValue({
-      pipelineServices: existingServices.map((s) => ({
-        namespace: { name: s.name },
-      })),
-      nextPageToken: "",
-    }),
-    listPipelineResolvers: vi
-      .fn()
-      .mockImplementation(({ namespaceName }: { namespaceName: string }) => ({
-        pipelineResolvers: existingResolvers[namespaceName] ?? [],
-        nextPageToken: "",
-      })),
-    getPipelineResolver: vi
-      .fn()
-      .mockImplementation(
-        ({ namespaceName, resolverName }: { namespaceName: string; resolverName: string }) => ({
-          pipelineResolver:
-            resolverDetails[`${namespaceName}:${resolverName}`] ??
-            (existingResolvers[namespaceName] ?? []).find(
-              (resolver) => resolver.name === resolverName,
-            ),
+    },
+    listPipelineServices: {
+      pipelineServices: existingServices.map(
+        (s): MessageInitShape<typeof PipelineServiceSchema> => ({
+          namespace: { name: s.name },
         }),
       ),
-    getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
-      const name = trn.split(":").pop();
-      const service = existingServices.find((s) => s.name === name);
-      return {
-        metadata: {
-          labels: service?.label
-            ? {
-                [sdkNameLabelKey]: service.label,
-                "sdk-version": service.sdkVersion ?? "v1-0-0",
-              }
-            : {},
-        },
-      };
+      nextPageToken: "",
+    },
+    listPipelineResolvers: (request) => ({
+      pipelineResolvers: existingResolvers[request.namespaceName ?? ""] ?? [],
+      nextPageToken: "",
     }),
-  } as unknown as OperatorClient;
+    getPipelineResolver: (request) => {
+      const namespaceName = request.namespaceName ?? "";
+      return {
+        pipelineResolver:
+          resolverDetails[`${namespaceName}:${request.resolverName}`] ??
+          (existingResolvers[namespaceName] ?? []).find(
+            (resolver) => resolver.name === request.resolverName,
+          ),
+      };
+    },
+    getMetadata: (request) => {
+      const name = request.trn?.split(":").pop();
+      const service = existingServices.find((s) => s.name === name);
+      const labels: Record<string, string> = service?.label
+        ? {
+            [sdkNameLabelKey]: service.label,
+            "sdk-version": service.sdkVersion ?? "v1-0-0",
+          }
+        : {};
+      return { metadata: { labels } };
+    },
+  });
 }
 
 function buildCtx(overrides: Partial<PlanContext>): PlanContext {
@@ -527,7 +531,7 @@ describe("planPipeline (resolver service level)", () => {
       const createResult = await planPipeline(
         buildCtx({ client: createMockClient([]), application: createMockApplication([pipeline]) }),
       );
-      return createResult.changeSet.resolver.creates[0]!.request.pipelineResolver;
+      return createResult.changeSet.resolver.creates[0]!.request.pipelineResolver!;
     }
 
     test("resolver is unchanged when remote definition matches desired definition", async () => {
@@ -539,7 +543,7 @@ describe("planPipeline (resolver service level)", () => {
       const desiredResolver = await getDesiredResolver(pipeline);
 
       const client = createMockClient([{ name: "my-resolver", label: appName }], {
-        "my-resolver": [desiredResolver as Record<string, unknown>],
+        "my-resolver": [desiredResolver],
       });
       const result = await planPipeline(
         buildCtx({ client, application: createMockApplication([pipeline]) }),
@@ -568,7 +572,7 @@ describe("planPipeline (resolver service level)", () => {
       });
 
       const client = createMockClient([{ name: "my-resolver", label: appName }], {
-        "my-resolver": [remoteResolver as Record<string, unknown>],
+        "my-resolver": [remoteResolver],
       });
       const result = await planPipeline(
         buildCtx({ client, application: createMockApplication([pipeline]) }),
@@ -590,7 +594,7 @@ describe("planPipeline (resolver service level)", () => {
       const client = createMockClient(
         [{ name: "my-resolver", label: appName }],
         { "my-resolver": [{ name: "test-resolver" }] },
-        { "my-resolver:test-resolver": desiredResolver as Record<string, unknown> },
+        { "my-resolver:test-resolver": desiredResolver },
       );
       const result = await planPipeline(
         buildCtx({ client, application: createMockApplication([pipeline]) }),
@@ -611,7 +615,7 @@ describe("planPipeline (resolver service level)", () => {
       const desiredResolver = await getDesiredResolver(pipeline);
 
       const client = createMockClient([{ name: "my-resolver", label: appName }], {
-        "my-resolver": [desiredResolver as Record<string, unknown>],
+        "my-resolver": [desiredResolver],
       });
       const result = await planPipeline(
         buildCtx({
@@ -640,7 +644,7 @@ describe("planPipeline (resolver service level)", () => {
       });
 
       const client = createMockClient([{ name: "my-resolver", label: appName }], {
-        "my-resolver": [remoteResolver as Record<string, unknown>],
+        "my-resolver": [remoteResolver],
       });
       const result = await planPipeline(
         buildCtx({
@@ -664,10 +668,10 @@ describe("planPipeline (resolver service level)", () => {
       });
       const desiredResolver = structuredClone(await getDesiredResolver(pipeline));
       expect(desiredResolver).toBeDefined();
-      delete desiredResolver!.pipelines?.[0]?.invoker;
+      delete desiredResolver.pipelines?.[0]?.invoker;
 
       const client = createMockClient([{ name: "my-resolver", label: appName }], {
-        "my-resolver": [desiredResolver as Record<string, unknown>],
+        "my-resolver": [desiredResolver],
       });
       const result = await planPipeline(
         buildCtx({ client, application: createMockApplication([pipeline]) }),
@@ -705,10 +709,10 @@ describe("planPipeline (resolver service level)", () => {
       // plan again as if that shape were already deployed (so it comes back unchanged).
       const emptyClient = createMockClient([]);
       const createResult = await planPipeline(buildCtx({ client: emptyClient, application }));
-      const desiredResolver = createResult.changeSet.resolver.creates[0]!.request.pipelineResolver;
+      const desiredResolver = createResult.changeSet.resolver.creates[0]!.request.pipelineResolver!;
 
       const client = createMockClient([{ name: "my-resolver", label: appName }], {
-        "my-resolver": [desiredResolver as Record<string, unknown>],
+        "my-resolver": [desiredResolver],
       });
       const first = await planPipeline(buildCtx({ client, application }));
       expect(client.listPipelineServices).toHaveBeenCalledTimes(1);
@@ -732,7 +736,7 @@ describe("planPipeline (resolver service level)", () => {
     test("skips re-listing resolvers for a deleted service's namespace when a prior fetch is provided", async () => {
       const application = createMockApplication([createMockResolverService("new-resolver")]);
       const client = createMockClient([{ name: "old-resolver", label: appName }], {
-        "old-resolver": [{ name: "stale-resolver", operation: "query" }],
+        "old-resolver": [{ name: "stale-resolver", operationType: "query" }],
       });
 
       const first = await planPipeline(buildCtx({ client, application }));
@@ -908,14 +912,14 @@ describe("formatResolverChangeEntries", () => {
 
 describe("applyPipeline phase separation", () => {
   function createMockClientWithSpies() {
-    return {
-      deletePipelineResolver: vi.fn().mockResolvedValue({}),
-      deletePipelineService: vi.fn().mockResolvedValue({}),
-      createPipelineService: vi.fn().mockResolvedValue({}),
-      createPipelineResolver: vi.fn().mockResolvedValue({}),
-      updatePipelineResolver: vi.fn().mockResolvedValue({}),
-      setMetadata: vi.fn().mockResolvedValue({}),
-    } as unknown as OperatorClient;
+    return mockOperatorClient({
+      deletePipelineResolver: {},
+      deletePipelineService: {},
+      createPipelineService: {},
+      createPipelineResolver: {},
+      updatePipelineResolver: {},
+      setMetadata: {},
+    });
   }
 
   function createMockPlanResult() {

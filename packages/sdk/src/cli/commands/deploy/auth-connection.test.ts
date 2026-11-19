@@ -5,6 +5,8 @@ import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import type { AuthService } from "#/cli/services/auth/service";
 import type { AuthConnectionConfig } from "#/types/auth-connection.generated";
 import type { SecretsStateScope } from "./secrets-state";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { AuthConnectionSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
 const { mockLoggerWarn, mockLoggerInfo, mockSaveSecretsState } = vi.hoisted(() => ({
   mockLoggerWarn: vi.fn(),
@@ -94,11 +96,11 @@ const oauth2DesiredConfig: AuthConnectionConfig = {
   clientSecret: "client-secret",
 };
 
-function oauth2Connection(name: string) {
+function oauth2Connection(name: string): MessageInitShape<typeof AuthConnectionSchema> {
   return {
     name,
     config: {
-      case: "oauth2" as const,
+      case: "oauth2",
       value: {
         providerUrl: "https://idp.example.com",
         issuerUrl: "https://idp.example.com",
@@ -184,9 +186,7 @@ describe("planAuthConnections", () => {
 
     await planAuthConnections(client, connectionStateScope(), emptyAuths);
 
-    const trns = vi
-      .mocked(client.getMetadata)
-      .mock.calls.map(([req]) => (req as { trn: string }).trn);
+    const trns = client.getMetadata.mock.calls.map(([req]) => req.trn);
     expect(trns).toContain(`trn:v1:workspace:${workspaceId}:auth_connection:owned-connection`);
   });
 
@@ -402,8 +402,7 @@ describe("applyAuthConnections", () => {
 
     await applyAuthConnections(client, result, "create-update");
 
-    const updateFn = client.updateAuthConnection;
-    expect(updateFn).toHaveBeenCalledWith(
+    expect(client.updateAuthConnection).toHaveBeenCalledWith(
       expect.objectContaining({
         updateMask: { paths: ["oauth2.client_secret"] },
       }),

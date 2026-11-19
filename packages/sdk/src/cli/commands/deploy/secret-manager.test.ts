@@ -11,6 +11,8 @@ import { hashValue } from "./secrets-state";
 import type { PlanContext } from "#/cli/commands/deploy/types";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { SecretManagerSecretSchema } from "@tailor-platform/tailor-proto/secret_manager_resource_pb";
 
 const mockLoadSecretsState = vi.fn();
 const mockSaveSecretsState = vi.fn();
@@ -85,9 +87,7 @@ function createMockApplyClient(overrides: Partial<OperatorClientMocks<ApplyMetho
   });
 }
 
-type ExistingSecretFixture =
-  | string
-  | { name: string; updateTime?: { seconds: bigint; nanos: number } };
+type ExistingSecretFixture = string | MessageInitShape<typeof SecretManagerSecretSchema>;
 
 type PlanMethod = "listSecretManagerVaults" | "getMetadata" | "listSecretManagerSecrets";
 
@@ -100,7 +100,7 @@ function createMockPlanClient(
     listSecretManagerVaults: { vaults: [{ name: vaultName }], nextPageToken: "" },
     getMetadata: { metadata: { labels: { "sdk-name": "test-app", "sdk-version": sdkVersion } } },
     listSecretManagerSecrets: {
-      secrets: existingSecrets.map((secret) =>
+      secrets: existingSecrets.map((secret): MessageInitShape<typeof SecretManagerSecretSchema> =>
         typeof secret === "string" ? { name: secret } : secret,
       ),
       nextPageToken: "",
