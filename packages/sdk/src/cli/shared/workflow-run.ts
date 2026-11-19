@@ -282,11 +282,15 @@ async function outcomeAfterWorkflowRemoved(
   // loop exits when the job reaches a terminal status or the deadline passes
   // oxlint-disable-next-line typescript/no-unnecessary-condition
   while (true) {
+    let signal: AbortSignal | undefined;
     try {
-      const { execution: job } = await client.getFunctionExecution({
-        workspaceId,
-        executionId: jobExecutionId,
-      });
+      const budget = deadline - Date.now();
+      if (budget <= 0) return unavailable("the job was still running when the wait ended");
+      signal = AbortSignal.timeout(budget);
+      const { execution: job } = await client.getFunctionExecution(
+        { workspaceId, executionId: jobExecutionId },
+        { signal },
+      );
       if (!job) return unavailable("the job execution of the run could not be found");
       const logs = joinFunctionLogMessages(job.logEntries);
       const result = job.result;
@@ -307,6 +311,8 @@ async function outcomeAfterWorkflowRemoved(
         return { state: "finished", result: { success: false, logs, result, error } };
       }
     } catch (error) {
+      // The signal fires on the deadline, but its timer can run a few milliseconds ahead of the clock.
+      if (signal?.aborted) return unavailable("reading the job of the run did not finish in time");
       if (!isRetryableWaitError(error)) {
         return unavailable(error instanceof Error ? error.message : String(error));
       }

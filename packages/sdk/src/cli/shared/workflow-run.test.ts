@@ -449,6 +449,29 @@ describe("awaitWorkflowRun when a sweep removes the workflow while it waits", ()
     });
   });
 
+  test("stops at the deadline when the lookup of the job's execution never answers", async () => {
+    const client = createClient();
+    client.getWorkflowExecution.mockResolvedValueOnce(running).mockRejectedValue(gone);
+    client.getFunctionExecution.mockImplementation(
+      (_request?: unknown, options?: { signal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          options?.signal?.addEventListener("abort", () =>
+            reject(new ConnectError("canceled", Code.Canceled)),
+          );
+        }) as never,
+    );
+
+    const outcome = await awaitWorkflowRun({
+      client: asClient(client),
+      workspaceId: "ws",
+      started,
+      pollInterval: 5,
+      timeoutMs: 40,
+    });
+
+    expect(outcome).toMatchObject({ state: "outcomeUnavailable", workflowRemoved: true });
+  });
+
   test("reports the outcome as unavailable, saying the workflow is gone, when the job outlasts the wait", async () => {
     const client = createClient();
     client.getWorkflowExecution.mockResolvedValueOnce(running).mockRejectedValue(gone);
