@@ -131,6 +131,7 @@ describe("applyAuth phase separation", () => {
         workspaceId: "test-workspace",
         applicationId: "test-app-id",
         applicationName: "test-app",
+        configPath: "/proj/app/tailor.config.ts",
       },
     } as unknown as Awaited<ReturnType<typeof planAuth>>;
   }

@@ -10,20 +10,24 @@ import {
 } from "./secrets-state";
 import type { SecretsStateScope } from "./secrets-state";
 
-vi.mock("#/cli/shared/dist-dir", () => ({
-  getDistDir: () => "/tmp/tailor-test-secrets-state",
+const { getDistDir } = vi.hoisted(() => ({
+  getDistDir: vi.fn(() => "/tmp/tailor-test-secrets-state"),
 }));
+
+vi.mock("#/cli/shared/dist-dir", () => ({ getDistDir }));
 
 const scopeA = {
   workspaceId: "workspace-a",
   applicationId: "application-a",
   applicationName: "shared-name",
+  configPath: "/proj/app/tailor.config.ts",
 } satisfies SecretsStateScope;
 
 const scopeB = {
   workspaceId: "workspace-b",
   applicationId: "application-b",
   applicationName: "shared-name",
+  configPath: "/proj/app/tailor.config.ts",
 } satisfies SecretsStateScope;
 
 function removeStateFiles(): void {
@@ -42,6 +46,23 @@ describe("secrets-state", () => {
     removeStateFiles();
     await runTest();
     removeStateFiles();
+  });
+
+  test.each([
+    {
+      name: "under the config's directory when the output directory is relative",
+      distDir: ".tailor",
+      stateDir: "/proj/app/.tailor/secrets-state",
+    },
+    {
+      name: "in the output directory when it is absolute",
+      distDir: "/tmp/tailor-test-output",
+      stateDir: "/tmp/tailor-test-output/secrets-state",
+    },
+  ])("getSecretsStatePath puts the state $name", ({ distDir, stateDir }) => {
+    getDistDir.mockReturnValueOnce(distDir);
+
+    expect(path.dirname(getSecretsStatePath(scopeA))).toBe(stateDir);
   });
 
   test("loadSecretsState returns empty state when file does not exist", () => {

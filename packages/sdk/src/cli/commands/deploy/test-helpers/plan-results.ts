@@ -93,6 +93,7 @@ export function emptyPlanResults(): PlanResults {
         workspaceId: "workspace-id",
         applicationId: "application-id",
         applicationName: "my-app",
+        configPath: "/proj/app/tailor.config.ts",
       },
       changeSet: {
         service: createChangeSet("Auth services"),
@@ -147,6 +148,7 @@ export function emptyPlanResults(): PlanResults {
         workspaceId: "workspace-id",
         applicationId: "application-id",
         applicationName: "my-app",
+        configPath: "/proj/app/tailor.config.ts",
       },
       vaultChangeSet: createChangeSet("Vaults"),
       secretChangeSet: createChangeSet("Secrets"),

@@ -10,10 +10,12 @@ import type { OperatorClient } from "#/cli/shared/client";
 const mockLoadSecretsState = vi.fn();
 const mockSaveSecretsState = vi.fn();
 const sdkVersion = "v1-0-0";
+const configPath = "/proj/app/tailor.config.ts";
 const stateScope = {
   workspaceId: "ws-1",
   applicationId: "app-1",
   applicationName: "test-app",
+  configPath,
 };
 
 vi.mock("./secrets-state", async (importOriginal) => {
@@ -117,7 +119,7 @@ function createPlanContext(
       idpServices: overrides.idpServices ?? [],
     } as unknown as Application,
     forRemoval: overrides.forRemoval ?? false,
-    config: {} as PlanContext["config"],
+    config: { path: configPath } as PlanContext["config"],
   };
 }
 
@@ -379,6 +381,7 @@ describe("planSecretManager hash-based diff", () => {
       workspaceId: "ws-b",
       applicationId: "shared-app-id",
       applicationName: "test-app",
+      configPath,
     });
   });
 });

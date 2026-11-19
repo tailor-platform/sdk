@@ -87,6 +87,7 @@ import {
   writeMetadataLabels,
 } from "./label";
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
+import { secretsStateScope } from "./secrets-state";
 import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { AuthAttributeValue } from "#/configure/services/auth/types";
@@ -425,7 +426,7 @@ export async function planAuth(context: PlanContext) {
     planOAuth2Clients(client, workspaceId, namespaces, expectedLocalWebsites, forceApplyAll),
     planSCIMConfigs(client, workspaceId, namespaces, forceApplyAll),
     planSCIMResources(client, workspaceId, namespaces, forceApplyAll),
-    planAuthConnections(client, workspaceId, application.name, application.id, auths),
+    planAuthConnections(client, secretsStateScope(context), auths),
   ]);
   return {
     changeSet: {
