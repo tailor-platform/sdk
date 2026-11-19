@@ -390,6 +390,7 @@ export async function preflightTailorDB(
  * Return a partially applied migration's tables to their Pre-phase shape after
  * its Post-phase stopped partway, so the next deploy finds the schema it resumes from.
  * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
  * @param changeSet - TailorDB change set
  * @param migration - Migration whose Post-phase failed
  * @param phaseSettings - How this deploy's migration phases write table settings
@@ -398,6 +399,7 @@ export async function preflightTailorDB(
  */
 async function reapplyPrePhaseAfterPostPhaseFailure(
   client: OperatorClient,
+  workspaceId: string,
   changeSet: TailorDBChangeSet,
   migration: PendingMigration,
   phaseSettings: MigrationPhaseSettings,
@@ -407,6 +409,7 @@ async function reapplyPrePhaseAfterPostPhaseFailure(
   try {
     await executeSingleMigrationPrePhase(
       client,
+      workspaceId,
       changeSet,
       migration,
       phaseSettings,
@@ -1310,6 +1313,7 @@ async function runPreMigrationPhase(
     await withSpan("apply.tailorDB.migration.prePhase", () =>
       executeSingleMigrationPrePhase(
         client,
+        flow.migrationContext.workspaceId,
         changeSet,
         migration,
         phaseSettings,
@@ -1376,13 +1380,21 @@ async function runPostMigrationPhase(
   flow.timeline?.enter("postMigration");
   try {
     await withSpan("apply.tailorDB.migration.postPhase", () =>
-      executeSingleMigrationPostPhase(client, changeSet, migration, phaseSettings, attemptedTables),
+      executeSingleMigrationPostPhase(
+        client,
+        flow.migrationContext.workspaceId,
+        changeSet,
+        migration,
+        phaseSettings,
+        attemptedTables,
+      ),
     );
   } catch (error) {
     if (!rollsBackOnFailure && (inProgress || runsSteps)) {
       runLog.partial.set(migration.namespace, migration);
       await reapplyPrePhaseAfterPostPhaseFailure(
         client,
+        flow.migrationContext.workspaceId,
         changeSet,
         migration,
         phaseSettings,
@@ -1395,6 +1407,7 @@ async function runPostMigrationPhase(
     if (isRollbackSkippedWithRecord(failure)) {
       await reapplyPrePhaseAfterPostPhaseFailure(
         client,
+        flow.migrationContext.workspaceId,
         changeSet,
         migration,
         phaseSettings,

@@ -142,6 +142,35 @@ function entriesOfNamespace<T extends { request: { namespaceName?: string } }>(
 }
 
 /**
+ * List the tables a migration changes that the deploy plan neither creates nor updates, yet the
+ * workspace holds while the migration runs: a table a later migration removes, which this deploy
+ * created from the baseline snapshot or which the plan deletes. Their schema follows the history
+ * like any other table's, so the script sees the shape its migration defines.
+ * @param changeSet - TailorDB change set
+ * @param migration - The migration about to run
+ * @returns Names of the tables
+ */
+function planlessTableNames(changeSet: TailorDBChangeSet, migration: PendingMigration): string[] {
+  const snapshotTables = migrationSnapshotCache.load(migration).tables;
+  const planned = new Set(
+    [
+      ...entriesOfNamespace(changeSet.type.creates, migration.namespace),
+      ...entriesOfNamespace(changeSet.type.updates, migration.namespace),
+    ].map((entry) => entry.request.tailordbType?.name),
+  );
+  const deleted = new Set(
+    entriesOfNamespace(changeSet.type.deletes, migration.namespace).map((entry) => entry.name),
+  );
+  return [...getAffectedTableNames(migration)].filter(
+    (tableName) =>
+      tableName in snapshotTables &&
+      !planned.has(tableName) &&
+      (deleted.has(tableName) ||
+        processedTables.created.has(namespacedTableKey(migration.namespace, tableName))),
+  );
+}
+
+/**
  * How to undo the GraphQL permission a migration's Pre-phase wrote for a table:
  * restore `previous`, or delete the permission when there was none before.
  */
@@ -285,6 +314,7 @@ export async function awaitAllSettledOrThrow(
 /**
  * Execute pre-migration phase for a single migration
  * @param {OperatorClient} client - Operator client instance
+ * @param workspaceId - Workspace ID
  * @param {TailorDBChangeSet} changeSet - TailorDB change set
  * @param {PendingMigration} migration - Single pending migration
  * @param phaseSettings - How this deploy's migration phases write table settings
@@ -294,6 +324,7 @@ export async function awaitAllSettledOrThrow(
  */
 export async function executeSingleMigrationPrePhase(
   client: OperatorClient,
+  workspaceId: string,
   changeSet: TailorDBChangeSet,
   migration: PendingMigration,
   phaseSettings: MigrationPhaseSettings,
@@ -408,6 +439,34 @@ export async function executeSingleMigrationPrePhase(
     processedTables.updated.add(tableKey(tableName));
     attemptedTables.add(tableName);
     await client.updateTailorDBType(clonedRequest);
+  }
+
+  for (const tableName of planlessTableNames(changeSet, migration)) {
+    const typeChanges = preMigrationChanges.get(tableName);
+    const snapshotType = buildSnapshotTypeManifest(
+      migration,
+      tableName,
+      phaseSettings,
+      typeChanges,
+    );
+    if (!snapshotType) continue;
+
+    const clonedType = structuredClone(snapshotType);
+    if (typeChanges && typeChanges.size > 0 && clonedType.schema?.fields) {
+      applyPreMigrationFieldAdjustments(clonedType.schema.fields, typeChanges);
+    }
+    const indexChanges = preMigrationIndexChanges.get(tableName);
+    if (indexChanges && indexChanges.size > 0 && clonedType.schema?.indexes) {
+      applyPreMigrationIndexAdjustments(clonedType.schema.indexes, indexChanges);
+    }
+
+    processedTables.updated.add(tableKey(tableName));
+    attemptedTables.add(tableName);
+    await client.updateTailorDBType({
+      workspaceId,
+      namespaceName: migration.namespace,
+      tailordbType: clonedType,
+    });
   }
 
   const currentTableNames = new Set(Object.keys(migrationSnapshotCache.load(migration).tables));
@@ -593,6 +652,7 @@ export async function rollbackSingleMigrationAfterFailure(
 /**
  * Execute post-migration phase for a single migration: Apply final tables (with required: true)
  * @param {OperatorClient} client - Operator client instance
+ * @param workspaceId - Workspace ID
  * @param {TailorDBChangeSet} changeSet - TailorDB change set
  * @param {PendingMigration} migration - Single pending migration
  * @param phaseSettings - How this deploy's migration phases write table settings
@@ -601,6 +661,7 @@ export async function rollbackSingleMigrationAfterFailure(
  */
 export async function executeSingleMigrationPostPhase(
   client: OperatorClient,
+  workspaceId: string,
   changeSet: TailorDBChangeSet,
   migration: PendingMigration,
   phaseSettings: MigrationPhaseSettings,
@@ -649,6 +710,19 @@ export async function executeSingleMigrationPostPhase(
       await client.updateTailorDBType({
         workspaceId: update.request.workspaceId,
         namespaceName: update.request.namespaceName,
+        tailordbType: snapshotType,
+      });
+    }
+
+    // Tables outside the plan that a later migration removes
+    for (const tableName of planlessTableNames(changeSet, migration)) {
+      if (!adjustedTypes.has(tableName)) continue;
+      const snapshotType = buildSnapshotTypeManifest(migration, tableName, phaseSettings);
+      if (!snapshotType) continue;
+      attemptedTables.add(tableName);
+      await client.updateTailorDBType({
+        workspaceId,
+        namespaceName: migration.namespace,
         tailordbType: snapshotType,
       });
     }

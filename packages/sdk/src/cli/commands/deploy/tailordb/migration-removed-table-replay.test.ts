@@ -206,6 +206,99 @@ describe("migration flow: replaying a history that removes tables into a fresh w
     expect(deleteOrders(client, NAMESPACE, "Draft").table).toHaveLength(2);
   });
 
+  test("applies a migration's schema change to a baseline table a later migration removes, before and after that migration's script", async () => {
+    const before = snapshotTable("A", nameField);
+    const after = snapshotTable("A", { ...nameField, source: { type: "string", required: true } });
+    const tableC = snapshotTable("C", nameField);
+    snapshotState.tablesByVersion = {
+      0: { A: before, C: tableC },
+      1: { A: after, C: tableC },
+      2: { C: tableC },
+    };
+    const planResult = createPlanResult({ type: { creates: [typeEntry("C")] } });
+    planResult.context.pendingMigrations = checkpoint.mockPending([
+      mkPendingMigration([
+        {
+          kind: "field_added",
+          typeName: "A",
+          tableName: "A",
+          fieldName: "source",
+          after: { type: "string", required: true },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
+      ]),
+      mkPendingMigration(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        [{ kind: "table_removed", tableName: "A", before: after } as any],
+        { number: 2, hasScript: false },
+      ),
+    ]);
+    const client = checkpoint.createMockClient();
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    const mock = vi.mocked(client.updateTailorDBType).mock;
+    const withSource = mock.invocationCallOrder.filter((_order, index) => {
+      const type = mock.calls[index]?.[0].tailordbType;
+      return type?.name === "A" && type.schema?.fields?.source !== undefined;
+    });
+    expect(withSource).toHaveLength(2);
+    expect(withSource[0]).toBeLessThan(firstScriptOrder());
+    expect(withSource[1]).toBeGreaterThan(firstScriptOrder());
+  });
+
+  test("applies a migration's schema change to a table the workspace has and the plan deletes", async () => {
+    const before = snapshotTable("A", nameField);
+    const after = snapshotTable("A", { ...nameField, source: { type: "string", required: true } });
+    snapshotState.tablesByVersion = { 0: { A: before }, 1: { A: after }, 2: {} };
+    const planResult = createPlanResult({
+      type: {
+        deletes: [
+          {
+            name: "A",
+            request: {
+              workspaceId: "test-workspace",
+              namespaceName: NAMESPACE,
+              tailordbTypeName: "A",
+            },
+          },
+        ],
+      },
+    });
+    checkpoint = createRemoteCheckpoint(0);
+    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
+    planResult.context.pendingMigrations = checkpoint.mockPending([
+      mkPendingMigration([
+        {
+          kind: "field_added",
+          typeName: "A",
+          tableName: "A",
+          fieldName: "source",
+          after: { type: "string", required: true },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
+      ]),
+      mkPendingMigration(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        [{ kind: "table_removed", tableName: "A", before: after } as any],
+        { number: 2, hasScript: false },
+      ),
+    ]);
+    const client = checkpoint.createMockClient({
+      listTailorDBTypes: { tailordbTypes: [{ name: "A" }] },
+    });
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    const mock = vi.mocked(client.updateTailorDBType).mock;
+    const withSource = mock.invocationCallOrder.filter((_order, index) => {
+      const type = mock.calls[index]?.[0].tailordbType;
+      return type?.name === "A" && type.schema?.fields?.source !== undefined;
+    });
+    expect(withSource).toHaveLength(2);
+    expect(deleteOrders(client, NAMESPACE, "A").table).toHaveLength(1);
+  });
+
   test("creates a baseline table that a later migration renames away, and deletes it after the renaming migration's checkpoint", async () => {
     const oldTable = snapshotTable("Old", nameField);
     const newTable = snapshotTable("New", nameField);
