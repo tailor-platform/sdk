@@ -487,6 +487,10 @@ transparent here), Bun, and Yarn Classic. The exception is **Yarn Plug'n'Play**,
 
 Run `tailor plugin list` to see which plugins are discovered and where they resolve from.
 
+While a plugin runs, `tailor` exits when the plugin does. Ctrl+C reaches the plugin directly, so
+`tailor` does not pass SIGINT on to it; to stop a plugin through the `tailor` process, send `tailor`
+a SIGTERM, which it passes on to the plugin.
+
 ### Context passed to plugins
 
 Before running a plugin, the CLI injects the current Tailor Platform context as environment variables so
