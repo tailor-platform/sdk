@@ -112,21 +112,41 @@ type ManagedResourceSpec<C extends ManagedResourceChangeSet<HasName>> = Omit<
 
 function managedResource<C extends ManagedResourceChangeSet<HasName>>(
   resource: ManagedResourceSpec<C>,
-): ManagedResource<HasName> {
+): ManagedResource<HasName> & { changeSetOf: (results: PlanResults) => C } {
   return resource;
 }
 
-function workflowJobFunctionNames(items: ReadonlyArray<{ usedJobNames: string[] }>): HasName[] {
-  return [...new Set(items.flatMap((item) => item.usedJobNames))].map((name) => ({ name }));
+type WorkflowJobFunctionChangeSet = Omit<
+  ManagedResourceChangeSet<HasName>,
+  "replaces" | "deletes"
+> & {
+  replaces: never[];
+  deletes: PlanResults["workflow"]["jobFunctionDeletes"];
+};
+
+function workflowJobFunctionNames(
+  jobNames: Iterable<string>,
+  listed: ReadonlyArray<HasName>,
+): HasName[] {
+  const listedNames = new Set(listed.map((item) => item.name));
+  return [...new Set(jobNames)].filter((name) => !listedNames.has(name)).map((name) => ({ name }));
 }
 
-function workflowJobFunctionChangeSet(results: PlanResults): ManagedResourceChangeSet {
+// List each job name once: pre-flight validation reports a name once for each list holding it.
+function workflowJobFunctionChangeSet(results: PlanResults): WorkflowJobFunctionChangeSet {
   const { workflow } = results;
+  const usedJobNames = (items: ReadonlyArray<{ usedJobNames: string[] }>) =>
+    items.flatMap((item) => item.usedJobNames);
+  const creates = workflowJobFunctionNames(usedJobNames(workflow.changeSet.creates), []);
+  const updates = workflowJobFunctionNames(usedJobNames(workflow.changeSet.updates), creates);
   return {
-    creates: workflowJobFunctionNames(workflow.changeSet.creates),
-    updates: workflowJobFunctionNames(workflow.changeSet.updates),
-    replaces: workflowJobFunctionNames(workflow.changeSet.replaces),
-    unchanged: [...workflow.unchangedWorkflowJobNames].map((name) => ({ name })),
+    creates,
+    updates,
+    replaces: [],
+    unchanged: workflowJobFunctionNames(workflow.unchangedWorkflowJobNames, [
+      ...creates,
+      ...updates,
+    ]),
     deletes: workflow.jobFunctionDeletes,
     lines: () => {
       const display = createChangeSet<HasName, HasName, HasName>("Workflow job functions");
@@ -244,6 +264,11 @@ export const MANAGED_RESOURCES = {
     changeSetOf: (results) => results.workflowExecutionPolicy.changeSet,
   }),
 } satisfies Record<ManagedResourceType, ManagedResource>;
+
+/** The change set `MANAGED_RESOURCES` maps resource type `T` to, with its items' own types. */
+export type ManagedChangeSetOf<T extends ManagedResourceType> = ReturnType<
+  (typeof MANAGED_RESOURCES)[T]["changeSetOf"]
+>;
 
 function managedResourceName(resource: ManagedResource, item: ManagedResourceItem): string {
   return resource.nameOf ? resource.nameOf(item) : (item as HasName).name;

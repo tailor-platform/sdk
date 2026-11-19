@@ -201,7 +201,7 @@ async function execRemove(
   await applyIdP(client, plans.idp, "delete-services");
   await applyTailorDB(client, plans.tailorDB, "delete-resources");
   await applyTailorDB(client, plans.tailorDB, "delete-services");
-  await applyFunctionRegistry(client, workspaceId, plans.functionRegistry, "delete");
+  await applyFunctionRegistry(client, plans.functionRegistry, "delete");
   await applySecretManager(client, plans.secretManager, "delete");
 
   return { removed: true, leftBehind };

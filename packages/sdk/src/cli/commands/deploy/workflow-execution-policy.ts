@@ -62,7 +62,13 @@ function toConcurrencyPolicyInit(
   return { maxConcurrentExecutions: policy.maxConcurrentExecutions };
 }
 
-function createRequest(
+/**
+ * Build the request that creates an execution policy.
+ * @param workspaceId - Workspace the policy belongs to
+ * @param policy - Execution policy from the config
+ * @returns The create request
+ */
+export function executionPolicyCreateRequest(
   workspaceId: string,
   policy: ExecutionPolicyInstance,
 ): MessageInitShape<typeof CreateWorkflowJobFunctionExecutionPolicyRequestSchema> {
@@ -74,7 +80,13 @@ function createRequest(
   };
 }
 
-function updateRequest(
+/**
+ * Build the request that updates an execution policy.
+ * @param workspaceId - Workspace the policy belongs to
+ * @param policy - Execution policy from the config
+ * @returns The update request
+ */
+export function executionPolicyUpdateRequest(
   workspaceId: string,
   policy: ExecutionPolicyInstance,
 ): MessageInitShape<typeof UpdateWorkflowJobFunctionExecutionPolicyRequestSchema> {
@@ -226,7 +238,7 @@ export async function planWorkflowJobFunctionExecutionPolicy(
     isConfigUnchanged: ({ policy }, found) =>
       isRequestUnchanged(
         executionPolicyComparison,
-        updateRequest(workspaceId, policy),
+        executionPolicyUpdateRequest(workspaceId, policy),
         found.resource,
       ),
     create: ({ policy, metaRequest }) => ({ name: policy.name, workspaceId, policy, metaRequest }),
@@ -262,19 +274,19 @@ export async function applyWorkflowJobFunctionExecutionPolicy(
           executionPolicyName: replace.name,
         });
         await client.createWorkflowJobFunctionExecutionPolicy(
-          createRequest(replace.workspaceId, replace.policy),
+          executionPolicyCreateRequest(replace.workspaceId, replace.policy),
         );
         await writeMetadataLabels(client, replace.metaRequest);
       }),
       ...changeSet.creates.map(async (create) => {
         await client.createWorkflowJobFunctionExecutionPolicy(
-          createRequest(create.workspaceId, create.policy),
+          executionPolicyCreateRequest(create.workspaceId, create.policy),
         );
         await writeMetadataLabels(client, create.metaRequest);
       }),
       ...changeSet.updates.map(async (update) => {
         await client.updateWorkflowJobFunctionExecutionPolicy(
-          updateRequest(update.workspaceId, update.policy),
+          executionPolicyUpdateRequest(update.workspaceId, update.policy),
         );
         await writeMetadataLabels(client, update.metaRequest);
       }),

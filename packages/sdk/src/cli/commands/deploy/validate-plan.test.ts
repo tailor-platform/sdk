@@ -3,11 +3,14 @@ import {
   AuthOAuth2Client_ClientType,
   AuthOAuth2Client_GrantType,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
+import { TailorDBGQLPermission_Permit } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { logger, plainRedacted } from "#/cli/shared/logger";
-import { emptyPlanResults } from "./test-helpers/plan-results";
-import { validatePlans } from "./validate-plan";
+import { MANAGED_RESOURCES } from "./managed-resources";
+import { emptyPlanResults, PLANNED_ITEM } from "./test-helpers/plan-results";
+import { REQUEST_CHECKS, validatePlans } from "./validate-plan";
 import type { PlanResults } from "./apply-phases";
+import type { ManagedResourceType } from "./managed-resource-type";
 
 const WS_ID = "00000000-0000-0000-0000-000000000001";
 const METADATA = { trn: "", labels: {} };
@@ -49,6 +52,32 @@ function invalidConnectionUpdate(input: PlanResults): void {
       workspaceId: WS_ID,
       connection: INVALID_CONNECTION,
       updateMask: { paths: ["oauth2.token_url"] },
+    },
+    metaRequest: METADATA,
+  });
+}
+
+function emptyGqlPermissionActions(input: PlanResults): void {
+  input.tailorDB.changeSet.gqlPermission.creates.push({
+    name: "Item",
+    request: {
+      workspaceId: WS_ID,
+      namespaceName: "main",
+      typeName: "Item",
+      permission: { policies: [{ actions: [], permit: TailorDBGQLPermission_Permit.ALLOW }] },
+    },
+  });
+}
+
+function oversizedFunction(input: PlanResults): void {
+  input.functionRegistry.changeSet.updates.push({
+    name: "resolver--main--big",
+    workspaceId: WS_ID,
+    entry: {
+      name: "resolver--main--big",
+      scriptContent: "x".repeat(20 * 1024 * 1024 + 1),
+      contentHash: "0".repeat(64),
+      description: "",
     },
     metaRequest: METADATA,
   });
@@ -547,7 +576,100 @@ const invalidCases: Case<RegExp>[] = [
   },
 ];
 
+const LIST_ACTIONS = {
+  creates: "create",
+  updates: "update",
+  replaces: "replace",
+  unchanged: "update",
+} as const;
+
+type CheckedList = keyof typeof LIST_ACTIONS;
+
+/** Lists whose requests create a resource whatever the list's own action. */
+const CREATING_LISTS: Partial<Record<ManagedResourceType, readonly CheckedList[]>> = {
+  "idp.client": ["updates"],
+  workflow_job_function: ["updates", "unchanged"],
+  workflow_job_function_execution_policy: ["replaces"],
+};
+
+type ViolationIssue = { resourceType: string; action: string; fieldPath: string };
+
+/** Every field a request check reads, with a workspace ID that is not a UUID. */
+const ITEM_OF_ANY_LIST = {
+  ...PLANNED_ITEM,
+  request: { workspaceId: PLANNED_ITEM.workspaceId },
+  createRequest: { workspaceId: PLANNED_ITEM.workspaceId },
+  metaRequest: METADATA,
+  namespaceName: "main",
+  vaultName: "vault",
+  secretName: "secret",
+  value: "value",
+  workflow: { name: "workflow", mainJob: { name: "job" } },
+  usedJobNames: ["job"],
+  policy: { name: "policy", key: "policy" },
+  entry: {
+    name: "function",
+    scriptContent: "// script",
+    contentHash: "0".repeat(64),
+    description: "",
+  },
+};
+
+function planItem(results: PlanResults, resourceType: ManagedResourceType, list: CheckedList) {
+  if (resourceType !== "workflow_job_function") {
+    (MANAGED_RESOURCES[resourceType].changeSetOf(results)[list] as unknown[]).push(
+      ITEM_OF_ANY_LIST,
+    );
+    return;
+  }
+  // Job functions are listed from the workflows that use them.
+  const workflows = results.workflow.changeSet;
+  const usedJobNames = list === "unchanged" ? [] : ITEM_OF_ANY_LIST.usedJobNames;
+  (list === "updates" ? workflows.updates : workflows.creates).push({
+    ...ITEM_OF_ANY_LIST,
+    usedJobNames,
+  } as never);
+  if (list === "unchanged") {
+    results.workflow.unchangedWorkflowJobNames.add("job");
+  }
+}
+
+const CHECKED_LISTS = (Object.keys(REQUEST_CHECKS) as ManagedResourceType[]).flatMap(
+  (resourceType) =>
+    (Object.keys(LIST_ACTIONS) as CheckedList[]).flatMap((list) => {
+      const checks =
+        (REQUEST_CHECKS[resourceType] as Partial<Record<CheckedList, readonly unknown[]>>)[list] ??
+        [];
+      const action = CREATING_LISTS[resourceType]?.includes(list) ? "create" : LIST_ACTIONS[list];
+      return checks.length > 0 ? [{ resourceType, list, action, checks: checks.length }] : [];
+    }),
+);
+
 describe("validatePlans", () => {
+  test.each(CHECKED_LISTS)(
+    "validates each $resourceType in $list as a $action with each of its $checks check(s)",
+    async ({ resourceType, list, action, checks }) => {
+      using _errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
+      using _logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+      const results = emptyPlanResults();
+      planItem(results, resourceType, list);
+
+      const error = await validatePlans([{ application: "my-app", results }]).catch(
+        (e: unknown) => e,
+      );
+
+      expect(error).toMatchObject({ code: "DEPLOY_VALIDATION_FAILED" });
+      const { issues } = (error as { context: { issues: ViolationIssue[] } }).context;
+      const workspaceIssues = issues.filter(
+        (issue) =>
+          issue.resourceType === resourceType && /(^|\.)workspace_id$/.test(issue.fieldPath),
+      );
+      expect(workspaceIssues.map((issue) => issue.action)).toEqual(
+        Array.from({ length: checks }, () => action),
+      );
+    },
+  );
+
   test.each(validCases)("$name", async ({ mutate }) => {
     const input = emptyPlanResults();
     mutate(input);
@@ -680,6 +802,26 @@ describe("validatePlans", () => {
         name: INVALID_CONNECTION.name,
         action: "update",
         fieldPath: "connection.name",
+      },
+    },
+    {
+      name: "a TailorDB GraphQL permission whose policy lists no actions",
+      mutate: emptyGqlPermissionActions,
+      issue: {
+        resourceType: "tailordb.gql_permission",
+        name: "Item",
+        action: "create",
+        fieldPath: "permission.policies[0].actions",
+      },
+    },
+    {
+      name: "a function whose script exceeds the 20 MiB upload limit",
+      mutate: oversizedFunction,
+      issue: {
+        resourceType: "function_registry",
+        name: "resolver--main--big",
+        action: "update",
+        fieldPath: "info.size_bytes",
       },
     },
   ])("carries each violation of $name in the error context", async ({ mutate, issue }) => {
