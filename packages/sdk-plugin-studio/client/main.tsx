@@ -1,5 +1,4 @@
 import "@tailor-platform/app-shell/styles";
-import "./theme-tailor.css";
 import { AppShell, SidebarLayout, defineModule } from "@tailor-platform/app-shell";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
