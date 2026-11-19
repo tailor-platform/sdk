@@ -701,6 +701,54 @@ describe("validatePlans", () => {
     expect(logSpy.mock.calls.flat().join("\n")).not.toContain("my-app");
   });
 
+  test.each([
+    {
+      label: "TailorDB namespace",
+      mutate: (input: PlanResults) =>
+        input.tailorDB.changeSet.service.creates.push({
+          name: "main",
+          request: { workspaceId: "not-a-uuid", namespaceName: "main" },
+        } as never),
+    },
+    {
+      label: "Resolver namespace",
+      mutate: (input: PlanResults) =>
+        input.pipeline.changeSet.service.creates.push({
+          name: "main",
+          request: { workspaceId: "not-a-uuid", namespaceName: "main" },
+        } as never),
+    },
+    {
+      label: "Auth IdP config",
+      mutate: (input: PlanResults) =>
+        input.auth.changeSet.idpConfig.creates.push({
+          name: "main",
+          request: { workspaceId: "not-a-uuid", namespaceName: "main-auth" },
+        } as never),
+    },
+    {
+      label: "IdP client secret",
+      mutate: (input: PlanResults) =>
+        input.idp.changeSet.client.creates.push({
+          name: "main",
+          request: { workspaceId: WS_ID, namespaceName: "a".repeat(60), client: { name: "main" } },
+        }),
+    },
+  ])("names a violation by the resource label $label", async ({ label, mutate }) => {
+    using _errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
+    using logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+    const input = emptyPlanResults();
+    mutate(input);
+
+    await expect(validatePlans([{ application: "my-app", results: input }])).rejects.toThrow(
+      /validation error/,
+    );
+
+    expect(logSpy.mock.calls.map(([line]) => plainRedacted(line))).toContainEqual(
+      expect.stringMatching(new RegExp(`^ {2}${label} main \\(create\\) — `)),
+    );
+  });
+
   test("reports the violations of every plan in one error", async () => {
     using _errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
     using logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});

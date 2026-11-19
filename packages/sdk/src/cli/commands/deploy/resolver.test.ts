@@ -481,7 +481,7 @@ describe("planPipeline (resolver service level)", () => {
       expect(result.unmanaged).toEqual([
         {
           resourceType: "pipeline.service",
-          resourceLabel: "Pipeline service",
+          resourceLabel: "Resolver namespace",
           resourceName: "resolver-a",
         },
       ]);

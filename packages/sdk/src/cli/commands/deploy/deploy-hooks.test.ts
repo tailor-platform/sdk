@@ -335,7 +335,7 @@ test("applies a renamed application's cleanup delete from the plan the URL rebui
   using _logger = silenceLogger("info", "warn", "success", "out", "log", "newline");
   mocks.results.tailorDB.conflicts.push({
     resourceType: "tailordb.service",
-    resourceLabel: "TailorDB service",
+    resourceLabel: "TailorDB namespace",
     resourceName: "db",
     currentOwner: "old-app",
   });

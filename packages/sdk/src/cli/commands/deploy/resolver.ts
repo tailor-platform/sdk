@@ -4,15 +4,15 @@ import {
   type CreatePipelineServiceRequestSchema,
   type DeletePipelineResolverRequestSchema,
   type DeletePipelineServiceRequestSchema,
-  type UpdatePipelineResolverRequestSchema,
-  type UpdatePipelineServiceRequestSchema,
+  UpdatePipelineResolverRequestSchema,
+  UpdatePipelineServiceRequestSchema,
 } from "@tailor-platform/tailor-proto/pipeline_pb";
 import {
   type PipelineResolver_FieldSchema,
   PipelineResolver_OperationType,
   type PipelineResolver_PipelineSchema,
   type PipelineResolver_TypeSchema,
-  PipelineResolverSchema,
+  type PipelineResolverSchema,
 } from "@tailor-platform/tailor-proto/pipeline_resource_pb";
 import * as inflection from "inflection";
 import { type ResolverService } from "#/cli/services/resolver/service";
@@ -27,7 +27,7 @@ import {
 import { buildResolverOperationHookExpr } from "#/cli/shared/runtime-exprs";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type ChangeSet } from "./change-set";
-import { areNormalizedEqual, toComparableProtoJson } from "./compare";
+import { defineRequestComparison, isRequestUnchanged } from "./compare";
 import { resolverFunctionName } from "./function-registry";
 import {
   formatChangeEntriesWithFunctionRegistry,
@@ -35,12 +35,12 @@ import {
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
 import { listInvokerMachineUsers, normalizeInvoker } from "./invoker";
+import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   addDependencyRecords,
   buildMetaRequest,
   type DependentAppsByResource,
   eventSourceKey,
-  hasMatchingSdkVersion,
   type MetadataLabelWrite,
   resolverTrn,
   resourceTrn,
@@ -247,6 +247,19 @@ type DeleteService = {
   request: MessageInitShape<typeof DeletePipelineServiceRequestSchema>;
 };
 
+type DesiredService = {
+  name: string;
+  request: MessageInitShape<typeof CreatePipelineServiceRequestSchema> &
+    MessageInitShape<typeof UpdatePipelineServiceRequestSchema>;
+  metaRequest: MetadataLabelWrite;
+};
+
+const pipelineServiceComparison = defineRequestComparison({
+  schema: UpdatePipelineServiceRequestSchema,
+  // The SDK never sends `commonSdl`.
+  excluded: ["workspaceId", "namespaceName", "commonSdl"],
+});
+
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
@@ -275,61 +288,34 @@ async function planServices(
       getName: (resource) => resource.namespace?.name,
       getTrn: (name) => resourceTrn(workspaceId, "pipeline", name),
     }));
-  // Diffing below deletes matched entries to find what's left to remove, so
-  // work on a copy and keep `fetchedServices` itself pristine for reuse.
-  const existingServices = { ...fetchedServices };
-
+  const desired: DesiredService[] = [];
   for (const pipeline of pipelines) {
-    const existing = existingServices[pipeline.namespace];
-    const metaRequest = await buildMetaRequest({
-      trn: resourceTrn(workspaceId, "pipeline", pipeline.namespace),
-      appName,
-      appId,
+    desired.push({
+      name: pipeline.namespace,
+      request: { workspaceId, namespaceName: pipeline.namespace },
+      metaRequest: await buildMetaRequest({
+        trn: resourceTrn(workspaceId, "pipeline", pipeline.namespace),
+        appName,
+        appId,
+      }),
     });
-    if (existing) {
-      const owned = ownership.ownsDesired(existing.allLabels, {
-        resourceType: "pipeline.service",
-        resourceLabel: "Pipeline service",
-        resourceName: pipeline.namespace,
-      });
-
-      if (owned && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
-        changeSet.unchanged.push({ name: pipeline.namespace });
-      } else {
-        changeSet.updates.push({
-          name: pipeline.namespace,
-          request: {
-            workspaceId,
-            namespaceName: pipeline.namespace,
-          },
-          metaRequest,
-          ...(owned && { forcedBySdkVersion: true }),
-        });
-      }
-      delete existingServices[pipeline.namespace];
-    } else {
-      changeSet.creates.push({
-        name: pipeline.namespace,
-        request: {
-          workspaceId,
-          namespaceName: pipeline.namespace,
-        },
-        metaRequest,
-      });
-    }
   }
-  Object.entries(existingServices).forEach(([namespaceName]) => {
-    const entry = existingServices[namespaceName];
-    // Only delete services managed by this application (by name or stable id)
-    if (ownership.ownsRemaining(entry?.allLabels)) {
-      changeSet.deletes.push({
-        name: namespaceName,
-        request: {
-          workspaceId,
-          namespaceName,
-        },
-      });
-    }
+
+  await diffKeyed({
+    changeSet,
+    desired,
+    existing: Object.entries(fetchedServices),
+    keyOf: (service) => service.name,
+    ...labeledResourceChecks(ownership, (service: DesiredService) => ({
+      resourceType: "pipeline.service",
+      resourceName: service.name,
+    })),
+    isConfigUnchanged: (service, existing) =>
+      isRequestUnchanged(pipelineServiceComparison, service.request, existing.resource),
+    create: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),
+    update: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),
+    unchanged: ({ name }) => ({ name }),
+    delete: (namespaceName) => ({ name: namespaceName, request: { workspaceId, namespaceName } }),
   });
 
   return { changeSet, ...ownership.result, existingServices: fetchedServices };
@@ -360,6 +346,18 @@ type DeleteResolver = {
   name: string;
   request: MessageInitShape<typeof DeletePipelineResolverRequestSchema>;
 };
+
+type DesiredResolver = {
+  name: string;
+  request: MessageInitShape<typeof CreatePipelineResolverRequestSchema> &
+    MessageInitShape<typeof UpdatePipelineResolverRequestSchema>;
+  metaRequest: MetadataLabelWrite;
+};
+
+const pipelineResolverComparison = defineRequestComparison({
+  schema: UpdatePipelineResolverRequestSchema,
+  excluded: ["workspaceId", "namespaceName"],
+});
 
 /** What planResolvers needs to record dependencies on each resolver. */
 type ResolverRecordInputs = {
@@ -451,100 +449,82 @@ async function planResolvers(
     }
   }
 
-  for (const pipeline of pipelines) {
-    const existingResolvers = await fetchResolvers(pipeline.namespace);
-    const existingResolversMap = new Map(
-      existingResolvers.map((resolver) => [resolver.name, resolver]),
-    );
-    const cachedDetails = previousExisting?.get(pipeline.namespace)?.existingResolverDetails;
-    const existingResolverDetails = new Map<string, ExistingPipelineResolverDetail>();
-    for (const resolver of Object.values(pipeline.resolvers)) {
-      const desiredResolver = processResolver(
-        pipeline.namespace,
-        resolver,
-        executorUsedResolvers,
-        env,
-        authNamespace,
-        knownMachineUsers,
-      );
-      const existingResolver = existingResolversMap.get(resolver.name);
-      const metaRequest = await resolverMetaRequest(pipeline.namespace, resolver);
-      if (existingResolver) {
-        const existingResolverDetail = cachedDetails?.has(resolver.name)
-          ? cachedDetails.get(resolver.name)
-          : (
-              await client.getPipelineResolver({
-                workspaceId,
-                namespaceName: pipeline.namespace,
-                resolverName: resolver.name,
-              })
-            ).pipelineResolver;
-        existingResolverDetails.set(resolver.name, existingResolverDetail);
-        const configUnchanged =
-          !!existingResolverDetail && areResolversEqual(existingResolverDetail, desiredResolver);
-        if (!forceApplyAll && configUnchanged) {
-          // The definition matches, but the records may not, so the labels still go.
-          changeSet.unchanged.push({ name: resolver.name, metaRequest });
-        } else {
-          changeSet.updates.push({
-            name: resolver.name,
-            request: {
-              workspaceId,
-              namespaceName: pipeline.namespace,
-              pipelineResolver: desiredResolver,
-            },
-            metaRequest,
-            ...(configUnchanged && { forcedBySdkVersion: true }),
-          });
-        }
-        existingResolversMap.delete(resolver.name);
-      } else {
-        changeSet.creates.push({
-          name: resolver.name,
-          request: {
-            workspaceId,
-            namespaceName: pipeline.namespace,
-            pipelineResolver: desiredResolver,
-          },
-          metaRequest,
-        });
-      }
-    }
-    existingResolversByNamespace.set(pipeline.namespace, {
-      existingResolvers,
-      existingResolverDetails,
-    });
-    existingResolversMap.forEach((_resolver, name) => {
-      changeSet.deletes.push({
-        name,
-        request: {
-          workspaceId,
-          namespaceName: pipeline.namespace,
-          resolverName: name,
-        },
-      });
-    });
-  }
-
-  for (const namespaceName of deletedServices) {
+  const namespaces = [
+    ...pipelines.map((pipeline) => ({
+      namespaceName: pipeline.namespace,
+      resolvers: Object.values(pipeline.resolvers),
+      deleted: false,
+    })),
+    ...deletedServices.map((namespaceName) => ({ namespaceName, resolvers: [], deleted: true })),
+  ];
+  for (const { namespaceName, resolvers, deleted } of namespaces) {
     const existingResolvers = await fetchResolvers(namespaceName);
-    existingResolvers.forEach((resolver) => {
-      changeSet.deletes.push({
+    const cachedDetails = previousExisting?.get(namespaceName)?.existingResolverDetails;
+    const existingResolverDetails = new Map<string, ExistingPipelineResolverDetail>();
+    const existingNames = new Set(existingResolvers.map((resolver) => resolver.name));
+    const desired: DesiredResolver[] = [];
+    for (const resolver of resolvers) {
+      if (existingNames.has(resolver.name)) {
+        existingResolverDetails.set(
+          resolver.name,
+          cachedDetails?.has(resolver.name)
+            ? cachedDetails.get(resolver.name)
+            : (
+                await client.getPipelineResolver({
+                  workspaceId,
+                  namespaceName,
+                  resolverName: resolver.name,
+                })
+              ).pipelineResolver,
+        );
+      }
+      desired.push({
         name: resolver.name,
         request: {
           workspaceId,
           namespaceName,
-          resolverName: resolver.name,
+          pipelineResolver: processResolver(
+            namespaceName,
+            resolver,
+            executorUsedResolvers,
+            env,
+            authNamespace,
+            knownMachineUsers,
+          ),
         },
+        metaRequest: await resolverMetaRequest(namespaceName, resolver),
       });
+    }
+    await diffKeyed({
+      changeSet,
+      desired,
+      existing: existingResolvers.map((resolver) => [resolver.name, resolver] as const),
+      keyOf: (resolver) => resolver.name,
+      versionMatches: () => !forceApplyAll,
+      isConfigUnchanged: (resolver) => {
+        const detail = existingResolverDetails.get(resolver.name);
+        return (
+          !!detail &&
+          isRequestUnchanged(pipelineResolverComparison, resolver.request, {
+            pipelineResolver: detail,
+          })
+        );
+      },
+      create: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),
+      update: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),
+      // The definition matches, but the records may not, so the labels still go.
+      unchanged: ({ name, metaRequest }) => ({ name, metaRequest }),
+      delete: (resolverName) => ({
+        name: resolverName,
+        request: { workspaceId, namespaceName, resolverName },
+      }),
     });
-    // No detail is ever fetched for a deleted namespace's resolvers, so carry
-    // over whatever a prior call already cached instead of leaving this
-    // namespace out of the returned cache entirely.
     existingResolversByNamespace.set(namespaceName, {
       existingResolvers,
-      existingResolverDetails:
-        previousExisting?.get(namespaceName)?.existingResolverDetails ?? new Map(),
+      // No detail is ever fetched for a deleted namespace's resolvers, so carry
+      // over whatever a prior call already cached instead of leaving this
+      // namespace out of the returned cache entirely.
+      existingResolverDetails: deleted ? (cachedDetails ?? new Map()) : existingResolverDetails,
     });
   }
   return { changeSet, existingResolversByNamespace };
@@ -576,20 +556,6 @@ export function formatResolverChangeEntries(
     {
       getNamespace: (item) => item.request.namespaceName,
     },
-  );
-}
-
-function normalizeComparableResolver(resolver: MessageInitShape<typeof PipelineResolverSchema>) {
-  return toComparableProtoJson(PipelineResolverSchema, resolver);
-}
-
-function areResolversEqual(
-  existing: MessageInitShape<typeof PipelineResolverSchema>,
-  desired: MessageInitShape<typeof PipelineResolverSchema>,
-): boolean {
-  return areNormalizedEqual(
-    normalizeComparableResolver(existing),
-    normalizeComparableResolver(desired),
   );
 }
 

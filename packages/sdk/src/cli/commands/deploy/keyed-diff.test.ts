@@ -1,0 +1,111 @@
+import { describe, expect, test } from "vitest";
+import { createChangeSet } from "./change-set";
+import { diffKeyed, type KeyedDiffOwnership } from "./keyed-diff";
+
+type Desired = { name: string; config: string; kind?: string };
+type Existing = { config: string; kind?: string; owner?: string; version: string };
+
+const currentVersion = "v2";
+const ownership: KeyedDiffOwnership<Desired, Existing> = {
+  ownsDesired: (_desired, existing) => existing.owner === "app",
+  ownsRemaining: (existing) => existing.owner === "app",
+};
+
+async function plan(
+  desired: Desired[],
+  existing: Partial<Record<string, Existing>>,
+  options: { owned?: boolean } = {},
+) {
+  const changeSet = createChangeSet<
+    { name: string },
+    { name: string },
+    { name: string },
+    { name: string },
+    { name: string }
+  >("Items");
+  await diffKeyed({
+    changeSet,
+    desired,
+    existing: Object.entries(existing),
+    keyOf: (item) => item.name,
+    ...(options.owned === false ? {} : { ownership }),
+    versionMatches: (_item, remote) => remote.version === currentVersion,
+    isConfigUnchanged: async (item, remote) => item.config === remote.config,
+    replace: (item, remote) =>
+      item.kind === remote.kind ? undefined : { name: `${item.name}:replace` },
+    create: (item) => ({ name: `${item.name}:create` }),
+    update: (item) => ({ name: `${item.name}:update` }),
+    unchanged: (item) => ({ name: `${item.name}:unchanged` }),
+    delete: (key, remote) => (remote.config === "keep" ? undefined : { name: `${key}:delete` }),
+  });
+  return changeSet;
+}
+
+describe("diffKeyed", () => {
+  test.each([
+    {
+      case: "creates a desired item with no match",
+      existing: {},
+      expected: { creates: ["a:create"] },
+    },
+    {
+      case: "keeps a match whose config and SDK version match",
+      existing: { a: { config: "x", owner: "app", version: currentVersion } },
+      expected: { unchanged: ["a:unchanged"] },
+    },
+    {
+      case: "forces an update for a match applied by another SDK version",
+      existing: { a: { config: "x", owner: "app", version: "v1" } },
+      expected: { updates: [{ name: "a:update", forcedBySdkVersion: true }] },
+    },
+    {
+      case: "updates a match whose config differs",
+      existing: { a: { config: "y", owner: "app", version: currentVersion } },
+      expected: { updates: [{ name: "a:update" }] },
+    },
+    {
+      case: "updates a matching resource it takes over without marking it forced",
+      existing: { a: { config: "x", owner: "other", version: currentVersion } },
+      expected: { updates: [{ name: "a:update" }] },
+    },
+    {
+      case: "replaces a match that cannot be updated in place",
+      existing: { a: { config: "x", kind: "old", owner: "app", version: currentVersion } },
+      expected: { replaces: ["a:replace"] },
+    },
+  ])("$case", async ({ existing, expected }) => {
+    const changeSet = await plan([{ name: "a", config: "x" }], existing);
+
+    expect({
+      creates: changeSet.creates.map((item) => item.name),
+      updates: changeSet.updates,
+      unchanged: changeSet.unchanged.map((item) => item.name),
+      replaces: changeSet.replaces.map((item) => item.name),
+      deletes: changeSet.deletes.map((item) => item.name),
+    }).toEqual({ creates: [], updates: [], unchanged: [], replaces: [], deletes: [], ...expected });
+  });
+
+  test("deletes owned leftovers and keeps others and those the builder skips", async () => {
+    const changeSet = await plan([], {
+      owned: { config: "x", owner: "app", version: currentVersion },
+      foreign: { config: "x", owner: "other", version: currentVersion },
+      skipped: { config: "keep", owner: "app", version: currentVersion },
+    });
+
+    expect(changeSet.deletes.map((item) => item.name)).toEqual(["owned:delete"]);
+  });
+
+  test("treats every match and leftover as owned without ownership checks", async () => {
+    const changeSet = await plan(
+      [{ name: "a", config: "x" }],
+      {
+        a: { config: "x", owner: "other", version: currentVersion },
+        b: { config: "x", owner: "other", version: currentVersion },
+      },
+      { owned: false },
+    );
+
+    expect(changeSet.unchanged.map((item) => item.name)).toEqual(["a:unchanged"]);
+    expect(changeSet.deletes.map((item) => item.name)).toEqual(["b:delete"]);
+  });
+});

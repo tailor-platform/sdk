@@ -2,10 +2,10 @@ import { isPlainObject } from "es-toolkit/predicate";
 import { createChangeSet } from "../change-set";
 import type { PlanResults } from "../apply-phases";
 
-/** A delete that every planned delete list accepts, including workflow job function deletes. */
-export const PLANNED_DELETE = {
-  name: "planned-delete",
-  jobFunctionName: "planned-delete",
+/** An item that every change set and delete list accepts, including workflow job function deletes. */
+export const PLANNED_ITEM = {
+  name: "planned-item",
+  jobFunctionName: "planned-item",
   workspaceId: "workspace-id",
   request: {},
 };
@@ -156,6 +156,46 @@ export function emptyPlanResults(): PlanResults {
   } satisfies PlanResults;
 }
 
+type PlannedChangeSet = { creates: unknown[]; updates: unknown[]; deletes: unknown[] };
+
+type PlanResultsVisitor = {
+  changeSet: (path: string, changeSet: PlannedChangeSet) => void;
+  deleteList: (path: string, list: unknown[]) => void;
+};
+
+function visitPlanResults(results: PlanResults, visitor: PlanResultsVisitor): void {
+  const visit = (value: unknown, path: string) => {
+    if (!isPlainObject(value)) return;
+    if (Array.isArray(value.deletes) && typeof value.lines === "function") {
+      visitor.changeSet(path, value as PlannedChangeSet);
+      return;
+    }
+    for (const [key, child] of Object.entries(value)) {
+      const childPath = path ? `${path}.${key}` : key;
+      if (key.endsWith("Deletes") && Array.isArray(child)) {
+        visitor.deleteList(childPath, child);
+      } else {
+        visit(child, childPath);
+      }
+    }
+  };
+  visit(results, "");
+}
+
+/**
+ * Find every change set of the plan results.
+ * @param results - Plan results to search
+ * @returns The change sets themselves, keyed by their dotted path in `results`
+ */
+export function plannedChangeSets(results: PlanResults): Map<string, PlannedChangeSet> {
+  const changeSets = new Map<string, PlannedChangeSet>();
+  visitPlanResults(results, {
+    changeSet: (path, changeSet) => changeSets.set(path, changeSet),
+    deleteList: () => {},
+  });
+  return changeSets;
+}
+
 /**
  * Find every list of planned deletes: each change set's deletes and each `*Deletes` list.
  * @param results - Plan results to search
@@ -163,21 +203,9 @@ export function emptyPlanResults(): PlanResults {
  */
 export function plannedDeleteLists(results: PlanResults): Map<string, unknown[]> {
   const lists = new Map<string, unknown[]>();
-  const visit = (value: unknown, path: string) => {
-    if (!isPlainObject(value)) return;
-    if (Array.isArray(value.deletes) && typeof value.lines === "function") {
-      lists.set(path, value.deletes);
-      return;
-    }
-    for (const [key, child] of Object.entries(value)) {
-      const childPath = path ? `${path}.${key}` : key;
-      if (key.endsWith("Deletes") && Array.isArray(child)) {
-        lists.set(childPath, child);
-      } else {
-        visit(child, childPath);
-      }
-    }
-  };
-  visit(results, "");
+  visitPlanResults(results, {
+    changeSet: (path, changeSet) => lists.set(path, changeSet.deletes),
+    deleteList: (path, list) => lists.set(path, list),
+  });
   return lists;
 }

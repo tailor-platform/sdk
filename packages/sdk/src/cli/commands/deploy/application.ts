@@ -1,10 +1,18 @@
 import { type MessageInitShape } from "@bufbuild/protobuf";
 import {
+  type CreateApplicationRequestSchema,
+  type DeleteApplicationRequestSchema,
+  UpdateApplicationRequestSchema,
+} from "@tailor-platform/tailor-proto/application_pb";
+import {
   type Application as ProtoApplication,
   type Subgraph,
   Subgraph_ServiceType,
-  type SubgraphSchema,
 } from "@tailor-platform/tailor-proto/application_resource_pb";
+import {
+  type HttpAdapter,
+  HttpAdapterSchema,
+} from "@tailor-platform/tailor-proto/http_adapter_resource_pb";
 import {
   fetchAllTolerant,
   getOrNull,
@@ -17,10 +25,15 @@ import { symbols } from "#/cli/shared/logger";
 import { HTTP_METHODS } from "#/parser/service/http-adapter/index";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
-import { areNormalizedEqual } from "./compare";
+import {
+  areNormalizedEqual,
+  defineRequestComparison,
+  isRequestUnchanged,
+  toComparableProtoJson,
+} from "./compare";
+import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   buildMetaRequest,
-  hasMatchingSdkVersion,
   isOwnedByApp,
   MAX_RESOURCE_LABELS,
   type MetadataLabelWrite,
@@ -32,12 +45,6 @@ import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Application } from "#/cli/services/application";
 import type { HttpAdapterBundleResult } from "#/cli/services/http-adapter/bundler";
-import type {
-  DeleteApplicationRequestSchema,
-  CreateApplicationRequestSchema,
-  UpdateApplicationRequestSchema,
-} from "@tailor-platform/tailor-proto/application_pb";
-import type { HttpAdapterSchema } from "@tailor-platform/tailor-proto/http_adapter_resource_pb";
 
 /**
  * Apply application changes for the given phase.
@@ -129,138 +136,37 @@ type DeleteApplication = {
   request: MessageInitShape<typeof DeleteApplicationRequestSchema>;
 };
 
-type ComparableHttpAdapter = {
+type DesiredApplication = {
   name: string;
-  pathPattern: string;
-  methods: string[];
-  inputScript: string;
-  outputScript: string;
-  enabled: boolean;
-  priority: number;
+  request: MessageInitShape<typeof CreateApplicationRequestSchema> &
+    MessageInitShape<typeof UpdateApplicationRequestSchema>;
+  /** The request with its `:url` CORS entries resolved as the plan resolves them. */
+  comparableRequest: MessageInitShape<typeof UpdateApplicationRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
-type ComparableApplication = {
-  authNamespace: string;
-  authIdpConfigName: string;
-  cors: string[];
-  subgraphs: Array<{
-    serviceType: Subgraph_ServiceType;
-    serviceNamespace: string;
-  }>;
-  allowedIpAddresses: string[];
-  disableIntrospection: boolean;
-  disabled: boolean;
-  httpAdapters: ComparableHttpAdapter[];
-};
-
-function sortStrings(values: readonly string[] | undefined): string[] {
-  return (values ?? []).toSorted();
+function normalizeHttpAdapter(adapter: HttpAdapter): void {
+  adapter.methods.sort();
+  // The platform stamps these times.
+  adapter.createTime = undefined;
+  adapter.updateTime = undefined;
 }
 
-function normalizeSubgraphs(
-  subgraphs: ReadonlyArray<MessageInitShape<typeof SubgraphSchema>> | undefined,
-): ComparableApplication["subgraphs"] {
-  return [...(subgraphs ?? [])]
-    .map((subgraph) => ({
-      serviceType: assertDefined(subgraph.serviceType, "subgraph missing serviceType"),
-      serviceNamespace: subgraph.serviceNamespace ?? "",
-    }))
-    .toSorted((left, right) => {
-      if (left.serviceType !== right.serviceType) {
-        return left.serviceType - right.serviceType;
-      }
-      return left.serviceNamespace.localeCompare(right.serviceNamespace);
-    });
-}
-
-function normalizeHttpAdapters(
-  httpAdapters:
-    | ReadonlyArray<{
-        name?: string;
-        pathPattern?: string;
-        methods?: string[];
-        inputScript?: string;
-        outputScript?: string;
-        enabled?: boolean;
-        priority?: number;
-      }>
-    | undefined,
-): ComparableHttpAdapter[] {
-  return [...(httpAdapters ?? [])]
-    .map((adapter) => ({
-      name: adapter.name ?? "",
-      pathPattern: adapter.pathPattern ?? "",
-      methods: sortStrings(adapter.methods),
-      inputScript: adapter.inputScript ?? "",
-      outputScript: adapter.outputScript ?? "",
-      // Fallbacks mirror the schema defaults; in practice both sides always
-      // carry explicit values (the SDK sets them and proto bools are present).
-      enabled: adapter.enabled ?? true,
-      priority: adapter.priority ?? 0,
-    }))
-    .toSorted((left, right) => left.name.localeCompare(right.name));
-}
-
-function toComparableApplication(
-  input: Pick<
-    ComparableApplication,
-    | "authNamespace"
-    | "authIdpConfigName"
-    | "cors"
-    | "subgraphs"
-    | "allowedIpAddresses"
-    | "disableIntrospection"
-    | "disabled"
-    | "httpAdapters"
-  >,
-): ComparableApplication {
-  return {
-    authNamespace: input.authNamespace,
-    authIdpConfigName: input.authIdpConfigName,
-    cors: sortStrings(input.cors),
-    subgraphs: [...input.subgraphs],
-    allowedIpAddresses: sortStrings(input.allowedIpAddresses),
-    disableIntrospection: input.disableIntrospection,
-    disabled: input.disabled,
-    httpAdapters: [...input.httpAdapters],
-  };
-}
-
-function normalizeComparableApplication(
-  application: Readonly<Application>,
-  authNamespace: string | undefined,
-  authIdpConfigName: string | undefined,
-  cors: string[],
-  httpAdapters: ReadonlyArray<MessageInitShape<typeof HttpAdapterSchema>>,
-): ComparableApplication {
-  return toComparableApplication({
-    authNamespace: authNamespace ?? "",
-    authIdpConfigName: authIdpConfigName ?? "",
-    cors,
-    subgraphs: normalizeSubgraphs(application.subgraphs.map((subgraph) => protoSubgraph(subgraph))),
-    allowedIpAddresses: application.config.allowedIpAddresses ?? [],
-    disableIntrospection: application.config.disableIntrospection ?? false,
-    disabled: false,
-    httpAdapters: normalizeHttpAdapters(httpAdapters),
-  });
-}
-
-function normalizeComparableExistingApplication(app: ProtoApplication): ComparableApplication {
-  return toComparableApplication({
-    authNamespace: app.authNamespace,
-    authIdpConfigName: app.authIdpConfigName,
-    cors: app.cors,
-    subgraphs: normalizeSubgraphs(app.subgraphs),
-    allowedIpAddresses: app.allowedIpAddresses,
-    disableIntrospection: app.disableIntrospection,
-    disabled: app.disabled,
-    httpAdapters: normalizeHttpAdapters(app.httpAdapters),
-  });
-}
-
-function areApplicationsEqual(existing: ProtoApplication, desired: ComparableApplication): boolean {
-  return areNormalizedEqual(normalizeComparableExistingApplication(existing), desired);
-}
+const applicationComparison = defineRequestComparison({
+  schema: UpdateApplicationRequestSchema,
+  excluded: ["workspaceId", "applicationName", "updateMask"],
+  normalize: (request) => {
+    request.cors.sort();
+    request.allowedIpAddresses.sort();
+    request.subgraphs.sort(
+      (left, right) =>
+        left.serviceType - right.serviceType ||
+        left.serviceNamespace.localeCompare(right.serviceNamespace),
+    );
+    request.httpAdapters.forEach(normalizeHttpAdapter);
+    request.httpAdapters.sort((left, right) => left.name.localeCompare(right.name));
+  },
+});
 
 /**
  * Plan application changes based on current and desired state.
@@ -397,13 +303,6 @@ export async function planApplication(
     { expectedLocalNames: expectedLocalWebsites },
   );
   const httpAdapters = buildHttpAdapters(application, httpAdapterBuildResult);
-  const desired = normalizeComparableApplication(
-    application,
-    authNamespace,
-    authIdpConfigName,
-    resolvedCors,
-    httpAdapters,
-  );
   const request = {
     workspaceId,
     applicationName: application.name,
@@ -426,41 +325,46 @@ export async function planApplication(
     );
   }
 
-  if (existing) {
-    const owned = ownership.ownsDesired(existingLabels, {
+  const nonEmpty = (lines: string[]) => (lines.length > 0 ? lines : undefined);
+  await diffKeyed({
+    changeSet,
+    desired: [
+      {
+        name: application.name,
+        request,
+        comparableRequest: { ...request, cors: resolvedCors },
+        metaRequest,
+      },
+    ],
+    existing: existing
+      ? [[existing.name, { resource: existing, allLabels: existingLabels }] as const]
+      : [],
+    keyOf: (app) => app.name,
+    ...labeledResourceChecks(ownership, (app: DesiredApplication) => ({
       resourceType: "application",
-      resourceLabel: "Application",
-      resourceName: application.name,
-    });
-    const update: UpdateApplication = {
-      name: application.name,
+      resourceName: app.name,
+    })),
+    isConfigUnchanged: (app, { resource }) =>
+      metadataDetails.length === 0 &&
+      isRequestUnchanged(applicationComparison, app.comparableRequest, resource),
+    create: ({ name, request, metaRequest }) => ({
+      name,
       request,
       metaRequest,
-    };
-    const configUnchanged =
-      owned && areApplicationsEqual(existing, desired) && metadataDetails.length === 0;
-    if (configUnchanged && hasMatchingSdkVersion(existingLabels, metaRequest.labels)) {
-      // Plan display shows this as unchanged, but apply still re-issues it.
-      changeSet.unchanged.push(update);
-    } else {
-      const details = [
-        ...diffHttpAdapterDisplay(existing.httpAdapters, httpAdapters),
+      details: nonEmpty([...diffHttpAdapterDisplay(undefined, httpAdapters), ...metadataDetails]),
+    }),
+    update: ({ name, request, metaRequest }, { resource }) => {
+      const details = nonEmpty([
+        ...diffHttpAdapterDisplay(resource.httpAdapters, httpAdapters),
         ...metadataDetails,
-      ];
-      if (details.length > 0) {
-        update.details = details;
-      }
-      changeSet.updates.push({ ...update, ...(configUnchanged && { forcedBySdkVersion: true }) });
-    }
-  } else {
-    const details = [...diffHttpAdapterDisplay(undefined, httpAdapters), ...metadataDetails];
-    changeSet.creates.push({
-      name: application.name,
-      request,
-      metaRequest,
-      details: details.length > 0 ? details : undefined,
-    });
-  }
+      ]);
+      return { name, request, metaRequest, ...(details && { details }) };
+    },
+    // Plan display shows this as unchanged, but apply still re-issues it.
+    unchanged: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),
+    // Other applications are deleted only by the rename and removal paths above.
+    delete: () => undefined,
+  });
 
   return Object.assign(changeSet, ownership.result, {
     existingApplications,
@@ -503,7 +407,10 @@ export function diffHttpAdapterDisplay(
     if (!existing) {
       entries.push({ name, symbol: symbols.create });
     } else if (
-      !areNormalizedEqual(normalizeHttpAdapters([existing])[0], normalizeHttpAdapters([desired])[0])
+      !areNormalizedEqual(
+        toComparableProtoJson(HttpAdapterSchema, existing, normalizeHttpAdapter),
+        toComparableProtoJson(HttpAdapterSchema, desired, normalizeHttpAdapter),
+      )
     ) {
       entries.push({ name, symbol: symbols.update });
     }

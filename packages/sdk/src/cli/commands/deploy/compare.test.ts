@@ -1,8 +1,17 @@
 import { create } from "@bufbuild/protobuf";
+import { UpdateAIGatewayRequestSchema } from "@tailor-platform/tailor-proto/aigateway_pb";
+import { AIGatewaySchema } from "@tailor-platform/tailor-proto/aigateway_resource_pb";
+import {
+  IdPPermissionPermit,
+  IdPPermissionSchema,
+} from "@tailor-platform/tailor-proto/idp_resource_pb";
 import { TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import { describe, expect, test } from "vitest";
 import {
   areNormalizedEqual,
+  defineRequestComparison,
+  emptyMessageAsUnset,
+  isRequestUnchanged,
   normalizeProtoConfig,
   stableStringify,
   toComparableProtoJson,
@@ -41,5 +50,66 @@ describe("compare policy", () => {
         toComparableProtoJson(TailorDBTypeSchema, materialized),
       ),
     ).toBe(true);
+  });
+
+  test("toComparableProtoJson normalizes a copy, leaving the input message intact", () => {
+    const remote = create(UpdateAIGatewayRequestSchema, { cors: ["https://b", "https://a"] });
+
+    const canonical = toComparableProtoJson(UpdateAIGatewayRequestSchema, remote, (request) => {
+      request.cors.sort();
+    });
+
+    expect(canonical).toEqual({ cors: ["https://a", "https://b"] });
+    expect(remote.cors).toEqual(["https://b", "https://a"]);
+  });
+});
+
+describe("isRequestUnchanged", () => {
+  const comparison = defineRequestComparison({
+    schema: UpdateAIGatewayRequestSchema,
+    excluded: ["workspaceId", "aigatewayName", "updateMask", "disabled"],
+    normalize: (request) => {
+      request.cors.sort();
+    },
+  });
+  const sent = {
+    workspaceId: "workspace",
+    aigatewayName: "gateway",
+    authNamespace: "auth",
+    cors: ["https://b", "https://a"],
+  };
+  const existing = create(AIGatewaySchema, {
+    name: "gateway",
+    domain: "gateway.example.com",
+    url: "https://gateway.example.com",
+    authNamespace: "auth",
+    cors: ["https://a", "https://b"],
+    disabled: true,
+  });
+
+  test("ignores excluded members and existing members the request does not have", () => {
+    expect(isRequestUnchanged(comparison, sent, existing)).toBe(true);
+  });
+
+  test.each([
+    { member: "authNamespace", changed: { authNamespace: "other-auth" } },
+    { member: "cors", changed: { cors: ["https://a"] } },
+  ])("detects a change in compared member $member", ({ changed }) => {
+    expect(isRequestUnchanged(comparison, { ...sent, ...changed }, existing)).toBe(false);
+  });
+});
+
+describe("emptyMessageAsUnset", () => {
+  test("treats a submessage with no field set as unset", () => {
+    expect(emptyMessageAsUnset(IdPPermissionSchema, create(IdPPermissionSchema))).toBeUndefined();
+    expect(emptyMessageAsUnset(IdPPermissionSchema, undefined)).toBeUndefined();
+  });
+
+  test("keeps a submessage with a field set", () => {
+    const permission = create(IdPPermissionSchema, {
+      read: [{ permit: IdPPermissionPermit.ALLOW }],
+    });
+
+    expect(emptyMessageAsUnset(IdPPermissionSchema, permission)).toBe(permission);
   });
 });

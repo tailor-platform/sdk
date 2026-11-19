@@ -49,7 +49,7 @@ jobs:
 
       - name: Check docs-implementation consistency
         if: steps.reuse.outputs.reuse == 'false'
-        uses: anthropics/claude-code-action@e5812cd75691ca7bbfc57c0ecf4441db3a1ab7dd # v1.0.281
+        uses: anthropics/claude-code-action@f431adaf77e0fecf918431e75a2b5b45b85af002 # v1.0.283
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           # Allow PRs opened by the tailor-bobbin GitHub App to run this check
@@ -257,7 +257,7 @@ jobs:
 
       - name: Fix Recommended Actions heading with Claude
         if: always() && steps.reuse.outputs.reuse == 'false' && steps.validate-heading.outputs.needs_fix == 'true'
-        uses: anthropics/claude-code-action@e5812cd75691ca7bbfc57c0ecf4441db3a1ab7dd # v1.0.281
+        uses: anthropics/claude-code-action@f431adaf77e0fecf918431e75a2b5b45b85af002 # v1.0.283
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           # Allow PRs opened by the tailor-bobbin GitHub App to run this check
@@ -288,9 +288,24 @@ jobs:
           PR_NUMBER: ${{ env.PR_NUMBER }}
           REPO: ${{ github.repository }}
           MARKER: "<!-- docs-consistency-check -->"
+          WORKFLOW_PATH: .github/workflows/docs-consistency-check.yml
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           if [ ! -s "$REVIEW_BODY_FILE" ]; then
             echo "No review body was produced." >&2
+            merge_blob=$(git rev-parse --verify "$GITHUB_SHA:$WORKFLOW_PATH")
+            default_blob=$(gh api "repos/$REPO/contents/$WORKFLOW_PATH?ref=$DEFAULT_BRANCH" --jq .sha)
+            if [ "$merge_blob" != "$default_blob" ]; then
+              base_sha=$(gh api "repos/$REPO/commits/$GITHUB_SHA" --jq '.parents[0].sha')
+              base_blob=$(gh api "repos/$REPO/contents/$WORKFLOW_PATH?ref=$base_sha" --jq .sha)
+              if [ "$merge_blob" != "$base_blob" ]; then
+                echo "::error::claude-code-action skipped because this PR changes $WORKFLOW_PATH; it runs only when that file matches $DEFAULT_BRANCH's, so this check cannot run until the change is merged."
+              elif [ "$GITHUB_BASE_REF" = "$DEFAULT_BRANCH" ]; then
+                echo "::error::claude-code-action skipped because $WORKFLOW_PATH in this PR's merge commit is older than $DEFAULT_BRANCH's. Bring $DEFAULT_BRANCH into this PR."
+              else
+                echo "::error::claude-code-action skipped because $WORKFLOW_PATH on $GITHUB_BASE_REF differs from $DEFAULT_BRANCH's. If $GITHUB_BASE_REF changes the file, this check cannot run until that change is merged; otherwise rebase $GITHUB_BASE_REF onto $DEFAULT_BRANCH, then this PR onto it."
+              fi
+            fi
             exit 1
           fi
 

@@ -36,7 +36,9 @@ export type DBFieldMetadata = {
   /** Allowed values for enum fields */
   allowedValues?:
     | {
+        /** The allowed value */
         value: string;
+        /** Description of the allowed value */
         description?: string | undefined;
       }[]
     | undefined;

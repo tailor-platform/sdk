@@ -392,7 +392,9 @@ type MockClientOptions = {
     refreshTokenLifetime?: { seconds: bigint };
     refreshTokenIdleLifetime?: { seconds: bigint };
     requireDpop: boolean;
+    clientId?: string;
     clientSecret?: string;
+    createdAt?: { seconds: bigint };
   }>;
   authHook?: {
     scriptRef: string;
@@ -522,6 +524,28 @@ describe("planAuth", () => {
     expect(result.changeSet.oauth2Client.unchanged).toHaveLength(1);
     expect(result.changeSet.service.updates).toHaveLength(0);
     expect(result.changeSet.machineUser.updates).toHaveLength(0);
+    expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
+  });
+
+  test("marks an oauth2 client unchanged when the Platform returns its generated credentials and default lifetimes", async () => {
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
+      oauth2Clients: [
+        {
+          ...remoteOAuth2Client({
+            redirectUris: ["https://a.example.com/callback", "https://b.example.com/callback"],
+            accessTokenLifetime: { seconds: 86400n },
+            refreshTokenLifetime: { seconds: 604800n },
+          }),
+          clientId: "sample-client-id",
+          createdAt: { seconds: 1700000000n },
+        },
+      ],
+    });
+
+    const result = await planAuth(createContext(client));
+
+    expect(result.changeSet.oauth2Client.unchanged).toHaveLength(1);
     expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
   });
 
@@ -1132,10 +1156,10 @@ describe("planAuth", () => {
     });
   });
 
-  test("does not mark a forceApplyAll idpConfig update that has nothing to compare against", async () => {
+  test("does not mark a forceApplyAll idpConfig update that has nothing to compare against, and deletes a stale config beside it", async () => {
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
-      authIdPConfigs: [{ name: "default" }],
+      authIdPConfigs: [{ name: "default" }, { name: "stale" }],
     });
 
     const result = await planAuth({
@@ -1145,6 +1169,7 @@ describe("planAuth", () => {
 
     expect(result.changeSet.idpConfig.updates).toHaveLength(1);
     expect(result.changeSet.idpConfig.updates[0]).not.toHaveProperty("forcedBySdkVersion");
+    expect(result.changeSet.idpConfig.deletes.map((del) => del.name)).toEqual(["stale"]);
   });
 
   describe("OAuth2 redirect URI resolution on first deployment (issue #1030)", () => {

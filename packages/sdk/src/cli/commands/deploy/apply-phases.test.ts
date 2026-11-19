@@ -6,6 +6,7 @@ import {
   applyRemainingResources,
   preflightAllTailorDB,
   type PlannedDeployment,
+  type PlanResults,
 } from "./apply-phases";
 import { writeMetadataLabels } from "./label";
 import { MaintenanceTimeline } from "./tailordb/migration-timing";
@@ -90,22 +91,27 @@ vi.mock("./workflow-execution-policy", () => ({
   applyWorkflowJobFunctionExecutionPolicy: mocks.applyWorkflowJobFunctionExecutionPolicy,
 }));
 
+const PLAN_MARKERS = {
+  functionRegistry: "function",
+  tailorDB: "tailordb",
+  staticWebsite: "staticwebsite",
+  aiGateway: "aigateway",
+  idp: "idp",
+  auth: "auth",
+  pipeline: "pipeline",
+  app: "application",
+  executor: "executor",
+  workflow: "workflow",
+  workflowExecutionPolicy: "workflowExecutionPolicy",
+  secretManager: "secret",
+} satisfies Record<keyof PlanResults, string>;
+
 function deployment(name: string): PlannedDeployment {
-  const plan = (kind: string) => ({ marker: `${name}-${kind}` });
   return {
     application: { name },
-    functionRegistry: plan("function"),
-    tailorDB: plan("tailordb"),
-    staticWebsite: plan("staticwebsite"),
-    aiGateway: plan("aigateway"),
-    idp: plan("idp"),
-    auth: plan("auth"),
-    pipeline: plan("pipeline"),
-    app: plan("application"),
-    executor: plan("executor"),
-    workflow: plan("workflow"),
-    workflowExecutionPolicy: plan("workflowExecutionPolicy"),
-    secretManager: plan("secret"),
+    ...Object.fromEntries(
+      Object.entries(PLAN_MARKERS).map(([kind, marker]) => [kind, { marker: `${name}-${marker}` }]),
+    ),
   } as unknown as PlannedDeployment;
 }
 
@@ -349,6 +355,23 @@ describe("applyDeploymentPlans", () => {
       "function:supplier-function:delete",
     ]);
   });
+
+  test.each(Object.values(PLAN_MARKERS))(
+    "applies the %s plan in a create-update phase and a delete phase",
+    async (marker) => {
+      mocks.calls.length = 0;
+
+      await applyDeploymentPlans(mockOperatorClient({}), "workspace-id", [deployment("supplier")]);
+
+      const phases = mocks.calls
+        .filter((call) => call.startsWith(`${marker}:supplier-${marker}:`))
+        .map((call) => call.split(":")[2] ?? "");
+      expect({
+        createUpdate: phases.some((phase) => phase.startsWith("create-update")),
+        delete: phases.some((phase) => phase.startsWith("delete")),
+      }).toEqual({ createUpdate: true, delete: true });
+    },
+  );
 
   test("preflightAllTailorDB runs before any resource is applied", async () => {
     mocks.calls.length = 0;
