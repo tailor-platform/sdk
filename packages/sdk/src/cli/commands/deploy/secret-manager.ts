@@ -190,7 +190,6 @@ export async function planSecretManager(context: PlanContext) {
         });
         const owned = ownership.ownsDesired(existing.allLabels, {
           resourceType: "secret.vault",
-          resourceLabel: "Secret Manager vault",
           resourceName: vaultName,
         });
         if (owned && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {

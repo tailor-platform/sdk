@@ -301,7 +301,7 @@ describe("planFunctionRegistry", () => {
       expect(result.unmanaged).toEqual([
         {
           resourceType: "function_registry",
-          resourceLabel: "Function registry",
+          resourceLabel: "Function",
           resourceName: "resolver/ns/getUser",
         },
       ]);
@@ -318,7 +318,7 @@ describe("planFunctionRegistry", () => {
       expect(result.conflicts).toEqual([
         {
           resourceType: "function_registry",
-          resourceLabel: "Function registry",
+          resourceLabel: "Function",
           resourceName: "resolver/ns/getUser",
           currentOwner: "other-app",
         },

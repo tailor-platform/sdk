@@ -486,7 +486,6 @@ async function planServices(
     keyOf: (service) => service.name,
     ...labeledResourceChecks(ownership, (service: DesiredService) => ({
       resourceType: "idp.service",
-      resourceLabel: "IdP service",
       resourceName: service.name,
     })),
     isConfigUnchanged: (service, existing) =>

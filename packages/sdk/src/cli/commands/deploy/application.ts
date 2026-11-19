@@ -342,7 +342,6 @@ export async function planApplication(
     keyOf: (app) => app.name,
     ...labeledResourceChecks(ownership, (app: DesiredApplication) => ({
       resourceType: "application",
-      resourceLabel: "Application",
       resourceName: app.name,
     })),
     isConfigUnchanged: (app, { resource }) =>

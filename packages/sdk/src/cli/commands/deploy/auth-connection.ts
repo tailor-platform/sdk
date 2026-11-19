@@ -174,7 +174,6 @@ export async function planAuthConnections(
     if (existing) {
       const owned = ownership.ownsDesired(existing.allLabels, {
         resourceType: "auth.connection",
-        resourceLabel: "Auth connection",
         resourceName: name,
       });
 

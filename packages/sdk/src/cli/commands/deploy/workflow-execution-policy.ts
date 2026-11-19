@@ -214,7 +214,6 @@ export async function planWorkflowJobFunctionExecutionPolicy(
     keyOf: ({ policy }) => policy.name,
     ...labeledResourceChecks(ownership, ({ policy }: DesiredPolicy) => ({
       resourceType: "workflow_job_function_execution_policy",
-      resourceLabel: "Workflow execution policy",
       resourceName: policy.name,
     })),
     // execution_policy_key is immutable after create; the platform requires

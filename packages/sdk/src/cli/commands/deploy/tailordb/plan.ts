@@ -295,7 +295,6 @@ async function planServices(
     keyOf: (service) => service.name,
     ...labeledResourceChecks(ownership, (service: DesiredService) => ({
       resourceType: "tailordb.service",
-      resourceLabel: "TailorDB service",
       resourceName: service.name,
     })),
     // An update writes only the labels, so no setting of the service can differ from it.

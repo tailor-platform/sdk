@@ -75,6 +75,7 @@ import {
 } from "./function-registry";
 import { planIdP } from "./idp";
 import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn, sdkNameLabelKey } from "./label";
+import { MANAGED_RESOURCE_LABELS } from "./managed-resource-type";
 import {
   assertUniqueGlobalResourceNames,
   collectImportantResourceDeletions,
@@ -421,11 +422,12 @@ export function collectExternalAuthIdpConfigNames(
     const { name } = authService.config;
     const idpConfigName = authService.config.idProvider?.name;
     if (idpConfigNames.has(name) && idpConfigNames.get(name) !== idpConfigName) {
+      const label = MANAGED_RESOURCE_LABELS["auth.service"];
       throw CLIError({
         code: "AUTH_NAMESPACE_CONFLICT",
         message:
-          `Auth namespace "${name}" is defined by multiple config files with different IdP configs. ` +
-          `Auth namespace names must be unique across all configs in a single deploy.`,
+          `${label} "${name}" is defined by multiple config files with different IdP configs. ` +
+          `${label} names must be unique across all configs in a single deploy.`,
       });
     }
     idpConfigNames.set(name, idpConfigName);

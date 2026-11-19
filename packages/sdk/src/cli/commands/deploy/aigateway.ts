@@ -159,7 +159,6 @@ export async function planAIGateway(context: PlanContext) {
     keyOf: (gateway) => gateway.name,
     ...labeledResourceChecks(ownership, (gateway: DesiredAIGateway) => ({
       resourceType: "aigateway",
-      resourceLabel: "AIGateway",
       resourceName: gateway.name,
     })),
     isConfigUnchanged: (gateway, existing) =>
