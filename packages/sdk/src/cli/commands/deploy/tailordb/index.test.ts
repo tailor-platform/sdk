@@ -4134,6 +4134,43 @@ describe("applyTailorDB migration label reconciliation", () => {
     );
   });
 
+  test("refuses to apply a plan that deletes and recreates a table once the unfinished deletion no longer exists", async () => {
+    using _stderr = captureStderr();
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+    writeUserRemovalMigration(userType);
+    writeMigrationDiff(2, [{ kind: "table_added", tableName: "User", after: userType }]);
+    const planResult = planUserDeletion();
+    planResult.context.tailorDBInputs = [
+      { namespace: "test-tailordb", config: { files: [] }, types: { User: userType } },
+    ];
+    planResult.context.migrationFileState = captureMigrationFileState(
+      planResult.context.namespacesWithMigrations,
+    );
+    planResult.context.pendingMigrations = [{ namespace: "test-tailordb", number: 2 }];
+    planResult.changeSet.type.creates.push({
+      name: "User",
+      request: {
+        workspaceId: "test-workspace",
+        namespaceName: "test-tailordb",
+        tailordbType: generateTailorDBTypeManifestFromSnapshot(userType, { subscribed: false }),
+      },
+      metaRequest: typeMetaRequest("User", "test-tailordb"),
+    });
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    vi.mocked(client.listTailorDBTypes).mockResolvedValue({
+      tailordbTypes: [],
+      nextPageToken: "",
+    } as never);
+    storeLabels(client, { [NAMESPACE_TRN]: { "sdk-migration": "m0001" } });
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toMatchObject({
+      code: "DEPLOY_PLAN_STALE",
+    });
+    expect(client.deleteTailorDBType).not.toHaveBeenCalled();
+    expect(client.createTailorDBType).not.toHaveBeenCalled();
+  });
+
   test("deletes the tables another namespace's checkpoint left behind once while this one migrates", async () => {
     using _stderr = captureStderr();
     const userType = userSnapshotType();

@@ -350,6 +350,26 @@ async function validateTailorDBMigrationState(
       });
     }
   }
+  const unfinishedByNamespace = new Map(
+    [...validation.unfinishedRemovals].map(([namespace, { tableNames }]) => [
+      namespace,
+      new Set(tableNames),
+    ]),
+  );
+  const recreatedWithoutUnfinishedRemoval = result.changeSet.type.deletes.filter(
+    (del) =>
+      result.changeSet.type.creates.some(
+        (create) =>
+          create.name === del.name && create.request.namespaceName === del.request.namespaceName,
+      ) && !unfinishedByNamespace.get(del.request.namespaceName ?? "")?.has(del.name),
+  );
+  if (recreatedWithoutUnfinishedRemoval.length > 0) {
+    throw CLIError({
+      code: "DEPLOY_PLAN_STALE",
+      message: `Tables to delete and create again changed after deployment planning: ${recreatedWithoutUnfinishedRemoval.map((del) => del.name).join(", ")}.`,
+      suggestion: "Run the deployment again to review the deletion.",
+    });
+  }
   if (!migrationFileStatesEqual(context.migrationFileState, validation.migrationFileState)) {
     throw CLIError({
       code: "DEPLOY_PLAN_STALE",
@@ -2258,12 +2278,20 @@ async function applyDeferredGqlPermissions(
   deferredKeys: ReadonlySet<string>,
 ): Promise<void> {
   const { client, changeSet } = flow;
+  const isDue = (entry: { name: string; request: { namespaceName?: string } }) => {
+    const key = `${entry.request.namespaceName}/${entry.name}`;
+    return (
+      deferredKeys.has(key) ||
+      (processedTables.gqlPermissionsRemovedByCleanup.has(key) &&
+        !processedTables.gqlPermissionsProcessed.has(key))
+    );
+  };
   await Promise.all([
     ...changeSet.gqlPermission.creates
-      .filter((create) => deferredKeys.has(`${create.request.namespaceName}/${create.name}`))
+      .filter(isDue)
       .map((create) => client.createTailorDBGQLPermission(create.request)),
     ...changeSet.gqlPermission.updates
-      .filter((update) => deferredKeys.has(`${update.request.namespaceName}/${update.name}`))
+      .filter(isDue)
       .map((update) => client.updateTailorDBGQLPermission(update.request)),
   ]);
 }

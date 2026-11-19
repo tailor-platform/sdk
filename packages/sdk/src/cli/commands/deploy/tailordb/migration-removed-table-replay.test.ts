@@ -379,6 +379,40 @@ describe("migration flow: replaying a history that removes tables into a fresh w
     expect(permissionCreates[1]).toBeGreaterThan(table[0]!);
   });
 
+  test("applies the GraphQL permission again for a table the replay removed and the local definitions recreate", async () => {
+    const audit = snapshotTable("Audit", nameField);
+    const draft = snapshotTable("Draft", nameField);
+    snapshotState.tablesByVersion = {
+      0: { Audit: audit, Draft: draft },
+      1: { Audit: audit, Draft: draft },
+      2: { Audit: audit },
+    };
+    const planResult = createPlanResult({
+      type: { creates: [typeEntry("Draft"), typeEntry("Audit")] },
+      gqlPermission: { creates: [gqlPermissionEntry("Draft")] },
+    });
+    planResult.context.pendingMigrations = checkpoint.mockPending([
+      mkPendingMigration([]),
+      mkPendingMigration(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        [{ kind: "table_removed", tableName: "Draft", before: draft } as any],
+        { number: 2, hasScript: false },
+      ),
+    ]);
+    const client = checkpoint.createMockClient();
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    const mock = vi.mocked(client.createTailorDBGQLPermission).mock;
+    const permissionCreates = mock.invocationCallOrder.filter(
+      (_order, index) => mock.calls[index]?.[0].typeName === "Draft",
+    );
+    const { table } = deleteOrders(client, NAMESPACE, "Draft");
+    expect(table).toHaveLength(1);
+    expect(permissionCreates).toHaveLength(2);
+    expect(permissionCreates[1]).toBeGreaterThan(table[0]!);
+  });
+
   test("does not create or delete a table the workspace already has when a later migration removes it", async () => {
     const tableA = snapshotTable("A", nameField);
     snapshotState.tablesByVersion = { 0: { A: tableA }, 1: { A: tableA }, 2: {} };

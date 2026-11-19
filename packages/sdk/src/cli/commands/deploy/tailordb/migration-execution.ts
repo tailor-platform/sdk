@@ -190,10 +190,12 @@ export const processedTables = {
   created: new Set<string>(),
   updated: new Set<string>(),
   gqlPermissionsProcessed: new Set<string>(),
+  gqlPermissionsRemovedByCleanup: new Set<string>(),
   reset() {
     this.created.clear();
     this.updated.clear();
     this.gqlPermissionsProcessed.clear();
+    this.gqlPermissionsRemovedByCleanup.clear();
   },
 };
 
@@ -1125,6 +1127,7 @@ export async function deleteTablesCreatedByDeploy(
         typeName: tableName,
       });
       processedTables.gqlPermissionsProcessed.delete(tableKey(tableName));
+      processedTables.gqlPermissionsRemovedByCleanup.add(tableKey(tableName));
     }
     if (!deletedResources.types.has(tableKey(tableName))) {
       await client.deleteTailorDBType({
