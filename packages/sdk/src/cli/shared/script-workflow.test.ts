@@ -13,7 +13,8 @@ vi.mock(import("#/cli/shared/logger"), async (importOriginal) => {
   return { ...actual, logger: logger as unknown as typeof actual.logger };
 });
 
-vi.mock("#/cli/commands/deploy/label", () => ({
+vi.mock("#/cli/commands/deploy/label", async (importOriginal) => ({
+  ...(await importOriginal()),
   resourceTrn: (workspaceId: string, kind: string, name: string) =>
     `trn:v1:workspace:${workspaceId}:${kind}:${name}`,
   writeMetadataLabelsDirect: vi.fn(),

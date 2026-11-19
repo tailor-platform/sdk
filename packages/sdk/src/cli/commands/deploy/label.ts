@@ -366,17 +366,16 @@ export async function buildMetaRequest(
 }
 
 /**
- * Add the config's `metadata` to a write of the SDK's own labels, which win
- * over a same-named entry.
+ * Add labels to a write of the SDK's own labels, which win over a same-named one.
  * @param write - Write of the SDK's own labels
- * @param metadata - Labels from `defineConfig({ metadata })`
- * @returns The write with `metadata` added
+ * @param labels - Labels to add, such as the config's `metadata`
+ * @returns The write with the labels added
  */
-export function withConfigMetadata(
+export function withExtraLabels(
   write: MetadataLabelWrite,
-  metadata: Record<string, string>,
+  labels: Record<string, string>,
 ): MetadataLabelWrite {
-  return { ...write, labels: { ...metadata, ...write.labels } };
+  return { ...write, labels: { ...labels, ...write.labels } };
 }
 
 /**

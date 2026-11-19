@@ -38,7 +38,7 @@ import {
   labelCountViolation,
   type MetadataLabelWrite,
   resourceTrn,
-  withConfigMetadata,
+  withExtraLabels,
   writeMetadataLabelsDirect,
 } from "./label";
 import { createOwnershipTracker } from "./owned-resource";
@@ -126,7 +126,7 @@ async function writeApplicationLabels(
 ): Promise<ApplicationLabelRejection | undefined> {
   const { name, metaRequest, metadata = {} } = entry;
   const violation = await labelCountViolationOf(() =>
-    writeMetadataLabelsDirect(client, withConfigMetadata(metaRequest, metadata)),
+    writeMetadataLabelsDirect(client, withExtraLabels(metaRequest, metadata)),
   );
   if (violation === undefined) return undefined;
   const sdkLabelsInPlace =

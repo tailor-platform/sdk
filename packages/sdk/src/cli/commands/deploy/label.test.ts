@@ -21,7 +21,7 @@ import {
   resolverTrn,
   resourceTrn,
   tailorDBTypeTrn,
-  withConfigMetadata,
+  withExtraLabels,
   withMetadataWriteBatch,
   writeMetadataLabels,
 } from "./label";
@@ -115,7 +115,7 @@ describe("buildMetaRequest", () => {
   test("writes config metadata alongside the SDK labels", async () => {
     const client = createClient({ "sdk-name": "my-app", team: "billing" });
 
-    const write = withConfigMetadata(
+    const write = withExtraLabels(
       await buildMetaRequest({ trn: "trn:x", appName: "my-app", appId: "id-1" }),
       { "erp-kit-version": "v1-2-3", tier: "gold" },
     );
@@ -131,7 +131,7 @@ describe("buildMetaRequest", () => {
   });
 
   test("keeps the SDK labels when config metadata names one of them", async () => {
-    const write = withConfigMetadata(
+    const write = withExtraLabels(
       await buildMetaRequest({ trn: "trn:x", appName: "my-app", appId: "id-1" }),
       { "sdk-name": "other", "sdk-app-id": "app-other" },
     );
@@ -157,7 +157,7 @@ describe("config metadata against the platform's label rules", () => {
 
   async function labelsFor(metadata: Record<string, string>): Promise<Record<string, string>> {
     const write = await buildMetaRequest({ trn, appName: "my-app", appId: "id-1" });
-    return withConfigMetadata(write, metadata).labels ?? {};
+    return withExtraLabels(write, metadata).labels ?? {};
   }
 
   test.each([
