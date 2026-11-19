@@ -244,7 +244,7 @@ snapshots:
 		"packages/create-sdk": {
 			"dependencies": {
 				"@clack/prompts": "1.9.0",
-				"@politty/zod": "0.7.3",
+				"@politty/zod": "0.7.4",
 				"execa": "10.2.1",
 				"picocolors": "1.1.1",
 				"pkg-types": "2.4.0",
@@ -427,7 +427,7 @@ snapshots:
 				"@opentelemetry/sdk-trace": "3.1.1",
 				"@opentelemetry/semantic-conventions": "1.45.0",
 				"@oxc-project/types": "0.158.0",
-				"@politty/zod": "0.7.3",
+				"@politty/zod": "0.7.4",
 				"@secretlint/core": "13.1.0",
 				"@secretlint/secretlint-rule-preset-recommend": "13.1.0",
 				"@standard-schema/spec": "1.1.0",
@@ -492,7 +492,7 @@ snapshots:
 		"packages/sdk-codemod": {
 			"dependencies": {
 				"@ast-grep/napi": "0.51.2",
-				"@politty/zod": "0.7.3",
+				"@politty/zod": "0.7.4",
 				"diff": "9.0.0",
 				"pathe": "2.0.3",
 				"picomatch": "4.0.7",
@@ -532,7 +532,7 @@ snapshots:
 		"packages/sdk-plugin-seed": {
 			"name": "@tailor-platform/sdk-plugin-seed",
 			"dependencies": {
-				"@politty/zod": "0.7.3",
+				"@politty/zod": "0.7.4",
 				"lines-db": "0.19.0",
 				"pathe": "2.0.3",
 				"pkg-types": "2.4.0",
@@ -553,7 +553,7 @@ snapshots:
 		"packages/sdk-plugin-setup": {
 			"dependencies": {
 				"@croct/json5-parser": "0.2.2",
-				"@politty/zod": "0.7.3",
+				"@politty/zod": "0.7.4",
 				"json5": "2.2.3",
 				"pathe": "2.0.3",
 				"pkg-types": "2.4.0",
@@ -577,7 +577,7 @@ snapshots:
 		"packages/sdk-plugin-tailordb-erd": {
 			"name": "@tailor-platform/sdk-plugin-tailordb-erd",
 			"dependencies": {
-				"@politty/zod": "0.7.3",
+				"@politty/zod": "0.7.4",
 				"chokidar": "5.0.0",
 				"mime-types": "3.0.2",
 				"open": "11.0.4",
@@ -3029,8 +3029,8 @@ snapshots:
 			},
 		},
 
-		"@politty/zod@0.7.3": {
-			"integrity": "sha512-D0XF/VLMiAhe74Rha1Eu2EzfLbsFjXb9vHEGM4Gsm3bwvtCvt1aXT2668x/ySBu5+xamEchQumB+Fj9DXgxiOA==",
+		"@politty/zod@0.7.4": {
+			"integrity": "sha512-i3BzDWl/FuZWXnNTNskBwQawqPnSQFxL+/7mFJiX6ssVxsUI1g3g8CurVLfoslWWdUCLRrPiq/gZS7XNsL/+lA==",
 			"engines": {"node": ">=20.12.0 <21.0.0 || >=21.7.0"},
 			"hasBin": true,
 			"peerDependencies": {

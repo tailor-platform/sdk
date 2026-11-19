@@ -205,7 +205,7 @@
     "@opentelemetry/sdk-trace": "3.1.1",
     "@opentelemetry/semantic-conventions": "1.45.0",
     "@oxc-project/types": "0.158.0",
-    "@politty/zod": "0.7.3",
+    "@politty/zod": "0.7.4",
     "@secretlint/core": "13.1.0",
     "@secretlint/secretlint-rule-preset-recommend": "13.1.0",
     "@standard-schema/spec": "1.1.0",
