@@ -9,10 +9,12 @@
 import { resourceTrn, sdkAppIdLabelKey, sdkNameLabelKey } from "#/cli/commands/deploy/label";
 import { fetchPaged } from "#/cli/shared/client";
 import { CLIError, isCLIError } from "#/cli/shared/errors";
+import { logger } from "#/cli/shared/logger";
 import { readOutcome } from "#/cli/shared/script-workflow";
 import {
   createTemporaryWorkflow,
   isExecutionActive,
+  isStartRefused,
   listTemporaryWorkflowExecutions,
   pollUntilTerminal,
   teardownTemporaryWorkflow,
@@ -30,7 +32,9 @@ import type { ScriptExecutionResult, ScriptInvoker } from "#/cli/shared/script-e
 import type { Jsonifiable } from "type-fest";
 
 const SUBJECT = "workflow run";
-const LEFTOVER_NOTE = "Run `tailor workflow run --cleanup` to remove it.";
+const LEFTOVER_NOTE =
+  "`tailor workflow run --cleanup` retries the removal while the workflow exists; " +
+  "a function or job function left after the workflow is gone has to be removed by hand.";
 
 /** A run that has not started is kept this long, since another process may be about to start it. */
 const NOT_STARTED_GRACE_MS = 60_000;
@@ -73,6 +77,7 @@ export async function startWorkflowRun(
     labels: workflowRunLabels({ kind, runId }),
   };
   const created: { workflowId?: string } = {};
+  let startSent = false;
   try {
     await uploadTemporaryFunction({
       ...owner,
@@ -86,6 +91,7 @@ export async function startWorkflowRun(
       { ...owner, client, workspaceId, name, jobFunctionNames: [name], subject: SUBJECT },
       created,
     );
+    startSent = true;
     const { executionId } = await client.startWorkflow({
       workspaceId,
       workflowId,
@@ -94,6 +100,13 @@ export async function startWorkflowRun(
     });
     return { runId, name, workflowId, executionId };
   } catch (error) {
+    if (startSent && !isStartRefused(error)) {
+      logger.warn(
+        `Could not confirm that run ${runId} was not started, so its resources were kept. ` +
+          "`tailor workflow run --cleanup` removes them once the run has finished.",
+      );
+      throw error;
+    }
     await teardownTemporaryWorkflow({
       client,
       workspaceId,
@@ -192,6 +205,7 @@ export async function reclaimWorkflowRuns(params: ReclaimWorkflowRunsParams): Pr
 
   const removed: string[] = [];
   for (const workflow of workflows) {
+    if (!workflow.name.startsWith(workflowRunResourceName("r"))) continue;
     const { metadata } = await client.getMetadata({
       trn: resourceTrn(workspaceId, "workflow", workflow.name),
     });
@@ -208,7 +222,7 @@ export async function reclaimWorkflowRuns(params: ReclaimWorkflowRunsParams): Pr
       const startedAt = runIdStartedAt(marker.runId);
       if (startedAt && now.getTime() - startedAt.getTime() < NOT_STARTED_GRACE_MS) continue;
     }
-    await teardownTemporaryWorkflow({
+    const gone = await teardownTemporaryWorkflow({
       client,
       workspaceId,
       name: workflow.name,
@@ -216,7 +230,7 @@ export async function reclaimWorkflowRuns(params: ReclaimWorkflowRunsParams): Pr
       subject: SUBJECT,
       leftoverNote: LEFTOVER_NOTE,
     });
-    removed.push(workflow.name);
+    if (gone) removed.push(workflow.name);
   }
   return removed;
 }

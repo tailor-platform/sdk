@@ -127,6 +127,28 @@ describe("startWorkflowRun", () => {
   });
 });
 
+describe("startWorkflowRun when the start outcome is unknown", () => {
+  test("keeps the resources, since an execution may have been created", async () => {
+    const client = createClient();
+    client.startWorkflow.mockRejectedValueOnce(new ConnectError("reset", Code.Unavailable));
+
+    await expect(
+      startWorkflowRun({
+        client: asClient(client),
+        workspaceId: "ws",
+        runId,
+        kind: "script",
+        code: "",
+        description: "d",
+        invoker,
+        arg: undefined,
+      }),
+    ).rejects.toThrow("reset");
+    expect(client.deleteWorkflow).not.toHaveBeenCalled();
+    expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
+  });
+});
+
 const started = { runId, name: `tmp-${runId}`, workflowId: "wf-1", executionId: "exec-1" };
 
 describe("awaitWorkflowRun", () => {
@@ -274,5 +296,29 @@ describe("reclaimWorkflowRuns", () => {
     await reclaimWorkflowRuns({ client: asClient(client), workspaceId: "ws", now: old });
 
     expect(client.deleteWorkflow).not.toHaveBeenCalled();
+  });
+
+  test("does not report a run as removed when its removal failed", async () => {
+    const client = createSweepClient([
+      { name: `tmp-${runId}`, labels: run(runId), executions: [WorkflowExecution_Status.SUCCESS] },
+    ]);
+    client.deleteWorkflow.mockRejectedValueOnce(new ConnectError("boom", Code.Unavailable));
+
+    const removed = await reclaimWorkflowRuns({
+      client: asClient(client),
+      workspaceId: "ws",
+      now: old,
+    });
+
+    expect(removed).toEqual([]);
+  });
+
+  test("does not read the labels of workflows whose name is not a run's", async () => {
+    const client = createSweepClient([
+      { name: "nightly", labels: { "sdk-name": "app" }, executions: [] },
+    ]);
+    await reclaimWorkflowRuns({ client: asClient(client), workspaceId: "ws", now: old });
+
+    expect(client.getMetadata).not.toHaveBeenCalled();
   });
 });

@@ -17,6 +17,7 @@ import { loadConfig } from "#/cli/shared/config-loader";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
+import { assertWritable } from "#/cli/shared/readonly-guard";
 import {
   awaitWorkflowRun,
   reclaimWorkflowRuns,
@@ -26,16 +27,18 @@ import {
 import { createRunId } from "#/cli/shared/workflow-run-labels";
 import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
-import { resolveAuthNamespace, resolveMachineUser, resolveMachineUserName } from "../function/run";
+import {
+  resolveArgOptions,
+  resolveAuthNamespace,
+  resolveMachineUser,
+  resolveMachineUserName,
+} from "../function/run";
 import {
   argumentToSend,
   executionRecord,
-  type FunctionArg,
   type FunctionRunTarget,
-  parseArgOption,
   prepareFunction,
   printExecutionDetails,
-  readFunctionArgFile,
 } from "../function/run-function";
 
 const CLEANUP_COMMAND = "tailor workflow run --cleanup";
@@ -90,6 +93,7 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
     { cmd: "--cleanup", desc: "Remove the resources of finished runs" },
   ],
   run: async (args) => {
+    await assertWritable({ profile: args.profile });
     const { client, workspaceId } = await loadOperatorWorkspaceContext({
       profile: args.profile,
       workspaceId: args["workspace-id"],
@@ -114,7 +118,12 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
     if (!fs.existsSync(filePath)) {
       throw CLIError({ code: "FILE_NOT_FOUND", message: `File not found: ${filePath}` });
     }
-    const functionArg = readArgument(args.arg, args["arg-file"]);
+    const { arg: functionArg } = resolveArgOptions({
+      arg: args.arg,
+      argFile: args["arg-file"],
+      watch: false,
+      command: "workflow run",
+    });
 
     const { config, plugins } = await loadConfig(args.config);
     const authNamespace = resolveAuthNamespace(config.auth);
@@ -204,23 +213,6 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
     if (!result.success) process.exit(1);
   },
 });
-
-function readArgument(
-  inline: string | undefined,
-  file: string | undefined,
-): FunctionArg | undefined {
-  if (inline !== undefined && file !== undefined) {
-    throw CLIError({
-      code: "WORKFLOW_RUN_OPTIONS_CONFLICT",
-      message: "Options --arg and --arg-file are mutually exclusive.",
-      suggestion: "Pass the argument with only one of them.",
-      command: "workflow run",
-    });
-  }
-  if (inline !== undefined) return parseArgOption(inline);
-  if (file !== undefined) return readFunctionArgFile(path.resolve(file));
-  return undefined;
-}
 
 function reportLeftBehind(started: StartedWorkflowRun): void {
   logger.warn(

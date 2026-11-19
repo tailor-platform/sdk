@@ -141,6 +141,7 @@ Changes to \`tailor.config.ts\`, \`tsconfig.json\`, \`package.json\`, env files,
       arg: args.arg,
       argFile: args["arg-file"],
       watch: args.watch,
+      command: "function run",
     });
 
     // 2. Load config (required)
@@ -279,6 +280,8 @@ interface ArgOptions {
   argFile: string | undefined;
   /** Whether `--watch` is set, which reads the argument file on every run instead */
   watch: boolean;
+  /** Command the options belong to, named in the conflict error */
+  command: "function run" | "workflow run";
 }
 
 interface ResolvedArgOptions {
@@ -293,13 +296,16 @@ interface ResolvedArgOptions {
  * @param options - Raw option values
  * @returns The parsed argument and the argument file's absolute path
  */
-function resolveArgOptions(options: ArgOptions): ResolvedArgOptions {
+export function resolveArgOptions(options: ArgOptions): ResolvedArgOptions {
   if (options.arg !== undefined && options.argFile !== undefined) {
     throw CLIError({
-      code: "FUNCTION_RUN_OPTIONS_CONFLICT",
+      code:
+        options.command === "function run"
+          ? "FUNCTION_RUN_OPTIONS_CONFLICT"
+          : "WORKFLOW_RUN_OPTIONS_CONFLICT",
       message: "Options --arg and --arg-file are mutually exclusive.",
       suggestion: "Pass the argument with only one of them.",
-      command: "function run",
+      command: options.command,
     });
   }
   if (options.arg !== undefined) {

@@ -141,10 +141,11 @@ export interface TeardownTemporaryWorkflowParams {
  * outcome, so every removal is attempted and an unexpected failure is reported
  * as a warning rather than raised.
  * @param params - Resources to remove
+ * @returns Whether every resource is gone
  */
 export async function teardownTemporaryWorkflow(
   params: TeardownTemporaryWorkflowParams,
-): Promise<void> {
+): Promise<boolean> {
   const { client, workspaceId, name, workflowId, subject, leftoverNote } = params;
   const jobFunctionNames = params.jobFunctionNames ?? [name];
   const steps: [label: string, resource: string, run: () => Promise<unknown>][] = [];
@@ -160,6 +161,7 @@ export async function teardownTemporaryWorkflow(
   }
   steps.push(["function", name, () => client.deleteFunctionRegistry({ workspaceId, name })]);
 
+  let removedAll = true;
   for (const [label, resource, run] of steps) {
     try {
       await run();
@@ -167,12 +169,14 @@ export async function teardownTemporaryWorkflow(
       // An already-absent resource means teardown's goal is met; anything else
       // leaves a resource behind and has to stay diagnosable.
       if (isNotFoundError(error)) continue;
+      removedAll = false;
       logger.warn(
         `Could not remove the temporary ${subject} ${label} '${resource}': ` +
           `${error instanceof Error ? error.message : String(error)}. ${leftoverNote}`,
       );
     }
   }
+  return removedAll;
 }
 
 /**
