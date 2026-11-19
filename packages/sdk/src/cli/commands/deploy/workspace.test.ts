@@ -316,6 +316,9 @@ describe("resolveDeployWorkspace", () => {
       profile: undefined,
       allowMissingProfile: true,
     });
+    expect(mocks.initOperatorClient).toHaveBeenCalledWith("access-token", undefined, {
+      reportUnexpectedAlreadyExists: true,
+    });
     expect(mocks.saveWorkspaceContext).toHaveBeenCalledWith({
       version: 1,
       platformUrl: "https://api.tailor.tech",

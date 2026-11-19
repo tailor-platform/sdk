@@ -171,6 +171,13 @@ interface OperatorClientOptions {
    * best-effort call that may be abandoned mid-flight, which must never rotate the stored login.
    */
   renewToken?: boolean;
+  /**
+   * Save a crash report, and print where it was saved, when some creates that `tailor deploy`
+   * sends, such as `createTailorDBType` and `createSecretManagerVault`, fail because the
+   * resource already exists although no earlier attempt of the same call could have created it
+   * (default false).
+   */
+  reportUnexpectedAlreadyExists?: boolean;
 }
 
 /**
@@ -203,7 +210,7 @@ export async function initOperatorClient(
   const interceptors: Interceptor[] = [
     await userAgentInterceptor(),
     await bearerTokenInterceptor(tokenSource),
-    retryInterceptor(),
+    retryInterceptor(options),
     errorHandlingInterceptor(),
     createTracingInterceptor(),
     // Innermost: gates the actual network attempt so each retry re-acquires a
@@ -544,13 +551,15 @@ async function currentAccessToken(source: AccessTokenSource): Promise<string> {
  * from an allowlisted Create (see `RETRY_SAFE_CREATE_METHODS`) is treated as
  * success, since it means a prior attempt already committed the resource
  * server-side. An `AlreadyExists` from such a Create that no prior attempt could
- * have committed still surfaces, but is routed to crash/error reporting first (the
- * top-level handler skips `ConnectError`), so the otherwise-silent compound-create
- * race is trackable.
+ * have committed still surfaces, and is routed to crash/error reporting first when
+ * `reportUnexpectedAlreadyExists` is set.
  * @internal
+ * @param options - Client options that control crash reporting
  * @returns Retry interceptor
  */
-export function retryInterceptor(): Interceptor {
+export function retryInterceptor(
+  options: Pick<OperatorClientOptions, "reportUnexpectedAlreadyExists"> = {},
+): Interceptor {
   return (next) => async (req) => {
     if (req.stream) {
       return await next(req);
@@ -581,13 +590,11 @@ export function retryInterceptor(): Interceptor {
             );
             return synthesizeEmptyUnaryResponse(req);
           }
-          // No prior attempt of ours could have committed it, so the resource was
-          // committed out-of-band (a concurrent or non-idempotent compound create
-          // under load — #1350). The top-level handler skips ConnectError, so
-          // route it to error tracking here before letting it surface as the
-          // deploy error.
-          const { reportCrash } = await import("#/cli/crashreport/index");
-          await reportCrash(error, "handledError");
+          if (options.reportUnexpectedAlreadyExists) {
+            // The top-level handler skips ConnectError, so report it before it surfaces.
+            const { reportCrash } = await import("#/cli/crashreport/index");
+            await reportCrash(error, "handledError");
+          }
         }
         const unsentRequest = isUnsentRequest(error);
         if (unsentRequest || isRetriable(error, req.method)) {
