@@ -355,27 +355,36 @@ export async function pollUntilTerminal(
     deadline,
     options = {},
   } = params;
+  const throwIfPastDeadline = (expired = false) => {
+    if (deadline === undefined || (!expired && Date.now() < deadline)) return;
+    throw CLIError({
+      code: POLL_DEADLINE_EXCEEDED,
+      message: `${subject} workflow execution '${executionId}' did not finish in time.`,
+    });
+  };
   const sleepUntilNextPoll = async () => {
-    if (deadline === undefined) {
-      await new Promise((resolve) => setTimeout(resolve, pollInterval));
-      return;
-    }
-    const remaining = deadline - Date.now();
-    if (remaining <= 0) {
-      throw CLIError({
-        code: POLL_DEADLINE_EXCEEDED,
-        message: `${subject} workflow execution '${executionId}' did not finish in time.`,
-      });
-    }
-    await new Promise((resolve) => setTimeout(resolve, Math.min(pollInterval, remaining)));
+    throwIfPastDeadline();
+    const wait =
+      deadline === undefined ? pollInterval : Math.min(pollInterval, deadline - Date.now());
+    await new Promise((resolve) => setTimeout(resolve, wait));
   };
   // loop exits when the workflow execution reaches a terminal status
   // oxlint-disable-next-line typescript/no-unnecessary-condition
   while (true) {
     let execution: WorkflowExecution | undefined;
+    let lookupSignal: AbortSignal | undefined;
     try {
-      ({ execution } = await client.getWorkflowExecution({ workspaceId, executionId }));
+      throwIfPastDeadline();
+      if (deadline !== undefined) {
+        lookupSignal = AbortSignal.timeout(Math.max(1, deadline - Date.now()));
+      }
+      const request = { workspaceId, executionId };
+      ({ execution } = await (lookupSignal
+        ? client.getWorkflowExecution(request, { signal: lookupSignal })
+        : client.getWorkflowExecution(request)));
     } catch (error) {
+      // The signal fires on the deadline, but its timer can run a few milliseconds ahead of the clock.
+      throwIfPastDeadline(lookupSignal?.aborted);
       if (!isRetryableWaitError(error)) throw error;
       options.onPollFailed?.();
       await sleepUntilNextPoll();

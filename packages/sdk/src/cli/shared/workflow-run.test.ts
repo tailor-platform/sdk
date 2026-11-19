@@ -51,12 +51,14 @@ function createClient(options: ClientOptions = {}) {
     createWorkflowJobFunction: vi.fn(async () => ({ jobFunction: { version: 1n } })),
     createWorkflow: vi.fn(async () => ({ workflow: { id: "wf-1" } })),
     startWorkflow: vi.fn(async (_request: { arg: string }) => ({ executionId: "exec-1" })),
-    getWorkflowExecution: vi.fn(async () => ({
-      execution: {
-        status: options.status ?? WorkflowExecution_Status.SUCCESS,
-        jobExecutions: [{ executionId: "fn-1" }],
-      },
-    })),
+    getWorkflowExecution: vi.fn(
+      async (_request?: unknown, _options?: { signal?: AbortSignal }) => ({
+        execution: {
+          status: options.status ?? WorkflowExecution_Status.SUCCESS,
+          jobExecutions: [{ executionId: "fn-1" }],
+        },
+      }),
+    ),
     getFunctionExecution: vi.fn(async () => ({
       execution: { logEntries: [{ message: "hello" }], result: options.result ?? '{"ok":true}' },
     })),
@@ -158,6 +160,31 @@ describe("startWorkflowRun when the start outcome is unknown", () => {
   });
 });
 
+describe("startWorkflowRun when the run name is already taken", () => {
+  test("removes nothing, because this invocation created nothing", async () => {
+    const client = createClient();
+    client.createFunctionRegistry.mockRejectedValueOnce(
+      new ConnectError("exists", Code.AlreadyExists),
+    );
+
+    await expect(
+      startWorkflowRun({
+        client: asClient(client),
+        workspaceId: "ws",
+        runId,
+        kind: "script",
+        code: "",
+        description: "d",
+        invoker,
+        arg: undefined,
+      }),
+    ).rejects.toThrow("exists");
+    expect(client.deleteWorkflow).not.toHaveBeenCalled();
+    expect(client.deleteWorkflowJobFunction).not.toHaveBeenCalled();
+    expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
+  });
+});
+
 const started = { runId, name: `tmp-${runId}`, workflowId: "wf-1", executionId: "exec-1" };
 
 describe("awaitWorkflowRun", () => {
@@ -206,6 +233,29 @@ describe("awaitWorkflowRun deadline", () => {
       started,
       pollInterval: 5,
       timeoutMs: 30,
+    });
+
+    expect(outcome).toEqual({ state: "timedOut" });
+    expect(client.deleteWorkflow).not.toHaveBeenCalled();
+  });
+
+  test("stops waiting at the deadline when a status lookup never answers", async () => {
+    const client = createClient();
+    client.getWorkflowExecution.mockImplementation(
+      (_request?: unknown, options?: { signal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          options?.signal?.addEventListener("abort", () =>
+            reject(new ConnectError("canceled", Code.Canceled)),
+          );
+        }) as never,
+    );
+
+    const outcome = await awaitWorkflowRun({
+      client: asClient(client),
+      workspaceId: "ws",
+      started,
+      pollInterval: 5,
+      timeoutMs: 40,
     });
 
     expect(outcome).toEqual({ state: "timedOut" });
@@ -460,6 +510,23 @@ describe("reclaimWorkflowRuns", () => {
 
     expect(logger.warn).not.toHaveBeenCalled();
     expect(logger.debug).toHaveBeenCalledWith(expect.stringContaining(`tmp-${runId}`));
+  });
+
+  test("skips a workflow whose metadata is gone and still sweeps the others", async () => {
+    const other = createRunId(now, "bbbbbb");
+    const client = createSweepClient([
+      { name: `tmp-${runId}`, labels: run(runId), executions: [WorkflowExecution_Status.SUCCESS] },
+      { name: `tmp-${other}`, labels: run(other), executions: [WorkflowExecution_Status.SUCCESS] },
+    ]);
+    client.getMetadata.mockRejectedValueOnce(new ConnectError("gone", Code.NotFound));
+
+    const removed = await reclaimWorkflowRuns({
+      client: asClient(client),
+      workspaceId: "ws",
+      now: old,
+    });
+
+    expect(removed).toEqual([`tmp-${other}`]);
   });
 
   test("does not read the labels of workflows whose name is not a run's", async () => {

@@ -88,10 +88,16 @@ export const runCommand = defineAppCommand({
 
 Without \`--job\`, the whole file runs: export \`main(arg)\` from a plain script, or pass a resolver, executor, or workflow job file. With \`--job\`, only the workflow job of that name runs, with \`--arg\` as its input.
 
-When the wait stops (\`--timeout\` elapsed), the script keeps running and its temporary resources stay in place. The command prints the run ID; read the outcome with \`tailor workflow executions\`. \`${CLEANUP_COMMAND}\` removes the resources of runs that have finished, and the next \`workflow run\` does the same before it starts. A run that finished within the last few minutes is left alone by that automatic sweep (and by \`tailor deploy\`), so the command still waiting for it can read its result; \`--cleanup\` removes it at once.`,
+When the wait stops (\`--timeout\` elapsed), the script keeps running and its temporary resources stay in place. The command prints the run ID; read the outcome with \`tailor workflow executions\`. \`${CLEANUP_COMMAND}\` removes the resources of runs that have finished, and the next \`workflow run\` does the same before it starts. A run that finished within the last few minutes is left alone by that automatic sweep (and by \`tailor deploy\`), so the command still waiting for it can read its result; \`--cleanup\` removes it at once.
+
+> [!WARNING]
+> Only the selected job is registered, so a job that starts other jobs with \`.start()\` fails at that call. Run such a workflow from its own entry point instead.`,
   examples: [
     { cmd: 'scripts/backfill.ts --arg \'{"from":"2026-01-01"}\'', desc: "Run a long script" },
-    { cmd: "workflows/sample.ts --job validate-order", desc: "Run one workflow job" },
+    {
+      cmd: 'workflows/jobs.ts --job send-report --arg \'{"id":"42"}\'',
+      desc: "Run one workflow job that does not start other jobs",
+    },
     { cmd: "--cleanup", desc: "Remove the resources of finished runs" },
   ],
   run: async (args) => {

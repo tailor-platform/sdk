@@ -165,10 +165,10 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 $ tailor workflow run scripts/backfill.ts --arg '{"from":"2026-01-01"}'
 ```
 
-**Run one workflow job**
+**Run one workflow job that does not start other jobs**
 
 ```bash
-$ tailor workflow run workflows/sample.ts --job validate-order
+$ tailor workflow run workflows/jobs.ts --job send-report --arg '{"id":"42"}'
 ```
 
 **Remove the resources of finished runs**
@@ -184,6 +184,9 @@ The script runs as an asynchronous workflow job, so it is not bound by the time 
 Without `--job`, the whole file runs: export `main(arg)` from a plain script, or pass a resolver, executor, or workflow job file. With `--job`, only the workflow job of that name runs, with `--arg` as its input.
 
 When the wait stops (`--timeout` elapsed), the script keeps running and its temporary resources stay in place. The command prints the run ID; read the outcome with `tailor workflow executions`. `tailor workflow run --cleanup` removes the resources of runs that have finished, and the next `workflow run` does the same before it starts. A run that finished within the last few minutes is left alone by that automatic sweep (and by `tailor deploy`), so the command still waiting for it can read its result; `--cleanup` removes it at once.
+
+> [!WARNING]
+> Only the selected job is registered, so a job that starts other jobs with `.start()` fails at that call. Run such a workflow from its own entry point instead.
 
 ### workflow wait
 

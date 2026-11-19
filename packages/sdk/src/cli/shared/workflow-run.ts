@@ -7,9 +7,10 @@
  */
 
 import { timestampMs } from "@bufbuild/protobuf/wkt";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { resourceTrn, sdkAppIdLabelKey, sdkNameLabelKey } from "#/cli/commands/deploy/label";
 import { recoveryContextArgs } from "#/cli/shared/args";
-import { fetchPaged } from "#/cli/shared/client";
+import { fetchPaged, getOrNull } from "#/cli/shared/client";
 import { CLIError, formatCommandHint, isCLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { readOutcome } from "#/cli/shared/script-workflow";
@@ -88,15 +89,24 @@ export async function startWorkflowRun(
   };
   const created: { workflowId?: string } = {};
   let startSent = false;
+  const state = { collided: false };
   try {
-    await uploadTemporaryFunction({
-      ...owner,
-      client,
-      workspaceId,
-      name,
-      code: params.code,
-      description: params.description,
-    });
+    try {
+      await uploadTemporaryFunction({
+        ...owner,
+        client,
+        workspaceId,
+        name,
+        code: params.code,
+        description: params.description,
+      });
+    } catch (error) {
+      // The name belongs to another run, so there is nothing of ours to roll back.
+      if (error instanceof ConnectError && error.code === Code.AlreadyExists) {
+        state.collided = true;
+      }
+      throw error;
+    }
     const workflowId = await createTemporaryWorkflow(
       { ...owner, client, workspaceId, name, jobFunctionNames: [name], subject: SUBJECT },
       created,
@@ -110,6 +120,7 @@ export async function startWorkflowRun(
     });
     return { runId, name, workflowId, executionId };
   } catch (error) {
+    if (state.collided) throw error;
     if (startSent && !isStartRefused(error)) {
       logger.warn(
         `Could not confirm that run ${runId} was not started, so its resources were kept. ` +
@@ -213,10 +224,10 @@ export async function reclaimWorkflowRuns(params: ReclaimWorkflowRunsParams): Pr
   const removed: string[] = [];
   for (const workflow of workflows) {
     if (!workflow.name.startsWith(workflowRunResourceName("r"))) continue;
-    const { metadata } = await client.getMetadata({
-      trn: resourceTrn(workspaceId, "workflow", workflow.name),
-    });
-    const labels = metadata?.labels;
+    const response = await getOrNull(() =>
+      client.getMetadata({ trn: resourceTrn(workspaceId, "workflow", workflow.name) }),
+    );
+    const labels = response?.metadata?.labels;
     const marker = readWorkflowRunMarker(labels);
     if (!marker || workflow.name !== workflowRunResourceName(marker.runId)) continue;
     if (labels?.[sdkNameLabelKey] !== undefined || labels?.[sdkAppIdLabelKey] !== undefined) {
