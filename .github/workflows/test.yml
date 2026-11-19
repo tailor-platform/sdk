@@ -47,6 +47,7 @@ jobs:
             changes:
               - *metrics
               - .github/actions/**
+              - .github/workflows/pkg-pr-new.yml
               - .github/workflows/securefix.yml
               - llm-challenge/**
               - scripts/**
@@ -58,7 +59,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [22, 24]
+        node: [22, 24, 26]
         shard: [1, 2, 3, 4]
         # Must equal the number of `shard` values.
         shard-total: [4]
