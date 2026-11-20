@@ -1,21 +1,22 @@
 import { createHash } from "node:crypto";
 import * as path from "pathe";
 import { CONFIG_FILE_NAME } from "#/cli/shared/args";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { loadConfigFile, type LoadedConfigFile } from "#/cli/shared/config-loader";
 import { findConfigFile } from "#/cli/shared/context";
 import { errorSummary } from "#/cli/shared/errors";
 import { readPackageJson } from "#/cli/shared/package-json";
 import { KYSELY_FILE_NAME, REGISTRY_FILE_NAME } from "#/cli/shared/tailor-file-extension";
-import { loadConfigNamespaces } from "#/cli/shared/tailordb-namespaces";
-import { generateTypeDefinitionFromConfig } from "#/cli/shared/type-generator";
+import { loadConfigNamespaces, loadWorkspaceNamespaces } from "#/cli/shared/tailordb-namespaces";
+import {
+  generateTypeDefinitionFromConfig,
+  generateTypeDefinitionFromWorkspace,
+} from "#/cli/shared/type-generator";
 import { beginUserModuleRun } from "#/cli/shared/user-modules";
 import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
 import { generateKyselyTypesSource } from "#/plugin/builtin/kysely-type/type-processor";
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { collectLoadedFiles } from "./loaded-files";
 import { initializeResult, type ContentMapperHandlers, type PositionEncoding } from "./protocol";
-import type { LoadedConfig } from "#/cli/shared/config-loader";
-import type { Plugin } from "#/plugin/types";
 
 interface OpenProjectParams {
   configFileName: string;
@@ -65,15 +66,17 @@ export interface Evaluation {
 }
 
 async function kyselyTypesOf(
-  config: LoadedConfig,
-  plugins: Plugin[],
+  loaded: LoadedConfigFile,
 ): Promise<Pick<Evaluation, "kyselyTypes" | "kyselyError">> {
+  const { plugins } = loaded;
   const options = resolvePluginConfig(plugins, KyselyGeneratorID);
   if (options?.contentMapper !== true) return {};
   try {
-    const { namespaces } = await loadConfigNamespaces(config, plugins, undefined, {
-      precompileScripts: false,
-    });
+    const loadOptions = { precompileScripts: false };
+    const namespaces =
+      loaded.kind === "workspace"
+        ? await loadWorkspaceNamespaces(loaded.workspace, plugins, loadOptions)
+        : (await loadConfigNamespaces(loaded.config, plugins, undefined, loadOptions)).namespaces;
     return { kyselyTypes: await generateKyselyTypesSource(namespaces, options.temporal ?? false) };
   } catch (error) {
     return { kyselyError: errorSummary(error) };
@@ -93,10 +96,13 @@ export async function evaluateConfigInProcess(configPath: string): Promise<Evalu
     process.chdir(path.dirname(configPath));
     beginUserModuleRun();
     const { outcome, files } = await collectLoadedFiles(async () => {
-      const { config, plugins } = await loadConfig(configPath);
+      const loaded = await loadConfigFile(configPath);
       return {
-        registryTypes: generateTypeDefinitionFromConfig(config),
-        ...(await kyselyTypesOf(config, plugins)),
+        registryTypes:
+          loaded.kind === "workspace"
+            ? generateTypeDefinitionFromWorkspace(loaded.workspace)
+            : generateTypeDefinitionFromConfig(loaded.config),
+        ...(await kyselyTypesOf(loaded)),
       };
     });
     return outcome.status === "rejected"
