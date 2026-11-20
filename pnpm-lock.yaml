@@ -484,7 +484,7 @@ snapshots:
 				"tsx": "4.23.15",
 				"typescript": "6.0.3",
 				"vitest": "5.1.0",
-				"zinfer": "0.5.4",
+				"zinfer": "0.5.5",
 			},
 		},
 
@@ -7128,8 +7128,8 @@ snapshots:
 			},
 		},
 
-		"zinfer@0.5.4": {
-			"integrity": "sha512-93EGviXIO91K5GpM3sWlPu2Sq8xo9Ji+KXoAHVoe/86Y8PWdp14Sr6zp52fzDjFHxV3HfgKxRImmhEuXnvIJ6Q==",
+		"zinfer@0.5.5": {
+			"integrity": "sha512-q6TekLokyHrUrKZwNhfUHYWsGlpqC9yKQ2ASCLdumZMxZNlUMRfyk+oF6SjAXxeVJ0Eb/T/4PVxoihZGSA2gsA==",
 			"hasBin": true,
 			"peerDependencies": {
 				"zod": {
