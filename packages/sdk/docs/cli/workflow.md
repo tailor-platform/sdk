@@ -144,17 +144,17 @@ tailor workflow run [options] <file>
 
 **Options**
 
-| Option                          | Alias | Description                                                                                                                                | Required | Default              | Env                                 |
-| ------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------- | -------------------- | ----------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                                                               | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`      |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                                                          | No       | -                    | `TAILOR_PLATFORM_PROFILE`           |
-| `--job <JOB>`                   | -     | Workflow job to run, with the jobs it starts (matches the `name` field of createWorkflowJob). Optional when the file defines only one job. | No       | -                    | -                                   |
-| `--arg <ARG>`                   | `-a`  | JSON object to pass to the job as its input                                                                                                | No       | -                    | -                                   |
-| `--arg-file <ARG_FILE>`         | -     | Path to a JSON file holding the object to pass to the job as its input                                                                     | No       | -                    | -                                   |
-| `--machine-user <MACHINE_USER>` | `-m`  | Machine user name for authentication. Falls back to the active profile's default machine user.                                             | No       | -                    | `TAILOR_PLATFORM_MACHINE_USER_NAME` |
-| `--interval <INTERVAL>`         | `-i`  | Polling interval when waiting, at most 1m (e.g., '3s', '500ms', '1m')                                                                      | No       | `"3s"`               | -                                   |
-| `--timeout <TIMEOUT>`           | `-t`  | Maximum time to wait for the run, not a limit on its jobs; waits without a limit when omitted (e.g., '30s', '10m')                         | No       | -                    | -                                   |
-| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                                                                                                 | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`                |
+| Option                          | Alias | Description                                                                                                                                | Required | Default | Env                                 |
+| ------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------- | ------- | ----------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                                                               | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID`      |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                                                          | No       | -       | `TAILOR_PLATFORM_PROFILE`           |
+| `--job <JOB>`                   | -     | Workflow job to run, with the jobs it starts (matches the `name` field of createWorkflowJob). Optional when the file defines only one job. | No       | -       | -                                   |
+| `--arg <ARG>`                   | `-a`  | JSON object to pass to the job as its input                                                                                                | No       | -       | -                                   |
+| `--arg-file <ARG_FILE>`         | -     | Path to a JSON file holding the object to pass to the job as its input                                                                     | No       | -       | -                                   |
+| `--machine-user <MACHINE_USER>` | `-m`  | Machine user name for authentication. Falls back to the active profile's default machine user.                                             | No       | -       | `TAILOR_PLATFORM_MACHINE_USER_NAME` |
+| `--interval <INTERVAL>`         | `-i`  | Polling interval when waiting, at most 1m (e.g., '3s', '500ms', '1m')                                                                      | No       | `"3s"`  | -                                   |
+| `--timeout <TIMEOUT>`           | `-t`  | Maximum time to wait for the run, not a limit on its jobs; waits without a limit when omitted (e.g., '30s', '10m')                         | No       | -       | -                                   |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory)                                    | No       | -       | `TAILOR_CONFIG_PATH`                |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
