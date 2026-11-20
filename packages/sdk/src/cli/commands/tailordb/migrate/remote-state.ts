@@ -368,6 +368,60 @@ export function formatInProgressMigrationAction(action: InProgressMigrationActio
 }
 
 /**
+ * The command that takes a namespace's tables out of the maintenance mode a deploy left in place
+ * after committing the checkpoint, when `migration resolve --maintenance` accepts that state.
+ * @param state - Remote migration state of the namespace
+ * @param namespace - TailorDB namespace
+ * @param context - Config and workspace selection of the current run
+ * @returns The command, or undefined when no record names the current checkpoint or a migration is in progress
+ */
+export function maintenanceModeReleaseAction(
+  state: RemoteMigrationState,
+  namespace: string,
+  context: MigrationCommandContext,
+): CLIErrorNextAction | undefined {
+  const migrationInProgress = state.inProgress !== null && !isStaleMigrationInProgress(state);
+  if (migrationInProgress || state.maintenanceModeCheckpoint !== (state.number ?? 0)) {
+    return undefined;
+  }
+  return {
+    command: "tailor",
+    args: namespaceMigrationArgs({
+      ...context,
+      subcommand: ["resolve", "--maintenance"],
+      namespace,
+    }),
+  };
+}
+
+/**
+ * Refuse a command that moves the checkpoint while a deploy's maintenance mode record remains,
+ * since the record would then name a checkpoint the namespace no longer has.
+ * @param state - Remote migration state of the namespace
+ * @param namespace - TailorDB namespace
+ * @param context - Config and workspace selection of the current run
+ */
+export function assertNoMaintenanceModeRecord(
+  state: RemoteMigrationState,
+  namespace: string,
+  context: MigrationCommandContext,
+): void {
+  if (state.maintenanceModeCheckpoint === null) return;
+  const release = maintenanceModeReleaseAction(state, namespace, context);
+  const statusCommand = formatCommandHint({
+    command: "tailor",
+    args: namespaceMigrationArgs({ ...context, subcommand: ["status"], namespace }),
+  });
+  throw CLIError({
+    code: "MIGRATION_MAINTENANCE_MODE_RECORDED",
+    message: `Namespace "${namespace}" records tables a deploy left in maintenance mode at checkpoint ${describeMigrationCheckpoint(state.maintenanceModeCheckpoint)}.`,
+    suggestion: release
+      ? `Take the tables out of maintenance mode first with ${formatCommandHint(release)}.`
+      : `Run ${statusCommand} to check the migration state.`,
+  });
+}
+
+/**
  * Refuse a command that rewrites migration state while a migration is
  * partially applied, which only a deploy or `migration resolve` can finish
  * consistently, or its `main` run is unsettled, which only `migration resolve`

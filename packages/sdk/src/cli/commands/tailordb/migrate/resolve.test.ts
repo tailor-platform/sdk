@@ -178,19 +178,124 @@ describe("tailordb migration resolve", () => {
     expect(state.removeMigrationWorkflowResources).not.toHaveBeenCalled();
   }
 
-  test("requires either --rollback or --complete", async () => {
+  test("requires one of --rollback, --complete or --maintenance", async () => {
     const result = await runCommand(resolveCommand, ["--yes"]);
 
     expect(result.success).toBe(false);
-    expect(String(result.error)).toMatch(/--rollback or --complete/);
+    expect(String(result.error)).toMatch(/--rollback, --complete or --maintenance/);
     expectNothingWritten();
+  });
+
+  test.each([
+    ["--rollback", "--maintenance"],
+    ["--complete", "--maintenance"],
+  ])("refuses %s together with %s", async (...flags) => {
+    const result = await runCommand(resolveCommand, [...flags, "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/--rollback, --complete or --maintenance/);
+    expectNothingWritten();
+  });
+
+  describe("--maintenance", () => {
+    function leftInMaintenanceModeAt0001(extraFields: string[] = []): void {
+      remoteLabels({ "sdk-migration": "m0001", "sdk-maintenance-mode": "m0001" });
+      state.listTailorDBTypes.mockResolvedValue({
+        tailordbTypes: [
+          restrictedRemoteType("User", ["id", "name", ...extraFields]),
+          restrictedRemoteType("Post", ["id", "name"]),
+        ],
+        nextPageToken: "",
+      });
+    }
+
+    test("lifts the restrictions and removes the record without moving the checkpoint", async () => {
+      using _json = jsonMode();
+      using stdout = captureStdout();
+      leftInMaintenanceModeAt0001();
+
+      const result = await runCommand(resolveCommand, ["--maintenance", "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(JSON.parse(stdout.output)).toMatchObject({
+        resolution: "maintenance",
+        checkpoint: 1,
+        tables: { created: [], updated: ["User", "Post"], deleted: [] },
+      });
+      expect(
+        state.updateTailorDBType.mock.calls.map(([call]) => call.tailordbType.name).toSorted(),
+      ).toEqual(["Post", "User"]);
+      expect(state.setMetadata).toHaveBeenCalledWith(
+        expect.objectContaining({ labels: { "sdk-migration": "m0001", "sdk-name": "my-app" } }),
+      );
+    });
+
+    test("refuses when no maintenance mode record remains", async () => {
+      remoteLabels({ "sdk-migration": "m0001" });
+
+      const result = await runCommand(resolveCommand, ["--maintenance", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_NO_MAINTENANCE_RECORD" });
+      expectNothingWritten();
+    });
+
+    test("refuses when the record names a checkpoint the namespace no longer has", async () => {
+      remoteLabels({ "sdk-migration": "m0001", "sdk-maintenance-mode": "m0002" });
+
+      const result = await runCommand(resolveCommand, ["--maintenance", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_NO_MAINTENANCE_RECORD" });
+      expectNothingWritten();
+    });
+
+    test("refuses while a migration is recorded as in progress and points to --rollback and --complete", async () => {
+      remoteLabels({
+        "sdk-migration": "m0001",
+        "sdk-migration-in-progress": "m0002",
+        "sdk-maintenance-mode": "m0001",
+      });
+
+      const result = await runCommand(resolveCommand, ["--maintenance", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({
+        code: "MIGRATION_RESOLVE_MAINTENANCE_IN_PROGRESS",
+        suggestion: expect.stringContaining("--rollback"),
+      });
+      expectNothingWritten();
+    });
+
+    test("refuses when a table differs from the checkpoint beyond the restrictions", async () => {
+      leftInMaintenanceModeAt0001(["email"]);
+
+      const result = await runCommand(resolveCommand, ["--maintenance", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_MAINTENANCE_DRIFT" });
+      expectNothingWritten();
+    });
+
+    test("leaves the record alone when sending the schema fails", async () => {
+      leftInMaintenanceModeAt0001();
+      state.updateTailorDBType.mockRejectedValue(new Error("update failed"));
+
+      const result = await runCommand(resolveCommand, ["--maintenance", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(state.updateTailorDBType).toHaveBeenCalledWith(
+        expect.objectContaining({ namespaceName: "tailordb" }),
+      );
+      expect(state.setMetadata).not.toHaveBeenCalled();
+    });
   });
 
   test("rejects --rollback and --complete together", async () => {
     const result = await runCommand(resolveCommand, ["--rollback", "--complete", "--yes"]);
 
     expect(result.success).toBe(false);
-    expect(String(result.error)).toMatch(/--rollback or --complete/);
+    expect(String(result.error)).toMatch(/--rollback, --complete or --maintenance/);
     expectNothingWritten();
   });
 

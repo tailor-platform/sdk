@@ -28,6 +28,7 @@ import {
   type MigrationSubcommandArgs,
 } from "./hints";
 import {
+  assertNoMaintenanceModeRecord,
   assertNoMigrationInProgress,
   fetchRemoteMigrationState,
   migrationHistoryMismatchError,
@@ -240,6 +241,7 @@ async function rebaseline(options: RebaselineOptions): Promise<RebaselineResult>
       resourceTrn(workspaceId, "tailordb", target.namespace),
     );
     assertNoMigrationInProgress(remoteState, target.namespace, commandContext);
+    assertNoMaintenanceModeRecord(remoteState, target.namespace, commandContext);
     const remoteMigration = remoteState.number;
     if (remoteMigration !== latestMigration) {
       const actual = remoteMigration === null ? "<unset>" : formatMigrationNumber(remoteMigration);

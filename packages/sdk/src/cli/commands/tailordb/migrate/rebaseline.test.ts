@@ -308,6 +308,39 @@ describe("tailordb migration rebaseline", () => {
     expect(fs.readFileSync(schemaPath, "utf-8")).toBe(before);
   });
 
+  test("refuses to re-baseline while a deploy's maintenance mode record remains", async () => {
+    const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
+    const before = fs.readFileSync(schemaPath, "utf-8");
+    state.getMetadata.mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0001", "sdk-maintenance-mode": "m0001" } },
+    });
+
+    const result = await runCommand(rebaselineCommand, ["--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_MAINTENANCE_MODE_RECORDED",
+      suggestion: expect.stringContaining("migration resolve --maintenance"),
+    });
+    expect(fs.readFileSync(schemaPath, "utf-8")).toBe(before);
+    expect(state.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("points to status when the maintenance mode record names another checkpoint", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0001", "sdk-maintenance-mode": "m0002" } },
+    });
+
+    const result = await runCommand(rebaselineCommand, ["--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_MAINTENANCE_MODE_RECORDED",
+      suggestion: expect.stringContaining("migration status"),
+    });
+    expect(state.setMetadata).not.toHaveBeenCalled();
+  });
+
   test("rejects ungenerated local schema changes before reading the remote", async () => {
     state.localTypes = { User: parsedType("User") };
 

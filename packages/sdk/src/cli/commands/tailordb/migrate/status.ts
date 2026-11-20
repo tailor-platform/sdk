@@ -6,7 +6,13 @@ import { deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { CLIError, errorSummary, isCLIError } from "#/cli/shared/errors";
+import {
+  CLIError,
+  errorSummary,
+  formatCommandHint,
+  isCLIError,
+  type CLIErrorNextAction,
+} from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { getNamespacesWithMigrations, migrationConfigNotFoundError } from "./config";
@@ -18,6 +24,7 @@ import {
   type InProgressMigrationAction,
   isStaleMigrationInProgress,
   matchesLocalMigrationHistory,
+  maintenanceModeReleaseAction,
 } from "./remote-state";
 import {
   locateRemoteCheckpoint,
@@ -64,6 +71,11 @@ interface MigrationStatusInfo {
   inProgressMigrationRun?: "steps" | "main";
   /** Commands that continue or settle the in-progress migration. */
   inProgressMigrationActions?: InProgressMigrationAction[];
+  /** Checkpoint whose tables a deploy left in maintenance mode, when no migration is in progress. */
+  maintenanceModeCheckpoint?: number;
+  maintenanceModeCheckpointLabel?: string;
+  /** Command that takes those tables out of maintenance mode. */
+  maintenanceModeRelease?: CLIErrorNextAction;
 }
 
 interface MigrationStatusFailure {
@@ -271,6 +283,11 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
       ...(descriptions.has(num) ? { description: descriptions.get(num) } : {}),
     }));
     const inProgress = isStaleMigrationInProgress(remoteState) ? null : remoteState.inProgress;
+    const maintenanceModeRelease = maintenanceModeReleaseAction(
+      remoteState,
+      namespace,
+      commandContext,
+    );
 
     rows.push({
       status: "ok",
@@ -288,6 +305,13 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
               state: remoteState,
               namespace,
             }),
+          }
+        : {}),
+      ...(maintenanceModeRelease
+        ? {
+            maintenanceModeCheckpoint: currentMigration,
+            maintenanceModeCheckpointLabel: formatMigrationNumber(currentMigration),
+            maintenanceModeRelease,
           }
         : {}),
     });
@@ -314,6 +338,13 @@ function printMigrationStatuses(rows: MigrationStatusRow[]): void {
       for (const action of row.inProgressMigrationActions ?? []) {
         logger.log(`    ${formatInProgressMigrationAction(action)}`);
       }
+    }
+
+    if (row.maintenanceModeRelease) {
+      logger.log(
+        `  Maintenance mode: tables left in maintenance mode at checkpoint ${styles.bold(row.maintenanceModeCheckpointLabel ?? "")}`,
+      );
+      logger.log(`    Release: ${formatCommandHint(row.maintenanceModeRelease)}`);
     }
 
     if (row.pendingMigrations.length > 0) {
