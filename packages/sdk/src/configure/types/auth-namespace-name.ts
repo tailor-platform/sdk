@@ -15,6 +15,8 @@ export interface AuthNamespaceNameRegistry {}
  * To let an `AIGatewayConfig` authenticate against an auth namespace owned by a
  * different application in the workspace, extend the registry: `declare module
  * "@tailor-platform/sdk" { interface AuthNamespaceNameRegistry { "other-app-auth": true } }`.
+ * An authAccessToken trigger's `auth` still has to name the config's own Auth service;
+ * `deploy` rejects any other name.
  */
 export type AuthNamespaceName = keyof AuthNamespaceNameRegistry extends never
   ? string

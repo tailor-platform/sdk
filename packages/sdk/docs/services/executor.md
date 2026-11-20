@@ -185,7 +185,7 @@ Fire on auth access token lifecycle events:
 authAccessTokenIssuedTrigger();
 ```
 
-The triggers subscribe to the Auth service the executor's config uses: its own `defineAuth()` or the external Auth service it references. Pass `auth` to name it explicitly; the name is type-narrowed via the generated `AuthNamespaceName` type, and `deploy` fails when `auth` names any other Auth service. Unlike `idp`, `auth` cannot name an Auth service that another config in the same `tailor deploy -c` run owns.
+The triggers subscribe to the Auth service the executor's config uses: its own `defineAuth()` or the external Auth service it references. Pass `auth` to name it explicitly; the name is type-narrowed via the generated `AuthNamespaceName` type, and `deploy` fails when `auth` names any other Auth service. Unlike `idp`, `auth` does not resolve against the other configs in a `tailor deploy -c` run; to subscribe to an Auth service another config owns, reference it as external in the executor's config.
 
 ```typescript
 authAccessTokenIssuedTrigger({ auth: "my-auth" });

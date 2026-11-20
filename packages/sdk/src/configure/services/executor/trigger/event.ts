@@ -520,8 +520,8 @@ export type AuthAccessTokenTrigger<Args> = ParserAuthAccessTokenTrigger & {
 
 type AuthAccessTokenSingleTriggerOptions = {
   /**
-   * Auth namespace name to subscribe to. Must name the config's Auth service, its own
-   * `defineAuth()` or the external Auth service it references; defaults to it.
+   * Auth namespace name to subscribe to. Must name the config's Auth service (its own
+   * `defineAuth()` or the external Auth service it references), which is also the default.
    */
   auth?: AuthNamespaceName;
 };

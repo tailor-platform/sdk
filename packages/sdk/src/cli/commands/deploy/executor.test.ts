@@ -1310,31 +1310,24 @@ describe("planExecutor", () => {
       ).rejects.toThrow(/no IdP with that name is configured/);
     });
 
-    test("authAccessTokenIssued throws when no Auth service configured", async () => {
-      const client = createMockClient([]);
-      const executor: Executor = {
-        name: "on-auth-token-issued",
-        description: "test",
-        disabled: false,
-        trigger: { kind: "authAccessToken", events: ["auth.access_token.issued"] },
-        operation: { kind: "function", body: () => {} },
-      };
-      const application = createMockApplication([executor]);
+    test.for([undefined, "my-auth"])(
+      "authAccessTokenIssued with auth %s throws when no Auth service configured",
+      async (auth) => {
+        const executor: Executor = {
+          name: "on-auth-token-issued",
+          description: "test",
+          disabled: false,
+          trigger: { kind: "authAccessToken", events: ["auth.access_token.issued"], auth },
+          operation: { kind: "function", body: () => {} },
+        };
+        const application = createMockApplication([executor]);
 
-      await expect(
-        planExecutor({
-          client,
-          workspaceId,
-          application,
-          owner: applicationOwner(application),
-          forRemoval: false,
-          config: mockConfig,
-        }),
-      ).rejects.toMatchObject({
-        code: "AUTH_CONFIG_REQUIRED",
-        message: "No Auth service configured",
-      });
-    });
+        await expect(planExecutor(buildPlanContext(application))).rejects.toMatchObject({
+          code: "AUTH_CONFIG_REQUIRED",
+          message: "No Auth service configured",
+        });
+      },
+    );
 
     test.for([
       { label: "its own Auth", appOptions: { authName: "my-auth" } },
@@ -1349,13 +1342,7 @@ describe("planExecutor", () => {
       };
       const application = createMockApplication([executor], appOptions);
 
-      const result = await planExecutor({
-        client: createMockClient([]),
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      });
+      const result = await planExecutor(buildPlanContext(application));
 
       expect(getEventConfig(result).value.namespaceName).toBe("my-auth");
     });
@@ -1379,15 +1366,7 @@ describe("planExecutor", () => {
         };
         const application = createMockApplication([executor], appOptions);
 
-        await expect(
-          planExecutor({
-            client: createMockClient([]),
-            workspaceId,
-            application,
-            forRemoval: false,
-            config: mockConfig,
-          }),
-        ).rejects.toMatchObject({
+        await expect(planExecutor(buildPlanContext(application))).rejects.toMatchObject({
           code: "EXECUTOR_AUTH_NOT_FOUND",
           context: { executor: "on-auth-token-issued", auth: "other-auth", available: ["my-auth"] },
         });
