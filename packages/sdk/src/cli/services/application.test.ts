@@ -1621,6 +1621,23 @@ ${brandedDefault(kind, workspace)}
     });
   });
 
+  test("looks up a static website once for the root env and every override", async () => {
+    const workspace = await writeWorkspace();
+    workspace.envOverrides.resolver = {
+      "shop-api": { api: "shop-site:url" },
+      "admin-api": { api: "shop-site:url" },
+    };
+    workspace.envOverrides.auth = {
+      "shop-auth": { hook: "shop-site:url" },
+      "admin-auth": { hook: "shop-site:url" },
+    };
+    const client = siteClient(true);
+
+    await loadWorkspace({ workspace, client, workspaceId: "ws-1" });
+
+    expect(client.getStaticWebsite).toHaveBeenCalledTimes(1);
+  });
+
   test("names the only Auth service as the invoker of a workflow a resolver starts", async () => {
     tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
     fs.writeFileSync(
