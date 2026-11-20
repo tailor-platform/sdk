@@ -194,7 +194,7 @@ snapshots:
 				"madge": "8.0.0",
 				"oxfmt": "0.78.0",
 				"oxlint": "1.93.0",
-				"pkg-pr-new": "0.0.93",
+				"pkg-pr-new": "0.0.94",
 				"publint": "0.3.25",
 				"tsx": "4.23.15",
 				"typescript": "6.0.3",
@@ -6013,8 +6013,8 @@ snapshots:
 			"engines": {"node": ">=12"},
 		},
 
-		"pkg-pr-new@0.0.93": {
-			"integrity": "sha512-JH3HEO+m8sNFpalNAeGrNKjdwxNcXT3yuEuGMU/65dvLojPo+Ofnmc8la2v2ceisjXTOKQw/738Pj4KNFY7F+w==",
+		"pkg-pr-new@0.0.94": {
+			"integrity": "sha512-+s3ZZl1Vt3wHfsIRH+chHG6/3wsu1N+Z5jitNYAPc0GGCYR8xmju34UShzTAMosi4WAYFCXvp80LZZc/fXSdpQ==",
 			"hasBin": true,
 		},
 
