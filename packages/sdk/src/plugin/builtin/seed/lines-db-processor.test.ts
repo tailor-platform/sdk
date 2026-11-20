@@ -93,6 +93,85 @@ describe("generateLinesDbSchemaFileWithPluginAPI", () => {
   });
 });
 
+describe("the row type of a plugin-generated table's seed schema", () => {
+  const pluginSource = {
+    exportName: "AuditLog",
+    pluginId: "audit-plugin",
+    pluginImportPath: "@example/audit-plugin",
+    originalFilePath: "",
+    originalExportName: "",
+    generatedTableKind: "auditLog",
+  };
+  const metadata: LinesDbMetadata = {
+    tableName: "AuditLog",
+    exportName: "AuditLog",
+    importPath: "",
+    optionalFields: ["id"],
+    omitFields: [],
+    foreignKeys: [],
+    indexes: [],
+    pluginSource,
+    rowType: "{\n  id?: string;\n  action: string;\n}",
+  };
+
+  test.each([
+    ["a namespace plugin", {}],
+    [
+      "a table-attached plugin",
+      {
+        pluginSource: { ...pluginSource, originalExportName: "user" },
+        originalImportPath: "../../tailordb/user",
+      },
+    ],
+  ])("is declared for a table %s generates", (_name, overrides) => {
+    const { originalImportPath, ...metadataOverrides } = overrides as {
+      originalImportPath?: string;
+    } & Partial<LinesDbMetadata>;
+    const source = generateLinesDbSchemaFileWithPluginAPI(
+      { ...metadata, ...metadataOverrides },
+      { configImportPath: "../../../tailor.config.ts", originalImportPath },
+    );
+
+    expect(source).toContain("type SeedRow = {\n  id?: string;\n  action: string;\n};");
+    expect(source).toContain(
+      "createStandardSchema<SeedRow>(schemaType as never, hook as never, AuditLog)",
+    );
+  });
+
+  test("is not declared when the fields of the table are not known", () => {
+    const source = generateLinesDbSchemaFileWithPluginAPI(
+      { ...metadata, rowType: undefined },
+      { configImportPath: "../../../tailor.config.ts" },
+    );
+
+    expect(source).not.toContain("SeedRow");
+    expect(source).toContain("createStandardSchema(schemaType, hook, AuditLog)");
+  });
+
+  test("is built from the fields of the table by processLinesDb", () => {
+    const type = {
+      name: "AuditLog",
+      fields: {
+        action: { config: { type: "string", required: true } },
+        at: { config: { type: "datetime", required: true } },
+      },
+    } as unknown as TailorDBType;
+    const source = {
+      exportName: "AuditLog",
+      pluginId: "audit-plugin",
+      pluginImportPath: "@example/audit-plugin",
+      originalFilePath: "",
+      originalExportName: "",
+      generatedTableKind: "auditLog",
+    };
+
+    const result = processLinesDb(type, source);
+
+    expect(result.rowType).toContain("action: string;");
+    expect(result.rowType).toContain("at: string | Date;");
+  });
+});
+
 describe("generateLinesDbSchemaFile", () => {
   const metadata: LinesDbMetadata = {
     tableName: "User",

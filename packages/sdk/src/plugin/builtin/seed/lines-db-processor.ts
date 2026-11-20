@@ -1,6 +1,7 @@
 import { isPluginGeneratedTable } from "#/parser/service/tailordb/type-source";
 import ml from "#/utils/multiline";
 import { SEED_SCHEMA_MODULE } from "./schema-module";
+import { generateSeedRowType, type SeedRowFieldConfig } from "./seed-row-type";
 import type {
   ParsedField,
   PluginGeneratedTableSource,
@@ -64,6 +65,16 @@ function processLinesDbForPluginTable(
     foreignKeys,
     indexes,
     pluginSource: source,
+    rowType: generateSeedRowType({
+      fields: Object.fromEntries(
+        Object.entries(type.fields).map(([name, field]) => [
+          name,
+          field.config as SeedRowFieldConfig,
+        ]),
+      ),
+      optionalFields,
+      omitFields,
+    }),
   };
 }
 
@@ -277,8 +288,16 @@ export function generateLinesDbSchemaFileWithPluginAPI(
   metadata: LinesDbMetadata,
   params: PluginSchemaParams,
 ): string {
-  const { tableName, exportName, optionalFields, omitFields, foreignKeys, indexes, pluginSource } =
-    metadata;
+  const {
+    tableName,
+    exportName,
+    optionalFields,
+    omitFields,
+    foreignKeys,
+    indexes,
+    pluginSource,
+    rowType,
+  } = metadata;
 
   if (!pluginSource) {
     throw new Error(`pluginSource is required for plugin-generated table "${tableName}"`);
@@ -294,6 +313,10 @@ export function generateLinesDbSchemaFileWithPluginAPI(
     `;
 
   const schemaOptionsCode = generateSchemaOptions(foreignKeys, indexes);
+  const rowTypeCode = rowType ? `type SeedRow = ${rowType};\n` : "";
+  const standardSchemaCode = rowType
+    ? `createStandardSchema<SeedRow>(schemaType as never, hook as never, ${exportName})`
+    : `createStandardSchema(schemaType, hook, ${exportName})`;
 
   // Table-attached plugin (e.g., changeset): import the original table and use getGeneratedTable(configPath, pluginId, table, kind)
   if (pluginSource.originalExportName && originalImportPath && pluginSource.generatedTableKind) {
@@ -308,12 +331,13 @@ export function generateLinesDbSchemaFileWithPluginAPI(
     const configPath = join(import.meta.dirname, "${configImportPath}");
     const ${exportName} = await getGeneratedTable(configPath, "${pluginSource.pluginId}", ${pluginSource.originalExportName}, "${pluginSource.generatedTableKind}");
 
+    ${rowTypeCode}
     ${schemaTypeCode}
 
     export const hook = createTailorDBHook(${exportName});
 
     export const schema = defineSchema(
-      createStandardSchema(schemaType, hook, ${exportName}),${schemaOptionsCode}
+      ${standardSchemaCode},${schemaOptionsCode}
     );
 
     `;
@@ -337,12 +361,13 @@ export function generateLinesDbSchemaFileWithPluginAPI(
     const configPath = join(import.meta.dirname, "${configImportPath}");
     const ${exportName} = await getGeneratedTable(configPath, "${pluginSource.pluginId}", null, "${pluginSource.generatedTableKind}");
 
+    ${rowTypeCode}
     ${schemaTypeCode}
 
     export const hook = createTailorDBHook(${exportName});
 
     export const schema = defineSchema(
-      createStandardSchema(schemaType, hook, ${exportName}),${schemaOptionsCode}
+      ${standardSchemaCode},${schemaOptionsCode}
     );
 
     `;

@@ -32,4 +32,6 @@ export interface LinesDbMetadata {
   indexes: IndexDefinition[];
   /** Plugin source info if this is a plugin-generated type */
   pluginSource?: PluginGeneratedTableSource;
+  /** Row type of a table whose fields are known only at generation, as TypeScript source */
+  rowType?: string;
 }
