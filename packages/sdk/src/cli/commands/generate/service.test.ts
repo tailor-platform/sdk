@@ -116,11 +116,11 @@ describe("GenerationManager", () => {
     test("initializes without legacy generator API", () => {
       const application = defineApplication({ config: mockConfig });
       const manager = createGenerationManager({
-        application,
+        workspaceServices: application,
         config: mockConfig,
       });
 
-      expect(manager.application).toBe(application);
+      expect(manager.workspaceServices).toBe(application);
       expect(manager.baseDir).toContain("generated");
       expect(manager.services).toEqual({ tailordb: {}, resolver: {}, executor: {} });
       expect("generators" in manager).toBe(false);
@@ -131,7 +131,7 @@ describe("GenerationManager", () => {
     test("creates base directory", () => {
       const application = defineApplication({ config: mockConfig });
       createGenerationManager({
-        application,
+        workspaceServices: application,
         config: mockConfig,
       });
 
@@ -145,7 +145,7 @@ describe("GenerationManager", () => {
     test("executes complete generation process", async () => {
       const application = defineApplication({ config: mockConfig });
       const manager = createGenerationManager({
-        application,
+        workspaceServices: application,
         config: mockConfig,
       });
 
@@ -168,7 +168,7 @@ describe("GenerationManager", () => {
       ]);
       const pluginManager = new PluginManager([plugin]);
       const manager = createGenerationManager({
-        application,
+        workspaceServices: application,
         config: mockConfig,
         pluginManager,
       });
@@ -199,7 +199,7 @@ describe("GenerationManager", () => {
       const finishSibling = Promise.withResolvers<void>();
       const config = { ...mockConfig, db: {}, resolver: {} };
       const manager = createGenerationManager({
-        application: defineApplication({ config }),
+        workspaceServices: defineApplication({ config }),
         config,
         pluginManager: new PluginManager([
           {
@@ -263,7 +263,7 @@ describe("GenerationManager", () => {
           { id: "third-plugin", description: "Third", [hookName]: stringHook },
         ];
         const manager = createGenerationManager({
-          application: defineApplication({ config }),
+          workspaceServices: defineApplication({ config }),
           config,
           pluginManager: new PluginManager(plugins),
         });
@@ -320,7 +320,7 @@ describe("GenerationManager", () => {
         loadedTailorDBService("analytics", ["User"]),
       ]);
       const duplicateManager = createGenerationManager({
-        application: duplicateApp,
+        workspaceServices: duplicateApp,
         config: mockConfig,
       });
 
@@ -340,7 +340,10 @@ describe("GenerationManager", () => {
           loadTypes: vi.fn().mockRejectedValue(loadFailure),
         },
       ]);
-      const manager = createGenerationManager({ application, config: mockConfig });
+      const manager = createGenerationManager({
+        workspaceServices: application,
+        config: mockConfig,
+      });
 
       await expect(manager.generate()).rejects.toBe(loadFailure);
       expect(vi.mocked(logger.error).mock.calls).toEqual([
@@ -363,7 +366,7 @@ describe("GenerationManager", () => {
           },
         ],
       };
-      const manager = createGenerationManager({ application, config });
+      const manager = createGenerationManager({ workspaceServices: application, config });
 
       await expect(manager.generate()).rejects.toBe(loadFailure);
       expect(vi.mocked(logger.error).mock.calls).toEqual([
@@ -378,7 +381,7 @@ describe("GenerationManager", () => {
       });
       const config = { ...mockConfig, db: {}, resolver: {} };
       const manager = createGenerationManager({
-        application: defineApplication({ config }),
+        workspaceServices: defineApplication({ config }),
         config,
         pluginManager: new PluginManager([
           {

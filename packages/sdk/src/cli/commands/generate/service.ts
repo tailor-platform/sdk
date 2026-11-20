@@ -4,13 +4,18 @@ import {
   defineApplication,
   definePluginResolverServices,
   generatePluginFilesIfNeeded,
-  type Application,
+  type WorkspaceServices,
 } from "#/cli/services/application";
 import { createExecutorService } from "#/cli/services/executor/service";
 import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
 import { getAuthInput } from "#/cli/shared/auth-input";
 import { soleAuthService } from "#/cli/shared/auth-namespace";
-import { loadConfig, type LoadedConfig } from "#/cli/shared/config-loader";
+import {
+  isLoadedWorkspaceConfig,
+  loadConfig,
+  type LoadedConfig,
+  type LoadedWorkspaceConfig,
+} from "#/cli/shared/config-loader";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { errorToJson } from "#/cli/shared/error-json";
 import { CLIError, isCLIError } from "#/cli/shared/errors";
@@ -41,7 +46,7 @@ type TypeInfo = {
  * Generation manager type.
  */
 export type GenerationManager = {
-  readonly application: Application;
+  readonly workspaceServices: WorkspaceServices;
   readonly baseDir: string;
   readonly services: {
     tailordb: Record<string, TypeInfo>;
@@ -51,20 +56,31 @@ export type GenerationManager = {
   generate: () => Promise<void>;
 };
 
+function generationTarget(config: LoadedConfig | LoadedWorkspaceConfig): string {
+  return isLoadedWorkspaceConfig(config)
+    ? `workspace: ${styles.highlight(path.relative(process.cwd(), config.path))}`
+    : `application: ${styles.highlight(config.name)}`;
+}
+
+/**
+ * Parameters for creating a generation manager
+ */
+export interface CreateGenerationManagerParams {
+  /** Services the config defines */
+  workspaceServices: WorkspaceServices;
+  /** The `defineConfig()` or workspace config the services come from */
+  config: LoadedConfig | LoadedWorkspaceConfig;
+  /** Plugin manager for processing plugins */
+  pluginManager?: PluginManager;
+}
+
 /**
  * Creates a generation manager.
  * @param params - Parameters for creating the generation manager
- * @param params.application - Application instance to generate code for
- * @param params.config - Loaded configuration
- * @param params.pluginManager - Plugin manager for processing plugins
  * @returns GenerationManager instance
  */
-export function createGenerationManager(params: {
-  application: Application;
-  config: LoadedConfig;
-  pluginManager?: PluginManager;
-}): GenerationManager {
-  const { application, config, pluginManager } = params;
+export function createGenerationManager(params: CreateGenerationManagerParams): GenerationManager {
+  const { workspaceServices, config, pluginManager } = params;
   const configDir = path.dirname(config.path);
   const baseDir = path.resolve(getDistDir(), "generated");
   fs.mkdirSync(baseDir, { recursive: true });
@@ -120,7 +136,7 @@ export function createGenerationManager(params: {
     if (!hook) return;
 
     const pluginBaseDir = path.join(baseDir, plugin.id);
-    const authService = soleAuthService(application);
+    const authService = soleAuthService(workspaceServices);
     const auth = authService && getAuthInput(authService);
     const tailordb = buildTailorDBData();
 
@@ -263,15 +279,15 @@ export function createGenerationManager(params: {
   }
 
   return {
-    application,
+    workspaceServices,
     baseDir,
     services,
 
     async generate(): Promise<void> {
       logger.newline();
-      logger.log(`Generation for application: ${styles.highlight(application.config.name)}`);
+      logger.log(`Generation for ${generationTarget(config)}`);
 
-      const app = application;
+      const app = workspaceServices;
 
       // Load TailorDB tables (includes plugin-generated tables)
       await withSpan("generate.loadTailorDBTypes", async (span) => {
@@ -440,7 +456,11 @@ export async function generate(options?: GenerateOptions) {
 
     rootSpan.setAttribute("app.name", application.config.name);
 
-    const manager = createGenerationManager({ application, config, pluginManager });
+    const manager = createGenerationManager({
+      workspaceServices: application,
+      config,
+      pluginManager,
+    });
     await manager.generate();
   });
 }

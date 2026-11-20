@@ -166,7 +166,11 @@ describe("plugin-generated resolvers", () => {
       path: path.join(baseDir, "tailor.config.ts"),
     };
     const application = defineApplication({ config, pluginManager });
-    const generation = createGenerationManager({ application, config, pluginManager });
+    const generation = createGenerationManager({
+      workspaceServices: application,
+      config,
+      pluginManager,
+    });
     await generation.generate();
     expect(Object.keys(generation.services.resolver.main!).toSorted()).toEqual([
       "getOrder",
@@ -191,7 +195,11 @@ describe("plugin-generated resolvers", () => {
     };
     const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const application = defineApplication({ config, pluginManager });
-    const generation = createGenerationManager({ application, config, pluginManager });
+    const generation = createGenerationManager({
+      workspaceServices: application,
+      config,
+      pluginManager,
+    });
     await generation.generate();
     const warnings = warn.mock.calls.map(([message]) => String(message));
     warn.mockRestore();
@@ -718,7 +726,7 @@ describe("plugin-generated resolvers", () => {
     });
     const application = defineApplication({ config, pluginManager });
     await expect(
-      createGenerationManager({ application, config, pluginManager }).generate(),
+      createGenerationManager({ workspaceServices: application, config, pluginManager }).generate(),
     ).rejects.toMatchObject({ code: "PLUGIN_RESOLVER_NAMESPACE_EXTERNAL" });
   });
 });
