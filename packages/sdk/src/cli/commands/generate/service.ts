@@ -334,6 +334,7 @@ export function createGenerationManager(params: CreateGenerationManagerParams): 
         try {
           assertUniqueLocalTailorDBTypeNames({
             tailorDBServices: app.tailorDBServices,
+            scope: isLoadedWorkspaceConfig(config) ? "workspace" : "application",
           });
         } catch (error) {
           logger.error("Error validating TailorDB table names");

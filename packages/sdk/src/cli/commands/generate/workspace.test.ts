@@ -110,6 +110,16 @@ describe("generate with a workspace config", () => {
     expect(fs.readFileSync(path.join(dir, "tailor.d.ts"), "utf8")).toContain('workspace: "unset";');
   });
 
+  test("asks for table names unique across the workspace when two namespaces share one", async () => {
+    fs.writeFileSync(path.join(dir, "db", "ledger", "table.ts"), TABLE("Customer"));
+    fs.writeFileSync(configPath, workspaceConfig(["corp-auth"]));
+
+    await expect(generate({ configPath })).rejects.toMatchObject({
+      suggestion:
+        "Give each TailorDB type a name that is unique across all TailorDB namespaces in the workspace.",
+    });
+  });
+
   test("passes plugins the only Auth service as auth, and every Auth service as auths", async () => {
     fs.writeFileSync(configPath, workspaceConfig(["corp-auth"]));
 
