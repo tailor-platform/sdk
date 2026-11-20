@@ -351,10 +351,9 @@ export async function planApplication(
     }
   };
 
+  const scansRenamedApps = owner.kind === "application" && Boolean(application.id);
   // The platform rejects an application without subgraphs, so a config with
   // none (e.g. only static web hosting) is planned like a removal.
-  // Only an application id can own apps of other names; the workspace mark is on every app.
-  const scansRenamedApps = owner.kind === "application" && Boolean(application.id);
   if (forRemoval || application.subgraphs.length === 0) {
     // A same-named app in a shared workspace may belong to another user, so
     // never delete by name alone. Without an id only the same-name app can be

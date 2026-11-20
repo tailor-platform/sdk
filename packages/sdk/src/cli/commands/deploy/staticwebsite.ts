@@ -327,7 +327,6 @@ export async function planStaticWebsite(context: PlanContext) {
     delete: (name) => ({ name, request: { workspaceId, name } }),
   });
 
-  // A workspace lists the domains it deletes in its takeover; an application only removes its own.
   const removesDomain = (labels: Record<string, string> | undefined, domain: string) =>
     owner.kind === "workspace"
       ? ownership.ownsRemaining(labels, {
