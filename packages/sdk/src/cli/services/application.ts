@@ -1137,7 +1137,6 @@ export async function loadApplication(
     bundledScripts.authHooks = await bundleAuthHooks({
       configPath: config.path,
       authName,
-      handlerAccessPath: `auth.hooks.beforeLogin.handler`,
       env,
       startContext,
       cache: bundleCache,
@@ -1291,7 +1290,6 @@ async function reloadEnvDependentBundles(params: {
     bundledScripts.authHooks = await bundleAuthHooks({
       configPath: config.path,
       authName,
-      handlerAccessPath: `auth.hooks.beforeLogin.handler`,
       env,
       startContext,
       cache: bundleCache,
