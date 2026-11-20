@@ -21,8 +21,10 @@ import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   buildMetaRequest,
   isOwnedByApp,
+  labelRefreshOf,
   type MetadataLabelWrite,
   resourceTrn,
+  writeLabelRefreshes,
   writeMetadataLabels,
 } from "./label";
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
@@ -53,6 +55,7 @@ export async function applyStaticWebsite(
         await client.updateStaticWebsite(update.request);
         await writeMetadataLabels(client, update.metaRequest);
       }),
+      ...writeLabelRefreshes(client, changeSet.unchanged),
     ]);
     // Custom domains. Adds may complete a transfer; adoptions only write labels.
     await Promise.all([
@@ -68,6 +71,7 @@ export async function applyStaticWebsite(
       ...customDomainChangeSet.updates.map((adopt) =>
         writeMetadataLabels(client, adopt.metaRequest),
       ),
+      ...writeLabelRefreshes(client, customDomainChangeSet.unchanged),
     ]);
     await Promise.all(
       customDomainChangeSet.deletes.map((del) => client.removeCustomDomain(del.request)),
@@ -486,16 +490,20 @@ export async function planStaticWebsite(context: PlanContext) {
         resourceType: "staticwebsite.custom_domain",
         resourceName: domain,
       });
+      const metaRequest = await buildMetaRequest({
+        trn: customDomainTrn(workspaceId, name, domain),
+        appName: application.name,
+        appId: application.id,
+      });
       if (owned) {
-        customDomainChangeSet.unchanged.push({ name: domain });
+        customDomainChangeSet.unchanged.push({
+          name: domain,
+          ...labelRefreshOf(existing.allLabels, metaRequest),
+        });
       } else {
         customDomainChangeSet.updates.push({
           name: domain,
-          metaRequest: await buildMetaRequest({
-            trn: customDomainTrn(workspaceId, name, domain),
-            appName: application.name,
-            appId: application.id,
-          }),
+          metaRequest,
           details: ["takes SDK ownership; the domain itself is unchanged"],
         });
       }

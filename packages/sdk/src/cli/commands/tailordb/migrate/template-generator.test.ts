@@ -31,39 +31,10 @@ import {
   generateMigrationTestScript,
 } from "./template-generator";
 import { createMockMigrationDiff } from "./test-helpers/migration-diff";
+import { getTypeScriptDiagnostics } from "./test-helpers/typescript-diagnostics";
 import type { DiffChange } from "./diff-calculator";
 import type { ExpandContractPlan } from "./expand-contract";
-import type { SnapshotFieldConfig } from "./snapshot-types";
-
-const packageRoot = path.resolve(import.meta.dirname, "../../../../..");
-
-function getTypeScriptDiagnostics(
-  filePath: string,
-): readonly { code: number; messageText: string }[] {
-  const program = ts.createProgram([filePath], {
-    module: ts.ModuleKind.ESNext,
-    moduleResolution: ts.ModuleResolutionKind.Bundler,
-    noEmit: true,
-    paths: {
-      "@tailor-platform/sdk": [path.join(packageRoot, "src/configure/index.ts")],
-      "@tailor-platform/sdk/kysely": [path.join(packageRoot, "src/kysely/index.ts")],
-      "@tailor-platform/sdk/vitest": [path.join(packageRoot, "src/vitest/index.ts")],
-      "@electric-sql/pglite": [path.join(packageRoot, "node_modules/@electric-sql/pglite")],
-      vitest: [path.join(packageRoot, "node_modules/vitest")],
-    },
-    skipLibCheck: true,
-    strict: true,
-    target: ts.ScriptTarget.ES2022,
-  });
-
-  return ts
-    .getPreEmitDiagnostics(program)
-    .filter((diagnostic) => diagnostic.file?.fileName === filePath)
-    .map((diagnostic) => ({
-      code: diagnostic.code,
-      messageText: ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
-    }));
-}
+import type { SnapshotFieldConfig, SnapshotIndexConfig } from "./snapshot-types";
 
 function replaceTodoCalls(source: string, replacement: string): string {
   const ast = ts.createSourceFile("migrate.ts", source, ts.ScriptTarget.Latest, true);
@@ -2208,6 +2179,74 @@ describe("template-generator", () => {
       expect(scriptContent).toContain('.where("org", "=", dup.org)');
       expect(scriptContent).not.toContain("No data migration needed");
     });
+
+    const serialField: SnapshotFieldConfig = {
+      type: "string",
+      required: true,
+      serial: { start: 1, format: "INV-%05d" },
+    };
+
+    test.each<{
+      change: string;
+      indexes?: Record<string, SnapshotIndexConfig>;
+      diffChange: DiffChange;
+    }>([
+      {
+        change: "a unique constraint added to it",
+        diffChange: {
+          kind: "field_modified",
+          tableName: "Invoice",
+          fieldName: "invoiceNo",
+          before: serialField,
+          after: { ...serialField, unique: true },
+        },
+      },
+      {
+        change: "a unique index led by it",
+        diffChange: {
+          kind: "index_added",
+          tableName: "Invoice",
+          indexName: "invoiceNo_tenant",
+          after: { fields: ["invoiceNo", "tenantId"], unique: true },
+        },
+      },
+      {
+        change: "the index led by it made unique",
+        indexes: { invoiceNo_tenant: { fields: ["invoiceNo", "tenantId"], unique: false } },
+        diffChange: {
+          kind: "index_modified",
+          tableName: "Invoice",
+          indexName: "invoiceNo_tenant",
+          before: { fields: ["invoiceNo", "tenantId"], unique: false },
+          after: { fields: ["invoiceNo", "tenantId"], unique: true },
+        },
+      },
+    ])(
+      "typechecks the new values given to duplicates of a serial field after $change",
+      async ({ indexes, diffChange }) => {
+        const previous = createTestSnapshot({
+          Invoice: {
+            name: "Invoice",
+            pluralForm: "Invoices",
+            fields: { invoiceNo: serialField, tenantId: { type: "string", required: true } },
+            ...(indexes && { indexes }),
+          },
+        });
+        const diff = createMockMigrationDiff({
+          changes: [diffChange],
+          hasBreakingChanges: true,
+          requiresMigrationScript: true,
+        });
+
+        const result = await generateDiffFiles(diff, tempDir, 1, previous);
+        const source = await fs.readFile(result.migrateFilePath!, "utf8");
+        expect(countUnresolvedTodos(source, "migrate.ts")).toBe(1);
+        await fs.writeFile(result.migrateFilePath!, replaceTodoCalls(source, '"INV-99999"'));
+
+        expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
+      },
+      30_000,
+    );
 
     test("should generate migration script when an existing index gains unique", async () => {
       const snapshotWithIndex = createTestSnapshot({

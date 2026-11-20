@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import { runCommand } from "@politty/zod";
 import * as path from "pathe";
@@ -14,6 +13,7 @@ import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import { scriptCommand } from "./script";
@@ -109,9 +109,7 @@ describe("function script", () => {
     vi.mocked(loadAccessToken).mockClear();
     vi.mocked(loadWorkspaceId).mockClear();
     vi.mocked(initOperatorClient).mockClear();
-    vi.mocked(initOperatorClient).mockResolvedValue(
-      {} as unknown as Awaited<ReturnType<typeof initOperatorClient>>,
-    );
+    vi.mocked(initOperatorClient).mockResolvedValue(mockOperatorClient({}));
     mockLocalNamespace();
   });
 

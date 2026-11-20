@@ -221,12 +221,12 @@ describe("summarizePlanResults", () => {
     });
   });
 
-  test("counts function labels refreshed without re-uploading the script", () => {
+  test("counts unchanged resources whose labels are refreshed across kinds", () => {
     const results = emptyPlanResults();
-    results.functionRegistry.metadataUpdates.push(
-      { name: "resolver--ns--add", metaRequest: { trn: "trn:a", labels: {} } },
-      { name: "executor--user-created", metaRequest: { trn: "trn:b", labels: {} } },
-    );
+    const labelRefresh = { trn: "trn:a", labels: {} };
+    results.functionRegistry.changeSet.unchanged.push({ name: "resolver--ns--add", labelRefresh });
+    results.tailorDB.changeSet.service.unchanged.push({ name: "main", labelRefresh });
+    results.executor.changeSet.unchanged.push({ name: "nightly" });
 
     const summary = summarizePlanResults(results, [], []);
 

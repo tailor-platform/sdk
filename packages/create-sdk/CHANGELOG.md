@@ -1,5 +1,15 @@
 # @tailor-platform/create-sdk
 
+## 2.46.0
+
+No changes in this release.
+
+## 2.45.0
+
+### Patch Changes
+
+- [#3199](https://github.com/tailor-platform/sdk/pull/3199) [`dfa1b4d`](https://github.com/tailor-platform/sdk/commit/dfa1b4d1160c1d7b752a292fbf1c5aa9e09b2632) Thanks [@renovate](https://github.com/apps/renovate)! - Update `@politty/zod` to 0.7.5, so a lone `-` after an option that takes a value, such as `--value -`, is read as its value instead of being rejected
+
 ## 2.44.0
 
 ### Patch Changes

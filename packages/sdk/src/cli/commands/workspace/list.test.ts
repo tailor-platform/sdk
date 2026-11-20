@@ -1,7 +1,7 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadPlatformClientConfig } from "#/cli/shared/context";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { encodeExpiresAt, expiresAtLabelKey } from "./expiry";
 import { listWorkspaces, listWorkspacesWithExpiry } from "./list";
 
@@ -19,14 +19,12 @@ vi.mock("#/cli/shared/context", async (importOriginal) => ({
 describe("listWorkspaces", () => {
   test("uses the selected profile for authentication and Platform selection", async () => {
     const platformConfig = { platformUrl: "https://api.staging.tailor.tech" };
-    const client = {
-      listWorkspaces: vi.fn().mockResolvedValue({ workspaces: [], nextPageToken: "" }),
-    };
+    const client = mockOperatorClient({
+      listWorkspaces: { workspaces: [], nextPageToken: "" },
+    });
     vi.mocked(loadAccessToken).mockResolvedValue("staging-token");
     vi.mocked(loadPlatformClientConfig).mockResolvedValue(platformConfig);
-    vi.mocked(initOperatorClient).mockResolvedValue(
-      client as unknown as Awaited<ReturnType<typeof initOperatorClient>>,
-    );
+    vi.mocked(initOperatorClient).mockResolvedValue(client);
 
     await expect(listWorkspaces({ profile: "staging" })).resolves.toEqual([]);
     expect(loadAccessToken).toHaveBeenCalledWith({ profile: "staging" });
@@ -49,8 +47,8 @@ describe("listWorkspacesWithExpiry", () => {
   });
 
   function stubClient(labelsByTrn: Record<string, Record<string, string>>) {
-    const client = {
-      listWorkspaces: vi.fn().mockResolvedValue({
+    const client = mockOperatorClient({
+      listWorkspaces: {
         workspaces: [
           { id: "ws-expiring", name: "expiring", region: "us-west", organizationId: "org-1" },
           { id: "ws-bare", name: "bare", region: "us-west", organizationId: "org-1" },
@@ -58,17 +56,16 @@ describe("listWorkspacesWithExpiry", () => {
           { id: "ws-unreadable", name: "unreadable", region: "us-west", organizationId: "org-1" },
         ],
         nextPageToken: "",
-      }),
-      getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
+      },
+      getMetadata: (request) => {
+        const trn = request.trn ?? "";
         if (trn === "trn:v1:workspace:ws-unreadable") {
           return Promise.reject(new Error("permission denied"));
         }
         return Promise.resolve({ metadata: { labels: labelsByTrn[trn] ?? {} } });
-      }),
-    };
-    vi.mocked(initOperatorClient).mockResolvedValue(
-      client as unknown as Awaited<ReturnType<typeof initOperatorClient>>,
-    );
+      },
+    });
+    vi.mocked(initOperatorClient).mockResolvedValue(client);
     return client;
   }
 

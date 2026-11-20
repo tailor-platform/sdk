@@ -147,15 +147,16 @@ describe("applyTailorDB: type rename migration flow", () => {
   });
 
   test("creates the new table before the script and drops the old table after the checkpoint", async () => {
-    const client = checkpoint.createMockClient();
+    const client = checkpoint.createMockClient({
+      listTailorDBTypes: { tailordbTypes: [{ name: "User" }] },
+    });
     const planResult = buildPlanResult();
     planResult.context.pendingMigrations = setPendingMigrations([mkTypeRenameMigration(1)]);
 
     const order: string[] = [];
-    vi.mocked(client.createTailorDBType).mockImplementation(async (req: unknown) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      order.push(`create:${(req as any)?.tailordbType?.name}`);
-      return {} as never;
+    client.createTailorDBType.mockImplementation(async (request) => {
+      order.push(`create:${request.tailordbType?.name}`);
+      return {};
     });
     vi.mocked(migrationModule.executeMigrations).mockImplementation(async () => {
       order.push("script");
@@ -164,15 +165,13 @@ describe("applyTailorDB: type rename migration flow", () => {
       order.push("checkpoint");
       return checkpoint.record(...args);
     });
-    vi.mocked(client.deleteTailorDBGQLPermission).mockImplementation(async (req: unknown) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      order.push(`delete-perm:${(req as any)?.typeName}`);
-      return {} as never;
+    client.deleteTailorDBGQLPermission.mockImplementation(async (request) => {
+      order.push(`delete-perm:${request.typeName}`);
+      return {};
     });
-    vi.mocked(client.deleteTailorDBType).mockImplementation(async (req: unknown) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      order.push(`delete-type:${(req as any)?.tailordbTypeName}`);
-      return {} as never;
+    client.deleteTailorDBType.mockImplementation(async (request) => {
+      order.push(`delete-type:${request.tailordbTypeName}`);
+      return {};
     });
 
     await applyTailorDB(client, planResult, "create-update");
@@ -197,9 +196,8 @@ describe("applyTailorDB: type rename migration flow", () => {
     await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow("copy failed");
 
     // Rollback removes the type created by the Pre-phase...
-    const deleted = vi.mocked(client.deleteTailorDBType).mock.calls.map(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (c) => (c[0] as any)?.tailordbTypeName,
+    const deleted = client.deleteTailorDBType.mock.calls.map(
+      ([request]) => request.tailordbTypeName,
     );
     expect(deleted).toContain("Person");
     // ...but never the old type that still holds the data.
@@ -216,20 +214,18 @@ describe("applyTailorDB: type rename migration flow", () => {
     vi.mocked(migrationModule.executeMigrations).mockResolvedValue();
 
     const order: string[] = [];
-    vi.mocked(client.updateTailorDBType).mockImplementation(async (req: unknown) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const name = (req as any)?.tailordbType?.name;
+    client.updateTailorDBType.mockImplementation(async (request) => {
+      const name = request.tailordbType?.name;
       order.push(`update:${name}`);
       // The Post-phase update, the first to point Order at Person, may have been applied when it fails.
       if (name === "Order" && order.filter((entry) => entry === "update:Order").length === 2) {
         throw new Error("post-phase failed");
       }
-      return {} as never;
+      return {};
     });
-    vi.mocked(client.deleteTailorDBType).mockImplementation(async (req: unknown) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      order.push(`delete-type:${(req as any)?.tailordbTypeName}`);
-      return {} as never;
+    client.deleteTailorDBType.mockImplementation(async (request) => {
+      order.push(`delete-type:${request.tailordbTypeName}`);
+      return {};
     });
 
     await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(

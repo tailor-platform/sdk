@@ -1,4 +1,8 @@
-import { COLUMN_TYPE_ALIASES, mapFieldTypeToColumnType } from "#/utils/field-column-type";
+import {
+  COLUMN_TYPE_ALIASES,
+  isFilledOnCreate,
+  mapFieldTypeToColumnType,
+} from "#/utils/field-column-type";
 import multiline from "#/utils/multiline";
 import {
   type KyselyFieldConfig,
@@ -104,10 +108,7 @@ function getNestedType(fieldConfig: KyselyFieldConfig, temporal: boolean): Field
   const fieldTypes = fieldResults.map((r) => r.fieldType);
   const obj = `{\n  ${fieldTypes.join(";\n  ")}${fieldTypes.length > 0 ? ";" : ""}\n}`;
 
-  const hasGeneratedFields = Object.values(fields).some(
-    (config) =>
-      config.hooks?.create || config.default !== undefined || config.optionalOnCreate === true,
-  );
+  const hasGeneratedFields = Object.values(fields).some(isFilledOnCreate);
   if (usesColumnTypeAlias(aggregatedUtilityTypes) || hasGeneratedFields) {
     return {
       type: `ObjectColumnType<${obj}>`,
@@ -205,11 +206,7 @@ function generateFieldType(
     usedUtilityTypes.Serial = true;
     finalType = `Serial<${finalType}>`;
   }
-  if (
-    fieldConfig.hooks?.create ||
-    fieldConfig.default !== undefined ||
-    fieldConfig.optionalOnCreate === true
-  ) {
+  if (isFilledOnCreate(fieldConfig)) {
     finalType = `Generated<${finalType}>`;
   }
 

@@ -35,6 +35,30 @@ const imports = [
   "",
 ].join("\n");
 
+const methodMocks = [
+  'import { vi } from "vitest";',
+  'import { mockOperatorClient, withOperatorClientMocks } from "./operator-client";',
+  "client.getMetadata.mockResolvedValue({} as never);",
+  "client.getMetadata.mockResolvedValueOnce({} as any);",
+  "vi.mocked(client.getMetadata).mockReturnValue({} as never);",
+  "ctx.operatorClient.getMetadata.mockReturnValueOnce({} as never);",
+  "client.getMetadata.mockResolvedValueOnce({}).mockResolvedValueOnce({} as never);",
+  "client.getMetadata.mockImplementation(async () => ({}) as never);",
+  "client.getMetadata.mockImplementationOnce(async function () { return {} as never; });",
+  "client.getMetadata.mockImplementation(async (request: unknown) => ({ request }));",
+  "mockOperatorClient({ getMetadata: {} as never });",
+  "mockOperatorClient({ getMetadata: async (request: object) => ({ request }) });",
+  "withOperatorClientMocks(client, { watchEvents: async function* () { yield {} as never; } });",
+  "withOperatorClientMocks(client, { getMetadata() { return {} as any; } });",
+  "vi.mocked(initOperatorClient).mockReset().mockResolvedValue({} as never);",
+  "client.getMetadata.mockResolvedValue({});",
+  "client.getMetadata.mockImplementation(async (request) => ({ request }));",
+  "client.getMetadata.mockImplementation(async () => { const read = () => ({}) as never; return read(); });",
+  "client.getMetadata.mockRejectedValue(new Error() as never);",
+  "service.load.mockResolvedValue({} as never);",
+  "",
+].join("\n");
+
 function lint(level: "error" | "off", source = fixture) {
   return lintWithLocalRule({
     rule: "typed-operator-client-mock",
@@ -70,7 +94,18 @@ describe("local/typed-operator-client-mock", () => {
     ]);
   });
 
-  test("reports nothing when disabled, so the fixture itself is clean", () => {
+  test("flags unchecked responses and annotated requests in operator client method mocks", () => {
+    expect(lint("error", methodMocks)).toEqual(
+      [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map((line) => ({
+        rule: "local(typed-operator-client-mock)",
+        line,
+      })),
+    );
+  });
+
+  test("reports nothing when disabled, so the fixtures themselves are clean", () => {
     expect(lint("off")).toEqual([]);
+    expect(lint("off", imports)).toEqual([]);
+    expect(lint("off", methodMocks)).toEqual([]);
   });
 });

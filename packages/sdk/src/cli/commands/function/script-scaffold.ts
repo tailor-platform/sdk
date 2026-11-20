@@ -34,6 +34,7 @@ import {
   generateUnifiedKyselyTypes,
   processKyselyFields,
 } from "#/plugin/builtin/kysely-type/type-processor";
+import { isFilledOnCreate } from "#/utils/field-column-type";
 import type { SnapshotFieldConfig } from "#/cli/commands/tailordb/migrate/snapshot-types";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
@@ -316,10 +317,7 @@ function preserveGeneratedContract(
         ]),
       )
     : undefined;
-  const generated =
-    source?.hooks?.create !== undefined ||
-    source?.default !== undefined ||
-    source?.optionalOnCreate === true;
+  const generated = source !== undefined && isFilledOnCreate(source);
   return {
     ...comparable,
     ...(fields === undefined ? {} : { fields }),

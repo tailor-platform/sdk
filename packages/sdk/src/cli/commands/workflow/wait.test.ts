@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { runCommand } from "@politty/zod";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { aroundEach, describe, expect, test, vi } from "vitest";
@@ -6,8 +5,10 @@ import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { waitCommand } from "./wait";
-import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { WorkflowExecutionSchema } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
@@ -18,24 +19,28 @@ vi.mock("#/cli/shared/client", () => ({
   initOperatorClient: vi.fn(),
 }));
 
-function execution(status: WorkflowExecution_Status): WorkflowExecution {
+function execution(
+  status: WorkflowExecution_Status,
+): MessageInitShape<typeof WorkflowExecutionSchema> {
   return {
     id: "execution-1",
     workflowName: "my-workflow",
     status,
     jobExecutions: [],
-  } as unknown as WorkflowExecution;
+  };
 }
 
 describe("workflow wait command", () => {
   aroundEach(async (runTest) => {
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      getWorkflowExecution: vi.fn().mockResolvedValue({
-        execution: execution(WorkflowExecution_Status.SUCCESS),
+    vi.mocked(initOperatorClient).mockResolvedValue(
+      mockOperatorClient({
+        getWorkflowExecution: {
+          execution: execution(WorkflowExecution_Status.SUCCESS),
+        },
       }),
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    );
     await runTest();
   });
 

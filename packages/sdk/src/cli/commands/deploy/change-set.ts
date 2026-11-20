@@ -1,4 +1,5 @@
 import { styles, symbols } from "#/cli/shared/logger";
+import type { UnchangedAnnotation } from "./label";
 
 export interface HasName {
   name: string;
@@ -40,7 +41,7 @@ export type ChangeSet<
   readonly updates: Array<U & UpdateAnnotation>;
   readonly deletes: D[];
   readonly replaces: R[];
-  readonly unchanged: Un[];
+  readonly unchanged: Array<Un & UnchangedAnnotation>;
   isEmpty: () => boolean;
   lines: () => string[];
 };
@@ -52,7 +53,10 @@ export interface PlanSummary {
   replace: number;
   /** Updates, also counted in `update`, that are forced by the SDK version. */
   forcedBySdkVersion: number;
-  /** Function scripts left as they are whose labels are rewritten; not counted in `update`. */
+  /**
+   * Resources left as they are whose labels are rewritten, apart from TailorDB tables and
+   * resolvers; not counted in `update`.
+   */
   labelRefreshes: number;
 }
 
@@ -72,7 +76,7 @@ export function createChangeSet<
   const updates: Array<U & UpdateAnnotation> = [];
   const deletes: D[] = [];
   const replaces: R[] = [];
-  const unchanged: Un[] = [];
+  const unchanged: Array<Un & UnchangedAnnotation> = [];
 
   const isEmpty = (): boolean =>
     creates.length === 0 && updates.length === 0 && deletes.length === 0 && replaces.length === 0;
@@ -156,7 +160,7 @@ export function formatPlanSummary(summary: PlanSummary): string {
   }
 
   if (summary.labelRefreshes > 0) {
-    parts.push(`${summary.labelRefreshes} function labels to refresh`);
+    parts.push(`${summary.labelRefreshes} to refresh labels`);
   }
 
   return `Plan: ${parts.join(", ")}`;

@@ -1,10 +1,12 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
   WorkflowExecution_Status,
   WorkflowJobExecution_Status,
+  type WorkflowExecution,
+  type WorkflowExecutionSchema,
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { describe, expect, test, vi } from "vitest";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { logger } from "./logger";
 import {
   assertNoActiveScriptWorkflow,
@@ -14,9 +16,9 @@ import {
   readOutcome,
   withScriptWorkflow,
 } from "./script-workflow";
-import type { OperatorClient } from "./client";
 import type { ScriptInvoker } from "./script-executor";
-import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { FunctionLogEntrySchema } from "@tailor-platform/tailor-proto/function_resource_pb";
 
 vi.mock(import("#/cli/shared/logger"), async (importOriginal) => {
   const actual = await importOriginal();
@@ -42,7 +44,7 @@ interface MockClientOptions {
   /** Workflow left behind by an interrupted earlier run. */
   leftoverWorkflowId?: string;
   /** Executions of the leftover workflow, newest first. */
-  leftoverExecutions?: { id: string; status: WorkflowExecution_Status }[];
+  leftoverExecutions?: MessageInitShape<typeof WorkflowExecutionSchema>[];
   /** Machine user lookup result: found (default), answered empty, or rejected as not found. */
   machineUser?: "found" | "empty" | "not-found";
 }
@@ -53,40 +55,37 @@ function createMockClient(options: MockClientOptions = {}) {
     calls.push(name);
     return Promise.resolve(value);
   };
-  const client = {
-    getAuthMachineUser: vi.fn(() => {
+  const client = mockOperatorClient({
+    getAuthMachineUser: () => {
       calls.push("getAuthMachineUser");
       if (options.machineUser === "not-found") {
         return Promise.reject(new ConnectError("not found", Code.NotFound));
       }
       return Promise.resolve({ machineUser: options.machineUser === "empty" ? undefined : {} });
-    }),
-    getWorkflowByName: vi.fn(() => {
+    },
+    getWorkflowByName: () => {
       calls.push("getWorkflowByName");
       if (options.leftoverWorkflowId === undefined) {
         return Promise.reject(new ConnectError("not found", Code.NotFound));
       }
       return Promise.resolve({ workflow: { id: options.leftoverWorkflowId } });
-    }),
-    listWorkflowExecutions: vi.fn(() => {
+    },
+    listWorkflowExecutions: () => {
       calls.push("listWorkflowExecutions");
       if (options.leftoverWorkflowId === undefined) {
         return Promise.reject(new ConnectError("not found", Code.NotFound));
       }
       return Promise.resolve({ executions: options.leftoverExecutions ?? [], nextPageToken: "" });
-    }),
-    deleteWorkflow: vi.fn(() => record("deleteWorkflow", {})),
-    deleteWorkflowJobFunction: vi.fn(() => record("deleteWorkflowJobFunction", {})),
-    deleteFunctionRegistry: vi.fn(() => record("deleteFunctionRegistry", {})),
-    createFunctionRegistry: vi.fn(() => record("createFunctionRegistry", {})),
-    createWorkflowJobFunction: vi.fn(() =>
+    },
+    deleteWorkflow: () => record("deleteWorkflow", {}),
+    deleteWorkflowJobFunction: () => record("deleteWorkflowJobFunction", {}),
+    deleteFunctionRegistry: () => record("deleteFunctionRegistry", {}),
+    createFunctionRegistry: () => record("createFunctionRegistry", {}),
+    createWorkflowJobFunction: () =>
       record("createWorkflowJobFunction", { jobFunction: { version: 1n } }),
-    ),
-    createWorkflow: vi.fn(() => record("createWorkflow", { workflow: { id: "wf-1" } })),
-    startWorkflow: vi.fn((_request: { workflowId: string; authInvoker: unknown; arg: string }) =>
-      record("startWorkflow", { executionId: "exec-1" }),
-    ),
-    getWorkflowExecution: vi.fn(() =>
+    createWorkflow: () => record("createWorkflow", { workflow: { id: "wf-1" } }),
+    startWorkflow: () => record("startWorkflow", { executionId: "exec-1" }),
+    getWorkflowExecution: () =>
       Promise.resolve({
         execution: {
           status: options.status ?? WorkflowExecution_Status.SUCCESS,
@@ -99,18 +98,18 @@ function createMockClient(options: MockClientOptions = {}) {
           ],
         },
       }),
-    ),
-    getFunctionExecution: vi.fn(() =>
+    getFunctionExecution: () =>
       Promise.resolve({
         execution: {
-          logEntries: (options.logs ?? []).map((message) => ({ message })),
+          logEntries: (options.logs ?? []).map(
+            (message): MessageInitShape<typeof FunctionLogEntrySchema> => ({ message }),
+          ),
           error: options.errorMessage ? { message: options.errorMessage } : undefined,
           result: options.result ?? "",
         },
       }),
-    ),
-  };
-  return { client: client as unknown as OperatorClient, mocks: client, calls };
+  });
+  return { client, calls };
 }
 
 const baseOptions = {
@@ -126,20 +125,20 @@ const baseOptions = {
 
 describe("withScriptWorkflow", () => {
   test("registers the script once and starts it once per argument with the argument as JSON", async () => {
-    const { client, mocks } = createMockClient({ result: '{"success":true}' });
+    const { client } = createMockClient({ result: '{"success":true}' });
 
     await withScriptWorkflow({ ...baseOptions, client }, async (run) => {
       await run({ chunk: 1 });
       await run({ chunk: 2 });
     });
 
-    expect(mocks.createFunctionRegistry).toHaveBeenCalledTimes(1);
-    expect(mocks.createWorkflow).toHaveBeenCalledTimes(1);
-    expect(mocks.startWorkflow.mock.calls.map(([request]) => request.arg)).toEqual([
+    expect(client.createFunctionRegistry).toHaveBeenCalledTimes(1);
+    expect(client.createWorkflow).toHaveBeenCalledTimes(1);
+    expect(client.startWorkflow.mock.calls.map(([request]) => request.arg)).toEqual([
       '{"chunk":1}',
       '{"chunk":2}',
     ]);
-    expect(mocks.startWorkflow.mock.calls[0]?.[0]).toMatchObject({
+    expect(client.startWorkflow.mock.calls[0]?.[0]).toMatchObject({
       workflowId: "wf-1",
       authInvoker: invoker,
     });
@@ -187,7 +186,7 @@ describe("withScriptWorkflow", () => {
   });
 
   test("removes the resources and rethrows when the callback throws", async () => {
-    const { client, mocks, calls } = createMockClient();
+    const { client, calls } = createMockClient();
 
     await expect(
       withScriptWorkflow({ ...baseOptions, client }, async () => {
@@ -195,14 +194,14 @@ describe("withScriptWorkflow", () => {
       }),
     ).rejects.toThrow("boom");
 
-    expect(mocks.deleteWorkflow).toHaveBeenCalledWith({ workspaceId: "ws", workflowId: "wf-1" });
+    expect(client.deleteWorkflow).toHaveBeenCalledWith({ workspaceId: "ws", workflowId: "wf-1" });
     expect(calls.at(-1)).toBe("deleteFunctionRegistry");
   });
 
   test.each(["empty", "not-found"] as const)(
     "stops before registering anything when the machine user lookup is %s",
     async (machineUser) => {
-      const { client, mocks } = createMockClient({ machineUser });
+      const { client } = createMockClient({ machineUser });
 
       const run = withScriptWorkflow({ ...baseOptions, client }, (run) => run({}));
 
@@ -210,17 +209,17 @@ describe("withScriptWorkflow", () => {
         code: "MACHINE_USER_NOT_FOUND",
         message: expect.stringContaining("seeder"),
       });
-      expect(mocks.createFunctionRegistry).not.toHaveBeenCalled();
-      expect(mocks.startWorkflow).not.toHaveBeenCalled();
+      expect(client.createFunctionRegistry).not.toHaveBeenCalled();
+      expect(client.startWorkflow).not.toHaveBeenCalled();
     },
   );
 
   test("looks the machine user up in the invoker's auth namespace", async () => {
-    const { client, mocks } = createMockClient();
+    const { client } = createMockClient();
 
     await withScriptWorkflow({ ...baseOptions, client }, (run) => run({}));
 
-    expect(mocks.getAuthMachineUser).toHaveBeenCalledWith({
+    expect(client.getAuthMachineUser).toHaveBeenCalledWith({
       workspaceId: "ws",
       authNamespace: "auth",
       name: "seeder",
@@ -228,8 +227,8 @@ describe("withScriptWorkflow", () => {
   });
 
   test("rethrows an error of the machine user lookup other than not found", async () => {
-    const { client, mocks } = createMockClient();
-    mocks.getAuthMachineUser.mockRejectedValue(new ConnectError("denied", Code.PermissionDenied));
+    const { client } = createMockClient();
+    client.getAuthMachineUser.mockRejectedValue(new ConnectError("denied", Code.PermissionDenied));
 
     const run = withScriptWorkflow({ ...baseOptions, client }, (run) => run({}));
 
@@ -242,19 +241,19 @@ describe("withScriptWorkflow", () => {
   ])(
     "reports the outcome of a %s workflow whose job execution the platform has no record of",
     async (status, error) => {
-      const { client, mocks } = createMockClient({ status });
-      mocks.getFunctionExecution.mockRejectedValue(new ConnectError("not found", Code.NotFound));
+      const { client } = createMockClient({ status });
+      client.getFunctionExecution.mockRejectedValue(new ConnectError("not found", Code.NotFound));
 
       const outcome = await withScriptWorkflow({ ...baseOptions, client }, (run) => run({}));
 
       expect(outcome).toMatchObject({ success: false, error: expect.stringContaining(error) });
-      expect(mocks.getFunctionExecution).toHaveBeenCalledTimes(1);
+      expect(client.getFunctionExecution).toHaveBeenCalledTimes(1);
     },
   );
 
   test("reads the job's outcome again after a transient error", async () => {
-    const { client, mocks } = createMockClient({ result: '{"success":true}' });
-    mocks.getFunctionExecution
+    const { client } = createMockClient({ result: '{"success":true}' });
+    client.getFunctionExecution
       .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
       .mockImplementation(() =>
         Promise.resolve({
@@ -265,12 +264,12 @@ describe("withScriptWorkflow", () => {
     const outcome = await withScriptWorkflow({ ...baseOptions, client }, (run) => run({}));
 
     expect(outcome).toMatchObject({ success: true, result: '{"success":true}' });
-    expect(mocks.getFunctionExecution).toHaveBeenCalledTimes(2);
+    expect(client.getFunctionExecution).toHaveBeenCalledTimes(2);
   });
 
   test("reports an unknown outcome when a finished workflow's job result cannot be found", async () => {
-    const { client, mocks } = createMockClient();
-    mocks.getFunctionExecution.mockResolvedValue({ execution: undefined } as never);
+    const { client } = createMockClient();
+    client.getFunctionExecution.mockResolvedValue({ execution: undefined });
 
     const outcome = await withScriptWorkflow({ ...baseOptions, client }, (run) => run({}));
 
@@ -281,8 +280,8 @@ describe("withScriptWorkflow", () => {
   });
 
   test("tells how a resource that could not be removed gets removed", async () => {
-    const { client, mocks } = createMockClient();
-    mocks.deleteWorkflow.mockRejectedValue(new ConnectError("unavailable", Code.Unavailable));
+    const { client } = createMockClient();
+    client.deleteWorkflow.mockRejectedValue(new ConnectError("unavailable", Code.Unavailable));
 
     await withScriptWorkflow({ ...baseOptions, client }, (run) => run({}));
 
@@ -292,7 +291,7 @@ describe("withScriptWorkflow", () => {
   });
 
   test("stops without removing anything when an earlier run of the workflow is still executing", async () => {
-    const { client, mocks } = createMockClient({
+    const { client } = createMockClient({
       leftoverWorkflowId: "wf-old",
       leftoverExecutions: [{ id: "exec-old", status: WorkflowExecution_Status.RUNNING }],
     });
@@ -303,20 +302,20 @@ describe("withScriptWorkflow", () => {
       code: "SCRIPT_WORKFLOW_EXECUTION_ACTIVE",
       context: { workflowName: "tailordb-seed--tailordb", executionId: "exec-old" },
     });
-    expect(mocks.deleteWorkflow).not.toHaveBeenCalled();
-    expect(mocks.deleteFunctionRegistry).not.toHaveBeenCalled();
-    expect(mocks.createFunctionRegistry).not.toHaveBeenCalled();
+    expect(client.deleteWorkflow).not.toHaveBeenCalled();
+    expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
+    expect(client.createFunctionRegistry).not.toHaveBeenCalled();
   });
 
   test("reclaims the leftovers of an earlier run that has finished", async () => {
-    const { client, mocks } = createMockClient({
+    const { client } = createMockClient({
       leftoverWorkflowId: "wf-old",
       leftoverExecutions: [{ id: "exec-old", status: WorkflowExecution_Status.FAILED }],
     });
 
     await withScriptWorkflow({ ...baseOptions, client }, (run) => run({}));
 
-    expect(mocks.deleteWorkflow).toHaveBeenCalledWith({ workspaceId: "ws", workflowId: "wf-old" });
+    expect(client.deleteWorkflow).toHaveBeenCalledWith({ workspaceId: "ws", workflowId: "wf-old" });
   });
 
   test("reclaims the leftovers of an interrupted run before registering the script", async () => {
@@ -329,7 +328,9 @@ describe("withScriptWorkflow", () => {
 });
 
 describe("assertNoActiveScriptWorkflow", () => {
-  const running = [{ id: "exec-old", status: WorkflowExecution_Status.RUNNING }];
+  const running = [
+    { id: "exec-old", status: WorkflowExecution_Status.RUNNING },
+  ] satisfies MessageInitShape<typeof WorkflowExecutionSchema>[];
 
   test("names the workspace and profile in the command that inspects the running execution", async () => {
     const { client } = createMockClient({
@@ -408,17 +409,17 @@ describe("the main job of a workflow execution", () => {
   });
 
   test("is read for the result, not the job it started", async () => {
-    const client = {
-      getFunctionExecution: vi.fn(async (request: { executionId: string }) => ({
+    const client = mockOperatorClient({
+      getFunctionExecution: async (request) => ({
         execution: {
           logEntries: [],
           result: request.executionId === "fn-main" ? '"main"' : '"child"',
         },
-      })),
-    };
+      }),
+    });
 
     const outcome = await readOutcome({
-      client: client as unknown as OperatorClient,
+      client: client,
       workspaceId: "ws",
       execution: executionOf(row("fn-main", 0), row("fn-child", 1)),
       pollInterval: 1,
@@ -478,14 +479,18 @@ describe("the job a finished run's outcome is read from", () => {
       ...job(executionId, depth, status),
       kind: { case: "jobFunction", value: { name } },
     });
-    const logsOf = (logs: Record<string, string>) => ({
-      getFunctionExecution: vi.fn(async (request: { executionId: string }) => ({
-        execution: {
-          logEntries: logs[request.executionId] ? [{ message: logs[request.executionId] }] : [],
-          result: request.executionId === "fn-main" ? '"main"' : '"child"',
+    const logsOf = (logs: Record<string, string>) =>
+      mockOperatorClient({
+        getFunctionExecution: async (request) => {
+          const log = logs[request.executionId ?? ""];
+          return {
+            execution: {
+              logEntries: log ? [{ message: log }] : [],
+              result: request.executionId === "fn-main" ? '"main"' : '"child"',
+            },
+          };
         },
-      })),
-    });
+      });
     const succeeded = {
       status: WorkflowExecution_Status.SUCCESS,
       jobExecutions: [
@@ -498,7 +503,7 @@ describe("the job a finished run's outcome is read from", () => {
       const client = logsOf({ "fn-main": "main line 1\nmain line 2", "fn-child": "child line" });
 
       const outcome = await readOutcome({
-        client: client as unknown as OperatorClient,
+        client: client,
         workspaceId: "ws",
         execution: succeeded,
         pollInterval: 1,
@@ -517,17 +522,17 @@ describe("the job a finished run's outcome is read from", () => {
           named("fn-child", 1, FAILED, "run-child"),
         ],
       } as unknown as WorkflowExecution;
-      const client = {
-        getFunctionExecution: vi.fn(async (request: { executionId: string }) => ({
+      const client = mockOperatorClient({
+        getFunctionExecution: async (request) => ({
           execution:
             request.executionId === "fn-child"
               ? { logEntries: [{ message: "child log" }], result: "", error: { message: "boom" } }
               : { logEntries: [{ message: "parent log" }], result: "" },
-        })),
-      };
+        }),
+      });
 
       const outcome = await readOutcome({
-        client: client as unknown as OperatorClient,
+        client: client,
         workspaceId: "ws",
         execution: failed,
         pollInterval: 1,
@@ -538,15 +543,15 @@ describe("the job a finished run's outcome is read from", () => {
     });
 
     test("still reports the outcome when the log of another job cannot be read", async () => {
-      const client = {
-        getFunctionExecution: vi.fn(async (request: { executionId: string }) => {
+      const client = mockOperatorClient({
+        getFunctionExecution: async (request) => {
           if (request.executionId === "fn-child") throw new Error("lookup failed");
           return { execution: { logEntries: [{ message: "main line" }], result: '"main"' } };
-        }),
-      };
+        },
+      });
 
       const outcome = await readOutcome({
-        client: client as unknown as OperatorClient,
+        client: client,
         workspaceId: "ws",
         execution: succeeded,
         pollInterval: 1,
@@ -564,15 +569,15 @@ describe("the job a finished run's outcome is read from", () => {
     test("reads the logs of the jobs it started at the same time", async () => {
       let inFlight = 0;
       let peak = 0;
-      const client = {
-        getFunctionExecution: vi.fn(async () => {
+      const client = mockOperatorClient({
+        getFunctionExecution: async () => {
           inFlight += 1;
           peak = Math.max(peak, inFlight);
           await new Promise((resolve) => setTimeout(resolve, 20));
           inFlight -= 1;
           return { execution: { logEntries: [{ message: "x" }], result: '"r"' } };
-        }),
-      };
+        },
+      });
       const manyJobs = {
         status: WorkflowExecution_Status.SUCCESS,
         jobExecutions: [
@@ -584,7 +589,7 @@ describe("the job a finished run's outcome is read from", () => {
       } as unknown as WorkflowExecution;
 
       await readOutcome({
-        client: client as unknown as OperatorClient,
+        client: client,
         workspaceId: "ws",
         execution: manyJobs,
         pollInterval: 1,
@@ -595,7 +600,7 @@ describe("the job a finished run's outcome is read from", () => {
 
     test("names the job function the outcome was read from", async () => {
       const outcome = await readOutcome({
-        client: logsOf({}) as unknown as OperatorClient,
+        client: logsOf({}),
         workspaceId: "ws",
         execution: succeeded,
         pollInterval: 1,
@@ -623,14 +628,14 @@ describe("the job a finished run's outcome is read from", () => {
     });
 
     test("reports a cancellation, not the record of the suspended call, as the error", async () => {
-      const client = {
-        getFunctionExecution: vi.fn(async () => ({
+      const client = mockOperatorClient({
+        getFunctionExecution: async () => ({
           execution: { logEntries: [], result: callRecord },
-        })),
-      };
+        }),
+      });
 
       const outcome = await readOutcome({
-        client: client as unknown as OperatorClient,
+        client: client,
         workspaceId: "ws",
         execution: canceledRun(job("fn-main", 0, CANCELED)),
         pollInterval: 1,
@@ -641,17 +646,17 @@ describe("the job a finished run's outcome is read from", () => {
   });
 
   test("gives the error of the job that failed, not the main job's bookkeeping, when read", async () => {
-    const client = {
-      getFunctionExecution: vi.fn(async (request: { executionId: string }) => ({
+    const client = mockOperatorClient({
+      getFunctionExecution: async (request) => ({
         execution:
           request.executionId === "fn-child"
             ? { logEntries: [], result: "", error: { message: "boom-from-child" } }
             : { logEntries: [], result: '{"call_index":0,"job_name":"child"}' },
-      })),
-    };
+      }),
+    });
 
     const outcome = await readOutcome({
-      client: client as unknown as OperatorClient,
+      client: client,
       workspaceId: "ws",
       execution: failedRun(job("fn-main", 0, FAILED), job("fn-child", 1, FAILED)),
       pollInterval: 1,

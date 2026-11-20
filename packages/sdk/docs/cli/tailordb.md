@@ -183,6 +183,7 @@ tailor tailordb migration resolve [options]
 | `--yes`                         | `-y`  | Skip confirmation prompts                                                                               | No       | `false` | -                              |
 | `--rollback`                    | -     | Return the namespace to the schema before the in-progress migration                                     | No       | `false` | -                              |
 | `--complete`                    | -     | Apply the schema of the in-progress migration and mark it as completed                                  | No       | `false` | -                              |
+| `--maintenance`                 | -     | Take the tables out of the maintenance mode a deploy left in place after its migration was committed    | No       | `false` | -                              |
 | `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (required if multiple namespaces exist)                                       | No       | -       | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -198,7 +199,9 @@ For a run that a deploy could not confirm, the command reads how the run ended a
 
 `--rollback` also settles a migration that no deploy recorded as in progress, but whose pre-migration schema or maintenance mode a deploy left in place, for example because the deploy stopped before recording it. See "Settling a migration that stays in progress" in the TailorDB Migrations guide for when it runs.
 
-Both options remove the in-progress record, take the tables out of maintenance mode, and remove the temporary resources of the failed run, so `deploy` and the other migration commands work again. As with `tailordb migration sync`, the local migration history must reproduce the current table definitions. If sending the schema stops partway, run the command again.
+`--maintenance` is for a namespace whose checkpoint a deploy committed but whose tables it left in maintenance mode, with no migration in progress. It sends the schema of the checkpoint to restore the tables' settings and removes the maintenance mode record, without moving the checkpoint. It cannot be combined with the other two options, and it refuses when a migration is in progress, when no record names the current checkpoint, when a table the committed migration removes is not deleted yet (a deploy deletes it), when a deploy was interrupted before it recorded the next migration (settle it with `--rollback`), or when a table differs from the checkpoint in more than maintenance mode, printing the difference.
+
+Both `--rollback` and `--complete` remove the in-progress record, take the tables out of maintenance mode, and remove the temporary resources of the failed run, so `deploy` and the other migration commands work again. As with `tailordb migration sync`, the local migration history must reproduce the current table definitions. If sending the schema stops partway, run the command again.
 
 #### tailordb migration script
 

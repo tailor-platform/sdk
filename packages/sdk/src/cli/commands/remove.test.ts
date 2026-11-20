@@ -18,6 +18,7 @@ import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import {
   mockOperatorClient,
   type OperatorClientMocks,
+  withOperatorClientMocks,
 } from "#/cli/shared/test-helpers/operator-client";
 import {
   emptyPlanResults,
@@ -154,11 +155,11 @@ const APPLY_BY_PLAN: Record<keyof PlanResults, { mock: { calls: unknown[][] } }>
 };
 
 function mockClient<K extends keyof OperatorClient = never>(methods?: OperatorClientMocks<K>) {
-  const client = Object.assign(
+  const client = withOperatorClientMocks(
     mockOperatorClient({
       listWorkflowJobFunctionExecutionPolicies: { policies: [], nextPageToken: "" },
     }),
-    methods && mockOperatorClient(methods),
+    methods,
   );
   vi.mocked(initOperatorClient).mockResolvedValue(client);
   return client;

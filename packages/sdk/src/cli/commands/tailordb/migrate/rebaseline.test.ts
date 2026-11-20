@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { runCommand } from "@politty/zod";
@@ -11,6 +10,7 @@ import { loadWorkspaceId } from "#/cli/shared/context";
 import { prompt } from "#/cli/shared/prompt";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import { rebaselineCommand } from "./rebaseline";
 import { migrationDbConfig } from "./test-helpers/migration-config";
@@ -22,17 +22,22 @@ import {
   writeRebaselineMarker,
 } from "./test-helpers/schema-fixtures";
 import type { CLIError } from "#/cli/shared/errors";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 const workspaceId = vi.hoisted(() => "12345678-1234-4abc-8def-123456789012");
 
 const state = vi.hoisted(() => ({
   migrationsDir: "",
   localTypes: {} as Record<string, unknown>,
-  getMetadata: vi.fn(),
-  setMetadata: vi.fn(),
-  listTailorDBTypes: vi.fn(),
-  listTailorDBGQLPermissions: vi.fn(),
 }));
+
+const client = mockOperatorClient({
+  getMetadata: {},
+  setMetadata: {},
+  listTailorDBTypes: {},
+  listTailorDBGQLPermissions: {},
+});
 
 vi.mock("#/cli/shared/config-loader", () => ({
   loadConfig: vi.fn(),
@@ -82,7 +87,7 @@ function mockConfig(namespaces: string[] = ["tailordb"]): void {
   } as unknown as Awaited<ReturnType<typeof loadConfig>>);
 }
 
-function remoteType(name: string): Record<string, unknown> {
+function remoteType(name: string): MessageInitShape<typeof TailorDBTypeSchema> {
   return {
     name,
     schema: {
@@ -148,30 +153,25 @@ describe("tailordb migration rebaseline", () => {
     state.localTypes = { User: parsedType("User"), Post: parsedType("Post") };
     mockConfig();
 
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0001", "sdk-name": "my-app" } },
     });
-    state.setMetadata.mockResolvedValue({});
-    state.listTailorDBTypes.mockResolvedValue({
+    client.setMetadata.mockResolvedValue({});
+    client.listTailorDBTypes.mockResolvedValue({
       tailordbTypes: [remoteType("User"), remoteType("Post")],
       nextPageToken: "",
     });
-    state.listTailorDBGQLPermissions.mockResolvedValue({ permissions: [], nextPageToken: "" });
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      getMetadata: state.getMetadata,
-      setMetadata: state.setMetadata,
-      listTailorDBTypes: state.listTailorDBTypes,
-      listTailorDBGQLPermissions: state.listTailorDBGQLPermissions,
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    client.listTailorDBGQLPermissions.mockResolvedValue({ permissions: [], nextPageToken: "" });
+    vi.mocked(initOperatorClient).mockResolvedValue(client);
     vi.mocked(prompt.confirm).mockResolvedValue(true);
 
     await runTest();
 
     vi.restoreAllMocks();
-    state.getMetadata.mockReset();
-    state.setMetadata.mockReset();
-    state.listTailorDBTypes.mockReset();
-    state.listTailorDBGQLPermissions.mockReset();
+    client.getMetadata.mockReset();
+    client.setMetadata.mockReset();
+    client.listTailorDBTypes.mockReset();
+    client.listTailorDBGQLPermissions.mockReset();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -222,7 +222,7 @@ describe("tailordb migration rebaseline", () => {
       "Committed migration files will remain in Git history. Preserve any uncommitted files before continuing.",
     );
     expect(prompt.confirm).not.toHaveBeenCalled();
-    expect(state.setMetadata).toHaveBeenCalledWith(
+    expect(client.setMetadata).toHaveBeenCalledWith(
       expect.objectContaining({
         labels: {
           "sdk-migration": "m0000",
@@ -257,7 +257,7 @@ describe("tailordb migration rebaseline", () => {
 
   test("records the previous generation when re-baselining an existing rebaseline history", async () => {
     writeRebaselineMarker(state.migrationsDir, "hprevious", { replacedLatestMigration: 7 });
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: {
         labels: {
           "sdk-migration": "m0001",
@@ -284,7 +284,7 @@ describe("tailordb migration rebaseline", () => {
       replacedLatestMigration: 1,
     });
     expect(baseline.rebaseline.historyId).not.toBe("hprevious");
-    expect(state.setMetadata).toHaveBeenCalledWith(
+    expect(client.setMetadata).toHaveBeenCalledWith(
       expect.objectContaining({
         labels: expect.objectContaining({
           "sdk-migration": "m0000",
@@ -297,7 +297,7 @@ describe("tailordb migration rebaseline", () => {
   test("refuses to re-baseline while a migration is in progress", async () => {
     const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
     const before = fs.readFileSync(schemaPath, "utf-8");
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002" } },
     });
 
@@ -306,6 +306,63 @@ describe("tailordb migration rebaseline", () => {
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/partially applied/);
     expect(fs.readFileSync(schemaPath, "utf-8")).toBe(before);
+  });
+
+  test("refuses to re-baseline while a deploy's maintenance mode record remains", async () => {
+    const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
+    const before = fs.readFileSync(schemaPath, "utf-8");
+    client.getMetadata.mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0001", "sdk-maintenance-mode": "m0001" } },
+    });
+
+    const result = await runCommand(rebaselineCommand, ["--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_MAINTENANCE_MODE_RECORDED",
+      suggestion: expect.stringContaining("migration resolve --maintenance"),
+    });
+    expect(fs.readFileSync(schemaPath, "utf-8")).toBe(before);
+    expect(client.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("says a deploy finishes the table deletion while a removed table of the committed migration is not deleted yet", async () => {
+    client.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: {
+          "sdk-migration": "m0001",
+          "sdk-maintenance-mode": "m0001",
+          "sdk-migration-cleanup": "m0001",
+        },
+      },
+    });
+
+    const result = await runCommand(rebaselineCommand, ["--yes"]);
+
+    expect(result.success).toBe(false);
+    const suggestion = (result.error as { suggestion?: string }).suggestion ?? "";
+    expect(suggestion).toContain("not deleted yet");
+    expect(suggestion).toContain("tailor deploy");
+    expect(suggestion).not.toContain("another checkpoint");
+    expect(suggestion).not.toContain("MIGRATION_REMOTE_DRIFT");
+    expect(client.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("points to deploy when the maintenance mode record names another checkpoint", async () => {
+    client.getMetadata.mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0001", "sdk-maintenance-mode": "m0002" } },
+    });
+
+    const result = await runCommand(rebaselineCommand, ["--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_MAINTENANCE_MODE_RECORDED",
+      suggestion: expect.stringMatching(
+        /tailor deploy.*MIGRATION_REMOTE_DRIFT.*migration sync 0001/s,
+      ),
+    });
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("rejects ungenerated local schema changes before reading the remote", async () => {
@@ -324,8 +381,8 @@ describe("tailordb migration rebaseline", () => {
       ),
     });
     expect(migrationDirectories()).toEqual(["0000", "0001"]);
-    expect(state.getMetadata).not.toHaveBeenCalled();
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.getMetadata).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("writes the selected namespace instead of preserving a stale snapshot namespace", async () => {
@@ -343,7 +400,7 @@ describe("tailordb migration rebaseline", () => {
   });
 
   test("rejects when the connected workspace has not applied the latest migration", async () => {
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0000", "sdk-name": "my-app" } },
     });
 
@@ -352,12 +409,12 @@ describe("tailordb migration rebaseline", () => {
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/must be at the latest migration 0001/i);
     expect(migrationDirectories()).toEqual(["0000", "0001"]);
-    expect(state.listTailorDBTypes).not.toHaveBeenCalled();
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.listTailorDBTypes).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("rejects when the connected workspace schema differs from the latest snapshot", async () => {
-    state.listTailorDBTypes.mockResolvedValue({
+    client.listTailorDBTypes.mockResolvedValue({
       tailordbTypes: [remoteType("User")],
       nextPageToken: "",
     });
@@ -373,11 +430,11 @@ describe("tailordb migration rebaseline", () => {
     );
     expect(suggestion).not.toContain("--force");
     expect(migrationDirectories()).toEqual(["0000", "0001"]);
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("rejects an invalid connected workspace history marker", async () => {
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0001", "sdk-migration-history": "INVALID!" },
       },
@@ -392,12 +449,12 @@ describe("tailordb migration rebaseline", () => {
       `tailor tailordb migration sync 0001 --force --namespace tailordb ${formatConfigArg(configPath())} --workspace-id=${workspaceId}\`, which removes the fields that migration does not have and deletes the tables it does not have together with their data`,
     );
     expect(migrationDirectories()).toEqual(["0000", "0001"]);
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("rejects a connected workspace from a different migration history", async () => {
     writeRebaselineMarker(state.migrationsDir, "hcurrent");
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0001", "sdk-migration-history": "hother" },
       },
@@ -415,12 +472,12 @@ describe("tailordb migration rebaseline", () => {
       `tailor tailordb migration sync 0001 --force --namespace tailordb ${formatConfigArg(configPath())} --workspace-id=${workspaceId}\`, which removes the fields that migration does not have and deletes the tables it does not have together with their data`,
     );
     expect(migrationDirectories()).toEqual(["0000", "0001"]);
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("rejects a connected workspace history change while waiting for confirmation", async () => {
     writeRebaselineMarker(state.migrationsDir, "hcurrent");
-    state.getMetadata
+    client.getMetadata
       .mockResolvedValueOnce({
         metadata: {
           labels: { "sdk-migration": "m0001", "sdk-migration-history": "hcurrent" },
@@ -442,11 +499,11 @@ describe("tailordb migration rebaseline", () => {
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/history changed while waiting for confirmation/i);
     expect(migrationDirectories()).toEqual(["0000", "0001"]);
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("asks for a rerun when the history marker becomes invalid while waiting for confirmation", async () => {
-    state.getMetadata
+    client.getMetadata
       .mockResolvedValueOnce({ metadata: { labels: { "sdk-migration": "m0001" } } })
       .mockResolvedValueOnce({ metadata: { labels: { "sdk-migration": "m0001" } } })
       .mockResolvedValueOnce({
@@ -461,7 +518,7 @@ describe("tailordb migration rebaseline", () => {
       suggestion: expect.stringMatching(/run the command again/i),
     });
     expect((result.error as CLIError).suggestion).not.toContain("--force");
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("fails without changing local or remote state when confirmation is declined", async () => {
@@ -472,7 +529,7 @@ describe("tailordb migration rebaseline", () => {
     expect(result.success).toBe(false);
     expect(result.error).toMatchObject({ code: "REBASELINE_CANCELLED" });
     expect(migrationDirectories()).toEqual(["0000", "0001"]);
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("rejects migration files changed while waiting for confirmation", async () => {
@@ -486,7 +543,7 @@ describe("tailordb migration rebaseline", () => {
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/migration files changed while waiting for confirmation/i);
     expect(migrationDirectories()).toEqual(["0000", "0001"]);
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("rejects orphaned migration artifacts added while waiting for confirmation", async () => {
@@ -502,7 +559,7 @@ describe("tailordb migration rebaseline", () => {
     expect(result.success).toBe(false);
     expect(String(result.error)).toContain("Migration 0005 has migrate.ts but no diff.json");
     expect(migrationDirectories()).toEqual(["0000", "0001", "0005"]);
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("rejects a test-only migration directory added while waiting for confirmation", async () => {
@@ -518,7 +575,7 @@ describe("tailordb migration rebaseline", () => {
     expect(result.success).toBe(false);
     expect(String(result.error)).toContain("Migration 0005 has migrate.test.ts but no diff.json");
     expect(migrationDirectories()).toEqual(["0000", "0001", "0005"]);
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("rejects extra files added to a migration directory while waiting for confirmation", async () => {
@@ -533,7 +590,7 @@ describe("tailordb migration rebaseline", () => {
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/migration files changed while waiting for confirmation/i);
     expect(fs.readFileSync(notesPath, "utf-8")).toBe("keep me");
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("rejects migration script target changes while waiting for confirmation", async () => {
@@ -552,7 +609,7 @@ describe("tailordb migration rebaseline", () => {
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/migration files changed while waiting for confirmation/i);
     expect(fs.readFileSync(targetPath, "utf-8")).toContain("version = 2");
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("rejects local type changes made while waiting for confirmation", async () => {
@@ -568,7 +625,7 @@ describe("tailordb migration rebaseline", () => {
       /migration history must reproduce the current local schema/i,
     );
     expect(migrationDirectories()).toEqual(["0000", "0001"]);
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("requires --namespace when multiple namespaces have migrations", async () => {
@@ -578,7 +635,7 @@ describe("tailordb migration rebaseline", () => {
 
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/specify namespace with --namespace/);
-    expect(state.getMetadata).not.toHaveBeenCalled();
+    expect(client.getMetadata).not.toHaveBeenCalled();
   });
 
   test("supports a migration directory configured through a symbolic link", async () => {
@@ -592,11 +649,11 @@ describe("tailordb migration rebaseline", () => {
 
     expect(result.success).toBe(true);
     expect(migrationDirectories()).toEqual(["0000"]);
-    expect(state.setMetadata).toHaveBeenCalledOnce();
+    expect(client.setMetadata).toHaveBeenCalledOnce();
   });
 
   test("keeps the activated baseline when the checkpoint update fails", async () => {
-    state.setMetadata.mockRejectedValue(new Error("metadata unavailable"));
+    client.setMetadata.mockRejectedValue(new Error("metadata unavailable"));
     vi.mocked(loadWorkspaceId).mockResolvedValueOnce("87654321-4321-4cba-8fed-210987654321");
 
     const result = await runCommand(rebaselineCommand, [

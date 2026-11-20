@@ -499,7 +499,7 @@ export function locateRemoteCheckpoint(
 
 /**
  * List the remote tables a migration removed that are still to be deleted after its checkpoint,
- * leaving out a table a later local migration adds again.
+ * including one a later local migration adds again: the deploy deletes it and creates it again.
  * @param migrationsDir - Migrations directory of the namespace
  * @param checkpoint - Migration whose checkpoint is committed
  * @param remoteTypes - Remote tables of the namespace
@@ -513,10 +513,9 @@ function findUnfinishedRemovals(
   const diffPath = getMigrationFilePath(migrationsDir, checkpoint, "diff");
   if (!fs.existsSync(diffPath)) return [];
   const deleted = getTablesDeletedAfterCheckpoint(loadDiff(diffPath));
-  const latestTables = reconstructSnapshotFromMigrations(migrationsDir)?.tables ?? {};
   return remoteTypes
     .map((type) => type.name)
-    .filter((tableName) => deleted.has(tableName) && !Object.hasOwn(latestTables, tableName))
+    .filter((tableName) => deleted.has(tableName))
     .toSorted();
 }
 

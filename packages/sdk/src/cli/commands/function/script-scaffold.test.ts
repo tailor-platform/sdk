@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { beforeEach, describe, expect, test, vi } from "vitest";
@@ -9,6 +8,7 @@ import {
   type SchemaSnapshot,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import {
   SCRIPT_SNAPSHOT_FILE_NAME,
@@ -19,7 +19,6 @@ import {
   loadScriptSchemaSnapshot,
   verifyScriptSchemaSnapshot,
 } from "./script-scaffold";
-import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 
 vi.mock("#/cli/commands/tailordb/migrate/schema-checks", async (importActual) => {
@@ -211,7 +210,7 @@ describe("loadScriptSchemaSnapshot", () => {
 });
 
 describe("verifyScriptSchemaSnapshot", () => {
-  const client = {} as OperatorClient;
+  const client = mockOperatorClient({});
 
   beforeEach(() => {
     vi.mocked(fetchRemoteSchemaSnapshot).mockReset();

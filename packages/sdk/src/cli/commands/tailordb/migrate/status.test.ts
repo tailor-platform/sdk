@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { Code, ConnectError } from "@connectrpc/connect";
@@ -10,6 +9,7 @@ import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken } from "#/cli/shared/context";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import { statusCommand } from "./status";
 import { migrationDbConfig } from "./test-helpers/migration-config";
@@ -21,8 +21,9 @@ import {
 
 const state = vi.hoisted(() => ({
   migrationsDir: "",
-  getMetadata: vi.fn(),
 }));
+
+const client = mockOperatorClient({ getMetadata: {} });
 
 vi.mock("#/cli/shared/config-loader", () => ({
   loadConfig: vi.fn(),
@@ -63,16 +64,14 @@ describe("tailordb migration status --json", () => {
       },
     } as unknown as Awaited<ReturnType<typeof loadConfig>>);
 
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: {
         labels: {
           "sdk-migration": "m0001",
         },
       },
     });
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      getMetadata: state.getMetadata,
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    vi.mocked(initOperatorClient).mockResolvedValue(client);
 
     await runTest();
 
@@ -106,7 +105,7 @@ describe("tailordb migration status --json", () => {
   });
 
   test("reports a migration left in progress by an earlier deploy", async () => {
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002" },
       },
@@ -156,8 +155,125 @@ describe("tailordb migration status --json", () => {
     ]);
   });
 
+  test("reports tables a deploy left in maintenance mode at the checkpoint and the command that releases them", async () => {
+    client.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0001", "sdk-maintenance-mode": "m0001" },
+      },
+    });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    await runCommand(statusCommand, []);
+
+    expect(JSON.parse(stdout.output)).toMatchObject([
+      {
+        status: "ok",
+        maintenanceModeCheckpoint: 1,
+        maintenanceModeCheckpointLabel: "0001",
+        maintenanceModeRelease: {
+          command: "tailor",
+          args: [
+            "tailordb",
+            "migration",
+            "resolve",
+            "--maintenance",
+            "--namespace",
+            "tailordb",
+            workspaceArg,
+          ],
+        },
+      },
+    ]);
+  });
+
+  test("lists deploy for a maintenance record while a removed table of the committed migration is not deleted yet", async () => {
+    client.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: {
+          "sdk-migration": "m0001",
+          "sdk-maintenance-mode": "m0001",
+          "sdk-migration-cleanup": "m0001",
+        },
+      },
+    });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    await runCommand(statusCommand, []);
+
+    const [row] = JSON.parse(stdout.output) as Record<string, unknown>[];
+    expect(row).toMatchObject({
+      maintenanceModeCheckpoint: 1,
+      maintenanceModeRelease: { via: "deploy", command: "tailor", args: ["deploy", workspaceArg] },
+    });
+    expect((row?.maintenanceModeRelease as Record<string, unknown>).fallback).toBeUndefined();
+  });
+
+  test("tells a deploy removes a maintenance mode record that names another checkpoint, and sync when the deploy stops on drift", async () => {
+    client.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0001", "sdk-maintenance-mode": "m0002" },
+      },
+    });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    await runCommand(statusCommand, []);
+
+    expect(JSON.parse(stdout.output)).toMatchObject([
+      {
+        status: "ok",
+        maintenanceModeCheckpoint: 2,
+        maintenanceModeCheckpointLabel: "0002",
+        maintenanceModeRelease: {
+          via: "deploy",
+          command: "tailor",
+          args: ["deploy", workspaceArg],
+          fallback: {
+            command: "tailor",
+            args: [
+              "tailordb",
+              "migration",
+              "sync",
+              "0001",
+              "--namespace",
+              "tailordb",
+              workspaceArg,
+            ],
+          },
+        },
+      },
+    ]);
+  });
+
+  test.each([
+    [
+      "comes with a migration in progress",
+      {
+        "sdk-migration": "m0001",
+        "sdk-migration-in-progress": "m0002",
+        "sdk-maintenance-mode": "m0001",
+      },
+    ],
+    ["is absent", { "sdk-migration": "m0001" }],
+  ])("does not offer to release maintenance mode when the record %s", async (_name, labels) => {
+    client.getMetadata.mockResolvedValue({ metadata: { labels } });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    await runCommand(statusCommand, []);
+
+    const [row] = JSON.parse(stdout.output) as Record<string, unknown>[];
+    expect(row).not.toHaveProperty("maintenanceModeRelease");
+  });
+
   test("reports a `main` run whose outcome an earlier deploy could not settle", async () => {
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002-main" },
       },
@@ -202,7 +318,7 @@ describe("tailordb migration status --json", () => {
     ]);
   });
 
-  test.each([
+  test.each<{ name: string; labels: Record<string, string>; actions: string[] }>([
     {
       name: "a namespace without a checkpoint",
       labels: { "sdk-migration-in-progress": "m0001" },
@@ -214,7 +330,7 @@ describe("tailordb migration status --json", () => {
       actions: [],
     },
   ])("lists the in-progress commands that accept $name", async (row) => {
-    state.getMetadata.mockResolvedValue({ metadata: { labels: row.labels } });
+    client.getMetadata.mockResolvedValue({ metadata: { labels: row.labels } });
     using stdout = captureStdout();
     using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     using _json = jsonMode();
@@ -228,7 +344,7 @@ describe("tailordb migration status --json", () => {
   });
 
   test("keeps the config, workspace, and profile of the run in the in-progress commands", async () => {
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002" },
       },
@@ -251,7 +367,7 @@ describe("tailordb migration status --json", () => {
   });
 
   test("tells the user to settle a `main` run whose outcome is not settled", async () => {
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002-main" },
       },
@@ -271,7 +387,7 @@ describe("tailordb migration status --json", () => {
   });
 
   test("does not report an in-progress record the checkpoint already passed", async () => {
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0002", "sdk-migration-in-progress": "m0002" },
       },
@@ -289,7 +405,7 @@ describe("tailordb migration status --json", () => {
   });
 
   test("tells the user how to resume, roll back, or complete an in-progress migration", async () => {
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002" },
       },
@@ -309,7 +425,7 @@ describe("tailordb migration status --json", () => {
   });
 
   test("reports unreadable in-progress labels as an error", async () => {
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "broken" },
       },
@@ -327,7 +443,7 @@ describe("tailordb migration status --json", () => {
   });
 
   test("treats metadata NotFound as no applied migrations", async () => {
-    state.getMetadata.mockRejectedValue(new ConnectError("metadata not found", Code.NotFound));
+    client.getMetadata.mockRejectedValue(new ConnectError("metadata not found", Code.NotFound));
     using stdout = captureStdout();
     using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     using _json = jsonMode();
@@ -345,7 +461,7 @@ describe("tailordb migration status --json", () => {
   });
 
   test("propagates metadata errors other than NotFound", async () => {
-    state.getMetadata.mockRejectedValue(new ConnectError("unavailable", Code.Unavailable));
+    client.getMetadata.mockRejectedValue(new ConnectError("unavailable", Code.Unavailable));
     using stdout = captureStdout();
     using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     using _json = jsonMode();
@@ -441,7 +557,7 @@ describe("tailordb migration status --json", () => {
       filePath,
       JSON.stringify({ ...contents, version: SCHEMA_SNAPSHOT_VERSION + 1 }),
     );
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0002" } },
     });
     using stdout = captureStdout();
@@ -464,7 +580,7 @@ describe("tailordb migration status --json", () => {
 
   test("reports a remote migration history mismatch", async () => {
     writeRebaselineMarker(state.migrationsDir, "hlocal");
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0001", "sdk-migration-history": "hremote" },
       },
@@ -486,7 +602,7 @@ describe("tailordb migration status --json", () => {
   });
 
   test("reports a remote checkpoint ahead of the local migration history as an error", async () => {
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0009" } },
     });
     using stdout = captureStdout();
@@ -522,7 +638,7 @@ describe("tailordb migration status --json", () => {
     { history: "a migration history label it cannot read", label: "Not a history ID" },
   ])("offers to replace $history with --force", async ({ label }) => {
     writeRebaselineMarker(state.migrationsDir, "hlocal");
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0001", "sdk-migration-history": label } },
     });
     using stdout = captureStdout();
@@ -540,7 +656,7 @@ describe("tailordb migration status --json", () => {
 
   test("does not offer to move a checkpoint the next deploy resets to the new baseline", async () => {
     writeRebaselineMarker(state.migrationsDir, "hlocal", { replacedHistoryId: "hprevious" });
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0000", "sdk-migration-history": "hprevious" } },
     });
     using stdout = captureStdout();
@@ -570,7 +686,7 @@ describe("tailordb migration status --json", () => {
 
   test("identifies a migration history mismatch in human-readable output", async () => {
     writeRebaselineMarker(state.migrationsDir, "hlocal");
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0001", "sdk-migration-history": "hremote" },
       },
@@ -588,7 +704,7 @@ describe("tailordb migration status --json", () => {
 
   test("accepts a matching remote migration history", async () => {
     writeRebaselineMarker(state.migrationsDir, "hlocal");
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0001", "sdk-migration-history": "hlocal" },
       },
@@ -611,7 +727,7 @@ describe("tailordb migration status --json", () => {
 
   test("does not report a history mismatch for an undeployed namespace", async () => {
     writeRebaselineMarker(state.migrationsDir, "hlocal");
-    state.getMetadata.mockRejectedValue(new ConnectError("metadata not found", Code.NotFound));
+    client.getMetadata.mockRejectedValue(new ConnectError("metadata not found", Code.NotFound));
     using stdout = captureStdout();
     using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     using _json = jsonMode();
@@ -635,8 +751,8 @@ describe("tailordb migration status --json", () => {
         db: migrationDbConfig(["tailordb", "analyticsdb"], state.migrationsDir),
       },
     } as unknown as Awaited<ReturnType<typeof loadConfig>>);
-    state.getMetadata.mockImplementation(({ trn }: { trn: string }) =>
-      trn.endsWith("analyticsdb")
+    client.getMetadata.mockImplementation((request) =>
+      request.trn?.endsWith("analyticsdb")
         ? Promise.reject(new ConnectError("unavailable", Code.Unavailable))
         : Promise.resolve({ metadata: { labels: { "sdk-migration": "m0001" } } }),
     );

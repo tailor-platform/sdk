@@ -1,16 +1,17 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
-import { create } from "@bufbuild/protobuf";
+import { create, type MessageInitShape } from "@bufbuild/protobuf";
 import { ExecutorExecutorSchema } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { describe, test, expect, vi } from "vitest";
 import { symbols } from "#/cli/shared/logger";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { formatExecutorChangeEntries, planExecutor } from "./executor";
-import { sdkNameLabelKey } from "./label";
+import { buildMetaRequest, sdkNameLabelKey } from "./label";
 import type { Application } from "#/cli/services/application";
 import type { ExecutorService } from "#/cli/services/executor/service";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { Executor } from "#/types/executor.generated";
 import type { PlanContext } from "./types";
+import type { MachineUserSummarySchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
 // Mock node:fs to avoid file system access
 vi.mock("node:fs", () => ({
@@ -105,39 +106,40 @@ describe("planExecutor", () => {
     existingExecutors: Array<{
       name: string;
       label?: string;
-      resource?: Record<string, unknown>;
+      resource?: MessageInitShape<typeof ExecutorExecutorSchema>;
       sdkVersion?: string;
     }>,
     workspaceMachineUsers: string[] = [],
   ): OperatorClient {
-    return {
-      listAuthMachineUsers: vi.fn().mockResolvedValue({
-        machineUsers: workspaceMachineUsers.map((name) => ({ name })),
+    return mockOperatorClient({
+      listAuthMachineUsers: {
+        machineUsers: workspaceMachineUsers.map(
+          (name): MessageInitShape<typeof MachineUserSummarySchema> => ({ name }),
+        ),
         nextPageToken: "",
-      }),
-      listExecutorExecutors: vi.fn().mockResolvedValue({
-        executors: existingExecutors.map((e) => ({ name: e.name })),
+      },
+      listExecutorExecutors: {
+        executors: existingExecutors.map((e): MessageInitShape<typeof ExecutorExecutorSchema> => ({
+          name: e.name,
+        })),
         nextPageToken: "",
-      }),
-      getExecutorExecutor: vi.fn().mockImplementation(({ name }: { name: string }) => {
+      },
+      getExecutorExecutor: (request) => {
+        const executor = existingExecutors.find((e) => e.name === request.name);
+        return { executor: executor?.resource ?? { name: request.name } };
+      },
+      getMetadata: (request) => {
+        const name = request.trn?.split(":").pop();
         const executor = existingExecutors.find((e) => e.name === name);
-        return { executor: executor?.resource ?? { name } };
-      }),
-      getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
-        const name = trn.split(":").pop();
-        const executor = existingExecutors.find((e) => e.name === name);
-        return {
-          metadata: {
-            labels: executor?.label
-              ? {
-                  [sdkNameLabelKey]: executor.label,
-                  "sdk-version": executor.sdkVersion ?? "v1-0-0",
-                }
-              : {},
-          },
-        };
-      }),
-    } as unknown as OperatorClient;
+        const labels: Record<string, string> = executor?.label
+          ? {
+              [sdkNameLabelKey]: executor.label,
+              "sdk-version": executor.sdkVersion ?? "v1-0-0",
+            }
+          : {};
+        return { metadata: { labels } };
+      },
+    });
   }
 
   // Helper to create mock executor service
@@ -385,6 +387,32 @@ describe("planExecutor", () => {
       expect(result.changeSet.unchanged).toHaveLength(1);
       expect(result.changeSet.unchanged[0]!.name).toBe("existing-executor");
       expect(result.changeSet.updates).toHaveLength(0);
+    });
+
+    test("existing executor whose other SDK labels differ stays unchanged with a label refresh", async () => {
+      const executor = createMockExecutor("existing-executor");
+      const createResult = await planExecutor(buildPlanContext(createMockApplication([executor])));
+      const desiredExecutor = createResult.changeSet.creates[0]!.request.executor;
+      const desiredLabels = { "sdk-name": appName, "sdk-version": "v1-0-0", "sdk-app-id": "app-1" };
+      vi.mocked(buildMetaRequest).mockImplementationOnce(async ({ trn }) => ({
+        trn,
+        labels: desiredLabels,
+      }));
+      const client = createMockClient([
+        { name: "existing-executor", label: appName, resource: desiredExecutor },
+      ]);
+
+      const result = await planExecutor(
+        buildPlanContext(createMockApplication([executor]), { client }),
+      );
+
+      expect(result.changeSet.updates).toHaveLength(0);
+      expect(result.changeSet.unchanged).toEqual([
+        {
+          name: "existing-executor",
+          labelRefresh: expect.objectContaining({ labels: desiredLabels }),
+        },
+      ]);
     });
 
     test("existing executor is compared against its fetched detail, not its list row", async () => {
@@ -1475,31 +1503,27 @@ describe("planExecutor", () => {
 
   describe("previousExisting reuse", () => {
     test("skips re-listing executors when a prior fetch is provided", async () => {
-      const listExecutorExecutors = vi.fn().mockResolvedValue({
-        executors: [{ name: "existing-executor" }],
-        nextPageToken: "",
+      const client = mockOperatorClient({
+        listExecutorExecutors: {
+          executors: [{ name: "existing-executor" }],
+          nextPageToken: "",
+        },
+        getExecutorExecutor: { executor: { name: "existing-executor" } },
+        getMetadata: { metadata: { labels: {} } },
       });
-      const getExecutorExecutor = vi
-        .fn()
-        .mockResolvedValue({ executor: { name: "existing-executor" } });
-      const client = {
-        listExecutorExecutors,
-        getExecutorExecutor,
-        getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
-      } as unknown as OperatorClient;
 
       const application = createMockApplication([createMockExecutor("existing-executor")]);
       const first = await planExecutor(buildPlanContext(application, { client }));
-      expect(listExecutorExecutors).toHaveBeenCalledTimes(1);
-      expect(getExecutorExecutor).toHaveBeenCalledTimes(1);
+      expect(client.listExecutorExecutors).toHaveBeenCalledTimes(1);
+      expect(client.getExecutorExecutor).toHaveBeenCalledTimes(1);
       expect(first.changeSet.creates).toHaveLength(0);
       expect(first.changeSet.updates).toHaveLength(1);
 
       const second = await planExecutor(buildPlanContext(application, { client }), first);
 
       // Not called a second time: the platform list and details are reused as-is.
-      expect(listExecutorExecutors).toHaveBeenCalledTimes(1);
-      expect(getExecutorExecutor).toHaveBeenCalledTimes(1);
+      expect(client.listExecutorExecutors).toHaveBeenCalledTimes(1);
+      expect(client.getExecutorExecutor).toHaveBeenCalledTimes(1);
       expect(second.changeSet.creates).toHaveLength(0);
       expect(second.changeSet.updates).toHaveLength(1);
     });

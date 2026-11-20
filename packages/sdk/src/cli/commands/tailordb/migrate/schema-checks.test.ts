@@ -1,9 +1,9 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import {
   computeSourceScriptHash,
   extractSourceScriptHash,
@@ -26,6 +26,7 @@ import { createMockMigrationDiff } from "./test-helpers/migration-diff";
 import {
   remoteType,
   restrictedRemoteType,
+  type RemoteTailorDBType,
   snapshotField,
   snapshotType,
   writeDiff,
@@ -35,7 +36,9 @@ import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { MigrationDiff } from "./diff-calculator";
 import type { SchemaDrift } from "./types";
-import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { MetadataSchema } from "@tailor-platform/tailor-proto/metadata_resource_pb";
+import type { TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 const missingHashDrift: SchemaDrift = {
   tableName: "Foo",
@@ -267,14 +270,15 @@ describe("verifyRemoteSchema", () => {
     return migrationsDirWith({ User: snapshotType("User") });
   }
 
-  function remoteClient(metadata: unknown, remoteTypes: unknown[]) {
-    return {
-      getMetadata: vi.fn().mockResolvedValue({ metadata }),
-      listTailorDBTypes: vi
-        .fn()
-        .mockResolvedValue({ tailordbTypes: remoteTypes, nextPageToken: "" }),
-      listTailorDBGQLPermissions: vi.fn().mockResolvedValue({ permissions: [], nextPageToken: "" }),
-    } as unknown as OperatorClient;
+  function remoteClient(
+    metadata: MessageInitShape<typeof MetadataSchema>,
+    remoteTypes: MessageInitShape<typeof TailorDBTypeSchema>[],
+  ) {
+    return mockOperatorClient({
+      getMetadata: { metadata },
+      listTailorDBTypes: { tailordbTypes: remoteTypes, nextPageToken: "" },
+      listTailorDBGQLPermissions: { permissions: [], nextPageToken: "" },
+    });
   }
 
   function verify(client: OperatorClient, migrationsDir: string) {
@@ -352,10 +356,10 @@ describe("verifyRemoteSchema", () => {
       Item: { name: "Item", pluralForm: "Items", fields: itemFields },
     });
     const item = remoteType("Item", ["name"]);
-    const remoteItem = {
-      ...item,
+    const remoteItem: MessageInitShape<typeof TailorDBTypeSchema> = {
+      name: item.name,
       schema: {
-        ...item.schema,
+        fields: item.schema?.fields,
         typeHook: {
           create: { expr: `_value // @sdk-source-hash:${computeSourceScriptHash(itemFields)}` },
         },
@@ -386,19 +390,29 @@ describe("verifyRemoteSchema", () => {
       return { labels: { "sdk-migration": "m0000", "sdk-migration-in-progress": record } };
     }
 
-    function withStatus(type: ProtoTailorDBType, required: boolean): ProtoTailorDBType {
-      const status = remoteType(type.name, ["status"]).schema!.fields.status!;
-      type.schema!.fields.status = { ...status, required };
-      return type;
+    function withStatus(type: RemoteTailorDBType, required: boolean): RemoteTailorDBType {
+      const status = remoteType(type.name ?? "", ["status"]).schema?.fields?.status;
+      return {
+        ...type,
+        schema: {
+          fields: { ...type.schema?.fields, status: { ...status, required } },
+          settings: type.schema?.settings,
+        },
+      };
     }
 
-    function inMaintenanceMode(type: ProtoTailorDBType): ProtoTailorDBType {
-      type.schema!.settings = {
-        bulkUpsert: false,
-        publishRecordEvents: false,
-        disableGqlOperations: { create: true, update: true, delete: true, read: false },
-      } as never;
-      return type;
+    function inMaintenanceMode(type: RemoteTailorDBType): RemoteTailorDBType {
+      return {
+        ...type,
+        schema: {
+          fields: type.schema?.fields,
+          settings: {
+            bulkUpsert: false,
+            publishRecordEvents: false,
+            disableGqlOperations: { create: true, update: true, delete: true, read: false },
+          },
+        },
+      };
     }
 
     test("accepts the schema a steps run leaves after its Post-phase", async () => {
@@ -477,15 +491,15 @@ describe("verifyRemoteSchema", () => {
   });
 
   describe("a namespace a deploy left after the Pre-phase of the next migration", () => {
-    function withOptionalEmail(type: ProtoTailorDBType): ProtoTailorDBType {
-      const fields = type.schema!.fields;
+    function withOptionalEmail(type: RemoteTailorDBType): RemoteTailorDBType {
+      const fields = type.schema?.fields;
       return {
         ...type,
         schema: {
-          ...type.schema,
-          fields: { ...fields, email: { ...fields.name, required: false } },
+          fields: { ...fields, email: { ...fields?.name, required: false } },
+          settings: type.schema?.settings,
         },
-      } as ProtoTailorDBType;
+      };
     }
 
     function migrationsDirAddingEmail(): string {
@@ -750,6 +764,29 @@ describe("verifyRemoteSchema", () => {
         interruptedMigration: 2,
         unfinishedRemovals: ["Legacy"],
       });
+    });
+
+    test("accepts a table whose deletion the checkpoint's migration did not finish, though a later migration adds it again", async () => {
+      const dir = migrationsDirWith({ User: snapshotType("User"), Post: snapshotType("Post") });
+      writeDiff(dir, 1, [
+        { kind: "table_removed", tableName: "Post", before: snapshotType("Post") },
+      ]);
+      writeDiff(dir, 2, [{ kind: "table_added", tableName: "Post", after: snapshotType("Post") }]);
+      const client = remoteClient(
+        { labels: { "sdk-migration": "m0001", "sdk-migration-cleanup": "m0001" } },
+        [remoteType("User", ["id", "name"]), restrictedRemoteType("Post", ["id", "name"])],
+      );
+
+      const [result] = await verifyRemoteSchema(
+        client,
+        "workspace",
+        [{ namespace: "tailordb", migrationsDir: dir }],
+        {} as LoadedConfig,
+        [],
+        { acceptUnfinishedRemovals: true, acceptInterruptedMigration: true },
+      );
+
+      expect(result).toMatchObject({ hasDrift: false, unfinishedRemovals: ["Post"] });
     });
 
     test("reports drift when no local migration follows the checkpoint", async () => {

@@ -52,6 +52,23 @@ export type TailorDBPlanResult = Awaited<ReturnType<typeof planTailorDB>>;
 
 export type TailorDBChangeSet = TailorDBPlanResult["changeSet"];
 
+/** A change-set entry that names a table and the namespace it lives in. */
+export type NamespacedEntry = { name: string; request: { namespaceName?: string } };
+
+/**
+ * Whether the plan deletes a table and creates it again: the deletion runs before the
+ * migrations, so the closing deletions leave the table the migrations created.
+ * @param changeSet - TailorDB change set
+ * @param del - A planned deletion
+ * @returns Whether the plan also creates a table of that name in the namespace
+ */
+export function isRecreated(changeSet: TailorDBChangeSet, del: NamespacedEntry): boolean {
+  return changeSet.type.creates.some(
+    (create) =>
+      create.name === del.name && create.request.namespaceName === del.request.namespaceName,
+  );
+}
+
 /**
  * Plan TailorDB-related changes based on current and desired state.
  * @param context - Planning context
@@ -159,6 +176,14 @@ export async function planTailorDB(context: PlanContext) {
     });
     logMigrationPlanNotices(detected);
   }
+  // A table whose deletion an earlier deploy left unfinished, and that the final schema keeps,
+  // starts over: the remote leftover is deleted and the table is created again.
+  const recreatedTables = new Map<string, ReadonlySet<string>>();
+  for (const [namespace, { tableNames }] of detected?.unfinishedRemovals ?? []) {
+    const localTypes = tailordbs.find((tailordb) => tailordb.namespace === namespace)?.types ?? {};
+    const kept = tableNames.filter((tableName) => Object.hasOwn(localTypes, tableName));
+    if (kept.length > 0) recreatedTables.set(namespace, new Set(kept));
+  }
   const { namespacesWithMigrations, migrationFileState, checkpointRepairs, pendingMigrations } =
     detected ?? {
       namespacesWithMigrations: migrationConfig,
@@ -189,8 +214,16 @@ export async function planTailorDB(context: PlanContext) {
         dependentApps: context.dependentApps,
         runAppIds: context.runAppIds,
       },
+      recreatedTables,
     ),
-    planGqlPermissions(client, workspaceId, tailordbs, deletedServices, forceApplyAll),
+    planGqlPermissions(
+      client,
+      workspaceId,
+      tailordbs,
+      deletedServices,
+      forceApplyAll,
+      recreatedTables,
+    ),
   ]);
 
   // Apply table DDL in a stable, name-sorted order so the create burst (capped
@@ -367,6 +400,7 @@ async function planTypes(
   filteredTypesByNamespace?: Map<string, Record<string, TailorDBSnapshotType>>,
   forceApplyAll = false,
   records: TypeRecordInputs = {},
+  recreatedTables: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
 ) {
   const changeSet = createChangeSet<CreateType, UpdateType, DeleteType, never, UnchangedType>(
     "TailorDB tables",
@@ -433,7 +467,9 @@ async function planTypes(
     })),
   ];
   for (const { namespaceName, types, gqlOperations } of namespaces) {
-    const existingTypes = await fetchTypes(namespaceName);
+    const remoteTypes = await fetchTypes(namespaceName);
+    const recreated = recreatedTables.get(namespaceName);
+    const existingTypes = remoteTypes.filter((type) => !recreated?.has(type.name));
     const desired: DesiredType[] = [];
     for (const [tableName, tailordbTypeSnapshot] of Object.entries(types)) {
       desired.push({
@@ -470,6 +506,13 @@ async function planTypes(
         request: { workspaceId, namespaceName, tailordbTypeName },
       }),
     });
+    for (const type of remoteTypes) {
+      if (!recreated?.has(type.name)) continue;
+      changeSet.deletes.push({
+        name: type.name,
+        request: { workspaceId, namespaceName, tailordbTypeName: type.name },
+      });
+    }
   }
   return changeSet;
 }
@@ -517,6 +560,7 @@ async function planGqlPermissions(
   tailordbs: ReadonlyArray<TailorDBDeployInput>,
   deletedServices: ReadonlyArray<string>,
   forceApplyAll = false,
+  recreatedTables: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
 ) {
   const changeSet = createChangeSet<CreateGqlPermission, UpdateGqlPermission, DeleteGqlPermission>(
     "TailorDB gqlPermissions",
@@ -543,7 +587,11 @@ async function planGqlPermissions(
       ...deletedServices.map((namespaceName) => ({ namespaceName, types: {} })),
     ];
   for (const { namespaceName, types } of namespaces) {
-    const existingGqlPermissions = await fetchGqlPermissions(namespaceName);
+    const remoteGqlPermissions = await fetchGqlPermissions(namespaceName);
+    const recreated = recreatedTables.get(namespaceName);
+    const existingGqlPermissions = remoteGqlPermissions.filter(
+      (entry) => !recreated?.has(entry.typeName),
+    );
     const desired: DesiredGqlPermission[] = Object.entries(types).flatMap(
       ([typeName, typeEntry]) => {
         const gqlPermission = typeEntry.permissions?.gql;
@@ -569,6 +617,13 @@ async function planGqlPermissions(
       unchanged: ({ name }) => ({ name }),
       delete: (typeName) => ({ name: typeName, request: { workspaceId, namespaceName, typeName } }),
     });
+    for (const entry of remoteGqlPermissions) {
+      if (!recreated?.has(entry.typeName)) continue;
+      changeSet.deletes.push({
+        name: entry.typeName,
+        request: { workspaceId, namespaceName, typeName: entry.typeName },
+      });
+    }
   }
   return changeSet;
 }

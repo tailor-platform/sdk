@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -6,8 +5,11 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { decodeExpiresAt, expiresAtLabelKey } from "../src/cli/commands/workspace/expiry";
 import { initOperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken, loadUserWorkspaceDefaults } from "../src/cli/shared/context";
+import {
+  mockOperatorClient,
+  type OperatorClientMocks,
+} from "../src/cli/shared/test-helpers/operator-client";
 import { resolveE2EWorkspaceLocation, trackWorkspace } from "./globalSetup";
-import type { OperatorClient } from "../src/cli/shared/client";
 
 vi.mock("../src/cli/shared/context", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/cli/shared/context")>()),
@@ -23,15 +25,12 @@ vi.mock("../src/cli/shared/client", async (importOriginal) => ({
 const workspaceId = "00000000-0000-4000-8000-000000000001";
 const trackingFile = path.join(os.tmpdir(), "e2e-workspaces", workspaceId);
 
-type SetMetadata = (request: { trn: string; labels: Record<string, string> }) => Promise<unknown>;
-
-function fakeClient(setMetadata: SetMetadata) {
-  const client = {
-    getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
-    setMetadata: vi.fn(setMetadata),
-    deleteWorkspace: vi.fn().mockResolvedValue({}),
-  };
-  return { client, asOperator: client as unknown as OperatorClient };
+function fakeClient(setMetadata: OperatorClientMocks<"setMetadata">["setMetadata"]) {
+  return mockOperatorClient({
+    getMetadata: { metadata: { labels: {} } },
+    setMetadata,
+    deleteWorkspace: {},
+  });
 }
 
 describe("trackWorkspace", () => {
@@ -40,10 +39,10 @@ describe("trackWorkspace", () => {
   });
 
   test("records an expiry 24 hours after the workspace is tracked", async () => {
-    const { client, asOperator } = fakeClient(async () => ({}));
+    const client = fakeClient(async () => ({}));
     const before = Date.now();
 
-    await trackWorkspace(asOperator, workspaceId);
+    await trackWorkspace(client, workspaceId);
 
     const labels = client.setMetadata.mock.calls[0]?.[0].labels;
     const expiresAt = decodeExpiresAt(labels?.[expiresAtLabelKey])?.getTime() ?? 0;
@@ -54,23 +53,23 @@ describe("trackWorkspace", () => {
   });
 
   test("deletes the workspace and rethrows when the expiry cannot be recorded", async () => {
-    const { client, asOperator } = fakeClient(async () => {
+    const client = fakeClient(async () => {
       throw new Error("metadata unavailable");
     });
 
-    await expect(trackWorkspace(asOperator, workspaceId)).rejects.toThrow("metadata unavailable");
+    await expect(trackWorkspace(client, workspaceId)).rejects.toThrow("metadata unavailable");
 
     expect(client.deleteWorkspace).toHaveBeenCalledWith({ workspaceId });
     expect(fs.existsSync(trackingFile)).toBe(false);
   });
 
   test("rethrows the expiry error even when the cleanup delete fails too", async () => {
-    const { client, asOperator } = fakeClient(async () => {
+    const client = fakeClient(async () => {
       throw new Error("metadata unavailable");
     });
     client.deleteWorkspace.mockRejectedValue(new Error("delete denied"));
 
-    await expect(trackWorkspace(asOperator, workspaceId)).rejects.toThrow("metadata unavailable");
+    await expect(trackWorkspace(client, workspaceId)).rejects.toThrow("metadata unavailable");
   });
 });
 
@@ -136,7 +135,7 @@ describe("resolveE2EWorkspaceLocation", () => {
 describe("teardown", () => {
   let tmpRoot: string;
   let trackingDir: string;
-  const deleteWorkspace = vi.fn();
+  const client = mockOperatorClient({ deleteWorkspace: {} });
 
   async function loadTeardown() {
     vi.resetModules();
@@ -148,11 +147,9 @@ describe("teardown", () => {
     trackingDir = path.join(tmpRoot, "e2e-workspaces");
     vi.stubEnv("TMPDIR", tmpRoot);
     vi.stubEnv("TAILOR_PLATFORM_TOKEN", undefined);
-    deleteWorkspace.mockReset().mockResolvedValue({});
+    client.deleteWorkspace.mockReset().mockResolvedValue({});
     vi.mocked(loadAccessToken).mockReset().mockResolvedValue("profile-token");
-    vi.mocked(initOperatorClient)
-      .mockReset()
-      .mockResolvedValue({ deleteWorkspace } as unknown as OperatorClient);
+    vi.mocked(initOperatorClient).mockReset().mockResolvedValue(client);
     vi.spyOn(console, "log").mockImplementation(() => {});
     vi.spyOn(console, "warn").mockImplementation(() => {});
   });
@@ -174,9 +171,9 @@ describe("teardown", () => {
 
     await teardown();
 
-    expect(deleteWorkspace).toHaveBeenCalledTimes(2);
-    expect(deleteWorkspace).toHaveBeenCalledWith({ workspaceId: "ws-a" });
-    expect(deleteWorkspace).toHaveBeenCalledWith({ workspaceId: "ws-b" });
+    expect(client.deleteWorkspace).toHaveBeenCalledTimes(2);
+    expect(client.deleteWorkspace).toHaveBeenCalledWith({ workspaceId: "ws-a" });
+    expect(client.deleteWorkspace).toHaveBeenCalledWith({ workspaceId: "ws-b" });
   });
 
   test("does not authenticate when no workspace is tracked", async () => {
@@ -198,6 +195,6 @@ describe("teardown", () => {
       expect.stringContaining("authentication unavailable"),
       expect.any(Error),
     );
-    expect(deleteWorkspace).not.toHaveBeenCalled();
+    expect(client.deleteWorkspace).not.toHaveBeenCalled();
   });
 });

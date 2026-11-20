@@ -1,8 +1,9 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { listInvokerMachineUsers, normalizeInvoker } from "./invoker";
 import type { Application } from "#/cli/services/application";
-import type { OperatorClient } from "#/cli/shared/client";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { MachineUserSummarySchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
 describe("normalizeInvoker", () => {
   test("returns undefined when invoker is undefined", () => {
@@ -79,14 +80,14 @@ describe("normalizeInvoker", () => {
 
 describe("listInvokerMachineUsers", () => {
   function clientWithMachineUsers(names: string[]) {
-    const listAuthMachineUsers = vi.fn().mockResolvedValue({
-      machineUsers: names.map((name) => ({ name })),
-      nextPageToken: "",
+    return mockOperatorClient({
+      listAuthMachineUsers: {
+        machineUsers: names.map((name): MessageInitShape<typeof MachineUserSummarySchema> => ({
+          name,
+        })),
+        nextPageToken: "",
+      },
     });
-    return {
-      client: { listAuthMachineUsers } as unknown as OperatorClient,
-      listAuthMachineUsers,
-    };
   }
 
   function applicationWithAuth(authNamespace: string | undefined): Readonly<Application> {
@@ -96,7 +97,7 @@ describe("listInvokerMachineUsers", () => {
   }
 
   test("lists the machine users of the workspace when no config in the run defines the namespace", async () => {
-    const { client, listAuthMachineUsers } = clientWithMachineUsers(["kiosk"]);
+    const client = clientWithMachineUsers(["kiosk"]);
 
     const known = await listInvokerMachineUsers({
       client,
@@ -105,13 +106,13 @@ describe("listInvokerMachineUsers", () => {
     });
 
     expect([...known!]).toEqual(["kiosk"]);
-    expect(listAuthMachineUsers).toHaveBeenCalledWith(
+    expect(client.listAuthMachineUsers).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: "ws", authNamespace: "my-auth" }),
     );
   });
 
   test("uses the machine users the run defines as the final set, without the workspace", async () => {
-    const { client, listAuthMachineUsers } = clientWithMachineUsers(["legacy", "admin"]);
+    const client = clientWithMachineUsers(["legacy", "admin"]);
 
     const known = await listInvokerMachineUsers({
       client,
@@ -121,11 +122,11 @@ describe("listInvokerMachineUsers", () => {
     });
 
     expect([...known!]).toEqual(["admin"]);
-    expect(listAuthMachineUsers).not.toHaveBeenCalled();
+    expect(client.listAuthMachineUsers).not.toHaveBeenCalled();
   });
 
   test("returns undefined when the application has no auth namespace", async () => {
-    const { client } = clientWithMachineUsers([]);
+    const client = clientWithMachineUsers([]);
 
     await expect(
       listInvokerMachineUsers({

@@ -1,11 +1,10 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { existsSync, rmSync } from "node:fs";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { applyAuthConnections, type planAuthConnections } from "./auth-connection";
 import { applySecretManager, type planSecretManager } from "./secret-manager";
 import { hashValue, loadSecretsState, type SecretsStateScope } from "./secrets-state";
 import type { Application } from "#/cli/services/application";
-import type { OperatorClient } from "#/cli/shared/client";
 
 const distDir = "/tmp/tailor-sdk-test-secrets-state-concurrency";
 
@@ -55,7 +54,7 @@ function secretUpdate(secretName: string, value: string) {
 function secretPlanResult(updates: Array<ReturnType<typeof secretUpdate>>) {
   return {
     stateScope,
-    vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
+    vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [], unchanged: [] },
     secretChangeSet: { creates: [], updates, deletes: [], replaces: [] },
   } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
 }
@@ -78,7 +77,7 @@ function connectionUpdate(name: string, clientSecret: string) {
 function connectionPlanResult(updates: Array<ReturnType<typeof connectionUpdate>>) {
   return {
     stateScope,
-    changeSet: { creates: [], updates, deletes: [], replaces: [] },
+    changeSet: { creates: [], updates, deletes: [], replaces: [], unchanged: [] },
   } as unknown as Awaited<ReturnType<typeof planAuthConnections>>;
 }
 
@@ -95,22 +94,22 @@ describe("concurrent deploys to the same target", () => {
 
     // Deploy A: the trailing secret's remote update settles only after deploy B
     // has fully finished (or after a grace period when B is made to wait).
-    const clientA = {
-      updateSecretManagerSecret: vi.fn().mockImplementation(async (req) => {
-        remote.set(req.secretmanagerSecretName, req.secretmanagerSecretValue);
+    const clientA = mockOperatorClient({
+      updateSecretManagerSecret: async (req) => {
+        remote.set(req.secretmanagerSecretName ?? "", req.secretmanagerSecretValue ?? "");
         if (req.secretmanagerSecretName === "trailing-secret") {
           await Promise.race([bSettled.promise, sleep(50)]);
         }
         return {};
-      }),
-    } as unknown as OperatorClient;
+      },
+    });
 
-    const clientB = {
-      updateSecretManagerSecret: vi.fn().mockImplementation(async (req) => {
-        remote.set(req.secretmanagerSecretName, req.secretmanagerSecretValue);
+    const clientB = mockOperatorClient({
+      updateSecretManagerSecret: async (req) => {
+        remote.set(req.secretmanagerSecretName ?? "", req.secretmanagerSecretValue ?? "");
         return {};
-      }),
-    } as unknown as OperatorClient;
+      },
+    });
 
     const applyA = applySecretManager(
       clientA,
@@ -142,26 +141,32 @@ describe("concurrent deploys to the same target", () => {
     const remote = new Map<string, string>();
     const bSettled = deferred();
 
-    const clientA = {
-      updateAuthConnection: vi.fn().mockImplementation(async (req) => {
-        remote.set(req.connection.name, req.connection.config.value.clientSecret);
+    const clientA = mockOperatorClient({
+      updateAuthConnection: async (req) => {
+        if (req.connection?.config?.case !== "oauth2") {
+          throw new Error("Expected an OAuth2 connection");
+        }
+        remote.set(req.connection.name ?? "", req.connection.config.value.clientSecret ?? "");
         if (req.connection.name === "trailing-conn") {
           await Promise.race([bSettled.promise, sleep(50)]);
         }
         return {};
-      }),
-      setMetadata: vi.fn().mockResolvedValue({}),
-      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
-    } as unknown as OperatorClient;
+      },
+      setMetadata: {},
+      getMetadata: { metadata: { labels: {} } },
+    });
 
-    const clientB = {
-      updateAuthConnection: vi.fn().mockImplementation(async (req) => {
-        remote.set(req.connection.name, req.connection.config.value.clientSecret);
+    const clientB = mockOperatorClient({
+      updateAuthConnection: async (req) => {
+        if (req.connection?.config?.case !== "oauth2") {
+          throw new Error("Expected an OAuth2 connection");
+        }
+        remote.set(req.connection.name ?? "", req.connection.config.value.clientSecret ?? "");
         return {};
-      }),
-      setMetadata: vi.fn().mockResolvedValue({}),
-      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
-    } as unknown as OperatorClient;
+      },
+      setMetadata: {},
+      getMetadata: { metadata: { labels: {} } },
+    });
 
     const applyA = applyAuthConnections(
       clientA,

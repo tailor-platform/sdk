@@ -124,7 +124,7 @@ Add the `skip-changeset` label to your PR when:
 - Development tooling changes (eslint, lefthook, etc.)
 - Test-only changes with no source code modifications
 
-Internal refactoring of non-test source in a package listed in [changeset-check.yml](../.github/workflows/changeset-check.yml) still needs a `patch` changeset, even with no observable behavior change; do not use `skip-changeset` for it. Documentation a package publishes reaches users only through a release, so it needs a `patch` changeset too; `changeset-check.yml` fails a PR that changes a path in its `published_docs` filter without one, even when it has `skip-changeset`.
+Internal refactoring of non-test source in a package listed in [changeset-check.yml](../.github/workflows/changeset-check.yml) still needs a `patch` changeset, even with no observable behavior change; do not use `skip-changeset` for it. Documentation a package publishes reaches users only through a release, so it needs a `patch` changeset too; `changeset-check.yml` fails a PR that changes a path in its `published_docs` filter without one, even when it has `skip-changeset`. `tailor upgrade` runs the latest published `@tailor-platform/sdk-codemod`, so a PR that changes non-test files under `packages/sdk-codemod/src/` or `packages/sdk-codemod/codemods/` must release `@tailor-platform/sdk-codemod` (any bump except `none`) from a changeset it adds or edits; `changeset-check.yml` fails the PR otherwise, even when it has `skip-changeset`.
 
 ## Writing the Description
 

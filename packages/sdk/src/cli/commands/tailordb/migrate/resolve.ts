@@ -20,27 +20,33 @@ import { logBetaWarning } from "#/cli/shared/beta";
 import { type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, formatCommandHint } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { getNamespacesWithMigrations, selectTargetNamespace } from "./config";
+import {
+  getNamespacesWithMigrations,
+  selectTargetNamespace,
+  type NamespaceWithMigrations,
+} from "./config";
 import {
   formatNamespaceMigrationHint,
   migrationCommandContext,
+  migrationContextArgs,
   type MigrationCommandContext,
 } from "./hints";
 import {
   fetchRemoteMigrationState,
+  formatMigrationResolveHint,
   isStaleMigrationInProgress,
   matchesLocalMigrationHistory,
   migrationHistoryMismatchError,
   type MigrationResolution,
   type RemoteMigrationState,
 } from "./remote-state";
-import { verifyRemoteSchema } from "./schema-checks";
+import { formatRemoteVerificationResults, verifyRemoteSchema } from "./schema-checks";
 import {
   assertMigrationNumberExists,
   assertValidMigrationFiles,
@@ -52,9 +58,11 @@ import { applySnapshotPlan, planSnapshotApply } from "./snapshot-apply";
 import { assertMigrationsReproduceLocalTypes } from "./sync";
 import { handleOptionalToRequiredError } from "./types";
 
+type ResolveMode = MigrationResolution | "maintenance";
+
 interface ResolveOptions {
   configPath?: string;
-  resolution: MigrationResolution;
+  resolution: ResolveMode;
   namespace?: string;
   yes?: boolean;
   workspaceId?: string;
@@ -65,7 +73,7 @@ type ResolveResult = {
   changed: boolean;
   workspaceId: string;
   namespace: string;
-  resolution: MigrationResolution;
+  resolution: ResolveMode;
   migrationNumber: number;
   checkpoint: number;
   /** Set when no migration was recorded as in progress, but a deploy left the Pre-phase or maintenance mode of this one in place. */
@@ -94,7 +102,8 @@ async function assertMigrationStateUnchanged(params: AssertStateUnchangedParams)
     now.historyId !== before.historyId ||
     now.inProgress?.number !== before.inProgress?.number ||
     now.inProgress?.executionId !== before.inProgress?.executionId ||
-    now.inProgress?.kind !== before.inProgress?.kind
+    now.inProgress?.kind !== before.inProgress?.kind ||
+    now.maintenanceModeCheckpoint !== before.maintenanceModeCheckpoint
   ) {
     throw CLIError({
       code: "MIGRATION_RESOLVE_STATE_CHANGED",
@@ -152,6 +161,199 @@ function warnMainRunResolution(params: MainRunResolution): void {
 }
 
 /**
+ * Refuse to settle a namespace whose recorded migration history is not the local one.
+ * @param state - Remote migration state of the namespace
+ * @param target - Namespace and its local migration files
+ */
+function assertLocalMigrationHistoryMatches(
+  state: RemoteMigrationState,
+  target: NamespaceWithMigrations,
+): void {
+  const localHistoryId =
+    reconstructSnapshotFromMigrations(target.migrationsDir, 0)?.rebaseline?.historyId ?? null;
+  if (matchesLocalMigrationHistory(state, localHistoryId)) return;
+  throw migrationHistoryMismatchError({
+    state,
+    localHistoryId,
+    namespace: target.namespace,
+    code: "MIGRATION_RESOLVE_HISTORY_MISMATCH",
+    suggestion:
+      "Run the command from a checkout of the migration history that was deployed to the workspace.",
+  });
+}
+
+/**
+ * Rebuild the schema a checkpoint stands for from the local migration files.
+ * @param target - Namespace and its local migration files
+ * @param checkpoint - Migration number whose schema is rebuilt
+ * @returns The schema snapshot at the checkpoint
+ */
+function loadCheckpointSnapshot(target: NamespaceWithMigrations, checkpoint: number) {
+  assertMigrationNumberExists(target.migrationsDir, checkpoint);
+  const snapshot = reconstructSnapshotFromMigrations(target.migrationsDir, checkpoint);
+  if (!snapshot) {
+    throw CLIError({
+      code: "MIGRATION_BASELINE_NOT_FOUND",
+      message: `No initial schema snapshot found in ${target.migrationsDir}. Expected 0000/schema.json.`,
+      suggestion: "Create the initial schema snapshot first.",
+    });
+  }
+  return snapshot;
+}
+
+/**
+ * Ask for confirmation unless `--yes` was given.
+ * @param options - Command options
+ * @param message - Question to ask
+ */
+async function confirmResolve(options: ResolveOptions, message: string): Promise<void> {
+  if (options.yes) return;
+  const confirmation = await prompt.confirm({ message, default: false });
+  if (!confirmation) {
+    throw CLIError({
+      code: "MIGRATION_RESOLVE_CANCELLED",
+      message: "Migration resolve cancelled.",
+    });
+  }
+  logger.newline();
+}
+
+type ReleaseMaintenanceModeParams = {
+  options: ResolveOptions;
+  loaded: Awaited<ReturnType<typeof loadConfig>>;
+  target: NamespaceWithMigrations;
+  client: OperatorClient;
+  workspaceId: string;
+  state: RemoteMigrationState;
+  commandContext: MigrationCommandContext;
+  statusHint: string;
+};
+
+/**
+ * Take the tables out of the maintenance mode a deploy left in place after its migration was
+ * committed, without moving the checkpoint.
+ * @param params - Command options, target namespace, and the remote state read for it
+ * @returns What was sent to the remote and the unchanged checkpoint
+ */
+async function releaseMaintenanceMode(
+  params: ReleaseMaintenanceModeParams,
+): Promise<ResolveResult> {
+  const { options, loaded, target, client, workspaceId, state, commandContext, statusHint } =
+    params;
+  const { namespace } = target;
+  const checkpoint = state.number ?? 0;
+
+  if (state.inProgress !== null && !isStaleMigrationInProgress(state)) {
+    throw CLIError({
+      code: "MIGRATION_RESOLVE_MAINTENANCE_IN_PROGRESS",
+      message: `Migration ${formatMigrationNumber(state.inProgress.number)} of namespace "${namespace}" is recorded as in progress.`,
+      suggestion: `Settle it with ${formatMigrationResolveHint("rollback", namespace, commandContext)} or ${formatMigrationResolveHint("complete", namespace, commandContext)}, which also take the tables out of maintenance mode.`,
+    });
+  }
+  if (state.maintenanceModeCheckpoint !== checkpoint) {
+    throw CLIError({
+      code: "MIGRATION_RESOLVE_NO_MAINTENANCE_RECORD",
+      message: `Namespace "${namespace}" has no record of tables left in maintenance mode at checkpoint ${formatMigrationNumber(checkpoint)}.`,
+      suggestion: `Run ${statusHint} to check the migration state.`,
+    });
+  }
+
+  assertValidMigrationFiles(target.migrationsDir, namespace, loaded.config.path);
+  assertLocalMigrationHistoryMatches(state, target);
+
+  if (state.cleanupCheckpoint === checkpoint) {
+    throw CLIError({
+      code: "MIGRATION_RESOLVE_MAINTENANCE_CLEANUP_PENDING",
+      message: `A table that migration ${formatMigrationNumber(checkpoint)} of namespace "${namespace}" removes is not deleted yet.`,
+      suggestion: `Run ${formatCommandHint({ command: "tailor", args: ["deploy", ...migrationContextArgs(commandContext)] })}, which deletes the table, takes the tables out of maintenance mode, and removes both records.`,
+    });
+  }
+
+  const verification = (
+    await verifyRemoteSchema(client, workspaceId, [target], loaded.config, [], {
+      acceptInterruptedMigration: true,
+    })
+  )[0];
+  if (verification?.interruptedMigration !== undefined) {
+    const interrupted = formatMigrationNumber(verification.interruptedMigration);
+    throw CLIError({
+      code: "MIGRATION_RESOLVE_MAINTENANCE_INTERRUPTED",
+      message: `A deploy left the pre-migration schema of migration ${interrupted} of namespace "${namespace}" in place before it recorded the migration.`,
+      suggestion: `Settle it with ${formatMigrationResolveHint("rollback", namespace, commandContext)}, or deploy again to run migration ${interrupted}.`,
+    });
+  }
+  if (verification?.hasDrift) {
+    logger.error("Remote schema drift detected:");
+    logger.log(formatRemoteVerificationResults([verification]));
+    throw CLIError({
+      code: "MIGRATION_RESOLVE_MAINTENANCE_DRIFT",
+      message: `The tables of namespace "${namespace}" differ from checkpoint ${formatMigrationNumber(checkpoint)} in more than the maintenance mode.`,
+      suggestion: `Run ${formatNamespaceMigrationHint({ ...commandContext, subcommand: ["validate"], namespace })} to see the difference.`,
+    });
+  }
+  if (!verification?.leftInMaintenanceMode) {
+    throw CLIError({
+      code: "MIGRATION_RESOLVE_MAINTENANCE_UNVERIFIED",
+      message: `The tables of namespace "${namespace}" could not be compared with checkpoint ${formatMigrationNumber(checkpoint)}, for example because the local migration files do not reach that checkpoint.`,
+      suggestion: `Run ${statusHint} to compare the workspace with the local migration history.`,
+    });
+  }
+
+  const snapshot = loadCheckpointSnapshot(target, checkpoint);
+  const manifestOptions = await assertMigrationsReproduceLocalTypes(loaded, target);
+  const plan = await planSnapshotApply({ client, workspaceId, namespace, snapshot });
+
+  logger.newline();
+  logger.info(`Namespace: ${styles.bold(namespace)}`);
+  logger.log(
+    `  Maintenance mode left at checkpoint: ${styles.bold(formatMigrationNumber(checkpoint))}`,
+  );
+  logger.log(`  Tables to update: ${styles.bold(String(plan.updates.length))}`);
+  logger.newline();
+  logger.warn(
+    "Make sure no deploy to this workspace is running: a running deploy holds the tables in maintenance mode on purpose.",
+  );
+  logger.newline();
+
+  await confirmResolve(
+    options,
+    `Take the tables of namespace ${namespace} out of maintenance mode?`,
+  );
+
+  await assertMigrationStateUnchanged({ client, workspaceId, namespace, before: state });
+  try {
+    await applySnapshotPlan({ client, workspaceId, namespace, snapshot, manifestOptions, plan });
+  } catch (error) {
+    handleOptionalToRequiredError(
+      error,
+      "The schema of the checkpoint marks a field as required, but records still have no value for it. " +
+        "Fill in those records first (for example with `tailor query`), then run the command again.",
+    );
+  }
+  await assertMigrationStateUnchanged({ client, workspaceId, namespace, before: state });
+  await clearMaintenanceModeRecord(client, workspaceId, namespace);
+
+  logger.success(
+    `Took the tables of namespace ${styles.bold(namespace)} out of maintenance mode; the checkpoint stays ${styles.bold(formatMigrationNumber(checkpoint))}.`,
+  );
+
+  const { creates, updates, deletes, desiredGqlPermissions, gqlPermissionDeletes } = plan;
+  return {
+    changed: true,
+    workspaceId,
+    namespace,
+    resolution: "maintenance",
+    migrationNumber: checkpoint,
+    checkpoint,
+    tables: { created: creates, updated: updates, deleted: deletes },
+    gqlPermissions: {
+      set: desiredGqlPermissions.map(({ typeName }) => typeName),
+      deleted: gqlPermissionDeletes.map(({ typeName }) => typeName),
+    },
+  };
+}
+
+/**
  * Settle a migration that an earlier deploy left partially applied, or whose
  * `main` run it could not settle.
  *
@@ -202,6 +404,18 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
       suggestion: `Run ${statusHint} to inspect the migration state.`,
     });
   }
+  if (options.resolution === "maintenance") {
+    return releaseMaintenanceMode({
+      options,
+      loaded,
+      target,
+      client,
+      workspaceId,
+      state,
+      commandContext,
+      statusHint,
+    });
+  }
   const currentCheckpoint = state.number ?? 0;
   const nextMigrationNumber = currentCheckpoint + 1;
   const staleRecord = isStaleMigrationInProgress(state) ? state.inProgress : null;
@@ -238,18 +452,7 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
     });
   }
 
-  const localHistoryId =
-    reconstructSnapshotFromMigrations(target.migrationsDir, 0)?.rebaseline?.historyId ?? null;
-  if (!matchesLocalMigrationHistory(state, localHistoryId)) {
-    throw migrationHistoryMismatchError({
-      state,
-      localHistoryId,
-      namespace,
-      code: "MIGRATION_RESOLVE_HISTORY_MISMATCH",
-      suggestion:
-        "Run the command from a checkout of the migration history that was deployed to the workspace.",
-    });
-  }
+  assertLocalMigrationHistoryMatches(state, target);
 
   const migrationNumber = nextMigrationNumber;
   const migrationLabel = formatMigrationNumber(migrationNumber);
@@ -263,16 +466,9 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
       record?.executionId,
     );
   }
-  const checkpoint = options.resolution === "rollback" ? migrationNumber - 1 : migrationNumber;
-  assertMigrationNumberExists(target.migrationsDir, checkpoint);
-  const snapshot = reconstructSnapshotFromMigrations(target.migrationsDir, checkpoint);
-  if (!snapshot) {
-    throw CLIError({
-      code: "MIGRATION_BASELINE_NOT_FOUND",
-      message: `No initial schema snapshot found in ${target.migrationsDir}. Expected 0000/schema.json.`,
-      suggestion: "Create the initial schema snapshot first.",
-    });
-  }
+  const resolution: MigrationResolution = options.resolution;
+  const checkpoint = resolution === "rollback" ? migrationNumber - 1 : migrationNumber;
+  const snapshot = loadCheckpointSnapshot(target, checkpoint);
 
   const manifestOptions = await assertMigrationsReproduceLocalTypes(loaded, target);
   const plan = await planSnapshotApply({ client, workspaceId, namespace, snapshot });
@@ -325,19 +521,10 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
   }
   logger.newline();
 
-  if (!options.yes) {
-    const confirmation = await prompt.confirm({
-      message: `Continue and ${options.resolution} migration ${formatMigrationNumber(migrationNumber)}?`,
-      default: false,
-    });
-    if (!confirmation) {
-      throw CLIError({
-        code: "MIGRATION_RESOLVE_CANCELLED",
-        message: "Migration resolve cancelled.",
-      });
-    }
-    logger.newline();
-  }
+  await confirmResolve(
+    options,
+    `Continue and ${options.resolution} migration ${formatMigrationNumber(migrationNumber)}?`,
+  );
 
   await assertMigrationStateUnchanged({ client, workspaceId, namespace, before: state });
   await assertNoActiveMigrationExecution(client, workspaceId, namespace, migrationNumber);
@@ -409,7 +596,9 @@ For a run that a deploy could not confirm, the command reads how the run ended a
 
 \`--rollback\` also settles a migration that no deploy recorded as in progress, but whose pre-migration schema or maintenance mode a deploy left in place, for example because the deploy stopped before recording it. See "Settling a migration that stays in progress" in the TailorDB Migrations guide for when it runs.
 
-Both options remove the in-progress record, take the tables out of maintenance mode, and remove the temporary resources of the failed run, so \`deploy\` and the other migration commands work again. As with \`tailordb migration sync\`, the local migration history must reproduce the current table definitions. If sending the schema stops partway, run the command again.`,
+\`--maintenance\` is for a namespace whose checkpoint a deploy committed but whose tables it left in maintenance mode, with no migration in progress. It sends the schema of the checkpoint to restore the tables' settings and removes the maintenance mode record, without moving the checkpoint. It cannot be combined with the other two options, and it refuses when a migration is in progress, when no record names the current checkpoint, when a table the committed migration removes is not deleted yet (a deploy deletes it), when a deploy was interrupted before it recorded the next migration (settle it with \`--rollback\`), or when a table differs from the checkpoint in more than maintenance mode, printing the difference.
+
+Both \`--rollback\` and \`--complete\` remove the in-progress record, take the tables out of maintenance mode, and remove the temporary resources of the failed run, so \`deploy\` and the other migration commands work again. As with \`tailordb migration sync\`, the local migration history must reproduce the current table definitions. If sending the schema stops partway, run the command again.`,
   args: z.strictObject({
     ...deploymentArgs,
     ...confirmationArgs,
@@ -419,22 +608,26 @@ Both options remove the in-progress record, take the tables out of maintenance m
     complete: arg(z.boolean().default(false), {
       description: "Apply the schema of the in-progress migration and mark it as completed",
     }),
+    maintenance: arg(z.boolean().default(false), {
+      description:
+        "Take the tables out of the maintenance mode a deploy left in place after its migration was committed",
+    }),
     namespace: arg(z.string().optional(), {
       alias: "n",
       description: "Target TailorDB namespace (required if multiple namespaces exist)",
     }),
   }),
   run: async (args) => {
-    if (args.rollback === args.complete) {
+    if ([args.rollback, args.complete, args.maintenance].filter(Boolean).length !== 1) {
       throw CLIError({
         code: "MIGRATION_RESOLVE_DIRECTION_REQUIRED",
-        message: "Specify exactly one of --rollback or --complete.",
+        message: "Specify exactly one of --rollback, --complete or --maintenance.",
       });
     }
     await assertWritable({ profile: args.profile });
     const resolved = await resolve({
       configPath: args.config,
-      resolution: args.rollback ? "rollback" : "complete",
+      resolution: args.maintenance ? "maintenance" : args.rollback ? "rollback" : "complete",
       namespace: args.namespace,
       yes: args.yes,
       workspaceId: args["workspace-id"],

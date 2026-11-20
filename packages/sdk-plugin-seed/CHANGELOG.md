@@ -1,5 +1,13 @@
 # @tailor-platform/sdk-plugin-seed
 
+## 0.10.3
+
+### Patch Changes
+
+- [#3199](https://github.com/tailor-platform/sdk/pull/3199) [`dfa1b4d`](https://github.com/tailor-platform/sdk/commit/dfa1b4d1160c1d7b752a292fbf1c5aa9e09b2632) Thanks [@renovate](https://github.com/apps/renovate)! - Update `@politty/zod` to 0.7.5, so a lone `-` after an option that takes a value, such as `--value -`, is read as its value instead of being rejected
+- Updated dependencies [[`8a93054`](https://github.com/tailor-platform/sdk/commit/8a9305455330df2923197ec1e00462f3914bb342), [`c6072bb`](https://github.com/tailor-platform/sdk/commit/c6072bb0f2e121aaa88cd2701439f40902c9138b), [`c6072bb`](https://github.com/tailor-platform/sdk/commit/c6072bb0f2e121aaa88cd2701439f40902c9138b), [`97335d4`](https://github.com/tailor-platform/sdk/commit/97335d4911d16a0d5b088871eb20745b1c9e4bf9), [`d4ca31c`](https://github.com/tailor-platform/sdk/commit/d4ca31ca73f0f232c1962e3009ef5b706782b184), [`84e4742`](https://github.com/tailor-platform/sdk/commit/84e47422989f20964b83f9d7a591458dc1e52f82), [`f42f99a`](https://github.com/tailor-platform/sdk/commit/f42f99a5c91d11d2ea3a34a294cd5abf3bcb5db3), [`04ff663`](https://github.com/tailor-platform/sdk/commit/04ff663b6bbae76dafe693b29f3da165cb82f8e9), [`9fd196c`](https://github.com/tailor-platform/sdk/commit/9fd196cdb87140b7b506f877f3f7b0035b3a4389), [`c39c53a`](https://github.com/tailor-platform/sdk/commit/c39c53a30ca1b4c7be721bc767512b27e71b6ef4), [`45fb3f5`](https://github.com/tailor-platform/sdk/commit/45fb3f5e8c3cf899d27d1fed3beca8c202002e5c), [`d352a28`](https://github.com/tailor-platform/sdk/commit/d352a28f722f40a3931284ab168d620407ff4032), [`dfa1b4d`](https://github.com/tailor-platform/sdk/commit/dfa1b4d1160c1d7b752a292fbf1c5aa9e09b2632), [`c4c2e25`](https://github.com/tailor-platform/sdk/commit/c4c2e2559715e2e9a94e3de9d9600439001744e1), [`3965bbe`](https://github.com/tailor-platform/sdk/commit/3965bbe38c7e0028f7556185d7df137052e581b4)]:
+  - @tailor-platform/sdk@2.45.0
+
 ## 0.10.2
 
 ### Patch Changes
