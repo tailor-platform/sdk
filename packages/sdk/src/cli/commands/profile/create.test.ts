@@ -7,7 +7,7 @@ import { writeHeldConfigLock } from "#/cli/shared/test-helpers/config-lock";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "#/cli/shared/token-store";
-import { createCommand } from "./create";
+import { createCommand, createProfile } from "./create";
 import type * as ClientModule from "#/cli/shared/client";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-profile-create-${Date.now()}-${Math.random()}`);
@@ -217,5 +217,19 @@ describe("profile create while another process updates the config", () => {
 
     const { profiles } = await readPlatformConfig();
     expect([profiles.other, profiles.myprofile?.workspace_id]).toEqual([otherProfile, validUUID]);
+  });
+
+  test("rejects a console URL that is not a URL before it reads or writes anything", async () => {
+    clientMocks.initOperatorClient.mockClear();
+    await expect(
+      createProfile({
+        name: "myprofile",
+        user: "platform-user-sub",
+        workspaceId: validUUID,
+        consoleUrl: "not-a-url",
+      }),
+    ).rejects.toThrow('console URL "not-a-url" is not a URL');
+    expect(clientMocks.initOperatorClient).not.toHaveBeenCalled();
+    expect((await readPlatformConfig()).profiles.myprofile).toBeUndefined();
   });
 });
