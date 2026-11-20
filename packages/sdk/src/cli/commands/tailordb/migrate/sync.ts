@@ -2,7 +2,10 @@ import { arg } from "@politty/zod";
 import * as path from "pathe";
 import { z } from "zod";
 import { resourceTrn } from "#/cli/commands/deploy/label";
-import { updateMigrationLabel } from "#/cli/commands/deploy/tailordb/migration";
+import {
+  clearMaintenanceModeRecord,
+  updateMigrationLabel,
+} from "#/cli/commands/deploy/tailordb/migration";
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -338,6 +341,9 @@ async function sync(options: SyncOptions): Promise<SyncResult> {
     );
   }
 
+  if (currentState.maintenanceModeCheckpoint !== null) {
+    await clearMaintenanceModeRecord(client, workspaceId, target.namespace);
+  }
   const labelChanged = await updateMigrationLabel(
     client,
     workspaceId,

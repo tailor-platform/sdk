@@ -6,13 +6,7 @@ import { deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
-import {
-  CLIError,
-  errorSummary,
-  formatCommandHint,
-  isCLIError,
-  type CLIErrorNextAction,
-} from "#/cli/shared/errors";
+import { CLIError, errorSummary, formatCommandHint, isCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { getNamespacesWithMigrations, migrationConfigNotFoundError } from "./config";
@@ -25,6 +19,7 @@ import {
   isStaleMigrationInProgress,
   matchesLocalMigrationHistory,
   maintenanceModeReleaseAction,
+  type MaintenanceModeRelease,
 } from "./remote-state";
 import {
   locateRemoteCheckpoint,
@@ -71,11 +66,11 @@ interface MigrationStatusInfo {
   inProgressMigrationRun?: "steps" | "main";
   /** Commands that continue or settle the in-progress migration. */
   inProgressMigrationActions?: InProgressMigrationAction[];
-  /** Checkpoint whose tables a deploy left in maintenance mode, when no migration is in progress. */
+  /** Checkpoint a deploy's maintenance mode record names, when no migration is in progress. */
   maintenanceModeCheckpoint?: number;
   maintenanceModeCheckpointLabel?: string;
-  /** Command that takes those tables out of maintenance mode. */
-  maintenanceModeRelease?: CLIErrorNextAction;
+  /** Command that removes the record, taking the tables out of maintenance mode if they are in it. */
+  maintenanceModeRelease?: MaintenanceModeRelease;
 }
 
 interface MigrationStatusFailure {
@@ -309,8 +304,10 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
         : {}),
       ...(maintenanceModeRelease
         ? {
-            maintenanceModeCheckpoint: currentMigration,
-            maintenanceModeCheckpointLabel: formatMigrationNumber(currentMigration),
+            maintenanceModeCheckpoint: remoteState.maintenanceModeCheckpoint ?? undefined,
+            maintenanceModeCheckpointLabel: formatMigrationNumber(
+              remoteState.maintenanceModeCheckpoint ?? 0,
+            ),
             maintenanceModeRelease,
           }
         : {}),
@@ -341,8 +338,11 @@ function printMigrationStatuses(rows: MigrationStatusRow[]): void {
     }
 
     if (row.maintenanceModeRelease) {
+      const label = styles.bold(row.maintenanceModeCheckpointLabel ?? "");
       logger.log(
-        `  Maintenance mode: tables left in maintenance mode at checkpoint ${styles.bold(row.maintenanceModeCheckpointLabel ?? "")}`,
+        row.maintenanceModeCheckpoint === row.currentMigration
+          ? `  Maintenance mode: tables left in maintenance mode at checkpoint ${label}`
+          : `  Maintenance mode: a record names checkpoint ${label}, not the current checkpoint`,
       );
       logger.log(`    Release: ${formatCommandHint(row.maintenanceModeRelease)}`);
     }

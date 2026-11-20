@@ -367,31 +367,37 @@ export function formatInProgressMigrationAction(action: InProgressMigrationActio
   return `${IN_PROGRESS_ACTION_LABELS[action.action]}: ${formatCommandHint(action)} (${action.description})`;
 }
 
+/** How a maintenance mode record is removed, and the command that does it. */
+export type MaintenanceModeRelease = CLIErrorNextAction & { via: "resolve" | "deploy" };
+
 /**
- * The command that takes a namespace's tables out of the maintenance mode a deploy left in place
- * after committing the checkpoint, when `migration resolve --maintenance` accepts that state.
+ * The command that removes the maintenance mode record a deploy left in place: `migration resolve
+ * --maintenance` when the record names the current checkpoint, which also takes the tables out of
+ * maintenance mode, and `deploy` when it names another checkpoint, since a deploy removes it.
  * @param state - Remote migration state of the namespace
  * @param namespace - TailorDB namespace
  * @param context - Config and workspace selection of the current run
- * @returns The command, or undefined when no record names the current checkpoint or a migration is in progress
+ * @returns The command, or undefined when no record remains or a migration is in progress
  */
 export function maintenanceModeReleaseAction(
   state: RemoteMigrationState,
   namespace: string,
   context: MigrationCommandContext,
-): CLIErrorNextAction | undefined {
+): MaintenanceModeRelease | undefined {
   const migrationInProgress = state.inProgress !== null && !isStaleMigrationInProgress(state);
-  if (migrationInProgress || state.maintenanceModeCheckpoint !== (state.number ?? 0)) {
-    return undefined;
+  if (migrationInProgress || state.maintenanceModeCheckpoint === null) return undefined;
+  if (state.maintenanceModeCheckpoint === (state.number ?? 0)) {
+    return {
+      via: "resolve",
+      command: "tailor",
+      args: namespaceMigrationArgs({
+        ...context,
+        subcommand: ["resolve", "--maintenance"],
+        namespace,
+      }),
+    };
   }
-  return {
-    command: "tailor",
-    args: namespaceMigrationArgs({
-      ...context,
-      subcommand: ["resolve", "--maintenance"],
-      namespace,
-    }),
-  };
+  return { via: "deploy", command: "tailor", args: ["deploy", ...migrationContextArgs(context)] };
 }
 
 /**
@@ -408,16 +414,16 @@ export function assertNoMaintenanceModeRecord(
 ): void {
   if (state.maintenanceModeCheckpoint === null) return;
   const release = maintenanceModeReleaseAction(state, namespace, context);
-  const statusCommand = formatCommandHint({
-    command: "tailor",
-    args: namespaceMigrationArgs({ ...context, subcommand: ["status"], namespace }),
-  });
+  const suggestion =
+    release === undefined
+      ? "Settle the migration in progress first."
+      : release.via === "deploy"
+        ? `The record names a checkpoint other than the current one, which a deploy removes: run ${formatCommandHint(release)}.`
+        : `Take the tables out of maintenance mode first with ${formatCommandHint(release)}.`;
   throw CLIError({
     code: "MIGRATION_MAINTENANCE_MODE_RECORDED",
     message: `Namespace "${namespace}" records tables a deploy left in maintenance mode at checkpoint ${describeMigrationCheckpoint(state.maintenanceModeCheckpoint)}.`,
-    suggestion: release
-      ? `Take the tables out of maintenance mode first with ${formatCommandHint(release)}.`
-      : `Run ${statusCommand} to check the migration state.`,
+    suggestion,
   });
 }
 

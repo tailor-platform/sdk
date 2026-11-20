@@ -101,7 +101,8 @@ async function assertMigrationStateUnchanged(params: AssertStateUnchangedParams)
     now.historyId !== before.historyId ||
     now.inProgress?.number !== before.inProgress?.number ||
     now.inProgress?.executionId !== before.inProgress?.executionId ||
-    now.inProgress?.kind !== before.inProgress?.kind
+    now.inProgress?.kind !== before.inProgress?.kind ||
+    now.maintenanceModeCheckpoint !== before.maintenanceModeCheckpoint
   ) {
     throw CLIError({
       code: "MIGRATION_RESOLVE_STATE_CHANGED",
@@ -158,6 +159,64 @@ function warnMainRunResolution(params: MainRunResolution): void {
   }
 }
 
+/**
+ * Refuse to settle a namespace whose recorded migration history is not the local one.
+ * @param state - Remote migration state of the namespace
+ * @param target - Namespace and its local migration files
+ */
+function assertLocalMigrationHistoryMatches(
+  state: RemoteMigrationState,
+  target: NamespaceWithMigrations,
+): void {
+  const localHistoryId =
+    reconstructSnapshotFromMigrations(target.migrationsDir, 0)?.rebaseline?.historyId ?? null;
+  if (matchesLocalMigrationHistory(state, localHistoryId)) return;
+  throw migrationHistoryMismatchError({
+    state,
+    localHistoryId,
+    namespace: target.namespace,
+    code: "MIGRATION_RESOLVE_HISTORY_MISMATCH",
+    suggestion:
+      "Run the command from a checkout of the migration history that was deployed to the workspace.",
+  });
+}
+
+/**
+ * Rebuild the schema a checkpoint stands for from the local migration files.
+ * @param target - Namespace and its local migration files
+ * @param checkpoint - Migration number whose schema is rebuilt
+ * @returns The schema snapshot at the checkpoint
+ */
+function loadCheckpointSnapshot(target: NamespaceWithMigrations, checkpoint: number) {
+  assertMigrationNumberExists(target.migrationsDir, checkpoint);
+  const snapshot = reconstructSnapshotFromMigrations(target.migrationsDir, checkpoint);
+  if (!snapshot) {
+    throw CLIError({
+      code: "MIGRATION_BASELINE_NOT_FOUND",
+      message: `No initial schema snapshot found in ${target.migrationsDir}. Expected 0000/schema.json.`,
+      suggestion: "Create the initial schema snapshot first.",
+    });
+  }
+  return snapshot;
+}
+
+/**
+ * Ask for confirmation unless `--yes` was given.
+ * @param options - Command options
+ * @param message - Question to ask
+ */
+async function confirmResolve(options: ResolveOptions, message: string): Promise<void> {
+  if (options.yes) return;
+  const confirmation = await prompt.confirm({ message, default: false });
+  if (!confirmation) {
+    throw CLIError({
+      code: "MIGRATION_RESOLVE_CANCELLED",
+      message: "Migration resolve cancelled.",
+    });
+  }
+  logger.newline();
+}
+
 type ReleaseMaintenanceModeParams = {
   options: ResolveOptions;
   loaded: Awaited<ReturnType<typeof loadConfig>>;
@@ -199,39 +258,27 @@ async function releaseMaintenanceMode(
   }
 
   assertValidMigrationFiles(target.migrationsDir, namespace, loaded.config.path);
-  const localHistoryId =
-    reconstructSnapshotFromMigrations(target.migrationsDir, 0)?.rebaseline?.historyId ?? null;
-  if (!matchesLocalMigrationHistory(state, localHistoryId)) {
-    throw migrationHistoryMismatchError({
-      state,
-      localHistoryId,
-      namespace,
-      code: "MIGRATION_RESOLVE_HISTORY_MISMATCH",
-      suggestion:
-        "Run the command from a checkout of the migration history that was deployed to the workspace.",
-    });
-  }
+  assertLocalMigrationHistoryMatches(state, target);
 
   const verification = (
     await verifyRemoteSchema(client, workspaceId, [target], loaded.config, [])
   )[0];
-  if (!verification?.leftInMaintenanceMode || verification.hasDrift) {
+  if (verification?.hasDrift) {
     throw CLIError({
       code: "MIGRATION_RESOLVE_MAINTENANCE_DRIFT",
       message: `The tables of namespace "${namespace}" differ from checkpoint ${formatMigrationNumber(checkpoint)} in more than the maintenance mode.`,
       suggestion: `Run ${statusHint} to compare the workspace with the local migration history.`,
     });
   }
-
-  assertMigrationNumberExists(target.migrationsDir, checkpoint);
-  const snapshot = reconstructSnapshotFromMigrations(target.migrationsDir, checkpoint);
-  if (!snapshot) {
+  if (!verification?.leftInMaintenanceMode) {
     throw CLIError({
-      code: "MIGRATION_BASELINE_NOT_FOUND",
-      message: `No initial schema snapshot found in ${target.migrationsDir}. Expected 0000/schema.json.`,
-      suggestion: "Create the initial schema snapshot first.",
+      code: "MIGRATION_RESOLVE_MAINTENANCE_UNVERIFIED",
+      message: `The tables of namespace "${namespace}" could not be compared with checkpoint ${formatMigrationNumber(checkpoint)}, for example because the local migration files do not reach that checkpoint.`,
+      suggestion: `Run ${statusHint} to compare the workspace with the local migration history.`,
     });
   }
+
+  const snapshot = loadCheckpointSnapshot(target, checkpoint);
   const manifestOptions = await assertMigrationsReproduceLocalTypes(loaded, target);
   const plan = await planSnapshotApply({ client, workspaceId, namespace, snapshot });
 
@@ -247,19 +294,10 @@ async function releaseMaintenanceMode(
   );
   logger.newline();
 
-  if (!options.yes) {
-    const confirmation = await prompt.confirm({
-      message: `Take the tables of namespace ${namespace} out of maintenance mode?`,
-      default: false,
-    });
-    if (!confirmation) {
-      throw CLIError({
-        code: "MIGRATION_RESOLVE_CANCELLED",
-        message: "Migration resolve cancelled.",
-      });
-    }
-    logger.newline();
-  }
+  await confirmResolve(
+    options,
+    `Take the tables of namespace ${namespace} out of maintenance mode?`,
+  );
 
   await assertMigrationStateUnchanged({ client, workspaceId, namespace, before: state });
   try {
@@ -271,6 +309,7 @@ async function releaseMaintenanceMode(
         "Fill in those records first (for example with `tailor query`), then run the command again.",
     );
   }
+  await assertMigrationStateUnchanged({ client, workspaceId, namespace, before: state });
   await clearMaintenanceModeRecord(client, workspaceId, namespace);
 
   logger.success(
@@ -392,18 +431,7 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
     });
   }
 
-  const localHistoryId =
-    reconstructSnapshotFromMigrations(target.migrationsDir, 0)?.rebaseline?.historyId ?? null;
-  if (!matchesLocalMigrationHistory(state, localHistoryId)) {
-    throw migrationHistoryMismatchError({
-      state,
-      localHistoryId,
-      namespace,
-      code: "MIGRATION_RESOLVE_HISTORY_MISMATCH",
-      suggestion:
-        "Run the command from a checkout of the migration history that was deployed to the workspace.",
-    });
-  }
+  assertLocalMigrationHistoryMatches(state, target);
 
   const migrationNumber = nextMigrationNumber;
   const migrationLabel = formatMigrationNumber(migrationNumber);
@@ -419,15 +447,7 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
   }
   const resolution: MigrationResolution = options.resolution;
   const checkpoint = resolution === "rollback" ? migrationNumber - 1 : migrationNumber;
-  assertMigrationNumberExists(target.migrationsDir, checkpoint);
-  const snapshot = reconstructSnapshotFromMigrations(target.migrationsDir, checkpoint);
-  if (!snapshot) {
-    throw CLIError({
-      code: "MIGRATION_BASELINE_NOT_FOUND",
-      message: `No initial schema snapshot found in ${target.migrationsDir}. Expected 0000/schema.json.`,
-      suggestion: "Create the initial schema snapshot first.",
-    });
-  }
+  const snapshot = loadCheckpointSnapshot(target, checkpoint);
 
   const manifestOptions = await assertMigrationsReproduceLocalTypes(loaded, target);
   const plan = await planSnapshotApply({ client, workspaceId, namespace, snapshot });
@@ -480,19 +500,10 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
   }
   logger.newline();
 
-  if (!options.yes) {
-    const confirmation = await prompt.confirm({
-      message: `Continue and ${options.resolution} migration ${formatMigrationNumber(migrationNumber)}?`,
-      default: false,
-    });
-    if (!confirmation) {
-      throw CLIError({
-        code: "MIGRATION_RESOLVE_CANCELLED",
-        message: "Migration resolve cancelled.",
-      });
-    }
-    logger.newline();
-  }
+  await confirmResolve(
+    options,
+    `Continue and ${options.resolution} migration ${formatMigrationNumber(migrationNumber)}?`,
+  );
 
   await assertMigrationStateUnchanged({ client, workspaceId, namespace, before: state });
   await assertNoActiveMigrationExecution(client, workspaceId, namespace, migrationNumber);

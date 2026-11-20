@@ -240,8 +240,19 @@ read them:
 - `MIGRATION_SYNC_HISTORY_MISMATCH`: the namespace records a different migration history ID, or one
   that cannot be read, and `sync` was run without `--force`.
 - `MIGRATION_SYNC_CANCELLED`: the `sync` confirmation was declined.
-- `MIGRATION_RESOLVE_DIRECTION_REQUIRED`: `resolve` was given neither or both of `--rollback` and
-  `--complete`.
+- `MIGRATION_RESOLVE_DIRECTION_REQUIRED`: `resolve` was not given exactly one of `--rollback`,
+  `--complete`, and `--maintenance`.
+- `MIGRATION_MAINTENANCE_MODE_RECORDED`: `rebaseline` found a record of tables a deploy left in
+  maintenance mode; remove it with `resolve --maintenance` first, or with `deploy` when it names a
+  checkpoint other than the current one.
+- `MIGRATION_RESOLVE_NO_MAINTENANCE_RECORD`: `resolve --maintenance` found no record of tables left
+  in maintenance mode at the namespace's current checkpoint.
+- `MIGRATION_RESOLVE_MAINTENANCE_IN_PROGRESS`: `resolve --maintenance` found a migration in
+  progress; settle it with `--rollback` or `--complete`.
+- `MIGRATION_RESOLVE_MAINTENANCE_DRIFT`: with `--maintenance`, a table differs from the checkpoint
+  in more than maintenance mode.
+- `MIGRATION_RESOLVE_MAINTENANCE_UNVERIFIED`: with `--maintenance`, the tables could not be compared
+  with the checkpoint, for example because the local migration files do not reach it.
 - `MIGRATION_RESOLVE_NO_IN_PROGRESS`: `resolve` found nothing to settle: no migration is in
   progress in the namespace, and with `--rollback`, no interrupted deploy left the pre-migration
   schema of a migration either.

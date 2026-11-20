@@ -189,8 +189,33 @@ describe("tailordb migration status --json", () => {
     ]);
   });
 
+  test("tells a deploy removes a maintenance mode record that names another checkpoint", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0001", "sdk-maintenance-mode": "m0002" },
+      },
+    });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    await runCommand(statusCommand, []);
+
+    expect(JSON.parse(stdout.output)).toMatchObject([
+      {
+        status: "ok",
+        maintenanceModeCheckpoint: 2,
+        maintenanceModeCheckpointLabel: "0002",
+        maintenanceModeRelease: {
+          via: "deploy",
+          command: "tailor",
+          args: ["deploy", workspaceArg],
+        },
+      },
+    ]);
+  });
+
   test.each([
-    ["names another checkpoint", { "sdk-migration": "m0001", "sdk-maintenance-mode": "m0002" }],
     [
       "comes with a migration in progress",
       {

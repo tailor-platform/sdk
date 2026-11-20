@@ -277,6 +277,56 @@ describe("tailordb migration resolve", () => {
       expectNothingWritten();
     });
 
+    test("refuses when the namespace records another migration history", async () => {
+      leftInMaintenanceModeAt0001();
+      remoteLabels({
+        "sdk-migration": "m0001",
+        "sdk-maintenance-mode": "m0001",
+        "sdk-migration-history": "hother",
+      });
+
+      const result = await runCommand(resolveCommand, ["--maintenance", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_HISTORY_MISMATCH" });
+      expectNothingWritten();
+    });
+
+    test("writes nothing when the confirmation is declined", async () => {
+      leftInMaintenanceModeAt0001();
+      vi.mocked(prompt.confirm).mockResolvedValue(false);
+
+      const result = await runCommand(resolveCommand, ["--maintenance"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_CANCELLED" });
+      expectNothingWritten();
+    });
+
+    test("says the tables could not be compared when the checkpoint is past the local migrations", async () => {
+      remoteLabels({ "sdk-migration": "m0005", "sdk-maintenance-mode": "m0005" });
+
+      const result = await runCommand(resolveCommand, ["--maintenance", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_MAINTENANCE_UNVERIFIED" });
+      expectNothingWritten();
+    });
+
+    test("keeps a maintenance record another deploy wrote while the tables were being updated", async () => {
+      leftInMaintenanceModeAt0001();
+      state.updateTailorDBType.mockImplementation(async () => {
+        remoteLabels({ "sdk-migration": "m0002", "sdk-maintenance-mode": "m0002" });
+        return {};
+      });
+
+      const result = await runCommand(resolveCommand, ["--maintenance", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_STATE_CHANGED" });
+      expect(state.setMetadata).not.toHaveBeenCalled();
+    });
+
     test("leaves the record alone when sending the schema fails", async () => {
       leftInMaintenanceModeAt0001();
       state.updateTailorDBType.mockRejectedValue(new Error("update failed"));

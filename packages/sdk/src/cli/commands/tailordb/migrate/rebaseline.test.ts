@@ -326,7 +326,7 @@ describe("tailordb migration rebaseline", () => {
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
 
-  test("points to status when the maintenance mode record names another checkpoint", async () => {
+  test("points to deploy when the maintenance mode record names another checkpoint", async () => {
     state.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0001", "sdk-maintenance-mode": "m0002" } },
     });
@@ -336,7 +336,7 @@ describe("tailordb migration rebaseline", () => {
     expect(result.success).toBe(false);
     expect(result.error).toMatchObject({
       code: "MIGRATION_MAINTENANCE_MODE_RECORDED",
-      suggestion: expect.stringContaining("migration status"),
+      suggestion: expect.stringContaining("tailor deploy"),
     });
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
