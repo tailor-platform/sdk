@@ -240,10 +240,21 @@ function StudioHeader() {
   const [error, setError] = useState<string>();
 
   useEffect(() => {
-    void fetch("/api/context")
-      .then((response) => response.json() as Promise<ContextInfo | { error: string }>)
-      .then((body) => ("error" in body ? setError(body.error) : setInfo(body)))
-      .catch((e: unknown) => setError(String(e)));
+    const load = () =>
+      void fetch("/api/context")
+        .then((response) => response.json() as Promise<ContextInfo | { error: string }>)
+        .then((body) => {
+          if ("error" in body) setError(body.error);
+          else {
+            setError(undefined);
+            setInfo(body);
+          }
+        })
+        .catch((e: unknown) => setError(String(e)));
+    load();
+    const events = new EventSource("/api/context/events");
+    events.addEventListener("changed", load);
+    return () => events.close();
   }, []);
 
   const select = async (profile: string) => {

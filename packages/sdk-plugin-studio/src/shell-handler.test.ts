@@ -20,7 +20,11 @@ function get(handler: (r: Request) => Promise<Response>, pathname: string, init?
 
 type Handler = (
   request: Request,
-  context: { basePath: string; getSelection: () => object },
+  context: {
+    basePath: string;
+    getSelection: () => object;
+    onSelectionChange: (l: () => void) => () => void;
+  },
 ) => Response | Promise<Response>;
 
 function mounted(id: string, handler: Handler): Tab {
@@ -123,6 +127,52 @@ describe("createShellHandler", () => {
     });
   });
 
+  describe("/api/context/events", () => {
+    async function open(handler: (r: Request) => Promise<Response>) {
+      const abort = new AbortController();
+      const res = await get(handler, "/api/context/events", { signal: abort.signal });
+      const reader = res.body!.getReader();
+      const read = async () => new TextDecoder().decode((await reader.read()).value);
+      return { res, read, abort };
+    }
+
+    test("sends a changed event to every open page when a profile is selected", async () => {
+      const handler = shell([]);
+      const first = await open(handler);
+      const second = await open(handler);
+      expect(first.res.headers.get("content-type")).toBe("text/event-stream");
+      await first.read();
+      await second.read();
+      await put(handler, { profile: "test" });
+      expect([await first.read(), await second.read()]).toEqual([
+        "event: changed\ndata: {}\n\n",
+        "event: changed\ndata: {}\n\n",
+      ]);
+      first.abort.abort();
+      second.abort.abort();
+    });
+
+    test("stops listening when the page disconnects", async () => {
+      const inner = workspace();
+      let active = 0;
+      const ws = {
+        ...inner,
+        subscribe: (listener: () => void) => {
+          active++;
+          const unsubscribe = inner.subscribe(listener);
+          return () => {
+            active--;
+            return unsubscribe();
+          };
+        },
+      };
+      const { abort } = await open(shell([], ws));
+      expect(active).toBe(1);
+      abort.abort();
+      expect(active).toBe(0);
+    });
+  });
+
   describe("creating a profile", () => {
     const input = { name: "test", user: "me@example.com", workspaceId: WORKSPACES[0]!.id };
 
@@ -219,7 +269,14 @@ describe("createShellHandler", () => {
 
   test("passes the plugin the path below its prefix, and the base path", async () => {
     const plugin = vi.fn(
-      (_r: Request, _c: { basePath: string; getSelection: () => object }) => new Response("ok"),
+      (
+        _r: Request,
+        _c: {
+          basePath: string;
+          getSelection: () => object;
+          onSelectionChange: (l: () => void) => () => void;
+        },
+      ) => new Response("ok"),
     );
     await get(shell([mounted("erd", plugin)]), "/plugins/erd/assets/app.js?x=1");
     const [request, context] = plugin.mock.calls[0]!;
@@ -231,7 +288,14 @@ describe("createShellHandler", () => {
     "keeps the forwarded URL on the shell's origin when the path below the prefix is %j",
     async (rest) => {
       const plugin = vi.fn(
-        (_r: Request, _c: { basePath: string; getSelection: () => object }) => new Response("ok"),
+        (
+          _r: Request,
+          _c: {
+            basePath: string;
+            getSelection: () => object;
+            onSelectionChange: (l: () => void) => () => void;
+          },
+        ) => new Response("ok"),
       );
       await get(shell([mounted("erd", plugin)]), `/plugins/erd${rest}?q=1`);
       const forwarded = new URL(plugin.mock.calls[0]![0].url);

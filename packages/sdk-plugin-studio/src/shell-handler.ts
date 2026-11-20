@@ -6,6 +6,8 @@ export interface UiHandlerContext {
   basePath: string;
   /** The profile / workspace chosen in the shell, read again on every call. */
   getSelection: () => WorkspaceSelection;
+  /** Call `listener` whenever the selection changes; returns the function that stops it. */
+  onSelectionChange: (listener: () => void) => () => void;
 }
 
 export type UiHandler = (
@@ -105,6 +107,39 @@ export function createShellHandler(options: ShellHandlerOptions) {
     }
   };
 
+  const handleContextEvents = (request: Request): Response => {
+    const encoder = new TextEncoder();
+    let stop = () => {};
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const send = (text: string) => {
+          try {
+            controller.enqueue(encoder.encode(text));
+          } catch {
+            stop();
+          }
+        };
+        const unsubscribe = options.workspace.subscribe(() => send("event: changed\ndata: {}\n\n"));
+        stop = () => {
+          unsubscribe();
+          try {
+            controller.close();
+          } catch {
+            // already closed
+          }
+        };
+        request.signal.addEventListener("abort", stop, { once: true });
+        send(": connected\n\n");
+      },
+      cancel() {
+        stop();
+      },
+    });
+    return new Response(body, {
+      headers: { "content-type": "text/event-stream", "cache-control": "no-store" },
+    });
+  };
+
   const failure = (error: unknown) =>
     Response.json(
       { error: error instanceof Error ? error.message : String(error) },
@@ -161,6 +196,7 @@ export function createShellHandler(options: ShellHandlerOptions) {
     const url = new URL(request.url);
     if (url.pathname === "/api/tabs") return Response.json(options.tabs.map(describeTab));
 
+    if (url.pathname === "/api/context/events") return handleContextEvents(request);
     if (url.pathname === "/api/context") return handleContext(request);
 
     if (url.pathname === "/api/accounts") {
@@ -191,6 +227,7 @@ export function createShellHandler(options: ShellHandlerOptions) {
       return await tab.handler(forwarded, {
         basePath: `/plugins/${id}/`,
         getSelection: () => options.workspace.selection(),
+        onSelectionChange: (listener) => options.workspace.subscribe(listener),
       });
     } catch (error) {
       options.onError?.(error, id!);

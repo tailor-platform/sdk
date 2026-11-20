@@ -60,6 +60,34 @@ describe("createWorkspaceContext", () => {
   });
 });
 
+describe("subscribe", () => {
+  test("calls the listener after a profile is selected and after it is cleared", async () => {
+    const ctx = await context();
+    let calls = 0;
+    ctx.subscribe(() => calls++);
+    await ctx.select("test");
+    await ctx.select(null);
+    expect(calls).toBe(2);
+  });
+
+  test("stops calling a listener once it unsubscribed", async () => {
+    const ctx = await context();
+    let calls = 0;
+    const unsubscribe = ctx.subscribe(() => calls++);
+    unsubscribe();
+    await ctx.select("test");
+    expect(calls).toBe(0);
+  });
+
+  test("does not call the listener when selecting an unknown profile fails", async () => {
+    const ctx = await context();
+    let calls = 0;
+    ctx.subscribe(() => calls++);
+    await expect(ctx.select("nope")).rejects.toThrow("not found");
+    expect(calls).toBe(0);
+  });
+});
+
 describe("remembering the selection", () => {
   function remembering(saved: string | undefined, initialProfile?: string) {
     const writes: (string | null)[] = [];

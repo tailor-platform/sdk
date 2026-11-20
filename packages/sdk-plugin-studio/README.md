@@ -42,13 +42,15 @@ A plugin that provides a tab declares its UI in `package.json`. The shell curren
 ```ts
 import { selectionArgs, type UiHandler } from "@tailor-platform/sdk-plugin-studio";
 
-const handler: UiHandler = (request, { basePath, getSelection }) => new Response("...");
+const handler: UiHandler = (request, { basePath, getSelection, onSelectionChange }) =>
+  new Response("...");
 export default handler;
 ```
 
 - The shell serves the handler under `/plugins/<id>/`. The request URL it receives has that prefix removed, and `basePath` is the prefix. Reference assets and APIs with relative URLs.
 - The shell checks every request before it reaches a handler. A request a browser marks `Sec-Fetch-Site: cross-site` or `same-site` is rejected, so another page cannot make the browser call a handler; opening the UI from the address bar, a bookmark or `--open` is unaffected. A request other than `GET` / `HEAD` must be marked `same-origin` and carry a local `Origin`, so it has to come from a page of the shell itself: `fetch` from the plugin's page works without any extra header, and `curl` does not.
 - `getSelection()` returns the profile / workspace chosen in the bar, `{ profile?, workspaceId? }`, as of that call. `selectionArgs(getSelection())` turns it into `tailor` options (`--profile=<name> --workspace-id=<id>`) and is empty while nothing is selected, in which case the tab should ask the user to choose one in the bar.
+- `onSelectionChange(listener)` calls `listener` whenever the choice changes, from any open window, and returns the function that stops it. A tab that keeps work running against the selection can stop it there instead of polling `getSelection()`.
 - A handler may return a streaming `text/event-stream` response.
 - `id` is the tab's route (`/<id>`), so `api`, `plugins` and `assets` are rejected.
 - Only `kind: "module"` is supported. `kind: "process"` is reserved for plugins that run as a separate process and is rejected for now.

@@ -20,6 +20,8 @@ export interface WorkspaceContext {
   selection(): WorkspaceSelection;
   select(profile: string | null): Promise<void>;
   describe(): Promise<{ profiles: ProfileInfo[]; selected: WorkspaceSelection }>;
+  /** Call `listener` after every `select`; returns the function that stops it. */
+  subscribe(listener: () => void): () => void;
 }
 
 export interface WorkspaceContextOptions {
@@ -44,6 +46,10 @@ export async function listProfiles(): Promise<ProfileInfo[]> {
  */
 export function createWorkspaceContext(options: WorkspaceContextOptions): WorkspaceContext {
   let selected: WorkspaceSelection = {};
+  const listeners = new Set<() => void>();
+  const notify = () => {
+    for (const listener of listeners) listener();
+  };
   return {
     restore: async () => {
       const profiles = await options.listProfiles();
@@ -61,14 +67,20 @@ export function createWorkspaceContext(options: WorkspaceContextOptions): Worksp
       if (profile === null) {
         selected = {};
         options.store?.save(null);
+        notify();
         return;
       }
       const found = (await options.listProfiles()).find((p) => p.name === profile);
       if (!found) throw new Error(`Profile "${profile}" not found`);
       selected = { profile: found.name, workspaceId: found.workspaceId };
       options.store?.save(found.name);
+      notify();
     },
     describe: async () => ({ profiles: await options.listProfiles(), selected: { ...selected } }),
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
   };
 }
 

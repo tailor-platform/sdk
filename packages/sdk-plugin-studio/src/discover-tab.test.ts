@@ -64,6 +64,7 @@ describe("discoverTab", () => {
     const res = await tab.handler(new Request("http://x/"), {
       basePath: "/plugins/fake/",
       getSelection: () => ({}),
+      onSelectionChange: () => () => {},
     });
     expect(await res.text()).toBe("from plugin");
   });
