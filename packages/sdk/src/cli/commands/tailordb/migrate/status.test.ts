@@ -156,6 +156,123 @@ describe("tailordb migration status --json", () => {
     ]);
   });
 
+  test("reports tables a deploy left in maintenance mode at the checkpoint and the command that releases them", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0001", "sdk-maintenance-mode": "m0001" },
+      },
+    });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    await runCommand(statusCommand, []);
+
+    expect(JSON.parse(stdout.output)).toMatchObject([
+      {
+        status: "ok",
+        maintenanceModeCheckpoint: 1,
+        maintenanceModeCheckpointLabel: "0001",
+        maintenanceModeRelease: {
+          command: "tailor",
+          args: [
+            "tailordb",
+            "migration",
+            "resolve",
+            "--maintenance",
+            "--namespace",
+            "tailordb",
+            workspaceArg,
+          ],
+        },
+      },
+    ]);
+  });
+
+  test("lists deploy for a maintenance record while a removed table of the committed migration is not deleted yet", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: {
+          "sdk-migration": "m0001",
+          "sdk-maintenance-mode": "m0001",
+          "sdk-migration-cleanup": "m0001",
+        },
+      },
+    });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    await runCommand(statusCommand, []);
+
+    const [row] = JSON.parse(stdout.output) as Record<string, unknown>[];
+    expect(row).toMatchObject({
+      maintenanceModeCheckpoint: 1,
+      maintenanceModeRelease: { via: "deploy", command: "tailor", args: ["deploy", workspaceArg] },
+    });
+    expect((row?.maintenanceModeRelease as Record<string, unknown>).fallback).toBeUndefined();
+  });
+
+  test("tells a deploy removes a maintenance mode record that names another checkpoint, and sync when the deploy stops on drift", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0001", "sdk-maintenance-mode": "m0002" },
+      },
+    });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    await runCommand(statusCommand, []);
+
+    expect(JSON.parse(stdout.output)).toMatchObject([
+      {
+        status: "ok",
+        maintenanceModeCheckpoint: 2,
+        maintenanceModeCheckpointLabel: "0002",
+        maintenanceModeRelease: {
+          via: "deploy",
+          command: "tailor",
+          args: ["deploy", workspaceArg],
+          fallback: {
+            command: "tailor",
+            args: [
+              "tailordb",
+              "migration",
+              "sync",
+              "0001",
+              "--namespace",
+              "tailordb",
+              workspaceArg,
+            ],
+          },
+        },
+      },
+    ]);
+  });
+
+  test.each([
+    [
+      "comes with a migration in progress",
+      {
+        "sdk-migration": "m0001",
+        "sdk-migration-in-progress": "m0002",
+        "sdk-maintenance-mode": "m0001",
+      },
+    ],
+    ["is absent", { "sdk-migration": "m0001" }],
+  ])("does not offer to release maintenance mode when the record %s", async (_name, labels) => {
+    state.getMetadata.mockResolvedValue({ metadata: { labels } });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    await runCommand(statusCommand, []);
+
+    const [row] = JSON.parse(stdout.output) as Record<string, unknown>[];
+    expect(row).not.toHaveProperty("maintenanceModeRelease");
+  });
+
   test("reports a `main` run whose outcome an earlier deploy could not settle", async () => {
     state.getMetadata.mockResolvedValue({
       metadata: {

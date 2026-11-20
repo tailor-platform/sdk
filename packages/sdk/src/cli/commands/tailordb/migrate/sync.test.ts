@@ -198,6 +198,24 @@ describe("tailordb migration sync", () => {
     );
   });
 
+  test("removes a maintenance mode record, since the schema it sends puts the tables out of maintenance mode", async () => {
+    let labels: Record<string, string> = {
+      "sdk-migration": "m0002",
+      "sdk-maintenance-mode": "m0002",
+      "sdk-name": "my-app",
+    };
+    state.getMetadata.mockImplementation(async () => ({ metadata: { labels } }));
+    state.setMetadata.mockImplementation(async (request: { labels: Record<string, string> }) => {
+      labels = request.labels;
+      return {};
+    });
+
+    const result = await runCommand(syncCommand, ["1", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(labels).toEqual({ "sdk-migration": "m0001", "sdk-name": "my-app" });
+  });
+
   test("refuses to sync while a migration is in progress", async () => {
     state.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002" } },
@@ -257,6 +275,16 @@ describe("tailordb migration sync", () => {
       labels: { "sdk-migration": "m0000", "sdk-name": "my-app" },
       previousMigrationNumber: 0,
       changed: false,
+    },
+    {
+      name: "only a maintenance mode record is removed",
+      labels: {
+        "sdk-migration": "m0000",
+        "sdk-maintenance-mode": "m0000",
+        "sdk-name": "my-app",
+      },
+      previousMigrationNumber: 0,
+      changed: true,
     },
     {
       name: "only the label moves",
