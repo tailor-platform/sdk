@@ -253,6 +253,32 @@ describe("planFunctionRegistry", () => {
       ]);
     });
 
+    test("for a workspace config, relabels a function an application deployed without uploading it", async () => {
+      const entry = createEntry("resolver/ns/getUser");
+      const client = createMockClient([
+        { name: "resolver/ns/getUser", contentHash: entry.contentHash, label: "shop" },
+      ]);
+
+      const result = await planFunctionRegistry(client, workspaceId, { kind: "workspace" }, [
+        entry,
+      ]);
+
+      expect(result.changeSet.updates).toEqual([]);
+      expect(result.changeSet.unchanged).toEqual([
+        {
+          name: "resolver/ns/getUser",
+          labelRefresh: expect.objectContaining({ trn: expect.any(String) }),
+        },
+      ]);
+      expect(result.takeovers).toEqual([
+        expect.objectContaining({
+          resourceName: "resolver/ns/getUser",
+          action: "update",
+          currentOwner: "shop",
+        }),
+      ]);
+    });
+
     test("labels are left alone when content and sdk version both match", async () => {
       const entry = createEntry("resolver/ns/getUser");
       const client = createMockClient([

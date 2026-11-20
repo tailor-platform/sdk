@@ -313,11 +313,12 @@ function buildPlanReport(results: PlanResults): PlanReport {
       styles.bold("Taken over from application configs (will require confirmation on apply):"),
     );
     for (const { resourceLabel, resourceName, action, currentOwner } of allTakeovers) {
-      const from = currentOwner ? ` from "${currentOwner}"` : "";
+      const outcome =
+        action === "delete"
+          ? `deleted${currentOwner ? ` (deployed by "${currentOwner}")` : ""}`
+          : `taken over${currentOwner ? ` from "${currentOwner}"` : ""}`;
       allLines.push(
-        `  ${styles.warning("!")} ${styles.bold(resourceLabel)} "${resourceName}" — ${
-          action === "delete" ? `deleted${from}` : `taken over${from}`
-        }`,
+        `  ${styles.warning("!")} ${styles.bold(resourceLabel)} "${resourceName}" — ${outcome}`,
       );
     }
   }

@@ -522,6 +522,7 @@ describe("planTailorDB (service level)", () => {
         client,
         workspaceId,
         application,
+        owner: appOwner,
         forRemoval: false,
         config: mockConfig,
         noSchemaCheck: true,

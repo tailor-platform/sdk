@@ -430,7 +430,7 @@ export interface BuildMetaRequestParams {
  *
  * Sets only the SDK's own labels; {@link writeMetadataLabels} keeps the rest
  * from the labels it reads at write time. Each owner removes the other
- * owner's labels, so a resource never carries both marks.
+ * owner's labels, so the deploy leaves only its own owner's mark.
  *
  * Without an app id the id label is removed rather than merely left unset,
  * because {@link isOwnedByApp} decides ownership by that label alone: one left

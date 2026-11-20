@@ -1097,22 +1097,46 @@ describe("printPlanResults", () => {
   test("lists the resources a workspace config takes over only when there are any", () => {
     using _json = jsonMode();
 
-    printPlanResults(emptyPlanResults(), { dryRun: true });
-    const results = emptyPlanResults();
-    results.staticWebsite.takeovers.push(legacyStaticWebsite("update"));
-    results.executor.takeovers.push({
+    printDeploymentPlans([plannedDeployment("app", emptyPlanResults())], { dryRun: true });
+    const workspace = emptyPlanResults();
+    workspace.staticWebsite.takeovers.push(legacyStaticWebsite("update"));
+    workspace.executor.takeovers.push({
       resourceType: "executor",
       resourceLabel: "Executor",
       resourceName: "old-sync",
       action: "delete",
     });
-    printPlanResults(results, { dryRun: true });
+    printDeploymentPlans(
+      [
+        plannedDeployment("workspace", workspace, { kind: "workspace" }),
+        plannedDeployment("app", emptyPlanResults()),
+      ],
+      { dryRun: true },
+    );
 
     expect(outSpy.mock.calls[0]?.[0]).not.toHaveProperty("takeovers");
     expect((outSpy.mock.calls[1]?.[0] as { takeovers: unknown }).takeovers).toEqual([
       { resourceType: "staticwebsite", name: "old-site", action: "update", currentOwner: "shop" },
       { resourceType: "executor", name: "old-sync", action: "delete" },
     ]);
+  });
+
+  test("prints the resources a workspace config takes over in the human plan", () => {
+    const results = emptyPlanResults();
+    results.staticWebsite.takeovers.push(legacyStaticWebsite("update"));
+    results.staticWebsite.takeovers.push({
+      ...legacyStaticWebsite("delete"),
+      resourceName: "gone",
+    });
+
+    printPlanResults(results, { dryRun: false });
+
+    const plain = plainRedacted(logSpy.mock.calls.flat().join("\n"));
+    expect(plain).toContain(
+      "Taken over from application configs (will require confirmation on apply):",
+    );
+    expect(plain).toContain('StaticWebsite "old-site" — taken over from "shop"');
+    expect(plain).toContain('StaticWebsite "gone" — deleted (deployed by "shop")');
   });
 
   test("includes migration checkpoint repairs in JSON dry-run changes and summary", () => {

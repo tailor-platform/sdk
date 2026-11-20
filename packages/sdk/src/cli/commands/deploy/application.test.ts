@@ -44,7 +44,7 @@ vi.mock("./label", async (importOriginal) => {
             "sdk-version": "v1-0-0",
             ...(id ? { "sdk-app-id": `app-${id}` } : {}),
           },
-          // Mirrors the real buildMetaRequest: a config with no id asks for the
+          // Like the real buildMetaRequest, a config with no id asks for the
           // stale sdk-app-id to be dropped.
           remove: id ? undefined : ["sdk-app-id"],
         };

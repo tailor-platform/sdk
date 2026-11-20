@@ -10,9 +10,9 @@ import type { OwnershipTracker } from "./owned-resource";
 
 /** Ownership checks for a planner whose resources carry SDK labels. */
 export interface KeyedDiffOwnership<Existing> {
-  /** Whether a same-named existing resource is managed by this app; records takeovers. */
+  /** Whether the deploy's owner manages a same-named existing resource; records takeovers. */
   ownsDesired(key: string, existing: Existing): boolean;
-  /** Whether a remote-only resource is managed by this app, so deploy may delete it. */
+  /** Whether deploy deletes a remote-only resource. */
   ownsRemaining(key: string, existing: Existing): boolean;
 }
 

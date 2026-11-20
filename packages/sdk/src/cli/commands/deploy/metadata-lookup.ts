@@ -32,7 +32,7 @@ function ownershipFilters(owners: ReadonlyArray<DeployOwner>): Record<string, st
 }
 
 /**
- * Create a client that resolves metadata from app-scoped list queries first.
+ * Create a client that resolves metadata from list queries scoped to the deploy's owners first.
  * List misses still delegate to `GetMetadata` because an exact label filter
  * cannot distinguish another owner from a resource with no SDK labels.
  * @param params - Metadata lookup inputs

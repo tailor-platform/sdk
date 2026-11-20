@@ -65,11 +65,11 @@ export interface OwnershipTracker {
   /** Confirmation data recorded so far, in the shape plan results carry. */
   result: OwnershipResult;
   /**
-   * Determine whether a same-named existing resource is managed by this app.
+   * Determine whether the deploy's owner manages a same-named existing resource.
    * Records the user-facing confirmation data when ownership does not match.
    * @param labels - Existing resource labels
    * @param resource - Resource kind and name for confirmation messages
-   * @returns True when the resource is owned by the current app
+   * @returns True when the owner manages the resource
    */
   ownsDesired(labels: Record<string, string> | undefined, resource: TrackedResource): boolean;
   /**
@@ -128,7 +128,7 @@ export function createOwnershipTracker(owner: DeployOwner): OwnershipTracker {
     ownsRemaining(labels, resource) {
       if (isOwnedBy(labels, owner)) return true;
       if (owner.kind === "workspace") {
-        if (!labels?.[sdkAppIdLabelKey]) return false;
+        if (!labels || !deployedByApplication(labels) || !labels[sdkAppIdLabelKey]) return false;
         takeover(labels, resource, "delete");
         return true;
       }

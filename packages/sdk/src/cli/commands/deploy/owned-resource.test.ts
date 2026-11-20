@@ -59,6 +59,12 @@ describe("createOwnershipTracker", () => {
 
       expect(ownership.ownsDesired({ "sdk-managed": "workspace" }, resource)).toBe(true);
       expect(
+        ownership.ownsDesired(
+          { "sdk-managed": "workspace", "sdk-name": "shop", "sdk-app-id": "app-id-1" },
+          resource,
+        ),
+      ).toBe(true);
+      expect(
         ownership.ownsDesired({ "sdk-name": "shop", "sdk-app-id": "app-id-1" }, resource),
       ).toBe(false);
       expect(ownership.ownsDesired({ "sdk-name": "legacy" }, resource)).toBe(false);

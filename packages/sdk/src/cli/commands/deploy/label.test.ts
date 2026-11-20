@@ -14,6 +14,7 @@ import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { listSourceFiles } from "#/cli/shared/test-helpers/source-files";
 import { AppConfigSchema } from "#/parser/app-config/schema";
 import {
+  addDependencyRecords,
   buildMetaRequest,
   hasMatchingSdkVersion,
   isOwnedBy,
@@ -171,6 +172,33 @@ describe("labelRefreshOf", () => {
   test("plans a refresh for a resource without labels", () => {
     const write = { trn: "trn:a", labels: { "sdk-name": "my-app" } };
     expect(labelRefreshOf(undefined, write)).toEqual({ labelRefresh: write });
+  });
+});
+
+describe("addDependencyRecords", () => {
+  const params = {
+    key: "workflow:nightly",
+    dependentApps: new Map([
+      [
+        "workflow:nightly",
+        new Map([["11111111-1111-4111-8111-111111111111", "publish-events" as const]]),
+      ],
+    ]),
+    runAppIds: new Set(["11111111-1111-4111-8111-111111111111"]),
+    pinned: false,
+  };
+
+  test("records the dependents of an application config", () => {
+    const write = addDependencyRecords({ trn: "trn:x" }, { ...params, owner: appOwner("my-app") });
+    expect(write.dependencies).toHaveLength(1);
+  });
+
+  test("records none for a workspace config, whose deploy has no other config", () => {
+    const write = addDependencyRecords(
+      { trn: "trn:x" },
+      { ...params, owner: { kind: "workspace" } },
+    );
+    expect(write.dependencies).toBeUndefined();
   });
 });
 

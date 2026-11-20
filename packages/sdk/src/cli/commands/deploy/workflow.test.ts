@@ -816,8 +816,7 @@ describe("planWorkflow", () => {
       const result = await planWorkflow(
         client,
         workspaceId,
-        appName,
-        undefined,
+        { kind: "application", name: appName, id: undefined },
         { "sample-workflow": createMockWorkflow("sample-workflow", "validate-order") },
         { "validate-order": ["validate-order", "check-inventory", "process-payment"] },
         new Set(["validate-order", "check-inventory", "process-payment"]),
