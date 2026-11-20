@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { runCommand } from "@politty/zod";
 import { describe, expect, test, vi } from "vitest";
 import { SKIP_CONFIRMATION_SUGGESTION } from "#/cli/shared/args";
@@ -6,6 +5,7 @@ import { initOperatorClient } from "#/cli/shared/client";
 import { prompt } from "#/cli/shared/prompt";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { restoreCommand } from "./restore";
 
 vi.mock("#/cli/shared/client", () => ({
@@ -30,10 +30,8 @@ const workspaceId = "12345678-1234-4abc-8def-123456789012";
 
 describe("workspace restore command", () => {
   test("fails without restoring when the confirmation is not yes", async () => {
-    const client = { restoreWorkspace: vi.fn().mockResolvedValue({}) };
-    vi.mocked(initOperatorClient).mockResolvedValue(
-      client as unknown as Awaited<ReturnType<typeof initOperatorClient>>,
-    );
+    const client = mockOperatorClient({ restoreWorkspace: {} });
+    vi.mocked(initOperatorClient).mockResolvedValue(client);
     vi.mocked(prompt.text).mockResolvedValue("no");
 
     const result = await runCommand(restoreCommand, ["--workspace-id", workspaceId]);
@@ -47,10 +45,8 @@ describe("workspace restore command", () => {
   });
 
   test("restores when the confirmation is yes", async () => {
-    const client = { restoreWorkspace: vi.fn().mockResolvedValue({}) };
-    vi.mocked(initOperatorClient).mockResolvedValue(
-      client as unknown as Awaited<ReturnType<typeof initOperatorClient>>,
-    );
+    const client = mockOperatorClient({ restoreWorkspace: {} });
+    vi.mocked(initOperatorClient).mockResolvedValue(client);
     vi.mocked(prompt.text).mockResolvedValue("yes");
 
     const result = await runCommand(restoreCommand, ["--workspace-id", workspaceId]);
@@ -60,10 +56,8 @@ describe("workspace restore command", () => {
   });
 
   test("prints the restored workspace under JSON output", async () => {
-    const client = { restoreWorkspace: vi.fn().mockResolvedValue({}) };
-    vi.mocked(initOperatorClient).mockResolvedValue(
-      client as unknown as Awaited<ReturnType<typeof initOperatorClient>>,
-    );
+    const client = mockOperatorClient({ restoreWorkspace: {} });
+    vi.mocked(initOperatorClient).mockResolvedValue(client);
     using _json = jsonMode();
     using stdout = captureStdout();
 

@@ -1,11 +1,14 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
-import { create } from "@bufbuild/protobuf";
+import { create, type MessageInitShape } from "@bufbuild/protobuf";
 import {
   FunctionExecution_Status,
   FunctionExecutionSchema,
   FunctionLogEntrySchema,
 } from "@tailor-platform/tailor-proto/function_resource_pb";
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  mockOperatorClient,
+  type OperatorClientMocks,
+} from "#/cli/shared/test-helpers/operator-client";
 import {
   waitForExecution,
   executeScript,
@@ -15,14 +18,14 @@ import {
 } from "./script-executor";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
+import type { ExecScriptResponseSchema } from "@tailor-platform/tailor-proto/function_pb";
 
 // Mock client factory
-function createMockClient(overrides: Partial<OperatorClient> = {}): OperatorClient {
-  return {
-    execScript: vi.fn(),
-    getFunctionExecution: vi.fn(),
-    ...overrides,
-  } as unknown as OperatorClient;
+function createMockClient<K extends keyof OperatorClient = never>(
+  overrides?: OperatorClientMocks<K>,
+) {
+  const client = mockOperatorClient({ execScript: {}, getFunctionExecution: {} });
+  return Object.assign(client, overrides && mockOperatorClient(overrides));
 }
 
 // Mock auth invoker
@@ -55,7 +58,7 @@ describe("waitForExecution", () => {
     [FunctionExecution_Status.CANCELED, "canceled logs", "Execution canceled"],
   ])("returns immediately when execution is %s", async (status, logs, result) => {
     const client = createMockClient({
-      getFunctionExecution: vi.fn().mockResolvedValue(execution(status, logs, result)),
+      getFunctionExecution: execution(status, logs, result),
     });
 
     const outcome = await waitForExecution(client, "workspace-1", "exec-1");
@@ -67,9 +70,7 @@ describe("waitForExecution", () => {
 
   test("calls getFunctionExecution with the expected arguments", async () => {
     const client = createMockClient({
-      getFunctionExecution: vi
-        .fn()
-        .mockResolvedValue(execution(FunctionExecution_Status.SUCCESS, "test logs", "{}")),
+      getFunctionExecution: execution(FunctionExecution_Status.SUCCESS, "test logs", "{}"),
     });
 
     await waitForExecution(client, "workspace-1", "exec-1");
@@ -83,7 +84,7 @@ describe("waitForExecution", () => {
 
   test("throws error when execution is not found", async () => {
     const client = createMockClient({
-      getFunctionExecution: vi.fn().mockResolvedValue({ execution: null }),
+      getFunctionExecution: {},
     });
 
     await expect(waitForExecution(client, "workspace-1", "exec-1")).rejects.toMatchObject({
@@ -94,29 +95,27 @@ describe("waitForExecution", () => {
   });
 
   test("polls until execution completes", async () => {
-    const getFunctionExecution = vi
-      .fn()
+    const client = createMockClient();
+    client.getFunctionExecution
       .mockResolvedValueOnce(execution(FunctionExecution_Status.RUNNING, "", ""))
       .mockResolvedValueOnce(execution(FunctionExecution_Status.RUNNING, "partial logs", ""))
       .mockResolvedValueOnce(
         execution(FunctionExecution_Status.SUCCESS, "final logs", '{"done":true}'),
       );
 
-    const client = createMockClient({ getFunctionExecution });
-
     const resultPromise = waitForExecution(client, "workspace-1", "exec-1", 100);
 
     // First call - RUNNING
     await vi.advanceTimersByTimeAsync(0);
-    expect(getFunctionExecution).toHaveBeenCalledTimes(1);
+    expect(client.getFunctionExecution).toHaveBeenCalledTimes(1);
 
     // Wait for first poll interval
     await vi.advanceTimersByTimeAsync(100);
-    expect(getFunctionExecution).toHaveBeenCalledTimes(2);
+    expect(client.getFunctionExecution).toHaveBeenCalledTimes(2);
 
     // Wait for second poll interval
     await vi.advanceTimersByTimeAsync(100);
-    expect(getFunctionExecution).toHaveBeenCalledTimes(3);
+    expect(client.getFunctionExecution).toHaveBeenCalledTimes(3);
 
     const result = await resultPromise;
     expect(result.status).toBe(FunctionExecution_Status.SUCCESS);
@@ -124,25 +123,24 @@ describe("waitForExecution", () => {
   });
 
   test("polls through suspended and canceling states until cancellation completes", async () => {
-    const getFunctionExecution = vi
-      .fn()
+    const client = createMockClient();
+    client.getFunctionExecution
       .mockResolvedValueOnce(execution(FunctionExecution_Status.SUSPEND, "", ""))
       .mockResolvedValueOnce(execution(FunctionExecution_Status.CANCELING, "", ""))
       .mockResolvedValueOnce(
         execution(FunctionExecution_Status.CANCELED, "canceled logs", "Execution canceled"),
       );
 
-    const client = createMockClient({ getFunctionExecution });
     const resultPromise = waitForExecution(client, "workspace-1", "exec-1", 100);
 
     await vi.advanceTimersByTimeAsync(0);
-    expect(getFunctionExecution).toHaveBeenCalledTimes(1);
+    expect(client.getFunctionExecution).toHaveBeenCalledTimes(1);
 
     await vi.advanceTimersByTimeAsync(100);
-    expect(getFunctionExecution).toHaveBeenCalledTimes(2);
+    expect(client.getFunctionExecution).toHaveBeenCalledTimes(2);
 
     await vi.advanceTimersByTimeAsync(100);
-    expect(getFunctionExecution).toHaveBeenCalledTimes(3);
+    expect(client.getFunctionExecution).toHaveBeenCalledTimes(3);
 
     await expect(resultPromise).resolves.toMatchObject({
       status: FunctionExecution_Status.CANCELED,
@@ -152,25 +150,23 @@ describe("waitForExecution", () => {
   });
 
   test("uses default poll interval", async () => {
-    const getFunctionExecution = vi
-      .fn()
+    const client = createMockClient();
+    client.getFunctionExecution
       .mockResolvedValueOnce(execution(FunctionExecution_Status.RUNNING, "", ""))
       .mockResolvedValueOnce(execution(FunctionExecution_Status.SUCCESS, "done", ""));
-
-    const client = createMockClient({ getFunctionExecution });
 
     const resultPromise = waitForExecution(client, "workspace-1", "exec-1");
 
     // First call
     await vi.advanceTimersByTimeAsync(0);
-    expect(getFunctionExecution).toHaveBeenCalledTimes(1);
+    expect(client.getFunctionExecution).toHaveBeenCalledTimes(1);
 
     // Should wait for DEFAULT_POLL_INTERVAL before next call
     await vi.advanceTimersByTimeAsync(DEFAULT_POLL_INTERVAL - 1);
-    expect(getFunctionExecution).toHaveBeenCalledTimes(1);
+    expect(client.getFunctionExecution).toHaveBeenCalledTimes(1);
 
     await vi.advanceTimersByTimeAsync(1);
-    expect(getFunctionExecution).toHaveBeenCalledTimes(2);
+    expect(client.getFunctionExecution).toHaveBeenCalledTimes(2);
 
     await resultPromise;
   });
@@ -187,11 +183,13 @@ describe("executeScript", () => {
 
   function createExecScriptMockClient(
     execResult: ExecutionResponse,
-    execScriptResponse: { executionId: string; result?: string } = { executionId: "exec-123" },
+    execScriptResponse: MessageInitShape<typeof ExecScriptResponseSchema> = {
+      executionId: "exec-123",
+    },
   ) {
     return createMockClient({
-      execScript: vi.fn().mockResolvedValue(execScriptResponse),
-      getFunctionExecution: vi.fn().mockResolvedValue(execResult),
+      execScript: execScriptResponse,
+      getFunctionExecution: execResult,
     });
   }
 
@@ -261,10 +259,8 @@ describe("executeScript", () => {
 
   test("accepts options typed as the bare ScriptExecutionOptions", async () => {
     const client = createMockClient({
-      execScript: vi.fn().mockResolvedValue({ executionId: "exec-123" }),
-      getFunctionExecution: vi
-        .fn()
-        .mockResolvedValue(execution(FunctionExecution_Status.SUCCESS, "", "")),
+      execScript: { executionId: "exec-123" },
+      getFunctionExecution: execution(FunctionExecution_Status.SUCCESS, "", ""),
     });
 
     // Regression: a typed-out options object must stay assignable to
@@ -336,15 +332,10 @@ describe("executeScript", () => {
   });
 
   test("uses custom poll interval", async () => {
-    const getFunctionExecution = vi
-      .fn()
+    const client = createMockClient({ execScript: { executionId: "exec-123" } });
+    client.getFunctionExecution
       .mockResolvedValueOnce(execution(FunctionExecution_Status.RUNNING, "", ""))
       .mockResolvedValueOnce(execution(FunctionExecution_Status.SUCCESS, "", ""));
-
-    const client = createMockClient({
-      execScript: vi.fn().mockResolvedValue({ executionId: "exec-123" }),
-      getFunctionExecution,
-    });
 
     const customPollInterval = 500;
     const resultPromise = executeScript({
@@ -358,14 +349,14 @@ describe("executeScript", () => {
 
     // Initial call
     await vi.advanceTimersByTimeAsync(0);
-    expect(getFunctionExecution).toHaveBeenCalledTimes(1);
+    expect(client.getFunctionExecution).toHaveBeenCalledTimes(1);
 
     // Should wait for custom interval
     await vi.advanceTimersByTimeAsync(customPollInterval - 1);
-    expect(getFunctionExecution).toHaveBeenCalledTimes(1);
+    expect(client.getFunctionExecution).toHaveBeenCalledTimes(1);
 
     await vi.advanceTimersByTimeAsync(1);
-    expect(getFunctionExecution).toHaveBeenCalledTimes(2);
+    expect(client.getFunctionExecution).toHaveBeenCalledTimes(2);
 
     await resultPromise;
   });
@@ -410,7 +401,7 @@ describe("executeScript", () => {
 
   test("propagates execScript errors", async () => {
     const client = createMockClient({
-      execScript: vi.fn().mockRejectedValue(new Error("API error")),
+      execScript: () => Promise.reject(new Error("API error")),
     });
 
     await expect(

@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { create } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { runCommand } from "@politty/zod";
@@ -20,6 +19,10 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import {
+  mockOperatorClient,
+  type OperatorClientMocks,
+} from "#/cli/shared/test-helpers/operator-client";
 import { stripAnsi } from "#/cli/shared/test-helpers/strip-ansi";
 import {
   getExecutorWaitFailure,
@@ -27,8 +30,10 @@ import {
   jobsCommand,
   watchExecutorJob,
 } from "./jobs";
-import type { ExecutorJob } from "@tailor-platform/tailor-proto/executor_resource_pb";
-import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import type { OperatorClient } from "#/cli/shared/client";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { ListExecutorJobAttemptsResponseSchema } from "@tailor-platform/tailor-proto/executor_pb";
+import type { ExecutorJobSchema } from "@tailor-platform/tailor-proto/executor_resource_pb";
 
 vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
@@ -45,45 +50,43 @@ vi.mock("#/cli/shared/client", () => ({
   initOperatorClient: vi.fn(),
 }));
 
-function executorJob(status: ExecutorJobStatus): ExecutorJob {
+function executorJob(status: ExecutorJobStatus): MessageInitShape<typeof ExecutorJobSchema> {
   return {
     id: "job-1",
     executorName: "my-executor",
     status,
-  } as ExecutorJob;
+  };
 }
 
-type OperatorClientMockOverrides = {
-  [K in keyof Awaited<ReturnType<typeof initOperatorClient>>]?: ReturnType<typeof vi.fn>;
-} & {
-  targetType?: ExecutorTargetType;
-};
-
-function mockOperatorClient(overrides: OperatorClientMockOverrides = {}) {
-  const { targetType = ExecutorTargetType.WEBHOOK, ...rest } = overrides;
-  vi.mocked(initOperatorClient).mockResolvedValue({
-    getExecutorExecutor: vi.fn().mockResolvedValue({ executor: { targetType } }),
-    getExecutorJob: vi.fn().mockResolvedValue({ job: executorJob(ExecutorJobStatus.SUCCESS) }),
-    listExecutorJobAttempts: vi.fn().mockResolvedValue({ attempts: [], nextPageToken: "" }),
-    ...rest,
-  } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+function mockClient<K extends keyof OperatorClient = never>(
+  targetType = ExecutorTargetType.WEBHOOK,
+  overrides?: OperatorClientMocks<K>,
+) {
+  const client = Object.assign(
+    mockOperatorClient({
+      getExecutorExecutor: { executor: { targetType } },
+      getExecutorJob: { job: executorJob(ExecutorJobStatus.SUCCESS) },
+      listExecutorJobAttempts: { attempts: [], nextPageToken: "" },
+    }),
+    overrides && mockOperatorClient(overrides),
+  );
+  vi.mocked(initOperatorClient).mockResolvedValue(client);
+  return client;
 }
 
 describe("watchExecutorJob", () => {
-  let getExecutorJobMock: ReturnType<typeof vi.fn>;
+  let client: ReturnType<typeof mockClient<never>>;
 
   aroundEach(async (runTest) => {
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
 
-    getExecutorJobMock = vi
-      .fn()
+    client = mockClient();
+    client.getExecutorJob
       .mockRejectedValueOnce(new ConnectError("temporarily unavailable", Code.Unavailable))
       .mockResolvedValueOnce({
         job: executorJob(ExecutorJobStatus.SUCCESS),
       });
-
-    mockOperatorClient({ getExecutorJob: getExecutorJobMock });
     await runTest();
   });
 
@@ -110,7 +113,7 @@ describe("watchExecutorJob", () => {
   });
 
   test("returns timeout diagnostics with the last observed job status", async () => {
-    getExecutorJobMock.mockReset().mockResolvedValue({
+    client.getExecutorJob.mockReset().mockResolvedValue({
       job: executorJob(ExecutorJobStatus.PENDING),
     });
 
@@ -136,21 +139,8 @@ describe("watchExecutorJob", () => {
   });
 
   test("preserves workflow failure status when optional log fetch fails", async () => {
-    const getWorkflowExecutionMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        execution: {
-          id: "workflow-execution-1",
-          workflowName: "daily-workflow",
-          status: WorkflowExecution_Status.FAILED,
-          jobExecutions: [],
-        } as unknown as WorkflowExecution,
-      })
-      .mockRejectedValueOnce(new Error("logs unavailable"));
-
-    mockOperatorClient({
-      targetType: ExecutorTargetType.WORKFLOW,
-      listExecutorJobAttempts: vi.fn().mockResolvedValue({
+    const workflowClient = mockClient(ExecutorTargetType.WORKFLOW, {
+      listExecutorJobAttempts: {
         attempts: [
           {
             id: "attempt-1",
@@ -160,9 +150,19 @@ describe("watchExecutorJob", () => {
           },
         ],
         nextPageToken: "",
-      }),
-      getWorkflowExecution: getWorkflowExecutionMock,
+      },
+      getWorkflowExecution: {},
     });
+    workflowClient.getWorkflowExecution
+      .mockResolvedValueOnce({
+        execution: {
+          id: "workflow-execution-1",
+          workflowName: "daily-workflow",
+          status: WorkflowExecution_Status.FAILED,
+          jobExecutions: [],
+        },
+      })
+      .mockRejectedValueOnce(new Error("logs unavailable"));
 
     const result = await watchExecutorJob({
       executor: { name: "my-executor" },
@@ -194,9 +194,8 @@ describe("watchExecutorJob", () => {
   });
 
   test("reports a canceled downstream workflow as a failure", async () => {
-    mockOperatorClient({
-      targetType: ExecutorTargetType.WORKFLOW,
-      listExecutorJobAttempts: vi.fn().mockResolvedValue({
+    mockClient(ExecutorTargetType.WORKFLOW, {
+      listExecutorJobAttempts: {
         attempts: [
           {
             id: "attempt-1",
@@ -206,15 +205,15 @@ describe("watchExecutorJob", () => {
           },
         ],
         nextPageToken: "",
-      }),
-      getWorkflowExecution: vi.fn().mockResolvedValue({
+      },
+      getWorkflowExecution: {
         execution: {
           id: "workflow-execution-1",
           workflowName: "daily-workflow",
           status: WorkflowExecution_Status.CANCELED,
           jobExecutions: [],
-        } as unknown as WorkflowExecution,
-      }),
+        },
+      },
     });
 
     const result = await watchExecutorJob({
@@ -234,9 +233,8 @@ describe("watchExecutorJob", () => {
   });
 
   test("reports a canceled downstream function as a failure", async () => {
-    mockOperatorClient({
-      targetType: ExecutorTargetType.FUNCTION,
-      listExecutorJobAttempts: vi.fn().mockResolvedValue({
+    mockClient(ExecutorTargetType.FUNCTION, {
+      listExecutorJobAttempts: {
         attempts: [
           {
             id: "attempt-1",
@@ -246,14 +244,13 @@ describe("watchExecutorJob", () => {
           },
         ],
         nextPageToken: "",
-      }),
-      getFunctionExecution: vi.fn().mockResolvedValue({
+      },
+      getFunctionExecution: {
         execution: {
           status: FunctionExecution_Status.CANCELED,
-          logs: "canceled logs",
           result: "Execution canceled",
         },
-      }),
+      },
     });
 
     const result = await watchExecutorJob({
@@ -300,13 +297,15 @@ describe("downstream logs", () => {
     ],
   });
 
-  function attemptsReferencing(operationReference: string) {
-    return vi.fn().mockResolvedValue({
+  function attemptsReferencing(
+    operationReference: string,
+  ): MessageInitShape<typeof ListExecutorJobAttemptsResponseSchema> {
+    return {
       attempts: [
         { id: "attempt-1", jobId: "job-1", status: ExecutorJobStatus.SUCCESS, operationReference },
       ],
       nextPageToken: "",
-    });
+    };
   }
 
   aroundEach(async (runTest) => {
@@ -318,10 +317,9 @@ describe("downstream logs", () => {
   test("marks function log lines the Platform wrote", async () => {
     using _stdout = captureStdout();
     using stderr = captureStderr();
-    mockOperatorClient({
-      targetType: ExecutorTargetType.FUNCTION,
+    mockClient(ExecutorTargetType.FUNCTION, {
       listExecutorJobAttempts: attemptsReferencing("function-execution-1"),
-      getFunctionExecution: vi.fn().mockResolvedValue({ execution: functionExecution }),
+      getFunctionExecution: { execution: functionExecution },
     });
 
     await runCommand(jobsCommand, ["my-executor", "job-1", "-W", "-l", "-i", "1ms"]);
@@ -332,10 +330,9 @@ describe("downstream logs", () => {
   });
 
   test("reports the source of each function log entry", async () => {
-    mockOperatorClient({
-      targetType: ExecutorTargetType.FUNCTION,
+    mockClient(ExecutorTargetType.FUNCTION, {
       listExecutorJobAttempts: attemptsReferencing("function-execution-1"),
-      getFunctionExecution: vi.fn().mockResolvedValue({ execution: functionExecution }),
+      getFunctionExecution: { execution: functionExecution },
     });
 
     const result = await watchExecutorJob({
@@ -355,10 +352,9 @@ describe("downstream logs", () => {
   test("marks workflow job log lines the Platform wrote and reports their source", async () => {
     using _stdout = captureStdout();
     using stderr = captureStderr();
-    mockOperatorClient({
-      targetType: ExecutorTargetType.WORKFLOW,
+    mockClient(ExecutorTargetType.WORKFLOW, {
       listExecutorJobAttempts: attemptsReferencing("workflow-execution-1"),
-      getWorkflowExecution: vi.fn().mockResolvedValue({
+      getWorkflowExecution: {
         execution: {
           id: "workflow-execution-1",
           workflowName: "daily-workflow",
@@ -372,9 +368,9 @@ describe("downstream logs", () => {
               executionId: "function-execution-1",
             },
           ],
-        } as unknown as WorkflowExecution,
-      }),
-      getFunctionExecution: vi.fn().mockResolvedValue({ execution: functionExecution }),
+        },
+      },
+      getFunctionExecution: { execution: functionExecution },
     });
 
     const result = await watchExecutorJob({
@@ -404,10 +400,9 @@ describe("downstream logs", () => {
   test("heads a workflow job of an unknown kind with its id alone", async () => {
     using _stdout = captureStdout();
     using stderr = captureStderr();
-    mockOperatorClient({
-      targetType: ExecutorTargetType.WORKFLOW,
+    mockClient(ExecutorTargetType.WORKFLOW, {
       listExecutorJobAttempts: attemptsReferencing("workflow-execution-1"),
-      getWorkflowExecution: vi.fn().mockResolvedValue({
+      getWorkflowExecution: {
         execution: {
           id: "workflow-execution-1",
           workflowName: "daily-workflow",
@@ -420,9 +415,9 @@ describe("downstream logs", () => {
               executionId: "function-execution-1",
             },
           ],
-        } as unknown as WorkflowExecution,
-      }),
-      getFunctionExecution: vi.fn().mockResolvedValue({ execution: functionExecution }),
+        },
+      },
+      getFunctionExecution: { execution: functionExecution },
     });
 
     await runCommand(jobsCommand, ["my-executor", "job-1", "-W", "-l", "-i", "1ms"]);

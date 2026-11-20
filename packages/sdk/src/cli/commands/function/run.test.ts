@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { runCommand } from "@politty/zod";
@@ -10,6 +9,7 @@ import { loadMachineUserName } from "#/cli/shared/context";
 import { executeScriptReportingStart } from "#/cli/shared/script-executor";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { definePlugins } from "#/configure/config/index";
 import { kyselyTypePlugin } from "#/plugin/builtin/kysely-type/index";
 import { bundleForRun } from "./bundle";
@@ -61,10 +61,20 @@ vi.mock("./script-scaffold", async (importActual) => {
   };
 });
 
+function createClient() {
+  return mockOperatorClient({
+    getAuthMachineUser: {
+      machineUser: {
+        id: "machine-user-id",
+      },
+    },
+  });
+}
+
 describe("function run --json", () => {
   let scriptPath: string;
   let tsScriptPath: string;
-  let getAuthMachineUserMock: ReturnType<typeof vi.fn>;
+  let client: ReturnType<typeof createClient>;
 
   aroundEach(async (runTest) => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "function-run-json-test-"));
@@ -91,14 +101,8 @@ describe("function run --json", () => {
       },
       plugins: [],
     } as unknown as Awaited<ReturnType<typeof loadConfig>>);
-    getAuthMachineUserMock = vi.fn().mockResolvedValue({
-      machineUser: {
-        id: "machine-user-id",
-      },
-    });
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      getAuthMachineUser: getAuthMachineUserMock,
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    client = createClient();
+    vi.mocked(initOperatorClient).mockResolvedValue(client);
     vi.mocked(executeScriptReportingStart).mockResolvedValue({
       success: true,
       logs: "",
@@ -133,7 +137,7 @@ describe("function run --json", () => {
 
     await runCommand(runFunctionCommand, [scriptPath]);
 
-    expect(getAuthMachineUserMock).toHaveBeenCalledWith(
+    expect(client.getAuthMachineUser).toHaveBeenCalledWith(
       expect.objectContaining({ name: "profile-bot" }),
     );
     expect(JSON.parse(stdout.output)).toMatchObject({ success: true });
@@ -147,7 +151,9 @@ describe("function run --json", () => {
 
     await runCommand(runFunctionCommand, [scriptPath]);
 
-    expect(getAuthMachineUserMock).toHaveBeenCalledWith(expect.objectContaining({ name: "admin" }));
+    expect(client.getAuthMachineUser).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "admin" }),
+    );
     expect(JSON.parse(stdout.output)).toMatchObject({ success: true });
   });
 
@@ -311,7 +317,7 @@ describe("function run --json", () => {
     expect(loadMachineUserName).toHaveBeenCalledWith(
       expect.objectContaining({ machineUser: "flag-bot", machineUserSource: "option" }),
     );
-    expect(getAuthMachineUserMock).toHaveBeenCalledWith(
+    expect(client.getAuthMachineUser).toHaveBeenCalledWith(
       expect.objectContaining({ name: "flag-or-profile-bot" }),
     );
   });

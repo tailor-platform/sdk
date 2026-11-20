@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import { runCommand } from "@politty/zod";
 import * as path from "pathe";
@@ -8,6 +7,7 @@ import { fetchLatestToken, readPlatformConfig, writePlatformConfig } from "#/cli
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { writeHeldConfigLock } from "#/cli/shared/test-helpers/config-lock";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { updateCommand } from "./update";
@@ -116,9 +116,7 @@ describe("profile update --permission", () => {
       user: "new@example.com",
     });
     vi.mocked(fetchAll).mockResolvedValue([{ id: validUUID }]);
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      listWorkspaces: vi.fn(),
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    vi.mocked(initOperatorClient).mockResolvedValue(mockOperatorClient({ listWorkspaces: {} }));
 
     writeProfiles({
       rw: { user: "old@example.com", workspace_id: validUUID },
@@ -148,9 +146,7 @@ describe("profile update --permission", () => {
       user: "platform-user-sub",
     });
     vi.mocked(fetchAll).mockResolvedValue([{ id: newUUID }]);
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      listWorkspaces: vi.fn(),
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    vi.mocked(initOperatorClient).mockResolvedValue(mockOperatorClient({ listWorkspaces: {} }));
 
     writePlatformConfig({
       version: 2,
@@ -207,9 +203,7 @@ describe("profile update --permission", () => {
       }),
     } as unknown as ReturnType<typeof initOAuth2Client>);
     vi.mocked(fetchAll).mockResolvedValue([{ id: newUUID }]);
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      listWorkspaces: vi.fn(),
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    vi.mocked(initOperatorClient).mockResolvedValue(mockOperatorClient({ listWorkspaces: {} }));
     writePlatformConfig({
       version: 3,
       min_sdk_version: "2.0.0",
@@ -321,9 +315,7 @@ describe("profile update --platform", () => {
       user: "u@example.com",
     });
     vi.mocked(fetchAll).mockResolvedValue([{ id: validUUID }]);
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      listWorkspaces: vi.fn(),
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    vi.mocked(initOperatorClient).mockResolvedValue(mockOperatorClient({ listWorkspaces: {} }));
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",

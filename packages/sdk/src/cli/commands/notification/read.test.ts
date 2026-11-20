@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { runCommand } from "@politty/zod";
@@ -11,7 +10,14 @@ import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadConsoleBaseUrl } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import {
+  mockOperatorClient,
+  type OperatorClientMocks,
+} from "#/cli/shared/test-helpers/operator-client";
 import { readCommand } from "./read";
+import type { OperatorClient } from "#/cli/shared/client";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { NotificationSchema } from "@tailor-platform/tailor-proto/notification_resource_pb";
 
 vi.mock("#/cli/shared/client", async (importOriginal) => ({
   ...(await importOriginal()),
@@ -38,20 +44,20 @@ function notification(id: string, title = "Scheduled maintenance") {
     actions: [{ label: "Status page", url: "https://status.example.com/" }],
     scopeRefs: [],
     arrivedAt: timestampFromDate(arrivedAt),
-  };
+  } satisfies MessageInitShape<typeof NotificationSchema>;
 }
 
-function mockClient(overrides: Record<string, ReturnType<typeof vi.fn>> = {}) {
-  const client = {
-    getMyNotification: vi.fn(async ({ notificationId }: { notificationId: string }) => ({
-      notification: notification(notificationId),
-    })),
-    markMyNotificationsRead: vi.fn().mockResolvedValue({}),
-    ...overrides,
-  };
-  vi.mocked(initOperatorClient).mockResolvedValue(
-    client as unknown as Awaited<ReturnType<typeof initOperatorClient>>,
+function mockClient<K extends keyof OperatorClient = never>(overrides?: OperatorClientMocks<K>) {
+  const client = Object.assign(
+    mockOperatorClient({
+      getMyNotification: async (request) => ({
+        notification: notification(request.notificationId ?? ""),
+      }),
+      markMyNotificationsRead: {},
+    }),
+    overrides && mockOperatorClient(overrides),
   );
+  vi.mocked(initOperatorClient).mockResolvedValue(client);
   return client;
 }
 
@@ -122,12 +128,12 @@ describe("notification read", () => {
 
   test("strips terminal escapes from the title and body", async () => {
     mockClient({
-      getMyNotification: vi.fn().mockResolvedValue({
+      getMyNotification: {
         notification: {
           ...notification(ID_A, "Scheduled \u001b[31mmaintenance\u001b[0m"),
           bodyMarkdown: "Line\u001b[2J one\n",
         },
-      }),
+      },
     });
     using stdout = captureStdout();
 
@@ -141,7 +147,7 @@ describe("notification read", () => {
 
   test("resolves a same-origin path action against the Console of the active profile", async () => {
     mockClient({
-      getMyNotification: vi.fn().mockResolvedValue({
+      getMyNotification: {
         notification: {
           ...notification(ID_A),
           actions: [
@@ -149,7 +155,7 @@ describe("notification read", () => {
             { label: "Status page", url: "https://status.example.com/" },
           ],
         },
-      }),
+      },
     });
     using stdout = captureStdout();
 
@@ -181,12 +187,10 @@ describe("notification read", () => {
       { length: 101 },
       (_, i) => `0d2c0f1e-5c2b-4e3a-9c1d-${String(i).padStart(12, "0")}`,
     );
-    const client = mockClient({
-      markMyNotificationsRead: vi
-        .fn()
-        .mockResolvedValueOnce({})
-        .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable)),
-    });
+    const client = mockClient();
+    client.markMyNotificationsRead
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable));
     using _json = jsonMode();
     using logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
@@ -205,9 +209,8 @@ describe("notification read", () => {
 
   test("reports NOTIFICATION_NOT_FOUND when the platform answers NotFound", async () => {
     mockClient({
-      getMyNotification: vi
-        .fn()
-        .mockRejectedValue(new ConnectError("not addressed to you", Code.NotFound)),
+      getMyNotification: () =>
+        Promise.reject(new ConnectError("not addressed to you", Code.NotFound)),
     });
     using _stdout = captureStdout();
 
@@ -220,10 +223,10 @@ describe("notification read", () => {
 
   test("prints and marks the notifications it found, then reports the missing ones", async () => {
     const client = mockClient({
-      getMyNotification: vi.fn(async ({ notificationId }: { notificationId: string }) => {
-        if (notificationId === ID_B) throw new ConnectError("gone", Code.NotFound);
-        return { notification: notification(notificationId, "Found one") };
-      }),
+      getMyNotification: async (request) => {
+        if (request.notificationId === ID_B) throw new ConnectError("gone", Code.NotFound);
+        return { notification: notification(request.notificationId ?? "", "Found one") };
+      },
     });
     using stdout = captureStdout();
 
@@ -256,9 +259,8 @@ describe("notification read", () => {
 
   test("warns and still succeeds when the login may not mark notifications read", async () => {
     mockClient({
-      markMyNotificationsRead: vi
-        .fn()
-        .mockRejectedValue(new ConnectError("insufficient scope", Code.PermissionDenied)),
+      markMyNotificationsRead: () =>
+        Promise.reject(new ConnectError("insufficient scope", Code.PermissionDenied)),
     });
     using _json = jsonMode();
     using logSpy = vi.spyOn(console, "log").mockImplementation(() => {});

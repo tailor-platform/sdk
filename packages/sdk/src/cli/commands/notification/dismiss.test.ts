@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { Code, ConnectError } from "@connectrpc/connect";
 import { runCommand } from "@politty/zod";
 import { aroundEach, describe, expect, test, vi } from "vitest";
@@ -7,6 +6,10 @@ import { loadAccessToken } from "#/cli/shared/context";
 import { CLIError } from "#/cli/shared/errors";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import {
+  mockOperatorClient,
+  type OperatorClientMocks,
+} from "#/cli/shared/test-helpers/operator-client";
 import { dismissCommand } from "./dismiss";
 
 vi.mock("#/cli/shared/readonly-guard", () => ({ assertWritable: vi.fn() }));
@@ -23,11 +26,12 @@ vi.mock("#/cli/shared/context", async (importOriginal) => ({
 
 const ID = "0d2c0f1e-5c2b-4e3a-9c1d-2f6a7b8c9d0e";
 
-function mockClient(dismissMyNotification = vi.fn().mockResolvedValue({})) {
-  vi.mocked(initOperatorClient).mockResolvedValue({
-    dismissMyNotification,
-  } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
-  return dismissMyNotification;
+function mockClient(
+  dismissMyNotification: OperatorClientMocks<"dismissMyNotification">["dismissMyNotification"] = {},
+) {
+  const client = mockOperatorClient({ dismissMyNotification });
+  vi.mocked(initOperatorClient).mockResolvedValue(client);
+  return client.dismissMyNotification;
 }
 
 describe("notification dismiss", () => {
@@ -79,7 +83,7 @@ describe("notification dismiss", () => {
   });
 
   test("reports NOTIFICATION_NOT_FOUND when the platform answers NotFound", async () => {
-    mockClient(vi.fn().mockRejectedValue(new ConnectError("gone", Code.NotFound)));
+    mockClient(() => Promise.reject(new ConnectError("gone", Code.NotFound)));
     using _json = jsonMode();
 
     const result = await runCommand(dismissCommand, [ID]);

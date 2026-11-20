@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { Code, ConnectError } from "@connectrpc/connect";
@@ -10,6 +9,7 @@ import { loadConfig } from "#/cli/shared/config-loader";
 import { prompt } from "#/cli/shared/prompt";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { syncCommand } from "./sync";
 import { migrationDbConfig } from "./test-helpers/migration-config";
 import {
@@ -26,17 +26,20 @@ const state = vi.hoisted(() => ({
   executors: {} as Record<string, unknown>,
   pluginExecutors: {} as Record<string, unknown>,
   pluginExecutorFiles: [] as string[],
-  listTailorDBTypes: vi.fn(),
-  createTailorDBType: vi.fn(),
-  updateTailorDBType: vi.fn(),
-  deleteTailorDBType: vi.fn(),
-  listTailorDBGQLPermissions: vi.fn(),
-  createTailorDBGQLPermission: vi.fn(),
-  updateTailorDBGQLPermission: vi.fn(),
-  deleteTailorDBGQLPermission: vi.fn(),
-  getMetadata: vi.fn(),
-  setMetadata: vi.fn(),
 }));
+
+const client = mockOperatorClient({
+  listTailorDBTypes: {},
+  createTailorDBType: {},
+  updateTailorDBType: {},
+  deleteTailorDBType: {},
+  listTailorDBGQLPermissions: {},
+  createTailorDBGQLPermission: {},
+  updateTailorDBGQLPermission: {},
+  deleteTailorDBGQLPermission: {},
+  getMetadata: {},
+  setMetadata: {},
+});
 
 vi.mock("#/cli/shared/config-loader", () => ({
   loadConfig: vi.fn(),
@@ -116,50 +119,39 @@ describe("tailordb migration sync", () => {
     state.pluginExecutors = {};
     state.pluginExecutorFiles = [];
 
-    state.listTailorDBTypes.mockResolvedValue({
+    client.listTailorDBTypes.mockResolvedValue({
       tailordbTypes: [{ name: "User" }, { name: "Stale" }],
       nextPageToken: "",
     });
-    state.createTailorDBType.mockResolvedValue({});
-    state.updateTailorDBType.mockResolvedValue({});
-    state.deleteTailorDBType.mockResolvedValue({});
-    state.listTailorDBGQLPermissions.mockResolvedValue({ permissions: [], nextPageToken: "" });
-    state.createTailorDBGQLPermission.mockResolvedValue({});
-    state.updateTailorDBGQLPermission.mockResolvedValue({});
-    state.deleteTailorDBGQLPermission.mockResolvedValue({});
-    state.getMetadata.mockResolvedValue({
+    client.createTailorDBType.mockResolvedValue({});
+    client.updateTailorDBType.mockResolvedValue({});
+    client.deleteTailorDBType.mockResolvedValue({});
+    client.listTailorDBGQLPermissions.mockResolvedValue({ permissions: [], nextPageToken: "" });
+    client.createTailorDBGQLPermission.mockResolvedValue({});
+    client.updateTailorDBGQLPermission.mockResolvedValue({});
+    client.deleteTailorDBGQLPermission.mockResolvedValue({});
+    client.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0002", "sdk-name": "my-app" },
       },
     });
-    state.setMetadata.mockResolvedValue({});
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      listTailorDBTypes: state.listTailorDBTypes,
-      createTailorDBType: state.createTailorDBType,
-      updateTailorDBType: state.updateTailorDBType,
-      deleteTailorDBType: state.deleteTailorDBType,
-      listTailorDBGQLPermissions: state.listTailorDBGQLPermissions,
-      createTailorDBGQLPermission: state.createTailorDBGQLPermission,
-      updateTailorDBGQLPermission: state.updateTailorDBGQLPermission,
-      deleteTailorDBGQLPermission: state.deleteTailorDBGQLPermission,
-      getMetadata: state.getMetadata,
-      setMetadata: state.setMetadata,
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    client.setMetadata.mockResolvedValue({});
+    vi.mocked(initOperatorClient).mockResolvedValue(client);
 
     await runTest();
 
     vi.restoreAllMocks();
     vi.mocked(prompt.confirm).mockReset();
-    state.listTailorDBTypes.mockReset();
-    state.createTailorDBType.mockReset();
-    state.updateTailorDBType.mockReset();
-    state.deleteTailorDBType.mockReset();
-    state.listTailorDBGQLPermissions.mockReset();
-    state.createTailorDBGQLPermission.mockReset();
-    state.updateTailorDBGQLPermission.mockReset();
-    state.deleteTailorDBGQLPermission.mockReset();
-    state.getMetadata.mockReset();
-    state.setMetadata.mockReset();
+    client.listTailorDBTypes.mockReset();
+    client.createTailorDBType.mockReset();
+    client.updateTailorDBType.mockReset();
+    client.deleteTailorDBType.mockReset();
+    client.listTailorDBGQLPermissions.mockReset();
+    client.createTailorDBGQLPermission.mockReset();
+    client.updateTailorDBGQLPermission.mockReset();
+    client.deleteTailorDBGQLPermission.mockReset();
+    client.getMetadata.mockReset();
+    client.setMetadata.mockReset();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -172,26 +164,26 @@ describe("tailordb migration sync", () => {
     });
     // Snapshot at 0001 contains User (existing → update) and Post (new → create);
     // remote-only Stale is deleted.
-    expect(state.createTailorDBType).toHaveBeenCalledTimes(1);
-    expect(state.createTailorDBType.mock.calls[0]![0]).toMatchObject({
+    expect(client.createTailorDBType).toHaveBeenCalledTimes(1);
+    expect(client.createTailorDBType.mock.calls[0]![0]).toMatchObject({
       namespaceName: "tailordb",
       tailordbType: { name: "Post" },
     });
-    expect(state.updateTailorDBType).toHaveBeenCalledTimes(1);
-    expect(state.updateTailorDBType.mock.calls[0]![0]).toMatchObject({
+    expect(client.updateTailorDBType).toHaveBeenCalledTimes(1);
+    expect(client.updateTailorDBType.mock.calls[0]![0]).toMatchObject({
       namespaceName: "tailordb",
       tailordbType: { name: "User" },
     });
-    expect(state.deleteTailorDBType).toHaveBeenCalledTimes(1);
-    expect(state.deleteTailorDBType.mock.calls[0]![0]).toMatchObject({
+    expect(client.deleteTailorDBType).toHaveBeenCalledTimes(1);
+    expect(client.deleteTailorDBType.mock.calls[0]![0]).toMatchObject({
       namespaceName: "tailordb",
       tailordbTypeName: "Stale",
     });
     // No remote GQL permissions exist, so none are touched.
-    expect(state.deleteTailorDBGQLPermission).not.toHaveBeenCalled();
-    expect(state.createTailorDBGQLPermission).not.toHaveBeenCalled();
-    expect(state.updateTailorDBGQLPermission).not.toHaveBeenCalled();
-    expect(state.setMetadata).toHaveBeenCalledWith(
+    expect(client.deleteTailorDBGQLPermission).not.toHaveBeenCalled();
+    expect(client.createTailorDBGQLPermission).not.toHaveBeenCalled();
+    expect(client.updateTailorDBGQLPermission).not.toHaveBeenCalled();
+    expect(client.setMetadata).toHaveBeenCalledWith(
       expect.objectContaining({
         labels: { "sdk-migration": "m0001", "sdk-name": "my-app" },
       }),
@@ -217,7 +209,7 @@ describe("tailordb migration sync", () => {
   });
 
   test("refuses to sync while a migration is in progress", async () => {
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002" } },
     });
 
@@ -225,13 +217,13 @@ describe("tailordb migration sync", () => {
 
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/partially applied/);
-    expect(state.createTailorDBType).not.toHaveBeenCalled();
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.createTailorDBType).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("refuses before reading tables or prompting when the workspace records another migration history", async () => {
     vi.mocked(prompt.confirm).mockResolvedValue(true);
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0002", "sdk-migration-history": "hother" } },
     });
 
@@ -243,11 +235,11 @@ describe("tailordb migration sync", () => {
       suggestion: expect.stringContaining("--force"),
     });
     expect(prompt.confirm).not.toHaveBeenCalled();
-    expect(state.listTailorDBTypes).not.toHaveBeenCalled();
-    expect(state.createTailorDBType).not.toHaveBeenCalled();
-    expect(state.updateTailorDBType).not.toHaveBeenCalled();
-    expect(state.deleteTailorDBType).not.toHaveBeenCalled();
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.listTailorDBTypes).not.toHaveBeenCalled();
+    expect(client.createTailorDBType).not.toHaveBeenCalled();
+    expect(client.updateTailorDBType).not.toHaveBeenCalled();
+    expect(client.deleteTailorDBType).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("prints the applied snapshot under JSON output", async () => {
@@ -269,7 +261,12 @@ describe("tailordb migration sync", () => {
     });
   });
 
-  test.each([
+  test.each<{
+    name: string;
+    labels: Record<string, string>;
+    previousMigrationNumber: number | null;
+    changed: boolean;
+  }>([
     {
       name: "the remote already matches",
       labels: { "sdk-migration": "m0000", "sdk-name": "my-app" },
@@ -296,8 +293,8 @@ describe("tailordb migration sync", () => {
     fs.rmSync(state.migrationsDir, { recursive: true, force: true });
     writeInitialSchema(state.migrationsDir, {});
     state.localTypes = {};
-    state.listTailorDBTypes.mockResolvedValue({ tailordbTypes: [], nextPageToken: "" });
-    state.getMetadata.mockResolvedValue({ metadata: { labels: row.labels } });
+    client.listTailorDBTypes.mockResolvedValue({ tailordbTypes: [], nextPageToken: "" });
+    client.getMetadata.mockResolvedValue({ metadata: { labels: row.labels } });
     using _json = jsonMode();
     using stdout = captureStdout();
 
@@ -314,17 +311,17 @@ describe("tailordb migration sync", () => {
       tables: { created: [], updated: [], deleted: [] },
       gqlPermissions: { set: [], deleted: [] },
     });
-    expect(state.setMetadata).toHaveBeenCalledTimes(row.changed ? 1 : 0);
+    expect(client.setMetadata).toHaveBeenCalledTimes(row.changed ? 1 : 0);
   });
 
   test("sets the current migration history ID from a re-baselined snapshot", async () => {
     writeRebaselineMarker(state.migrationsDir, "hcurrent");
-    state.getMetadata.mockResolvedValue({ metadata: { labels: { "sdk-name": "my-app" } } });
+    client.getMetadata.mockResolvedValue({ metadata: { labels: { "sdk-name": "my-app" } } });
 
     const result = await runCommand(syncCommand, ["1", "--yes"]);
 
     expect(result.success).toBe(true);
-    expect(state.setMetadata).toHaveBeenCalledWith(
+    expect(client.setMetadata).toHaveBeenCalledWith(
       expect.objectContaining({
         labels: {
           "sdk-migration": "m0001",
@@ -338,15 +335,15 @@ describe("tailordb migration sync", () => {
   test("keeps a migration history ID that matches the local one", async () => {
     writeRebaselineMarker(state.migrationsDir, "hcurrent");
     vi.mocked(prompt.confirm).mockResolvedValue(true);
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0002", "sdk-migration-history": "hcurrent" } },
     });
 
     const result = await runCommand(syncCommand, ["1"]);
 
     expect(result.success).toBe(true);
-    expect(state.createTailorDBType).toHaveBeenCalledTimes(1);
-    expect(state.setMetadata).toHaveBeenCalledWith(
+    expect(client.createTailorDBType).toHaveBeenCalledTimes(1);
+    expect(client.setMetadata).toHaveBeenCalledWith(
       expect.objectContaining({
         labels: { "sdk-migration": "m0001", "sdk-migration-history": "hcurrent" },
       }),
@@ -355,7 +352,7 @@ describe("tailordb migration sync", () => {
 
   test("overwrites another migration history after confirmation with --force, naming both IDs", async () => {
     vi.mocked(prompt.confirm).mockResolvedValue(true);
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: {
         labels: {
           "sdk-migration": "m0002",
@@ -373,8 +370,8 @@ describe("tailordb migration sync", () => {
       "Overwriting the migration history ID hstale with <unset> (--force).",
     );
     expect(prompt.confirm).toHaveBeenCalledTimes(1);
-    expect(state.createTailorDBType).toHaveBeenCalledTimes(1);
-    expect(state.setMetadata).toHaveBeenCalledWith(
+    expect(client.createTailorDBType).toHaveBeenCalledTimes(1);
+    expect(client.setMetadata).toHaveBeenCalledWith(
       expect.objectContaining({
         labels: { "sdk-migration": "m0001", "sdk-name": "my-app" },
       }),
@@ -393,7 +390,7 @@ describe("tailordb migration sync", () => {
       Post: parsedType("Post"),
     };
     // Remote: a stale permission for a type absent from the snapshot.
-    state.listTailorDBGQLPermissions.mockResolvedValue({
+    client.listTailorDBGQLPermissions.mockResolvedValue({
       permissions: [{ typeName: "Stale" }],
       nextPageToken: "",
     });
@@ -402,12 +399,12 @@ describe("tailordb migration sync", () => {
 
     expect(result.success).toBe(true);
     // User's permission exists in the snapshot but not remotely → created.
-    expect(state.createTailorDBGQLPermission).toHaveBeenCalledWith(
+    expect(client.createTailorDBGQLPermission).toHaveBeenCalledWith(
       expect.objectContaining({ namespaceName: "tailordb", typeName: "User" }),
     );
-    expect(state.updateTailorDBGQLPermission).not.toHaveBeenCalled();
+    expect(client.updateTailorDBGQLPermission).not.toHaveBeenCalled();
     // Stale's permission has no snapshot counterpart → deleted before the table.
-    expect(state.deleteTailorDBGQLPermission).toHaveBeenCalledWith(
+    expect(client.deleteTailorDBGQLPermission).toHaveBeenCalledWith(
       expect.objectContaining({ namespaceName: "tailordb", typeName: "Stale" }),
     );
   });
@@ -415,7 +412,7 @@ describe("tailordb migration sync", () => {
   test("accepts 4-digit migration numbers", async () => {
     const result = await runCommand(syncCommand, ["0001", "--yes"]);
     expect(result.success).toBe(true);
-    expect(state.setMetadata).toHaveBeenCalledWith(
+    expect(client.setMetadata).toHaveBeenCalledWith(
       expect.objectContaining({
         labels: expect.objectContaining({ "sdk-migration": "m0001" }),
       }),
@@ -423,12 +420,12 @@ describe("tailordb migration sync", () => {
   });
 
   test("still sets the label when namespace metadata does not exist yet", async () => {
-    state.getMetadata.mockRejectedValue(new ConnectError("metadata not found", Code.NotFound));
+    client.getMetadata.mockRejectedValue(new ConnectError("metadata not found", Code.NotFound));
 
     const result = await runCommand(syncCommand, ["1", "--yes"]);
 
     expect(result.success).toBe(true);
-    expect(state.setMetadata).toHaveBeenCalledWith(
+    expect(client.setMetadata).toHaveBeenCalledWith(
       expect.objectContaining({
         labels: { "sdk-migration": "m0001" },
       }),
@@ -436,7 +433,7 @@ describe("tailordb migration sync", () => {
   });
 
   test("refuses to sync when the namespace does not exist remotely", async () => {
-    state.listTailorDBTypes.mockRejectedValue(
+    client.listTailorDBTypes.mockRejectedValue(
       new ConnectError("namespace not found", Code.NotFound),
     );
 
@@ -444,20 +441,20 @@ describe("tailordb migration sync", () => {
 
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/has not been deployed yet/);
-    expect(state.createTailorDBType).not.toHaveBeenCalled();
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.createTailorDBType).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("aborts before mutating when reading metadata fails with a non-NotFound error", async () => {
-    state.getMetadata.mockRejectedValue(new ConnectError("unavailable", Code.Unavailable));
+    client.getMetadata.mockRejectedValue(new ConnectError("unavailable", Code.Unavailable));
 
     const result = await runCommand(syncCommand, ["1", "--yes"]);
 
     expect(result.success).toBe(false);
-    expect(state.createTailorDBType).not.toHaveBeenCalled();
-    expect(state.updateTailorDBType).not.toHaveBeenCalled();
-    expect(state.deleteTailorDBType).not.toHaveBeenCalled();
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.createTailorDBType).not.toHaveBeenCalled();
+    expect(client.updateTailorDBType).not.toHaveBeenCalled();
+    expect(client.deleteTailorDBType).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("includes plugin-generated executors in publishRecordEvents detection", async () => {
@@ -467,7 +464,7 @@ describe("tailordb migration sync", () => {
     const result = await runCommand(syncCommand, ["1", "--yes"]);
 
     expect(result.success).toBe(true);
-    expect(state.updateTailorDBType.mock.calls[0]![0]).toMatchObject({
+    expect(client.updateTailorDBType.mock.calls[0]![0]).toMatchObject({
       tailordbType: { name: "User", schema: { settings: { publishRecordEvents: true } } },
     });
   });
@@ -478,10 +475,10 @@ describe("tailordb migration sync", () => {
     const result = await runCommand(syncCommand, ["1", "--yes"]);
 
     expect(result.success).toBe(true);
-    expect(state.updateTailorDBType.mock.calls[0]![0]).toMatchObject({
+    expect(client.updateTailorDBType.mock.calls[0]![0]).toMatchObject({
       tailordbType: { name: "User", schema: { settings: { publishRecordEvents: true } } },
     });
-    expect(state.createTailorDBType.mock.calls[0]![0]).toMatchObject({
+    expect(client.createTailorDBType.mock.calls[0]![0]).toMatchObject({
       tailordbType: { name: "Post", schema: { settings: { publishRecordEvents: false } } },
     });
   });
@@ -494,7 +491,7 @@ describe("tailordb migration sync", () => {
     const result = await runCommand(syncCommand, ["1", "--yes"]);
 
     expect(result.success).toBe(true);
-    expect(state.updateTailorDBType.mock.calls[0]![0]).toMatchObject({
+    expect(client.updateTailorDBType.mock.calls[0]![0]).toMatchObject({
       tailordbType: { name: "User", schema: { settings: { publishRecordEvents: false } } },
     });
   });
@@ -503,13 +500,13 @@ describe("tailordb migration sync", () => {
     const result = await runCommand(syncCommand, [input, "--yes"]);
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/Invalid migration number format/);
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("accepts 0 for the baseline snapshot", async () => {
     const result = await runCommand(syncCommand, ["0", "--yes"]);
     expect(result.success).toBe(true);
-    expect(state.setMetadata).toHaveBeenCalledWith(
+    expect(client.setMetadata).toHaveBeenCalledWith(
       expect.objectContaining({
         labels: expect.objectContaining({ "sdk-migration": "m0000" }),
       }),
@@ -523,14 +520,14 @@ describe("tailordb migration sync", () => {
 
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/Migration file validation failed/);
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("rejects a migration number beyond the working tree's latest", async () => {
     const result = await runCommand(syncCommand, ["3", "--yes"]);
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/does not exist in working tree/);
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("requires --namespace when multiple namespaces have migrations", async () => {
@@ -555,11 +552,11 @@ describe("tailordb migration sync", () => {
 
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/must reproduce the current local schema/);
-    expect(state.listTailorDBTypes).not.toHaveBeenCalled();
-    expect(state.createTailorDBType).not.toHaveBeenCalled();
-    expect(state.updateTailorDBType).not.toHaveBeenCalled();
-    expect(state.deleteTailorDBType).not.toHaveBeenCalled();
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.listTailorDBTypes).not.toHaveBeenCalled();
+    expect(client.createTailorDBType).not.toHaveBeenCalled();
+    expect(client.updateTailorDBType).not.toHaveBeenCalled();
+    expect(client.deleteTailorDBType).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("applies the snapshot when the confirmation prompt is accepted", async () => {
@@ -569,7 +566,7 @@ describe("tailordb migration sync", () => {
 
     expect(result.success).toBe(true);
     expect(prompt.confirm).toHaveBeenCalledWith(expect.objectContaining({ default: false }));
-    expect(state.createTailorDBType).toHaveBeenCalledTimes(1);
+    expect(client.createTailorDBType).toHaveBeenCalledTimes(1);
   });
 
   test("fails without changes when the confirmation prompt is declined", async () => {
@@ -579,9 +576,9 @@ describe("tailordb migration sync", () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toMatchObject({ code: "MIGRATION_SYNC_CANCELLED" });
-    expect(state.createTailorDBType).not.toHaveBeenCalled();
-    expect(state.updateTailorDBType).not.toHaveBeenCalled();
-    expect(state.deleteTailorDBType).not.toHaveBeenCalled();
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.createTailorDBType).not.toHaveBeenCalled();
+    expect(client.updateTailorDBType).not.toHaveBeenCalled();
+    expect(client.deleteTailorDBType).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 });

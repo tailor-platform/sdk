@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { Code, ConnectError } from "@connectrpc/connect";
@@ -28,6 +27,7 @@ import {
 import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { withMetadataWriteBatch } from "../label";
 import {
   detectPendingMigrations,
@@ -49,6 +49,8 @@ import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { MigrationRunEvent } from "./migration-workflow";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { MetadataSchema } from "@tailor-platform/tailor-proto/metadata_resource_pb";
 
 // Mock label.ts for resourceTrn
 vi.mock("../label", async (importOriginal) => ({
@@ -171,14 +173,11 @@ function writeSchemaFile(baseDir: string, migrationNumber: number): void {
   );
 }
 
-function createMetadataClient(
-  metadata: { labels: Record<string, string> } | null,
-  setMetadataMock: ReturnType<typeof vi.fn>,
-): OperatorClient {
-  return {
-    getMetadata: vi.fn().mockResolvedValue({ metadata }),
-    setMetadata: setMetadataMock,
-  } as unknown as OperatorClient;
+function createMetadataClient(metadata: MessageInitShape<typeof MetadataSchema> | undefined) {
+  return mockOperatorClient({
+    getMetadata: { metadata },
+    setMetadata: {},
+  });
 }
 
 describe("migration", () => {
@@ -368,21 +367,18 @@ describe("migration", () => {
   describe("detectPendingMigrations", () => {
     const workspaceId = "test-workspace";
 
-    function createMockClient(currentMigrations: Record<string, number>): OperatorClient {
-      return {
-        getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
-          const namespace = trn.split(":").pop();
+    function createMockClient(currentMigrations: Record<string, number>) {
+      return mockOperatorClient({
+        getMetadata: (request) => {
+          const namespace = request.trn?.split(":").pop();
           const migrationNumber = namespace ? currentMigrations[namespace] : undefined;
-          return {
-            metadata: {
-              labels:
-                migrationNumber !== undefined
-                  ? { [MIGRATION_LABEL_KEY]: `m${formatMigrationNumber(migrationNumber)}` }
-                  : {},
-            },
-          };
-        }),
-      } as unknown as OperatorClient;
+          const labels: Record<string, string> =
+            migrationNumber !== undefined
+              ? { [MIGRATION_LABEL_KEY]: `m${formatMigrationNumber(migrationNumber)}` }
+              : {};
+          return { metadata: { labels } };
+        },
+      });
     }
 
     test("returns empty array when no pending migrations", async () => {
@@ -398,9 +394,9 @@ describe("migration", () => {
     });
 
     test("treats a missing remote namespace as migration 0", async () => {
-      const client = {
-        getMetadata: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
-      } as unknown as OperatorClient;
+      const client = mockOperatorClient({
+        getMetadata: () => Promise.reject(new ConnectError("not found", Code.NotFound)),
+      });
       writeDiffFile(testDir, 1, createMockMigrationDiff());
 
       const namespacesWithMigrations: NamespaceWithMigrations[] = [
@@ -416,9 +412,9 @@ describe("migration", () => {
       ["unavailable", new ConnectError("unavailable", Code.Unavailable)],
       ["permission denied", new ConnectError("permission denied", Code.PermissionDenied)],
     ])("propagates %s errors while reading the migration checkpoint", async (_name, error) => {
-      const client = {
-        getMetadata: vi.fn().mockRejectedValue(error),
-      } as unknown as OperatorClient;
+      const client = mockOperatorClient({
+        getMetadata: () => Promise.reject(error),
+      });
       writeDiffFile(testDir, 1, createMockMigrationDiff());
 
       const namespacesWithMigrations: NamespaceWithMigrations[] = [
@@ -770,27 +766,24 @@ describe("migration", () => {
     const expectedTrn = `trn:v1:workspace:${workspaceId}:tailordb:${namespace}`;
 
     test("updates migration label on service metadata", async () => {
-      const setMetadataMock = vi.fn();
-      const client = createMetadataClient({ labels: {} }, setMetadataMock);
+      const client = createMetadataClient({ labels: {} });
 
       await updateMigrationLabel(client, workspaceId, namespace, 5);
 
-      expect(setMetadataMock).toHaveBeenCalledWith({
+      expect(client.setMetadata).toHaveBeenCalledWith({
         trn: expectedTrn,
         labels: { [MIGRATION_LABEL_KEY]: "m0005" },
       });
     });
 
     test("preserves existing labels", async () => {
-      const setMetadataMock = vi.fn();
-      const client = createMetadataClient(
-        { labels: { "existing-label": "value", "another-label": "another-value" } },
-        setMetadataMock,
-      );
+      const client = createMetadataClient({
+        labels: { "existing-label": "value", "another-label": "another-value" },
+      });
 
       await updateMigrationLabel(client, workspaceId, namespace, 3);
 
-      expect(setMetadataMock).toHaveBeenCalledWith({
+      expect(client.setMetadata).toHaveBeenCalledWith({
         trn: expectedTrn,
         labels: {
           "existing-label": "value",
@@ -801,15 +794,11 @@ describe("migration", () => {
     });
 
     test("updates the migration checkpoint and history ID atomically", async () => {
-      const setMetadataMock = vi.fn();
-      const client = createMetadataClient(
-        { labels: { "existing-label": "value" } },
-        setMetadataMock,
-      );
+      const client = createMetadataClient({ labels: { "existing-label": "value" } });
 
       await updateMigrationLabel(client, workspaceId, namespace, 0, "hcurrent");
 
-      expect(setMetadataMock).toHaveBeenCalledWith({
+      expect(client.setMetadata).toHaveBeenCalledWith({
         trn: expectedTrn,
         labels: {
           "existing-label": "value",
@@ -820,20 +809,16 @@ describe("migration", () => {
     });
 
     test("removes a stale history ID for a markerless local history", async () => {
-      const setMetadataMock = vi.fn();
-      const client = createMetadataClient(
-        {
-          labels: {
-            "existing-label": "value",
-            [MIGRATION_HISTORY_LABEL_KEY]: "hstale",
-          },
+      const client = createMetadataClient({
+        labels: {
+          "existing-label": "value",
+          [MIGRATION_HISTORY_LABEL_KEY]: "hstale",
         },
-        setMetadataMock,
-      );
+      });
 
       await updateMigrationLabel(client, workspaceId, namespace, 1);
 
-      expect(setMetadataMock).toHaveBeenCalledWith({
+      expect(client.setMetadata).toHaveBeenCalledWith({
         trn: expectedTrn,
         labels: {
           "existing-label": "value",
@@ -843,60 +828,55 @@ describe("migration", () => {
     });
 
     test("records unfinished table deletions atomically with the checkpoint", async () => {
-      const setMetadataMock = vi.fn();
-      const client = createMetadataClient({ labels: {} }, setMetadataMock);
+      const client = createMetadataClient({ labels: {} });
 
       await updateMigrationLabel(client, workspaceId, namespace, 2, undefined, false, true);
 
-      expect(setMetadataMock).toHaveBeenCalledWith({
+      expect(client.setMetadata).toHaveBeenCalledWith({
         trn: expectedTrn,
         labels: { [MIGRATION_LABEL_KEY]: "m0002", "sdk-migration-cleanup": "m0002" },
       });
     });
 
     test("removes the record of unfinished table deletions with any other checkpoint write", async () => {
-      const setMetadataMock = vi.fn();
-      const client = createMetadataClient(
-        { labels: { [MIGRATION_LABEL_KEY]: "m0001", "sdk-migration-cleanup": "m0001" } },
-        setMetadataMock,
-      );
+      const client = createMetadataClient({
+        labels: { [MIGRATION_LABEL_KEY]: "m0001", "sdk-migration-cleanup": "m0001" },
+      });
 
       await updateMigrationLabel(client, workspaceId, namespace, 2);
 
-      expect(setMetadataMock).toHaveBeenCalledWith({
+      expect(client.setMetadata).toHaveBeenCalledWith({
         trn: expectedTrn,
         labels: { [MIGRATION_LABEL_KEY]: "m0002" },
       });
     });
 
     test("handles missing metadata gracefully", async () => {
-      const setMetadataMock = vi.fn();
-      const client = createMetadataClient(null, setMetadataMock);
+      const client = createMetadataClient(undefined);
 
       await updateMigrationLabel(client, workspaceId, namespace, 1);
 
-      expect(setMetadataMock).toHaveBeenCalledWith({
+      expect(client.setMetadata).toHaveBeenCalledWith({
         trn: expectedTrn,
         labels: { [MIGRATION_LABEL_KEY]: "m0001" },
       });
     });
 
     test("commits migration checkpoints immediately inside a resource metadata batch", async () => {
-      const setMetadataMock = vi.fn();
-      const bulkSetMetadata = vi.fn();
-      const client = Object.assign(createMetadataClient({ labels: {} }, setMetadataMock), {
-        bulkSetMetadata,
-      });
+      const client = Object.assign(
+        createMetadataClient({ labels: {} }),
+        mockOperatorClient({ bulkSetMetadata: {} }),
+      );
 
-      await withMetadataWriteBatch(client as never, async (batchClient) => {
+      await withMetadataWriteBatch(client, async (batchClient) => {
         await updateMigrationLabel(batchClient, workspaceId, namespace, 2);
-        expect(setMetadataMock).toHaveBeenCalledWith({
+        expect(client.setMetadata).toHaveBeenCalledWith({
           trn: expectedTrn,
           labels: { [MIGRATION_LABEL_KEY]: "m0002" },
         });
       });
 
-      expect(bulkSetMetadata).not.toHaveBeenCalled();
+      expect(client.bulkSetMetadata).not.toHaveBeenCalled();
     });
   });
 
@@ -908,7 +888,7 @@ describe("migration", () => {
 
     function createMockContext(overrides: Partial<MigrationContext> = {}): MigrationContext {
       return {
-        client: {} as unknown as OperatorClient,
+        client: mockOperatorClient({}),
         workspaceId,
         authNamespace: "auth",
         machineUserByNamespace: new Map([["tailordb", "test-machine-user"]]),
@@ -942,7 +922,7 @@ describe("migration", () => {
     test("runs each namespace's scripts as the machine user resolved for that namespace", async () => {
       await executeMigrations(
         createMockContext({
-          client: createMetadataClient({ labels: {} }, vi.fn()),
+          client: createMetadataClient({ labels: {} }),
           machineUserByNamespace: new Map([["tailordb", "migrator"]]),
         }),
         [createMockMigration()],
@@ -956,10 +936,12 @@ describe("migration", () => {
 
     const stepsForm: MigrationScriptForm = { kind: "steps", order: ["backfill", "recompute"] };
 
-    function stepsContext(setMetadataMock: ReturnType<typeof vi.fn>): MigrationContext {
+    function stepsContext(
+      client: OperatorClient = createMetadataClient({ labels: {} }),
+    ): MigrationContext {
       return {
         ...createMockContext(),
-        client: createMetadataClient({ labels: {} }, setMetadataMock),
+        client,
       };
     }
 
@@ -975,7 +957,7 @@ describe("migration", () => {
       const migration = createMockMigration({ number: 3, scriptForm: stepsForm });
       const skipSteps = new Map([["tailordb", ["backfill"]]]);
 
-      await executeMigrations({ ...stepsContext(vi.fn()), skipSteps }, [migration], checkpoints, {
+      await executeMigrations({ ...stepsContext(), skipSteps }, [migration], checkpoints, {
         tailordb: { number: 3, kind: "steps" },
       });
 
@@ -997,7 +979,7 @@ describe("migration", () => {
       const migration = createMockMigration({ number: 4, scriptForm: stepsForm });
 
       await executeMigrations(
-        { ...stepsContext(vi.fn()), skipSteps: new Map([["tailordb", ["backfill"]]]) },
+        { ...stepsContext(), skipSteps: new Map([["tailordb", ["backfill"]]]) },
         [migration],
         checkpoints,
         { tailordb: { number: 3, kind: "steps" } },
@@ -1029,7 +1011,7 @@ describe("migration", () => {
       vi.mocked(logger.warn).mockClear();
       vi.mocked(logger.log).mockClear();
 
-      await executeMigrations(stepsContext(vi.fn()), [migration], checkpoints, {
+      await executeMigrations(stepsContext(), [migration], checkpoints, {
         tailordb: { number: 1, kind: "steps" },
       });
 
@@ -1064,7 +1046,7 @@ describe("migration", () => {
       vi.mocked(logger.log).mockClear();
 
       await executeMigrations(
-        stepsContext(vi.fn()),
+        stepsContext(),
         [createMockMigration({ scriptForm: stepsForm })],
         checkpoints,
         { tailordb: { number: 1, kind: "steps" } },
@@ -1075,7 +1057,7 @@ describe("migration", () => {
     });
 
     test("treats another deploy's active run as in progress without touching its records", async () => {
-      const setMetadataMock = vi.fn();
+      const client = createMetadataClient({ labels: {} });
       const migration = createMockMigration({ scriptForm: stepsForm });
       executeMigrationStepsAsWorkflowMock.mockRejectedValueOnce(
         CLIError({
@@ -1085,9 +1067,9 @@ describe("migration", () => {
       );
 
       await expect(
-        executeMigrations(stepsContext(setMetadataMock), [migration], checkpoints),
+        executeMigrations(stepsContext(client), [migration], checkpoints),
       ).rejects.toMatchObject({ code: "MIGRATION_PARTIALLY_APPLIED" });
-      expect(setMetadataMock).not.toHaveBeenCalled();
+      expect(client.setMetadata).not.toHaveBeenCalled();
     });
 
     interface MetadataFaults {
@@ -1107,19 +1089,19 @@ describe("migration", () => {
       let gets = 0;
       let sets = 0;
       const unavailable = () => new ConnectError("unavailable", Code.Unavailable);
-      const client = {
-        getMetadata: vi.fn(async () => {
+      const client = mockOperatorClient({
+        getMetadata: async () => {
           if (faults.failGets?.includes(gets++)) throw unavailable();
           return { metadata: { labels: { ...labels } } };
-        }),
-        setMetadata: vi.fn(async (request: { labels: Record<string, string> }) => {
+        },
+        setMetadata: async (request) => {
           const call = sets++;
           if (faults.failSets?.includes(call)) throw unavailable();
           labels = { ...request.labels };
           if (faults.loseSetResponses?.includes(call)) throw unavailable();
           return {};
-        }),
-      } as unknown as OperatorClient;
+        },
+      });
       return { client, labels: () => labels };
     }
 
@@ -1315,7 +1297,7 @@ describe("migration", () => {
       spinnerMock.fail.mockClear();
 
       await expect(
-        executeMigrations(stepsContext(vi.fn()), [migration], checkpoints, {
+        executeMigrations(stepsContext(), [migration], checkpoints, {
           tailordb: { number: 1, kind: "steps" },
         }),
       ).rejects.toMatchObject({ code: "MIGRATION_PARTIALLY_APPLIED" });
@@ -1341,7 +1323,7 @@ describe("migration", () => {
       });
 
       await expect(
-        executeMigrations(stepsContext(vi.fn()), [migration], checkpoints, {
+        executeMigrations(stepsContext(), [migration], checkpoints, {
           tailordb: { number: 1, kind: "steps" },
         }),
       ).rejects.toMatchObject({
@@ -1386,7 +1368,7 @@ describe("migration", () => {
         });
 
         await expect(
-          executeMigrations(stepsContext(vi.fn()), [migration], checkpoints, {
+          executeMigrations(stepsContext(), [migration], checkpoints, {
             tailordb: { number: 1, kind: "steps" },
           }),
         ).rejects.toMatchObject({
@@ -1412,7 +1394,7 @@ describe("migration", () => {
       });
 
       await expect(
-        executeMigrations(stepsContext(vi.fn()), [migration], checkpoints),
+        executeMigrations(stepsContext(), [migration], checkpoints),
       ).rejects.toMatchObject({
         code: "MIGRATION_FAILED",
         context: expect.objectContaining({ canceled: true }),
@@ -1968,7 +1950,7 @@ describe("migration", () => {
         stepsMayHaveCommitted: true,
       });
 
-      await executeMigrations(stepsContext(vi.fn()), [migration], checkpoints, {
+      await executeMigrations(stepsContext(), [migration], checkpoints, {
         tailordb: { number: 1, kind: "steps" },
       });
 
@@ -2082,7 +2064,7 @@ describe("migration", () => {
         .mockResolvedValueOnce(completed)
         .mockResolvedValueOnce(completed);
 
-      await executeMigrations(stepsContext(vi.fn()), migrations, checkpoints);
+      await executeMigrations(stepsContext(), migrations, checkpoints);
 
       expect(bundleMigrationStepsMock.mock.calls.map(([options]) => options.temporal)).toEqual([
         true,
@@ -2111,7 +2093,7 @@ describe("migration", () => {
         .mockResolvedValueOnce(completed)
         .mockResolvedValueOnce(completed);
 
-      await executeMigrations(stepsContext(vi.fn()), migrations, checkpoints);
+      await executeMigrations(stepsContext(), migrations, checkpoints);
 
       expect(bundleMigrationStepsMock.mock.calls.map(([options]) => options.dateDefault)).toEqual([
         "temporal",
