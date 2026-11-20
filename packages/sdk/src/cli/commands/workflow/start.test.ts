@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { runCommand } from "@politty/zod";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { aroundEach, describe, expect, test, vi } from "vitest";
@@ -11,10 +10,15 @@ import {
   captureStdoutStream,
 } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { resolveWorkflow } from "./get";
 import { resumeCommand } from "./resume";
 import { startCommand, startWorkflow, startWorkflowByName } from "./start";
-import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type {
+  WorkflowExecutionSchema,
+  WorkflowJobExecutionSchema,
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
@@ -34,15 +38,33 @@ vi.mock("./get", () => ({
   resolveWorkflow: vi.fn(),
 }));
 
-function executionResponse(status: WorkflowExecution_Status, jobExecutions: unknown[] = []) {
+function executionResponse(
+  status: WorkflowExecution_Status,
+  jobExecutions: MessageInitShape<typeof WorkflowJobExecutionSchema>[] = [],
+): { execution: MessageInitShape<typeof WorkflowExecutionSchema> } {
   return {
     execution: {
       id: "execution-1",
       workflowName: "legacy-workflow",
       status,
       jobExecutions,
-    } as unknown as WorkflowExecution,
+    },
   };
+}
+
+function createClient() {
+  return mockOperatorClient({
+    getApplication: {
+      application: {
+        authNamespace: "auth-ns",
+      },
+    },
+    getWorkflowExecution: executionResponse(WorkflowExecution_Status.SUCCESS),
+    startWorkflow: {
+      executionId: "execution-1",
+    },
+    resumeWorkflowExecution: { executionId: "execution-1" },
+  });
 }
 
 function runWaitCommand(command: "start" | "resume", ...flags: string[]) {
@@ -58,9 +80,7 @@ function runWaitCommand(command: "start" | "resume", ...flags: string[]) {
 }
 
 describe("startWorkflow", () => {
-  let getApplicationMock: ReturnType<typeof vi.fn>;
-  let getWorkflowExecutionMock: ReturnType<typeof vi.fn>;
-  let startWorkflowMock: ReturnType<typeof vi.fn>;
+  let client: ReturnType<typeof createClient>;
 
   aroundEach(async (runTest) => {
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
@@ -72,24 +92,8 @@ describe("startWorkflow", () => {
       },
     } as Awaited<ReturnType<typeof loadConfig>>);
 
-    getApplicationMock = vi.fn().mockResolvedValue({
-      application: {
-        authNamespace: "auth-ns",
-      },
-    });
-    startWorkflowMock = vi.fn().mockResolvedValue({
-      executionId: "execution-1",
-    });
-    getWorkflowExecutionMock = vi
-      .fn()
-      .mockResolvedValue(executionResponse(WorkflowExecution_Status.SUCCESS));
-
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      getApplication: getApplicationMock,
-      getWorkflowExecution: getWorkflowExecutionMock,
-      startWorkflow: startWorkflowMock,
-      resumeWorkflowExecution: vi.fn().mockResolvedValue({ executionId: "execution-1" }),
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    client = createClient();
+    vi.mocked(initOperatorClient).mockResolvedValue(client);
 
     vi.mocked(resolveWorkflow).mockImplementation(async (_client, _workspaceId, workflowName) => {
       return {
@@ -111,11 +115,11 @@ describe("startWorkflow", () => {
     });
 
     expect(loadConfig).toHaveBeenCalledTimes(1);
-    expect(getApplicationMock).toHaveBeenCalledWith({
+    expect(client.getApplication).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
       applicationName: "my-app",
     });
-    expect(startWorkflowMock).toHaveBeenCalledWith(
+    expect(client.startWorkflow).toHaveBeenCalledWith(
       expect.objectContaining({
         workflowId: "id:typed-workflow",
         authInvoker: expect.objectContaining({
@@ -133,7 +137,7 @@ describe("startWorkflow", () => {
         auth: { name: "external-auth", external: true },
       },
     } as Awaited<ReturnType<typeof loadConfig>>);
-    getApplicationMock.mockResolvedValueOnce({
+    client.getApplication.mockResolvedValueOnce({
       application: {},
     });
 
@@ -147,7 +151,7 @@ describe("startWorkflow", () => {
       invoker: "typed-user",
     });
 
-    expect(startWorkflowMock).toHaveBeenCalledWith(
+    expect(client.startWorkflow).toHaveBeenCalledWith(
       expect.objectContaining({
         workflowId: "id:typed-workflow",
         authInvoker: expect.objectContaining({
@@ -159,7 +163,7 @@ describe("startWorkflow", () => {
   });
 
   test("throws when neither the deployed app nor the config has an auth namespace", async () => {
-    getApplicationMock.mockResolvedValueOnce({
+    client.getApplication.mockResolvedValueOnce({
       application: {},
     });
 
@@ -174,7 +178,7 @@ describe("startWorkflow", () => {
         invoker: "typed-user",
       }),
     ).rejects.toThrow("my-app does not have an auth configuration");
-    expect(startWorkflowMock).not.toHaveBeenCalled();
+    expect(client.startWorkflow).not.toHaveBeenCalled();
   });
 
   test("start command with jsonMode emits only parseable JSON to stdout", async () => {
@@ -212,13 +216,13 @@ describe("startWorkflow", () => {
       using stdout = captureStdout();
       using _stderr = captureStderr();
       using _json = jsonMode();
-      getWorkflowExecutionMock.mockResolvedValue(
+      client.getWorkflowExecution.mockResolvedValue(
         executionResponse(WorkflowExecution_Status.FAILED),
       );
       const result = await runWaitCommand(command);
       expect(result.success).toBe(false);
       expect(JSON.parse(stdout.output)).toMatchObject({ id: "execution-1", status: "FAILED" });
-      expect(getWorkflowExecutionMock).toHaveBeenCalledTimes(1);
+      expect(client.getWorkflowExecution).toHaveBeenCalledTimes(1);
     },
   );
 
@@ -228,7 +232,7 @@ describe("startWorkflow", () => {
       using stdout = captureStdoutStream();
       using _stderr = captureStderr();
       using _json = jsonMode(false);
-      getWorkflowExecutionMock
+      client.getWorkflowExecution
         .mockResolvedValueOnce(executionResponse(WorkflowExecution_Status.SUCCESS))
         .mockResolvedValue(executionResponse(WorkflowExecution_Status.FAILED));
       const result = await runWaitCommand(command, "--logs");
@@ -243,7 +247,7 @@ describe("startWorkflow", () => {
       using stdout = captureStdout();
       using _stderr = captureStderr();
       using _json = jsonMode();
-      getWorkflowExecutionMock.mockResolvedValue(
+      client.getWorkflowExecution.mockResolvedValue(
         executionResponse(WorkflowExecution_Status.SUCCESS, [
           {
             id: "job-1",
@@ -273,7 +277,7 @@ describe("startWorkflow", () => {
       machineUserSource: undefined,
       profile: undefined,
     });
-    expect(startWorkflowMock).toHaveBeenCalledWith(
+    expect(client.startWorkflow).toHaveBeenCalledWith(
       expect.objectContaining({
         authInvoker: expect.objectContaining({ machineUserName: "profile-bot" }),
       }),

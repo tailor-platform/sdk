@@ -70,7 +70,7 @@ export interface LoadSeedContextOptions {
 /**
  * Load the seed context from the local config. Requires `seedPlugin` to be
  * configured in the config's plugins. A relative `distPath` in the seedPlugin
- * options is resolved against the current working directory — the same base
+ * options is resolved against the config's directory — the same base
  * `tailor generate` writes it to.
  * @param options - Seed context loading options.
  * @returns The seed context computed from the local config.
@@ -121,7 +121,7 @@ export async function loadSeedContext(options: LoadSeedContextOptions = {}): Pro
 
   return {
     config,
-    distPath: path.resolve(pluginOptions.distPath),
+    distPath: path.resolve(path.dirname(config.path), pluginOptions.distPath),
     machineUserName: pluginOptions.machineUserName,
     datasets: parseDatasets(pluginOptions.datasets, config.path),
     namespaces: buildSeedNamespaceConfigs(namespaces),

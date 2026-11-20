@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import { create, createRegistry } from "@bufbuild/protobuf";
 import { usedTypes } from "@bufbuild/protobuf/reflect";
 import { createValidator } from "@bufbuild/protovalidate";
+import { ViolationsSchema } from "@bufbuild/protovalidate/gen/buf/validate/validate_pb.js";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 import * as path from "pathe";
@@ -16,12 +17,16 @@ import {
   buildMetaRequest,
   hasMatchingSdkVersion,
   isOwnedByApp,
+  labelCountViolation,
+  labelRefreshOf,
   resolverTrn,
   resourceTrn,
   tailorDBTypeTrn,
+  withExtraLabels,
   withMetadataWriteBatch,
   writeMetadataLabels,
 } from "./label";
+import { labelCountRejection } from "./test-helpers/label-count-rejection";
 import type { MetadataLabelClient } from "./label";
 
 describe("isOwnedByApp", () => {
@@ -74,6 +79,34 @@ describe("hasMatchingSdkVersion", () => {
   });
 });
 
+describe("labelRefreshOf", () => {
+  const stored = { "sdk-name": "my-app", "sdk-version": "v1-0-0", owner: "team-a" };
+
+  test("plans no refresh when every label to set is stored and no label to remove is", () => {
+    expect(
+      labelRefreshOf(stored, {
+        trn: "trn:a",
+        labels: { "sdk-name": "my-app", "sdk-version": "v1-0-0" },
+        remove: ["sdk-app-id"],
+      }),
+    ).toEqual({});
+  });
+
+  test.each<{ case: string; labels: Record<string, string>; remove: string[] }>([
+    { case: "a label to set has another value", labels: { "sdk-name": "renamed" }, remove: [] },
+    { case: "a label to set is missing", labels: { "sdk-app-id": "app-id-1" }, remove: [] },
+    { case: "a label to remove is stored", labels: {}, remove: ["owner"] },
+  ])("plans the write as the refresh when $case", ({ labels, remove }) => {
+    const write = { trn: "trn:a", labels, remove };
+    expect(labelRefreshOf(stored, write)).toEqual({ labelRefresh: write });
+  });
+
+  test("plans a refresh for a resource without labels", () => {
+    const write = { trn: "trn:a", labels: { "sdk-name": "my-app" } };
+    expect(labelRefreshOf(undefined, write)).toEqual({ labelRefresh: write });
+  });
+});
+
 describe("buildMetaRequest", () => {
   function createClient(labels: Record<string, string>) {
     return mockOperatorClient({ getMetadata: { metadata: { labels } }, setMetadata: {} });
@@ -111,12 +144,10 @@ describe("buildMetaRequest", () => {
   test("writes config metadata alongside the SDK labels", async () => {
     const client = createClient({ "sdk-name": "my-app", team: "billing" });
 
-    const write = await buildMetaRequest({
-      trn: "trn:x",
-      appName: "my-app",
-      appId: "id-1",
-      metadata: { "erp-kit-version": "v1-2-3", tier: "gold" },
-    });
+    const write = withExtraLabels(
+      await buildMetaRequest({ trn: "trn:x", appName: "my-app", appId: "id-1" }),
+      { "erp-kit-version": "v1-2-3", tier: "gold" },
+    );
     await writeMetadataLabels(client, write);
 
     expect(client.setMetadata.mock.calls[0]?.[0].labels).toMatchObject({
@@ -129,12 +160,10 @@ describe("buildMetaRequest", () => {
   });
 
   test("keeps the SDK labels when config metadata names one of them", async () => {
-    const write = await buildMetaRequest({
-      trn: "trn:x",
-      appName: "my-app",
-      appId: "id-1",
-      metadata: { "sdk-name": "other", "sdk-app-id": "app-other" },
-    });
+    const write = withExtraLabels(
+      await buildMetaRequest({ trn: "trn:x", appName: "my-app", appId: "id-1" }),
+      { "sdk-name": "other", "sdk-app-id": "app-other" },
+    );
 
     expect(write.labels).toMatchObject({ "sdk-name": "my-app", "sdk-app-id": "app-id-1" });
   });
@@ -156,8 +185,8 @@ describe("config metadata against the platform's label rules", () => {
   }
 
   async function labelsFor(metadata: Record<string, string>): Promise<Record<string, string>> {
-    const write = await buildMetaRequest({ trn, appName: "my-app", appId: "id-1", metadata });
-    return write.labels ?? {};
+    const write = await buildMetaRequest({ trn, appName: "my-app", appId: "id-1" });
+    return withExtraLabels(write, metadata).labels ?? {};
   }
 
   test.each([
@@ -173,15 +202,35 @@ describe("config metadata against the platform's label rules", () => {
     expect(platformAccepts(await labelsFor(metadata))).toBe(accepted);
   });
 
-  test("the entry cap fills the platform's label limit exactly once the SDK labels are added", async () => {
-    const entries = (count: number) =>
-      Object.fromEntries(Array.from({ length: count }, (_, i) => [`key-${i}`, "v"]));
+  test("leaves the label count to the platform", async () => {
+    const entries = Object.fromEntries(Array.from({ length: 18 }, (_, i) => [`key-${i}`, "v"]));
 
-    expect(configAccepts(entries(17))).toBe(true);
-    expect(platformAccepts(await labelsFor(entries(17)))).toBe(true);
+    expect(configAccepts(entries)).toBe(true);
+    expect(platformAccepts(await labelsFor(entries))).toBe(false);
+  });
+});
 
-    expect(configAccepts(entries(18))).toBe(false);
-    expect(platformAccepts(await labelsFor(entries(18)))).toBe(false);
+describe("labelCountViolation", () => {
+  test("reads the violation the platform reports for too many labels", () => {
+    expect(labelCountViolation(labelCountRejection())).toBe("map must be at most 20 entries");
+  });
+
+  test.each([
+    [
+      "another rule",
+      new ConnectError("validation error", Code.InvalidArgument, undefined, [
+        {
+          desc: ViolationsSchema,
+          value: create(ViolationsSchema, {
+            violations: [{ ruleId: "string.pattern", message: "does not match" }],
+          }),
+        },
+      ]),
+    ],
+    ["another code", new ConnectError("unavailable", Code.Unavailable)],
+    ["a plain error", new Error("map must be at most 20 entries")],
+  ])("ignores %s", (_case, error) => {
+    expect(labelCountViolation(error)).toBeUndefined();
   });
 });
 

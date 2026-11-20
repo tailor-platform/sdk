@@ -1,5 +1,97 @@
 # @tailor-platform/sdk
 
+## 2.46.0
+
+### Minor Changes
+
+- [#3165](https://github.com/tailor-platform/sdk/pull/3165) [`96f7917`](https://github.com/tailor-platform/sdk/commit/96f7917261cbab08a3371bada992c3de445a31ea) Thanks [@mocchira](https://github.com/mocchira)! - Add `tailor.sandbox` (beta) for running commands and managing files in an isolated sandbox from Functions. Import the typed wrapper from `@tailor-platform/sdk/runtime/sandbox` (also exported as `sandbox` from `@tailor-platform/sdk/runtime`), or use the ambient `tailor.sandbox` types from `@tailor-platform/sdk/runtime/globals`. A sandbox created without `name` is destroyed when the execution ends; pass `name` to keep it and reopen it later with `getByName` or `getOrCreate`. Unit tests can use the in-memory `mockSandbox()` from `@tailor-platform/sdk/vitest`.
+
+### Patch Changes
+
+- [#3228](https://github.com/tailor-platform/sdk/pull/3228) [`2cbdd9b`](https://github.com/tailor-platform/sdk/commit/2cbdd9bb34d13a57ee065de366a90d376fcb2b22) Thanks [@dqn](https://github.com/dqn)! - Fix the migration `db.ts` types to match the app's generated Kysely types: inserts can leave out fields that have a default or a create hook (such as `db.fields.timestamps()`), and values for serial fields are rejected. A serial field whose existing values the migration script has to fill or deduplicate stays writable. Existing `db.ts` files are not regenerated.
+
+## 2.45.0
+
+### Minor Changes
+
+- [#3202](https://github.com/tailor-platform/sdk/pull/3202) [`8a93054`](https://github.com/tailor-platform/sdk/commit/8a9305455330df2923197ec1e00462f3914bb342) Thanks [@dqn](https://github.com/dqn)! - **Breaking change**: In non-interactive or JSON mode, `tailor deploy` (and the `deploy()` / `apply()` exports of `@tailor-platform/sdk/cli`) no longer picks the only workspace visible to the account on its own, so a first deploy from a fresh clone, CI, or an AI agent cannot land in another project's workspace. When no workspace comes from `--workspace-id`, `TAILOR_PLATFORM_WORKSPACE_ID`, the profile, or a saved selection, it now stops with `WORKSPACE_SELECTION_REQUIRED`. Pass `--workspace-id` or set `TAILOR_PLATFORM_WORKSPACE_ID` to keep such runs working. Interactive terminals, `--create-workspace` reruns, and saved selections are unchanged.
+
+- [#3205](https://github.com/tailor-platform/sdk/pull/3205) [`c6072bb`](https://github.com/tailor-platform/sdk/commit/c6072bb0f2e121aaa88cd2701439f40902c9138b) Thanks [@dqn](https://github.com/dqn)! - **Breaking change**: `configArg` and `deploymentArgs` exported from `@tailor-platform/sdk/cli` no longer default `config` to `"tailor.config.ts"`, so a CLI plugin built on them gets `undefined` when neither `--config` nor `TAILOR_CONFIG_PATH` is given. Pass `args.config` as is to `loadConfig()`, which then uses the nearest `tailor.config.ts` in the current or a parent directory, or handle `undefined` where the plugin needs a path.
+
+- [#3205](https://github.com/tailor-platform/sdk/pull/3205) [`c6072bb`](https://github.com/tailor-platform/sdk/commit/c6072bb0f2e121aaa88cd2701439f40902c9138b) Thanks [@dqn](https://github.com/dqn)! - CLI commands now look for `tailor.config.ts` in parent directories when neither `--config` nor `TAILOR_CONFIG_PATH` is given, so running `tailor generate`, `tailor show`, or another command that reads the config from a subdirectory of your project uses the project's config instead of failing with `CONFIG_NOT_FOUND`. A `tailor.config.ts` in the current directory is still used first. `tailor deploy` now remembers which Secret Manager secrets and Auth Connection client secrets it has applied per config instead of per current directory, so it skips the unchanged ones from any directory. If you have deployed with `--config` or `TAILOR_CONFIG_PATH` naming a config in another directory, the next deploy updates those secrets once.
+
+- [#3203](https://github.com/tailor-platform/sdk/pull/3203) [`d4ca31c`](https://github.com/tailor-platform/sdk/commit/d4ca31ca73f0f232c1962e3009ef5b706782b184) Thanks [@dqn](https://github.com/dqn)! - Leave the number of `metadata` entries to the platform's limit on labels per application instead of capping it in the SDK. A config with more than 17 entries now loads, and `deploy` no longer counts the application's labels before it changes anything, so `deploy --dry-run` does not report an overflow. When the platform rejects the labels for their count, `deploy` writes the SDK's own labels without the `metadata` entries when those fit, applies the rest of its changes, runs plugins' `onDeployed` hooks, and then fails with `DEPLOY_LABEL_LIMIT_EXCEEDED`, naming the entries it did not write.
+
+- [#3205](https://github.com/tailor-platform/sdk/pull/3205) [`04ff663`](https://github.com/tailor-platform/sdk/commit/04ff663b6bbae76dafe693b29f3da165cb82f8e9) Thanks [@dqn](https://github.com/dqn)! - **Breaking change (beta)**: `tailor generate` resolves relative paths of the files plugins generate, such as a built-in plugin's relative `distPath`, against the directory of `tailor.config.ts` instead of the current directory, and `tailor seed`, `tailor tailordb migration test`, and `tailor function script` read a relative seed or Kysely `distPath` the same way. This only changes where files go when the current directory is not the config's directory, for example when `--config` or `TAILOR_CONFIG_PATH` names a config in another directory: generated files now land next to that config. Move the files generated before into that directory and update the imports that point at them. A custom plugin's generation-time hook still runs in the current directory, so a hook that builds paths of its own from a relative path in its options, such as an import between generated files, needs to resolve that path against `path.dirname(ctx.configPath)` first.
+
+- [#3207](https://github.com/tailor-platform/sdk/pull/3207) [`d352a28`](https://github.com/tailor-platform/sdk/commit/d352a28f722f40a3931284ab168d620407ff4032) Thanks [@dqn](https://github.com/dqn)! - Add `{ create: value }` secret values to `defineSecretManager()`. `tailor deploy` creates such a secret only when it does not exist yet and leaves an existing one unchanged, so a value generated once per environment, such as an encryption key, keeps its value across deploys.
+
+- [#3204](https://github.com/tailor-platform/sdk/pull/3204) [`3965bbe`](https://github.com/tailor-platform/sdk/commit/3965bbe38c7e0028f7556185d7df137052e581b4) Thanks [@dqn](https://github.com/dqn)! - Commands that create a single resource, such as `tailor secret vault create` and `tailor secret create`, and clients from `initOperatorClient` now handle a resource that already exists the same way every time:
+  
+  - They no longer save a crash report or print "An unexpected error occurred" before the already-exists error.
+  - When a create is retried automatically after a transient error and the retry finds the resource, they now fail with the already-exists error instead of reporting success. Before, `tailor secret create` for an existing secret could report the secret as created while it kept its old value. The same error now also appears when the first attempt did create the resource but its response was lost; check the resource before creating it again.
+  
+  Deploys (`tailor deploy`, `tailor tailordb migration test`, and `deploy()`), `tailor tailordb migration sync`, and `tailor tailordb migration resolve` keep their handling. To give your own client that handling, pass `createsPlannedResources: true` to `initOperatorClient`.
+
+### Patch Changes
+
+- [#3201](https://github.com/tailor-platform/sdk/pull/3201) [`97335d4`](https://github.com/tailor-platform/sdk/commit/97335d4911d16a0d5b088871eb20745b1c9e4bf9) Thanks [@dqn](https://github.com/dqn)! - Pre-flight validation in `tailor deploy` now also checks TailorDB GraphQL permissions and function uploads. A GraphQL permission policy with no actions, or a resolver, executor, workflow job, or Auth hook bundle over 20 MiB, now fails before deploy applies anything, instead of during apply, where an oversized bundle failed with `HTTP 503`.
+
+- [#3212](https://github.com/tailor-platform/sdk/pull/3212) [`84e4742`](https://github.com/tailor-platform/sdk/commit/84e47422989f20964b83f9d7a591458dc1e52f82) Thanks [@dqn](https://github.com/dqn)! - Wait for a CLI plugin to stop when Ctrl+C is pressed and exit with its exit code, and pass a SIGTERM sent to `tailor` on to the plugin instead of leaving the plugin running
+
+- [#3183](https://github.com/tailor-platform/sdk/pull/3183) [`f42f99a`](https://github.com/tailor-platform/sdk/commit/f42f99a5c91d11d2ea3a34a294cd5abf3bcb5db3) Thanks [@dqn](https://github.com/dqn)! - Report moving a relation to another key of the same table as a breaking change in `tailor tailordb migration generate` and scaffold the repair of the stored references in `migrate.ts`; the same change on a field inside `db.object()` is rejected, as moving it to another table already was
+
+- [#3183](https://github.com/tailor-platform/sdk/pull/3183) [`9fd196c`](https://github.com/tailor-platform/sdk/commit/9fd196cdb87140b7b506f877f3f7b0035b3a4389) Thanks [@dqn](https://github.com/dqn)! - Apply a relation that a TailorDB migration moves to another table or key only after `migrate.ts` runs, as for a relation added to an existing field, so a migration step that updates rows still pointing at the old target no longer fails on deploy
+
+- [#3206](https://github.com/tailor-platform/sdk/pull/3206) [`c39c53a`](https://github.com/tailor-platform/sdk/commit/c39c53a30ca1b4c7be721bc767512b27e71b6ef4) Thanks [@dqn](https://github.com/dqn)! - Internal: the config loader can now parse the upcoming workspace config formats, which are not exported yet. Loading a `defineConfig()` config, its validation, and its error messages are unchanged.
+
+- [#3183](https://github.com/tailor-platform/sdk/pull/3183) [`45fb3f5`](https://github.com/tailor-platform/sdk/commit/45fb3f5e8c3cf899d27d1fed3beca8c202002e5c) Thanks [@dqn](https://github.com/dqn)! - List the breaking changes of one TailorDB field in `tailordb migration generate` in the order its generated migration script handles them
+
+- [#3199](https://github.com/tailor-platform/sdk/pull/3199) [`dfa1b4d`](https://github.com/tailor-platform/sdk/commit/dfa1b4d1160c1d7b752a292fbf1c5aa9e09b2632) Thanks [@renovate](https://github.com/apps/renovate)! - Update `@politty/zod` to 0.7.5, so a lone `-` after an option that takes a value, such as `--value -`, is read as its value instead of being rejected
+
+- [#3208](https://github.com/tailor-platform/sdk/pull/3208) [`c4c2e25`](https://github.com/tailor-platform/sdk/commit/c4c2e2559715e2e9a94e3de9d9600439001744e1) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailor deploy` failing with `internal error` when it replays a TailorDB migration history from `0000` into a workspace without a checkpoint and a later migration removes a table. For example, `0000` creates tables `A` and `B` (`B.aId` references `A`), `0001` has a `migrate.ts` that runs an UPDATE, and `0002` removes `A`: the deploy never created `A`, so `B` kept a foreign key to a table that did not exist and the UPDATE in `0001` failed. A rename failed the same way, because the generated script of the renaming migration reads the old table.
+  
+  The deploy now creates every table of the `0000` schema before the first `migrate.ts` runs, including the ones a later migration removes or renames away, and the migration that removes or renames a table deletes it once its checkpoint is committed. A table that a later migration removes and then adds again is deleted at the removal and created again at the addition.
+  
+  The phases of a migration also write the schema that migration defines to such a table, so a `migrate.ts` can read a field that an earlier migration added to a table a later migration removes. A deploy that finds a table whose deletion an earlier deploy left unfinished, and that a later migration adds back, deletes it and creates it again instead of reporting remote schema drift.
+
+## 2.44.0
+
+### Minor Changes
+
+- [#3175](https://github.com/tailor-platform/sdk/pull/3175) [`dd55ff2`](https://github.com/tailor-platform/sdk/commit/dd55ff25a9ed76cd48d339c1b0e8d8a054019a0b) Thanks [@k1LoW](https://github.com/k1LoW)! - OAuth2 clients can keep refresh tokens for up to 90 days. `refreshTokenLifetimeSeconds` in `oauth2Clients` now accepts up to 7776000 seconds (90 days), and the new `refreshTokenIdleLifetimeSeconds` (60 seconds to 30 days) expires a refresh token once it has not been used for that long. A `refreshTokenLifetimeSeconds` above 7 days requires `refreshTokenIdleLifetimeSeconds`, which must be between `accessTokenLifetimeSeconds` and `refreshTokenLifetimeSeconds`.
+
+- [#3187](https://github.com/tailor-platform/sdk/pull/3187) [`55286e0`](https://github.com/tailor-platform/sdk/commit/55286e042a802c784299c8f75e655330f1e672c1) Thanks [@dqn](https://github.com/dqn)! - **Breaking change**: Remove `relation` and `as` from the type of a TailorDB field's `metadata`. The SDK never set either key on a TailorDB field, so reading them always returned `undefined`; delete any code that reads them
+
+### Patch Changes
+
+- [#3175](https://github.com/tailor-platform/sdk/pull/3175) [`42245d5`](https://github.com/tailor-platform/sdk/commit/42245d5b975a919f45d226f7e25a5a0bc3d298d8) Thanks [@k1LoW](https://github.com/k1LoW)! - Recognize the `CANCELING` workflow execution status, which an execution holds between a cancel request and `CANCELED`. `tailor workflow executions --status CANCELING` filters by it, and commands that wait for an execution keep waiting through it.
+
+- [#3182](https://github.com/tailor-platform/sdk/pull/3182) [`48cc087`](https://github.com/tailor-platform/sdk/commit/48cc08707c9b16d6b3292e6ba5c23226565b50cc) Thanks [@dqn](https://github.com/dqn)! - Report a configuration change to an Auth connection in the `tailor deploy` plan as an update instead of a replacement. The plan marks it `~` instead of `±`, `--json` reports `"action": "update"` and counts it in `summary.update` instead of `summary.replace`, and pre-flight validation errors label it `(update)`. Deploy still updates the connection in place, as before.
+
+- [#3186](https://github.com/tailor-platform/sdk/pull/3186) [`59e8786`](https://github.com/tailor-platform/sdk/commit/59e878647eede2bfb4ba1a21ab92bc8b88de749d) Thanks [@dqn](https://github.com/dqn)! - Fix `createTailorDBHook` so a table-level `create` hook receives the same `input` as when deployed: the `id` only when the data has one, only the fields the data carries or a field hook or default fills, and the dates that field hooks and `"now"` defaults produce as `Date` objects rather than ISO strings. A table hook that computes values from its input, run in unit tests or through `tailor seed validate` and `tailor seed fill`, now gets the same result as when deployed.
+
+- [#3189](https://github.com/tailor-platform/sdk/pull/3189) [`f57cd39`](https://github.com/tailor-platform/sdk/commit/f57cd3946662eed486b8568015a89ba7f3ca7e03) Thanks [@dqn](https://github.com/dqn)! - Stop `tailor deploy` from planning an update on every run for an IdP whose `permission` denies every operation with empty lists
+
+- [#3177](https://github.com/tailor-platform/sdk/pull/3177) [`8137b34`](https://github.com/tailor-platform/sdk/commit/8137b346fc9fa098b62c369923dd7640a9da0cbe) Thanks [@dqn](https://github.com/dqn)! - Document the `SEED_DATA_NOT_FOUND` and `SEED_DATA_INVALID` error codes of `tailor tailordb migration test`
+
+- [#3187](https://github.com/tailor-platform/sdk/pull/3187) [`6e9e004`](https://github.com/tailor-platform/sdk/commit/6e9e0042136c8e8b27f566420eb6a0b7f5cbf9bc) Thanks [@dqn](https://github.com/dqn)! - Fix webhook executors whose `headers` has an `undefined` value, which failed to load; that header is now left out of the request
+
+- [#3175](https://github.com/tailor-platform/sdk/pull/3175) [`e9b6ca4`](https://github.com/tailor-platform/sdk/commit/e9b6ca47f5424c5a320c7b6d5b901158c86198ea) Thanks [@k1LoW](https://github.com/k1LoW)! - Follow the Platform API, whose list responses for machine users and OAuth2 clients no longer carry a client secret. `tailor deploy`, `tailor show`, `tailor machineuser list` and `tailor oauth2client list` behave as before.
+
+- [#3185](https://github.com/tailor-platform/sdk/pull/3185) [`f820cde`](https://github.com/tailor-platform/sdk/commit/f820cde123dc7294138074cee0924e64fc7ddbcc) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​secretlint/core to v14
+
+- [#3188](https://github.com/tailor-platform/sdk/pull/3188) [`824fc17`](https://github.com/tailor-platform/sdk/commit/824fc1747a9520337a4ce653f060fc8b4472baa8) Thanks [@dqn](https://github.com/dqn)! - Show an OAuth2 client that `tailor deploy` replaces for a client type change under its Auth service in the plan, with that service as its `namespace` in `--dry-run --json`. Change how these deploy messages name resource types:
+  
+  - The duplicate-name and Auth IdP config conflict errors say "Auth service" and "IdP service" instead of "Auth namespace" and "IdP namespace".
+  - Pre-flight validation says "TailorDB namespace", "Resolver namespace", "Auth IdP config", and "Workflow job" instead of "TailorDB service", "Pipeline service", "Auth IDP config", and "Workflow job function".
+  - The owner-conflict and unmanaged-resource lists of the plan and its confirmation prompts say "TailorDB namespace", "Resolver namespace", and "Function" instead of "TailorDB service", "Pipeline service", and "Function registry".
+  - The warning about a workflow job left undeleted because a workflow still references it says "Workflow job" instead of "workflow job function".
+
+- [#3175](https://github.com/tailor-platform/sdk/pull/3175) [`5f41199`](https://github.com/tailor-platform/sdk/commit/5f411997a48c73648f93b41d08eab80cbfeb2430) Thanks [@k1LoW](https://github.com/k1LoW)! - Follow the Platform API for IdP. Its list response for IdP clients no longer carries a client secret, and it now carries the rule that `userAuthPolicy.allowedEmailDomains` must be set, which `tailor deploy` already checked. `tailor deploy` behaves as before and still reports a missing `allowedEmailDomains` once.
+
+- [#3187](https://github.com/tailor-platform/sdk/pull/3187) [`bdb7a6e`](https://github.com/tailor-platform/sdk/commit/bdb7a6e39e8abfd3b74bd3f4e8d79612649cd4fc) Thanks [@dqn](https://github.com/dqn)! - Fix resolvers and `machineUserAttributes` that use a TailorDB field defined with `.unique()`, `.index()`, `.vector()`, `.serial()`, or a decimal `scale`: they failed to load with an unrecognized key error
+
 ## 2.43.0
 
 ### Minor Changes

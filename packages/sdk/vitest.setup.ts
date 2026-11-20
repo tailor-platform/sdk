@@ -12,7 +12,7 @@ if (!("Temporal" in globalThis)) {
 // change CLI behavior: TAILOR_* (profile, machine user, token, ...),
 // FORCE_COLOR (styles output to non-TTY streams), and EDITOR/VISUAL (select the
 // editor a command spawns, which would block the run). Tests that need one set
-// it explicitly. The e2e projects do not load this file: they take workspace
+// it explicitly. The e2e project does not load this file: it takes workspace
 // credentials from the environment by design.
 export const STRIPPED_ENV_KEYS: readonly string[] = ["FORCE_COLOR", "EDITOR", "VISUAL"];
 

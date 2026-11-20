@@ -1,11 +1,11 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { errorToJson } from "#/cli/shared/error-json";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { defineConfig, definePlugins } from "#/configure/config/index";
 import { defineAIGateway } from "#/configure/services/aigateway/index";
 import { defineAuth } from "#/configure/services/auth/index";
@@ -217,7 +217,13 @@ describe("AI Gateway authNamespace default", () => {
       ...defineConfig({
         name: "testApp",
         secrets: defineSecretManager({
-          vault: { first: undefined, second: "set", third: null },
+          vault: {
+            first: undefined,
+            second: "set",
+            third: null,
+            fourth: { create: undefined },
+            fifth: { create: "set" },
+          },
         } as never),
       }),
       path: "tailor.config.ts",
@@ -227,11 +233,37 @@ describe("AI Gateway authNamespace default", () => {
       expect.objectContaining({
         code: "CONFIG_INVALID",
         message:
-          "Invalid Tailor config:\n  - secrets.vaults.vault.first: Has no value\n  - secrets.vaults.vault.third: Has no value",
+          "Invalid Tailor config:\n  - secrets.vaults.vault.first: Has no value\n  - secrets.vaults.vault.third: Has no value\n  - secrets.vaults.vault.fourth: Has no value",
         suggestion: expect.stringContaining("ignoreNullishValues: true"),
         context: expect.objectContaining({ configKey: "secrets" }),
       }),
     );
+  });
+
+  test("marks secrets declared as { create } as create-only", () => {
+    const config = {
+      ...defineConfig({
+        name: "testApp",
+        secrets: defineSecretManager(
+          {
+            vault: { plain: "value", created: { create: "key" }, missing: { create: undefined } },
+          },
+          { ignoreNullishValues: true },
+        ),
+      }),
+      path: "tailor.config.ts",
+    };
+
+    expect(defineApplication({ config }).secrets).toEqual([
+      {
+        vaultName: "vault",
+        secrets: [
+          { name: "plain", value: "value", createOnly: false },
+          { name: "created", value: "key", createOnly: true },
+          { name: "missing", value: undefined, createOnly: true },
+        ],
+      },
+    ]);
   });
 
   test("reports a userProfile type no TailorDB namespace defines as CONFIG_INVALID", async () => {
@@ -681,9 +713,7 @@ describe("loadApplication static website env resolution", () => {
   });
 
   function makeClient(url: string): OperatorClient {
-    return {
-      getStaticWebsite: vi.fn().mockResolvedValue({ staticwebsite: { url } }),
-    } as unknown as OperatorClient;
+    return mockOperatorClient({ getStaticWebsite: { staticwebsite: { url } } });
   }
 
   test("resolves a name:url placeholder before bundling a workflow job", async () => {
@@ -743,10 +773,9 @@ export default createWorkflow({ name: "main-workflow", mainJob });
   });
 
   test("keeps the placeholder with a warning when the site is created later in the same deploy run", async () => {
-    const getStaticWebsite = vi
-      .fn()
-      .mockRejectedValue(new ConnectError("not found", Code.NotFound));
-    const client = { getStaticWebsite } as unknown as OperatorClient;
+    const client = mockOperatorClient({
+      getStaticWebsite: () => Promise.reject(new ConnectError("not found", Code.NotFound)),
+    });
 
     const config = {
       ...defineConfig({
@@ -768,9 +797,9 @@ export default createWorkflow({ name: "main-workflow", mainJob });
 
   test("fails instead of shipping an unresolved placeholder when the lookup fails unexpectedly", async () => {
     const error = new ConnectError("service unavailable", Code.Unavailable);
-    const client = {
-      getStaticWebsite: vi.fn().mockRejectedValue(error),
-    } as unknown as OperatorClient;
+    const client = mockOperatorClient({
+      getStaticWebsite: () => Promise.reject(error),
+    });
 
     const config = {
       ...defineConfig({
@@ -836,9 +865,9 @@ export default createExecutor({
       path: path.join(tmpDir, "tailor.config.ts"),
     };
 
-    const notFoundClient = {
-      getStaticWebsite: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
-    } as unknown as OperatorClient;
+    const notFoundClient = mockOperatorClient({
+      getStaticWebsite: () => Promise.reject(new ConnectError("not found", Code.NotFound)),
+    });
 
     const first = await loadApplication({
       config,
@@ -848,11 +877,9 @@ export default createExecutor({
     });
     expect(first.application.env.siteUrl).toBe("my-site:url");
 
-    const resolvedClient = {
-      getStaticWebsite: vi
-        .fn()
-        .mockResolvedValue({ staticwebsite: { url: "https://site.example.com" } }),
-    } as unknown as OperatorClient;
+    const resolvedClient = mockOperatorClient({
+      getStaticWebsite: { staticwebsite: { url: "https://site.example.com" } },
+    });
 
     const second = await loadApplication({
       config,

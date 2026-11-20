@@ -1,7 +1,11 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
+import { create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { runCommand } from "@politty/zod";
+import {
+  WorkspaceSchema,
+  type Workspace,
+} from "@tailor-platform/tailor-proto/workspace_resource_pb";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import {
@@ -15,10 +19,13 @@ import { isCLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
+import {
+  mockOperatorClient,
+  type OperatorClientMocks,
+} from "#/cli/shared/test-helpers/operator-client";
 import { encodeExpiresAt, expiresAtLabelKey } from "./expiry";
 import { parseAge, pruneCommand, selectPruneCandidates } from "./prune";
 import type { RunResult } from "@politty/zod";
-import type { Workspace } from "@tailor-platform/tailor-proto/workspace_resource_pb";
 
 vi.mock("#/cli/shared/client", async (importOriginal) => ({
   ...(await importOriginal()),
@@ -76,10 +83,12 @@ function hoursAgo(hours: number): Date {
 
 function workspace(
   name: string,
-  overrides: Partial<Omit<Workspace, "createTime">> & { createdAt?: Date | null } = {},
+  overrides: Partial<Omit<Workspace, "createTime" | "$typeName" | "$unknown">> & {
+    createdAt?: Date | null;
+  } = {},
 ): Workspace {
   const { createdAt = hoursAgo(48), ...rest } = overrides;
-  return {
+  return create(WorkspaceSchema, {
     id: `id-${name}`,
     name,
     region: "us-west",
@@ -88,7 +97,7 @@ function workspace(
     deleteProtection: false,
     ...(createdAt ? { createTime: timestampFromDate(createdAt) } : {}),
     ...rest,
-  } as Workspace;
+  });
 }
 
 /**
@@ -96,29 +105,30 @@ function workspace(
  * @param expiries - Expiry per workspace id; an absent id records no expiry, an `Error` fails the read
  * @returns The `getMetadata` stub
  */
-function stubExpiries(expiries: Record<string, Date | Error>) {
-  return vi.fn().mockImplementation(({ trn }: { trn: string }) => {
-    const entry = expiries[trn.replace("trn:v1:workspace:", "")];
+function stubExpiries(
+  expiries: Record<string, Date | Error>,
+): OperatorClientMocks<"getMetadata">["getMetadata"] {
+  return (request) => {
+    const entry = expiries[(request.trn ?? "").replace("trn:v1:workspace:", "")];
     if (entry instanceof Error) return Promise.reject(entry);
-    return Promise.resolve({
-      metadata: { labels: entry ? { [expiresAtLabelKey]: encodeExpiresAt(entry) } : {} },
-    });
-  });
+    const labels: Record<string, string> = entry
+      ? { [expiresAtLabelKey]: encodeExpiresAt(entry) }
+      : {};
+    return Promise.resolve({ metadata: { labels } });
+  };
 }
 
 function stubClient(workspaces: Workspace[], expiries: Record<string, Date | Error> = {}) {
-  const client = {
-    listWorkspaces: vi.fn().mockResolvedValue({ workspaces, nextPageToken: "" }),
-    getOrganizationFolder: vi.fn().mockResolvedValue({ folder: { name: "dev" } }),
-    getWorkspace: vi.fn(async ({ workspaceId }: { workspaceId: string }) => ({
-      workspace: workspaces.find((candidate) => candidate.id === workspaceId),
-    })),
-    deleteWorkspace: vi.fn().mockResolvedValue({}),
+  const client = mockOperatorClient({
+    listWorkspaces: { workspaces, nextPageToken: "" },
+    getOrganizationFolder: { folder: { name: "dev" } },
+    getWorkspace: async (request) => ({
+      workspace: workspaces.find((candidate) => candidate.id === request.workspaceId),
+    }),
+    deleteWorkspace: {},
     getMetadata: stubExpiries(expiries),
-  };
-  vi.mocked(initOperatorClient).mockResolvedValue(
-    client as unknown as Awaited<ReturnType<typeof initOperatorClient>>,
-  );
+  });
+  vi.mocked(initOperatorClient).mockResolvedValue(client);
   return client;
 }
 
@@ -835,9 +845,9 @@ describe("workspace prune command", () => {
 
   test("skips a workspace that gained delete protection after it was listed", async () => {
     const client = stubClient([workspace("e2e-ws-1"), workspace("e2e-ws-2")]);
-    client.getWorkspace.mockImplementation(async ({ workspaceId }: { workspaceId: string }) => ({
+    client.getWorkspace.mockImplementation(async (request) => ({
       workspace:
-        workspaceId === "id-e2e-ws-1"
+        request.workspaceId === "id-e2e-ws-1"
           ? workspace("e2e-ws-1", { deleteProtection: true })
           : workspace("e2e-ws-2"),
     }));
@@ -857,9 +867,9 @@ describe("workspace prune command", () => {
 
   test("skips a workspace that moved out of the requested scope after it was listed", async () => {
     const client = stubClient([workspace("e2e-ws-1"), workspace("e2e-ws-2")]);
-    client.getWorkspace.mockImplementation(async ({ workspaceId }: { workspaceId: string }) => ({
+    client.getWorkspace.mockImplementation(async (request) => ({
       workspace:
-        workspaceId === "id-e2e-ws-1"
+        request.workspaceId === "id-e2e-ws-1"
           ? workspace("e2e-ws-1", { organizationId: ORG_B })
           : workspace("e2e-ws-2"),
     }));

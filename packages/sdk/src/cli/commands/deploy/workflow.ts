@@ -34,6 +34,7 @@ import {
   type WithLabel,
   writeMetadataLabels,
 } from "./label";
+import { MANAGED_RESOURCE_LABELS } from "./managed-resource-type";
 import {
   createOwnershipTracker,
   fetchExistingResourcesWithLabels,
@@ -101,7 +102,7 @@ export async function applyWorkflow(
   } else {
     await deleteAllSettled(
       changeSet.deletes.map((del) => ({
-        resourceLabel: "workflow",
+        resourceLabel: MANAGED_RESOURCE_LABELS.workflow,
         resourceName: del.name,
         run: () =>
           client.deleteWorkflow({
@@ -113,7 +114,7 @@ export async function applyWorkflow(
 
     await deleteAllSettled(
       result.jobFunctionDeletes.map((del) => ({
-        resourceLabel: "workflow job function",
+        resourceLabel: MANAGED_RESOURCE_LABELS.workflow_job_function,
         resourceName: del.jobFunctionName,
         run: () =>
           client.deleteWorkflowJobFunction({
@@ -658,7 +659,6 @@ export async function planWorkflow(
     keyOf: (workflow) => workflow.name,
     ...labeledResourceChecks(ownership, (workflow: DesiredWorkflow) => ({
       resourceType: "workflow",
-      resourceLabel: "Workflow",
       resourceName: workflow.name,
     })),
     isConfigUnchanged: ({ workflow, usedJobNames }, existing) =>

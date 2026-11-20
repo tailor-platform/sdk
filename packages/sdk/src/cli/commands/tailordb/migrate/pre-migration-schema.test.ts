@@ -123,16 +123,41 @@ describe.each(["deploy", "snapshot"])("%s Pre-phase nested constraints", (mode) 
 describe.each(["deploy", "snapshot"])("%s Pre-phase foreign keys", (mode) => {
   const reference = { foreignKey: true, foreignKeyType: "User", foreignKeyField: "id" } as const;
   const ownerId: SnapshotFieldConfig = { type: "uuid", required: false };
+  const owner = { ...ownerId, ...reference };
 
-  test("withholds a foreign key the migration adds to an existing field", () => {
-    const after = { ...ownerId, ...reference };
-    const pre = preField(mode, after, ownerId);
+  function expectWithheld(field: object | undefined) {
+    expect(field).toMatchObject({ type: "uuid" });
+    for (const key of ["foreignKey", "foreignKeyType", "foreignKeyField"]) {
+      expect(field).not.toHaveProperty(key);
+    }
+  }
 
-    expect(pre).toMatchObject({ type: "uuid" });
-    expect(pre).not.toHaveProperty("foreignKey");
-    expect(pre).not.toHaveProperty("foreignKeyType");
-    expect(pre).not.toHaveProperty("foreignKeyField");
-    expect(after).toMatchObject(reference);
+  test.each([
+    ["adds to an existing field", ownerId, owner],
+    ["retargets to another table", owner, { ...owner, foreignKeyType: "Account" }],
+    ["retargets to another key of the same table", owner, { ...owner, foreignKeyField: "email" }],
+  ])("withholds a foreign key the migration %s", (_, previous, after) => {
+    const target = structuredClone(after);
+
+    expectWithheld(preField(mode, after, previous));
+    expect(after).toEqual(target);
+  });
+
+  test("withholds a foreign key a nested member retargets to a renamed table and keeps the other members' foreign keys", () => {
+    const team = { foreignKey: true, foreignKeyType: "Team", foreignKeyField: "id" } as const;
+    const nested = (ownerTable: string): SnapshotFieldConfig => ({
+      type: "nested",
+      required: false,
+      fields: {
+        owner: { ...ownerId, ...reference, foreignKeyType: ownerTable },
+        team: { ...ownerId, ...team },
+      },
+    });
+
+    const pre = preField(mode, nested("Person"), nested("User"));
+
+    expectWithheld(pre?.fields?.owner);
+    expect(pre?.fields?.team).toMatchObject(team);
   });
 
   test("keeps a foreign key the migration adds to a nested member", () => {

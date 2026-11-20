@@ -1,7 +1,8 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { describe, expect, test, vi } from "vitest";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { checkVaultManaged, releaseVaultOwnership } from "./check-vault-managed";
-import type { OperatorClient } from "#/cli/shared/client";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { MetadataSchema } from "@tailor-platform/tailor-proto/metadata_resource_pb";
 
 vi.mock("#/cli/shared/logger", () => ({
   logger: {
@@ -12,8 +13,8 @@ vi.mock("#/cli/shared/logger", () => ({
 
 const TRN = "trn:v1:workspace:ws-1:vault:my-vault";
 
-const clientWithMetadata = (metadata: unknown) =>
-  ({ getMetadata: vi.fn().mockResolvedValue({ metadata }) }) as unknown as OperatorClient;
+const clientWithMetadata = (metadata: MessageInitShape<typeof MetadataSchema>) =>
+  mockOperatorClient({ getMetadata: { metadata } });
 
 describe("checkVaultManaged", () => {
   test("returns isManaged: true with labels when vault has sdk-name label", async () => {
@@ -41,9 +42,9 @@ describe("checkVaultManaged", () => {
   });
 
   test("returns isManaged: false when getMetadata fails", async () => {
-    const client = {
-      getMetadata: vi.fn().mockRejectedValue(new Error("not found")),
-    } as unknown as OperatorClient;
+    const client = mockOperatorClient({
+      getMetadata: () => Promise.reject(new Error("not found")),
+    });
 
     const result = await checkVaultManaged({ client, workspaceId: "ws-1", vaultName: "my-vault" });
 
@@ -71,10 +72,10 @@ describe("releaseVaultOwnership", () => {
       { custom: "value" },
     ],
   ])("%s", async (_name, remoteLabels, expectedLabels) => {
-    const client = {
-      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: remoteLabels } }),
-      setMetadata: vi.fn().mockResolvedValue({}),
-    } as unknown as OperatorClient;
+    const client = mockOperatorClient({
+      getMetadata: { metadata: { labels: remoteLabels } },
+      setMetadata: {},
+    });
 
     await releaseVaultOwnership({ client, trn: TRN });
 
@@ -82,12 +83,12 @@ describe("releaseVaultOwnership", () => {
   });
 
   test("keeps a label written after checkVaultManaged read the metadata", async () => {
-    const client = {
-      getMetadata: vi.fn().mockResolvedValue({
+    const client = mockOperatorClient({
+      getMetadata: {
         metadata: { labels: { "sdk-name": "my-app", "sdk-version": "v1-0-0", added: "later" } },
-      }),
-      setMetadata: vi.fn().mockResolvedValue({}),
-    } as unknown as OperatorClient;
+      },
+      setMetadata: {},
+    });
 
     await releaseVaultOwnership({ client, trn: TRN });
 

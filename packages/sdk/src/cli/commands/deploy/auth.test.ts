@@ -1,40 +1,39 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { describe, test, expect, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { applyAuth, type planAuth } from "./auth";
-import type { OperatorClient } from "#/cli/shared/client";
 
 describe("applyAuth phase separation", () => {
   function createMockClientWithSpies() {
-    return {
-      deleteAuthSCIMResource: vi.fn().mockResolvedValue({}),
-      deleteAuthSCIMConfig: vi.fn().mockResolvedValue({}),
-      deleteAuthOAuth2Client: vi.fn().mockResolvedValue({}),
-      deleteAuthHook: vi.fn().mockResolvedValue({}),
-      deleteAuthMachineUser: vi.fn().mockResolvedValue({}),
-      deleteTenantConfig: vi.fn().mockResolvedValue({}),
-      deleteUserProfileConfig: vi.fn().mockResolvedValue({}),
-      deleteAuthIDPConfig: vi.fn().mockResolvedValue({}),
-      deleteAuthService: vi.fn().mockResolvedValue({}),
-      createAuthService: vi.fn().mockResolvedValue({}),
-      createAuthIDPConfig: vi.fn().mockResolvedValue({}),
-      createUserProfileConfig: vi.fn().mockResolvedValue({}),
-      createTenantConfig: vi.fn().mockResolvedValue({}),
-      createAuthMachineUser: vi.fn().mockResolvedValue({}),
-      createAuthHook: vi.fn().mockResolvedValue({}),
-      createAuthOAuth2Client: vi.fn().mockResolvedValue({}),
-      createAuthSCIMConfig: vi.fn().mockResolvedValue({}),
-      createAuthSCIMResource: vi.fn().mockResolvedValue({}),
-      updateAuthIDPConfig: vi.fn().mockResolvedValue({}),
-      updateUserProfileConfig: vi.fn().mockResolvedValue({}),
-      updateTenantConfig: vi.fn().mockResolvedValue({}),
-      updateAuthMachineUser: vi.fn().mockResolvedValue({}),
-      updateAuthHook: vi.fn().mockResolvedValue({}),
-      updateAuthOAuth2Client: vi.fn().mockResolvedValue({}),
-      updateAuthSCIMConfig: vi.fn().mockResolvedValue({}),
-      updateAuthSCIMResource: vi.fn().mockResolvedValue({}),
-      setMetadata: vi.fn().mockResolvedValue({}),
-    } as unknown as OperatorClient;
+    return mockOperatorClient({
+      deleteAuthSCIMResource: {},
+      deleteAuthSCIMConfig: {},
+      deleteAuthOAuth2Client: {},
+      deleteAuthHook: {},
+      deleteAuthMachineUser: {},
+      deleteTenantConfig: {},
+      deleteUserProfileConfig: {},
+      deleteAuthIDPConfig: {},
+      deleteAuthService: {},
+      createAuthService: {},
+      createAuthIDPConfig: {},
+      createUserProfileConfig: {},
+      createTenantConfig: {},
+      createAuthMachineUser: {},
+      createAuthHook: {},
+      createAuthOAuth2Client: {},
+      createAuthSCIMConfig: {},
+      createAuthSCIMResource: {},
+      updateAuthIDPConfig: {},
+      updateUserProfileConfig: {},
+      updateTenantConfig: {},
+      updateAuthMachineUser: {},
+      updateAuthHook: {},
+      updateAuthOAuth2Client: {},
+      updateAuthSCIMConfig: {},
+      updateAuthSCIMResource: {},
+      setMetadata: {},
+    });
   }
 
   type OAuth2ClientReplace = {
@@ -49,6 +48,7 @@ describe("applyAuth phase separation", () => {
       updates: [],
       deletes: [{ name, request }],
       replaces: [] as OAuth2ClientReplace[],
+      unchanged: [],
       title,
       isEmpty: () => false,
       lines: () => [],
@@ -131,6 +131,7 @@ describe("applyAuth phase separation", () => {
         workspaceId: "test-workspace",
         applicationId: "test-app-id",
         applicationName: "test-app",
+        configPath: "/proj/app/tailor.config.ts",
       },
     } as unknown as Awaited<ReturnType<typeof planAuth>>;
   }
@@ -237,9 +238,9 @@ describe("applyAuth phase separation", () => {
 
   test("registers a newly created OAuth2 client's server-generated secret", async () => {
     const client = createMockClientWithSpies();
-    vi.mocked(client.createAuthOAuth2Client).mockResolvedValue({
+    client.createAuthOAuth2Client.mockResolvedValue({
       oauth2Client: { name: "test-oauth2-client", clientSecret: "brand-new-oauth2-secret" },
-    } as Awaited<ReturnType<OperatorClient["createAuthOAuth2Client"]>>);
+    });
     using registerSecretSpy = vi.spyOn(logger, "registerSecret").mockImplementation(() => {});
     const planResult = createMockPlanResult({
       oauth2ClientCreates: [
@@ -261,9 +262,9 @@ describe("applyAuth phase separation", () => {
 
   test("registers a newly created machine user's server-generated secret", async () => {
     const client = createMockClientWithSpies();
-    vi.mocked(client.createAuthMachineUser).mockResolvedValue({
+    client.createAuthMachineUser.mockResolvedValue({
       machineUser: { name: "test-machine-user", clientSecret: "brand-new-machineuser-secret" },
-    } as Awaited<ReturnType<OperatorClient["createAuthMachineUser"]>>);
+    });
     using registerSecretSpy = vi.spyOn(logger, "registerSecret").mockImplementation(() => {});
     const planResult = createMockPlanResult({
       machineUserCreates: [

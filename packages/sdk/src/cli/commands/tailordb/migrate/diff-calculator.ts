@@ -126,7 +126,7 @@ export interface FieldRemovedChange extends DiffChangeBase {
  * A member inside a nested field was renamed. `previousPath` and `path` are
  * relative to the top-level field and share the same parent.
  */
-export interface NestedMemberRename {
+interface NestedMemberRename {
   previousPath: string[];
   path: string[];
 }
@@ -616,7 +616,7 @@ function formatNestedMemberChange(change: NestedMemberChange): string {
  * @param {SnapshotFieldConfig} field - Field configuration
  * @returns {string} `<table>.<key>`, or `none` when the field has no foreign key
  */
-function formatForeignKeyTarget(field: SnapshotFieldConfig): string {
+export function formatForeignKeyTarget(field: SnapshotFieldConfig): string {
   return field.foreignKeyType ? `${field.foreignKeyType}.${field.foreignKeyField ?? "id"}` : "none";
 }
 

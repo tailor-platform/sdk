@@ -1,10 +1,11 @@
 import { logger } from "#/cli/shared/logger";
 import { deploymentPlanResults, type PlannedDeployment, type PlanResults } from "./apply-phases";
+import { createChangeSet, type HasName } from "./change-set";
 import { assertNoDuplicateResourceNames, type ResourceNameCheck } from "./duplicate-resource-names";
-import type { HasName } from "./change-set";
+import { MANAGED_RESOURCE_LABELS, type ManagedResourceType } from "./managed-resource-type";
 import type { ImportantResourceDeletion, OwnerConflict, UnmanagedResource } from "./confirm";
 import type { BuiltDeploymentTarget } from "./deployment-target";
-import type { ManagedResourceType } from "./managed-resource-type";
+import type { UnchangedAnnotation } from "./label";
 import type { OwnershipResult } from "./owned-resource";
 
 /**
@@ -40,7 +41,13 @@ export function computeRenamedAppDeletions(params: {
 export function assertUniqueGlobalResourceNames(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): void {
-  assertNoDuplicateResourceNames(targets, DEPLOY_MANAGED_RESOURCE_DEFINITIONS);
+  assertNoDuplicateResourceNames(
+    targets,
+    GLOBAL_RESOURCE_NAMES.map((check) => ({
+      ...check,
+      resourceLabel: MANAGED_RESOURCE_LABELS[check.resourceType],
+    })),
+  );
 }
 
 /**
@@ -66,115 +73,266 @@ function collectResourceOwners(results: PlanResults): Set<string> {
   return new Set(ownershipTrackedPlans(results).flatMap((plan) => [...plan.resourceOwners]));
 }
 
-export function collectImportantResourceDeletions(
-  results: PlanResults,
-): ImportantResourceDeletion[] {
-  const importantDeletions: ImportantResourceDeletion[] = [];
-  for (const del of results.tailorDB.changeSet.type.deletes) {
-    importantDeletions.push({
-      resourceLabel: "TailorDB table",
-      resourceName: del.name,
-    });
-  }
-  for (const del of results.staticWebsite.changeSet.deletes) {
-    importantDeletions.push({
-      resourceLabel: "StaticWebsite",
-      resourceName: del.name,
-    });
-  }
-  for (const del of results.aiGateway.changeSet.deletes) {
-    importantDeletions.push({
-      resourceLabel: "AIGateway",
-      resourceName: del.name,
-    });
-  }
-  for (const del of results.auth.changeSet.oauth2Client.deletes) {
-    importantDeletions.push({
-      resourceLabel: "OAuth2 client",
-      resourceName: del.name,
-    });
-  }
-  for (const replace of results.auth.changeSet.oauth2Client.replaces) {
-    importantDeletions.push({
-      resourceLabel: "OAuth2 client (client type change)",
-      resourceName: replace.name,
-    });
-  }
-  for (const del of results.auth.changeSet.connection.deletes) {
-    importantDeletions.push({
-      resourceLabel: "Auth connection",
-      resourceName: del.name,
-    });
-  }
-  for (const del of results.secretManager.vaultChangeSet.deletes) {
-    importantDeletions.push({
-      resourceLabel: "Secret Manager vault",
-      resourceName: del.name,
-    });
-  }
-  for (const del of results.secretManager.secretChangeSet.deletes) {
-    importantDeletions.push({
-      resourceLabel: "Secret Manager secret",
-      resourceName: del.name,
-    });
-  }
-  const { app } = results;
-  const keepsApplication = app.creates.length + app.updates.length + app.unchanged.length > 0;
-  if (!keepsApplication) {
-    for (const del of app.deletes) {
-      importantDeletions.push({
-        resourceLabel: "Application",
-        resourceName: del.name,
-      });
-    }
-  }
-  return importantDeletions;
-}
-
 type WorkflowJobFunctionItem = { jobFunctionName: string };
 type ManagedResourceItem = HasName | WorkflowJobFunctionItem;
 
-type ManagedResourceChangeSet = {
-  creates: ManagedResourceItem[];
-  updates: ManagedResourceItem[];
-  deletes: ManagedResourceItem[];
-  replaces: ManagedResourceItem[];
-  unchanged: ManagedResourceItem[];
+type ManagedResourceChangeSet<Item = ManagedResourceItem> = {
+  creates: Item[];
+  updates: Item[];
+  deletes: Item[];
+  replaces: Item[];
+  unchanged: Array<Item & UnchangedAnnotation>;
+  lines: () => string[];
 };
 
-type ManagedResourceGroup = {
-  changeSet: ManagedResourceChangeSet;
+/** Items that carry their requests; `unchanged` ones need not carry one. */
+type PlannedItem<C extends ManagedResourceChangeSet<HasName>> =
+  | C["creates"][number]
+  | C["updates"][number]
+  | C["deletes"][number]
+  | C["replaces"][number];
+
+type ManagedResource<Item = ManagedResourceItem> = {
+  changeSetOf: (results: PlanResults) => ManagedResourceChangeSet<Item>;
+  nameOf?: (item: ManagedResourceItem) => string;
+  /** The namespace a planned item belongs to, owned by a resource of type `owner`. */
+  namespace?: {
+    owner: ManagedResourceType;
+    of(item: Item): string | undefined;
+  };
+};
+
+/** A `ManagedResource` whose namespace accessor reads the items of change set `C`. */
+type ManagedResourceSpec<C extends ManagedResourceChangeSet<HasName>> = Omit<
+  ManagedResource<HasName>,
+  "changeSetOf" | "namespace"
+> & {
+  changeSetOf: (results: PlanResults) => C;
+  namespace?: { owner: ManagedResourceType; of: (item: PlannedItem<C>) => string | undefined };
+};
+
+function managedResource<C extends ManagedResourceChangeSet<HasName>>(
+  resource: ManagedResourceSpec<C>,
+): ManagedResource<HasName> & { changeSetOf: (results: PlanResults) => C } {
+  return resource;
+}
+
+type WorkflowJobFunctionChangeSet = Omit<
+  ManagedResourceChangeSet<HasName>,
+  "replaces" | "deletes"
+> & {
+  replaces: never[];
+  deletes: PlanResults["workflow"]["jobFunctionDeletes"];
+};
+
+function workflowJobFunctionNames(
+  jobNames: Iterable<string>,
+  listed: ReadonlyArray<HasName>,
+): HasName[] {
+  const listedNames = new Set(listed.map((item) => item.name));
+  return [...new Set(jobNames)].filter((name) => !listedNames.has(name)).map((name) => ({ name }));
+}
+
+// List each job name once: pre-flight validation reports a name once for each list holding it.
+function workflowJobFunctionChangeSet(results: PlanResults): WorkflowJobFunctionChangeSet {
+  const { workflow } = results;
+  const usedJobNames = (items: ReadonlyArray<{ usedJobNames: string[] }>) =>
+    items.flatMap((item) => item.usedJobNames);
+  const creates = workflowJobFunctionNames(usedJobNames(workflow.changeSet.creates), []);
+  const updates = workflowJobFunctionNames(usedJobNames(workflow.changeSet.updates), creates);
+  return {
+    creates,
+    updates,
+    replaces: [],
+    unchanged: workflowJobFunctionNames(workflow.unchangedWorkflowJobNames, [
+      ...creates,
+      ...updates,
+    ]),
+    deletes: workflow.jobFunctionDeletes,
+    lines: () => {
+      const display = createChangeSet<HasName, HasName, HasName>("Workflow job functions");
+      display.deletes.push(
+        ...workflow.jobFunctionDeletes.map((del) => ({ name: del.jobFunctionName })),
+      );
+      return display.lines();
+    },
+  };
+}
+
+/**
+ * Where each resource type's planned changes live in `PlanResults`, and the
+ * namespace each planned item belongs to.
+ */
+export const MANAGED_RESOURCES = {
+  aigateway: managedResource({ changeSetOf: (results) => results.aiGateway.changeSet }),
+  application: managedResource({ changeSetOf: (results) => results.app }),
+  "auth.connection": managedResource({
+    changeSetOf: (results) => results.auth.changeSet.connection,
+  }),
+  "auth.hook": managedResource({
+    changeSetOf: (results) => results.auth.changeSet.authHook,
+    namespace: { owner: "auth.service", of: (item) => item.request.namespaceName },
+  }),
+  "auth.idp_config": managedResource({
+    changeSetOf: (results) => results.auth.changeSet.idpConfig,
+    namespace: { owner: "auth.service", of: (item) => item.request.namespaceName },
+  }),
+  "auth.machine_user": managedResource({
+    changeSetOf: (results) => results.auth.changeSet.machineUser,
+    namespace: { owner: "auth.service", of: (item) => item.request.authNamespace },
+  }),
+  "auth.oauth2_client": managedResource({
+    changeSetOf: (results) => results.auth.changeSet.oauth2Client,
+    namespace: {
+      owner: "auth.service",
+      of: (item) => ("request" in item ? item.request : item.deleteRequest).namespaceName,
+    },
+  }),
+  "auth.scim": managedResource({
+    changeSetOf: (results) => results.auth.changeSet.scim,
+    namespace: { owner: "auth.service", of: (item) => item.request.namespaceName },
+  }),
+  "auth.scim_resource": managedResource({
+    changeSetOf: (results) => results.auth.changeSet.scimResource,
+    namespace: { owner: "auth.service", of: (item) => item.request.namespaceName },
+  }),
+  "auth.service": managedResource({ changeSetOf: (results) => results.auth.changeSet.service }),
+  "auth.tenant_config": managedResource({
+    changeSetOf: (results) => results.auth.changeSet.tenantConfig,
+    namespace: { owner: "auth.service", of: (item) => item.request.namespaceName },
+  }),
+  "auth.user_profile_config": managedResource({
+    changeSetOf: (results) => results.auth.changeSet.userProfileConfig,
+    namespace: { owner: "auth.service", of: (item) => item.request.namespaceName },
+  }),
+  executor: managedResource({ changeSetOf: (results) => results.executor.changeSet }),
+  function_registry: managedResource({
+    changeSetOf: (results) => results.functionRegistry.changeSet,
+  }),
+  "idp.client": managedResource({
+    changeSetOf: (results) => results.idp.changeSet.client,
+    namespace: {
+      owner: "idp.service",
+      of: (item) => ("request" in item ? item.request.namespaceName : item.namespaceName),
+    },
+  }),
+  "idp.service": managedResource({ changeSetOf: (results) => results.idp.changeSet.service }),
+  "pipeline.resolver": managedResource({
+    changeSetOf: (results) => results.pipeline.changeSet.resolver,
+    namespace: { owner: "pipeline.service", of: (item) => item.request.namespaceName },
+  }),
+  "pipeline.service": managedResource({
+    changeSetOf: (results) => results.pipeline.changeSet.service,
+  }),
+  "secret.secret": managedResource({
+    changeSetOf: (results) => results.secretManager.secretChangeSet,
+    namespace: { owner: "secret.vault", of: (item) => item.vaultName },
+  }),
+  "secret.vault": managedResource({
+    changeSetOf: (results) => results.secretManager.vaultChangeSet,
+  }),
+  staticwebsite: managedResource({ changeSetOf: (results) => results.staticWebsite.changeSet }),
+  "staticwebsite.custom_domain": managedResource({
+    changeSetOf: (results) => results.staticWebsite.customDomainChangeSet,
+    namespace: {
+      owner: "staticwebsite",
+      of: (item) =>
+        "request" in item && "staticWebsiteName" in item.request
+          ? item.request.staticWebsiteName
+          : undefined,
+    },
+  }),
+  "staticwebsite.custom_domain_transfer": managedResource({
+    changeSetOf: (results) => results.staticWebsite.customDomainTransferChangeSet,
+  }),
+  "tailordb.gql_permission": managedResource({
+    changeSetOf: (results) => results.tailorDB.changeSet.gqlPermission,
+    namespace: { owner: "tailordb.service", of: (item) => item.request.namespaceName },
+  }),
+  "tailordb.service": managedResource({
+    changeSetOf: (results) => results.tailorDB.changeSet.service,
+  }),
+  "tailordb.type": managedResource({
+    changeSetOf: (results) => results.tailorDB.changeSet.type,
+    namespace: { owner: "tailordb.service", of: (item) => item.request.namespaceName },
+  }),
+  workflow: managedResource({ changeSetOf: (results) => results.workflow.changeSet }),
+  workflow_job_function: {
+    changeSetOf: workflowJobFunctionChangeSet,
+    nameOf: (item) => ("jobFunctionName" in item ? item.jobFunctionName : item.name),
+  },
+  workflow_job_function_execution_policy: managedResource({
+    changeSetOf: (results) => results.workflowExecutionPolicy.changeSet,
+  }),
+} satisfies Record<ManagedResourceType, ManagedResource>;
+
+/**
+ * Count the unchanged resources whose labels are rewritten.
+ * @param results - Plan results for a single deployment
+ * @returns Number of unchanged items carrying a label refresh
+ */
+export function countLabelRefreshes(results: PlanResults): number {
+  return (Object.keys(MANAGED_RESOURCES) as ManagedResourceType[]).reduce(
+    (count, resourceType) =>
+      count +
+      MANAGED_RESOURCES[resourceType]
+        .changeSetOf(results)
+        .unchanged.filter((item) => item.labelRefresh !== undefined).length,
+    0,
+  );
+}
+
+/** The change set `MANAGED_RESOURCES` maps resource type `T` to, with its items' own types. */
+export type ManagedChangeSetOf<T extends ManagedResourceType> = ReturnType<
+  (typeof MANAGED_RESOURCES)[T]["changeSetOf"]
+>;
+
+function managedResourceName(resource: ManagedResource, item: ManagedResourceItem): string {
+  return resource.nameOf ? resource.nameOf(item) : (item as HasName).name;
+}
+
+function deletesNeedingConfirmation(
+  results: PlanResults,
+  resourceType: ManagedResourceType,
+): ImportantResourceDeletion[] {
+  const resource = MANAGED_RESOURCES[resourceType];
+  return resource.changeSetOf(results).deletes.map((item) => ({
+    resourceLabel: MANAGED_RESOURCE_LABELS[resourceType],
+    resourceName: managedResourceName(resource, item),
+  }));
+}
+
+export function collectImportantResourceDeletions(
+  results: PlanResults,
+): ImportantResourceDeletion[] {
+  const { app } = results;
+  const keepsApplication = app.creates.length + app.updates.length + app.unchanged.length > 0;
+  return [
+    ...deletesNeedingConfirmation(results, "tailordb.type"),
+    ...deletesNeedingConfirmation(results, "staticwebsite"),
+    ...deletesNeedingConfirmation(results, "aigateway"),
+    ...deletesNeedingConfirmation(results, "auth.oauth2_client"),
+    ...results.auth.changeSet.oauth2Client.replaces.map((replace) => ({
+      resourceLabel: `${MANAGED_RESOURCE_LABELS["auth.oauth2_client"]} (client type change)`,
+      resourceName: replace.name,
+    })),
+    ...deletesNeedingConfirmation(results, "auth.connection"),
+    ...deletesNeedingConfirmation(results, "secret.vault"),
+    ...deletesNeedingConfirmation(results, "secret.secret"),
+    ...(keepsApplication ? [] : deletesNeedingConfirmation(results, "application")),
+  ];
+}
+
+type ManagedResourceGroup = ManagedResource & {
   resourceType: ManagedResourceType;
-  namespaceFields?: readonly string[];
-  namespaceOwnerResourceType?: ManagedResourceType;
-  getName?: (item: ManagedResourceItem) => string;
+  changeSet: ManagedResourceChangeSet;
 };
 
-function readResourceField(item: ManagedResourceItem, field: string): string | undefined {
-  const itemRecord = item as unknown as Record<string, unknown>;
-  for (const requestField of ["request", "deleteRequest", "createRequest"]) {
-    const request = itemRecord[requestField];
-    if (request && typeof request === "object" && field in request) {
-      const value = (request as Record<string, unknown>)[field];
-      return value == null ? undefined : String(value);
-    }
-  }
-
-  const value = itemRecord[field];
-  return value == null ? undefined : String(value);
-}
-
-function managedResourceName(group: ManagedResourceGroup, item: ManagedResourceItem): string {
-  if (group.getName) {
-    return group.getName(item);
-  }
-  return (item as HasName).name;
-}
-
-function managedResourceKey(group: ManagedResourceGroup, item: ManagedResourceItem): string {
-  const namespace = group.namespaceFields
-    ?.map((field) => readResourceField(item, field))
-    .find((value) => value !== undefined);
+function managedResourceKey(
+  group: ManagedResourceGroup,
+  item: ManagedResourceItem,
+  namespace: string | undefined,
+): string {
   const name = managedResourceName(group, item);
   return namespace !== undefined
     ? `${group.resourceType}:${namespace}:${name}`
@@ -183,39 +341,24 @@ function managedResourceKey(group: ManagedResourceGroup, item: ManagedResourceIt
 
 function managedNamespaceOwnerKey(
   group: ManagedResourceGroup,
-  item: ManagedResourceItem,
+  namespace: string | undefined,
 ): string | undefined {
-  if (!group.namespaceOwnerResourceType) {
-    return undefined;
-  }
-  const namespace = group.namespaceFields
-    ?.map((field) => readResourceField(item, field))
-    .find((value) => value !== undefined);
-  return namespace !== undefined ? `${group.namespaceOwnerResourceType}:${namespace}` : undefined;
+  return group.namespace && namespace !== undefined
+    ? `${group.namespace.owner}:${namespace}`
+    : undefined;
 }
 
 function addManagedResourceClaims(
   claims: Set<string>,
   group: ManagedResourceGroup,
   item: ManagedResourceItem,
+  namespace: string | undefined,
 ): void {
-  claims.add(managedResourceKey(group, item));
-  const namespaceOwnerKey = managedNamespaceOwnerKey(group, item);
+  claims.add(managedResourceKey(group, item, namespace));
+  const namespaceOwnerKey = managedNamespaceOwnerKey(group, namespace);
   if (namespaceOwnerKey) {
     claims.add(namespaceOwnerKey);
   }
-}
-
-function isManagedResourceClaimed(
-  claims: ReadonlySet<string>,
-  group: ManagedResourceGroup,
-  item: ManagedResourceItem,
-): boolean {
-  if (claims.has(managedResourceKey(group, item))) {
-    return true;
-  }
-  const namespaceOwnerKey = managedNamespaceOwnerKey(group, item);
-  return namespaceOwnerKey ? claims.has(namespaceOwnerKey) : false;
 }
 
 function retainDeletesNotClaimed(
@@ -224,10 +367,11 @@ function retainDeletesNotClaimed(
 ): void {
   let writeIndex = 0;
   for (const item of group.changeSet.deletes) {
-    if (isManagedResourceClaimed(otherClaims, group, item)) {
-      logger.debug(
-        `Skipping delete of ${managedResourceKey(group, item)}: still managed by another config in this deploy.`,
-      );
+    const namespace = group.namespace?.of(item);
+    const key = managedResourceKey(group, item, namespace);
+    const namespaceOwnerKey = managedNamespaceOwnerKey(group, namespace);
+    if (otherClaims.has(key) || (namespaceOwnerKey && otherClaims.has(namespaceOwnerKey))) {
+      logger.debug(`Skipping delete of ${key}: still managed by another config in this deploy.`);
       continue;
     }
     group.changeSet.deletes[writeIndex] = item;
@@ -236,244 +380,87 @@ function retainDeletesNotClaimed(
   group.changeSet.deletes.length = writeIndex;
 }
 
-function workflowJobFunctionItems(items: ReadonlyArray<ManagedResourceItem>): HasName[] {
-  const jobNames = new Set<string>();
-  for (const item of items) {
-    const usedJobNames = (item as unknown as { usedJobNames?: unknown }).usedJobNames;
-    if (!Array.isArray(usedJobNames)) {
-      continue;
-    }
-    for (const jobName of usedJobNames) {
-      if (typeof jobName === "string") {
-        jobNames.add(jobName);
-      }
-    }
-  }
-  return [...jobNames].map((name) => ({ name }));
-}
-
-function workflowJobFunctionResourceGroup(results: PlanResults): ManagedResourceGroup {
-  return {
-    changeSet: {
-      creates: workflowJobFunctionItems(results.workflow.changeSet.creates),
-      updates: workflowJobFunctionItems(results.workflow.changeSet.updates),
-      replaces: workflowJobFunctionItems(results.workflow.changeSet.replaces),
-      unchanged: [...results.workflow.unchangedWorkflowJobNames].map((name) => ({ name })),
-      deletes: results.workflow.jobFunctionDeletes,
-    },
-    resourceType: "workflow_job_function",
-    getName: (item) => ("jobFunctionName" in item ? item.jobFunctionName : item.name),
-  };
-}
-
-const MANAGED_RESOURCE_NAMESPACE_FIELDS = [
-  "namespaceName",
-  "authNamespace",
-  "vaultName",
-  "staticWebsiteName",
-] as const;
-
-type DeployManagedResourceDefinition = Omit<ManagedResourceGroup, "changeSet"> &
-  ResourceNameCheck & {
-    changeSetOf: (results: PlanResults) => ManagedResourceChangeSet;
-  };
-
-const DEPLOY_MANAGED_RESOURCE_DEFINITIONS: ReadonlyArray<DeployManagedResourceDefinition> = [
+/**
+ * Resource types whose names are workspace-global (the TRN is not qualified by
+ * a namespace or an application), with the names each config defines.
+ */
+const GLOBAL_RESOURCE_NAMES: ReadonlyArray<
+  Pick<ResourceNameCheck, "namesOf"> & { resourceType: ManagedResourceType }
+> = [
+  { resourceType: "application", namesOf: (target) => [target.application.name] },
   {
-    resourceLabel: "Application",
-    resourceType: "application",
-    namesOf: (target) => [target.application.name],
-    changeSetOf: (results) => results.app,
-  },
-  {
-    resourceLabel: "Executor",
     resourceType: "executor",
     namesOf: (target) =>
       Object.values(target.application.executorService?.executors ?? {}).map(
         (executor) => executor.name,
       ),
-    changeSetOf: (results) => results.executor.changeSet,
   },
   {
-    resourceLabel: "Workflow job",
     resourceType: "workflow_job_function",
     namesOf: (target) => target.bundledScripts.workflowJobs.keys(),
-    changeSetOf: (results) => workflowJobFunctionResourceGroup(results).changeSet,
-    getName: (item) => ("jobFunctionName" in item ? item.jobFunctionName : item.name),
   },
   {
-    resourceLabel: "Workflow",
     resourceType: "workflow",
     namesOf: (target) =>
       Object.values(target.application.workflowService?.workflows ?? {}).map(
         (workflow) => workflow.name,
       ),
-    changeSetOf: (results) => results.workflow.changeSet,
   },
   {
-    resourceLabel: "Workflow execution policy",
     resourceType: "workflow_job_function_execution_policy",
     namesOf: (target) =>
       Object.values(target.config.workflow?.executionPolicies ?? {}).map((policy) => policy.name),
-    changeSetOf: (results) => results.workflowExecutionPolicy.changeSet,
   },
   {
-    resourceLabel: "Auth connection",
     resourceType: "auth.connection",
-    namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
-    namespaceOwnerResourceType: "auth.service",
     namesOf: (target) => Object.keys(target.application.authService?.connections ?? {}),
-    changeSetOf: (results) => results.auth.changeSet.connection,
   },
   {
-    resourceLabel: "StaticWebsite",
     resourceType: "staticwebsite",
     namesOf: (target) => target.application.staticWebsiteServices.map((service) => service.name),
-    changeSetOf: (results) => results.staticWebsite.changeSet,
   },
   {
-    resourceLabel: "TailorDB namespace",
     resourceType: "tailordb.service",
     namesOf: (target) => target.application.tailorDBServices.map((service) => service.namespace),
-    changeSetOf: (results) => results.tailorDB.changeSet.service,
   },
   {
-    resourceLabel: "Auth namespace",
     resourceType: "auth.service",
     namesOf: (target) => {
       const name = target.application.authService?.config.name;
       return name === undefined ? [] : [name];
     },
-    changeSetOf: (results) => results.auth.changeSet.service,
   },
   {
-    resourceLabel: "IdP namespace",
     resourceType: "idp.service",
     namesOf: (target) => target.application.idpServices.map((idp) => idp.name),
-    changeSetOf: (results) => results.idp.changeSet.service,
   },
   {
-    resourceLabel: "Resolver namespace",
     resourceType: "pipeline.service",
     namesOf: (target) => target.application.resolverServices.map((service) => service.namespace),
-    changeSetOf: (results) => results.pipeline.changeSet.service,
   },
   {
-    resourceLabel: "AIGateway",
     resourceType: "aigateway",
     namesOf: (target) => target.application.aiGatewayServices.map((service) => service.name),
-    changeSetOf: (results) => results.aiGateway.changeSet,
   },
   {
-    resourceLabel: "Secret Manager vault",
     resourceType: "secret.vault",
     namesOf: (target) => target.application.secrets.map((vault) => vault.vaultName),
-    changeSetOf: (results) => results.secretManager.vaultChangeSet,
   },
 ];
 
-function managedResourceGroupFromDefinition(
-  definition: DeployManagedResourceDefinition,
-  results: PlanResults,
-): ManagedResourceGroup {
-  const { changeSetOf, namesOf: _namesOf, resourceLabel: _resourceLabel, ...group } = definition;
-  return {
-    ...group,
-    changeSet: changeSetOf(results),
-  };
-}
+// A transfer is planned only for a domain of a site its own config defines.
+const NOT_CLAIMED_ACROSS_CONFIGS: ReadonlySet<ManagedResourceType> = new Set([
+  "staticwebsite.custom_domain_transfer",
+]);
 
 function managedResourceGroups(results: PlanResults): ManagedResourceGroup[] {
-  return [
-    { changeSet: results.functionRegistry.changeSet, resourceType: "function_registry" },
-    ...DEPLOY_MANAGED_RESOURCE_DEFINITIONS.map((definition) =>
-      managedResourceGroupFromDefinition(definition, results),
-    ),
-    {
-      changeSet: results.tailorDB.changeSet.type,
-      resourceType: "tailordb.type",
-      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
-      namespaceOwnerResourceType: "tailordb.service",
-    },
-    {
-      changeSet: results.tailorDB.changeSet.gqlPermission,
-      resourceType: "tailordb.gql_permission",
-      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
-      namespaceOwnerResourceType: "tailordb.service",
-    },
-    {
-      changeSet: results.staticWebsite.customDomainChangeSet,
-      resourceType: "staticwebsite.custom_domain",
-      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
-      namespaceOwnerResourceType: "staticwebsite",
-    },
-    {
-      changeSet: results.idp.changeSet.client,
-      resourceType: "idp.client",
-      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
-      namespaceOwnerResourceType: "idp.service",
-    },
-    {
-      changeSet: results.auth.changeSet.idpConfig,
-      resourceType: "auth.idp_config",
-      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
-      namespaceOwnerResourceType: "auth.service",
-    },
-    {
-      changeSet: results.auth.changeSet.userProfileConfig,
-      resourceType: "auth.user_profile_config",
-      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
-      namespaceOwnerResourceType: "auth.service",
-    },
-    {
-      changeSet: results.auth.changeSet.tenantConfig,
-      resourceType: "auth.tenant_config",
-      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
-      namespaceOwnerResourceType: "auth.service",
-    },
-    {
-      changeSet: results.auth.changeSet.machineUser,
-      resourceType: "auth.machine_user",
-      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
-      namespaceOwnerResourceType: "auth.service",
-    },
-    {
-      changeSet: results.auth.changeSet.oauth2Client,
-      resourceType: "auth.oauth2_client",
-      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
-      namespaceOwnerResourceType: "auth.service",
-    },
-    {
-      changeSet: results.auth.changeSet.authHook,
-      resourceType: "auth.hook",
-      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
-      namespaceOwnerResourceType: "auth.service",
-    },
-    {
-      changeSet: results.auth.changeSet.scim,
-      resourceType: "auth.scim",
-      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
-      namespaceOwnerResourceType: "auth.service",
-    },
-    {
-      changeSet: results.auth.changeSet.scimResource,
-      resourceType: "auth.scim_resource",
-      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
-      namespaceOwnerResourceType: "auth.service",
-    },
-    {
-      changeSet: results.pipeline.changeSet.resolver,
-      resourceType: "pipeline.resolver",
-      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
-      namespaceOwnerResourceType: "pipeline.service",
-    },
-    {
-      changeSet: results.secretManager.secretChangeSet,
-      resourceType: "secret.secret",
-      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
-      namespaceOwnerResourceType: "secret.vault",
-    },
-  ];
+  return (Object.keys(MANAGED_RESOURCES) as ManagedResourceType[])
+    .filter((resourceType) => !NOT_CLAIMED_ACROSS_CONFIGS.has(resourceType))
+    .map((resourceType) => ({
+      ...MANAGED_RESOURCES[resourceType],
+      resourceType,
+      changeSet: MANAGED_RESOURCES[resourceType].changeSetOf(results),
+    }));
 }
 
 export function dropCrossDeploymentManagedDeletes(
@@ -488,9 +475,11 @@ export function dropCrossDeploymentManagedDeletes(
         ...group.changeSet.creates,
         ...group.changeSet.updates,
         ...group.changeSet.replaces,
-        ...group.changeSet.unchanged,
       ]) {
-        addManagedResourceClaims(claims, group, item);
+        addManagedResourceClaims(claims, group, item, group.namespace?.of(item));
+      }
+      for (const item of group.changeSet.unchanged) {
+        addManagedResourceClaims(claims, group, item, undefined);
       }
       return claims;
     }, new Set<string>()),

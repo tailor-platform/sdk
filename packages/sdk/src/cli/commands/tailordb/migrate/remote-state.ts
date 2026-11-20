@@ -367,6 +367,94 @@ export function formatInProgressMigrationAction(action: InProgressMigrationActio
   return `${IN_PROGRESS_ACTION_LABELS[action.action]}: ${formatCommandHint(action)} (${action.description})`;
 }
 
+/** How a maintenance mode record is removed, and the command that does it. */
+export type MaintenanceModeRelease = CLIErrorNextAction & {
+  via: "resolve" | "deploy";
+  /** For `deploy`: the command to run when the deploy stops because the tables are still restricted. */
+  fallback?: CLIErrorNextAction;
+};
+
+/**
+ * The command that removes the maintenance mode record a deploy left in place: `migration resolve
+ * --maintenance` when the record names the current checkpoint, which also takes the tables out of
+ * maintenance mode, and `deploy` when it names another checkpoint or the committed migration's
+ * removed tables are not deleted yet, since a deploy removes the record and finishes the deletion.
+ * @param state - Remote migration state of the namespace
+ * @param namespace - TailorDB namespace
+ * @param context - Config and workspace selection of the current run
+ * @returns The command, or undefined when no record remains or a migration is in progress
+ */
+export function maintenanceModeReleaseAction(
+  state: RemoteMigrationState,
+  namespace: string,
+  context: MigrationCommandContext,
+): MaintenanceModeRelease | undefined {
+  const migrationInProgress = state.inProgress !== null && !isStaleMigrationInProgress(state);
+  if (migrationInProgress || state.maintenanceModeCheckpoint === null) return undefined;
+  const checkpoint = state.number ?? 0;
+  if (state.cleanupCheckpoint === checkpoint) {
+    return { via: "deploy", command: "tailor", args: ["deploy", ...migrationContextArgs(context)] };
+  }
+  if (state.maintenanceModeCheckpoint === checkpoint) {
+    return {
+      via: "resolve",
+      command: "tailor",
+      args: namespaceMigrationArgs({
+        ...context,
+        subcommand: ["resolve", "--maintenance"],
+        namespace,
+      }),
+    };
+  }
+  return {
+    via: "deploy",
+    command: "tailor",
+    args: ["deploy", ...migrationContextArgs(context)],
+    fallback: {
+      command: "tailor",
+      args: namespaceMigrationArgs({
+        ...context,
+        subcommand: ["sync", formatMigrationNumber(state.number ?? 0)],
+        namespace,
+      }),
+    },
+  };
+}
+
+/**
+ * Refuse a command that moves the checkpoint while a deploy's maintenance mode record remains,
+ * since the record would then name a checkpoint the namespace no longer has.
+ * @param state - Remote migration state of the namespace
+ * @param namespace - TailorDB namespace
+ * @param context - Config and workspace selection of the current run
+ */
+export function assertNoMaintenanceModeRecord(
+  state: RemoteMigrationState,
+  namespace: string,
+  context: MigrationCommandContext,
+): void {
+  if (state.maintenanceModeCheckpoint === null) return;
+  const release = maintenanceModeReleaseAction(state, namespace, context);
+  const suggestion = (() => {
+    if (release === undefined) return "Settle the migration in progress first.";
+    if (release.via === "resolve") {
+      return `Take the tables out of maintenance mode first with ${formatCommandHint(release)}.`;
+    }
+    if (release.fallback === undefined) {
+      return `A table that the committed migration removes is not deleted yet, which a deploy finishes: run ${formatCommandHint(release)}.`;
+    }
+    return (
+      `The record names a checkpoint other than the current one, which a deploy removes: run ${formatCommandHint(release)}. ` +
+      `If the deploy stops with MIGRATION_REMOTE_DRIFT because the tables are still restricted, run ${formatCommandHint(release.fallback)} instead, which also removes the record.`
+    );
+  })();
+  throw CLIError({
+    code: "MIGRATION_MAINTENANCE_MODE_RECORDED",
+    message: `Namespace "${namespace}" records tables a deploy left in maintenance mode at checkpoint ${describeMigrationCheckpoint(state.maintenanceModeCheckpoint)}.`,
+    suggestion,
+  });
+}
+
 /**
  * Refuse a command that rewrites migration state while a migration is
  * partially applied, which only a deploy or `migration resolve` can finish

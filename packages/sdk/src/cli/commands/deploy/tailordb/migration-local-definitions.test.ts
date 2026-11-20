@@ -94,7 +94,7 @@ describe("migration flow: local definitions that no pending migration includes",
 
   function createMockPlanResult(options: {
     local: TailorDBSnapshotType[];
-    creates?: string[];
+    creates?: Array<string | ReturnType<typeof typeEntry>>;
     updates?: string[];
     unchanged?: string[];
     deletes?: string[];
@@ -102,7 +102,9 @@ describe("migration flow: local definitions that no pending migration includes",
   }) {
     return createPlanResult({
       type: {
-        creates: (options.creates ?? []).map((name) => typeEntry(name)),
+        creates: (options.creates ?? []).map((entry) =>
+          typeof entry === "string" ? typeEntry(entry) : entry,
+        ),
         updates: (options.updates ?? []).map((name) => typeEntry(name)),
         unchanged: (options.unchanged ?? []).map((name) => ({
           name,
@@ -449,8 +451,9 @@ describe("migration flow: local definitions that no pending migration includes",
     await applyTailorDB(client, planResult, "create-update");
 
     const draftWrites = writesOf(client, "Draft");
-    expect(draftWrites).toHaveLength(1);
-    expect(draftWrites[0]?.order).toBeGreaterThan(lastLabelOrder());
+    expect(draftWrites).toHaveLength(2);
+    expect(draftWrites[0]?.order).toBeLessThan(lastLabelOrder());
+    expect(draftWrites[1]?.order).toBeGreaterThan(lastLabelOrder());
   });
 
   test("applies the local definition of a table a pending migration creates", async () => {
@@ -496,7 +499,14 @@ describe("migration flow: local definitions that no pending migration includes",
     const client = createMockClient();
     const planResult = createMockPlanResult({
       local: [user, post, localTemp],
-      creates: ["Temp"],
+      creates: [
+        typeEntry("Temp", {
+          fields: {
+            value: { type: "string", required: true },
+            note: { type: "string", required: false },
+          },
+        }),
+      ],
       unchanged: ["User", "Post"],
     });
     planResult.context.pendingMigrations = checkpoint.mockPending([
@@ -515,7 +525,7 @@ describe("migration flow: local definitions that no pending migration includes",
       vi
         .mocked(client.createTailorDBType)
         .mock.calls.filter((call) => call[0].tailordbType?.name === "Temp"),
-    ).toHaveLength(1);
+    ).toHaveLength(2);
     const last = writesOf(client, "Temp").at(-1);
     expect(fieldNames(last)).toEqual(["note", "value"]);
     expect(last?.tailordbType.schema?.settings?.disableGqlOperations).toBeUndefined();

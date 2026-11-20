@@ -1,5 +1,5 @@
 import { describe, expectTypeOf, test } from "vitest";
-import type { AppConfig } from "#/configure/config/types";
+import type { AppConfig, AppDefinition, EnvEntry, WorkspaceConfig } from "#/configure/config/types";
 import type { AIGatewayServiceInput } from "#/configure/services/aigateway/types";
 import type { AuthOwnConfig } from "#/configure/services/auth/types";
 import type { Operation } from "#/configure/services/executor/operation";
@@ -7,6 +7,7 @@ import type { Trigger } from "#/configure/services/executor/trigger/index";
 import type { HttpAdapter } from "#/configure/services/http-adapter/http-adapter";
 import type { IdPOwnConfig } from "#/configure/services/idp/types";
 import type { ResolverConfig } from "#/configure/services/resolver/resolver";
+import type { SecretsDefinition } from "#/configure/services/secrets/types";
 import type {
   DBFieldMetadata,
   RawRelationConfig,
@@ -18,7 +19,11 @@ import type { FieldMetadata, TailorFieldType } from "#/configure/types/field.typ
 import type { TailorDBFieldOutput } from "#/parser/service/tailordb/types";
 import type { Plugin } from "#/plugin/types";
 import type { AIGatewayInput } from "#/types/aigateway.generated";
-import type { AppConfigParsedInput } from "#/types/app-config.generated";
+import type {
+  AppConfigParsedInput,
+  AppDefinitionParsedInput,
+  WorkspaceConfigParsedInput,
+} from "#/types/app-config.generated";
 import type { AuthConfigInput } from "#/types/auth.generated";
 import type { OperationInput, TriggerInput } from "#/types/executor.generated";
 import type { TailorFieldInput } from "#/types/field.generated";
@@ -26,6 +31,7 @@ import type { HttpAdapterConfigInput } from "#/types/http-adapter.generated";
 import type { IdPInput } from "#/types/idp.generated";
 import type { PluginConfigInput } from "#/types/plugin-config.generated";
 import type { ResolverInput } from "#/types/resolver.generated";
+import type { SecretsInput } from "#/types/secrets.generated";
 import type {
   DBFieldMetadataInput,
   RawRelationConfigInput,
@@ -134,6 +140,17 @@ describe("configure input types are accepted by the schema that parses them", ()
     expectTypeOf<ExtraKeyPaths<AppConfig, AppConfigParsedInput>>().toEqualTypeOf<never>();
   });
 
+  test("defineApp", () => {
+    expectTypeOf<AppDefinition>().toExtend<AppDefinitionParsedInput>();
+    expectTypeOf<ExtraKeyPaths<AppDefinition, AppDefinitionParsedInput>>().toEqualTypeOf<never>();
+  });
+
+  test("defineWorkspace", () => {
+    type Configure = WorkspaceConfig<Record<string, EnvEntry>, string, string, string, string>;
+    expectTypeOf<Configure>().toExtend<WorkspaceConfigParsedInput>();
+    expectTypeOf<ExtraKeyPaths<Configure, WorkspaceConfigParsedInput>>().toEqualTypeOf<never>();
+  });
+
   test("defineAuth", () => {
     expectTypeOf<AuthOwnConfig>().toExtend<AuthConfigInput>();
     expectTypeOf<ExtraKeyPaths<AuthOwnConfig, AuthConfigInput>>().toEqualTypeOf<never>();
@@ -147,6 +164,11 @@ describe("configure input types are accepted by the schema that parses them", ()
   test("defineAIGateway", () => {
     expectTypeOf<AIGatewayServiceInput>().toExtend<AIGatewayInput>();
     expectTypeOf<ExtraKeyPaths<AIGatewayServiceInput, AIGatewayInput>>().toEqualTypeOf<never>();
+  });
+
+  test("defineSecretManager", () => {
+    expectTypeOf<SecretsDefinition>().toExtend<SecretsInput>();
+    expectTypeOf<ExtraKeyPaths<SecretsDefinition, SecretsInput>>().toEqualTypeOf<never>();
   });
 
   test("db.table metadata", () => {

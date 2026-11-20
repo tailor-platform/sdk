@@ -15,6 +15,7 @@ import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow
 import {
   buildMetaRequest,
   resourceTrn,
+  withExtraLabels,
   writeMetadataLabelsDirect,
 } from "#/cli/commands/deploy/label";
 import { isWorkflowExecutionFailureStatus } from "#/cli/commands/workflow/status";
@@ -282,12 +283,10 @@ export async function createTemporaryWorkflow(
   created.workflowId = workflowId;
   await writeMetadataLabelsDirect(
     client,
-    await buildMetaRequest({
-      trn: resourceTrn(workspaceId, "workflow", name),
-      appName,
-      appId,
-      ...(params.workflowLabels ? { metadata: params.workflowLabels } : {}),
-    }),
+    withExtraLabels(
+      await buildMetaRequest({ trn: resourceTrn(workspaceId, "workflow", name), appName, appId }),
+      params.workflowLabels ?? {},
+    ),
   );
   return workflowId;
 }

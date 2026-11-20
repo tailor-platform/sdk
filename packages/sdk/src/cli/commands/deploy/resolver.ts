@@ -45,6 +45,7 @@ import {
   resolverTrn,
   resourceTrn,
   type WithLabel,
+  writeLabelRefreshes,
   writeMetadataLabels,
 } from "./label";
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
@@ -110,6 +111,7 @@ export async function applyPipeline(
         await client.updatePipelineService(update.request);
         await writeMetadataLabels(client, update.metaRequest);
       }),
+      ...writeLabelRefreshes(client, changeSet.service.unchanged),
     ]);
 
     // Resolvers. An unchanged resolver still gets its labels written, because its
@@ -308,7 +310,6 @@ async function planServices(
     keyOf: (service) => service.name,
     ...labeledResourceChecks(ownership, (service: DesiredService) => ({
       resourceType: "pipeline.service",
-      resourceLabel: "Pipeline service",
       resourceName: service.name,
     })),
     isConfigUnchanged: (service, existing) =>

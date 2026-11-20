@@ -2,8 +2,7 @@ name: "SDK E2E Test"
 
 on:
   pull_request:
-  # The coverage workflow no longer runs the subprocess-driven e2e suite, so
-  # cover merge commits on main here.
+  # No other workflow runs the e2e suite, so cover merge commits on main here.
   push:
     branches: [main]
 

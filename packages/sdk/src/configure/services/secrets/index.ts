@@ -1,18 +1,12 @@
-import type { SecretsDefinitionBrand } from "#/configure/services/secrets/types";
+import type {
+  SecretsDefinition,
+  SecretsDefinitionBrand,
+  SecretsVaultsInput,
+  SecretsVaultsInputNullish,
+} from "#/configure/services/secrets/types";
 export type { SecretsConfig } from "#/configure/services/secrets/types";
 
-type SecretsVaultInput = Record<string, string>;
-type SecretsVaultInputNullish = Record<string, string | undefined | null>;
-type SecretsInput = Record<string, SecretsVaultInput>;
-type SecretsInputNullish = Record<string, SecretsVaultInputNullish>;
-
-type SecretsOptions = {
-  readonly ignoreNullishValues: boolean;
-};
-
-type DefinedSecrets<T extends SecretsInputNullish> = {
-  readonly vaults: T;
-  readonly options: SecretsOptions;
+type DefinedSecrets<T extends SecretsVaultsInputNullish> = SecretsDefinition<T> & {
   /**
    * Retrieve a single secret value.
    * @deprecated since 2.21.0 — import `secretmanager` from `@tailor-platform/sdk/runtime` and call `secretmanager.getSecret()` instead. Importing this object into a resolver, executor, or workflow file bundles the raw values passed to `defineSecretManager()` into that function's deployed code, which fails to build once any value comes from `process.env`. codemod: v3/secrets-get-to-secretmanager
@@ -40,26 +34,30 @@ type DefinedSecrets<T extends SecretsInputNullish> = {
 /**
  * Define secrets configuration for the Tailor SDK.
  * Each key is a vault name, and its value is a record of secret name to secret value.
+ * A string value replaces the stored value when it changes. A `{ create: value }` value is
+ * written only when the secret does not exist yet, and an existing secret keeps its value.
  * @param config - Secrets configuration mapping vault names to their secrets
  * @returns Defined secrets with typed runtime access methods
  */
-export function defineSecretManager<const T extends SecretsInput>(config: T): DefinedSecrets<T>;
+export function defineSecretManager<const T extends SecretsVaultsInput>(
+  config: T,
+): DefinedSecrets<T>;
 /**
  * Define secrets configuration for the Tailor SDK with ignoreNullishValues option.
- * When `ignoreNullishValues` is true, secrets with nullish values are skipped during deploy
- * instead of causing an error. This is useful for CI environments where not all
- * secret values are available.
+ * When `ignoreNullishValues` is true, secrets with nullish values, including `{ create: value }`
+ * with a nullish `value`, are skipped during deploy instead of causing an error. This is useful
+ * for CI environments where not all secret values are available.
  * @param config - Secrets configuration mapping vault names to their secrets
  * @param options - Options for secret management behavior
  * @param options.ignoreNullishValues - When true, secrets with nullish values are skipped during deploy
  * @returns Defined secrets with typed runtime access methods
  */
-export function defineSecretManager<const T extends SecretsInputNullish>(
+export function defineSecretManager<const T extends SecretsVaultsInputNullish>(
   config: T,
   options: { ignoreNullishValues: true },
 ): DefinedSecrets<T>;
 /* @__NO_SIDE_EFFECTS__ */
-export function defineSecretManager<const T extends SecretsInputNullish>(
+export function defineSecretManager<const T extends SecretsVaultsInputNullish>(
   config: T,
   options?: { ignoreNullishValues?: boolean },
 ): DefinedSecrets<T> {

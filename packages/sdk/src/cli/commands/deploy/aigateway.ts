@@ -13,6 +13,7 @@ import {
   buildMetaRequest,
   type MetadataLabelWrite,
   resourceTrn,
+  writeLabelRefreshes,
   writeMetadataLabels,
 } from "./label";
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
@@ -54,6 +55,7 @@ export async function applyAIGateway(
         await client.updateAIGateway(update.request);
         await writeMetadataLabels(client, update.metaRequest);
       }),
+      ...writeLabelRefreshes(client, changeSet.unchanged),
     ]);
   } else {
     await Promise.all(changeSet.deletes.map((del) => client.deleteAIGateway(del.request)));
@@ -159,7 +161,6 @@ export async function planAIGateway(context: PlanContext) {
     keyOf: (gateway) => gateway.name,
     ...labeledResourceChecks(ownership, (gateway: DesiredAIGateway) => ({
       resourceType: "aigateway",
-      resourceLabel: "AIGateway",
       resourceName: gateway.name,
     })),
     isConfigUnchanged: (gateway, existing) =>

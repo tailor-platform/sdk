@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { runCommand } from "@politty/zod";
 import { PATScope } from "@tailor-platform/tailor-proto/auth_resource_pb";
@@ -6,6 +5,7 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken } from "#/cli/shared/context";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { listCommand } from "./list";
 
 vi.mock("#/cli/shared/client", async (importOriginal) => ({
@@ -23,12 +23,14 @@ describe("user pat list", () => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
     vi.clearAllMocks();
     vi.mocked(loadAccessToken).mockResolvedValue("scoped-token");
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      listPersonalAccessTokens: vi.fn().mockResolvedValue({
-        personalAccessTokens: [],
-        nextPageToken: "",
+    vi.mocked(initOperatorClient).mockResolvedValue(
+      mockOperatorClient({
+        listPersonalAccessTokens: {
+          personalAccessTokens: [],
+          nextPageToken: "",
+        },
       }),
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    );
     await runTest();
     vi.unstubAllEnvs();
   });
@@ -69,24 +71,26 @@ describe("user pat list", () => {
   test("renders scopes, usage timestamps, and a never-used token as never", async () => {
     const createdAt = new Date("2026-01-02T03:04:05Z");
     const lastUsedAt = new Date("2026-03-04T05:06:07Z");
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      listPersonalAccessTokens: vi.fn().mockResolvedValue({
-        personalAccessTokens: [
-          {
-            name: "used",
-            scopes: [PATScope.PAT_SCOPE_READ, PATScope.PAT_SCOPE_WRITE],
-            createdAt: timestampFromDate(createdAt),
-            lastUsedAt: timestampFromDate(lastUsedAt),
-          },
-          {
-            name: "unused",
-            scopes: [PATScope.PAT_SCOPE_READ],
-            createdAt: timestampFromDate(createdAt),
-          },
-        ],
-        nextPageToken: "",
+    vi.mocked(initOperatorClient).mockResolvedValue(
+      mockOperatorClient({
+        listPersonalAccessTokens: {
+          personalAccessTokens: [
+            {
+              name: "used",
+              scopes: [PATScope.PAT_SCOPE_READ, PATScope.PAT_SCOPE_WRITE],
+              createdAt: timestampFromDate(createdAt),
+              lastUsedAt: timestampFromDate(lastUsedAt),
+            },
+            {
+              name: "unused",
+              scopes: [PATScope.PAT_SCOPE_READ],
+              createdAt: timestampFromDate(createdAt),
+            },
+          ],
+          nextPageToken: "",
+        },
       }),
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    );
     const chunks: string[] = [];
     using _stdout = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
       chunks.push(String(chunk));
@@ -115,18 +119,20 @@ describe("user pat list", () => {
 
   test("keeps usage timestamps as dates in JSON mode", async () => {
     const createdAt = new Date("2026-01-02T03:04:05Z");
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      listPersonalAccessTokens: vi.fn().mockResolvedValue({
-        personalAccessTokens: [
-          {
-            name: "unused",
-            scopes: [PATScope.PAT_SCOPE_READ],
-            createdAt: timestampFromDate(createdAt),
-          },
-        ],
-        nextPageToken: "",
+    vi.mocked(initOperatorClient).mockResolvedValue(
+      mockOperatorClient({
+        listPersonalAccessTokens: {
+          personalAccessTokens: [
+            {
+              name: "unused",
+              scopes: [PATScope.PAT_SCOPE_READ],
+              createdAt: timestampFromDate(createdAt),
+            },
+          ],
+          nextPageToken: "",
+        },
       }),
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    );
     using _json = jsonMode();
     using logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 

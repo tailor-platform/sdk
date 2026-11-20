@@ -1,5 +1,11 @@
 # @tailor-platform/sdk-codemod
 
+## 0.13.1
+
+### Patch Changes
+
+- [#3199](https://github.com/tailor-platform/sdk/pull/3199) [`dfa1b4d`](https://github.com/tailor-platform/sdk/commit/dfa1b4d1160c1d7b752a292fbf1c5aa9e09b2632) Thanks [@renovate](https://github.com/apps/renovate)! - Update `@politty/zod` to 0.7.5, so a lone `-` after an option that takes a value, such as `--value -`, is read as its value instead of being rejected
+
 ## 0.13.0
 
 ### Minor Changes

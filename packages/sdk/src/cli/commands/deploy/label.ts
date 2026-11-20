@@ -1,3 +1,5 @@
+import { ViolationsSchema } from "@bufbuild/protovalidate/gen/buf/validate/validate_pb.js";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { getOrNull } from "#/cli/shared/client";
 import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError, isCLIError, toError } from "#/cli/shared/errors";
@@ -98,9 +100,6 @@ export function resolverTrn(workspaceId: string, namespace: string, resolverName
   return nestedResourceTrn(workspaceId, ["pipeline", namespace], ["resolver", resolverName]);
 }
 
-/** The platform rejects a `SetMetadata` write holding more labels than this. */
-export const MAX_RESOURCE_LABELS = 20;
-
 export const sdkNameLabelKey = "sdk-name";
 export const sdkVersionLabelKey = "sdk-version";
 export const sdkAppIdLabelKey = "sdk-app-id";
@@ -126,6 +125,32 @@ export function hasMatchingSdkVersion(
   desiredLabels: Record<string, string> | undefined,
 ): boolean {
   return existingLabels?.[sdkVersionLabelKey] === desiredLabels?.[sdkVersionLabelKey];
+}
+
+/**
+ * Marks an unchanged resource whose SDK labels differ from the ones deploy writes. The
+ * application, IdP service, and workflow applies write every unchanged item's labels anyway, so
+ * for them it is only counted.
+ */
+export type UnchangedAnnotation = { labelRefresh?: MetadataLabelWrite };
+
+/**
+ * Plan a label refresh for an unchanged resource whose labels differ from the ones a write sets
+ * and removes. Dependency records are left out: they are reconciled against the labels read at
+ * write time.
+ * @param existingLabels - Labels currently stored on the remote resource
+ * @param write - Labels the current apply run would set and remove
+ * @returns The write as `labelRefresh` when it would change a label, otherwise no annotation
+ */
+export function labelRefreshOf(
+  existingLabels: Record<string, string> | undefined,
+  write: MetadataLabelWrite,
+): UnchangedAnnotation {
+  const { trn, labels, remove } = write;
+  const current = existingLabels ?? {};
+  return areSameLabels(current, applyMetadataLabelWrite(current, { trn, labels, remove }))
+    ? {}
+    : { labelRefresh: write };
 }
 
 /**
@@ -327,16 +352,13 @@ export interface BuildMetaRequestParams {
   trn: string;
   appName: string;
   appId?: string;
-  /** Labels from `defineConfig({ metadata })`, written alongside the SDK's own. */
-  metadata?: Record<string, string>;
 }
 
 /**
  * Build metadata request with SDK labels.
  *
- * Sets only the SDK's own labels and the config's `metadata`;
- * {@link writeMetadataLabels} keeps the rest from the labels it reads at write
- * time. The SDK's labels win over a same-named `metadata` entry.
+ * Sets only the SDK's own labels; {@link writeMetadataLabels} keeps the rest
+ * from the labels it reads at write time.
  *
  * Without an app id the id label is removed rather than merely left unset,
  * because {@link isOwnedByApp} decides ownership by that label alone: one left
@@ -346,13 +368,12 @@ export interface BuildMetaRequestParams {
  * @param params.trn - Target TRN
  * @param params.appName - Application name label
  * @param params.appId - Stable application id label (when managed by SDK)
- * @param params.metadata - Labels from the config's `metadata`
  * @returns Metadata request
  */
 export async function buildMetaRequest(
   params: BuildMetaRequestParams,
 ): Promise<MetadataLabelWrite> {
-  const { trn, appName, appId, metadata } = params;
+  const { trn, appName, appId } = params;
   const packageJson = await readPackageJson();
   // Format version to be suitable for label value
   const sdkVersion = packageJson.version
@@ -362,13 +383,39 @@ export async function buildMetaRequest(
   return {
     trn,
     labels: {
-      ...metadata,
       [sdkNameLabelKey]: appName,
       [sdkVersionLabelKey]: sdkVersion,
       ...(appId ? { [sdkAppIdLabelKey]: sdkAppIdLabelValue(appId) } : {}),
     },
     remove: appId ? undefined : [sdkAppIdLabelKey],
   };
+}
+
+/**
+ * Add labels to a write of the SDK's own labels, which win over a same-named one.
+ * @param write - Write of the SDK's own labels
+ * @param labels - Labels to add, such as the config's `metadata`
+ * @returns The write with the labels added
+ */
+export function withExtraLabels(
+  write: MetadataLabelWrite,
+  labels: Record<string, string>,
+): MetadataLabelWrite {
+  return { ...write, labels: { ...labels, ...write.labels } };
+}
+
+/**
+ * Read the violation the platform reports when a metadata write holds more
+ * labels than it allows on one resource.
+ * @param error - Error thrown by a metadata write
+ * @returns The violation message, or undefined for any other error
+ */
+export function labelCountViolation(error: unknown): string | undefined {
+  if (!(error instanceof ConnectError) || error.code !== Code.InvalidArgument) return undefined;
+  return error
+    .findDetails(ViolationsSchema)
+    .flatMap(({ violations }) => violations)
+    .find(({ ruleId }) => ruleId === "map.max_pairs")?.message;
 }
 
 /** What a planner knows about the resource it is recording dependencies for. */
@@ -630,9 +677,25 @@ export async function writeMetadataLabels(
 }
 
 /**
+ * Rewrite the labels of the unchanged resources whose SDK labels differ.
+ * @param client - Operator client instance
+ * @param unchanged - Unchanged items of a change set
+ * @returns One pending write per item with a label refresh
+ */
+export function writeLabelRefreshes(
+  client: MetadataLabelClient,
+  unchanged: ReadonlyArray<UnchangedAnnotation>,
+): Promise<void>[] {
+  return unchanged.flatMap(({ labelRefresh }) =>
+    labelRefresh ? [writeMetadataLabels(client, labelRefresh)] : [],
+  );
+}
+
+/**
  * Write one metadata change immediately, bypassing deploy resource batching.
- * This is reserved for migration checkpoints whose callers continue only
- * after the label is durable.
+ * This is reserved for callers that continue only after the label is durable,
+ * such as migration checkpoints, or that handle the write's own rejection,
+ * which a batch would share with every other write in it.
  * @param client - Operator client instance
  * @param write - TRN, labels to set, and label keys to delete
  * @returns Whether the labels changed

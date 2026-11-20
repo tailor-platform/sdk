@@ -43,14 +43,14 @@ tailor tailordb truncate [options] [tables]
 
 **Options**
 
-| Option                          | Alias | Description                                                                | Required | Default              | Env                            |
-| ------------------------------- | ----- | -------------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                               | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                          | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
-| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                                 | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
-| `--yes`                         | `-y`  | Skip confirmation prompts                                                  | No       | `false`              | -                              |
-| `--all`                         | `-a`  | Truncate all tables in all owned namespaces (excludes external namespaces) | No       | `false`              | -                              |
-| `--namespace <NAMESPACE>`       | `-n`  | Truncate all tables in specified namespace                                 | No       | -                    | -                              |
+| Option                          | Alias | Description                                                                                             | Required | Default | Env                            |
+| ------------------------------- | ----- | ------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                            | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                       | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory) | No       | -       | `TAILOR_CONFIG_PATH`           |
+| `--yes`                         | `-y`  | Skip confirmation prompts                                                                               | No       | `false` | -                              |
+| `--all`                         | `-a`  | Truncate all tables in all owned namespaces (excludes external namespaces)                              | No       | `false` | -                              |
+| `--namespace <NAMESPACE>`       | `-n`  | Truncate all tables in specified namespace                                                              | No       | -       | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -123,17 +123,17 @@ tailor tailordb migration generate [options]
 
 **Options**
 
-| Option                                | Alias | Description                                                                                                                                                                                                                                 | Required | Default              | Env                  |
-| ------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------------- | -------------------- |
-| `--yes`                               | `-y`  | Skip confirmation prompts                                                                                                                                                                                                                   | No       | `false`              | -                    |
-| `--config <CONFIG>`                   | `-c`  | Path to Tailor config file                                                                                                                                                                                                                  | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH` |
-| `--name <NAME>`                       | `-n`  | Optional description for the migration                                                                                                                                                                                                      | No       | -                    | -                    |
-| `--init`                              | -     | Delete existing migrations and start fresh (all namespaces with migrations configured, or only the one given by --namespace)                                                                                                                | No       | `false`              | -                    |
-| `--data-only`                         | -     | Create a migration with no schema changes whose migration script runs a standalone data transformation                                                                                                                                      | No       | `false`              | -                    |
-| `--namespace <NAMESPACE>`             | -     | Target TailorDB namespace for --data-only (required if multiple namespaces exist), or the only namespace --init resets                                                                                                                      | No       | -                    | -                    |
-| `--rename <RENAME>`                   | -     | Record a field, table, or nested member rename instead of remove + add (format: "Table.oldField:newField", "OldTable:NewTable", or "Table.field.oldMember:newMember"; repeatable). Renames require a migration script that copies the data. | No       | -                    | -                    |
-| `--drop <DROP>`                       | -     | Confirm that a removed field, table, or nested member is a genuine removal, not a rename (format: "Table.field", "Table", or "Table.field.member"; repeatable). Required in non-interactive runs for a removal with rename candidates.      | No       | -                    | -                    |
-| `--expand-contract <EXPAND_CONTRACT>` | -     | Convert a field type, or a single value into an array, through a temporary field (format: "Table.field"; repeatable). Generates two migrations.                                                                                             | No       | -                    | -                    |
+| Option                                | Alias | Description                                                                                                                                                                                                                                 | Required | Default | Env                  |
+| ------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- | -------------------- |
+| `--yes`                               | `-y`  | Skip confirmation prompts                                                                                                                                                                                                                   | No       | `false` | -                    |
+| `--config <CONFIG>`                   | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory)                                                                                                                                     | No       | -       | `TAILOR_CONFIG_PATH` |
+| `--name <NAME>`                       | `-n`  | Optional description for the migration                                                                                                                                                                                                      | No       | -       | -                    |
+| `--init`                              | -     | Delete existing migrations and start fresh (all namespaces with migrations configured, or only the one given by --namespace)                                                                                                                | No       | `false` | -                    |
+| `--data-only`                         | -     | Create a migration with no schema changes whose migration script runs a standalone data transformation                                                                                                                                      | No       | `false` | -                    |
+| `--namespace <NAMESPACE>`             | -     | Target TailorDB namespace for --data-only (required if multiple namespaces exist), or the only namespace --init resets                                                                                                                      | No       | -       | -                    |
+| `--rename <RENAME>`                   | -     | Record a field, table, or nested member rename instead of remove + add (format: "Table.oldField:newField", "OldTable:NewTable", or "Table.field.oldMember:newMember"; repeatable). Renames require a migration script that copies the data. | No       | -       | -                    |
+| `--drop <DROP>`                       | -     | Confirm that a removed field, table, or nested member is a genuine removal, not a rename (format: "Table.field", "Table", or "Table.field.member"; repeatable). Required in non-interactive runs for a removal with rename candidates.      | No       | -       | -                    |
+| `--expand-contract <EXPAND_CONTRACT>` | -     | Convert a field type, or a single value into an array, through a temporary field (format: "Table.field"; repeatable). Generates two migrations.                                                                                             | No       | -       | -                    |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -149,13 +149,13 @@ tailor tailordb migration rebaseline [options]
 
 **Options**
 
-| Option                          | Alias | Description                                                       | Required | Default              | Env                            |
-| ------------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                      | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                 | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
-| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                        | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
-| `--yes`                         | `-y`  | Skip confirmation prompts                                         | No       | `false`              | -                              |
-| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (required if multiple namespaces exist) | No       | -                    | -                              |
+| Option                          | Alias | Description                                                                                             | Required | Default | Env                            |
+| ------------------------------- | ----- | ------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                            | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                       | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory) | No       | -       | `TAILOR_CONFIG_PATH`           |
+| `--yes`                         | `-y`  | Skip confirmation prompts                                                                               | No       | `false` | -                              |
+| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (required if multiple namespaces exist)                                       | No       | -       | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -175,15 +175,16 @@ tailor tailordb migration resolve [options]
 
 **Options**
 
-| Option                          | Alias | Description                                                            | Required | Default              | Env                            |
-| ------------------------------- | ----- | ---------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                           | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                      | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
-| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                             | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
-| `--yes`                         | `-y`  | Skip confirmation prompts                                              | No       | `false`              | -                              |
-| `--rollback`                    | -     | Return the namespace to the schema before the in-progress migration    | No       | `false`              | -                              |
-| `--complete`                    | -     | Apply the schema of the in-progress migration and mark it as completed | No       | `false`              | -                              |
-| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (required if multiple namespaces exist)      | No       | -                    | -                              |
+| Option                          | Alias | Description                                                                                             | Required | Default | Env                            |
+| ------------------------------- | ----- | ------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                            | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                       | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory) | No       | -       | `TAILOR_CONFIG_PATH`           |
+| `--yes`                         | `-y`  | Skip confirmation prompts                                                                               | No       | `false` | -                              |
+| `--rollback`                    | -     | Return the namespace to the schema before the in-progress migration                                     | No       | `false` | -                              |
+| `--complete`                    | -     | Apply the schema of the in-progress migration and mark it as completed                                  | No       | `false` | -                              |
+| `--maintenance`                 | -     | Take the tables out of the maintenance mode a deploy left in place after its migration was committed    | No       | `false` | -                              |
+| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (required if multiple namespaces exist)                                       | No       | -       | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -198,7 +199,9 @@ For a run that a deploy could not confirm, the command reads how the run ended a
 
 `--rollback` also settles a migration that no deploy recorded as in progress, but whose pre-migration schema or maintenance mode a deploy left in place, for example because the deploy stopped before recording it. See "Settling a migration that stays in progress" in the TailorDB Migrations guide for when it runs.
 
-Both options remove the in-progress record, take the tables out of maintenance mode, and remove the temporary resources of the failed run, so `deploy` and the other migration commands work again. As with `tailordb migration sync`, the local migration history must reproduce the current table definitions. If sending the schema stops partway, run the command again.
+`--maintenance` is for a namespace whose checkpoint a deploy committed but whose tables it left in maintenance mode, with no migration in progress. It sends the schema of the checkpoint to restore the tables' settings and removes the maintenance mode record, without moving the checkpoint. It cannot be combined with the other two options, and it refuses when a migration is in progress, when no record names the current checkpoint, when a table the committed migration removes is not deleted yet (a deploy deletes it), when a deploy was interrupted before it recorded the next migration (settle it with `--rollback`), or when a table differs from the checkpoint in more than maintenance mode, printing the difference.
+
+Both `--rollback` and `--complete` remove the in-progress record, take the tables out of maintenance mode, and remove the temporary resources of the failed run, so `deploy` and the other migration commands work again. As with `tailordb migration sync`, the local migration history must reproduce the current table definitions. If sending the schema stops partway, run the command again.
 
 #### tailordb migration script
 
@@ -218,13 +221,13 @@ tailor tailordb migration script [options] <number>
 
 **Options**
 
-| Option                    | Alias | Description                                                                                  | Required | Default              | Env                  |
-| ------------------------- | ----- | -------------------------------------------------------------------------------------------- | -------- | -------------------- | -------------------- |
-| `--config <CONFIG>`       | `-c`  | Path to Tailor config file                                                                   | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH` |
-| `--namespace <NAMESPACE>` | `-n`  | Target TailorDB namespace (required if multiple namespaces exist)                            | No       | -                    | -                    |
-| `--no-script`             | -     | Record that this migration intentionally runs without a migration script (requires --reason) | No       | -                    | -                    |
-| `--reason <REASON>`       | -     | Reason why no migration script is needed (used with --no-script)                             | No       | -                    | -                    |
-| `--with-test`             | -     | Also add the migrate.test.ts and migrate.pglite.test.ts scaffolds                            | No       | -                    | -                    |
+| Option                    | Alias | Description                                                                                             | Required | Default | Env                  |
+| ------------------------- | ----- | ------------------------------------------------------------------------------------------------------- | -------- | ------- | -------------------- |
+| `--config <CONFIG>`       | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory) | No       | -       | `TAILOR_CONFIG_PATH` |
+| `--namespace <NAMESPACE>` | `-n`  | Target TailorDB namespace (required if multiple namespaces exist)                                       | No       | -       | -                    |
+| `--no-script`             | -     | Record that this migration intentionally runs without a migration script (requires --reason)            | No       | -       | -                    |
+| `--reason <REASON>`       | -     | Reason why no migration script is needed (used with --no-script)                                        | No       | -       | -                    |
+| `--with-test`             | -     | Also add the migrate.test.ts and migrate.pglite.test.ts scaffolds                                       | No       | -       | -                    |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -244,12 +247,12 @@ tailor tailordb migration status [options]
 
 **Options**
 
-| Option                          | Alias | Description                                                       | Required | Default              | Env                            |
-| ------------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                      | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                 | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
-| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                        | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
-| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (shows all namespaces if not specified) | No       | -                    | -                              |
+| Option                          | Alias | Description                                                                                             | Required | Default | Env                            |
+| ------------------------------- | ----- | ------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                            | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                       | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory) | No       | -       | `TAILOR_CONFIG_PATH`           |
+| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (shows all namespaces if not specified)                                       | No       | -       | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -275,14 +278,14 @@ tailor tailordb migration sync [options] <number>
 
 **Options**
 
-| Option                          | Alias | Description                                                                             | Required | Default              | Env                            |
-| ------------------------------- | ----- | --------------------------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                            | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                       | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
-| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                                              | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
-| `--yes`                         | `-y`  | Skip confirmation prompts                                                               | No       | `false`              | -                              |
-| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (required if multiple namespaces exist)                       | No       | -                    | -                              |
-| `--force`                       | -     | Proceed even when the namespace records a migration history ID other than the local one | No       | `false`              | -                              |
+| Option                          | Alias | Description                                                                                             | Required | Default | Env                            |
+| ------------------------------- | ----- | ------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                            | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                       | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory) | No       | -       | `TAILOR_CONFIG_PATH`           |
+| `--yes`                         | `-y`  | Skip confirmation prompts                                                                               | No       | `false` | -                              |
+| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (required if multiple namespaces exist)                                       | No       | -       | -                              |
+| `--force`                       | -     | Proceed even when the namespace records a migration history ID other than the local one                 | No       | `false` | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -302,22 +305,22 @@ tailor tailordb migration test [options]
 
 **Options**
 
-| Option                                        | Alias | Description                                                                                                                                                                                                                      | Required | Default              | Env                               |
-| --------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>`               | `-w`  | Workspace ID                                                                                                                                                                                                                     | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`                         | `-p`  | Workspace profile                                                                                                                                                                                                                | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`                           | `-c`  | Path to Tailor config file                                                                                                                                                                                                       | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`              |
-| `--yes`                                       | `-y`  | Acknowledge that a designated target workspace may be overwritten                                                                                                                                                                | No       | `false`              | -                                 |
-| `--data <DATA>`                               | -     | Data source for the migration test (seed or clone)                                                                                                                                                                               | No       | `"seed"`             | -                                 |
-| `--target-workspace-id <TARGET_WORKSPACE_ID>` | -     | Existing throwaway workspace to retain after the test (requires --yes)                                                                                                                                                           | No       | -                    | -                                 |
-| `--keep`                                      | -     | Keep the automatically created workspace after the test                                                                                                                                                                          | No       | `false`              | -                                 |
-| `--organization-id <ORGANIZATION_ID>`         | -     | Organization to create the temporary workspace in, at its root unless --folder-id is given (default: the source workspace's organization and folder). With --target-workspace-id, must match the target's organization           | No       | -                    | `TAILOR_PLATFORM_ORGANIZATION_ID` |
-| `--folder-id <FOLDER_ID>`                     | -     | Folder to create the temporary workspace in (default: the source workspace's folder). Requires --organization-id when the source workspace is not in an organization. With --target-workspace-id, must match the target's folder | No       | -                    | `TAILOR_PLATFORM_FOLDER_ID`       |
-| `--assert <ASSERT>`                           | -     | Path to a TypeScript assertion script to run after migrations                                                                                                                                                                    | No       | -                    | -                                 |
-| `--assert-namespace <ASSERT_NAMESPACE>`       | -     | TailorDB namespace exposed to the assertion script                                                                                                                                                                               | No       | -                    | -                                 |
-| `--keep-ttl <KEEP_TTL>`                       | -     | Record an expiry on the kept workspace, e.g. 24h or 7d (less than 50,000,000 days), so workspace prune --expired can delete it (requires --keep)                                                                                 | No       | -                    | -                                 |
-| `--clone-timeout <CLONE_TIMEOUT>`             | -     | How long to wait for the clone to finish with --data clone, e.g. 30s or 10m (default: 30m)                                                                                                                                       | No       | -                    | -                                 |
-| `--machine-user <MACHINE_USER>`               | -     | Machine user for seed, migration, and assertion script execution                                                                                                                                                                 | No       | -                    | -                                 |
+| Option                                        | Alias | Description                                                                                                                                                                                                                      | Required | Default  | Env                               |
+| --------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>`               | `-w`  | Workspace ID                                                                                                                                                                                                                     | No       | -        | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`                         | `-p`  | Workspace profile                                                                                                                                                                                                                | No       | -        | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`                           | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory)                                                                                                                          | No       | -        | `TAILOR_CONFIG_PATH`              |
+| `--yes`                                       | `-y`  | Acknowledge that a designated target workspace may be overwritten                                                                                                                                                                | No       | `false`  | -                                 |
+| `--data <DATA>`                               | -     | Data source for the migration test (seed or clone)                                                                                                                                                                               | No       | `"seed"` | -                                 |
+| `--target-workspace-id <TARGET_WORKSPACE_ID>` | -     | Existing throwaway workspace to retain after the test (requires --yes)                                                                                                                                                           | No       | -        | -                                 |
+| `--keep`                                      | -     | Keep the automatically created workspace after the test                                                                                                                                                                          | No       | `false`  | -                                 |
+| `--organization-id <ORGANIZATION_ID>`         | -     | Organization to create the temporary workspace in, at its root unless --folder-id is given (default: the source workspace's organization and folder). With --target-workspace-id, must match the target's organization           | No       | -        | `TAILOR_PLATFORM_ORGANIZATION_ID` |
+| `--folder-id <FOLDER_ID>`                     | -     | Folder to create the temporary workspace in (default: the source workspace's folder). Requires --organization-id when the source workspace is not in an organization. With --target-workspace-id, must match the target's folder | No       | -        | `TAILOR_PLATFORM_FOLDER_ID`       |
+| `--assert <ASSERT>`                           | -     | Path to a TypeScript assertion script to run after migrations                                                                                                                                                                    | No       | -        | -                                 |
+| `--assert-namespace <ASSERT_NAMESPACE>`       | -     | TailorDB namespace exposed to the assertion script                                                                                                                                                                               | No       | -        | -                                 |
+| `--keep-ttl <KEEP_TTL>`                       | -     | Record an expiry on the kept workspace, e.g. 24h or 7d (less than 50,000,000 days), so workspace prune --expired can delete it (requires --keep)                                                                                 | No       | -        | -                                 |
+| `--clone-timeout <CLONE_TIMEOUT>`             | -     | How long to wait for the clone to finish with --data clone, e.g. 30s or 10m (default: 30m)                                                                                                                                       | No       | -        | -                                 |
+| `--machine-user <MACHINE_USER>`               | -     | Machine user for seed, migration, and assertion script execution                                                                                                                                                                 | No       | -        | -                                 |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -337,14 +340,14 @@ tailor tailordb migration validate [options]
 
 **Options**
 
-| Option                                          | Alias | Description                                                                                                                                                 | Required | Default              | Env                            |
-| ----------------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>`                 | `-w`  | Workspace ID                                                                                                                                                | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`                           | `-p`  | Workspace profile                                                                                                                                           | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
-| `--config <CONFIG>`                             | `-c`  | Path to Tailor config file                                                                                                                                  | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
-| `--namespace <NAMESPACE>`                       | `-n`  | Target TailorDB namespace (validates all namespaces if not specified)                                                                                       | No       | -                    | -                              |
-| `--strict`                                      | -     | Also fail when a pending migration can drop data without an acknowledgment                                                                                  | No       | `false`              | -                              |
-| `--migration-skip-steps <MIGRATION_SKIP_STEPS>` | -     | Also check that 'deploy --migration-skip-steps' can skip these steps of a partially applied multi-step migration, as comma-separated namespace/step entries | No       | -                    | -                              |
+| Option                                          | Alias | Description                                                                                                                                                 | Required | Default | Env                            |
+| ----------------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>`                 | `-w`  | Workspace ID                                                                                                                                                | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`                           | `-p`  | Workspace profile                                                                                                                                           | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`                             | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory)                                                     | No       | -       | `TAILOR_CONFIG_PATH`           |
+| `--namespace <NAMESPACE>`                       | `-n`  | Target TailorDB namespace (validates all namespaces if not specified)                                                                                       | No       | -       | -                              |
+| `--strict`                                      | -     | Also fail when a pending migration can drop data without an acknowledgment                                                                                  | No       | `false` | -                              |
+| `--migration-skip-steps <MIGRATION_SKIP_STEPS>` | -     | Also check that 'deploy --migration-skip-steps' can skip these steps of a partially applied multi-step migration, as comma-separated namespace/step entries | No       | -       | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

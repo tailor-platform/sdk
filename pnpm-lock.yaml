@@ -176,7 +176,7 @@ snapshots:
 			"brace-expansion@>=5.0.5 <5.0.8": "5.0.13",
 			"esbuild@>=0.17.0 <0.28.1": "0.28.2",
 			"glob@>=9.0.0 <=14.0.1": "14.0.6",
-			"minimatch@<11.0.1": "11.0.8",
+			"minimatch@<11.0.1": "11.0.9",
 		},
 		"packageExtensionsChecksum": "sha256-366VrvjFdE9dy97BTVh0uNx88UlDPie1VVU5Ft1WOd4=",
 	},
@@ -189,12 +189,12 @@ snapshots:
 				"@tailor-platform/sdk": "workspace:^",
 				"@types/node": "26.6.6",
 				"eslint-plugin-zod": "5.3.0",
-				"knip": "6.44.2",
+				"knip": "6.45.1",
 				"lefthook": "2.2.1",
 				"madge": "8.0.0",
 				"oxfmt": "0.78.0",
 				"oxlint": "1.93.0",
-				"pkg-pr-new": "0.0.93",
+				"pkg-pr-new": "0.0.94",
 				"publint": "0.3.25",
 				"tsx": "4.23.15",
 				"typescript": "6.0.3",
@@ -244,7 +244,7 @@ snapshots:
 		"packages/create-sdk": {
 			"dependencies": {
 				"@clack/prompts": "1.9.0",
-				"@politty/zod": "0.7.3",
+				"@politty/zod": "0.7.5",
 				"execa": "10.2.1",
 				"picocolors": "1.1.1",
 				"pkg-types": "2.4.0",
@@ -427,9 +427,8 @@ snapshots:
 				"@opentelemetry/sdk-trace": "3.1.1",
 				"@opentelemetry/semantic-conventions": "1.45.0",
 				"@oxc-project/types": "0.158.0",
-				"@politty/zod": "0.7.3",
-				"@secretlint/core": "13.1.0",
-				"@secretlint/secretlint-rule-preset-recommend": "13.1.0",
+				"@politty/zod": "0.7.5",
+				"@secretlint/core": "14.0.1",
 				"@standard-schema/spec": "1.1.0",
 				"@tailor-platform/function-kysely-tailordb": "0.1.3",
 				"@toiroakr/read-multiline": "0.4.3",
@@ -492,7 +491,7 @@ snapshots:
 		"packages/sdk-codemod": {
 			"dependencies": {
 				"@ast-grep/napi": "0.51.2",
-				"@politty/zod": "0.7.3",
+				"@politty/zod": "0.7.5",
 				"diff": "9.0.0",
 				"pathe": "2.0.3",
 				"picomatch": "4.0.7",
@@ -532,7 +531,7 @@ snapshots:
 		"packages/sdk-plugin-seed": {
 			"name": "@tailor-platform/sdk-plugin-seed",
 			"dependencies": {
-				"@politty/zod": "0.7.3",
+				"@politty/zod": "0.7.5",
 				"lines-db": "0.19.0",
 				"pathe": "2.0.3",
 				"pkg-types": "2.4.0",
@@ -553,7 +552,7 @@ snapshots:
 		"packages/sdk-plugin-setup": {
 			"dependencies": {
 				"@croct/json5-parser": "0.2.2",
-				"@politty/zod": "0.7.3",
+				"@politty/zod": "0.7.5",
 				"json5": "2.2.3",
 				"pathe": "2.0.3",
 				"pkg-types": "2.4.0",
@@ -604,7 +603,7 @@ snapshots:
 		"packages/sdk-plugin-tailordb-erd": {
 			"name": "@tailor-platform/sdk-plugin-tailordb-erd",
 			"dependencies": {
-				"@politty/zod": "0.7.3",
+				"@politty/zod": "0.7.5",
 				"chokidar": "5.0.0",
 				"mime-types": "3.0.2",
 				"open": "11.0.4",
@@ -3190,6 +3189,31 @@ snapshots:
 			},
 		},
 
+		"@politty/zod@0.7.5": {
+			"integrity": "sha512-XbaaV5yGD62ZTOA28tmXQimwgwGTJC5rmFdS+H8JspcrNGmaOpFxoT6TbPTijQIyQCIKfYl3h3r5OA+599Z8QQ==",
+			"engines": {"node": ">=20.12.0 <21.0.0 || >=21.7.0"},
+			"hasBin": true,
+			"peerDependencies": {
+				"@clack/prompts": {
+					"specifier": "^0.10.0 || ^0.11.0 || ^1.0.0",
+					"version": "1.9.0",
+					"optional": true,
+				},
+				"@inquirer/prompts": {
+					"specifier": "^8.3.2",
+					"version": "8.8.0",
+					"optional": true,
+				},
+				"zod": {
+					"specifier": "^4.2.1",
+					"version": "4.6.7",
+				},
+			},
+			"dependencies": {
+				"yaml": "2.9.1",
+			},
+		},
+
 		"@prettier/sync@0.6.1": {
 			"integrity": "sha512-yF9G8vK/LYUTF3Cijd7VC9La3b20F20/J/fgoR4H0B8JGOWnZVZX6+I6+vODPosjmMcpdlUV+gUqJQZp3kLOcw==",
 			"peerDependencies": {
@@ -3506,8 +3530,8 @@ snapshots:
 			"integrity": "sha512-831qok9r2t8AlxLko40y2ebgSDhenenCatLVeW/uBtnHPyhHOvG0C7TvfgecV+wHzIm5KUICgzmVpWS+IMEAeg==",
 		},
 
-		"@secretlint/core@13.1.0": {
-			"integrity": "sha512-GL4qNP7G95zSdCpVOMeBVX6mROOko3uMuJNSXD+WmFG9vxChszbmTzpHRzogHHlr+TMqxHw5FE5LHl0OkB0luw==",
+		"@secretlint/core@14.0.1": {
+			"integrity": "sha512-f+FtBzQaevqwbwzKYKo5isFhG+fS3G+2tMJ6FdkGYFgGQB5GLAVp6neBgf8bXQCKMWw+JsRDlvc+c/t6xsmhog==",
 			"engines": {"node": ">=22.0.0"},
 			"peerDependencies": {
 				"supports-color": {
@@ -3516,24 +3540,22 @@ snapshots:
 				},
 			},
 			"dependencies": {
-				"@secretlint/profiler": "13.1.0",
-				"@secretlint/types": "13.1.0",
+				"@secretlint/profiler": "14.0.1",
+				"@secretlint/types": "14.0.1",
+				"@textlint/regexp-string-matcher": "2.0.4",
 				"debug": "4.4.3",
+				"picomatch": "4.0.7",
 				"structured-source": "4.0.0",
 			},
 		},
 
-		"@secretlint/profiler@13.1.0": {
-			"integrity": "sha512-Ss/n6FduYkhLLaqDP/CSH5i6Q3YpGd+x2CAnZWxjm9uvJbZpO8eiSnqqORayHC+FcoW3PwS/9wWbHmfEQ7noYw==",
-		},
-
-		"@secretlint/secretlint-rule-preset-recommend@13.1.0": {
-			"integrity": "sha512-dPnplMyjJYpVCJDNTjpUA8c/AfoHbWANJJJWKroK50DGGhAB4Oumzk+XinBMyMMAwgOsjU9CB9lUHXDvObMVCg==",
+		"@secretlint/profiler@14.0.1": {
+			"integrity": "sha512-BW+5m2f4dk2/lhyRwk9/Sp3Vr/DklC0CNxobTrjuodgbUH5iYChmP1sIgA13qgkGhoMPcfyVO2GbwtLQSVWFIw==",
 			"engines": {"node": ">=22.0.0"},
 		},
 
-		"@secretlint/types@13.1.0": {
-			"integrity": "sha512-ZslrDXhpdfqp9Kp+9XZO5M/ehiwuIRCbjGZumfmE8crCvKqszirQKBxM4HPPsoWFUlf3H/eCNxx8vE93KY5I4g==",
+		"@secretlint/types@14.0.1": {
+			"integrity": "sha512-fCNeipppEuoq92cXdI9sAM9UGVJkMv+zH5ReGw6Epa8N+bL1UPt6oNVf8pbtjpMoTDdaqr3XBkFo3ZmlV/rHdw==",
 			"engines": {"node": ">=22.0.0"},
 		},
 
@@ -3632,6 +3654,10 @@ snapshots:
 			},
 		},
 
+		"@textlint/regexp-string-matcher@2.0.4": {
+			"integrity": "sha512-wK/RrUO/UsfxKa/Flhu2583n2Om38w4Ds5uh4nMedIX/+wL1uL9FH8vgK9YDlsO4jNkp5LbjTp5XDnQTd1VYPg==",
+		},
+
 		"@toiroakr/read-multiline@0.4.3": {
 			"integrity": "sha512-qvxveKObkZVsnV2aN+rWyE/IitfZtQW42fi8etRKaF5TjZ6tr4sjcit0tSWquq9cTPpU1CF5JywmR4akulisKg==",
 		},
@@ -3669,7 +3695,7 @@ snapshots:
 		"@ts-morph/common@0.29.0": {
 			"integrity": "sha512-35oUmphHbJvQ/+UTwFNme/t2p3FoKiGJ5auTjjpNTop2dyREspirjMy82PLSC1pnDJ8ah1GU98hwpVt64YXQsg==",
 			"dependencies": {
-				"minimatch": "11.0.8",
+				"minimatch": "11.0.9",
 				"path-browserify": "1.0.1",
 				"tinyglobby": "0.2.17",
 			},
@@ -3874,7 +3900,7 @@ snapshots:
 				"@typescript-eslint/types": "8.72.2",
 				"@typescript-eslint/visitor-keys": "8.72.2",
 				"debug": "4.4.3",
-				"minimatch": "11.0.8",
+				"minimatch": "11.0.9",
 				"semver": "7.8.6",
 				"tinyglobby": "0.2.17",
 				"ts-api-utils": "2.5.0",
@@ -5522,8 +5548,8 @@ snapshots:
 			},
 		},
 
-		"knip@6.44.2": {
-			"integrity": "sha512-6URO7pnqtOnyvSsXfW6+8C9j1lfcicxUCysXO0RgMtHTZ96HqCXh29op8iabeQW5JeIc8dJWwzSdJVWDokeScQ==",
+		"knip@6.45.1": {
+			"integrity": "sha512-zp3zXKy2cZWiIttdlWU5fisKxVQaLSU6471ej0KGz1GdHdaHxpzTAO/LIyFNc3gU3v1W7LJaqvYumoO3l/u+6A==",
 			"engines": {"node": "^20.19.0 || >=22.12.0"},
 			"hasBin": true,
 			"dependencies": {
@@ -5538,7 +5564,6 @@ snapshots:
 				"tinyglobby": "0.2.17",
 				"unbash": "6.0.4",
 				"yaml": "2.9.1",
-				"zod": "4.6.7",
 			},
 		},
 
@@ -5910,6 +5935,15 @@ snapshots:
 
 		"minimatch@11.0.8": {
 			"integrity": "sha512-nFQuYSTVrGvysVBps5Ih+0BdnYFN/Cj3C816r6+p7yK+FHrVLGE4O4N9AFwykrlNlvM2HYt+Rad1Uiro6h88Ig==",
+			"engines": {"node": "20 || >=22"},
+			"dependencies": {
+				"@isaacs/nonrecursive-glob-match": "1.1.0",
+				"brace-expansion": "5.0.13",
+			},
+		},
+
+		"minimatch@11.0.9": {
+			"integrity": "sha512-KCFkfyjqerNlSstjlhIGNXIKZGA/6O4V4RlhZ+Dsr621SPPw0mzlypE9D9ZOoPiVefHID+j7/XuMMlqfD/F60Q==",
 			"engines": {"node": "20 || >=22"},
 			"dependencies": {
 				"@isaacs/nonrecursive-glob-match": "1.1.0",
@@ -6375,8 +6409,8 @@ snapshots:
 			"engines": {"node": ">=12"},
 		},
 
-		"pkg-pr-new@0.0.93": {
-			"integrity": "sha512-JH3HEO+m8sNFpalNAeGrNKjdwxNcXT3yuEuGMU/65dvLojPo+Ofnmc8la2v2ceisjXTOKQw/738Pj4KNFY7F+w==",
+		"pkg-pr-new@0.0.94": {
+			"integrity": "sha512-+s3ZZl1Vt3wHfsIRH+chHG6/3wsu1N+Z5jitNYAPc0GGCYR8xmju34UShzTAMosi4WAYFCXvp80LZZc/fXSdpQ==",
 			"hasBin": true,
 		},
 

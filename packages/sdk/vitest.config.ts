@@ -40,15 +40,8 @@ const sdkSourceAliases = Object.entries(packageJson.exports)
     };
   });
 
-// E2e files whose measured V8 coverage contribution justifies running them in
-// the coverage CI job ("e2e-coverage" project below): deploy.test.ts calls
-// deploy() in-process. The other e2e files drive the CLI through subprocesses,
-// which V8 coverage cannot observe, so they run only in the behavioral e2e
-// workflow ("e2e" project).
-const e2eCoverageTestIncludes = ["e2e/deploy.test.ts"];
-
 // The e2e CLI helper's own tests need no workspace, so they run with the unit
-// tests instead of the e2e projects.
+// tests instead of the e2e project.
 const e2eHelperTestIncludes = ["e2e/cli.test.ts"];
 
 // Shared with the "integration" project definition below.
@@ -114,13 +107,6 @@ const classifyUnitTests = (): { isolated: string[]; shared: string[] } => {
 
 const { isolated: isolatedUnitTests, shared: sharedUnitTests } = classifyUnitTests();
 
-// CLI subprocesses keep human-readable output when the suite runs inside an AI coding agent.
-const e2eEnv = { POLITTY_NO_AGENT: "1" };
-
-const e2eMaxWorkers = 8;
-
-const e2eGroupOrder = 1;
-
 export default defineConfig({
   resolve: {
     alias: [
@@ -169,37 +155,22 @@ export default defineConfig({
           include: integrationTestIncludes,
           setupFiles: ["./vitest.setup.ts"],
           testTimeout: 60000,
+          typecheck: { enabled: false },
         },
       },
       {
         test: {
           name: "e2e",
           include: ["e2e/**/*.test.ts"],
-          exclude: [
-            ...configDefaults.exclude,
-            ...e2eCoverageTestIncludes,
-            ...e2eHelperTestIncludes,
-          ],
+          exclude: [...configDefaults.exclude, ...e2eHelperTestIncludes],
           testTimeout: 120000,
           hookTimeout: 300000,
-          maxWorkers: e2eMaxWorkers,
-          sequence: { groupOrder: e2eGroupOrder },
+          maxWorkers: 8,
+          // Vitest rejects projects that differ in maxWorkers but share a groupOrder.
+          sequence: { groupOrder: 1 },
           globalSetup: ["e2e/globalSetup.ts"],
-          env: e2eEnv,
-        },
-      },
-      {
-        test: {
-          // Type tests already run in "unit-core"; disable so `--project 'e2e*'`
-          // does not compile them a second time.
-          name: "e2e-coverage",
-          include: e2eCoverageTestIncludes,
-          testTimeout: 120000,
-          hookTimeout: 300000,
-          maxWorkers: e2eMaxWorkers,
-          sequence: { groupOrder: e2eGroupOrder },
-          globalSetup: ["e2e/globalSetup.ts"],
-          env: e2eEnv,
+          // CLI subprocesses keep human-readable output when the suite runs inside an AI coding agent.
+          env: { POLITTY_NO_AGENT: "1" },
           typecheck: { enabled: false },
         },
       },

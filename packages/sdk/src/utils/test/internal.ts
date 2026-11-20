@@ -4,6 +4,8 @@ import { stripTailorDBTypeBuilderHelpers } from "#/parser/service/tailordb/build
  * These are NOT exported to library users.
  */
 import { TailorDBTypeSchema } from "#/parser/service/tailordb/schema";
+import { parseTypes } from "#/parser/service/tailordb/type-parser";
+import { buildTypeScripts, type TypeScripts } from "#/parser/service/tailordb/type-script";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 
 /**
@@ -38,4 +40,26 @@ export function toSchemaOutputs(
     result[name] = toSchemaOutput(type);
   }
   return result;
+}
+
+/**
+ * Compiles a db.table() result's hooks, defaults, and validators into table-level scripts.
+ * @param type - The db.table() result to compile
+ * @returns The table's hook and validate scripts
+ */
+export function buildTableScripts(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Accept any db.table() result for testing
+  type: any,
+): TypeScripts {
+  const parsed = parseTypes({ [type.name]: toSchemaOutput(type) }, "ns")[type.name];
+  if (!parsed) {
+    throw new Error(`Failed to parse table ${type.name}`);
+  }
+  const fields = Object.fromEntries(
+    Object.entries(parsed.fields).map(([name, field]) => [name, field.config]),
+  );
+  return buildTypeScripts(fields, {
+    typeHookExpr: parsed.typeHookExpr,
+    typeValidateExpr: parsed.typeValidateExpr,
+  });
 }

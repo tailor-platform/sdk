@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { Code, ConnectError } from "@connectrpc/connect";
 import { runCommand } from "@politty/zod";
 import { describe, expect, test, vi } from "vitest";
@@ -6,7 +5,13 @@ import { initOperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import {
+  mockOperatorClient,
+  type OperatorClientMocks,
+  withOperatorClientMocks,
+} from "#/cli/shared/test-helpers/operator-client";
 import { deleteCommand } from "./delete";
+import type { OperatorClient } from "#/cli/shared/client";
 
 vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn().mockResolvedValue("mock-token"),
@@ -41,15 +46,15 @@ const FOLDER_ID = "22222222-2222-2222-2222-222222222222";
 
 const argv = ["--organization-id", ORGANIZATION_ID, "--folder-id", FOLDER_ID, "--yes"];
 
-function mockClient(overrides: Record<string, unknown>) {
-  const client = {
-    getOrganizationFolder: vi.fn().mockResolvedValue({ folder: { name: "docs" } }),
-    deleteOrganizationFolder: vi.fn().mockResolvedValue({}),
-    ...overrides,
-  };
-  vi.mocked(initOperatorClient).mockResolvedValue(
-    client as unknown as Awaited<ReturnType<typeof initOperatorClient>>,
+function mockClient<K extends keyof OperatorClient = never>(overrides?: OperatorClientMocks<K>) {
+  const client = withOperatorClientMocks(
+    mockOperatorClient({
+      getOrganizationFolder: { folder: { name: "docs" } },
+      deleteOrganizationFolder: {},
+    }),
+    overrides,
   );
+  vi.mocked(initOperatorClient).mockResolvedValue(client);
   return client;
 }
 
@@ -69,7 +74,7 @@ describe("organization folder delete", () => {
 
   test("reports not found when the lookup succeeds without a folder", async () => {
     const client = mockClient({
-      getOrganizationFolder: vi.fn().mockResolvedValue({}),
+      getOrganizationFolder: {},
     });
 
     const result = await runCommand(deleteCommand, argv);
@@ -81,7 +86,7 @@ describe("organization folder delete", () => {
   test("reports not found when the lookup fails with NotFound", async () => {
     const failure = new ConnectError("folder missing", Code.NotFound);
     const client = mockClient({
-      getOrganizationFolder: vi.fn().mockRejectedValue(failure),
+      getOrganizationFolder: () => Promise.reject(failure),
     });
 
     const result = await runCommand(deleteCommand, argv);
@@ -120,7 +125,7 @@ describe("organization folder delete", () => {
   test("propagates lookup failures other than NotFound", async () => {
     const failure = new ConnectError("backend unavailable", Code.Unavailable);
     const client = mockClient({
-      getOrganizationFolder: vi.fn().mockRejectedValue(failure),
+      getOrganizationFolder: () => Promise.reject(failure),
     });
 
     const result = await runCommand(deleteCommand, argv);

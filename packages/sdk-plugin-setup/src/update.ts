@@ -1,7 +1,15 @@
 import { logger } from "@tailor-platform/sdk/cli";
-import { setupAutofix, type AutofixSetupOptions } from "./autofix";
+import { setupAutofix, type AutofixSetupInputs, type AutofixSetupOptions } from "./autofix";
 import { locatedMessage } from "./error-message";
-import { setupTarget, type SetupTargetOptions } from "./generate";
+import {
+  setupTarget,
+  type BranchSetupInputs,
+  type PreviewSetupInputs,
+  type SetupOutput,
+  type SetupRun,
+  type SetupTargetOptions,
+  type TagSetupInputs,
+} from "./generate";
 import {
   AUTOFIX_LABEL,
   managedWorkflows,
@@ -18,8 +26,6 @@ import {
   type PackageManager,
   type PreviewRequirement,
 } from "./templates";
-
-type UpdateCommon = { force: boolean; outputDir: string };
 
 // Not `setup check`'s `!== false`: an entry without the flag may hold an explicit
 // branch, and re-detecting it would silently move the deploy trigger.
@@ -41,9 +47,10 @@ function recordedPackageManagerUnlessDetected(
   return inputs.packageManager;
 }
 
-function recordedCodemod(
-  inputs: LockAutofix["inputs"],
-): Pick<AutofixSetupOptions, "codemod" | "copilotAuth"> {
+function recordedCodemod(inputs: LockAutofix["inputs"]): {
+  codemod: AutofixSetupInputs["codemod"];
+  copilotAuth: AutofixSetupInputs["copilotAuth"];
+} {
   const { codemod, copilotAuth } = inputs;
   if (codemod !== undefined && !isAutofixCodemod(codemod)) {
     throw new Error(
@@ -76,7 +83,7 @@ function legacyPreviewRequirement(inputs: LockInputs): PreviewRequirement {
  * @param common - Options shared by every target in this update run
  * @returns The setup options to regenerate this entry with
  */
-export function planUpdate(target: LockTarget, common: UpdateCommon): SetupTargetOptions {
+export function planUpdate(target: LockTarget, common: SetupOutput): SetupTargetOptions {
   const { kind, workspaceName, inputs } = target;
   const dir = inputs.apps ? inputs.apps.map((app) => app.dir) : inputs.dir;
   const base = {
@@ -84,7 +91,7 @@ export function planUpdate(target: LockTarget, common: UpdateCommon): SetupTarge
     dir,
     environment: inputs.environment,
     packageManager: recordedPackageManagerUnlessDetected(inputs),
-    ...(inputs.seed ? { seed: inputs.seed } : {}),
+    seed: inputs.seed || undefined,
     ...common,
   };
 
@@ -102,7 +109,7 @@ export function planUpdate(target: LockTarget, common: UpdateCommon): SetupTarge
         migrationTestEnvironment: inputs.migrationTestEnvironment,
         splitPlanEnvironment: inputs.splitPlanEnvironment,
         restrictDispatch: inputs.restrictDispatch ?? false,
-      };
+      } satisfies Record<keyof BranchSetupInputs, unknown>;
     case "tag":
       return {
         kind,
@@ -110,7 +117,7 @@ export function planUpdate(target: LockTarget, common: UpdateCommon): SetupTarge
         tagPattern: inputs.tagPattern ?? "v*",
         branch: inputs.branch ?? undefined,
         restrictDispatch: inputs.restrictDispatch ?? false,
-      };
+      } satisfies Record<keyof TagSetupInputs, unknown>;
     case "preview":
       return {
         kind,
@@ -122,7 +129,7 @@ export function planUpdate(target: LockTarget, common: UpdateCommon): SetupTarge
           inputs.require === undefined
             ? legacyPreviewRequirement(inputs)
             : (inputs.require ?? undefined),
-      };
+      } satisfies Record<keyof PreviewSetupInputs, unknown>;
   }
 }
 
@@ -132,7 +139,7 @@ export function planUpdate(target: LockTarget, common: UpdateCommon): SetupTarge
  * @param common - Options shared by every workflow in this update run
  * @returns The setup options to regenerate the autofix workflow with
  */
-function planAutofixUpdate(autofix: LockAutofix, common: UpdateCommon): AutofixSetupOptions {
+function planAutofixUpdate(autofix: LockAutofix, common: SetupOutput): AutofixSetupOptions {
   const { provider, securefixServerRepository, dirs } = autofix.inputs;
   return {
     provider,
@@ -141,19 +148,10 @@ function planAutofixUpdate(autofix: LockAutofix, common: UpdateCommon): AutofixS
     dir: dirs,
     packageManager: recordedPackageManagerUnlessDetected(autofix.inputs),
     ...common,
-  };
+  } satisfies Record<keyof AutofixSetupInputs, unknown>;
 }
 
-export type UpdateOptions = UpdateCommon &
-  Pick<
-    SetupTargetOptions,
-    | "gitRunner"
-    | "loadConfigId"
-    | "loadErdNamespaces"
-    | "loadHasMigrations"
-    | "loadHasSeeds"
-    | "loadSeedSettings"
-  >;
+export type UpdateOptions = Omit<SetupRun, "loadConfigName">;
 
 // Not the SDK's errorSummary: it is not exported from @tailor-platform/sdk/cli,
 // and importing it would make this plugin require a newer SDK.

@@ -7,7 +7,12 @@ import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
 import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
-import { type MachineUserInputSource, profileUpdateArgs, recoveryContextArgs } from "./args";
+import {
+  CONFIG_FILE_NAME,
+  type MachineUserInputSource,
+  profileUpdateArgs,
+  recoveryContextArgs,
+} from "./args";
 import {
   defaultPlatformBaseUrl,
   fetchUserInfo,
@@ -1606,7 +1611,14 @@ function createStoredTokenSource(init: StoredTokenSourceInit): AccessTokenSource
   return source;
 }
 
-const DEFAULT_CONFIG_FILENAME = "tailor.config.ts";
+/**
+ * Find the nearest `tailor.config.ts` in a directory or its parent directories.
+ * @param cwd - Directory to start the search from
+ * @returns Path of the config file, or undefined when none is found
+ */
+export function findConfigFile(cwd: string): string | undefined {
+  return findUpSync(CONFIG_FILE_NAME, { cwd });
+}
 
 /**
  * Load config path from command options, environment variables, or search parent directories.
@@ -1622,7 +1634,5 @@ export function loadConfigPath(configPath?: string): string | undefined {
   if (process.env.TAILOR_CONFIG_PATH) {
     return process.env.TAILOR_CONFIG_PATH;
   }
-
-  // Search for config file in current directory and parent directories
-  return findUpSync(DEFAULT_CONFIG_FILENAME);
+  return findConfigFile(process.cwd());
 }

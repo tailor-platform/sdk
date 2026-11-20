@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { runCommand } from "@politty/zod";
@@ -10,6 +9,10 @@ import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-di
 import { isCLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import {
+  mockOperatorClient,
+  type OperatorClientMocks,
+} from "#/cli/shared/test-helpers/operator-client";
 import { runCliCommand } from "#/cli/shared/test-helpers/run-cli-command";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "#/cli/shared/token-store";
@@ -63,15 +66,13 @@ const platformCreatedAtMs = 1_700_000_000_000;
 const subSecondCreateTime = { seconds: 1_700_000_000n, nanos: 500_000_000 };
 
 function stubClient(
-  overrides: Partial<{
-    getMetadata: ReturnType<typeof vi.fn>;
-    setMetadata: ReturnType<typeof vi.fn>;
-    createTime: typeof platformCreateTime;
-  }> = {},
+  overrides: Partial<
+    OperatorClientMocks<"setMetadata"> & { createTime: typeof platformCreateTime }
+  > = {},
 ) {
-  const client = {
-    listAvailableWorkspaceRegions: vi.fn().mockResolvedValue({ regions: ["us-west"] }),
-    createWorkspace: vi.fn().mockResolvedValue({
+  const client = mockOperatorClient({
+    listAvailableWorkspaceRegions: { regions: ["us-west"] },
+    createWorkspace: {
       workspace: {
         id: validUUID,
         name: "test-ws",
@@ -80,14 +81,12 @@ function stubClient(
         folderId: "folder-1",
         createTime: overrides.createTime ?? platformCreateTime,
       },
-    }),
-    getOrganizationFolder: vi.fn().mockResolvedValue({ folder: { name: "dev" } }),
-    getMetadata: overrides.getMetadata ?? vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
-    setMetadata: overrides.setMetadata ?? vi.fn().mockResolvedValue({}),
-  };
-  vi.mocked(initOperatorClient).mockResolvedValue(
-    client as unknown as Awaited<ReturnType<typeof initOperatorClient>>,
-  );
+    },
+    getOrganizationFolder: { folder: { name: "dev" } },
+    getMetadata: { metadata: { labels: {} } },
+    setMetadata: overrides.setMetadata ?? {},
+  });
+  vi.mocked(initOperatorClient).mockResolvedValue(client);
   return client;
 }
 
@@ -422,7 +421,7 @@ describe("workspace create --ttl", () => {
   test("reports an unconfirmed expiry in --json output before failing", async () => {
     stubClient({
       createTime: subSecondCreateTime,
-      setMetadata: vi.fn().mockRejectedValue(new Error("permission denied")),
+      setMetadata: () => Promise.reject(new Error("permission denied")),
     });
 
     const { result, output } = await runCreateJson("--ttl", "24h");
@@ -455,12 +454,8 @@ describe("workspace create --ttl", () => {
   });
 
   test("confirms the expiry when writing it a second time succeeds", async () => {
-    const client = stubClient({
-      setMetadata: vi
-        .fn()
-        .mockRejectedValueOnce(new Error("connection reset"))
-        .mockResolvedValue({}),
-    });
+    const client = stubClient();
+    client.setMetadata.mockRejectedValueOnce(new Error("connection reset")).mockResolvedValue({});
 
     const { result, output } = await runCreateJson("--ttl", "24h");
 
@@ -471,12 +466,11 @@ describe("workspace create --ttl", () => {
 
   test("confirms an expiry whose failed write landed without writing it again", async () => {
     const client = stubClient({
-      getMetadata: vi
-        .fn()
-        .mockResolvedValueOnce({ metadata: { labels: {} } })
-        .mockResolvedValue({ metadata: { labels: { [expiresAtLabelKey]: "s-1700086400" } } }),
-      setMetadata: vi.fn().mockRejectedValue(new Error("deadline exceeded")),
+      setMetadata: () => Promise.reject(new Error("deadline exceeded")),
     });
+    client.getMetadata
+      .mockResolvedValueOnce({ metadata: { labels: {} } })
+      .mockResolvedValue({ metadata: { labels: { [expiresAtLabelKey]: "s-1700086400" } } });
 
     const { result, output } = await runCreateJson("--ttl", "24h");
 
@@ -555,7 +549,7 @@ describe("workspace create --ttl", () => {
   });
 
   test("fails when the expiry write cannot be confirmed, naming the recovery command", async () => {
-    stubClient({ setMetadata: vi.fn().mockRejectedValue(new Error("permission denied")) });
+    stubClient({ setMetadata: () => Promise.reject(new Error("permission denied")) });
     using _logger = silenceLogger("out", "success", "warn", "info", "error");
 
     const result = await runCommand(createCommand, [
@@ -591,7 +585,7 @@ describe("workspace create --ttl", () => {
       profiles: { dev: { user: "u@example.com", workspace_id: validUUID } },
       current_user: null,
     });
-    stubClient({ setMetadata: vi.fn().mockRejectedValue(new Error("permission denied")) });
+    stubClient({ setMetadata: () => Promise.reject(new Error("permission denied")) });
     using _logger = silenceLogger("out", "success", "warn", "info", "error");
 
     const result = await runCommand(createCommand, [
@@ -619,7 +613,7 @@ describe("workspace create --ttl", () => {
   });
 
   test("still creates the profile when the expiry write cannot be confirmed", async () => {
-    stubClient({ setMetadata: vi.fn().mockRejectedValue(new Error("permission denied")) });
+    stubClient({ setMetadata: () => Promise.reject(new Error("permission denied")) });
     using _logger = silenceLogger("out", "success", "warn", "info", "error");
 
     const result = await runCommand(createCommand, [

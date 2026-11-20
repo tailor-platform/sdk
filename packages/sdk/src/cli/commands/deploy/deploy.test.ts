@@ -27,7 +27,12 @@ import {
   scheduleRenamedAppDeletes,
 } from "./managed-resources";
 import { printDeploymentPlans, printPlanResults, summarizePlanResults } from "./plan-report";
-import { emptyPlanResults, plannedDeleteLists, PLANNED_DELETE } from "./test-helpers/plan-results";
+import {
+  emptyPlanResults,
+  plannedChangeSets,
+  plannedDeleteLists,
+  PLANNED_ITEM,
+} from "./test-helpers/plan-results";
 import {
   collectVisibleIdpNames,
   collectVisibleResolverNamespaces,
@@ -216,12 +221,12 @@ describe("summarizePlanResults", () => {
     });
   });
 
-  test("counts function labels refreshed without re-uploading the script", () => {
+  test("counts unchanged resources whose labels are refreshed across kinds", () => {
     const results = emptyPlanResults();
-    results.functionRegistry.metadataUpdates.push(
-      { name: "resolver--ns--add", metaRequest: { trn: "trn:a", labels: {} } },
-      { name: "executor--user-created", metaRequest: { trn: "trn:b", labels: {} } },
-    );
+    const labelRefresh = { trn: "trn:a", labels: {} };
+    results.functionRegistry.changeSet.unchanged.push({ name: "resolver--ns--add", labelRefresh });
+    results.tailorDB.changeSet.service.unchanged.push({ name: "main", labelRefresh });
+    results.executor.changeSet.unchanged.push({ name: "nightly" });
 
     const summary = summarizePlanResults(results, [], []);
 
@@ -666,7 +671,7 @@ describe("scheduleRenamedAppDeletes", () => {
     const renamedTarget = emptyPlanResults();
     renamedTarget.tailorDB.conflicts.push({
       resourceType: "tailordb.service",
-      resourceLabel: "TailorDB service",
+      resourceLabel: "TailorDB namespace",
       resourceName: "shared",
       currentOwner: "old-app",
     });
@@ -686,14 +691,14 @@ describe("scheduleRenamedAppDeletes", () => {
     const first = emptyPlanResults();
     first.tailorDB.conflicts.push({
       resourceType: "tailordb.service",
-      resourceLabel: "TailorDB service",
+      resourceLabel: "TailorDB namespace",
       resourceName: "shared",
       currentOwner: "old-app",
     });
     const second = emptyPlanResults();
     second.pipeline.conflicts.push({
       resourceType: "pipeline.service",
-      resourceLabel: "Pipeline service",
+      resourceLabel: "Resolver namespace",
       resourceName: "shared-pipeline",
       currentOwner: "old-app",
     });
@@ -712,7 +717,7 @@ describe("scheduleRenamedAppDeletes", () => {
     const results = emptyPlanResults();
     results.tailorDB.conflicts.push({
       resourceType: "tailordb.service",
-      resourceLabel: "TailorDB service",
+      resourceLabel: "TailorDB namespace",
       resourceName: "shared",
       currentOwner: "old-app",
     });
@@ -824,7 +829,7 @@ describe("confirmDeploymentPlans", () => {
         const results = emptyPlanResults();
         results.tailorDB.conflicts.push({
           resourceType: "tailordb.service",
-          resourceLabel: "TailorDB service",
+          resourceLabel: "TailorDB namespace",
           resourceName: "shared",
           currentOwner: "old-app",
         });
@@ -837,7 +842,7 @@ describe("confirmDeploymentPlans", () => {
         const results = emptyPlanResults();
         results.tailorDB.unmanaged.push({
           resourceType: "tailordb.service",
-          resourceLabel: "TailorDB service",
+          resourceLabel: "TailorDB namespace",
           resourceName: "legacy",
         });
         return { deployments: [plannedDeployment("my-app", results)] };
@@ -897,7 +902,7 @@ describe("confirmDeploymentPlans", () => {
       const results = emptyPlanResults();
       results.tailorDB.conflicts.push({
         resourceType: "tailordb.service",
-        resourceLabel: "TailorDB service",
+        resourceLabel: "TailorDB namespace",
         resourceName: "shared",
         currentOwner: "old-app",
       });
@@ -969,7 +974,7 @@ describe("printPlanResults", () => {
     results.tailorDB.unmanaged = [
       {
         resourceType: "tailordb.service",
-        resourceLabel: "TailorDB service",
+        resourceLabel: "TailorDB namespace",
         resourceName: "legacy",
       },
     ];
@@ -993,7 +998,7 @@ describe("printPlanResults", () => {
     results.tailorDB.conflicts = [
       {
         resourceType: "tailordb.service",
-        resourceLabel: "TailorDB service",
+        resourceLabel: "TailorDB namespace",
         resourceName: "tailordb",
         currentOwner: "other-app",
       },
@@ -1088,11 +1093,23 @@ describe("printPlanResults", () => {
     expect(workflowSection).toContain(`  ${symbols.delete} orphaned-job (jobFunction)`);
   });
 
-  test.each([...plannedDeleteLists(emptyPlanResults()).keys()])(
-    "reports a planned delete from %s in the text plan, the summary, and JSON changes",
-    (path) => {
+  test.each([
+    ...[...plannedDeleteLists(emptyPlanResults()).keys()].map((path) => ({
+      path,
+      action: "delete" as const,
+    })),
+    ...[...plannedChangeSets(emptyPlanResults()).keys()].flatMap((path) =>
+      (["create", "update"] as const).map((action) => ({ path, action })),
+    ),
+  ])(
+    "reports a planned $action from $path in the text plan, the summary, and JSON changes",
+    ({ path, action }) => {
       const results = emptyPlanResults();
-      plannedDeleteLists(results).get(path)!.push(PLANNED_DELETE);
+      const list =
+        action === "delete"
+          ? plannedDeleteLists(results).get(path)
+          : plannedChangeSets(results).get(path)?.[`${action}s`];
+      list!.push(PLANNED_ITEM);
 
       const summary = printPlanResults(results, { dryRun: true });
       {
@@ -1100,16 +1117,40 @@ describe("printPlanResults", () => {
         printPlanResults(results, { dryRun: true });
       }
 
-      expect(String(outSpy.mock.calls[0]?.[0])).toContain(` ${PLANNED_DELETE.name}`);
-      expect(summary).toMatchObject({ create: 0, update: 0, delete: 1, replace: 0 });
+      expect(String(outSpy.mock.calls[0]?.[0])).toContain(` ${PLANNED_ITEM.name}`);
+      expect(summary).toMatchObject({ create: 0, update: 0, delete: 0, replace: 0, [action]: 1 });
       const payload = outSpy.mock.calls[1]?.[0] as {
         changes: Array<{ action: string; name: string }>;
       };
       expect(payload.changes).toContainEqual(
-        expect.objectContaining({ action: "delete", name: PLANNED_DELETE.name }),
+        expect.objectContaining({ action, name: PLANNED_ITEM.name }),
       );
     },
   );
+
+  test("reports an OAuth2 client replacement under its Auth service", () => {
+    using _json = jsonMode();
+    const results = emptyPlanResults();
+    results.auth.changeSet.oauth2Client.replaces.push({
+      name: "web",
+      deleteRequest: { workspaceId: "ws", namespaceName: "main-auth", name: "web" },
+      createRequest: {
+        workspaceId: "ws",
+        namespaceName: "main-auth",
+        oauth2Client: { name: "web" },
+      },
+    });
+
+    printPlanResults(results, { dryRun: true });
+
+    const payload = outSpy.mock.calls[0]?.[0] as { changes: unknown[] };
+    expect(payload.changes).toContainEqual({
+      action: "replace",
+      name: "web",
+      labels: ["oauth2Client"],
+      namespace: "main-auth",
+    });
+  });
 
   test("reports unmanaged resources and owner conflicts of every plan kind", () => {
     const results = emptyPlanResults();
@@ -1967,8 +2008,8 @@ describe("assertUniqueGlobalResourceNames", () => {
           '  - Executor "recompute-on-role-permissions-updated": apps/erp/tailor.config.ts, apps/user-management/tailor.config.ts',
           '  - StaticWebsite "default-web": apps/erp/tailor.config.ts, apps/user-management/tailor.config.ts',
           '  - TailorDB namespace "main-db": apps/erp/tailor.config.ts, apps/user-management/tailor.config.ts',
-          '  - Auth namespace "default": apps/erp/tailor.config.ts, apps/user-management/tailor.config.ts',
-          '  - IdP namespace "default": apps/erp/tailor.config.ts, apps/user-management/tailor.config.ts',
+          '  - Auth service "default": apps/erp/tailor.config.ts, apps/user-management/tailor.config.ts',
+          '  - IdP service "default": apps/erp/tailor.config.ts, apps/user-management/tailor.config.ts',
         ].join("\n"),
         suggestion:
           "Rename the duplicates so each name is defined once across all configs in a single deploy. " +
@@ -2206,7 +2247,7 @@ describe("collectExternalAuthIdpConfigNames", () => {
         fakeAuthTarget("shared-auth", "idp-b"),
       ]),
     ).toThrow(
-      'Auth namespace "shared-auth" is defined by multiple config files with different IdP configs. Auth namespace names must be unique across all configs in a single deploy.',
+      'Auth service "shared-auth" is defined by multiple config files with different IdP configs. Auth service names must be unique across all configs in a single deploy.',
     );
   });
 

@@ -7,7 +7,6 @@ import {
   findNestedMemberRenameCandidates,
   findRenameCandidates,
   findTypeRenameCandidates,
-  isBreakingForeignKeyRetarget,
   isNestedMemberRenameCompatible,
   isRenameCompatible,
   isTypeRenameCompatible,
@@ -677,38 +676,6 @@ describe("isTypeRenameCompatible", () => {
     expect(isTypeRenameCompatible(withNestedScale("User", 2), withNestedScale("Person", 2))).toBe(
       true,
     );
-  });
-});
-
-describe("isBreakingForeignKeyRetarget", () => {
-  const fk = (target: string, field?: string): SnapshotFieldConfig =>
-    stringField({
-      type: "uuid",
-      foreignKey: true,
-      foreignKeyType: target,
-      ...(field !== undefined && { foreignKeyField: field }),
-    });
-  const renames = new Map([["User", "Person"]]);
-
-  test("suppresses a retarget that follows a confirmed rename", () => {
-    expect(isBreakingForeignKeyRetarget(fk("User"), fk("Person"), renames)).toBe(false);
-    expect(isBreakingForeignKeyRetarget(fk("User", "id"), fk("Person", "id"), renames)).toBe(false);
-  });
-
-  test("flags a retarget whose referenced field also changes", () => {
-    expect(isBreakingForeignKeyRetarget(fk("User", "id"), fk("Person", "slug"), renames)).toBe(
-      true,
-    );
-  });
-
-  test("flags a retarget unrelated to any rename", () => {
-    expect(isBreakingForeignKeyRetarget(fk("Team"), fk("Org"), renames)).toBe(true);
-    expect(isBreakingForeignKeyRetarget(fk("Team"), fk("Org"))).toBe(true);
-  });
-
-  test("ignores fields without a foreign key target change", () => {
-    expect(isBreakingForeignKeyRetarget(fk("User"), fk("User"), renames)).toBe(false);
-    expect(isBreakingForeignKeyRetarget(stringField(), stringField(), renames)).toBe(false);
   });
 });
 

@@ -15,6 +15,7 @@ import {
   type SnapshotFieldConfig,
 } from "./snapshot";
 import { createMockMigrationDiff } from "./test-helpers/migration-diff";
+import { getTypeScriptDiagnostics } from "./test-helpers/typescript-diagnostics";
 
 const TEST_MIGRATIONS_BASE = path.join(__dirname, "__test_db_types__");
 
@@ -721,6 +722,130 @@ export async function rejectedWrites(trx: Transaction): Promise<void> {
     });
   });
 
+  describe("writeDbTypesFile with fields the platform fills", () => {
+    const invoiceFields: Record<string, Partial<SnapshotFieldConfig>> = {
+      customerId: { type: "string", required: true },
+      total: { type: "float", required: true },
+      createdAt: { type: "datetime", required: true, default: "now" },
+      updatedAt: {
+        type: "datetime",
+        required: true,
+        default: "now",
+        hooks: { update: { expr: "(() => new Date())()" } },
+      },
+      invoiceNo: { type: "string", required: true, serial: { start: 1, format: "INV-%05d" } },
+      note: { type: "string", required: false, hooks: { create: { expr: '(() => "")()' } } },
+      remoteFilled: { type: "string", required: true, optionalOnCreate: true },
+    };
+
+    async function typeCheck(
+      snapshot: SchemaSnapshot,
+      script: string,
+      diff?: MigrationDiff,
+    ): Promise<readonly { code: number; messageText: string }[]> {
+      const { filePath } = await generateContent(snapshot, 1, diff);
+      const scriptPath = path.join(path.dirname(filePath), "script.ts");
+      fs.writeFileSync(scriptPath, script);
+      return getTypeScriptDiagnostics(scriptPath);
+    }
+
+    test("wraps serial fields in Serial and fields filled on create in Generated", async () => {
+      const { content } = await generateContent(
+        createMockSnapshot({ Invoice: { fields: invoiceFields } }),
+      );
+
+      expect(content).toContain(
+        'import { type Transaction as KyselyTransaction, type Generated, type Timestamp, type Serial } from "@tailor-platform/sdk/kysely";',
+      );
+      expect(content).toContain("    customerId: string;");
+      expect(content).toContain("    invoiceNo: Serial<string>;");
+      expect(content).toContain("    createdAt: Generated<Timestamp>;");
+      expect(content).toContain("    updatedAt: Generated<Timestamp>;");
+      expect(content).toContain("    note: Generated<string | null>;");
+      expect(content).toContain("    remoteFilled: Generated<string>;");
+    });
+
+    test("lets inserts omit the fields the platform fills and rejects serial values", async () => {
+      const diagnostics = await typeCheck(
+        createMockSnapshot({ Invoice: { fields: invoiceFields } }),
+        `import type { Transaction } from "./db";
+export async function omitsFilledValues(trx: Transaction): Promise<void> {
+  await trx.insertInto("Invoice").values({ customerId: "c", total: 1 }).execute();
+}
+export async function suppliesSerialValues(trx: Transaction): Promise<void> {
+  // @ts-expect-error The platform numbers serial fields.
+  await trx.insertInto("Invoice").values({ customerId: "c", total: 1, createdAt: new Date(), updatedAt: new Date(), remoteFilled: "r", invoiceNo: "INV-00001" }).execute();
+  // @ts-expect-error The platform numbers serial fields.
+  await trx.updateTable("Invoice").set({ invoiceNo: "INV-00001" }).execute();
+}
+`,
+      );
+
+      expect(diagnostics).toEqual([]);
+    }, 30_000);
+
+    test("lets the script fill fields the migration adds to existing rows while inserts omit them", async () => {
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_added",
+            tableName: "Ticket",
+            fieldName: "code",
+            after: { type: "string", required: true, serial: { start: 1, format: "T-%05d" } },
+          },
+          {
+            kind: "field_added",
+            tableName: "Ticket",
+            fieldName: "createdAt",
+            after: { type: "datetime", required: true, default: "now" },
+          },
+        ],
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
+
+      const snapshot = createMockSnapshot({
+        Ticket: { fields: { title: { type: "string", required: true } } },
+      });
+      const { content } = await generateContent(snapshot, 1, diff);
+      expect(content).toContain("    code: Generated<ColumnType<string | null, string, string>>;");
+
+      const diagnostics = await typeCheck(
+        snapshot,
+        `import type { Transaction } from "./db";
+export async function main(trx: Transaction): Promise<void> {
+  await trx.updateTable("Ticket").set({ code: "T-00001", createdAt: new Date() }).execute();
+  await trx.insertInto("Ticket").values({ title: "t" }).execute();
+}
+`,
+        diff,
+      );
+
+      expect(diagnostics).toEqual([]);
+    }, 30_000);
+
+    test("keeps a serial field unwritable when the index the migration adds on it is not unique", async () => {
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "index_added",
+            tableName: "Invoice",
+            indexName: "invoiceNo_idx",
+            after: { fields: ["invoiceNo"], unique: false },
+          },
+        ],
+      });
+
+      const { content } = await generateContent(
+        createMockSnapshot({ Invoice: { fields: { invoiceNo: invoiceFields.invoiceNo! } } }),
+        1,
+        diff,
+      );
+
+      expect(content).toContain("    invoiceNo: Serial<string>;");
+    });
+  });
+
   describe("writeDbTypesFile with multiple tables", () => {
     test("generates types for multiple tables", async () => {
       const snapshot = createMockSnapshot({
@@ -870,6 +995,31 @@ export async function rejectedWrites(trx: Transaction): Promise<void> {
 
       // Added required field should be treated like optional->required
       expect(content).toContain("role: ColumnType<string | null, string, string>;");
+    });
+
+    test("generates ColumnType for the new name of a required field the migration renames", async () => {
+      const snapshot = createMockSnapshot({
+        User: { fields: { name: { type: "string", required: true } } },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_renamed",
+            tableName: "User",
+            fieldName: "fullName",
+            previousFieldName: "name",
+            before: { type: "string", required: true },
+            after: { type: "string", required: true },
+          },
+        ],
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
+
+      const { content } = await generateContent(snapshot, 1, diff);
+
+      expect(content).toContain("    name: string;");
+      expect(content).toContain("fullName: ColumnType<string | null, string, string>;");
     });
 
     test("declares an optional field the migration adds", async () => {

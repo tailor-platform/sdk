@@ -2,8 +2,8 @@ locale: en
 repository: ${GITHUB_REPOSITORY}/packages/sdk
 
 # Coverage metrics
-# SDK Metrics shards coverage across parallel runners. Each shard emits one
-# lcov report, and octocov merges them by path.
+# The Test workflow shards coverage across parallel runners. Each shard emits
+# one lcov report, and octocov merges them by path.
 coverage:
   paths:
     - coverage/lcov-*.info

@@ -5,7 +5,7 @@
  *
  * ```ts
  * const probe = createConcurrencyProbe();
- * const client = { updateThing: vi.fn().mockImplementation(probe.run) };
+ * const client = mockOperatorClient({ updateFunctionRegistry: probe.run });
  * // ...exercise code under test...
  * expect(probe.maxInFlight()).toBeGreaterThan(1);
  * ```

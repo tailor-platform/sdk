@@ -9,8 +9,10 @@ import {
   loadConfigPath,
   loadPlatformClientConfig,
   loadWorkspaceId,
+  platformConfigFromProfile,
   readEnvironmentToken,
   readPlatformConfig,
+  resolveUserTokenKey,
 } from "./context";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
@@ -241,7 +243,7 @@ interface PluginContextOptions {
 
 /**
  * Resolve the active user identifier, preferring the stored email over the
- * internal user key. An environment token's identity is not a config user, so
+ * user ID. An environment token's identity is not a config user, so
  * none is resolved while one is set.
  * @param profile - Active profile name; falls back to TAILOR_PLATFORM_PROFILE
  * @returns The resolved user (email when known), or undefined when not logged in or an environment
@@ -251,9 +253,11 @@ async function resolveActiveUser(profile?: string): Promise<string | undefined> 
   if (readEnvironmentToken()) return undefined;
   const config = await readPlatformConfig();
   const selectedProfile = profile || process.env.TAILOR_PLATFORM_PROFILE;
-  const user = selectedProfile ? config.profiles[selectedProfile]?.user : config.current_user;
+  const profileEntry = selectedProfile ? config.profiles[selectedProfile] : undefined;
+  const user = selectedProfile ? profileEntry?.user : config.current_user;
   if (!user) return undefined;
-  return config.users[user]?.email ?? user;
+  const userKey = resolveUserTokenKey(config, user, platformConfigFromProfile(profileEntry));
+  return config.users[userKey]?.email ?? user;
 }
 
 /**
@@ -429,7 +433,7 @@ function pluginSlug(commandPath: readonly string[] | undefined, name: string): s
 }
 
 /**
- * Resolve and execute a plugin, forwarding stdio and propagating its exit code.
+ * Resolve and execute a plugin, forwarding stdio and SIGTERM and propagating its exit code.
  * @param params - Dispatch parameters
  * @returns The plugin's exit code, or undefined when no matching plugin exists
  */
@@ -452,20 +456,32 @@ export async function dispatchPlugin(params: DispatchPluginParams): Promise<numb
   };
   const { command, args, shell } = buildSpawnTarget(plugin.path, params.args);
 
-  return await new Promise<number>((resolve) => {
-    const child = spawn(command, args, { stdio: "inherit", env, shell });
-    child.on("error", (error) => {
-      logger.error(`Failed to run plugin "${params.cliName}-${slug}": ${error.message}`);
-      resolve(1);
+  const child = spawn(command, args, { stdio: "inherit", env, shell });
+  // Ctrl+C already reaches the plugin in the same process group; a second SIGINT would interrupt it.
+  const ignoreInterrupt = () => {};
+  const forwardTerminate = () => {
+    child.kill("SIGTERM");
+  };
+  process.on("SIGINT", ignoreInterrupt);
+  process.on("SIGTERM", forwardTerminate);
+  try {
+    return await new Promise<number>((resolve) => {
+      child.on("error", (error) => {
+        logger.error(`Failed to run plugin "${params.cliName}-${slug}": ${error.message}`);
+        resolve(1);
+      });
+      child.on("close", (code, signal) => {
+        if (signal) {
+          resolve(signalToExitCode(signal));
+        } else {
+          resolve(code ?? 0);
+        }
+      });
     });
-    child.on("close", (code, signal) => {
-      if (signal) {
-        resolve(signalToExitCode(signal));
-      } else {
-        resolve(code ?? 0);
-      }
-    });
-  });
+  } finally {
+    process.off("SIGINT", ignoreInterrupt);
+    process.off("SIGTERM", forwardTerminate);
+  }
 }
 
 /**

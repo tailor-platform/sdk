@@ -24,13 +24,13 @@ import { fetchAllTolerant, isNotFoundError, type OperatorClient } from "#/cli/sh
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import { isRecreated, type NamespacedEntry, type TailorDBChangeSet } from "./plan";
 import type {
   FieldDiffChange,
   TableScriptsModifiedChange,
 } from "#/cli/commands/tailordb/migrate/diff-calculator";
 import type { TailorDBDeployInput } from "#/cli/commands/tailordb/migrate/schema-checks";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
-import type { TailorDBChangeSet } from "./plan";
 import type { TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 type MigrationTableSettings = {
@@ -134,11 +134,41 @@ export function namespacedTableKey(namespaceName: string, tableName: string): st
   return `${namespaceName}/${tableName}`;
 }
 
-function entriesOfNamespace<T extends { request: { namespaceName?: string } }>(
+function entriesOfNamespace<T extends NamespacedEntry>(
   entries: readonly T[],
   namespaceName: string,
 ): T[] {
   return entries.filter((entry) => entry.request.namespaceName === namespaceName);
+}
+
+/**
+ * List the tables a migration changes that the deploy plan neither creates nor updates, yet the
+ * workspace holds while the migration runs: a table a later migration removes, which this deploy
+ * created from the baseline snapshot or which the plan deletes. Their schema follows the history
+ * like any other table's, so the script sees the shape its migration defines.
+ * @param changeSet - TailorDB change set
+ * @param migration - The migration about to run
+ * @returns Names of the tables
+ */
+function planlessTableNames(changeSet: TailorDBChangeSet, migration: PendingMigration): string[] {
+  const snapshotTables = migrationSnapshotCache.load(migration).tables;
+  const planned = new Set(
+    [
+      ...entriesOfNamespace(changeSet.type.creates, migration.namespace),
+      ...entriesOfNamespace(changeSet.type.updates, migration.namespace),
+    ].map((entry) => entry.request.tailordbType?.name),
+  );
+  const deleted = new Set(
+    entriesOfNamespace(changeSet.type.deletes, migration.namespace).map((entry) => entry.name),
+  );
+  return [...getAffectedTableNames(migration)].filter(
+    (tableName) =>
+      tableName in snapshotTables &&
+      !planned.has(tableName) &&
+      !deletedResources.types.has(namespacedTableKey(migration.namespace, tableName)) &&
+      (deleted.has(tableName) ||
+        processedTables.created.has(namespacedTableKey(migration.namespace, tableName))),
+  );
 }
 
 /**
@@ -161,10 +191,12 @@ export const processedTables = {
   created: new Set<string>(),
   updated: new Set<string>(),
   gqlPermissionsProcessed: new Set<string>(),
+  gqlPermissionsRemovedByCleanup: new Set<string>(),
   reset() {
     this.created.clear();
     this.updated.clear();
     this.gqlPermissionsProcessed.clear();
+    this.gqlPermissionsRemovedByCleanup.clear();
   },
 };
 
@@ -285,6 +317,7 @@ export async function awaitAllSettledOrThrow(
 /**
  * Execute pre-migration phase for a single migration
  * @param {OperatorClient} client - Operator client instance
+ * @param workspaceId - Workspace ID
  * @param {TailorDBChangeSet} changeSet - TailorDB change set
  * @param {PendingMigration} migration - Single pending migration
  * @param phaseSettings - How this deploy's migration phases write table settings
@@ -294,6 +327,7 @@ export async function awaitAllSettledOrThrow(
  */
 export async function executeSingleMigrationPrePhase(
   client: OperatorClient,
+  workspaceId: string,
   changeSet: TailorDBChangeSet,
   migration: PendingMigration,
   phaseSettings: MigrationPhaseSettings,
@@ -408,6 +442,34 @@ export async function executeSingleMigrationPrePhase(
     processedTables.updated.add(tableKey(tableName));
     attemptedTables.add(tableName);
     await client.updateTailorDBType(clonedRequest);
+  }
+
+  for (const tableName of planlessTableNames(changeSet, migration)) {
+    const typeChanges = preMigrationChanges.get(tableName);
+    const snapshotType = buildSnapshotTypeManifest(
+      migration,
+      tableName,
+      phaseSettings,
+      typeChanges,
+    );
+    if (!snapshotType) continue;
+
+    const clonedType = structuredClone(snapshotType);
+    if (typeChanges && typeChanges.size > 0 && clonedType.schema?.fields) {
+      applyPreMigrationFieldAdjustments(clonedType.schema.fields, typeChanges);
+    }
+    const indexChanges = preMigrationIndexChanges.get(tableName);
+    if (indexChanges && indexChanges.size > 0 && clonedType.schema?.indexes) {
+      applyPreMigrationIndexAdjustments(clonedType.schema.indexes, indexChanges);
+    }
+
+    processedTables.updated.add(tableKey(tableName));
+    attemptedTables.add(tableName);
+    await client.updateTailorDBType({
+      workspaceId,
+      namespaceName: migration.namespace,
+      tailordbType: clonedType,
+    });
   }
 
   const currentTableNames = new Set(Object.keys(migrationSnapshotCache.load(migration).tables));
@@ -593,6 +655,7 @@ export async function rollbackSingleMigrationAfterFailure(
 /**
  * Execute post-migration phase for a single migration: Apply final tables (with required: true)
  * @param {OperatorClient} client - Operator client instance
+ * @param workspaceId - Workspace ID
  * @param {TailorDBChangeSet} changeSet - TailorDB change set
  * @param {PendingMigration} migration - Single pending migration
  * @param phaseSettings - How this deploy's migration phases write table settings
@@ -601,6 +664,7 @@ export async function rollbackSingleMigrationAfterFailure(
  */
 export async function executeSingleMigrationPostPhase(
   client: OperatorClient,
+  workspaceId: string,
   changeSet: TailorDBChangeSet,
   migration: PendingMigration,
   phaseSettings: MigrationPhaseSettings,
@@ -649,6 +713,19 @@ export async function executeSingleMigrationPostPhase(
       await client.updateTailorDBType({
         workspaceId: update.request.workspaceId,
         namespaceName: update.request.namespaceName,
+        tailordbType: snapshotType,
+      });
+    }
+
+    // Tables outside the plan that a later migration removes
+    for (const tableName of planlessTableNames(changeSet, migration)) {
+      if (!adjustedTypes.has(tableName)) continue;
+      const snapshotType = buildSnapshotTypeManifest(migration, tableName, phaseSettings);
+      if (!snapshotType) continue;
+      attemptedTables.add(tableName);
+      await client.updateTailorDBType({
+        workspaceId,
+        namespaceName: migration.namespace,
         tailordbType: snapshotType,
       });
     }
@@ -994,22 +1071,37 @@ function describeUnrestored(unrestored: readonly RestrictedTables[]): string {
 /**
  * Delete the tables that have a planned deletion, each with its GraphQL permission first, and record them in {@link deletedResources}.
  * @param client - Operator client instance
- * @param changeSet - Planned TailorDB changes
+ * @param changeSet - TailorDB change set
  * @param namespace - Namespace of the tables
  * @param tableNames - Tables to delete; those without a planned deletion are skipped
+ * @param permissionsDeletedByDeploy - Permissions the deploy's own cleanup already deleted
+ * @returns The tables this call deleted
  */
 export async function deletePlannedTables(
   client: OperatorClient,
   changeSet: TailorDBChangeSet,
   namespace: string,
   tableNames: ReadonlySet<string>,
-): Promise<void> {
+  permissionsDeletedByDeploy: ReadonlySet<string> = new Set(),
+): Promise<ReadonlySet<string>> {
   const tableKey = (tableName: string) => namespacedTableKey(namespace, tableName);
+  const isKept = (name: string) =>
+    isRecreated(changeSet, { name, request: { namespaceName: namespace } });
+  // The closing deletions skip a planned permission deletion the deploy's own cleanup already
+  // made, unless the plan creates the table again and a later removal must delete it once more.
+  for (const del of entriesOfNamespace(changeSet.gqlPermission.deletes, namespace)) {
+    if (permissionsDeletedByDeploy.has(del.name) && !isKept(del.name)) {
+      deletedResources.gqlPermissions.add(tableKey(del.name));
+    }
+  }
   const gqlPermissionsToDelete = entriesOfNamespace(
     changeSet.gqlPermission.deletes,
     namespace,
   ).filter(
-    (del) => tableNames.has(del.name) && !deletedResources.gqlPermissions.has(tableKey(del.name)),
+    (del) =>
+      tableNames.has(del.name) &&
+      !permissionsDeletedByDeploy.has(del.name) &&
+      !deletedResources.gqlPermissions.has(tableKey(del.name)),
   );
   for (const del of gqlPermissionsToDelete) {
     await client.deleteTailorDBGQLPermission(del.request);
@@ -1022,6 +1114,76 @@ export async function deletePlannedTables(
   for (const del of typesToDelete) {
     await client.deleteTailorDBType(del.request);
     deletedResources.types.add(tableKey(del.name));
+  }
+
+  for (const tableName of new Set([
+    ...gqlPermissionsToDelete.map((del) => del.name),
+    ...typesToDelete.map((del) => del.name),
+  ])) {
+    // A table the plan also creates is deleted again at each later removal.
+    if (!isKept(tableName)) continue;
+    deletedResources.types.delete(tableKey(tableName));
+    deletedResources.gqlPermissions.delete(tableKey(tableName));
+  }
+  return new Set(typesToDelete.map((del) => del.name));
+}
+
+/**
+ * Delete the tables a migration removes, once its checkpoint is committed: first the GraphQL
+ * permissions the deploy created for them, then the planned deletions, then the tables the deploy
+ * created that the plan holds no deletion for (the workspace lacked them and the final schema
+ * omits them). Each table the deploy created is forgotten as created, with its permission, so a
+ * later migration that adds the same name creates both again.
+ * @param client - Operator client instance
+ * @param changeSet - TailorDB change set
+ * @param workspaceId - Workspace ID
+ * @param namespace - Namespace of the tables
+ * @param tableNames - Tables the migration removes
+ */
+export async function deleteRemovedTables(
+  client: OperatorClient,
+  changeSet: TailorDBChangeSet,
+  workspaceId: string,
+  namespace: string,
+  tableNames: ReadonlySet<string>,
+): Promise<void> {
+  const tableKey = (tableName: string) => namespacedTableKey(namespace, tableName);
+  const createdByDeploy = [...tableNames].filter((tableName) =>
+    processedTables.created.has(tableKey(tableName)),
+  );
+
+  const permissionsDeleted = new Set<string>();
+  for (const tableName of createdByDeploy) {
+    if (!processedTables.gqlPermissionsProcessed.has(tableKey(tableName))) continue;
+    if (!deletedResources.gqlPermissions.has(tableKey(tableName))) {
+      await client.deleteTailorDBGQLPermission({
+        workspaceId,
+        namespaceName: namespace,
+        typeName: tableName,
+      });
+      permissionsDeleted.add(tableName);
+    }
+    processedTables.gqlPermissionsProcessed.delete(tableKey(tableName));
+    processedTables.gqlPermissionsRemovedByCleanup.add(tableKey(tableName));
+  }
+
+  const typesDeleted = await deletePlannedTables(
+    client,
+    changeSet,
+    namespace,
+    tableNames,
+    permissionsDeleted,
+  );
+
+  for (const tableName of createdByDeploy) {
+    if (!typesDeleted.has(tableName) && !deletedResources.types.has(tableKey(tableName))) {
+      await client.deleteTailorDBType({
+        workspaceId,
+        namespaceName: namespace,
+        tailordbTypeName: tableName,
+      });
+    }
+    processedTables.created.delete(tableKey(tableName));
   }
 }
 

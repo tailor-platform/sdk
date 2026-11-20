@@ -309,6 +309,7 @@ export {
   getEffectivePlatformConfig as platformConfigFromEnv,
   initOperatorClient,
   type OperatorClient,
+  type OperatorClientOptions,
   type PlatformClientConfig,
 } from "./shared/client";
 export type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";

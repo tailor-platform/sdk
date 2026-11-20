@@ -84,9 +84,11 @@ import {
   buildMetaRequest,
   type MetadataLabelWrite,
   resourceTrn,
+  writeLabelRefreshes,
   writeMetadataLabels,
 } from "./label";
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
+import { secretsStateScope } from "./secrets-state";
 import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { AuthAttributeValue } from "#/configure/services/auth/types";
@@ -128,6 +130,7 @@ export async function applyAuth(
         await client.updateAuthService(update.request);
         await writeMetadataLabels(client, update.metaRequest);
       }),
+      ...writeLabelRefreshes(client, changeSet.service.unchanged),
     ]);
   };
 
@@ -425,7 +428,7 @@ export async function planAuth(context: PlanContext) {
     planOAuth2Clients(client, workspaceId, namespaces, expectedLocalWebsites, forceApplyAll),
     planSCIMConfigs(client, workspaceId, namespaces, forceApplyAll),
     planSCIMResources(client, workspaceId, namespaces, forceApplyAll),
-    planAuthConnections(client, workspaceId, application.name, application.id, auths),
+    planAuthConnections(client, secretsStateScope(context), auths),
   ]);
   return {
     changeSet: {
@@ -525,7 +528,6 @@ async function planServices(
     keyOf: (service) => service.name,
     ...labeledResourceChecks(ownership, (service: DesiredService) => ({
       resourceType: "auth.service",
-      resourceLabel: "Auth service",
       resourceName: service.name,
     })),
     versionMatches: () => !forceApplyAll,

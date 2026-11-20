@@ -1,12 +1,21 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { IdPLang, IdPPermissionPermit } from "@tailor-platform/tailor-proto/idp_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { planIdP } from "./idp";
+import { buildMetaRequest } from "./label";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { PlanContext } from "./types";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type {
+  IdPClientSummarySchema,
+  IdPDisableGqlOperationsSchema,
+  IdPPermissionSchema,
+  IdPServiceSchema,
+  IdPUserAuthPolicySchema,
+} from "@tailor-platform/tailor-proto/idp_resource_pb";
 
 vi.mock("./label", async (importOriginal) => {
   const original = await importOriginal<Record<string, unknown>>();
@@ -41,7 +50,7 @@ const defaultUserAuthPolicy = {
   allowGoogleOauth: false,
   disablePasswordAuth: false,
   allowMicrosoftOauth: false,
-};
+} satisfies MessageInitShape<typeof IdPUserAuthPolicySchema>;
 
 const defaultDisableGqlOperations = {
   create: false,
@@ -49,7 +58,7 @@ const defaultDisableGqlOperations = {
   delete: false,
   read: false,
   sendPasswordResetEmail: false,
-};
+} satisfies MessageInitShape<typeof IdPDisableGqlOperationsSchema>;
 
 type MockIdpServiceOpts = {
   name?: string;
@@ -119,9 +128,9 @@ type MockRemoteService = {
   name: string;
   lang: IdPLang;
   publishEvents: boolean;
-  userAuthPolicy?: Record<string, unknown>;
-  disableGqlOperations?: Record<string, boolean>;
-  permission?: Record<string, unknown>;
+  userAuthPolicy?: MessageInitShape<typeof IdPUserAuthPolicySchema>;
+  disableGqlOperations?: MessageInitShape<typeof IdPDisableGqlOperationsSchema>;
+  permission?: MessageInitShape<typeof IdPPermissionSchema>;
   label?: string;
   sdkVersion?: string;
 };
@@ -138,16 +147,18 @@ function createMatchingRemoteService(overrides?: Partial<MockRemoteService>): Mo
   };
 }
 
+type RemoteIdPClients = Record<string, Array<MessageInitShape<typeof IdPClientSummarySchema>>>;
+
 function createMockClient(opts?: {
   services?: MockRemoteService[];
-  clients?: Record<string, Array<{ name: string; clientSecret: string }>>;
+  clients?: RemoteIdPClients;
 }): OperatorClient {
   const services = opts?.services ?? [];
   const clients = opts?.clients ?? {};
 
-  return {
-    listIdPServices: vi.fn().mockResolvedValue({
-      idpServices: services.map((service) => ({
+  return mockOperatorClient({
+    listIdPServices: {
+      idpServices: services.map((service): MessageInitShape<typeof IdPServiceSchema> => ({
         namespace: { name: service.name },
         authorization: "",
         lang: service.lang,
@@ -157,23 +168,20 @@ function createMockClient(opts?: {
         permission: service.permission,
       })),
       nextPageToken: "",
-    }),
-    listIdPClients: vi.fn().mockImplementation(({ namespaceName }: { namespaceName: string }) => ({
-      clients: clients[namespaceName] ?? [],
+    },
+    listIdPClients: (request) => ({
+      clients: clients[request.namespaceName ?? ""] ?? [],
       nextPageToken: "",
-    })),
-    getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
-      const name = trn.split(":").pop();
-      const service = services.find((entry) => entry.name === name);
-      return {
-        metadata: {
-          labels: service?.label
-            ? { "sdk-name": service.label, "sdk-version": service.sdkVersion ?? sdkVersion }
-            : {},
-        },
-      };
     }),
-  } as unknown as OperatorClient;
+    getMetadata: (request) => {
+      const name = request.trn?.split(":").pop();
+      const service = services.find((entry) => entry.name === name);
+      const labels: Record<string, string> = service?.label
+        ? { "sdk-name": service.label, "sdk-version": service.sdkVersion ?? sdkVersion }
+        : {};
+      return { metadata: { labels } };
+    },
+  });
 }
 
 function createContext(client: OperatorClient): PlanContext {
@@ -186,15 +194,15 @@ function createContext(client: OperatorClient): PlanContext {
   };
 }
 
-const defaultIdpClientSecret = {
-  "idp-a": [{ name: "default-idp-client", clientSecret: "secret" }],
-};
+const defaultIdpClients = {
+  "idp-a": [{ name: "default-idp-client", clientId: "default-idp-client-id" }],
+} satisfies RemoteIdPClients;
 
 describe("planIdP", () => {
   test("marks idp service and client unchanged when remote state matches", async () => {
     const client = createMockClient({
       services: [createMatchingRemoteService()],
-      clients: defaultIdpClientSecret,
+      clients: defaultIdpClients,
     });
 
     const result = await planIdP(createContext(client));
@@ -205,10 +213,32 @@ describe("planIdP", () => {
     expect(result.changeSet.client.updates).toHaveLength(0);
   });
 
+  test("refreshes the labels of an unchanged idp service whose SDK labels differ", async () => {
+    const client = createMockClient({
+      services: [createMatchingRemoteService()],
+      clients: defaultIdpClients,
+    });
+    const desiredLabels = { "sdk-name": appName, "sdk-version": sdkVersion, "sdk-app-id": "app-1" };
+    vi.mocked(buildMetaRequest).mockImplementationOnce(async ({ trn }) => ({
+      trn,
+      labels: desiredLabels,
+    }));
+
+    const result = await planIdP(createContext(client));
+
+    expect(result.changeSet.service.updates).toEqual([]);
+    expect(result.changeSet.service.unchanged).toEqual([
+      expect.objectContaining({
+        name: "idp-a",
+        labelRefresh: expect.objectContaining({ labels: desiredLabels }),
+      }),
+    ]);
+  });
+
   test("marks idp service and client updated when forceApplyAll is enabled", async () => {
     const client = createMockClient({
       services: [createMatchingRemoteService()],
-      clients: defaultIdpClientSecret,
+      clients: defaultIdpClients,
     });
 
     const result = await planIdP({
@@ -226,7 +256,7 @@ describe("planIdP", () => {
   test("marks an idp service update forced by the SDK version when only its sdk-version differs", async () => {
     const client = createMockClient({
       services: [createMatchingRemoteService({ sdkVersion: "v0-9-0" })],
-      clients: defaultIdpClientSecret,
+      clients: defaultIdpClients,
     });
 
     const result = await planIdP(createContext(client));
@@ -238,7 +268,7 @@ describe("planIdP", () => {
   test("does not mark an idp service update whose config also differs as forced by the SDK version", async () => {
     const client = createMockClient({
       services: [createMatchingRemoteService({ lang: IdPLang.EN, sdkVersion: "v0-9-0" })],
-      clients: defaultIdpClientSecret,
+      clients: defaultIdpClients,
     });
 
     const result = await planIdP(createContext(client));
@@ -250,7 +280,7 @@ describe("planIdP", () => {
   test("does not mark an idp service update that takes over ownership as forced by the SDK version", async () => {
     const client = createMockClient({
       services: [createMatchingRemoteService({ label: "other-app" })],
-      clients: defaultIdpClientSecret,
+      clients: defaultIdpClients,
     });
 
     const result = await planIdP(createContext(client));
@@ -262,7 +292,7 @@ describe("planIdP", () => {
   test("marks idp service updated when remote state differs", async () => {
     const client = createMockClient({
       services: [{ name: "idp-a", lang: IdPLang.EN, publishEvents: false, label: appName }],
-      clients: defaultIdpClientSecret,
+      clients: defaultIdpClients,
     });
 
     const result = await planIdP(createContext(client));
@@ -298,7 +328,7 @@ describe("planIdP", () => {
           },
         }),
       ],
-      clients: defaultIdpClientSecret,
+      clients: defaultIdpClients,
     });
 
     const result = await planIdP({
@@ -313,7 +343,7 @@ describe("planIdP", () => {
   test("marks idp service updated when config matches but ownership metadata is missing", async () => {
     const client = createMockClient({
       services: [createMatchingRemoteService({ label: undefined })],
-      clients: defaultIdpClientSecret,
+      clients: defaultIdpClients,
     });
 
     const result = await planIdP(createContext(client));
@@ -328,7 +358,7 @@ describe("planIdP", () => {
   test("marks idp service updated when config matches but resource is owned by another app", async () => {
     const client = createMockClient({
       services: [createMatchingRemoteService({ label: "other-app" })],
-      clients: defaultIdpClientSecret,
+      clients: defaultIdpClients,
     });
 
     const result = await planIdP(createContext(client));
@@ -341,7 +371,7 @@ describe("planIdP", () => {
   test("marks idp service updated when permission changes", async () => {
     const client = createMockClient({
       services: [createMatchingRemoteService()],
-      clients: defaultIdpClientSecret,
+      clients: defaultIdpClients,
     });
 
     const context = createContext(client);
@@ -376,7 +406,7 @@ describe("planIdP", () => {
           },
         }),
       ],
-      clients: defaultIdpClientSecret,
+      clients: defaultIdpClients,
     });
 
     const context = createContext(client);
@@ -403,7 +433,7 @@ describe("planIdP", () => {
     delete: [],
     sendPasswordResetEmail: [],
     unenrollMfa: [],
-  };
+  } satisfies MessageInitShape<typeof IdPPermissionSchema>;
 
   test.each([
     { case: "denies every operation and remote omits it", local: denyAllPermission },
@@ -424,7 +454,7 @@ describe("planIdP", () => {
     }) => {
       const client = createMockClient({
         services: [createMatchingRemoteService({ permission: remote })],
-        clients: defaultIdpClientSecret,
+        clients: defaultIdpClients,
       });
       const context = createContext(client);
       // oxlint-disable-next-line no-explicit-any
@@ -457,9 +487,9 @@ describe("planIdP and a client name the platform cannot delete", () => {
       services: [createMatchingRemoteService()],
       clients: {
         "idp-a": [
-          ...defaultIdpClientSecret["idp-a"],
-          { name: "c1", clientSecret: "c1-secret" },
-          { name: "old-client", clientSecret: "old-secret" },
+          ...defaultIdpClients["idp-a"],
+          { name: "c1", clientId: "c1-id" },
+          { name: "old-client", clientId: "old-client-id" },
         ],
       },
     });
@@ -483,10 +513,10 @@ describe("planIdP and a client name the platform cannot delete", () => {
         { name: "idp-removed", lang: IdPLang.JA, publishEvents: true, label: appName },
       ],
       clients: {
-        ...defaultIdpClientSecret,
+        ...defaultIdpClients,
         "idp-removed": [
-          { name: "-ab", clientSecret: "ab-secret" },
-          { name: "old-client", clientSecret: "old-secret" },
+          { name: "-ab", clientId: "ab-id" },
+          { name: "old-client", clientId: "old-client-id" },
         ],
       },
     });
@@ -588,7 +618,7 @@ describe("planIdP / publishEvents auto-configuration", () => {
     const app = createMockApplication({ idpServices: [{ publishEvents: undefined }] });
     const client = createMockClient({
       services: [createMatchingRemoteService({ publishEvents: true })],
-      clients: defaultIdpClientSecret,
+      clients: defaultIdpClients,
     });
 
     const result = await planIdP({
@@ -605,7 +635,7 @@ describe("planIdP / publishEvents auto-configuration", () => {
     const app = createMockApplication({ idpServices: [{ publishEvents: undefined }] });
     const client = createMockClient({
       services: [createMatchingRemoteService({ publishEvents: true })],
-      clients: defaultIdpClientSecret,
+      clients: defaultIdpClients,
     });
 
     const result = await planIdP({
@@ -693,7 +723,7 @@ describe("planIdP and an unchanged service's dependency records", () => {
     // record on the remote resource and prompt about a config already deployed.
     const client = createMockClient({
       services: [createMatchingRemoteService()],
-      clients: defaultIdpClientSecret,
+      clients: defaultIdpClients,
     });
 
     const result = await planIdP({
@@ -722,7 +752,7 @@ describe("planIdP and an implicit all-domains policy", () => {
     ["allowedEmailDomains is empty", { userAuthPolicy: { allowedEmailDomains: [] } }],
   ])("warns when %s", async (_name, service) => {
     using _logger = silenceLogger("warn");
-    const client = createMockClient({ services: [], clients: defaultIdpClientSecret });
+    const client = createMockClient({ services: [], clients: defaultIdpClients });
 
     await planIdP({
       ...createContext(client),
@@ -745,7 +775,7 @@ describe("planIdP and an implicit all-domains policy", () => {
     ],
   ])("stays quiet when %s", async (_name, userAuthPolicy) => {
     using _logger = silenceLogger("warn");
-    const client = createMockClient({ services: [], clients: defaultIdpClientSecret });
+    const client = createMockClient({ services: [], clients: defaultIdpClients });
 
     await planIdP({
       ...createContext(client),
@@ -773,7 +803,7 @@ describe("planIdP and a _loggedIn permission", () => {
 
   test("warns with the offending operations and how to restrict them", async () => {
     using _logger = silenceLogger("warn");
-    const client = createMockClient({ services: [], clients: defaultIdpClientSecret });
+    const client = createMockClient({ services: [], clients: defaultIdpClients });
 
     await planIdP({
       ...createContext(client),
@@ -799,7 +829,7 @@ describe("planIdP and a _loggedIn permission", () => {
 
   test("stays quiet when every operation is restricted to an administrator role", async () => {
     using _logger = silenceLogger("warn");
-    const client = createMockClient({ services: [], clients: defaultIdpClientSecret });
+    const client = createMockClient({ services: [], clients: defaultIdpClients });
 
     await planIdP({
       ...createContext(client),
@@ -818,7 +848,7 @@ describe("planIdP and allowedEmailDomains normalization", () => {
     // would otherwise be re-applied on every deploy.
     const client = createMockClient({
       services: [createMatchingRemoteService()],
-      clients: defaultIdpClientSecret,
+      clients: defaultIdpClients,
     });
 
     const result = await planIdP({

@@ -1,10 +1,10 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { runCommand } from "@politty/zod";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { webhookCommand } from "./webhook";
 
 vi.mock("#/cli/shared/client", () => ({
@@ -21,9 +21,7 @@ describe("executor webhook list", () => {
   aroundEach(async (runTest) => {
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("12345678-1234-4abc-8def-123456789012");
-    vi.mocked(initOperatorClient).mockResolvedValue(
-      {} as Awaited<ReturnType<typeof initOperatorClient>>,
-    );
+    vi.mocked(initOperatorClient).mockResolvedValue(mockOperatorClient({}));
     vi.mocked(fetchPaged).mockResolvedValue([
       { executorName: "on-webhook", url: "https://example.com/hook", disabled: false },
     ]);

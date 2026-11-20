@@ -1,11 +1,13 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { Code, ConnectError } from "@connectrpc/connect";
 import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { listFunctionRegistries } from "./list";
 import type * as ClientModule from "#/cli/shared/client";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { FunctionRegistrySchema } from "@tailor-platform/tailor-proto/function_registry_pb";
 
 vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
@@ -20,27 +22,27 @@ vi.mock("#/cli/shared/client", async () => {
   };
 });
 
-function fakeRegistry(name: string) {
+function fakeRegistry(name: string): MessageInitShape<typeof FunctionRegistrySchema> {
   return {
     name,
     description: "",
     sizeBytes: 0n,
     contentHash: "",
-    createdAt: null,
-    updatedAt: null,
   };
 }
 
+function createClient() {
+  return mockOperatorClient({ listFunctionRegistries: {} });
+}
+
 describe("listFunctionRegistries", () => {
-  let listMock: ReturnType<typeof vi.fn>;
+  let client: ReturnType<typeof createClient>;
 
   aroundEach(async (runTest) => {
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
-    listMock = vi.fn();
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      listFunctionRegistries: listMock,
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    client = createClient();
+    vi.mocked(initOperatorClient).mockResolvedValue(client);
     await runTest();
   });
 
@@ -51,11 +53,14 @@ describe("listFunctionRegistries", () => {
   ])(
     "passes pageDirection=$pageDirection when order is $order",
     async ({ order, pageDirection }) => {
-      listMock.mockResolvedValue({ functions: [fakeRegistry("a")], nextPageToken: "" });
+      client.listFunctionRegistries.mockResolvedValue({
+        functions: [fakeRegistry("a")],
+        nextPageToken: "",
+      });
 
       await listFunctionRegistries({ order });
 
-      expect(listMock).toHaveBeenCalledWith(
+      expect(client.listFunctionRegistries).toHaveBeenCalledWith(
         expect.objectContaining({
           workspaceId: "workspace-1",
           sortBy: "updated_at",
@@ -66,7 +71,7 @@ describe("listFunctionRegistries", () => {
   );
 
   test("enforces limit across paginated calls", async () => {
-    listMock
+    client.listFunctionRegistries
       .mockResolvedValueOnce({
         functions: [fakeRegistry("a"), fakeRegistry("b")],
         nextPageToken: "tok1",
@@ -83,7 +88,7 @@ describe("listFunctionRegistries", () => {
   });
 
   test("returns empty list when server raises ConnectError NotFound", async () => {
-    listMock.mockRejectedValue(new ConnectError("missing", Code.NotFound));
+    client.listFunctionRegistries.mockRejectedValue(new ConnectError("missing", Code.NotFound));
 
     const result = await listFunctionRegistries({});
 
@@ -91,7 +96,7 @@ describe("listFunctionRegistries", () => {
   });
 
   test("propagates non-NotFound errors", async () => {
-    listMock.mockRejectedValue(new ConnectError("boom", Code.Internal));
+    client.listFunctionRegistries.mockRejectedValue(new ConnectError("boom", Code.Internal));
 
     await expect(listFunctionRegistries({})).rejects.toThrow(ConnectError);
   });

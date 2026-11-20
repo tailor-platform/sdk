@@ -37,6 +37,7 @@ import {
   type MetadataLabelWrite,
   resourceTrn,
   type WithLabel,
+  writeLabelRefreshes,
   writeMetadataLabels,
 } from "./label";
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
@@ -81,6 +82,7 @@ export async function applyExecutor(
         await client.updateExecutorExecutor(update.request);
         await writeMetadataLabels(client, update.metaRequest);
       }),
+      ...writeLabelRefreshes(client, changeSet.unchanged),
     ]);
   } else {
     // Delete in reverse order of dependencies
@@ -215,7 +217,6 @@ export async function planExecutor(
     keyOf: (executor) => executor.name,
     ...labeledResourceChecks(ownership, (executor: DesiredExecutor) => ({
       resourceType: "executor",
-      resourceLabel: "Executor",
       resourceName: executor.name,
     })),
     isConfigUnchanged: (executor) => {

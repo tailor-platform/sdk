@@ -8,7 +8,18 @@ import type {
   SnapshotFieldConfig,
   TailorDBSnapshotType,
 } from "../snapshot";
-import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type {
+  TailorDBType as ProtoTailorDBType,
+  TailorDBType_FieldConfigSchema,
+  TailorDBTypeSchema,
+} from "@tailor-platform/tailor-proto/tailordb_resource_pb";
+
+/** A deployed table as `listTailorDBTypes` returns it, as a plain object rather than a message */
+export type RemoteTailorDBType = Exclude<
+  MessageInitShape<typeof TailorDBTypeSchema>,
+  ProtoTailorDBType
+>;
 
 /**
  * Parsed-table shape consumed by createSnapshotFromLocalTypes / createSnapshotType;
@@ -64,10 +75,10 @@ export function snapshotType(name: string): TailorDBSnapshotType {
  * Deployed counterpart of {@link snapshotType} with the given required fields: `id` is a uuid, the others strings
  * @param {string} name - Table name
  * @param {string[]} fieldNames - Field names
- * @returns {ProtoTailorDBType} Deployed table as the platform returns it
+ * @returns {RemoteTailorDBType} Deployed table as the platform returns it
  */
-export function remoteType(name: string, fieldNames: string[]): ProtoTailorDBType {
-  const fields: Record<string, unknown> = {};
+export function remoteType(name: string, fieldNames: string[]): RemoteTailorDBType {
+  const fields: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>> = {};
   for (const fieldName of fieldNames) {
     fields[fieldName] = {
       type: fieldName === "id" ? "uuid" : "string",
@@ -82,31 +93,27 @@ export function remoteType(name: string, fieldNames: string[]): ProtoTailorDBTyp
       fields: {},
     };
   }
-  return {
-    name,
-    schema: { fields },
-  } as unknown as ProtoTailorDBType;
+  return { name, schema: { fields } };
 }
 
 /**
  * {@link remoteType} with the settings a migration's maintenance mode writes
  * @param {string} name - Table name
  * @param {string[]} fieldNames - Field names
- * @returns {ProtoTailorDBType} Deployed table in maintenance mode
+ * @returns {RemoteTailorDBType} Deployed table in maintenance mode
  */
-export function restrictedRemoteType(name: string, fieldNames: string[]): ProtoTailorDBType {
-  const type = remoteType(name, fieldNames);
+export function restrictedRemoteType(name: string, fieldNames: string[]): RemoteTailorDBType {
   return {
-    ...type,
+    name,
     schema: {
-      ...type.schema,
+      fields: remoteType(name, fieldNames).schema?.fields,
       settings: {
         bulkUpsert: false,
         publishRecordEvents: false,
         disableGqlOperations: { create: true, update: true, delete: true, read: false },
       },
     },
-  } as ProtoTailorDBType;
+  };
 }
 
 /**
