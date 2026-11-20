@@ -43,7 +43,6 @@ export const seedStudioCommand = defineAppCommand({
     ...allDatasetsArg,
     ...noBaseArg,
     port: arg(z.coerce.number().int().min(0).max(65535).default(4848), {
-      alias: "p",
       description: "Port to listen on (0 picks a free one)",
     }),
     open: arg(z.boolean().default(false), {

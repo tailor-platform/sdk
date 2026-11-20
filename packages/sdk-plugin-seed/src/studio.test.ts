@@ -166,6 +166,13 @@ describe("seedStudioCommand", () => {
     );
   });
 
+  test("does not take -p for the port, which the host CLI reads as --profile", async () => {
+    const result = await runStudio(["-p", "0"]);
+
+    expect(result.exitCode).not.toBe(0);
+    expect(startStudioServer).not.toHaveBeenCalled();
+  });
+
   test("passes --port through", async () => {
     const result = await runStudio(["--port", "0"]);
 
