@@ -4,6 +4,7 @@ import { describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { planIdP } from "./idp";
+import { buildMetaRequest } from "./label";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { PlanContext } from "./types";
@@ -203,6 +204,28 @@ describe("planIdP", () => {
     expect(result.changeSet.client.unchanged).toHaveLength(1);
     expect(result.changeSet.service.updates).toHaveLength(0);
     expect(result.changeSet.client.updates).toHaveLength(0);
+  });
+
+  test("refreshes the labels of an unchanged idp service whose SDK labels differ", async () => {
+    const client = createMockClient({
+      services: [createMatchingRemoteService()],
+      clients: defaultIdpClientSecret,
+    });
+    const desiredLabels = { "sdk-name": appName, "sdk-version": sdkVersion, "sdk-app-id": "app-1" };
+    vi.mocked(buildMetaRequest).mockImplementationOnce(async ({ trn }) => ({
+      trn,
+      labels: desiredLabels,
+    }));
+
+    const result = await planIdP(createContext(client));
+
+    expect(result.changeSet.service.updates).toEqual([]);
+    expect(result.changeSet.service.unchanged).toEqual([
+      expect.objectContaining({
+        name: "idp-a",
+        labelRefresh: expect.objectContaining({ labels: desiredLabels }),
+      }),
+    ]);
   });
 
   test("marks idp service and client updated when forceApplyAll is enabled", async () => {

@@ -4,7 +4,7 @@ import { ExecutorExecutorSchema } from "@tailor-platform/tailor-proto/executor_r
 import { describe, test, expect, vi } from "vitest";
 import { symbols } from "#/cli/shared/logger";
 import { formatExecutorChangeEntries, planExecutor } from "./executor";
-import { sdkNameLabelKey } from "./label";
+import { buildMetaRequest, sdkNameLabelKey } from "./label";
 import type { Application } from "#/cli/services/application";
 import type { ExecutorService } from "#/cli/services/executor/service";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -385,6 +385,32 @@ describe("planExecutor", () => {
       expect(result.changeSet.unchanged).toHaveLength(1);
       expect(result.changeSet.unchanged[0]!.name).toBe("existing-executor");
       expect(result.changeSet.updates).toHaveLength(0);
+    });
+
+    test("existing executor whose other SDK labels differ stays unchanged with a label refresh", async () => {
+      const executor = createMockExecutor("existing-executor");
+      const createResult = await planExecutor(buildPlanContext(createMockApplication([executor])));
+      const desiredExecutor = createResult.changeSet.creates[0]!.request.executor;
+      const desiredLabels = { "sdk-name": appName, "sdk-version": "v1-0-0", "sdk-app-id": "app-1" };
+      vi.mocked(buildMetaRequest).mockImplementationOnce(async ({ trn }) => ({
+        trn,
+        labels: desiredLabels,
+      }));
+      const client = createMockClient([
+        { name: "existing-executor", label: appName, resource: desiredExecutor },
+      ]);
+
+      const result = await planExecutor(
+        buildPlanContext(createMockApplication([executor]), { client }),
+      );
+
+      expect(result.changeSet.updates).toHaveLength(0);
+      expect(result.changeSet.unchanged).toEqual([
+        {
+          name: "existing-executor",
+          labelRefresh: expect.objectContaining({ labels: desiredLabels }),
+        },
+      ]);
     });
 
     test("existing executor is compared against its fetched detail, not its list row", async () => {

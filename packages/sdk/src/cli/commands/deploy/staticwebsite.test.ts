@@ -60,6 +60,8 @@ type MockWebsite = {
   allowedIpAddresses?: string[];
   label?: string;
   sdkVersion?: string;
+  /** Labels in place of the ones `label` and `sdkVersion` give. */
+  labels?: Record<string, string>;
   customDomains?: MockCustomDomain[];
 };
 
@@ -108,9 +110,11 @@ function createMockClient(websites: MockWebsite[], transfers: MockTransfer[] = [
         const website = websites.find((entry) => entry.name === name);
         return {
           metadata: {
-            labels: website?.label
-              ? { "sdk-name": website.label, "sdk-version": website.sdkVersion ?? sdkVersion }
-              : {},
+            labels:
+              website?.labels ??
+              (website?.label
+                ? { "sdk-name": website.label, "sdk-version": website.sdkVersion ?? sdkVersion }
+                : {}),
           },
         };
       }
@@ -341,37 +345,32 @@ describe("planStaticWebsite", () => {
     expect(result.customDomainChangeSet.unchanged[0]!.name).toBe("example.com");
   });
 
-  test("refreshes only the labels of an owned custom domain whose other SDK labels differ", async () => {
+  test("refreshes only the labels of an owned website and custom domain whose other SDK labels differ", async () => {
+    const staleLabels = {
+      "sdk-name": "old-name",
+      "sdk-version": sdkVersion,
+      "sdk-app-id": "app-test-id",
+    };
     const client = createMockClient([
       {
         name: "site-a",
-        label: appName,
-        customDomains: [
-          {
-            domain: "example.com",
-            sdkManaged: true,
-            labels: {
-              "sdk-name": "old-name",
-              "sdk-version": sdkVersion,
-              "sdk-app-id": "app-test-id",
-            },
-          },
-        ],
+        description: "Marketing site",
+        allowedIpAddresses: ["1.1.1.1", "2.2.2.2"],
+        labels: staleLabels,
+        customDomains: [{ domain: "example.com", sdkManaged: true, labels: staleLabels }],
       },
     ]);
     const app = createMockApplication({ customDomains: ["example.com"] });
+    const labelRefresh = expect.objectContaining({
+      labels: { "sdk-name": "test-app", "sdk-version": "v1-0-0" },
+    });
 
     const result = await planStaticWebsite(createContext(client, app));
 
+    expect(result.changeSet.updates).toEqual([]);
+    expect(result.changeSet.unchanged).toEqual([{ name: "site-a", labelRefresh }]);
     expect(result.customDomainChangeSet.updates).toEqual([]);
-    expect(result.customDomainChangeSet.unchanged).toEqual([
-      {
-        name: "example.com",
-        labelRefresh: expect.objectContaining({
-          labels: { "sdk-name": "test-app", "sdk-version": "v1-0-0" },
-        }),
-      },
-    ]);
+    expect(result.customDomainChangeSet.unchanged).toEqual([{ name: "example.com", labelRefresh }]);
   });
 
   test("does not manage custom domains for unowned websites", async () => {

@@ -1,7 +1,7 @@
 // oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { describe, test, expect, vi } from "vitest";
 import { symbols } from "#/cli/shared/logger";
-import { sdkNameLabelKey } from "./label";
+import { buildMetaRequest, sdkNameLabelKey } from "./label";
 import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./resolver";
 import type { Application } from "#/cli/services/application";
 import type { ExecutorService } from "#/cli/services/executor/service";
@@ -460,6 +460,23 @@ describe("planPipeline (resolver service level)", () => {
       expect(result.changeSet.service.updates).toHaveLength(1);
       expect(result.changeSet.service.updates[0]?.forcedBySdkVersion).toBe(true);
       expect(result.changeSet.service.unchanged).toHaveLength(0);
+    });
+
+    test("service whose other SDK labels differ is unchanged with a label refresh", async () => {
+      const client = createMockClient([{ name: "resolver-a", label: appName }]);
+      const application = createMockApplication([createMockResolverService("resolver-a")]);
+      const desiredLabels = { "sdk-name": appName, "sdk-version": "v1-0-0", "sdk-app-id": "app-1" };
+      vi.mocked(buildMetaRequest).mockImplementationOnce(async ({ trn }) => ({
+        trn,
+        labels: desiredLabels,
+      }));
+
+      const result = await planPipeline(buildCtx({ client, application }));
+
+      expect(result.changeSet.service.updates).toHaveLength(0);
+      expect(result.changeSet.service.unchanged).toEqual([
+        { name: "resolver-a", labelRefresh: expect.objectContaining({ labels: desiredLabels }) },
+      ]);
     });
 
     test("service update taking over ownership is not forced by the SDK version", async () => {

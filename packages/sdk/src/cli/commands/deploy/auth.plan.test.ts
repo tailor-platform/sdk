@@ -23,6 +23,7 @@ import { defineConfig } from "#/configure/config/index";
 import { defineAuth } from "#/configure/services/auth/index";
 import { t } from "#/configure/types/type";
 import { applyAuth, formatAuthHookChangeEntries, planAuth } from "./auth";
+import { buildMetaRequest } from "./label";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { SCIMAuthorization } from "#/types/auth.generated";
@@ -525,6 +526,24 @@ describe("planAuth", () => {
     expect(result.changeSet.service.updates).toHaveLength(0);
     expect(result.changeSet.machineUser.updates).toHaveLength(0);
     expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
+  });
+
+  test("refreshes the labels of an unchanged auth service whose SDK labels differ", async () => {
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
+    });
+    const desiredLabels = { "sdk-name": appName, "sdk-version": sdkVersion, "sdk-app-id": "app-1" };
+    vi.mocked(buildMetaRequest).mockImplementationOnce(async ({ trn }) => ({
+      trn,
+      labels: desiredLabels,
+    }));
+
+    const result = await planAuth(createContext(client));
+
+    expect(result.changeSet.service.updates).toEqual([]);
+    expect(result.changeSet.service.unchanged).toEqual([
+      { name: "auth-a", labelRefresh: expect.objectContaining({ labels: desiredLabels }) },
+    ]);
   });
 
   test("marks an oauth2 client unchanged when the Platform returns its generated credentials and default lifetimes", async () => {
