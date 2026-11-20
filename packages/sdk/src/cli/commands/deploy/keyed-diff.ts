@@ -1,5 +1,5 @@
-import { hasMatchingSdkVersion, type MetadataLabelWrite } from "./label";
-import type { UpdateAnnotation } from "./change-set";
+import { hasMatchingSdkVersion, labelsMatch, type MetadataLabelWrite } from "./label";
+import type { UnchangedAnnotation, UpdateAnnotation } from "./change-set";
 import type { OwnershipTracker, TrackedResource } from "./owned-resource";
 
 /** Ownership checks for a planner whose resources carry SDK labels. */
@@ -10,14 +10,15 @@ export interface KeyedDiffOwnership<Desired, Existing> {
   ownsRemaining(existing: Existing): boolean;
 }
 
-/** Ownership and SDK-version checks of resources whose SDK labels deploy reads. */
+/** Ownership, SDK-version, and SDK-label checks of resources whose SDK labels deploy reads. */
 export interface LabeledResourceChecks<Desired, Existing> {
   ownership: KeyedDiffOwnership<Desired, Existing>;
   versionMatches(desired: Desired, existing: Existing): boolean;
+  labelRefresh(desired: Desired, existing: Existing): MetadataLabelWrite | undefined;
 }
 
 /**
- * Check ownership and SDK version through the labels listed with each existing resource.
+ * Check ownership, SDK version, and SDK labels through the labels listed with each existing resource.
  * @param tracker - Ownership tracker of the planner
  * @param describe - Resource kind and name shown when a desired resource is taken over
  * @returns Checks to spread into a keyed diff
@@ -37,6 +38,8 @@ export function labeledResourceChecks<
     },
     versionMatches: (desired, existing) =>
       hasMatchingSdkVersion(existing.allLabels, desired.metaRequest.labels),
+    labelRefresh: (desired, existing) =>
+      labelsMatch(existing.allLabels, desired.metaRequest) ? undefined : desired.metaRequest,
   };
 }
 
@@ -44,7 +47,7 @@ export function labeledResourceChecks<
 interface KeyedDiffChangeSet<Create, Update, Unchanged, Delete, Replace = never> {
   readonly creates: Create[];
   readonly updates: Array<Update & UpdateAnnotation>;
-  readonly unchanged: Unchanged[];
+  readonly unchanged: Array<Unchanged & UnchangedAnnotation>;
   readonly deletes: Delete[];
   readonly replaces: Replace[];
 }
@@ -60,6 +63,8 @@ export interface KeyedDiff<Desired, Existing, Create, Update, Unchanged, Delete,
   ownership?: KeyedDiffOwnership<Desired, NoInfer<Existing>>;
   /** Whether the existing resource was applied by this SDK version (or nothing forces a reapply). */
   versionMatches(desired: Desired, existing: NoInfer<Existing>): boolean;
+  /** The labels to rewrite on an unchanged resource; omitted for resources without SDK labels. */
+  labelRefresh?(desired: Desired, existing: NoInfer<Existing>): MetadataLabelWrite | undefined;
   isConfigUnchanged(desired: Desired, existing: Existing): boolean | Promise<boolean>;
   /** Returns a replace item when the match cannot be updated in place. */
   replace?(desired: Desired, existing: Existing): Replace | undefined;
@@ -106,7 +111,11 @@ export async function diffKeyed<
     }
     const configUnchanged = owned && (await diff.isConfigUnchanged(desired, existing));
     if (configUnchanged && diff.versionMatches(desired, existing)) {
-      changeSet.unchanged.push(diff.unchanged(desired, existing));
+      const labelRefresh = diff.labelRefresh?.(desired, existing);
+      changeSet.unchanged.push({
+        ...diff.unchanged(desired, existing),
+        ...(labelRefresh && { labelRefresh }),
+      });
     } else {
       changeSet.updates.push({
         ...diff.update(desired, existing),

@@ -243,7 +243,7 @@ Pass the global `--json` / `-j` flag to get machine-readable output.
 }
 ```
 
-- `summary` — counts of each change type. `forcedBySdkVersion` counts the updates forced by the SDK version, which are also included in `update`. `labelRefreshes` counts the function scripts that are left as they are while only their SDK version label is rewritten after an SDK upgrade; they are not included in `update`.
+- `summary` — counts of each change type. `forcedBySdkVersion` counts the updates forced by the SDK version, which are also included in `update`. `labelRefreshes` counts the resources that are left as they are while only the labels the SDK sets on them are rewritten, such as a function script's SDK version label after an SDK upgrade; they are not included in `update`.
 - `changes` — planned resource changes, each with `action`, `name`, and optional `labels` / `namespace`. An update forced by the SDK version also has `forcedBySdkVersion: true`.
 - `warnings` — resources not in config (`type: "unmanaged"`), secrets with missing values (`type: "skippedSecret"`), or applications recorded as depending on this deploy but missing from it (`type: "missingDependentApp"`). Unmanaged resources and missing dependent applications require confirmation in apply mode (apply is cancelled if declined); skipped secrets are non-blocking.
   - A `missingDependentApp` entry names the missing application's `appId`, the `reason` it depends on this deploy, and the resource whose event publishing turns off when applying without it (`resourceType` and `name`, plus `namespace` for a TailorDB table or resolver). An entry about a workflow's jobs rather than the workflow itself has `scope: "jobs"`.

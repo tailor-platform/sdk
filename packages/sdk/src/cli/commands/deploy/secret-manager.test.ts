@@ -153,6 +153,7 @@ describe("applySecretManager phase separation", () => {
         updates: [],
         deletes: [],
         replaces: [],
+        unchanged: [],
         title: "Secret Manager vaults",
         isEmpty: () => false,
         lines: () => [],
@@ -260,6 +261,7 @@ describe("applySecretManager phase separation", () => {
         updates: [],
         deletes: [],
         replaces: [],
+        unchanged: [],
         title: "Secret Manager vaults",
         isEmpty: () => true,
         lines: () => [],
@@ -479,7 +481,7 @@ describe("applySecretManager update-time evidence persistence", () => {
   function evidencePlanResult() {
     return {
       stateScope,
-      vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
+      vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [], unchanged: [] },
       secretChangeSet: {
         creates: [
           {
@@ -642,7 +644,7 @@ describe("applySecretManager create-only secrets", () => {
   function createPlanResult(creates: Array<typeof createOnlyCreate>) {
     return {
       stateScope,
-      vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
+      vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [], unchanged: [] },
       secretChangeSet: { creates, updates: [], deletes: [], replaces: [] },
     } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
   }
@@ -777,7 +779,9 @@ describe("planSecretManager vault metadata and deletion", () => {
         nextPageToken: "",
       },
       getMetadata: {
-        metadata: { labels: { "sdk-name": "my-app", "sdk-version": sdkVersion } },
+        metadata: {
+          labels: { "sdk-name": "my-app", "sdk-version": sdkVersion, "sdk-app-id": "app-app-1" },
+        },
       },
       listSecretManagerSecrets: { secrets: [], nextPageToken: "" },
     });
@@ -790,9 +794,41 @@ describe("planSecretManager vault metadata and deletion", () => {
 
     const result = await planSecretManager(ctx);
 
-    expect(result.vaultChangeSet.unchanged).toHaveLength(1);
-    expect(result.vaultChangeSet.unchanged[0]!.name).toBe("my-vault");
+    expect(result.vaultChangeSet.unchanged).toEqual([{ name: "my-vault" }]);
     expect(result.vaultChangeSet.creates).toHaveLength(0);
+  });
+
+  test("refreshes only the labels of a managed vault whose other SDK labels differ", async () => {
+    const client = mockOperatorClient({
+      listSecretManagerVaults: {
+        vaults: [{ name: "my-vault" }],
+        nextPageToken: "",
+      },
+      getMetadata: {
+        metadata: {
+          labels: { "sdk-name": "old-name", "sdk-version": sdkVersion, "sdk-app-id": "app-app-1" },
+        },
+      },
+      listSecretManagerSecrets: { secrets: [], nextPageToken: "" },
+    });
+
+    const result = await planSecretManager(
+      createPlanContext(
+        client,
+        [{ vaultName: "my-vault", secrets: [{ name: "app-key", value: "val" }] }],
+        { appName: "my-app" },
+      ),
+    );
+
+    expect(result.vaultChangeSet.updates).toEqual([]);
+    expect(result.vaultChangeSet.unchanged).toEqual([
+      {
+        name: "my-vault",
+        labelRefresh: expect.objectContaining({
+          labels: { "sdk-name": "my-app", "sdk-version": sdkVersion, "sdk-app-id": "app-app-1" },
+        }),
+      },
+    ]);
   });
 
   test("updates matching managed vault when forceApplyAll is enabled", async () => {
@@ -927,6 +963,7 @@ describe("applySecretManager metadata update", () => {
         updates: [{ name: "existing-vault", workspaceId: "ws-1" }],
         deletes: [],
         replaces: [],
+        unchanged: [],
       },
       secretChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
     } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
@@ -951,6 +988,7 @@ describe("applySecretManager metadata update", () => {
         updates: [],
         deletes: [{ name: "removed-vault", workspaceId: "ws-1" }],
         replaces: [],
+        unchanged: [],
       },
       secretChangeSet: {
         creates: [],
@@ -1005,7 +1043,7 @@ describe("applySecretManager state persistence", () => {
 
     const planResult = {
       stateScope,
-      vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
+      vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [], unchanged: [] },
       secretChangeSet: {
         creates: [
           {
@@ -1042,7 +1080,7 @@ describe("applySecretManager state persistence", () => {
     const client = createMockApplyClient();
     const planResult = {
       stateScope,
-      vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
+      vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [], unchanged: [] },
       secretChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
     } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
 
@@ -1058,7 +1096,7 @@ describe("applySecretManager state persistence", () => {
     } as unknown as Application;
     const planResult = {
       stateScope,
-      vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
+      vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [], unchanged: [] },
       secretChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
     } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
 
@@ -1081,7 +1119,7 @@ describe("applySecretManager state persistence", () => {
     const client = createMockApplyClient();
     const planResult = {
       stateScope,
-      vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
+      vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [], unchanged: [] },
       secretChangeSet: {
         creates: [],
         updates: [],
@@ -1117,7 +1155,7 @@ describe("applySecretManager state persistence", () => {
     const client = createMockApplyClient();
     const planResult = {
       stateScope,
-      vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
+      vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [], unchanged: [] },
       secretChangeSet: {
         creates: [],
         updates: [],
@@ -1237,7 +1275,7 @@ describe("applySecretManager ignoreNullishValues state persistence", () => {
 
     const planResult = {
       stateScope,
-      vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
+      vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [], unchanged: [] },
       secretChangeSet: {
         creates: [
           {

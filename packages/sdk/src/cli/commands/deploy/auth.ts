@@ -84,6 +84,7 @@ import {
   buildMetaRequest,
   type MetadataLabelWrite,
   resourceTrn,
+  writeLabelRefreshes,
   writeMetadataLabels,
 } from "./label";
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
@@ -129,6 +130,7 @@ export async function applyAuth(
         await client.updateAuthService(update.request);
         await writeMetadataLabels(client, update.metaRequest);
       }),
+      ...writeLabelRefreshes(client, changeSet.service.unchanged),
     ]);
   };
 

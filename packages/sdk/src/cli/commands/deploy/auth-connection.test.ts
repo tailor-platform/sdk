@@ -83,6 +83,8 @@ type ConnectionFixture = {
   ownerLabel?: string;
   /** sdk-app-id label value when the connection was tagged with an app id */
   appIdLabel?: string;
+  /** sdk-version label value of a connection carrying SDK metadata; defaults to the planned one */
+  sdkVersion?: string;
 };
 
 const oauth2DesiredConfig: AuthConnectionConfig = {
@@ -121,7 +123,9 @@ function createMockClient(opts: { connections: ConnectionFixture[] }): OperatorC
       return {
         metadata: {
           labels: {
-            ...(fixture?.ownerLabel ? { "sdk-name": fixture.ownerLabel } : {}),
+            ...(fixture?.ownerLabel
+              ? { "sdk-name": fixture.ownerLabel, "sdk-version": fixture.sdkVersion ?? "v1-0-0" }
+              : {}),
             ...(fixture?.appIdLabel ? { "sdk-app-id": fixture.appIdLabel } : {}),
           },
         },
@@ -265,9 +269,35 @@ describe("planAuthConnections", () => {
       authsWith(["owned-connection"]),
     );
 
-    expect(changeSet.unchanged.map((u) => u.name)).toEqual(["owned-connection"]);
+    expect(changeSet.unchanged).toEqual([{ name: "owned-connection" }]);
     expect(changeSet.updates.map((u) => u.name)).toEqual([]);
     expect(unmanaged.map((u) => u.resourceName)).toEqual([]);
+  });
+
+  test("refreshes only the labels of an owned unchanged connection applied by another SDK version", async () => {
+    mockLoadSecretsState.mockReturnValue({
+      vaults: {},
+      connections: { "owned-connection": "fixed-hash" },
+    });
+    const client = createMockClient({
+      connections: [{ name: "owned-connection", ownerLabel: appName, sdkVersion: "v0-9-0" }],
+    });
+
+    const { changeSet } = await planAuthConnections(
+      client,
+      connectionStateScope(),
+      authsWith(["owned-connection"]),
+    );
+
+    expect(changeSet.updates).toEqual([]);
+    expect(changeSet.unchanged).toEqual([
+      {
+        name: "owned-connection",
+        labelRefresh: expect.objectContaining({
+          labels: { "sdk-name": appName, "sdk-version": "v1-0-0" },
+        }),
+      },
+    ]);
   });
 
   test("omits client_secret from update mask when clientSecret is empty (CI scenario)", async () => {
@@ -368,7 +398,7 @@ describe("applyAuthConnections", () => {
 
   test("updates the connection in-place without deleting it", async () => {
     const client = createMockClient({
-      connections: [{ name: "conn", ownerLabel: appName }],
+      connections: [{ name: "conn", ownerLabel: appName, sdkVersion: "v0-9-0" }],
     });
     const result = await planAuthConnections(client, connectionStateScope(), authsWith(["conn"]));
     expect(result.changeSet.updates.map((u) => u.name)).toEqual(["conn"]);

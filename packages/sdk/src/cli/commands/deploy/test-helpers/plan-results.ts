@@ -51,7 +51,6 @@ export function emptyPlanResults(): PlanResults {
   return {
     functionRegistry: {
       changeSet: createChangeSet("Function registry"),
-      metadataUpdates: [],
       workflowJobChanges: emptyFunctionChanges(),
       resolverFunctionChanges: emptyFunctionChanges(),
       executorFunctionChanges: emptyFunctionChanges(),

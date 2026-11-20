@@ -128,6 +128,22 @@ export function hasMatchingSdkVersion(
 }
 
 /**
+ * Check whether a resource already carries the labels a write would leave on it.
+ * Dependency records are left out: they are reconciled against the labels read at write time.
+ * @param existingLabels - Labels currently stored on the remote resource
+ * @param write - Labels the current apply run would set and remove
+ * @returns True when writing them would change nothing
+ */
+export function labelsMatch(
+  existingLabels: Record<string, string> | undefined,
+  write: MetadataLabelWrite,
+): boolean {
+  const { trn, labels, remove } = write;
+  const current = existingLabels ?? {};
+  return areSameLabels(current, applyMetadataLabelWrite(current, { trn, labels, remove }));
+}
+
+/**
  * Determine whether a remote resource is owned by the given application.
  * When the resource carries an `sdk-app-id`, ownership is decided strictly
  * by id match — a resource explicitly tagged with another app's id is
@@ -648,6 +664,21 @@ export async function writeMetadataLabels(
     return;
   }
   await writeMetadataLabelsDirect(client, write);
+}
+
+/**
+ * Rewrite the labels of the unchanged resources whose SDK labels differ.
+ * @param client - Operator client instance
+ * @param unchanged - Unchanged items of a change set
+ * @returns One pending write per item with a label refresh
+ */
+export function writeLabelRefreshes(
+  client: MetadataLabelClient,
+  unchanged: ReadonlyArray<{ labelRefresh?: MetadataLabelWrite }>,
+): Promise<void>[] {
+  return unchanged.flatMap(({ labelRefresh }) =>
+    labelRefresh ? [writeMetadataLabels(client, labelRefresh)] : [],
+  );
 }
 
 /**

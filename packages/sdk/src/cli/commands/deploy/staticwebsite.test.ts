@@ -38,6 +38,8 @@ const sdkVersion = "v1-0-0";
 type MockCustomDomain = {
   domain: string;
   sdkManaged?: boolean;
+  /** Labels in place of the ones an SDK-managed domain carries. */
+  labels?: Record<string, string>;
   status?: CustomDomainStatus;
 };
 
@@ -120,9 +122,11 @@ function createMockClient(websites: MockWebsite[], transfers: MockTransfer[] = [
         const customDomain = website?.customDomains?.find((d) => d.domain === domain);
         return {
           metadata: {
-            labels: customDomain?.sdkManaged
-              ? { "sdk-name": appName, "sdk-version": sdkVersion, "sdk-app-id": "app-test-id" }
-              : {},
+            labels:
+              customDomain?.labels ??
+              (customDomain?.sdkManaged
+                ? { "sdk-name": appName, "sdk-version": sdkVersion, "sdk-app-id": "app-test-id" }
+                : {}),
           },
         };
       }
@@ -341,6 +345,39 @@ describe("planStaticWebsite", () => {
     expect(result.customDomainChangeSet.deletes[0]!.name).toBe("old.example.com");
     expect(result.customDomainChangeSet.unchanged).toHaveLength(1);
     expect(result.customDomainChangeSet.unchanged[0]!.name).toBe("example.com");
+  });
+
+  test("refreshes only the labels of an owned custom domain whose other SDK labels differ", async () => {
+    const client = createMockClient([
+      {
+        name: "site-a",
+        label: appName,
+        customDomains: [
+          {
+            domain: "example.com",
+            sdkManaged: true,
+            labels: {
+              "sdk-name": "old-name",
+              "sdk-version": sdkVersion,
+              "sdk-app-id": "app-test-id",
+            },
+          },
+        ],
+      },
+    ]);
+    const app = createMockApplication({ customDomains: ["example.com"] });
+
+    const result = await planStaticWebsite(createContext(client, app));
+
+    expect(result.customDomainChangeSet.updates).toEqual([]);
+    expect(result.customDomainChangeSet.unchanged).toEqual([
+      {
+        name: "example.com",
+        labelRefresh: expect.objectContaining({
+          labels: { "sdk-name": "test-app", "sdk-version": "v1-0-0" },
+        }),
+      },
+    ]);
   });
 
   test("does not manage custom domains for unowned websites", async () => {

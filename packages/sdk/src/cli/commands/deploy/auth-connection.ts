@@ -10,9 +10,11 @@ import { logger } from "#/cli/shared/logger";
 import { createChangeSet } from "./change-set";
 import {
   buildMetaRequest,
+  labelsMatch,
   type MetadataLabelWrite,
   resourceTrn,
   type WithLabel,
+  writeLabelRefreshes,
   writeMetadataLabels,
 } from "./label";
 import { createOwnershipTracker } from "./owned-resource";
@@ -190,7 +192,10 @@ export async function planAuthConnections(
         // the same question again.
         changeSet.updates.push({ name, metaRequest });
       } else {
-        changeSet.unchanged.push({ name });
+        changeSet.unchanged.push({
+          name,
+          ...(!labelsMatch(existing.allLabels, metaRequest) && { labelRefresh: metaRequest }),
+        });
       }
       delete existingConnections[name];
     } else {
@@ -291,11 +296,12 @@ export async function applyAuthConnections(
 
     // Metadata-only updates: backfill the SDK ownership label on connections
     // whose configuration is otherwise unchanged.
-    await Promise.all(
-      labelUpdates.map(async (update) => {
+    await Promise.all([
+      ...labelUpdates.map(async (update) => {
         await writeMetadataLabels(client, update.metaRequest);
       }),
-    );
+      ...writeLabelRefreshes(client, changeSet.unchanged),
+    ]);
   } else if (changeSet.deletes.length > 0) {
     await withSecretsStateLock(stateScope, async () => {
       await Promise.all(

@@ -18,6 +18,7 @@ import {
   hasMatchingSdkVersion,
   isOwnedByApp,
   labelCountViolation,
+  labelsMatch,
   resolverTrn,
   resourceTrn,
   tailorDBTypeTrn,
@@ -75,6 +76,32 @@ describe("hasMatchingSdkVersion", () => {
   test("returns false when one side is missing the label", () => {
     expect(hasMatchingSdkVersion(undefined, { "sdk-version": "v1-0-0" })).toBe(false);
     expect(hasMatchingSdkVersion({ "sdk-version": "v1-0-0" }, undefined)).toBe(false);
+  });
+});
+
+describe("labelsMatch", () => {
+  const stored = { "sdk-name": "my-app", "sdk-version": "v1-0-0", owner: "team-a" };
+
+  test("matches when every label to set is stored and no label to remove is", () => {
+    expect(
+      labelsMatch(stored, {
+        trn: "trn:a",
+        labels: { "sdk-name": "my-app", "sdk-version": "v1-0-0" },
+        remove: ["sdk-app-id"],
+      }),
+    ).toBe(true);
+  });
+
+  test.each<{ case: string; labels: Record<string, string>; remove: string[] }>([
+    { case: "a label to set has another value", labels: { "sdk-name": "renamed" }, remove: [] },
+    { case: "a label to set is missing", labels: { "sdk-app-id": "app-id-1" }, remove: [] },
+    { case: "a label to remove is stored", labels: {}, remove: ["owner"] },
+  ])("does not match when $case", ({ labels, remove }) => {
+    expect(labelsMatch(stored, { trn: "trn:a", labels, remove })).toBe(false);
+  });
+
+  test("does not match a resource without labels", () => {
+    expect(labelsMatch(undefined, { trn: "trn:a", labels: { "sdk-name": "my-app" } })).toBe(false);
   });
 });
 

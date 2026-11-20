@@ -1,6 +1,6 @@
 import { logger } from "#/cli/shared/logger";
 import { deploymentPlanResults, type PlannedDeployment, type PlanResults } from "./apply-phases";
-import { createChangeSet, type HasName } from "./change-set";
+import { createChangeSet, type HasName, type UnchangedAnnotation } from "./change-set";
 import { assertNoDuplicateResourceNames, type ResourceNameCheck } from "./duplicate-resource-names";
 import { MANAGED_RESOURCE_LABELS, type ManagedResourceType } from "./managed-resource-type";
 import type { ImportantResourceDeletion, OwnerConflict, UnmanagedResource } from "./confirm";
@@ -80,11 +80,11 @@ type ManagedResourceChangeSet<Item = ManagedResourceItem> = {
   updates: Item[];
   deletes: Item[];
   replaces: Item[];
-  unchanged: Item[];
+  unchanged: Array<Item & UnchangedAnnotation>;
   lines: () => string[];
 };
 
-/** Items that carry their requests; `unchanged` ones carry only a name. */
+/** Items that carry their requests; `unchanged` ones carry no request. */
 type PlannedItem<C extends ManagedResourceChangeSet<HasName>> =
   | C["creates"][number]
   | C["updates"][number]
@@ -264,6 +264,22 @@ export const MANAGED_RESOURCES = {
     changeSetOf: (results) => results.workflowExecutionPolicy.changeSet,
   }),
 } satisfies Record<ManagedResourceType, ManagedResource>;
+
+/**
+ * Count the unchanged resources whose labels are rewritten.
+ * @param results - Plan results for a single deployment
+ * @returns Number of unchanged items carrying a label refresh
+ */
+export function countLabelRefreshes(results: PlanResults): number {
+  return (Object.keys(MANAGED_RESOURCES) as ManagedResourceType[]).reduce(
+    (count, resourceType) =>
+      count +
+      MANAGED_RESOURCES[resourceType]
+        .changeSetOf(results)
+        .unchanged.filter((item) => item.labelRefresh !== undefined).length,
+    0,
+  );
+}
 
 /** The change set `MANAGED_RESOURCES` maps resource type `T` to, with its items' own types. */
 export type ManagedChangeSetOf<T extends ManagedResourceType> = ReturnType<

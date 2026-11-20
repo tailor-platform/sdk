@@ -5,7 +5,14 @@ import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
 import { idpClientVaultName } from "./idp";
-import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn, writeMetadataLabels } from "./label";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  labelsMatch,
+  resourceTrn,
+  writeLabelRefreshes,
+  writeMetadataLabels,
+} from "./label";
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
 import {
   hashValue,
@@ -214,7 +221,10 @@ export async function planSecretManager(context: PlanContext) {
           resourceName: vaultName,
         });
         if (owned && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
-          vaultChangeSet.unchanged.push({ name: vaultName });
+          vaultChangeSet.unchanged.push({
+            name: vaultName,
+            ...(!labelsMatch(existing.allLabels, metaRequest) && { labelRefresh: metaRequest }),
+          });
         } else {
           vaultChangeSet.updates.push({
             name: vaultName,
@@ -389,6 +399,7 @@ export async function applySecretManager(
         }),
       );
     }
+    await Promise.all(writeLabelRefreshes(client, vaultChangeSet.unchanged));
 
     const secretHashUpdates = [...secretChangeSet.creates, ...secretChangeSet.updates];
     if (secretHashUpdates.length > 0) {

@@ -51,7 +51,7 @@ import { logger } from "#/cli/shared/logger";
 import { withSpan } from "#/cli/telemetry/index";
 import { assertDefined } from "#/utils/assert";
 import { isRequestUnchanged } from "../compare";
-import { resourceTrn, writeMetadataLabels } from "../label";
+import { resourceTrn, writeLabelRefreshes, writeMetadataLabels } from "../label";
 import { tailordbTypeComparison } from "./compare";
 import {
   clearMaintenanceModeRecord,
@@ -2413,5 +2413,6 @@ async function executeServicesCreation(
       await writeMetadataLabels(client, create.metaRequest);
     }),
     ...changeSet.service.updates.map((update) => writeMetadataLabels(client, update.metaRequest)),
+    ...writeLabelRefreshes(client, changeSet.service.unchanged),
   ]);
 }
