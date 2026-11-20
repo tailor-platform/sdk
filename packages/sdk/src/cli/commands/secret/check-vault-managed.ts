@@ -1,4 +1,5 @@
 import {
+  isWorkspaceManaged,
   resourceTrn,
   sdkAppIdLabelKey,
   sdkManagedLabelKey,
@@ -39,7 +40,7 @@ export async function checkVaultManaged(
   try {
     const { metadata } = await client.getMetadata({ trn });
     allLabels = metadata?.labels ?? {};
-    owner = allLabels[sdkNameLabelKey] ?? (allLabels[sdkManagedLabelKey] ? "workspace" : undefined);
+    owner = allLabels[sdkNameLabelKey] ?? (isWorkspaceManaged(allLabels) ? "workspace" : undefined);
   } catch {
     // If metadata fetch fails (e.g., vault doesn't exist yet), proceed silently.
     // The actual operation will surface the appropriate error.

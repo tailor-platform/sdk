@@ -20,6 +20,7 @@ import { defineRequestComparison, isRequestUnchanged } from "./compare";
 import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   buildMetaRequest,
+  isOwnedBy,
   labelRefreshOf,
   ownsOrTakesOver,
   type MetadataLabelWrite,
@@ -326,7 +327,14 @@ export async function planStaticWebsite(context: PlanContext) {
     delete: (name) => ({ name, request: { workspaceId, name } }),
   });
 
-  // New websites, existing ones this app owns, and ones it takes over get their custom domains planned
+  // A workspace lists the domains it deletes in its takeover; an application only removes its own.
+  const removesDomain = (labels: Record<string, string> | undefined, domain: string) =>
+    owner.kind === "workspace"
+      ? ownership.ownsRemaining(labels, {
+          resourceType: "staticwebsite.custom_domain",
+          resourceName: domain,
+        })
+      : isOwnedBy(labels, owner);
   const ownedWebsiteNames = new Set(
     staticWebsiteServices
       .filter(({ name }) => {
@@ -503,13 +511,7 @@ export async function planStaticWebsite(context: PlanContext) {
     // a removal and a cancel can never name the same domain.
     if (desiredDomainsByWebsite.has(name)) {
       for (const { domain, allLabels } of existingDomains) {
-        if (
-          !desiredEntries.has(domain) &&
-          ownership.ownsRemaining(allLabels, {
-            resourceType: "staticwebsite.custom_domain",
-            resourceName: domain,
-          })
-        ) {
+        if (!desiredEntries.has(domain) && removesDomain(allLabels, domain)) {
           customDomainChangeSet.deletes.push({
             name: domain,
             request: { workspaceId, domain },

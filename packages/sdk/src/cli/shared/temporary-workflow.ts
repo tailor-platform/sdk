@@ -34,9 +34,8 @@ import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_r
 
 const CHUNK_SIZE = 64 * 1024;
 
-/** Owning application recorded in the labels of every temporary resource. */
+/** Owner recorded in the labels of every temporary resource. */
 interface TemporaryResourceOwner {
-  /** Owner whose labels the temporary resources carry. */
   owner: DeployOwner;
 }
 

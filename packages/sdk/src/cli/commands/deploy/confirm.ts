@@ -259,10 +259,8 @@ export async function confirmWorkspaceTakeover(
   if (!confirmed) {
     throw CLIError({
       code: "DEPLOY_CANCELLED",
-      message: ml`
-      Apply cancelled. Resources remain managed by their application configs.
-      To override, run again and confirm, or use --yes flag.
-    `,
+      message: "Apply cancelled: the workspace config did not take over these resources.",
+      suggestion: "Run the deploy again and confirm, or pass --yes.",
     });
   }
 }

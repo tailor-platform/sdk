@@ -104,7 +104,7 @@ export const sdkNameLabelKey = "sdk-name";
 export const sdkVersionLabelKey = "sdk-version";
 export const sdkAppIdLabelKey = "sdk-app-id";
 export const sdkManagedLabelKey = "sdk-managed";
-const workspaceManagedLabelValue = "workspace";
+export const sdkManagedLabelValue = "workspace";
 const onAppLabelPrefix = "sdk-on-app-";
 
 /**
@@ -186,7 +186,7 @@ export function applicationOwner(application: {
  */
 export function isOwnedBy(labels: Record<string, string> | undefined, owner: DeployOwner): boolean {
   if (owner.kind === "workspace") {
-    return labels?.[sdkManagedLabelKey] === workspaceManagedLabelValue;
+    return isWorkspaceManaged(labels);
   }
   return isOwnedByApp(labels, owner.name, owner.id);
 }
@@ -212,8 +212,17 @@ export function ownsOrTakesOver(
  */
 export function deployedByApplication(labels: Record<string, string> | undefined): boolean {
   return Boolean(
-    labels && !labels[sdkManagedLabelKey] && (labels[sdkNameLabelKey] || labels[sdkAppIdLabelKey]),
+    labels && !isWorkspaceManaged(labels) && (labels[sdkNameLabelKey] || labels[sdkAppIdLabelKey]),
   );
+}
+
+/**
+ * Determine whether a resource carries the mark of a workspace config.
+ * @param labels - Labels currently stored on the remote resource
+ * @returns True when a workspace config manages the resource
+ */
+export function isWorkspaceManaged(labels: Record<string, string> | undefined): boolean {
+  return labels?.[sdkManagedLabelKey] === sdkManagedLabelValue;
 }
 
 /**
@@ -446,7 +455,7 @@ export async function buildMetaRequest(
     return {
       trn,
       labels: {
-        [sdkManagedLabelKey]: workspaceManagedLabelValue,
+        [sdkManagedLabelKey]: sdkManagedLabelValue,
         [sdkVersionLabelKey]: sdkVersion,
       },
       remove: [sdkNameLabelKey, sdkAppIdLabelKey],

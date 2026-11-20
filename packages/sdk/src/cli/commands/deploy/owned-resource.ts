@@ -73,11 +73,12 @@ export interface OwnershipTracker {
    */
   ownsDesired(labels: Record<string, string> | undefined, resource: TrackedResource): boolean;
   /**
-   * Determine whether a remote-only resource is still owned by this app, so deploy deletes it.
+   * Determine whether deploy deletes a remote-only resource: one the owner manages, or, for the
+   * workspace, one an application deployed with an id, which it records as a takeover deletion.
    * Also records other SDK owners so renamed-empty applications can be handled.
    * @param labels - Existing resource labels
    * @param resource - Resource kind and name for confirmation messages
-   * @returns True when the resource is owned by the current app
+   * @returns True when deploy deletes the resource
    */
   ownsRemaining(labels: Record<string, string> | undefined, resource: TrackedResource): boolean;
 }

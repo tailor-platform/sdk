@@ -550,6 +550,24 @@ describe("planApplication", () => {
       expect(result.deletes[0]!.name).toBe(oldName);
     });
 
+    test("does not delete the other applications a workspace config manages", async () => {
+      const client = createMockClient([
+        {
+          name: "backoffice",
+          subgraphs: matchingSubgraphs,
+          extraLabels: { "sdk-managed": "workspace" },
+        },
+      ]);
+      const application = createMockApplication({ name: appName, id: "stable-id" });
+
+      const result = await planApplication({
+        ...createContext(client, application),
+        owner: { kind: "workspace" },
+      });
+
+      expect(result.deletes).toEqual([]);
+    });
+
     test("ignores apps with the same id when name still matches", async () => {
       const appId = "stable-id";
       const client = createMockClient([

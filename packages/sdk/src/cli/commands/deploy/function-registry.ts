@@ -6,9 +6,9 @@ import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import {
   buildMetaRequest,
-  deployedByApplication,
   type DeployOwner,
   labelRefreshOf,
+  ownsOrTakesOver,
   type MetadataLabelWrite,
   resourceTrn,
   type WithLabel,
@@ -349,18 +349,16 @@ export async function planFunctionRegistry(
         resourceName: entry.name,
       });
 
-      const contentUnchanged = existing.resource.contentHash === entry.contentHash;
-      if (owned && contentUnchanged) {
+      if (
+        existing.resource.contentHash === entry.contentHash &&
+        ownsOrTakesOver(existing.allLabels, owner)
+      ) {
         changeSet.unchanged.push({
           name: entry.name,
-          ...labelRefreshOf(existing.allLabels, metaRequest),
+          ...(owned
+            ? labelRefreshOf(existing.allLabels, metaRequest)
+            : { labelRefresh: metaRequest }),
         });
-      } else if (
-        contentUnchanged &&
-        owner.kind === "workspace" &&
-        deployedByApplication(existing.allLabels)
-      ) {
-        changeSet.unchanged.push({ name: entry.name, labelRefresh: metaRequest });
       } else {
         changeSet.updates.push({
           name: entry.name,

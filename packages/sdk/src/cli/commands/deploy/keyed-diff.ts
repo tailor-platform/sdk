@@ -9,16 +9,16 @@ import type { ManagedResourceType } from "./managed-resource-type";
 import type { OwnershipTracker } from "./owned-resource";
 
 /** Ownership checks for a planner whose resources carry SDK labels. */
-export interface KeyedDiffOwnership<Desired, Existing> {
+export interface KeyedDiffOwnership<Existing> {
   /** Whether a same-named existing resource is managed by this app; records takeovers. */
-  ownsDesired(key: string, desired: Desired, existing: Existing): boolean;
+  ownsDesired(key: string, existing: Existing): boolean;
   /** Whether a remote-only resource is managed by this app, so deploy may delete it. */
   ownsRemaining(key: string, existing: Existing): boolean;
 }
 
 /** Ownership, SDK-version, and SDK-label checks of resources whose SDK labels deploy reads. */
 export interface LabeledResourceChecks<Desired, Existing> {
-  ownership: KeyedDiffOwnership<Desired, Existing>;
+  ownership: KeyedDiffOwnership<Existing>;
   versionMatches(desired: Desired, existing: Existing): boolean;
   labelRefresh(desired: Desired, existing: Existing): UnchangedAnnotation;
 }
@@ -41,7 +41,7 @@ export function labeledResourceChecks(
 ): LabeledResourceChecks<LabeledDesired, LabeledExisting> {
   return {
     ownership: {
-      ownsDesired: (key, _desired, existing) =>
+      ownsDesired: (key, existing) =>
         tracker.ownsDesired(existing.allLabels, { resourceType, resourceName: key }),
       ownsRemaining: (key, existing) =>
         tracker.ownsRemaining(existing.allLabels, { resourceType, resourceName: key }),
@@ -69,7 +69,7 @@ export interface KeyedDiff<Desired, Existing, Create, Update, Unchanged, Delete,
   existing: Iterable<readonly [string, Existing | undefined]>;
   keyOf(desired: Desired): string;
   /** Omitted for resources without SDK labels: every match and leftover is then owned. */
-  ownership?: KeyedDiffOwnership<NoInfer<Desired>, NoInfer<Existing>>;
+  ownership?: KeyedDiffOwnership<NoInfer<Existing>>;
   /** Whether the existing resource was applied by this SDK version (or nothing forces a reapply). */
   versionMatches(desired: NoInfer<Desired>, existing: NoInfer<Existing>): boolean;
   /** The labels to rewrite on an unchanged resource; omitted where the plan does not read its labels. */
@@ -112,7 +112,7 @@ export async function diffKeyed<
       continue;
     }
     remaining.delete(key);
-    const owned = ownership?.ownsDesired(key, desired, existing) ?? true;
+    const owned = ownership?.ownsDesired(key, existing) ?? true;
     const replace = diff.replace?.(desired, existing);
     if (replace !== undefined) {
       changeSet.replaces.push(replace);

@@ -353,11 +353,13 @@ export async function planApplication(
 
   // The platform rejects an application without subgraphs, so a config with
   // none (e.g. only static web hosting) is planned like a removal.
+  // Only an application id can own apps of other names; the workspace mark is on every app.
+  const scansRenamedApps = owner.kind === "application" && Boolean(application.id);
   if (forRemoval || application.subgraphs.length === 0) {
     // A same-named app in a shared workspace may belong to another user, so
     // never delete by name alone. Without an id only the same-name app can be
     // ours; with an id, scan all apps to also clean up renamed-away ones.
-    const candidates = application.id
+    const candidates = scansRenamedApps
       ? existingApplications
       : existingApplications.filter((app) => app.name === application.name);
     // A deploy must not record other apps as owners: that blocks renamed-app cleanup.
@@ -432,7 +434,7 @@ export async function planApplication(
 
   // Detect renames: other apps owned by our id should be deleted before
   // creating/updating the current name (so the old name is freed up).
-  if (application.id) {
+  if (scansRenamedApps) {
     await scheduleOwnedAppDeletes(
       existingApplications.filter((app) => app.name !== application.name),
       ownedByConfig,

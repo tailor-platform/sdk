@@ -39,6 +39,7 @@ import {
   confirmUnmanagedResources,
   confirmWorkspaceTakeover,
   type ConfirmMode,
+  type ImportantResourceDeletion,
   type MissingDependentApp,
 } from "./confirm";
 import { assertNoSingleRunTransferHandoff } from "./custom-domain-transfer-guard";
@@ -694,6 +695,10 @@ export async function planDeploymentTargets(
   );
 }
 
+function deletionKey(resource: Pick<ImportantResourceDeletion, "resourceType" | "resourceName">) {
+  return JSON.stringify([resource.resourceType, resource.resourceName]);
+}
+
 function confirmationKey(deployment: PlannedDeployment, item: object): string {
   return JSON.stringify([deployment.application.name, item]);
 }
@@ -754,16 +759,13 @@ export async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParam
   }
   const takenOverDeletes = new Set(
     pending.flatMap(({ takeovers }) =>
-      takeovers
-        .filter(({ action }) => action === "delete")
-        .map(({ resourceType, resourceName }) => JSON.stringify([resourceType, resourceName])),
+      takeovers.filter(({ action }) => action === "delete").map(deletionKey),
     ),
   );
   await confirmImportantResourceDeletion(
     pending.flatMap((confirmations) =>
       confirmations.importantDeletions.filter(
-        ({ resourceType, resourceName }) =>
-          !takenOverDeletes.has(JSON.stringify([resourceType, resourceName])),
+        (deletion) => !takenOverDeletes.has(deletionKey(deletion)),
       ),
     ),
     mode,

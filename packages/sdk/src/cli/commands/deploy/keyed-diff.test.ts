@@ -8,8 +8,8 @@ type Desired = { name: string; config: string; kind?: string };
 type Existing = { config: string; kind?: string; owner?: string; version: string };
 
 const currentVersion = "v2";
-const ownership: KeyedDiffOwnership<Desired, Existing> = {
-  ownsDesired: (_key, _desired, existing) => existing.owner === "app",
+const ownership: KeyedDiffOwnership<Existing> = {
+  ownsDesired: (_key, existing) => existing.owner === "app",
   ownsRemaining: (_key, existing) => existing.owner === "app",
 };
 

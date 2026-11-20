@@ -6,6 +6,7 @@ import {
   sdkAppIdLabelKey,
   sdkAppIdLabelValue,
   sdkManagedLabelKey,
+  sdkManagedLabelValue,
   sdkNameLabelKey,
 } from "./label";
 import type { Metadata } from "@tailor-platform/tailor-proto/metadata_resource_pb";
@@ -21,7 +22,7 @@ function ownershipFilters(owners: ReadonlyArray<DeployOwner>): Record<string, st
   const add = (key: string, value: string) => filters.set(`${key}\0${value}`, { [key]: value });
   for (const owner of owners) {
     if (owner.kind === "workspace") {
-      add(sdkManagedLabelKey, "workspace");
+      add(sdkManagedLabelKey, sdkManagedLabelValue);
       continue;
     }
     add(sdkNameLabelKey, owner.name);
