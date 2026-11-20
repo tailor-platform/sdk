@@ -54,7 +54,10 @@ async function respond(handler: FetchHandler, req: http.IncomingMessage, res: ht
     });
     res.flushHeaders();
     if (response.body === null) res.end();
-    else pipeline(Readable.fromWeb(response.body as never), res, () => undefined);
+    else if (req.method === "HEAD") {
+      void response.body.cancel();
+      res.end();
+    } else pipeline(Readable.fromWeb(response.body as never), res, () => undefined);
   } catch {
     if (!res.headersSent) res.writeHead(500);
     res.end("Internal Server Error\n");
