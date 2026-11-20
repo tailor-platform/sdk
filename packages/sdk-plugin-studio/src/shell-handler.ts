@@ -1,9 +1,12 @@
 import { guardRequest } from "./request-guard";
 import { serveStatic } from "./static-files";
+import type { WorkspaceContext, WorkspaceSelection } from "./workspace-context";
 
 export interface UiHandlerContext {
   basePath: string;
   token: string;
+  /** The profile / workspace chosen in the shell, read again on every call. */
+  getSelection: () => WorkspaceSelection;
 }
 
 export type UiHandler = (
@@ -20,6 +23,7 @@ export interface ShellHandlerOptions {
   tabs: readonly Tab[];
   port: number;
   token: string;
+  workspace: WorkspaceContext;
   clientDir?: string;
   onError?: (error: unknown, pluginId: string) => void;
 }
@@ -56,12 +60,34 @@ function describeTab(tab: Tab) {
 export function createShellHandler(options: ShellHandlerOptions) {
   const byId = new Map(options.tabs.map((tab) => [tab.id, tab]));
 
+  const handleContext = async (request: Request): Promise<Response> => {
+    try {
+      if (request.method.toUpperCase() === "PUT") {
+        const body = (await request.json()) as { profile?: string | null };
+        await options.workspace.select(body.profile ?? null);
+      } else if (!["GET", "HEAD"].includes(request.method.toUpperCase())) {
+        return new Response("Method Not Allowed\n", {
+          status: 405,
+          headers: { allow: "GET, HEAD, PUT" },
+        });
+      }
+      return Response.json({ token: options.token, ...(await options.workspace.describe()) });
+    } catch (error) {
+      return Response.json(
+        { error: error instanceof Error ? error.message : String(error) },
+        { status: 400 },
+      );
+    }
+  };
+
   const handle = async (request: Request): Promise<Response> => {
     const denied = guardRequest(request, options);
     if (denied) return denied;
 
     const url = new URL(request.url);
     if (url.pathname === "/api/tabs") return Response.json(options.tabs.map(describeTab));
+
+    if (url.pathname === "/api/context") return handleContext(request);
 
     const match = PLUGIN_PATH.exec(url.pathname);
     if (!match) {
@@ -82,7 +108,11 @@ export function createShellHandler(options: ShellHandlerOptions) {
     forwardedUrl.search = url.search;
     const forwarded = new Request(forwardedUrl, request);
     try {
-      return await tab.handler(forwarded, { basePath: `/plugins/${id}/`, token: options.token });
+      return await tab.handler(forwarded, {
+        basePath: `/plugins/${id}/`,
+        token: options.token,
+        getSelection: () => options.workspace.selection(),
+      });
     } catch (error) {
       options.onError?.(error, id!);
       return new Response("Plugin handler failed\n", { status: 500 });

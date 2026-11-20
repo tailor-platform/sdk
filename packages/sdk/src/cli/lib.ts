@@ -50,6 +50,8 @@ export {
 } from "./commands/deploy/app-id-lock";
 export { generate } from "./commands/generate/service";
 export type { GenerateOptions } from "./commands/generate/options";
+export { listProfileInfos } from "./commands/profile/list";
+export type { ProfileInfo } from "./commands/profile/types";
 export { loadConfig, type LoadedConfig } from "./shared/config-loader";
 export { extractOwnedNamespaces } from "./shared/config";
 export { errorToJson, serializeError, type ErrorToJsonOptions } from "./shared/error-json";
