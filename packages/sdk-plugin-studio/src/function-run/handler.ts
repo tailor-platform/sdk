@@ -8,9 +8,17 @@ export interface FunctionRunHandlerOptions {
   loadPage: () => Promise<string>;
   files: ReturnType<typeof createSyncedFiles>;
   session: ReturnType<typeof createRunSession>;
-  /** Where the files are, as shown to the person in the page. */
-  paths: { file: string; argFile: string; resultFile?: string };
+  /** Where the files are: relative to the project for showing, absolute for copying. */
+  paths: FunctionRunPaths;
 }
+
+interface FilePaths {
+  file: string;
+  argFile: string;
+  resultFile?: string;
+}
+
+export type FunctionRunPaths = FilePaths & { absolute?: FilePaths };
 
 export type FunctionRunHandler = UiHandler & { close: () => void };
 

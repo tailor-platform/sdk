@@ -4,7 +4,11 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { createSyncedFiles } from "./files";
 import { formatTypeScript } from "./format";
-import { createFunctionRunHandler, type FunctionRunHandler } from "./handler";
+import {
+  createFunctionRunHandler,
+  type FunctionRunHandler,
+  type FunctionRunPaths,
+} from "./handler";
 import { createFunctionRunStarter } from "./process";
 import { createResultWriter } from "./result";
 import { createRunSession } from "./session";
@@ -28,7 +32,7 @@ export interface FunctionRunTabOptions {
 export interface FunctionRunTab {
   tab: Extract<Tab, { state: "mounted" }>;
   /** Where the function and its argument are, relative to the project. */
-  paths: { file: string; argFile: string; resultFile: string };
+  paths: FunctionRunPaths & { resultFile: string };
   close: () => void;
 }
 
@@ -78,6 +82,7 @@ export async function createFunctionRunTab(
     file: relative(file),
     argFile: relative(argFile),
     resultFile: relative(resultFile),
+    absolute: { file, argFile, resultFile },
   };
   const handler: FunctionRunHandler = createFunctionRunHandler({
     loadPage: () => readFile(options.pageFile, "utf8"),

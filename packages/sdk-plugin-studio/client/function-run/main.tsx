@@ -168,9 +168,14 @@ function Splitter({
   );
 }
 
-interface ServerState {
+interface Paths {
   file: string;
   argFile: string;
+  resultFile?: string;
+  absolute?: { file: string; argFile: string; resultFile?: string };
+}
+
+interface ServerState extends Paths {
   code: string;
   arg: string;
   status: Status;
@@ -201,6 +206,42 @@ async function readEvents(
   }
 }
 
+function PathWithCopy({
+  shown,
+  copied: text,
+  label,
+}: {
+  shown: string;
+  copied: string;
+  label: string;
+}) {
+  const [result, setResult] = useState<"copied" | "failed" | null>(null);
+  if (shown === "") return null;
+  const finish = (outcome: "copied" | "failed") => {
+    setResult(outcome);
+    setTimeout(() => setResult(null), 1500);
+  };
+  return (
+    <>
+      <code className="fr-path">{shown}</code>
+      <button
+        type="button"
+        className="fr-copy"
+        title={text}
+        aria-label={`Copy the path of the ${label}`}
+        onClick={() => {
+          navigator.clipboard.writeText(text).then(
+            () => finish("copied"),
+            () => finish("failed"),
+          );
+        }}
+      >
+        {result === "copied" ? "Copied" : result === "failed" ? "Copy failed" : "Copy"}
+      </button>
+    </>
+  );
+}
+
 function put(change: { code: string } | { arg: string }): void {
   void fetch("file", {
     method: "PUT",
@@ -213,7 +254,7 @@ function App() {
   const [code, setCode] = useState("");
   const [arg, setArg] = useState("");
   const [loaded, setLoaded] = useState(false);
-  const [paths, setPaths] = useState({ file: "", argFile: "" });
+  const [paths, setPaths] = useState<Paths>({ file: "", argFile: "" });
   const [status, setStatus] = useState<Status>("idle");
   const [argHeight, setArgHeight] = useState(DEFAULT_ARG_HEIGHT);
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -235,7 +276,12 @@ function App() {
         serverArg.current = state.arg;
         setCode(state.code);
         setArg(state.arg);
-        setPaths({ file: state.file, argFile: state.argFile });
+        setPaths({
+          file: state.file,
+          argFile: state.argFile,
+          resultFile: state.resultFile,
+          absolute: state.absolute,
+        });
         setStatus(state.status);
         setEntries([]);
         setArgErrors([]);
@@ -341,14 +387,24 @@ function App() {
       <div className="fr-main">
         <div className="fr-pane" ref={leftPane}>
           <div className="fr-label">
-            Function <code className="fr-path">{paths.file}</code>
+            Function{" "}
+            <PathWithCopy
+              shown={paths.file}
+              copied={paths.absolute?.file ?? paths.file}
+              label="function"
+            />
           </div>
           <div className="fr-editor">
             <Editor value={code} onChange={setCode} dark={dark} label="Function" typescript />
           </div>
           <Splitter height={argHeight} onChange={setArgHeight} pane={leftPane} />
           <div className="fr-label" id="argument-label">
-            Argument (JSON or JSON5, optional) <code className="fr-path">{paths.argFile}</code>
+            Argument (JSON or JSON5, optional){" "}
+            <PathWithCopy
+              shown={paths.argFile}
+              copied={paths.absolute?.argFile ?? paths.argFile}
+              label="argument"
+            />
             {argValid ? null : (
               <span className="fr-invalid">
                 {" "}
@@ -372,7 +428,14 @@ function App() {
           </div>
         </div>
         <div className="fr-pane">
-          <div className="fr-label">Output</div>
+          <div className="fr-label">
+            Output{" "}
+            <PathWithCopy
+              shown={paths.resultFile ?? ""}
+              copied={paths.absolute?.resultFile ?? paths.resultFile ?? ""}
+              label="result file"
+            />
+          </div>
           <div className="fr-output">
             {entries.length === 0 ? (
               <div className="fr-empty">Run the function to see its output here.</div>

@@ -201,6 +201,37 @@ describe("GET /events", () => {
     ]);
   });
 
+  test("tells the page the absolute paths too, so it can offer them for copying", async () => {
+    const { files, session } = await setup();
+    const handler = createFunctionRunHandler({
+      loadPage: async () => pageTemplate,
+      files,
+      session,
+      paths: {
+        file: "studio/function.ts",
+        argFile: "studio/function.arg.json5",
+        resultFile: "studio/function.result.json",
+        absolute: {
+          file: "/p/studio/function.ts",
+          argFile: "/p/studio/function.arg.json5",
+          resultFile: "/p/studio/function.result.json",
+        },
+      },
+    });
+
+    const response = await handler(events(), context);
+    const [first] = await readFrames(response, (frames) => frames.length >= 1);
+
+    expect(dataOf(first!)).toMatchObject({
+      resultFile: "studio/function.result.json",
+      absolute: {
+        file: "/p/studio/function.ts",
+        argFile: "/p/studio/function.arg.json5",
+        resultFile: "/p/studio/function.result.json",
+      },
+    });
+  });
+
   test("replays what the run already printed, then goes on with what it prints next", async () => {
     const { handler, session, run } = await setup();
     session.start();
