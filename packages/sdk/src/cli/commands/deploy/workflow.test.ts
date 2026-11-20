@@ -3,7 +3,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, test, expect, vi } from "vitest";
 import { MAX_PAGE_SIZE, type OperatorClient } from "#/cli/shared/client";
 import { logger, symbols } from "#/cli/shared/logger";
-import { sdkNameLabelKey } from "./label";
+import { buildMetaRequest, sdkNameLabelKey } from "./label";
 import { applyWorkflow, formatWorkflowChangeEntries, planWorkflow } from "./workflow";
 import type { Workflow, WorkflowJob } from "#/types/workflow.generated";
 
@@ -772,6 +772,49 @@ describe("planWorkflow", () => {
       expect(result.changeSet.unchanged).toHaveLength(1);
       expect(result.changeSet.unchanged[0]!.name).toBe("sample-workflow");
       expect(result.changeSet.updates).toHaveLength(0);
+    });
+
+    test("workflow whose other SDK labels differ is unchanged with a label refresh", async () => {
+      const client = createMockClient([
+        {
+          id: "1",
+          name: "sample-workflow",
+          label: appName,
+          resource: {
+            id: "1",
+            name: "sample-workflow",
+            mainJobFunctionName: "validate-order",
+            jobFunctions: {
+              "check-inventory": "5",
+              "process-payment": "5",
+              "validate-order": "5",
+            },
+          },
+        },
+      ]);
+      const desiredLabels = { "sdk-name": appName, "sdk-version": "v1-0-0", "sdk-app-id": "app-1" };
+      vi.mocked(buildMetaRequest).mockImplementationOnce(async ({ trn }) => ({
+        trn,
+        labels: { ...desiredLabels },
+      }));
+
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        undefined,
+        { "sample-workflow": createMockWorkflow("sample-workflow", "validate-order") },
+        { "validate-order": ["validate-order", "check-inventory", "process-payment"] },
+        new Set(["validate-order", "check-inventory", "process-payment"]),
+      );
+
+      expect(result.changeSet.updates).toHaveLength(0);
+      expect(result.changeSet.unchanged).toEqual([
+        expect.objectContaining({
+          name: "sample-workflow",
+          labelRefresh: expect.objectContaining({ labels: expect.objectContaining(desiredLabels) }),
+        }),
+      ]);
     });
 
     describe("SDK-version-forced updates", () => {

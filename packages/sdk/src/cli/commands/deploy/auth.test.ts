@@ -49,6 +49,7 @@ describe("applyAuth phase separation", () => {
       updates: [],
       deletes: [{ name, request }],
       replaces: [] as OAuth2ClientReplace[],
+      unchanged: [],
       title,
       isEmpty: () => false,
       lines: () => [],

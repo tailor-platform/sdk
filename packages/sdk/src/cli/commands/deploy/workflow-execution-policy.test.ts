@@ -63,10 +63,12 @@ describe("planWorkflowJobFunctionExecutionPolicy SDK-version-forced updates", ()
     remoteMaxConcurrentExecutions: number;
     owner?: string;
     staleSdkVersion?: boolean;
+    appId?: string;
   }) {
     const { labels } = await buildMetaRequest({
       trn: resourceTrn(workspaceId, "workflow_job_function_execution_policy", "premium"),
       appName,
+      appId: options.appId,
     });
     const client = {
       listWorkflowJobFunctionExecutionPolicies: vi.fn().mockResolvedValue({
@@ -90,7 +92,7 @@ describe("planWorkflowJobFunctionExecutionPolicy SDK-version-forced updates", ()
       }),
     } as unknown as OperatorClient;
 
-    return planWorkflowJobFunctionExecutionPolicy(client, workspaceId, appName, undefined, {
+    return planWorkflowJobFunctionExecutionPolicy(client, workspaceId, appName, options.appId, {
       premium: defineWorkflowExecutionPolicy("premium", {
         concurrencyPolicy: { maxConcurrentExecutions: 3 },
       }),
@@ -106,6 +108,24 @@ describe("planWorkflowJobFunctionExecutionPolicy SDK-version-forced updates", ()
 
     expect(result.changeSet.updates).toHaveLength(1);
     expect(result.changeSet.updates[0]?.forcedBySdkVersion).toBe(forced ? true : undefined);
+  });
+
+  test("refreshes the labels of an unchanged policy whose other SDK labels differ", async () => {
+    const result = await planPremium({
+      remoteMaxConcurrentExecutions: 3,
+      owner: "old-name",
+      appId: "app-1",
+    });
+
+    expect(result.changeSet.updates).toEqual([]);
+    expect(result.changeSet.unchanged).toEqual([
+      {
+        name: "premium",
+        labelRefresh: expect.objectContaining({
+          labels: expect.objectContaining({ "sdk-name": appName }),
+        }),
+      },
+    ]);
   });
 
   test("reports a policy owned by another app with its resource type and label", async () => {

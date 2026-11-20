@@ -252,6 +252,12 @@ When some updates are forced by the SDK version, the summary line also shows how
 Plan: 0 to create, 12 to update (11 forced by SDK version), 0 to delete
 ```
 
+When some resources are left as they are and only the labels the SDK sets on them are rewritten, the summary line also shows how many:
+
+```text
+Plan: 0 to create, 0 to update, 0 to delete, 2 to refresh labels
+```
+
 Use `--dry-run` to preview the plan without applying anything. In dry-run mode the plan is written to **stdout**, so it can be captured in CI without `2>&1`:
 
 ```bash
@@ -313,7 +319,7 @@ Pass the global `--json` / `-j` flag to get machine-readable output.
 }
 ```
 
-- `summary` — counts of each change type. `forcedBySdkVersion` counts the updates forced by the SDK version, which are also included in `update`. `labelRefreshes` counts the function scripts that are left as they are while only their SDK version label is rewritten after an SDK upgrade; they are not included in `update`.
+- `summary` — counts of each change type. `forcedBySdkVersion` counts the updates forced by the SDK version, which are also included in `update`. `labelRefreshes` counts the resources that are left as they are while only the labels the SDK sets on them are rewritten, such as a function script's SDK version label after an SDK upgrade; they are not included in `update`. TailorDB tables and resolvers are not counted, although deploy rewrites their labels too.
 - `changes` — planned resource changes, each with `action`, `name`, and optional `labels` / `namespace`. An update forced by the SDK version also has `forcedBySdkVersion: true`.
 - `warnings` — resources not in config (`type: "unmanaged"`), secrets with missing values (`type: "skippedSecret"`), or applications recorded as depending on this deploy but missing from it (`type: "missingDependentApp"`). Unmanaged resources and missing dependent applications require confirmation in apply mode (apply is cancelled if declined); skipped secrets are non-blocking.
   - A `missingDependentApp` entry names the missing application's `appId`, the `reason` it depends on this deploy, and the resource whose event publishing turns off when applying without it (`resourceType` and `name`, plus `namespace` for a TailorDB table or resolver). An entry about a workflow's jobs rather than the workflow itself has `scope: "jobs"`.

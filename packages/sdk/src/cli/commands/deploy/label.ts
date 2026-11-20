@@ -128,6 +128,32 @@ export function hasMatchingSdkVersion(
 }
 
 /**
+ * Marks an unchanged resource whose SDK labels differ from the ones deploy writes. The
+ * application, IdP service, and workflow applies write every unchanged item's labels anyway, so
+ * for them it is only counted.
+ */
+export type UnchangedAnnotation = { labelRefresh?: MetadataLabelWrite };
+
+/**
+ * Plan a label refresh for an unchanged resource whose labels differ from the ones a write sets
+ * and removes. Dependency records are left out: they are reconciled against the labels read at
+ * write time.
+ * @param existingLabels - Labels currently stored on the remote resource
+ * @param write - Labels the current apply run would set and remove
+ * @returns The write as `labelRefresh` when it would change a label, otherwise no annotation
+ */
+export function labelRefreshOf(
+  existingLabels: Record<string, string> | undefined,
+  write: MetadataLabelWrite,
+): UnchangedAnnotation {
+  const { trn, labels, remove } = write;
+  const current = existingLabels ?? {};
+  return areSameLabels(current, applyMetadataLabelWrite(current, { trn, labels, remove }))
+    ? {}
+    : { labelRefresh: write };
+}
+
+/**
  * Determine whether a remote resource is owned by the given application.
  * When the resource carries an `sdk-app-id`, ownership is decided strictly
  * by id match — a resource explicitly tagged with another app's id is
@@ -648,6 +674,21 @@ export async function writeMetadataLabels(
     return;
   }
   await writeMetadataLabelsDirect(client, write);
+}
+
+/**
+ * Rewrite the labels of the unchanged resources whose SDK labels differ.
+ * @param client - Operator client instance
+ * @param unchanged - Unchanged items of a change set
+ * @returns One pending write per item with a label refresh
+ */
+export function writeLabelRefreshes(
+  client: MetadataLabelClient,
+  unchanged: ReadonlyArray<UnchangedAnnotation>,
+): Promise<void>[] {
+  return unchanged.flatMap(({ labelRefresh }) =>
+    labelRefresh ? [writeMetadataLabels(client, labelRefresh)] : [],
+  );
 }
 
 /**

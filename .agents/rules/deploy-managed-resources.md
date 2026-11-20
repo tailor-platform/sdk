@@ -36,6 +36,11 @@ consumer below; the guard named with it fails while one is missing.
   whose workspace ID is not a UUID into each list with checks and expects a violation.
 - `resources-in-use.ts`'s `CHECKED_RESOURCES` — add a type that other resources reference, so
   deleting it while referenced fails.
+- `label-refresh.test.ts`'s `CASES` — when the type's planner reads its SDK labels, attach a
+  refresh to its unchanged items (`labeledResourceChecks` or `labelRefreshOf`) and write it in its
+  create-update apply with `writeLabelRefreshes`; add its case, or the reason it has none (guard:
+  `satisfies Record`). The cases check only the apply, so also plan an owned unchanged resource
+  with stale SDK labels in the planner's tests and expect its `labelRefresh`.
 
 ## Per plan kind
 

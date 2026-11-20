@@ -32,7 +32,7 @@ import { symbols } from "#/cli/shared/logger";
 import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
-import { sdkNameLabelKey } from "../label";
+import { buildMetaRequest, sdkNameLabelKey } from "../label";
 import { tailorDBPlanResultContext } from "../test-helpers/plan-results";
 import { logMigrationPlanNotices } from "./migration-validation";
 import {
@@ -492,6 +492,30 @@ describe("planTailorDB (service level)", () => {
         );
       },
     );
+
+    test("service whose other SDK labels differ is unchanged with a label refresh", async () => {
+      const client = createMockClient([{ name: "my-tailordb", label: appName }]);
+      const application = createMockApplication([createMockTailorDBService("my-tailordb")]);
+      const desiredLabels = { "sdk-name": appName, "sdk-version": "v1-0-0", "sdk-app-id": "app-1" };
+      vi.mocked(buildMetaRequest).mockImplementationOnce(async ({ trn }) => ({
+        trn,
+        labels: desiredLabels,
+      }));
+
+      const result = await planTailorDB({
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+        noSchemaCheck: true,
+      });
+
+      expect(result.changeSet.service.updates).toHaveLength(0);
+      expect(result.changeSet.service.unchanged).toEqual([
+        { name: "my-tailordb", labelRefresh: expect.objectContaining({ labels: desiredLabels }) },
+      ]);
+    });
 
     test("reports an unmanaged service with its resource type and label", async () => {
       const client = createMockClient([{ name: "my-tailordb" }]);

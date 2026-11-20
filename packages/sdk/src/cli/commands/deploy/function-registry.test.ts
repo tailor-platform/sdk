@@ -14,7 +14,7 @@ import {
   splitFunctionRegistryChanges,
   workflowJobFunctionName,
 } from "./function-registry";
-import { sdkNameLabelKey } from "./label";
+import { buildMetaRequest, sdkNameLabelKey } from "./label";
 import type { Application } from "#/cli/services/application";
 import type { CollectedJob } from "#/cli/services/workflow/service";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -219,10 +219,36 @@ describe("planFunctionRegistry", () => {
 
       const result = await planFunctionRegistry(client, workspaceId, appName, undefined, [entry]);
 
-      expect(result.metadataUpdates.map((update) => update.name)).toEqual(["resolver/ns/getUser"]);
-      expect(result.metadataUpdates[0]!.metaRequest.labels).toMatchObject({
-        "sdk-version": "v1-0-0",
-      });
+      expect(result.changeSet.unchanged).toEqual([
+        {
+          name: "resolver/ns/getUser",
+          labelRefresh: expect.objectContaining({
+            labels: expect.objectContaining({ "sdk-version": "v1-0-0" }),
+          }),
+        },
+      ]);
+    });
+
+    test("labels are refreshed for a function whose other SDK labels differ", async () => {
+      const entry = createEntry("resolver/ns/getUser");
+      const client = createMockClient([
+        { name: "resolver/ns/getUser", contentHash: entry.contentHash, label: appName },
+      ]);
+      const desiredLabels = { "sdk-name": appName, "sdk-version": "v1-0-0", "sdk-app-id": "app-1" };
+      vi.mocked(buildMetaRequest).mockImplementationOnce(async ({ trn }) => ({
+        trn,
+        labels: desiredLabels,
+      }));
+
+      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, [entry]);
+
+      expect(result.changeSet.updates).toHaveLength(0);
+      expect(result.changeSet.unchanged).toEqual([
+        {
+          name: "resolver/ns/getUser",
+          labelRefresh: expect.objectContaining({ labels: desiredLabels }),
+        },
+      ]);
     });
 
     test("labels are left alone when content and sdk version both match", async () => {
@@ -233,7 +259,7 @@ describe("planFunctionRegistry", () => {
 
       const result = await planFunctionRegistry(client, workspaceId, appName, undefined, [entry]);
 
-      expect(result.metadataUpdates).toHaveLength(0);
+      expect(result.changeSet.unchanged).toEqual([{ name: "resolver/ns/getUser" }]);
     });
 
     test("existing function is updated even when content hash matches", async () => {
@@ -448,7 +474,6 @@ describe("applyFunctionRegistry phase separation", () => {
         isEmpty: () => false,
         lines: () => [],
       },
-      metadataUpdates: [],
       conflicts: [],
       unmanaged: [],
       resourceOwners: new Set<string>(),
@@ -470,38 +495,19 @@ describe("applyFunctionRegistry phase separation", () => {
     expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
   });
 
-  test("create-update phase writes only labels for metadata updates without uploading", async () => {
+  test("delete phase does not write labels for a label refresh", async () => {
     const client = createMockClientWithSpies();
     const planResult = {
       ...createMockPlanResult(),
-      changeSet: { ...createMockPlanResult().changeSet, creates: [], updates: [] },
-      metadataUpdates: [
-        {
-          name: "resolver/ns/refresh-test",
-          metaRequest: { trn: "trn:refresh", labels: { "sdk-version": "v2-0-0" } },
-        },
-      ],
-    } as unknown as Awaited<ReturnType<typeof planFunctionRegistry>>;
-
-    await applyFunctionRegistry(client, planResult, "create-update");
-
-    expect(client.createFunctionRegistry).not.toHaveBeenCalled();
-    expect(client.updateFunctionRegistry).not.toHaveBeenCalled();
-    expect(client.setMetadata).toHaveBeenCalledWith(
-      expect.objectContaining({
-        trn: "trn:refresh",
-        labels: expect.objectContaining({ "sdk-version": "v2-0-0" }),
-      }),
-    );
-  });
-
-  test("delete phase does not write labels for metadata updates", async () => {
-    const client = createMockClientWithSpies();
-    const planResult = {
-      ...createMockPlanResult(),
-      metadataUpdates: [
-        { name: "resolver/ns/refresh-test", metaRequest: { trn: "trn:refresh", labels: {} } },
-      ],
+      changeSet: {
+        ...createMockPlanResult().changeSet,
+        unchanged: [
+          {
+            name: "resolver/ns/refresh-test",
+            labelRefresh: { trn: "trn:refresh", labels: { "sdk-version": "v2-0-0" } },
+          },
+        ],
+      },
     } as unknown as Awaited<ReturnType<typeof planFunctionRegistry>>;
 
     await applyFunctionRegistry(client, planResult, "delete");
@@ -570,7 +576,6 @@ describe("applyFunctionRegistry phase separation", () => {
       metaRequest: { trn: `trn:${name}`, labels: { "sdk-name": "test-app" } },
     });
     const planResult = {
-      metadataUpdates: [],
       changeSet: {
         creates: ["create-a", "create-b", "create-c"].map(changeOf),
         updates: ["update-a", "update-b", "update-c"].map(changeOf),
@@ -622,7 +627,6 @@ describe("applyFunctionRegistry phase separation", () => {
       metaRequest: { trn: `trn:${name}`, labels: { "sdk-name": "test-app" } },
     });
     const planResult = {
-      metadataUpdates: [],
       changeSet: {
         creates: ["create-a", "create-b"].map(changeOf),
         updates: ["update-a"].map(changeOf),
@@ -681,7 +685,6 @@ describe("applyFunctionRegistry phase separation", () => {
         metaRequest: { trn: `trn:${name}`, labels: { "sdk-name": "test-app" } },
       });
       const planResult = {
-        metadataUpdates: [],
         changeSet: {
           creates: [],
           updates: ["update-a", "update-b", "update-c", "update-d"].map(changeOf),

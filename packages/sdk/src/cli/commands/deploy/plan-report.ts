@@ -22,6 +22,7 @@ import {
 import {
   collectOwnerConflicts,
   collectUnmanagedResources,
+  countLabelRefreshes,
   MANAGED_RESOURCES,
 } from "./managed-resources";
 import { formatResolverChangeEntries } from "./resolver";
@@ -367,7 +368,7 @@ export function summarizePlanResults(
     delete: 0,
     replace: 0,
     forcedBySdkVersion: 0,
-    labelRefreshes: results.functionRegistry.metadataUpdates.length,
+    labelRefreshes: countLabelRefreshes(results),
   };
 
   // Count grouped display entries and service-level actions (shown as namespace headers)

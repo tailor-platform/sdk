@@ -55,7 +55,7 @@ function secretUpdate(secretName: string, value: string) {
 function secretPlanResult(updates: Array<ReturnType<typeof secretUpdate>>) {
   return {
     stateScope,
-    vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
+    vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [], unchanged: [] },
     secretChangeSet: { creates: [], updates, deletes: [], replaces: [] },
   } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
 }
@@ -78,7 +78,7 @@ function connectionUpdate(name: string, clientSecret: string) {
 function connectionPlanResult(updates: Array<ReturnType<typeof connectionUpdate>>) {
   return {
     stateScope,
-    changeSet: { creates: [], updates, deletes: [], replaces: [] },
+    changeSet: { creates: [], updates, deletes: [], replaces: [], unchanged: [] },
   } as unknown as Awaited<ReturnType<typeof planAuthConnections>>;
 }
 

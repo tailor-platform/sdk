@@ -1,6 +1,7 @@
 // oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { describe, expect, test, vi } from "vitest";
 import { planAIGateway } from "./aigateway";
+import { buildMetaRequest } from "./label";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { PlanContext } from "./types";
@@ -101,6 +102,29 @@ describe("planAIGateway", () => {
     expect(result.conflicts).toHaveLength(0);
     expect(result.unmanaged).toHaveLength(0);
     expect(result.changeSet.unchanged[0]!.name).toBe("gateway-a");
+  });
+
+  test("refreshes the labels of an unchanged gateway whose SDK labels differ", async () => {
+    const client = createMockClient([
+      {
+        name: "gateway-a",
+        authNamespace: "default",
+        cors: ["https://app.example.com", "https://example.com"],
+        label: appName,
+      },
+    ]);
+    const desiredLabels = { "sdk-name": appName, "sdk-version": sdkVersion, "sdk-app-id": "app-1" };
+    vi.mocked(buildMetaRequest).mockImplementationOnce(async ({ trn }) => ({
+      trn,
+      labels: desiredLabels,
+    }));
+
+    const result = await planAIGateway(createContext(client));
+
+    expect(result.changeSet.updates).toEqual([]);
+    expect(result.changeSet.unchanged).toEqual([
+      { name: "gateway-a", labelRefresh: expect.objectContaining({ labels: desiredLabels }) },
+    ]);
   });
 
   test.each([

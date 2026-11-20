@@ -6,7 +6,7 @@ import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import {
   buildMetaRequest,
-  hasMatchingSdkVersion,
+  labelRefreshOf,
   type MetadataLabelWrite,
   resourceTrn,
   type WithLabel,
@@ -308,7 +308,6 @@ export async function planFunctionRegistry(
     FunctionUpload,
     DeleteFunction
   >("Function registry");
-  const metadataUpdates: Array<{ name: string; metaRequest: MetadataLabelWrite }> = [];
   const ownership = createOwnershipTracker(appName, appId);
 
   const fetchedMap =
@@ -355,10 +354,8 @@ export async function planFunctionRegistry(
       if (configUnchanged) {
         changeSet.unchanged.push({
           name: entry.name,
+          ...labelRefreshOf(existing.allLabels, metaRequest),
         });
-        if (!hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
-          metadataUpdates.push({ name: entry.name, metaRequest });
-        }
       } else {
         changeSet.updates.push({
           name: entry.name,
@@ -397,7 +394,6 @@ export async function planFunctionRegistry(
   } = splitFunctionRegistryChanges(changeSet);
   return {
     changeSet,
-    metadataUpdates,
     workflowJobChanges,
     resolverFunctionChanges,
     executorFunctionChanges,
@@ -507,8 +503,8 @@ export async function applyFunctionRegistry(
           await writeMetadataLabels(client, update.metaRequest);
         }),
       ),
-      ...result.metadataUpdates.map((update) =>
-        limitFunction(() => writeMetadataLabels(client, update.metaRequest)),
+      ...changeSet.unchanged.flatMap(({ labelRefresh }) =>
+        labelRefresh ? [limitFunction(() => writeMetadataLabels(client, labelRefresh))] : [],
       ),
     ]);
   } else {

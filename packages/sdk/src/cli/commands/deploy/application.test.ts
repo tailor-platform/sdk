@@ -561,6 +561,34 @@ describe("planApplication", () => {
       expect(result.deletes).toHaveLength(0);
     });
 
+    test("refreshes the labels of an unchanged app that lacks its sdk-app-id", async () => {
+      const client = createMockClient([
+        {
+          name: appName,
+          authNamespace: "auth-a",
+          authIdpConfigName: "idp-a",
+          cors: ["https://a.example.com", "https://b.example.com"],
+          allowedIpAddresses: ["1.1.1.1", "2.2.2.2"],
+          disableIntrospection: true,
+          disabled: false,
+          subgraphs: matchingSubgraphs,
+        },
+      ]);
+      const application = createMockApplication({ name: appName, id: "stable-id" });
+
+      const result = await planApplication(createContext(client, application));
+
+      expect(result.updates).toHaveLength(0);
+      expect(result.unchanged).toEqual([
+        expect.objectContaining({
+          name: appName,
+          labelRefresh: expect.objectContaining({
+            labels: expect.objectContaining({ "sdk-app-id": "app-stable-id" }),
+          }),
+        }),
+      ]);
+    });
+
     test("does not delete unrelated apps when only sdk-name matches a different app", async () => {
       const client = createMockClient([
         {
