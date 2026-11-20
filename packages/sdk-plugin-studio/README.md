@@ -29,7 +29,7 @@ The bar at the top of the page shows the profile and workspace every tab works a
 
 ## Function run tab
 
-The Function run tab runs code you write in its editor with `tailor function run --watch --json` and shows each run as a card: status, execution ID, logs, result and error. Write the function, add an optional JSON argument, then press Run and watch. The function runs again a moment after you stop typing. Stop, or closing the page, ends the watch.
+The Function run tab runs code you write in its editor with `tailor function run --watch --json` and shows each run as a card: status, execution ID, logs, result and error. Pick the workspace in the bar at the top first; Run stays refused until one is selected. Write the function, add an optional JSON argument, then press Run and watch. The function runs again a moment after you stop typing. Stop, or closing the page, ends the watch.
 
 The code is saved to a temporary file outside the project, so it is not part of your project and the file is removed when the run ends. Packages installed in the project (such as `@tailor-platform/sdk`) can be imported; use absolute paths to import other project files. The tab uses the `@tailor-platform/sdk` installed in the project. A run starts only from a request that carries the per-run token the shell hands to the page.
 

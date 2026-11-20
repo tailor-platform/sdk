@@ -74,6 +74,27 @@ describe("functionRunArgs", () => {
     ]);
   });
 
+  test("selects the workspace with the given options", () => {
+    expect(
+      functionRunArgs({
+        tailorBin: "/sdk/bin/tailor.mjs",
+        file: "/app/a.ts",
+        workspaceArgs: ["-p", "test", "-w", "ws-1"],
+      }),
+    ).toEqual([
+      "/sdk/bin/tailor.mjs",
+      "function",
+      "run",
+      "/app/a.ts",
+      "--watch",
+      "--json",
+      "-p",
+      "test",
+      "-w",
+      "ws-1",
+    ]);
+  });
+
   test("passes the argument with --arg", () => {
     expect(
       functionRunArgs({ tailorBin: "/sdk/bin/tailor.mjs", file: "/app/a.ts", arg: '{"a":1}' }),

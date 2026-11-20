@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
+import { selectionArgs } from "../workspace-context";
 import { injectToken } from "./page";
 import type { UiHandler } from "../shell-handler";
 
@@ -17,6 +18,7 @@ export interface RunHandle {
 export interface RunInput {
   file: string;
   arg: string | undefined;
+  workspaceArgs: string[];
 }
 
 export interface FunctionRunHandlerOptions {
@@ -143,7 +145,7 @@ function streamRun(
 export function createFunctionRunHandler(options: FunctionRunHandlerOptions): UiHandler {
   const scratch = createScratch(options.projectDir, options.scratchRoot ?? os.tmpdir());
 
-  return async (request, { token }) => {
+  return async (request, { token, getSelection }) => {
     const { pathname } = new URL(request.url);
     const method = request.method.toUpperCase();
 
@@ -189,10 +191,17 @@ export function createFunctionRunHandler(options: FunctionRunHandlerOptions): Ui
     const input = parseRunBody(body);
     if (typeof input === "string") return badRequest(input);
 
+    const workspaceArgs = selectionArgs(getSelection());
+    if (workspaceArgs.length === 0) {
+      return new Response("Select a workspace in the bar at the top of the page.\n", {
+        status: 409,
+      });
+    }
+
     const { id, file } = scratch.create(input.code);
     let handle: RunHandle;
     try {
-      handle = options.startRun({ file, arg: input.arg });
+      handle = options.startRun({ file, arg: input.arg, workspaceArgs });
     } catch (error) {
       scratch.release(id);
       return new Response(`${error instanceof Error ? error.message : String(error)}\n`, {

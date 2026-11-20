@@ -4,7 +4,12 @@ import * as path from "pathe";
 import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { createFunctionRunHandler, type RunEvent, type RunHandle, type RunInput } from "./handler";
 
-const context = { basePath: "/plugins/function-run/", token: "tok-123" };
+const selected = { profile: "test", workspaceId: "ws-1" };
+const context = {
+  basePath: "/plugins/function-run/",
+  token: "tok-123",
+  getSelection: () => selected,
+};
 const root = "http://127.0.0.1:7777";
 
 let base: string;
@@ -165,6 +170,37 @@ describe("createFunctionRunHandler", () => {
       await handler(post({ code: "x", arg: "" }), context);
 
       expect(startRun.mock.calls.map(([input]) => input.arg)).toEqual(['{"a":1}', undefined]);
+    });
+
+    test("runs against the workspace selected in the shell at the time of the request", async () => {
+      const startRun = vi.fn((_input: RunInput) => fakeRun([]).handle);
+      let selection: { profile?: string; workspaceId?: string } = selected;
+      const handler = handlerWith(startRun);
+      const withSelection = { ...context, getSelection: () => selection };
+
+      await handler(post({ code: "x" }), withSelection);
+      selection = { profile: "dev", workspaceId: "ws-2" };
+      await handler(post({ code: "x" }), withSelection);
+
+      expect(startRun.mock.calls.map(([input]) => input.workspaceArgs)).toEqual([
+        ["-p", "test", "-w", "ws-1"],
+        ["-p", "dev", "-w", "ws-2"],
+      ]);
+    });
+
+    test("asks for a workspace with 409 and starts nothing while none is selected", async () => {
+      const startRun = vi.fn(() => fakeRun([]).handle);
+
+      const response = await handlerWith(startRun)(post({ code: "x" }), {
+        ...context,
+        getSelection: () => ({}),
+      });
+
+      expect([response.status, await response.text(), startRun.mock.calls.length]).toEqual([
+        409,
+        "Select a workspace in the bar at the top of the page.\n",
+        0,
+      ]);
     });
 
     test("tells the browser the run's id so it can save the code again", async () => {
