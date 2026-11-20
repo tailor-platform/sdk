@@ -42,7 +42,7 @@ export function defineUnambiguousContextField<Target extends object, Key extends
       throw CLIError({
         code: "PLUGIN_CONTEXT_FIELD_AMBIGUOUS",
         message: `"${key}" cannot be read because the config has ${names.length} ${candidatesLabel}: ${names.join(", ")}.`,
-        suggestion: `Read "${replacement}" instead.`,
+        suggestion: `Change the code that reads "${key}" to read "${replacement}".`,
         context: { field: key, replacement, candidates: names },
       });
     },

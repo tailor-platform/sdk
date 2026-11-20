@@ -45,7 +45,7 @@ describe("defineUnambiguousContextField", () => {
           code: "PLUGIN_CONTEXT_FIELD_AMBIGUOUS",
           message:
             '"auth" cannot be read because the config has 2 Auth services: corp-auth, partner-auth.',
-          suggestion: 'Read "auths" instead.',
+          suggestion: 'Change the code that reads "auth" to read "auths".',
           context: {
             field: "auth",
             replacement: "auths",
