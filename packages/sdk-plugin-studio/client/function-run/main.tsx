@@ -6,6 +6,7 @@ import { Highlight } from "@enlumine/react";
 import { Alert, Badge, Button, Card, Textarea } from "@tailor-platform/app-shell";
 import { StrictMode, useEffect, useRef, useState, type RefObject } from "react";
 import { createRoot } from "react-dom/client";
+import { normalizeArg } from "../../src/function-run/arg";
 import { parseFrame, splitFrames, type RunRecord } from "../../src/function-run/stream";
 import { scopeTheme } from "../../src/function-run/theme";
 import { Editor } from "./Editor";
@@ -130,15 +131,6 @@ function RunCard({ record }: { record: RunRecord }) {
   );
 }
 
-function isJson(text: string): boolean {
-  try {
-    JSON.parse(text);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 const DEFAULT_ARG_HEIGHT = 192;
 const MIN_ARG_HEIGHT = 64;
 const MIN_EDITOR_HEIGHT = 120;
@@ -204,7 +196,7 @@ function App() {
 
   useEffect(followShellTheme, []);
 
-  const argValid = arg.trim() === "" || isJson(arg);
+  const argValid = normalizeArg(arg) !== undefined;
 
   const save = (change: { code: string } | { arg: string }) => {
     const id = runId.current;
@@ -307,11 +299,11 @@ function App() {
           </div>
           <Splitter height={argHeight} onChange={setArgHeight} pane={leftPane} />
           <label className="fr-label" htmlFor="argument">
-            Argument (JSON, optional)
+            Argument (JSON or JSON5, optional)
             {argValid ? null : (
               <span className="fr-invalid">
                 {" "}
-                — not valid JSON, the last valid argument stays in use
+                — not valid JSON or JSON5, the last valid argument stays in use
               </span>
             )}
           </label>
@@ -319,7 +311,7 @@ function App() {
             id="argument"
             value={arg}
             onChange={(event) => setArg(event.target.value)}
-            placeholder='{"a": 1, "b": 2}'
+            placeholder="{a: 1, b: 2}"
             aria-invalid={!argValid}
             className="astw:font-mono fr-argument"
             style={{ height: argHeight }}

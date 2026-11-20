@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { selectionArgs } from "../workspace-context";
+import { normalizeArg } from "./arg";
 import { injectToken } from "./page";
 import type { UiHandler } from "../shell-handler";
 
@@ -41,22 +42,10 @@ function sseFrame(event: RunEvent): Uint8Array {
   return encoder.encode(`event: ${event.type}\ndata: ${data}\n\n`);
 }
 
-function isValidJson(text: string): boolean {
-  try {
-    JSON.parse(text);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const EMPTY_ARG = "{}";
-
 function parseArg(arg: unknown): string | undefined | null {
   if (arg === undefined) return undefined;
   if (typeof arg !== "string") return null;
-  if (arg === "") return EMPTY_ARG;
-  return isValidJson(arg) ? arg : null;
+  return normalizeArg(arg) ?? null;
 }
 
 function parseRunBody(body: unknown): { code: string; arg: string } | string {
@@ -64,8 +53,8 @@ function parseRunBody(body: unknown): { code: string; arg: string } | string {
   const { code, arg } = body as { code?: unknown; arg?: unknown };
   if (typeof code !== "string") return "`code` must be a string.";
   const parsed = parseArg(arg);
-  if (parsed === null) return "`arg` must be a string of valid JSON.";
-  return { code, arg: parsed ?? EMPTY_ARG };
+  if (parsed === null) return "`arg` must be a string of valid JSON or JSON5.";
+  return { code, arg: parsed ?? "{}" };
 }
 
 function parseSaveBody(body: unknown): { id: string; code?: string; arg?: string } | string {
@@ -74,7 +63,7 @@ function parseSaveBody(body: unknown): { id: string; code?: string; arg?: string
   if (typeof id !== "string" || id === "") return "`id` must be a non-empty string.";
   if (code !== undefined && typeof code !== "string") return "`code` must be a string.";
   const parsed = parseArg(arg);
-  if (parsed === null) return "`arg` must be a string of valid JSON.";
+  if (parsed === null) return "`arg` must be a string of valid JSON or JSON5.";
   if (code === undefined && parsed === undefined) return "Send `code` or `arg`.";
   return {
     id,

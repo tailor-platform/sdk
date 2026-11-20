@@ -180,6 +180,18 @@ describe("createFunctionRunHandler", () => {
       expect(seen).toEqual(['{"a":1}', "{}", "{}"]);
     });
 
+    test("accepts JSON5 for the argument and hands the run plain JSON", async () => {
+      const seen: string[] = [];
+      const handler = handlerWith((input) => {
+        seen.push(fs.readFileSync(input.argFile, "utf8"));
+        return fakeRun([]).handle;
+      });
+
+      await handler(post({ code: "x", arg: "{a: 1, b: 'two',}" }), context);
+
+      expect(seen).toEqual(['{"a":1,"b":"two"}']);
+    });
+
     test("tells the browser the run's id so it can save the code again", async () => {
       const response = await handlerWith(() => endlessRun().handle)(post({ code: "x" }), context);
 
@@ -298,6 +310,16 @@ describe("createFunctionRunHandler", () => {
         fs.readFileSync(argFile, "utf8"),
         fs.readFileSync(file, "utf8"),
       ]).toEqual([204, '{"a":2}', "keep"]);
+    });
+
+    test("saves a JSON5 argument as plain JSON", async () => {
+      const startRun = vi.fn((_input: RunInput) => endlessRun().handle);
+      const handler = handlerWith(startRun);
+      const started = await handler(post({ code: "x" }), context);
+
+      await handler(save({ id: started.headers.get("x-run-id"), arg: "{a: 2}" }), context);
+
+      expect(fs.readFileSync(startRun.mock.calls[0]![0].argFile, "utf8")).toBe('{"a":2}');
     });
 
     test("writes {} when the argument is saved empty", async () => {
