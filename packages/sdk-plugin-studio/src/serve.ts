@@ -1,11 +1,19 @@
 import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { arg, defineAppCommand, logger, workspaceArgs } from "@tailor-platform/sdk/cli";
+import {
+  arg,
+  defineAppCommand,
+  logger,
+  platformConfigFromEnv,
+  workspaceArgs,
+} from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { z } from "zod";
+import { createAccounts } from "./accounts";
 import { discoverTab, type TabSpec } from "./discover-tab";
 import { createFunctionRunTab } from "./function-run/tab";
 import { openBrowser } from "./open-browser";
+import { createSelectionStore } from "./selection-store";
 import { startServer } from "./server";
 import { createShellHandler } from "./shell-handler";
 import { createWorkspaceContext, listProfiles } from "./workspace-context";
@@ -22,7 +30,7 @@ export const uiCommand = defineAppCommand({
   name: "studio",
   description: "Serve the local web UI shell that hosts CLI plugin UIs. (beta)",
   args: z.strictObject({
-    ...workspaceArgs,
+    profile: workspaceArgs.profile,
     port: arg(z.coerce.number().int().min(0).max(65535).default(DEFAULT_PORT), {
       description:
         "Preferred local port; the next free port is used when it is taken (0 selects any free port)",
@@ -44,13 +52,13 @@ export const uiCommand = defineAppCommand({
       "The 'studio' command is a beta feature and may introduce breaking changes in future releases.",
     );
     const projectDir = process.cwd();
+    const platform = platformConfigFromEnv();
     const workspace = createWorkspaceContext({
-      initial: {
-        ...(args.profile ? { profile: args.profile } : {}),
-        ...(args["workspace-id"] ? { workspaceId: args["workspace-id"] } : {}),
-      },
+      ...(args.profile ? { initialProfile: args.profile } : {}),
       listProfiles: listProfiles,
+      store: createSelectionStore(process.cwd()),
     });
+    await workspace.restore();
     const functionRun = await createFunctionRunTab({
       projectDir,
       file: args["function-file"],
@@ -71,6 +79,8 @@ export const uiCommand = defineAppCommand({
           port,
           token,
           workspace,
+          accounts: createAccounts(platform),
+          ...(platform === undefined ? {} : { platform }),
           clientDir,
           onError: (error, pluginId) =>
             logger.error(

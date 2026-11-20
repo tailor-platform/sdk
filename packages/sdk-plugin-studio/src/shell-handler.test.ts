@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { describe, expect, test, vi } from "vitest";
-import { createShellHandler, type Tab } from "./shell-handler";
+import { createShellHandler, type Accounts, type PlatformInfo, type Tab } from "./shell-handler";
 import { createWorkspaceContext } from "./workspace-context";
 
 const PORT = 7777;
@@ -29,12 +29,41 @@ function mounted(id: string, handler: Handler): Tab {
 
 const PROFILES = [{ name: "test", workspaceId: "7390c4cc-914f-4791-89ee-f4a4ab4699fc" }];
 
-function workspace(initial = {}) {
-  return createWorkspaceContext({ initial, listProfiles: async () => PROFILES });
+function workspace(initialProfile?: string) {
+  return createWorkspaceContext({
+    ...(initialProfile === undefined ? {} : { initialProfile }),
+    listProfiles: async () => PROFILES,
+  });
 }
 
-function shell(tabs: Tab[], ws = workspace()) {
-  return createShellHandler({ tabs, port: PORT, token: TOKEN, workspace: ws });
+const WORKSPACES = [{ id: "7390c4cc-914f-4791-89ee-f4a4ab4699fc", name: "dev" }];
+
+function accounts(overrides: Partial<Accounts> = {}): Accounts {
+  return {
+    listUsers: async () => ["me@example.com"],
+    listWorkspaces: async () => WORKSPACES,
+    createProfile: async () => {},
+    ...overrides,
+  };
+}
+
+function shell(tabs: Tab[], ws = workspace(), acc = accounts(), platform?: PlatformInfo) {
+  return createShellHandler({
+    tabs,
+    port: PORT,
+    token: TOKEN,
+    workspace: ws,
+    accounts: acc,
+    ...(platform === undefined ? {} : { platform }),
+  });
+}
+
+function post(handler: (r: Request) => Promise<Response>, pathname: string, body: unknown) {
+  return get(handler, pathname, {
+    method: "POST",
+    headers: { "x-tailor-studio-token": TOKEN, origin: `http://127.0.0.1:${PORT}` },
+    body: JSON.stringify(body),
+  });
 }
 
 function put(handler: (r: Request) => Promise<Response>, body: unknown, token: string | null) {
@@ -48,12 +77,25 @@ function put(handler: (r: Request) => Promise<Response>, body: unknown, token: s
 describe("createShellHandler", () => {
   describe("/api/context", () => {
     test("lists the profiles with the current selection and hands out the token", async () => {
-      const res = await get(shell([], workspace({ profile: "test" })), "/api/context");
+      const ws = workspace("test");
+      await ws.restore();
+      const res = await get(shell([], ws), "/api/context");
       expect(await res.json()).toEqual({
         token: TOKEN,
         profiles: PROFILES,
         selected: { profile: "test", workspaceId: PROFILES[0]!.workspaceId },
       });
+    });
+
+    test("reports the platform the environment changed, so the page can show it", async () => {
+      const platform = { platformUrl: "https://platform.example", oauth2ClientId: "client" };
+      const res = await get(shell([], workspace(), accounts(), platform), "/api/context");
+      expect(((await res.json()) as { platform: unknown }).platform).toEqual(platform);
+    });
+
+    test("reports no platform when the environment leaves the default", async () => {
+      const res = await get(shell([]), "/api/context");
+      expect(await res.json()).not.toHaveProperty("platform");
     });
 
     test("PUT selects a profile and tabs read it on their next request", async () => {
@@ -76,6 +118,79 @@ describe("createShellHandler", () => {
     test("PUT of an unknown profile is 400 with the reason", async () => {
       const res = await put(shell([]), { profile: "nope" }, TOKEN);
       expect([res.status, await res.json()]).toEqual([400, { error: 'Profile "nope" not found' }]);
+    });
+  });
+
+  describe("creating a profile", () => {
+    const input = { name: "test", user: "me@example.com", workspaceId: WORKSPACES[0]!.id };
+
+    test("lists the logged-in users", async () => {
+      const res = await get(shell([]), "/api/accounts");
+      expect(await res.json()).toEqual({ users: ["me@example.com"] });
+    });
+
+    test("lists the workspaces of a user", async () => {
+      const listWorkspaces = vi.fn(async () => WORKSPACES);
+      const res = await get(
+        shell([], workspace(), accounts({ listWorkspaces })),
+        "/api/accounts/workspaces?user=me%40example.com",
+      );
+      expect([await res.json(), listWorkspaces.mock.calls[0]]).toEqual([
+        WORKSPACES,
+        ["me@example.com"],
+      ]);
+    });
+
+    test("answers 400 when the workspaces cannot be listed", async () => {
+      const failing = accounts({
+        listWorkspaces: async () => {
+          throw new Error("Token expired.");
+        },
+      });
+      const res = await get(
+        shell([], workspace(), failing),
+        "/api/accounts/workspaces?user=me%40example.com",
+      );
+      expect([res.status, await res.json()]).toEqual([400, { error: "Token expired." }]);
+    });
+
+    test("creates the profile and selects it", async () => {
+      const createProfile = vi.fn(async () => {});
+      const res = await post(shell([], workspace(), accounts({ createProfile })), "/api/profiles", {
+        ...input,
+        permission: "read",
+      });
+      const body = (await res.json()) as { selected: object };
+      expect([res.status, createProfile.mock.calls[0], body.selected]).toEqual([
+        200,
+        [{ ...input, permission: "read" }],
+        { profile: "test", workspaceId: WORKSPACES[0]!.id },
+      ]);
+    });
+
+    test("keeps the selection and answers 400 with the reason when creation fails", async () => {
+      const ws = workspace();
+      const failing = accounts({
+        createProfile: async () => {
+          throw new Error('Profile "test" already exists.');
+        },
+      });
+      const res = await post(shell([], ws, failing), "/api/profiles", input);
+      expect([res.status, await res.json(), ws.selection()]).toEqual([
+        400,
+        { error: 'Profile "test" already exists.' },
+        {},
+      ]);
+    });
+
+    test("answers 400 when the name, user or workspace is missing", async () => {
+      const res = await post(shell([]), "/api/profiles", { name: "test" });
+      expect(res.status).toBe(400);
+    });
+
+    test("answers 403 without the token", async () => {
+      const res = await get(shell([]), "/api/profiles", { method: "POST", body: "{}" });
+      expect(res.status).toBe(403);
     });
   });
 
@@ -174,6 +289,7 @@ describe("createShellHandler", () => {
       port: PORT,
       token: TOKEN,
       workspace: workspace(),
+      accounts: accounts(),
       clientDir,
     });
     expect(await (await get(handler, "/erd")).text()).toBe("<html>client</html>");
@@ -192,6 +308,7 @@ describe("createShellHandler", () => {
       port: PORT,
       token: TOKEN,
       workspace: workspace(),
+      accounts: accounts(),
       onError,
     });
     await get(handler, "/plugins/bad/");

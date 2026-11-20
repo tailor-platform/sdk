@@ -16,6 +16,96 @@ function assertProfileAvailable(
   }
 }
 
+export interface CreateProfileOptions {
+  name: string;
+  user: string;
+  workspaceId: string;
+  permission?: "write" | "read";
+  machineUser?: string;
+  machineUserOverride?: "allow" | "deny";
+  platformUrl?: string;
+  oauth2ClientId?: string;
+  consoleUrl?: string;
+}
+
+/**
+ * Create a profile after checking that the user can sign in and sees the workspace.
+ * @param options - Profile to create
+ * @returns The created profile
+ */
+export async function createProfile(options: CreateProfileOptions): Promise<ProfileInfo> {
+  const permission = options.permission ?? "write";
+  if (options.machineUserOverride === "deny" && !options.machineUser) {
+    throw CLIError({
+      code: "PROFILE_OPTIONS_INVALID",
+      message: "--machine-user-override deny requires --machine-user.",
+      command: "profile create",
+    });
+  }
+
+  const config = await readPlatformConfig();
+  assertProfileAvailable(config, options.name);
+
+  const platformConfigInput = {
+    ...(options.platformUrl ? { platformUrl: options.platformUrl } : {}),
+    ...(options.oauth2ClientId ? { oauth2ClientId: options.oauth2ClientId } : {}),
+    ...(options.consoleUrl ? { consoleUrl: options.consoleUrl } : {}),
+  };
+  const platformConfig =
+    Object.keys(platformConfigInput).length > 0 ? platformConfigInput : undefined;
+  const { accessToken: token, user: resolvedUser } = await fetchLatestToken(
+    config,
+    options.user,
+    platformConfig,
+  );
+  assertProfileAvailable(config, options.name);
+
+  const client = await initOperatorClient(token, platformConfig);
+  const workspaces = await fetchAll(async (pageToken, maxPageSize) => {
+    const { workspaces, nextPageToken } = await client.listWorkspaces({
+      pageToken,
+      pageSize: maxPageSize,
+    });
+    return [workspaces, nextPageToken];
+  });
+
+  const workspace = workspaces.find((ws) => ws.id === options.workspaceId);
+  if (!workspace) {
+    throw CLIError({
+      code: "WORKSPACE_NOT_FOUND",
+      message: `Workspace "${options.workspaceId}" not found.`,
+    });
+  }
+
+  config.profiles[options.name] = {
+    user: resolvedUser,
+    workspace_id: options.workspaceId,
+    ...(permission === "read" ? { readonly: true } : {}),
+    ...(options.machineUser ? { machine_user: options.machineUser } : {}),
+    ...(options.machineUserOverride === "deny" ? { machine_user_override: "deny" as const } : {}),
+    ...(options.platformUrl ? { platform_url: options.platformUrl } : {}),
+    ...(options.oauth2ClientId ? { oauth2_client_id: options.oauth2ClientId } : {}),
+    ...(options.consoleUrl ? { console_url: options.consoleUrl } : {}),
+  };
+  writePlatformConfig(config);
+
+  return {
+    name: options.name,
+    user: resolvedUser,
+    workspaceId: options.workspaceId,
+    permission,
+    ...(options.machineUser
+      ? {
+          machineUser: options.machineUser,
+          machineUserOverride: options.machineUserOverride ?? "allow",
+        }
+      : {}),
+    ...(options.platformUrl ? { platformUrl: options.platformUrl } : {}),
+    ...(options.oauth2ClientId ? { oauth2ClientId: options.oauth2ClientId } : {}),
+    ...(options.consoleUrl ? { consoleUrl: options.consoleUrl } : {}),
+  };
+}
+
 export const createCommand = defineAppCommand({
   name: "create",
   description: "Create a new profile.",
@@ -59,85 +149,20 @@ export const createCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
-    if (args["machine-user-override"] === "deny" && !args["machine-user"]) {
-      throw CLIError({
-        code: "PROFILE_OPTIONS_INVALID",
-        message: "--machine-user-override deny requires --machine-user.",
-        command: "profile create",
-      });
-    }
-
-    const config = await readPlatformConfig();
-    assertProfileAvailable(config, args.name);
-
-    // Check if user exists
-    const platformConfigInput = {
-      ...(args["platform-url"] ? { platformUrl: args["platform-url"] } : {}),
-      ...(args["oauth2-client-id"] ? { oauth2ClientId: args["oauth2-client-id"] } : {}),
-      ...(args["console-url"] ? { consoleUrl: args["console-url"] } : {}),
-    };
-    const platformConfig =
-      Object.keys(platformConfigInput).length > 0 ? platformConfigInput : undefined;
-    const { accessToken: token, user: resolvedUser } = await fetchLatestToken(
-      config,
-      args.user,
-      platformConfig,
-    );
-    assertProfileAvailable(config, args.name);
-
-    // Check if workspace exists
-    const client = await initOperatorClient(token, platformConfig);
-    const workspaces = await fetchAll(async (pageToken, maxPageSize) => {
-      const { workspaces, nextPageToken } = await client.listWorkspaces({
-        pageToken,
-        pageSize: maxPageSize,
-      });
-      return [workspaces, nextPageToken];
+    const profileInfo = await createProfile({
+      name: args.name,
+      user: args.user,
+      workspaceId: args["workspace-id"],
+      permission: args.permission,
+      machineUser: args["machine-user"],
+      machineUserOverride: args["machine-user-override"],
+      platformUrl: args["platform-url"],
+      oauth2ClientId: args["oauth2-client-id"],
+      consoleUrl: args["console-url"],
     });
-
-    const workspace = workspaces.find((ws) => ws.id === args["workspace-id"]);
-    if (!workspace) {
-      throw CLIError({
-        code: "WORKSPACE_NOT_FOUND",
-        message: `Workspace "${args["workspace-id"]}" not found.`,
-      });
-    }
-
-    // Create new profile
-    config.profiles[args.name] = {
-      user: resolvedUser,
-      workspace_id: args["workspace-id"],
-      ...(args.permission === "read" ? { readonly: true } : {}),
-      ...(args["machine-user"] ? { machine_user: args["machine-user"] } : {}),
-      ...(args["machine-user-override"] === "deny"
-        ? { machine_user_override: "deny" as const }
-        : {}),
-      ...(args["platform-url"] ? { platform_url: args["platform-url"] } : {}),
-      ...(args["oauth2-client-id"] ? { oauth2_client_id: args["oauth2-client-id"] } : {}),
-      ...(args["console-url"] ? { console_url: args["console-url"] } : {}),
-    };
-    writePlatformConfig(config);
-
     if (!args.json) {
       logger.success(`Profile "${args.name}" created successfully.`);
     }
-
-    // Show profile info
-    const profileInfo: ProfileInfo = {
-      name: args.name,
-      user: resolvedUser,
-      workspaceId: args["workspace-id"],
-      permission: args.permission,
-      ...(args["machine-user"]
-        ? {
-            machineUser: args["machine-user"],
-            machineUserOverride: args["machine-user-override"] ?? "allow",
-          }
-        : {}),
-      ...(args["platform-url"] ? { platformUrl: args["platform-url"] } : {}),
-      ...(args["oauth2-client-id"] ? { oauth2ClientId: args["oauth2-client-id"] } : {}),
-      ...(args["console-url"] ? { consoleUrl: args["console-url"] } : {}),
-    };
     logger.out(profileInfo);
   },
 });

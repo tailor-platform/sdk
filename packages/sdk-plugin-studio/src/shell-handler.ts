@@ -19,11 +19,33 @@ export type Tab =
   | { id: string; title: string; state: "not-installed"; installCommand: string }
   | { id: string; title: string; state: "no-ui-support" };
 
+interface NewProfile {
+  name: string;
+  user: string;
+  workspaceId: string;
+  permission?: "write" | "read";
+}
+
+export interface Accounts {
+  listUsers(): Promise<string[]>;
+  listWorkspaces(user: string): Promise<{ id: string; name: string }[]>;
+  createProfile(profile: NewProfile): Promise<void>;
+}
+
+export interface PlatformInfo {
+  platformUrl?: string;
+  oauth2ClientId?: string;
+  consoleUrl?: string;
+}
+
 export interface ShellHandlerOptions {
   tabs: readonly Tab[];
   port: number;
   token: string;
   workspace: WorkspaceContext;
+  accounts: Accounts;
+  /** Platform settings taken from the environment; absent for the default platform. */
+  platform?: PlatformInfo;
   clientDir?: string;
   onError?: (error: unknown, pluginId: string) => void;
 }
@@ -60,6 +82,12 @@ function describeTab(tab: Tab) {
 export function createShellHandler(options: ShellHandlerOptions) {
   const byId = new Map(options.tabs.map((tab) => [tab.id, tab]));
 
+  const contextBody = async () => ({
+    token: options.token,
+    ...(options.platform === undefined ? {} : { platform: options.platform }),
+    ...(await options.workspace.describe()),
+  });
+
   const handleContext = async (request: Request): Promise<Response> => {
     try {
       if (request.method.toUpperCase() === "PUT") {
@@ -71,12 +99,51 @@ export function createShellHandler(options: ShellHandlerOptions) {
           headers: { allow: "GET, HEAD, PUT" },
         });
       }
-      return Response.json({ token: options.token, ...(await options.workspace.describe()) });
+      return Response.json(await contextBody());
     } catch (error) {
       return Response.json(
         { error: error instanceof Error ? error.message : String(error) },
         { status: 400 },
       );
+    }
+  };
+
+  const failure = (error: unknown) =>
+    Response.json(
+      { error: error instanceof Error ? error.message : String(error) },
+      { status: 400 },
+    );
+
+  const handleWorkspaces = async (url: URL): Promise<Response> => {
+    const user = url.searchParams.get("user");
+    if (!user) return failure(new Error("user is required"));
+    try {
+      return Response.json(await options.accounts.listWorkspaces(user));
+    } catch (error) {
+      return failure(error);
+    }
+  };
+
+  const handleCreateProfile = async (request: Request): Promise<Response> => {
+    if (request.method.toUpperCase() !== "POST") {
+      return new Response("Method Not Allowed\n", { status: 405, headers: { allow: "POST" } });
+    }
+    try {
+      const body = (await request.json()) as Partial<NewProfile>;
+      const { name, user, workspaceId, permission } = body;
+      if (!name || !user || !workspaceId) {
+        throw new Error("name, user and workspaceId are required");
+      }
+      await options.accounts.createProfile({
+        name,
+        user,
+        workspaceId,
+        ...(permission === undefined ? {} : { permission }),
+      });
+      await options.workspace.select(name);
+      return Response.json(await contextBody());
+    } catch (error) {
+      return failure(error);
     }
   };
 
@@ -88,6 +155,12 @@ export function createShellHandler(options: ShellHandlerOptions) {
     if (url.pathname === "/api/tabs") return Response.json(options.tabs.map(describeTab));
 
     if (url.pathname === "/api/context") return handleContext(request);
+
+    if (url.pathname === "/api/accounts") {
+      return Response.json({ users: await options.accounts.listUsers() });
+    }
+    if (url.pathname === "/api/accounts/workspaces") return handleWorkspaces(url);
+    if (url.pathname === "/api/profiles") return handleCreateProfile(request);
 
     const match = PLUGIN_PATH.exec(url.pathname);
     if (!match) {
