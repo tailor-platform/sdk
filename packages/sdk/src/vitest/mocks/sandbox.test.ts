@@ -97,6 +97,26 @@ describe("mockSandbox", () => {
       expect(box.status).toBe("DESTROYED");
     });
 
+    test("destroy cancels running executions and ignores the handler's later result", async () => {
+      using sb = mockSandbox();
+      let finish!: () => void;
+      sb.onExec(async () => {
+        await new Promise<void>((resolve) => (finish = resolve));
+        return { stdout: "late" };
+      });
+      const box = await sandboxApi().create({ template: "guest" });
+      const exec = await box.start(["sleep", "60"]);
+      const pending = box.exec(["sleep", "60"]);
+
+      await box.destroy();
+
+      expect((await exec.wait()).status).toBe("CANCELED");
+      expect((await pending).status).toBe("CANCELED");
+      finish();
+      await Promise.resolve();
+      expect((await exec.refresh()).status).toBe("CANCELED");
+    });
+
     test("destroy marks DESTROYED, frees the name and blocks further commands", async () => {
       using _sb = mockSandbox();
       const box = await sandboxApi().create({ template: "guest", name: "dev" });

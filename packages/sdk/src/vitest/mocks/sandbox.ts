@@ -402,6 +402,8 @@ export function mockSandbox() {
         if (sandbox.status === "DESTROYED") return;
         sandbox.status = "DESTROYED";
         state.files.clear();
+        // As on the platform, running executions end CANCELED with the sandbox.
+        for (const execution of state.executions) execution.cancel();
       },
     };
     state.sandbox = sandbox;
