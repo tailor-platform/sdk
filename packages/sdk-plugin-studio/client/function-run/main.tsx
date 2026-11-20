@@ -4,7 +4,7 @@ import light from "@enlumine/html/themes/light";
 import json from "@enlumine/json";
 import { Highlight } from "@enlumine/react";
 import { Alert, Badge, Button, Card, Textarea } from "@tailor-platform/app-shell";
-import { StrictMode, useEffect, useRef, useState } from "react";
+import { StrictMode, useEffect, useRef, useState, type RefObject } from "react";
 import { createRoot } from "react-dom/client";
 import { parseFrame, splitFrames, type RunRecord } from "../../src/function-run/stream";
 import { scopeTheme } from "../../src/function-run/theme";
@@ -130,8 +130,61 @@ function RunCard({ record }: { record: RunRecord }) {
   );
 }
 
+const DEFAULT_ARG_HEIGHT = 192;
+const MIN_ARG_HEIGHT = 64;
+const MIN_EDITOR_HEIGHT = 120;
+
+function Splitter({
+  height,
+  onChange,
+  pane,
+}: {
+  height: number;
+  onChange: (height: number) => void;
+  pane: RefObject<HTMLDivElement | null>;
+}) {
+  const maxHeight = () => {
+    const editor = pane.current?.querySelector(".fr-editor")?.clientHeight ?? 0;
+    return height + editor - MIN_EDITOR_HEIGHT;
+  };
+  const start = useRef<{ y: number; height: number; max: number } | null>(null);
+  return (
+    <div
+      className="fr-splitter"
+      role="separator"
+      aria-orientation="horizontal"
+      aria-label="Resize the argument"
+      aria-valuenow={height}
+      tabIndex={0}
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        start.current = { y: event.clientY, height, max: maxHeight() };
+      }}
+      onPointerMove={(event) => {
+        if (start.current === null) return;
+        const next = start.current.height + start.current.y - event.clientY;
+        onChange(Math.round(Math.max(MIN_ARG_HEIGHT, Math.min(next, start.current.max))));
+      }}
+      onPointerUp={() => {
+        start.current = null;
+      }}
+      onPointerCancel={() => {
+        start.current = null;
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+        event.preventDefault();
+        const next = height + (event.key === "ArrowUp" ? 24 : -24);
+        onChange(Math.max(MIN_ARG_HEIGHT, Math.min(next, maxHeight())));
+      }}
+    />
+  );
+}
+
 function App() {
   const [code, setCode] = useState(starterCode);
+  const [argHeight, setArgHeight] = useState(DEFAULT_ARG_HEIGHT);
+  const leftPane = useRef<HTMLDivElement | null>(null);
   const [arg, setArg] = useState("");
   const [status, setStatus] = useState<"idle" | "watching" | "stopped">("idle");
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -227,11 +280,12 @@ function App() {
         </Badge>
       </div>
       <div className="fr-main">
-        <div className="fr-pane">
+        <div className="fr-pane" ref={leftPane}>
           <div className="fr-label">Function</div>
           <div className="fr-editor">
             <Editor value={code} onChange={setCode} dark={dark} />
           </div>
+          <Splitter height={argHeight} onChange={setArgHeight} pane={leftPane} />
           <label className="fr-label" htmlFor="argument">
             Argument (JSON, optional)
           </label>
@@ -240,9 +294,9 @@ function App() {
             value={arg}
             onChange={(event) => setArg(event.target.value)}
             placeholder='{"a": 1, "b": 2}'
-            rows={4}
             disabled={watching}
-            className="astw:font-mono"
+            className="astw:font-mono fr-argument"
+            style={{ height: argHeight }}
           />
         </div>
         <div className="fr-pane">

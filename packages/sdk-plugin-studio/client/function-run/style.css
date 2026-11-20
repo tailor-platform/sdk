@@ -39,6 +39,27 @@
   min-height: 0;
 }
 
+.fr-argument {
+  flex: none;
+  resize: none;
+}
+
+.fr-splitter {
+  background: var(--border, currentColor);
+  border-radius: 2px;
+  cursor: row-resize;
+  flex: none;
+  height: 4px;
+  margin: 2px 0;
+  opacity: 0.5;
+  touch-action: none;
+}
+
+.fr-splitter:hover,
+.fr-splitter:focus-visible {
+  opacity: 1;
+}
+
 .fr-output {
   align-content: start;
   display: grid;
