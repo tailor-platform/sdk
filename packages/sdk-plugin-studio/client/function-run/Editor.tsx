@@ -45,7 +45,7 @@ export function Editor({
           ...(placeholder === undefined ? [] : [placeholderExtension(placeholder)]),
           theme.current.of(latest.current.dark ? oneDark : []),
           EditorView.theme({
-            "&": { fontSize: "0.8125rem", height: "100%" },
+            "&": { fontSize: "0.9375rem", height: "100%" },
             ".cm-scroller": { overflow: "auto", fontFamily: "ui-monospace, monospace" },
             "&.cm-editor": { backgroundColor: "var(--card)" },
             ".cm-gutters": {
