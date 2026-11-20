@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 import {
   mockOperatorClient,
   type OperatorClientMocks,
+  withOperatorClientMocks,
 } from "#/cli/shared/test-helpers/operator-client";
 import { planAIGateway } from "./aigateway";
 import { buildMetaRequest } from "./label";
@@ -74,7 +75,7 @@ function createMockClient<K extends keyof OperatorClient = never>(
       return { metadata: { labels } };
     },
   });
-  return Object.assign(client, overrides && mockOperatorClient(overrides));
+  return withOperatorClientMocks(client, overrides);
 }
 
 function createContext(client: OperatorClient): PlanContext {

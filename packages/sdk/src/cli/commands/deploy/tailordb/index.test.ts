@@ -33,6 +33,7 @@ import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-pr
 import {
   mockOperatorClient,
   type OperatorClientMocks,
+  withOperatorClientMocks,
 } from "#/cli/shared/test-helpers/operator-client";
 import { buildMetaRequest, sdkNameLabelKey } from "../label";
 import { tailorDBPlanResultContext } from "../test-helpers/plan-results";
@@ -169,7 +170,7 @@ describe("planTailorDB (service level)", () => {
         return { metadata: { labels } };
       },
     });
-    return Object.assign(client, overrides && mockOperatorClient(overrides));
+    return withOperatorClientMocks(client, overrides);
   }
 
   function createMockApplication(tailorDBServices: TailorDBService[]): Application {
@@ -2631,29 +2632,36 @@ describe("applyTailorDB migration label reconciliation", () => {
     );
   }
 
+  type MigrationClientOptions<K extends keyof OperatorClient> = {
+    includeRemoteSchema?: boolean;
+    overrides?: OperatorClientMocks<K>;
+  };
+
   function createMigrationClient<K extends keyof OperatorClient = never>(
     remoteLabels: Record<string, string>,
-    options: { includeRemoteSchema?: boolean; overrides?: OperatorClientMocks<K> } = {},
+    options: MigrationClientOptions<K> = {},
   ) {
-    const client = Object.assign(
-      mockOperatorClient({
-        getMetadata: { metadata: { labels: remoteLabels } },
-        setMetadata: {},
-        createTailorDBService: {},
-        createTailorDBType: {},
-        updateTailorDBType: {},
-        createTailorDBGQLPermission: {},
-        updateTailorDBGQLPermission: {},
-        deleteTailorDBGQLPermission: {},
-        deleteTailorDBType: {},
-      }),
-      options.includeRemoteSchema
-        ? mockOperatorClient({
-            listTailorDBTypes: { tailordbTypes: [], nextPageToken: "" },
-            listTailorDBGQLPermissions: { permissions: [], nextPageToken: "" },
-          })
-        : undefined,
-      options.overrides && mockOperatorClient(options.overrides),
+    const client = withOperatorClientMocks(
+      withOperatorClientMocks(
+        mockOperatorClient({
+          getMetadata: { metadata: { labels: remoteLabels } },
+          setMetadata: {},
+          createTailorDBService: {},
+          createTailorDBType: {},
+          updateTailorDBType: {},
+          createTailorDBGQLPermission: {},
+          updateTailorDBGQLPermission: {},
+          deleteTailorDBGQLPermission: {},
+          deleteTailorDBType: {},
+        }),
+        options.includeRemoteSchema
+          ? {
+              listTailorDBTypes: { tailordbTypes: [], nextPageToken: "" },
+              listTailorDBGQLPermissions: { permissions: [], nextPageToken: "" },
+            }
+          : undefined,
+      ),
+      options.overrides,
     );
     return { client, getMetadata: client.getMetadata, setMetadata: client.setMetadata };
   }
@@ -3292,14 +3300,11 @@ describe("applyTailorDB migration label reconciliation", () => {
     }
 
     function withRun(client: OperatorClient, status: WorkflowExecution_Status): OperatorClient {
-      return Object.assign(
-        client,
-        mockOperatorClient({
-          getWorkflowExecution: {
-            execution: { id: executionId, status, jobExecutions: [] },
-          },
-        }),
-      );
+      return withOperatorClientMocks(client, {
+        getWorkflowExecution: {
+          execution: { id: executionId, status, jobExecutions: [] },
+        },
+      });
     }
 
     function resolveCommand(direction: string): unknown {

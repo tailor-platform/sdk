@@ -22,6 +22,7 @@ import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-
 import {
   mockOperatorClient,
   type OperatorClientMocks,
+  withOperatorClientMocks,
 } from "#/cli/shared/test-helpers/operator-client";
 import { stripAnsi } from "#/cli/shared/test-helpers/strip-ansi";
 import {
@@ -62,13 +63,13 @@ function mockClient<K extends keyof OperatorClient = never>(
   targetType = ExecutorTargetType.WEBHOOK,
   overrides?: OperatorClientMocks<K>,
 ) {
-  const client = Object.assign(
+  const client = withOperatorClientMocks(
     mockOperatorClient({
       getExecutorExecutor: { executor: { targetType } },
       getExecutorJob: { job: executorJob(ExecutorJobStatus.SUCCESS) },
       listExecutorJobAttempts: { attempts: [], nextPageToken: "" },
     }),
-    overrides && mockOperatorClient(overrides),
+    overrides,
   );
   vi.mocked(initOperatorClient).mockResolvedValue(client);
   return client;

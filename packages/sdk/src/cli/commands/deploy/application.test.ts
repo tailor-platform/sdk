@@ -5,6 +5,7 @@ import { logger, symbols } from "#/cli/shared/logger";
 import {
   mockOperatorClient,
   type OperatorClientMocks,
+  withOperatorClientMocks,
 } from "#/cli/shared/test-helpers/operator-client";
 import {
   applicationLabelLimitError,
@@ -139,7 +140,7 @@ function createMockClient<K extends keyof OperatorClient = never>(
       return { metadata: { labels } };
     },
   });
-  return Object.assign(client, overrides && mockOperatorClient(overrides));
+  return withOperatorClientMocks(client, overrides);
 }
 
 function createContext(client: OperatorClient, application = createMockApplication()): PlanContext {

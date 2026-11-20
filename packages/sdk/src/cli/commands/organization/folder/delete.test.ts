@@ -8,6 +8,7 @@ import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import {
   mockOperatorClient,
   type OperatorClientMocks,
+  withOperatorClientMocks,
 } from "#/cli/shared/test-helpers/operator-client";
 import { deleteCommand } from "./delete";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -46,12 +47,12 @@ const FOLDER_ID = "22222222-2222-2222-2222-222222222222";
 const argv = ["--organization-id", ORGANIZATION_ID, "--folder-id", FOLDER_ID, "--yes"];
 
 function mockClient<K extends keyof OperatorClient = never>(overrides?: OperatorClientMocks<K>) {
-  const client = Object.assign(
+  const client = withOperatorClientMocks(
     mockOperatorClient({
       getOrganizationFolder: { folder: { name: "docs" } },
       deleteOrganizationFolder: {},
     }),
-    overrides && mockOperatorClient(overrides),
+    overrides,
   );
   vi.mocked(initOperatorClient).mockResolvedValue(client);
   return client;

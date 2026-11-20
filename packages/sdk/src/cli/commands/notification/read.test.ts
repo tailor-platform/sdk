@@ -13,6 +13,7 @@ import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import {
   mockOperatorClient,
   type OperatorClientMocks,
+  withOperatorClientMocks,
 } from "#/cli/shared/test-helpers/operator-client";
 import { readCommand } from "./read";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -48,14 +49,14 @@ function notification(id: string, title = "Scheduled maintenance") {
 }
 
 function mockClient<K extends keyof OperatorClient = never>(overrides?: OperatorClientMocks<K>) {
-  const client = Object.assign(
+  const client = withOperatorClientMocks(
     mockOperatorClient({
       getMyNotification: async (request) => ({
         notification: notification(request.notificationId ?? ""),
       }),
       markMyNotificationsRead: {},
     }),
-    overrides && mockOperatorClient(overrides),
+    overrides,
   );
   vi.mocked(initOperatorClient).mockResolvedValue(client);
   return client;

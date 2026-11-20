@@ -8,6 +8,7 @@ import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   mockOperatorClient,
   type OperatorClientMocks,
+  withOperatorClientMocks,
 } from "#/cli/shared/test-helpers/operator-client";
 import {
   waitForExecution,
@@ -25,7 +26,7 @@ function createMockClient<K extends keyof OperatorClient = never>(
   overrides?: OperatorClientMocks<K>,
 ) {
   const client = mockOperatorClient({ execScript: {}, getFunctionExecution: {} });
-  return Object.assign(client, overrides && mockOperatorClient(overrides));
+  return withOperatorClientMocks(client, overrides);
 }
 
 // Mock auth invoker

@@ -12,6 +12,7 @@ import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import {
   mockOperatorClient,
   type OperatorClientMocks,
+  withOperatorClientMocks,
 } from "#/cli/shared/test-helpers/operator-client";
 import { triggerCommand, triggerExecutor } from "./trigger";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -58,9 +59,8 @@ describe("triggerExecutor", () => {
   function mockIncomingWebhookClient<K extends keyof OperatorClient = never>(
     overrides?: OperatorClientMocks<K>,
   ) {
-    Object.assign(
-      client,
-      mockOperatorClient({
+    client = withOperatorClientMocks(
+      withOperatorClientMocks(client, {
         getExecutorExecutor: {
           executor: {
             triggerType: ExecutorTriggerType.INCOMING_WEBHOOK,
@@ -68,8 +68,9 @@ describe("triggerExecutor", () => {
           },
         },
       }),
-      overrides && mockOperatorClient(overrides),
+      overrides,
     );
+    vi.mocked(initOperatorClient).mockResolvedValue(client);
   }
 
   test("triggers a webhook executor by definition and forwards the payload", async () => {

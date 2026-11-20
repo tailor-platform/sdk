@@ -27,7 +27,10 @@ import {
 import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
-import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import {
+  mockOperatorClient,
+  withOperatorClientMocks,
+} from "#/cli/shared/test-helpers/operator-client";
 import { withMetadataWriteBatch } from "../label";
 import {
   detectPendingMigrations,
@@ -863,10 +866,9 @@ describe("migration", () => {
     });
 
     test("commits migration checkpoints immediately inside a resource metadata batch", async () => {
-      const client = Object.assign(
-        createMetadataClient({ labels: {} }),
-        mockOperatorClient({ bulkSetMetadata: {} }),
-      );
+      const client = withOperatorClientMocks(createMetadataClient({ labels: {} }), {
+        bulkSetMetadata: {},
+      });
 
       await withMetadataWriteBatch(client, async (batchClient) => {
         await updateMigrationLabel(batchClient, workspaceId, namespace, 2);
