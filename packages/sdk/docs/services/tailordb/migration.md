@@ -310,6 +310,8 @@ export default defineConfig({
 
 `db.ts` types the schema the [pre-migration phase](#per-migration-phases) leaves in place while the script runs. Breaking constraints are relaxed (e.g., a new `required` field is added as `optional` first) and removed fields and tables are kept, so the data being read still matches the previous shape. The fields and tables the migration adds already exist, so the script can write them.
 
+As in the app's generated Kysely types, an insert can leave out a field that has a default or a create hook, and `db.ts` rejects values for serial fields, which the platform numbers. The exception is a serial field whose existing values the script has to fill or deduplicate: one the migration adds to an existing table, makes required, or covers with a new unique constraint or unique index. The script can write that field, and inserts can still leave it out.
+
 ### Migration file format compatibility
 
 Migration files are versioned independently of the SDK package. This SDK writes format version `8` and reads versions `1` through `8`. It normalizes supported older formats in memory; it never rewrites applied migration files on disk. Format version `6` records renames of members inside nested fields (`memberRenames`); older SDK versions refuse to read it rather than deploying such a migration without the copy step. Format version `7` records whether a migration's `db.ts` uses Temporal column types (`temporal`); older SDK versions refuse to read it rather than running the script with `Date` values. Format version `8` records the `defaultDateRepresentation` a migration script was generated under (`dateRepresentation`); older SDK versions refuse to read it rather than running the script with string values.

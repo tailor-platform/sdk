@@ -7,11 +7,16 @@
 
 import * as fs from "node:fs/promises";
 import { assertDefined } from "#/utils/assert";
-import { COLUMN_TYPE_ALIASES, mapFieldTypeToColumnType } from "#/utils/field-column-type";
+import {
+  COLUMN_TYPE_ALIASES,
+  isFilledOnCreate,
+  mapFieldTypeToColumnType,
+} from "#/utils/field-column-type";
 import { buildPreMigrationSnapshot } from "./pre-migration-schema";
 import {
   applyDiffToSnapshot,
   getMigrationFilePath,
+  isBreakingIndexChange,
   type SchemaSnapshot,
   type SnapshotFieldConfig,
   type TailorDBSnapshotType,
@@ -41,6 +46,8 @@ interface BreakingChangeFieldInfo {
   enumValueChanges: Map<string, Map<string, EnumValueChange>>;
   /** Map of tableName -> Set of fieldNames a conversion script clears */
   clearedFields: Map<string, Set<string>>;
+  /** Map of tableName -> Set of fieldNames a new unique constraint or unique index covers */
+  uniqueAdded: Map<string, Set<string>>;
 }
 
 /**
@@ -57,6 +64,12 @@ function extractBreakingChangeFields(
 ): BreakingChangeFieldInfo {
   const optionalToRequired = new Map<string, Set<string>>();
   const enumValueChanges = new Map<string, Map<string, EnumValueChange>>();
+  const uniqueAdded = new Map<string, Set<string>>();
+  const addUniqueAdded = (tableName: string, fieldNames: readonly string[]) => {
+    const fields = uniqueAdded.get(tableName) ?? new Set<string>();
+    for (const fieldName of fieldNames) fields.add(fieldName);
+    uniqueAdded.set(tableName, fields);
+  };
 
   for (const table of Object.values(target.tables)) {
     const relaxed = Object.entries(table.fields).filter(([fieldName, field]) => {
@@ -69,8 +82,17 @@ function extractBreakingChangeFields(
   }
 
   for (const change of diff.changes) {
+    if (change.kind === "index_added" || change.kind === "index_modified") {
+      const before = change.kind === "index_modified" ? change.before : undefined;
+      if (isBreakingIndexChange(change.tableName, change.indexName, before, change.after)) {
+        addUniqueAdded(change.tableName, change.after.fields);
+      }
+    }
     if (change.kind === "field_modified" || change.kind === "field_type_modified") {
       const { before, after } = change;
+      if (!(before.unique ?? false) && (after.unique ?? false)) {
+        addUniqueAdded(change.tableName, [change.fieldName]);
+      }
 
       // Check if this is an enum value change. Snapshots omit allowedValues
       // when an enum has no values left, so a missing list is an empty one.
@@ -104,6 +126,7 @@ function extractBreakingChangeFields(
     optionalToRequired,
     enumValueChanges,
     clearedFields: new Map<string, Set<string>>(),
+    uniqueAdded,
   };
 }
 
@@ -130,6 +153,7 @@ function generateDbTypesFromSnapshot(
         optionalToRequired: new Map(),
         enumValueChanges: new Map(),
         clearedFields: new Map<string, Set<string>>(),
+        uniqueAdded: new Map<string, Set<string>>(),
       };
 
   for (const plan of expandPlans) {
@@ -309,6 +333,9 @@ function generateTableType(
   const clearedFieldsForType =
     breakingChangeFields.clearedFields.get(type.name) ?? new Set<string>();
 
+  const uniqueAddedFieldsForType =
+    breakingChangeFields.uniqueAdded.get(type.name) ?? new Set<string>();
+
   for (const [fieldName, fieldConfig] of Object.entries(type.fields)) {
     if (fieldName === "id") continue;
 
@@ -321,7 +348,14 @@ function generateTableType(
     const clearableResult = clearable
       ? generateClearableFieldType(fieldConfig, temporal)
       : undefined;
-    fieldLines.push(`    ${fieldName}: ${(clearableResult ?? result).type};`);
+    const rewritesExisting = isOptionalToRequired || uniqueAddedFieldsForType.has(fieldName);
+    const column = wrapPlatformFilledColumn(
+      (clearableResult ?? result).type,
+      fieldConfig,
+      rewritesExisting,
+    );
+    fieldLines.push(`    ${fieldName}: ${column.type};`);
+    if (column.usesSerial) usedUtilityTypes.add("Serial");
     if (!clearable && result.usedUtilityType) usedUtilityTypes.add(result.usedUtilityType);
     usedColumnType = usedColumnType || result.usedColumnType || clearable;
     usedArrayColumnType = usedArrayColumnType || (!clearable && result.usedArrayColumnType);
@@ -335,6 +369,27 @@ function generateTableType(
   const typeDef = `  ${type.name}: {\n${fieldLines.join("\n")}\n  }`;
 
   return { typeDef, usedUtilityTypes, usedColumnType, usedArrayColumnType, usesTemporalNamespace };
+}
+
+/**
+ * Wrap a column the platform fills, as the app's Kysely types do: a serial field
+ * in `Serial<>`, and a field filled on create in `Generated<>`.
+ * @param type - Column type before wrapping
+ * @param config - Field configuration in the pre-migration snapshot
+ * @param rewritesExisting - Whether the script writes the field's existing values, which
+ * keeps a serial field writable and only lets inserts omit it
+ * @returns The wrapped column type, and whether it uses `Serial`
+ */
+function wrapPlatformFilledColumn(
+  type: string,
+  config: SnapshotFieldConfig,
+  rewritesExisting: boolean,
+): { type: string; usesSerial: boolean } {
+  const isSerial = config.serial !== undefined;
+  const usesSerial = isSerial && !rewritesExisting;
+  const wrapped = usesSerial ? `Serial<${type}>` : type;
+  const omittable = isFilledOnCreate(config) || (isSerial && !usesSerial);
+  return { type: omittable ? `Generated<${wrapped}>` : wrapped, usesSerial };
 }
 
 /** A utility type reported as used, so the generated file's imports cover it. */
