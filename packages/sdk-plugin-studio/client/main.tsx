@@ -14,13 +14,13 @@ function TabPage({ tab }: { tab: TabInfo }) {
       <iframe
         title={tab.title}
         src={`/plugins/${tab.id}/`}
-        style={{ border: 0, width: "100%", height: "calc(100vh - 6rem)" }}
+        style={{ display: "block", border: 0, width: "100%", height: "100%" }}
       />
     );
   }
   if (tab.state === "not-installed") {
     return (
-      <div>
+      <div style={{ padding: "1.5rem" }}>
         <p>{tab.title} is not installed. Install it to show it here:</p>
         <pre>
           <code>{tab.installCommand}</code>
@@ -29,7 +29,7 @@ function TabPage({ tab }: { tab: TabInfo }) {
     );
   }
   return (
-    <p>
+    <p style={{ padding: "1.5rem" }}>
       The installed version of {tab.title} does not provide a UI yet. Update it to show it here.
     </p>
   );
@@ -53,7 +53,13 @@ async function main() {
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
       <AppShell title="Tailor Studio" modules={modules}>
-        <SidebarLayout />
+        <SidebarLayout
+          body={
+            <main style={{ flex: 1, minWidth: 0, height: "100vh", overflow: "auto" }}>
+              <SidebarLayout.Outlet />
+            </main>
+          }
+        />
       </AppShell>
     </StrictMode>,
   );
