@@ -101,9 +101,8 @@ export type ServiceSettings = Pick<
 /** `env` values each service uses in place of the root values with the same keys. */
 export type EnvOverrides = LoadedWorkspaceConfig["envOverrides"];
 
-/** The services a config defines, with the settings and `env` they share. */
-export type WorkspaceServices = {
-  readonly settings: ServiceSettings;
+/** The services a config defines, with the `env` they share. */
+export type ConfigServices = {
   readonly tailorDBServices: ReadonlyArray<TailorDBService>;
   readonly externalTailorDBNamespaces: ReadonlyArray<string>;
   readonly resolverServices: ReadonlyArray<ResolverService>;
@@ -118,10 +117,15 @@ export type WorkspaceServices = {
   readonly secrets: ReadonlyArray<SecretVault>;
   readonly ignoreNullishValues: boolean;
   readonly env: Readonly<Record<string, string | number | boolean>>;
+};
+
+/** The services a workspace config defines, with the settings they share and their `env` overrides. */
+export type WorkspaceServices = ConfigServices & {
+  readonly settings: ServiceSettings;
   readonly envOverrides: EnvOverrides;
 };
 
-export type Application = WorkspaceServices & {
+export type Application = ConfigServices & {
   readonly name: string;
   readonly id: string | undefined;
   readonly config: AppConfig;
@@ -691,18 +695,15 @@ function defineServices(
   };
 }
 
-interface BuildWorkspaceServicesParams extends DefineServicesResult {
-  settings: ServiceSettings;
+interface BuildConfigServicesParams extends DefineServicesResult {
   executorService: ExecutorService | undefined;
   workflowService: WorkflowService | undefined;
   httpAdapterService: HttpAdapterService | undefined;
   env: Record<string, string | number | boolean>;
-  envOverrides: EnvOverrides;
 }
 
-function buildWorkspaceServices(params: BuildWorkspaceServicesParams): WorkspaceServices {
+function buildConfigServices(params: BuildConfigServicesParams): ConfigServices {
   return {
-    settings: params.settings,
     tailorDBServices: params.tailordbResult.tailorDBServices,
     externalTailorDBNamespaces: params.tailordbResult.externalTailorDBNamespaces,
     resolverServices: params.resolverResult.resolverServices,
@@ -716,24 +717,16 @@ function buildWorkspaceServices(params: BuildWorkspaceServicesParams): Workspace
     secrets: params.secrets,
     ignoreNullishValues: params.ignoreNullishValues,
     env: params.env,
-    envOverrides: params.envOverrides,
   };
 }
 
-interface BuildApplicationParams extends Omit<
-  BuildWorkspaceServicesParams,
-  "settings" | "envOverrides"
-> {
+interface BuildApplicationParams extends BuildConfigServicesParams {
   config: LoadedConfig;
 }
 
 function buildApplication(params: BuildApplicationParams): Application {
   const application: Application = {
-    ...buildWorkspaceServices({
-      ...params,
-      settings: params.config,
-      envOverrides: { resolver: {}, auth: {} },
-    }),
+    ...buildConfigServices(params),
     name: params.config.name,
     id: params.config.id,
     config: params.config,
@@ -853,15 +846,17 @@ export function defineWorkspaceServices(params: DefineWorkspaceServicesParams): 
     pluginManager,
     precompileTailorDBScripts,
   );
-  return buildWorkspaceServices({
-    ...services,
+  return {
+    ...buildConfigServices({
+      ...services,
+      executorService: defineExecutor(workspace.executor, baseDir, false),
+      workflowService: defineWorkflow(workspace.workflow, baseDir),
+      httpAdapterService: defineHttpAdapterService(workspace.httpAdapter, baseDir),
+      env: workspace.env,
+    }),
     settings: workspace,
-    executorService: defineExecutor(workspace.executor, baseDir, false),
-    workflowService: defineWorkflow(workspace.workflow, baseDir),
-    httpAdapterService: defineHttpAdapterService(workspace.httpAdapter, baseDir),
-    env: workspace.env,
     envOverrides: workspace.envOverrides,
-  });
+  };
 }
 
 /**
