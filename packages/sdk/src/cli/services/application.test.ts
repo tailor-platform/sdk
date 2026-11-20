@@ -1,7 +1,9 @@
 import * as fs from "node:fs";
+import { pathToFileURL } from "node:url";
 import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
+import { loadConfig } from "#/cli/shared/config-loader";
 import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { errorToJson } from "#/cli/shared/error-json";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
@@ -1373,5 +1375,88 @@ export default createWorkflow({ name: "caller-workflow", mainJob: callerJob });
     expect(workflowBuildResult?.bundledCode.get("caller-job")).toMatch(
       /startWorkflow\([`'"]sync-gl-balances/,
     );
+  });
+});
+
+describe("loadApplication before-login hook", () => {
+  let tmpDir: string | undefined;
+
+  afterEach(() => {
+    if (tmpDir) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      tmpDir = undefined;
+    }
+  });
+
+  async function writeConfig() {
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
+    const configFile = path.join(tmpDir, "tailor.config.ts");
+    fs.writeFileSync(
+      configFile,
+      `
+import { db, defineAuth, defineConfig, defineStaticWebSite } from "@tailor-platform/sdk";
+
+const site = defineStaticWebSite("shop-site", { description: "shop" });
+
+export default defineConfig({
+  name: "shop",
+  env: { region: "jp", siteUrl: site.url },
+  staticWebsites: [site],
+  auth: defineAuth("shop-auth", {
+    machineUserAttributes: { role: db.string() },
+    machineUsers: { admin: { attributes: { role: "ADMIN" } } },
+    hooks: {
+      beforeLogin: { handler: async ({ env }) => ({ hook: "shop-auth", env }), invoker: "admin" },
+    },
+  }),
+});
+`,
+    );
+    return (await loadConfig(configFile)).config;
+  }
+
+  async function runHook(code: string | undefined): Promise<unknown> {
+    const bundleFile = path.join(tmpDir!, `hook-${Math.random().toString(36).slice(2)}.mjs`);
+    fs.writeFileSync(bundleFile, code!);
+    const { main } = await import(pathToFileURL(bundleFile).href);
+    return main({ claims: {}, idpConfigName: "idp" });
+  }
+
+  test("bundles the Auth service's hook with the config's env", async () => {
+    const config = await writeConfig();
+
+    const { bundledScripts } = await loadApplication({ config });
+
+    await expect(
+      runHook(bundledScripts.authHooks.get("auth-hook--shop-auth--before-login")),
+    ).resolves.toEqual({ hook: "shop-auth", env: { region: "jp", siteUrl: "shop-site:url" } });
+  });
+
+  test("rebundles the hook with the URL a reload resolves", async () => {
+    const config = await writeConfig();
+    const first = await loadApplication({
+      config,
+      client: mockOperatorClient({
+        getStaticWebsite: () => Promise.reject(new ConnectError("not found", Code.NotFound)),
+      }),
+      workspaceId: "ws-1",
+    });
+
+    const second = await loadApplication({
+      config,
+      client: mockOperatorClient({
+        getStaticWebsite: { staticwebsite: { url: "https://shop.example.com" } },
+      }),
+      workspaceId: "ws-1",
+      previous: first,
+    });
+
+    await expect(
+      runHook(second.bundledScripts.authHooks.get("auth-hook--shop-auth--before-login")),
+    ).resolves.toEqual({
+      hook: "shop-auth",
+      env: { region: "jp", siteUrl: "https://shop.example.com" },
+    });
+    expect(second.bundledScripts.resolvers).toBe(first.bundledScripts.resolvers);
   });
 });
