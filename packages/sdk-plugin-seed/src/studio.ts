@@ -1,4 +1,3 @@
-import { readdirSync } from "node:fs";
 import {
   loadSeedContext,
   configArg,
@@ -17,15 +16,8 @@ import {
   selectDatasets,
 } from "./datasets";
 import { assertSeedDataDirectory } from "./jsonl";
+import { hasSchemaFiles, missingReferencedTableError } from "./seed-data";
 import type { DatasetSelection } from "./datasets";
-
-function hasSchemaFiles(dir: string): boolean {
-  return readdirSync(dir).some((name) => /\.schema\.[mc]?ts$/.test(name));
-}
-
-// The CLI's signal handler awaits the command's `cleanup` hook and then exits the process,
-// so a close that only follows the wait for the signal in `run` is never reached.
-let closeRunningStudio: (() => Promise<void>) | undefined;
 
 export const seedStudioCommand = defineAppCommand({
   name: "studio",
@@ -55,7 +47,11 @@ export const seedStudioCommand = defineAppCommand({
       completion: { type: "directory" },
     }),
   }),
+  gracefulShutdown: true,
   run: async (args) => {
+    const stopRequested = new Promise<void>((resolve) => {
+      args.$signal?.addEventListener("abort", () => resolve(), { once: true });
+    });
     assertDatasetSelection(args.dataset, args["all-datasets"]);
     if (args.path && (args.dataset.length > 0 || args["all-datasets"] || args["no-base"])) {
       throw new Error("--dataset, --all-datasets and --no-base cannot be combined with a path.");
@@ -73,16 +69,17 @@ export const seedStudioCommand = defineAppCommand({
       targetPath = path.join(context.distPath, "data");
       datasets = selectDatasets(context, args.dataset, args["all-datasets"]);
     }
-    assertSeedDataDirectory(targetPath);
+    assertSeedDataDirectory(targetPath, { suggestGenerate: !args.path });
 
     const dataDirs = [...(args["no-base"] ? [] : [targetPath]), ...datasets.dirs];
     let schemaDir: string | undefined;
     if (datasets.dirs.length > 0) {
       schemaDir = targetPath;
-    } else if (args.path && !hasSchemaFiles(targetPath)) {
+    } else if (args.path && !(await hasSchemaFiles(targetPath))) {
       const parent = path.dirname(targetPath);
-      if (hasSchemaFiles(parent)) schemaDir = parent;
+      if (await hasSchemaFiles(parent)) schemaDir = parent;
     }
+    const withoutBase = schemaDir !== undefined && !dataDirs.includes(schemaDir);
     const { startStudioServer } = await import("@lines-db/studio");
     const studio = await startStudioServer({
       dataDir: dataDirs.length === 1 ? dataDirs[0] : dataDirs,
@@ -90,15 +87,19 @@ export const seedStudioCommand = defineAppCommand({
       port: args.port,
       writeFilledValues: "primaryKey",
     }).catch((error: unknown) => {
-      if ((error as NodeJS.ErrnoException).code !== "EADDRINUSE") throw error;
-      throw new Error(
-        `Port ${args.port} is already in use. Pass --port <number> to use another one (0 picks a free port).`,
-        { cause: error },
-      );
+      if ((error as NodeJS.ErrnoException).code === "EADDRINUSE") {
+        throw new Error(
+          `Port ${args.port} is already in use. Pass --port <number> to use another one (0 picks a free port).`,
+          { cause: error },
+        );
+      }
+      const missingTable =
+        withoutBase && error instanceof Error
+          ? missingReferencedTableError(error, "open them on top of the base seed data")
+          : undefined;
+      throw missingTable ?? error;
     });
 
-    let closing: Promise<void> | undefined;
-    closeRunningStudio = () => (closing ??= studio.close());
     try {
       if (args.json) {
         logger.out({
@@ -115,22 +116,9 @@ export const seedStudioCommand = defineAppCommand({
           logger.warn("Failed to open browser automatically. Please open the URL above manually.");
         }
       }
-      await new Promise<void>((resolve) => {
-        const stop = () => {
-          process.off("SIGINT", stop);
-          process.off("SIGTERM", stop);
-          resolve();
-          void closeRunningStudio?.().finally(() => process.exit(0));
-        };
-        process.prependListener("SIGINT", stop);
-        process.prependListener("SIGTERM", stop);
-      });
+      await stopRequested;
     } finally {
-      await closeRunningStudio();
-      closeRunningStudio = undefined;
+      await studio.close();
     }
-  },
-  cleanup: async () => {
-    await closeRunningStudio?.();
   },
 });

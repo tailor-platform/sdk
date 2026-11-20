@@ -7,6 +7,7 @@ import {
   definesBothTailorDBNamespaceHooks,
   hasDefinitionTimeHooks,
 } from "#/parser/plugin-config/definition-hooks";
+import { isSdkBranded } from "#/utils/brand";
 import { loadFilesWithIgnores, type FileLoadConfig } from "#/utils/file-loader";
 import { tailorDBNamespaceHookOf } from "./guards";
 import { PluginManager } from "./manager";
@@ -132,13 +133,13 @@ interface DbNamespaceConfig extends Partial<FileLoadConfig> {
 }
 
 function isTableNamed(value: unknown, name: string): boolean {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "plugins" in value &&
-    "name" in value &&
-    value.name === name
-  );
+  return isSdkBranded(value, "tailordb-type") && (value as { name?: unknown }).name === name;
+}
+
+async function importCurrentContents(file: string): Promise<Record<string, unknown>> {
+  const url = pathToFileURL(file);
+  url.searchParams.set("v", String(fs.statSync(file).mtimeMs));
+  return import(url.href);
 }
 
 /**
@@ -161,26 +162,34 @@ async function resolveNamespaceForTable(
     throw new Error(`No db configuration found in config`);
   }
 
-  const namespacesOfSameName = new Set<string>();
+  const filesByNamespace: [string, string[]][] = [];
   for (const [namespace, nsConfig] of Object.entries(config.db)) {
     const dbConfig = nsConfig as DbNamespaceConfig;
     // Skip external namespaces (no files to resolve)
     if (dbConfig.external || !dbConfig.files) continue;
+    filesByNamespace.push([
+      namespace,
+      loadFilesWithIgnores(
+        { files: dbConfig.files, ignores: dbConfig.ignores },
+        configDir,
+        console.warn,
+      ),
+    ]);
+  }
 
-    const files = loadFilesWithIgnores(
-      { files: dbConfig.files, ignores: dbConfig.ignores },
-      configDir,
-      console.warn,
-    );
+  for (const [namespace, files] of filesByNamespace) {
     for (const file of files) {
       const mod = await import(pathToFileURL(file).href);
-      for (const exported of Object.values(mod)) {
-        if (exported === sourceTable) {
-          return namespace;
-        }
-        if (isTableNamed(exported, sourceTable.name)) {
-          namespacesOfSameName.add(namespace);
-        }
+      if (Object.values(mod).includes(sourceTable)) return namespace;
+    }
+  }
+
+  const namespacesOfSameName = new Set<string>();
+  for (const [namespace, files] of filesByNamespace) {
+    for (const file of files) {
+      const mod = await importCurrentContents(file);
+      if (Object.values(mod).some((exported) => isTableNamed(exported, sourceTable.name))) {
+        namespacesOfSameName.add(namespace);
       }
     }
   }

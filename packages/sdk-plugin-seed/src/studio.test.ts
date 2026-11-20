@@ -37,6 +37,7 @@ let cogs: string;
 let startStudioServer: typeof lines.startStudioServer;
 let closeStudio: ReturnType<typeof vi.fn<() => Promise<void>>>;
 let exit: ReturnType<typeof vi.spyOn>;
+let stop: AbortController;
 
 function writeRows(file: string, rows: object[]): void {
   writeFileSync(file, rows.map((row) => `${JSON.stringify(row)}\n`).join(""));
@@ -44,6 +45,7 @@ function writeRows(file: string, rows: object[]): void {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  stop = new AbortController();
   exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
   vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
   distPath = mkdtempSync(path.join(tmpdir(), "seed-studio-command-"));
@@ -70,12 +72,7 @@ beforeEach(() => {
   closeStudio = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
   startStudioServer = lines.startStudioServer;
   startStudioServer.mockImplementation(async () => {
-    const listenersBefore = process.listenerCount("SIGTERM");
-    const stopWhenListening = setInterval(() => {
-      if (process.listenerCount("SIGTERM") === listenersBefore) return;
-      clearInterval(stopWhenListening);
-      process.emit("SIGTERM");
-    }, 1);
+    setTimeout(() => stop.abort(), 1);
     return { url: "http://127.0.0.1:4848", token: "token", close: closeStudio };
   });
 });
@@ -87,7 +84,12 @@ afterEach(() => {
 });
 
 function runStudio(args: string[]) {
-  return runCommand(seedStudioCommand, args, {
+  const stoppable = {
+    ...seedStudioCommand,
+    run: (commandArgs: never) =>
+      seedStudioCommand.run?.(Object.assign({}, commandArgs, { $signal: stop.signal })),
+  } as typeof seedStudioCommand;
+  return runCommand(stoppable, args, {
     globalArgs: z.strictObject(createCommonArgs({ verboseAlias: "v" })),
   });
 }
@@ -187,38 +189,12 @@ describe("seedStudioCommand", () => {
     expect(closeStudio).toHaveBeenCalledTimes(1);
   });
 
-  test("closes the studio from the cleanup hook, which the CLI awaits before exiting on a signal", async () => {
-    startStudioServer.mockResolvedValue({
-      url: "http://127.0.0.1:4848",
-      token: "token",
-      close: closeStudio,
-    });
-    const running = runStudio([]);
-    await vi.waitFor(() =>
-      expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("4848")),
-    );
-
-    await seedStudioCommand.cleanup?.({ args: {} as never });
-    expect(closeStudio).toHaveBeenCalledTimes(1);
-
-    process.emit("SIGTERM");
-    await running;
-    expect(closeStudio).toHaveBeenCalledTimes(1);
-  });
-
-  test("exits with 0 once the studio is closed on a stop signal", async () => {
-    await runStudio([]);
+  test("ends the command normally once the studio is closed on a stop signal", async () => {
+    const result = await runStudio([]);
 
     expect(closeStudio).toHaveBeenCalledWith();
-    expect(exit).toHaveBeenCalledWith(0);
-  });
-
-  test("leaves no signal listeners behind once stopped", async () => {
-    const before = process.listenerCount("SIGINT") + process.listenerCount("SIGTERM");
-
-    await runStudio([]);
-
-    expect(process.listenerCount("SIGINT") + process.listenerCount("SIGTERM")).toBe(before);
+    expect(result.exitCode).toBe(0);
+    expect(exit).not.toHaveBeenCalled();
   });
 
   test("does not open a browser unless asked", async () => {
@@ -279,6 +255,53 @@ describe("seedStudioCommand", () => {
     expect(result.exitCode).toBe(1);
     expect(String(result.error)).toContain("--no-base needs at least one --dataset");
     expect(startStudioServer).not.toHaveBeenCalled();
+  });
+
+  test("does not tell to generate when the path given is missing", async () => {
+    const result = await runStudio([path.join(distPath, "dta")]);
+
+    expect(result.exitCode).toBe(1);
+    expect(String(result.error)).toContain("Seed data directory not found");
+    expect(String(result.error)).not.toContain("tailor generate");
+    expect(startStudioServer).not.toHaveBeenCalled();
+  });
+
+  test("names the file to add when a dataset opened without the base data references a table only the base data holds", async () => {
+    startStudioServer.mockRejectedValue(
+      new Error("Foreign key reference to non-existent table 'Customer' in table 'SalesOrder'"),
+    );
+
+    const result = await runStudio(["--dataset", "cogs", "--no-base"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(String(result.error)).toContain("SalesOrder has a foreign key to Customer");
+    expect(String(result.error)).toContain("Customer.jsonl");
+    expect(String(result.error)).toContain("on top of the base seed data");
+  });
+
+  test("names the file to add when a dataset opened by path references a table only the base data holds", async () => {
+    writeFileSync(path.join(dataDir, "Item.schema.ts"), "export const schema = {};\n");
+    startStudioServer.mockRejectedValue(
+      new Error("Foreign key reference to non-existent table 'Customer' in table 'SalesOrder'"),
+    );
+
+    const result = await runStudio([cogs]);
+
+    expect(result.exitCode).toBe(1);
+    expect(String(result.error)).toContain("SalesOrder has a foreign key to Customer");
+  });
+
+  test("leaves a missing referenced table as it is when the base data is opened too", async () => {
+    startStudioServer.mockRejectedValue(
+      new Error("Foreign key reference to non-existent table 'Customer' in table 'SalesOrder'"),
+    );
+
+    const result = await runStudio(["--dataset", "cogs"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(String(result.error)).toBe(
+      "Error: Foreign key reference to non-existent table 'Customer' in table 'SalesOrder'",
+    );
   });
 
   test("tells to generate first when the seed data directory is missing", async () => {

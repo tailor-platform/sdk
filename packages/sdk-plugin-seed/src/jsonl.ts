@@ -15,7 +15,16 @@ import * as path from "pathe";
 import { jsonlRecordLines } from "./record-lines";
 import type { ErrorSourceLocation, SeedData } from "@tailor-platform/sdk/cli";
 
-export function assertSeedDataDirectory(dataDir: string): void {
+type AssertSeedDataDirectoryOptions = {
+  /** Point at `tailor generate` when the directory is missing. Defaults to true. */
+  suggestGenerate?: boolean;
+};
+
+export function assertSeedDataDirectory(
+  dataDir: string,
+  options: AssertSeedDataDirectoryOptions = {},
+): void {
+  const { suggestGenerate = true } = options;
   let stats: ReturnType<typeof statSync>;
   try {
     stats = statSync(dataDir);
@@ -23,7 +32,9 @@ export function assertSeedDataDirectory(dataDir: string): void {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === "ENOENT" || code === "ENOTDIR") {
       throw new Error(
-        `Seed data directory not found: ${dataDir}. Run \`tailor generate\` to create it.`,
+        `Seed data directory not found: ${dataDir}.${
+          suggestGenerate ? " Run `tailor generate` to create it." : ""
+        }`,
         { cause: error },
       );
     }

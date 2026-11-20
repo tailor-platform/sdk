@@ -131,6 +131,30 @@ export default {
     expect(Object.keys(table.fields)).toEqual(["id", "name", "deletedAt"]);
   });
 
+  test("finds a table added to a namespace file after the file was first imported", async () => {
+    writeTable('{ "first": {} }');
+    writeConfig(extendingPlugin("first", "deletedAt", "db.datetime({ optional: true })"));
+    const { order } = (await import(`${pathToFileURL(tablePath).href}?linesDbV=abc123`)) as {
+      order: TailorAnyDBType;
+    };
+    await getExtendedTable(configPath, order);
+    fs.appendFileSync(
+      tablePath,
+      `export const refund = db.table("Refund", { name: db.string() });
+refund.plugin({ "first": {} });
+`,
+    );
+    const later = new Date(Date.now() + 5_000);
+    fs.utimesSync(tablePath, later, later);
+    const { refund } = (await import(`${pathToFileURL(tablePath).href}?linesDbV=def456`)) as {
+      refund: TailorAnyDBType;
+    };
+
+    const table = await getExtendedTable(configPath, refund);
+
+    expect(Object.keys(table.fields)).toEqual(["id", "name", "deletedAt"]);
+  });
+
   test("does not guess the namespace of a versioned import when two namespaces hold a table of that name", async () => {
     writeTable('{ "first": {} }');
     const otherPath = path.join(path.dirname(tablePath), "other-order.mjs");
@@ -471,11 +495,9 @@ export default {
       const writeOrder = (retentionDays: number) =>
         fs.writeFileSync(
           tablePath,
-          `export const order = {
-  name: "Order",
-  fields: {},
-  plugins: [{ pluginId: "table-plugin", config: { retentionDays: ${retentionDays} } }],
-};
+          `import { db } from "@tailor-platform/sdk";
+export const order = db.table("Order", { name: db.string() });
+order.plugin({ "table-plugin": { retentionDays: ${retentionDays} } });
 `,
         );
       fs.writeFileSync(
