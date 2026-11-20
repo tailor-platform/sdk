@@ -49,6 +49,7 @@ jobs:
               - 'packages/sdk-plugin-tailordb-erd/**'
               - 'packages/sdk-plugin-frontend/**'
               - 'packages/tailor-proto/**'
+              - 'packages/shared/**'
             codemod_source:
               - 'packages/sdk-codemod/src/**'
               - 'packages/sdk-codemod/codemods/**'
@@ -71,6 +72,7 @@ jobs:
               - 'packages/sdk-plugin-tailordb-erd/bin/**'
               - 'packages/sdk-plugin-frontend/src/**'
               - 'packages/tailor-proto/src/**'
+              - 'packages/shared/src/**'
               - '!packages/*/src/**/*.test.ts'
               - '!packages/*/src/**/*.test-d.ts'
               - '!packages/*/src/**/test-helpers/**'
@@ -113,6 +115,7 @@ jobs:
           echo ""
           echo "Add a changeset (patch for an internal refactor with no user-visible change): pnpm changeset"
           echo "For a change under packages/tailor-proto/src, release @tailor-platform/sdk, which bundles it."
+          echo "For a change under packages/shared/src, release each package that bundles the changed module, directly or through another shared module, such as @tailor-platform/sdk."
           echo "A PR stacked on another can edit the parent PR's changeset instead."
           echo "The 'skip-changeset' label does not apply to package source."
           exit 1

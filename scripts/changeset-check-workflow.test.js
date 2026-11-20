@@ -60,6 +60,7 @@ describe("changeset-check workflow", () => {
     "packages/sdk-plugin-tailordb-erd/src/cli.ts",
     "packages/sdk-plugin-frontend/src/index.ts",
     "packages/tailor-proto/src/tailor/v1/service_pb.js",
+    "packages/shared/src/resource-name.ts",
   ])("requires a changeset for %s, which a package ships", (file) => {
     expect(matchesFilter(packageSource, file)).toBe(true);
   });
