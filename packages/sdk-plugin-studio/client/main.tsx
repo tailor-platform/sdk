@@ -62,6 +62,7 @@ function WorkspaceBar() {
         flexShrink: 0,
       }}
     >
+      <SidebarLayout.Trigger />
       <strong>Workspace</strong>
       <select
         aria-label="Profile"
