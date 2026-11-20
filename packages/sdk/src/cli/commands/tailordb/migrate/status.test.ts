@@ -156,7 +156,7 @@ describe("tailordb migration status --json", () => {
   });
 
   test("reports tables a deploy left in maintenance mode at the checkpoint and the command that releases them", async () => {
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0001", "sdk-maintenance-mode": "m0001" },
       },
@@ -189,7 +189,7 @@ describe("tailordb migration status --json", () => {
   });
 
   test("lists deploy for a maintenance record while a removed table of the committed migration is not deleted yet", async () => {
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: {
         labels: {
           "sdk-migration": "m0001",
@@ -213,7 +213,7 @@ describe("tailordb migration status --json", () => {
   });
 
   test("tells a deploy removes a maintenance mode record that names another checkpoint, and sync when the deploy stops on drift", async () => {
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0001", "sdk-maintenance-mode": "m0002" },
       },
@@ -261,7 +261,7 @@ describe("tailordb migration status --json", () => {
     ],
     ["is absent", { "sdk-migration": "m0001" }],
   ])("does not offer to release maintenance mode when the record %s", async (_name, labels) => {
-    state.getMetadata.mockResolvedValue({ metadata: { labels } });
+    client.getMetadata.mockResolvedValue({ metadata: { labels } });
     using stdout = captureStdout();
     using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     using _json = jsonMode();

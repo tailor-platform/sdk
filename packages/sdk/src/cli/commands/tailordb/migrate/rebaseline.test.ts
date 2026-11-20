@@ -311,7 +311,7 @@ describe("tailordb migration rebaseline", () => {
   test("refuses to re-baseline while a deploy's maintenance mode record remains", async () => {
     const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
     const before = fs.readFileSync(schemaPath, "utf-8");
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0001", "sdk-maintenance-mode": "m0001" } },
     });
 
@@ -323,11 +323,11 @@ describe("tailordb migration rebaseline", () => {
       suggestion: expect.stringContaining("migration resolve --maintenance"),
     });
     expect(fs.readFileSync(schemaPath, "utf-8")).toBe(before);
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("says a deploy finishes the table deletion while a removed table of the committed migration is not deleted yet", async () => {
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: {
         labels: {
           "sdk-migration": "m0001",
@@ -345,11 +345,11 @@ describe("tailordb migration rebaseline", () => {
     expect(suggestion).toContain("tailor deploy");
     expect(suggestion).not.toContain("another checkpoint");
     expect(suggestion).not.toContain("MIGRATION_REMOTE_DRIFT");
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("points to deploy when the maintenance mode record names another checkpoint", async () => {
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0001", "sdk-maintenance-mode": "m0002" } },
     });
 
@@ -362,7 +362,7 @@ describe("tailordb migration rebaseline", () => {
         /tailor deploy.*MIGRATION_REMOTE_DRIFT.*migration sync 0001/s,
       ),
     });
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("rejects ungenerated local schema changes before reading the remote", async () => {

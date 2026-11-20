@@ -189,7 +189,7 @@ describe("tailordb migration resolve", () => {
   describe("--maintenance", () => {
     function leftInMaintenanceModeAt0001(extraFields: string[] = []): void {
       remoteLabels({ "sdk-migration": "m0001", "sdk-maintenance-mode": "m0001" });
-      state.listTailorDBTypes.mockResolvedValue({
+      client.listTailorDBTypes.mockResolvedValue({
         tailordbTypes: [
           restrictedRemoteType("User", ["id", "name", ...extraFields]),
           restrictedRemoteType("Post", ["id", "name"]),
@@ -212,9 +212,9 @@ describe("tailordb migration resolve", () => {
         tables: { created: [], updated: ["User", "Post"], deleted: [] },
       });
       expect(
-        state.updateTailorDBType.mock.calls.map(([call]) => call.tailordbType.name).toSorted(),
+        client.updateTailorDBType.mock.calls.map(([call]) => call.tailordbType?.name).toSorted(),
       ).toEqual(["Post", "User"]);
-      expect(state.setMetadata).toHaveBeenCalledWith(
+      expect(client.setMetadata).toHaveBeenCalledWith(
         expect.objectContaining({ labels: { "sdk-migration": "m0001", "sdk-name": "my-app" } }),
       );
     });
@@ -290,7 +290,7 @@ describe("tailordb migration resolve", () => {
 
     test("points to --rollback when a deploy was interrupted before it recorded the next migration", async () => {
       remoteLabels({ "sdk-migration": "m0001", "sdk-maintenance-mode": "m0001" });
-      state.listTailorDBTypes.mockResolvedValue({
+      client.listTailorDBTypes.mockResolvedValue({
         tailordbTypes: [
           remoteType("User", ["id", "name"]),
           remoteType("Post", ["id", "name"]),
@@ -347,7 +347,7 @@ describe("tailordb migration resolve", () => {
 
     test("keeps a maintenance record another deploy wrote while the tables were being updated", async () => {
       leftInMaintenanceModeAt0001();
-      state.updateTailorDBType.mockImplementation(async () => {
+      client.updateTailorDBType.mockImplementation(async () => {
         remoteLabels({ "sdk-migration": "m0002", "sdk-maintenance-mode": "m0002" });
         return {};
       });
@@ -356,20 +356,20 @@ describe("tailordb migration resolve", () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_STATE_CHANGED" });
-      expect(state.setMetadata).not.toHaveBeenCalled();
+      expect(client.setMetadata).not.toHaveBeenCalled();
     });
 
     test("leaves the record alone when sending the schema fails", async () => {
       leftInMaintenanceModeAt0001();
-      state.updateTailorDBType.mockRejectedValue(new Error("update failed"));
+      client.updateTailorDBType.mockRejectedValue(new Error("update failed"));
 
       const result = await runCommand(resolveCommand, ["--maintenance", "--yes"]);
 
       expect(result.success).toBe(false);
-      expect(state.updateTailorDBType).toHaveBeenCalledWith(
+      expect(client.updateTailorDBType).toHaveBeenCalledWith(
         expect.objectContaining({ namespaceName: "tailordb" }),
       );
-      expect(state.setMetadata).not.toHaveBeenCalled();
+      expect(client.setMetadata).not.toHaveBeenCalled();
     });
   });
 

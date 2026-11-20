@@ -196,9 +196,9 @@ describe("tailordb migration sync", () => {
       "sdk-maintenance-mode": "m0002",
       "sdk-name": "my-app",
     };
-    state.getMetadata.mockImplementation(async () => ({ metadata: { labels } }));
-    state.setMetadata.mockImplementation(async (request: { labels: Record<string, string> }) => {
-      labels = request.labels;
+    client.getMetadata.mockImplementation(async () => ({ metadata: { labels } }));
+    client.setMetadata.mockImplementation(async (request) => {
+      labels = { ...request.labels };
       return {};
     });
 
