@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import {
   arg,
@@ -44,7 +43,6 @@ export const uiCommand = defineAppCommand({
     );
     const platform = platformConfigFromEnv();
     const tabs = await Promise.all(DEFAULT_TABS.map((spec) => discoverTab(spec, process.cwd())));
-    const token = randomBytes(32).toString("hex");
     const workspace = createWorkspaceContext({
       ...(args.profile ? { initialProfile: args.profile } : {}),
       listProfiles: listProfiles,
@@ -57,7 +55,6 @@ export const uiCommand = defineAppCommand({
         createShellHandler({
           tabs,
           port,
-          token,
           workspace,
           accounts: createAccounts(platform),
           ...(platform === undefined ? {} : { platform }),

@@ -2,7 +2,6 @@ import { describe, expect, test } from "vitest";
 import { guardRequest } from "./request-guard";
 
 const PORT = 7777;
-const TOKEN = "t0ken";
 
 function request(
   method: string,
@@ -13,7 +12,7 @@ function request(
 }
 
 function guard(req: Request) {
-  return guardRequest(req, { port: PORT, token: TOKEN });
+  return guardRequest(req, { port: PORT });
 }
 
 describe("guardRequest", () => {
@@ -32,32 +31,33 @@ describe("guardRequest", () => {
 
   describe("write requests", () => {
     const host = `127.0.0.1:${PORT}`;
+    const sameOrigin = { host, "sec-fetch-site": "same-origin" };
 
-    test.each(["POST", "PUT", "PATCH", "DELETE"])("%s without the token is 403", (method) => {
-      expect(guard(request(method, { host }))?.status).toBe(403);
+    test.each(["POST", "PUT", "PATCH", "DELETE"])(
+      "%s without Sec-Fetch-Site is 403, so a client that is not a page of the shell cannot write",
+      (method) => {
+        expect(guard(request(method, { host }))?.status).toBe(403);
+      },
+    );
+
+    test.each(["none", "same-site", "cross-site"])("POST marked %s is 403", (site) => {
+      expect(guard(request("POST", { host, "sec-fetch-site": site }))?.status).toBe(403);
     });
 
-    test("POST with the token is allowed", () => {
-      expect(guard(request("POST", { host, "x-tailor-studio-token": TOKEN }))).toBeUndefined();
+    test("POST marked same-origin is allowed", () => {
+      expect(guard(request("POST", sameOrigin))).toBeUndefined();
     });
 
-    test("POST with a wrong token is 403", () => {
-      expect(guard(request("POST", { host, "x-tailor-studio-token": "nope" }))?.status).toBe(403);
-    });
-
-    test("POST from a foreign Origin is 403 even with the token", () => {
-      const res = guard(
-        request("POST", { host, origin: "http://evil.example", "x-tailor-studio-token": TOKEN }),
+    test("POST from a foreign Origin is 403 even when marked same-origin", () => {
+      expect(guard(request("POST", { ...sameOrigin, origin: "http://evil.example" }))?.status).toBe(
+        403,
       );
-      expect(res?.status).toBe(403);
     });
 
     test.each([`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`])(
-      "POST from Origin %s with the token is allowed",
+      "POST from Origin %s is allowed",
       (origin) => {
-        expect(
-          guard(request("POST", { host, origin, "x-tailor-studio-token": TOKEN })),
-        ).toBeUndefined();
+        expect(guard(request("POST", { ...sameOrigin, origin }))).toBeUndefined();
       },
     );
   });

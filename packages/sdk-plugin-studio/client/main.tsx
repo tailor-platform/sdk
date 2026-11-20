@@ -11,7 +11,6 @@ type TabInfo =
 type PlatformInfo = { platformUrl?: string; oauth2ClientId?: string; consoleUrl?: string };
 
 type ContextInfo = {
-  token: string;
   platform?: PlatformInfo;
   profiles: { name: string; workspaceId: string }[];
   selected: { profile?: string; workspaceId?: string };
@@ -54,11 +53,9 @@ function PlatformDetails({ platform }: { platform: PlatformInfo }) {
 }
 
 function NewProfileDialog({
-  token,
   platform,
   onCreated,
 }: {
-  token: string;
   platform?: PlatformInfo;
   onCreated: (info: ContextInfo) => void;
 }) {
@@ -110,7 +107,7 @@ function NewProfileDialog({
     try {
       const response = await fetch("/api/profiles", {
         method: "POST",
-        headers: { "content-type": "application/json", "x-tailor-studio-token": token },
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({ name, user, workspaceId, permission }),
       });
       const body = (await response.json()) as ContextInfo | { error: string };
@@ -253,7 +250,7 @@ function StudioHeader() {
     if (!info) return;
     const response = await fetch("/api/context", {
       method: "PUT",
-      headers: { "content-type": "application/json", "x-tailor-studio-token": info.token },
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ profile: profile === "" ? null : profile }),
     });
     const body = (await response.json()) as ContextInfo | { error: string };
@@ -316,9 +313,7 @@ function StudioHeader() {
           </option>
         ))}
       </select>
-      {info ? (
-        <NewProfileDialog token={info.token} platform={info.platform} onCreated={setInfo} />
-      ) : null}
+      {info ? <NewProfileDialog platform={info.platform} onCreated={setInfo} /> : null}
       {selected?.workspaceId ? (
         <span style={{ opacity: 0.85 }}>
           workspace: <code>{selected.workspaceId}</code>

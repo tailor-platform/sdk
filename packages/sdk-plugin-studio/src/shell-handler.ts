@@ -4,7 +4,6 @@ import type { WorkspaceContext, WorkspaceSelection } from "./workspace-context";
 
 export interface UiHandlerContext {
   basePath: string;
-  token: string;
   /** The profile / workspace chosen in the shell, read again on every call. */
   getSelection: () => WorkspaceSelection;
 }
@@ -41,7 +40,6 @@ export interface PlatformInfo {
 export interface ShellHandlerOptions {
   tabs: readonly Tab[];
   port: number;
-  token: string;
   workspace: WorkspaceContext;
   accounts: Accounts;
   /** Platform settings taken from the environment; absent for the default platform. */
@@ -76,14 +74,13 @@ function describeTab(tab: Tab) {
 /**
  * Build the request handler of the shell: it guards every request, serves the
  * tab list, and forwards `/plugins/<id>/*` to the plugin's handler.
- * @param options - Tabs, listening port and per-run token
+ * @param options - Tabs and listening port
  * @returns A Web-standard fetch handler
  */
 export function createShellHandler(options: ShellHandlerOptions) {
   const byId = new Map(options.tabs.map((tab) => [tab.id, tab]));
 
   const contextBody = async () => ({
-    token: options.token,
     ...(options.platform === undefined ? {} : { platform: options.platform }),
     ...(await options.workspace.describe()),
   });
@@ -193,7 +190,6 @@ export function createShellHandler(options: ShellHandlerOptions) {
     try {
       return await tab.handler(forwarded, {
         basePath: `/plugins/${id}/`,
-        token: options.token,
         getSelection: () => options.workspace.selection(),
       });
     } catch (error) {

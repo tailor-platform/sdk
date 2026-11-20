@@ -3,7 +3,7 @@ import * as path from "pathe";
 import { describe, expect, test } from "vitest";
 import { createErdUiHandler } from "./ui";
 
-const context = { basePath: "/plugins/tailordb-erd", token: "t" };
+const context = { basePath: "/plugins/tailordb-erd" };
 const root = "http://127.0.0.1:7777/";
 
 function exportViewer(html: (outputDir: string) => string) {
