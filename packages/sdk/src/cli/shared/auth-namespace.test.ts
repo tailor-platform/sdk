@@ -23,6 +23,14 @@ describe("getApplicationAuthNamespace", () => {
   test("returns undefined when no auth is configured", () => {
     expect(getApplicationAuthNamespace({ authServices: [], config: {} })).toBeUndefined();
   });
+
+  test("refuses to pick one of several Auth services", () => {
+    expect(() =>
+      getApplicationAuthNamespace({
+        authServices: [{ config: { name: "corp-auth" } }, { config: { name: "partner-auth" } }],
+      }),
+    ).toThrow("An application has one Auth service at most, but 2 were defined");
+  });
 });
 
 describe("requireApplicationAuthNamespace", () => {

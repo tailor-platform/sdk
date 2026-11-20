@@ -23,11 +23,15 @@ import { createTailorDBService, type TailorDBService } from "#/cli/services/tail
 import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
 import { bundleWorkflowJobs, type BundleWorkflowJobsResult } from "#/cli/services/workflow/bundler";
 import { createWorkflowService, type WorkflowService } from "#/cli/services/workflow/service";
-import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
+import { getApplicationAuthNamespace, soleAuthService } from "#/cli/shared/auth-namespace";
 import { buildOptionsOf, projectSourcesOf } from "#/cli/shared/build-options";
 import { resolveBundleLogLevel } from "#/cli/shared/bundle-log-level";
 import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
-import { type LoadedConfig, type LoadedWorkspaceConfig } from "#/cli/shared/config-loader";
+import {
+  isLoadedWorkspaceConfig,
+  type LoadedConfig,
+  type LoadedWorkspaceConfig,
+} from "#/cli/shared/config-loader";
 import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { CLIError } from "#/cli/shared/errors";
@@ -259,13 +263,8 @@ function pluginResolverSource(
   return pluginManager && { pluginManager, appName: outputKey };
 }
 
-/**
- * Key that keeps the plugin-generated resolver files of one config apart from another's.
- * @param config - Loaded `defineConfig()` or workspace config
- * @returns The application name of a `defineConfig()` config, or the path of a workspace config
- */
-export function pluginResolverOutputKey(config: LoadedConfig | LoadedWorkspaceConfig): string {
-  return "apps" in config ? config.path : config.name;
+function pluginResolverOutputKey(config: LoadedConfig | LoadedWorkspaceConfig): string {
+  return isLoadedWorkspaceConfig(config) ? config.path : config.name;
 }
 
 function defineResolver(
@@ -301,20 +300,18 @@ function defineResolver(
 /**
  * Define resolver services for namespaces that plugins generate resolvers into without a `resolver` entry.
  * Call after table and namespace plugins have run.
- * @param settings - Settings of the config the plugins belong to
- * @param outputKey - Key from {@link pluginResolverOutputKey} for the config
+ * @param config - Loaded `defineConfig()` or workspace config the plugins belong to
  * @param pluginManager - Plugin manager holding the generated resolvers
  * @returns Resolver services for those namespaces
  */
 export function definePluginResolverServices(
-  settings: ServiceSettings,
-  outputKey: string,
+  config: LoadedConfig | LoadedWorkspaceConfig,
   pluginManager: PluginManager | undefined,
 ): ResolverService[] {
-  const baseDir = path.dirname(settings.path);
+  const baseDir = path.dirname(config.path);
   const resolverServices: ResolverService[] = [];
   for (const { namespace, pluginId } of pluginManager?.getPluginGeneratedResolvers() ?? []) {
-    const serviceConfig = settings.resolver?.[namespace];
+    const serviceConfig = config.resolver?.[namespace];
     if (serviceConfig && "external" in serviceConfig) {
       throw CLIError({
         code: "PLUGIN_RESOLVER_NAMESPACE_EXTERNAL",
@@ -329,9 +326,9 @@ export function definePluginResolverServices(
       createResolverService({
         namespace,
         config: { files: [] },
-        configPath: settings.path,
+        configPath: config.path,
         baseDir,
-        plugins: pluginResolverSource(outputKey, pluginManager),
+        plugins: pluginResolverSource(pluginResolverOutputKey(config), pluginManager),
       }),
     );
   }
@@ -523,24 +520,23 @@ function defineAIGateways(
     if (gateway.authNamespace === undefined) {
       const [authNamespace, ...others] = authNamespaces;
       if (authNamespace === undefined || others.length > 0) {
+        const issue =
+          authNamespace === undefined
+            ? {
+                message: "No Auth service is configured to default to",
+                suggestion: 'Define an Auth service, or set "authNamespace" explicitly.',
+              }
+            : {
+                message: `Several Auth services are configured (${authNamespaces.join(", ")}), so there is none to default to`,
+                suggestion: 'Set "authNamespace" to one of the Auth services.',
+              };
         throw configIssuesError({
           file: configPath,
           exportName: "default",
           subject: "Tailor config",
           service: { configKey: "aiGateways", name: gateway.name },
-          issues: [
-            {
-              path: ["aiGateways", index, "authNamespace"],
-              message:
-                authNamespace === undefined
-                  ? "No Auth service is configured to default to"
-                  : `Several Auth services are configured (${authNamespaces.join(", ")}), so there is none to default to`,
-            },
-          ],
-          suggestion:
-            authNamespace === undefined
-              ? 'Define an Auth service, or set "authNamespace" explicitly.'
-              : 'Set "authNamespace" to one of the Auth services.',
+          issues: [{ path: ["aiGateways", index, "authNamespace"], message: issue.message }],
+          suggestion: issue.suggestion,
         });
       }
       gateway.authNamespace = authNamespace;
@@ -718,11 +714,14 @@ function buildWorkspaceServices(params: BuildWorkspaceServicesParams): Workspace
   };
 }
 
-function buildApplication(
-  params: Omit<BuildWorkspaceServicesParams, "settings" | "envOverrides"> & {
-    config: LoadedConfig;
-  },
-): Application {
+interface BuildApplicationParams extends Omit<
+  BuildWorkspaceServicesParams,
+  "settings" | "envOverrides"
+> {
+  config: LoadedConfig;
+}
+
+function buildApplication(params: BuildApplicationParams): Application {
   const application: Application = {
     ...buildWorkspaceServices({
       ...params,
@@ -825,13 +824,12 @@ export function defineApplication(params: DefineApplicationParams): Application 
 /**
  * Parameters for defining the services of a workspace
  */
-export interface DefineWorkspaceServicesParams {
+export interface DefineWorkspaceServicesParams extends Pick<
+  DefineApplicationParams,
+  "pluginManager" | "precompileTailorDBScripts"
+> {
   /** Workspace loaded from a `defineWorkspace()` or `defineApp()` config */
   workspace: LoadedWorkspaceConfig;
-  /** Plugin manager for processing plugins */
-  pluginManager?: PluginManager;
-  /** Bundle each TailorDB table's hook and validator scripts while loading. Defaults to `true`; turn it off when only the table definitions are read. */
-  precompileTailorDBScripts?: boolean;
 }
 
 /**
@@ -979,11 +977,7 @@ export async function loadApplication(
   assertUniqueLocalTailorDBTypeNames({
     tailorDBServices: tailordbResult.tailorDBServices,
   });
-  const pluginResolverServices = definePluginResolverServices(
-    config,
-    pluginResolverOutputKey(config),
-    pluginManager,
-  );
+  const pluginResolverServices = definePluginResolverServices(config, pluginManager);
   const resolverResult: DefineResolverResult = {
     resolverServices: [...configuredResolverResult.resolverServices, ...pluginResolverServices],
     subgraphs: [
@@ -1136,7 +1130,7 @@ export async function loadApplication(
   }
 
   // 14. Bundle auth hooks
-  const [authService] = authResult.authServices;
+  const authService = soleAuthService(authResult);
   if (authService?.config.hooks?.beforeLogin) {
     const authName = authService.config.name;
     bundledScripts.authHooks = await bundleAuthHooks({
@@ -1290,7 +1284,7 @@ async function reloadEnvDependentBundles(params: {
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
 
-  const [authService] = previousApplication.authServices;
+  const authService = soleAuthService(previousApplication);
   if (authService?.config.hooks?.beforeLogin) {
     const authName = authService.config.name;
     bundledScripts.authHooks = await bundleAuthHooks({

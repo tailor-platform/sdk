@@ -70,6 +70,7 @@ import {
   MIGRATION_LABEL_KEY,
   sanitizeMigrationLabel,
 } from "#/cli/commands/tailordb/migrate/types";
+import { soleAuthService } from "#/cli/shared/auth-namespace";
 import { type OperatorClient } from "#/cli/shared/client";
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError, isCLIError } from "#/cli/shared/errors";
@@ -1505,7 +1506,7 @@ export function resolveScriptMachineUsers(
 ): MigrationMachineUsers | undefined {
   const namespaces = new Set(scriptNamespaces);
   if (namespaces.size === 0) return undefined;
-  const [authService] = source.application.authServices;
+  const authService = soleAuthService(source.application);
   if (!authService) {
     throw CLIError({
       code: "AUTH_CONFIG_REQUIRED",

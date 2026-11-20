@@ -41,6 +41,17 @@ export type LoadedConfig = ResolvedEnvAppConfig & { path: string };
 /** A `defineWorkspace()` or `defineApp()` config with its `env` values resolved, and its path. */
 export type LoadedWorkspaceConfig = WorkspaceRepresentation<EnvValue> & { path: string };
 
+/**
+ * Whether a loaded config is a `defineWorkspace()` or `defineApp()` config.
+ * @param config - Loaded config of either kind
+ * @returns `true` for a workspace config
+ */
+export function isLoadedWorkspaceConfig(
+  config: LoadedConfig | LoadedWorkspaceConfig,
+): config is LoadedWorkspaceConfig {
+  return "apps" in config;
+}
+
 /** A loaded config file, told apart by the function that defined its default export. */
 export type LoadedConfigFile =
   | { kind: "config"; config: LoadedConfig; plugins: Plugin[] }

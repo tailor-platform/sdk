@@ -3,13 +3,13 @@ import * as path from "pathe";
 import {
   defineApplication,
   definePluginResolverServices,
-  pluginResolverOutputKey,
   generatePluginFilesIfNeeded,
   type Application,
 } from "#/cli/services/application";
 import { createExecutorService } from "#/cli/services/executor/service";
 import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
 import { getAuthInput } from "#/cli/shared/auth-input";
+import { soleAuthService } from "#/cli/shared/auth-namespace";
 import { loadConfig, type LoadedConfig } from "#/cli/shared/config-loader";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { errorToJson } from "#/cli/shared/error-json";
@@ -120,7 +120,7 @@ export function createGenerationManager(params: {
     if (!hook) return;
 
     const pluginBaseDir = path.join(baseDir, plugin.id);
-    const [authService] = application.authServices;
+    const authService = soleAuthService(application);
     const auth = authService && getAuthInput(authService);
     const tailordb = buildTailorDBData();
 
@@ -308,7 +308,7 @@ export function createGenerationManager(params: {
       });
       const resolverServices = [
         ...app.resolverServices,
-        ...definePluginResolverServices(config, pluginResolverOutputKey(config), pluginManager),
+        ...definePluginResolverServices(config, pluginManager),
       ];
 
       // Generate plugin type and executor files

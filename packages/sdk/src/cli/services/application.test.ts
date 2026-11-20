@@ -72,14 +72,20 @@ describe("defineWorkspaceServices", () => {
     expect(services.settings.path).toBe("/project/tailor.config.ts");
   });
 
-  test("defines one Auth service per auth and every IdP, in config order", () => {
-    const corpAuth = defineAuth("corp-auth", { machineUserAttributes: {}, machineUsers: {} });
+  test("defines one Auth service per auth, each resolving its user profile, and every IdP", async () => {
+    const employee = db.table("Employee", { email: db.string().unique() });
+    const partner = db.table("Partner", { email: db.string().unique() });
+    const corpAuth = defineAuth("corp-auth", {
+      userProfile: { type: employee, usernameField: "email" },
+      machineUsers: {},
+    });
     const partnerAuth = defineAuth("partner-auth", {
-      machineUserAttributes: {},
+      userProfile: { type: partner, usernameField: "email" },
       machineUsers: {},
     });
     const workspace = loadWorkspace(
       defineWorkspace({
+        db: { "people-db": { files: [] } },
         auth: { "corp-auth": corpAuth, "partner-auth": partnerAuth },
         idp: {
           "corp-idp": defineIdp("corp-idp", { clients: ["default"] }),
@@ -90,10 +96,19 @@ describe("defineWorkspaceServices", () => {
     );
 
     const services = defineWorkspaceServices({ workspace });
+    for (const authService of services.authServices) {
+      await authService.resolveNamespaces();
+    }
 
-    expect(services.authServices.map((service) => service.config.name)).toEqual([
-      "corp-auth",
-      "partner-auth",
+    expect(
+      services.authServices.map((service) => ({
+        name: service.config.name,
+        userProfile: service.userProfile?.type.name,
+        namespace: service.userProfile?.namespace,
+      })),
+    ).toEqual([
+      { name: "corp-auth", userProfile: "Employee", namespace: "people-db" },
+      { name: "partner-auth", userProfile: "Partner", namespace: "people-db" },
     ]);
     expect(services.idpServices.map((idp) => idp.name)).toEqual(["corp-idp", "partner-idp"]);
   });

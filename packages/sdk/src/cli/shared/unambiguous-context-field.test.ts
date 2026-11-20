@@ -1,11 +1,11 @@
 import { describe, expect, test } from "vitest";
-import { defineUnambiguousField } from "./unambiguous-field";
+import { defineUnambiguousContextField } from "./unambiguous-context-field";
 
 const options = { key: "auth", kind: "Auth services", replacement: "auths" } as const;
 
-describe("defineUnambiguousField", () => {
+describe("defineUnambiguousContextField", () => {
   test("sets the only candidate as an ordinary field", () => {
-    const context = defineUnambiguousField(
+    const context = defineUnambiguousContextField(
       { baseDir: "out" },
       { ...options, candidates: { "corp-auth": { name: "corp-auth" } } },
     );
@@ -15,7 +15,10 @@ describe("defineUnambiguousField", () => {
   });
 
   test("sets the field to undefined when there is no candidate", () => {
-    const context = defineUnambiguousField({ baseDir: "out" }, { ...options, candidates: {} });
+    const context = defineUnambiguousContextField(
+      { baseDir: "out" },
+      { ...options, candidates: {} },
+    );
 
     expect(context.auth).toBeUndefined();
     expect(Object.keys(context)).toEqual(["baseDir", "auth"]);
@@ -23,7 +26,7 @@ describe("defineUnambiguousField", () => {
 
   describe("with several candidates", () => {
     const create = () =>
-      defineUnambiguousField(
+      defineUnambiguousContextField(
         { baseDir: "out" },
         {
           ...options,

@@ -1,7 +1,7 @@
 import { CLIError } from "./errors";
 
-/** A field whose value is one of several named candidates. */
-export interface UnambiguousFieldOptions<Key extends string, Value> {
+/** A plugin context field whose value is one of several named candidates. */
+export interface UnambiguousContextFieldOptions<Key extends string, Value> {
   /** Name of the field. */
   key: Key;
   /** Values the field could hold, keyed by name. */
@@ -13,15 +13,16 @@ export interface UnambiguousFieldOptions<Key extends string, Value> {
 }
 
 /**
- * Add a field that holds its only candidate. With several candidates, reading the field throws an
- * error pointing to the field that holds all of them, and the field is left out of spread copies.
- * @param target - Object to add the field to
+ * Add a plugin context field that holds its only candidate. With several candidates, reading the
+ * field throws an error pointing to the field that holds all of them, and the field is left out of
+ * spread copies.
+ * @param target - Plugin context to add the field to
  * @param options - The field and its candidates
  * @returns `target`, with the field added
  */
-export function defineUnambiguousField<Target extends object, Key extends string, Value>(
+export function defineUnambiguousContextField<Target extends object, Key extends string, Value>(
   target: Target,
-  options: UnambiguousFieldOptions<Key, Value>,
+  options: UnambiguousContextFieldOptions<Key, Value>,
 ): Target & { [K in Key]?: Value } {
   const { key, candidates, kind, replacement } = options;
   const names = Object.keys(candidates);

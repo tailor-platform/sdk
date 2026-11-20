@@ -13,6 +13,7 @@ import {
   type HttpAdapter,
   HttpAdapterSchema,
 } from "@tailor-platform/tailor-proto/http_adapter_resource_pb";
+import { soleAuthService } from "#/cli/shared/auth-namespace";
 import {
   fetchAllTolerant,
   getOrNull,
@@ -373,7 +374,7 @@ export async function planApplication(
 
   let authNamespace: string | undefined;
   let authIdpConfigName: string | undefined;
-  const [authService] = application.authServices;
+  const authService = soleAuthService(application);
   if (authService) {
     authNamespace = authService.config.name;
 
