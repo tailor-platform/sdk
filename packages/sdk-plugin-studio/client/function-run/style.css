@@ -41,7 +41,11 @@
 
 .fr-argument {
   flex: none;
-  resize: none;
+  min-height: 0;
+}
+
+.fr-frame[data-invalid="true"] {
+  border-color: var(--destructive, #dc2626);
 }
 
 .fr-invalid {

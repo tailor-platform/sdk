@@ -3,11 +3,12 @@ import dark from "@enlumine/html/themes/dark";
 import light from "@enlumine/html/themes/light";
 import json from "@enlumine/json";
 import { Highlight } from "@enlumine/react";
-import { Alert, Badge, Button, Card, Textarea } from "@tailor-platform/app-shell";
-import { StrictMode, useEffect, useRef, useState, type RefObject } from "react";
+import { Alert, Badge, Button, Card } from "@tailor-platform/app-shell";
+import { StrictMode, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { createRoot } from "react-dom/client";
-import { normalizeArg } from "../../src/function-run/arg";
+import { locateArgPath, normalizeArg } from "../../src/function-run/arg";
 import { parseFrame, splitFrames, type RunRecord } from "../../src/function-run/stream";
+import { parseTailorErrors, type TailorErrorItem } from "../../src/function-run/tailor-errors";
 import { scopeTheme } from "../../src/function-run/theme";
 import { Editor } from "./Editor";
 import "./style.css";
@@ -196,7 +197,18 @@ function App() {
 
   useEffect(followShellTheme, []);
 
+  const [argErrors, setArgErrors] = useState<TailorErrorItem[]>([]);
   const argValid = normalizeArg(arg) !== undefined;
+  const argDiagnostics = useMemo(
+    () =>
+      argErrors.flatMap((item) => {
+        const range = locateArgPath(arg, item.path);
+        if (range === undefined) return [];
+        const where = item.path.length > 0 ? `${item.path.join(".")}: ` : "";
+        return [{ ...range, severity: "error" as const, message: `${where}${item.message}` }];
+      }),
+    [argErrors, arg],
+  );
 
   const save = (change: { code: string } | { arg: string }) => {
     const id = runId.current;
@@ -227,6 +239,7 @@ function App() {
     const abort = new AbortController();
     controller.current = abort;
     setEntries([]);
+    setArgErrors([]);
     setStatus("watching");
     try {
       const response = await fetch("run", {
@@ -250,8 +263,10 @@ function App() {
         for (const frame of frames) {
           const message = parseFrame(frame);
           if (message === undefined || message.type === "exit") continue;
-          if (message.type === "run") add({ type: "run", record: message.record });
-          else add(message);
+          if (message.type === "run") {
+            add({ type: "run", record: message.record });
+            setArgErrors(parseTailorErrors(message.record.error));
+          } else add(message);
         }
       }
     } catch (error) {
@@ -295,10 +310,10 @@ function App() {
         <div className="fr-pane" ref={leftPane}>
           <div className="fr-label">Function</div>
           <div className="fr-editor">
-            <Editor value={code} onChange={setCode} dark={dark} />
+            <Editor value={code} onChange={setCode} dark={dark} label="Function" typescript />
           </div>
           <Splitter height={argHeight} onChange={setArgHeight} pane={leftPane} />
-          <label className="fr-label" htmlFor="argument">
+          <div className="fr-label" id="argument-label">
             Argument (JSON or JSON5, optional)
             {argValid ? null : (
               <span className="fr-invalid">
@@ -306,16 +321,21 @@ function App() {
                 — not valid JSON or JSON5, the last valid argument stays in use
               </span>
             )}
-          </label>
-          <Textarea
-            id="argument"
-            value={arg}
-            onChange={(event) => setArg(event.target.value)}
-            placeholder="{a: 1, b: 2}"
-            aria-invalid={!argValid}
-            className="astw:font-mono fr-argument"
-            style={{ height: argHeight }}
-          />
+          </div>
+          <div className="fr-argument" style={{ height: argHeight }}>
+            <Editor
+              value={arg}
+              onChange={(next) => {
+                setArg(next);
+                setArgErrors([]);
+              }}
+              dark={dark}
+              label="Argument"
+              placeholder="{a: 1, b: 2}"
+              diagnostics={argDiagnostics}
+              invalid={!argValid || argErrors.length > 0}
+            />
+          </div>
         </div>
         <div className="fr-pane">
           <div className="fr-label">Output</div>
