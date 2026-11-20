@@ -84,7 +84,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
           }),
         ],
       },
-      application: { authService: undefined },
+      application: { authServices: [] },
     });
   }
 
@@ -188,7 +188,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
       type: {
         creates: [typeEntry("SalesOrder", { fields: {} }), typeEntry("User", { fields: {} })],
       },
-      application: { authService: undefined },
+      application: { authServices: [] },
     });
 
     const migration = mkFieldMigration("field_added", 1, "SalesOrder", "reference");

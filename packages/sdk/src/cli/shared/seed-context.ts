@@ -107,8 +107,9 @@ export async function loadSeedContext(options: LoadSeedContextOptions = {}): Pro
 
   // userProfile is only populated once auth namespaces are resolved (the
   // generate flow does the same after loading TailorDB namespaces).
-  await application.authService?.resolveNamespaces();
-  const authInput = getAuthInput(application);
+  const [authService] = application.authServices;
+  await authService?.resolveNamespaces();
+  const authInput = authService && getAuthInput(authService);
   const idpUserMeta = authInput ? processIdpUser(authInput) : undefined;
   const idpUser: SeedIdpUserContext | null = idpUserMeta
     ? {

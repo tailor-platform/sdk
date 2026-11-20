@@ -373,10 +373,11 @@ export async function planApplication(
 
   let authNamespace: string | undefined;
   let authIdpConfigName: string | undefined;
-  if (application.authService) {
-    authNamespace = application.authService.config.name;
+  const [authService] = application.authServices;
+  if (authService) {
+    authNamespace = authService.config.name;
 
-    const idProvider = application.authService.config.idProvider;
+    const idProvider = authService.config.idProvider;
     if (idProvider) {
       authIdpConfigName = idProvider.name;
     }

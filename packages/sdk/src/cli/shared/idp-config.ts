@@ -1,7 +1,7 @@
 import type { IdPConfig } from "#/configure/services/idp/types";
 
 /** The `idp` value of `defineConfig()`: one IdP, or an array of IdPs. */
-export type IdpConfigInput = IdPConfig | readonly IdPConfig[];
+type IdpConfigInput = IdPConfig | readonly IdPConfig[];
 
 /**
  * Whether `idp` is written as an array.

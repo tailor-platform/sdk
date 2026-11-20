@@ -3,6 +3,7 @@ import * as path from "pathe";
 import {
   defineApplication,
   definePluginResolverServices,
+  pluginResolverOutputKey,
   generatePluginFilesIfNeeded,
   type Application,
 } from "#/cli/services/application";
@@ -119,7 +120,8 @@ export function createGenerationManager(params: {
     if (!hook) return;
 
     const pluginBaseDir = path.join(baseDir, plugin.id);
-    const auth = getAuthInput(application);
+    const [authService] = application.authServices;
+    const auth = authService && getAuthInput(authService);
     const tailordb = buildTailorDBData();
 
     let result: GeneratorResult;
@@ -306,7 +308,7 @@ export function createGenerationManager(params: {
       });
       const resolverServices = [
         ...app.resolverServices,
-        ...definePluginResolverServices(config, pluginManager),
+        ...definePluginResolverServices(config, pluginResolverOutputKey(config), pluginManager),
       ];
 
       // Generate plugin type and executor files
@@ -329,11 +331,12 @@ export function createGenerationManager(params: {
       );
 
       // Resolve Auth namespaces (depends on TailorDB)
-      if (app.authService) {
-        const authService = app.authService;
-        await withSpan("generate.resolveAuthNamespaces", async () =>
-          authService.resolveNamespaces(),
-        );
+      if (app.authServices.length > 0) {
+        await withSpan("generate.resolveAuthNamespaces", async () => {
+          for (const authService of app.authServices) {
+            await authService.resolveNamespaces();
+          }
+        });
       }
 
       // Add blank line after TailorDB tables loaded

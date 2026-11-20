@@ -188,16 +188,18 @@ describe("planExecutor", () => {
       tailorDBServices,
       resolverServices,
       idpServices,
-      authService: options?.authName
-        ? {
-            config: {
-              name: options.authName,
-              machineUsers: Object.fromEntries(
-                (options.authMachineUsers ?? []).map((name) => [name, {}]),
-              ),
+      authServices: options?.authName
+        ? [
+            {
+              config: {
+                name: options.authName,
+                machineUsers: Object.fromEntries(
+                  (options.authMachineUsers ?? []).map((name) => [name, {}]),
+                ),
+              },
             },
-          }
-        : undefined,
+          ]
+        : [],
       config: options?.externalAuthName
         ? { auth: { name: options.externalAuthName, external: true } }
         : {},

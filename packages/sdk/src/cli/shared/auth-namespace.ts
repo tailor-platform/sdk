@@ -2,7 +2,7 @@ import { CLIError } from "./errors";
 import type { AppConfig } from "#/configure/config/types";
 
 type AuthNamespaceApplication = {
-  authService?: { config: { name: string } };
+  authServices: ReadonlyArray<{ config: { name: string } }>;
   config?: Pick<AppConfig, "auth">;
 };
 
@@ -14,7 +14,7 @@ type AuthNamespaceApplication = {
 export function getApplicationAuthNamespace(
   application: AuthNamespaceApplication,
 ): string | undefined {
-  return application.authService?.config.name ?? application.config?.auth?.name;
+  return application.authServices[0]?.config.name ?? application.config?.auth?.name;
 }
 
 /**

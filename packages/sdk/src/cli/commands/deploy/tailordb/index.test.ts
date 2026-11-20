@@ -1492,7 +1492,7 @@ describe("planTailorDB (service level)", () => {
           workspaceId,
           application: {
             ...createMockApplication([createMockTailorDBService("test-tailordb")]),
-            authService,
+            authServices: authService === undefined ? [] : [authService],
           } as unknown as Application,
           forRemoval: false,
           config: {

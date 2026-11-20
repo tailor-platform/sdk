@@ -85,14 +85,16 @@ function createMockApplication(
       metadata: overrides.metadata,
     },
     staticWebsiteServices: overrides.staticWebsiteServices ?? [],
-    authService: {
-      config: {
-        name: "auth-a",
-        idProvider: {
-          name: "idp-a",
+    authServices: [
+      {
+        config: {
+          name: "auth-a",
+          idProvider: {
+            name: "idp-a",
+          },
         },
       },
-    },
+    ],
   } as unknown as Application;
 }
 
@@ -384,7 +386,7 @@ describe("planApplication", () => {
     const baseApplication = createMockApplication();
     const application = {
       ...baseApplication,
-      authService: undefined,
+      authServices: [],
       config: {
         ...baseApplication.config,
         auth: { name: "peer-auth", external: true },
@@ -406,7 +408,7 @@ describe("planApplication", () => {
     const baseApplication = createMockApplication();
     const application = {
       ...baseApplication,
-      authService: undefined,
+      authServices: [],
       config: {
         ...baseApplication.config,
         auth: { name: "peer-auth", external: true },

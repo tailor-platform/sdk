@@ -1464,7 +1464,7 @@ export function getMigrationMachineUser(
 
 /** The auth, config, and environment variables a deploy runs its migration scripts with. */
 interface MigrationRunSource {
-  application: Pick<Application, "authService" | "env">;
+  application: Pick<Application, "authServices" | "env">;
   config: LoadedConfig;
   /** Machine user that runs every namespace's scripts in place of the configured one. */
   migrationMachineUserOverride?: string;
@@ -1505,7 +1505,7 @@ export function resolveScriptMachineUsers(
 ): MigrationMachineUsers | undefined {
   const namespaces = new Set(scriptNamespaces);
   if (namespaces.size === 0) return undefined;
-  const authService = source.application.authService;
+  const [authService] = source.application.authServices;
   if (!authService) {
     throw CLIError({
       code: "AUTH_CONFIG_REQUIRED",

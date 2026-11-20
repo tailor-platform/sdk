@@ -220,16 +220,28 @@ export async function loadConfigFile(
       plugins: allPlugins,
     };
   }
-  const { workspace } = parsed.data;
   return {
     kind: "workspace",
-    workspace: {
-      ...workspace,
-      env: resolveEnv(workspace.env),
-      envOverrides: mapEnvOverrides(workspace.envOverrides, resolveEnv),
-      path: resolvedPath,
-    },
+    workspace: toLoadedWorkspaceConfig(parsed.data.workspace, resolvedPath),
     plugins: allPlugins,
+  };
+}
+
+/**
+ * Resolve the `env` values of a parsed workspace and attach the path of its config file.
+ * @param workspace - Workspace parsed from a `defineWorkspace()` or `defineApp()` config
+ * @param configPath - Absolute path of the config file
+ * @returns The loaded workspace
+ */
+export function toLoadedWorkspaceConfig(
+  workspace: WorkspaceRepresentation,
+  configPath: string,
+): LoadedWorkspaceConfig {
+  return {
+    ...workspace,
+    env: resolveEnv(workspace.env),
+    envOverrides: mapEnvOverrides(workspace.envOverrides, resolveEnv),
+    path: configPath,
   };
 }
 

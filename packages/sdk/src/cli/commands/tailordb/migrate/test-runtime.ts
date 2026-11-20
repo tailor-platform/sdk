@@ -730,7 +730,7 @@ export async function deleteExistingUserProfileConfig(
   state: RuntimeState,
   targetWorkspaceId: string,
 ): Promise<void> {
-  const auth = state.loaded.application.authService;
+  const [auth] = state.loaded.application.authServices;
   if (!auth) return;
   const namespaceName = auth.config.name;
   const existing = await getOrNull(() =>

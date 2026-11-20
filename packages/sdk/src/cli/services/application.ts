@@ -27,11 +27,11 @@ import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
 import { buildOptionsOf, projectSourcesOf } from "#/cli/shared/build-options";
 import { resolveBundleLogLevel } from "#/cli/shared/bundle-log-level";
 import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
-import { type LoadedConfig } from "#/cli/shared/config-loader";
+import { type LoadedConfig, type LoadedWorkspaceConfig } from "#/cli/shared/config-loader";
 import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { CLIError } from "#/cli/shared/errors";
-import { idpConfigList, isIdpConfigList, type IdpConfigInput } from "#/cli/shared/idp-config";
+import { idpConfigList, isIdpConfigList } from "#/cli/shared/idp-config";
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { logger } from "#/cli/shared/logger";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
@@ -52,9 +52,10 @@ import {
   type LogLevel,
   type ResolverServiceInput,
   type WorkflowServiceConfig,
+  type WorkspaceSettings,
 } from "#/configure/config/types";
 import { type AuthConfig } from "#/configure/services/auth/types";
-import { type IdPOwnConfig } from "#/configure/services/idp/types";
+import { type IdPConfig, type IdPOwnConfig } from "#/configure/services/idp/types";
 import { AIGatewaySchema } from "#/parser/service/aigateway/index";
 import { AuthConfigSchema } from "#/parser/service/auth/index";
 import { IdPSchema } from "#/parser/service/idp/index";
@@ -86,16 +87,24 @@ type SecretVault = {
   }>;
 };
 
-export type Application = {
-  readonly name: string;
-  readonly id: string | undefined;
-  readonly config: AppConfig;
-  readonly subgraphs: ReadonlyArray<{ Type: string; Name: string }>;
+/** Settings of a `defineConfig()` or workspace config that its services share. */
+export type ServiceSettings = Pick<
+  LoadedConfig,
+  "path" | keyof WorkspaceSettings | "db" | "resolver" | "workflow"
+>;
+
+/** `env` values each service uses in place of the root values with the same keys. */
+export type EnvOverrides = LoadedWorkspaceConfig["envOverrides"];
+
+/** The services a config defines, with the settings and `env` they share. */
+export type WorkspaceServices = {
+  readonly settings: ServiceSettings;
   readonly tailorDBServices: ReadonlyArray<TailorDBService>;
   readonly externalTailorDBNamespaces: ReadonlyArray<string>;
   readonly resolverServices: ReadonlyArray<ResolverService>;
   readonly idpServices: ReadonlyArray<IdP>;
-  readonly authService: Readonly<AuthService> | undefined;
+  /** Auth services the config defines, in config order. A `defineConfig()` config has at most one. */
+  readonly authServices: ReadonlyArray<Readonly<AuthService>>;
   readonly executorService: Readonly<ExecutorService> | undefined;
   readonly workflowService: Readonly<WorkflowService> | undefined;
   readonly httpAdapterService: Readonly<HttpAdapterService> | undefined;
@@ -104,8 +113,18 @@ export type Application = {
   readonly secrets: ReadonlyArray<SecretVault>;
   readonly ignoreNullishValues: boolean;
   readonly env: Readonly<Record<string, string | number | boolean>>;
+  readonly envOverrides: EnvOverrides;
+};
+
+export type Application = WorkspaceServices & {
+  readonly name: string;
+  readonly id: string | undefined;
+  readonly config: AppConfig;
+  readonly subgraphs: ReadonlyArray<{ Type: string; Name: string }>;
   readonly applications: ReadonlyArray<Application>;
 };
+
+const NO_ENV_OVERRIDES: EnvOverrides = { resolver: {}, auth: {} };
 
 /**
  * Intermediate state from a `loadApplication` call that carries no `env`
@@ -234,10 +253,19 @@ type DefineResolverResult = {
 };
 
 function pluginResolverSource(
-  config: LoadedConfig,
+  outputKey: string,
   pluginManager: PluginManager | undefined,
 ): PluginResolverSource | undefined {
-  return pluginManager && { pluginManager, appName: config.name };
+  return pluginManager && { pluginManager, appName: outputKey };
+}
+
+/**
+ * Key that keeps the plugin-generated resolver files of one config apart from another's.
+ * @param config - Loaded `defineConfig()` or workspace config
+ * @returns The application name of a `defineConfig()` config, or the path of a workspace config
+ */
+export function pluginResolverOutputKey(config: LoadedConfig | LoadedWorkspaceConfig): string {
+  return "apps" in config ? config.path : config.name;
 }
 
 function defineResolver(
@@ -273,18 +301,20 @@ function defineResolver(
 /**
  * Define resolver services for namespaces that plugins generate resolvers into without a `resolver` entry.
  * Call after table and namespace plugins have run.
- * @param config - Loaded configuration
+ * @param settings - Settings of the config the plugins belong to
+ * @param outputKey - Key from {@link pluginResolverOutputKey} for the config
  * @param pluginManager - Plugin manager holding the generated resolvers
  * @returns Resolver services for those namespaces
  */
 export function definePluginResolverServices(
-  config: LoadedConfig,
+  settings: ServiceSettings,
+  outputKey: string,
   pluginManager: PluginManager | undefined,
 ): ResolverService[] {
-  const baseDir = path.dirname(config.path);
+  const baseDir = path.dirname(settings.path);
   const resolverServices: ResolverService[] = [];
   for (const { namespace, pluginId } of pluginManager?.getPluginGeneratedResolvers() ?? []) {
-    const serviceConfig = config.resolver?.[namespace];
+    const serviceConfig = settings.resolver?.[namespace];
     if (serviceConfig && "external" in serviceConfig) {
       throw CLIError({
         code: "PLUGIN_RESOLVER_NAMESPACE_EXTERNAL",
@@ -299,9 +329,9 @@ export function definePluginResolverServices(
       createResolverService({
         namespace,
         config: { files: [] },
-        configPath: config.path,
+        configPath: settings.path,
         baseDir,
-        plugins: pluginResolverSource(config, pluginManager),
+        plugins: pluginResolverSource(outputKey, pluginManager),
       }),
     );
   }
@@ -320,72 +350,81 @@ function stripIdpProviderHelper(idpConfig: IdPOwnConfig): IdPOwnConfig {
   return config;
 }
 
-function defineIdp(config: IdpConfigInput | undefined, configPath: string): DefineIdpResult {
+/** A service configured in a config, with its key under the service's config property, when it has one. */
+interface ServiceEntry<Config> {
+  config: Config;
+  key?: string | number;
+}
+
+function defineIdp(
+  entries: ReadonlyArray<ServiceEntry<IdPConfig>>,
+  configPath: string,
+): DefineIdpResult {
   const idpServices: IdP[] = [];
   const subgraphs: Array<{ Type: string; Name: string }> = [];
 
-  const idps = idpConfigList(config);
   assertUniqueDefinitionNames({
     kind: "idp",
-    definitions: idps
-      .map(({ name }, index) => ({
-        name,
+    definitions: entries
+      .map(({ config, key }) => ({
+        name: config.name,
         file: configPath,
         exportName: "default",
-        path: ["idp", index],
+        path: key === undefined ? ["idp"] : ["idp", key],
       }))
       .filter((definition) => typeof definition.name === "string"),
   });
-  idps.forEach((idpConfig, index) => {
-    const name = idpConfig.name;
-    if (!("external" in idpConfig)) {
-      const idp = parseServiceConfig(IdPSchema, stripIdpProviderHelper(idpConfig), {
+  for (const { config, key } of entries) {
+    const name = config.name;
+    if (!("external" in config)) {
+      const idp = parseServiceConfig(IdPSchema, stripIdpProviderHelper(config), {
         file: configPath,
         configKey: "idp",
-        key: isIdpConfigList(config) ? index : undefined,
+        key,
         name,
       });
       idpServices.push(idp);
     }
     subgraphs.push({ Type: "idp", Name: name });
-  });
+  }
 
   return { idpServices, subgraphs };
 }
 
 type DefineAuthResult = {
-  authService: AuthService | undefined;
+  authServices: AuthService[];
   subgraphs: Array<{ Type: string; Name: string }>;
 };
 
 function defineAuth(
-  config: AuthConfig | undefined,
+  entries: ReadonlyArray<ServiceEntry<AuthConfig>>,
   configPath: string,
   tailorDBServices: ReadonlyArray<TailorDBService>,
   externalTailorDBNamespaces: ReadonlyArray<string>,
 ): DefineAuthResult {
+  const authServices: AuthService[] = [];
   const subgraphs: Array<{ Type: string; Name: string }> = [];
 
-  if (!config) {
-    return { authService: undefined, subgraphs };
+  for (const { config, key } of entries) {
+    if (!("external" in config)) {
+      authServices.push(
+        createAuthService(
+          parseServiceConfig(AuthConfigSchema, config, {
+            file: configPath,
+            configKey: "auth",
+            key,
+            name: config.name,
+          }),
+          tailorDBServices,
+          externalTailorDBNamespaces,
+          configPath,
+        ),
+      );
+    }
+    subgraphs.push({ Type: "auth", Name: config.name });
   }
 
-  let authService: AuthService | undefined;
-  if (!("external" in config)) {
-    authService = createAuthService(
-      parseServiceConfig(AuthConfigSchema, config, {
-        file: configPath,
-        configKey: "auth",
-        name: config.name,
-      }),
-      tailorDBServices,
-      externalTailorDBNamespaces,
-      configPath,
-    );
-  }
-  subgraphs.push({ Type: "auth", Name: config.name });
-
-  return { authService, subgraphs };
+  return { authServices, subgraphs };
 }
 
 function defineExecutor(
@@ -459,7 +498,7 @@ function defineStaticWebsites(
 function defineAIGateways(
   gateways: readonly AIGatewayInput[] | undefined,
   configPath: string,
-  applicationAuthNamespace: string | undefined,
+  authNamespaces: readonly string[],
 ): AIGateway[] {
   const aiGatewayServices: AIGateway[] = [];
   assertUniqueDefinitionNames({
@@ -482,7 +521,8 @@ function defineAIGateways(
       name: config.name,
     });
     if (gateway.authNamespace === undefined) {
-      if (!applicationAuthNamespace) {
+      const [authNamespace, ...others] = authNamespaces;
+      if (authNamespace === undefined || others.length > 0) {
         throw configIssuesError({
           file: configPath,
           exportName: "default",
@@ -491,13 +531,19 @@ function defineAIGateways(
           issues: [
             {
               path: ["aiGateways", index, "authNamespace"],
-              message: "No Auth service is configured to default to",
+              message:
+                authNamespace === undefined
+                  ? "No Auth service is configured to default to"
+                  : `Several Auth services are configured (${authNamespaces.join(", ")}), so there is none to default to`,
             },
           ],
-          suggestion: 'Define an Auth service, or set "authNamespace" explicitly.',
+          suggestion:
+            authNamespace === undefined
+              ? 'Define an Auth service, or set "authNamespace" explicitly.'
+              : 'Set "authNamespace" to one of the Auth services.',
         });
       }
-      gateway.authNamespace = applicationAuthNamespace;
+      gateway.authNamespace = authNamespace;
     }
     aiGatewayServices.push(gateway);
   });
@@ -567,40 +613,70 @@ type DefineServicesResult = {
   ignoreNullishValues: boolean;
 };
 
+/** The service declarations of a `defineConfig()` or workspace config, in one shape. */
+interface ServiceSource {
+  settings: ServiceSettings;
+  pluginResolverOutputKey: string;
+  idps: ReadonlyArray<ServiceEntry<IdPConfig>>;
+  auths: ReadonlyArray<ServiceEntry<AuthConfig>>;
+}
+
+function configServiceSource(config: LoadedConfig): ServiceSource {
+  return {
+    settings: config,
+    pluginResolverOutputKey: pluginResolverOutputKey(config),
+    idps: idpConfigList(config.idp).map((idp, index) => ({
+      config: idp,
+      key: isIdpConfigList(config.idp) ? index : undefined,
+    })),
+    auths: config.auth ? [{ config: config.auth }] : [],
+  };
+}
+
+function workspaceServiceSource(workspace: LoadedWorkspaceConfig): ServiceSource {
+  return {
+    settings: workspace,
+    pluginResolverOutputKey: pluginResolverOutputKey(workspace),
+    idps: Object.entries(workspace.idp).map(([key, idp]) => ({ config: idp, key })),
+    auths: Object.entries(workspace.auth).map(([key, auth]) => ({ config: auth, key })),
+  };
+}
+
 function defineServices(
-  config: LoadedConfig,
+  source: ServiceSource,
   baseDir: string,
   pluginManager?: PluginManager,
   precompileTailorDBScripts?: boolean,
 ): DefineServicesResult {
+  const { settings } = source;
   const tailordbResult = defineTailorDB(
-    config.db,
-    config.path,
+    settings.db,
+    settings.path,
     baseDir,
-    effectiveDateDefault(config),
+    effectiveDateDefault(settings),
     pluginManager,
     precompileTailorDBScripts,
   );
   const resolverResult = defineResolver(
-    config.resolver,
-    config.path,
+    settings.resolver,
+    settings.path,
     baseDir,
-    pluginResolverSource(config, pluginManager),
+    pluginResolverSource(source.pluginResolverOutputKey, pluginManager),
   );
-  const idpResult = defineIdp(config.idp, config.path);
+  const idpResult = defineIdp(source.idps, settings.path);
   const authResult = defineAuth(
-    config.auth,
-    config.path,
+    source.auths,
+    settings.path,
     tailordbResult.tailorDBServices,
     tailordbResult.externalTailorDBNamespaces,
   );
-  const staticWebsiteServices = defineStaticWebsites(config.staticWebsites, config.path);
+  const staticWebsiteServices = defineStaticWebsites(settings.staticWebsites, settings.path);
   const aiGatewayServices = defineAIGateways(
-    config.aiGateways,
-    config.path,
-    getApplicationAuthNamespace({ authService: authResult.authService, config }),
+    settings.aiGateways,
+    settings.path,
+    source.auths.map(({ config }) => config.name),
   );
-  const { secrets, ignoreNullishValues } = parseSecretManager(config.secrets, config.path);
+  const { secrets, ignoreNullishValues } = parseSecretManager(settings.secrets, settings.path);
   return {
     tailordbResult,
     resolverResult,
@@ -613,22 +689,46 @@ function defineServices(
   };
 }
 
-function buildApplication(params: {
-  config: AppConfig;
-  tailordbResult: DefineTailorDBResult;
-  resolverResult: DefineResolverResult;
-  idpResult: DefineIdpResult;
-  authResult: DefineAuthResult;
+interface BuildWorkspaceServicesParams extends DefineServicesResult {
+  settings: ServiceSettings;
   executorService: ExecutorService | undefined;
   workflowService: WorkflowService | undefined;
   httpAdapterService: HttpAdapterService | undefined;
-  staticWebsiteServices: StaticWebsite[];
-  aiGatewayServices: AIGateway[];
-  secrets: SecretVault[];
-  ignoreNullishValues: boolean;
   env: Record<string, string | number | boolean>;
-}): Application {
+  envOverrides: EnvOverrides;
+}
+
+function buildWorkspaceServices(params: BuildWorkspaceServicesParams): WorkspaceServices {
+  return {
+    settings: params.settings,
+    tailorDBServices: params.tailordbResult.tailorDBServices,
+    externalTailorDBNamespaces: params.tailordbResult.externalTailorDBNamespaces,
+    resolverServices: params.resolverResult.resolverServices,
+    idpServices: params.idpResult.idpServices,
+    authServices: params.authResult.authServices,
+    executorService: params.executorService,
+    workflowService: params.workflowService,
+    httpAdapterService: params.httpAdapterService,
+    staticWebsiteServices: params.staticWebsiteServices,
+    aiGatewayServices: params.aiGatewayServices,
+    secrets: params.secrets,
+    ignoreNullishValues: params.ignoreNullishValues,
+    env: params.env,
+    envOverrides: params.envOverrides,
+  };
+}
+
+function buildApplication(
+  params: Omit<BuildWorkspaceServicesParams, "settings" | "envOverrides"> & {
+    config: LoadedConfig;
+  },
+): Application {
   const application: Application = {
+    ...buildWorkspaceServices({
+      ...params,
+      settings: params.config,
+      envOverrides: NO_ENV_OVERRIDES,
+    }),
     name: params.config.name,
     id: params.config.id,
     config: params.config,
@@ -638,19 +738,6 @@ function buildApplication(params: {
       ...params.idpResult.subgraphs,
       ...params.authResult.subgraphs,
     ],
-    tailorDBServices: params.tailordbResult.tailorDBServices,
-    externalTailorDBNamespaces: params.tailordbResult.externalTailorDBNamespaces,
-    resolverServices: params.resolverResult.resolverServices,
-    idpServices: params.idpResult.idpServices,
-    authService: params.authResult.authService,
-    executorService: params.executorService,
-    workflowService: params.workflowService,
-    httpAdapterService: params.httpAdapterService,
-    staticWebsiteServices: params.staticWebsiteServices,
-    aiGatewayServices: params.aiGatewayServices,
-    secrets: params.secrets,
-    ignoreNullishValues: params.ignoreNullishValues,
-    env: params.env,
     get applications() {
       return [application];
     },
@@ -714,7 +801,12 @@ export interface LoadApplicationParams extends DefineApplicationParams {
 export function defineApplication(params: DefineApplicationParams): Application {
   const { config, pluginManager, precompileTailorDBScripts } = params;
   const baseDir = path.dirname(config.path);
-  const services = defineServices(config, baseDir, pluginManager, precompileTailorDBScripts);
+  const services = defineServices(
+    configServiceSource(config),
+    baseDir,
+    pluginManager,
+    precompileTailorDBScripts,
+  );
   // Plugin executors are not known at define-time; generate/apply flows handle them after table loading.
   const executorService = defineExecutor(config.executor, baseDir, false);
   const workflowService = defineWorkflow(config.workflow, baseDir);
@@ -727,6 +819,44 @@ export function defineApplication(params: DefineApplicationParams): Application 
     workflowService,
     httpAdapterService,
     env: config.env ?? {},
+  });
+}
+
+/**
+ * Parameters for defining the services of a workspace
+ */
+export interface DefineWorkspaceServicesParams {
+  /** Workspace loaded from a `defineWorkspace()` or `defineApp()` config */
+  workspace: LoadedWorkspaceConfig;
+  /** Plugin manager for processing plugins */
+  pluginManager?: PluginManager;
+  /** Bundle each TailorDB table's hook and validator scripts while loading. Defaults to `true`; turn it off when only the table definitions are read. */
+  precompileTailorDBScripts?: boolean;
+}
+
+/**
+ * Define every service a workspace declares, whether or not an application exposes it.
+ * Like {@link defineApplication}, this loads no tables and bundles no files.
+ * @param params - Parameters for defining the services
+ * @returns The workspace's services
+ */
+export function defineWorkspaceServices(params: DefineWorkspaceServicesParams): WorkspaceServices {
+  const { workspace, pluginManager, precompileTailorDBScripts } = params;
+  const baseDir = path.dirname(workspace.path);
+  const services = defineServices(
+    workspaceServiceSource(workspace),
+    baseDir,
+    pluginManager,
+    precompileTailorDBScripts,
+  );
+  return buildWorkspaceServices({
+    ...services,
+    settings: workspace,
+    executorService: defineExecutor(workspace.executor, baseDir, false),
+    workflowService: defineWorkflow(workspace.workflow, baseDir),
+    httpAdapterService: defineHttpAdapterService(workspace.httpAdapter, baseDir),
+    env: workspace.env,
+    envOverrides: workspace.envOverrides,
   });
 }
 
@@ -821,7 +951,12 @@ export async function loadApplication(
     aiGatewayServices,
     secrets,
     ignoreNullishValues,
-  } = defineServices(config, baseDir, pluginManager, precompileTailorDBScripts);
+  } = defineServices(
+    configServiceSource(config),
+    baseDir,
+    pluginManager,
+    precompileTailorDBScripts,
+  );
 
   // 2. Resolve `name:url` static website placeholders in `env` once, before any
   // bundling or expression generation embeds it into resolver, executor,
@@ -844,7 +979,11 @@ export async function loadApplication(
   assertUniqueLocalTailorDBTypeNames({
     tailorDBServices: tailordbResult.tailorDBServices,
   });
-  const pluginResolverServices = definePluginResolverServices(config, pluginManager);
+  const pluginResolverServices = definePluginResolverServices(
+    config,
+    pluginResolverOutputKey(config),
+    pluginManager,
+  );
   const resolverResult: DefineResolverResult = {
     resolverServices: [...configuredResolverResult.resolverServices, ...pluginResolverServices],
     subgraphs: [
@@ -883,7 +1022,7 @@ export async function loadApplication(
   // 8. Build start context for workflow/job start transformation
   const startContext = await buildStartContext(
     config.workflow,
-    getApplicationAuthNamespace({ authService: authResult.authService, config }),
+    getApplicationAuthNamespace({ authServices: authResult.authServices, config }),
     baseDir,
     workflowService?.workflowSources,
     tsconfigCache,
@@ -997,8 +1136,9 @@ export async function loadApplication(
   }
 
   // 14. Bundle auth hooks
-  if (authResult.authService?.config.hooks?.beforeLogin) {
-    const authName = authResult.authService.config.name;
+  const [authService] = authResult.authServices;
+  if (authService?.config.hooks?.beforeLogin) {
+    const authName = authService.config.name;
     bundledScripts.authHooks = await bundleAuthHooks({
       configPath: config.path,
       authName,
@@ -1150,8 +1290,9 @@ async function reloadEnvDependentBundles(params: {
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
 
-  if (previousApplication.authService?.config.hooks?.beforeLogin) {
-    const authName = previousApplication.authService.config.name;
+  const [authService] = previousApplication.authServices;
+  if (authService?.config.hooks?.beforeLogin) {
+    const authName = authService.config.name;
     bundledScripts.authHooks = await bundleAuthHooks({
       configPath: config.path,
       authName,

@@ -52,7 +52,7 @@ describe("applyTailorDB: machine user that runs migration scripts", () => {
         ],
       },
       application: {
-        authService: { config: { name: "auth", machineUsers } },
+        authServices: [{ config: { name: "auth", machineUsers } }],
       } as unknown as Partial<Application>,
       context: {
         pendingMigrations,
