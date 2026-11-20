@@ -442,7 +442,7 @@ snapshots:
 				"globals": "17.14.0",
 				"inflection": "3.0.2",
 				"kysely": "0.29.9",
-				"lines-db": "0.19.0",
+				"lines-db": "0.19.3",
 				"mime-types": "3.0.2",
 				"open": "11.0.4",
 				"oxc-parser": "0.158.0",
@@ -532,7 +532,7 @@ snapshots:
 			"name": "@tailor-platform/sdk-plugin-seed",
 			"dependencies": {
 				"@politty/zod": "0.7.5",
-				"lines-db": "0.19.0",
+				"lines-db": "0.19.3",
 				"pathe": "2.0.3",
 				"pkg-types": "2.4.0",
 				"zod": "4.6.7",
@@ -5459,8 +5459,8 @@ snapshots:
 			},
 		},
 
-		"lines-db@0.19.0": {
-			"integrity": "sha512-kQzwof1EzIJKz+XBn+ueYTNFNyqz7Bami0O0cy2844gte1zjLclFYMpKPRVscL93s2dhlhdDBHbwd6k6P4RH4w==",
+		"lines-db@0.19.3": {
+			"integrity": "sha512-AgPn5pjalNu0A35eht/uSaHM/hto+uMspujqGtAsqOidM7iG9OQry0zK89HcW5NApn/EQqe7QRfXvRgnAFjuJw==",
 			"engines": {"node": ">=22.18.0"},
 			"hasBin": true,
 			"peerDependencies": {
