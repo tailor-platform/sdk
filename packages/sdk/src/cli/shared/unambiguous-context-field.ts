@@ -15,7 +15,8 @@ export interface UnambiguousContextFieldOptions<Key extends string, Value> {
 /**
  * Add a plugin context field that holds its only candidate, or `undefined` when there is none.
  * With several candidates, reading the field throws an error pointing to the field that holds all
- * of them, and the field is left out of spread copies.
+ * of them, while a spread copy leaves the field out, so reading it from the copy gives `undefined` as
+ * when there is no candidate.
  * @param target - Plugin context to add the field to
  * @param options - The field and its candidates
  * @returns `target`, with the field added
