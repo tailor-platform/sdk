@@ -35,22 +35,26 @@ export async function checkVaultManaged(
   const trn = resourceTrn(workspaceId, "vault", vaultName);
   const notManaged = { isManaged: false, trn, existingLabels: {} };
 
-  let owner: string | undefined;
   let allLabels: Record<string, string>;
   try {
     const { metadata } = await client.getMetadata({ trn });
     allLabels = metadata?.labels ?? {};
-    owner = allLabels[sdkNameLabelKey] ?? (isWorkspaceManaged(allLabels) ? "workspace" : undefined);
   } catch {
     // If metadata fetch fails (e.g., vault doesn't exist yet), proceed silently.
     // The actual operation will surface the appropriate error.
     return notManaged;
   }
 
-  if (!owner) return notManaged;
+  const owner = allLabels[sdkNameLabelKey];
+  const manager = owner
+    ? `defineSecretManager() in tailor.config.ts (owner: "${owner}")`
+    : isWorkspaceManaged(allLabels)
+      ? "the workspace config"
+      : undefined;
+  if (!manager) return notManaged;
 
   logger.warn(
-    `Vault "${vaultName}" is managed by defineSecretManager() in tailor.config.ts (owner: "${owner}"). ` +
+    `Vault "${vaultName}" is managed by ${manager}. ` +
       `Changes made via CLI may conflict with the config on the next apply.`,
   );
 
