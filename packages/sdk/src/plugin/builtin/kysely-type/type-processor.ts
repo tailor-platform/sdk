@@ -430,11 +430,11 @@ const CREATE_GET_DB_SOURCE = multiline /* ts */ `
    * \`@tailor-platform/sdk/kysely\`, whose type argument maps namespaces to their tables: here
    * it is a union of namespace names, and the returned \`getDB\` is the one this module exports.
    */
-  function createNamespaceGetDB<N extends keyof Namespace>() {
-    return getDB as <const M extends N>(
-      namespace: M,
-      config?: Parameters<typeof getDB>[1],
-    ) => DB<M>;
+  function createNamespaceGetDB<N extends keyof Namespace>(): <const M extends N>(
+    namespace: M,
+    config?: Parameters<typeof getDB>[1],
+  ) => DB<M> {
+    return getDB;
   }
 
   export { createNamespaceGetDB as createGetDB };

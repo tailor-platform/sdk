@@ -2,7 +2,11 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
-import { brandedDefault } from "#/cli/shared/test-helpers/workspace-config";
+import {
+  brandedDefault,
+  WORKSPACE_DB_SOURCE,
+  writeWorkspaceTables,
+} from "#/cli/shared/test-helpers/workspace-config";
 import { generate } from "./service";
 
 const TABLE = (name: string) =>
@@ -13,7 +17,7 @@ export const table = db
   .gqlPermission(unsafeAllowAllGqlPermission);
 `;
 
-// Records what the TailorDB-ready hook receives, reading `auth` only after `auths`.
+// Records what the TailorDB-ready hook receives, and what reading `auth` gives or throws.
 const RECORDING_PLUGIN = `{
   id: "record",
   description: "Records the TailorDB-ready context",
@@ -43,11 +47,7 @@ import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
 ${brandedDefault(
   "workspace-config",
   `{
-  db: {
-    "customer-db": { files: ["./db/customer/*.ts"] },
-    "order-db": { files: ["./db/order/*.ts"] },
-    "ledger-db": { files: ["./db/ledger/*.ts"] },
-  },
+  db: ${WORKSPACE_DB_SOURCE},
   auth: { ${auths.map(AUTH).join(", ")} },
   apps: { shop: { db: ["customer-db", "order-db"] } },
 }`,
@@ -68,18 +68,9 @@ describe("generate with a workspace config", () => {
     // Inside the package, so the project's `@tailor-platform/sdk` imports resolve to its build.
     dir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".workspace-generate-")));
     configPath = path.join(dir, "tailor.config.ts");
-    for (const [namespace, table] of [
-      ["customer", "Customer"],
-      ["order", "Order"],
-      ["ledger", "Entry"],
-    ] as const) {
-      fs.mkdirSync(path.join(dir, "db", namespace), { recursive: true });
-      fs.writeFileSync(path.join(dir, "db", namespace, "table.ts"), TABLE(table));
-    }
+    writeWorkspaceTables(dir, TABLE);
     process.chdir(dir);
     vi.stubEnv("TAILOR_BUILD_OUTPUT_DIR", path.join(dir, ".tailor"));
-    vi.stubEnv("TAILOR_DTS_PATH", undefined);
-    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
     silenceLogger("log", "info", "success", "warn", "newline", "debug");
   });
 
@@ -138,7 +129,10 @@ describe("generate with a workspace config", () => {
 
     expect(readJson("generated/ready.json")).toMatchObject({
       auths: ["corp-auth", "partner-auth"],
-      auth: { code: "PLUGIN_CONTEXT_FIELD_AMBIGUOUS", suggestion: 'Read "auths" instead.' },
+      auth: {
+        code: "PLUGIN_CONTEXT_FIELD_AMBIGUOUS",
+        suggestion: 'Change the code that reads "auth" to read "auths".',
+      },
     });
   });
 });

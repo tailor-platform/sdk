@@ -2,7 +2,10 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { defineWorkspace } from "#/configure/config/workspace";
+import { defineAIGateway } from "#/configure/services/aigateway/index";
 import { defineAuth } from "#/configure/services/auth/index";
+import { defineIdp } from "#/configure/services/idp/index";
+import { defineSecretManager } from "#/configure/services/secrets/index";
 import { db } from "#/configure/services/tailordb/schema";
 import { t } from "#/configure/types/type";
 import { logger } from "./logger";
@@ -778,6 +781,44 @@ describe("generateTypeDefinitionFromWorkspace", () => {
     expect(content).toContain('"partner-auth": true;');
     expect(content).toContain("stage: string;");
     expect(content).toContain('workspace: "unset";');
+  });
+
+  test("declares the IdPs, AI Gateways, secrets, and connections the workspace defines", () => {
+    const google = {
+      type: "oauth2",
+      providerUrl: "https://accounts.google.com",
+      issuerUrl: "https://accounts.google.com",
+      clientId: "x",
+      clientSecret: "y",
+    } as const;
+    const workspace = loadedWorkspace(
+      defineWorkspace({
+        auth: {
+          "corp-auth": defineAuth("corp-auth", {
+            machineUserAttributes: {},
+            machineUsers: {},
+            connections: { google, slack: google },
+          }),
+          "partner-auth": defineAuth("partner-auth", {
+            machineUserAttributes: {},
+            machineUsers: {},
+            connections: { google },
+          }),
+        },
+        idp: { "corp-idp": defineIdp("corp-idp", { clients: ["default"] }) },
+        aiGateways: [defineAIGateway("assistant", { authNamespace: "corp-auth" })],
+        secrets: defineSecretManager({ "api-keys": { stripe: "sk_test" } }),
+        apps: {},
+      }),
+    );
+
+    const content = generateTypeDefinitionFromWorkspace(workspace);
+
+    expect(content.match(/^ {4}google: true;$/gm)).toHaveLength(1);
+    expect(content).toContain("slack: true;");
+    expect(content).toContain('"corp-idp": true;');
+    expect(content).toContain("assistant: true;");
+    expect(content).toContain('"api-keys": "stripe";');
   });
 
   test("declares the attributes of a single Auth service as a defineConfig() config does", () => {

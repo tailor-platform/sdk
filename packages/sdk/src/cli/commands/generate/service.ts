@@ -58,9 +58,13 @@ export type GenerationManager = {
 };
 
 function generationTarget(config: LoadedConfig | LoadedWorkspaceConfig): string {
-  return isLoadedWorkspaceConfig(config)
-    ? `workspace: ${styles.highlight(path.relative(process.cwd(), config.path))}`
-    : `application: ${styles.highlight(config.name)}`;
+  if (!isLoadedWorkspaceConfig(config)) {
+    return `application: ${styles.highlight(config.name)}`;
+  }
+  const [appName] = Object.keys(config.apps);
+  return config.definedBy === "defineApp" && appName !== undefined
+    ? `application: ${styles.highlight(appName)}`
+    : `workspace: ${styles.highlight(path.relative(process.cwd(), config.path))}`;
 }
 
 /**
@@ -82,7 +86,8 @@ export interface CreateGenerationManagerParams {
  */
 export function createGenerationManager(params: CreateGenerationManagerParams): GenerationManager {
   const { workspaceServices, config, pluginManager } = params;
-  const configDir = path.dirname(config.path);
+  const configPath = workspaceServices.settings.path;
+  const configDir = path.dirname(configPath);
   const baseDir = path.resolve(getDistDir(), "generated");
   fs.mkdirSync(baseDir, { recursive: true });
 
@@ -143,7 +148,7 @@ export function createGenerationManager(params: CreateGenerationManagerParams): 
         getAuthInput(authService),
       ]),
     );
-    const contextOf = <Context extends object>(context: Context) =>
+    const withAuthField = <Context extends object>(context: Context) =>
       defineUnambiguousContextField(context, {
         key: "auth",
         candidates: auths,
@@ -160,11 +165,11 @@ export function createGenerationManager(params: CreateGenerationManagerParams): 
           plugin.onTailorDBReady,
           "plugin.onTailorDBReady hook missing",
         )(
-          contextOf({
+          withAuthField({
             tailordb,
             auths,
             baseDir: pluginBaseDir,
-            configPath: config.path,
+            configPath,
             pluginConfig: plugin.pluginConfig,
           }),
         );
@@ -174,12 +179,12 @@ export function createGenerationManager(params: CreateGenerationManagerParams): 
           plugin.onResolverReady,
           "plugin.onResolverReady hook missing",
         )(
-          contextOf({
+          withAuthField({
             tailordb,
             resolvers: buildResolverData(),
             auths,
             baseDir: pluginBaseDir,
-            configPath: config.path,
+            configPath,
             pluginConfig: plugin.pluginConfig,
           }),
         );
@@ -189,13 +194,13 @@ export function createGenerationManager(params: CreateGenerationManagerParams): 
           plugin.onExecutorReady,
           "plugin.onExecutorReady hook missing",
         )(
-          contextOf({
+          withAuthField({
             tailordb,
             resolvers: buildResolverData(),
             executors: { ...services.executor },
             auths,
             baseDir: pluginBaseDir,
-            configPath: config.path,
+            configPath,
             pluginConfig: plugin.pluginConfig,
           }),
         );
@@ -305,12 +310,10 @@ export function createGenerationManager(params: CreateGenerationManagerParams): 
       logger.newline();
       logger.log(`Generation for ${generationTarget(config)}`);
 
-      const app = workspaceServices;
-
       // Load TailorDB tables (includes plugin-generated tables)
       await withSpan("generate.loadTailorDBTypes", async (span) => {
-        span.setAttribute("generate.namespace_count", app.tailorDBServices.length);
-        for (const db of app.tailorDBServices) {
+        span.setAttribute("generate.namespace_count", workspaceServices.tailorDBServices.length);
+        for (const db of workspaceServices.tailorDBServices) {
           const namespace = db.namespace;
           await withSpan(`generate.loadTypes.${namespace}`, async () => {
             try {
@@ -333,7 +336,7 @@ export function createGenerationManager(params: CreateGenerationManagerParams): 
         }
         try {
           assertUniqueLocalTailorDBTypeNames({
-            tailorDBServices: app.tailorDBServices,
+            tailorDBServices: workspaceServices.tailorDBServices,
             scope: isLoadedWorkspaceConfig(config) ? "workspace" : "application",
           });
         } catch (error) {
@@ -342,7 +345,7 @@ export function createGenerationManager(params: CreateGenerationManagerParams): 
         }
       });
       const resolverServices = [
-        ...app.resolverServices,
+        ...workspaceServices.resolverServices,
         ...definePluginResolverServices(config, pluginManager),
       ];
 
@@ -353,29 +356,29 @@ export function createGenerationManager(params: CreateGenerationManagerParams): 
         async () => {
           const pluginExecutorFiles = generatePluginFilesIfNeeded(
             pluginManager,
-            app.tailorDBServices,
-            config.path,
+            workspaceServices.tailorDBServices,
+            configPath,
           );
           const executorService =
-            app.executorService ??
+            workspaceServices.executorService ??
             (pluginExecutorFiles.length > 0
-              ? createExecutorService({ config: { files: [] }, baseDir: path.dirname(config.path) })
+              ? createExecutorService({ config: { files: [] }, baseDir: configDir })
               : undefined);
           return { pluginExecutorFiles, executorService };
         },
       );
 
       // Resolve Auth namespaces (depends on TailorDB)
-      if (app.authServices.length > 0) {
+      if (workspaceServices.authServices.length > 0) {
         await withSpan("generate.resolveAuthNamespaces", async () => {
-          for (const authService of app.authServices) {
+          for (const authService of workspaceServices.authServices) {
             await authService.resolveNamespaces();
           }
         });
       }
 
       // Add blank line after TailorDB tables loaded
-      if (app.tailorDBServices.length > 0 || pluginExecutorFiles.length > 0) {
+      if (workspaceServices.tailorDBServices.length > 0 || pluginExecutorFiles.length > 0) {
         logger.newline();
       }
 

@@ -7,6 +7,7 @@ import { PluginValidationError } from "#/utils/plugin-validation-error";
 import { atConfigSource, loadConfig, loadConfigFile } from "./config-loader";
 import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
 import { errorToJson } from "./error-json";
+import { brandedDefault } from "./test-helpers/workspace-config";
 
 // Assembled at runtime: spelled out in full, this fixture is indistinguishable
 // from a live credential to the repository's own push protection.
@@ -36,10 +37,6 @@ afterEach(() => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
-
-function brandedDefault(kind: string, source: string): string {
-  return `export default Object.defineProperty(${source}, Symbol.for("tailor-platform/sdk"), { value: ${JSON.stringify(kind)} });`;
-}
 
 const allowedSlackToken = `{ value: ${JSON.stringify(SLACK_TOKEN)}, allowSecretReason: "demo workspace" }`;
 
@@ -133,7 +130,7 @@ describe("loadConfigFile", () => {
   test.each([
     {
       name: "defineWorkspace",
-      kind: "workspace-config",
+      kind: "workspace-config" as const,
       source: `{
         env: { SLACK_BOT_TOKEN: "placeholder" },
         resolver: { "shop-api": { files: [], env: { SLACK_BOT_TOKEN: ${JSON.stringify(SLACK_TOKEN)} } } },
@@ -151,7 +148,7 @@ describe("loadConfigFile", () => {
     },
     {
       name: "defineApp",
-      kind: "app-config",
+      kind: "app-config" as const,
       source: `{
         name: "shop",
         env: { SLACK_BOT_TOKEN: "placeholder" },
@@ -179,8 +176,8 @@ describe("loadConfigFile", () => {
 
 describe("loadConfig", () => {
   test.each([
-    { kind: "workspace-config", source: `{ apps: {} }` },
-    { kind: "app-config", source: `{ name: "shop" }` },
+    { kind: "workspace-config" as const, source: `{ apps: {} }` },
+    { kind: "app-config" as const, source: `{ name: "shop" }` },
   ])("rejects a $kind config, which commands do not support yet", async ({ kind, source }) => {
     const configPath = writeConfig(brandedDefault(kind, source));
 

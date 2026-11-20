@@ -4,7 +4,11 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { precompileTailorDBTypeScripts } from "#/cli/services/tailordb/hooks-validate-bundler";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
-import { brandedDefault } from "#/cli/shared/test-helpers/workspace-config";
+import {
+  brandedDefault,
+  WORKSPACE_DB_SOURCE,
+  writeWorkspaceTables,
+} from "#/cli/shared/test-helpers/workspace-config";
 import { createContentMapperHandlers, evaluateConfigInProcess, type Evaluation } from "./mapper";
 import type * as HooksValidateBundler from "#/cli/services/tailordb/hooks-validate-bundler";
 
@@ -88,11 +92,7 @@ ${brandedDefault(
   "workspace-config",
   `{
   env: { stage: "dev" },
-  db: {
-    "customer-db": { files: ["./db/customer/*.ts"] },
-    "order-db": { files: ["./db/order/*.ts"] },
-    "ledger-db": { files: ["./db/ledger/*.ts"] },
-  },
+  db: ${WORKSPACE_DB_SOURCE},
   apps: { shop: { db: ["customer-db", "order-db"] } },
 }`,
 )}
@@ -102,17 +102,7 @@ export const plugins = definePlugins(kyselyTypePlugin({ contentMapper: true }));
 function workspaceProject(): ReturnType<typeof project> {
   const p = project();
   fs.writeFileSync(p.config, WORKSPACE_CONFIG);
-  for (const [namespace, table] of [
-    ["customer", "Customer"],
-    ["order", "Order"],
-    ["ledger", "Entry"],
-  ] as const) {
-    fs.mkdirSync(path.join(p.dir, "db", namespace), { recursive: true });
-    fs.writeFileSync(
-      path.join(p.dir, "db", namespace, "table.ts"),
-      ORDER_TABLE.replace('"Order"', JSON.stringify(table)),
-    );
-  }
+  writeWorkspaceTables(p.dir, (name) => ORDER_TABLE.replace('"Order"', JSON.stringify(name)));
   return p;
 }
 

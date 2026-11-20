@@ -262,18 +262,20 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
   };
 }
 
+function uniqueNames(names: readonly string[]): string[] | undefined {
+  return names.length ? [...new Set(names)] : undefined;
+}
+
 function collectServiceNames(
   idpNameList: readonly string[],
   config: Pick<AppConfig, "aiGateways" | "secrets">,
 ): Pick<ExtractedAttributes, "idpNames" | "aiGatewayNames" | "secretVaultNames"> {
   // De-duplicate IdP names so duplicates in config don't emit duplicate
   // `IdpNameRegistry` keys (which would be invalid TypeScript).
-  const idpNames = idpNameList.length ? [...new Set(idpNameList)] : undefined;
+  const idpNames = uniqueNames(idpNameList);
 
   // De-duplicate AI Gateway names for the same reason.
-  const aiGatewayNames = config.aiGateways?.length
-    ? [...new Set(config.aiGateways.map((gateway) => gateway.name))]
-    : undefined;
+  const aiGatewayNames = uniqueNames((config.aiGateways ?? []).map((gateway) => gateway.name));
 
   // Extract Secret Manager vault -> secret *name* mapping. Only `Object.keys()` of
   // each vault, never its values — a value is the configured secret itself.
@@ -295,7 +297,6 @@ type AuthAttributes = Pick<
 >;
 
 function collectAuthAttributes(auth: AppConfig["auth"]): AuthAttributes {
-  // An application has exactly one auth namespace: its own `auth`, local or external.
   const authNamespaceNames =
     auth && typeof auth === "object" && typeof auth.name === "string" ? [auth.name] : undefined;
 
@@ -447,10 +448,6 @@ export function generateTypeDefinitionFromConfig(
 
 /** Key under which a workspace config records its `defaultDateRepresentation`. */
 const WORKSPACE_DATE_REPRESENTATION_KEY = "workspace";
-
-function uniqueNames(names: readonly string[]): string[] | undefined {
-  return names.length ? [...new Set(names)] : undefined;
-}
 
 // Nothing tells which Auth service a principal signed in through, so its attributes may be any one's.
 function mergeAttributes(
