@@ -10,6 +10,7 @@ import {
   reconcileContent,
   resolveConfigPath,
   resolvePackageManager,
+  type SetupOutput,
 } from "./generate";
 import { LOCK_VERSION, readLock, writeLock } from "./lock";
 import {
@@ -28,7 +29,7 @@ import {
   type PackageManager,
 } from "./templates";
 
-export type AutofixSetupOptions = {
+export type AutofixSetupInputs = {
   provider: AutofixProvider;
   /** For the `securefix` provider: the repository that runs the securefix server workflow. */
   securefixServerRepository?: string;
@@ -40,9 +41,9 @@ export type AutofixSetupOptions = {
   dir: string | readonly string[];
   /** Package manager the workflow uses; detected from the repository root when omitted. */
   packageManager?: PackageManager;
-  force: boolean;
-  outputDir: string;
 };
+
+export type AutofixSetupOptions = AutofixSetupInputs & SetupOutput;
 
 export type AutofixSetupResult = AutofixCodemodParams & {
   provider: AutofixProvider;
