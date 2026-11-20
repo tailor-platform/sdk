@@ -188,6 +188,21 @@ describe("createShellHandler", () => {
       expect(res.status).toBe(400);
     });
 
+    test("rejects a non-string name and an unknown permission before creating anything", async () => {
+      const createProfile = vi.fn(async () => {});
+      const handler = shell([], workspace(), accounts({ createProfile }));
+      const numericName = await post(handler, "/api/profiles", { ...input, name: 7 });
+      const unknownPermission = await post(handler, "/api/profiles", {
+        ...input,
+        permission: "admin",
+      });
+      expect([
+        numericName.status,
+        unknownPermission.status,
+        createProfile.mock.calls.length,
+      ]).toEqual([400, 400, 0]);
+    });
+
     test("answers 403 without the token", async () => {
       const res = await get(shell([]), "/api/profiles", { method: "POST", body: "{}" });
       expect(res.status).toBe(403);
@@ -334,7 +349,7 @@ describe("createShellHandler", () => {
       expect(framing(rejected)).toEqual(protectedHeaders);
     });
 
-    test("keeps the plugin's own Content-Security-Policy directives", async () => {
+    test("keeps the plugin's own Content-Security-Policy as a separate policy, so its own frame-ancestors cannot widen ours", async () => {
       const res = await get(
         shell([
           mounted(
@@ -346,7 +361,7 @@ describe("createShellHandler", () => {
         "/plugins/erd/",
       );
       expect(res.headers.get("content-security-policy")).toBe(
-        "default-src 'none'; frame-ancestors 'self'",
+        "default-src 'none', frame-ancestors 'self'",
       );
     });
   });

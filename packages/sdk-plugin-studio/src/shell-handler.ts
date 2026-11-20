@@ -56,7 +56,7 @@ function withFramingProtection(response: Response): Response {
   const headers = new Headers(response.headers);
   headers.set("x-frame-options", "SAMEORIGIN");
   const csp = headers.get("content-security-policy");
-  headers.set("content-security-policy", csp ? `${csp}; ${FRAME_ANCESTORS}` : FRAME_ANCESTORS);
+  headers.set("content-security-policy", csp ? `${csp}, ${FRAME_ANCESTORS}` : FRAME_ANCESTORS);
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
@@ -129,10 +129,20 @@ export function createShellHandler(options: ShellHandlerOptions) {
       return new Response("Method Not Allowed\n", { status: 405, headers: { allow: "POST" } });
     }
     try {
-      const body = (await request.json()) as Partial<NewProfile>;
+      const body = (await request.json()) as Record<string, unknown>;
       const { name, user, workspaceId, permission } = body;
-      if (!name || !user || !workspaceId) {
+      if (
+        typeof name !== "string" ||
+        typeof user !== "string" ||
+        typeof workspaceId !== "string" ||
+        !name ||
+        !user ||
+        !workspaceId
+      ) {
         throw new Error("name, user and workspaceId are required");
+      }
+      if (permission !== undefined && permission !== "write" && permission !== "read") {
+        throw new Error('permission must be "write" or "read"');
       }
       await options.accounts.createProfile({
         name,

@@ -108,11 +108,18 @@ describe("remembering the selection", () => {
 
 describe("selectionArgs", () => {
   test("passes the profile and its workspace ID, so an environment workspace ID cannot override the profile", () => {
-    expect(selectionArgs({ profile: "test", workspaceId: "w" })).toEqual(["-p", "test", "-w", "w"]);
+    expect(selectionArgs({ profile: "test", workspaceId: "w" })).toEqual([
+      "--profile=test",
+      "--workspace-id=w",
+    ]);
   });
 
   test("passes only the workspace ID when no profile is selected", () => {
-    expect(selectionArgs({ workspaceId: "w" })).toEqual(["-w", "w"]);
+    expect(selectionArgs({ workspaceId: "w" })).toEqual(["--workspace-id=w"]);
+  });
+
+  test("binds a profile name that starts with a hyphen to its option", () => {
+    expect(selectionArgs({ profile: "-x" })).toEqual(["--profile=-x"]);
   });
 
   test("is empty when nothing is selected", () => {

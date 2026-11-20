@@ -71,6 +71,7 @@ function NewProfileDialog({
   const [permission, setPermission] = useState<"write" | "read">("write");
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const latestUser = useRef("");
 
   const open = () => {
     setError(undefined);
@@ -82,6 +83,7 @@ function NewProfileDialog({
   };
 
   const chooseUser = (value: string) => {
+    latestUser.current = value;
     setUser(value);
     setWorkspaceId("");
     setWorkspaces(undefined);
@@ -92,8 +94,14 @@ function NewProfileDialog({
         (response) =>
           response.json() as Promise<{ id: string; name: string }[] | { error: string }>,
       )
-      .then((body) => ("error" in body ? setError(body.error) : setWorkspaces(body)))
-      .catch((e: unknown) => setError(String(e)));
+      .then((body) => {
+        if (latestUser.current !== value) return;
+        if ("error" in body) setError(body.error);
+        else setWorkspaces(body);
+      })
+      .catch((e: unknown) => {
+        if (latestUser.current === value) setError(String(e));
+      });
   };
 
   const create = async () => {

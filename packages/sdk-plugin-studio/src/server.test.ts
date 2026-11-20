@@ -63,6 +63,17 @@ describe("startServer", () => {
     expect(await res.text()).toBe("POST /a/b payload");
   });
 
+  test("sends each Set-Cookie header the handler returns", async () => {
+    const server = await start(() => () => {
+      const headers = new Headers();
+      headers.append("set-cookie", "a=1");
+      headers.append("set-cookie", "b=2");
+      return new Response("ok", { headers });
+    });
+    const res = await fetch(server.url);
+    expect(res.headers.getSetCookie()).toEqual(["a=1", "b=2"]);
+  });
+
   test("delivers a streamed chunk before the response ends", async () => {
     const server = await start(() => () => {
       const stream = new ReadableStream<Uint8Array>({

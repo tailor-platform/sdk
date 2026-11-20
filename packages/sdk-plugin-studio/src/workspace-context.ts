@@ -76,11 +76,11 @@ export function createWorkspaceContext(options: WorkspaceContextOptions): Worksp
  * CLI options that point a `tailor` command at the selected workspace. The workspace ID is passed
  * as well as the profile because `TAILOR_PLATFORM_WORKSPACE_ID` in the environment beats `-p`.
  * @param selection - The shell's current selection
- * @returns `-p <profile>` and/or `-w <id>`, or nothing when no workspace is selected
+ * @returns `--profile=<name>` and/or `--workspace-id=<id>`, or nothing when no workspace is selected
  */
 export function selectionArgs(selection: WorkspaceSelection): string[] {
   return [
-    ...(selection.profile ? ["-p", selection.profile] : []),
-    ...(selection.workspaceId ? ["-w", selection.workspaceId] : []),
+    ...(selection.profile ? [`--profile=${selection.profile}`] : []),
+    ...(selection.workspaceId ? [`--workspace-id=${selection.workspaceId}`] : []),
   ];
 }
