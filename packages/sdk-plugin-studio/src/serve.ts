@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { arg, defineAppCommand, logger } from "@tailor-platform/sdk/cli";
+import { arg, defineAppCommand, logger, workspaceArgs } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { z } from "zod";
 import { discoverTab, type TabSpec } from "./discover-tab";
@@ -10,6 +10,7 @@ import { createFunctionRunStarter } from "./function-run/process";
 import { openBrowser } from "./open-browser";
 import { startServer } from "./server";
 import { createShellHandler, type Tab } from "./shell-handler";
+import { createWorkspaceContext, listProfiles } from "./workspace-context";
 
 const DEFAULT_PORT = 7777;
 
@@ -36,6 +37,7 @@ export const uiCommand = defineAppCommand({
   name: "studio",
   description: "Serve the local web UI shell that hosts CLI plugin UIs. (beta)",
   args: z.strictObject({
+    ...workspaceArgs,
     port: arg(z.coerce.number().int().min(0).max(65535).default(DEFAULT_PORT), {
       description:
         "Preferred local port; the next free port is used when it is taken (0 selects any free port)",
@@ -54,6 +56,13 @@ export const uiCommand = defineAppCommand({
       functionRunTab(projectDir),
     ];
     const token = randomBytes(32).toString("hex");
+    const workspace = createWorkspaceContext({
+      initial: {
+        ...(args.profile ? { profile: args.profile } : {}),
+        ...(args["workspace-id"] ? { workspaceId: args["workspace-id"] } : {}),
+      },
+      listProfiles: listProfiles,
+    });
     const server = await startServer({
       port: args.port,
       createHandler: (port) =>
@@ -61,6 +70,7 @@ export const uiCommand = defineAppCommand({
           tabs,
           port,
           token,
+          workspace,
           clientDir,
           onError: (error, pluginId) =>
             logger.error(

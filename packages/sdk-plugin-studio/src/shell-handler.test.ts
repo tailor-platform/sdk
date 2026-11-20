@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { describe, expect, test, vi } from "vitest";
 import { createShellHandler, type Tab } from "./shell-handler";
+import { createWorkspaceContext } from "./workspace-context";
 
 const PORT = 7777;
 const TOKEN = "t0ken";
@@ -19,18 +20,65 @@ function get(handler: (r: Request) => Promise<Response>, pathname: string, init?
 
 type Handler = (
   request: Request,
-  context: { basePath: string; token: string },
+  context: { basePath: string; token: string; getSelection: () => object },
 ) => Response | Promise<Response>;
 
 function mounted(id: string, handler: Handler): Tab {
   return { id, title: id, state: "mounted", handler };
 }
 
-function shell(tabs: Tab[]) {
-  return createShellHandler({ tabs, port: PORT, token: TOKEN });
+const PROFILES = [{ name: "test", workspaceId: "7390c4cc-914f-4791-89ee-f4a4ab4699fc" }];
+
+function workspace(initial = {}) {
+  return createWorkspaceContext({ initial, listProfiles: async () => PROFILES });
+}
+
+function shell(tabs: Tab[], ws = workspace()) {
+  return createShellHandler({ tabs, port: PORT, token: TOKEN, workspace: ws });
+}
+
+function put(handler: (r: Request) => Promise<Response>, body: unknown, token: string | null) {
+  return get(handler, "/api/context", {
+    method: "PUT",
+    headers: token === null ? {} : { "x-tailor-studio-token": token },
+    body: JSON.stringify(body),
+  });
 }
 
 describe("createShellHandler", () => {
+  describe("/api/context", () => {
+    test("lists the profiles with the current selection and hands out the token", async () => {
+      const res = await get(shell([], workspace({ profile: "test" })), "/api/context");
+      expect(await res.json()).toEqual({
+        token: TOKEN,
+        profiles: PROFILES,
+        selected: { profile: "test", workspaceId: PROFILES[0]!.workspaceId },
+      });
+    });
+
+    test("PUT selects a profile and tabs read it on their next request", async () => {
+      const seen: object[] = [];
+      const handler = shell([
+        mounted("erd", (_r, { getSelection }) => {
+          seen.push(getSelection());
+          return new Response("ok");
+        }),
+      ]);
+      expect((await put(handler, { profile: "test" }, TOKEN)).status).toBe(200);
+      await get(handler, "/plugins/erd/");
+      expect(seen).toEqual([{ profile: "test", workspaceId: PROFILES[0]!.workspaceId }]);
+    });
+
+    test("PUT without the token is 403", async () => {
+      expect((await put(shell([]), { profile: "test" }, null)).status).toBe(403);
+    });
+
+    test("PUT of an unknown profile is 400 with the reason", async () => {
+      const res = await put(shell([]), { profile: "nope" }, TOKEN);
+      expect([res.status, await res.json()]).toEqual([400, { error: 'Profile "nope" not found' }]);
+    });
+  });
+
   test("redirects /plugins/<id> to /plugins/<id>/ so relative asset URLs resolve", async () => {
     const res = await get(shell([mounted("erd", () => new Response("ok"))]), "/plugins/erd");
     expect(res.status).toBe(308);
@@ -39,19 +87,21 @@ describe("createShellHandler", () => {
 
   test("passes the plugin the path below its prefix, the base path and the token", async () => {
     const plugin = vi.fn(
-      (_r: Request, _c: { basePath: string; token: string }) => new Response("ok"),
+      (_r: Request, _c: { basePath: string; token: string; getSelection: () => object }) =>
+        new Response("ok"),
     );
     await get(shell([mounted("erd", plugin)]), "/plugins/erd/assets/app.js?x=1");
     const [request, context] = plugin.mock.calls[0]!;
     expect(new URL(request.url).pathname + new URL(request.url).search).toBe("/assets/app.js?x=1");
-    expect(context).toEqual({ basePath: "/plugins/erd/", token: TOKEN });
+    expect(context).toMatchObject({ basePath: "/plugins/erd/", token: TOKEN });
   });
 
   test.each(["//evil.example/x", "/\\evil.example/x", "//evil.example:1/x"])(
     "keeps the forwarded URL on the shell's origin when the path below the prefix is %j",
     async (rest) => {
       const plugin = vi.fn(
-        (_r: Request, _c: { basePath: string; token: string }) => new Response("ok"),
+        (_r: Request, _c: { basePath: string; token: string; getSelection: () => object }) =>
+          new Response("ok"),
       );
       await get(shell([mounted("erd", plugin)]), `/plugins/erd${rest}?q=1`);
       const forwarded = new URL(plugin.mock.calls[0]![0].url);
@@ -119,7 +169,13 @@ describe("createShellHandler", () => {
   test("serves the built client for everything outside /api and /plugins", async () => {
     const clientDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-studio-client-"));
     fs.writeFileSync(path.join(clientDir, "index.html"), "<html>client</html>");
-    const handler = createShellHandler({ tabs: [], port: PORT, token: TOKEN, clientDir });
+    const handler = createShellHandler({
+      tabs: [],
+      port: PORT,
+      token: TOKEN,
+      workspace: workspace(),
+      clientDir,
+    });
     expect(await (await get(handler, "/erd")).text()).toBe("<html>client</html>");
     fs.rmSync(clientDir, { recursive: true });
   });
@@ -135,6 +191,7 @@ describe("createShellHandler", () => {
       ],
       port: PORT,
       token: TOKEN,
+      workspace: workspace(),
       onError,
     });
     await get(handler, "/plugins/bad/");

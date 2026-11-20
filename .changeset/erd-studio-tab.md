@@ -1,5 +1,5 @@
 ---
-"@tailor-platform/sdk-plugin-tailordb-erd": patch
+"@tailor-platform/sdk-plugin-tailordb-erd": minor
 ---
 
 Provide the ERD viewer as the default tab of `tailor studio`.
