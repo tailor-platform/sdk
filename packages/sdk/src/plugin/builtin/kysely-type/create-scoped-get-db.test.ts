@@ -65,7 +65,8 @@ async function diagnosticsFor(usage: string): Promise<string[]> {
     .map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, " "));
 }
 
-describe("createScopedGetDB of the content-mapped Kysely types", () => {
+// Each case compiles the generated module through ts.createProgram, which takes seconds under load.
+describe("createScopedGetDB of the content-mapped Kysely types", { timeout: 60_000 }, () => {
   test("gives a getDB that reads the tables of the namespaces it names", async () => {
     expect(
       await diagnosticsFor(`
