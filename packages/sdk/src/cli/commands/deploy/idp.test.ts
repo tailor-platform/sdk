@@ -1,24 +1,25 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, test, expect, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
+import {
+  mockOperatorClient,
+  type OperatorClientMocks,
+} from "#/cli/shared/test-helpers/operator-client";
 import { applyIdP, type planIdP } from "./idp";
-import type { OperatorClient } from "#/cli/shared/client";
 
 describe("applyIdP phase separation", () => {
   function createMockClientWithSpies() {
-    return {
-      deleteIdPClient: vi.fn().mockResolvedValue({}),
-      deleteIdPService: vi.fn().mockResolvedValue({}),
-      deleteSecretManagerVault: vi.fn().mockResolvedValue({}),
-      createIdPService: vi.fn().mockResolvedValue({}),
-      createIdPClient: vi.fn().mockResolvedValue({}),
-      updateIdPClient: vi.fn().mockResolvedValue({}),
-      createSecretManagerVault: vi.fn().mockResolvedValue({}),
-      createSecretManagerSecret: vi.fn().mockResolvedValue({}),
-      setMetadata: vi.fn().mockResolvedValue({}),
-      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
-    } as unknown as OperatorClient;
+    return mockOperatorClient({
+      deleteIdPClient: {},
+      deleteIdPService: {},
+      deleteSecretManagerVault: {},
+      createIdPService: {},
+      createIdPClient: {},
+      createSecretManagerVault: {},
+      createSecretManagerSecret: {},
+      setMetadata: {},
+      getMetadata: { metadata: { labels: {} } },
+    });
   }
 
   function createMockPlanResult() {
@@ -88,7 +89,7 @@ describe("applyIdP phase separation", () => {
 
   test("delete-resources phase ignores a client vault that is already gone", async () => {
     const client = createMockClientWithSpies();
-    vi.mocked(client.deleteSecretManagerVault).mockRejectedValue(
+    client.deleteSecretManagerVault.mockRejectedValue(
       new ConnectError("vault not found", Code.NotFound),
     );
 
@@ -121,7 +122,7 @@ describe("applyIdP phase separation", () => {
 
   test("delete-resources phase propagates other errors from deleting a client vault", async () => {
     const client = createMockClientWithSpies();
-    vi.mocked(client.deleteSecretManagerVault).mockRejectedValue(
+    client.deleteSecretManagerVault.mockRejectedValue(
       new ConnectError("denied", Code.PermissionDenied),
     );
 
@@ -174,17 +175,18 @@ describe("applyIdP allowedReturnOrigins placeholder resolution", () => {
     } as unknown as Awaited<ReturnType<typeof planIdP>>;
   }
 
-  const defaultGetStaticWebsite = () =>
-    vi.fn().mockResolvedValue({ staticwebsite: { url: "https://my-site.example.com" } });
-
-  function createClient(getStaticWebsite = defaultGetStaticWebsite()) {
-    return {
-      createIdPService: vi.fn().mockResolvedValue({}),
-      updateIdPService: vi.fn().mockResolvedValue({}),
-      setMetadata: vi.fn().mockResolvedValue({}),
-      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
+  function createClient(
+    getStaticWebsite: OperatorClientMocks<"getStaticWebsite">["getStaticWebsite"] = {
+      staticwebsite: { url: "https://my-site.example.com" },
+    },
+  ) {
+    return mockOperatorClient({
+      createIdPService: {},
+      updateIdPService: {},
+      setMetadata: {},
+      getMetadata: { metadata: { labels: {} } },
       getStaticWebsite,
-    } as unknown as OperatorClient;
+    });
   }
 
   test("resolves :url placeholder before createIdPService", async () => {
@@ -200,10 +202,8 @@ describe("applyIdP allowedReturnOrigins placeholder resolution", () => {
       name: "my-site",
     });
     expect(client.createIdPService).toHaveBeenCalledTimes(1);
-    const req = (client.createIdPService as ReturnType<typeof vi.fn>).mock.calls[0]![0] as {
-      userAuthPolicy: { allowedReturnOrigins: string[] };
-    };
-    expect(req.userAuthPolicy.allowedReturnOrigins).toEqual([
+    const req = client.createIdPService.mock.calls[0]![0];
+    expect(req.userAuthPolicy?.allowedReturnOrigins).toEqual([
       "https://my-site.example.com",
       "https://other.example.com",
     ]);
@@ -218,10 +218,8 @@ describe("applyIdP allowedReturnOrigins placeholder resolution", () => {
     );
 
     expect(client.updateIdPService).toHaveBeenCalledTimes(1);
-    const req = (client.updateIdPService as ReturnType<typeof vi.fn>).mock.calls[0]![0] as {
-      userAuthPolicy: { allowedReturnOrigins: string[] };
-    };
-    expect(req.userAuthPolicy.allowedReturnOrigins).toEqual(["https://my-site.example.com"]);
+    const req = client.updateIdPService.mock.calls[0]![0];
+    expect(req.userAuthPolicy?.allowedReturnOrigins).toEqual(["https://my-site.example.com"]);
   });
 
   test("skips static-website lookup when allowedReturnOrigins has no placeholder", async () => {
@@ -233,16 +231,12 @@ describe("applyIdP allowedReturnOrigins placeholder resolution", () => {
     );
 
     expect(client.getStaticWebsite).not.toHaveBeenCalled();
-    const req = (client.createIdPService as ReturnType<typeof vi.fn>).mock.calls[0]![0] as {
-      userAuthPolicy: { allowedReturnOrigins: string[] };
-    };
-    expect(req.userAuthPolicy.allowedReturnOrigins).toEqual(["https://app.example.com"]);
+    const req = client.createIdPService.mock.calls[0]![0];
+    expect(req.userAuthPolicy?.allowedReturnOrigins).toEqual(["https://app.example.com"]);
   });
 
   test("fails fast when a placeholder cannot be resolved (NotFound)", async () => {
-    const client = createClient(
-      vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
-    );
+    const client = createClient(() => Promise.reject(new ConnectError("not found", Code.NotFound)));
 
     await expect(
       applyIdP(
@@ -255,7 +249,7 @@ describe("applyIdP allowedReturnOrigins placeholder resolution", () => {
   });
 
   test("fails fast when a placeholder resolves to a website without URL", async () => {
-    const client = createClient(vi.fn().mockResolvedValue({ staticwebsite: { url: "" } }));
+    const client = createClient({ staticwebsite: { url: "" } });
 
     await expect(
       applyIdP(
@@ -307,16 +301,13 @@ describe("applyIdP client updates forced by the SDK version", () => {
   }
 
   function createClient(opts: { vaultExists: boolean }) {
-    return {
-      getIdPClient: vi.fn().mockResolvedValue({ client: { clientSecret: "secret-from-get" } }),
-      getSecretManagerVault: vi
-        .fn()
-        .mockImplementation(async () =>
-          opts.vaultExists ? {} : Promise.reject(new ConnectError("not found", Code.NotFound)),
-        ),
-      createSecretManagerVault: vi.fn().mockResolvedValue({}),
-      createSecretManagerSecret: vi.fn().mockResolvedValue({}),
-    } as unknown as OperatorClient;
+    return mockOperatorClient({
+      getIdPClient: { client: { clientSecret: "secret-from-get" } },
+      getSecretManagerVault: async () =>
+        opts.vaultExists ? {} : Promise.reject(new ConnectError("not found", Code.NotFound)),
+      createSecretManagerVault: {},
+      createSecretManagerSecret: {},
+    });
   }
 
   test("creates the missing secret from the value returned by getIdPClient", async () => {
@@ -353,7 +344,7 @@ describe("applyIdP client updates forced by the SDK version", () => {
     },
   ])("fails the deploy when getIdPClient fails with $name", async ({ code, message }) => {
     const client = createClient({ vaultExists: false });
-    vi.mocked(client.getIdPClient).mockRejectedValue(new ConnectError(message, code));
+    client.getIdPClient.mockRejectedValue(new ConnectError(message, code));
 
     await expect(applyIdP(client, createPlanResult(), "create-update")).rejects.toThrow(message);
   });

@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { runCommand } from "@politty/zod";
 import {
@@ -10,7 +9,13 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken } from "#/cli/shared/context";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import {
+  mockOperatorClient,
+  type OperatorClientMocks,
+} from "#/cli/shared/test-helpers/operator-client";
 import { listCommand } from "./list";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { NotificationSchema } from "@tailor-platform/tailor-proto/notification_resource_pb";
 
 vi.mock("#/cli/shared/client", async (importOriginal) => ({
   ...(await importOriginal()),
@@ -25,11 +30,12 @@ vi.mock("#/cli/shared/context", async (importOriginal) => ({
 const WORKSPACE_ID = "6739b373-7371-4b50-99c9-a0c9db07cdee";
 const ORGANIZATION_ID = "9fff4dcf-0000-4000-8000-000000000000";
 
-function mockClient(listMyNotifications: ReturnType<typeof vi.fn>) {
-  vi.mocked(initOperatorClient).mockResolvedValue({
-    listMyNotifications,
-  } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
-  return listMyNotifications;
+function mockClient(
+  listMyNotifications: OperatorClientMocks<"listMyNotifications">["listMyNotifications"],
+) {
+  const client = mockOperatorClient({ listMyNotifications });
+  vi.mocked(initOperatorClient).mockResolvedValue(client);
+  return client.listMyNotifications;
 }
 
 function captureStdout() {
@@ -76,7 +82,7 @@ describe("notification list", () => {
   aroundEach(async (runTest) => {
     vi.clearAllMocks();
     vi.mocked(loadAccessToken).mockResolvedValue("scoped-token");
-    mockClient(vi.fn().mockResolvedValue({ notifications: [], nextPageToken: "", totalCount: 0 }));
+    mockClient({ notifications: [], nextPageToken: "", totalCount: 0n });
     await runTest();
     vi.unstubAllEnvs();
   });
@@ -93,9 +99,7 @@ describe("notification list", () => {
   });
 
   test("lists the whole inbox newest first with no filters by default", async () => {
-    const list = mockClient(
-      vi.fn().mockResolvedValue({ notifications: [], nextPageToken: "", totalCount: 0 }),
-    );
+    const list = mockClient({ notifications: [], nextPageToken: "", totalCount: 0n });
     using _json = jsonMode();
 
     const result = await runCommand(listCommand, []);
@@ -114,9 +118,7 @@ describe("notification list", () => {
   });
 
   test("maps the filter flags onto the request", async () => {
-    const list = mockClient(
-      vi.fn().mockResolvedValue({ notifications: [], nextPageToken: "", totalCount: 0 }),
-    );
+    const list = mockClient({ notifications: [], nextPageToken: "", totalCount: 0n });
     using _json = jsonMode();
 
     const result = await runCommand(listCommand, [
@@ -148,23 +150,24 @@ describe("notification list", () => {
 
   test("caps the listing at the 50 newest notifications by default", async () => {
     const arrivedAt = timestampFromDate(new Date("2026-10-29T01:02:03Z"));
-    const many = Array.from({ length: 60 }, (_, i) => ({
-      id: `0d2c0f1e-5c2b-4e3a-9c1d-${String(i).padStart(12, "0")}`,
-      category: NotificationCategory.ANNOUNCEMENT,
-      severity: NotificationSeverity.INFO,
-      title: `n${i}`,
-      bodyMarkdown: "",
-      actions: [],
-      scopeRefs: [],
-      arrivedAt,
-    }));
-    const list = mockClient(
-      vi.fn(async ({ pageSize }: { pageSize: number }) => ({
-        notifications: many.slice(0, pageSize),
-        nextPageToken: "",
-        totalCount: many.length,
-      })),
+    const many = Array.from(
+      { length: 60 },
+      (_, i): MessageInitShape<typeof NotificationSchema> => ({
+        id: `0d2c0f1e-5c2b-4e3a-9c1d-${String(i).padStart(12, "0")}`,
+        category: NotificationCategory.ANNOUNCEMENT,
+        severity: NotificationSeverity.INFO,
+        title: `n${i}`,
+        bodyMarkdown: "",
+        actions: [],
+        scopeRefs: [],
+        arrivedAt,
+      }),
     );
+    const list = mockClient(async (request) => ({
+      notifications: many.slice(0, request.pageSize),
+      nextPageToken: "",
+      totalCount: BigInt(many.length),
+    }));
     using _json = jsonMode();
     using logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     using _stderr = captureStderr();
@@ -179,9 +182,7 @@ describe("notification list", () => {
   });
 
   test("--limit 0 lists everything", async () => {
-    const list = mockClient(
-      vi.fn().mockResolvedValue({ notifications: [], nextPageToken: "", totalCount: 0 }),
-    );
+    const list = mockClient({ notifications: [], nextPageToken: "", totalCount: 0n });
     using _json = jsonMode();
 
     const result = await runCommand(listCommand, ["--limit", "0"]);
@@ -212,35 +213,33 @@ describe("notification list", () => {
 
   test("renders a table with a sanitized title and the read state", async () => {
     const arrivedAt = new Date(Date.now() - 60 * 60 * 1000);
-    mockClient(
-      vi.fn().mockResolvedValue({
-        notifications: [
-          {
-            id: "0d2c0f1e-5c2b-4e3a-9c1d-2f6a7b8c9d0e",
-            category: NotificationCategory.MAINTENANCE,
-            severity: NotificationSeverity.WARNING,
-            title: "Scheduled \u001b[31mmaintenance\u001b[0m",
-            bodyMarkdown: "body",
-            actions: [],
-            scopeRefs: [],
-            arrivedAt: timestampFromDate(arrivedAt),
-          },
-          {
-            id: "1d2c0f1e-5c2b-4e3a-9c1d-2f6a7b8c9d0e",
-            category: NotificationCategory.ANNOUNCEMENT,
-            severity: NotificationSeverity.INFO,
-            title: "Read one",
-            bodyMarkdown: "body",
-            actions: [],
-            scopeRefs: [],
-            arrivedAt: timestampFromDate(arrivedAt),
-            readAt: timestampFromDate(arrivedAt),
-          },
-        ],
-        nextPageToken: "",
-        totalCount: 2,
-      }),
-    );
+    mockClient({
+      notifications: [
+        {
+          id: "0d2c0f1e-5c2b-4e3a-9c1d-2f6a7b8c9d0e",
+          category: NotificationCategory.MAINTENANCE,
+          severity: NotificationSeverity.WARNING,
+          title: "Scheduled \u001b[31mmaintenance\u001b[0m",
+          bodyMarkdown: "body",
+          actions: [],
+          scopeRefs: [],
+          arrivedAt: timestampFromDate(arrivedAt),
+        },
+        {
+          id: "1d2c0f1e-5c2b-4e3a-9c1d-2f6a7b8c9d0e",
+          category: NotificationCategory.ANNOUNCEMENT,
+          severity: NotificationSeverity.INFO,
+          title: "Read one",
+          bodyMarkdown: "body",
+          actions: [],
+          scopeRefs: [],
+          arrivedAt: timestampFromDate(arrivedAt),
+          readAt: timestampFromDate(arrivedAt),
+        },
+      ],
+      nextPageToken: "",
+      totalCount: 2n,
+    });
     using stdout = captureStdout();
 
     const result = await runCommand(listCommand, []);
@@ -269,24 +268,22 @@ describe("notification list", () => {
 
   test("prints the full rows as JSON in JSON mode", async () => {
     const arrivedAt = new Date("2026-10-29T01:02:03Z");
-    mockClient(
-      vi.fn().mockResolvedValue({
-        notifications: [
-          {
-            id: "0d2c0f1e-5c2b-4e3a-9c1d-2f6a7b8c9d0e",
-            category: NotificationCategory.ALERT,
-            severity: NotificationSeverity.CRITICAL,
-            title: "Act now",
-            bodyMarkdown: "body",
-            actions: [],
-            scopeRefs: [{ ref: { case: "workspaceId", value: WORKSPACE_ID } }],
-            arrivedAt: timestampFromDate(arrivedAt),
-          },
-        ],
-        nextPageToken: "",
-        totalCount: 1,
-      }),
-    );
+    mockClient({
+      notifications: [
+        {
+          id: "0d2c0f1e-5c2b-4e3a-9c1d-2f6a7b8c9d0e",
+          category: NotificationCategory.ALERT,
+          severity: NotificationSeverity.CRITICAL,
+          title: "Act now",
+          bodyMarkdown: "body",
+          actions: [],
+          scopeRefs: [{ ref: { case: "workspaceId", value: WORKSPACE_ID } }],
+          arrivedAt: timestampFromDate(arrivedAt),
+        },
+      ],
+      nextPageToken: "",
+      totalCount: 1n,
+    });
     using _json = jsonMode();
     using logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 

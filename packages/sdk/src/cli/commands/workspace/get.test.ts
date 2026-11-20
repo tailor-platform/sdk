@@ -1,7 +1,10 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import {
+  mockOperatorClient,
+  type OperatorClientMocks,
+} from "#/cli/shared/test-helpers/operator-client";
 import { encodeExpiresAt, expiresAtLabelKey } from "./expiry";
 import { getWorkspace } from "./get";
 
@@ -27,27 +30,23 @@ describe("getWorkspace", () => {
   });
 
   function stubClient(
-    getMetadata: ReturnType<typeof vi.fn>,
+    getMetadata: OperatorClientMocks<"getMetadata">["getMetadata"],
   ): Awaited<ReturnType<typeof initOperatorClient>> {
-    const client = {
-      getWorkspace: vi.fn().mockResolvedValue({
+    const client = mockOperatorClient({
+      getWorkspace: {
         workspace: { id: workspaceId, name: "ws", region: "us-west", organizationId: "org-1" },
-      }),
+      },
       getMetadata,
-    };
-    vi.mocked(initOperatorClient).mockResolvedValue(
-      client as unknown as Awaited<ReturnType<typeof initOperatorClient>>,
-    );
-    return client as unknown as Awaited<ReturnType<typeof initOperatorClient>>;
+    });
+    vi.mocked(initOperatorClient).mockResolvedValue(client);
+    return client;
   }
 
   test("reports the recorded expiry", async () => {
     const expiresAt = new Date("2030-01-01T00:00:00.000Z");
-    stubClient(
-      vi.fn().mockResolvedValue({
-        metadata: { labels: { [expiresAtLabelKey]: encodeExpiresAt(expiresAt) } },
-      }),
-    );
+    stubClient({
+      metadata: { labels: { [expiresAtLabelKey]: encodeExpiresAt(expiresAt) } },
+    });
 
     await expect(getWorkspace({ workspaceId })).resolves.toMatchObject({
       expiresAt: expiresAt.toISOString(),
@@ -55,13 +54,13 @@ describe("getWorkspace", () => {
   });
 
   test("reports no expiry as null, not as unavailable", async () => {
-    stubClient(vi.fn().mockResolvedValue({ metadata: { labels: {} } }));
+    stubClient({ metadata: { labels: {} } });
 
     await expect(getWorkspace({ workspaceId })).resolves.toMatchObject({ expiresAt: null });
   });
 
   test("reports a failed read as unavailable rather than as no expiry", async () => {
-    stubClient(vi.fn().mockRejectedValue(new Error("permission denied")));
+    stubClient(() => Promise.reject(new Error("permission denied")));
 
     await expect(getWorkspace({ workspaceId })).resolves.toMatchObject({
       expiresAt: "unavailable",

@@ -1,8 +1,8 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, test, expect, vi } from "vitest";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import {
   applyFunctionRegistry,
   authHookFunctionName,
@@ -19,6 +19,8 @@ import type { Application } from "#/cli/services/application";
 import type { CollectedJob } from "#/cli/services/workflow/service";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { BundledScripts, FunctionEntry } from "./function-registry";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { FunctionRegistrySchema } from "@tailor-platform/tailor-proto/function_registry_pb";
 
 // Mock label.ts
 vi.mock("./label", async (importOriginal) => {
@@ -88,32 +90,30 @@ describe("planFunctionRegistry", () => {
       sdkVersion?: string;
     }>,
   ): OperatorClient {
-    return {
-      listFunctionRegistries: vi.fn().mockResolvedValue({
-        functions: existingFunctions.map((f) => ({
+    return mockOperatorClient({
+      listFunctionRegistries: {
+        functions: existingFunctions.map((f): MessageInitShape<typeof FunctionRegistrySchema> => ({
           name: f.name,
           contentHash: f.contentHash,
         })),
         nextPageToken: "",
-      }),
-      getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
+      },
+      getMetadata: (request) => {
+        const trn = request.trn ?? "";
         // TRN format: trn:v1:workspace:{workspaceId}:function_registry:{name}
         // Name may contain colons (e.g., "resolver/ns/getUser"), so extract after the prefix
         const prefix = `trn:v1:workspace:${workspaceId}:function_registry:`;
         const name = trn.startsWith(prefix) ? trn.slice(prefix.length) : trn.split(":").pop();
         const func = existingFunctions.find((f) => f.name === name);
-        return {
-          metadata: {
-            labels: func?.label
-              ? {
-                  [sdkNameLabelKey]: func.label,
-                  "sdk-version": func.sdkVersion ?? "v1-0-0",
-                }
-              : {},
-          },
-        };
-      }),
-    } as unknown as OperatorClient;
+        const labels: Record<string, string> = func?.label
+          ? {
+              [sdkNameLabelKey]: func.label,
+              "sdk-version": func.sdkVersion ?? "v1-0-0",
+            }
+          : {};
+        return { metadata: { labels } };
+      },
+    });
   }
 
   describe("pagination", () => {
@@ -429,13 +429,13 @@ describe("splitFunctionRegistryChanges", () => {
 
 describe("applyFunctionRegistry phase separation", () => {
   function createMockClientWithSpies() {
-    return {
-      createFunctionRegistry: vi.fn().mockResolvedValue({}),
-      updateFunctionRegistry: vi.fn().mockResolvedValue({}),
-      deleteFunctionRegistry: vi.fn().mockResolvedValue({}),
-      setMetadata: vi.fn().mockResolvedValue({}),
-      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
-    } as unknown as OperatorClient;
+    return mockOperatorClient({
+      createFunctionRegistry: {},
+      updateFunctionRegistry: {},
+      deleteFunctionRegistry: {},
+      setMetadata: {},
+      getMetadata: { metadata: { labels: {} } },
+    });
   }
 
   function createMockPlanResult() {
@@ -534,9 +534,7 @@ describe("applyFunctionRegistry phase separation", () => {
 
   test("delete phase treats a function that is already gone as deleted", async () => {
     const client = createMockClientWithSpies();
-    vi.mocked(client.deleteFunctionRegistry).mockRejectedValue(
-      new ConnectError("not found", Code.NotFound),
-    );
+    client.deleteFunctionRegistry.mockRejectedValue(new ConnectError("not found", Code.NotFound));
 
     await expect(
       applyFunctionRegistry(client, createMockPlanResult(), "delete"),
@@ -545,7 +543,7 @@ describe("applyFunctionRegistry phase separation", () => {
 
   test("delete phase still reports other delete failures", async () => {
     const client = createMockClientWithSpies();
-    vi.mocked(client.deleteFunctionRegistry).mockRejectedValue(
+    client.deleteFunctionRegistry.mockRejectedValue(
       new ConnectError("denied", Code.PermissionDenied),
     );
 
@@ -556,13 +554,13 @@ describe("applyFunctionRegistry phase separation", () => {
 
   test("uploads functions concurrently in the create-update phase", async () => {
     const probe = createConcurrencyProbe();
-    const client = {
-      createFunctionRegistry: vi.fn().mockImplementation(probe.run),
-      updateFunctionRegistry: vi.fn().mockImplementation(probe.run),
-      deleteFunctionRegistry: vi.fn().mockResolvedValue({}),
-      setMetadata: vi.fn().mockResolvedValue({}),
-      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
-    } as unknown as OperatorClient;
+    const client = mockOperatorClient({
+      createFunctionRegistry: probe.run,
+      updateFunctionRegistry: probe.run,
+      deleteFunctionRegistry: {},
+      setMetadata: {},
+      getMetadata: { metadata: { labels: {} } },
+    });
 
     const changeOf = (name: string) => ({
       name,
@@ -601,20 +599,20 @@ describe("applyFunctionRegistry phase separation", () => {
     vi.stubEnv("TAILOR_APPLY_CONCURRENCY", "2");
     let releaseFirstCreate!: () => void;
     let releaseSecondCreate!: () => void;
-    const createFunctionRegistry = vi
-      .fn()
-      .mockImplementationOnce(() => new Promise<void>((resolve) => (releaseFirstCreate = resolve)))
+    const client = mockOperatorClient({
+      createFunctionRegistry: {},
+      updateFunctionRegistry: {},
+      deleteFunctionRegistry: {},
+      setMetadata: {},
+      getMetadata: { metadata: { labels: {} } },
+    });
+    client.createFunctionRegistry
       .mockImplementationOnce(
-        () => new Promise<void>((resolve) => (releaseSecondCreate = resolve)),
+        () => new Promise((resolve) => (releaseFirstCreate = () => resolve({}))),
+      )
+      .mockImplementationOnce(
+        () => new Promise((resolve) => (releaseSecondCreate = () => resolve({}))),
       );
-    const updateFunctionRegistry = vi.fn().mockResolvedValue({});
-    const client = {
-      createFunctionRegistry,
-      updateFunctionRegistry,
-      deleteFunctionRegistry: vi.fn().mockResolvedValue({}),
-      setMetadata: vi.fn().mockResolvedValue({}),
-      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
-    } as unknown as OperatorClient;
     const changeOf = (name: string) => ({
       name,
       workspaceId: "test-workspace",
@@ -643,10 +641,10 @@ describe("applyFunctionRegistry phase separation", () => {
 
     const applyPromise = applyFunctionRegistry(client, planResult, "create-update");
 
-    await vi.waitFor(() => expect(createFunctionRegistry).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(client.createFunctionRegistry).toHaveBeenCalledTimes(2));
     releaseFirstCreate();
     try {
-      await vi.waitFor(() => expect(updateFunctionRegistry).toHaveBeenCalledTimes(1), {
+      await vi.waitFor(() => expect(client.updateFunctionRegistry).toHaveBeenCalledTimes(1), {
         timeout: 100,
       });
     } finally {
@@ -660,18 +658,18 @@ describe("applyFunctionRegistry phase separation", () => {
     vi.stubEnv("TAILOR_APPLY_CONCURRENCY", "2");
     try {
       const probe = createConcurrencyProbe();
-      const client = {
-        createFunctionRegistry: vi.fn().mockImplementation(probe.run),
-        updateFunctionRegistry: vi.fn().mockImplementation(probe.run),
-        deleteFunctionRegistry: vi.fn().mockResolvedValue({}),
-        setMetadata: vi.fn().mockImplementation(probe.run),
+      const client = mockOperatorClient({
+        createFunctionRegistry: probe.run,
+        updateFunctionRegistry: probe.run,
+        deleteFunctionRegistry: {},
+        setMetadata: probe.run,
         // The real client limits every RPC, reads included, so the label
         // re-read has to count towards the cap this asserts.
-        getMetadata: vi.fn().mockImplementation(async () => {
+        getMetadata: async () => {
           await probe.run();
           return { metadata: { labels: {} } };
-        }),
-      } as unknown as OperatorClient;
+        },
+      });
 
       const changeOf = (name: string) => ({
         name,

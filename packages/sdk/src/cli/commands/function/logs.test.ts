@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import { stripVTControlCharacters } from "node:util";
 import { create, type MessageInitShape } from "@bufbuild/protobuf";
@@ -24,6 +23,7 @@ import {
   captureStdoutStream,
 } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { stripAnsi } from "#/cli/shared/test-helpers/strip-ansi";
 import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
 import {
@@ -32,15 +32,14 @@ import {
   formatExecutionError,
   logsCommand,
 } from "./logs";
-import type { OperatorClient } from "#/cli/shared/client";
 import type {
   FunctionExecution,
   FunctionExecutionSummary,
 } from "@tailor-platform/tailor-proto/function_resource_pb";
 
-function makeDownloadClient(chunks: Uint8Array[], metadata?: { updatedAt: Date }): OperatorClient {
-  return {
-    downloadFunctionRegistryScript: vi.fn(async function* () {
+function makeDownloadClient(chunks: Uint8Array[], metadata?: { updatedAt: Date }) {
+  return mockOperatorClient({
+    async *downloadFunctionRegistryScript() {
       yield {
         payload: {
           case: "metadata" as const,
@@ -50,8 +49,8 @@ function makeDownloadClient(chunks: Uint8Array[], metadata?: { updatedAt: Date }
       for (const c of chunks) {
         yield { payload: { case: "chunk" as const, value: c } };
       }
-    }),
-  } as unknown as OperatorClient;
+    },
+  });
 }
 
 function makeInlineSourcemapBundle(sourcemap: object, code: string): string {
@@ -464,15 +463,13 @@ function functionExecution(
   });
 }
 
-function mockClient(responses: FunctionExecution[]): ReturnType<typeof vi.fn> {
-  const getFunctionExecution = vi.fn();
+function mockClient(responses: FunctionExecution[]) {
+  const client = mockOperatorClient({ getFunctionExecution: {} });
   for (const execution of responses) {
-    getFunctionExecution.mockResolvedValueOnce({ execution });
+    client.getFunctionExecution.mockResolvedValueOnce({ execution });
   }
-  vi.mocked(initOperatorClient).mockResolvedValue({
-    getFunctionExecution,
-  } as unknown as OperatorClient);
-  return getFunctionExecution;
+  vi.mocked(initOperatorClient).mockResolvedValue(client);
+  return client.getFunctionExecution;
 }
 
 describe("logs command detail output", () => {
@@ -728,12 +725,12 @@ describe("logs command detail output", () => {
   test("--follow --timeout stops with an error when the execution does not finish", async () => {
     using _stdout = captureStdout();
     using _stderr = captureStderr();
-    const getFunctionExecution = vi.fn().mockResolvedValue({
-      execution: functionExecution({ status: FunctionExecution_Status.RUNNING }),
+    const client = mockOperatorClient({
+      getFunctionExecution: {
+        execution: functionExecution({ status: FunctionExecution_Status.RUNNING }),
+      },
     });
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      getFunctionExecution,
-    } as unknown as OperatorClient);
+    vi.mocked(initOperatorClient).mockResolvedValue(client);
 
     const result = await runCommand(logsCommand, [
       "exec-1",
@@ -747,7 +744,7 @@ describe("logs command detail output", () => {
     expect(result.success).toBe(false);
     expect(result.error?.message).toContain("Timed out");
     expect(result.error?.message).toContain("RUNNING");
-    expect(getFunctionExecution).toHaveBeenCalledWith(
+    expect(client.getFunctionExecution).toHaveBeenCalledWith(
       { workspaceId: "workspace-1", executionId: "exec-1" },
       { signal: expect.any(AbortSignal) },
     );
@@ -756,22 +753,18 @@ describe("logs command detail output", () => {
   test("--follow --timeout aborts a poll request that never answers", async () => {
     using _stdout = captureStdout();
     using _stderr = captureStderr();
-    const getFunctionExecution = vi
-      .fn()
-      .mockResolvedValueOnce({
-        execution: functionExecution({ status: FunctionExecution_Status.RUNNING }),
-      })
-      .mockImplementation(
-        (_request: unknown, options: { signal: AbortSignal }) =>
-          new Promise((_resolve, reject) => {
-            options.signal.addEventListener("abort", () =>
-              reject(new ConnectError("deadline", Code.DeadlineExceeded)),
-            );
-          }),
-      );
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      getFunctionExecution,
-    } as unknown as OperatorClient);
+    const client = mockOperatorClient({
+      getFunctionExecution: (_request, options) =>
+        new Promise((_resolve, reject) => {
+          options?.signal?.addEventListener("abort", () =>
+            reject(new ConnectError("deadline", Code.DeadlineExceeded)),
+          );
+        }),
+    });
+    client.getFunctionExecution.mockResolvedValueOnce({
+      execution: functionExecution({ status: FunctionExecution_Status.RUNNING }),
+    });
+    vi.mocked(initOperatorClient).mockResolvedValue(client);
 
     const result = await runCommand(logsCommand, [
       "exec-1",
@@ -791,8 +784,8 @@ describe("logs command detail output", () => {
     using stdout = captureStdout();
     using stderr = captureStderr();
     using _json = jsonMode();
-    const getFunctionExecution = vi
-      .fn()
+    const client = mockOperatorClient({ getFunctionExecution: {} });
+    client.getFunctionExecution
       .mockResolvedValueOnce({
         execution: functionExecution({
           status: FunctionExecution_Status.RUNNING,
@@ -806,14 +799,12 @@ describe("logs command detail output", () => {
           logEntries: entries,
         }),
       });
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      getFunctionExecution,
-    } as unknown as OperatorClient);
+    vi.mocked(initOperatorClient).mockResolvedValue(client);
 
     const result = await runCommand(logsCommand, ["exec-1", "--follow", "--interval", "1ms"]);
 
     expect(result.success).toBe(true);
-    expect(getFunctionExecution).toHaveBeenCalledTimes(3);
+    expect(client.getFunctionExecution).toHaveBeenCalledTimes(3);
     expect(stripAnsi(stderr.output)).toContain("Retrying function execution poll");
     expect(JSON.parse(stdout.output).logEntries).toHaveLength(2);
   });
@@ -821,21 +812,19 @@ describe("logs command detail output", () => {
   test("--follow stops on a non-retryable poll error", async () => {
     using _stdout = captureStdout();
     using _stderr = captureStderr();
-    const getFunctionExecution = vi
-      .fn()
+    const client = mockOperatorClient({ getFunctionExecution: {} });
+    client.getFunctionExecution
       .mockResolvedValueOnce({
         execution: functionExecution({ status: FunctionExecution_Status.RUNNING }),
       })
       .mockRejectedValueOnce(new ConnectError("denied", Code.PermissionDenied));
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      getFunctionExecution,
-    } as unknown as OperatorClient);
+    vi.mocked(initOperatorClient).mockResolvedValue(client);
 
     const result = await runCommand(logsCommand, ["exec-1", "--follow", "--interval", "1ms"]);
 
     expect(result.success).toBe(false);
     expect(result.error?.message).toContain("denied");
-    expect(getFunctionExecution).toHaveBeenCalledTimes(2);
+    expect(client.getFunctionExecution).toHaveBeenCalledTimes(2);
   });
 
   test("--follow with --json emits the final execution once", async () => {
@@ -890,14 +879,16 @@ describe("logs command list output", () => {
     using stdout = captureStdout();
     using stderr = captureStderr();
     using _json = jsonMode();
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      listFunctionExecutions: vi.fn(async ({ pageSize }: { pageSize: number }) => ({
-        executions: Array.from({ length: pageSize }, (_, index) =>
-          listedExecution({ id: `exec-${index}` }),
-        ),
-        nextPageToken: "more",
-      })),
-    } as unknown as OperatorClient);
+    vi.mocked(initOperatorClient).mockResolvedValue(
+      mockOperatorClient({
+        listFunctionExecutions: async (request) => ({
+          executions: Array.from({ length: request.pageSize ?? 0 }, (_, index) =>
+            listedExecution({ id: `exec-${index}` }),
+          ),
+          nextPageToken: "more",
+        }),
+      }),
+    );
 
     const result = await runCommand(logsCommand, []);
 
@@ -909,9 +900,11 @@ describe("logs command list output", () => {
   });
 
   function mockList(executions: FunctionExecutionSummary[]): void {
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      listFunctionExecutions: vi.fn(async () => ({ executions, nextPageToken: "" })),
-    } as unknown as OperatorClient);
+    vi.mocked(initOperatorClient).mockResolvedValue(
+      mockOperatorClient({
+        listFunctionExecutions: async () => ({ executions, nextPageToken: "" }),
+      }),
+    );
   }
 
   test("--json reports the error kind, name, and message of each execution", async () => {

@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { pathToFileURL } from "node:url";
@@ -11,12 +10,12 @@ import {
 import { planPipeline } from "#/cli/commands/deploy/resolver";
 import { createGenerationManager } from "#/cli/commands/generate/service";
 import { logger } from "#/cli/shared/logger";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { beginUserModuleRun } from "#/cli/shared/user-modules";
 import { defineConfig } from "#/configure/config/index";
 import { t } from "#/configure/types/type";
 import { PluginManager } from "#/plugin/manager";
 import { defineApplication, loadApplication } from "./application";
-import type { OperatorClient } from "#/cli/shared/client";
 
 describe("plugin-generated resolvers", () => {
   let baseDir: string;
@@ -89,11 +88,11 @@ describe("plugin-generated resolvers", () => {
         message: "Hello, Tailor!",
       });
 
-      const client = {
-        listPipelineServices: vi.fn().mockResolvedValue({ pipelineServices: [] }),
-        listPipelineResolvers: vi.fn().mockResolvedValue({ pipelineResolvers: [] }),
-        listFunctionRegistries: vi.fn().mockResolvedValue({ functions: [] }),
-      } as unknown as OperatorClient;
+      const client = mockOperatorClient({
+        listPipelineServices: { pipelineServices: [] },
+        listPipelineResolvers: { pipelineResolvers: [] },
+        listFunctionRegistries: { functions: [] },
+      });
       const pipelinePlan = await planPipeline({
         client,
         workspaceId: "ws",

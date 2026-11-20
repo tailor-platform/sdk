@@ -1,5 +1,5 @@
 import { assertType, describe, expectTypeOf, test, vi } from "vitest";
-import { mockOperatorClient } from "./operator-client";
+import { mockOperatorClient, withOperatorClientMocks } from "./operator-client";
 
 describe("mockOperatorClient", () => {
   test("accepts responses and implementations shaped like the RPC", () => {
@@ -102,5 +102,29 @@ describe("mockOperatorClient", () => {
 
     // @ts-expect-error A response field of another message
     assertType(client.getUserProfileConfig.mockResolvedValueOnce({ providerType: 1 }));
+  });
+});
+
+describe("withOperatorClientMocks", () => {
+  test("keeps the spies of the client and of the methods as spies", () => {
+    const client = withOperatorClientMocks(
+      mockOperatorClient({ getTenantConfig: {}, getUserProfileConfig: {} }),
+      { getUserProfileConfig: {}, setMetadata: {} },
+    );
+
+    assertType(client.getTenantConfig.mockResolvedValueOnce({ tenantProviderConfig: {} }));
+    assertType(client.getUserProfileConfig.mockResolvedValueOnce({}));
+    assertType(client.setMetadata.mockResolvedValueOnce({}));
+    // @ts-expect-error A response field of another message
+    assertType(client.setMetadata.mockResolvedValueOnce({ providerType: 1 }));
+  });
+
+  test("rejects a response the RPC cannot send", () => {
+    assertType(
+      withOperatorClientMocks(mockOperatorClient({}), {
+        // @ts-expect-error A response field of another message
+        getUserProfileConfig: { providerType: 1 },
+      }),
+    );
   });
 });

@@ -1,5 +1,5 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { describe, expect, test, vi } from "vitest";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import {
   assertMigrationSkipSteps,
   assertSkipNamespacesKnown,
@@ -7,7 +7,6 @@ import {
   parseMigrationSkipSteps,
 } from "./migration-skip-steps";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
-import type { OperatorClient } from "#/cli/shared/client";
 
 const assertSkippableSteps = vi.hoisted(() => vi.fn(async (_options: unknown) => {}));
 vi.mock("./migration-workflow", () => ({
@@ -53,7 +52,7 @@ describe("parseMigrationSkipSteps", () => {
 });
 
 describe("assertMigrationSkipSteps", () => {
-  const client = {} as OperatorClient;
+  const client = mockOperatorClient({});
   const stepsMigration = (namespace: string, number: number): PendingMigration =>
     ({
       namespace,

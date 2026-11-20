@@ -1,9 +1,12 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { Code, ConnectError } from "@connectrpc/connect";
 import { Subgraph_ServiceType } from "@tailor-platform/tailor-proto/application_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { logger, symbols } from "#/cli/shared/logger";
-import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import {
+  mockOperatorClient,
+  type OperatorClientMocks,
+  withOperatorClientMocks,
+} from "#/cli/shared/test-helpers/operator-client";
 import {
   applicationLabelLimitError,
   applyApplication,
@@ -19,6 +22,11 @@ import {
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { PlanContext } from "./types";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type {
+  ApplicationSchema,
+  SubgraphSchema,
+} from "@tailor-platform/tailor-proto/application_resource_pb";
 
 vi.mock("./label", async (importOriginal) => {
   const original = await importOriginal<Record<string, unknown>>();
@@ -51,7 +59,7 @@ const appName = "test-app";
 const matchingSubgraphs = [
   { serviceType: Subgraph_ServiceType.TAILORDB, serviceNamespace: "tailordb-a" },
   { serviceType: Subgraph_ServiceType.PIPELINE, serviceNamespace: "pipeline-a" },
-];
+] satisfies Array<MessageInitShape<typeof SubgraphSchema>>;
 
 function createMockApplication(
   overrides: {
@@ -88,49 +96,51 @@ function createMockApplication(
   } as unknown as Application;
 }
 
-function createMockClient(
-  applications: Array<{
-    name: string;
-    authNamespace?: string;
-    authIdpConfigName?: string;
-    cors?: string[];
-    allowedIpAddresses?: string[];
-    disableIntrospection?: boolean;
-    disabled?: boolean;
-    subgraphs?: Array<{ serviceType: number; serviceNamespace: string }>;
-    sdkVersion?: string;
-    label?: string;
-    sdkAppId?: string;
-    extraLabels?: Record<string, string>;
-  }>,
+type RemoteApplication = MessageInitShape<typeof ApplicationSchema> & {
+  name: string;
+  sdkVersion?: string;
+  label?: string;
+  sdkAppId?: string;
+  extraLabels?: Record<string, string>;
+};
+
+function createMockClient<K extends keyof OperatorClient = never>(
+  applications: RemoteApplication[],
+  overrides?: OperatorClientMocks<K>,
 ): OperatorClient {
-  return {
-    listApplications: vi.fn().mockResolvedValue({
-      applications,
+  const client = mockOperatorClient({
+    listApplications: {
+      applications: applications.map(
+        ({
+          sdkVersion: _sdkVersion,
+          label: _label,
+          sdkAppId: _sdkAppId,
+          extraLabels: _extraLabels,
+          ...application
+        }): MessageInitShape<typeof ApplicationSchema> => application,
+      ),
       nextPageToken: "",
-    }),
-    listAuthIDPConfigs: vi.fn().mockResolvedValue({
+    },
+    listAuthIDPConfigs: {
       idpConfigs: [],
       nextPageToken: "",
-    }),
-    getStaticWebsite: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
-    getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
-      const name = trn.split(":").pop();
+    },
+    getStaticWebsite: () => Promise.reject(new ConnectError("not found", Code.NotFound)),
+    getMetadata: (request) => {
+      const name = request.trn?.split(":").pop();
       const application = applications.find((app) => app.name === name);
-      return {
-        metadata: {
-          labels: application
-            ? {
-                "sdk-name": application.label ?? appName,
-                "sdk-version": application.sdkVersion ?? "v1-0-0",
-                ...(application.sdkAppId ? { "sdk-app-id": `app-${application.sdkAppId}` } : {}),
-                ...application.extraLabels,
-              }
-            : {},
-        },
-      };
-    }),
-  } as unknown as OperatorClient;
+      const labels: Record<string, string> = application
+        ? {
+            "sdk-name": application.label ?? appName,
+            "sdk-version": application.sdkVersion ?? "v1-0-0",
+            ...(application.sdkAppId ? { "sdk-app-id": `app-${application.sdkAppId}` } : {}),
+            ...application.extraLabels,
+          }
+        : {};
+      return { metadata: { labels } };
+    },
+  });
+  return withOperatorClientMocks(client, overrides);
 }
 
 function createContext(client: OperatorClient, application = createMockApplication()): PlanContext {
@@ -208,7 +218,7 @@ describe("planApplication", () => {
       disableIntrospection: true,
       disabled: false,
       subgraphs: matchingSubgraphs,
-    };
+    } satisfies RemoteApplication;
 
     test("carries config metadata next to the application's SDK labels", async () => {
       const client = createMockClient([]);
@@ -661,10 +671,9 @@ describe("planApplication", () => {
     });
 
     test("does not delete a same-name app that carries no SDK labels", async () => {
-      const client = {
-        ...createMockClient([{ name: appName }]),
-        getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
-      } as unknown as OperatorClient;
+      const client = createMockClient([{ name: appName }], {
+        getMetadata: { metadata: { labels: {} } },
+      });
       const application = createMockApplication({ name: appName });
 
       const result = await plan(client, application);
@@ -703,10 +712,9 @@ describe("planApplication", () => {
   describe("CORS resolution on first deployment (issue #1030)", () => {
     test("does not warn when CORS references a locally-defined static website that is not yet on the platform", async () => {
       using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-      const client = {
-        ...createMockClient([]),
-        getStaticWebsite: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
-      } as unknown as OperatorClient;
+      const client = createMockClient([], {
+        getStaticWebsite: () => Promise.reject(new ConnectError("not found", Code.NotFound)),
+      });
       const application = createMockApplication({
         cors: ["my-frontend:url"],
         staticWebsiteServices: [{ name: "my-frontend" }],
@@ -720,10 +728,9 @@ describe("planApplication", () => {
 
     test("still warns when CORS references a static website that is not defined locally", async () => {
       using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-      const client = {
-        ...createMockClient([]),
-        getStaticWebsite: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
-      } as unknown as OperatorClient;
+      const client = createMockClient([], {
+        getStaticWebsite: () => Promise.reject(new ConnectError("not found", Code.NotFound)),
+      });
       const application = createMockApplication({
         cors: ["typo-name:url"],
         staticWebsiteServices: [{ name: "my-frontend" }],
@@ -774,20 +781,24 @@ describe("planApplication", () => {
     });
 
     test("treats a legitimately-undefined previous.existingLabels as already fetched, not a cache miss", async () => {
-      const client = createMockClient([
+      const client = createMockClient(
+        [
+          {
+            name: appName,
+            authNamespace: "auth-a",
+            authIdpConfigName: "idp-a",
+            cors: ["https://a.example.com", "https://b.example.com"],
+            allowedIpAddresses: ["1.1.1.1", "2.2.2.2"],
+            disableIntrospection: true,
+            disabled: false,
+            subgraphs: matchingSubgraphs,
+          },
+        ],
         {
-          name: appName,
-          authNamespace: "auth-a",
-          authIdpConfigName: "idp-a",
-          cors: ["https://a.example.com", "https://b.example.com"],
-          allowedIpAddresses: ["1.1.1.1", "2.2.2.2"],
-          disableIntrospection: true,
-          disabled: false,
-          subgraphs: matchingSubgraphs,
+          // No metadata found for this app's own trn, e.g. a brand new resource.
+          getMetadata: () => Promise.reject(new ConnectError("not found", Code.NotFound)),
         },
-      ]);
-      // No metadata found for this app's own trn, e.g. a brand new resource.
-      client.getMetadata = vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound));
+      );
       const application = createMockApplication({
         cors: ["https://a.example.com", "https://b.example.com"],
       });
@@ -852,8 +863,7 @@ describe("diffHttpAdapterDisplay", () => {
 
 describe("recomposeApplication", () => {
   test("updates every application the deploy created, updated, or left unchanged", async () => {
-    const updateApplication = vi.fn().mockResolvedValue({});
-    const client = { updateApplication } as unknown as OperatorClient;
+    const client = mockOperatorClient({ updateApplication: {} });
     const entry = (applicationName: string) => ({
       name: applicationName,
       request: { workspaceId: "ws", applicationName },
@@ -867,11 +877,9 @@ describe("recomposeApplication", () => {
       deletes: [entry("deleted")],
     } as never);
 
-    expect(updateApplication.mock.calls.map(([request]) => request.applicationName)).toEqual([
-      "created",
-      "updated",
-      "unchanged",
-    ]);
+    expect(client.updateApplication.mock.calls.map(([request]) => request.applicationName)).toEqual(
+      ["created", "updated", "unchanged"],
+    );
   });
 });
 

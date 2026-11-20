@@ -1,10 +1,16 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { describe, expect, test, vi } from "vitest";
+import {
+  mockOperatorClient,
+  type OperatorClientMocks,
+  withOperatorClientMocks,
+} from "#/cli/shared/test-helpers/operator-client";
 import { planAIGateway } from "./aigateway";
 import { buildMetaRequest } from "./label";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { PlanContext } from "./types";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { AIGatewaySchema } from "@tailor-platform/tailor-proto/aigateway_resource_pb";
 
 vi.mock("./label", async (importOriginal) => {
   const original = await importOriginal<Record<string, unknown>>();
@@ -40,7 +46,7 @@ function createMockApplication(): Application {
   } as unknown as Application;
 }
 
-function createMockClient(
+function createMockClient<K extends keyof OperatorClient = never>(
   gateways: Array<{
     name: string;
     authNamespace?: string;
@@ -48,29 +54,28 @@ function createMockClient(
     label?: string;
     sdkVersion?: string;
   }>,
+  overrides?: OperatorClientMocks<K>,
 ): OperatorClient {
-  return {
-    listAIGateways: vi.fn().mockResolvedValue({
-      aigateways: gateways.map((gateway) => ({
+  const client = mockOperatorClient({
+    listAIGateways: {
+      aigateways: gateways.map((gateway): MessageInitShape<typeof AIGatewaySchema> => ({
         name: gateway.name,
         authNamespace: gateway.authNamespace ?? "",
         cors: gateway.cors ?? [],
         domain: "",
       })),
       nextPageToken: "",
-    }),
-    getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
-      const name = trn.split(":").pop();
+    },
+    getMetadata: (request) => {
+      const name = request.trn?.split(":").pop();
       const gateway = gateways.find((entry) => entry.name === name);
-      return {
-        metadata: {
-          labels: gateway?.label
-            ? { "sdk-name": gateway.label, "sdk-version": gateway.sdkVersion ?? sdkVersion }
-            : {},
-        },
-      };
-    }),
-  } as unknown as OperatorClient;
+      const labels: Record<string, string> = gateway?.label
+        ? { "sdk-name": gateway.label, "sdk-version": gateway.sdkVersion ?? sdkVersion }
+        : {};
+      return { metadata: { labels } };
+    },
+  });
+  return withOperatorClientMocks(client, overrides);
 }
 
 function createContext(client: OperatorClient): PlanContext {
@@ -220,19 +225,21 @@ describe("planAIGateway", () => {
   );
 
   test("resolves staticwebsite :url placeholder in cors against deployed URL", async () => {
-    const client = createMockClient([
+    const client = createMockClient(
+      [
+        {
+          name: "gateway-a",
+          authNamespace: "default",
+          cors: ["https://my-frontend.example.com"],
+          label: appName,
+        },
+      ],
       {
-        name: "gateway-a",
-        authNamespace: "default",
-        cors: ["https://my-frontend.example.com"],
-        label: appName,
+        getStaticWebsite: {
+          staticwebsite: { name: "my-frontend", url: "https://my-frontend.example.com" },
+        },
       },
-    ]);
-    (client as unknown as { getStaticWebsite: ReturnType<typeof vi.fn> }).getStaticWebsite = vi
-      .fn()
-      .mockResolvedValue({
-        staticwebsite: { name: "my-frontend", url: "https://my-frontend.example.com" },
-      });
+    );
 
     const application = {
       name: appName,

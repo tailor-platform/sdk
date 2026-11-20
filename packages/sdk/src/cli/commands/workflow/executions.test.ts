@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
@@ -20,6 +19,7 @@ import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { stripAnsi } from "#/cli/shared/test-helpers/strip-ansi";
 import {
   executionsCommand,
@@ -27,8 +27,11 @@ import {
   listWorkflowExecutions,
   printExecutionWithLogs,
 } from "./executions";
-import type { ListWorkflowExecutionsRequest } from "@tailor-platform/tailor-proto/workflow_pb";
-import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type {
+  WorkflowJobExecutionSchema,
+  WorkflowSchema,
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
@@ -48,14 +51,14 @@ aroundEach(async (runTest) => {
 
 function execution(
   status: WorkflowExecution_Status,
-  jobExecutions: WorkflowExecution["jobExecutions"] = [],
-): WorkflowExecution {
+  jobExecutions: MessageInitShape<typeof WorkflowJobExecutionSchema>[] = [],
+): MessageInitShape<typeof WorkflowExecutionSchema> {
   return {
     id: "execution-1",
     workflowName: "my-workflow",
     status,
     jobExecutions,
-  } as unknown as WorkflowExecution;
+  };
 }
 
 const runningJob = {
@@ -65,15 +68,17 @@ const runningJob = {
   position: { parentWorkflowJobExecutionId: "", depth: 0 },
   status: WorkflowJobExecution_Status.RUNNING,
   executionId: "fn-exec-1",
-} as unknown as WorkflowExecution["jobExecutions"][number];
+} satisfies MessageInitShape<typeof WorkflowJobExecutionSchema>;
 
 describe("getWorkflowExecution", () => {
   test("returns wait diagnostics when waiting times out", async () => {
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      getWorkflowExecution: vi.fn().mockResolvedValue({
-        execution: execution(WorkflowExecution_Status.PENDING),
+    vi.mocked(initOperatorClient).mockResolvedValue(
+      mockOperatorClient({
+        getWorkflowExecution: {
+          execution: execution(WorkflowExecution_Status.PENDING),
+        },
       }),
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    );
 
     const { wait } = await getWorkflowExecution({
       executionId: "execution-1",
@@ -95,39 +100,39 @@ describe("getWorkflowExecution", () => {
   });
 
   test("fetches each job's function execution by id and exposes its log entries", async () => {
-    const getFunctionExecution = vi.fn().mockResolvedValue({
-      execution: create(FunctionExecutionSchema, {
-        id: "fn-exec-1",
-        status: FunctionExecution_Status.RUNNING,
-        logEntries: [
-          {
-            message: "step 1",
-            severity: FunctionLogSeverity.INFO,
-            timestamp: timestampFromDate(new Date("2026-09-05T00:00:00.000Z")),
-            source: FunctionLogSource.USER,
-          },
-          {
-            message: "runs close to the limit",
-            severity: FunctionLogSeverity.WARNING,
-            timestamp: timestampFromDate(new Date("2026-09-05T00:00:01.000Z")),
-            source: FunctionLogSource.PLATFORM,
-          },
-        ],
-      }),
-    });
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      getWorkflowExecution: vi.fn().mockResolvedValue({
+    const client = mockOperatorClient({
+      getWorkflowExecution: {
         execution: execution(WorkflowExecution_Status.RUNNING, [runningJob]),
-      }),
-      getFunctionExecution,
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+      },
+      getFunctionExecution: {
+        execution: create(FunctionExecutionSchema, {
+          id: "fn-exec-1",
+          status: FunctionExecution_Status.RUNNING,
+          logEntries: [
+            {
+              message: "step 1",
+              severity: FunctionLogSeverity.INFO,
+              timestamp: timestampFromDate(new Date("2026-09-05T00:00:00.000Z")),
+              source: FunctionLogSource.USER,
+            },
+            {
+              message: "runs close to the limit",
+              severity: FunctionLogSeverity.WARNING,
+              timestamp: timestampFromDate(new Date("2026-09-05T00:00:01.000Z")),
+              source: FunctionLogSource.PLATFORM,
+            },
+          ],
+        }),
+      },
+    });
+    vi.mocked(initOperatorClient).mockResolvedValue(client);
 
     const { execution: detail } = await getWorkflowExecution({
       executionId: "execution-1",
       logs: true,
     });
 
-    expect(getFunctionExecution).toHaveBeenCalledWith({
+    expect(client.getFunctionExecution).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
       executionId: "fn-exec-1",
     });
@@ -156,18 +161,20 @@ describe("getWorkflowExecution", () => {
   });
 
   test("omits log entries when the function execution has none", async () => {
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      getWorkflowExecution: vi.fn().mockResolvedValue({
-        execution: execution(WorkflowExecution_Status.SUCCESS, [runningJob]),
+    vi.mocked(initOperatorClient).mockResolvedValue(
+      mockOperatorClient({
+        getWorkflowExecution: {
+          execution: execution(WorkflowExecution_Status.SUCCESS, [runningJob]),
+        },
+        getFunctionExecution: {
+          execution: create(FunctionExecutionSchema, {
+            id: "fn-exec-1",
+            status: FunctionExecution_Status.SUCCESS,
+            result: "1",
+          }),
+        },
       }),
-      getFunctionExecution: vi.fn().mockResolvedValue({
-        execution: create(FunctionExecutionSchema, {
-          id: "fn-exec-1",
-          status: FunctionExecution_Status.SUCCESS,
-          result: "1",
-        }),
-      }),
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    );
 
     const { execution: detail } = await getWorkflowExecution({
       executionId: "execution-1",
@@ -180,12 +187,14 @@ describe("getWorkflowExecution", () => {
 
   test("keeps the job info quietly when the function execution is not found", async () => {
     using stderr = captureStderr();
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      getWorkflowExecution: vi.fn().mockResolvedValue({
-        execution: execution(WorkflowExecution_Status.RUNNING, [runningJob]),
+    vi.mocked(initOperatorClient).mockResolvedValue(
+      mockOperatorClient({
+        getWorkflowExecution: {
+          execution: execution(WorkflowExecution_Status.RUNNING, [runningJob]),
+        },
+        getFunctionExecution: () => Promise.reject(new ConnectError("gone", Code.NotFound)),
       }),
-      getFunctionExecution: vi.fn().mockRejectedValue(new ConnectError("gone", Code.NotFound)),
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    );
 
     const { execution: detail } = await getWorkflowExecution({
       executionId: "execution-1",
@@ -201,14 +210,14 @@ describe("getWorkflowExecution", () => {
 
   test("warns and keeps the job info when the function execution lookup fails otherwise", async () => {
     using stderr = captureStderr();
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      getWorkflowExecution: vi.fn().mockResolvedValue({
-        execution: execution(WorkflowExecution_Status.RUNNING, [runningJob]),
+    vi.mocked(initOperatorClient).mockResolvedValue(
+      mockOperatorClient({
+        getWorkflowExecution: {
+          execution: execution(WorkflowExecution_Status.RUNNING, [runningJob]),
+        },
+        getFunctionExecution: () => Promise.reject(new ConnectError("try later", Code.Unavailable)),
       }),
-      getFunctionExecution: vi
-        .fn()
-        .mockRejectedValue(new ConnectError("try later", Code.Unavailable)),
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    );
 
     const { execution: detail } = await getWorkflowExecution({
       executionId: "execution-1",
@@ -328,48 +337,49 @@ interface ExecutionFixture {
 function mockWorkflowClient(
   executionsByWorkflow: Record<string, ExecutionFixture[] | ConnectError>,
 ) {
-  const listWorkflows = vi.fn(async () => ({
-    workflows: Object.keys(executionsByWorkflow).map((name) => ({ name })),
-    nextPageToken: "",
-  }));
-  const listWorkflowExecutions = vi.fn(async (request: Partial<ListWorkflowExecutionsRequest>) => {
-    const workflowName = request.workflowName ?? "";
-    if (workflowName === "") {
-      throw new ConnectError(
-        "validation error: workflow_name: does not match regex pattern",
-        Code.InvalidArgument,
-      );
-    }
-    const created = executionsByWorkflow[workflowName];
-    if (created === undefined) {
-      throw new ConnectError(`workflow '${workflowName}' not found`, Code.NotFound);
-    }
-    if (created instanceof ConnectError) throw created;
-    const ordered = request.pageDirection === PageDirection.ASC ? created : created.toReversed();
-    const offset = Number(request.pageToken || 0);
-    const end = offset + (request.pageSize || ordered.length);
-    return {
-      executions: ordered.slice(offset, end).map(({ id, startedAt, finishedAt }) =>
-        create(WorkflowExecutionSchema, {
-          id,
-          workflowName,
-          status: startedAt
-            ? WorkflowExecution_Status.SUCCESS
-            : finishedAt
-              ? WorkflowExecution_Status.CANCELED
-              : WorkflowExecution_Status.PENDING,
-          startedAt: startedAt ? timestampFromDate(new Date(startedAt)) : undefined,
-          finishedAt: finishedAt ? timestampFromDate(new Date(finishedAt)) : undefined,
-        }),
+  const client = mockOperatorClient({
+    listWorkflows: async () => ({
+      workflows: Object.keys(executionsByWorkflow).map(
+        (name): MessageInitShape<typeof WorkflowSchema> => ({ name }),
       ),
-      nextPageToken: end < ordered.length ? String(end) : "",
-    };
+      nextPageToken: "",
+    }),
+    listWorkflowExecutions: async (request) => {
+      const workflowName = request.workflowName ?? "";
+      if (workflowName === "") {
+        throw new ConnectError(
+          "validation error: workflow_name: does not match regex pattern",
+          Code.InvalidArgument,
+        );
+      }
+      const created = executionsByWorkflow[workflowName];
+      if (created === undefined) {
+        throw new ConnectError(`workflow '${workflowName}' not found`, Code.NotFound);
+      }
+      if (created instanceof ConnectError) throw created;
+      const ordered = request.pageDirection === PageDirection.ASC ? created : created.toReversed();
+      const offset = Number(request.pageToken || 0);
+      const end = offset + (request.pageSize || ordered.length);
+      return {
+        executions: ordered.slice(offset, end).map(({ id, startedAt, finishedAt }) =>
+          create(WorkflowExecutionSchema, {
+            id,
+            workflowName,
+            status: startedAt
+              ? WorkflowExecution_Status.SUCCESS
+              : finishedAt
+                ? WorkflowExecution_Status.CANCELED
+                : WorkflowExecution_Status.PENDING,
+            startedAt: startedAt ? timestampFromDate(new Date(startedAt)) : undefined,
+            finishedAt: finishedAt ? timestampFromDate(new Date(finishedAt)) : undefined,
+          }),
+        ),
+        nextPageToken: end < ordered.length ? String(end) : "",
+      };
+    },
   });
-  vi.mocked(initOperatorClient).mockResolvedValue({
-    listWorkflows,
-    listWorkflowExecutions,
-  } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
-  return { listWorkflows, listWorkflowExecutions };
+  vi.mocked(initOperatorClient).mockResolvedValue(client);
+  return client;
 }
 
 // Each list is in creation order, oldest first.
@@ -462,7 +472,7 @@ describe("listWorkflowExecutions", () => {
 
     expect(listRequest).toHaveBeenCalledTimes(3);
     for (const [request] of listRequest.mock.calls) {
-      expect(request.filter?.and[0]?.condition).toMatchObject({
+      expect(request.filter?.and?.[0]?.condition).toMatchObject({
         field: "status",
         value: { kind: { case: "numberValue", value: WorkflowExecution_Status.RUNNING } },
       });

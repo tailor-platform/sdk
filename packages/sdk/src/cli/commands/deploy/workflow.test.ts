@@ -1,11 +1,16 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, test, expect, vi } from "vitest";
 import { MAX_PAGE_SIZE, type OperatorClient } from "#/cli/shared/client";
 import { logger, symbols } from "#/cli/shared/logger";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { buildMetaRequest, sdkNameLabelKey } from "./label";
 import { applyWorkflow, formatWorkflowChangeEntries, planWorkflow } from "./workflow";
 import type { Workflow, WorkflowJob } from "#/types/workflow.generated";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type {
+  WorkflowJobFunctionSummarySchema,
+  WorkflowSchema,
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 // Mock label.ts
 vi.mock("./label", async (importOriginal) => {
@@ -68,7 +73,7 @@ describe("planWorkflow", () => {
       id: string;
       name: string;
       label?: string;
-      resource?: Record<string, unknown>;
+      resource?: MessageInitShape<typeof WorkflowSchema>;
       sdkVersion?: string;
       /** Extra labels the workflow's own TRN answers with. */
       extraLabels?: Record<string, string>;
@@ -99,26 +104,26 @@ describe("planWorkflow", () => {
     }
     const labelsByJobFunction = { ...inferredJobFunctionLabels, ...jobFunctionLabels };
 
-    return {
-      listWorkflows: vi.fn().mockResolvedValue({
-        workflows: existingWorkflows.map((w) => w.resource ?? { id: w.id, name: w.name }),
+    return mockOperatorClient({
+      listWorkflows: {
+        workflows: existingWorkflows.map(
+          (w): MessageInitShape<typeof WorkflowSchema> => w.resource ?? { id: w.id, name: w.name },
+        ),
         nextPageToken: "",
-      }),
-      getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
+      },
+      getMetadata: (request) => {
+        const trn = request.trn ?? "";
         const jobFunctionPrefix = `trn:v1:workspace:${workspaceId}:workflow_job_function:`;
         if (trn.startsWith(jobFunctionPrefix)) {
           const name = trn.slice(jobFunctionPrefix.length);
           const jobFunction = labelsByJobFunction[name]!;
-          return {
-            metadata: {
-              labels: jobFunction.label
-                ? {
-                    [sdkNameLabelKey]: jobFunction.label,
-                    "sdk-version": jobFunction.sdkVersion ?? "v1-0-0",
-                  }
-                : {},
-            },
-          };
+          const labels: Record<string, string> = jobFunction.label
+            ? {
+                [sdkNameLabelKey]: jobFunction.label,
+                "sdk-version": jobFunction.sdkVersion ?? "v1-0-0",
+              }
+            : {};
+          return { metadata: { labels } };
         }
 
         const name = trn.split(":").pop();
@@ -136,15 +141,17 @@ describe("planWorkflow", () => {
             },
           },
         };
-      }),
-      listWorkflowJobFunctions: vi.fn().mockResolvedValue({
-        jobFunctions: Object.entries(labelsByJobFunction).map(([name, jobFunction]) => ({
-          name,
-          publishExecutionEvents: jobFunction.publishExecutionEvents ?? false,
-        })),
+      },
+      listWorkflowJobFunctions: {
+        jobFunctions: Object.entries(labelsByJobFunction).map(
+          ([name, jobFunction]): MessageInitShape<typeof WorkflowJobFunctionSummarySchema> => ({
+            name,
+            publishExecutionEvents: jobFunction.publishExecutionEvents ?? false,
+          }),
+        ),
         nextPageToken: "",
-      }),
-    } as unknown as OperatorClient;
+      },
+    });
   }
 
   describe("workflow execution event publishing", () => {
@@ -273,7 +280,7 @@ describe("planWorkflow", () => {
             id: "1",
             name: "orders",
             mainJobFunctionName: "main-job",
-            jobFunctions: { "main-job": "1" },
+            jobFunctions: { "main-job": 1n },
             publishExecutionEvents: true,
           },
         },
@@ -304,7 +311,7 @@ describe("planWorkflow", () => {
               id: "1",
               name: "orders",
               mainJobFunctionName: "main-job",
-              jobFunctions: { "main-job": "1" },
+              jobFunctions: { "main-job": 1n },
             },
           },
         ],
@@ -337,7 +344,7 @@ describe("planWorkflow", () => {
               id: "1",
               name: "orders",
               mainJobFunctionName: "main-job",
-              jobFunctions: { "main-job": "1" },
+              jobFunctions: { "main-job": 1n },
               publishExecutionEvents: true,
             },
           },
@@ -391,7 +398,7 @@ describe("planWorkflow", () => {
               id: "1",
               name: "orders",
               mainJobFunctionName: "main-job",
-              jobFunctions: { "main-job": "1" },
+              jobFunctions: { "main-job": 1n },
             },
           },
         ],
@@ -428,7 +435,7 @@ describe("planWorkflow", () => {
               id: "1",
               name: "orders",
               mainJobFunctionName: "main-job",
-              jobFunctions: { "main-job": "1" },
+              jobFunctions: { "main-job": 1n },
               publishExecutionEvents: true,
             },
           },
@@ -527,8 +534,8 @@ describe("planWorkflow", () => {
             name: "workflow-1",
             mainJobFunctionName: "main-job-1",
             jobFunctions: {
-              "main-job-1": "1",
-              "child-job-1": "1",
+              "main-job-1": 1n,
+              "child-job-1": 1n,
             },
           },
         },
@@ -541,7 +548,7 @@ describe("planWorkflow", () => {
             name: "workflow-2",
             mainJobFunctionName: "main-job-2",
             jobFunctions: {
-              "main-job-2": "1",
+              "main-job-2": 1n,
             },
           },
         },
@@ -572,8 +579,8 @@ describe("planWorkflow", () => {
             name: "removed-workflow",
             mainJobFunctionName: "removed-job",
             jobFunctions: {
-              "removed-job": "1",
-              "shared-job": "1",
+              "removed-job": 1n,
+              "shared-job": 1n,
             },
           },
         },
@@ -586,7 +593,7 @@ describe("planWorkflow", () => {
             name: "kept-workflow",
             mainJobFunctionName: "shared-job",
             jobFunctions: {
-              "shared-job": "1",
+              "shared-job": 1n,
             },
           },
         },
@@ -599,8 +606,8 @@ describe("planWorkflow", () => {
             name: "other-workflow",
             mainJobFunctionName: "other-shared-job",
             jobFunctions: {
-              "other-shared-job": "1",
-              "other-only-job": "1",
+              "other-shared-job": 1n,
+              "other-only-job": 1n,
             },
           },
         },
@@ -638,7 +645,7 @@ describe("planWorkflow", () => {
               name: "removed-workflow",
               mainJobFunctionName: "shared-job",
               jobFunctions: {
-                "shared-job": "1",
+                "shared-job": 1n,
               },
             },
           },
@@ -651,7 +658,7 @@ describe("planWorkflow", () => {
               name: "other-workflow",
               mainJobFunctionName: "shared-job",
               jobFunctions: {
-                "shared-job": "1",
+                "shared-job": 1n,
               },
             },
           },
@@ -681,7 +688,7 @@ describe("planWorkflow", () => {
               name: "removed-workflow",
               mainJobFunctionName: "foreign-job",
               jobFunctions: {
-                "foreign-job": "1",
+                "foreign-job": 1n,
               },
             },
           },
@@ -744,9 +751,9 @@ describe("planWorkflow", () => {
             name: "sample-workflow",
             mainJobFunctionName: "validate-order",
             jobFunctions: {
-              "check-inventory": "5",
-              "process-payment": "5",
-              "validate-order": "5",
+              "check-inventory": 5n,
+              "process-payment": 5n,
+              "validate-order": 5n,
             },
           },
         },
@@ -785,9 +792,9 @@ describe("planWorkflow", () => {
             name: "sample-workflow",
             mainJobFunctionName: "validate-order",
             jobFunctions: {
-              "check-inventory": "5",
-              "process-payment": "5",
-              "validate-order": "5",
+              "check-inventory": 5n,
+              "process-payment": 5n,
+              "validate-order": 5n,
             },
           },
         },
@@ -848,7 +855,7 @@ describe("planWorkflow", () => {
                 id: "1",
                 name: "sample-workflow",
                 mainJobFunctionName: options.mainJobFunctionName ?? "validate-order",
-                jobFunctions: Object.fromEntries(jobNames.map((jobName) => [jobName, "5"])),
+                jobFunctions: Object.fromEntries(jobNames.map((jobName) => [jobName, 5n])),
               },
             },
           ],
@@ -924,9 +931,9 @@ describe("planWorkflow", () => {
             name: "order-processing",
             mainJobFunctionName: "process-order",
             jobFunctions: {
-              "fetch-customer": "5",
-              "send-notification": "5",
-              "process-order": "5",
+              "fetch-customer": 5n,
+              "send-notification": 5n,
+              "process-order": 5n,
             },
             retryPolicy: {
               maxRetries: 3,
@@ -996,7 +1003,7 @@ describe("planWorkflow", () => {
               name: "batch-processing",
               mainJobFunctionName: "run-batch",
               jobFunctions: {
-                "run-batch": "5",
+                "run-batch": 5n,
               },
               concurrencyPolicy: {
                 maxConcurrentExecutions: 5,
@@ -1033,42 +1040,39 @@ describe("planWorkflow", () => {
     );
 
     test("plans owned orphaned job functions for deletion even when remaining workflows are unchanged", async () => {
-      const listWorkflowJobFunctions = vi.fn().mockResolvedValue({
-        jobFunctions: [
-          { name: "keep-job", publishExecutionEvents: false },
-          { name: "orphaned-job", publishExecutionEvents: false },
-        ],
-        nextPageToken: "",
-      });
-      const getMetadata = vi.fn().mockImplementation(({ trn }: { trn: string }) => {
-        const jobName = trn.split(":").pop();
-        return {
-          metadata: {
-            labels:
-              jobName === "orphaned-job"
-                ? { [sdkNameLabelKey]: appName, "sdk-version": "v1-0-0" }
-                : { [sdkNameLabelKey]: "other-app", "sdk-version": "v1-0-0" },
-          },
-        };
-      });
-
-      const client = {
-        listWorkflows: vi.fn().mockResolvedValue({
+      const client = mockOperatorClient({
+        listWorkflows: {
           workflows: [
             {
               id: "workflow-1",
               name: "kept-workflow",
               mainJobFunctionName: "keep-job",
               jobFunctions: {
-                "keep-job": "1",
+                "keep-job": 1n,
               },
             },
           ],
           nextPageToken: "",
-        }),
-        listWorkflowJobFunctions,
-        getMetadata,
-      } as unknown as OperatorClient;
+        },
+        listWorkflowJobFunctions: {
+          jobFunctions: [
+            { name: "keep-job", publishExecutionEvents: false },
+            { name: "orphaned-job", publishExecutionEvents: false },
+          ],
+          nextPageToken: "",
+        },
+        getMetadata: (request) => {
+          const jobName = request.trn?.split(":").pop();
+          return {
+            metadata: {
+              labels:
+                jobName === "orphaned-job"
+                  ? { [sdkNameLabelKey]: appName, "sdk-version": "v1-0-0" }
+                  : { [sdkNameLabelKey]: "other-app", "sdk-version": "v1-0-0" },
+            },
+          };
+        },
+      });
 
       const result = await planWorkflow(
         client,
@@ -1084,7 +1088,7 @@ describe("planWorkflow", () => {
         new Set(["keep-job"]),
       );
 
-      expect(listWorkflowJobFunctions).toHaveBeenCalledWith({
+      expect(client.listWorkflowJobFunctions).toHaveBeenCalledWith({
         workspaceId,
         pageToken: "",
         pageSize: MAX_PAGE_SIZE,
@@ -1095,20 +1099,18 @@ describe("planWorkflow", () => {
     test("records the owner of an orphaned job function it cannot claim", async () => {
       // Skipping it silently lets remove report that it deleted everything the
       // application manages while this one is still there.
-      const listWorkflowJobFunctions = vi.fn().mockResolvedValue({
-        jobFunctions: [{ name: "orphaned-job", publishExecutionEvents: false }],
-        nextPageToken: "",
-      });
-      const getMetadata = vi.fn().mockResolvedValue({
-        metadata: {
-          labels: { [sdkNameLabelKey]: appName, "sdk-app-id": "app-id-1" },
+      const client = mockOperatorClient({
+        listWorkflows: { workflows: [], nextPageToken: "" },
+        listWorkflowJobFunctions: {
+          jobFunctions: [{ name: "orphaned-job", publishExecutionEvents: false }],
+          nextPageToken: "",
+        },
+        getMetadata: {
+          metadata: {
+            labels: { [sdkNameLabelKey]: appName, "sdk-app-id": "app-id-1" },
+          },
         },
       });
-      const client = {
-        listWorkflows: vi.fn().mockResolvedValue({ workflows: [], nextPageToken: "" }),
-        listWorkflowJobFunctions,
-        getMetadata,
-      } as unknown as OperatorClient;
 
       const result = await planWorkflow(client, workspaceId, appName, "id-2", {}, {}, new Set());
 
@@ -1119,12 +1121,7 @@ describe("planWorkflow", () => {
 
   describe("apply phase separation", () => {
     test("delete phase deletes job functions after their workflows", async () => {
-      const deleteWorkflow = vi.fn().mockResolvedValue({});
-      const deleteWorkflowJobFunction = vi.fn().mockResolvedValue({});
-      const client = {
-        deleteWorkflow,
-        deleteWorkflowJobFunction,
-      } as unknown as OperatorClient;
+      const client = mockOperatorClient({ deleteWorkflow: {}, deleteWorkflowJobFunction: {} });
 
       await applyWorkflow(
         client,
@@ -1157,35 +1154,30 @@ describe("planWorkflow", () => {
         "delete",
       );
 
-      expect(deleteWorkflow).toHaveBeenCalledWith({
+      expect(client.deleteWorkflow).toHaveBeenCalledWith({
         workspaceId,
         workflowId: "workflow-1",
       });
-      expect(deleteWorkflowJobFunction).toHaveBeenCalledTimes(1);
-      expect(deleteWorkflowJobFunction).toHaveBeenCalledWith({
+      expect(client.deleteWorkflowJobFunction).toHaveBeenCalledTimes(1);
+      expect(client.deleteWorkflowJobFunction).toHaveBeenCalledWith({
         workspaceId,
         jobFunctionName: "removed-job",
       });
-      expect(deleteWorkflow.mock.invocationCallOrder[0]!).toBeLessThan(
-        deleteWorkflowJobFunction.mock.invocationCallOrder[0]!,
+      expect(client.deleteWorkflow.mock.invocationCallOrder[0]!).toBeLessThan(
+        client.deleteWorkflowJobFunction.mock.invocationCallOrder[0]!,
       );
     });
 
     test("delete phase continues deletions and tolerates terminal platform states", async () => {
       const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
-      const deleteWorkflow = vi
-        .fn()
+      const client = mockOperatorClient({ deleteWorkflow: {}, deleteWorkflowJobFunction: {} });
+      client.deleteWorkflow
         .mockRejectedValueOnce(new ConnectError("gone", Code.NotFound))
         .mockResolvedValueOnce({});
-      const deleteWorkflowJobFunction = vi
-        .fn()
+      client.deleteWorkflowJobFunction
         .mockRejectedValueOnce(new ConnectError("still referenced", Code.FailedPrecondition))
         .mockRejectedValueOnce(new ConnectError("gone", Code.NotFound))
         .mockResolvedValueOnce({});
-      const client = {
-        deleteWorkflow,
-        deleteWorkflowJobFunction,
-      } as unknown as OperatorClient;
 
       await applyWorkflow(
         client,
@@ -1228,8 +1220,8 @@ describe("planWorkflow", () => {
         "delete",
       );
 
-      expect(deleteWorkflow).toHaveBeenCalledTimes(2);
-      expect(deleteWorkflowJobFunction).toHaveBeenCalledTimes(3);
+      expect(client.deleteWorkflow).toHaveBeenCalledTimes(2);
+      expect(client.deleteWorkflowJobFunction).toHaveBeenCalledTimes(3);
       expect(warn).toHaveBeenCalledWith(
         'Skipped deleting Workflow job "job-a" because it is still referenced.',
       );
@@ -1300,9 +1292,9 @@ describe("planWorkflow", () => {
             name: "sample-workflow",
             mainJobFunctionName: "validate-order",
             jobFunctions: {
-              "check-inventory": "5",
-              "process-payment": "5",
-              "validate-order": "5",
+              "check-inventory": 5n,
+              "process-payment": 5n,
+              "validate-order": 5n,
             },
           },
         },
