@@ -804,8 +804,14 @@ export async function suppliesSerialValues(trx: Transaction): Promise<void> {
         requiresMigrationScript: true,
       });
 
+      const snapshot = createMockSnapshot({
+        Ticket: { fields: { title: { type: "string", required: true } } },
+      });
+      const { content } = await generateContent(snapshot, 1, diff);
+      expect(content).toContain("    code: Generated<ColumnType<string | null, string, string>>;");
+
       const diagnostics = await typeCheck(
-        createMockSnapshot({ Ticket: { fields: { title: { type: "string", required: true } } } }),
+        snapshot,
         `import type { Transaction } from "./db";
 export async function main(trx: Transaction): Promise<void> {
   await trx.updateTable("Ticket").set({ code: "T-00001", createdAt: new Date() }).execute();
@@ -817,6 +823,27 @@ export async function main(trx: Transaction): Promise<void> {
 
       expect(diagnostics).toEqual([]);
     }, 30_000);
+
+    test("keeps a serial field unwritable when the index the migration adds on it is not unique", async () => {
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "index_added",
+            tableName: "Invoice",
+            indexName: "invoiceNo_idx",
+            after: { fields: ["invoiceNo"], unique: false },
+          },
+        ],
+      });
+
+      const { content } = await generateContent(
+        createMockSnapshot({ Invoice: { fields: { invoiceNo: invoiceFields.invoiceNo! } } }),
+        1,
+        diff,
+      );
+
+      expect(content).toContain("    invoiceNo: Serial<string>;");
+    });
   });
 
   describe("writeDbTypesFile with multiple tables", () => {

@@ -46,8 +46,8 @@ interface BreakingChangeFieldInfo {
   enumValueChanges: Map<string, Map<string, EnumValueChange>>;
   /** Map of tableName -> Set of fieldNames a conversion script clears */
   clearedFields: Map<string, Set<string>>;
-  /** Map of tableName -> Set of fieldNames a new unique constraint or unique index covers */
-  uniqueAdded: Map<string, Set<string>>;
+  /** Map of tableName -> Set of fieldNames a unique constraint or unique index the migration adds covers */
+  madeUnique: Map<string, Set<string>>;
 }
 
 /**
@@ -64,35 +64,42 @@ function extractBreakingChangeFields(
 ): BreakingChangeFieldInfo {
   const optionalToRequired = new Map<string, Set<string>>();
   const enumValueChanges = new Map<string, Map<string, EnumValueChange>>();
-  const uniqueAdded = new Map<string, Set<string>>();
-  const addUniqueAdded = (tableName: string, fieldNames: readonly string[]) => {
-    const fields = uniqueAdded.get(tableName) ?? new Set<string>();
-    for (const fieldName of fieldNames) fields.add(fieldName);
-    uniqueAdded.set(tableName, fields);
-  };
+  const madeUnique = new Map<string, Set<string>>();
 
   for (const table of Object.values(target.tables)) {
+    const preMigrationTable = preMigration.tables[table.name];
     const relaxed = Object.entries(table.fields).filter(([fieldName, field]) => {
-      const preMigrationField = preMigration.tables[table.name]?.fields[fieldName];
+      const preMigrationField = preMigrationTable?.fields[fieldName];
       return field.required && preMigrationField !== undefined && !preMigrationField.required;
     });
     if (relaxed.length > 0) {
       optionalToRequired.set(table.name, new Set(relaxed.map(([fieldName]) => fieldName)));
     }
+
+    const unique = new Set(
+      Object.entries(table.fields)
+        .filter(([fieldName, field]) => {
+          const preMigrationField = preMigrationTable?.fields[fieldName];
+          return (
+            (field.unique ?? false) &&
+            preMigrationField !== undefined &&
+            !(preMigrationField.unique ?? false)
+          );
+        })
+        .map(([fieldName]) => fieldName),
+    );
+    for (const [indexName, index] of Object.entries(table.indexes ?? {})) {
+      const preMigrationIndex = preMigrationTable?.indexes?.[indexName];
+      if (isBreakingIndexChange(table.name, indexName, preMigrationIndex, index)) {
+        for (const fieldName of index.fields) unique.add(fieldName);
+      }
+    }
+    if (unique.size > 0) madeUnique.set(table.name, unique);
   }
 
   for (const change of diff.changes) {
-    if (change.kind === "index_added" || change.kind === "index_modified") {
-      const before = change.kind === "index_modified" ? change.before : undefined;
-      if (isBreakingIndexChange(change.tableName, change.indexName, before, change.after)) {
-        addUniqueAdded(change.tableName, change.after.fields);
-      }
-    }
     if (change.kind === "field_modified" || change.kind === "field_type_modified") {
       const { before, after } = change;
-      if (!(before.unique ?? false) && (after.unique ?? false)) {
-        addUniqueAdded(change.tableName, [change.fieldName]);
-      }
 
       // Check if this is an enum value change. Snapshots omit allowedValues
       // when an enum has no values left, so a missing list is an empty one.
@@ -126,7 +133,7 @@ function extractBreakingChangeFields(
     optionalToRequired,
     enumValueChanges,
     clearedFields: new Map<string, Set<string>>(),
-    uniqueAdded,
+    madeUnique,
   };
 }
 
@@ -153,7 +160,7 @@ function generateDbTypesFromSnapshot(
         optionalToRequired: new Map(),
         enumValueChanges: new Map(),
         clearedFields: new Map<string, Set<string>>(),
-        uniqueAdded: new Map<string, Set<string>>(),
+        madeUnique: new Map<string, Set<string>>(),
       };
 
   for (const plan of expandPlans) {
@@ -333,8 +340,8 @@ function generateTableType(
   const clearedFieldsForType =
     breakingChangeFields.clearedFields.get(type.name) ?? new Set<string>();
 
-  const uniqueAddedFieldsForType =
-    breakingChangeFields.uniqueAdded.get(type.name) ?? new Set<string>();
+  const madeUniqueFieldsForType =
+    breakingChangeFields.madeUnique.get(type.name) ?? new Set<string>();
 
   for (const [fieldName, fieldConfig] of Object.entries(type.fields)) {
     if (fieldName === "id") continue;
@@ -348,7 +355,7 @@ function generateTableType(
     const clearableResult = clearable
       ? generateClearableFieldType(fieldConfig, temporal)
       : undefined;
-    const rewritesExisting = isOptionalToRequired || uniqueAddedFieldsForType.has(fieldName);
+    const rewritesExisting = isOptionalToRequired || madeUniqueFieldsForType.has(fieldName);
     const column = wrapPlatformFilledColumn(
       (clearableResult ?? result).type,
       fieldConfig,
@@ -388,7 +395,7 @@ function wrapPlatformFilledColumn(
   const isSerial = config.serial !== undefined;
   const usesSerial = isSerial && !rewritesExisting;
   const wrapped = usesSerial ? `Serial<${type}>` : type;
-  const omittable = isFilledOnCreate(config) || (isSerial && !usesSerial);
+  const omittable = isFilledOnCreate(config) || (isSerial && rewritesExisting);
   return { type: omittable ? `Generated<${wrapped}>` : wrapped, usesSerial };
 }
 

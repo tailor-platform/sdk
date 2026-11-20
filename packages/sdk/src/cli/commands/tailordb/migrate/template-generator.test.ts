@@ -34,7 +34,7 @@ import { createMockMigrationDiff } from "./test-helpers/migration-diff";
 import { getTypeScriptDiagnostics } from "./test-helpers/typescript-diagnostics";
 import type { DiffChange } from "./diff-calculator";
 import type { ExpandContractPlan } from "./expand-contract";
-import type { SnapshotFieldConfig } from "./snapshot-types";
+import type { SnapshotFieldConfig, SnapshotIndexConfig } from "./snapshot-types";
 
 function replaceTodoCalls(source: string, replacement: string): string {
   const ast = ts.createSourceFile("migrate.ts", source, ts.ScriptTarget.Latest, true);
@@ -2186,7 +2186,11 @@ describe("template-generator", () => {
       serial: { start: 1, format: "INV-%05d" },
     };
 
-    test.each<{ change: string; diffChange: DiffChange }>([
+    test.each<{
+      change: string;
+      indexes?: Record<string, SnapshotIndexConfig>;
+      diffChange: DiffChange;
+    }>([
       {
         change: "a unique constraint added to it",
         diffChange: {
@@ -2206,14 +2210,26 @@ describe("template-generator", () => {
           after: { fields: ["invoiceNo", "tenantId"], unique: true },
         },
       },
+      {
+        change: "the index led by it made unique",
+        indexes: { invoiceNo_tenant: { fields: ["invoiceNo", "tenantId"], unique: false } },
+        diffChange: {
+          kind: "index_modified",
+          tableName: "Invoice",
+          indexName: "invoiceNo_tenant",
+          before: { fields: ["invoiceNo", "tenantId"], unique: false },
+          after: { fields: ["invoiceNo", "tenantId"], unique: true },
+        },
+      },
     ])(
       "typechecks the new values given to duplicates of a serial field after $change",
-      async ({ diffChange }) => {
+      async ({ indexes, diffChange }) => {
         const previous = createTestSnapshot({
           Invoice: {
             name: "Invoice",
             pluralForm: "Invoices",
             fields: { invoiceNo: serialField, tenantId: { type: "string", required: true } },
+            ...(indexes && { indexes }),
           },
         });
         const diff = createMockMigrationDiff({
