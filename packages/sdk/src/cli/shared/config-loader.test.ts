@@ -79,6 +79,7 @@ describe("loadConfigFile", () => {
           auth: { "corp-auth": resolved },
         },
         apps: { shop: { db: [], resolver: ["shop-api"], auth: "corp-auth" } },
+        definedBy: "defineWorkspace",
         path: configPath,
       },
       plugins: [{ id: "first", description: "First plugin" }],

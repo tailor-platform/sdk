@@ -5,6 +5,7 @@ import {
   envOverrideEntries,
   mapEnvOverrides,
   parseConfigExport,
+  type WorkspaceExport,
 } from "#/parser/app-config/config-export";
 import { PluginConfigSchema } from "#/parser/plugin-config/index";
 import { isPluginValidationError } from "#/utils/plugin-validation-error";
@@ -39,7 +40,8 @@ export type ResolvedEnvAppConfig = Omit<AppConfig, "env"> & {
 export type LoadedConfig = ResolvedEnvAppConfig & { path: string };
 
 /** A `defineWorkspace()` or `defineApp()` config with its `env` values resolved, and its path. */
-export type LoadedWorkspaceConfig = WorkspaceRepresentation<EnvValue> & { path: string };
+export type LoadedWorkspaceConfig = WorkspaceRepresentation<EnvValue> &
+  Pick<WorkspaceExport, "definedBy"> & { path: string };
 
 /**
  * Whether a loaded config is a `defineWorkspace()` or `defineApp()` config.
@@ -233,25 +235,27 @@ export async function loadConfigFile(
   }
   return {
     kind: "workspace",
-    workspace: toLoadedWorkspaceConfig(parsed.data.workspace, resolvedPath),
+    workspace: toLoadedWorkspaceConfig(parsed.data, resolvedPath),
     plugins: allPlugins,
   };
 }
 
 /**
  * Resolve the `env` values of a parsed workspace and attach the path of its config file.
- * @param workspace - Workspace parsed from a `defineWorkspace()` or `defineApp()` config
+ * @param parsed - Workspace parsed from a `defineWorkspace()` or `defineApp()` config
  * @param configPath - Absolute path of the config file
  * @returns The loaded workspace
  */
 export function toLoadedWorkspaceConfig(
-  workspace: WorkspaceRepresentation,
+  parsed: WorkspaceExport,
   configPath: string,
 ): LoadedWorkspaceConfig {
+  const { workspace, definedBy } = parsed;
   return {
     ...workspace,
     env: resolveEnv(workspace.env),
     envOverrides: mapEnvOverrides(workspace.envOverrides, resolveEnv),
+    definedBy,
     path: configPath,
   };
 }

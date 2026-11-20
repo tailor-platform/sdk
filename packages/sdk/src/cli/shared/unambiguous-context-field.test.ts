@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { defineUnambiguousContextField } from "./unambiguous-context-field";
 
-const options = { key: "auth", kind: "Auth services", replacement: "auths" } as const;
+const options = { key: "auth", candidatesLabel: "Auth services", replacement: "auths" } as const;
 
 describe("defineUnambiguousContextField", () => {
   test("sets the only candidate as an ordinary field", () => {

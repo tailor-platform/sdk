@@ -60,6 +60,7 @@ import {
 } from "#/configure/config/types";
 import { type AuthConfig } from "#/configure/services/auth/types";
 import { type IdPConfig, type IdPOwnConfig } from "#/configure/services/idp/types";
+import { singleServiceKey } from "#/parser/app-config/config-export";
 import { AIGatewaySchema } from "#/parser/service/aigateway/index";
 import { AuthConfigSchema } from "#/parser/service/auth/index";
 import { IdPSchema } from "#/parser/service/idp/index";
@@ -127,8 +128,6 @@ export type Application = WorkspaceServices & {
   readonly subgraphs: ReadonlyArray<{ Type: string; Name: string }>;
   readonly applications: ReadonlyArray<Application>;
 };
-
-const NO_ENV_OVERRIDES: EnvOverrides = { resolver: {}, auth: {} };
 
 /**
  * Intermediate state from a `loadApplication` call that carries no `env`
@@ -260,11 +259,15 @@ function pluginResolverSource(
   outputKey: string,
   pluginManager: PluginManager | undefined,
 ): PluginResolverSource | undefined {
-  return pluginManager && { pluginManager, appName: outputKey };
+  return pluginManager && { pluginManager, outputKey };
 }
 
+// A workspace config is never loaded together with another config, so one fixed key is enough
+// and the generated files stay where they are in every checkout.
+const WORKSPACE_PLUGIN_RESOLVER_OUTPUT_KEY = "workspace";
+
 function pluginResolverOutputKey(config: LoadedConfig | LoadedWorkspaceConfig): string {
-  return isLoadedWorkspaceConfig(config) ? config.path : config.name;
+  return isLoadedWorkspaceConfig(config) ? WORKSPACE_PLUGIN_RESOLVER_OUTPUT_KEY : config.name;
 }
 
 function defineResolver(
@@ -415,6 +418,7 @@ function defineAuth(
           tailorDBServices,
           externalTailorDBNamespaces,
           configPath,
+          key === undefined ? ["auth"] : ["auth", key],
         ),
       );
     }
@@ -633,8 +637,14 @@ function workspaceServiceSource(workspace: LoadedWorkspaceConfig): ServiceSource
   return {
     settings: workspace,
     pluginResolverOutputKey: pluginResolverOutputKey(workspace),
-    idps: Object.entries(workspace.idp).map(([key, idp]) => ({ config: idp, key })),
-    auths: Object.entries(workspace.auth).map(([key, auth]) => ({ config: auth, key })),
+    idps: Object.entries(workspace.idp).map(([name, idp]) => ({
+      config: idp,
+      key: singleServiceKey(workspace.definedBy, name),
+    })),
+    auths: Object.entries(workspace.auth).map(([name, auth]) => ({
+      config: auth,
+      key: singleServiceKey(workspace.definedBy, name),
+    })),
   };
 }
 
@@ -726,7 +736,7 @@ function buildApplication(params: BuildApplicationParams): Application {
     ...buildWorkspaceServices({
       ...params,
       settings: params.config,
-      envOverrides: NO_ENV_OVERRIDES,
+      envOverrides: { resolver: {}, auth: {} },
     }),
     name: params.config.name,
     id: params.config.id,

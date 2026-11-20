@@ -2,38 +2,29 @@ import * as fs from "node:fs";
 import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
-import { toLoadedWorkspaceConfig, type LoadedWorkspaceConfig } from "#/cli/shared/config-loader";
 import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { errorToJson } from "#/cli/shared/error-json";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { loadedWorkspace } from "#/cli/shared/test-helpers/workspace-config";
 import { defineConfig, definePlugins } from "#/configure/config/index";
-import { defineWorkspace } from "#/configure/config/workspace";
+import { defineApp, defineWorkspace } from "#/configure/config/workspace";
 import { defineAIGateway } from "#/configure/services/aigateway/index";
 import { defineAuth } from "#/configure/services/auth/index";
 import { defineIdp } from "#/configure/services/idp/index";
 import { defineSecretManager } from "#/configure/services/secrets/index";
 import { defineStaticWebSite } from "#/configure/services/staticwebsite/index";
 import { db } from "#/configure/services/tailordb/schema";
-import { parseConfigExport } from "#/parser/app-config/config-export";
 import { kyselyTypePlugin } from "#/plugin/builtin/kysely-type/index";
 import { PluginManager } from "#/plugin/manager";
 import { getRegisteredWaitPoints, restoreWaitPointRegistry } from "#/utils/wait-point-registry";
 import { defineApplication, defineWorkspaceServices, loadApplication } from "./application";
 import type { OperatorClient } from "#/cli/shared/client";
 
-function loadWorkspace(config: unknown): LoadedWorkspaceConfig {
-  const parsed = parseConfigExport(config);
-  if (!parsed.success || parsed.data.kind !== "workspace") {
-    throw new Error("expected a valid workspace config");
-  }
-  return toLoadedWorkspaceConfig(parsed.data.workspace, "/project/tailor.config.ts");
-}
-
 describe("defineWorkspaceServices", () => {
   test("defines every namespace the workspace declares, including one no application lists", () => {
     const corpAuth = defineAuth("corp-auth", { machineUserAttributes: {}, machineUsers: {} });
-    const workspace = loadWorkspace(
+    const workspace = loadedWorkspace(
       defineWorkspace({
         db: {
           "customer-db": { files: [] },
@@ -83,7 +74,7 @@ describe("defineWorkspaceServices", () => {
       userProfile: { type: partner, usernameField: "email" },
       machineUsers: {},
     });
-    const workspace = loadWorkspace(
+    const workspace = loadedWorkspace(
       defineWorkspace({
         db: { "people-db": { files: [] } },
         auth: { "corp-auth": corpAuth, "partner-auth": partnerAuth },
@@ -113,8 +104,74 @@ describe("defineWorkspaceServices", () => {
     expect(services.idpServices.map((idp) => idp.name)).toEqual(["corp-idp", "partner-idp"]);
   });
 
+  test("reports an invalid auth of a defineWorkspace() config under its key", () => {
+    const invalidAuth = Object.assign(
+      defineAuth("corp-auth", { machineUserAttributes: {}, machineUsers: {} }),
+      {
+        machineUser: {},
+      },
+    );
+    const workspace = loadedWorkspace(
+      defineWorkspace({ auth: { "corp-auth": invalidAuth }, apps: {} }),
+    );
+
+    expect(() => defineWorkspaceServices({ workspace })).toThrow(
+      expect.objectContaining({
+        context: expect.objectContaining({
+          issues: [{ path: ["auth", "corp-auth"], message: 'Unrecognized key: "machineUser"' }],
+        }),
+      }),
+    );
+  });
+
+  test("reports an invalid auth of a defineApp() config where the config writes it", () => {
+    const invalidAuth = Object.assign(
+      defineAuth("corp-auth", { machineUserAttributes: {}, machineUsers: {} }),
+      {
+        machineUser: {},
+      },
+    );
+    const workspace = loadedWorkspace(defineApp({ name: "shop", auth: invalidAuth }));
+
+    expect(() => defineWorkspaceServices({ workspace })).toThrow(
+      expect.objectContaining({
+        context: expect.objectContaining({
+          issues: [{ path: ["auth"], message: 'Unrecognized key: "machineUser"' }],
+        }),
+      }),
+    );
+  });
+
+  test("reports a user profile table no namespace defines under the auth's key", async () => {
+    const user = db.table("User", { email: db.string().unique() });
+    const workspace = loadedWorkspace(
+      defineWorkspace({
+        db: { "customer-db": { files: [] }, "order-db": { files: [] } },
+        auth: {
+          "corp-auth": defineAuth("corp-auth", {
+            userProfile: { type: user, usernameField: "email" },
+            machineUsers: {},
+          }),
+        },
+        apps: {},
+      }),
+    );
+    const [authService] = defineWorkspaceServices({ workspace }).authServices;
+
+    await expect(authService!.resolveNamespaces()).rejects.toMatchObject({
+      context: {
+        issues: [
+          {
+            path: ["auth", "corp-auth", "userProfile", "type"],
+            message: 'Type "User" not found in any TailorDB namespace',
+          },
+        ],
+      },
+    });
+  });
+
   test("keeps env overrides apart from the root env", () => {
-    const workspace = loadWorkspace(
+    const workspace = loadedWorkspace(
       defineWorkspace({
         env: { CHECKOUT_URL: "https://example.com", REGION: "us" },
         resolver: { "shop-api": { files: [], env: { CHECKOUT_URL: "https://shop.example.com" } } },
@@ -134,7 +191,7 @@ describe("defineWorkspaceServices", () => {
   });
 
   test("defaults an omitted AI Gateway authNamespace to the only Auth service", () => {
-    const workspace = loadWorkspace(
+    const workspace = loadedWorkspace(
       defineWorkspace({
         auth: {
           "corp-auth": defineAuth("corp-auth", { machineUserAttributes: {}, machineUsers: {} }),
@@ -150,7 +207,7 @@ describe("defineWorkspaceServices", () => {
   });
 
   test("requires an AI Gateway authNamespace when the workspace has several Auth services", () => {
-    const workspace = loadWorkspace(
+    const workspace = loadedWorkspace(
       defineWorkspace({
         auth: {
           "corp-auth": defineAuth("corp-auth", { machineUserAttributes: {}, machineUsers: {} }),

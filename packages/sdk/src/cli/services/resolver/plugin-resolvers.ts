@@ -13,14 +13,14 @@ import type { TailorField } from "#/types/field.generated";
 
 /**
  * Generate validated resolver modules for the standard loader and bundler.
- * @param appName - Name of the application the resolvers belong to
+ * @param outputKey - Key that keeps the generated files of one config apart from another's
  * @param namespace - Resolver namespace to generate files for
  * @param configPath - Path to the application's config
  * @param resolvers - Plugin resolver definitions in one namespace
  * @returns Absolute paths of generated resolver modules
  */
 export function generatePluginResolverFiles(
-  appName: string,
+  outputKey: string,
   namespace: string,
   configPath: string,
   resolvers: ReadonlyArray<PluginResolverInfo>,
@@ -30,7 +30,7 @@ export function generatePluginResolverFiles(
     "plugin",
     "resolvers",
     createHash("sha256")
-      .update(JSON.stringify([appName, namespace]))
+      .update(JSON.stringify([outputKey, namespace]))
       .digest("hex"),
   );
   fs.rmSync(outputDir, { recursive: true, force: true });
