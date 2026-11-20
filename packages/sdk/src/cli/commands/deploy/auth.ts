@@ -82,6 +82,7 @@ import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   buildMetaRequest,
+  type DeployOwner,
   type MetadataLabelWrite,
   resourceTrn,
   writeLabelRefreshes,
@@ -383,7 +384,7 @@ type AuthNamespace = {
  * @returns Planned auth changes and metadata
  */
 export async function planAuth(context: PlanContext) {
-  const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
+  const { client, workspaceId, application, owner, forRemoval, forceApplyAll = false } = context;
   const auths: Readonly<AuthService>[] = [];
   if (!forRemoval && application.authService) {
     await application.authService.resolveNamespaces();
@@ -394,16 +395,10 @@ export async function planAuth(context: PlanContext) {
     changeSet: serviceChangeSet,
     conflicts,
     unmanaged,
+    takeovers,
     resourceOwners,
     existingServices,
-  } = await planServices(
-    client,
-    workspaceId,
-    application.name,
-    application.id,
-    auths,
-    forceApplyAll,
-  );
+  } = await planServices(client, workspaceId, owner, auths, forceApplyAll);
   const namespaces: AuthNamespace[] = [
     ...auths.map((auth) => ({ namespaceName: auth.config.name, auth })),
     ...serviceChangeSet.deletes.map((del) => ({ namespaceName: del.name, auth: undefined })),
@@ -428,7 +423,7 @@ export async function planAuth(context: PlanContext) {
     planOAuth2Clients(client, workspaceId, namespaces, expectedLocalWebsites, forceApplyAll),
     planSCIMConfigs(client, workspaceId, namespaces, forceApplyAll),
     planSCIMResources(client, workspaceId, namespaces, forceApplyAll),
-    planAuthConnections(client, secretsStateScope(context), auths),
+    planAuthConnections(client, secretsStateScope(context), owner, auths),
   ]);
   return {
     changeSet: {
@@ -445,6 +440,7 @@ export async function planAuth(context: PlanContext) {
     },
     conflicts: [...conflicts, ...connectionResult.conflicts],
     unmanaged: [...unmanaged, ...connectionResult.unmanaged],
+    takeovers: [...takeovers, ...connectionResult.takeovers],
     resourceOwners: new Set([...resourceOwners, ...connectionResult.resourceOwners]),
     connectionStateScope: connectionResult.stateScope,
     existingServices,
@@ -483,13 +479,12 @@ const authServiceComparison = defineRequestComparison({
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
-  appName: string,
-  appId: string | undefined,
+  owner: DeployOwner,
   auths: ReadonlyArray<Readonly<AuthService>>,
   forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>("Auth services");
-  const ownership = createOwnershipTracker(appName, appId);
+  const ownership = createOwnershipTracker(owner);
 
   const fetchedServices = await fetchExistingResourcesWithLabels({
     client,
@@ -516,8 +511,7 @@ async function planServices(
       },
       metaRequest: await buildMetaRequest({
         trn: resourceTrn(workspaceId, "auth", config.name),
-        appName,
-        appId,
+        owner,
       }),
     });
   }
@@ -526,10 +520,7 @@ async function planServices(
     desired,
     existing: Object.entries(fetchedServices),
     keyOf: (service) => service.name,
-    ...labeledResourceChecks(ownership, (service: DesiredService) => ({
-      resourceType: "auth.service",
-      resourceName: service.name,
-    })),
+    ...labeledResourceChecks(ownership, "auth.service"),
     versionMatches: () => !forceApplyAll,
     isConfigUnchanged: (service, existing) =>
       isRequestUnchanged(authServiceComparison, service.request, existing.resource),

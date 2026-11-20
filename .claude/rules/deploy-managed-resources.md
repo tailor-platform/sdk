@@ -72,6 +72,7 @@ consumer below; the guard named with it fails while one is missing.
   rebuild reuses it instead of re-planning.
 - `deploy.ts`'s `shouldForceApplyAll` — add a candidate TRN for each top-level service of the
   kind, so a change of SDK version re-applies its resources.
-- The plan result carries `conflicts`, `unmanaged`, and `resourceOwners`;
-  `collectOwnerConflicts`, `collectUnmanagedResources`, and `collectResourceOwners`
-  (`managed-resources.ts`) read every plan through `Object.values`.
+- The plan result carries `conflicts`, `unmanaged`, `takeovers`, and `resourceOwners`;
+  `collectOwnerConflicts`, `collectUnmanagedResources`, `collectTakeovers`, and
+  `collectResourceOwners` (`managed-resources.ts`) read every plan through `Object.values`. A
+  plan that merges the results of several trackers carries each of these fields over.

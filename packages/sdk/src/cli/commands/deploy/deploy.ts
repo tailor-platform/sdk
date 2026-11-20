@@ -37,6 +37,7 @@ import {
   confirmMissingDependentApps,
   confirmOwnerConflict,
   confirmUnmanagedResources,
+  confirmWorkspaceTakeover,
   type ConfirmMode,
   type MissingDependentApp,
 } from "./confirm";
@@ -74,12 +75,21 @@ import {
   planFunctionRegistry,
 } from "./function-registry";
 import { planIdP } from "./idp";
-import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn, sdkNameLabelKey } from "./label";
+import {
+  applicationOwner,
+  buildMetaRequest,
+  type DeployOwner,
+  hasMatchingSdkVersion,
+  isOwnedBy,
+  resourceTrn,
+  sdkNameLabelKey,
+} from "./label";
 import { MANAGED_RESOURCE_LABELS } from "./managed-resource-type";
 import {
   assertUniqueGlobalResourceNames,
   collectImportantResourceDeletions,
   collectOwnerConflicts,
+  collectTakeovers,
   collectUnmanagedResources,
   dropCrossDeploymentManagedDeletes,
   scheduleRenamedAppDeletes,
@@ -194,6 +204,7 @@ export function collectExpectedLocalStaticWebsiteNamesFromConfigs(
  * different SDK version, in which case every resource is re-applied.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
+ * @param owner - Owner of the resources the deploy manages
  * @param application - Application being deployed
  * @param functionEntries - Function registry entries of the application
  * @returns True when an owned resource carries a different sdk-version label
@@ -201,16 +212,18 @@ export function collectExpectedLocalStaticWebsiteNamesFromConfigs(
 export async function shouldForceApplyAll(
   client: OperatorClient,
   workspaceId: string,
+  owner: DeployOwner,
   application: Readonly<Application>,
   functionEntries: ReadonlyArray<{ name: string }>,
 ) {
   const desiredLabels = (
     await buildMetaRequest({
       trn: resourceTrn(workspaceId, "application", application.name),
-      appName: application.name,
-      appId: application.id,
+      owner,
     })
   ).labels;
+  const managedByOwner = (labels: Record<string, string>) =>
+    owner.kind === "workspace" ? isOwnedBy(labels, owner) : labels[sdkNameLabelKey] === owner.name;
   const candidateTrns = new Set<string>();
 
   if (application.subgraphs.length > 0) {
@@ -259,7 +272,8 @@ export async function shouldForceApplyAll(
   const hasMismatch = results.some(
     (result) =>
       result.status === "fulfilled" &&
-      result.value?.labels[sdkNameLabelKey] === application.name &&
+      result.value != null &&
+      managedByOwner(result.value.labels) &&
       !hasMatchingSdkVersion(result.value.labels, desiredLabels),
   );
   if (hasMismatch) {
@@ -515,12 +529,13 @@ async function planDeploymentTarget(
     workflowBuildResult?.usedJobNames ?? [],
   );
   const functionEntries = collectFunctionEntries(application, bundledWorkflowJobs, bundledScripts);
+  const owner = applicationOwner(application);
   // Reused as-is on a rebuild's replan -- see `PlannedDeployment.forceApplyAll`'s
   // doc comment for why recomputing it there is unsafe.
   const forceApplyAll = previous
     ? previous.forceApplyAll
     : await withSpan("plan.detectSdkVersionChange", () =>
-        shouldForceApplyAll(client, workspaceId, application, functionEntries),
+        shouldForceApplyAll(client, workspaceId, owner, application, functionEntries),
       );
 
   return withSpan("plan", async () => {
@@ -532,6 +547,7 @@ async function planDeploymentTarget(
       client,
       workspaceId,
       application,
+      owner,
       forRemoval: false,
       config,
       noSchemaCheck,
@@ -554,8 +570,7 @@ async function planDeploymentTarget(
       planFunctionRegistry(
         client,
         workspaceId,
-        application.name,
-        application.id,
+        owner,
         functionEntries,
         previous?.functionRegistry.existingMap,
       ),
@@ -609,8 +624,7 @@ async function planDeploymentTarget(
         planWorkflow(
           client,
           workspaceId,
-          application.name,
-          application.id,
+          owner,
           workflowService?.workflows ?? {},
           workflowBuildResult?.mainJobDeps ?? {},
           unchangedWorkflowJobs,
@@ -632,8 +646,7 @@ async function planDeploymentTarget(
             planWorkflowJobFunctionExecutionPolicy(
               client,
               workspaceId,
-              application.name,
-              application.id,
+              owner,
               config.workflow?.executionPolicies ?? {},
             ),
           ),
@@ -644,6 +657,7 @@ async function planDeploymentTarget(
 
     return {
       application,
+      owner,
       forceApplyAll,
       functionRegistry,
       tailorDB,
@@ -694,6 +708,7 @@ function collectConfirmations(
     checkpointRepairs: deployment.tailorDB.context.checkpointRepairs.filter(isNew),
     conflicts: collectOwnerConflicts(results).filter(isNew),
     unmanaged: collectUnmanagedResources(results).filter(isNew),
+    takeovers: collectTakeovers(results).filter(isNew),
     importantDeletions: collectImportantResourceDeletions(results).filter(isNew),
   };
 }
@@ -724,17 +739,33 @@ export async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParam
     mode,
   );
   await confirmMissingDependentApps(missingDependentApps, mode);
-  for (const { deployment, conflicts, unmanaged } of pending) {
-    await confirmOwnerConflict(
-      conflicts,
-      deployment.application.name,
-      mode,
-      deployment.application.id,
-    );
+  for (const { deployment, conflicts, unmanaged, takeovers } of pending) {
+    if (deployment.owner.kind === "workspace") {
+      await confirmWorkspaceTakeover(takeovers, mode);
+    } else {
+      await confirmOwnerConflict(
+        conflicts,
+        deployment.application.name,
+        mode,
+        deployment.application.id,
+      );
+    }
     await confirmUnmanagedResources(unmanaged, deployment.application.name, mode);
   }
+  const takenOverDeletes = new Set(
+    pending.flatMap(({ takeovers }) =>
+      takeovers
+        .filter(({ action }) => action === "delete")
+        .map(({ resourceType, resourceName }) => JSON.stringify([resourceType, resourceName])),
+    ),
+  );
   await confirmImportantResourceDeletion(
-    pending.flatMap((confirmations) => confirmations.importantDeletions),
+    pending.flatMap((confirmations) =>
+      confirmations.importantDeletions.filter(
+        ({ resourceType, resourceName }) =>
+          !takenOverDeletes.has(JSON.stringify([resourceType, resourceName])),
+      ),
+    ),
     mode,
   );
 }
@@ -981,7 +1012,7 @@ async function deployInternal(
               createMetadataLookupClient({
                 client,
                 workspaceId,
-                applications: planTargets.map(({ application }) => application),
+                owners: planTargets.map(({ application }) => applicationOwner(application)),
               }),
             );
       firstMetadataClient = metadataClient;

@@ -6,6 +6,8 @@ import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import {
   buildMetaRequest,
+  deployedByApplication,
+  type DeployOwner,
   labelRefreshOf,
   type MetadataLabelWrite,
   resourceTrn,
@@ -287,8 +289,7 @@ type ExistingFunction = {
  * Plan function registry changes based on current and desired state.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
- * @param appName - Application name
- * @param appId - Stable application id (when managed by SDK)
+ * @param owner - Owner of the resources the deploy manages
  * @param entries - Desired function entries
  * @param previousExisting - A prior call's fetched existing registry entries, reused instead of
  *   re-listing them from the platform (the remote function registry cannot have changed between
@@ -298,8 +299,7 @@ type ExistingFunction = {
 export async function planFunctionRegistry(
   client: OperatorClient,
   workspaceId: string,
-  appName: string,
-  appId: string | undefined,
+  owner: DeployOwner,
   entries: FunctionEntry[],
   previousExisting?: WithLabel<ExistingFunction>,
 ) {
@@ -308,7 +308,7 @@ export async function planFunctionRegistry(
     FunctionUpload,
     DeleteFunction
   >("Function registry");
-  const ownership = createOwnershipTracker(appName, appId);
+  const ownership = createOwnershipTracker(owner);
 
   const fetchedMap =
     previousExisting ??
@@ -340,8 +340,7 @@ export async function planFunctionRegistry(
     const existing = existingMap[entry.name];
     const metaRequest = await buildMetaRequest({
       trn: resourceTrn(workspaceId, "function_registry", entry.name),
-      appName,
-      appId,
+      owner,
     });
 
     if (existing) {
@@ -350,12 +349,18 @@ export async function planFunctionRegistry(
         resourceName: entry.name,
       });
 
-      const configUnchanged = owned && existing.resource.contentHash === entry.contentHash;
-      if (configUnchanged) {
+      const contentUnchanged = existing.resource.contentHash === entry.contentHash;
+      if (owned && contentUnchanged) {
         changeSet.unchanged.push({
           name: entry.name,
           ...labelRefreshOf(existing.allLabels, metaRequest),
         });
+      } else if (
+        contentUnchanged &&
+        owner.kind === "workspace" &&
+        deployedByApplication(existing.allLabels)
+      ) {
+        changeSet.unchanged.push({ name: entry.name, labelRefresh: metaRequest });
       } else {
         changeSet.updates.push({
           name: entry.name,
@@ -378,7 +383,12 @@ export async function planFunctionRegistry(
   // Remaining entries in existingMap are candidates for deletion
   for (const [name, existing] of Object.entries(existingMap)) {
     if (!existing) continue;
-    if (ownership.ownsRemaining(existing.allLabels)) {
+    if (
+      ownership.ownsRemaining(existing.allLabels, {
+        resourceType: "function_registry",
+        resourceName: name,
+      })
+    ) {
       changeSet.deletes.push({
         name,
         workspaceId,

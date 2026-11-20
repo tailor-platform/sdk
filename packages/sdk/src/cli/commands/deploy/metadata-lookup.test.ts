@@ -57,9 +57,9 @@ describe("createMetadataLookupClient", () => {
     const lookup = await createMetadataLookupClient({
       client,
       workspaceId,
-      applications: [
-        { name: "billing", id: "billing-id" },
-        { name: "billing", id: "billing-id" },
+      owners: [
+        { kind: "application", name: "billing", id: "billing-id" },
+        { kind: "application", name: "billing", id: "billing-id" },
       ],
     });
 
@@ -101,7 +101,7 @@ describe("createMetadataLookupClient", () => {
     const lookup = await createMetadataLookupClient({
       client,
       workspaceId,
-      applications: [{ name: "billing", id: "billing-id" }],
+      owners: [{ kind: "application", name: "billing", id: "billing-id" }],
     });
 
     const [first, second] = await Promise.all([
@@ -144,7 +144,7 @@ describe("createMetadataLookupClient", () => {
     const lookup = await createMetadataLookupClient({
       client,
       workspaceId,
-      applications: [{ name: "billing" }],
+      owners: [{ kind: "application", name: "billing", id: undefined }],
     });
     await fetchExistingResourcesWithLabels({ client: lookup, ...params });
 

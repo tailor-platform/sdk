@@ -1,6 +1,7 @@
 import {
   resourceTrn,
   sdkAppIdLabelKey,
+  sdkManagedLabelKey,
   sdkNameLabelKey,
   sdkVersionLabelKey,
   writeMetadataLabels,
@@ -38,7 +39,7 @@ export async function checkVaultManaged(
   try {
     const { metadata } = await client.getMetadata({ trn });
     allLabels = metadata?.labels ?? {};
-    owner = allLabels[sdkNameLabelKey];
+    owner = allLabels[sdkNameLabelKey] ?? (allLabels[sdkManagedLabelKey] ? "workspace" : undefined);
   } catch {
     // If metadata fetch fails (e.g., vault doesn't exist yet), proceed silently.
     // The actual operation will surface the appropriate error.
@@ -62,9 +63,10 @@ export async function checkVaultManaged(
  * `checkVaultManaged` saw: anything written since then is kept, and only the
  * ownership labels are removed.
  *
- * That includes the app id, which decides ownership on its own: leaving it
- * behind would keep the vault SDK-owned, and the next deploy of a config that
- * no longer declares it would delete the vault and every secret in it.
+ * That includes the app id and the workspace mark, each of which decides
+ * ownership on its own: leaving one behind would keep the vault SDK-owned, and
+ * the next deploy of a config that no longer declares it would delete the vault
+ * and every secret in it.
  * @param params - Client and TRN from the checkVaultManaged result
  * @param params.client - Operator client used to update vault metadata
  * @param params.trn - TRN of the vault resource
@@ -76,7 +78,7 @@ export async function releaseVaultOwnership(params: {
   const { client, trn } = params;
   await writeMetadataLabels(client, {
     trn,
-    remove: [sdkNameLabelKey, sdkVersionLabelKey, sdkAppIdLabelKey],
+    remove: [sdkNameLabelKey, sdkVersionLabelKey, sdkAppIdLabelKey, sdkManagedLabelKey],
   });
   logger.info(
     "Config ownership has been removed from this vault. " +

@@ -14,13 +14,14 @@ import {
   planApplication,
   recomposeApplication,
 } from "./application";
-import { withMetadataWriteBatch } from "./label";
+import { applicationOwner, withMetadataWriteBatch } from "./label";
 import {
   applicationLabelRejection,
   labelCountRejection,
 } from "./test-helpers/label-count-rejection";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
+import type { DeployOwner } from "./label";
 import type { PlanContext } from "./types";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type {
@@ -34,19 +35,20 @@ vi.mock("./label", async (importOriginal) => {
     ...original,
     buildMetaRequest: vi
       .fn()
-      .mockImplementation(
-        async ({ trn, appName, appId }: { trn: string; appName: string; appId?: string }) => ({
+      .mockImplementation(async ({ trn, owner }: { trn: string; owner: DeployOwner }) => {
+        const { name, id } = owner.kind === "application" ? owner : { name: "", id: undefined };
+        return {
           trn,
           labels: {
-            "sdk-name": appName,
+            "sdk-name": name,
             "sdk-version": "v1-0-0",
-            ...(appId ? { "sdk-app-id": `app-${appId}` } : {}),
+            ...(id ? { "sdk-app-id": `app-${id}` } : {}),
           },
           // Mirrors the real buildMetaRequest: a config with no id asks for the
           // stale sdk-app-id to be dropped.
-          remove: appId ? undefined : ["sdk-app-id"],
-        }),
-      ),
+          remove: id ? undefined : ["sdk-app-id"],
+        };
+      }),
   };
 });
 
@@ -148,6 +150,7 @@ function createContext(client: OperatorClient, application = createMockApplicati
     client,
     workspaceId,
     application,
+    owner: applicationOwner(application),
     forRemoval: false,
     config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
   };

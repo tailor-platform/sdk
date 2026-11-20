@@ -11,6 +11,7 @@ import { hashValue } from "./secrets-state";
 import type { PlanContext } from "#/cli/commands/deploy/types";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
+import type { DeployOwner } from "./label";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { SecretManagerSecretSchema } from "@tailor-platform/tailor-proto/secret_manager_resource_pb";
 
@@ -54,12 +55,12 @@ vi.mock("./label", async (importOriginal) => {
     ...original,
     buildMetaRequest: vi
       .fn()
-      .mockImplementation(async (params: { trn: string; appName: string; appId?: string }) => ({
-        trn: params.trn,
+      .mockImplementation(async ({ trn, owner }: { trn: string; owner: DeployOwner }) => ({
+        trn,
         labels: {
-          "sdk-name": params.appName,
+          "sdk-name": owner.kind === "application" ? owner.name : "",
           "sdk-version": "v1-0-0",
-          ...(params.appId ? { "sdk-app-id": `app-${params.appId}` } : {}),
+          ...(owner.kind === "application" && owner.id ? { "sdk-app-id": `app-${owner.id}` } : {}),
         },
       })),
   };
@@ -139,6 +140,11 @@ function createPlanContext(
       })),
       idpServices: overrides.idpServices ?? [],
     } as unknown as Application,
+    owner: {
+      kind: "application",
+      name: overrides.appName ?? "test-app",
+      id: overrides.appId ?? "app-1",
+    },
     forRemoval: overrides.forRemoval ?? false,
     config: { path: configPath } as PlanContext["config"],
   };
@@ -149,7 +155,16 @@ describe("applySecretManager phase separation", () => {
     return {
       stateScope,
       vaultChangeSet: {
-        creates: [{ name: "my-vault", workspaceId: "ws-1" }],
+        creates: [
+          {
+            name: "my-vault",
+            workspaceId: "ws-1",
+            metaRequest: {
+              trn: "trn:v1:workspace:ws-1:vault:my-vault",
+              labels: { "sdk-name": "my-app" },
+            },
+          },
+        ],
         updates: [],
         deletes: [],
         replaces: [],
@@ -560,7 +575,7 @@ describe("planSecretManager create-only secrets", () => {
     {
       case: "the vault does not exist",
       vaults: [],
-      vaultCreates: [{ name: "my-vault", workspaceId: "ws-1" }],
+      vaultCreates: [{ name: "my-vault", workspaceId: "ws-1", metaRequest: expect.anything() }],
     },
   ])("plans a create-only create when $case", async ({ vaults, vaultCreates }) => {
     const client = createMockPlanClient([], "my-vault", {
@@ -960,7 +975,16 @@ describe("applySecretManager metadata update", () => {
     const planResult = {
       vaultChangeSet: {
         creates: [],
-        updates: [{ name: "existing-vault", workspaceId: "ws-1" }],
+        updates: [
+          {
+            name: "existing-vault",
+            workspaceId: "ws-1",
+            metaRequest: {
+              trn: "trn:v1:workspace:ws-1:vault:existing-vault",
+              labels: { "sdk-name": "my-app" },
+            },
+          },
+        ],
         deletes: [],
         replaces: [],
         unchanged: [],

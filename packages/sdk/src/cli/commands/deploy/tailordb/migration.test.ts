@@ -896,8 +896,7 @@ describe("migration", () => {
         machineUserByNamespace: new Map([["tailordb", "test-machine-user"]]),
         env: {},
         configPath: path.join(process.cwd(), "tailor.config.ts"),
-        appName: "test-app",
-        appId: "test-app-id",
+        owner: { kind: "application", name: "test-app", id: "test-app-id" },
         maintenanceMode: true,
         migrationHistoryIds: {},
         ...overrides,
@@ -1898,8 +1897,7 @@ describe("migration", () => {
         namespace: "tailordb",
         migrationNumber: 1,
         code: "// bundled",
-        appName: "test-app",
-        appId: "test-app-id",
+        owner: { kind: "application", name: "test-app", id: "test-app-id" },
         commandContext: { contextArgs: ["--workspace-id=test-workspace"] },
       });
     });

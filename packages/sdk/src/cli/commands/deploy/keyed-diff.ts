@@ -5,14 +5,15 @@ import {
   type UnchangedAnnotation,
 } from "./label";
 import type { UpdateAnnotation } from "./change-set";
-import type { OwnershipTracker, TrackedResource } from "./owned-resource";
+import type { ManagedResourceType } from "./managed-resource-type";
+import type { OwnershipTracker } from "./owned-resource";
 
 /** Ownership checks for a planner whose resources carry SDK labels. */
 export interface KeyedDiffOwnership<Desired, Existing> {
   /** Whether a same-named existing resource is managed by this app; records takeovers. */
-  ownsDesired(desired: Desired, existing: Existing): boolean;
+  ownsDesired(key: string, desired: Desired, existing: Existing): boolean;
   /** Whether a remote-only resource is managed by this app, so deploy may delete it. */
-  ownsRemaining(existing: Existing): boolean;
+  ownsRemaining(key: string, existing: Existing): boolean;
 }
 
 /** Ownership, SDK-version, and SDK-label checks of resources whose SDK labels deploy reads. */
@@ -22,24 +23,28 @@ export interface LabeledResourceChecks<Desired, Existing> {
   labelRefresh(desired: Desired, existing: Existing): UnchangedAnnotation;
 }
 
+/** A desired resource whose SDK labels deploy writes. */
+type LabeledDesired = { metaRequest: MetadataLabelWrite };
+
+/** An existing resource listed with the labels stored on it. */
+type LabeledExisting = { allLabels?: Record<string, string> };
+
 /**
  * Check ownership, SDK version, and SDK labels through the labels listed with each existing resource.
  * @param tracker - Ownership tracker of the planner
- * @param describe - Resource kind and name shown when a desired resource is taken over
+ * @param resourceType - Kind of the resources, named by their key in confirmations
  * @returns Checks to spread into a keyed diff
  */
-export function labeledResourceChecks<
-  Desired extends { metaRequest: MetadataLabelWrite },
-  Existing extends { allLabels?: Record<string, string> },
->(
+export function labeledResourceChecks(
   tracker: OwnershipTracker,
-  describe: (desired: Desired) => TrackedResource,
-): LabeledResourceChecks<Desired, Existing> {
+  resourceType: ManagedResourceType,
+): LabeledResourceChecks<LabeledDesired, LabeledExisting> {
   return {
     ownership: {
-      ownsDesired: (desired, existing) =>
-        tracker.ownsDesired(existing.allLabels, describe(desired)),
-      ownsRemaining: (existing) => tracker.ownsRemaining(existing.allLabels),
+      ownsDesired: (key, _desired, existing) =>
+        tracker.ownsDesired(existing.allLabels, { resourceType, resourceName: key }),
+      ownsRemaining: (key, existing) =>
+        tracker.ownsRemaining(existing.allLabels, { resourceType, resourceName: key }),
     },
     versionMatches: (desired, existing) =>
       hasMatchingSdkVersion(existing.allLabels, desired.metaRequest.labels),
@@ -64,11 +69,11 @@ export interface KeyedDiff<Desired, Existing, Create, Update, Unchanged, Delete,
   existing: Iterable<readonly [string, Existing | undefined]>;
   keyOf(desired: Desired): string;
   /** Omitted for resources without SDK labels: every match and leftover is then owned. */
-  ownership?: KeyedDiffOwnership<Desired, NoInfer<Existing>>;
+  ownership?: KeyedDiffOwnership<NoInfer<Desired>, NoInfer<Existing>>;
   /** Whether the existing resource was applied by this SDK version (or nothing forces a reapply). */
-  versionMatches(desired: Desired, existing: NoInfer<Existing>): boolean;
+  versionMatches(desired: NoInfer<Desired>, existing: NoInfer<Existing>): boolean;
   /** The labels to rewrite on an unchanged resource; omitted where the plan does not read its labels. */
-  labelRefresh?(desired: Desired, existing: NoInfer<Existing>): UnchangedAnnotation;
+  labelRefresh?(desired: NoInfer<Desired>, existing: NoInfer<Existing>): UnchangedAnnotation;
   isConfigUnchanged(desired: Desired, existing: Existing): boolean | Promise<boolean>;
   /** Returns a replace item when the match cannot be updated in place. */
   replace?(desired: Desired, existing: Existing): Replace | undefined;
@@ -107,7 +112,7 @@ export async function diffKeyed<
       continue;
     }
     remaining.delete(key);
-    const owned = ownership?.ownsDesired(desired, existing) ?? true;
+    const owned = ownership?.ownsDesired(key, desired, existing) ?? true;
     const replace = diff.replace?.(desired, existing);
     if (replace !== undefined) {
       changeSet.replaces.push(replace);
@@ -127,7 +132,7 @@ export async function diffKeyed<
     }
   }
   for (const [key, existing] of remaining) {
-    if (ownership && !ownership.ownsRemaining(existing)) continue;
+    if (ownership && !ownership.ownsRemaining(key, existing)) continue;
     const item = diff.delete(key, existing);
     if (item !== undefined) changeSet.deletes.push(item);
   }

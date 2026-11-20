@@ -6,6 +6,7 @@ import {
 import { describe, expect, test, vi } from "vitest";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { createChangeSet } from "./change-set";
+import { applicationOwner } from "./label";
 import {
   applyStaticWebsite,
   assertStaticWebsiteDeletesNotOffered,
@@ -174,6 +175,7 @@ function createContext(
     client,
     workspaceId,
     application: application ?? createMockApplication(),
+    owner: applicationOwner(application ?? createMockApplication()),
     forRemoval,
     config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
   };

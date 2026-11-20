@@ -40,6 +40,7 @@ import {
 } from "./visible-resources";
 import type { PlannedDeployment } from "./apply-phases";
 import type { GroupedDisplayEntry, NamespaceAction } from "./grouped-display";
+import type { DeployOwner } from "./label";
 import type { ManagedResourceType } from "./managed-resource-type";
 
 type PlanResults = Parameters<typeof summarizePlanResults>[0];
@@ -48,15 +49,29 @@ function entry(action: GroupedDisplayEntry["action"], name: string): GroupedDisp
   return { action, symbol: "+", name, labels: [] };
 }
 
-function plannedDeployment(name: string, results: PlanResults): PlannedDeployment {
+function plannedDeployment(
+  name: string,
+  results: PlanResults,
+  owner: DeployOwner = { kind: "application", name, id: undefined },
+): PlannedDeployment {
   return {
     application: { name },
+    owner,
     ...results,
   } as unknown as PlannedDeployment;
 }
 
+const legacyStaticWebsite = (action: "update" | "delete") => ({
+  resourceType: "staticwebsite" as const,
+  resourceLabel: "StaticWebsite",
+  resourceName: "old-site",
+  action,
+  currentOwner: "shop",
+});
+
 describe("shouldForceApplyAll", () => {
-  type App = Parameters<typeof shouldForceApplyAll>[2];
+  type App = Parameters<typeof shouldForceApplyAll>[3];
+  const appOwner: DeployOwner = { kind: "application", name: "test-app", id: "test-app-id" };
 
   function minimalApplication(): App {
     return {
@@ -84,11 +99,13 @@ describe("shouldForceApplyAll", () => {
       },
     });
 
-    const result = await shouldForceApplyAll(client, "test-workspace", minimalApplication(), [
-      { name: "fn-a" },
-      { name: "fn-b" },
-      { name: "fn-c" },
-    ]);
+    const result = await shouldForceApplyAll(
+      client,
+      "test-workspace",
+      appOwner,
+      minimalApplication(),
+      [{ name: "fn-a" }, { name: "fn-b" }, { name: "fn-c" }],
+    );
 
     expect(result).toBe(false);
     expect(client.getMetadata).toHaveBeenCalledTimes(3);
@@ -102,11 +119,40 @@ describe("shouldForceApplyAll", () => {
       },
     });
 
-    const result = await shouldForceApplyAll(client, "test-workspace", minimalApplication(), [
-      { name: "fn-a" },
-    ]);
+    const result = await shouldForceApplyAll(
+      client,
+      "test-workspace",
+      appOwner,
+      minimalApplication(),
+      [{ name: "fn-a" }],
+    );
 
     expect(result).toBe(true);
+  });
+
+  test("for the workspace, checks the resources carrying its mark", async () => {
+    const client = mockOperatorClient({
+      getMetadata: {
+        metadata: { labels: { "sdk-managed": "workspace", "sdk-version": "v0-0-0-other" } },
+      },
+    });
+
+    const workspace = await shouldForceApplyAll(
+      client,
+      "test-workspace",
+      { kind: "workspace" },
+      minimalApplication(),
+      [{ name: "fn-a" }],
+    );
+    const application = await shouldForceApplyAll(
+      client,
+      "test-workspace",
+      appOwner,
+      minimalApplication(),
+      [{ name: "fn-a" }],
+    );
+
+    expect({ workspace, application }).toEqual({ workspace: true, application: false });
   });
 
   test("prefers a detected sdk-version mismatch over an unrelated fetch failure", async () => {
@@ -119,10 +165,13 @@ describe("shouldForceApplyAll", () => {
         metadata: { labels: { "sdk-name": "test-app", "sdk-version": "v0-0-0-other" } },
       });
 
-    const result = await shouldForceApplyAll(client, "test-workspace", minimalApplication(), [
-      { name: "fn-a" },
-      { name: "fn-b" },
-    ]);
+    const result = await shouldForceApplyAll(
+      client,
+      "test-workspace",
+      appOwner,
+      minimalApplication(),
+      [{ name: "fn-a" }, { name: "fn-b" }],
+    );
 
     expect(result).toBe(true);
   });
@@ -133,7 +182,9 @@ describe("shouldForceApplyAll", () => {
     });
 
     await expect(
-      shouldForceApplyAll(client, "test-workspace", minimalApplication(), [{ name: "fn-a" }]),
+      shouldForceApplyAll(client, "test-workspace", appOwner, minimalApplication(), [
+        { name: "fn-a" },
+      ]),
     ).rejects.toThrow("unavailable");
   });
 });
@@ -856,6 +907,16 @@ describe("confirmDeploymentPlans", () => {
         return { deployments: [plannedDeployment("my-app", results)] };
       },
     },
+    {
+      warning: "Resources deployed by an application config were found:",
+      plan: () => {
+        const results = emptyPlanResults();
+        results.staticWebsite.takeovers.push(legacyStaticWebsite("update"));
+        return {
+          deployments: [plannedDeployment("my-workspace", results, { kind: "workspace" })],
+        };
+      },
+    },
   ];
 
   test.for(
@@ -894,6 +955,25 @@ describe("confirmDeploymentPlans", () => {
       expect(logger.warn).not.toHaveBeenCalledWith(warning);
     },
   );
+
+  test("asks once about a resource the takeover deletes that is also an important deletion", async () => {
+    using _logger = silenceLogger("warn", "log", "success", "newline");
+    using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(true);
+    const results = emptyPlanResults();
+    results.staticWebsite.changeSet.deletes.push({ name: "old-site" } as never);
+    results.staticWebsite.takeovers.push(legacyStaticWebsite("delete"));
+
+    await confirmDeploymentPlans({
+      deployments: [plannedDeployment("my-workspace", results, { kind: "workspace" })],
+      yes: false,
+    });
+
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Resources deployed by an application config were found:",
+    );
+    expect(logger.warn).not.toHaveBeenCalledWith("The following resources will be deleted:");
+  });
 
   test("asks about a conflict that only another application confirmed", async () => {
     using _logger = silenceLogger("warn", "log", "success", "newline");
@@ -1011,6 +1091,27 @@ describe("printPlanResults", () => {
     };
     expect(payload.conflicts).toEqual([
       { resourceType: "tailordb.service", name: "tailordb", currentOwner: "other-app" },
+    ]);
+  });
+
+  test("lists the resources a workspace config takes over only when there are any", () => {
+    using _json = jsonMode();
+
+    printPlanResults(emptyPlanResults(), { dryRun: true });
+    const results = emptyPlanResults();
+    results.staticWebsite.takeovers.push(legacyStaticWebsite("update"));
+    results.executor.takeovers.push({
+      resourceType: "executor",
+      resourceLabel: "Executor",
+      resourceName: "old-sync",
+      action: "delete",
+    });
+    printPlanResults(results, { dryRun: true });
+
+    expect(outSpy.mock.calls[0]?.[0]).not.toHaveProperty("takeovers");
+    expect((outSpy.mock.calls[1]?.[0] as { takeovers: unknown }).takeovers).toEqual([
+      { resourceType: "staticwebsite", name: "old-site", action: "update", currentOwner: "shop" },
+      { resourceType: "executor", name: "old-sync", action: "delete" },
     ]);
   });
 

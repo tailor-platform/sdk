@@ -33,6 +33,16 @@ describe("checkVaultManaged", () => {
     });
   });
 
+  test("returns isManaged: true when a workspace config manages the vault", async () => {
+    const client = clientWithMetadata({
+      labels: { "sdk-managed": "workspace", "sdk-version": "v1-0-0" },
+    });
+
+    const result = await checkVaultManaged({ client, workspaceId: "ws-1", vaultName: "my-vault" });
+
+    expect(result.isManaged).toBe(true);
+  });
+
   test("returns isManaged: false when vault has no sdk-name label", async () => {
     const client = clientWithMetadata({ labels: {} });
 
@@ -69,6 +79,11 @@ describe("releaseVaultOwnership", () => {
       // still be deleted by the next deploy of a config that dropped it.
       "removes sdk-app-id, which decides ownership on its own",
       { "sdk-name": "my-app", "sdk-version": "v1-0-0", "sdk-app-id": "app-uuid", custom: "value" },
+      { custom: "value" },
+    ],
+    [
+      "removes the workspace mark, which decides ownership on its own",
+      { "sdk-managed": "workspace", "sdk-version": "v1-0-0", custom: "value" },
       { custom: "value" },
     ],
   ])("%s", async (_name, remoteLabels, expectedLabels) => {

@@ -34,7 +34,7 @@ import {
 import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   buildMetaRequest,
-  isOwnedByApp,
+  isOwnedBy,
   labelCountViolation,
   type MetadataLabelWrite,
   resourceTrn,
@@ -302,8 +302,8 @@ export async function planApplication(
     existingLabels: Record<string, string> | undefined;
   },
 ) {
-  const { client, workspaceId, application, forRemoval } = context;
-  const ownership = createOwnershipTracker(application.name, application.id);
+  const { client, workspaceId, application, owner, forRemoval } = context;
+  const ownership = createOwnershipTracker(owner);
   const changeSet = createChangeSet<
     CreateApplication,
     UpdateApplication,
@@ -328,15 +328,14 @@ export async function planApplication(
       return [applications, nextPageToken];
     }));
 
-  const ownedByConfig = (labels: Record<string, string> | undefined) =>
-    isOwnedByApp(labels, application.name, application.id);
+  const ownedByConfig = (labels: Record<string, string> | undefined) => isOwnedBy(labels, owner);
   const scheduleOwnedAppDeletes = async (
     candidates: ReadonlyArray<ProtoApplication>,
-    owns: (labels: Record<string, string> | undefined) => boolean,
+    owns: (labels: Record<string, string> | undefined, name: string) => boolean,
   ) => {
     const owned = await Promise.all(
       candidates.map(async (app) =>
-        owns(await fetchAppLabels(client, workspaceId, app.name)) ? app.name : null,
+        owns(await fetchAppLabels(client, workspaceId, app.name), app.name) ? app.name : null,
       ),
     );
     for (const name of owned) {
@@ -362,8 +361,10 @@ export async function planApplication(
       ? existingApplications
       : existingApplications.filter((app) => app.name === application.name);
     // A deploy must not record other apps as owners: that blocks renamed-app cleanup.
-    await scheduleOwnedAppDeletes(candidates, (labels) =>
-      forRemoval ? ownership.ownsRemaining(labels) : ownedByConfig(labels),
+    await scheduleOwnedAppDeletes(candidates, (labels, name) =>
+      forRemoval
+        ? ownership.ownsRemaining(labels, { resourceType: "application", resourceName: name })
+        : ownedByConfig(labels),
     );
     return Object.assign(changeSet, ownership.result, {
       existingApplications,
@@ -397,8 +398,7 @@ export async function planApplication(
   }
   const metaRequest = await buildMetaRequest({
     trn: resourceTrn(workspaceId, "application", application.name),
-    appName: application.name,
-    appId: application.id,
+    owner,
   });
   const { metadata } = application.config;
   // `previous.existingLabels` can legitimately be `undefined` (no metadata
@@ -449,16 +449,13 @@ export async function planApplication(
         comparableRequest: { ...request, cors: resolvedCors },
         metaRequest,
         metadata,
-      },
+      } satisfies DesiredApplication,
     ],
     existing: existing
       ? [[existing.name, { resource: existing, allLabels: existingLabels }] as const]
       : [],
     keyOf: (app) => app.name,
-    ...labeledResourceChecks(ownership, (app: DesiredApplication) => ({
-      resourceType: "application",
-      resourceName: app.name,
-    })),
+    ...labeledResourceChecks(ownership, "application"),
     isConfigUnchanged: (app, { resource }) =>
       metadataDetails.length === 0 &&
       isRequestUnchanged(applicationComparison, app.comparableRequest, resource),

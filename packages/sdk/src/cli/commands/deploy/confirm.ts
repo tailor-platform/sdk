@@ -20,6 +20,14 @@ export interface UnmanagedResource {
   resourceName: string;
 }
 
+/** A resource an application deployed, which a workspace config takes over or deletes. */
+export interface WorkspaceTakeover extends UnmanagedResource {
+  /** `update` for a resource the config has, `delete` for one it no longer has. */
+  action: "update" | "delete";
+  /** Name of the application that deployed it, when it records one. */
+  currentOwner?: string;
+}
+
 /** Whether a confirmation prompts, is accepted by `--yes`, or is only reported by `--dry-run`. */
 export type ConfirmMode = "prompt" | "yes" | "dry-run";
 
@@ -209,6 +217,57 @@ async function confirmNameMismatch(
 }
 
 /**
+ * Confirm moving resources that applications deployed under the workspace config's management:
+ * taking over the ones the config has and deleting the ones it no longer has.
+ * @param takeovers - Resources to take over or delete
+ * @param mode - Whether to prompt, auto-confirm, or only report
+ * @returns Promise that resolves when confirmation completes
+ */
+export async function confirmWorkspaceTakeover(
+  takeovers: ReadonlyArray<WorkspaceTakeover>,
+  mode: ConfirmMode,
+): Promise<void> {
+  if (takeovers.length === 0) return;
+
+  const describe = (takeover: WorkspaceTakeover) =>
+    `    • ${styles.bold(takeover.resourceLabel)} ${styles.info(`"${takeover.resourceName}"`)}${
+      takeover.currentOwner ? styles.dim(` (application "${takeover.currentOwner}")`) : ""
+    }`;
+  const updates = takeovers.filter((takeover) => takeover.action === "update");
+  const deletes = takeovers.filter((takeover) => takeover.action === "delete");
+
+  logger.warn("Resources deployed by an application config were found:");
+  if (updates.length > 0) {
+    logger.log(`  ${styles.info("Taken over by this workspace config")}:`);
+    for (const takeover of updates) logger.log(describe(takeover));
+  }
+  if (deletes.length > 0) {
+    logger.log(`  ${styles.error("Deleted, since this workspace config does not have them")}:`);
+    for (const takeover of deletes) logger.log(describe(takeover));
+  }
+
+  if (mode === "dry-run") return;
+  if (mode === "yes") {
+    logger.success("Taking over these resources (--yes flag specified)...", { mode: "plain" });
+    return;
+  }
+
+  const confirmed = await prompt.confirm({
+    message: "Move these resources under this workspace config's management?",
+    default: false,
+  });
+  if (!confirmed) {
+    throw CLIError({
+      code: "DEPLOY_CANCELLED",
+      message: ml`
+      Apply cancelled. Resources remain managed by their application configs.
+      To override, run again and confirm, or use --yes flag.
+    `,
+    });
+  }
+}
+
+/**
  * Confirm allowing tailor to manage previously unmanaged resources.
  * @param resources - Unmanaged resources
  * @param appName - Target application name
@@ -259,6 +318,7 @@ export async function confirmUnmanagedResources(
 }
 
 export interface ImportantResourceDeletion {
+  resourceType: ManagedResourceType;
   resourceLabel: string;
   resourceName: string;
 }

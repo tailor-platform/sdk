@@ -1,7 +1,7 @@
 import { describe, test, expect, vi } from "vitest";
 import { symbols } from "#/cli/shared/logger";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
-import { buildMetaRequest, sdkNameLabelKey } from "./label";
+import { applicationOwner, buildMetaRequest, sdkNameLabelKey } from "./label";
 import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./resolver";
 import type { Application } from "#/cli/services/application";
 import type { ExecutorService } from "#/cli/services/executor/service";
@@ -134,6 +134,7 @@ function buildCtx(overrides: Partial<PlanContext>): PlanContext {
     client: createMockClient([]),
     workspaceId,
     application: createMockApplication([]),
+    owner: applicationOwner(createMockApplication([])),
     forRemoval: false,
     config: mockConfig,
     ...overrides,
@@ -193,6 +194,7 @@ describe("planPipeline (resolver service level)", () => {
         client,
         workspaceId,
         application: createMockApplication([createResolverServiceWith(publishEvents)]),
+        owner: applicationOwner(createMockApplication([createResolverServiceWith(publishEvents)])),
         forRemoval: false,
         config: mockConfig,
         executorUsedResolvers: subscribed ? new Set(["myResolver"]) : new Set<string>(),
@@ -245,6 +247,7 @@ describe("planPipeline (resolver service level)", () => {
         client: createMockClient([]),
         workspaceId,
         application,
+        owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
         executorUsedResolvers: new Set<string>(),
@@ -272,6 +275,7 @@ describe("planPipeline (resolver service level)", () => {
         client: createMockClient([]),
         workspaceId,
         application,
+        owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
         executorUsedResolvers: new Set<string>(),
@@ -294,6 +298,7 @@ describe("planPipeline (resolver service level)", () => {
           client,
           workspaceId,
           application: createMockApplication([createResolverServiceWith(false)]),
+          owner: applicationOwner(createMockApplication([createResolverServiceWith(false)])),
           forRemoval: false,
           config: mockConfig,
           executorUsedResolvers: new Set(["myResolver"]),

@@ -4,9 +4,12 @@ import {
   confirmMigrationCheckpointRepairs,
   confirmOwnerConflict,
   confirmUnmanagedResources,
+  confirmWorkspaceTakeover,
   type MissingDependentApp,
   type OwnerConflict,
+  type WorkspaceTakeover,
 } from "./confirm";
+import type { logger as loggerModule } from "#/cli/shared/logger";
 import type { prompt as promptModule } from "#/cli/shared/prompt";
 
 vi.mock("#/cli/shared/logger", () => ({
@@ -368,5 +371,65 @@ describe("confirmMissingDependentApps", () => {
     await confirmMissingDependentApps(missing, "yes");
 
     expect(prompt.confirm).not.toHaveBeenCalled();
+  });
+});
+
+describe("confirmWorkspaceTakeover", () => {
+  let prompt: typeof promptModule;
+  let logger: typeof loggerModule;
+
+  const takeovers: WorkspaceTakeover[] = [
+    {
+      resourceType: "tailordb.service",
+      resourceLabel: "TailorDB namespace",
+      resourceName: "shared-db",
+      action: "update",
+      currentOwner: "shop",
+    },
+    {
+      resourceType: "executor",
+      resourceLabel: "Executor",
+      resourceName: "old-sync",
+      action: "delete",
+      currentOwner: "backoffice",
+    },
+  ];
+
+  aroundEach(async (runTest) => {
+    ({ prompt } = await import("#/cli/shared/prompt"));
+    ({ logger } = await import("#/cli/shared/logger"));
+    await runTest();
+    vi.restoreAllMocks();
+  });
+
+  test("returns immediately when nothing is taken over", async () => {
+    await confirmWorkspaceTakeover([], "prompt");
+    expect(prompt.confirm).not.toHaveBeenCalled();
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  test("lists the resources taken over and the ones deleted, then asks once", async () => {
+    vi.mocked(prompt.confirm).mockResolvedValue(true);
+    await confirmWorkspaceTakeover(takeovers, "prompt");
+
+    const lines = vi
+      .mocked(logger.log)
+      .mock.calls.map(([line]) => String(line))
+      .join("\n");
+    expect(lines).toContain('TailorDB namespace "shared-db" (application "shop")');
+    expect(lines).toContain('Executor "old-sync" (application "backoffice")');
+    expect(prompt.confirm).toHaveBeenCalledTimes(1);
+  });
+
+  test.each(["yes", "dry-run"] as const)("does not ask with %s", async (mode) => {
+    await confirmWorkspaceTakeover(takeovers, mode);
+    expect(prompt.confirm).not.toHaveBeenCalled();
+  });
+
+  test("cancels the deploy when the answer is no", async () => {
+    vi.mocked(prompt.confirm).mockResolvedValueOnce(false);
+    await expect(confirmWorkspaceTakeover(takeovers, "prompt")).rejects.toMatchObject({
+      code: "DEPLOY_CANCELLED",
+    });
   });
 });

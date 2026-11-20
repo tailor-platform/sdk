@@ -9,8 +9,8 @@ type Existing = { config: string; kind?: string; owner?: string; version: string
 
 const currentVersion = "v2";
 const ownership: KeyedDiffOwnership<Desired, Existing> = {
-  ownsDesired: (_desired, existing) => existing.owner === "app",
-  ownsRemaining: (existing) => existing.owner === "app",
+  ownsDesired: (_key, _desired, existing) => existing.owner === "app",
+  ownsRemaining: (_key, existing) => existing.owner === "app",
 };
 
 async function plan(
@@ -134,11 +134,8 @@ describe("labeledResourceChecks", () => {
       existing: [["a", { allLabels } satisfies LabeledExisting]],
       keyOf: (item) => item.name,
       ...labeledResourceChecks(
-        createOwnershipTracker("renamed", "id-1"),
-        (item: LabeledDesired) => ({
-          resourceType: "executor",
-          resourceName: item.name,
-        }),
+        createOwnershipTracker({ kind: "application", name: "renamed", id: "id-1" }),
+        "executor",
       ),
       isConfigUnchanged: () => true,
       create: ({ name }) => ({ name }),
@@ -164,5 +161,48 @@ describe("labeledResourceChecks", () => {
     const changeSet = await planLabeled({ ...desired.metaRequest.labels, owner: "team-a" });
 
     expect(changeSet.unchanged).toEqual([{ name: "a" }]);
+  });
+
+  test("takes over, for the workspace, a matching resource and a leftover an application deployed", async () => {
+    const tracker = createOwnershipTracker({ kind: "workspace" });
+    const changeSet = createChangeSet<{ name: string }, { name: string }, { name: string }>(
+      "Items",
+    );
+    const legacy = { "sdk-name": "shop", "sdk-version": "v2", "sdk-app-id": "app-id-1" };
+
+    await diffKeyed({
+      changeSet,
+      desired: [desired],
+      existing: [
+        ["a", { allLabels: legacy }],
+        ["b", { allLabels: legacy }],
+      ],
+      keyOf: (item) => item.name,
+      ...labeledResourceChecks(tracker, "executor"),
+      isConfigUnchanged: () => true,
+      create: ({ name }) => ({ name }),
+      update: ({ name }) => ({ name }),
+      unchanged: ({ name }) => ({ name }),
+      delete: (name) => ({ name }),
+    });
+
+    expect(changeSet.updates).toEqual([{ name: "a" }]);
+    expect(changeSet.deletes).toEqual([{ name: "b" }]);
+    expect(tracker.result.takeovers).toEqual([
+      {
+        resourceType: "executor",
+        resourceLabel: "Executor",
+        resourceName: "a",
+        action: "update",
+        currentOwner: "shop",
+      },
+      {
+        resourceType: "executor",
+        resourceLabel: "Executor",
+        resourceName: "b",
+        action: "delete",
+        currentOwner: "shop",
+      },
+    ]);
   });
 });

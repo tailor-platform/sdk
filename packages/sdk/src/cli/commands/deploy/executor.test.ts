@@ -4,7 +4,7 @@ import { describe, test, expect, vi } from "vitest";
 import { symbols } from "#/cli/shared/logger";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { formatExecutorChangeEntries, planExecutor } from "./executor";
-import { buildMetaRequest, sdkNameLabelKey } from "./label";
+import { applicationOwner, buildMetaRequest, sdkNameLabelKey } from "./label";
 import type { Application } from "#/cli/services/application";
 import type { ExecutorService } from "#/cli/services/executor/service";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -212,6 +212,7 @@ describe("planExecutor", () => {
       client: createMockClient([]),
       workspaceId,
       application,
+      owner: applicationOwner(application),
       forRemoval: false,
       config: mockConfig,
       ...overrides,
@@ -1023,6 +1024,7 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
         tailorDBTypeNamespaces: new Map([["User", "shared-db"]]),
@@ -1054,6 +1056,7 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
       });
@@ -1084,6 +1087,7 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
         resolverNamespaces: new Map([["myResolver", "shared-pipeline"]]),
@@ -1112,6 +1116,7 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
       });
@@ -1137,6 +1142,7 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
         idpNames: new Set(["peer-idp"]),
@@ -1164,6 +1170,7 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
       });
@@ -1192,7 +1199,14 @@ describe("planExecutor", () => {
       });
 
       await expect(
-        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
+        planExecutor({
+          client,
+          workspaceId,
+          application,
+          owner: applicationOwner(application),
+          forRemoval: false,
+          config: mockConfig,
+        }),
       ).rejects.toThrow('TailorDB table "Unknown" not found in any namespace');
     });
 
@@ -1210,7 +1224,14 @@ describe("planExecutor", () => {
       });
 
       await expect(
-        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
+        planExecutor({
+          client,
+          workspaceId,
+          application,
+          owner: applicationOwner(application),
+          forRemoval: false,
+          config: mockConfig,
+        }),
       ).rejects.toThrow('Resolver "unknown" not found in any namespace');
     });
 
@@ -1226,7 +1247,14 @@ describe("planExecutor", () => {
       const application = createMockApplication([executor]);
 
       await expect(
-        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
+        planExecutor({
+          client,
+          workspaceId,
+          application,
+          owner: applicationOwner(application),
+          forRemoval: false,
+          config: mockConfig,
+        }),
       ).rejects.toThrow(/no IdP is configured/);
     });
 
@@ -1244,7 +1272,14 @@ describe("planExecutor", () => {
       });
 
       await expect(
-        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
+        planExecutor({
+          client,
+          workspaceId,
+          application,
+          owner: applicationOwner(application),
+          forRemoval: false,
+          config: mockConfig,
+        }),
       ).rejects.toThrow(/multiple IdPs/);
     });
 
@@ -1262,7 +1297,14 @@ describe("planExecutor", () => {
       });
 
       await expect(
-        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
+        planExecutor({
+          client,
+          workspaceId,
+          application,
+          owner: applicationOwner(application),
+          forRemoval: false,
+          config: mockConfig,
+        }),
       ).rejects.toThrow(/no IdP with that name is configured/);
     });
 
@@ -1278,7 +1320,14 @@ describe("planExecutor", () => {
       const application = createMockApplication([executor]);
 
       await expect(
-        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
+        planExecutor({
+          client,
+          workspaceId,
+          application,
+          owner: applicationOwner(application),
+          forRemoval: false,
+          config: mockConfig,
+        }),
       ).rejects.toMatchObject({
         code: "AUTH_CONFIG_REQUIRED",
         message: "No Auth service configured",
@@ -1306,6 +1355,7 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
       });
@@ -1341,6 +1391,7 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
       });
@@ -1371,6 +1422,7 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
       });

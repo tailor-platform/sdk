@@ -160,8 +160,7 @@ describe("planWorkflow", () => {
       const result = await planWorkflow(
         createMockClient([]),
         workspaceId,
-        appName,
-        undefined,
+        { kind: "application", name: appName, id: undefined },
         { orders: workflow },
         { "main-job": ["main-job"] },
         new Set(),
@@ -180,8 +179,7 @@ describe("planWorkflow", () => {
         planWorkflow(
           createMockClient([]),
           workspaceId,
-          appName,
-          undefined,
+          { kind: "application", name: appName, id: undefined },
           { orders: workflow },
           { "main-job": ["main-job"] },
           new Set(),
@@ -197,8 +195,7 @@ describe("planWorkflow", () => {
       const result = await planWorkflow(
         createMockClient([]),
         workspaceId,
-        appName,
-        undefined,
+        { kind: "application", name: appName, id: undefined },
         { orders: workflow },
         { "main-job": ["main-job", "child-job"] },
         new Set(),
@@ -221,8 +218,7 @@ describe("planWorkflow", () => {
       const result = await planWorkflow(
         createMockClient([]),
         workspaceId,
-        appName,
-        undefined,
+        { kind: "application", name: appName, id: undefined },
         { orders: workflow },
         { "main-job": ["main-job", "child-job"] },
         new Set(),
@@ -257,8 +253,7 @@ describe("planWorkflow", () => {
         const result = await planWorkflow(
           createMockClient([]),
           workspaceId,
-          appName,
-          undefined,
+          { kind: "application", name: appName, id: undefined },
           { orders: workflow },
           { "main-job": ["main-job"] },
           new Set(),
@@ -289,8 +284,7 @@ describe("planWorkflow", () => {
       const result = await planWorkflow(
         client,
         workspaceId,
-        appName,
-        undefined,
+        { kind: "application", name: appName, id: undefined },
         { orders: createMockWorkflow("orders", "main-job") },
         { "main-job": ["main-job"] },
         new Set(["main-job"]),
@@ -321,8 +315,7 @@ describe("planWorkflow", () => {
       const result = await planWorkflow(
         client,
         workspaceId,
-        appName,
-        undefined,
+        { kind: "application", name: appName, id: undefined },
         { orders: createMockWorkflow("orders", "main-job") },
         { "main-job": ["main-job"] },
         new Set(["main-job"]),
@@ -355,8 +348,7 @@ describe("planWorkflow", () => {
       const result = await planWorkflow(
         client,
         workspaceId,
-        appName,
-        undefined,
+        { kind: "application", name: appName, id: undefined },
         { orders: { ...createMockWorkflow("orders", "main-job"), publishEvents: false } },
         { "main-job": ["main-job"] },
         new Set(["main-job"]),
@@ -374,8 +366,7 @@ describe("planWorkflow", () => {
         planWorkflow(
           createMockClient([]),
           workspaceId,
-          appName,
-          undefined,
+          { kind: "application", name: appName, id: undefined },
           { orders: workflow },
           { "main-job": ["main-job"] },
           new Set(),
@@ -408,8 +399,7 @@ describe("planWorkflow", () => {
       const result = await planWorkflow(
         client,
         workspaceId,
-        appName,
-        undefined,
+        { kind: "application", name: appName, id: undefined },
         { orders: createMockWorkflow("orders", "main-job") },
         { "main-job": ["main-job"] },
         new Set(["main-job"]),
@@ -446,8 +436,7 @@ describe("planWorkflow", () => {
       const result = await planWorkflow(
         client,
         workspaceId,
-        appName,
-        undefined,
+        { kind: "application", name: appName, id: undefined },
         { orders: createMockWorkflow("orders", "main-job") },
         { "main-job": ["main-job"] },
         new Set(["main-job"]),
@@ -478,8 +467,7 @@ describe("planWorkflow", () => {
       const result = await planWorkflow(
         client,
         workspaceId,
-        appName,
-        undefined,
+        { kind: "application", name: appName, id: undefined },
         workflows,
         mainJobDeps,
       );
@@ -510,8 +498,7 @@ describe("planWorkflow", () => {
       const result = await planWorkflow(
         client,
         workspaceId,
-        appName,
-        undefined,
+        { kind: "application", name: appName, id: undefined },
         workflows,
         mainJobDeps,
       );
@@ -554,7 +541,13 @@ describe("planWorkflow", () => {
         },
       ]);
 
-      const result = await planWorkflow(client, workspaceId, appName, undefined, {}, {});
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        { kind: "application", name: appName, id: undefined },
+        {},
+        {},
+      );
 
       expect(result.changeSet.deletes).toHaveLength(2);
       expect(result.changeSet.deletes.map((d) => d.name).toSorted()).toEqual([
@@ -616,8 +609,7 @@ describe("planWorkflow", () => {
       const result = await planWorkflow(
         client,
         workspaceId,
-        appName,
-        undefined,
+        { kind: "application", name: appName, id: undefined },
         {
           "kept-workflow": createMockWorkflow("kept-workflow", "shared-job"),
         },
@@ -668,7 +660,13 @@ describe("planWorkflow", () => {
         },
       );
 
-      const result = await planWorkflow(client, workspaceId, appName, undefined, {}, {});
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        { kind: "application", name: appName, id: undefined },
+        {},
+        {},
+      );
 
       expect(result.changeSet.deletes).toHaveLength(1);
       expect(result.changeSet.deletes[0]!.name).toBe("removed-workflow");
@@ -698,7 +696,13 @@ describe("planWorkflow", () => {
         },
       );
 
-      const result = await planWorkflow(client, workspaceId, appName, undefined, {}, {});
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        { kind: "application", name: appName, id: undefined },
+        {},
+        {},
+      );
 
       expect(result.changeSet.deletes).toHaveLength(1);
       expect(result.changeSet.deletes[0]!.name).toBe("removed-workflow");
@@ -714,7 +718,13 @@ describe("planWorkflow", () => {
         { id: "3", name: "unmanaged-workflow" }, // No label
       ]);
 
-      const result = await planWorkflow(client, workspaceId, appName, undefined, {}, {});
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        { kind: "application", name: appName, id: undefined },
+        {},
+        {},
+      );
 
       expect(result.changeSet.deletes).toHaveLength(1);
       expect(result.changeSet.deletes[0]!.name).toBe("my-workflow");
@@ -727,8 +737,7 @@ describe("planWorkflow", () => {
       const result = await planWorkflow(
         client,
         workspaceId,
-        appName,
-        undefined,
+        { kind: "application", name: appName, id: undefined },
         { "my-workflow": createMockWorkflow("my-workflow", "main-job") },
         { "main-job": ["main-job"] },
       );
@@ -769,8 +778,7 @@ describe("planWorkflow", () => {
       const result = await planWorkflow(
         client,
         workspaceId,
-        appName,
-        undefined,
+        { kind: "application", name: appName, id: undefined },
         workflows,
         mainJobDeps,
         new Set(["validate-order", "check-inventory", "process-payment"]),
@@ -864,8 +872,7 @@ describe("planWorkflow", () => {
         return planWorkflow(
           client,
           workspaceId,
-          appName,
-          undefined,
+          { kind: "application", name: appName, id: undefined },
           { "sample-workflow": createMockWorkflow("sample-workflow", "validate-order") },
           mainJobDeps,
           options.unchangedJobFunctions ?? new Set(),
@@ -969,8 +976,7 @@ describe("planWorkflow", () => {
       const result = await planWorkflow(
         client,
         workspaceId,
-        appName,
-        undefined,
+        { kind: "application", name: appName, id: undefined },
         workflows,
         mainJobDeps,
         new Set(["process-order", "fetch-customer", "send-notification"]),
@@ -1027,8 +1033,7 @@ describe("planWorkflow", () => {
         const result = await planWorkflow(
           client,
           workspaceId,
-          appName,
-          undefined,
+          { kind: "application", name: appName, id: undefined },
           workflows,
           mainJobDeps,
           new Set(["run-batch"]),
@@ -1077,8 +1082,7 @@ describe("planWorkflow", () => {
       const result = await planWorkflow(
         client,
         workspaceId,
-        appName,
-        undefined,
+        { kind: "application", name: appName, id: undefined },
         {
           "kept-workflow": createMockWorkflow("kept-workflow", "keep-job"),
         },
@@ -1112,7 +1116,14 @@ describe("planWorkflow", () => {
         },
       });
 
-      const result = await planWorkflow(client, workspaceId, appName, "id-2", {}, {}, new Set());
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        { kind: "application", name: appName, id: "id-2" },
+        {},
+        {},
+        new Set(),
+      );
 
       expect(result.jobFunctionDeletes).toEqual([]);
       expect(result.resourceOwners.has(appName)).toBe(true);
@@ -1242,8 +1253,7 @@ describe("planWorkflow", () => {
       const result = await planWorkflow(
         client,
         workspaceId,
-        appName,
-        undefined,
+        { kind: "application", name: appName, id: undefined },
         { orders: workflow },
         { "main-job": ["main-job", "child-job"] },
         new Set(),
@@ -1314,8 +1324,7 @@ describe("planWorkflow", () => {
       const first = await planWorkflow(
         client,
         workspaceId,
-        appName,
-        undefined,
+        { kind: "application", name: appName, id: undefined },
         workflows,
         mainJobDeps,
         unchangedJobFunctions,
@@ -1327,8 +1336,7 @@ describe("planWorkflow", () => {
       const second = await planWorkflow(
         client,
         workspaceId,
-        appName,
-        undefined,
+        { kind: "application", name: appName, id: undefined },
         workflows,
         mainJobDeps,
         unchangedJobFunctions,
