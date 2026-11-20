@@ -5,14 +5,14 @@ import { describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
-import { scriptCommand } from "./script";
+import { scaffoldCommand } from "./scaffold";
 
-describe("workflow script", () => {
+describe("workflow scaffold", () => {
   test("scaffolds a workflow whose main job starts a sub job, exported as a workflow", async () => {
-    using tmp = tempCwd("sdk-workflow-script-");
+    using tmp = tempCwd("sdk-workflow-scaffold-");
     using _logger = silenceLogger("info", "success", "warn");
 
-    await runCommand(scriptCommand, ["workflows/order.ts"]);
+    await runCommand(scaffoldCommand, ["workflows/order.ts"]);
 
     const file = fs.readFileSync(path.join(tmp.dir, "workflows/order.ts"), "utf-8");
     expect(file).toContain(
@@ -25,11 +25,11 @@ describe("workflow script", () => {
   });
 
   test("tells the user to run the scaffolded workflow with workflow run, without naming a job", async () => {
-    using _tmp = tempCwd("sdk-workflow-script-");
+    using _tmp = tempCwd("sdk-workflow-scaffold-");
     using _success = silenceLogger("success", "warn");
     const info = vi.spyOn(logger, "info").mockImplementation(() => {});
 
-    await runCommand(scriptCommand, ["workflows/order.ts"]);
+    await runCommand(scaffoldCommand, ["workflows/order.ts"]);
 
     expect(info).toHaveBeenCalledWith(
       expect.stringContaining("tailor workflow run workflows/order.ts --arg"),
@@ -38,24 +38,24 @@ describe("workflow script", () => {
   });
 
   test("refuses a path that does not end with .ts", async () => {
-    using _tmp = tempCwd("sdk-workflow-script-");
+    using _tmp = tempCwd("sdk-workflow-scaffold-");
     using _logger = silenceLogger("info", "success", "warn");
 
-    const result = await runCommand(scriptCommand, ["workflows/order.js"]);
+    const result = await runCommand(scaffoldCommand, ["workflows/order.js"]);
 
-    expect(result.error).toMatchObject({ code: "SCRIPT_PATH_INVALID" });
+    expect(result.error).toMatchObject({ code: "SCAFFOLD_PATH_INVALID" });
   });
 
   test("leaves a file that already exists untouched and says so", async () => {
-    using tmp = tempCwd("sdk-workflow-script-");
+    using tmp = tempCwd("sdk-workflow-scaffold-");
     using _logger = silenceLogger("info", "success", "warn");
     const file = path.join(tmp.dir, "workflows/order.ts");
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, "// mine");
 
-    const result = await runCommand(scriptCommand, ["workflows/order.ts"]);
+    const result = await runCommand(scaffoldCommand, ["workflows/order.ts"]);
 
-    expect(result.error).toMatchObject({ code: "SCRIPT_FILE_EXISTS" });
+    expect(result.error).toMatchObject({ code: "SCAFFOLD_FILE_EXISTS" });
     expect(fs.readFileSync(file, "utf-8")).toBe("// mine");
   });
 });

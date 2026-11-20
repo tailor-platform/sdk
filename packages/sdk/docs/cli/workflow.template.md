@@ -40,7 +40,7 @@ tailor workflow start my-workflow -m admin -W
 ```
 
 {{politty:command:workflow run}}
-{{politty:command:workflow script}}
+{{politty:command:workflow scaffold}}
 
 {{politty:command:workflow cleanup}}
 

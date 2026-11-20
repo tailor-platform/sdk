@@ -5,7 +5,7 @@ import { getCommand } from "./get";
 import { listCommand } from "./list";
 import { resumeCommand } from "./resume";
 import { runCommand } from "./run";
-import { scriptCommand } from "./script";
+import { scaffoldCommand } from "./scaffold";
 import { startCommand } from "./start";
 import { waitCommand } from "./wait";
 
@@ -17,7 +17,7 @@ export const workflowCommand = defineCommand({
     get: getCommand,
     start: startCommand,
     run: runCommand,
-    script: scriptCommand,
+    scaffold: scaffoldCommand,
     cleanup: cleanupCommand,
     wait: waitCommand,
     executions: executionsCommand,

@@ -677,7 +677,7 @@ Commands for managing workflows and executions.
 | [workflow get](./cli/workflow.md#workflow-get)               | Get workflow details.                                                                  |
 | [workflow start](./cli/workflow.md#workflow-start)           | Start a workflow execution.                                                            |
 | [workflow run](./cli/workflow.md#workflow-run)               | Run a workflow job with the jobs it starts, as a temporary workflow without deploying. |
-| [workflow script](./cli/workflow.md#workflow-script)         | Scaffold a workflow definition to run with `workflow run`.                             |
+| [workflow scaffold](./cli/workflow.md#workflow-scaffold)     | Scaffold a workflow definition to run with `workflow run`.                             |
 | [workflow cleanup](./cli/workflow.md#workflow-cleanup)       | Remove the temporary resources that `workflow run` left behind.                        |
 | [workflow wait](./cli/workflow.md#workflow-wait)             | Wait for a workflow execution.                                                         |
 | [workflow executions](./cli/workflow.md#workflow-executions) | List or get workflow executions.                                                       |

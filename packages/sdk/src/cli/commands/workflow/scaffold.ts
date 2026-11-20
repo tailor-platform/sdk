@@ -1,5 +1,5 @@
 /**
- * `tailor workflow script` command
+ * `tailor workflow scaffold` command
  *
  * Scaffolds a workflow definition that `tailor workflow run` runs without deploying.
  */
@@ -46,8 +46,8 @@ const WORKFLOW_SKELETON = [
   "",
 ].join("\n");
 
-export const scriptCommand = defineAppCommand({
-  name: "script",
+export const scaffoldCommand = defineAppCommand({
+  name: "scaffold",
   description: "Scaffold a workflow definition to run with `workflow run`.",
   args: z.strictObject({
     file: arg(z.string(), {
@@ -63,17 +63,17 @@ Rename the jobs and the workflow and fill in the bodies; to deploy it, add the f
     const filePath = path.resolve(args.file);
     if (!filePath.endsWith(".ts")) {
       throw CLIError({
-        code: "SCRIPT_PATH_INVALID",
+        code: "SCAFFOLD_PATH_INVALID",
         message: `Workflow path must end with .ts: ${args.file}`,
-        command: "workflow script",
+        command: "workflow scaffold",
       });
     }
     if (fs.existsSync(filePath)) {
       throw CLIError({
-        code: "SCRIPT_FILE_EXISTS",
+        code: "SCAFFOLD_FILE_EXISTS",
         message: `${args.file} already exists and was left untouched.`,
         suggestion: "Choose a path that does not exist yet.",
-        command: "workflow script",
+        command: "workflow scaffold",
       });
     }
     assertGeneratedTypeScript(filePath, WORKFLOW_SKELETON);

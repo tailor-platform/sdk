@@ -91,7 +91,7 @@ export const runCommand = defineAppCommand({
 
 A single job is ended by the Platform after 5 minutes, and the run is reported as failed with a timeout error. The command waits until the run ends; \`--timeout\` limits how long it waits, not how long the jobs may run.
 
-The file must export workflow jobs created with \`createWorkflowJob\`; a file that defines no workflow job is refused. Without \`--job\`, the run starts from the main job of the workflow the file exports as default, or from the only job when the file defines just one; \`--job\` selects another job to start from. The jobs it starts run from your files, not the ones already deployed under the same names, and the jobs of files in the config's \`workflow.files\` can be started too. The input must be a JSON object (\`null\` is accepted too): unlike \`function run\`, a number, string, boolean, or array is refused before anything is created. \`tailor workflow script\` scaffolds a workflow to start from.
+The file must export workflow jobs created with \`createWorkflowJob\`; a file that defines no workflow job is refused. Without \`--job\`, the run starts from the main job of the workflow the file exports as default, or from the only job when the file defines just one; \`--job\` selects another job to start from. The jobs it starts run from your files, not the ones already deployed under the same names, and the jobs of files in the config's \`workflow.files\` can be started too. The input must be a JSON object (\`null\` is accepted too): unlike \`function run\`, a number, string, boolean, or array is refused before anything is created. \`tailor workflow scaffold\` scaffolds a workflow to start from.
 
 When the wait stops (\`--timeout\` elapsed), the run keeps going and its temporary resources stay in place. The command prints the run ID; read the outcome with \`tailor workflow executions\`. \`${CLEANUP_COMMAND}\` removes the resources of runs that have finished, and the next \`workflow run\` does the same before it starts. A run that finished within the last few minutes is left alone by that automatic sweep (and by \`tailor deploy\`), so the command still waiting for it can read its result; \`${CLEANUP_COMMAND}\` removes it at once.`,
   examples: [
@@ -152,7 +152,7 @@ When the wait stops (\`--timeout\` elapsed), the run keeps going and its tempora
         code: "WORKFLOW_RUN_WORKFLOW_REQUIRED",
         message: `${filePath} defines no workflow job (found: ${detected.type}).`,
         suggestion:
-          "Export a workflow job created with createWorkflowJob; `tailor workflow script` scaffolds one.",
+          "Export a workflow job created with createWorkflowJob; `tailor workflow scaffold` scaffolds one.",
         command: "workflow run",
       });
     }
