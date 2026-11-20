@@ -47,6 +47,7 @@ jobs:
             changes:
               - *metrics
               - .github/actions/**
+              - .github/workflows/changeset-check.yml
               - .github/workflows/pkg-pr-new.yml
               - .github/workflows/securefix.yml
               - llm-challenge/**
