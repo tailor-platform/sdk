@@ -223,7 +223,9 @@ function PathWithCopy({
   };
   return (
     <>
-      <code className="fr-path">{shown}</code>
+      <code className="fr-path" title={text}>
+        {shown}
+      </code>
       <button
         type="button"
         className="fr-copy"
