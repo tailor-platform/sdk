@@ -418,6 +418,7 @@ describe("confirmWorkspaceTakeover", () => {
       .join("\n");
     expect(lines).toContain('TailorDB namespace "shared-db" (application "shop")');
     expect(lines).toContain('Executor "old-sync" (application "backoffice")');
+    expect(lines).not.toContain("permanently remove");
     expect(prompt.confirm).toHaveBeenCalledTimes(1);
   });
 

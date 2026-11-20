@@ -957,7 +957,8 @@ describe("confirmDeploymentPlans", () => {
   );
 
   test("asks once about a resource the takeover deletes that is also an important deletion", async () => {
-    using _logger = silenceLogger("warn", "log", "success", "newline");
+    using _logger = silenceLogger("warn", "success", "newline");
+    using logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
     using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(true);
     const results = emptyPlanResults();
     results.staticWebsite.changeSet.deletes.push({ name: "old-site" } as never);
@@ -968,12 +969,118 @@ describe("confirmDeploymentPlans", () => {
       yes: false,
     });
 
-    expect(confirm).toHaveBeenCalledOnce();
+    expect(confirm).toHaveBeenCalledExactlyOnceWith({
+      message: "Take over these resources and delete the ones listed as deleted?",
+      default: false,
+    });
     expect(logger.warn).toHaveBeenCalledWith(
       "Resources deployed by an application config were found:",
     );
     expect(logger.warn).not.toHaveBeenCalledWith("The following resources will be deleted:");
+    expect(plainRedacted(logSpy.mock.calls.flat().join("\n"))).toContain(
+      "Deleting these resources will permanently remove all associated data.",
+    );
   });
+
+  test("still asks before deleting a table in a namespace the workspace config takes over", async () => {
+    using _logger = silenceLogger("warn", "log", "success", "newline");
+    using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(true);
+    const results = emptyPlanResults();
+    results.tailorDB.changeSet.type.deletes.push({
+      name: "Order",
+      request: { workspaceId: "ws", namespaceName: "main", tailordbTypeName: "Order" },
+    });
+    results.tailorDB.takeovers.push({
+      resourceType: "tailordb.service",
+      resourceLabel: "TailorDB namespace",
+      resourceName: "main",
+      action: "update",
+      currentOwner: "shop",
+    });
+
+    await confirmDeploymentPlans({
+      deployments: [plannedDeployment("my-workspace", results, { kind: "workspace" })],
+      yes: false,
+    });
+
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(logger.warn).toHaveBeenCalledWith("The following resources will be deleted:");
+  });
+
+  test.for([
+    {
+      parent: 'Secret Manager vault "old-vault" (application "shop")',
+      children: [
+        'Secret Manager secret "old-vault/DB_PASSWORD"',
+        'Secret Manager secret "old-vault/API_KEY"',
+      ],
+      plan: (results: PlanResults) => {
+        results.secretManager.vaultChangeSet.deletes.push({ name: "old-vault", workspaceId: "ws" });
+        for (const secretName of ["DB_PASSWORD", "API_KEY"]) {
+          results.secretManager.secretChangeSet.deletes.push({
+            name: `old-vault/${secretName}`,
+            secretName,
+            workspaceId: "ws",
+            vaultName: "old-vault",
+          });
+        }
+        results.secretManager.takeovers.push({
+          resourceType: "secret.vault",
+          resourceLabel: "Secret Manager vault",
+          resourceName: "old-vault",
+          action: "delete",
+          currentOwner: "shop",
+        });
+      },
+    },
+    {
+      parent: 'TailorDB namespace "old-db" (application "shop")',
+      children: ['TailorDB table "Order"', 'TailorDB table "Customer"'],
+      plan: (results: PlanResults) => {
+        results.tailorDB.changeSet.service.deletes.push({
+          name: "old-db",
+          request: { workspaceId: "ws", namespaceName: "old-db" },
+        });
+        for (const tailordbTypeName of ["Order", "Customer"]) {
+          results.tailorDB.changeSet.type.deletes.push({
+            name: tailordbTypeName,
+            request: { workspaceId: "ws", namespaceName: "old-db", tailordbTypeName },
+          });
+        }
+        results.tailorDB.takeovers.push({
+          resourceType: "tailordb.service",
+          resourceLabel: "TailorDB namespace",
+          resourceName: "old-db",
+          action: "delete",
+          currentOwner: "shop",
+        });
+      },
+    },
+  ])(
+    "asks once about $parent the takeover deletes, listing what goes with it",
+    async ({ parent, children, plan }) => {
+      using _logger = silenceLogger("warn", "success", "newline");
+      using logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+      using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(true);
+      const results = emptyPlanResults();
+      plan(results);
+
+      await confirmDeploymentPlans({
+        deployments: [plannedDeployment("my-workspace", results, { kind: "workspace" })],
+        yes: false,
+      });
+
+      expect(confirm).toHaveBeenCalledOnce();
+      const lines = plainRedacted(logSpy.mock.calls.flat().join("\n")).split("\n");
+      const parentLine = lines.findIndex((line) => line.includes(parent));
+      expect(lines.slice(parentLine + 1, parentLine + 1 + children.length)).toEqual(
+        children.map((child) => expect.stringContaining(child)),
+      );
+      expect(lines).toContain(
+        "  Deleting these resources will permanently remove all associated data.",
+      );
+    },
+  );
 
   test("asks about a conflict that only another application confirmed", async () => {
     using _logger = silenceLogger("warn", "log", "success", "newline");

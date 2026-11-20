@@ -304,12 +304,19 @@ function deletesNeedingConfirmation(
   results: PlanResults,
   resourceType: ManagedResourceType,
 ): ImportantResourceDeletion[] {
-  const resource = MANAGED_RESOURCES[resourceType];
-  return resource.changeSetOf(results).deletes.map((item) => ({
-    resourceType,
-    resourceLabel: MANAGED_RESOURCE_LABELS[resourceType],
-    resourceName: managedResourceName(resource, item),
-  }));
+  const resource: ManagedResource = MANAGED_RESOURCES[resourceType];
+  return resource.changeSetOf(results).deletes.map((item) => {
+    const parentName = resource.namespace?.of(item);
+    return {
+      resourceType,
+      resourceLabel: MANAGED_RESOURCE_LABELS[resourceType],
+      resourceName: managedResourceName(resource, item),
+      ...(resource.namespace &&
+        parentName !== undefined && {
+          parent: { resourceType: resource.namespace.owner, resourceName: parentName },
+        }),
+    };
+  });
 }
 
 export function collectImportantResourceDeletions(

@@ -41,6 +41,8 @@ import {
   type ConfirmMode,
   type ImportantResourceDeletion,
   type MissingDependentApp,
+  type TakeoverConfirmation,
+  type WorkspaceTakeover,
 } from "./confirm";
 import { assertNoSingleRunTransferHandoff } from "./custom-domain-transfer-guard";
 import { fetchMissingDependentApps } from "./dependency-records";
@@ -744,9 +746,12 @@ export async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParam
     mode,
   );
   await confirmMissingDependentApps(missingDependentApps, mode);
-  for (const { deployment, conflicts, unmanaged, takeovers } of pending) {
+  const remainingDeletions: ImportantResourceDeletion[] = [];
+  for (const { deployment, conflicts, unmanaged, takeovers, importantDeletions } of pending) {
+    const split = splitTakeoverDeletions(takeovers, importantDeletions);
+    remainingDeletions.push(...split.remaining);
     if (deployment.owner.kind === "workspace") {
-      await confirmWorkspaceTakeover(takeovers, mode);
+      await confirmWorkspaceTakeover(split.takeovers, mode);
     } else {
       await confirmOwnerConflict(
         conflicts,
@@ -757,19 +762,38 @@ export async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParam
     }
     await confirmUnmanagedResources(unmanaged, deployment.application.name, mode);
   }
-  const takenOverDeletes = new Set(
-    pending.flatMap(({ takeovers }) =>
-      takeovers.filter(({ action }) => action === "delete").map(deletionKey),
-    ),
+  await confirmImportantResourceDeletion(remainingDeletions, mode);
+}
+
+type SplitTakeoverDeletions = {
+  takeovers: TakeoverConfirmation[];
+  remaining: ImportantResourceDeletion[];
+};
+
+function splitTakeoverDeletions(
+  takeovers: ReadonlyArray<WorkspaceTakeover>,
+  importantDeletions: ReadonlyArray<ImportantResourceDeletion>,
+): SplitTakeoverDeletions {
+  const deletedByTakeover = new Set(
+    takeovers.filter(({ action }) => action === "delete").map(deletionKey),
   );
-  await confirmImportantResourceDeletion(
-    pending.flatMap((confirmations) =>
-      confirmations.importantDeletions.filter(
-        (deletion) => !takenOverDeletes.has(deletionKey(deletion)),
-      ),
-    ),
-    mode,
-  );
+  const covered = (deletion: ImportantResourceDeletion) =>
+    deletedByTakeover.has(deletionKey(deletion)) ||
+    (deletion.parent !== undefined && deletedByTakeover.has(deletionKey(deletion.parent)));
+  return {
+    takeovers: takeovers.map((takeover) => {
+      if (takeover.action !== "delete") return takeover;
+      const key = deletionKey(takeover);
+      return {
+        ...takeover,
+        losesData: importantDeletions.some((deletion) => deletionKey(deletion) === key),
+        nestedDeletions: importantDeletions.filter(
+          (deletion) => deletion.parent && deletionKey(deletion.parent) === key,
+        ),
+      };
+    }),
+    remaining: importantDeletions.filter((deletion) => !covered(deletion)),
+  };
 }
 
 /**
