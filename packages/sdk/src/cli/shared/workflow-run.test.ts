@@ -209,6 +209,21 @@ describe("startWorkflowRun", () => {
       expect(client.deleteFunctionRegistry).toHaveBeenCalledTimes(2);
     });
 
+    test("waits for a run without a time limit when the wait is unlimited", async () => {
+      const client = createClient();
+      const started = await jobRun(client);
+
+      const outcome = await awaitWorkflowRun({
+        client: asClient(client),
+        workspaceId: "ws",
+        started,
+        pollInterval: 1,
+        timeoutMs: Number.POSITIVE_INFINITY,
+      });
+
+      expect(outcome.state).toBe("finished");
+    });
+
     test("removes all of them once the run finishes", async () => {
       const client = createClient();
       const started = await jobRun(client);

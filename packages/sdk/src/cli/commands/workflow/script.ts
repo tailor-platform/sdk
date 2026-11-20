@@ -13,35 +13,35 @@ import { CLIError, formatCommandHint } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { assertGeneratedTypeScript } from "../function/script-scaffold";
 
-const MAIN_JOB_NAME = "process-all";
+const MAIN_JOB_NAME = "main";
 
 const WORKFLOW_SKELETON = [
   "/**",
   " * Workflow to try without deploying:",
   " *",
-  ` *   tailor workflow run <this file> --job ${MAIN_JOB_NAME} --arg '{"ids":["a","b"]}'`,
+  ` *   tailor workflow run <this file> --arg '{"ids":["a","b"]}'`,
   " */",
   "",
   'import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";',
   "",
-  "export const processItem = createWorkflowJob({",
-  '  name: "process-item",',
+  "export const sub = createWorkflowJob({",
+  '  name: "sub",',
   "  body: (input: { id: string }) => {",
   "    return { id: input.id, processed: true };",
   "  },",
   "});",
   "",
-  "export const processAll = createWorkflowJob({",
+  "export const main = createWorkflowJob({",
   `  name: "${MAIN_JOB_NAME}",`,
   "  body: (input: { ids: string[] }) => {",
-  "    const results = input.ids.map((id) => processItem.start({ id }));",
+  "    const results = input.ids.map((id) => sub.start({ id }));",
   "    return { results };",
   "  },",
   "});",
   "",
   "export default createWorkflow({",
-  `  name: "${MAIN_JOB_NAME}",`,
-  "  mainJob: processAll,",
+  '  name: "temporal-workflow",',
+  "  mainJob: main,",
   "});",
   "",
 ].join("\n");
@@ -55,7 +55,7 @@ export const scriptCommand = defineAppCommand({
       description: "Path to create the workflow file at (must end with .ts)",
     }),
   }),
-  notes: `The scaffolded file defines two workflow jobs and a workflow: \`process-all\` starts one \`process-item\` job for each id of its input, and the workflow runs from \`process-all\`. Run it with \`tailor workflow run <file> --job process-all --arg '{"ids":["a","b"]}'\`.
+  notes: `The scaffolded file defines two workflow jobs and a workflow: \`main\` starts one \`sub\` job for each id of its input, and the workflow runs from \`main\`. Run it with \`tailor workflow run <file> --arg '{"ids":["a","b"]}'\`.
 
 Rename the jobs and the workflow and fill in the bodies; to deploy it, add the file to the config's \`workflow.files\`. An existing file is never overwritten.`,
   examples: [{ cmd: "workflows/order.ts", desc: "Scaffold a workflow definition" }],
@@ -85,7 +85,7 @@ Rename the jobs and the workflow and fill in the bodies; to deploy it, add the f
     logger.info(
       `Next: edit the workflow, then run ${formatCommandHint({
         command: "tailor",
-        args: ["workflow", "run", relPath, "--job", MAIN_JOB_NAME, "--arg", '{"ids":["a","b"]}'],
+        args: ["workflow", "run", relPath, "--arg", '{"ids":["a","b"]}'],
       })}`,
     );
   },

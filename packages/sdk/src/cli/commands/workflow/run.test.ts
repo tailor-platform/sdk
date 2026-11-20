@@ -212,6 +212,40 @@ describe("workflow run", () => {
     expect(bundleForRun).not.toHaveBeenCalled();
   });
 
+  test("starts from the main job of the workflow the file exports when --job is not given", async () => {
+    using _stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    await invoke(runCommand, [scriptPath, "-m", "admin"]);
+
+    expect(detectFunctionType).toHaveBeenCalledWith(
+      expect.objectContaining({ useWorkflowMainJob: true }),
+    );
+  });
+
+  test("waits without a limit unless --timeout is given", async () => {
+    using _stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    await invoke(runCommand, [scriptPath, "-m", "admin"]);
+
+    expect(awaitWorkflowRun).toHaveBeenCalledWith(
+      expect.objectContaining({ timeoutMs: Number.POSITIVE_INFINITY }),
+    );
+  });
+
+  test("waits at most as long as --timeout says", async () => {
+    using _stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    await invoke(runCommand, [scriptPath, "--timeout", "30s", "-m", "admin"]);
+
+    expect(awaitWorkflowRun).toHaveBeenCalledWith(expect.objectContaining({ timeoutMs: 30_000 }));
+  });
+
   test.each([
     { type: "plain" as const, name: "backfill" },
     { type: "resolver" as const, name: "sum" },

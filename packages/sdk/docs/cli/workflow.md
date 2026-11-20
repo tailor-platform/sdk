@@ -153,7 +153,7 @@ tailor workflow run [options] <file>
 | `--arg-file <ARG_FILE>`         | -     | Path to a JSON file holding the object to pass to the job as its input                                                                     | No       | -                    | -                                   |
 | `--machine-user <MACHINE_USER>` | `-m`  | Machine user name for authentication. Falls back to the active profile's default machine user.                                             | No       | -                    | `TAILOR_PLATFORM_MACHINE_USER_NAME` |
 | `--interval <INTERVAL>`         | `-i`  | Polling interval when waiting, at most 1m (e.g., '3s', '500ms', '1m')                                                                      | No       | `"3s"`               | -                                   |
-| `--timeout <TIMEOUT>`           | `-t`  | Maximum time to wait for the run, not a limit on its jobs (e.g., '30s', '10m')                                                             | No       | `"10m"`              | -                                   |
+| `--timeout <TIMEOUT>`           | `-t`  | Maximum time to wait for the run, not a limit on its jobs; waits without a limit when omitted (e.g., '30s', '10m')                         | No       | -                    | -                                   |
 | `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                                                                                                 | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`                |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -176,9 +176,9 @@ $ tailor workflow run workflows/jobs.ts --job process-order --arg-file ./order.j
 
 The workflow job runs as a temporary workflow, so the job you are editing runs the way it does once deployed, without a deploy. The job is the first job of the temporary workflow, and every job it starts with `.start()` is registered with it. A job that calls `.start()` is suspended until the started job finishes and then continues with its result, so work that does not fit in one job is split into jobs and carried across them. The command waits for the whole run, prints the logs of every job and the result of the first job, and removes the temporary resources afterwards.
 
-A single job is ended by the Platform after 5 minutes, and the run is reported as failed with a timeout error. `--timeout` limits how long this command waits, not how long the jobs may run.
+A single job is ended by the Platform after 5 minutes, and the run is reported as failed with a timeout error. The command waits until the run ends; `--timeout` limits how long it waits, not how long the jobs may run.
 
-The file must export workflow jobs created with `createWorkflowJob`; a file that defines no workflow job is refused. `--job` selects the job to start from and is optional when the file defines only one. The jobs it starts run from your files, not the ones already deployed under the same names, and the jobs of files in the config's `workflow.files` can be started too. The input must be a JSON object (`null` is accepted too): unlike `function run`, a number, string, boolean, or array is refused before anything is created. `tailor workflow script` scaffolds a workflow to start from.
+The file must export workflow jobs created with `createWorkflowJob`; a file that defines no workflow job is refused. Without `--job`, the run starts from the main job of the workflow the file exports as default, or from the only job when the file defines just one; `--job` selects another job to start from. The jobs it starts run from your files, not the ones already deployed under the same names, and the jobs of files in the config's `workflow.files` can be started too. The input must be a JSON object (`null` is accepted too): unlike `function run`, a number, string, boolean, or array is refused before anything is created. `tailor workflow script` scaffolds a workflow to start from.
 
 When the wait stops (`--timeout` elapsed), the run keeps going and its temporary resources stay in place. The command prints the run ID; read the outcome with `tailor workflow executions`. `tailor workflow cleanup` removes the resources of runs that have finished, and the next `workflow run` does the same before it starts. A run that finished within the last few minutes is left alone by that automatic sweep (and by `tailor deploy`), so the command still waiting for it can read its result; `tailor workflow cleanup` removes it at once.
 
@@ -210,7 +210,7 @@ $ tailor workflow script workflows/order.ts
 
 **Notes**
 
-The scaffolded file defines two workflow jobs and a workflow: `process-all` starts one `process-item` job for each id of its input, and the workflow runs from `process-all`. Run it with `tailor workflow run <file> --job process-all --arg '{"ids":["a","b"]}'`.
+The scaffolded file defines two workflow jobs and a workflow: `main` starts one `sub` job for each id of its input, and the workflow runs from `main`. Run it with `tailor workflow run <file> --arg '{"ids":["a","b"]}'`.
 
 Rename the jobs and the workflow and fill in the bodies; to deploy it, add the file to the config's `workflow.files`. An existing file is never overwritten.
 

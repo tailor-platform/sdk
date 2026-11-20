@@ -242,6 +242,45 @@ export default {
       expect(result.exportName).toBe("my_job");
     });
 
+    describe("main job of the workflow a file exports", () => {
+      const workflowSource = `${multiJobSource}
+export default {
+  name: "my-workflow",
+  mainJob: { name: "job-b", start: () => {}, body: () => {} },
+  start: () => {},
+};
+`;
+
+      test("is selected without a job name when the caller asks for it", async () => {
+        const filePath = writeFile("workflow-main.mjs", workflowSource);
+
+        const result = await detectFunctionType({ filePath, useWorkflowMainJob: true });
+
+        expect(result.name).toBe("job-b");
+        expect(result.exportName).toBe("job_b");
+      });
+
+      test("is not picked unless the caller asks for it, so function run still asks for --name", async () => {
+        const filePath = writeFile("workflow-main-default.mjs", workflowSource);
+
+        await expect(detectFunctionType({ filePath })).rejects.toThrow(
+          "Multiple workflow jobs found",
+        );
+      });
+
+      test("yields to a job name that was given", async () => {
+        const filePath = writeFile("workflow-main-named.mjs", workflowSource);
+
+        const result = await detectFunctionType({
+          filePath,
+          jobName: "job-a",
+          useWorkflowMainJob: true,
+        });
+
+        expect(result.name).toBe("job-a");
+      });
+    });
+
     test("selects a workflow job by --name", async () => {
       const filePath = writeFile("multi-jobs.mjs", multiJobSource);
 

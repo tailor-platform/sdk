@@ -223,7 +223,7 @@ export interface AwaitWorkflowRunParams {
   started: StartedWorkflowRun;
   /** Poll interval in milliseconds */
   pollInterval: number;
-  /** Longest wait in milliseconds */
+  /** Longest wait in milliseconds; `Number.POSITIVE_INFINITY` waits until the run ends */
   timeoutMs: number;
   /** Called with each poll that finds the run still going */
   onActive?: () => void;
@@ -252,7 +252,7 @@ export async function awaitWorkflowRun(
   params: AwaitWorkflowRunParams,
 ): Promise<WorkflowRunOutcome> {
   const { client, workspaceId, started, pollInterval, timeoutMs } = params;
-  const deadline = Date.now() + timeoutMs;
+  const deadline = Number.isFinite(timeoutMs) ? Date.now() + timeoutMs : undefined;
   let execution;
   let jobExecutionId: string | undefined;
   try {
@@ -332,8 +332,8 @@ interface OutcomeAfterRemovalParams {
   jobExecutionId: string | undefined;
   /** Wait between reads in milliseconds */
   pollInterval: number;
-  /** Epoch milliseconds after which reading stops */
-  deadline: number;
+  /** Epoch milliseconds after which reading stops; none when the wait is unlimited */
+  deadline: number | undefined;
 }
 
 /**
@@ -359,13 +359,15 @@ async function outcomeAfterWorkflowRemoved(
   while (true) {
     let signal: AbortSignal | undefined;
     try {
-      const budget = deadline - Date.now();
-      if (budget <= 0) return unavailable("the job was still running when the wait ended");
-      signal = AbortSignal.timeout(budget);
-      const { execution: job } = await client.getFunctionExecution(
-        { workspaceId, executionId: jobExecutionId },
-        { signal },
-      );
+      if (deadline !== undefined) {
+        const budget = deadline - Date.now();
+        if (budget <= 0) return unavailable("the job was still running when the wait ended");
+        signal = AbortSignal.timeout(budget);
+      }
+      const request = { workspaceId, executionId: jobExecutionId };
+      const { execution: job } = await (signal
+        ? client.getFunctionExecution(request, { signal })
+        : client.getFunctionExecution(request));
       if (!job) return unavailable("the job execution of the run could not be found");
       const logs = joinFunctionLogMessages(job.logEntries);
       const result = job.result;
@@ -397,7 +399,7 @@ async function outcomeAfterWorkflowRemoved(
         return unavailable(error instanceof Error ? error.message : String(error));
       }
     }
-    const remaining = deadline - Date.now();
+    const remaining = deadline === undefined ? pollInterval : deadline - Date.now();
     if (remaining <= 0) return unavailable("the job was still running when the wait ended");
     await new Promise((resolve) => setTimeout(resolve, Math.min(pollInterval, remaining)));
   }

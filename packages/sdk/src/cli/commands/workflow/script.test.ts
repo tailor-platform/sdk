@@ -8,7 +8,7 @@ import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import { scriptCommand } from "./script";
 
 describe("workflow script", () => {
-  test("scaffolds a workflow whose main job starts another job, exported as a workflow", async () => {
+  test("scaffolds a workflow whose main job starts a sub job, exported as a workflow", async () => {
     using tmp = tempCwd("sdk-workflow-script-");
     using _logger = silenceLogger("info", "success", "warn");
 
@@ -18,12 +18,13 @@ describe("workflow script", () => {
     expect(file).toContain(
       'import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";',
     );
-    expect(file).toContain("processItem.start(");
+    expect(file).toContain("sub.start(");
     expect(file).toContain("export default createWorkflow({");
-    expect(file).toContain("mainJob: processAll");
+    expect(file).toContain("mainJob: main");
+    expect(file).toContain('name: "temporal-workflow"');
   });
 
-  test("tells the user to run the scaffolded workflow from its main job with workflow run", async () => {
+  test("tells the user to run the scaffolded workflow with workflow run, without naming a job", async () => {
     using _tmp = tempCwd("sdk-workflow-script-");
     using _success = silenceLogger("success", "warn");
     const info = vi.spyOn(logger, "info").mockImplementation(() => {});
@@ -31,7 +32,7 @@ describe("workflow script", () => {
     await runCommand(scriptCommand, ["workflows/order.ts"]);
 
     expect(info).toHaveBeenCalledWith(
-      expect.stringContaining("tailor workflow run workflows/order.ts --job process-all"),
+      expect.stringContaining("tailor workflow run workflows/order.ts --arg"),
     );
     info.mockRestore();
   });

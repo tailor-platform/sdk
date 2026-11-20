@@ -58,6 +58,8 @@ interface DetectFunctionOptions {
   jobName?: string;
   /** Flag the asking command selects a job with, named in the hint (default: `--name`) */
   jobFlag?: string;
+  /** Start from the main job of the workflow the file exports as default when no job name is given */
+  useWorkflowMainJob?: boolean;
 }
 
 /**
@@ -68,7 +70,7 @@ interface DetectFunctionOptions {
 export async function detectFunctionType(
   options: DetectFunctionOptions,
 ): Promise<DetectedFunction> {
-  const { filePath, jobName, jobFlag = "--name" } = options;
+  const { filePath, jobName, jobFlag = "--name", useWorkflowMainJob = false } = options;
 
   const module = await importUserModule(filePath);
 
@@ -106,7 +108,11 @@ export async function detectFunctionType(
   }
 
   // 3. Check workflow jobs (scan all named exports)
-  const workflowJobResult = detectWorkflowJob(module, jobName, jobFlag);
+  const workflowJobResult = detectWorkflowJob(
+    module,
+    jobName ?? (useWorkflowMainJob ? workflowMainJobName(module.default) : undefined),
+    jobFlag,
+  );
   if (workflowJobResult) {
     return workflowJobResult;
   }
@@ -128,6 +134,19 @@ export async function detectFunctionType(
     details:
       'The file must have one of:\n - A default-exported resolver (createResolver)\n - A default-exported executor (createExecutor) with function/jobFunction operation\n - A named-exported workflow job (createWorkflowJob)\n - A default-exported function\n - A named-exported "main" function',
   });
+}
+
+/**
+ * Read the name of the main job of a workflow definition.
+ * @param workflow - The default export of a module
+ * @returns Name of its main job, or undefined when it is not a workflow
+ */
+function workflowMainJobName(workflow: unknown): string | undefined {
+  if (typeof workflow !== "object" || workflow === null || !("mainJob" in workflow)) {
+    return undefined;
+  }
+  const mainJob = WorkflowJobSchema.safeParse(workflow.mainJob);
+  return mainJob.success ? mainJob.data.name : undefined;
 }
 
 /**
