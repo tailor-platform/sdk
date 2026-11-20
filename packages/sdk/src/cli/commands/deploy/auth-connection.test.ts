@@ -5,6 +5,7 @@ import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import type { AuthService } from "#/cli/services/auth/service";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { AuthConnectionConfig } from "#/types/auth-connection.generated";
+import type { SecretsStateScope } from "./secrets-state";
 
 const { mockLoggerWarn, mockLoggerInfo, mockSaveSecretsState } = vi.hoisted(() => ({
   mockLoggerWarn: vi.fn(),
@@ -63,6 +64,18 @@ vi.mock("./label", async (importOriginal) => {
 
 const workspaceId = "ws-1";
 const appName = "my-app";
+const configPath = "/proj/app/tailor.config.ts";
+
+function connectionStateScope(
+  overrides: Partial<Pick<SecretsStateScope, "workspaceId" | "applicationId">> = {},
+): SecretsStateScope {
+  return {
+    workspaceId: overrides.workspaceId ?? workspaceId,
+    applicationId: overrides.applicationId,
+    applicationName: appName,
+    configPath,
+  };
+}
 
 type ConnectionFixture = {
   name: string;
@@ -155,9 +168,7 @@ describe("planAuthConnections", () => {
 
     const { changeSet, resourceOwners } = await planAuthConnections(
       client,
-      workspaceId,
-      appName,
-      undefined,
+      connectionStateScope(),
       emptyAuths,
     );
 
@@ -170,7 +181,7 @@ describe("planAuthConnections", () => {
       connections: [{ name: "owned-connection", ownerLabel: appName }],
     });
 
-    await planAuthConnections(client, workspaceId, appName, undefined, emptyAuths);
+    await planAuthConnections(client, connectionStateScope(), emptyAuths);
 
     const trns = vi
       .mocked(client.getMetadata)
@@ -191,9 +202,7 @@ describe("planAuthConnections", () => {
 
     const result = await planAuthConnections(
       client,
-      workspaceId,
-      appName,
-      undefined,
+      connectionStateScope(),
       authsWith(["adopted-connection"]),
     );
     const { changeSet, unmanaged } = result;
@@ -232,9 +241,7 @@ describe("planAuthConnections", () => {
 
     const { changeSet, conflicts } = await planAuthConnections(
       client,
-      workspaceId,
-      appName,
-      "id-2",
+      connectionStateScope({ applicationId: "id-2" }),
       authsWith(["owned-connection"]),
     );
 
@@ -254,9 +261,7 @@ describe("planAuthConnections", () => {
 
     const { changeSet, unmanaged } = await planAuthConnections(
       client,
-      workspaceId,
-      appName,
-      undefined,
+      connectionStateScope(),
       authsWith(["owned-connection"]),
     );
 
@@ -275,7 +280,7 @@ describe("planAuthConnections", () => {
       providerUrl: "https://changed.example.com",
     };
 
-    const { changeSet } = await planAuthConnections(client, workspaceId, appName, undefined, [
+    const { changeSet } = await planAuthConnections(client, connectionStateScope(), [
       { name: "auth-a", connections: { conn: ciConfig } } as unknown as AuthService,
     ]);
 
@@ -297,16 +302,12 @@ describe("planAuthConnections", () => {
 
     const resultA = await planAuthConnections(
       client,
-      "ws-a",
-      appName,
-      "shared-app-id",
+      connectionStateScope({ workspaceId: "ws-a", applicationId: "shared-app-id" }),
       authsWith(["shared-connection"]),
     );
     const resultB = await planAuthConnections(
       client,
-      "ws-b",
-      appName,
-      "shared-app-id",
+      connectionStateScope({ workspaceId: "ws-b", applicationId: "shared-app-id" }),
       authsWith(["shared-connection"]),
     );
 
@@ -321,6 +322,7 @@ describe("planAuthConnections", () => {
       workspaceId: "ws-b",
       applicationId: "shared-app-id",
       applicationName: appName,
+      configPath,
     });
   });
 });
@@ -337,9 +339,7 @@ describe("applyAuthConnections", () => {
     const client = createMockClient({ connections: [] });
     const result = await planAuthConnections(
       client,
-      workspaceId,
-      appName,
-      undefined,
+      connectionStateScope(),
       authsWith(["new-conn"]),
     );
     expect(result.changeSet.creates.map((c) => c.name)).toEqual(["new-conn"]);
@@ -355,7 +355,7 @@ describe("applyAuthConnections", () => {
     const client = createMockClient({
       connections: [{ name: "owned-connection", ownerLabel: appName }],
     });
-    const result = await planAuthConnections(client, workspaceId, appName, undefined, emptyAuths);
+    const result = await planAuthConnections(client, connectionStateScope(), emptyAuths);
     expect(result.changeSet.deletes.map((d) => d.name)).toEqual(["owned-connection"]);
 
     await applyAuthConnections(client, result, "delete-resources");
@@ -370,13 +370,7 @@ describe("applyAuthConnections", () => {
     const client = createMockClient({
       connections: [{ name: "conn", ownerLabel: appName }],
     });
-    const result = await planAuthConnections(
-      client,
-      workspaceId,
-      appName,
-      undefined,
-      authsWith(["conn"]),
-    );
+    const result = await planAuthConnections(client, connectionStateScope(), authsWith(["conn"]));
     expect(result.changeSet.updates.map((u) => u.name)).toEqual(["conn"]);
 
     await applyAuthConnections(client, result, "create-update");
@@ -403,7 +397,7 @@ describe("applyAuthConnections", () => {
       providerUrl: "https://changed.example.com",
     };
 
-    const result = await planAuthConnections(client, workspaceId, appName, undefined, [
+    const result = await planAuthConnections(client, connectionStateScope(), [
       { name: "auth-a", connections: { conn: ciConfig } } as unknown as AuthService,
     ]);
     expect(result.changeSet.updates.map((u) => u.name)).toEqual(["conn"]);
@@ -429,13 +423,7 @@ describe("applyAuthConnections", () => {
       connection: { status: AuthConnection_Status.UNAUTHORIZED },
     });
 
-    const result = await planAuthConnections(
-      client,
-      workspaceId,
-      appName,
-      undefined,
-      authsWith(["conn"]),
-    );
+    const result = await planAuthConnections(client, connectionStateScope(), authsWith(["conn"]));
     await applyAuthConnections(client, result, "create-update");
 
     expect(mockLoggerWarn).toHaveBeenCalledWith(

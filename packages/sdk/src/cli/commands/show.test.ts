@@ -1,12 +1,14 @@
 // oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
+import { runCommand } from "@politty/zod";
 import { aroundEach, describe, expect, test, vi, type Mock } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
-import { show } from "./show";
+import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
+import { show, showCommand } from "./show";
 
 vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
@@ -90,6 +92,24 @@ describe("show", () => {
       listAuthOAuth2Clients: listAuthOAuth2ClientsMock,
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
     await runTest();
+  });
+
+  test.each([
+    { args: [], configPath: undefined },
+    { args: ["--config", "apps/shop/tailor.config.ts"], configPath: "apps/shop/tailor.config.ts" },
+  ])("loads the config the command was given ($args)", async ({ args, configPath }) => {
+    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
+    using _logger = silenceLogger("out");
+    getAIGatewayMock.mockRejectedValue(new ConnectError("not found", Code.NotFound));
+
+    try {
+      const result = await runCommand(showCommand, args);
+      expect(result.error).toBeUndefined();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+
+    expect(loadConfig).toHaveBeenCalledWith(configPath);
   });
 
   test("includes the URL of every configured AI Gateway", async () => {

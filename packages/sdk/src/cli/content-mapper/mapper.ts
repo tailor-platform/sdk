@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
-import { findUpSync } from "find-up-simple";
 import * as path from "pathe";
-import { DEFAULT_CONFIG_PATH } from "#/cli/shared/args";
+import { CONFIG_FILE_NAME } from "#/cli/shared/args";
 import { loadConfig } from "#/cli/shared/config-loader";
+import { findConfigFile } from "#/cli/shared/context";
 import { errorSummary } from "#/cli/shared/errors";
 import { readPackageJson } from "#/cli/shared/package-json";
 import { KYSELY_FILE_NAME, REGISTRY_FILE_NAME } from "#/cli/shared/tailor-file-extension";
@@ -50,7 +50,7 @@ const PROJECT_NOT_OPENED = "The project was not opened; restart the TypeScript s
 function configCandidates(searchFrom: string, foundIn?: string): string[] {
   const candidates: string[] = [];
   for (let dir = searchFrom; dir !== foundIn; dir = path.dirname(dir)) {
-    candidates.push(path.join(dir, DEFAULT_CONFIG_PATH));
+    candidates.push(path.join(dir, CONFIG_FILE_NAME));
     if (path.dirname(dir) === dir) break;
   }
   return candidates;
@@ -113,10 +113,10 @@ async function loadProject(
   evaluate: EvaluateConfig,
 ): Promise<Omit<Project, "identity"> & { configPath?: string }> {
   const searchFrom = path.dirname(tsconfigPath);
-  const configPath = findUpSync(DEFAULT_CONFIG_PATH, { cwd: searchFrom });
+  const configPath = findConfigFile(searchFrom);
   if (!configPath) {
     return {
-      error: `No ${DEFAULT_CONFIG_PATH} found in ${searchFrom} or its parent directories`,
+      error: `No ${CONFIG_FILE_NAME} found in ${searchFrom} or its parent directories`,
       watchedFiles: configCandidates(searchFrom),
     };
   }
@@ -200,7 +200,7 @@ export function createContentMapperHandlers(evaluate: EvaluateConfig): ContentMa
         watchedFiles: loaded.watchedFiles,
         optionDiagnostics: Object.keys(options ?? {}).map((key) => ({
           path: [key],
-          messageText: `@tailor-platform/sdk's content mapper takes no options; it reads ${DEFAULT_CONFIG_PATH}`,
+          messageText: `@tailor-platform/sdk's content mapper takes no options; it reads ${CONFIG_FILE_NAME}`,
           code: OPTION_DIAGNOSTIC_CODE,
         })),
       };

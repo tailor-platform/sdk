@@ -21,6 +21,7 @@ import {
   loadSecretsState,
   saveSecretsState,
   withSecretsStateLock,
+  type SecretsStateScope,
 } from "./secrets-state";
 import type { AuthConnectionConfig } from "#/types/auth-connection.generated";
 import type { ApplyPhase } from "./phase";
@@ -111,24 +112,16 @@ function buildUpdateMask(
 /**
  * Plan auth connection changes based on current and desired state.
  * @param client - Operator client instance
- * @param workspaceId - Workspace ID
- * @param appName - Application name for ownership
- * @param appId - Stable application id (when managed by SDK)
+ * @param stateScope - Workspace, application, and config the connections belong to
  * @param auths - Auth services with connection configs
  * @returns Planned changes for auth connections
  */
 export async function planAuthConnections(
   client: OperatorClient,
-  workspaceId: string,
-  appName: string,
-  appId: string | undefined,
+  stateScope: SecretsStateScope,
   auths: ReadonlyArray<Readonly<AuthService>>,
 ) {
-  const stateScope = {
-    workspaceId,
-    applicationId: appId,
-    applicationName: appName,
-  };
+  const { workspaceId, applicationName: appName, applicationId: appId } = stateScope;
   const changeSet = createChangeSet<CreateConnection, UpdateConnection, DeleteConnection>(
     "Auth connections",
   );

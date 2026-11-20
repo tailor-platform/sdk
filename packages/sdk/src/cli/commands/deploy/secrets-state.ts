@@ -13,6 +13,7 @@ import * as path from "pathe";
 import { z } from "zod";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { CLIError, internalError } from "#/cli/shared/errors";
+import type { PlanContext } from "#/cli/commands/deploy/types";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 
 // strip unknown keys
@@ -42,6 +43,22 @@ export interface SecretsStateScope {
   readonly workspaceId: string;
   readonly applicationId: string | undefined;
   readonly applicationName: string;
+  /** Config being deployed; a relative output directory resolves against its directory. */
+  readonly configPath: string;
+}
+
+/**
+ * Build the secrets state scope of the application a plan deploys.
+ * @param context - Planning context
+ * @returns Secrets state scope for the plan's workspace, application, and config
+ */
+export function secretsStateScope(context: PlanContext): SecretsStateScope {
+  return {
+    workspaceId: context.workspaceId,
+    applicationId: context.application.id,
+    applicationName: context.application.name,
+    configPath: context.config.path,
+  };
 }
 
 /**
@@ -51,7 +68,12 @@ export interface SecretsStateScope {
  */
 export function getSecretsStatePath(scope: SecretsStateScope): string {
   const scopeHash = hashValue(JSON.stringify([scope.workspaceId, applicationStateKey(scope)]));
-  return path.join(getDistDir(), "secrets-state", `${scopeHash}.json`);
+  return path.resolve(
+    path.dirname(scope.configPath),
+    getDistDir(),
+    "secrets-state",
+    `${scopeHash}.json`,
+  );
 }
 
 function loadPersistedSecretsState(scope: SecretsStateScope): PersistedSecretsState | undefined {

@@ -1,12 +1,12 @@
 import * as fs from "node:fs";
-import {
-  extractOwnedNamespaces,
-  loadConfig,
-  logger,
-  getNamespacesWithMigrations,
-} from "@tailor-platform/sdk/cli";
+import { logger } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { isCI } from "std-env";
+import {
+  defaultLoadErdNamespaces,
+  defaultLoadHasMigrations,
+  defaultLoadHasSeeds,
+} from "./config-loaders";
 import { detectDefaultBranch, type GitRunner } from "./git";
 import {
   AUTOFIX_LABEL,
@@ -25,6 +25,7 @@ import {
   isManagedHash,
   ManagedMergeError,
 } from "./managed";
+import { escapesRoot } from "./repo-path";
 import { defaultLoadSeedSettings, seedSettingsProblem, type SeedSettings } from "./seed-settings";
 import { TEMPLATE_VERSION } from "./templates";
 
@@ -346,12 +347,6 @@ function detectDefaultBranchSafe(cwd: string, run: GitRunner | undefined): strin
   }
 }
 
-function escapesRoot(rel: string): boolean {
-  return (
-    path.isAbsolute(rel) || rel === ".." || rel.startsWith(`..${path.sep}`) || rel.startsWith("../")
-  );
-}
-
 // The lock is machine-owned, but a corrupted or hand-edited lock could carry an
 // absolute, `..`-traversing, or symlinked path. Reject lexical escapes and, when
 // the path exists, resolve symlinks and reject anything whose real location is
@@ -463,21 +458,6 @@ export type CheckGitHubOptions = {
   /** Injectable seedPlugin settings loader, for testing. Defaults to loading the config. */
   loadSeedSettings?: (configPath: string) => Promise<SeedSettings | null>;
 };
-
-async function defaultLoadErdNamespaces(configPath: string): Promise<string[]> {
-  const { config } = await loadConfig(configPath);
-  return extractOwnedNamespaces(config);
-}
-
-async function defaultLoadHasMigrations(configPath: string): Promise<boolean> {
-  const { config } = await loadConfig(configPath);
-  return getNamespacesWithMigrations(config, path.dirname(configPath)).length > 0;
-}
-
-async function defaultLoadHasSeeds(configPath: string): Promise<boolean> {
-  const { plugins } = await loadConfig(configPath);
-  return plugins.some((p) => p.id === "@tailor-platform/seed");
-}
 
 /**
  * Audit the generated workflows for drift against the current config/repo

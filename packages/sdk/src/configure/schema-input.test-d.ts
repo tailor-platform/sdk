@@ -7,6 +7,7 @@ import type { Trigger } from "#/configure/services/executor/trigger/index";
 import type { HttpAdapter } from "#/configure/services/http-adapter/http-adapter";
 import type { IdPOwnConfig } from "#/configure/services/idp/types";
 import type { ResolverConfig } from "#/configure/services/resolver/resolver";
+import type { SecretsDefinition } from "#/configure/services/secrets/types";
 import type {
   DBFieldMetadata,
   RawRelationConfig,
@@ -30,6 +31,7 @@ import type { HttpAdapterConfigInput } from "#/types/http-adapter.generated";
 import type { IdPInput } from "#/types/idp.generated";
 import type { PluginConfigInput } from "#/types/plugin-config.generated";
 import type { ResolverInput } from "#/types/resolver.generated";
+import type { SecretsInput } from "#/types/secrets.generated";
 import type {
   DBFieldMetadataInput,
   RawRelationConfigInput,
@@ -162,6 +164,11 @@ describe("configure input types are accepted by the schema that parses them", ()
   test("defineAIGateway", () => {
     expectTypeOf<AIGatewayServiceInput>().toExtend<AIGatewayInput>();
     expectTypeOf<ExtraKeyPaths<AIGatewayServiceInput, AIGatewayInput>>().toEqualTypeOf<never>();
+  });
+
+  test("defineSecretManager", () => {
+    expectTypeOf<SecretsDefinition>().toExtend<SecretsInput>();
+    expectTypeOf<ExtraKeyPaths<SecretsDefinition, SecretsInput>>().toEqualTypeOf<never>();
   });
 
   test("db.table metadata", () => {
