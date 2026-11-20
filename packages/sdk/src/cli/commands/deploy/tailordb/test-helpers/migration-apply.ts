@@ -316,7 +316,7 @@ export function createPlanResult(options: PlanResultOptions = {}): TailorDBPlanR
       workspaceId: WORKSPACE_ID,
       application: {
         name: APP_NAME,
-        authService: { config: { name: "auth", machineUsers: { migrator: {} } } },
+        authServices: [{ config: { name: "auth", machineUsers: { migrator: {} } } }],
         ...options.application,
       } as Application,
       tailorDBInputs: options.local

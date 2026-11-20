@@ -228,9 +228,9 @@ export async function shouldForceApplyAll(
   application.idpServices.forEach((idp) => {
     candidateTrns.add(resourceTrn(workspaceId, "idp", idp.name));
   });
-  if (application.authService) {
-    candidateTrns.add(resourceTrn(workspaceId, "auth", application.authService.config.name));
-  }
+  application.authServices.forEach((authService) => {
+    candidateTrns.add(resourceTrn(workspaceId, "auth", authService.config.name));
+  });
   Object.values(application.executorService?.executors ?? {}).forEach((executor) => {
     candidateTrns.add(resourceTrn(workspaceId, "executor", executor.name));
   });
@@ -414,11 +414,7 @@ export function collectExternalAuthIdpConfigNames(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): ReadonlyMap<string, string | undefined> {
   const idpConfigNames = new Map<string, string | undefined>();
-  for (const target of targets) {
-    const authService = target.application.authService;
-    if (!authService) {
-      continue;
-    }
+  for (const authService of targets.flatMap((target) => target.application.authServices)) {
     const { name } = authService.config;
     const idpConfigName = authService.config.idProvider?.name;
     if (idpConfigNames.has(name) && idpConfigNames.get(name) !== idpConfigName) {
@@ -439,11 +435,7 @@ export function collectPlannedMachineUsers(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): ReadonlyMap<string, ReadonlySet<string>> {
   const machineUsers = new Map<string, Set<string>>();
-  for (const target of targets) {
-    const authService = target.application.authService;
-    if (!authService) {
-      continue;
-    }
+  for (const authService of targets.flatMap((target) => target.application.authServices)) {
     const { name } = authService.config;
     const names = machineUsers.get(name) ?? new Set<string>();
     for (const machineUserName of Object.keys(authService.config.machineUsers ?? {})) {
@@ -832,14 +824,13 @@ export function adjustApplicationForMigrationTest(
     return application;
   }
   const forBaseline = internalContext.migrationTestBaselines !== undefined;
-  const authService =
-    forBaseline && application.authService
-      ? { ...application.authService, userProfile: undefined }
-      : application.authService;
+  const authServices = forBaseline
+    ? application.authServices.map((authService) => ({ ...authService, userProfile: undefined }))
+    : application.authServices;
   const adjusted: Application = {
     ...application,
     executorService: forBaseline ? undefined : application.executorService,
-    authService,
+    authServices,
     staticWebsiteServices: application.staticWebsiteServices.map((website) => ({
       ...website,
       customDomains: undefined,

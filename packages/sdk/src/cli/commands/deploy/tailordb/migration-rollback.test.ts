@@ -245,9 +245,11 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         application: {
           name: "test-app",
           tailorDBServices: [mockService],
-          authService: {
-            config: { name: "auth", machineUsers: { migrator: {} } },
-          },
+          authServices: [
+            {
+              config: { name: "auth", machineUsers: { migrator: {} } },
+            },
+          ],
         } as unknown as Application,
         config: mockConfig,
         noSchemaCheck: true,

@@ -722,7 +722,7 @@ describe("collectFunctionEntries", () => {
     executorService?: {
       executors: Record<string, { name: string; operation: { kind: string } }>;
     };
-    authService?: { config: { name: string; hooks?: { beforeLogin?: unknown } } };
+    authServices?: Array<{ config: { name: string; hooks?: { beforeLogin?: unknown } } }>;
   }): Application {
     const app = {
       name: "test-app",
@@ -732,7 +732,7 @@ describe("collectFunctionEntries", () => {
       externalTailorDBNamespaces: [],
       resolverServices: overrides?.resolverServices ?? [],
       idpServices: [],
-      authService: overrides?.authService,
+      authServices: overrides?.authServices ?? [],
       executorService: overrides?.executorService,
       workflowService: undefined,
       staticWebsiteServices: [],
@@ -857,9 +857,7 @@ describe("collectFunctionEntries", () => {
     });
 
     const app = createMockApplication({
-      authService: {
-        config: { name: authName, hooks: { beforeLogin: {} } },
-      },
+      authServices: [{ config: { name: authName, hooks: { beforeLogin: {} } } }],
     });
 
     const entries = collectFunctionEntries(app, [], scripts);

@@ -76,6 +76,7 @@ function createMockApplication(
     env: {},
     resolverServices,
     executorService: createMockExecutorService(),
+    authServices: [],
     ...extra,
   } as unknown as Application;
 }
@@ -813,7 +814,7 @@ describe("processResolver invoker mapping", () => {
 
     const result = await planWithResolverService(
       resolverService,
-      { authService: { config: { name: "my-auth" } } },
+      { authServices: [{ config: { name: "my-auth" } }] },
       new Map([["my-auth", new Set(["batch-user"])]]),
     );
 

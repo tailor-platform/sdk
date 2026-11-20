@@ -13,6 +13,7 @@ import {
 } from "#/plugin/builtin/seed/seed-type-processor";
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { getAuthInput } from "./auth-input";
+import { soleAuthService } from "./auth-namespace";
 import { withErrorDiagnostics } from "./error-diagnostics";
 import { CLIError } from "./errors";
 import { loadApplicationNamespaces } from "./tailordb-namespaces";
@@ -107,8 +108,9 @@ export async function loadSeedContext(options: LoadSeedContextOptions = {}): Pro
 
   // userProfile is only populated once auth namespaces are resolved (the
   // generate flow does the same after loading TailorDB namespaces).
-  await application.authService?.resolveNamespaces();
-  const authInput = getAuthInput(application);
+  const authService = soleAuthService(application);
+  await authService?.resolveNamespaces();
+  const authInput = authService && getAuthInput(authService);
   const idpUserMeta = authInput ? processIdpUser(authInput) : undefined;
   const idpUser: SeedIdpUserContext | null = idpUserMeta
     ? {

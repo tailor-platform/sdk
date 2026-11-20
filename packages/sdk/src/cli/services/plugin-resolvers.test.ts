@@ -11,11 +11,18 @@ import { planPipeline } from "#/cli/commands/deploy/resolver";
 import { createGenerationManager } from "#/cli/commands/generate/service";
 import { logger } from "#/cli/shared/logger";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { loadedWorkspace } from "#/cli/shared/test-helpers/workspace-config";
 import { beginUserModuleRun } from "#/cli/shared/user-modules";
 import { defineConfig } from "#/configure/config/index";
+import { defineWorkspace } from "#/configure/config/workspace";
 import { t } from "#/configure/types/type";
 import { PluginManager } from "#/plugin/manager";
-import { defineApplication, loadApplication } from "./application";
+import {
+  defineApplication,
+  definePluginResolverServices,
+  defineWorkspaceServices,
+  loadApplication,
+} from "./application";
 
 describe("plugin-generated resolvers", () => {
   let baseDir: string;
@@ -239,6 +246,63 @@ describe("plugin-generated resolvers", () => {
       );
     }
     expect(generatedFiles[1]).toEqual(generatedFiles[0]);
+  });
+
+  async function generateWorkspaceResolverFiles(
+    configPath: string,
+    resolverName: string,
+  ): Promise<string[]> {
+    const pluginManager = new PluginManager([
+      {
+        id: "greeting",
+        description: "Query",
+        onTailorDBNamespaceLoaded: () => ({
+          resolvers: [
+            { name: resolverName, operation: "query", outputFields: {}, body: "return {};" },
+          ],
+        }),
+      },
+    ]);
+    const workspace = loadedWorkspace(
+      defineWorkspace({ db: { main: { files: [] } }, apps: {} }),
+      configPath,
+    );
+    const { tailorDBServices } = defineWorkspaceServices({ workspace, pluginManager });
+    for (const tailordb of tailorDBServices) {
+      await tailordb.loadTypes();
+      await tailordb.processNamespacePlugins();
+    }
+    const [resolverService] = definePluginResolverServices(workspace, pluginManager);
+    await resolverService!.loadResolvers();
+    return Object.keys(resolverService!.resolvers);
+  }
+
+  test("generates a workspace's resolver files at the same project-relative path in every checkout", async () => {
+    const generatedFiles: string[][] = [];
+    for (const checkout of ["checkout-1", "checkout-2"]) {
+      const projectDir = path.join(baseDir, checkout);
+      vi.stubEnv("TAILOR_BUILD_OUTPUT_DIR", path.join(projectDir, ".tailor"));
+      const files = await generateWorkspaceResolverFiles(
+        path.join(projectDir, "tailor.config.ts"),
+        "greet",
+      );
+      generatedFiles.push(files.map((file) => path.relative(projectDir, file)));
+    }
+    expect(generatedFiles[0]).toHaveLength(1);
+    expect(generatedFiles[1]).toEqual(generatedFiles[0]);
+  });
+
+  test("keeps another workspace config's generated resolvers in the same namespace", async () => {
+    const files = await generateWorkspaceResolverFiles(
+      path.join(baseDir, "apps", "shop", "tailor.config.ts"),
+      "greet_shop",
+    );
+    expect(files).toHaveLength(1);
+    await generateWorkspaceResolverFiles(
+      path.join(baseDir, "apps", "backoffice", "tailor.config.ts"),
+      "greet_backoffice",
+    );
+    expect(files.filter((file) => !fs.existsSync(file))).toEqual([]);
   });
 
   test("warns about unmatched resolver patterns when plugins generate resolvers", async () => {

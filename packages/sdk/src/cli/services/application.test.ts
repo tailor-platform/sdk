@@ -6,7 +6,9 @@ import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { errorToJson } from "#/cli/shared/error-json";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { loadedWorkspace } from "#/cli/shared/test-helpers/workspace-config";
 import { defineConfig, definePlugins } from "#/configure/config/index";
+import { defineApp, defineWorkspace } from "#/configure/config/workspace";
 import { defineAIGateway } from "#/configure/services/aigateway/index";
 import { defineAuth } from "#/configure/services/auth/index";
 import { defineIdp } from "#/configure/services/idp/index";
@@ -16,8 +18,220 @@ import { db } from "#/configure/services/tailordb/schema";
 import { kyselyTypePlugin } from "#/plugin/builtin/kysely-type/index";
 import { PluginManager } from "#/plugin/manager";
 import { getRegisteredWaitPoints, restoreWaitPointRegistry } from "#/utils/wait-point-registry";
-import { defineApplication, loadApplication } from "./application";
+import { defineApplication, defineWorkspaceServices, loadApplication } from "./application";
 import type { OperatorClient } from "#/cli/shared/client";
+
+describe("defineWorkspaceServices", () => {
+  test("defines every namespace the workspace declares, including one no application lists", () => {
+    const corpAuth = defineAuth("corp-auth", { machineUserAttributes: {}, machineUsers: {} });
+    const workspace = loadedWorkspace(
+      defineWorkspace({
+        db: {
+          "customer-db": { files: [] },
+          "order-db": { files: [] },
+          "ledger-db": { files: [] },
+        },
+        resolver: {
+          "shop-api": { files: [] },
+          "backoffice-api": { files: [] },
+        },
+        auth: { "corp-auth": corpAuth },
+        apps: {
+          shop: { db: ["customer-db", "order-db"], resolver: ["shop-api"], auth: "corp-auth" },
+          backoffice: {
+            db: ["customer-db", "order-db"],
+            resolver: ["backoffice-api"],
+            auth: "corp-auth",
+          },
+        },
+      }),
+    );
+
+    const services = defineWorkspaceServices({ workspace });
+
+    expect(services.tailorDBServices.map((service) => service.namespace)).toEqual([
+      "customer-db",
+      "order-db",
+      "ledger-db",
+    ]);
+    expect(services.externalTailorDBNamespaces).toEqual([]);
+    expect(services.resolverServices.map((service) => service.namespace)).toEqual([
+      "shop-api",
+      "backoffice-api",
+    ]);
+    expect(services.authServices.map((service) => service.config.name)).toEqual(["corp-auth"]);
+    expect(services.settings.path).toBe("/project/tailor.config.ts");
+  });
+
+  test("defines one Auth service per auth, each resolving its user profile, and every IdP", async () => {
+    const employee = db.table("Employee", { email: db.string().unique() });
+    const partner = db.table("Partner", { email: db.string().unique() });
+    const corpAuth = defineAuth("corp-auth", {
+      userProfile: { type: employee, usernameField: "email" },
+      machineUsers: {},
+    });
+    const partnerAuth = defineAuth("partner-auth", {
+      userProfile: { type: partner, usernameField: "email" },
+      machineUsers: {},
+    });
+    const workspace = loadedWorkspace(
+      defineWorkspace({
+        db: { "people-db": { files: [] } },
+        auth: { "corp-auth": corpAuth, "partner-auth": partnerAuth },
+        idp: {
+          "corp-idp": defineIdp("corp-idp", { clients: ["default"] }),
+          "partner-idp": defineIdp("partner-idp", { clients: ["default"] }),
+        },
+        apps: {},
+      }),
+    );
+
+    const services = defineWorkspaceServices({ workspace });
+    for (const authService of services.authServices) {
+      await authService.resolveNamespaces();
+    }
+
+    expect(
+      services.authServices.map((service) => ({
+        name: service.config.name,
+        userProfile: service.userProfile?.type.name,
+        namespace: service.userProfile?.namespace,
+      })),
+    ).toEqual([
+      { name: "corp-auth", userProfile: "Employee", namespace: "people-db" },
+      { name: "partner-auth", userProfile: "Partner", namespace: "people-db" },
+    ]);
+    expect(services.idpServices.map((idp) => idp.name)).toEqual(["corp-idp", "partner-idp"]);
+  });
+
+  test("reports an invalid auth of a defineWorkspace() config under its key", () => {
+    const invalidAuth = Object.assign(
+      defineAuth("corp-auth", { machineUserAttributes: {}, machineUsers: {} }),
+      {
+        machineUser: {},
+      },
+    );
+    const workspace = loadedWorkspace(
+      defineWorkspace({ auth: { "corp-auth": invalidAuth }, apps: {} }),
+    );
+
+    expect(() => defineWorkspaceServices({ workspace })).toThrow(
+      expect.objectContaining({
+        context: expect.objectContaining({
+          issues: [{ path: ["auth", "corp-auth"], message: 'Unrecognized key: "machineUser"' }],
+        }),
+      }),
+    );
+  });
+
+  test("reports an invalid auth of a defineApp() config where the config writes it", () => {
+    const invalidAuth = Object.assign(
+      defineAuth("corp-auth", { machineUserAttributes: {}, machineUsers: {} }),
+      {
+        machineUser: {},
+      },
+    );
+    const workspace = loadedWorkspace(defineApp({ name: "shop", auth: invalidAuth }));
+
+    expect(() => defineWorkspaceServices({ workspace })).toThrow(
+      expect.objectContaining({
+        context: expect.objectContaining({
+          issues: [{ path: ["auth"], message: 'Unrecognized key: "machineUser"' }],
+        }),
+      }),
+    );
+  });
+
+  test("reports a user profile table no namespace defines under the auth's key", async () => {
+    const user = db.table("User", { email: db.string().unique() });
+    const workspace = loadedWorkspace(
+      defineWorkspace({
+        db: { "customer-db": { files: [] }, "order-db": { files: [] } },
+        auth: {
+          "corp-auth": defineAuth("corp-auth", {
+            userProfile: { type: user, usernameField: "email" },
+            machineUsers: {},
+          }),
+        },
+        apps: {},
+      }),
+    );
+    const [authService] = defineWorkspaceServices({ workspace }).authServices;
+
+    await expect(authService!.resolveNamespaces()).rejects.toMatchObject({
+      context: {
+        issues: [
+          {
+            path: ["auth", "corp-auth", "userProfile", "type"],
+            message: 'Type "User" not found in any TailorDB namespace',
+          },
+        ],
+      },
+    });
+  });
+
+  test("keeps env overrides apart from the root env", () => {
+    const workspace = loadedWorkspace(
+      defineWorkspace({
+        env: { CHECKOUT_URL: "https://example.com", REGION: "us" },
+        resolver: { "shop-api": { files: [], env: { CHECKOUT_URL: "https://shop.example.com" } } },
+        executor: { files: [], env: { REGION: "eu" } },
+        apps: {},
+      }),
+    );
+
+    const services = defineWorkspaceServices({ workspace });
+
+    expect(services.env).toEqual({ CHECKOUT_URL: "https://example.com", REGION: "us" });
+    expect(services.envOverrides).toEqual({
+      resolver: { "shop-api": { CHECKOUT_URL: "https://shop.example.com" } },
+      executor: { REGION: "eu" },
+      auth: {},
+    });
+  });
+
+  test("defaults an omitted AI Gateway authNamespace to the only Auth service", () => {
+    const workspace = loadedWorkspace(
+      defineWorkspace({
+        auth: {
+          "corp-auth": defineAuth("corp-auth", { machineUserAttributes: {}, machineUsers: {} }),
+        },
+        aiGateways: [defineAIGateway("assistant", {})],
+        apps: {},
+      }),
+    );
+
+    const services = defineWorkspaceServices({ workspace });
+
+    expect(services.aiGatewayServices[0]?.authNamespace).toBe("corp-auth");
+  });
+
+  test("requires an AI Gateway authNamespace when the workspace has several Auth services", () => {
+    const workspace = loadedWorkspace(
+      defineWorkspace({
+        auth: {
+          "corp-auth": defineAuth("corp-auth", { machineUserAttributes: {}, machineUsers: {} }),
+          "partner-auth": defineAuth("partner-auth", {
+            machineUserAttributes: {},
+            machineUsers: {},
+          }),
+        },
+        aiGateways: [defineAIGateway("assistant", {})],
+        apps: {},
+      }),
+    );
+
+    expect(() => defineWorkspaceServices({ workspace })).toThrow(
+      expect.objectContaining({
+        code: "CONFIG_INVALID",
+        message:
+          "Invalid Tailor config:\n  - aiGateways.0.authNamespace: Several Auth services are configured (corp-auth, partner-auth), so there is none to default to",
+        suggestion: 'Set "authNamespace" to one of the Auth services.',
+        context: expect.objectContaining({ configKey: "aiGateways", name: "assistant" }),
+      }),
+    );
+  });
+});
 
 describe("defineAuth parse wiring", () => {
   test("preserves an explicit userProfile.namespace through AuthConfigSchema.parse", async () => {
@@ -47,12 +261,12 @@ describe("defineAuth parse wiring", () => {
       path: "tailor.config.ts",
     };
 
-    const application = defineApplication({ config });
-    expect(application.authService).toBeDefined();
+    const [authService] = defineApplication({ config }).authServices;
+    expect(authService).toBeDefined();
 
-    await application.authService!.resolveNamespaces();
+    await authService!.resolveNamespaces();
 
-    expect(application.authService!.userProfile?.namespace).toBe("external-ns");
+    expect(authService!.userProfile?.namespace).toBe("external-ns");
   });
 
   test("accepts defineIdp helper objects when parsing IdP services", () => {
@@ -175,7 +389,7 @@ describe("AI Gateway authNamespace default", () => {
 
     const application = defineApplication({ config });
 
-    expect(application.authService).toBeUndefined();
+    expect(application.authServices).toEqual([]);
     expect(application.aiGatewayServices[0]?.authNamespace).toBe("core-auth");
   });
 
@@ -281,7 +495,7 @@ describe("AI Gateway authNamespace default", () => {
     };
 
     await expect(
-      defineApplication({ config }).authService!.resolveNamespaces(),
+      defineApplication({ config }).authServices[0]!.resolveNamespaces(),
     ).rejects.toMatchObject({
       code: "CONFIG_INVALID",
       message:

@@ -385,10 +385,12 @@ type AuthNamespace = {
 export async function planAuth(context: PlanContext) {
   const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
   const auths: Readonly<AuthService>[] = [];
-  if (!forRemoval && application.authService) {
-    await application.authService.resolveNamespaces();
-    assertAuthMachineUsersDefined(application.authService.config);
-    auths.push(application.authService);
+  if (!forRemoval) {
+    for (const authService of application.authServices) {
+      await authService.resolveNamespaces();
+      assertAuthMachineUsersDefined(authService.config);
+      auths.push(authService);
+    }
   }
   const {
     changeSet: serviceChangeSet,

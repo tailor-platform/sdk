@@ -62,7 +62,7 @@ describe("migration flow: breaking index changes across Pre/Post phases", () => 
       type: {
         updates: [typeEntry("User", { fields: {} })],
       },
-      application: { authService: undefined },
+      application: { authServices: [] },
     });
   }
 

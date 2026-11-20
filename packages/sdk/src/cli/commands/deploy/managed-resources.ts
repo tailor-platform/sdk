@@ -413,7 +413,10 @@ const GLOBAL_RESOURCE_NAMES: ReadonlyArray<
   },
   {
     resourceType: "auth.connection",
-    namesOf: (target) => Object.keys(target.application.authService?.connections ?? {}),
+    namesOf: (target) =>
+      target.application.authServices.flatMap((authService) =>
+        Object.keys(authService.connections),
+      ),
   },
   {
     resourceType: "staticwebsite",
@@ -425,10 +428,8 @@ const GLOBAL_RESOURCE_NAMES: ReadonlyArray<
   },
   {
     resourceType: "auth.service",
-    namesOf: (target) => {
-      const name = target.application.authService?.config.name;
-      return name === undefined ? [] : [name];
-    },
+    namesOf: (target) =>
+      target.application.authServices.map((authService) => authService.config.name),
   },
   {
     resourceType: "idp.service",

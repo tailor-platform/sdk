@@ -67,7 +67,7 @@ describe("shouldForceApplyAll", () => {
       aiGatewayServices: [],
       resolverServices: [],
       idpServices: [],
-      authService: undefined,
+      authServices: [],
       executorService: undefined,
       workflowService: undefined,
       tailorDBServices: [],
@@ -1551,14 +1551,16 @@ function fakeTarget(
       },
       staticWebsiteServices: (bundles.staticWebsiteNames ?? []).map((name) => ({ name })),
       tailorDBServices: (bundles.tailorDBNamespaces ?? []).map((namespace) => ({ namespace })),
-      authService: bundles.authNamespace
-        ? {
-            config: { name: bundles.authNamespace },
-            connections: Object.fromEntries(
-              (bundles.authConnectionNames ?? []).map((name) => [name, {}]),
-            ),
-          }
-        : undefined,
+      authServices: bundles.authNamespace
+        ? [
+            {
+              config: { name: bundles.authNamespace },
+              connections: Object.fromEntries(
+                (bundles.authConnectionNames ?? []).map((name) => [name, {}]),
+              ),
+            },
+          ]
+        : [],
       idpServices: (bundles.idpNames ?? []).map((name) => ({ name })),
       resolverServices: (bundles.resolverNamespaces ?? []).map((namespace) => ({
         namespace,
@@ -1759,7 +1761,7 @@ describe("adjustApplicationForMigrationTest", () => {
     const application = {
       name: "app",
       executorService: { executors: {} },
-      authService: { config: { name: "auth-a" }, userProfile: { namespace: "tailordb" } },
+      authServices: [{ config: { name: "auth-a" }, userProfile: { namespace: "tailordb" } }],
       staticWebsiteServices: [{ name: "site", customDomains: ["example.com"] }],
       get applications() {
         return [application];
@@ -1782,8 +1784,8 @@ describe("adjustApplicationForMigrationTest", () => {
     });
 
     expect(adjusted.executorService).toBeUndefined();
-    expect(adjusted.authService?.userProfile).toBeUndefined();
-    expect(adjusted.authService?.config.name).toBe("auth-a");
+    expect(adjusted.authServices[0]?.userProfile).toBeUndefined();
+    expect(adjusted.authServices[0]?.config.name).toBe("auth-a");
     expect(adjusted.staticWebsiteServices[0]?.customDomains).toBeUndefined();
     expect(adjusted.applications).toEqual([adjusted]);
   });
@@ -1794,7 +1796,7 @@ describe("adjustApplicationForMigrationTest", () => {
     });
 
     expect(adjusted.executorService).toBeDefined();
-    expect(adjusted.authService?.userProfile).toBeDefined();
+    expect(adjusted.authServices[0]?.userProfile).toBeDefined();
     expect(adjusted.staticWebsiteServices[0]?.customDomains).toBeUndefined();
   });
 });
@@ -2223,12 +2225,14 @@ function fakeAuthTarget(
 ): Parameters<typeof collectExternalAuthIdpConfigNames>[0][number] {
   return {
     application: {
-      authService: {
-        config: {
-          name,
-          idProvider: idpConfigName === undefined ? undefined : { name: idpConfigName },
+      authServices: [
+        {
+          config: {
+            name,
+            idProvider: idpConfigName === undefined ? undefined : { name: idpConfigName },
+          },
         },
-      },
+      ],
     },
   } as unknown as Parameters<typeof collectExternalAuthIdpConfigNames>[0][number];
 }
@@ -2268,9 +2272,11 @@ describe("collectPlannedMachineUsers", () => {
   ): Parameters<typeof collectPlannedMachineUsers>[0][number] {
     return {
       application: {
-        authService: {
-          config: { name, machineUsers: Object.fromEntries(machineUsers.map((m) => [m, {}])) },
-        },
+        authServices: [
+          {
+            config: { name, machineUsers: Object.fromEntries(machineUsers.map((m) => [m, {}])) },
+          },
+        ],
       },
     } as unknown as Parameters<typeof collectPlannedMachineUsers>[0][number];
   }
@@ -2288,7 +2294,7 @@ describe("collectPlannedMachineUsers", () => {
   test("ignores configs that only reference an external auth", () => {
     const externalOnly = {
       application: {
-        authService: undefined,
+        authServices: [],
         config: { auth: { name: "core-auth", external: true } },
       },
     } as unknown as Parameters<typeof collectPlannedMachineUsers>[0][number];

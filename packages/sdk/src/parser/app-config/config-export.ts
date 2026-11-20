@@ -19,7 +19,7 @@ type ParseResult =
   | { success: true; data: ParsedConfigExport }
   | { success: false; error: z.ZodError };
 
-type WorkspaceExport = Extract<ParsedConfigExport, { kind: "workspace" }>;
+export type WorkspaceExport = Extract<ParsedConfigExport, { kind: "workspace" }>;
 
 /**
  * List the `env` overrides of a workspace with the path of the service that holds each, as the
@@ -35,11 +35,25 @@ export function envOverrideEntries<Value>(
     ...Object.entries(resolver).map(([name, env]) => ({ servicePath: ["resolver", name], env })),
     ...(executor ? [{ servicePath: ["executor"], env: executor }] : []),
     ...(workflow ? [{ servicePath: ["workflow"], env: workflow }] : []),
-    ...Object.entries(auth).map(([name, env]) => ({
-      servicePath: parsed.definedBy === "defineApp" ? ["auth"] : ["auth", name],
-      env,
-    })),
+    ...Object.entries(auth).map(([name, env]) => {
+      const key = singleServiceKey(parsed.definedBy, name);
+      return { servicePath: key === undefined ? ["auth"] : ["auth", key], env };
+    }),
   ];
+}
+
+/**
+ * The key an auth or IdP of a workspace is written under in its config: its name in
+ * `defineWorkspace()`, and none in `defineApp()`, which takes a single auth and a single IdP.
+ * @param definedBy - Function that defined the config
+ * @param name - Name of the auth or IdP
+ * @returns The key, or undefined for a `defineApp()` config
+ */
+export function singleServiceKey(
+  definedBy: WorkspaceExport["definedBy"],
+  name: string,
+): string | undefined {
+  return definedBy === "defineApp" ? undefined : name;
 }
 
 /**
