@@ -22,6 +22,7 @@ import type { TailorDBFileAPI } from "./file";
 import type { TailorIconvAPI } from "./iconv";
 import type { TailorIdpAPI } from "./idp";
 import type { TailorLoggerAPI } from "./logger";
+import type { PlatformSandboxAPI } from "./sandbox";
 import type { TailorSecretmanagerAPI } from "./secretmanager";
 import type { PlatformWorkflowAPI } from "./workflow";
 
@@ -30,6 +31,26 @@ export { secretmanager } from "./secretmanager";
 export { authconnection } from "./authconnection";
 export { idp } from "./idp";
 export { workflow } from "./workflow";
+export { sandbox } from "./sandbox";
+export type {
+  CreateSandboxOptions,
+  ExecOptions,
+  ExecResult,
+  Execution,
+  ExecutionInfo,
+  ExecutionPage,
+  ExecutionStatus,
+  FileInfo,
+  GetOrCreateSandboxOptions,
+  ListExecutionsOptions,
+  OutputChunk,
+  OutputOptions,
+  PlatformSandboxAPI,
+  Sandbox,
+  SandboxError,
+  SandboxInfo,
+  SandboxStatus,
+} from "./sandbox";
 export { context } from "./context";
 export { file } from "./file";
 export { aigateway } from "./aigateway";
@@ -82,6 +103,7 @@ export interface TailorRuntime {
   iconv: TailorIconvAPI;
   idp: TailorIdpAPI;
   workflow: PlatformWorkflowAPI;
+  sandbox: PlatformSandboxAPI;
   context: PlatformContextAPI;
   aigateway: TailorAigatewayAPI;
   logger: TailorLoggerAPI;
