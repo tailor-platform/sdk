@@ -78,7 +78,6 @@ import {
   captureMigrationRestrictionState,
   deletedResources,
   deletePlannedTables,
-  isRecreated,
   deleteRemovedTables,
   executeSingleMigrationPostPhase,
   executeSingleMigrationPrePhase,
@@ -117,9 +116,15 @@ import {
   validateAndDetectMigrations,
   type ValidateAndDetectResult,
 } from "./migration-validation";
+import {
+  isRecreated,
+  type NamespacedEntry,
+  type planTailorDB,
+  type TailorDBChangeSet,
+  type TailorDBPlanResult,
+} from "./plan";
 import type { MigrationRunKind, PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { ApplyPhase } from "../types";
-import type { planTailorDB, TailorDBChangeSet, TailorDBPlanResult } from "./plan";
 
 function deployCommandContext(context: TailorDBPlanResult["context"]): MigrationCommandContext {
   return migrationCommandContext({
@@ -2279,7 +2284,7 @@ async function applyDeferredGqlPermissions(
   deferredKeys: ReadonlySet<string>,
 ): Promise<void> {
   const { client, changeSet } = flow;
-  const isDue = (entry: { name: string; request: { namespaceName?: string } }) => {
+  const isDue = (entry: NamespacedEntry) => {
     const key = `${entry.request.namespaceName}/${entry.name}`;
     return (
       deferredKeys.has(key) ||

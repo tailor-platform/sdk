@@ -247,6 +247,55 @@ describe("migration flow: replaying a history that removes tables into a fresh w
     expect(withSource[1]).toBeGreaterThan(firstScriptOrder());
   });
 
+  test("does not write a table the plan deletes after an earlier migration of this deploy already deleted it", async () => {
+    const tableA = snapshotTable("A", nameField);
+    snapshotState.tablesByVersion = { 0: { A: tableA }, 1: {}, 2: { A: tableA }, 3: {} };
+    const planResult = createPlanResult({
+      type: {
+        deletes: [
+          {
+            name: "A",
+            request: {
+              workspaceId: "test-workspace",
+              namespaceName: NAMESPACE,
+              tailordbTypeName: "A",
+            },
+          },
+        ],
+      },
+    });
+    checkpoint = createRemoteCheckpoint(0);
+    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
+    planResult.context.pendingMigrations = checkpoint.mockPending([
+      mkPendingMigration(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        [{ kind: "table_removed", tableName: "A", before: tableA } as any],
+        { number: 1, hasScript: false },
+      ),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      mkPendingMigration([{ kind: "table_added", tableName: "A" } as any], {
+        number: 2,
+        hasScript: false,
+      }),
+      mkPendingMigration(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        [{ kind: "table_removed", tableName: "A", before: tableA } as any],
+        { number: 3, hasScript: false },
+      ),
+    ]);
+    const client = checkpoint.createMockClient({
+      listTailorDBTypes: { tailordbTypes: [{ name: "A" }] },
+    });
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    const updatedA = vi
+      .mocked(client.updateTailorDBType)
+      .mock.calls.filter((call) => call[0].tailordbType?.name === "A");
+    expect(updatedA).toHaveLength(0);
+    expect(deleteOrders(client, NAMESPACE, "A").table).toHaveLength(1);
+  });
+
   test("applies a migration's schema change to a table the workspace has and the plan deletes", async () => {
     const before = snapshotTable("A", nameField);
     const after = snapshotTable("A", { ...nameField, source: { type: "string", required: true } });

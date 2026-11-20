@@ -52,6 +52,23 @@ export type TailorDBPlanResult = Awaited<ReturnType<typeof planTailorDB>>;
 
 export type TailorDBChangeSet = TailorDBPlanResult["changeSet"];
 
+/** A change-set entry that names a table and the namespace it lives in. */
+export type NamespacedEntry = { name: string; request: { namespaceName?: string } };
+
+/**
+ * Whether the plan deletes a table and creates it again: the deletion runs before the
+ * migrations, so the closing deletions leave the table the migrations created.
+ * @param changeSet - TailorDB change set
+ * @param del - A planned deletion
+ * @returns Whether the plan also creates a table of that name in the namespace
+ */
+export function isRecreated(changeSet: TailorDBChangeSet, del: NamespacedEntry): boolean {
+  return changeSet.type.creates.some(
+    (create) =>
+      create.name === del.name && create.request.namespaceName === del.request.namespaceName,
+  );
+}
+
 /**
  * Plan TailorDB-related changes based on current and desired state.
  * @param context - Planning context

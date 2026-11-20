@@ -24,13 +24,13 @@ import { fetchAllTolerant, isNotFoundError, type OperatorClient } from "#/cli/sh
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import { isRecreated, type NamespacedEntry, type TailorDBChangeSet } from "./plan";
 import type {
   FieldDiffChange,
   TableScriptsModifiedChange,
 } from "#/cli/commands/tailordb/migrate/diff-calculator";
 import type { TailorDBDeployInput } from "#/cli/commands/tailordb/migrate/schema-checks";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
-import type { TailorDBChangeSet } from "./plan";
 import type { TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 type MigrationTableSettings = {
@@ -134,7 +134,7 @@ export function namespacedTableKey(namespaceName: string, tableName: string): st
   return `${namespaceName}/${tableName}`;
 }
 
-function entriesOfNamespace<T extends { request: { namespaceName?: string } }>(
+function entriesOfNamespace<T extends NamespacedEntry>(
   entries: readonly T[],
   namespaceName: string,
 ): T[] {
@@ -165,6 +165,7 @@ function planlessTableNames(changeSet: TailorDBChangeSet, migration: PendingMigr
     (tableName) =>
       tableName in snapshotTables &&
       !planned.has(tableName) &&
+      !deletedResources.types.has(namespacedTableKey(migration.namespace, tableName)) &&
       (deleted.has(tableName) ||
         processedTables.created.has(namespacedTableKey(migration.namespace, tableName))),
   );
@@ -1125,23 +1126,6 @@ export async function deletePlannedTables(
     deletedResources.gqlPermissions.delete(tableKey(tableName));
   }
   return new Set(typesToDelete.map((del) => del.name));
-}
-
-/**
- * Whether the plan deletes a table and creates it again: the deletion runs before the
- * migrations, so the closing deletions leave the table the migrations created.
- * @param changeSet - TailorDB change set
- * @param del - A planned deletion
- * @returns Whether the plan also creates a table of that name in the namespace
- */
-export function isRecreated(
-  changeSet: TailorDBChangeSet,
-  del: { name: string; request: { namespaceName?: string } },
-): boolean {
-  return changeSet.type.creates.some(
-    (create) =>
-      create.name === del.name && create.request.namespaceName === del.request.namespaceName,
-  );
 }
 
 /**
