@@ -377,7 +377,8 @@ export type MaintenanceModeRelease = CLIErrorNextAction & {
 /**
  * The command that removes the maintenance mode record a deploy left in place: `migration resolve
  * --maintenance` when the record names the current checkpoint, which also takes the tables out of
- * maintenance mode, and `deploy` when it names another checkpoint, since a deploy removes it.
+ * maintenance mode, and `deploy` when it names another checkpoint or the committed migration's
+ * removed tables are not deleted yet, since a deploy removes the record and finishes the deletion.
  * @param state - Remote migration state of the namespace
  * @param namespace - TailorDB namespace
  * @param context - Config and workspace selection of the current run
@@ -390,7 +391,11 @@ export function maintenanceModeReleaseAction(
 ): MaintenanceModeRelease | undefined {
   const migrationInProgress = state.inProgress !== null && !isStaleMigrationInProgress(state);
   if (migrationInProgress || state.maintenanceModeCheckpoint === null) return undefined;
-  if (state.maintenanceModeCheckpoint === (state.number ?? 0)) {
+  const checkpoint = state.number ?? 0;
+  if (state.cleanupCheckpoint === checkpoint) {
+    return { via: "deploy", command: "tailor", args: ["deploy", ...migrationContextArgs(context)] };
+  }
+  if (state.maintenanceModeCheckpoint === checkpoint) {
     return {
       via: "resolve",
       command: "tailor",

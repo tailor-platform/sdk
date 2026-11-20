@@ -20,7 +20,7 @@ import { logBetaWarning } from "#/cli/shared/beta";
 import { type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, formatCommandHint } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
@@ -34,6 +34,7 @@ import {
 import {
   formatNamespaceMigrationHint,
   migrationCommandContext,
+  migrationContextArgs,
   type MigrationCommandContext,
 } from "./hints";
 import {
@@ -45,7 +46,7 @@ import {
   type MigrationResolution,
   type RemoteMigrationState,
 } from "./remote-state";
-import { verifyRemoteSchema } from "./schema-checks";
+import { formatRemoteVerificationResults, verifyRemoteSchema } from "./schema-checks";
 import {
   assertMigrationNumberExists,
   assertValidMigrationFiles,
@@ -260,14 +261,34 @@ async function releaseMaintenanceMode(
   assertValidMigrationFiles(target.migrationsDir, namespace, loaded.config.path);
   assertLocalMigrationHistoryMatches(state, target);
 
+  if (state.cleanupCheckpoint === checkpoint) {
+    throw CLIError({
+      code: "MIGRATION_RESOLVE_MAINTENANCE_CLEANUP_PENDING",
+      message: `A table that migration ${formatMigrationNumber(checkpoint)} of namespace "${namespace}" removes is not deleted yet.`,
+      suggestion: `Run ${formatCommandHint({ command: "tailor", args: ["deploy", ...migrationContextArgs(commandContext)] })}, which deletes the table, takes the tables out of maintenance mode, and removes both records.`,
+    });
+  }
+
   const verification = (
-    await verifyRemoteSchema(client, workspaceId, [target], loaded.config, [])
+    await verifyRemoteSchema(client, workspaceId, [target], loaded.config, [], {
+      acceptInterruptedMigration: true,
+    })
   )[0];
+  if (verification?.interruptedMigration !== undefined) {
+    const interrupted = formatMigrationNumber(verification.interruptedMigration);
+    throw CLIError({
+      code: "MIGRATION_RESOLVE_MAINTENANCE_INTERRUPTED",
+      message: `A deploy left the pre-migration schema of migration ${interrupted} of namespace "${namespace}" in place before it recorded the migration.`,
+      suggestion: `Settle it with ${formatMigrationResolveHint("rollback", namespace, commandContext)}, or deploy again to run migration ${interrupted}.`,
+    });
+  }
   if (verification?.hasDrift) {
+    logger.error("Remote schema drift detected:");
+    logger.log(formatRemoteVerificationResults([verification]));
     throw CLIError({
       code: "MIGRATION_RESOLVE_MAINTENANCE_DRIFT",
       message: `The tables of namespace "${namespace}" differ from checkpoint ${formatMigrationNumber(checkpoint)} in more than the maintenance mode.`,
-      suggestion: `Run ${statusHint} to compare the workspace with the local migration history.`,
+      suggestion: `Run ${formatNamespaceMigrationHint({ ...commandContext, subcommand: ["validate"], namespace })} to see the difference.`,
     });
   }
   if (!verification?.leftInMaintenanceMode) {
@@ -575,7 +596,7 @@ For a run that a deploy could not confirm, the command reads how the run ended a
 
 \`--rollback\` also settles a migration that no deploy recorded as in progress, but whose pre-migration schema or maintenance mode a deploy left in place, for example because the deploy stopped before recording it. See "Settling a migration that stays in progress" in the TailorDB Migrations guide for when it runs.
 
-\`--maintenance\` is for a namespace whose checkpoint a deploy committed but whose tables it left in maintenance mode, with no migration in progress. It sends the schema of the checkpoint to restore the tables' settings and removes the maintenance mode record, without moving the checkpoint. It cannot be combined with the other two options, and it refuses when a migration is in progress, when no record names the current checkpoint, or when a table differs from the checkpoint in more than maintenance mode.
+\`--maintenance\` is for a namespace whose checkpoint a deploy committed but whose tables it left in maintenance mode, with no migration in progress. It sends the schema of the checkpoint to restore the tables' settings and removes the maintenance mode record, without moving the checkpoint. It cannot be combined with the other two options, and it refuses when a migration is in progress, when no record names the current checkpoint, when a table the committed migration removes is not deleted yet (a deploy deletes it), when a deploy was interrupted before it recorded the next migration (settle it with \`--rollback\`), or when a table differs from the checkpoint in more than maintenance mode, printing the difference.
 
 Both \`--rollback\` and \`--complete\` remove the in-progress record, take the tables out of maintenance mode, and remove the temporary resources of the failed run, so \`deploy\` and the other migration commands work again. As with \`tailordb migration sync\`, the local migration history must reproduce the current table definitions. If sending the schema stops partway, run the command again.`,
   args: z.strictObject({

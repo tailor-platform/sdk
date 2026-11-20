@@ -187,6 +187,7 @@ describe("tailordb migration resolve", () => {
   });
 
   test.each([
+    ["--rollback", "--complete"],
     ["--rollback", "--maintenance"],
     ["--complete", "--maintenance"],
   ])("refuses %s together with %s", async (...flags) => {
@@ -273,7 +274,50 @@ describe("tailordb migration resolve", () => {
       const result = await runCommand(resolveCommand, ["--maintenance", "--yes"]);
 
       expect(result.success).toBe(false);
-      expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_MAINTENANCE_DRIFT" });
+      expect(result.error).toMatchObject({
+        code: "MIGRATION_RESOLVE_MAINTENANCE_DRIFT",
+        suggestion: expect.stringContaining("migration validate"),
+      });
+      expect(state.stderr.join("")).toContain("User");
+      expectNothingWritten();
+    });
+
+    test("points to deploy when a removed table of the committed migration is not deleted yet", async () => {
+      leftInMaintenanceModeAt0001();
+      remoteLabels({
+        "sdk-migration": "m0001",
+        "sdk-maintenance-mode": "m0001",
+        "sdk-migration-cleanup": "m0001",
+      });
+
+      const result = await runCommand(resolveCommand, ["--maintenance", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({
+        code: "MIGRATION_RESOLVE_MAINTENANCE_CLEANUP_PENDING",
+        suggestion: expect.stringContaining("tailor deploy"),
+      });
+      expectNothingWritten();
+    });
+
+    test("points to --rollback when a deploy was interrupted before it recorded the next migration", async () => {
+      remoteLabels({ "sdk-migration": "m0001", "sdk-maintenance-mode": "m0001" });
+      state.listTailorDBTypes.mockResolvedValue({
+        tailordbTypes: [
+          remoteType("User", ["id", "name"]),
+          remoteType("Post", ["id", "name"]),
+          restrictedRemoteType("Comment", ["id", "name"]),
+        ],
+        nextPageToken: "",
+      });
+
+      const result = await runCommand(resolveCommand, ["--maintenance", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({
+        code: "MIGRATION_RESOLVE_MAINTENANCE_INTERRUPTED",
+        suggestion: expect.stringContaining("--rollback"),
+      });
       expectNothingWritten();
     });
 
@@ -339,14 +383,6 @@ describe("tailordb migration resolve", () => {
       );
       expect(state.setMetadata).not.toHaveBeenCalled();
     });
-  });
-
-  test("rejects --rollback and --complete together", async () => {
-    const result = await runCommand(resolveCommand, ["--rollback", "--complete", "--yes"]);
-
-    expect(result.success).toBe(false);
-    expect(String(result.error)).toMatch(/--rollback, --complete or --maintenance/);
-    expectNothingWritten();
   });
 
   test("refuses when no migration is in progress", async () => {

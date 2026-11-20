@@ -250,7 +250,11 @@ read them:
 - `MIGRATION_RESOLVE_MAINTENANCE_IN_PROGRESS`: `resolve --maintenance` found a migration in
   progress; settle it with `--rollback` or `--complete`.
 - `MIGRATION_RESOLVE_MAINTENANCE_DRIFT`: with `--maintenance`, a table differs from the checkpoint
-  in more than maintenance mode.
+  in more than maintenance mode; the command prints the difference.
+- `MIGRATION_RESOLVE_MAINTENANCE_CLEANUP_PENDING`: with `--maintenance`, a table that the committed
+  migration removes is not deleted yet; a deploy deletes it.
+- `MIGRATION_RESOLVE_MAINTENANCE_INTERRUPTED`: with `--maintenance`, a deploy was interrupted before
+  it recorded the next migration; settle it with `--rollback`.
 - `MIGRATION_RESOLVE_MAINTENANCE_UNVERIFIED`: with `--maintenance`, the tables could not be compared
   with the checkpoint, for example because the local migration files do not reach it.
 - `MIGRATION_RESOLVE_NO_IN_PROGRESS`: `resolve` found nothing to settle: no migration is in
