@@ -30,7 +30,7 @@ import {
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
-import { listInvokerMachineUsers, normalizeInvoker } from "./invoker";
+import { type InvokerMachineUsers, listInvokerMachineUsers, normalizeInvoker } from "./invoker";
 import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   buildMetaRequest,
@@ -169,16 +169,15 @@ export async function planExecutor(
       getTrn: (name) => resourceTrn(workspaceId, "executor", name),
     }));
   const executors = forRemoval ? {} : ((await application.executorService?.loadExecutors()) ?? {});
-  const knownMachineUsers = Object.values(executors).some(
-    (executor) => "invoker" in executor.operation && typeof executor.operation.invoker === "string",
-  )
-    ? await listInvokerMachineUsers({
-        client,
-        workspaceId,
-        application,
-        plannedMachineUsers: context.plannedMachineUsers,
-      })
-    : undefined;
+  const invokerMachineUsers = await listInvokerMachineUsers({
+    client,
+    workspaceId,
+    invokers: Object.values(executors).map((executor) =>
+      "invoker" in executor.operation ? executor.operation.invoker : undefined,
+    ),
+    authNamespace: getApplicationAuthNamespace(application),
+    plannedMachineUsers: context.plannedMachineUsers,
+  });
   const cachedDetails = previousExisting?.existingExecutorDetails;
   const existingExecutorDetails = new Map(
     await Promise.all(
@@ -201,7 +200,7 @@ export async function planExecutor(
       name: executor.name,
       request: {
         workspaceId,
-        executor: protoExecutor(context, executor, application.env, knownMachineUsers),
+        executor: protoExecutor(context, executor, application.env, invokerMachineUsers),
       },
       metaRequest: await buildMetaRequest({
         trn: resourceTrn(workspaceId, "executor", executor.name),
@@ -466,7 +465,7 @@ function protoExecutor(
   context: PlanContext,
   executor: Executor,
   env: ApplicationEnv,
-  knownMachineUsers: ReadonlySet<string> | undefined,
+  invokerMachineUsers: InvokerMachineUsers | undefined,
 ): MessageInitShape<typeof ExecutorExecutorSchema> {
   const { application } = context;
   const appName = application.name;
@@ -662,7 +661,7 @@ function protoExecutor(
               target.invoker,
               authNamespace,
               invokerContext,
-              knownMachineUsers,
+              invokerMachineUsers,
             ),
           },
         },
@@ -690,7 +689,7 @@ function protoExecutor(
               target.invoker,
               authNamespace,
               invokerContext,
-              knownMachineUsers,
+              invokerMachineUsers,
             ),
           },
         },
@@ -714,7 +713,7 @@ function protoExecutor(
               target.invoker,
               authNamespace,
               invokerContext,
-              knownMachineUsers,
+              invokerMachineUsers,
             ),
           },
         },

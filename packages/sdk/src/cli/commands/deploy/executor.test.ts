@@ -584,6 +584,7 @@ describe("planExecutor", () => {
       const application = {
         name: appName,
         env: {},
+        authServices: [],
         executorService: { loadExecutors },
       } as unknown as Application;
 
@@ -675,8 +676,10 @@ describe("planExecutor", () => {
       expect(variablesExpr).toContain("error: args.failed?.error");
     });
 
-    describe("string invoker", () => {
-      function createInvokerExecutor(invoker: string): Executor {
+    describe("invoker", () => {
+      function createInvokerExecutor(
+        invoker: string | { namespace: string; machineUserName: string },
+      ): Executor {
         return {
           name: "test-executor",
           description: "Executor test-executor",
@@ -768,6 +771,27 @@ describe("planExecutor", () => {
             }),
           ),
         ).rejects.toMatchObject({ code: "INVOKER_MACHINE_USER_NOT_FOUND" });
+      });
+
+      test("rejects an object invoker whose Auth namespace lacks the machine user", async () => {
+        const application = createMockApplication([
+          createInvokerExecutor({ namespace: "other-auth", machineUserName: "batch-usr" }),
+        ]);
+
+        await expect(
+          planExecutor(
+            buildPlanContext(application, {
+              client: createMockClient([], ["batch-user"]),
+            }),
+          ),
+        ).rejects.toMatchObject({
+          code: "INVOKER_MACHINE_USER_NOT_FOUND",
+          context: {
+            invoker: "batch-usr",
+            authNamespace: "other-auth",
+            machineUsers: ["batch-user"],
+          },
+        });
       });
     });
   });

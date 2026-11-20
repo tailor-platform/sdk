@@ -1616,6 +1616,24 @@ describe("workflowTarget", () => {
     });
   });
 
+  test("can specify an invoker naming its Auth service", () => {
+    const executor = createExecutor({
+      name: "test",
+      trigger: scheduleTrigger({ cron: "0 12 * * *" }),
+      operation: {
+        kind: "workflow",
+        workflow: testWorkflow,
+        args: { orderId: "test-id" },
+        invoker: { namespace: "other-auth", machineUserName: "admin" },
+      },
+    });
+
+    expect(executor.operation.invoker).toEqual({
+      namespace: "other-auth",
+      machineUserName: "admin",
+    });
+  });
+
   test("can omit args for workflow with undefined input", () => {
     const noInputJob = createWorkflowJob({
       name: "no-input-job",

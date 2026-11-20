@@ -72,12 +72,16 @@ const WORKFLOW_RUNTIME_EXPR = "globalThis.tailor.workflow";
  * platform RPC expects: a plain string (machine user name) becomes
  * `{ namespace, machineUserName }`, while an object form passes through
  * as-is. Any other options value is unchanged. The auth namespace is baked
- * in at bundle time.
+ * in at bundle time; without one, a string invoker is left unchanged.
  * @param authNamespace - Auth service namespace to embed
  * @returns Source line defining the helper
  */
-function buildNormalizerHelperSource(authNamespace: string): string {
-  return `const ${NORMALIZER_IDENTIFIER} = (o) => { if (!o) return o; const { invoker, ...rest } = o; return typeof invoker === "string" ? { ...rest, authInvoker: { namespace: ${JSON.stringify(authNamespace)}, machineUserName: invoker } } : typeof invoker === "object" ? { ...rest, authInvoker: invoker } : o; };\n`;
+function buildNormalizerHelperSource(authNamespace: string | undefined): string {
+  const fromString =
+    authNamespace === undefined
+      ? "o"
+      : `{ ...rest, authInvoker: { namespace: ${JSON.stringify(authNamespace)}, machineUserName: invoker } }`;
+  return `const ${NORMALIZER_IDENTIFIER} = (o) => { if (!o) return o; const { invoker, ...rest } = o; return typeof invoker === "string" ? ${fromString} : typeof invoker === "object" ? { ...rest, authInvoker: invoker } : o; };\n`;
 }
 
 function findModule(context: StartContext, candidatePath: string): StartModuleBindings | undefined {
@@ -295,7 +299,7 @@ export function transformStartCalls(
       end: argsRange.start,
       text: prefix,
     });
-    const normalizeOptions = call.kind === "workflow" && authNamespace && optionsRange;
+    const normalizeOptions = call.kind === "workflow" && optionsRange;
     if (optionsRange) {
       replacements.push({
         start: argsRange.end,
@@ -312,7 +316,7 @@ export function transformStartCalls(
   }
 
   const transformed = applyReplacements(source, replacements);
-  if (needsNormalizerHelper && authNamespace) {
+  if (needsNormalizerHelper) {
     transformed.prepend(buildNormalizerHelperSource(authNamespace));
   }
   return transformed;

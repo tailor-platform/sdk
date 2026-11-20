@@ -34,7 +34,7 @@ import {
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
-import { listInvokerMachineUsers, normalizeInvoker } from "./invoker";
+import { type InvokerMachineUsers, listInvokerMachineUsers, normalizeInvoker } from "./invoker";
 import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   addDependencyRecords,
@@ -188,17 +188,16 @@ export async function planPipeline(
     previous?.existingServices,
   );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
-  const hasStringInvoker = pipelines.some((pipeline) =>
-    Object.values(pipeline.resolvers).some((resolver) => typeof resolver.invoker === "string"),
-  );
-  const knownMachineUsers = hasStringInvoker
-    ? await listInvokerMachineUsers({
-        client,
-        workspaceId,
-        application,
-        plannedMachineUsers: context.plannedMachineUsers,
-      })
-    : undefined;
+  const authNamespace = getApplicationAuthNamespace(application);
+  const invokerMachineUsers = await listInvokerMachineUsers({
+    client,
+    workspaceId,
+    invokers: pipelines.flatMap((pipeline) =>
+      Object.values(pipeline.resolvers).map((resolver) => resolver.invoker),
+    ),
+    authNamespace,
+    plannedMachineUsers: context.plannedMachineUsers,
+  });
   const { changeSet: resolverChangeSet, existingResolversByNamespace } = await planResolvers(
     client,
     workspaceId,
@@ -207,8 +206,8 @@ export async function planPipeline(
     context.executorUsedResolvers ?? new Set<string>(),
     deletedServices,
     application.env,
-    getApplicationAuthNamespace(application),
-    knownMachineUsers,
+    authNamespace,
+    invokerMachineUsers,
     forceApplyAll,
     {
       appName: application.name,
@@ -378,7 +377,7 @@ async function planResolvers(
   deletedServices: ReadonlyArray<string>,
   env: ApplicationEnv,
   authNamespace: string | undefined,
-  knownMachineUsers: ReadonlySet<string> | undefined,
+  invokerMachineUsers: InvokerMachineUsers | undefined,
   forceApplyAll = false,
   records: ResolverRecordInputs = {},
   previousExisting?: PreviousPipelineResolvers,
@@ -491,7 +490,7 @@ async function planResolvers(
             executorUsedResolvers,
             env,
             authNamespace,
-            knownMachineUsers,
+            invokerMachineUsers,
           ),
         },
         metaRequest: await resolverMetaRequest(namespaceName, resolver),
@@ -567,7 +566,7 @@ function processResolver(
   executorUsedResolvers: ReadonlySet<string>,
   env: ApplicationEnv,
   authNamespace: string | undefined,
-  knownMachineUsers: ReadonlySet<string> | undefined,
+  invokerMachineUsers: InvokerMachineUsers | undefined,
 ): MessageInitShape<typeof PipelineResolverSchema> {
   const pipelines: MessageInitShape<typeof PipelineResolver_PipelineSchema>[] = [
     {
@@ -584,7 +583,7 @@ function processResolver(
         resolver.invoker,
         authNamespace,
         `Resolver "${resolver.name}"`,
-        knownMachineUsers,
+        invokerMachineUsers,
       ),
     },
   ];

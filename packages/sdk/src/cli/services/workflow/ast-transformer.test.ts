@@ -10,7 +10,7 @@ import {
   type StartModuleBindings,
   type StartTarget,
 } from "#/cli/shared/start-context";
-import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
+import { makeTempDir, tempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { createHookFailures } from "../hook-failures";
 import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
@@ -973,19 +973,35 @@ await myWorkflow.start({ id: 2 }, { invoker: "batch" });
       expect(matches).toHaveLength(1);
     });
 
-    test("keeps options unchanged and omits the helper when authNamespace is not provided", () => {
+    test("maps an object invoker to authInvoker and leaves a string one when authNamespace is not provided", async () => {
       const source = `
-const result = await myWorkflow.start({ id: 1 }, { invoker: "kiosk" });
+await myWorkflow.start({ id: 1 }, { invoker: { namespace: "other-auth", machineUserName: "kiosk" } });
+await myWorkflow.start({ id: 2 }, { invoker: "kiosk" });
 `;
-      const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
-      const jobNameMap = new Map<string, string>();
-
-      const result = transformStartCalls(source, workflowNameMap, jobNameMap);
-
-      expect(result).toContain(
-        'tailor.workflow.startWorkflow("my-workflow", { id: 1 }, { invoker: "kiosk" })',
+      const result = transformStartCalls(
+        source,
+        new Map([["myWorkflow", "my-workflow"]]),
+        new Map<string, string>(),
       );
-      expect(result).not.toContain("__tailor_normalizeStartOptions");
+      const startWorkflow = vi.fn(async () => "run-id");
+      vi.stubGlobal("tailor", { workflow: { startWorkflow } });
+      using dir = tempDir("start-object-invoker-");
+      const file = path.join(dir.dir, "start.mjs");
+      fs.writeFileSync(file, result);
+      try {
+        await import(file);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+
+      expect(startWorkflow.mock.calls).toEqual([
+        [
+          "my-workflow",
+          { id: 1 },
+          { authInvoker: { namespace: "other-auth", machineUserName: "kiosk" } },
+        ],
+        ["my-workflow", { id: 2 }, { invoker: "kiosk" }],
+      ]);
     });
   });
   describe("job start transformation", () => {
