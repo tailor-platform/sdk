@@ -179,6 +179,15 @@ export function applicationOwner(application: {
 }
 
 /**
+ * Get the stable id of an application config's owner.
+ * @param owner - Owner of the resources a deploy manages
+ * @returns The application id, or undefined for a workspace config or a config with no id
+ */
+export function applicationIdOf(owner: DeployOwner): string | undefined {
+  return owner.kind === "application" ? owner.id : undefined;
+}
+
+/**
  * Determine whether a remote resource is managed by the deploy's owner.
  * @param labels - Labels currently stored on the remote resource
  * @param owner - Owner of the resources the deploy manages

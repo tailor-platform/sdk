@@ -5,13 +5,12 @@ import {
   subscribesToEvents,
 } from "#/cli/shared/publish-events";
 import { collectApplicationIdpNames, findResolverNamespace } from "./executor";
-import { dependedByAppLabelKey, eventSourceKey } from "./label";
+import { applicationIdOf, dependedByAppLabelKey, eventSourceKey } from "./label";
 import {
   collectVisibleIdpNames,
   collectVisibleResolverNamespaces,
   collectVisibleTailorDBTypeNamespaces,
 } from "./visible-resources";
-import type { Application } from "#/cli/services/application";
 import type { Executor } from "#/types/executor.generated";
 import type { BuiltDeploymentTarget } from "./deployment-target";
 import type { DependentAppsByResource, DeployDependencyReason } from "./label";
@@ -21,18 +20,18 @@ import type { WorkflowEventSubscribers } from "./workflow";
  * Resolve which IdP an `idpUser` trigger subscribes to. A trigger that omits the
  * `idp` option means the only configured IdP; when several exist the target is
  * ambiguous and the apply pipeline throws a clearer error for it later.
- * @param application - Application declaring the executor
+ * @param target - Target declaring the executor
  * @param trigger - The executor's `idpUser` trigger
  * @returns The subscribed IdP name, or undefined when ambiguous
  */
 function subscribedIdpName(
-  application: Readonly<Application>,
+  target: BuiltDeploymentTarget,
   trigger: { idp?: string | undefined },
 ): string | undefined {
   if (trigger.idp != null) {
     return trigger.idp;
   }
-  const idps = collectApplicationIdpNames(application);
+  const idps = collectApplicationIdpNames(target);
   if (idps.size !== 1) {
     return undefined;
   }
@@ -115,10 +114,9 @@ export function collectEventSubscriptions(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): EventSubscription[] {
   const subscriptions: EventSubscription[] = [];
-  const applications = targets.map((target) => target.application);
   for (const subscriber of targets) {
     const executors = subscriber.application.executorService?.executors ?? {};
-    const visibility = collectSubscriberVisibility(subscriber, applications);
+    const visibility = collectSubscriberVisibility(subscriber, targets);
     for (const executor of Object.values(executors)) {
       const lookup = eventSourceLookup(executor, subscriber, visibility);
       if (!lookup) {
@@ -261,9 +259,7 @@ export function subscribedIdps(
   return new Set(
     publishingSubscriptions(subscriptions).flatMap((subscription) =>
       subscription.trigger.kind === "idpUser"
-        ? [
-            subscribedIdpName(subscription.subscriber.application, subscription.trigger) ?? [],
-          ].flat()
+        ? [subscribedIdpName(subscription.subscriber, subscription.trigger) ?? []].flat()
         : [],
     ),
   );
@@ -319,7 +315,7 @@ export function collectDependentApps(
     if (subscriber.config.path === owner.config.path || pinned || key === undefined) {
       continue;
     }
-    const appId = subscriber.application.id;
+    const appId = applicationIdOf(subscriber.owner);
     if (appId === undefined) {
       continue;
     }
@@ -373,12 +369,12 @@ type SubscriberVisibility = {
 
 function collectSubscriberVisibility(
   subscriber: BuiltDeploymentTarget,
-  applications: ReadonlyArray<Readonly<Application>>,
+  targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): SubscriberVisibility {
   return {
-    tailorDBTypes: collectVisibleTailorDBTypeNamespaces(subscriber.application, applications),
-    resolvers: collectVisibleResolverNamespaces(subscriber.application, applications),
-    idps: collectVisibleIdpNames(subscriber.application, applications),
+    tailorDBTypes: collectVisibleTailorDBTypeNamespaces(subscriber, targets),
+    resolvers: collectVisibleResolverNamespaces(subscriber, targets),
+    idps: collectVisibleIdpNames(subscriber, targets),
   };
 }
 
@@ -433,7 +429,8 @@ function externalSubgraphNames(
   subgraphType: string,
   localNames: ReadonlySet<string>,
 ): string[] {
-  return target.application.subgraphs
+  return target.applications
+    .flatMap((application) => application.subgraphs)
     .filter((subgraph) => subgraph.Type === subgraphType && !localNames.has(subgraph.Name))
     .map((subgraph) => subgraph.Name);
 }
@@ -658,7 +655,7 @@ function eventSourceLookup(
       };
     }
     case "idpUser": {
-      const idpName = subscribedIdpName(subscriber.application, trigger);
+      const idpName = subscribedIdpName(subscriber, trigger);
       if (idpName === undefined) {
         return undefined;
       }
@@ -733,7 +730,7 @@ export function assertRecordableDependencies(
     if (subscriber.config.path === owner.config.path) continue;
     if (pinned) continue;
     if (!writes) continue;
-    const appId = subscriber.application.id;
+    const appId = applicationIdOf(subscriber.owner);
     // An id that cannot form a label key fails the same way as a missing one, and
     // it has to fail here: the write happens partway through apply, once sibling
     // resources have already been mutated.

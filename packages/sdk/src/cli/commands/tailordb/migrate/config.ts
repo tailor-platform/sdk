@@ -45,7 +45,7 @@ function hasMigrationConfig(dbConfig: unknown): dbConfig is { migration: { direc
  * @returns {NamespaceWithMigrations[]} Array of namespaces with migrations configured
  */
 export function getNamespacesWithMigrations(
-  config: AppConfig,
+  config: Pick<AppConfig, "db">,
   configDir: string,
 ): NamespaceWithMigrations[] {
   const result: NamespaceWithMigrations[] = [];

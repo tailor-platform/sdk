@@ -53,10 +53,14 @@ export interface SecretsStateScope {
  * @returns Secrets state scope for the plan's workspace, application, and config
  */
 export function secretsStateScope(context: PlanContext): SecretsStateScope {
+  const { owner } = context;
+  if (owner.kind !== "application") {
+    throw internalError("Secrets state is kept only for an application config");
+  }
   return {
     workspaceId: context.workspaceId,
-    applicationId: context.application.id,
-    applicationName: context.application.name,
+    applicationId: owner.id,
+    applicationName: owner.name,
     configPath: context.config.path,
   };
 }

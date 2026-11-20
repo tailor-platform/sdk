@@ -106,6 +106,7 @@ describe("plugin-generated resolvers", () => {
         workspaceId: "ws",
         application,
         config,
+        applications: [],
         owner: applicationOwner(application),
         forRemoval: false,
       });

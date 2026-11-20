@@ -484,9 +484,10 @@ function createContext(
     client,
     workspaceId,
     application,
+    applications: [],
     owner: applicationOwner(application),
     forRemoval: false,
-    config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
+    config: { path: "/test/tailor.config.ts" },
   };
 }
 
@@ -959,9 +960,10 @@ describe("planAuth", () => {
       client,
       workspaceId,
       application,
+      applications: [],
       owner: applicationOwner(application),
       forRemoval: false,
-      config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
+      config: { path: "/test/tailor.config.ts" },
     });
 
     expect(result.changeSet.oauth2Client.unchanged).toHaveLength(1);
@@ -1019,9 +1021,10 @@ describe("planAuth", () => {
         client,
         workspaceId,
         application,
+        applications: [],
         owner: applicationOwner(application),
         forRemoval: false,
-        config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
+        config: { path: "/test/tailor.config.ts" },
       });
 
       expect(

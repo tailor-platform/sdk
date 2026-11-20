@@ -1,5 +1,12 @@
 import { collectApplicationIdpNames } from "./executor";
-import type { Application } from "#/cli/services/application";
+import type { ConfigServices } from "#/cli/services/application";
+import type { DeployApplication } from "./deploy-application";
+
+/** A config in the deploy run: the services it defines and the applications exposing them. */
+type VisibleConfig = {
+  application: Readonly<ConfigServices>;
+  applications: ReadonlyArray<Pick<DeployApplication, "subgraphs">>;
+};
 
 function addPossiblyAmbiguousNamespace(
   namespaces: Map<string, string | undefined>,
@@ -21,21 +28,20 @@ type VisibleResource = {
 };
 
 type CollectVisibleResourcesParams<TResult> = {
-  application: Readonly<Application>;
-  applications: ReadonlyArray<Readonly<Application>>;
-  visibleKeysOf: (application: Readonly<Application>) => ReadonlySet<string>;
-  resourcesOf: (application: Readonly<Application>) => Iterable<VisibleResource>;
+  config: VisibleConfig;
+  configs: ReadonlyArray<VisibleConfig>;
+  visibleKeysOf: (config: VisibleConfig) => ReadonlySet<string>;
+  resourcesOf: (services: Readonly<ConfigServices>) => Iterable<VisibleResource>;
   createResult: () => TResult;
   addResource: (result: TResult, resourceKey: string, visibilityKey: string) => void;
 };
 
 function collectVisibleResources<TResult>(params: CollectVisibleResourcesParams<TResult>): TResult {
-  const { application, applications, visibleKeysOf, resourcesOf, createResult, addResource } =
-    params;
-  const visibleKeys = visibleKeysOf(application);
+  const { config, configs, visibleKeysOf, resourcesOf, createResult, addResource } = params;
+  const visibleKeys = visibleKeysOf(config);
   const result = createResult();
-  for (const candidate of applications) {
-    for (const resource of resourcesOf(candidate)) {
+  for (const candidate of configs) {
+    for (const resource of resourcesOf(candidate.application)) {
       if (!visibleKeys.has(resource.visibilityKey)) {
         continue;
       }
@@ -45,17 +51,15 @@ function collectVisibleResources<TResult>(params: CollectVisibleResourcesParams<
   return result;
 }
 
-function collectApplicationTailorDBNamespaces(
-  application: Readonly<Application>,
-): ReadonlySet<string> {
+function collectApplicationTailorDBNamespaces(config: VisibleConfig): ReadonlySet<string> {
   return new Set([
-    ...application.tailorDBServices.map((service) => service.namespace),
-    ...application.externalTailorDBNamespaces,
+    ...config.application.tailorDBServices.map((service) => service.namespace),
+    ...config.application.externalTailorDBNamespaces,
   ]);
 }
 
-function* tailorDBTypeResources(application: Readonly<Application>): Iterable<VisibleResource> {
-  for (const service of application.tailorDBServices) {
+function* tailorDBTypeResources(services: Readonly<ConfigServices>): Iterable<VisibleResource> {
+  for (const service of services.tailorDBServices) {
     for (const tableName of Object.keys(service.types)) {
       yield { visibilityKey: service.namespace, resourceKey: tableName };
     }
@@ -63,12 +67,12 @@ function* tailorDBTypeResources(application: Readonly<Application>): Iterable<Vi
 }
 
 export function collectVisibleTailorDBTypeNamespaces(
-  application: Readonly<Application>,
-  applications: ReadonlyArray<Readonly<Application>>,
+  config: VisibleConfig,
+  configs: ReadonlyArray<VisibleConfig>,
 ): ReadonlyMap<string, string | undefined> {
   return collectVisibleResources({
-    application,
-    applications,
+    config,
+    configs,
     visibleKeysOf: collectApplicationTailorDBNamespaces,
     resourcesOf: tailorDBTypeResources,
     createResult: () => new Map<string, string | undefined>(),
@@ -76,31 +80,30 @@ export function collectVisibleTailorDBTypeNamespaces(
   });
 }
 
-function collectApplicationResolverNamespaces(
-  application: Readonly<Application>,
-): ReadonlySet<string> {
+function collectApplicationResolverNamespaces(config: VisibleConfig): ReadonlySet<string> {
   return new Set(
-    application.subgraphs
+    config.applications
+      .flatMap((application) => application.subgraphs)
       .filter((subgraph) => subgraph.Type === "pipeline")
       .map((subgraph) => subgraph.Name),
   );
 }
 
 export function collectVisibleIdpNames(
-  application: Readonly<Application>,
-  applications: ReadonlyArray<Readonly<Application>>,
+  config: VisibleConfig,
+  configs: ReadonlyArray<VisibleConfig>,
 ): ReadonlySet<string> {
-  const names = new Set(collectApplicationIdpNames(application));
-  for (const candidate of applications) {
-    for (const idp of candidate.idpServices) {
+  const names = new Set(collectApplicationIdpNames(config));
+  for (const candidate of configs) {
+    for (const idp of candidate.application.idpServices) {
       names.add(idp.name);
     }
   }
   return names;
 }
 
-function* resolverResources(application: Readonly<Application>): Iterable<VisibleResource> {
-  for (const service of application.resolverServices) {
+function* resolverResources(services: Readonly<ConfigServices>): Iterable<VisibleResource> {
+  for (const service of services.resolverServices) {
     for (const resolver of Object.values(service.resolvers)) {
       yield { visibilityKey: service.namespace, resourceKey: resolver.name };
     }
@@ -108,12 +111,12 @@ function* resolverResources(application: Readonly<Application>): Iterable<Visibl
 }
 
 export function collectVisibleResolverNamespaces(
-  application: Readonly<Application>,
-  applications: ReadonlyArray<Readonly<Application>>,
+  config: VisibleConfig,
+  configs: ReadonlyArray<VisibleConfig>,
 ): ReadonlyMap<string, string | undefined> {
   return collectVisibleResources({
-    application,
-    applications,
+    config,
+    configs,
     visibleKeysOf: collectApplicationResolverNamespaces,
     resourcesOf: resolverResources,
     createResult: () => new Map<string, string | undefined>(),

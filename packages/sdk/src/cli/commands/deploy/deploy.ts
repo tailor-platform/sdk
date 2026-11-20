@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { type Application } from "#/cli/services/application";
+import { type Application, type ConfigServices } from "#/cli/services/application";
 import { assertUniqueTailorDBTypeNamesWithExternal } from "#/cli/services/tailordb/type-name-validation";
 import { recoveryContextArgs, type EnvFileArgs } from "#/cli/shared/args";
 import {
@@ -80,7 +80,7 @@ import {
 } from "./function-registry";
 import { planIdP } from "./idp";
 import {
-  applicationOwner,
+  applicationIdOf,
   buildMetaRequest,
   type DeployOwner,
   hasMatchingSdkVersion,
@@ -118,6 +118,7 @@ import {
 import { planWorkflow } from "./workflow";
 import { planWorkflowJobFunctionExecutionPolicy } from "./workflow-execution-policy";
 import { resolveDeployWorkspace } from "./workspace";
+import type { DeployApplication } from "./deploy-application";
 import type {
   PlanContext,
   TailorDBMigrationTestBaseline,
@@ -203,35 +204,37 @@ export function collectExpectedLocalStaticWebsiteNamesFromConfigs(
   return websiteNames;
 }
 
+type ForceApplyCandidates = {
+  application: Readonly<ConfigServices>;
+  applications: ReadonlyArray<Pick<DeployApplication, "name" | "subgraphs">>;
+};
+
 /**
- * Detect whether any resource owned by this application was last applied by a
+ * Detect whether any resource owned by this config was last applied by a
  * different SDK version, in which case every resource is re-applied.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param owner - Owner of the resources the deploy manages
- * @param application - Application being deployed
- * @param functionEntries - Function registry entries of the application
+ * @param config - Services and applications the config deploys
+ * @param functionEntries - Function registry entries of the config
  * @returns True when an owned resource carries a different sdk-version label
  */
 export async function shouldForceApplyAll(
   client: OperatorClient,
   workspaceId: string,
   owner: DeployOwner,
-  application: Readonly<Application>,
+  config: ForceApplyCandidates,
   functionEntries: ReadonlyArray<{ name: string }>,
 ) {
-  const desiredLabels = (
-    await buildMetaRequest({
-      trn: resourceTrn(workspaceId, "application", application.name),
-      owner,
-    })
-  ).labels;
+  const { application, applications } = config;
   const managedByOwner = (labels: Record<string, string>) =>
     owner.kind === "workspace" ? isOwnedBy(labels, owner) : labels[sdkNameLabelKey] === owner.name;
   const candidateTrns = new Set<string>();
 
-  if (application.subgraphs.length > 0) {
-    candidateTrns.add(resourceTrn(workspaceId, "application", application.name));
+  for (const app of applications) {
+    if (app.subgraphs.length > 0) {
+      candidateTrns.add(resourceTrn(workspaceId, "application", app.name));
+    }
   }
   application.staticWebsiteServices.forEach((website) => {
     candidateTrns.add(resourceTrn(workspaceId, "staticwebsite", website.name));
@@ -263,6 +266,11 @@ export async function shouldForceApplyAll(
   functionEntries.forEach((entry) => {
     candidateTrns.add(resourceTrn(workspaceId, "function_registry", entry.name));
   });
+  const [anyTrn] = candidateTrns;
+  if (anyTrn === undefined) {
+    return false;
+  }
+  const desiredLabels = (await buildMetaRequest({ trn: anyTrn, owner })).labels;
 
   const results = await Promise.allSettled(
     [...candidateTrns].map((trn) =>
@@ -473,7 +481,7 @@ function collectDeployRunPlanInputs(
   return {
     eventSubscriptions,
     runAppIds: new Set(
-      targets.map((target) => target.application.id).filter((id) => id !== undefined),
+      targets.map((target) => applicationIdOf(target.owner)).filter((id) => id !== undefined),
     ),
     expectedLocalStaticWebsiteNames: collectExpectedLocalStaticWebsiteNames(targets),
     externalAuthIdpConfigNames: collectExternalAuthIdpConfigNames(targets),
@@ -525,24 +533,24 @@ async function planDeploymentTarget(
     workflowBuildResult?.usedJobNames ?? [],
   );
   const functionEntries = collectFunctionEntries(application, bundledWorkflowJobs, bundledScripts);
-  const owner = applicationOwner(application);
+  const { owner, applications } = target;
   // Reused as-is on a rebuild's replan -- see `PlannedDeployment.forceApplyAll`'s
   // doc comment for why recomputing it there is unsafe.
   const forceApplyAll = previous
     ? previous.forceApplyAll
     : await withSpan("plan.detectSdkVersionChange", () =>
-        shouldForceApplyAll(client, workspaceId, owner, application, functionEntries),
+        shouldForceApplyAll(client, workspaceId, owner, target, functionEntries),
       );
 
   return withSpan("plan", async () => {
-    const applications = targets.map((target) => target.application);
-    const tailorDBTypeNamespaces = collectVisibleTailorDBTypeNamespaces(application, applications);
-    const resolverNamespaces = collectVisibleResolverNamespaces(application, applications);
-    const idpNames = collectVisibleIdpNames(application, applications);
+    const tailorDBTypeNamespaces = collectVisibleTailorDBTypeNamespaces(target, targets);
+    const resolverNamespaces = collectVisibleResolverNamespaces(target, targets);
+    const idpNames = collectVisibleIdpNames(target, targets);
     const ctx: PlanContext = {
       client,
       workspaceId,
       application,
+      applications,
       owner,
       forRemoval: false,
       config,
@@ -653,6 +661,7 @@ async function planDeploymentTarget(
 
     return {
       application,
+      applications,
       owner,
       forceApplyAll,
       functionRegistry,
@@ -746,12 +755,7 @@ export async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParam
     if (deployment.owner.kind === "workspace") {
       await confirmWorkspaceTakeover(split.takeovers, mode);
     } else {
-      await confirmOwnerConflict(
-        conflicts,
-        deployment.application.name,
-        mode,
-        deployment.application.id,
-      );
+      await confirmOwnerConflict(conflicts, deployment.owner.name, mode, deployment.owner.id);
     }
     await confirmUnmanagedResources(unmanaged, deployment.application.name, mode);
   }
@@ -893,9 +897,6 @@ export function adjustApplicationForMigrationTest(
       ...website,
       customDomains: undefined,
     })),
-    get applications() {
-      return [adjusted];
-    },
   };
   return adjusted;
 }
@@ -1030,7 +1031,7 @@ async function deployInternal(
               createMetadataLookupClient({
                 client,
                 workspaceId,
-                owners: planTargets.map(({ application }) => applicationOwner(application)),
+                owners: planTargets.map(({ owner }) => owner),
               }),
             );
       firstMetadataClient = metadataClient;

@@ -140,13 +140,14 @@ function createPlanContext(
       })),
       idpServices: overrides.idpServices ?? [],
     } as unknown as Application,
+    applications: [],
     owner: {
       kind: "application",
       name: overrides.appName ?? "test-app",
       id: overrides.appId ?? "app-1",
     },
     forRemoval: overrides.forRemoval ?? false,
-    config: { path: configPath } as PlanContext["config"],
+    config: { path: configPath },
   };
 }
 

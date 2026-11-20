@@ -133,11 +133,12 @@ beforeEach(() => {
     aiGatewayServices: [],
     secrets: [],
     env: {},
-    applications: [],
   };
   mocks.target = {
     config: { path: "/repo/tailor.config.ts", name: "app" },
     application,
+    owner: { kind: "application", name: "app", id: undefined },
+    applications: [{ name: "app", subgraphs: [], authNamespace: undefined, settings: {} }],
     plugins: [],
     bundledScripts: {
       resolvers: new Map(),

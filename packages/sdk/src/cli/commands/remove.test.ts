@@ -97,7 +97,13 @@ vi.mock(import("#/cli/commands/deploy/workflow-execution-policy"), async (origin
   };
 });
 vi.mock("#/cli/services/application", () => ({
-  defineApplication: vi.fn(() => ({ name: "my-app", id: "app-id" })),
+  defineApplication: vi.fn(() => ({
+    name: "my-app",
+    id: "app-id",
+    config: {},
+    subgraphs: [],
+    authServices: [],
+  })),
 }));
 vi.mock("#/cli/shared/client", async (importOriginal) => ({
   ...(await importOriginal()),

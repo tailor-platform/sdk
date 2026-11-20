@@ -23,9 +23,11 @@ import {
 } from "@tailor-platform/tailor-proto/telemetryrouter_resource_pb";
 import { describe, expect, test } from "vitest";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { deployApplicationOf } from "./deploy-application";
 import { dropCrossDeploymentManagedDeletes } from "./managed-resources";
 import { assertResourcesNotInUse } from "./resources-in-use";
 import { emptyPlanResults } from "./test-helpers/plan-results";
+import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { PlanResults, PlannedDeployment } from "./apply-phases";
 
@@ -63,8 +65,15 @@ function check(
 }
 
 function deployment(application: ApplicationShape, results: PlanResults) {
+  const full = {
+    subgraphs: [],
+    authServices: [],
+    config: {},
+    ...application,
+  } as unknown as Application;
   return {
-    application: { subgraphs: [], authServices: [], ...application },
+    application: full,
+    applications: [deployApplicationOf(full)],
     ...results,
   } as unknown as PlannedDeployment;
 }
