@@ -155,7 +155,7 @@ describe("workflow run", () => {
 
     await invoke(runCommand, [scriptPath, "-m", "admin"]);
 
-    expect(stderr.output).toContain("tailor workflow cleanup --include-unlabeled");
+    expect(stderr.output).toContain("tailor workflow prune --include-unlabeled");
   });
 
   test("runs the only workflow job of the file with its argument and prints the result with the run ids", async () => {
@@ -295,7 +295,7 @@ describe("workflow run", () => {
     });
     expect(result.error).toMatchObject({ suggestion: expect.stringContaining(WORKSPACE_ID) });
     expect(result.error).toMatchObject({
-      suggestion: expect.stringContaining("tailor workflow cleanup"),
+      suggestion: expect.stringContaining("tailor workflow prune"),
     });
   });
 
@@ -316,7 +316,7 @@ describe("workflow run", () => {
       suggestion: expect.stringContaining("--logs"),
     });
     expect(result.error).toMatchObject({
-      suggestion: expect.stringContaining("tailor workflow cleanup"),
+      suggestion: expect.stringContaining("tailor workflow prune"),
     });
   });
 

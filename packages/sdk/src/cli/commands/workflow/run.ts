@@ -22,7 +22,7 @@ import {
   assertPollInterval,
   assertWorkflowArg,
   awaitWorkflowRun,
-  cleanupHint,
+  pruneHint,
   reclaimFinishedWorkflowRuns,
   startWorkflowRun,
   workflowRunHints,
@@ -47,7 +47,7 @@ import {
 } from "../function/run-function";
 import { bundleWorkflowRunJobs } from "./run-jobs";
 
-const CLEANUP_COMMAND = "tailor workflow cleanup";
+const PRUNE_COMMAND = "tailor workflow prune";
 
 export const runCommand = defineAppCommand({
   name: "run",
@@ -93,7 +93,7 @@ A single job is ended by the Platform after 5 minutes, and the run is reported a
 
 The file must export workflow jobs created with \`createWorkflowJob\`; a file that defines no workflow job is refused. Without \`--job\`, the run starts from the main job of the workflow the file exports as default, or from the only job when the file defines just one; \`--job\` selects another job to start from. The jobs it starts run from your files, not the ones already deployed under the same names, and the jobs of files in the config's \`workflow.files\` can be started too. The input must be a JSON object (\`null\` is accepted too): unlike \`function run\`, a number, string, boolean, or array is refused before anything is created. \`tailor workflow scaffold\` scaffolds a workflow to start from.
 
-When the wait stops (\`--timeout\` elapsed), the run keeps going and its temporary resources stay in place. The command prints the run ID; read the outcome with \`tailor workflow executions\`. \`${CLEANUP_COMMAND}\` removes the resources of runs that have finished, and the next \`workflow run\` does the same before it starts. A run that finished within the last few minutes is left alone by that automatic sweep (and by \`tailor deploy\`), so the command still waiting for it can read its result; \`${CLEANUP_COMMAND}\` removes it at once.`,
+When the wait stops (\`--timeout\` elapsed), the run keeps going and its temporary resources stay in place. The command prints the run ID; read the outcome with \`tailor workflow executions\`. \`${PRUNE_COMMAND}\` removes the resources of runs that have finished, and the next \`workflow run\` does the same before it starts. A run that finished within the last few minutes is left alone by that automatic sweep (and by \`tailor deploy\`), so the command still waiting for it can read its result; \`${PRUNE_COMMAND}\` removes it at once.`,
   examples: [
     {
       cmd: 'workflows/jobs.ts --job send-report --arg \'{"id":"42"}\'',
@@ -193,7 +193,7 @@ When the wait stops (\`--timeout\` elapsed), the run keeps going and its tempora
     if (swept && swept.keptUnlabeled.length > 0) {
       logger.warn(
         `${swept.keptUnlabeled.length} resource(s) named \`tmp-run-…\` carry no \`workflow run\` label and were left in place. ` +
-          `If they are leftovers of an interrupted run, ${cleanupHint({ workspaceId, profile: args.profile, includeUnlabeled: true })} removes them.`,
+          `If they are leftovers of an interrupted run, ${pruneHint({ workspaceId, profile: args.profile, includeUnlabeled: true })} removes them.`,
       );
     }
 
@@ -218,7 +218,7 @@ When the wait stops (\`--timeout\` elapsed), the run keeps going and its tempora
     });
     const onInterrupt = () => {
       logger.warn(
-        `Stopped waiting. Run ${started.runId} keeps running; read it with ${hints.inspect}, then ${hints.cleanup}.`,
+        `Stopped waiting. Run ${started.runId} keeps running; read it with ${hints.inspect}, then ${hints.prune}.`,
       );
       process.exit(130);
     };
@@ -236,7 +236,7 @@ When the wait stops (\`--timeout\` elapsed), the run keeps going and its tempora
       throw CLIError({
         code: "WORKFLOW_RUN_WAIT_TIMEOUT",
         message: `Stopped waiting for run ${started.runId}; the run is still going.`,
-        suggestion: `Read the outcome with ${hints.inspect}. Afterwards, ${hints.cleanup} removes the temporary resources.`,
+        suggestion: `Read the outcome with ${hints.inspect}. Afterwards, ${hints.prune} removes the temporary resources.`,
         context: { runId: started.runId, executionId: started.executionId },
       });
     }
@@ -249,7 +249,7 @@ When the wait stops (\`--timeout\` elapsed), the run keeps going and its tempora
           : `Run ${started.runId} finished, but its result could not be read: ${outcome.reason}`,
         suggestion: outcome.workflowRemoved
           ? "The jobs themselves run to their end, but the execution can no longer be read through the workflow."
-          : `Read it with ${hints.inspect}. Afterwards, ${hints.cleanup} removes the temporary resources.`,
+          : `Read it with ${hints.inspect}. Afterwards, ${hints.prune} removes the temporary resources.`,
         context: { runId: started.runId, executionId: started.executionId },
       });
     }

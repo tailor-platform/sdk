@@ -29,7 +29,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 | [`workflow start`](#workflow-start)           | Start a workflow execution.                                                            |
 | [`workflow run`](#workflow-run)               | Run a workflow job with the jobs it starts, as a temporary workflow without deploying. |
 | [`workflow scaffold`](#workflow-scaffold)     | Scaffold a workflow definition to run with `workflow run`.                             |
-| [`workflow cleanup`](#workflow-cleanup)       | Remove the temporary resources that `workflow run` left behind.                        |
+| [`workflow prune`](#workflow-prune)           | Remove the temporary resources that `workflow run` left behind.                        |
 | [`workflow wait`](#workflow-wait)             | Wait for a workflow execution.                                                         |
 | [`workflow executions`](#workflow-executions) | List or get workflow executions.                                                       |
 | [`workflow resume`](#workflow-resume)         | Resume a failed or pending workflow execution.                                         |
@@ -180,7 +180,7 @@ A single job is ended by the Platform after 5 minutes, and the run is reported a
 
 The file must export workflow jobs created with `createWorkflowJob`; a file that defines no workflow job is refused. Without `--job`, the run starts from the main job of the workflow the file exports as default, or from the only job when the file defines just one; `--job` selects another job to start from. The jobs it starts run from your files, not the ones already deployed under the same names, and the jobs of files in the config's `workflow.files` can be started too. The input must be a JSON object (`null` is accepted too): unlike `function run`, a number, string, boolean, or array is refused before anything is created. `tailor workflow scaffold` scaffolds a workflow to start from.
 
-When the wait stops (`--timeout` elapsed), the run keeps going and its temporary resources stay in place. The command prints the run ID; read the outcome with `tailor workflow executions`. `tailor workflow cleanup` removes the resources of runs that have finished, and the next `workflow run` does the same before it starts. A run that finished within the last few minutes is left alone by that automatic sweep (and by `tailor deploy`), so the command still waiting for it can read its result; `tailor workflow cleanup` removes it at once.
+When the wait stops (`--timeout` elapsed), the run keeps going and its temporary resources stay in place. The command prints the run ID; read the outcome with `tailor workflow executions`. `tailor workflow prune` removes the resources of runs that have finished, and the next `workflow run` does the same before it starts. A run that finished within the last few minutes is left alone by that automatic sweep (and by `tailor deploy`), so the command still waiting for it can read its result; `tailor workflow prune` removes it at once.
 
 ### workflow scaffold
 
@@ -214,14 +214,14 @@ The scaffolded file defines two workflow jobs and a workflow: `main` starts one 
 
 Rename the jobs and the workflow and fill in the bodies; to deploy it, add the file to the config's `workflow.files`. An existing file is never overwritten.
 
-### workflow cleanup
+### workflow prune
 
 Remove the temporary resources that `workflow run` left behind.
 
 **Usage**
 
 ```
-tailor workflow cleanup [options]
+tailor workflow prune [options]
 ```
 
 **Options**
@@ -239,13 +239,13 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 **Remove the resources of finished runs**
 
 ```bash
-$ tailor workflow cleanup
+$ tailor workflow prune
 ```
 
 **Also remove `tmp-run-…` resources that have no label**
 
 ```bash
-$ tailor workflow cleanup --include-unlabeled
+$ tailor workflow prune --include-unlabeled
 ```
 
 **Notes**

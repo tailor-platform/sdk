@@ -80,7 +80,7 @@ describe("workflowRunResourceName", () => {
     expect(workflowRunResourceName("r1")).not.toBe(workflowRunResourceName("r2"));
   });
 
-  test("starts with tmp-run-, the prefix a cleanup looks for", () => {
+  test("starts with tmp-run-, the prefix a prune looks for", () => {
     expect(workflowRunResourceName("r1")).toBe("tmp-run-r1");
     expect(isWorkflowRunResourceName("tmp-run-r1")).toBe(true);
     expect(isWorkflowRunResourceName("tmp-r1")).toBe(false);

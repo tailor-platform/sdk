@@ -5,10 +5,10 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { cleanupHint, reclaimWorkflowRuns } from "#/cli/shared/workflow-run";
+import { pruneHint, reclaimWorkflowRuns } from "#/cli/shared/workflow-run";
 
-export const cleanupCommand = defineAppCommand({
-  name: "cleanup",
+export const pruneCommand = defineAppCommand({
+  name: "prune",
   description: "Remove the temporary resources that `workflow run` left behind.",
   args: z.strictObject({
     ...workspaceArgs,
@@ -64,7 +64,7 @@ A resource whose name starts with \`tmp-run-\` but that carries no \`workflow ru
         logger.log(`  ${kind} ${name}`);
       }
       logger.log(
-        `If they are leftovers of an interrupted run, ${cleanupHint({ workspaceId, profile: args.profile, includeUnlabeled: true })} removes them.`,
+        `If they are leftovers of an interrupted run, ${pruneHint({ workspaceId, profile: args.profile, includeUnlabeled: true })} removes them.`,
       );
     }
   },

@@ -16,7 +16,7 @@ import {
   reclaimFinishedWorkflowRuns,
   reclaimWorkflowRuns,
   startWorkflowRun,
-  cleanupHint,
+  pruneHint,
   workflowRunHints,
 } from "./workflow-run";
 import { createRunId, workflowRunJobFunctionName, workflowRunLabels } from "./workflow-run-labels";
@@ -1505,9 +1505,9 @@ describe("workflowRunHints", () => {
     expect(hints.inspect).toContain("--logs");
     expect(hints.inspect).toContain("ws-1");
     expect(hints.inspect).toContain("staging");
-    expect(hints.cleanup).toContain("tailor workflow cleanup");
-    expect(hints.cleanup).toContain("ws-1");
-    expect(hints.cleanup).toContain("staging");
+    expect(hints.prune).toContain("tailor workflow prune");
+    expect(hints.prune).toContain("ws-1");
+    expect(hints.prune).toContain("staging");
   });
 });
 
@@ -1534,21 +1534,21 @@ describe("assertWorkflowArg", () => {
   );
 });
 
-describe("cleanupHint", () => {
+describe("pruneHint", () => {
   test("names the workspace and profile the run used, also with --include-unlabeled", () => {
     expect(
-      cleanupHint({ workspaceId: "ws-1", profile: "staging", includeUnlabeled: true }),
-    ).toContain("tailor workflow cleanup --include-unlabeled");
-    expect(
-      cleanupHint({ workspaceId: "ws-1", profile: "staging", includeUnlabeled: true }),
-    ).toMatch(/ws-1/);
-    expect(
-      cleanupHint({ workspaceId: "ws-1", profile: "staging", includeUnlabeled: true }),
-    ).toMatch(/staging/);
+      pruneHint({ workspaceId: "ws-1", profile: "staging", includeUnlabeled: true }),
+    ).toContain("tailor workflow prune --include-unlabeled");
+    expect(pruneHint({ workspaceId: "ws-1", profile: "staging", includeUnlabeled: true })).toMatch(
+      /ws-1/,
+    );
+    expect(pruneHint({ workspaceId: "ws-1", profile: "staging", includeUnlabeled: true })).toMatch(
+      /staging/,
+    );
   });
 
   test("leaves out --include-unlabeled unless asked", () => {
-    expect(cleanupHint({ workspaceId: "ws-1", profile: undefined })).not.toContain(
+    expect(pruneHint({ workspaceId: "ws-1", profile: undefined })).not.toContain(
       "--include-unlabeled",
     );
   });

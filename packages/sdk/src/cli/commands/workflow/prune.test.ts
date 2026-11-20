@@ -5,7 +5,7 @@ import { initOperatorClient } from "#/cli/shared/client";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { reclaimWorkflowRuns } from "#/cli/shared/workflow-run";
-import { cleanupCommand } from "./cleanup";
+import { pruneCommand } from "./prune";
 
 vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn().mockResolvedValue("mock-token"),
@@ -35,14 +35,14 @@ function prepare(result: Partial<Awaited<ReturnType<typeof reclaimWorkflowRuns>>
     .mockResolvedValue({ removed: [], keptUnlabeled: [], removedUnlabeled: [], ...result });
 }
 
-describe("workflow cleanup", () => {
+describe("workflow prune", () => {
   test("removes finished runs at once, ignoring the grace that protects a waiting command", async () => {
     prepare({ removed: ["tmp-run-r1", "tmp-run-r2"] });
     using stdout = captureStdout();
     using _stderr = captureStderr();
     using _json = jsonMode();
 
-    await invoke(cleanupCommand, []);
+    await invoke(pruneCommand, []);
 
     expect(reclaimWorkflowRuns).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -62,7 +62,7 @@ describe("workflow cleanup", () => {
     using _stdout = captureStdout();
     using stderr = captureStderr();
 
-    await invoke(cleanupCommand, []);
+    await invoke(pruneCommand, []);
 
     expect(stderr.output).toContain("tmp-run-r1-orphan");
     expect(stderr.output).toContain("job function");
@@ -75,7 +75,7 @@ describe("workflow cleanup", () => {
     using _stderr = captureStderr();
     using _json = jsonMode();
 
-    await invoke(cleanupCommand, ["--include-unlabeled"]);
+    await invoke(pruneCommand, ["--include-unlabeled"]);
 
     expect(reclaimWorkflowRuns).toHaveBeenCalledWith(
       expect.objectContaining({ includeUnlabeled: true }),
@@ -88,7 +88,7 @@ describe("workflow cleanup", () => {
     using _stdout = captureStdout();
     using stderr = captureStderr();
 
-    await invoke(cleanupCommand, []);
+    await invoke(pruneCommand, []);
 
     expect(stderr.output).not.toContain("--include-unlabeled");
   });

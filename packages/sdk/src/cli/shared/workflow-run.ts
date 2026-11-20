@@ -49,7 +49,7 @@ import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_r
 import type { Jsonifiable } from "type-fest";
 
 const SUBJECT = "workflow run";
-const LEFTOVER_NOTE = "`tailor workflow cleanup` retries the removal once the run has finished.";
+const LEFTOVER_NOTE = "`tailor workflow prune` retries the removal once the run has finished.";
 
 /** A run that has not started is kept this long, since another process may be about to start it. */
 const NOT_STARTED_GRACE_MS = 60_000;
@@ -199,7 +199,7 @@ export async function startWorkflowRun(
     if (startSent && !isStartRefused(error)) {
       logger.warn(
         `Could not confirm that run ${runId} was not started, so its resources were kept. ` +
-          "`tailor workflow cleanup` removes them once the run has finished.",
+          "`tailor workflow prune` removes them once the run has finished.",
       );
       throw error;
     }
@@ -409,7 +409,7 @@ export interface ReclaimWorkflowRunsParams {
   client: OperatorClient;
   workspaceId: string;
   now: Date;
-  /** Also remove a run that finished moments ago (an explicit `workflow cleanup`) */
+  /** Also remove a run that finished moments ago (an explicit `workflow prune`) */
   ignoreFinishedGrace?: boolean;
   /** Also remove resources named like a run's that carry no run label */
   includeUnlabeled?: boolean;
@@ -740,7 +740,7 @@ export interface WorkflowRunHintsParams {
  */
 export function workflowRunHints(params: WorkflowRunHintsParams): {
   inspect: string;
-  cleanup: string;
+  prune: string;
 } {
   const context = recoveryContextArgs({ workspaceId: params.workspaceId, profile: params.profile });
   return {
@@ -748,11 +748,11 @@ export function workflowRunHints(params: WorkflowRunHintsParams): {
       command: "tailor",
       args: ["workflow", "executions", params.executionId, "--logs", ...context],
     }),
-    cleanup: cleanupHint({ workspaceId: params.workspaceId, profile: params.profile }),
+    prune: pruneHint({ workspaceId: params.workspaceId, profile: params.profile }),
   };
 }
 
-interface CleanupHintParams {
+interface PruneHintParams {
   workspaceId: string;
   profile: string | undefined;
   /** Remove the resources that carry no run label as well */
@@ -760,16 +760,16 @@ interface CleanupHintParams {
 }
 
 /**
- * The `workflow cleanup` command line that selects the workspace and profile a run used.
+ * The `workflow prune` command line that selects the workspace and profile a run used.
  * @param params - Workspace, profile, and whether to remove unlabeled resources too
  * @returns Command line for a hint
  */
-export function cleanupHint(params: CleanupHintParams): string {
+export function pruneHint(params: PruneHintParams): string {
   return formatCommandHint({
     command: "tailor",
     args: [
       "workflow",
-      "cleanup",
+      "prune",
       ...(params.includeUnlabeled ? ["--include-unlabeled"] : []),
       ...recoveryContextArgs({ workspaceId: params.workspaceId, profile: params.profile }),
     ],

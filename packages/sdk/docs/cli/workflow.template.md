@@ -42,7 +42,7 @@ tailor workflow start my-workflow -m admin -W
 {{politty:command:workflow run}}
 {{politty:command:workflow scaffold}}
 
-{{politty:command:workflow cleanup}}
+{{politty:command:workflow prune}}
 
 {{politty:command:workflow wait}}
 
