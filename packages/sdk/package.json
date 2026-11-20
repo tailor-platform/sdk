@@ -239,7 +239,7 @@
     "temporal-polyfill": "1.0.8",
     "temporal-spec": "1.0.1",
     "ts-cron-validator": "1.1.5",
-    "type-fest": "5.10.0",
+    "type-fest": "6.0.1",
     "xdg-basedir": "5.1.0",
     "zod": "4.6.7"
   },
