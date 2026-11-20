@@ -1,37 +1,92 @@
 /**
  * `tailor workflow script` command
  *
- * Scaffolds a script that `tailor workflow run` executes past the
- * synchronous time limit.
+ * Scaffolds a workflow definition that `tailor workflow run` runs without deploying.
  */
 
+import * as fs from "node:fs";
+import { arg } from "@politty/zod";
+import * as path from "pathe";
+import { z } from "zod";
 import { defineAppCommand } from "#/cli/shared/command";
-import { scaffoldScript, scriptArgs } from "../function/script";
-import { generateWorkflowScriptSkeleton } from "../function/script-scaffold";
+import { CLIError, formatCommandHint } from "#/cli/shared/errors";
+import { logger, styles } from "#/cli/shared/logger";
+import { assertGeneratedTypeScript } from "../function/script-scaffold";
+
+const MAIN_JOB_NAME = "process-all";
+
+const WORKFLOW_SKELETON = [
+  "/**",
+  " * Workflow to try without deploying:",
+  " *",
+  ` *   tailor workflow run <this file> --job ${MAIN_JOB_NAME} --arg '{"ids":["a","b"]}'`,
+  " */",
+  "",
+  'import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";',
+  "",
+  "export const processItem = createWorkflowJob({",
+  '  name: "process-item",',
+  "  body: (input: { id: string }) => {",
+  "    return { id: input.id, processed: true };",
+  "  },",
+  "});",
+  "",
+  "export const processAll = createWorkflowJob({",
+  `  name: "${MAIN_JOB_NAME}",`,
+  "  body: (input: { ids: string[] }) => {",
+  "    const results = input.ids.map((id) => processItem.start({ id }));",
+  "    return { results };",
+  "  },",
+  "});",
+  "",
+  "export default createWorkflow({",
+  `  name: "${MAIN_JOB_NAME}",`,
+  "  mainJob: processAll,",
+  "});",
+  "",
+].join("\n");
 
 export const scriptCommand = defineAppCommand({
   name: "script",
-  description: "Scaffold a long-running script to run with `workflow run`.",
-  args: scriptArgs,
-  notes: `The scaffolded script is a default-exported \`main(arg)\` function; execute it with \`tailor workflow run <file>\`. \`workflow run\` passes \`--arg\` to \`main\` as its argument and prints what \`main\` returns.
-
-The Platform ends a workflow job that runs too long, so the skeleton handles a bounded batch of rows per run: it stops before the limit and returns where it stopped (\`{ done: false, next: { after } }\`). Run it again with \`--arg '{"after":"…"}'\` to continue from there, until it returns \`{ done: true }\`.
-
-Database types are generated the same way as in \`function script\`: the skeleton imports \`getDB()\` from the \`kyselyTypePlugin\` types when the project configures the plugin, and otherwise writes a script-scoped \`db.ts\` plus a \`db.snapshot.json\` next to the script. \`workflow run\` refuses to run the script when that snapshot no longer matches the table and field structure; pass \`--allow-schema-drift\` to run it anyway. Pass \`--remote\` to generate them from the deployed schema. Re-running the command refreshes \`db.ts\` and \`db.snapshot.json\` and leaves the script itself untouched.`,
-  examples: [
-    {
-      cmd: "scripts/backfill.ts",
-      desc: "Scaffold a long-running script (single-namespace project)",
-    },
-    {
-      cmd: "scripts/backfill.ts --namespace tailordb",
-      desc: "Scaffold a script targeting a specific namespace",
-    },
-  ],
-  run: async (args) =>
-    scaffoldScript(args, {
-      command: "workflow script",
-      runCommand: ["workflow", "run"],
-      skeleton: generateWorkflowScriptSkeleton,
+  description: "Scaffold a workflow definition to run with `workflow run`.",
+  args: z.strictObject({
+    file: arg(z.string(), {
+      positional: true,
+      description: "Path to create the workflow file at (must end with .ts)",
     }),
+  }),
+  notes: `The scaffolded file defines two workflow jobs and a workflow: \`process-all\` starts one \`process-item\` job for each id of its input, and the workflow runs from \`process-all\`. Run it with \`tailor workflow run <file> --job process-all --arg '{"ids":["a","b"]}'\`.
+
+Rename the jobs and the workflow and fill in the bodies; to deploy it, add the file to the config's \`workflow.files\`. An existing file is never overwritten.`,
+  examples: [{ cmd: "workflows/order.ts", desc: "Scaffold a workflow definition" }],
+  run: async (args) => {
+    const filePath = path.resolve(args.file);
+    if (!filePath.endsWith(".ts")) {
+      throw CLIError({
+        code: "SCRIPT_PATH_INVALID",
+        message: `Workflow path must end with .ts: ${args.file}`,
+        command: "workflow script",
+      });
+    }
+    if (fs.existsSync(filePath)) {
+      throw CLIError({
+        code: "SCRIPT_FILE_EXISTS",
+        message: `${args.file} already exists and was left untouched.`,
+        suggestion: "Choose a path that does not exist yet.",
+        command: "workflow script",
+      });
+    }
+    assertGeneratedTypeScript(filePath, WORKFLOW_SKELETON);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, WORKFLOW_SKELETON);
+
+    const relPath = path.relative(process.cwd(), filePath);
+    logger.success(`Created ${styles.path(relPath)}`);
+    logger.info(
+      `Next: edit the workflow, then run ${formatCommandHint({
+        command: "tailor",
+        args: ["workflow", "run", relPath, "--job", MAIN_JOB_NAME, "--arg", '{"ids":["a","b"]}'],
+      })}`,
+    );
+  },
 });

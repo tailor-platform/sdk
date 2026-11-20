@@ -31,6 +31,7 @@ import { createRunId, workflowRunJobFunctionName } from "#/cli/shared/workflow-r
 import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { assertDefined } from "#/utils/assert";
+import { detectFunctionType } from "../function/detect";
 import {
   resolveArgOptions,
   resolveAuthNamespace,
@@ -42,32 +43,32 @@ import {
   executionRecord,
   type FunctionRunTarget,
   type PreparedFunction,
-  prepareFunction,
   printExecutionDetails,
 } from "../function/run-function";
-import { checkScriptSchemaSnapshot } from "../function/script-scaffold";
 import { bundleWorkflowRunJobs } from "./run-jobs";
 
 const CLEANUP_COMMAND = "tailor workflow cleanup";
 
 export const runCommand = defineAppCommand({
   name: "run",
-  description: "Run a script as a temporary workflow, past the synchronous time limit.",
+  description:
+    "Run a workflow job with the jobs it starts, as a temporary workflow without deploying.",
   args: z.strictObject({
     ...workspaceArgs,
     file: arg(z.string(), {
       positional: true,
-      description: "Path to the script file",
+      description: "Path to the file that defines the workflow job",
     }),
     job: arg(z.string().optional(), {
-      description: "Workflow job name to run (matches the `name` field of createWorkflowJob)",
+      description:
+        "Workflow job to run, with the jobs it starts (matches the `name` field of createWorkflowJob). Optional when the file defines only one job.",
     }),
     arg: arg(z.string().optional(), {
       alias: "a",
-      description: "JSON object to pass to the script as its argument",
+      description: "JSON object to pass to the job as its input",
     }),
     "arg-file": arg(z.string().optional(), {
-      description: "Path to a JSON file holding the object to pass to the script as its argument",
+      description: "Path to a JSON file holding the object to pass to the job as its input",
     }),
     "machine-user": arg(z.string().optional(), {
       alias: "m",
@@ -81,28 +82,25 @@ export const runCommand = defineAppCommand({
     }),
     timeout: arg(durationArg.default("10m"), {
       alias: "t",
-      description:
-        "Maximum time to wait for the script, not a limit on its run (e.g., '30s', '10m')",
-    }),
-    "allow-schema-drift": arg(z.boolean().default(false), {
-      description: "Run a scaffolded script even when its schema snapshot no longer matches",
+      description: "Maximum time to wait for the run, not a limit on its jobs (e.g., '30s', '10m')",
     }),
     ...configArg,
   }),
-  notes: `The script runs as an asynchronous workflow job, so it is not bound by the time limit of \`function run\`. The command waits for it to finish and removes the temporary resources afterwards.
+  notes: `The workflow job runs as a temporary workflow, so the job you are editing runs the way it does once deployed, without a deploy. The job is the first job of the temporary workflow, and every job it starts with \`.start()\` is registered with it. A job that calls \`.start()\` is suspended until the started job finishes and then continues with its result, so work that does not fit in one job is split into jobs and carried across them. The command waits for the whole run, prints the logs of every job and the result of the first job, and removes the temporary resources afterwards.
 
-\`--timeout\` limits how long this command waits, not how long the script may run. The Platform ends a workflow job that runs longer than 5 minutes and the run is reported as failed with a timeout error; a script that needs longer has to be split so that it can be run again from where it stopped. \`tailor workflow script\` scaffolds such a script.
+A single job is ended by the Platform after 5 minutes, and the run is reported as failed with a timeout error. \`--timeout\` limits how long this command waits, not how long the jobs may run.
 
-Without \`--job\`, the whole file runs: export \`main(arg)\` from a plain script, or pass a resolver, executor, or workflow job file. With \`--job\`, the workflow job of that name runs as the first job of the temporary workflow, with \`--arg\` as its input. A job it starts with \`.start()\` is registered with it, so those calls work; they run the jobs of your files, not the ones already deployed under the same names. The argument must be a JSON object (\`null\` is accepted too): unlike \`function run\`, a number, string, boolean, or array is refused before anything is created.
+The file must export workflow jobs created with \`createWorkflowJob\`; a file that defines no workflow job is refused. \`--job\` selects the job to start from and is optional when the file defines only one. The jobs it starts run from your files, not the ones already deployed under the same names, and the jobs of files in the config's \`workflow.files\` can be started too. The input must be a JSON object (\`null\` is accepted too): unlike \`function run\`, a number, string, boolean, or array is refused before anything is created. \`tailor workflow script\` scaffolds a workflow to start from.
 
-A script scaffolded by \`function script\` with a generated \`db.ts\` is checked against its \`db.snapshot.json\` before it runs and refused on schema drift, as with \`function run\`; pass \`--allow-schema-drift\` to run it anyway.
-
-When the wait stops (\`--timeout\` elapsed), the script keeps running and its temporary resources stay in place. The command prints the run ID; read the outcome with \`tailor workflow executions\`. \`${CLEANUP_COMMAND}\` removes the resources of runs that have finished, and the next \`workflow run\` does the same before it starts. A run that finished within the last few minutes is left alone by that automatic sweep (and by \`tailor deploy\`), so the command still waiting for it can read its result; \`${CLEANUP_COMMAND}\` removes it at once.`,
+When the wait stops (\`--timeout\` elapsed), the run keeps going and its temporary resources stay in place. The command prints the run ID; read the outcome with \`tailor workflow executions\`. \`${CLEANUP_COMMAND}\` removes the resources of runs that have finished, and the next \`workflow run\` does the same before it starts. A run that finished within the last few minutes is left alone by that automatic sweep (and by \`tailor deploy\`), so the command still waiting for it can read its result; \`${CLEANUP_COMMAND}\` removes it at once.`,
   examples: [
-    { cmd: 'scripts/backfill.ts --arg \'{"from":"2026-01-01"}\'', desc: "Run a long script" },
     {
       cmd: 'workflows/jobs.ts --job send-report --arg \'{"id":"42"}\'',
       desc: "Run one workflow job together with the jobs it starts",
+    },
+    {
+      cmd: "workflows/jobs.ts --job process-order --arg-file ./order.json --timeout 30m",
+      desc: "Run a job from a file of arguments and wait up to 30 minutes for the whole run",
     },
   ],
   run: async (args) => {
@@ -141,20 +139,24 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
       machineUserName,
       authConfig: config.auth,
     });
-    await checkScriptSchemaSnapshot({
-      filePath,
-      allowDrift: args["allow-schema-drift"],
-      client,
-      workspaceId,
-      config,
-      configArgValue: args.config,
-      scriptArgValue: args.file,
-      ...(args.profile === undefined ? {} : { profileArgValue: args.profile }),
-      runCommand: ["workflow", "run"],
-    });
-    const target: FunctionRunTarget = {
+    assertJobSource({ filePath, job: args.job });
+    const detected = await detectFunctionType({
       filePath,
       jobName: args.job,
+      jobFlag: "--job",
+    });
+    if (detected.type !== "workflow-job") {
+      throw CLIError({
+        code: "WORKFLOW_RUN_WORKFLOW_REQUIRED",
+        message: `${filePath} defines no workflow job (found: ${detected.type}).`,
+        suggestion:
+          "Export a workflow job created with createWorkflowJob; `tailor workflow script` scaffolds one.",
+        command: "workflow run",
+      });
+    }
+    const target: FunctionRunTarget = {
+      filePath,
+      jobName: detected.name,
       jobFlag: "--job",
       config,
       kyselyTemporal: resolvePluginConfig(plugins, KyselyGeneratorID)?.temporal ?? false,
@@ -165,29 +167,25 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
     };
     const runId = createRunId(new Date(), crypto.randomBytes(3).toString("hex"));
     const progress = (message: string) => logger.info(message);
-    let prepared: PreparedFunction;
-    let source: RunSource;
-    if (args.job === undefined) {
-      prepared = await prepareFunction({ target, progress });
-      source = { kind: "script", code: prepared.bundledCode };
-    } else {
-      assertJobSource({ filePath, job: args.job });
-      progress(`Bundling job "${args.job}" with the jobs it starts...`);
-      const bundled = await bundleWorkflowRunJobs({ target, runId, jobName: args.job });
-      const main = assertDefined(
-        bundled.jobs.find((job) => job.jobName === bundled.mainJobName),
-        "main job missing from the bundle",
-      );
-      prepared = {
-        scriptName: workflowRunJobFunctionName(runId, main.jobName),
-        bundledCode: main.code,
-        functionType: "workflow-job",
-        functionName: main.jobName,
-        acceptsArg: true,
-        sourceFiles: [filePath],
-      };
-      source = { kind: "job", mainJobName: bundled.mainJobName, jobs: bundled.jobs };
-    }
+    progress(`Bundling job "${detected.name}" with the jobs it starts...`);
+    const bundled = await bundleWorkflowRunJobs({ target, runId, jobName: detected.name });
+    const main = assertDefined(
+      bundled.jobs.find((job) => job.jobName === bundled.mainJobName),
+      "main job missing from the bundle",
+    );
+    const prepared: PreparedFunction = {
+      scriptName: workflowRunJobFunctionName(runId, main.jobName),
+      bundledCode: main.code,
+      functionType: "workflow-job",
+      functionName: main.jobName,
+      acceptsArg: true,
+      sourceFiles: [filePath],
+    };
+    const source: RunSource = {
+      kind: "job",
+      mainJobName: bundled.mainJobName,
+      jobs: bundled.jobs,
+    };
 
     const swept = await reclaimFinishedWorkflowRuns({ client, workspaceId, now: new Date() });
     if (swept && swept.keptUnlabeled.length > 0) {
@@ -234,7 +232,7 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
     if (outcome.state === "timedOut") {
       throw CLIError({
         code: "WORKFLOW_RUN_WAIT_TIMEOUT",
-        message: `Stopped waiting for run ${started.runId}; the script is still running.`,
+        message: `Stopped waiting for run ${started.runId}; the run is still going.`,
         suggestion: `Read the outcome with ${hints.inspect}. Afterwards, ${hints.cleanup} removes the temporary resources.`,
         context: { runId: started.runId, executionId: started.executionId },
       });
@@ -247,7 +245,7 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
           ? `The temporary workflow of run ${started.runId} was removed, so its result could not be read: ${outcome.reason}`
           : `Run ${started.runId} finished, but its result could not be read: ${outcome.reason}`,
         suggestion: outcome.workflowRemoved
-          ? "The script itself runs to its end, but its execution can no longer be read through the workflow."
+          ? "The jobs themselves run to their end, but the execution can no longer be read through the workflow."
           : `Read it with ${hints.inspect}. Afterwards, ${hints.cleanup} removes the temporary resources.`,
         context: { runId: started.runId, executionId: started.executionId },
       });
@@ -287,9 +285,11 @@ When the wait stops (\`--timeout\` elapsed), the script keeps running and its te
   },
 });
 
-type RunSource =
-  | { kind: "script"; code: string }
-  | { kind: "job"; mainJobName: string; jobs: Array<{ jobName: string; code: string }> };
+type RunSource = {
+  kind: "job";
+  mainJobName: string;
+  jobs: Array<{ jobName: string; code: string }>;
+};
 
 interface OutcomeBundleParams {
   /** What the run registered */
@@ -308,7 +308,6 @@ interface OutcomeBundleParams {
  * @returns Bundled code of that job
  */
 export function outcomeBundle(params: OutcomeBundleParams): string {
-  if (params.source.kind !== "job") return params.fallback;
   const match = params.source.jobs.find(
     (job) => workflowRunJobFunctionName(params.runId, job.jobName) === params.jobFunctionName,
   );
@@ -318,8 +317,8 @@ export function outcomeBundle(params: OutcomeBundleParams): string {
 interface JobSourceParams {
   /** Absolute path of the file */
   filePath: string;
-  /** `--job` value */
-  job: string;
+  /** `--job` value, when given */
+  job: string | undefined;
 }
 
 /**
@@ -330,7 +329,7 @@ export function assertJobSource(params: JobSourceParams): void {
   if (!params.filePath.endsWith(".js")) return;
   throw CLIError({
     code: "WORKFLOW_RUN_JOB_NOT_FOUND",
-    message: `Workflow job "${params.job}" cannot be selected in a pre-bundled file.`,
+    message: `A workflow job cannot be selected in a pre-bundled file${params.job === undefined ? "" : ` ("${params.job}")`}.`,
     suggestion: "Pass the TypeScript source (.ts) that exports the workflow job.",
     command: "workflow run",
   });

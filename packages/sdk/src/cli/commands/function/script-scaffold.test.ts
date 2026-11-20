@@ -16,7 +16,6 @@ import {
   generateScriptDbTypes,
   generateScriptSkeleton,
   isGeneratedScriptDbTypes,
-  checkScriptSchemaSnapshot,
   loadScriptSchemaSnapshot,
   verifyScriptSchemaSnapshot,
 } from "./script-scaffold";
@@ -296,20 +295,6 @@ describe("verifyScriptSchemaSnapshot", () => {
     });
   });
 
-  test("names the command that is being run in the hint to run anyway", async () => {
-    const drifted = makeSnapshot();
-    drifted.tables.Product!.fields.price = { type: "float", required: false };
-    vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(drifted));
-
-    await expect(
-      verifyScriptSchemaSnapshot({ ...makeOptions(), runCommand: ["workflow", "run"] }),
-    ).rejects.toMatchObject({
-      suggestion: expect.stringMatching(
-        /tailor workflow run scripts\/fix\.ts --allow-schema-drift/,
-      ),
-    });
-  });
-
   test("accepts a local snapshot when the deployed schema carries the same generated contract", async () => {
     const remoteDerived = makeSnapshot();
     const createdAt = remoteDerived.tables.Product!.fields.createdAt!;
@@ -442,66 +427,5 @@ describe("verifyScriptSchemaSnapshot", () => {
       namespaces: ["tailordb"],
     });
     expect(fetchRemoteSchemaSnapshot).not.toHaveBeenCalled();
-  });
-});
-
-describe("checkScriptSchemaSnapshot", () => {
-  const client = {} as OperatorClient;
-  const config = { path: "/proj/tailor.config.ts" } as LoadedConfig;
-
-  function options(filePath: string, allowDrift: boolean) {
-    return {
-      filePath,
-      allowDrift,
-      client,
-      workspaceId: "ws-1",
-      config,
-      configArgValue: "tailor.config.ts",
-      scriptArgValue: filePath,
-    };
-  }
-
-  beforeEach(() => {
-    vi.mocked(fetchRemoteSchemaSnapshot).mockReset();
-  });
-
-  test("leaves a pre-bundled .js file alone", async () => {
-    using tmp = tempCwd("sdk-script-check-");
-    const file = path.join(tmp.dir, "run.js");
-    fs.writeFileSync(file, "export function main() {}");
-    fs.writeFileSync(path.join(tmp.dir, SCRIPT_SNAPSHOT_FILE_NAME), "not even json");
-
-    await expect(checkScriptSchemaSnapshot(options(file, false))).resolves.toBeUndefined();
-    expect(fetchRemoteSchemaSnapshot).not.toHaveBeenCalled();
-  });
-
-  test("does nothing for a script that has no snapshot next to it", async () => {
-    using tmp = tempCwd("sdk-script-check-");
-    const file = path.join(tmp.dir, "plain.ts");
-    fs.writeFileSync(file, "export function main() {}");
-
-    await expect(checkScriptSchemaSnapshot(options(file, false))).resolves.toBeUndefined();
-    expect(fetchRemoteSchemaSnapshot).not.toHaveBeenCalled();
-  });
-
-  test("skips the check when asked to allow drift, even if the snapshot cannot be read", async () => {
-    using tmp = tempCwd("sdk-script-check-");
-    const file = path.join(tmp.dir, "fix.ts");
-    fs.writeFileSync(file, "export function main() {}");
-    fs.writeFileSync(path.join(tmp.dir, SCRIPT_SNAPSHOT_FILE_NAME), "not even json");
-
-    await expect(checkScriptSchemaSnapshot(options(file, true))).resolves.toBeUndefined();
-    expect(fetchRemoteSchemaSnapshot).not.toHaveBeenCalled();
-  });
-
-  test("refuses a snapshot it cannot read when drift is not allowed", async () => {
-    using tmp = tempCwd("sdk-script-check-");
-    const file = path.join(tmp.dir, "fix.ts");
-    fs.writeFileSync(file, "export function main() {}");
-    fs.writeFileSync(path.join(tmp.dir, SCRIPT_SNAPSHOT_FILE_NAME), "not even json");
-
-    await expect(checkScriptSchemaSnapshot(options(file, false))).rejects.toMatchObject({
-      code: "SCRIPT_SNAPSHOT_INVALID",
-    });
   });
 });

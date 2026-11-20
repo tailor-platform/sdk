@@ -26,7 +26,6 @@ import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { assertDefined } from "#/utils/assert";
 import {
-  type ScriptSkeletonOptions,
   SCRIPT_DB_TYPES_FILE_NAME,
   SCRIPT_SNAPSHOT_FILE_NAME,
   assertGeneratedTypeScript,
@@ -37,38 +36,24 @@ import {
 } from "./script-scaffold";
 import type { Plugin } from "#/plugin/types";
 
-// strip unknown keys
-export const scriptArgs = z.object({
-  ...workspaceArgs,
-  ...configArg,
-  file: arg(z.string(), {
-    positional: true,
-    description: "Path to create the script at (must end with .ts)",
-  }),
-  namespace: arg(z.string().optional(), {
-    description: "Target TailorDB namespace (required when the config does not pin one)",
-  }),
-  remote: arg(z.boolean().default(false), {
-    description: "Generate script-scoped DB types from the deployed schema",
-  }),
-});
-
-export type ScriptArgs = z.infer<typeof scriptArgs>;
-
-/** The command a script is scaffolded for, and how it differs between `function script` and `workflow script` */
-export interface ScaffoldVariant {
-  /** Command that scaffolds, named in errors */
-  command: "function script" | "workflow script";
-  /** Command that runs the scaffolded script, named in the next-step hint */
-  runCommand: ["function", "run"] | ["workflow", "run"];
-  /** Builds the script file's contents */
-  skeleton: (options: ScriptSkeletonOptions) => string;
-}
-
 export const scriptCommand = defineAppCommand({
   name: "script",
   description: "Scaffold a one-off script to run with `function run`.",
-  args: scriptArgs,
+  // strip unknown keys
+  args: z.object({
+    ...workspaceArgs,
+    ...configArg,
+    file: arg(z.string(), {
+      positional: true,
+      description: "Path to create the script at (must end with .ts)",
+    }),
+    namespace: arg(z.string().optional(), {
+      description: "Target TailorDB namespace (required when the config does not pin one)",
+    }),
+    remote: arg(z.boolean().default(false), {
+      description: "Generate script-scoped DB types from the deployed schema",
+    }),
+  }),
   notes: `The scaffolded script is a plain default-exported function; execute it with \`tailor function run <file>\`.
 
 By default, when the project configures \`kyselyTypePlugin\`, the skeleton imports \`getDB()\` from the plugin's generated types, or from \`@tailor-platform/sdk/plugin/kysely-type/db\` when the plugin sets \`contentMapper: true\`. Without the plugin, the command uses the namespace's local table definitions to write a script-scoped \`db.ts\` plus a \`db.snapshot.json\` next to the script; \`function run\` refuses to run the script when that snapshot no longer matches the deployed or locally defined table and field structure.
@@ -88,200 +73,186 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
       desc: "Scaffold from a deployed or external namespace",
     },
   ],
-  run: async (args) =>
-    scaffoldScript(args, {
-      command: "function script",
-      runCommand: ["function", "run"],
-      skeleton: generateScriptSkeleton,
-    }),
-});
-
-/**
- * Scaffold a one-off script and the files it depends on.
- * @param args - Parsed arguments of the scaffolding command
- * @param variant - Command the script is scaffolded for
- */
-export async function scaffoldScript(args: ScriptArgs, variant: ScaffoldVariant): Promise<void> {
-  const filePath = path.resolve(args.file);
-  if (!filePath.endsWith(".ts")) {
-    throw CLIError({
-      code: "SCRIPT_PATH_INVALID",
-      message: `Script path must end with .ts: ${args.file}`,
-      command: variant.command,
-    });
-  }
-  const scriptDir = path.dirname(filePath);
-  const scriptExists = fs.existsSync(filePath);
-  const dbTypesPath = path.join(scriptDir, SCRIPT_DB_TYPES_FILE_NAME);
-  const snapshotPath = path.join(scriptDir, SCRIPT_SNAPSHOT_FILE_NAME);
-  if (filePath === dbTypesPath) {
-    throw CLIError({
-      code: "SCRIPT_PATH_INVALID",
-      message: `${SCRIPT_DB_TYPES_FILE_NAME} is reserved for the generated Kysely types written next to the script. Choose a different script file name.`,
-      command: variant.command,
-    });
-  }
-
-  const { config, plugins } = await loadConfig(args.config);
-  const kyselyPlugin = plugins.find((plugin) => plugin.id === KyselyGeneratorID);
-  const hasSnapshotSidecar = fs.existsSync(snapshotPath);
-  if (args.remote && kyselyPlugin !== undefined && scriptExists && !hasSnapshotSidecar) {
-    throw CLIError({
-      code: "SCRIPT_EXISTS",
-      message: `Script already exists: ${path.relative(process.cwd(), filePath)}.`,
-      suggestion:
-        "Scaffold --remote at a new path so the generated script imports its script-scoped db.ts.",
-    });
-  }
-  // A directory that already carries a snapshot sidecar keeps using
-  // script-scoped generated types, even when the project has since
-  // configured kyselyTypePlugin: its scripts import ./db.
-  const useGeneratedDbTypes = args.remote || kyselyPlugin === undefined || hasSnapshotSidecar;
-
-  let existingSidecarNamespace: string | undefined;
-  if (useGeneratedDbTypes) {
-    try {
-      existingSidecarNamespace = loadScriptSchemaSnapshot(filePath)?.snapshot.namespace;
-    } catch {
-      // A corrupt sidecar is regenerated below; resolve from the config instead.
+  run: async (args) => {
+    const filePath = path.resolve(args.file);
+    if (!filePath.endsWith(".ts")) {
+      throw CLIError({
+        code: "SCRIPT_PATH_INVALID",
+        message: `Script path must end with .ts: ${args.file}`,
+        command: "function script",
+      });
     }
-  }
-  const namespace = resolveNamespace({
-    command: variant.command,
-    config,
-    explicit: args.namespace,
-    sidecarNamespace: existingSidecarNamespace,
-    remote: args.remote,
-  });
-  if (existingSidecarNamespace !== undefined && existingSidecarNamespace !== namespace) {
-    throw CLIError({
-      code: "SCRIPT_NAMESPACE_MISMATCH",
-      message: `This directory's generated types target namespace "${existingSidecarNamespace}" (${SCRIPT_SNAPSHOT_FILE_NAME}).`,
-      suggestion: `Scaffold scripts for namespace "${namespace}" in a separate directory.`,
-    });
-  }
+    const scriptDir = path.dirname(filePath);
+    const scriptExists = fs.existsSync(filePath);
+    const dbTypesPath = path.join(scriptDir, SCRIPT_DB_TYPES_FILE_NAME);
+    const snapshotPath = path.join(scriptDir, SCRIPT_SNAPSHOT_FILE_NAME);
+    if (filePath === dbTypesPath) {
+      throw CLIError({
+        code: "SCRIPT_PATH_INVALID",
+        message: `${SCRIPT_DB_TYPES_FILE_NAME} is reserved for the generated Kysely types written next to the script. Choose a different script file name.`,
+        command: "function script",
+      });
+    }
 
-  const created: string[] = [];
-  let getDBImportPath: string;
-  let resolvedWorkspaceId: string | undefined;
-
-  if (!useGeneratedDbTypes) {
-    if (scriptExists) {
+    const { config, plugins } = await loadConfig(args.config);
+    const kyselyPlugin = plugins.find((plugin) => plugin.id === KyselyGeneratorID);
+    const hasSnapshotSidecar = fs.existsSync(snapshotPath);
+    if (args.remote && kyselyPlugin !== undefined && scriptExists && !hasSnapshotSidecar) {
       throw CLIError({
         code: "SCRIPT_EXISTS",
         message: `Script already exists: ${path.relative(process.cwd(), filePath)}.`,
         suggestion:
-          "It imports the project's generated Kysely types, so there is nothing to refresh.",
+          "Scaffold --remote at a new path so the generated script imports its script-scoped db.ts.",
       });
     }
-    const { specifier, generatedFile } = resolveKyselyTypesImport(plugins, scriptDir);
-    getDBImportPath = specifier;
-    if (generatedFile !== undefined && !fs.existsSync(generatedFile)) {
-      logger.warn(
-        `Generated Kysely types not found at ${styles.path(path.relative(process.cwd(), generatedFile))}. Run \`tailor generate\` before executing the script.`,
-      );
-    }
-  } else {
-    let snapshot: NormalizedSchemaSnapshot;
-    if (args.remote) {
-      const { client, workspaceId } = await loadOperatorWorkspaceContext({
-        profile: args.profile,
-        workspaceId: args["workspace-id"],
-      });
-      resolvedWorkspaceId = workspaceId;
+    // A directory that already carries a snapshot sidecar keeps using
+    // script-scoped generated types, even when the project has since
+    // configured kyselyTypePlugin: its scripts import ./db.
+    const useGeneratedDbTypes = args.remote || kyselyPlugin === undefined || hasSnapshotSidecar;
 
-      logger.info(`Fetching deployed schema of namespace ${styles.bold(namespace)}...`);
-      snapshot = await fetchRemoteSchemaSnapshot(client, workspaceId, namespace);
-    } else {
-      logger.info(`Loading local definitions of namespace ${styles.bold(namespace)}...`);
-      const { namespaces } = await loadTailorDBNamespaces({
-        configPath: args.config,
-        namespaces: [namespace],
-      });
-      const namespaceData = assertDefined(namespaces[0], `namespace ${namespace}`);
-      snapshot = createSnapshotFromLocalTypes(namespaceData.tables, namespace);
-    }
-    if (Object.keys(snapshot.tables).length === 0) {
-      const sourceDescription = args.remote
-        ? `deployed tables in workspace ${assertDefined(resolvedWorkspaceId, "workspace ID")}`
-        : "locally defined tables";
-      throw CLIError({
-        code: "SCRIPT_SCHEMA_NOT_FOUND",
-        message: `Namespace "${namespace}" has no ${sourceDescription}.`,
-      });
-    }
-
-    if (fs.existsSync(dbTypesPath)) {
-      const existing = fs.readFileSync(dbTypesPath, "utf-8");
-      if (!isGeneratedScriptDbTypes(existing)) {
-        throw CLIError({
-          code: "GENERATED_TYPES_NOT_OWNED",
-          message:
-            `Refusing to overwrite ${path.relative(process.cwd(), dbTypesPath)}: ` +
-            "it was not generated by `tailor function script` or `tailor workflow script`.",
-        });
+    let existingSidecarNamespace: string | undefined;
+    if (useGeneratedDbTypes) {
+      try {
+        existingSidecarNamespace = loadScriptSchemaSnapshot(filePath)?.snapshot.namespace;
+      } catch {
+        // A corrupt sidecar is regenerated below; resolve from the config instead.
       }
     }
-    const dbTypesContent = generateScriptDbTypes(
-      snapshot,
-      resolvePluginConfig(plugins, KyselyGeneratorID)?.temporal ?? false,
-    );
-    assertGeneratedTypeScript(dbTypesPath, dbTypesContent);
-    fs.mkdirSync(scriptDir, { recursive: true });
-    fs.writeFileSync(dbTypesPath, dbTypesContent);
-    created.push(dbTypesPath);
-    fs.writeFileSync(
-      snapshotPath,
-      JSON.stringify({ ...snapshot, source: args.remote ? "remote" : "local" }, null, 2) + "\n",
-    );
-    created.push(snapshotPath);
-    getDBImportPath = "./db";
-  }
-
-  if (!scriptExists) {
-    const skeleton = variant.skeleton({ getDBImportPath, namespace });
-    assertGeneratedTypeScript(filePath, skeleton);
-    fs.mkdirSync(scriptDir, { recursive: true });
-    fs.writeFileSync(filePath, skeleton);
-    created.unshift(filePath);
-  }
-
-  const relScript = path.relative(process.cwd(), filePath);
-  const runArgs: string[] = [...variant.runCommand, relScript];
-  if (args.config !== DEFAULT_CONFIG_PATH) {
-    runArgs.push(`--config=${args.config}`);
-  }
-  const workspaceIdForHint = resolvedWorkspaceId ?? args["workspace-id"];
-  if (workspaceIdForHint !== undefined) {
-    runArgs.push(`--workspace-id=${workspaceIdForHint}`);
-  }
-  if (args.profile !== undefined) {
-    runArgs.push(`--profile=${args.profile}`);
-  }
-
-  if (logger.jsonMode) {
-    logger.out({
-      script: filePath,
-      created,
-      namespace,
-      usesGeneratedDbTypes: useGeneratedDbTypes,
+    const namespace = resolveNamespace({
+      config,
+      explicit: args.namespace,
+      sidecarNamespace: existingSidecarNamespace,
+      remote: args.remote,
     });
-    return;
-  }
+    if (existingSidecarNamespace !== undefined && existingSidecarNamespace !== namespace) {
+      throw CLIError({
+        code: "SCRIPT_NAMESPACE_MISMATCH",
+        message: `This directory's generated types target namespace "${existingSidecarNamespace}" (${SCRIPT_SNAPSHOT_FILE_NAME}).`,
+        suggestion: `Scaffold scripts for namespace "${namespace}" in a separate directory.`,
+      });
+    }
 
-  if (scriptExists) {
-    logger.info(`Script already exists; refreshed generated types only.`);
-  }
-  for (const file of created) {
-    logger.success(`Created ${styles.path(path.relative(process.cwd(), file))}`);
-  }
-  logger.info(
-    `Next: edit the script, then run ${formatCommandHint({ command: "tailor", args: runArgs })}`,
-  );
-}
+    const created: string[] = [];
+    let getDBImportPath: string;
+    let resolvedWorkspaceId: string | undefined;
+
+    if (!useGeneratedDbTypes) {
+      if (scriptExists) {
+        throw CLIError({
+          code: "SCRIPT_EXISTS",
+          message: `Script already exists: ${path.relative(process.cwd(), filePath)}.`,
+          suggestion:
+            "It imports the project's generated Kysely types, so there is nothing to refresh.",
+        });
+      }
+      const { specifier, generatedFile } = resolveKyselyTypesImport(plugins, scriptDir);
+      getDBImportPath = specifier;
+      if (generatedFile !== undefined && !fs.existsSync(generatedFile)) {
+        logger.warn(
+          `Generated Kysely types not found at ${styles.path(path.relative(process.cwd(), generatedFile))}. Run \`tailor generate\` before executing the script.`,
+        );
+      }
+    } else {
+      let snapshot: NormalizedSchemaSnapshot;
+      if (args.remote) {
+        const { client, workspaceId } = await loadOperatorWorkspaceContext({
+          profile: args.profile,
+          workspaceId: args["workspace-id"],
+        });
+        resolvedWorkspaceId = workspaceId;
+
+        logger.info(`Fetching deployed schema of namespace ${styles.bold(namespace)}...`);
+        snapshot = await fetchRemoteSchemaSnapshot(client, workspaceId, namespace);
+      } else {
+        logger.info(`Loading local definitions of namespace ${styles.bold(namespace)}...`);
+        const { namespaces } = await loadTailorDBNamespaces({
+          configPath: args.config,
+          namespaces: [namespace],
+        });
+        const namespaceData = assertDefined(namespaces[0], `namespace ${namespace}`);
+        snapshot = createSnapshotFromLocalTypes(namespaceData.tables, namespace);
+      }
+      if (Object.keys(snapshot.tables).length === 0) {
+        const sourceDescription = args.remote
+          ? `deployed tables in workspace ${assertDefined(resolvedWorkspaceId, "workspace ID")}`
+          : "locally defined tables";
+        throw CLIError({
+          code: "SCRIPT_SCHEMA_NOT_FOUND",
+          message: `Namespace "${namespace}" has no ${sourceDescription}.`,
+        });
+      }
+
+      if (fs.existsSync(dbTypesPath)) {
+        const existing = fs.readFileSync(dbTypesPath, "utf-8");
+        if (!isGeneratedScriptDbTypes(existing)) {
+          throw CLIError({
+            code: "GENERATED_TYPES_NOT_OWNED",
+            message:
+              `Refusing to overwrite ${path.relative(process.cwd(), dbTypesPath)}: ` +
+              "it was not generated by `tailor function script`.",
+          });
+        }
+      }
+      const dbTypesContent = generateScriptDbTypes(
+        snapshot,
+        resolvePluginConfig(plugins, KyselyGeneratorID)?.temporal ?? false,
+      );
+      assertGeneratedTypeScript(dbTypesPath, dbTypesContent);
+      fs.mkdirSync(scriptDir, { recursive: true });
+      fs.writeFileSync(dbTypesPath, dbTypesContent);
+      created.push(dbTypesPath);
+      fs.writeFileSync(
+        snapshotPath,
+        JSON.stringify({ ...snapshot, source: args.remote ? "remote" : "local" }, null, 2) + "\n",
+      );
+      created.push(snapshotPath);
+      getDBImportPath = "./db";
+    }
+
+    if (!scriptExists) {
+      const skeleton = generateScriptSkeleton({ getDBImportPath, namespace });
+      assertGeneratedTypeScript(filePath, skeleton);
+      fs.mkdirSync(scriptDir, { recursive: true });
+      fs.writeFileSync(filePath, skeleton);
+      created.unshift(filePath);
+    }
+
+    const relScript = path.relative(process.cwd(), filePath);
+    const runArgs = ["function", "run", relScript];
+    if (args.config !== DEFAULT_CONFIG_PATH) {
+      runArgs.push(`--config=${args.config}`);
+    }
+    const workspaceIdForHint = resolvedWorkspaceId ?? args["workspace-id"];
+    if (workspaceIdForHint !== undefined) {
+      runArgs.push(`--workspace-id=${workspaceIdForHint}`);
+    }
+    if (args.profile !== undefined) {
+      runArgs.push(`--profile=${args.profile}`);
+    }
+
+    if (logger.jsonMode) {
+      logger.out({
+        script: filePath,
+        created,
+        namespace,
+        usesGeneratedDbTypes: useGeneratedDbTypes,
+      });
+      return;
+    }
+
+    if (scriptExists) {
+      logger.info(`Script already exists; refreshed generated types only.`);
+    }
+    for (const file of created) {
+      logger.success(`Created ${styles.path(path.relative(process.cwd(), file))}`);
+    }
+    logger.info(
+      `Next: edit the script, then run ${formatCommandHint({ command: "tailor", args: runArgs })}`,
+    );
+  },
+});
 
 interface ResolveNamespaceOptions {
-  command: ScaffoldVariant["command"];
   config: LoadedConfig;
   explicit: string | undefined;
   sidecarNamespace: string | undefined;
@@ -294,7 +265,7 @@ interface ResolveNamespaceOptions {
  * @returns The namespace name
  */
 function resolveNamespace(options: ResolveNamespaceOptions): string {
-  const { command, config, explicit, sidecarNamespace, remote } = options;
+  const { config, explicit, sidecarNamespace, remote } = options;
   const allNamespaces = extractAllNamespaces(config);
   const ownedNamespaces = extractOwnedNamespaces(config);
   const configured = remote ? allNamespaces : ownedNamespaces;
@@ -304,7 +275,7 @@ function resolveNamespace(options: ResolveNamespaceOptions): string {
       throw CLIError({
         code: "SCRIPT_NAMESPACE_REQUIRES_REMOTE",
         message: `Namespace "${explicit}" is not owned by the config and requires --remote.`,
-        command: command,
+        command: "function script",
       });
     }
     return explicit;
@@ -315,7 +286,7 @@ function resolveNamespace(options: ResolveNamespaceOptions): string {
       throw CLIError({
         code: "SCRIPT_NAMESPACE_REQUIRES_REMOTE",
         message: `Namespace "${sidecarNamespace}" is not owned by the config and requires --remote.`,
-        command,
+        command: "function script",
       });
     }
     return sidecarNamespace;
@@ -329,7 +300,7 @@ function resolveNamespace(options: ResolveNamespaceOptions): string {
     throw CLIError({
       code: "TAILORDB_NAMESPACE_REQUIRED",
       message: `Multiple TailorDB namespaces are defined (${configured.join(", ")}). Specify one with --namespace.`,
-      command,
+      command: "function script",
     });
   }
   if (!remote && allNamespaces.length > 0) {

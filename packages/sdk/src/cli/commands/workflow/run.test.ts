@@ -19,7 +19,6 @@ import {
 } from "#/cli/shared/workflow-run";
 import { bundleForRun } from "../function/bundle";
 import { detectFunctionType } from "../function/detect";
-import { checkScriptSchemaSnapshot } from "../function/script-scaffold";
 import { assertJobSource, outcomeBundle, runCommand } from "./run";
 import { bundleWorkflowRunJobs } from "./run-jobs";
 
@@ -51,11 +50,6 @@ vi.mock("../function/detect", () => ({
 
 vi.mock("../function/bundle", () => ({
   bundleForRun: vi.fn(),
-}));
-
-vi.mock("../function/script-scaffold", async (importActual) => ({
-  ...(await importActual<object>()),
-  checkScriptSchemaSnapshot: vi.fn(),
 }));
 
 const WORKSPACE_ID = "12345678-1234-4abc-8def-123456789012";
@@ -94,8 +88,8 @@ describe("workflow run", () => {
 
   aroundEach(async (runTest) => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-run-test-"));
-    scriptPath = path.join(tmpDir, "backfill.ts");
-    fs.writeFileSync(scriptPath, "export async function main() { return { ok: true }; }");
+    scriptPath = path.join(tmpDir, "jobs.ts");
+    fs.writeFileSync(scriptPath, "export const greet = {};");
 
     vi.mocked(loadConfig).mockResolvedValue({
       config: {
@@ -108,13 +102,20 @@ describe("workflow run", () => {
     vi.mocked(initOperatorClient).mockResolvedValue({
       getAuthMachineUser: vi.fn().mockResolvedValue({ machineUser: { id: "mu-1" } }),
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
-    vi.mocked(detectFunctionType).mockResolvedValue({ type: "plain", name: "backfill" });
+    vi.mocked(detectFunctionType).mockResolvedValue({
+      type: "workflow-job",
+      name: "greet",
+      exportName: "greet",
+    });
+    vi.mocked(bundleWorkflowRunJobs).mockResolvedValue({
+      mainJobName: "greet",
+      jobs: [{ jobName: "greet", code: "// greet" }],
+    });
     vi.mocked(bundleForRun).mockResolvedValue({
       bundledCode: "export const main = async () => ({});",
       scriptName: "backfill.js",
       sourceFiles: [],
     });
-    vi.mocked(checkScriptSchemaSnapshot).mockReset();
     vi.mocked(startWorkflowRun).mockReset().mockResolvedValue(started);
     vi.mocked(awaitWorkflowRun)
       .mockReset()
@@ -133,7 +134,7 @@ describe("workflow run", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  test("asks for a script file", async () => {
+  test("asks for a file", async () => {
     using _stdout = captureStdout();
     using _stderr = captureStderr();
     using _json = jsonMode();
@@ -157,7 +158,7 @@ describe("workflow run", () => {
     expect(stderr.output).toContain("tailor workflow cleanup --include-unlabeled");
   });
 
-  test("runs the script once with its argument and prints the result with the run ids", async () => {
+  test("runs the only workflow job of the file with its argument and prints the result with the run ids", async () => {
     using stdout = captureStdout();
     using _stderr = captureStderr();
     using _json = jsonMode();
@@ -167,7 +168,8 @@ describe("workflow run", () => {
     expect(startWorkflowRun).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceId: WORKSPACE_ID,
-        kind: "script",
+        kind: "job",
+        mainJobName: "greet",
         arg: { from: "2026-01-01" },
       }),
     );
@@ -180,7 +182,7 @@ describe("workflow run", () => {
     expect(exit).not.toHaveBeenCalled();
   });
 
-  test("runs --job as a job run that registers the jobs it starts, without bundling the file as a script", async () => {
+  test("registers the jobs the selected job starts, and never bundles the file as a script", async () => {
     vi.mocked(bundleWorkflowRunJobs).mockResolvedValue({
       mainJobName: "greet",
       jobs: [
@@ -194,6 +196,9 @@ describe("workflow run", () => {
 
     await invoke(runCommand, [scriptPath, "--job", "greet", "-m", "admin"]);
 
+    expect(detectFunctionType).toHaveBeenCalledWith(
+      expect.objectContaining({ jobName: "greet", jobFlag: "--job" }),
+    );
     expect(startWorkflowRun).toHaveBeenCalledWith(
       expect.objectContaining({
         kind: "job",
@@ -205,10 +210,29 @@ describe("workflow run", () => {
       }),
     );
     expect(bundleForRun).not.toHaveBeenCalled();
-    expect(detectFunctionType).not.toHaveBeenCalled();
   });
 
-  test("exits 1 and still prints the result of a script that failed", async () => {
+  test.each([
+    { type: "plain" as const, name: "backfill" },
+    { type: "resolver" as const, name: "sum" },
+    { type: "executor" as const, name: "on-create" },
+  ])(
+    "refuses a $type file, which defines no workflow, before creating anything",
+    async (detected) => {
+      vi.mocked(detectFunctionType).mockResolvedValue(detected);
+      using _stdout = captureStdout();
+      using _stderr = captureStderr();
+      using _json = jsonMode();
+
+      const result = await invoke(runCommand, [scriptPath, "-m", "admin"]);
+
+      expect(result.error).toMatchObject({ code: "WORKFLOW_RUN_WORKFLOW_REQUIRED" });
+      expect(bundleWorkflowRunJobs).not.toHaveBeenCalled();
+      expect(startWorkflowRun).not.toHaveBeenCalled();
+    },
+  );
+
+  test("exits 1 and still prints the result of a job that failed", async () => {
     vi.mocked(awaitWorkflowRun).mockResolvedValue({
       state: "finished",
       result: { success: false, logs: "about to fail", result: "", error: "boom" },
@@ -262,7 +286,7 @@ describe("workflow run", () => {
     });
   });
 
-  test("says the script runs to its end, and does not send to the workflow, when it was removed", async () => {
+  test("says the jobs run to their end, and does not send to the workflow, when it was removed", async () => {
     vi.mocked(awaitWorkflowRun).mockResolvedValue({
       state: "outcomeUnavailable",
       reason: "the workflow was removed before the job of the run was seen",
@@ -277,7 +301,7 @@ describe("workflow run", () => {
     expect(result.error).toMatchObject({
       code: "WORKFLOW_RUN_OUTCOME_UNAVAILABLE",
       message: expect.stringContaining("removed"),
-      suggestion: expect.stringContaining("runs to its end"),
+      suggestion: expect.stringContaining("run to their end"),
     });
     expect(result.error).not.toMatchObject({
       suggestion: expect.stringContaining("workflow executions"),
@@ -337,34 +361,6 @@ describe("workflow run", () => {
     expect(startWorkflowRun).not.toHaveBeenCalled();
   });
 
-  test("checks the schema snapshot of the script as a workflow run, and passes the override on", async () => {
-    using _stdout = captureStdout();
-    using _stderr = captureStderr();
-    using _json = jsonMode();
-
-    await invoke(runCommand, [scriptPath, "--allow-schema-drift", "-m", "admin"]);
-
-    expect(checkScriptSchemaSnapshot).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: scriptPath,
-        allowDrift: true,
-        runCommand: ["workflow", "run"],
-      }),
-    );
-  });
-
-  test("does not create anything when the schema snapshot check refuses", async () => {
-    vi.mocked(checkScriptSchemaSnapshot).mockRejectedValueOnce(new Error("Schema drift detected"));
-    using _stdout = captureStdout();
-    using _stderr = captureStderr();
-    using _json = jsonMode();
-
-    const result = await invoke(runCommand, [scriptPath, "-m", "admin"]);
-
-    expect(result.error?.message).toMatch(/Schema drift detected/);
-    expect(startWorkflowRun).not.toHaveBeenCalled();
-  });
-
   test("points an invalid --arg at workflow run, not at function run", async () => {
     using _stdout = captureStdout();
     using _stderr = captureStderr();
@@ -418,16 +414,5 @@ describe("outcomeBundle", () => {
     expect(
       outcomeBundle({ source, runId: "r1", jobFunctionName: "other", fallback: "// main" }),
     ).toBe("// main");
-  });
-
-  test("is the script's own bundle for a script run", () => {
-    expect(
-      outcomeBundle({
-        source: { kind: "script", code: "// script" },
-        runId: "r1",
-        jobFunctionName: "tmp-run-r1",
-        fallback: "// script",
-      }),
-    ).toBe("// script");
   });
 });

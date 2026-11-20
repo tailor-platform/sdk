@@ -12,7 +12,6 @@ import { z } from "zod";
 import {
   commonArgs,
   configArg,
-  DEFAULT_CONFIG_PATH,
   resolveMachineUserInputSource,
   flagTokensOf,
   type MachineUserInputSource,
@@ -22,7 +21,7 @@ import { type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadMachineUserName } from "#/cli/shared/context";
-import { CLIError, formatCommandHint } from "#/cli/shared/errors";
+import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
@@ -41,8 +40,11 @@ import {
   printExecutionDetails,
   readFunctionArgFile,
 } from "./run-function";
-import { checkScriptSchemaSnapshot } from "./script-scaffold";
-import type { ScriptExecutionResult } from "#/cli/shared/script-executor";
+import {
+  SCRIPT_SNAPSHOT_FILE_NAME,
+  loadScriptSchemaSnapshot,
+  verifyScriptSchemaSnapshot,
+} from "./script-scaffold";
 
 export const runFunctionCommand = defineAppCommand({
   name: "run",
@@ -93,8 +95,6 @@ A script scaffolded by \`function script\` with a generated \`db.ts\` is checked
 Each run prints a \`-->\` line when the Platform accepts it and a \`<--\` line with \`[OK]\` or \`[FAILED]\` when it finishes, followed by its logs and result. Both lines carry the execution ID, which \`function logs\` accepts. When reading the argument file, loading or bundling the function, or the request to the Platform fails, the command prints an \`[ERROR]\` line and keeps watching. Until the function loads and bundles again, adding a file anywhere in the project also starts a run, so a file that an import names can be created after the import. A save during a run starts one more run after it finishes. With \`--json\`, each run writes one JSON object per line to stdout, including its \`executionId\`, and each failure writes an error object to stderr.
 
 Changes to \`tailor.config.ts\`, \`tsconfig.json\`, \`package.json\`, env files, and installed packages are not picked up; restart the command after changing them.
-
-A function run is stopped by the Platform when it takes too long. Its error is then followed by the \`workflow run\` command line that runs the same file as an asynchronous job, which may run longer.
 
 \`test-run\` is a deprecated alias of this command and will be removed in v3.
 
@@ -170,16 +170,27 @@ A function run is stopped by the Platform when it takes too long. Its error is t
     });
 
     // 4. Check a scaffolded script's schema snapshot
-    await checkScriptSchemaSnapshot({
-      filePath,
-      allowDrift: args["allow-schema-drift"],
-      client,
-      workspaceId,
-      config,
-      configArgValue: args.config,
-      scriptArgValue: args.file,
-      ...(args.profile === undefined ? {} : { profileArgValue: args.profile }),
-    });
+    if (!filePath.endsWith(".js")) {
+      if (args["allow-schema-drift"]) {
+        if (fs.existsSync(path.join(path.dirname(filePath), SCRIPT_SNAPSHOT_FILE_NAME))) {
+          logger.warn("Skipping the schema snapshot check (--allow-schema-drift).");
+        }
+      } else {
+        const sidecar = loadScriptSchemaSnapshot(filePath);
+        if (sidecar) {
+          logger.info("Checking the script's schema snapshot for drift...");
+          await verifyScriptSchemaSnapshot({
+            client,
+            workspaceId,
+            config,
+            configArgValue: args.config,
+            scriptArgValue: args.file,
+            profileArgValue: args.profile,
+            sidecar,
+          });
+        }
+      }
+    }
 
     const target: FunctionRunTarget = {
       filePath,
@@ -210,21 +221,8 @@ A function run is stopped by the Platform when it takes too long. Its error is t
     const result = await executeFunction({ target, prepared, arg: argValue });
 
     // 6. Display result
-    const suggestion = isTimeoutFailure(result)
-      ? workflowRunSuggestion({
-          file: path.relative(process.cwd(), filePath) || args.file,
-          job: args.name,
-          arg: args.arg,
-          argFile: args["arg-file"],
-          machineUser: args["machine-user"],
-          allowSchemaDrift: args["allow-schema-drift"],
-          config: args.config,
-          workspaceId: args["workspace-id"],
-          profile: args.profile,
-        })
-      : undefined;
     if (jsonOutput) {
-      logger.out({ ...executionRecord(prepared, result), ...(suggestion && { suggestion }) });
+      logger.out(executionRecord(prepared, result));
     } else {
       if (result.success) {
         logger.success("Execution succeeded");
@@ -232,7 +230,6 @@ A function run is stopped by the Platform when it takes too long. Its error is t
         logger.error("Execution failed");
       }
       printExecutionDetails(prepared, result);
-      if (suggestion) logger.info(suggestion);
     }
 
     if (!result.success) {
@@ -240,56 +237,6 @@ A function run is stopped by the Platform when it takes too long. Its error is t
     }
   },
 });
-
-const TIMEOUT_ERROR = /Execution timed out after \d+ seconds?/i;
-
-/**
- * Tell whether the Platform stopped the run because it took too long.
- * @param result - Execution result
- * @returns true when the run failed with a timeout error
- */
-function isTimeoutFailure(result: ScriptExecutionResult): boolean {
-  return !result.success && TIMEOUT_ERROR.test(result.error ?? "");
-}
-
-interface WorkflowRunSuggestionParams {
-  /** File given to `function run`, as the user can pass it again */
-  file: string;
-  /** `--name` value */
-  job: string | undefined;
-  /** `--arg` value */
-  arg: string | undefined;
-  /** `--arg-file` value */
-  argFile: string | undefined;
-  /** `--machine-user` value */
-  machineUser: string | undefined;
-  /** `--allow-schema-drift` value */
-  allowSchemaDrift: boolean;
-  /** `--config` value */
-  config: string;
-  /** `--workspace-id` value */
-  workspaceId: string | undefined;
-  /** `--profile` value */
-  profile: string | undefined;
-}
-
-/**
- * Build the hint that points a timed-out run to `workflow run`, with the options the user gave.
- * @param params - Options of the timed-out `function run`
- * @returns Hint text naming the `workflow run` command line
- */
-export function workflowRunSuggestion(params: WorkflowRunSuggestionParams): string {
-  const args = ["workflow", "run", params.file];
-  if (params.job !== undefined) args.push("--job", params.job);
-  if (params.arg !== undefined) args.push("--arg", params.arg);
-  if (params.argFile !== undefined) args.push("--arg-file", params.argFile);
-  if (params.machineUser !== undefined) args.push(`--machine-user=${params.machineUser}`);
-  if (params.allowSchemaDrift) args.push("--allow-schema-drift");
-  if (params.config !== DEFAULT_CONFIG_PATH) args.push(`--config=${params.config}`);
-  if (params.workspaceId !== undefined) args.push(`--workspace-id=${params.workspaceId}`);
-  if (params.profile !== undefined) args.push(`--profile=${params.profile}`);
-  return `The Platform stops a function run that takes too long. \`workflow run\` runs the same file as an asynchronous job, which may run longer: ${formatCommandHint({ command: "tailor", args })}`;
-}
 
 /**
  * Global option tokens that consume the following argv token as their value.

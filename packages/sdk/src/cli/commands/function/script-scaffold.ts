@@ -29,7 +29,6 @@ import {
 import { DEFAULT_CONFIG_PATH } from "#/cli/shared/args";
 import { extractOwnedNamespaces } from "#/cli/shared/config";
 import { CLIError, formatCommandHint, internalError } from "#/cli/shared/errors";
-import { logger } from "#/cli/shared/logger";
 import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
 import {
   generateUnifiedKyselyTypes,
@@ -133,59 +132,6 @@ export function generateScriptSkeleton(options: ScriptSkeletonOptions): string {
   ].join("\n");
 }
 
-/**
- * Generate the skeleton of a script that `workflow run` executes in pieces.
- * @param options - Skeleton options
- * @returns Skeleton file contents
- */
-export function generateWorkflowScriptSkeleton(options: ScriptSkeletonOptions): string {
-  const { getDBImportPath, namespace } = options;
-  return [
-    "/**",
-    " * Long-running script. Run it past the synchronous time limit:",
-    " *",
-    " *   tailor workflow run <this file>",
-    " *",
-    " * The Platform ends a run that takes too long, so this script works through",
-    " * the table in batches and stops before the limit. It returns where it",
-    " * stopped; run it again with that value as --arg to continue:",
-    " *",
-    ` *   tailor workflow run <this file> --arg '{"after":"<value of next.after>"}'`,
-    " */",
-    "",
-    `import { getDB } from ${JSON.stringify(getDBImportPath)};`,
-    "",
-    "interface Arg {",
-    "  /** Primary key of the last row handled by the previous run */",
-    "  after?: string;",
-    "}",
-    "",
-    "const TIME_BUDGET_MS = 4 * 60 * 1000;",
-    "",
-    "export default async function main(arg: Arg = {}) {",
-    `  const db = getDB(${JSON.stringify(namespace)});`,
-    "  const deadline = Date.now() + TIME_BUDGET_MS;",
-    "  let after = arg.after;",
-    "",
-    "  while (Date.now() < deadline) {",
-    "    // A transaction rolls every change of one batch back when any statement fails.",
-    "    const lastId = await db.transaction().execute(async (trx) => {",
-    '      // e.g. const rows = await trx.selectFrom("MyTable").select("id").orderBy("id").limit(500)',
-    '      //   .$if(after !== undefined, (query) => query.where("id", ">", after as string)).execute();',
-    "      // ...update the rows, then return the last one:",
-    "      // return rows[rows.length - 1]?.id;",
-    "      return undefined as string | undefined;",
-    "    });",
-    "    if (lastId === undefined) return { done: true };",
-    "    after = lastId;",
-    "  }",
-    "",
-    "  return { done: false, next: { after } };",
-    "}",
-    "",
-  ].join("\n");
-}
-
 /** A schema snapshot sidecar found next to a script. */
 export interface ScriptSchemaSnapshotSidecar {
   /** Path of the snapshot file */
@@ -270,8 +216,6 @@ export interface VerifyScriptSchemaSnapshotOptions {
   profileArgValue?: string;
   /** The snapshot sidecar found next to the script */
   sidecar: ScriptSchemaSnapshotSidecar;
-  /** Command that runs the script, named in the hint to run anyway (default: `function run`) */
-  runCommand?: readonly string[];
 }
 
 /**
@@ -325,40 +269,6 @@ export async function verifyScriptSchemaSnapshot(
   if (hasChanges(remoteDiff)) {
     throw schemaDriftError("the deployed schema", remoteDiff, options);
   }
-}
-
-/** Options for {@link checkScriptSchemaSnapshot}. */
-export interface CheckScriptSchemaSnapshotOptions extends Omit<
-  VerifyScriptSchemaSnapshotOptions,
-  "sidecar"
-> {
-  /** Absolute path of the script about to run */
-  filePath: string;
-  /** Run without the check (`--allow-schema-drift`) */
-  allowDrift: boolean;
-}
-
-/**
- * Check the schema snapshot a scaffolded script carries before it runs.
- * Pre-bundled `.js` files and scripts without a snapshot are not checked.
- * @param options - Script, how it is run and the workspace it runs in
- * @throws When the snapshot cannot be read or no longer matches
- */
-export async function checkScriptSchemaSnapshot(
-  options: CheckScriptSchemaSnapshotOptions,
-): Promise<void> {
-  const { filePath, allowDrift, ...verifyOptions } = options;
-  if (filePath.endsWith(".js")) return;
-  if (allowDrift) {
-    if (fs.existsSync(path.join(path.dirname(filePath), SCRIPT_SNAPSHOT_FILE_NAME))) {
-      logger.warn("Skipping the schema snapshot check (--allow-schema-drift).");
-    }
-    return;
-  }
-  const sidecar = loadScriptSchemaSnapshot(filePath);
-  if (!sidecar) return;
-  logger.info("Checking the script's schema snapshot for drift...");
-  await verifyScriptSchemaSnapshot({ ...verifyOptions, sidecar });
 }
 
 /**
@@ -456,12 +366,7 @@ function schemaDriftError(
   });
   const override = formatCommandHint({
     command: "tailor",
-    args: [
-      ...(options.runCommand ?? ["function", "run"]),
-      options.scriptArgValue,
-      "--allow-schema-drift",
-      ...contextFlags,
-    ],
+    args: ["function", "run", options.scriptArgValue, "--allow-schema-drift", ...contextFlags],
   });
   return CLIError({
     code: "SCRIPT_SCHEMA_DRIFT",

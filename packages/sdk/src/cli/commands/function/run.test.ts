@@ -14,8 +14,8 @@ import { definePlugins } from "#/configure/config/index";
 import { kyselyTypePlugin } from "#/plugin/builtin/kysely-type/index";
 import { bundleForRun } from "./bundle";
 import { detectFunctionType } from "./detect";
-import { runFunctionCommand, workflowRunSuggestion } from "./run";
-import { checkScriptSchemaSnapshot } from "./script-scaffold";
+import { runFunctionCommand } from "./run";
+import { loadScriptSchemaSnapshot, verifyScriptSchemaSnapshot } from "./script-scaffold";
 import { startFunctionRunWatch } from "./watch";
 import { functionCommand } from "./index";
 
@@ -56,7 +56,8 @@ vi.mock("./script-scaffold", async (importActual) => {
   const actual = await importActual<object>();
   return {
     ...actual,
-    checkScriptSchemaSnapshot: vi.fn(),
+    loadScriptSchemaSnapshot: vi.fn().mockReturnValue(null),
+    verifyScriptSchemaSnapshot: vi.fn(),
   };
 });
 
@@ -75,7 +76,8 @@ describe("function run --json", () => {
     vi.mocked(executeScriptReportingStart).mockClear();
     vi.mocked(loadConfig).mockClear();
     vi.mocked(startFunctionRunWatch).mockClear();
-    vi.mocked(checkScriptSchemaSnapshot).mockReset();
+    vi.mocked(verifyScriptSchemaSnapshot).mockReset();
+    vi.mocked(loadScriptSchemaSnapshot).mockReset().mockReturnValue(null);
     vi.mocked(loadMachineUserName).mockResolvedValue(undefined);
     vi.mocked(loadConfig).mockResolvedValue({
       config: {
@@ -243,25 +245,27 @@ describe("function run --json", () => {
     expect(bundleForRun).toHaveBeenCalledWith(expect.objectContaining({ kyselyTemporal: true }));
   });
 
-  test("checks the schema snapshot of the script before executing", async () => {
+  test("verifies the schema snapshot of a scaffolded script before executing", async () => {
+    const sidecar = { snapshotPath: "/tmp/db.snapshot.json", snapshot: { namespace: "tailordb" } };
+    vi.mocked(loadScriptSchemaSnapshot).mockReturnValueOnce(sidecar as never);
     using stdout = captureStdout();
     using _stderr = captureStderr();
     using _json = jsonMode();
 
     await runCommand(runFunctionCommand, [tsScriptPath, "--machine-user", "admin"]);
 
-    expect(checkScriptSchemaSnapshot).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: tsScriptPath,
-        allowDrift: false,
-        workspaceId: "12345678-1234-4abc-8def-123456789012",
-      }),
+    expect(verifyScriptSchemaSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({ sidecar, workspaceId: "12345678-1234-4abc-8def-123456789012" }),
     );
     expect(JSON.parse(stdout.output)).toMatchObject({ success: true });
   });
 
   test("refuses to run when the schema snapshot check reports drift", async () => {
-    vi.mocked(checkScriptSchemaSnapshot).mockRejectedValueOnce(new Error("Schema drift detected"));
+    vi.mocked(loadScriptSchemaSnapshot).mockReturnValueOnce({
+      snapshotPath: "/tmp/db.snapshot.json",
+      snapshot: { namespace: "tailordb" },
+    } as never);
+    vi.mocked(verifyScriptSchemaSnapshot).mockRejectedValueOnce(new Error("Schema drift detected"));
     using _stdout = captureStdout();
     using _stderr = captureStderr();
     using _json = jsonMode();
@@ -273,9 +277,13 @@ describe("function run --json", () => {
     expect(executeScriptReportingStart).not.toHaveBeenCalled();
   });
 
-  test("passes --allow-schema-drift on to the snapshot check", async () => {
+  test("skips the schema snapshot check with --allow-schema-drift, even when the sidecar cannot be loaded", async () => {
+    fs.writeFileSync(path.join(path.dirname(tsScriptPath), "db.snapshot.json"), "{broken");
+    vi.mocked(loadScriptSchemaSnapshot).mockImplementation(() => {
+      throw new Error("Failed to parse schema snapshot");
+    });
     using stdout = captureStdout();
-    using _stderr = captureStderr();
+    using stderr = captureStderr();
     using _json = jsonMode();
 
     await runCommand(runFunctionCommand, [
@@ -285,9 +293,9 @@ describe("function run --json", () => {
       "--allow-schema-drift",
     ]);
 
-    expect(checkScriptSchemaSnapshot).toHaveBeenCalledWith(
-      expect.objectContaining({ allowDrift: true }),
-    );
+    expect(loadScriptSchemaSnapshot).not.toHaveBeenCalled();
+    expect(verifyScriptSchemaSnapshot).not.toHaveBeenCalled();
+    expect(stderr.output).toContain("Skipping the schema snapshot check");
     expect(JSON.parse(stdout.output)).toMatchObject({ success: true });
   });
 
@@ -334,115 +342,6 @@ describe("function run --json", () => {
     expect(stderr.output).toContain(
       '--arg is ignored because this resolver has no input schema. Define "input" in your resolver to use --arg.',
     );
-  });
-
-  describe("when the Platform stops the run for taking too long", () => {
-    test("points to workflow run with the file and argument that were given", async () => {
-      vi.mocked(executeScriptReportingStart).mockResolvedValueOnce({
-        success: false,
-        logs: "",
-        result: "",
-        error: "Execution timed out after 60 seconds",
-      });
-      const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
-      using _stdout = captureStdout();
-      using stderr = captureStderr();
-
-      await runCommand(runFunctionCommand, [
-        scriptPath,
-        "--arg",
-        '{"from":"2026-01-01"}',
-        "--machine-user",
-        "admin",
-      ]);
-
-      expect(stderr.output).toContain("tailor workflow run");
-      expect(stderr.output).toContain('--arg \'{"from":"2026-01-01"}\'');
-      expect(exit).toHaveBeenCalledWith(1);
-    });
-
-    test("reports the same hint as suggestion in --json output", async () => {
-      vi.mocked(executeScriptReportingStart).mockResolvedValueOnce({
-        success: false,
-        logs: "",
-        result: "",
-        error: "Execution timed out after 60 seconds",
-      });
-      vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
-      using stdout = captureStdout();
-      using _stderr = captureStderr();
-      using _json = jsonMode();
-
-      await runCommand(runFunctionCommand, [scriptPath, "--machine-user", "admin"]);
-
-      expect(JSON.parse(stdout.output).suggestion).toContain("tailor workflow run");
-    });
-
-    test("stays silent when the function's own error merely mentions a timeout", async () => {
-      vi.mocked(executeScriptReportingStart).mockResolvedValueOnce({
-        success: false,
-        logs: "",
-        result: "",
-        error: "Error: Request timeout while calling the payment API",
-      });
-      vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
-      using _stdout = captureStdout();
-      using stderr = captureStderr();
-
-      await runCommand(runFunctionCommand, [scriptPath, "--machine-user", "admin"]);
-
-      expect(stderr.output).not.toContain("workflow run");
-    });
-
-    test("stays silent when the run failed for another reason", async () => {
-      vi.mocked(executeScriptReportingStart).mockResolvedValueOnce({
-        success: false,
-        logs: "",
-        result: "",
-        error: "TypeError: x is not a function",
-      });
-      vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
-      using _stdout = captureStdout();
-      using stderr = captureStderr();
-
-      await runCommand(runFunctionCommand, [scriptPath, "--machine-user", "admin"]);
-
-      expect(stderr.output).not.toContain("workflow run");
-    });
-
-    test("keeps --allow-schema-drift, so the suggested run is not refused for the drift the user accepted", () => {
-      expect(
-        workflowRunSuggestion({
-          file: "scripts/backfill.ts",
-          job: undefined,
-          arg: undefined,
-          argFile: undefined,
-          machineUser: undefined,
-          allowSchemaDrift: true,
-          config: "tailor.config.ts",
-          workspaceId: undefined,
-          profile: undefined,
-        }),
-      ).toContain("`tailor workflow run scripts/backfill.ts --allow-schema-drift`");
-    });
-
-    test("names --name as --job, and leaves out options at their defaults", () => {
-      expect(
-        workflowRunSuggestion({
-          file: "workflows/jobs.ts",
-          job: "send-report",
-          arg: undefined,
-          argFile: "args/report.json",
-          machineUser: "admin",
-          allowSchemaDrift: false,
-          config: "tailor.config.ts",
-          workspaceId: undefined,
-          profile: undefined,
-        }),
-      ).toContain(
-        "`tailor workflow run workflows/jobs.ts --job send-report --arg-file args/report.json --machine-user=admin`",
-      );
-    });
   });
 
   describe("--arg-file", () => {
