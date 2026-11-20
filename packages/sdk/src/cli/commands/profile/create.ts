@@ -2,7 +2,12 @@ import { arg } from "@politty/zod";
 import { z } from "zod";
 import { fetchAll, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { fetchLatestToken, readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
+import {
+  fetchLatestToken,
+  readPlatformConfig,
+  withPlatformConfigLock,
+  writePlatformConfig,
+} from "#/cli/shared/context";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import type { ProfileInfo } from "./types";
@@ -77,17 +82,21 @@ export async function createProfile(options: CreateProfileOptions): Promise<Prof
     });
   }
 
-  config.profiles[options.name] = {
-    user: resolvedUser,
-    workspace_id: options.workspaceId,
-    ...(permission === "read" ? { readonly: true } : {}),
-    ...(options.machineUser ? { machine_user: options.machineUser } : {}),
-    ...(options.machineUserOverride === "deny" ? { machine_user_override: "deny" as const } : {}),
-    ...(options.platformUrl ? { platform_url: options.platformUrl } : {}),
-    ...(options.oauth2ClientId ? { oauth2_client_id: options.oauth2ClientId } : {}),
-    ...(options.consoleUrl ? { console_url: options.consoleUrl } : {}),
-  };
-  writePlatformConfig(config);
+  await withPlatformConfigLock(async () => {
+    const latest = await readPlatformConfig();
+    assertProfileAvailable(latest, options.name);
+    latest.profiles[options.name] = {
+      user: resolvedUser,
+      workspace_id: options.workspaceId,
+      ...(permission === "read" ? { readonly: true } : {}),
+      ...(options.machineUser ? { machine_user: options.machineUser } : {}),
+      ...(options.machineUserOverride === "deny" ? { machine_user_override: "deny" as const } : {}),
+      ...(options.platformUrl ? { platform_url: options.platformUrl } : {}),
+      ...(options.oauth2ClientId ? { oauth2_client_id: options.oauth2ClientId } : {}),
+      ...(options.consoleUrl ? { console_url: options.consoleUrl } : {}),
+    };
+    writePlatformConfig(latest);
+  });
 
   return {
     name: options.name,
