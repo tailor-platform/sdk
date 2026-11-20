@@ -133,15 +133,19 @@ describe("kyselyTypePlugin pgliteSchemaPath", () => {
   });
 
   test.each([
-    ["./generated/shared.ts", "./generated/shared.ts"],
-    ["./generated/shared.ts", "./generated/nested/../shared.ts"],
-    ["./generated/shared.ts", resolve("generated/shared.ts")],
-  ])("rejects overlapping output paths %s and %s", async (distPath, pgliteSchemaPath) => {
-    const config = { distPath, pgliteSchemaPath };
-    await expect(
-      kyselyTypePlugin(config).onTailorDBReady!(ctx(namespaces, config)),
-    ).rejects.toThrow(/distPath and pgliteSchemaPath must resolve to different files/);
-  });
+    ["./generated/shared.ts", "./generated/shared.ts", "tailor.config.ts"],
+    ["./generated/shared.ts", "./generated/nested/../shared.ts", "tailor.config.ts"],
+    ["./generated/shared.ts", resolve("generated/shared.ts"), "tailor.config.ts"],
+    ["./generated/shared.ts", "/proj/app/generated/shared.ts", "/proj/app/tailor.config.ts"],
+  ])(
+    "rejects overlapping output paths %s and %s for %s",
+    async (distPath, pgliteSchemaPath, configPath) => {
+      const config = { distPath, pgliteSchemaPath };
+      await expect(
+        kyselyTypePlugin(config).onTailorDBReady!({ ...ctx(namespaces, config), configPath }),
+      ).rejects.toThrow(/distPath and pgliteSchemaPath must resolve to different files/);
+    },
+  );
 
   test("rejects overlapping output paths even without tables", async () => {
     const config = { distPath: "./shared.ts", pgliteSchemaPath: "./shared.ts" };

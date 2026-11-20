@@ -11,6 +11,7 @@ import {
   hashValue,
   loadSecretsState,
   saveSecretsState,
+  secretsStateScope,
   serializeUpdateTime,
   withSecretsStateLock,
 } from "./secrets-state";
@@ -193,11 +194,7 @@ export async function planSecretManager(context: PlanContext) {
     getTrn: (name) => resourceTrn(workspaceId, "vault", name),
   });
 
-  const stateScope = {
-    workspaceId,
-    applicationId: application.id,
-    applicationName: application.name,
-  };
+  const stateScope = secretsStateScope(context);
   const state = loadSecretsState(stateScope);
   const skippedSecrets: string[] = [];
 

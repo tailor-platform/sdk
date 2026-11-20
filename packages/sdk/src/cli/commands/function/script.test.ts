@@ -12,6 +12,7 @@ import {
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
 import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
@@ -118,6 +119,19 @@ describe("function script", () => {
     vi.unstubAllEnvs();
   });
 
+  test("resolves the generated types' distPath against the config's directory", async () => {
+    using tmp = tempCwd("sdk-function-script-");
+    using _logger = silenceLogger("info", "success", "warn");
+    mockConfig(tmp.dir, { plugins: [kyselyPluginStub] });
+    fs.mkdirSync(path.join(tmp.dir, "sub"));
+    process.chdir(path.join(tmp.dir, "sub"));
+
+    await runCommand(scriptCommand, ["scripts/fix.ts", "--namespace", "tailordb"]);
+
+    const script = fs.readFileSync(path.join(tmp.dir, "sub/scripts/fix.ts"), "utf-8");
+    expect(script).toContain('import { getDB } from "../../generated/tailordb";');
+  });
+
   test("scaffolds a skeleton importing the project's generated types when kyselyTypePlugin is configured", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
@@ -158,6 +172,30 @@ describe("function script", () => {
     expect(result.error?.message).toMatch(/without a distPath or contentMapper: true/);
   });
 
+  test.each([
+    { args: [], configHints: [] },
+    {
+      args: ["--config", "apps/shop/tailor.config.ts"],
+      configHints: ["--config=apps/shop/tailor.config.ts"],
+    },
+  ])(
+    "names --config in the next-step hint only when it was given ($args)",
+    async ({ args, configHints }) => {
+      using tmp = tempCwd("sdk-function-script-");
+      using _logger = silenceLogger("info", "success", "warn");
+      mockConfig(tmp.dir);
+
+      await runCommand(scriptCommand, ["scripts/fix.ts", ...args]);
+
+      const nextHint = vi
+        .mocked(logger.info)
+        .mock.calls.map(([message]) => String(message))
+        .find((message) => message.startsWith("Next:"));
+      expect(nextHint).toContain("function run scripts/fix.ts");
+      expect(nextHint?.match(/--config=[^\s`]+/g) ?? []).toEqual(configHints);
+    },
+  );
+
   test("generates db.ts and db.snapshot.json from local definitions without authentication by default", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
@@ -179,7 +217,7 @@ describe("function script", () => {
     expect(snapshot.namespace).toBe("tailordb");
     expect(snapshot.source).toBe("local");
     expect(loadTailorDBNamespaces).toHaveBeenCalledWith({
-      configPath: "tailor.config.ts",
+      configPath: undefined,
       namespaces: ["tailordb"],
     });
     expect(loadAccessToken).not.toHaveBeenCalled();
@@ -422,7 +460,7 @@ describe("function script", () => {
     await runCommand(scriptCommand, ["scripts/fix.ts"]);
 
     expect(loadTailorDBNamespaces).toHaveBeenCalledWith({
-      configPath: "tailor.config.ts",
+      configPath: undefined,
       namespaces: ["tailordb"],
     });
     expect(fetchRemoteSchemaSnapshot).not.toHaveBeenCalled();
@@ -515,7 +553,7 @@ describe("function script", () => {
     );
     expect(snapshot.source).toBe("local");
     expect(loadTailorDBNamespaces).toHaveBeenCalledWith({
-      configPath: "tailor.config.ts",
+      configPath: undefined,
       namespaces: ["tailordb"],
     });
     expect(fetchRemoteSchemaSnapshot).not.toHaveBeenCalled();

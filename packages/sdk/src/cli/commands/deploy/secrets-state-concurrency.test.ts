@@ -3,7 +3,7 @@ import { existsSync, rmSync } from "node:fs";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { applyAuthConnections, type planAuthConnections } from "./auth-connection";
 import { applySecretManager, type planSecretManager } from "./secret-manager";
-import { hashValue, loadSecretsState } from "./secrets-state";
+import { hashValue, loadSecretsState, type SecretsStateScope } from "./secrets-state";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 
@@ -17,7 +17,8 @@ const stateScope = {
   workspaceId: "ws-1",
   applicationId: "app-1",
   applicationName: "test-app",
-};
+  configPath: "/proj/app/tailor.config.ts",
+} satisfies SecretsStateScope;
 
 const application = {
   name: "test-app",

@@ -4,7 +4,7 @@ description: "Configure your application in tailor.config.ts, including applicat
 
 # Configuration
 
-The SDK uses TypeScript for configuration files. By default, it uses `tailor.config.ts` in the project root. You can specify a different path using the `--config` option.
+The SDK uses TypeScript for configuration files. By default, CLI commands use the nearest `tailor.config.ts`, looking in the current directory and then in each parent directory, so they also work from a subdirectory of your project. You can specify a different path using the `--config` option or the `TAILOR_CONFIG_PATH` environment variable.
 
 For service-specific documentation, see:
 
@@ -605,6 +605,8 @@ export const plugins = definePlugins(
   enumConstantsPlugin({ distPath: "./generated/enums.ts" }),
 );
 ```
+
+Relative output paths in the options of the built-in plugins, such as `distPath`, are resolved against the directory of `tailor.config.ts`, so `tailor generate` writes to the same place from any directory.
 
 `kyselyTypePlugin` requires either `distPath` or `contentMapper: true`, and accepts only one of them. With `contentMapper: true`, `tailor generate` writes no types file, and you import `getDB()` from the SDK instead:
 

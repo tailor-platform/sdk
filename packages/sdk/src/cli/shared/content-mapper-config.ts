@@ -1,8 +1,7 @@
 import * as fs from "node:fs";
-import { findUpSync } from "find-up-simple";
 import { createFilesMatcher, parseTsconfig, type TsConfigJsonResolved } from "get-tsconfig";
 import * as path from "pathe";
-import { DEFAULT_CONFIG_PATH } from "./args";
+import { findConfigFile } from "./context";
 import { TAILOR_FILE_EXTENSION } from "./tailor-file-extension";
 
 interface ContentMapperEntry {
@@ -75,7 +74,7 @@ export function isContentMapperEnabled(configPath: string): boolean {
     if (!project) return false;
     const { contentMappers } = project.config as { contentMappers?: unknown };
     if (!Array.isArray(contentMappers) || !contentMappers.some(isSdkMapper)) return false;
-    const found = findUpSync(DEFAULT_CONFIG_PATH, { cwd: path.dirname(project.tsconfigPath) });
+    const found = findConfigFile(path.dirname(project.tsconfigPath));
     return found !== undefined && path.resolve(found) === file;
   } catch {
     return false;
