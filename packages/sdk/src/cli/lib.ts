@@ -51,6 +51,8 @@ export {
 export { generate } from "./commands/generate/service";
 export type { GenerateOptions } from "./commands/generate/options";
 export { listProfileInfos } from "./commands/profile/list";
+export { createProfile, type CreateProfileOptions } from "./commands/profile/create";
+export { listLoggedInUsers } from "./commands/user/list";
 export type { ProfileInfo } from "./commands/profile/types";
 export { loadConfig, type LoadedConfig } from "./shared/config-loader";
 export { extractOwnedNamespaces } from "./shared/config";
@@ -97,7 +99,11 @@ export {
 } from "./commands/show";
 export { remove, type RemoveOptions } from "./commands/remove";
 export { createWorkspace, type CreateWorkspaceOptions } from "./commands/workspace/create";
-export { listWorkspaces, type ListWorkspacesOptions } from "./commands/workspace/list";
+export {
+  listWorkspaces,
+  listWorkspacesOfUser,
+  type ListWorkspacesOptions,
+} from "./commands/workspace/list";
 export { deleteWorkspace, type DeleteWorkspaceOptions } from "./commands/workspace/delete";
 export { getWorkspace, type GetWorkspaceOptions } from "./commands/workspace/get";
 export { restoreWorkspace, type RestoreWorkspaceOptions } from "./commands/workspace/restore";
@@ -299,6 +305,11 @@ export {
   type RunScript,
   type ScriptWorkflowOptions,
 } from "./shared/script-workflow";
-export { initOperatorClient, type OperatorClient } from "./shared/client";
+export {
+  getEffectivePlatformConfig as platformConfigFromEnv,
+  initOperatorClient,
+  type OperatorClient,
+  type PlatformClientConfig,
+} from "./shared/client";
 export type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
 export { CustomDomainStatus } from "@tailor-platform/tailor-proto/staticwebsite_resource_pb";

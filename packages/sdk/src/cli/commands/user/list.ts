@@ -1,5 +1,10 @@
 import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
+import {
+  getPlatformBaseUrl,
+  isDefaultPlatform,
+  type PlatformClientConfig,
+} from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
   platformConfigFromProfile,
@@ -17,6 +22,22 @@ type UserListInfo = {
   platformUrl: string | null;
   current: boolean;
 };
+
+/**
+ * List the users that are logged in on a platform.
+ * @param platformConfig - Platform to list; defaults to `TAILOR_PLATFORM_URL`, then the default platform
+ * @returns The email of each user that has one, otherwise its user name
+ */
+export async function listLoggedInUsers(platformConfig?: PlatformClientConfig): Promise<string[]> {
+  const config = await readPlatformConfig();
+  const platformUrl = getPlatformBaseUrl(platformConfig);
+  const prefix = `${platformUrl}|`;
+  const isDefault = isDefaultPlatform(platformConfig);
+  return Object.entries(config.users).flatMap(([key, entry]) => {
+    if (isDefault ? key.includes("|") : !key.startsWith(prefix)) return [];
+    return [entry?.email ?? (isDefault ? key : key.slice(prefix.length))];
+  });
+}
 
 function activeCurrentUserKey(config: PlatformConfig, activeProfile?: string): string | null {
   if (!activeProfile) {
