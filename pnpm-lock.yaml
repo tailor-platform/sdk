@@ -176,7 +176,7 @@ snapshots:
 			"brace-expansion@>=5.0.5 <5.0.8": "5.0.13",
 			"esbuild@>=0.17.0 <0.28.1": "0.28.2",
 			"glob@>=9.0.0 <=14.0.1": "14.0.6",
-			"minimatch@<11.0.1": "11.0.8",
+			"minimatch@<11.0.1": "11.0.9",
 		},
 		"packageExtensionsChecksum": "sha256-366VrvjFdE9dy97BTVh0uNx88UlDPie1VVU5Ft1WOd4=",
 	},
@@ -1448,7 +1448,7 @@ snapshots:
 			"dependencies": {
 				"@eslint/object-schema": "3.0.5",
 				"debug": "4.4.3",
-				"minimatch": "11.0.8",
+				"minimatch": "11.0.9",
 			},
 		},
 
@@ -3633,7 +3633,7 @@ snapshots:
 				"@typescript-eslint/types": "8.72.2",
 				"@typescript-eslint/visitor-keys": "8.72.2",
 				"debug": "4.4.3",
-				"minimatch": "11.0.8",
+				"minimatch": "11.0.9",
 				"semver": "7.8.6",
 				"tinyglobby": "0.2.17",
 				"ts-api-utils": "2.5.0",
@@ -4657,7 +4657,7 @@ snapshots:
 				"imurmurhash": "0.1.4",
 				"is-glob": "4.0.3",
 				"json-stable-stringify-without-jsonify": "1.0.1",
-				"minimatch": "11.0.8",
+				"minimatch": "11.0.9",
 				"natural-compare": "1.4.0",
 				"optionator": "0.9.4",
 			},
@@ -4939,7 +4939,7 @@ snapshots:
 			"integrity": "sha512-OwXjVP2svY5EyLY75Vek96C8qK43gqrt4xsZ+qSILdnaEiJPXkd62mcfUSNx/TQErQRdu5uM5kF67sfONragKw==",
 			"engines": {"node": "18 || 20 || >=22"},
 			"dependencies": {
-				"minimatch": "11.0.8",
+				"minimatch": "11.0.9",
 				"minipass": "7.1.3",
 				"path-scurry": "3.0.0",
 			},
@@ -5593,8 +5593,8 @@ snapshots:
 			"engines": {"node": ">=6"},
 		},
 
-		"minimatch@11.0.8": {
-			"integrity": "sha512-nFQuYSTVrGvysVBps5Ih+0BdnYFN/Cj3C816r6+p7yK+FHrVLGE4O4N9AFwykrlNlvM2HYt+Rad1Uiro6h88Ig==",
+		"minimatch@11.0.9": {
+			"integrity": "sha512-KCFkfyjqerNlSstjlhIGNXIKZGA/6O4V4RlhZ+Dsr621SPPw0mzlypE9D9ZOoPiVefHID+j7/XuMMlqfD/F60Q==",
 			"engines": {"node": "20 || >=22"},
 			"dependencies": {
 				"@isaacs/nonrecursive-glob-match": "1.1.0",
