@@ -91,7 +91,8 @@ export interface TailorDBReadyContext<PluginConfig = unknown> {
   /** All TailorDB namespaces with their tables and metadata */
   tailordb: TailorDBNamespaceData[];
   /**
-   * The config's Auth service. Reading it throws when the config has several Auth services.
+   * The config's Auth service. Reading it throws when the config has several Auth services, and
+   * a copy made with `{ ...ctx }` then leaves it out.
    * @deprecated since NEXT_RELEASE — use `auths` instead. codemod: v3/plugin-context-auths
    */
   auth?: GeneratorAuthInput;
@@ -117,7 +118,8 @@ export interface ResolverReadyContext<PluginConfig = unknown> {
   /** All resolver namespaces with their resolvers */
   resolvers: ResolverNamespaceData[];
   /**
-   * The config's Auth service. Reading it throws when the config has several Auth services.
+   * The config's Auth service. Reading it throws when the config has several Auth services, and
+   * a copy made with `{ ...ctx }` then leaves it out.
    * @deprecated since NEXT_RELEASE — use `auths` instead. codemod: v3/plugin-context-auths
    */
   auth?: GeneratorAuthInput;
@@ -145,7 +147,8 @@ export interface ExecutorReadyContext<PluginConfig = unknown> {
   /** All executors, keyed by executor name */
   executors: Record<string, Executor>;
   /**
-   * The config's Auth service. Reading it throws when the config has several Auth services.
+   * The config's Auth service. Reading it throws when the config has several Auth services, and
+   * a copy made with `{ ...ctx }` then leaves it out.
    * @deprecated since NEXT_RELEASE — use `auths` instead. codemod: v3/plugin-context-auths
    */
   auth?: GeneratorAuthInput;

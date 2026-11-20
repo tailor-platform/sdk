@@ -203,14 +203,14 @@ onTailorDBNamespaceLoaded(context) {
 
 **Context** (`TailorDBReadyContext`):
 
-| Field          | Type                                 | Description                                                                                   |
-| -------------- | ------------------------------------ | --------------------------------------------------------------------------------------------- |
-| `tailordb`     | `TailorDBNamespaceData[]`            | All namespaces with tables, source info, and plugin attachments                               |
-| `auths`        | `Record<string, GeneratorAuthInput>` | Every Auth service of the config (machine users, OAuth2 clients, etc.), keyed by its name     |
-| `auth`         | `GeneratorAuthInput?`                | Deprecated: use `auths`. The only Auth service; reading it throws when the config has several |
-| `baseDir`      | `string`                             | Output directory for generated files                                                          |
-| `configPath`   | `string`                             | Path to `tailor.config.ts`                                                                    |
-| `pluginConfig` | `PluginConfig`                       | Plugin-level config from `definePlugins()`                                                    |
+| Field          | Type                                 | Description                                                                                                           |
+| -------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `tailordb`     | `TailorDBNamespaceData[]`            | All namespaces with tables, source info, and plugin attachments                                                       |
+| `auths`        | `Record<string, GeneratorAuthInput>` | Every Auth service of the config (machine users, OAuth2 clients, etc.), keyed by its name                             |
+| `auth`         | `GeneratorAuthInput?`                | Deprecated: use `auths`. The only Auth service; with several, reading it throws and a `{ ...ctx }` copy leaves it out |
+| `baseDir`      | `string`                             | Output directory for generated files                                                                                  |
+| `configPath`   | `string`                             | Path to `tailor.config.ts`                                                                                            |
+| `pluginConfig` | `PluginConfig`                       | Plugin-level config from `definePlugins()`                                                                            |
 
 `TailorDBNamespaceData` contains:
 
