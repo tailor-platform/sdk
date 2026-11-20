@@ -1,5 +1,15 @@
 # @tailor-platform/sdk
 
+## 2.46.0
+
+### Minor Changes
+
+- [#3165](https://github.com/tailor-platform/sdk/pull/3165) [`96f7917`](https://github.com/tailor-platform/sdk/commit/96f7917261cbab08a3371bada992c3de445a31ea) Thanks [@mocchira](https://github.com/mocchira)! - Add `tailor.sandbox` (beta) for running commands and managing files in an isolated sandbox from Functions. Import the typed wrapper from `@tailor-platform/sdk/runtime/sandbox` (also exported as `sandbox` from `@tailor-platform/sdk/runtime`), or use the ambient `tailor.sandbox` types from `@tailor-platform/sdk/runtime/globals`. A sandbox created without `name` is destroyed when the execution ends; pass `name` to keep it and reopen it later with `getByName` or `getOrCreate`. Unit tests can use the in-memory `mockSandbox()` from `@tailor-platform/sdk/vitest`.
+
+### Patch Changes
+
+- [#3228](https://github.com/tailor-platform/sdk/pull/3228) [`2cbdd9b`](https://github.com/tailor-platform/sdk/commit/2cbdd9bb34d13a57ee065de366a90d376fcb2b22) Thanks [@dqn](https://github.com/dqn)! - Fix the migration `db.ts` types to match the app's generated Kysely types: inserts can leave out fields that have a default or a create hook (such as `db.fields.timestamps()`), and values for serial fields are rejected. A serial field whose existing values the migration script has to fill or deduplicate stays writable. Existing `db.ts` files are not regenerated.
+
 ## 2.45.0
 
 ### Minor Changes
