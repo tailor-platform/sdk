@@ -117,6 +117,8 @@ declare global {
       type FileInfo = SandboxTypes.FileInfo;
       type CreateSandboxOptions = SandboxTypes.CreateSandboxOptions;
       type GetOrCreateSandboxOptions = SandboxTypes.GetOrCreateSandboxOptions;
+      type OutputOptions = SandboxTypes.OutputOptions;
+      type ListExecutionsOptions = SandboxTypes.ListExecutionsOptions;
     }
 
     namespace context {

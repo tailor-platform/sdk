@@ -223,7 +223,7 @@ describe("mockSandbox", () => {
   });
 
   describe("executions", () => {
-    test("start returns a finished execution whose output streams chunks and an exit chunk", async () => {
+    test("output streams chunks and an exit chunk once the execution finishes", async () => {
       using sb = mockSandbox();
       sb.onExec(() => ({ stdout: "out", stderr: "err", exitCode: 0 }));
       const box = await sandboxApi().create({ template: "guest" });
@@ -286,8 +286,62 @@ describe("mockSandbox", () => {
       using _sb = mockSandbox();
       const box = await sandboxApi().create({ template: "guest" });
       const exec = await box.start(["x"]);
+      await exec.wait();
 
       expect((await exec.cancel()).status).toBe("SUCCESS");
+    });
+
+    test("start returns while the handler runs; wait resolves once it finishes", async () => {
+      using sb = mockSandbox();
+      let finish!: () => void;
+      sb.onExec(async () => {
+        await new Promise<void>((resolve) => (finish = resolve));
+        return { stdout: "done" };
+      });
+      const box = await sandboxApi().create({ template: "guest" });
+
+      const exec = await box.start(["sleep", "60"]);
+      expect(exec).toMatchObject({ status: "RUNNING", exitCode: null, finishedAt: null });
+      expect((await exec.refresh()).status).toBe("RUNNING");
+
+      finish();
+      expect(await exec.wait()).toMatchObject({ status: "SUCCESS", exitCode: 0 });
+    });
+
+    test("cancel stops a running execution; the handler's later result is ignored", async () => {
+      using sb = mockSandbox();
+      let finish!: () => void;
+      sb.onExec(async () => {
+        await new Promise<void>((resolve) => (finish = resolve));
+        return { stdout: "late" };
+      });
+      const box = await sandboxApi().create({ template: "guest" });
+      const exec = await box.start(["sleep", "60"]);
+
+      expect((await exec.cancel()).status).toBe("CANCELED");
+      expect((await exec.wait()).status).toBe("CANCELED");
+      const chunks = [];
+      for await (const chunk of exec.output()) chunks.push(chunk);
+      expect(chunks).toEqual([
+        { type: "exit", execution: expect.objectContaining({ status: "CANCELED" }) },
+      ]);
+
+      finish();
+      await Promise.resolve();
+      expect((await exec.refresh()).status).toBe("CANCELED");
+    });
+
+    test("a handler error rejects wait and output but not start", async () => {
+      using sb = mockSandbox();
+      sb.onExec(() => {
+        throw new Error("boom");
+      });
+      const box = await sandboxApi().create({ template: "guest" });
+
+      const exec = await box.start(["x"]);
+
+      await expect(exec.wait()).rejects.toThrow("boom");
+      await expect(exec.output().getReader().read()).rejects.toThrow("boom");
     });
   });
 

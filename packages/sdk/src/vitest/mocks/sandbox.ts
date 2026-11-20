@@ -63,8 +63,13 @@ interface ExecutionState {
   stdout: Uint8Array;
   stderr: Uint8Array;
   idempotencyKey?: string;
-  /** Settles when the command handler has finished; rejects with its error. */
+  /**
+   * Resolves when the execution leaves `RUNNING` (the handler finished or `cancel` was called).
+   * Rejects with the handler's error if the handler throws while the execution is still running.
+   */
   done: Promise<void>;
+  /** Marks the execution `CANCELED` and resolves `done`. */
+  cancel: () => void;
 }
 
 const encoder = new TextEncoder();
@@ -131,8 +136,9 @@ function streamOf(bytes: Uint8Array): ReadableStream<Uint8Array> {
  * `start` run the handler set with `onExec` (default: exit code 0, empty output).
  * Errors are raised as `SandboxError` with the same codes the platform uses
  * (`NOT_FOUND`, `ALREADY_EXISTS`, `FAILED_PRECONDITION`, `INVALID_ARGUMENT`).
- * Holds are not modelled, so `ABORTED` is never raised. `start` runs the handler to completion
- * before it returns, so a `RUNNING` execution is never observable and `cancel` has no effect.
+ * Holds are not modelled, so `ABORTED` is never raised. As on the platform, `start` returns
+ * while the execution is `RUNNING`; `wait`, `output` and `exec` wait until the handler
+ * finishes or `cancel` is called. If the handler throws, they reject with its error.
  *
  * **Beta:** This API may change in future releases.
  * @returns Disposable sandbox mock control object
@@ -194,37 +200,39 @@ export function mockSandbox() {
       output(opts) {
         const stdoutOffset = opts?.stdoutOffset ?? 0;
         const stderrOffset = opts?.stderrOffset ?? 0;
-        const chunks: OutputChunk[] = [];
-        if (state.stdout.length > stdoutOffset) {
-          chunks.push({
-            type: "stdout",
-            offset: stdoutOffset,
-            data: state.stdout.slice(stdoutOffset),
-          });
-        }
-        if (state.stderr.length > stderrOffset) {
-          chunks.push({
-            type: "stderr",
-            offset: stderrOffset,
-            data: state.stderr.slice(stderrOffset),
-          });
-        }
-        chunks.push({ type: "exit", execution: { ...state.info } });
         return new ReadableStream<OutputChunk>({
-          start(controller) {
-            for (const chunk of chunks) controller.enqueue(chunk);
+          async start(controller) {
+            try {
+              await state.done;
+            } catch (err) {
+              controller.error(err);
+              return;
+            }
+            if (state.stdout.length > stdoutOffset) {
+              controller.enqueue({
+                type: "stdout",
+                offset: stdoutOffset,
+                data: state.stdout.slice(stdoutOffset),
+              });
+            }
+            if (state.stderr.length > stderrOffset) {
+              controller.enqueue({
+                type: "stderr",
+                offset: stderrOffset,
+                data: state.stderr.slice(stderrOffset),
+              });
+            }
+            controller.enqueue({ type: "exit", execution: { ...state.info } });
             controller.close();
           },
         });
       },
       async wait() {
+        await state.done;
         return executionView(state);
       },
       async cancel() {
-        if (state.info.status === "RUNNING") {
-          state.info.status = "CANCELED";
-          state.info.finishedAt = now();
-        }
+        state.cancel();
         return executionView(state);
       },
       async refresh() {
@@ -251,10 +259,7 @@ export function mockSandbox() {
     const key = opts?.idempotencyKey;
     if (key !== undefined) {
       const existing = sandboxState.executions.find((e) => e.idempotencyKey === key);
-      if (existing) {
-        await existing.done;
-        return existing;
-      }
+      if (existing) return existing;
     }
     const id = nextId("exec");
     const startedAt = now();
@@ -273,6 +278,7 @@ export function mockSandbox() {
       stderr: new Uint8Array(),
       ...(key !== undefined && { idempotencyKey: key }),
       done: Promise.resolve(),
+      cancel: () => {},
     };
     makeExecution(state);
     sandboxState.executions.push(state);
@@ -283,16 +289,30 @@ export function mockSandbox() {
       executionId: id,
     });
 
-    state.done = (async () => {
-      const out = await handler([...argv], opts);
-      state.stdout = toBytes(out.stdout);
-      state.stderr = toBytes(out.stderr);
-      state.info.exitCode = out.exitCode ?? 0;
-      state.info.status = state.info.exitCode === 0 ? "SUCCESS" : "FAILED";
+    const { promise, resolve, reject } = Promise.withResolvers<void>();
+    // Callers that never wait must not surface the handler's error as an unhandled rejection.
+    promise.catch(() => {});
+    state.done = promise;
+    state.cancel = () => {
+      if (state.info.status !== "RUNNING") return;
+      state.info.status = "CANCELED";
       state.info.finishedAt = now();
+      resolve();
+    };
+    void (async () => {
+      try {
+        const out = await handler([...argv], opts);
+        if (state.info.status !== "RUNNING") return;
+        state.stdout = toBytes(out.stdout);
+        state.stderr = toBytes(out.stderr);
+        state.info.exitCode = out.exitCode ?? 0;
+        state.info.status = state.info.exitCode === 0 ? "SUCCESS" : "FAILED";
+        state.info.finishedAt = now();
+        resolve();
+      } catch (err) {
+        if (state.info.status === "RUNNING") reject(err);
+      }
     })();
-    await state.done;
-    executionView(state);
     return state;
   };
 
@@ -323,6 +343,8 @@ export function mockSandbox() {
       failureMessage: null,
       async exec(argv, execOpts) {
         const exec = await run(state, argv, execOpts, "exec");
+        await exec.done;
+        executionView(exec);
         const result: ExecResult = {
           ...exec.info,
           stdout: decoder.decode(exec.stdout),

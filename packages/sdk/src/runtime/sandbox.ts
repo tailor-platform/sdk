@@ -18,7 +18,11 @@
  * console.log(result.stdout, result.exitCode);
  */
 
-/** Lifecycle status of a sandbox. */
+/**
+ * Lifecycle status of a sandbox. A named sandbox is `SUSPENDED` after about a minute without
+ * calls, or once the execution that held it ends. `get`, `getByName` and `getOrCreate` can
+ * return it in that state; the next command or file call resumes it.
+ */
 export type SandboxStatus = "PROVISIONING" | "RUNNING" | "SUSPENDED" | "DESTROYED" | "FAILED";
 
 /** Status of a command execution inside a sandbox. */
@@ -267,7 +271,7 @@ export interface Sandbox extends SandboxInfo {
 }
 
 /**
- * Error raised by `tailor.sandbox` calls. `code` is the gRPC code name, for example
+ * Error raised by `tailor.sandbox` calls. `code` is the error code, for example
  * `NOT_FOUND`, `ABORTED`, `FAILED_PRECONDITION`, or `INVALID_ARGUMENT` for arguments
  * rejected before any request is sent. `name` is `"SandboxError"`.
  *
@@ -283,7 +287,7 @@ export interface Sandbox extends SandboxInfo {
  * }
  */
 export interface SandboxError extends Error {
-  /** gRPC code name. */
+  /** Error code. */
   code: string;
 }
 

@@ -279,6 +279,33 @@ expect(lineOne.wait).toHaveBeenCalledWith({ message: "Please approve" });
 
 Use `wf.setEnv(...)` when locally-run workflow job bodies need configuration values. Per-run `runWorkflowLocally(..., { env })` options take precedence over the mock's env.
 
+### Sandbox Mock
+
+`mockSandbox()` keeps sandboxes, their files under `/workspace` and their executions in memory. Every command returns exit code 0 with no output unless you set a handler with `onExec`.
+
+```typescript
+import { mockSandbox } from "@tailor-platform/sdk/vitest";
+
+test("runs a command in a sandbox", async () => {
+  using sb = mockSandbox();
+  sb.onExec((argv) => ({ stdout: `ran ${argv.join(" ")}\n`, exitCode: 0 }));
+
+  const box = await tailor.sandbox.create({ template: "guest" });
+  await box.writeFile("/workspace/run.sh", "echo 1");
+  const result = await box.exec(["sh", "/workspace/run.sh"]);
+
+  expect(result.stdout).toBe("ran sh /workspace/run.sh\n");
+  expect(sb.executions.map((e) => e.argv)).toEqual([["sh", "/workspace/run.sh"]]);
+  expect(sb.files(box.id).has("/workspace/run.sh")).toBe(true);
+});
+```
+
+As on the Platform, `start` returns while the execution is `RUNNING`. `wait()`, `output()` and `exec` wait until the handler finishes, and `cancel()` marks a running execution `CANCELED`. To test a running execution, return a promise from the handler and resolve it when the test is ready. If the handler throws, `exec`, `wait()` and `output()` reject with its error.
+
+`sb.sandboxes`, `sb.executions` and `sb.files(id)` show the current state. `create`, `getOrCreate`, `get` and `getByName` are `vi.fn`s.
+
+The mock does not model holds, so it never raises `ABORTED`, and sandboxes stay `RUNNING` until destroyed. `listFiles` and `deleteFile` reject with `UNIMPLEMENTED`, as on the Platform.
+
 ### SecretManager Mock
 
 ```typescript
