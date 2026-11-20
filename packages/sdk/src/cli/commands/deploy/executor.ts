@@ -318,7 +318,7 @@ function resolveSameRunNamespace(
 
 /**
  * Find the local TailorDB namespace that declares the given table.
- * @param application - Loaded application
+ * @param application - Services the config defines
  * @param tableName - TailorDB table name to look up
  * @returns The declaring namespace, or undefined when no local service has it
  */
@@ -332,7 +332,7 @@ function findTailorDBNamespace(
 
 /**
  * Find the local resolver namespace that declares the given resolver.
- * @param application - Loaded application
+ * @param application - Services the config defines
  * @param resolverName - Resolver name to look up
  * @returns The declaring namespace, or undefined when no local service has it
  */
@@ -410,7 +410,7 @@ type IdpNamesSource = {
  * @param config - Services and applications of the config
  * @returns IdP names visible from the config
  */
-export function collectApplicationIdpNames(config: IdpNamesSource): ReadonlySet<string> {
+export function collectConfigIdpNames(config: IdpNamesSource): ReadonlySet<string> {
   const names = new Set(config.application.idpServices.map((idp) => idp.name));
   for (const subgraph of config.applications.flatMap((application) => application.subgraphs)) {
     if (subgraph.Type === "idp") {
@@ -426,7 +426,7 @@ function resolveIdpNamespace(
   idpName: string | undefined,
   sameRunIdpNames?: ReadonlySet<string>,
 ): string {
-  const localIdpNames = collectApplicationIdpNames(config);
+  const localIdpNames = collectConfigIdpNames(config);
   if (idpName !== undefined) {
     const candidateNames = sameRunIdpNames ?? localIdpNames;
     if (!candidateNames.has(idpName)) {

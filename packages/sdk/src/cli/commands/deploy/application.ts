@@ -364,8 +364,7 @@ export async function planApplication(
   const scansRenamedApps = owner.kind === "application" && Boolean(owner.id);
   // A same-named app in a shared workspace may belong to another user, so
   // never delete by name alone. Without an id only the same-name app can be
-  // ours; with an id, scan all apps to also clean up renamed-away ones, deleted
-  // before the current name is created or updated so the old name is freed up.
+  // ours; with an id, scan all apps to also clean up renamed-away ones.
   // A deploy must not record other apps as owners: that blocks renamed-app cleanup.
   await scheduleOwnedAppDeletes(
     existingApplications.filter((app) =>
@@ -392,9 +391,9 @@ export async function planApplication(
         app.authNamespace ? authIdpConfigNameOf(context, app.authNamespace) : undefined,
         buildMetaRequest({ trn: resourceTrn(workspaceId, "application", app.name), owner }),
         // `previous.existingLabels` can legitimately hold `undefined` (no metadata
-        // found on the first fetch), so branch on `previous` itself -- `??` would
-        // treat that cached `undefined` as a cache miss and re-fetch needlessly.
-        previous
+        // found on the first fetch), so branch on `has` -- `??` would treat that
+        // cached `undefined` as a cache miss and re-fetch needlessly.
+        previous?.existingLabels.has(app.name)
           ? previous.existingLabels.get(app.name)
           : fetchAppLabels(client, workspaceId, app.name),
         resolveStaticWebsiteUrls(client, workspaceId, cors, "CORS", {

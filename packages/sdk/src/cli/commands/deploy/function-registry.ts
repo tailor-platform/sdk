@@ -174,7 +174,7 @@ export function authHookFunctionName(authName: string, hookPoint: string): strin
 
 /**
  * Collect all function entries from in-memory bundled scripts for all services.
- * @param application - Application definition
+ * @param application - Services the config defines
  * @param workflowJobs - Collected workflow jobs from config
  * @param bundledScripts - In-memory bundled code organized by kind
  * @returns Array of function entries to register

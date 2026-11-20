@@ -185,6 +185,32 @@ describe("assertResourcesNotInUse", () => {
     );
   });
 
+  test("names each application of a config that still uses a deleted Auth service", async () => {
+    const results = plannedApplication("shop");
+    results.app.unchanged.push({ name: "backoffice", request: {} } as never);
+    const twoApplications = {
+      ...deployment({ name: "shop" }, results),
+      applications: [
+        { name: "shop", subgraphs: [], authNamespace: undefined, settings: {} },
+        { name: "backoffice", subgraphs: [], authNamespace: "shared-auth", settings: {} },
+      ],
+    };
+
+    await expect(
+      check(
+        [deployment({ name: "core" }, ownerDeleting("shared-auth")), twoApplications],
+        "deploy",
+      ),
+    ).rejects.toThrow(
+      expect.objectContaining({
+        code: "SERVICE_IN_USE",
+        context: {
+          uses: [{ resourceType: "auth.service", name: "shared-auth", application: "backoffice" }],
+        },
+      }),
+    );
+  });
+
   test("accepts an application of the run that no longer references the deleted Auth service", async () => {
     const owner = withWorkspaceApplications(ownerDeleting("shared-auth"), [
       { name: "core", authNamespace: "shared-auth" },

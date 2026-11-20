@@ -524,6 +524,15 @@ describe("visible same-run namespaces", () => {
     expect(result.has("peer-idp")).toBe(true);
   });
 
+  test("sees an IdP any application of the current config exposes", () => {
+    const current: VisibleConfig = {
+      application: { idpServices: [] } as unknown as VisibleConfig["application"],
+      applications: [{ subgraphs: [] }, { subgraphs: [{ Type: "idp", Name: "peer-idp" }] }],
+    };
+
+    expect(collectVisibleIdpNames(current, [current]).has("peer-idp")).toBe(true);
+  });
+
   test("collects IdPs owned by peer configs even when the current app declares none", () => {
     const current = visibleConfig({ idpServices: [] });
     const peer = visibleConfig({ idpServices: [{ name: "peer-idp" }] });
@@ -804,6 +813,28 @@ describe("scheduleRenamedAppDeletes", () => {
     expect([...first.app.deletes, ...second.app.deletes].map((item) => item.name)).toEqual([
       "old-app",
     ]);
+  });
+
+  test("keeps every application a deployment plans", () => {
+    const results = emptyPlanResults();
+    results.tailorDB.conflicts.push({
+      resourceType: "tailordb.service",
+      resourceLabel: "TailorDB namespace",
+      resourceName: "shared",
+      currentOwner: "backoffice",
+    });
+
+    scheduleRenamedAppDeletes([
+      {
+        ...plannedDeployment("shop", results),
+        applications: [
+          { name: "shop", subgraphs: [], authNamespace: undefined, settings: {} },
+          { name: "backoffice", subgraphs: [], authNamespace: undefined, settings: {} },
+        ],
+      },
+    ]);
+
+    expect(results.app.deletes).toEqual([]);
   });
 
   test("does not add a delete the application plan already carries under the same name", () => {
@@ -2418,6 +2449,20 @@ describe("assertUniqueGlobalResourceNames", () => {
         fakeTarget({ appName: "shared-app" }),
       ]),
     ).toThrow('- Application "shared-app": ');
+  });
+
+  test("throws when another config defines the name of any application a config deploys", () => {
+    const twoApplications = {
+      ...fakeTarget({ appName: "shop" }),
+      applications: [
+        { name: "shop", subgraphs: [], authNamespace: undefined, settings: {} },
+        { name: "backoffice", subgraphs: [], authNamespace: undefined, settings: {} },
+      ],
+    };
+
+    expect(() =>
+      assertUniqueGlobalResourceNames([twoApplications, fakeTarget({ appName: "backoffice" })]),
+    ).toThrow('- Application "backoffice": ');
   });
 
   test("throws when two configs define the same workflow job name", () => {

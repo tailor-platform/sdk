@@ -85,7 +85,10 @@ describe("configAuthNamespace", () => {
 
   test("returns the Auth service the config defines, or the external Auth its application uses", () => {
     expect(
-      configAuthNamespace({ application: { authServices: [authService] }, applications: [] }),
+      configAuthNamespace({
+        application: { authServices: [authService] },
+        applications: [app("shop-auth")],
+      }),
     ).toBe("shop-auth");
     expect(
       configAuthNamespace({

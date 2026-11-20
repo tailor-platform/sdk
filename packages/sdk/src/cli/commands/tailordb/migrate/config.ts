@@ -40,7 +40,7 @@ function hasMigrationConfig(dbConfig: unknown): dbConfig is { migration: { direc
  * Get namespaces that have migrations configured
  *
  * **Beta:** This API may change in future releases.
- * @param {AppConfig} config - Application configuration
+ * @param {Pick<AppConfig, "db">} config - Configuration whose `db` declares the migrations
  * @param {string} configDir - Configuration directory path
  * @returns {NamespaceWithMigrations[]} Array of namespaces with migrations configured
  */

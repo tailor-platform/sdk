@@ -1,4 +1,4 @@
-import { collectApplicationIdpNames } from "./executor";
+import { collectConfigIdpNames } from "./executor";
 import type { ConfigServices } from "#/cli/services/application";
 import type { DeployApplication } from "./deploy-application";
 
@@ -51,7 +51,7 @@ function collectVisibleResources<TResult>(params: CollectVisibleResourcesParams<
   return result;
 }
 
-function collectApplicationTailorDBNamespaces(config: VisibleConfig): ReadonlySet<string> {
+function collectConfigTailorDBNamespaces(config: VisibleConfig): ReadonlySet<string> {
   return new Set([
     ...config.application.tailorDBServices.map((service) => service.namespace),
     ...config.application.externalTailorDBNamespaces,
@@ -73,14 +73,14 @@ export function collectVisibleTailorDBTypeNamespaces(
   return collectVisibleResources({
     config,
     configs,
-    visibleKeysOf: collectApplicationTailorDBNamespaces,
+    visibleKeysOf: collectConfigTailorDBNamespaces,
     resourcesOf: tailorDBTypeResources,
     createResult: () => new Map<string, string | undefined>(),
     addResource: addPossiblyAmbiguousNamespace,
   });
 }
 
-function collectApplicationResolverNamespaces(config: VisibleConfig): ReadonlySet<string> {
+function collectConfigResolverNamespaces(config: VisibleConfig): ReadonlySet<string> {
   return new Set(
     config.applications
       .flatMap((application) => application.subgraphs)
@@ -93,7 +93,7 @@ export function collectVisibleIdpNames(
   config: VisibleConfig,
   configs: ReadonlyArray<VisibleConfig>,
 ): ReadonlySet<string> {
-  const names = new Set(collectApplicationIdpNames(config));
+  const names = new Set(collectConfigIdpNames(config));
   for (const candidate of configs) {
     for (const idp of candidate.application.idpServices) {
       names.add(idp.name);
@@ -117,7 +117,7 @@ export function collectVisibleResolverNamespaces(
   return collectVisibleResources({
     config,
     configs,
-    visibleKeysOf: collectApplicationResolverNamespaces,
+    visibleKeysOf: collectConfigResolverNamespaces,
     resourcesOf: resolverResources,
     createResult: () => new Map<string, string | undefined>(),
     addResource: addPossiblyAmbiguousNamespace,

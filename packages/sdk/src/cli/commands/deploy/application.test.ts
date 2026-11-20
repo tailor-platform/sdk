@@ -504,7 +504,12 @@ describe("planApplication", () => {
   });
 
   test("plans every application of the config with its own subgraphs, Auth, and settings", async () => {
-    const client = createMockClient([]);
+    const managed = { extraLabels: { "sdk-managed": "workspace" } };
+    const client = createMockClient([
+      { name: "shop", subgraphs: matchingSubgraphs, ...managed },
+      { name: "landing", subgraphs: matchingSubgraphs, ...managed },
+      { name: "unrelated", subgraphs: matchingSubgraphs, ...managed },
+    ]);
 
     const result = await planApplication({
       ...createContext(client),
@@ -522,10 +527,11 @@ describe("planApplication", () => {
           authNamespace: undefined,
           settings: { disableIntrospection: true },
         },
+        { name: "landing", subgraphs: [], authNamespace: undefined, settings: {} },
       ],
     });
 
-    expect(result.creates.map(({ name, request }) => ({ name, request }))).toEqual([
+    expect(result.updates.map(({ name, request }) => ({ name, request }))).toEqual([
       {
         name: "shop",
         request: expect.objectContaining({
@@ -539,6 +545,8 @@ describe("planApplication", () => {
           disableIntrospection: undefined,
         }),
       },
+    ]);
+    expect(result.creates.map(({ name, request }) => ({ name, request }))).toEqual([
       {
         name: "backoffice",
         request: expect.objectContaining({
@@ -553,7 +561,7 @@ describe("planApplication", () => {
         }),
       },
     ]);
-    expect(result.deletes).toEqual([]);
+    expect(result.deletes.map(({ name }) => name)).toEqual(["landing"]);
   });
 
   test("reports a conflict for a same-name application this config does not own", async () => {

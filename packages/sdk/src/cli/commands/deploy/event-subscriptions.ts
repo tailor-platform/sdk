@@ -4,7 +4,7 @@ import {
   publishEventsConflict,
   subscribesToEvents,
 } from "#/cli/shared/publish-events";
-import { collectApplicationIdpNames, findResolverNamespace } from "./executor";
+import { collectConfigIdpNames, findResolverNamespace } from "./executor";
 import { applicationIdOf, dependedByAppLabelKey, eventSourceKey } from "./label";
 import {
   collectVisibleIdpNames,
@@ -31,7 +31,7 @@ function subscribedIdpName(
   if (trigger.idp != null) {
     return trigger.idp;
   }
-  const idps = collectApplicationIdpNames(target);
+  const idps = collectConfigIdpNames(target);
   if (idps.size !== 1) {
     return undefined;
   }

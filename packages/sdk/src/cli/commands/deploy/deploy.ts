@@ -204,7 +204,7 @@ export function collectExpectedLocalStaticWebsiteNamesFromConfigs(
   return websiteNames;
 }
 
-type ForceApplyCandidates = {
+type ForceApplyConfig = {
   application: Readonly<ConfigServices>;
   applications: ReadonlyArray<Pick<DeployApplication, "name" | "subgraphs">>;
 };
@@ -223,7 +223,7 @@ export async function shouldForceApplyAll(
   client: OperatorClient,
   workspaceId: string,
   owner: DeployOwner,
-  config: ForceApplyCandidates,
+  config: ForceApplyConfig,
   functionEntries: ReadonlyArray<{ name: string }>,
 ) {
   const { application, applications } = config;
@@ -507,8 +507,15 @@ async function planDeploymentTarget(
     skip,
     previous,
   } = params;
-  const { config, application, workflowBuildResult, httpAdapterBuildResult, bundledScripts } =
-    target;
+  const {
+    config,
+    application,
+    applications,
+    owner,
+    workflowBuildResult,
+    httpAdapterBuildResult,
+    bundledScripts,
+  } = target;
   const owned = ownedSubscriptions(runInputs.eventSubscriptions, target);
 
   const migrationTestServices = application.tailorDBServices.map((service) => {
@@ -533,7 +540,6 @@ async function planDeploymentTarget(
     workflowBuildResult?.usedJobNames ?? [],
   );
   const functionEntries = collectFunctionEntries(application, bundledWorkflowJobs, bundledScripts);
-  const { owner, applications } = target;
   // Reused as-is on a rebuild's replan -- see `PlannedDeployment.forceApplyAll`'s
   // doc comment for why recomputing it there is unsafe.
   const forceApplyAll = previous
@@ -889,7 +895,7 @@ export function adjustApplicationForMigrationTest(
   const authServices = forBaseline
     ? application.authServices.map((authService) => ({ ...authService, userProfile: undefined }))
     : application.authServices;
-  const adjusted: Application = {
+  return {
     ...application,
     executorService: forBaseline ? undefined : application.executorService,
     authServices,
@@ -898,7 +904,6 @@ export function adjustApplicationForMigrationTest(
       customDomains: undefined,
     })),
   };
-  return adjusted;
 }
 
 /**
