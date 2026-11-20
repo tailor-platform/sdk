@@ -1,5 +1,10 @@
-import { hasMatchingSdkVersion, labelsMatch, type MetadataLabelWrite } from "./label";
-import type { UnchangedAnnotation, UpdateAnnotation } from "./change-set";
+import {
+  hasMatchingSdkVersion,
+  labelRefreshOf,
+  type MetadataLabelWrite,
+  type UnchangedAnnotation,
+} from "./label";
+import type { UpdateAnnotation } from "./change-set";
 import type { OwnershipTracker, TrackedResource } from "./owned-resource";
 
 /** Ownership checks for a planner whose resources carry SDK labels. */
@@ -14,7 +19,7 @@ export interface KeyedDiffOwnership<Desired, Existing> {
 export interface LabeledResourceChecks<Desired, Existing> {
   ownership: KeyedDiffOwnership<Desired, Existing>;
   versionMatches(desired: Desired, existing: Existing): boolean;
-  labelRefresh(desired: Desired, existing: Existing): MetadataLabelWrite | undefined;
+  labelRefresh(desired: Desired, existing: Existing): UnchangedAnnotation;
 }
 
 /**
@@ -38,8 +43,7 @@ export function labeledResourceChecks<
     },
     versionMatches: (desired, existing) =>
       hasMatchingSdkVersion(existing.allLabels, desired.metaRequest.labels),
-    labelRefresh: (desired, existing) =>
-      labelsMatch(existing.allLabels, desired.metaRequest) ? undefined : desired.metaRequest,
+    labelRefresh: (desired, existing) => labelRefreshOf(existing.allLabels, desired.metaRequest),
   };
 }
 
@@ -63,8 +67,8 @@ export interface KeyedDiff<Desired, Existing, Create, Update, Unchanged, Delete,
   ownership?: KeyedDiffOwnership<Desired, NoInfer<Existing>>;
   /** Whether the existing resource was applied by this SDK version (or nothing forces a reapply). */
   versionMatches(desired: Desired, existing: NoInfer<Existing>): boolean;
-  /** The labels to rewrite on an unchanged resource; omitted for resources without SDK labels. */
-  labelRefresh?(desired: Desired, existing: NoInfer<Existing>): MetadataLabelWrite | undefined;
+  /** The labels to rewrite on an unchanged resource; omitted where the plan does not read its labels. */
+  labelRefresh?(desired: Desired, existing: NoInfer<Existing>): UnchangedAnnotation;
   isConfigUnchanged(desired: Desired, existing: Existing): boolean | Promise<boolean>;
   /** Returns a replace item when the match cannot be updated in place. */
   replace?(desired: Desired, existing: Existing): Replace | undefined;
@@ -111,10 +115,9 @@ export async function diffKeyed<
     }
     const configUnchanged = owned && (await diff.isConfigUnchanged(desired, existing));
     if (configUnchanged && diff.versionMatches(desired, existing)) {
-      const labelRefresh = diff.labelRefresh?.(desired, existing);
       changeSet.unchanged.push({
         ...diff.unchanged(desired, existing),
-        ...(labelRefresh && { labelRefresh }),
+        ...diff.labelRefresh?.(desired, existing),
       });
     } else {
       changeSet.updates.push({

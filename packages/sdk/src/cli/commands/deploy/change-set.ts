@@ -1,5 +1,5 @@
 import { styles, symbols } from "#/cli/shared/logger";
-import type { MetadataLabelWrite } from "./label";
+import type { UnchangedAnnotation } from "./label";
 
 export interface HasName {
   name: string;
@@ -17,12 +17,6 @@ export interface HasName {
  * different SDK version.
  */
 export type UpdateAnnotation = { forcedBySdkVersion?: true };
-
-/**
- * Marks an unchanged resource whose SDK labels differ from the ones deploy
- * writes, so only its labels are rewritten.
- */
-export type UnchangedAnnotation = { labelRefresh?: MetadataLabelWrite };
 
 const FORCED_BY_SDK_VERSION = "forced by SDK version";
 
@@ -59,7 +53,10 @@ export interface PlanSummary {
   replace: number;
   /** Updates, also counted in `update`, that are forced by the SDK version. */
   forcedBySdkVersion: number;
-  /** Resources left as they are whose labels are rewritten; not counted in `update`. */
+  /**
+   * Resources left as they are whose labels are rewritten, apart from TailorDB tables and
+   * resolvers; not counted in `update`.
+   */
   labelRefreshes: number;
 }
 

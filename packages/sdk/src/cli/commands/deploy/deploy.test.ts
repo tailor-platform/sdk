@@ -221,7 +221,7 @@ describe("summarizePlanResults", () => {
     });
   });
 
-  test("counts unchanged resources whose labels are refreshed, of every kind", () => {
+  test("counts unchanged resources whose labels are refreshed across kinds", () => {
     const results = emptyPlanResults();
     const labelRefresh = { trn: "trn:a", labels: {} };
     results.functionRegistry.changeSet.unchanged.push({ name: "resolver--ns--add", labelRefresh });

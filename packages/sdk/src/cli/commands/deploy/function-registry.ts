@@ -6,7 +6,7 @@ import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import {
   buildMetaRequest,
-  labelsMatch,
+  labelRefreshOf,
   type MetadataLabelWrite,
   resourceTrn,
   type WithLabel,
@@ -354,7 +354,7 @@ export async function planFunctionRegistry(
       if (configUnchanged) {
         changeSet.unchanged.push({
           name: entry.name,
-          ...(!labelsMatch(existing.allLabels, metaRequest) && { labelRefresh: metaRequest }),
+          ...labelRefreshOf(existing.allLabels, metaRequest),
         });
       } else {
         changeSet.updates.push({

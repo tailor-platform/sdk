@@ -10,7 +10,7 @@ import { logger } from "#/cli/shared/logger";
 import { createChangeSet } from "./change-set";
 import {
   buildMetaRequest,
-  labelsMatch,
+  labelRefreshOf,
   type MetadataLabelWrite,
   resourceTrn,
   type WithLabel,
@@ -194,7 +194,7 @@ export async function planAuthConnections(
       } else {
         changeSet.unchanged.push({
           name,
-          ...(!labelsMatch(existing.allLabels, metaRequest) && { labelRefresh: metaRequest }),
+          ...labelRefreshOf(existing.allLabels, metaRequest),
         });
       }
       delete existingConnections[name];
@@ -294,8 +294,8 @@ export async function applyAuthConnections(
       });
     }
 
-    // Metadata-only updates: backfill the SDK ownership label on connections
-    // whose configuration is otherwise unchanged.
+    // Metadata-only writes: backfill the SDK ownership label on connections
+    // whose configuration is otherwise unchanged, and refresh owned ones' labels.
     await Promise.all([
       ...labelUpdates.map(async (update) => {
         await writeMetadataLabels(client, update.metaRequest);

@@ -14,6 +14,7 @@ paths:
   - "packages/sdk/src/cli/commands/deploy/managed-resources.ts"
   - "packages/sdk/src/cli/commands/deploy/managed-resources.test.ts"
   - "packages/sdk/src/cli/commands/deploy/resources-in-use.ts"
+  - "packages/sdk/src/cli/commands/deploy/label-refresh.test.ts"
 ---
 
 # Adding a Deploy-Managed Resource Type
@@ -54,6 +55,10 @@ consumer below; the guard named with it fails while one is missing.
   whose workspace ID is not a UUID into each list with checks and expects a violation.
 - `resources-in-use.ts`'s `CHECKED_RESOURCES` — add a type that other resources reference, so
   deleting it while referenced fails.
+- `label-refresh.test.ts`'s `CASES` — when the type's planner reads its SDK labels, attach a
+  refresh to its unchanged items (`labeledResourceChecks` or `labelRefreshOf`) and write it in its
+  create-update apply with `writeLabelRefreshes`; add its case, or the reason it has none (guard:
+  `satisfies Record`).
 
 ## Per plan kind
 

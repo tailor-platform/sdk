@@ -1,10 +1,11 @@
 import { logger } from "#/cli/shared/logger";
 import { deploymentPlanResults, type PlannedDeployment, type PlanResults } from "./apply-phases";
-import { createChangeSet, type HasName, type UnchangedAnnotation } from "./change-set";
+import { createChangeSet, type HasName } from "./change-set";
 import { assertNoDuplicateResourceNames, type ResourceNameCheck } from "./duplicate-resource-names";
 import { MANAGED_RESOURCE_LABELS, type ManagedResourceType } from "./managed-resource-type";
 import type { ImportantResourceDeletion, OwnerConflict, UnmanagedResource } from "./confirm";
 import type { BuiltDeploymentTarget } from "./deployment-target";
+import type { UnchangedAnnotation } from "./label";
 import type { OwnershipResult } from "./owned-resource";
 
 /**
@@ -84,7 +85,7 @@ type ManagedResourceChangeSet<Item = ManagedResourceItem> = {
   lines: () => string[];
 };
 
-/** Items that carry their requests; `unchanged` ones carry no request. */
+/** Items that carry their requests; `unchanged` ones need not carry one. */
 type PlannedItem<C extends ManagedResourceChangeSet<HasName>> =
   | C["creates"][number]
   | C["updates"][number]

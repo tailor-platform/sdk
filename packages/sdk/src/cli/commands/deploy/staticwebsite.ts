@@ -21,7 +21,7 @@ import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   buildMetaRequest,
   isOwnedByApp,
-  labelsMatch,
+  labelRefreshOf,
   type MetadataLabelWrite,
   resourceTrn,
   writeLabelRefreshes,
@@ -498,7 +498,7 @@ export async function planStaticWebsite(context: PlanContext) {
       if (owned) {
         customDomainChangeSet.unchanged.push({
           name: domain,
-          ...(!labelsMatch(existing.allLabels, metaRequest) && { labelRefresh: metaRequest }),
+          ...labelRefreshOf(existing.allLabels, metaRequest),
         });
       } else {
         customDomainChangeSet.updates.push({

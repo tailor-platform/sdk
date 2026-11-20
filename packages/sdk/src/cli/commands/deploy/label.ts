@@ -128,19 +128,29 @@ export function hasMatchingSdkVersion(
 }
 
 /**
- * Check whether a resource already carries the labels a write would leave on it.
- * Dependency records are left out: they are reconciled against the labels read at write time.
+ * Marks an unchanged resource whose SDK labels differ from the ones deploy writes. The
+ * application, IdP service, and workflow applies write every unchanged item's labels anyway, so
+ * for them it is only counted.
+ */
+export type UnchangedAnnotation = { labelRefresh?: MetadataLabelWrite };
+
+/**
+ * Plan a label refresh for an unchanged resource whose labels differ from the ones a write sets
+ * and removes. Dependency records are left out: they are reconciled against the labels read at
+ * write time.
  * @param existingLabels - Labels currently stored on the remote resource
  * @param write - Labels the current apply run would set and remove
- * @returns True when writing them would change nothing
+ * @returns The write as `labelRefresh` when it would change a label, otherwise no annotation
  */
-export function labelsMatch(
+export function labelRefreshOf(
   existingLabels: Record<string, string> | undefined,
   write: MetadataLabelWrite,
-): boolean {
+): UnchangedAnnotation {
   const { trn, labels, remove } = write;
   const current = existingLabels ?? {};
-  return areSameLabels(current, applyMetadataLabelWrite(current, { trn, labels, remove }));
+  return areSameLabels(current, applyMetadataLabelWrite(current, { trn, labels, remove }))
+    ? {}
+    : { labelRefresh: write };
 }
 
 /**
@@ -674,7 +684,7 @@ export async function writeMetadataLabels(
  */
 export function writeLabelRefreshes(
   client: MetadataLabelClient,
-  unchanged: ReadonlyArray<{ labelRefresh?: MetadataLabelWrite }>,
+  unchanged: ReadonlyArray<UnchangedAnnotation>,
 ): Promise<void>[] {
   return unchanged.flatMap(({ labelRefresh }) =>
     labelRefresh ? [writeMetadataLabels(client, labelRefresh)] : [],

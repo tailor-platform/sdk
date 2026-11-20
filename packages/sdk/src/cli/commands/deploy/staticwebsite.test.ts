@@ -1,10 +1,10 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
   CustomDomainStatus,
   CustomDomainTransferStatus,
 } from "@tailor-platform/tailor-proto/staticwebsite_resource_pb";
 import { describe, expect, test, vi } from "vitest";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { createChangeSet } from "./change-set";
 import {
   applyStaticWebsite,
@@ -80,7 +80,7 @@ function createMockApplication(
   } as unknown as Application;
 }
 
-function createMockClient(websites: MockWebsite[], transfers: MockTransfer[] = []): OperatorClient {
+function createMockClient(websites: MockWebsite[], transfers: MockTransfer[] = []) {
   const asTransfer = (t: MockTransfer) => ({
     domain: t.domain,
     status: t.status,
@@ -90,8 +90,8 @@ function createMockClient(websites: MockWebsite[], transfers: MockTransfer[] = [
     targetStaticWebsiteName: "",
     requestPurgedAt: t.requestPurgedAt === false ? undefined : {},
   });
-  return {
-    listStaticWebsites: vi.fn().mockResolvedValue({
+  return mockOperatorClient({
+    listStaticWebsites: {
       staticwebsites: websites.map((website) => ({
         name: website.name,
         description: website.description ?? "",
@@ -99,8 +99,8 @@ function createMockClient(websites: MockWebsite[], transfers: MockTransfer[] = [
         url: "",
       })),
       nextPageToken: "",
-    }),
-    getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
+    },
+    getMetadata: ({ trn = "" }) => {
       // Static website metadata
       const websiteMatch = trn.match(/:staticwebsite:([^:]+)$/);
       if (websiteMatch) {
@@ -131,40 +131,34 @@ function createMockClient(websites: MockWebsite[], transfers: MockTransfer[] = [
         };
       }
       return { metadata: { labels: {} } };
+    },
+    listCustomDomains: ({ staticWebsiteName }) => {
+      const website = websites.find((w) => w.name === staticWebsiteName);
+      return {
+        customDomains: (website?.customDomains ?? []).map((d) => ({
+          domain: d.domain,
+          status: d.status ?? CustomDomainStatus.ACTIVE,
+        })),
+      };
+    },
+    setMetadata: {},
+    listCustomDomainTransfers: ({ status }) => ({
+      transfers: transfers.filter((t) => t.status === status).map(asTransfer),
+      nextPageToken: "",
+      totalCount: 0n,
     }),
-    listCustomDomains: vi
-      .fn()
-      .mockImplementation(({ staticWebsiteName }: { staticWebsiteName: string }) => {
-        const website = websites.find((w) => w.name === staticWebsiteName);
-        return {
-          customDomains: (website?.customDomains ?? []).map((d) => ({
-            domain: d.domain,
-            status: d.status ?? CustomDomainStatus.ACTIVE,
-          })),
-        };
-      }),
-    setMetadata: vi.fn().mockResolvedValue({}),
-    listCustomDomainTransfers: vi
-      .fn()
-      .mockImplementation(({ status }: { status: CustomDomainTransferStatus }) => {
-        return {
-          transfers: transfers.filter((t) => t.status === status).map(asTransfer),
-          nextPageToken: "",
-          totalCount: 0n,
-        };
-      }),
-    getCustomDomainTransfer: vi.fn().mockImplementation(({ domain }: { domain: string }) => {
+    getCustomDomainTransfer: ({ domain }) => {
       const found = transfers.find((t) => t.domain === domain);
       if (!found) {
         throw new ConnectError("not found", Code.NotFound);
       }
       return { transfer: asTransfer(found) };
-    }),
-    requestCustomDomainTransfer: vi.fn().mockResolvedValue({}),
-    cancelCustomDomainTransfer: vi.fn().mockResolvedValue({}),
-    addCustomDomain: vi.fn().mockResolvedValue({}),
-    removeCustomDomain: vi.fn().mockResolvedValue({}),
-  } as unknown as OperatorClient;
+    },
+    requestCustomDomainTransfer: {},
+    cancelCustomDomainTransfer: {},
+    addCustomDomain: {},
+    removeCustomDomain: {},
+  });
 }
 
 function createContext(
@@ -817,13 +811,12 @@ describe("planStaticWebsite custom domain transfers", () => {
 });
 
 describe("applyStaticWebsite custom domains", () => {
-  function createRecordingClient(calls: string[]): OperatorClient {
-    const record = (name: string) =>
-      vi.fn().mockImplementation(async () => {
-        calls.push(name);
-        return {};
-      });
-    return {
+  function createRecordingClient(calls: string[]) {
+    const record = (name: string) => async () => {
+      calls.push(name);
+      return {};
+    };
+    return mockOperatorClient({
       createStaticWebsite: record("createStaticWebsite"),
       updateStaticWebsite: record("updateStaticWebsite"),
       deleteStaticWebsite: record("deleteStaticWebsite"),
@@ -831,9 +824,9 @@ describe("applyStaticWebsite custom domains", () => {
       removeCustomDomain: record("removeCustomDomain"),
       requestCustomDomainTransfer: record("requestCustomDomainTransfer"),
       cancelCustomDomainTransfer: record("cancelCustomDomainTransfer"),
-      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
-      setMetadata: vi.fn().mockResolvedValue({}),
-    } as unknown as OperatorClient;
+      getMetadata: { metadata: { labels: {} } },
+      setMetadata: {},
+    });
   }
 
   function planWith(overrides: Record<string, unknown>) {

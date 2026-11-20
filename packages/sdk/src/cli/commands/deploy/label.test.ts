@@ -18,7 +18,7 @@ import {
   hasMatchingSdkVersion,
   isOwnedByApp,
   labelCountViolation,
-  labelsMatch,
+  labelRefreshOf,
   resolverTrn,
   resourceTrn,
   tailorDBTypeTrn,
@@ -79,29 +79,31 @@ describe("hasMatchingSdkVersion", () => {
   });
 });
 
-describe("labelsMatch", () => {
+describe("labelRefreshOf", () => {
   const stored = { "sdk-name": "my-app", "sdk-version": "v1-0-0", owner: "team-a" };
 
-  test("matches when every label to set is stored and no label to remove is", () => {
+  test("plans no refresh when every label to set is stored and no label to remove is", () => {
     expect(
-      labelsMatch(stored, {
+      labelRefreshOf(stored, {
         trn: "trn:a",
         labels: { "sdk-name": "my-app", "sdk-version": "v1-0-0" },
         remove: ["sdk-app-id"],
       }),
-    ).toBe(true);
+    ).toEqual({});
   });
 
   test.each<{ case: string; labels: Record<string, string>; remove: string[] }>([
     { case: "a label to set has another value", labels: { "sdk-name": "renamed" }, remove: [] },
     { case: "a label to set is missing", labels: { "sdk-app-id": "app-id-1" }, remove: [] },
     { case: "a label to remove is stored", labels: {}, remove: ["owner"] },
-  ])("does not match when $case", ({ labels, remove }) => {
-    expect(labelsMatch(stored, { trn: "trn:a", labels, remove })).toBe(false);
+  ])("plans the write as the refresh when $case", ({ labels, remove }) => {
+    const write = { trn: "trn:a", labels, remove };
+    expect(labelRefreshOf(stored, write)).toEqual({ labelRefresh: write });
   });
 
-  test("does not match a resource without labels", () => {
-    expect(labelsMatch(undefined, { trn: "trn:a", labels: { "sdk-name": "my-app" } })).toBe(false);
+  test("plans a refresh for a resource without labels", () => {
+    const write = { trn: "trn:a", labels: { "sdk-name": "my-app" } };
+    expect(labelRefreshOf(undefined, write)).toEqual({ labelRefresh: write });
   });
 });
 

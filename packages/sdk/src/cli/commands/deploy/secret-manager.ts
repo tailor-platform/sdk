@@ -8,7 +8,7 @@ import { idpClientVaultName } from "./idp";
 import {
   buildMetaRequest,
   hasMatchingSdkVersion,
-  labelsMatch,
+  labelRefreshOf,
   resourceTrn,
   writeLabelRefreshes,
   writeMetadataLabels,
@@ -223,7 +223,7 @@ export async function planSecretManager(context: PlanContext) {
         if (owned && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
           vaultChangeSet.unchanged.push({
             name: vaultName,
-            ...(!labelsMatch(existing.allLabels, metaRequest) && { labelRefresh: metaRequest }),
+            ...labelRefreshOf(existing.allLabels, metaRequest),
           });
         } else {
           vaultChangeSet.updates.push({

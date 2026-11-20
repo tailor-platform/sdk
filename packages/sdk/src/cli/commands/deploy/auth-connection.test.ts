@@ -1,9 +1,8 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { AuthConnection_Status } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import type { AuthService } from "#/cli/services/auth/service";
-import type { OperatorClient } from "#/cli/shared/client";
 import type { AuthConnectionConfig } from "#/types/auth-connection.generated";
 import type { SecretsStateScope } from "./secrets-state";
 
@@ -111,14 +110,14 @@ function oauth2Connection(name: string) {
   };
 }
 
-function createMockClient(opts: { connections: ConnectionFixture[] }): OperatorClient {
-  return {
-    listAuthConnections: vi.fn().mockResolvedValue({
+function createMockClient(opts: { connections: ConnectionFixture[] }) {
+  return mockOperatorClient({
+    listAuthConnections: {
       connections: opts.connections.map((c) => oauth2Connection(c.name)),
       nextPageToken: "",
-    }),
-    getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
-      const name = trn.split(":").pop();
+    },
+    getMetadata: ({ trn }) => {
+      const name = trn?.split(":").pop();
       const fixture = opts.connections.find((c) => c.name === name);
       return {
         metadata: {
@@ -130,14 +129,12 @@ function createMockClient(opts: { connections: ConnectionFixture[] }): OperatorC
           },
         },
       };
-    }),
-    setMetadata: vi.fn().mockResolvedValue({}),
-    createAuthConnection: vi.fn().mockResolvedValue({}),
-    updateAuthConnection: vi
-      .fn()
-      .mockResolvedValue({ connection: { status: AuthConnection_Status.AUTHORIZED } }),
-    deleteAuthConnection: vi.fn().mockResolvedValue({}),
-  } as unknown as OperatorClient;
+    },
+    setMetadata: {},
+    createAuthConnection: {},
+    updateAuthConnection: { connection: { status: AuthConnection_Status.AUTHORIZED } },
+    deleteAuthConnection: {},
+  });
 }
 
 /** Auth service with no desired connections, so every existing one is a deletion candidate. */
@@ -405,8 +402,7 @@ describe("applyAuthConnections", () => {
 
     await applyAuthConnections(client, result, "create-update");
 
-    const updateFn = (client as OperatorClient & { updateAuthConnection: ReturnType<typeof vi.fn> })
-      .updateAuthConnection;
+    const updateFn = client.updateAuthConnection;
     expect(updateFn).toHaveBeenCalledWith(
       expect.objectContaining({
         updateMask: { paths: ["oauth2.client_secret"] },
@@ -447,9 +443,7 @@ describe("applyAuthConnections", () => {
       connections: [{ name: "conn", ownerLabel: appName }],
     });
     // Override to return UNAUTHORIZED
-    (
-      client as OperatorClient & { updateAuthConnection: ReturnType<typeof vi.fn> }
-    ).updateAuthConnection.mockResolvedValueOnce({
+    client.updateAuthConnection.mockResolvedValueOnce({
       connection: { status: AuthConnection_Status.UNAUTHORIZED },
     });
 

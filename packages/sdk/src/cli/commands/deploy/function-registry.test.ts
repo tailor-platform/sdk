@@ -495,35 +495,6 @@ describe("applyFunctionRegistry phase separation", () => {
     expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
   });
 
-  test("create-update phase writes only labels for a label refresh without uploading", async () => {
-    const client = createMockClientWithSpies();
-    const planResult = {
-      ...createMockPlanResult(),
-      changeSet: {
-        ...createMockPlanResult().changeSet,
-        creates: [],
-        updates: [],
-        unchanged: [
-          {
-            name: "resolver/ns/refresh-test",
-            labelRefresh: { trn: "trn:refresh", labels: { "sdk-version": "v2-0-0" } },
-          },
-        ],
-      },
-    } as unknown as Awaited<ReturnType<typeof planFunctionRegistry>>;
-
-    await applyFunctionRegistry(client, planResult, "create-update");
-
-    expect(client.createFunctionRegistry).not.toHaveBeenCalled();
-    expect(client.updateFunctionRegistry).not.toHaveBeenCalled();
-    expect(client.setMetadata).toHaveBeenCalledWith(
-      expect.objectContaining({
-        trn: "trn:refresh",
-        labels: expect.objectContaining({ "sdk-version": "v2-0-0" }),
-      }),
-    );
-  });
-
   test("delete phase does not write labels for a label refresh", async () => {
     const client = createMockClientWithSpies();
     const planResult = {
