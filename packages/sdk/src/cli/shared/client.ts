@@ -1518,6 +1518,14 @@ export async function resolveStaticWebsiteUrls(
 /** Application `env` as declared by `defineConfig({ env })`. */
 export type ApplicationEnv = Readonly<Record<string, string | number | boolean>>;
 
+export type ResolveEnvStaticWebsiteUrlsOptions = Omit<
+  ResolveStaticWebsiteUrlsOptions,
+  "keepUnresolved" | "failOnUnexpectedError"
+> & {
+  /** The service whose env this is, as messages name it, e.g. `resolver "shop-api"`. */
+  service?: string;
+};
+
 /**
  * Resolve `name:url` patterns held by an application's `env` values.
  *
@@ -1544,17 +1552,18 @@ export async function resolveStaticWebsiteUrlsInEnv(
   client: OperatorClient,
   workspaceId: string,
   env: ApplicationEnv | undefined,
-  options: Omit<ResolveStaticWebsiteUrlsOptions, "keepUnresolved" | "failOnUnexpectedError"> = {},
+  options: ResolveEnvStaticWebsiteUrlsOptions = {},
 ): Promise<ApplicationEnv> {
   if (!env || !Object.values(env).some(hasStaticWebsiteUrlPlaceholder)) {
     return env ?? {};
   }
 
+  const { service, ...resolveOptions } = options;
   // Shared across every key below, so two keys referencing the same site
   // (e.g. `siteUrl` and `callbackUrl`) issue one getStaticWebsite call, not
   // one per key.
-  const siteLookupCache: NonNullable<ResolveStaticWebsiteUrlsOptions["siteLookupCache"]> =
-    new Map();
+  const siteLookupCache = options.siteLookupCache ?? new Map();
+  const envLabel = (key: string) => `env "${key}"${service === undefined ? "" : ` of ${service}`}`;
 
   const entries = await Promise.all(
     Object.entries(env).map(async ([key, value]) => {
@@ -1565,15 +1574,20 @@ export async function resolveStaticWebsiteUrlsInEnv(
         client,
         workspaceId,
         [value],
-        `env "${key}"`,
-        { ...options, keepUnresolved: true, failOnUnexpectedError: true, siteLookupCache },
+        envLabel(key),
+        {
+          ...resolveOptions,
+          keepUnresolved: true,
+          failOnUnexpectedError: true,
+          siteLookupCache,
+        },
       );
       return [key, resolved ?? value] as const;
     }),
   );
 
   const resolved: ApplicationEnv = Object.fromEntries<string | number | boolean>(entries);
-  warnUnresolvedEnvPlaceholders(resolved, options.expectedLocalNames);
+  warnUnresolvedEnvPlaceholders(resolved, envLabel, options.expectedLocalNames);
   return resolved;
 }
 
@@ -1582,10 +1596,12 @@ export async function resolveStaticWebsiteUrlsInEnv(
  * resolution, so a gap surfaces at deploy time instead of as a malformed URL
  * inside a running function.
  * @param env - Env record after resolution
+ * @param envLabel - Names an env key in a message
  * @param expectedLocalNames - Static websites this deploy run creates later
  */
 function warnUnresolvedEnvPlaceholders(
   env: ApplicationEnv,
+  envLabel: (key: string) => string,
   expectedLocalNames: ReadonlySet<string> | undefined,
 ): void {
   for (const [key, value] of Object.entries(env)) {
@@ -1593,13 +1609,13 @@ function warnUnresolvedEnvPlaceholders(
     const siteName = value.slice(0, value.search(STATIC_WEBSITE_URL_PATTERN));
     if (expectedLocalNames?.has(siteName)) {
       logger.warn(
-        `env "${key}" keeps the unresolved value "${value}" for now because static website "${siteName}" ` +
+        `${envLabel(key)} keeps the unresolved value "${value}" for now because static website "${siteName}" ` +
           `isn't available yet; this deploy rebuilds automatically once it is, to inject the real URL.`,
       );
       continue;
     }
     logger.warn(
-      `env "${key}" keeps the unresolved value "${value}". ` +
+      `${envLabel(key)} keeps the unresolved value "${value}". ` +
         `The literal pattern is passed to your code at runtime.`,
     );
   }

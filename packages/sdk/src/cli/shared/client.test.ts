@@ -2117,6 +2117,35 @@ describe("resolveStaticWebsiteUrlsInEnv", () => {
     });
   });
 
+  test("looks a site up once across records that share a lookup cache", async () => {
+    const client = makeClient(async () => ({ staticwebsite: { url: "https://site.example.com" } }));
+    const siteLookupCache = new Map();
+
+    await resolveStaticWebsiteUrlsInEnv(client, "ws-1", { A: "my-site:url" }, { siteLookupCache });
+    await resolveStaticWebsiteUrlsInEnv(client, "ws-1", { B: "my-site:url" }, { siteLookupCache });
+
+    expect(client.getStaticWebsite).toHaveBeenCalledOnce();
+  });
+
+  test("names the service whose env keeps a placeholder", async () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const client = makeClient(async () => {
+      throw new ConnectError("not found", Code.NotFound);
+    });
+
+    await resolveStaticWebsiteUrlsInEnv(
+      client,
+      "ws-1",
+      { SITE_URL: "unknown:url" },
+      { service: 'resolver "shop-api"' },
+    );
+
+    expect(warnSpy.mock.calls.map(([message]) => message)).toEqual([
+      'Static website "unknown" not found for env "SITE_URL" of resolver "shop-api" configuration. Leaving the env "SITE_URL" of resolver "shop-api" value unresolved.',
+      'env "SITE_URL" of resolver "shop-api" keeps the unresolved value "unknown:url". The literal pattern is passed to your code at runtime.',
+    ]);
+  });
+
   test("returns the record as-is without a lookup when no value is a placeholder", async () => {
     const client = mockOperatorClient({ getStaticWebsite: {} });
     const env = { API_URL: "https://literal.example.com", RETRIES: 3 };
