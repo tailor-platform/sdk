@@ -1,7 +1,7 @@
 import { isPluginGeneratedTable } from "#/parser/service/tailordb/type-source";
 import ml from "#/utils/multiline";
 import { SEED_SCHEMA_MODULE } from "./schema-module";
-import { generateSeedRowType, type SeedRowFieldConfig } from "./seed-row-type";
+import { generateSeedRowType } from "./seed-row-type";
 import type {
   ParsedField,
   PluginGeneratedTableSource,
@@ -67,10 +67,7 @@ function processLinesDbForPluginTable(
     pluginSource: source,
     rowType: generateSeedRowType({
       fields: Object.fromEntries(
-        Object.entries(type.fields).map(([name, field]) => [
-          name,
-          field.config as SeedRowFieldConfig,
-        ]),
+        Object.entries(type.fields).map(([name, field]) => [name, field.config]),
       ),
       optionalFields,
       omitFields,

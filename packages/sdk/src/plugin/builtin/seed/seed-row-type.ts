@@ -1,5 +1,5 @@
 /** The part of a parsed field config the seed row type is built from. */
-export interface SeedRowFieldConfig {
+interface SeedRowFieldConfig {
   type: string;
   required?: boolean;
   array?: boolean;
@@ -52,6 +52,10 @@ function valueType(field: SeedRowFieldConfig, nullable: boolean): string {
   return nullable ? `${element} | null` : element;
 }
 
+function propertyKey(name: string): string {
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? name : JSON.stringify(name);
+}
+
 function members(
   fields: Readonly<Record<string, SeedRowFieldConfig>>,
   optionalFields: readonly string[],
@@ -61,7 +65,7 @@ function members(
     .filter(([name]) => !omitFields.includes(name))
     .map(([name, field]) => {
       const optional = field.required !== true || optionalFields.includes(name);
-      return `${name}${optional ? "?" : ""}: ${valueType(field, optional)};`;
+      return `${propertyKey(name)}${optional ? "?" : ""}: ${valueType(field, optional)};`;
     });
 }
 

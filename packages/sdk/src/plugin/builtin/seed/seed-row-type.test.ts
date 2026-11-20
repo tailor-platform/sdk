@@ -129,6 +129,26 @@ describe("generateSeedRowType", () => {
     expect(rowType).toContain("meta: { x: string; y?: number | null };");
   });
 
+  test("quotes a field name that is not an identifier", () => {
+    const rowType = generateSeedRowType({
+      fields: {
+        "my-field": { type: "string", required: true },
+        "1st": { type: "integer", required: true },
+        meta: {
+          type: "nested",
+          required: true,
+          fields: { "x-y": { type: "string", required: true }, plain: { type: "string" } },
+        },
+      },
+      optionalFields: [],
+      omitFields: [],
+    });
+
+    expect(rowType).toContain('"my-field": string;');
+    expect(rowType).toContain('"1st": number;');
+    expect(rowType).toContain('meta: { "x-y": string; plain?: string | null };');
+  });
+
   test("writes the row type seed-row-type.test-d.ts holds against the type of a table in TypeScript source", () => {
     const rowType = generateSeedRowType({
       fields: {
