@@ -167,7 +167,7 @@ describe("plugin-generated resolvers", () => {
     };
     const application = defineApplication({ config, pluginManager });
     const generation = createGenerationManager({
-      workspaceServices: application,
+      configServices: application,
       config,
       pluginManager,
     });
@@ -196,7 +196,7 @@ describe("plugin-generated resolvers", () => {
     const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const application = defineApplication({ config, pluginManager });
     const generation = createGenerationManager({
-      workspaceServices: application,
+      configServices: application,
       config,
       pluginManager,
     });
@@ -726,7 +726,7 @@ describe("plugin-generated resolvers", () => {
     });
     const application = defineApplication({ config, pluginManager });
     await expect(
-      createGenerationManager({ workspaceServices: application, config, pluginManager }).generate(),
+      createGenerationManager({ configServices: application, config, pluginManager }).generate(),
     ).rejects.toMatchObject({ code: "PLUGIN_RESOLVER_NAMESPACE_EXTERNAL" });
   });
 });
