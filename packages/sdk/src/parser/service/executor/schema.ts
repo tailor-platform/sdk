@@ -1,7 +1,7 @@
 import { print, type DocumentNode } from "@0no-co/graphql.web";
 import { z } from "zod";
 import { AuthInvokerSchema } from "../auth";
-import { functionSchema } from "../common";
+import { functionSchema, omitNullishValues } from "../common";
 import type { JsonValue } from "#/types/helpers";
 
 export const TailorDBTriggerSchema = z.strictObject({
@@ -159,8 +159,9 @@ export const WebhookOperationSchema = z.strictObject({
   headers: z
     .record(
       z.string(),
-      z.union([z.string(), z.strictObject({ vault: z.string(), key: z.string() })]),
+      z.union([z.string(), z.strictObject({ vault: z.string(), key: z.string() })]).optional(),
     )
+    .transform((headers) => omitNullishValues(headers))
     .optional()
     .describe("HTTP headers for the webhook request"),
 });

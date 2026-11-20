@@ -5,7 +5,7 @@
 import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 import type { Namespace, Script } from "./resource_pb";
-import type { Value } from "@bufbuild/protobuf/wkt";
+import type { Duration, Timestamp, Value } from "@bufbuild/protobuf/wkt";
 
 /**
  * Describes the file tailor/v1/tailordb_resource.proto.
@@ -1127,4 +1127,344 @@ export enum TailorDBGQLPermission_Permit {
  * Describes the enum tailor.v1.TailorDBGQLPermission.Permit.
  */
 export declare const TailorDBGQLPermission_PermitSchema: GenEnum<TailorDBGQLPermission_Permit>;
+
+/**
+ * TailorDBReplicationDestination is an external data warehouse that
+ * TailorDBReplications write into. Creating the first destination in a
+ * workspace issues the workspace's replication service account, which the
+ * customer grants access to the destination.
+ *
+ * @generated from message tailor.v1.TailorDBReplicationDestination
+ */
+export declare type TailorDBReplicationDestination = Message<"tailor.v1.TailorDBReplicationDestination"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * @generated from oneof tailor.v1.TailorDBReplicationDestination.kind
+   */
+  kind: {
+    /**
+     * @generated from field: tailor.v1.TailorDBReplicationDestination.BigQuery bigquery = 2;
+     */
+    value: TailorDBReplicationDestination_BigQuery;
+    case: "bigquery";
+  } | { case: undefined; value?: undefined };
+
+  /**
+   * @generated from field: tailor.v1.TailorDBReplicationDestination.Status status = 10;
+   */
+  status?: TailorDBReplicationDestination_Status;
+};
+
+/**
+ * Describes the message tailor.v1.TailorDBReplicationDestination.
+ * Use `create(TailorDBReplicationDestinationSchema)` to create a new message.
+ */
+export declare const TailorDBReplicationDestinationSchema: GenMessage<TailorDBReplicationDestination>;
+
+/**
+ * BigQuery is a customer-owned BigQuery dataset.
+ *
+ * @generated from message tailor.v1.TailorDBReplicationDestination.BigQuery
+ */
+export declare type TailorDBReplicationDestination_BigQuery = Message<"tailor.v1.TailorDBReplicationDestination.BigQuery"> & {
+  /**
+   * Google Cloud project ID hosting the dataset. Immutable.
+   *
+   * @generated from field: string project = 1;
+   */
+  project: string;
+
+  /**
+   * BigQuery dataset ID within the project. Immutable.
+   *
+   * @generated from field: string dataset = 2;
+   */
+  dataset: string;
+
+  /**
+   * Service account to grant `roles/bigquery.dataEditor` on the dataset and
+   * `roles/bigquery.jobUser` on the project. Every destination in the
+   * workspace shares it.
+   *
+   * @generated from field: string service_account_email = 3;
+   */
+  serviceAccountEmail: string;
+};
+
+/**
+ * Describes the message tailor.v1.TailorDBReplicationDestination.BigQuery.
+ * Use `create(TailorDBReplicationDestination_BigQuerySchema)` to create a new message.
+ */
+export declare const TailorDBReplicationDestination_BigQuerySchema: GenMessage<TailorDBReplicationDestination_BigQuery>;
+
+/**
+ * @generated from message tailor.v1.TailorDBReplicationDestination.Status
+ */
+export declare type TailorDBReplicationDestination_Status = Message<"tailor.v1.TailorDBReplicationDestination.Status"> & {
+  /**
+   * @generated from field: tailor.v1.TailorDBReplicationDestination.State state = 1;
+   */
+  state: TailorDBReplicationDestination_State;
+
+  /**
+   * Why the destination is in its state, e.g. which grant is missing.
+   *
+   * @generated from field: string message = 2;
+   */
+  message: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp last_verified_at = 3;
+   */
+  lastVerifiedAt?: Timestamp;
+};
+
+/**
+ * Describes the message tailor.v1.TailorDBReplicationDestination.Status.
+ * Use `create(TailorDBReplicationDestination_StatusSchema)` to create a new message.
+ */
+export declare const TailorDBReplicationDestination_StatusSchema: GenMessage<TailorDBReplicationDestination_Status>;
+
+/**
+ * @generated from enum tailor.v1.TailorDBReplicationDestination.State
+ */
+export enum TailorDBReplicationDestination_State {
+  /**
+   * @generated from enum value: STATE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * The grant to the service account has not been verified yet.
+   *
+   * @generated from enum value: STATE_PENDING_PERMISSION = 1;
+   */
+  PENDING_PERMISSION = 1,
+
+  /**
+   * The grant has been verified.
+   *
+   * @generated from enum value: STATE_ACTIVE = 2;
+   */
+  ACTIVE = 2,
+
+  /**
+   * The grant worked before but the last check was denied, e.g. it was revoked.
+   *
+   * @generated from enum value: STATE_PERMISSION_ERROR = 3;
+   */
+  PERMISSION_ERROR = 3,
+}
+
+/**
+ * Describes the enum tailor.v1.TailorDBReplicationDestination.State.
+ */
+export declare const TailorDBReplicationDestination_StateSchema: GenEnum<TailorDBReplicationDestination_State>;
+
+/**
+ * TailorDBReplication replicates types of a TailorDB namespace into a
+ * TailorDBReplicationDestination.
+ *
+ * @generated from message tailor.v1.TailorDBReplication
+ */
+export declare type TailorDBReplication = Message<"tailor.v1.TailorDBReplication"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * @generated from field: tailor.v1.TailorDBReplication.Source source = 2;
+   */
+  source?: TailorDBReplication_Source;
+
+  /**
+   * Name of the TailorDBReplicationDestination to write into.
+   *
+   * @generated from field: string destination = 3;
+   */
+  destination: string;
+
+  /**
+   * Prefix prepended to each destination table name.
+   *
+   * @generated from field: optional string table_prefix = 4;
+   */
+  tablePrefix?: string;
+
+  /**
+   * @generated from field: bool enabled = 5;
+   */
+  enabled: boolean;
+};
+
+/**
+ * Describes the message tailor.v1.TailorDBReplication.
+ * Use `create(TailorDBReplicationSchema)` to create a new message.
+ */
+export declare const TailorDBReplicationSchema: GenMessage<TailorDBReplication>;
+
+/**
+ * @generated from message tailor.v1.TailorDBReplication.Source
+ */
+export declare type TailorDBReplication_Source = Message<"tailor.v1.TailorDBReplication.Source"> & {
+  /**
+   * TailorDB namespace to read from. Immutable.
+   *
+   * @generated from field: string namespace = 1;
+   */
+  namespace: string;
+
+  /**
+   * @generated from field: repeated tailor.v1.TailorDBReplication.SourceType types = 2;
+   */
+  types: TailorDBReplication_SourceType[];
+};
+
+/**
+ * Describes the message tailor.v1.TailorDBReplication.Source.
+ * Use `create(TailorDBReplication_SourceSchema)` to create a new message.
+ */
+export declare const TailorDBReplication_SourceSchema: GenMessage<TailorDBReplication_Source>;
+
+/**
+ * @generated from message tailor.v1.TailorDBReplication.SourceType
+ */
+export declare type TailorDBReplication_SourceType = Message<"tailor.v1.TailorDBReplication.SourceType"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * @generated from oneof tailor.v1.TailorDBReplication.SourceType.fields
+   */
+  fields: {
+    /**
+     * Every field but these (e.g. PII). Fields added later are replicated.
+     *
+     * @generated from field: tailor.v1.TailorDBReplication.FieldList exclude_fields = 2;
+     */
+    value: TailorDBReplication_FieldList;
+    case: "excludeFields";
+  } | {
+    /**
+     * Only these fields. Fields added later are not replicated.
+     *
+     * @generated from field: tailor.v1.TailorDBReplication.FieldList include_fields = 3;
+     */
+    value: TailorDBReplication_FieldList;
+    case: "includeFields";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message tailor.v1.TailorDBReplication.SourceType.
+ * Use `create(TailorDBReplication_SourceTypeSchema)` to create a new message.
+ */
+export declare const TailorDBReplication_SourceTypeSchema: GenMessage<TailorDBReplication_SourceType>;
+
+/**
+ * @generated from message tailor.v1.TailorDBReplication.FieldList
+ */
+export declare type TailorDBReplication_FieldList = Message<"tailor.v1.TailorDBReplication.FieldList"> & {
+  /**
+   * @generated from field: repeated string names = 1;
+   */
+  names: string[];
+};
+
+/**
+ * Describes the message tailor.v1.TailorDBReplication.FieldList.
+ * Use `create(TailorDBReplication_FieldListSchema)` to create a new message.
+ */
+export declare const TailorDBReplication_FieldListSchema: GenMessage<TailorDBReplication_FieldList>;
+
+/**
+ * TailorDBReplicationTableStatus is the live state of one replicated type.
+ *
+ * @generated from message tailor.v1.TailorDBReplicationTableStatus
+ */
+export declare type TailorDBReplicationTableStatus = Message<"tailor.v1.TailorDBReplicationTableStatus"> & {
+  /**
+   * @generated from field: string type = 1;
+   */
+  type: string;
+
+  /**
+   * Destination table name, table_prefix included.
+   *
+   * @generated from field: string table = 2;
+   */
+  table: string;
+
+  /**
+   * @generated from field: tailor.v1.TailorDBReplicationTableStatus.State state = 3;
+   */
+  state: TailorDBReplicationTableStatus_State;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp backfill_completed_at = 4;
+   */
+  backfillCompletedAt?: Timestamp;
+
+  /**
+   * @generated from field: google.protobuf.Duration lag = 5;
+   */
+  lag?: Duration;
+
+  /**
+   * Last error, when state is ERROR.
+   *
+   * @generated from field: string message = 6;
+   */
+  message: string;
+};
+
+/**
+ * Describes the message tailor.v1.TailorDBReplicationTableStatus.
+ * Use `create(TailorDBReplicationTableStatusSchema)` to create a new message.
+ */
+export declare const TailorDBReplicationTableStatusSchema: GenMessage<TailorDBReplicationTableStatus>;
+
+/**
+ * @generated from enum tailor.v1.TailorDBReplicationTableStatus.State
+ */
+export enum TailorDBReplicationTableStatus_State {
+  /**
+   * @generated from enum value: STATE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * Waiting for a backfill of the table.
+   *
+   * @generated from enum value: STATE_PENDING = 1;
+   */
+  PENDING = 1,
+
+  /**
+   * @generated from enum value: STATE_BACKFILLING = 2;
+   */
+  BACKFILLING = 2,
+
+  /**
+   * @generated from enum value: STATE_STREAMING = 3;
+   */
+  STREAMING = 3,
+
+  /**
+   * @generated from enum value: STATE_ERROR = 4;
+   */
+  ERROR = 4,
+}
+
+/**
+ * Describes the enum tailor.v1.TailorDBReplicationTableStatus.State.
+ */
+export declare const TailorDBReplicationTableStatus_StateSchema: GenEnum<TailorDBReplicationTableStatus_State>;
 

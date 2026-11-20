@@ -100,16 +100,16 @@ describe("deployCommand", () => {
       configPath: "flag/tailor.config.ts",
     },
     {
-      name: "uses the default config path when TAILOR_CONFIG_PATH is empty",
+      name: "leaves the config path to the default lookup when TAILOR_CONFIG_PATH is empty",
       env: { TAILOR_CONFIG_PATH: "" },
       args: [],
-      configPath: "tailor.config.ts",
+      configPath: undefined,
     },
     {
       name: "ignores TAILOR_PLATFORM_SDK_CONFIG_PATH",
       env: { TAILOR_PLATFORM_SDK_CONFIG_PATH: "old/tailor.config.ts" },
       args: [],
-      configPath: "tailor.config.ts",
+      configPath: undefined,
     },
   ])("$name", async ({ env, args, configPath }) => {
     for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);

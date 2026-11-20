@@ -18,15 +18,15 @@ import { beginUserModuleRun } from "#/cli/shared/user-modules";
 import { withSpan } from "#/cli/telemetry/index";
 import { beginWaitPointScope } from "#/utils/wait-point-registry";
 import { planAIGateway } from "./aigateway";
-import { planApplication } from "./application";
+import { applicationLabelLimitError, planApplication } from "./application";
 import {
   applyPrerequisiteResources,
   applyRemainingResources,
   deploymentPlanResults,
   preflightAllTailorDB,
   type PlannedDeployment,
+  type RemainingApplyResult,
   type ReusablePlanKind,
-  type TailorDBMaintenance,
 } from "./apply-phases";
 import { planAuth } from "./auth";
 import { collectHttpAdapterScripts, mergeBundledScripts } from "./bundled-scripts";
@@ -75,6 +75,7 @@ import {
 } from "./function-registry";
 import { planIdP } from "./idp";
 import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn, sdkNameLabelKey } from "./label";
+import { MANAGED_RESOURCE_LABELS } from "./managed-resource-type";
 import {
   assertUniqueGlobalResourceNames,
   collectImportantResourceDeletions,
@@ -421,11 +422,12 @@ export function collectExternalAuthIdpConfigNames(
     const { name } = authService.config;
     const idpConfigName = authService.config.idProvider?.name;
     if (idpConfigNames.has(name) && idpConfigNames.get(name) !== idpConfigName) {
+      const label = MANAGED_RESOURCE_LABELS["auth.service"];
       throw CLIError({
         code: "AUTH_NAMESPACE_CONFLICT",
         message:
-          `Auth namespace "${name}" is defined by multiple config files with different IdP configs. ` +
-          `Auth namespace names must be unique across all configs in a single deploy.`,
+          `${label} "${name}" is defined by multiple config files with different IdP configs. ` +
+          `${label} names must be unique across all configs in a single deploy.`,
       });
     }
     idpConfigNames.set(name, idpConfigName);
@@ -1078,7 +1080,7 @@ async function deployInternal(
     // the time env is read again below.
     await applyPrerequisiteResources(client, deployments);
 
-    let tailordbMaintenance: TailorDBMaintenance[];
+    let applied: RemainingApplyResult;
     if (needsUrlResolution) {
       logger.info(
         "A static website was just created; rebuilding so env resolves to its real URL before the rest of this deploy applies.",
@@ -1102,13 +1104,14 @@ async function deployInternal(
         deployments: rebuilt.deployments,
         confirmedDeployments: deployments,
       });
-      tailordbMaintenance = await applyRemainingResources(client, workspaceId, rebuilt.deployments);
+      applied = await applyRemainingResources(client, rebuilt.deployments);
     } else {
-      tailordbMaintenance = await applyRemainingResources(client, workspaceId, deployments);
+      applied = await applyRemainingResources(client, deployments);
     }
+    const { maintenance: tailordbMaintenance, labelRejections } = applied;
 
     const applications =
-      logger.jsonMode && !internalContext?.suppressResultOutput
+      logger.jsonMode && !internalContext?.suppressResultOutput && labelRejections.length === 0
         ? await loadDeployedApplications({ client, workspaceId, targets }).catch(
             (error: unknown) => {
               if (pendingDeployedHooks.length)
@@ -1139,6 +1142,7 @@ async function deployInternal(
           applications,
           profile: options?.profile,
         });
+    if (labelRejections.length > 0) throw applicationLabelLimitError(labelRejections);
 
     if (!internalContext?.suppressResultOutput) {
       if (logger.jsonMode) {

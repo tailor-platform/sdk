@@ -21,6 +21,10 @@ function setField(record: Record<string, unknown>, key: string, value: unknown):
  * - Uses existing id from data if provided, otherwise generates UUID for id fields
  * - Recursively processes nested types
  * - Executes hooks.create for fields with create hooks
+ * - Returns dates from field hooks and `"now"` defaults as ISO strings
+ * - Calls the table's create hook with the input it receives once deployed: the
+ *   data's own properties plus the values field hooks and defaults produce, with
+ *   dates kept as `Date` objects
  * - Takes each field from the data's own properties, so a field named after a
  *   member of `Object` such as `toString` is read from the record rather than
  *   from the prototype
@@ -32,6 +36,10 @@ function setField(record: Record<string, unknown>, key: string, value: unknown):
 export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
   return (data: unknown, now: Date = new Date()) => {
     const obj = data && typeof data === "object" ? (data as Record<string, unknown>) : undefined;
+    const typeHookInput: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj ?? {})) {
+      setField(typeHookInput, key, value);
+    }
     const hooked = Object.entries(type.fields).reduce(
       (hooked, [key, value]) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -40,6 +48,7 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
         // such as `toString` would otherwise read the inherited value.
         const input = obj && Object.hasOwn(obj, key) ? obj[key] : undefined;
         let hookedValue: unknown;
+        let fromHookOrNow = false;
         if (key === "id") {
           hookedValue = input ?? crypto.randomUUID();
         } else if (field.type === "nested") {
@@ -54,24 +63,30 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
           }
         } else if (field.metadata.hooks?.create) {
           hookedValue = field.metadata.hooks.create({ input, invoker: null, now });
-          if (hookedValue instanceof Date) {
-            hookedValue = hookedValue.toISOString();
-          }
+          fromHookOrNow = true;
         } else {
           hookedValue = input;
         }
         if (hookedValue == null && field.metadata.default !== undefined) {
           const isTimeType =
             field.type === "datetime" || field.type === "date" || field.type === "time";
-          hookedValue =
-            field.metadata.default === "now" && isTimeType
-              ? now.toISOString()
-              : field.metadata.default;
+          fromHookOrNow = field.metadata.default === "now" && isTimeType;
+          hookedValue = fromHookOrNow ? now : field.metadata.default;
+        }
+        if (
+          field.type !== "nested" &&
+          (field.metadata.hooks?.create || field.metadata.default !== undefined)
+        ) {
+          setField(typeHookInput, key, hookedValue);
         }
         // Set even when there is no value: the key carrying `undefined` is what
         // tells a schema inferred from the record that the column is nullable,
         // and it shadows a same-named member of `Object.prototype`.
-        setField(hooked, key, hookedValue);
+        setField(
+          hooked,
+          key,
+          fromHookOrNow && hookedValue instanceof Date ? hookedValue.toISOString() : hookedValue,
+        );
         return hooked;
       },
       {} as Record<string, unknown>,
@@ -79,7 +94,6 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
 
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- metadata absent in recursive nested calls
     if (type.metadata?.typeHook?.create) {
-      const { id: _id, ...typeHookInput } = hooked;
       // oxlint-disable-next-line typescript/no-unsafe-function-type
       const overrides = type.metadata.typeHook.create({
         input: typeHookInput,

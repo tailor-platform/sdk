@@ -188,8 +188,8 @@ snapshots:
 				"@changesets/cli": "3.0.3",
 				"@tailor-platform/sdk": "workspace:^",
 				"@types/node": "26.6.6",
-				"eslint-plugin-zod": "5.2.2",
-				"knip": "6.44.2",
+				"eslint-plugin-zod": "5.3.0",
+				"knip": "6.45.1",
 				"lefthook": "2.2.1",
 				"madge": "8.0.0",
 				"oxfmt": "0.78.0",
@@ -215,15 +215,14 @@ snapshots:
 				"@tailor-platform/sdk-plugin-seed": "workspace:^",
 				"@tailor-platform/sdk-plugin-tailordb-erd": "workspace:^",
 				"@types/node": "26.6.6",
-				"eslint-plugin-zod": "5.2.2",
+				"eslint-plugin-zod": "5.3.0",
 				"graphql": "17.1.0",
 				"graphql-request": "7.4.0",
 				"multiline-ts": "4.0.1",
 				"oxfmt": "0.78.0",
 				"oxlint": "1.93.0",
-				"oxlint-tsgolint": "7.0.2007",
 				"tsdown": "0.23.7",
-				"tsrs": "0.16.0-ts7.1.0-dev.20260929",
+				"tsrs": "0.25.0-ts7.1.0-beta",
 				"tsx": "4.23.15",
 				"typescript": "6.0.3",
 				"vitest": "5.1.0",
@@ -233,9 +232,9 @@ snapshots:
 		"llm-challenge": {
 			"devDependencies": {
 				"@types/node": "26.6.6",
-				"eslint-plugin-zod": "5.2.2",
+				"eslint-plugin-zod": "5.3.0",
 				"oxlint": "1.93.0",
-				"oxlint-tsgolint": "7.0.2007",
+				"tsrs": "0.25.0-ts7.1.0-beta",
 				"tsx": "4.23.15",
 				"typescript": "6.0.3",
 				"vitest": "5.1.0",
@@ -245,7 +244,7 @@ snapshots:
 		"packages/create-sdk": {
 			"dependencies": {
 				"@clack/prompts": "1.9.0",
-				"@politty/zod": "0.7.3",
+				"@politty/zod": "0.7.5",
 				"execa": "10.2.1",
 				"picocolors": "1.1.1",
 				"pkg-types": "2.4.0",
@@ -253,10 +252,10 @@ snapshots:
 			},
 			"devDependencies": {
 				"@types/node": "26.6.6",
-				"eslint-plugin-zod": "5.2.2",
+				"eslint-plugin-zod": "5.3.0",
 				"oxlint": "1.93.0",
-				"oxlint-tsgolint": "7.0.2007",
 				"tsdown": "0.23.7",
+				"tsrs": "0.25.0-ts7.1.0-beta",
 				"typescript": "6.0.3",
 				"vitest": "5.1.0",
 			},
@@ -281,7 +280,7 @@ snapshots:
 				"@types/node": "26.6.6",
 				"oxfmt": "0.78.0",
 				"oxlint": "1.93.0",
-				"oxlint-tsgolint": "7.0.2007",
+				"tsrs": "0.25.0-ts7.1.0-beta",
 				"typescript": "6.0.3",
 				"vitest": "5.1.0",
 			},
@@ -295,7 +294,7 @@ snapshots:
 				"@types/node": "26.6.6",
 				"oxfmt": "0.78.0",
 				"oxlint": "1.93.0",
-				"oxlint-tsgolint": "7.0.2007",
+				"tsrs": "0.25.0-ts7.1.0-beta",
 				"typescript": "6.0.3",
 				"vitest": "5.1.0",
 			},
@@ -308,7 +307,7 @@ snapshots:
 				"@types/node": "26.6.6",
 				"oxfmt": "0.78.0",
 				"oxlint": "1.93.0",
-				"oxlint-tsgolint": "7.0.2007",
+				"tsrs": "0.25.0-ts7.1.0-beta",
 				"typescript": "6.0.3",
 			},
 		},
@@ -320,7 +319,7 @@ snapshots:
 				"@types/node": "26.6.6",
 				"oxfmt": "0.78.0",
 				"oxlint": "1.93.0",
-				"oxlint-tsgolint": "7.0.2007",
+				"tsrs": "0.25.0-ts7.1.0-beta",
 				"typescript": "6.0.3",
 			},
 		},
@@ -332,7 +331,7 @@ snapshots:
 				"@types/node": "26.6.6",
 				"oxfmt": "0.78.0",
 				"oxlint": "1.93.0",
-				"oxlint-tsgolint": "7.0.2007",
+				"tsrs": "0.25.0-ts7.1.0-beta",
 				"typescript": "6.0.3",
 			},
 		},
@@ -344,7 +343,7 @@ snapshots:
 				"@types/node": "26.6.6",
 				"oxfmt": "0.78.0",
 				"oxlint": "1.93.0",
-				"oxlint-tsgolint": "7.0.2007",
+				"tsrs": "0.25.0-ts7.1.0-beta",
 				"typescript": "6.0.3",
 				"vitest": "5.1.0",
 			},
@@ -357,7 +356,7 @@ snapshots:
 				"@types/node": "26.6.6",
 				"oxfmt": "0.78.0",
 				"oxlint": "1.93.0",
-				"oxlint-tsgolint": "7.0.2007",
+				"tsrs": "0.25.0-ts7.1.0-beta",
 				"typescript": "6.0.3",
 			},
 		},
@@ -369,7 +368,7 @@ snapshots:
 				"@types/node": "26.6.6",
 				"oxfmt": "0.78.0",
 				"oxlint": "1.93.0",
-				"oxlint-tsgolint": "7.0.2007",
+				"tsrs": "0.25.0-ts7.1.0-beta",
 				"typescript": "6.0.3",
 				"vitest": "5.1.0",
 			},
@@ -384,7 +383,7 @@ snapshots:
 				"graphql-request": "7.4.0",
 				"oxfmt": "0.78.0",
 				"oxlint": "1.93.0",
-				"oxlint-tsgolint": "7.0.2007",
+				"tsrs": "0.25.0-ts7.1.0-beta",
 				"typescript": "6.0.3",
 				"vitest": "5.1.0",
 			},
@@ -428,9 +427,8 @@ snapshots:
 				"@opentelemetry/sdk-trace": "3.1.1",
 				"@opentelemetry/semantic-conventions": "1.45.0",
 				"@oxc-project/types": "0.158.0",
-				"@politty/zod": "0.7.3",
-				"@secretlint/core": "13.1.0",
-				"@secretlint/secretlint-rule-preset-recommend": "13.1.0",
+				"@politty/zod": "0.7.5",
+				"@secretlint/core": "14.0.0",
 				"@standard-schema/spec": "1.1.0",
 				"@tailor-platform/function-kysely-tailordb": "0.1.3",
 				"@toiroakr/read-multiline": "0.4.3",
@@ -476,14 +474,13 @@ snapshots:
 				"@types/semver": "7.8.0",
 				"@vitest/coverage-v8": "5.1.0",
 				"date-fns": "4.4.0",
-				"eslint-plugin-zod": "5.2.2",
+				"eslint-plugin-zod": "5.3.0",
 				"graphql": "17.1.0",
 				"oxfmt": "0.78.0",
 				"oxlint": "1.93.0",
-				"oxlint-tsgolint": "7.0.2007",
 				"sonda": "0.14.0",
 				"tsdown": "0.23.7",
-				"tsrs": "0.16.0-ts7.1.0-dev.20260929",
+				"tsrs": "0.25.0-ts7.1.0-beta",
 				"tsx": "4.23.15",
 				"typescript": "6.0.3",
 				"vitest": "5.1.0",
@@ -494,7 +491,7 @@ snapshots:
 		"packages/sdk-codemod": {
 			"dependencies": {
 				"@ast-grep/napi": "0.51.2",
-				"@politty/zod": "0.7.3",
+				"@politty/zod": "0.7.5",
 				"diff": "9.0.0",
 				"pathe": "2.0.3",
 				"picomatch": "4.0.7",
@@ -507,10 +504,10 @@ snapshots:
 				"@types/node": "26.6.6",
 				"@types/picomatch": "4.0.3",
 				"@types/semver": "7.8.0",
-				"eslint-plugin-zod": "5.2.2",
+				"eslint-plugin-zod": "5.3.0",
 				"oxlint": "1.93.0",
-				"oxlint-tsgolint": "7.0.2007",
 				"tsdown": "0.23.7",
+				"tsrs": "0.25.0-ts7.1.0-beta",
 				"typescript": "6.0.3",
 				"vitest": "5.1.0",
 			},
@@ -524,8 +521,8 @@ snapshots:
 				"@tailor-platform/sdk": "workspace:^",
 				"@types/node": "26.6.6",
 				"oxlint": "1.93.0",
-				"oxlint-tsgolint": "7.0.2007",
 				"tsdown": "0.23.7",
+				"tsrs": "0.25.0-ts7.1.0-beta",
 				"typescript": "6.0.3",
 				"vitest": "5.1.0",
 			},
@@ -535,7 +532,7 @@ snapshots:
 			"name": "@tailor-platform/sdk-plugin-seed",
 			"dependencies": {
 				"@lines-db/studio": "0.16.7",
-				"@politty/zod": "0.7.3",
+				"@politty/zod": "0.7.5",
 				"lines-db": "0.19.2",
 				"open": "11.0.4",
 				"pathe": "2.0.3",
@@ -547,8 +544,8 @@ snapshots:
 				"@tailor-platform/shared": "workspace:^",
 				"@types/node": "26.6.6",
 				"oxlint": "1.93.0",
-				"oxlint-tsgolint": "7.0.2007",
 				"tsdown": "0.23.7",
+				"tsrs": "0.25.0-ts7.1.0-beta",
 				"typescript": "6.0.3",
 				"vitest": "5.1.0",
 			},
@@ -557,7 +554,7 @@ snapshots:
 		"packages/sdk-plugin-setup": {
 			"dependencies": {
 				"@croct/json5-parser": "0.2.2",
-				"@politty/zod": "0.7.3",
+				"@politty/zod": "0.7.5",
 				"json5": "2.2.3",
 				"pathe": "2.0.3",
 				"pkg-types": "2.4.0",
@@ -571,8 +568,8 @@ snapshots:
 				"@types/node": "26.6.6",
 				"confbox": "0.3.2",
 				"oxlint": "1.93.0",
-				"oxlint-tsgolint": "7.0.2007",
 				"tsdown": "0.23.7",
+				"tsrs": "0.25.0-ts7.1.0-beta",
 				"typescript": "6.0.3",
 				"vitest": "5.1.0",
 			},
@@ -581,7 +578,7 @@ snapshots:
 		"packages/sdk-plugin-tailordb-erd": {
 			"name": "@tailor-platform/sdk-plugin-tailordb-erd",
 			"dependencies": {
-				"@politty/zod": "0.7.3",
+				"@politty/zod": "0.7.5",
 				"chokidar": "5.0.0",
 				"mime-types": "3.0.2",
 				"open": "11.0.4",
@@ -595,8 +592,8 @@ snapshots:
 				"@types/mime-types": "3.0.1",
 				"@types/node": "26.6.6",
 				"oxlint": "1.93.0",
-				"oxlint-tsgolint": "7.0.2007",
 				"tsdown": "0.23.7",
+				"tsrs": "0.25.0-ts7.1.0-beta",
 				"typescript": "6.0.3",
 				"vitest": "5.1.0",
 			},
@@ -606,7 +603,7 @@ snapshots:
 			"name": "@tailor-platform/shared",
 			"devDependencies": {
 				"oxlint": "1.93.0",
-				"oxlint-tsgolint": "7.0.2007",
+				"tsrs": "0.25.0-ts7.1.0-beta",
 				"vitest": "5.1.0",
 			},
 		},
@@ -642,7 +639,7 @@ snapshots:
 				},
 				"tsrs": {
 					"specifier": "*",
-					"version": "0.16.0-ts7.1.0-dev.20260929",
+					"version": "0.25.0-ts7.1.0-beta",
 					"optional": true,
 				},
 				"typescript": {
@@ -1432,8 +1429,8 @@ snapshots:
 			"engines": {"node": "^12.0.0 || ^14.0.0 || >=16.0.0"},
 		},
 
-		"@eslint-zod/utils@6.4.0": {
-			"integrity": "sha512-S5txT8FeUircxA9w/Uhe3GJXvcOTI4TK5CsAbrgecLsgCRsV67+2MBk6FT3/GjgfXgFahox10iwm9LOePDhnjA==",
+		"@eslint-zod/utils@7.0.0": {
+			"integrity": "sha512-ToKmzhtXqagS6ohatO3vbE03KRGQ732MZ2mIOHr+pi/ta6X1cEjcBCbGzTUQU0Pvs/QOO5XydVcdDgMc7aHkkg==",
 			"engines": {"node": "^20.19 || ^22.12 || >=24"},
 			"dependencies": {
 				"@typescript-eslint/types": "8.72.2",
@@ -3052,8 +3049,8 @@ snapshots:
 			},
 		},
 
-		"@politty/zod@0.7.3": {
-			"integrity": "sha512-D0XF/VLMiAhe74Rha1Eu2EzfLbsFjXb9vHEGM4Gsm3bwvtCvt1aXT2668x/ySBu5+xamEchQumB+Fj9DXgxiOA==",
+		"@politty/zod@0.7.5": {
+			"integrity": "sha512-XbaaV5yGD62ZTOA28tmXQimwgwGTJC5rmFdS+H8JspcrNGmaOpFxoT6TbPTijQIyQCIKfYl3h3r5OA+599Z8QQ==",
 			"engines": {"node": ">=20.12.0 <21.0.0 || >=21.7.0"},
 			"hasBin": true,
 			"peerDependencies": {
@@ -3389,8 +3386,8 @@ snapshots:
 			"integrity": "sha512-831qok9r2t8AlxLko40y2ebgSDhenenCatLVeW/uBtnHPyhHOvG0C7TvfgecV+wHzIm5KUICgzmVpWS+IMEAeg==",
 		},
 
-		"@secretlint/core@13.1.0": {
-			"integrity": "sha512-GL4qNP7G95zSdCpVOMeBVX6mROOko3uMuJNSXD+WmFG9vxChszbmTzpHRzogHHlr+TMqxHw5FE5LHl0OkB0luw==",
+		"@secretlint/core@14.0.0": {
+			"integrity": "sha512-oxei92V+9bfWysS8jwCGgX07dXq3EecUL20ntWBVx0435PDAlftu8+BcNtFGM6HvKhY+ebcq+QOxe9Om6l28Lg==",
 			"engines": {"node": ">=22.0.0"},
 			"peerDependencies": {
 				"supports-color": {
@@ -3399,24 +3396,22 @@ snapshots:
 				},
 			},
 			"dependencies": {
-				"@secretlint/profiler": "13.1.0",
-				"@secretlint/types": "13.1.0",
+				"@secretlint/profiler": "14.0.0",
+				"@secretlint/types": "14.0.0",
+				"@textlint/regexp-string-matcher": "2.0.3",
 				"debug": "4.4.3",
+				"picomatch": "4.0.7",
 				"structured-source": "4.0.0",
 			},
 		},
 
-		"@secretlint/profiler@13.1.0": {
-			"integrity": "sha512-Ss/n6FduYkhLLaqDP/CSH5i6Q3YpGd+x2CAnZWxjm9uvJbZpO8eiSnqqORayHC+FcoW3PwS/9wWbHmfEQ7noYw==",
-		},
-
-		"@secretlint/secretlint-rule-preset-recommend@13.1.0": {
-			"integrity": "sha512-dPnplMyjJYpVCJDNTjpUA8c/AfoHbWANJJJWKroK50DGGhAB4Oumzk+XinBMyMMAwgOsjU9CB9lUHXDvObMVCg==",
+		"@secretlint/profiler@14.0.0": {
+			"integrity": "sha512-A/WtcGrg5/sjy/pLIO4I9/b/IbhNqYD1gIKUYbqnF97QZVuTSB5heKmmFNL129PRKtpiolj21Qb6OecsUPZDYQ==",
 			"engines": {"node": ">=22.0.0"},
 		},
 
-		"@secretlint/types@13.1.0": {
-			"integrity": "sha512-ZslrDXhpdfqp9Kp+9XZO5M/ehiwuIRCbjGZumfmE8crCvKqszirQKBxM4HPPsoWFUlf3H/eCNxx8vE93KY5I4g==",
+		"@secretlint/types@14.0.0": {
+			"integrity": "sha512-zLrSc4t3iK5cJgWinBQNcE38gqMDRnYC6yXeVk3TjAv9fbYavotEs4wD/Y/bBSZ02hjjm897M5POzTlDMWShYA==",
 			"engines": {"node": ">=22.0.0"},
 		},
 
@@ -3437,6 +3432,10 @@ snapshots:
 					"version": "0.29.9",
 				},
 			},
+		},
+
+		"@textlint/regexp-string-matcher@2.0.3": {
+			"integrity": "sha512-oLaihTHU+vutFmWOXTJexrIYFTF2f60QMTXQjvWO0/jJmCXQ2yfOq6xic0XO2MjG7A1d0UIk4oBMXTLps3mfsg==",
 		},
 
 		"@toiroakr/read-multiline@0.4.3": {
@@ -3473,16 +3472,24 @@ snapshots:
 			},
 		},
 
-		"@tsrs/darwin-arm64@0.16.0-ts7.1.0-dev.20260929": {
-			"integrity": "sha512-9e7ZeELv0Fq06PL7xr0w7jeU45cd2UcDAejH3uloTPD37Vm6h099u/hAj90CPbY88ky15eXCiKE5hJzqvSvCBA==",
+		"@tsrs/darwin-arm64@0.25.0-ts7.1.0-beta": {
+			"integrity": "sha512-+pYoQ+AqpdUolO4kJBQlQmwxJOoc5INuusw/2AZnR4frfnyVGza+gEn0br8Z0LOk7nklQuILuMKH93BU3hpHvA==",
 			"engines": {"node": ">=16.20.0"},
 			"cpu": ["arm64"],
 			"os": ["darwin"],
 			"optional": true,
 		},
 
-		"@tsrs/linux-arm64-gnu@0.16.0-ts7.1.0-dev.20260929": {
-			"integrity": "sha512-+pWQ4gnuIVeDJsUYKxwRuSF9smST209Srto2B0LrCwnomgbMHENB7hzN+kAOe+HGWvmss9sjoQiwNHME3C9nNA==",
+		"@tsrs/darwin-x64@0.25.0-ts7.1.0-beta": {
+			"integrity": "sha512-MnD5Bv48TdIcTpNavsg7PV6RUuwAKhozJ29CZDlKq6oZwGjGulcQLI3Sok6MvvCG7U6v4l9RONKO8BhNXCytvQ==",
+			"engines": {"node": ">=16.20.0"},
+			"cpu": ["x64"],
+			"os": ["darwin"],
+			"optional": true,
+		},
+
+		"@tsrs/linux-arm64-gnu@0.25.0-ts7.1.0-beta": {
+			"integrity": "sha512-Mc/YuFQa7APDuX39UMr8NMQHKkCOmEx8SfUXVnew7eljJHKnUkpLHpoQFQA0aKnzIqDAxnNudXhIWB0DjZEX2A==",
 			"engines": {"node": ">=16.20.0"},
 			"cpu": ["arm64"],
 			"os": ["linux"],
@@ -3490,8 +3497,8 @@ snapshots:
 			"optional": true,
 		},
 
-		"@tsrs/linux-arm64-musl@0.16.0-ts7.1.0-dev.20260929": {
-			"integrity": "sha512-T2whHu5XbgEAnre71GVHBavdypwZu4tD/vEZDWTctfKrQ2LDbtt5QTbWhxN1SOkNS9i8EqWYaRUKQEDPjFntZg==",
+		"@tsrs/linux-arm64-musl@0.25.0-ts7.1.0-beta": {
+			"integrity": "sha512-ZTZxIv/W4qiqDBCXcDlr8ma76JCO0DQHbUukuhpSpKHz3E2m5FCwLcra/NTqAVniyLU6/RjIOCIcDRpVQvq6cQ==",
 			"engines": {"node": ">=16.20.0"},
 			"cpu": ["arm64"],
 			"os": ["linux"],
@@ -3499,8 +3506,8 @@ snapshots:
 			"optional": true,
 		},
 
-		"@tsrs/linux-x64-gnu@0.16.0-ts7.1.0-dev.20260929": {
-			"integrity": "sha512-hPsRzR/oG4+wQwiCFSLM7Vct70yO1C4mHjDebEUAqyzyVlhRzZsqJVDpy+xYVyB1eebDD9VJ+c5UEzA2PuKDiw==",
+		"@tsrs/linux-x64-gnu@0.25.0-ts7.1.0-beta": {
+			"integrity": "sha512-dGRvubxWQXNP3aow+RLgFAbW3pR4oQ+UPfwrSgdggKCKKL9sAPr8nFGYM50JWAiqGQYSwRJl48AzIC7bHuQ2cQ==",
 			"engines": {"node": ">=16.20.0"},
 			"cpu": ["x64"],
 			"os": ["linux"],
@@ -3508,12 +3515,28 @@ snapshots:
 			"optional": true,
 		},
 
-		"@tsrs/linux-x64-musl@0.16.0-ts7.1.0-dev.20260929": {
-			"integrity": "sha512-oW49ztnYwI0uOc/Yf8PCcXqAaVlkbvYJByLcz3u1cT2I7R8D649jDdegHWrqDfPPCa9yM7Q7WdNKstZIaQCjeg==",
+		"@tsrs/linux-x64-musl@0.25.0-ts7.1.0-beta": {
+			"integrity": "sha512-zm89HYpXAv36XuXrEsfxAEmGTehY5K0L27+tFmJzxX2CqLwki0AX4FGA78Fy97x8Yk8kOR8FJO2xTvSW9vXBIg==",
 			"engines": {"node": ">=16.20.0"},
 			"cpu": ["x64"],
 			"os": ["linux"],
 			"libc": ["musl"],
+			"optional": true,
+		},
+
+		"@tsrs/win32-arm64@0.25.0-ts7.1.0-beta": {
+			"integrity": "sha512-fVqAnHvFD2vxIHxVJEeQq9W63QZUW6WLy1+qFVuMUdM5ViURhjzcuLgOx8EIGqp6qOqFDpuAlNPQmjUpTXYg2g==",
+			"engines": {"node": ">=16.20.0"},
+			"cpu": ["arm64"],
+			"os": ["win32"],
+			"optional": true,
+		},
+
+		"@tsrs/win32-x64@0.25.0-ts7.1.0-beta": {
+			"integrity": "sha512-BfRCSI5E0LQ3kim43dBqX3Dq3dmRUI2aMWLGcgUxbTEkyvsESX01tM7u31flzRRajw3zVZwVB95kh5xvUeIOkA==",
+			"engines": {"node": ">=16.20.0"},
+			"cpu": ["x64"],
+			"os": ["win32"],
 			"optional": true,
 		},
 
@@ -4565,8 +4588,8 @@ snapshots:
 			},
 		},
 
-		"eslint-plugin-zod@5.2.2": {
-			"integrity": "sha512-aLV0f3/T5FTHAfHhRUm+AhRisjSXAXnfEsHSu2PrDc+W2TtX2expljKoWogKS6/LAAk31tykmjyj8zXgFbNgyA==",
+		"eslint-plugin-zod@5.3.0": {
+			"integrity": "sha512-0n41UcIJWJonZ3rNqKOUHQTasgD7rsT+MFZPOuJ9nP95MlFp4m2hzRZVq31r1zvoER/y7OX+4/IsKNXS0OfyKQ==",
 			"engines": {"node": "^20.19 || ^22.12 || >=24"},
 			"peerDependencies": {
 				"eslint": {
@@ -4586,7 +4609,7 @@ snapshots:
 				},
 			},
 			"dependencies": {
-				"@eslint-zod/utils": "6.4.0",
+				"@eslint-zod/utils": "7.0.0",
 				"@typescript-eslint/types": "8.72.2",
 			},
 		},
@@ -5216,8 +5239,8 @@ snapshots:
 			},
 		},
 
-		"knip@6.44.2": {
-			"integrity": "sha512-6URO7pnqtOnyvSsXfW6+8C9j1lfcicxUCysXO0RgMtHTZ96HqCXh29op8iabeQW5JeIc8dJWwzSdJVWDokeScQ==",
+		"knip@6.45.1": {
+			"integrity": "sha512-zp3zXKy2cZWiIttdlWU5fisKxVQaLSU6471ej0KGz1GdHdaHxpzTAO/LIyFNc3gU3v1W7LJaqvYumoO3l/u+6A==",
 			"engines": {"node": "^20.19.0 || >=22.12.0"},
 			"hasBin": true,
 			"dependencies": {
@@ -5232,7 +5255,6 @@ snapshots:
 				"tinyglobby": "0.2.17",
 				"unbash": "6.0.4",
 				"yaml": "2.9.1",
-				"zod": "4.6.7",
 			},
 		},
 
@@ -6267,7 +6289,7 @@ snapshots:
 				},
 				"tsrs": {
 					"specifier": "*",
-					"version": "0.16.0-ts7.1.0-dev.20260929",
+					"version": "0.25.0-ts7.1.0-beta",
 					"optional": true,
 				},
 				"typescript": {
@@ -6683,7 +6705,7 @@ snapshots:
 					"optional": true,
 				},
 				"tsrs": {
-					"version": "0.16.0-ts7.1.0-dev.20260929",
+					"version": "0.25.0-ts7.1.0-beta",
 					"below": true,
 				},
 				"tsx": {
@@ -6728,16 +6750,19 @@ snapshots:
 			"optional": true,
 		},
 
-		"tsrs@0.16.0-ts7.1.0-dev.20260929": {
-			"integrity": "sha512-/SfYc9iIH353Fj1evYYtiRWbz+/+ieYhlHuu2A3iDvA2DLjzlV1vKMzyh2eXuACPNsmFI2hc3w9EPPx6B+E8OA==",
+		"tsrs@0.25.0-ts7.1.0-beta": {
+			"integrity": "sha512-J7eAkkriIwHExX2TzwTW6flJ/fmg3U+FDQwmTUkvaYmo02iva69YPmxFaCXGYIlsED3l1Aa62hSsEDJewBrIKA==",
 			"engines": {"node": ">=16.20.0"},
 			"hasBin": true,
 			"optionalDependencies": {
-				"@tsrs/darwin-arm64": "0.16.0-ts7.1.0-dev.20260929",
-				"@tsrs/linux-arm64-gnu": "0.16.0-ts7.1.0-dev.20260929",
-				"@tsrs/linux-arm64-musl": "0.16.0-ts7.1.0-dev.20260929",
-				"@tsrs/linux-x64-gnu": "0.16.0-ts7.1.0-dev.20260929",
-				"@tsrs/linux-x64-musl": "0.16.0-ts7.1.0-dev.20260929",
+				"@tsrs/darwin-arm64": "0.25.0-ts7.1.0-beta",
+				"@tsrs/darwin-x64": "0.25.0-ts7.1.0-beta",
+				"@tsrs/linux-arm64-gnu": "0.25.0-ts7.1.0-beta",
+				"@tsrs/linux-arm64-musl": "0.25.0-ts7.1.0-beta",
+				"@tsrs/linux-x64-gnu": "0.25.0-ts7.1.0-beta",
+				"@tsrs/linux-x64-musl": "0.25.0-ts7.1.0-beta",
+				"@tsrs/win32-arm64": "0.25.0-ts7.1.0-beta",
+				"@tsrs/win32-x64": "0.25.0-ts7.1.0-beta",
 			},
 		},
 

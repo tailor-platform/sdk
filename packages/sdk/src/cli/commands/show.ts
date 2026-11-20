@@ -10,7 +10,7 @@ import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertDefined } from "#/utils/assert";
 import { createWorkspaceNameTransformer, resolveWorkspaceFolderName } from "./workspace/transform";
 import type { Application } from "@tailor-platform/tailor-proto/application_resource_pb";
-import type { AuthOAuth2Client } from "@tailor-platform/tailor-proto/auth_resource_pb";
+import type { AuthOAuth2ClientSummary } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
 export interface ShowOptions {
   workspaceId?: string;
@@ -121,7 +121,7 @@ async function fetchOAuth2Clients(
   if (!namespaceName || names.length === 0) {
     return [];
   }
-  let deployed: AuthOAuth2Client[];
+  let deployed: AuthOAuth2ClientSummary[];
   try {
     deployed = await fetchAllTolerant(async (pageToken, maxPageSize) => {
       const { oauth2Clients, nextPageToken } = await client.listAuthOAuth2Clients({
@@ -143,7 +143,6 @@ async function fetchOAuth2Clients(
   }
   const clientIds = new Map<string, string>();
   for (const oauth2Client of deployed) {
-    logger.registerSecret(oauth2Client.clientSecret);
     clientIds.set(oauth2Client.name, oauth2Client.clientId);
   }
   return names.flatMap((name) => {

@@ -21,6 +21,7 @@ import {
 } from "./auth";
 import { idpClientVaultName } from "./idp";
 import { sdkNameLabelKey } from "./label";
+import { isRecreated } from "./tailordb/plan";
 import type { PlannedDeployment } from "./apply-phases";
 import type { ManagedResourceType } from "./managed-resource-type";
 import type { MessageInitShape } from "@bufbuild/protobuf";
@@ -119,10 +120,12 @@ const CHECKED_RESOURCES: Record<CheckedResourceType, CheckedResource> = {
   "tailordb.type": {
     label: ({ namespace, name }) => `TailorDB table "${name}" in namespace "${namespace}"`,
     deletesOf: (plan) =>
-      plan.tailorDB.changeSet.type.deletes.map(({ name, request }) => ({
-        namespace: request.namespaceName,
-        name,
-      })),
+      plan.tailorDB.changeSet.type.deletes
+        .filter((del) => !isRecreated(plan.tailorDB.changeSet, del))
+        .map(({ name, request }) => ({
+          namespace: request.namespaceName,
+          name,
+        })),
   },
   "pipeline.resolver": {
     label: ({ namespace, name }) => `Resolver "${name}" in namespace "${namespace}"`,

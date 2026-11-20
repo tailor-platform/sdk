@@ -4,8 +4,8 @@ import path from "node:path";
 import url from "node:url";
 import { generate, deploy } from "@tailor-platform/sdk/cli";
 
-// Disable inline sourcemaps during test fixture generation so that snapshot
-// comparisons remain stable across environments.
+// Disable inline sourcemaps so the bundles that bundled_execution.test.ts runs
+// stay within its size limit.
 process.env.TAILOR_INLINE_SOURCEMAP ??= "false";
 
 const __filename = url.fileURLToPath(import.meta.url);

@@ -65,6 +65,13 @@ file (never the other way around):
 const TailorDBFieldSchema: z.ZodType<TailorDBFieldOutput> = z.lazy(() => ...);
 ```
 
+Such a binding checks only the schema's output. Every hand-written configure
+type that a schema parses (a `define*`/`create*` argument, or the metadata a
+builder writes) has an entry in `configure/schema-input.test-d.ts`, which
+fails when the type is not assignable to the schema's generated `*Input` type
+or declares a key, at any depth, that the strict schema rejects. Add an entry
+when you add such a type or schema.
+
 `configure/types/type-compatibility.test.ts` additionally asserts that
 configure's full builder types extend the minimal structural interfaces.
 

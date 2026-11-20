@@ -165,17 +165,17 @@ tailor function run [options] <file>
 
 **Options**
 
-| Option                          | Alias | Description                                                                                    | Required | Default              | Env                                 |
-| ------------------------------- | ----- | ---------------------------------------------------------------------------------------------- | -------- | -------------------- | ----------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                   | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`      |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                              | No       | -                    | `TAILOR_PLATFORM_PROFILE`           |
-| `--name <NAME>`                 | `-n`  | Workflow job name to run (matches the `name` field of createWorkflowJob)                       | No       | -                    | -                                   |
-| `--arg <ARG>`                   | `-a`  | JSON argument to pass to the function                                                          | No       | -                    | -                                   |
-| `--arg-file <ARG_FILE>`         | -     | Path to a JSON file holding the argument to pass to the function                               | No       | -                    | -                                   |
-| `--watch`                       | -     | Run the function again each time the file, a file it imports, or the argument file changes     | No       | `false`              | -                                   |
-| `--machine-user <MACHINE_USER>` | `-m`  | Machine user name for authentication. Falls back to the active profile's default machine user. | No       | -                    | `TAILOR_PLATFORM_MACHINE_USER_NAME` |
-| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                                                     | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`                |
-| `--allow-schema-drift`          | -     | Run a scaffolded script even when its schema snapshot no longer matches                        | No       | `false`              | -                                   |
+| Option                          | Alias | Description                                                                                             | Required | Default | Env                                 |
+| ------------------------------- | ----- | ------------------------------------------------------------------------------------------------------- | -------- | ------- | ----------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                            | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID`      |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                       | No       | -       | `TAILOR_PLATFORM_PROFILE`           |
+| `--name <NAME>`                 | `-n`  | Workflow job name to run (matches the `name` field of createWorkflowJob)                                | No       | -       | -                                   |
+| `--arg <ARG>`                   | `-a`  | JSON argument to pass to the function                                                                   | No       | -       | -                                   |
+| `--arg-file <ARG_FILE>`         | -     | Path to a JSON file holding the argument to pass to the function                                        | No       | -       | -                                   |
+| `--watch`                       | -     | Run the function again each time the file, a file it imports, or the argument file changes              | No       | `false` | -                                   |
+| `--machine-user <MACHINE_USER>` | `-m`  | Machine user name for authentication. Falls back to the active profile's default machine user.          | No       | -       | `TAILOR_PLATFORM_MACHINE_USER_NAME` |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory) | No       | -       | `TAILOR_CONFIG_PATH`                |
+| `--allow-schema-drift`          | -     | Run a scaffolded script even when its schema snapshot no longer matches                                 | No       | `false` | -                                   |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -250,13 +250,13 @@ tailor function script [options] <file>
 
 **Options**
 
-| Option                          | Alias | Description                                                           | Required | Default              | Env                            |
-| ------------------------------- | ----- | --------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                          | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                     | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
-| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                            | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
-| `--namespace <NAMESPACE>`       | -     | Target TailorDB namespace (required when the config does not pin one) | No       | -                    | -                              |
-| `--remote`                      | -     | Generate script-scoped DB types from the deployed schema              | No       | `false`              | -                              |
+| Option                          | Alias | Description                                                                                             | Required | Default | Env                            |
+| ------------------------------- | ----- | ------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                            | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                       | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory) | No       | -       | `TAILOR_CONFIG_PATH`           |
+| `--namespace <NAMESPACE>`       | -     | Target TailorDB namespace (required when the config does not pin one)                                   | No       | -       | -                              |
+| `--remote`                      | -     | Generate script-scoped DB types from the deployed schema                                                | No       | `false` | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

@@ -6,9 +6,10 @@ Vitest is configured with several projects (see [`packages/sdk/vitest.config.ts`
 
 - **unit / unit-core / unit-windows** — Unit tests under `src/**` and `scripts/**`, plus `e2e/cli.test.ts` (the e2e CLI helper's own tests, which need no workspace), split by isolation needs; the `unit*` glob selects all three, and the Windows CI job runs `unit-windows`, whose tests have Windows-specific behavior
 - **integration** — Deploy fixture integration tests
-- **e2e** — Subprocess-driven e2e files in `e2e/**` other than `e2e/cli.test.ts` (120-second test timeout); excluded from coverage CI because subprocess execution does not contribute coverage data
-- **e2e-coverage** — `e2e/deploy.test.ts`, which exercises `deploy()` in-process; the coverage CI job runs it, and `--project=e2e*` selects both e2e projects
+- **e2e** — E2E files in `e2e/**` other than `e2e/cli.test.ts` (120-second test timeout); excluded from coverage CI, which runs without Platform credentials
 - **scripts** — Tests for repository scripts
+
+CI's `Test` workflow runs `unit*`, `integration`, and `scripts` on every Node version it tests. On pushes to main and pull requests into it, one Node version also collects coverage when the SDK metrics' inputs change.
 
 ```bash
 # All tests
@@ -36,7 +37,7 @@ Before raising the minimum supported migration format, identify a released bridg
 
 Most E2E suites require Platform credentials, and each of those creates its own disposable workspace. CI deletes the workspaces in a cleanup step keyed by the run ID; `globalSetup`'s teardown also deletes them, authenticating the same way the tests do (`TAILOR_PLATFORM_TOKEN` or the `tailor login` session). If no credentials can be resolved at teardown it only warns, and the workspaces are left for prune to reclaim after their 24-hour expiry.
 
-Located in `packages/sdk/e2e/`. CI runs these in the `sdk-e2e.yml` workflow (pull requests and pushes to main); `sdk-metrics.yml` additionally runs the `e2e-coverage` project under coverage.
+Located in `packages/sdk/e2e/`. CI runs these only in the `sdk-e2e.yml` workflow (pull requests and pushes to main).
 
 ### Writing E2E Suites
 
@@ -83,11 +84,11 @@ pnpm docs:update
 
 ```bash
 cd example
-pnpm test                          # Generator output tests
+pnpm test                          # Generator tests
 pnpm test:e2e                      # E2E tests
-pnpm test:generator:update-expects # Update test fixtures after intentional changes
+pnpm test:generator:update-expects # Regenerate the expected fixtures (build first, see below)
 ```
 
-Generator tests compare output against expected fixtures in `example/tests/fixtures/`. After intentional changes to code generation, update the fixtures with `test:generator:update-expects`.
+`pnpm test` writes generated files and bundles to `tests/fixtures/plugins/`, then runs the bundled-execution tests against them, along with the PGlite and migration tests. No Vitest test reads `tests/fixtures/expected/`; only `tests/kysely-parity.ts` type-checks against its `db.ts`. The `generate.yml` workflow regenerates the example's files and these fixtures and fails if that changes a file. On a pull request from this repository, the `securefix.yml` workflow also pushes the regenerated files as a `chore: apply automated fixes` commit, after which the check passes, so review that commit's diff. After changing code generation, run `pnpm generate` at the repository root (it builds the packages first), then `pnpm --filter example run test:generator:update-expects`, and commit the result when the diff is intended.
 
 To show that a change leaves bundled resolvers, executors, workflow jobs, auth hooks, and HTTP adapters unchanged, run `pnpm snapshot:bundles <outDir>` in `example/` of two built checkouts, your branch and its base commit (for example `git worktree add <dir> <base>`, then `pnpm install && pnpm build` there), and `diff -r` the two directories. Check out the base at the same depth as your branch (for example a sibling directory of the same parent): inline sourcemaps record relative source paths, so a checkout at a different depth makes some inline-true outputs differ. The script bundles `tailor.config.ts` and `tests/tailor.config.plugins-compat.ts` with inline sourcemaps on and off, bypassing the bundle cache. The cache manifest is not included: its input hashes and dependency paths depend on where the checkout is, and the dependency paths also vary between runs of the same build.

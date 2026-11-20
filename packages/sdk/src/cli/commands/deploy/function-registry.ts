@@ -27,14 +27,9 @@ export type { BundledScripts, FunctionEntry } from "./function-registry-types";
 
 const CHUNK_SIZE = 64 * 1024; // 64KB
 
-type CreateFunction = {
+type FunctionUpload = {
   name: string;
-  entry: FunctionEntry;
-  metaRequest: MetadataLabelWrite;
-};
-
-type UpdateFunction = {
-  name: string;
+  workspaceId: string;
   entry: FunctionEntry;
   metaRequest: MetadataLabelWrite;
 };
@@ -44,7 +39,7 @@ type DeleteFunction = {
   workspaceId: string;
 };
 
-type FunctionRegistryChangeSet = ChangeSet<CreateFunction, UpdateFunction, DeleteFunction>;
+type FunctionRegistryChangeSet = ChangeSet<FunctionUpload, FunctionUpload, DeleteFunction>;
 
 /**
  * Compute SHA-256 content hash for a script string.
@@ -309,8 +304,8 @@ export async function planFunctionRegistry(
   previousExisting?: WithLabel<ExistingFunction>,
 ) {
   const changeSet: FunctionRegistryChangeSet = createChangeSet<
-    CreateFunction,
-    UpdateFunction,
+    FunctionUpload,
+    FunctionUpload,
     DeleteFunction
   >("Function registry");
   const metadataUpdates: Array<{ name: string; metaRequest: MetadataLabelWrite }> = [];
@@ -353,7 +348,6 @@ export async function planFunctionRegistry(
     if (existing) {
       const owned = ownership.ownsDesired(existing.allLabels, {
         resourceType: "function_registry",
-        resourceLabel: "Function registry",
         resourceName: entry.name,
       });
 
@@ -368,6 +362,7 @@ export async function planFunctionRegistry(
       } else {
         changeSet.updates.push({
           name: entry.name,
+          workspaceId,
           entry,
           metaRequest,
         });
@@ -376,6 +371,7 @@ export async function planFunctionRegistry(
     } else {
       changeSet.creates.push({
         name: entry.name,
+        workspaceId,
         entry,
         metaRequest,
       });
@@ -412,34 +408,46 @@ export async function planFunctionRegistry(
 }
 
 /**
+ * Build the message that opens a function's upload stream, ahead of its content chunks.
+ * @param upload - Planned function create or update
+ * @returns The stream's info message
+ */
+export function functionUploadInfoMessage(upload: FunctionUpload) {
+  const { workspaceId, entry } = upload;
+  return {
+    payload: {
+      case: "info" as const,
+      value: {
+        workspaceId,
+        name: entry.name,
+        description: entry.description,
+        sizeBytes: BigInt(Buffer.byteLength(entry.scriptContent, "utf-8")),
+        contentHash: entry.contentHash,
+      },
+    },
+  };
+}
+
+/**
  * Upload a function script to the function registry using client streaming.
  * @param client - Operator client instance
- * @param workspaceId - Workspace ID
- * @param entry - Function entry to upload
+ * @param upload - Planned function create or update
  * @param isCreate - Whether this is a create (true) or update (false)
  */
 async function uploadFunctionScript(
   client: OperatorClient,
-  workspaceId: string,
-  entry: FunctionEntry,
+  upload: FunctionUpload,
   isCreate: boolean,
 ) {
-  const buffer = Buffer.from(entry.scriptContent, "utf-8");
-
-  const info = {
-    workspaceId,
-    name: entry.name,
-    description: entry.description,
-    sizeBytes: BigInt(buffer.length),
-    contentHash: entry.contentHash,
-  };
+  const buffer = Buffer.from(upload.entry.scriptContent, "utf-8");
+  const info = functionUploadInfoMessage(upload);
 
   if (isCreate) {
     /** @yields {MessageInitShape<typeof CreateFunctionRegistryRequestSchema>} Create request messages (info header followed by content chunks) */
     async function* createStream(): AsyncIterable<
       MessageInitShape<typeof CreateFunctionRegistryRequestSchema>
     > {
-      yield { payload: { case: "info" as const, value: info } };
+      yield info;
       for (let i = 0; i < buffer.length; i += CHUNK_SIZE) {
         yield {
           payload: {
@@ -455,7 +463,7 @@ async function uploadFunctionScript(
     async function* updateStream(): AsyncIterable<
       MessageInitShape<typeof UpdateFunctionRegistryRequestSchema>
     > {
-      yield { payload: { case: "info" as const, value: info } };
+      yield info;
       for (let i = 0; i < buffer.length; i += CHUNK_SIZE) {
         yield {
           payload: {
@@ -472,13 +480,11 @@ async function uploadFunctionScript(
 /**
  * Apply function registry changes for the given phase.
  * @param client - Operator client instance
- * @param workspaceId - Workspace ID
  * @param result - Planned function registry changes
  * @param phase - Apply phase
  */
 export async function applyFunctionRegistry(
   client: OperatorClient,
-  workspaceId: string,
   result: Awaited<ReturnType<typeof planFunctionRegistry>>,
   phase: Extract<ApplyPhase, "create-update" | "delete"> = "create-update",
 ) {
@@ -491,13 +497,13 @@ export async function applyFunctionRegistry(
     await Promise.all([
       ...changeSet.creates.map((create) =>
         limitFunction(async () => {
-          await uploadFunctionScript(client, workspaceId, create.entry, true);
+          await uploadFunctionScript(client, create, true);
           await writeMetadataLabels(client, create.metaRequest);
         }),
       ),
       ...changeSet.updates.map((update) =>
         limitFunction(async () => {
-          await uploadFunctionScript(client, workspaceId, update.entry, false);
+          await uploadFunctionScript(client, update, false);
           await writeMetadataLabels(client, update.metaRequest);
         }),
       ),

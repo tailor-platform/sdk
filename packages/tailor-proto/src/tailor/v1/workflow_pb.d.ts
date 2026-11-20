@@ -903,8 +903,10 @@ export declare const CancelWorkflowExecutionRequestSchema: GenMessage<CancelWork
  */
 export declare type CancelWorkflowExecutionResponse = Message<"tailor.v1.CancelWorkflowExecutionResponse"> & {
   /**
-   * Status after the cancel took effect. Always STATUS_CANCELED; carried so
-   * the caller does not need a follow-up GetWorkflowExecution.
+   * Status after the cancel took effect, carried so the caller does not need
+   * a follow-up GetWorkflowExecution. STATUS_CANCELING while jobs that were running
+   * are being stopped (the execution becomes STATUS_CANCELED once they have),
+   * STATUS_CANCELED when nothing had to stop.
    *
    * @generated from field: tailor.v1.WorkflowExecution.Status status = 1;
    */

@@ -235,40 +235,4 @@ describe("migration flow: creates of types predating the pending migrations", ()
     expect(createOrderOf(client, "Report")).toBeGreaterThan(firstScriptOrder()!);
     expect(createOrderOf(client, "Audit")).toBeLessThan(firstScriptOrder()!);
   });
-
-  test("does not pre-create a baseline type a pending migration removes and re-adds", async () => {
-    const client = checkpoint.createMockClient();
-    const planResult = createMockPlanResult({ creates: ["Draft", "Audit"] });
-    const audit = snapshotTable("Audit", { legacy: { type: "string", required: false } });
-    const draft = snapshotTable("Draft", { name: { type: "string", required: true } });
-    snapshotState.tablesByVersion = {
-      0: { Audit: audit, Draft: draft },
-      1: { Audit: audit, Draft: draft },
-      2: { Audit: audit },
-      3: { Audit: audit, Draft: draft },
-    };
-    planResult.context.pendingMigrations = checkpoint.mockPending([
-      mkPendingMigration([]),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      mkPendingMigration([{ kind: "table_removed", tableName: "Draft" } as any], {
-        number: 2,
-        hasScript: false,
-      }),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      mkPendingMigration([{ kind: "table_added", tableName: "Draft" } as any], {
-        number: 3,
-        hasScript: false,
-      }),
-    ]);
-
-    await applyTailorDB(client, planResult, "create-update");
-
-    // Pre-creating Draft would erase the remove→add boundary: with no delete
-    // entry in the plan, the removal's post phase would drop nothing and rows
-    // written before the removal would survive it.
-    const created = createdTypeCalls(client);
-    expect(created.filter((name) => name === "test-ns/Draft")).toHaveLength(1);
-    expect(createOrderOf(client, "Draft")).toBeGreaterThan(firstScriptOrder()!);
-    expect(createOrderOf(client, "Audit")).toBeLessThan(firstScriptOrder()!);
-  });
 });

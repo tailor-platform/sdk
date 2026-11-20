@@ -22,7 +22,7 @@ import {
 import {
   emptyPlanResults,
   plannedDeleteLists,
-  PLANNED_DELETE,
+  PLANNED_ITEM,
 } from "./deploy/test-helpers/plan-results";
 import { removeCommand } from "./remove";
 import type { PlanResults } from "./deploy/apply-phases";
@@ -260,20 +260,20 @@ describe("remove command", () => {
     vi.mocked(planWorkflowJobFunctionExecutionPolicy).mockImplementation(
       async () => mocks.plans.workflowExecutionPolicy,
     );
-    plannedDeleteLists(mocks.plans).get(path)!.push(PLANNED_DELETE);
+    plannedDeleteLists(mocks.plans).get(path)!.push(PLANNED_ITEM);
     const kind = path.split(".")[0] as keyof PlanResults;
     using _json = jsonMode();
 
     await runCommand(removeCommand, ["--yes"]);
 
-    expect(logger.log).toHaveBeenCalledWith(expect.stringContaining(`- ${PLANNED_DELETE.name}`));
+    expect(logger.log).toHaveBeenCalledWith(expect.stringContaining(`- ${PLANNED_ITEM.name}`));
     expect(APPLY_BY_PLAN[kind].mock.calls.flat()).toContain(mocks.plans[kind]);
     expect(logger.out).toHaveBeenCalledWith(expect.objectContaining({ changed: true }));
   });
 
   test("stops before listing or deleting anything when another application uses a service it deletes", async () => {
     mockClient();
-    mocks.plans.app.deletes.push({ ...PLANNED_DELETE, name: "my-app" });
+    mocks.plans.app.deletes.push({ ...PLANNED_ITEM, name: "my-app" });
     mocks.plans.app.existingApplications = [
       {
         name: "my-app",
@@ -289,14 +289,14 @@ describe("remove command", () => {
         ],
       },
     ] as never;
-    mocks.plans.auth.changeSet.service.deletes.push({ ...PLANNED_DELETE, name: "shared-auth" });
-    mocks.plans.auth.changeSet.machineUser.deletes.push({ ...PLANNED_DELETE, name: "admin" });
-    mocks.plans.tailorDB.changeSet.service.deletes.push({ ...PLANNED_DELETE, name: "main" });
+    mocks.plans.auth.changeSet.service.deletes.push({ ...PLANNED_ITEM, name: "shared-auth" });
+    mocks.plans.auth.changeSet.machineUser.deletes.push({ ...PLANNED_ITEM, name: "admin" });
+    mocks.plans.tailorDB.changeSet.service.deletes.push({ ...PLANNED_ITEM, name: "main" });
     mocks.plans.pipeline.changeSet.service.deletes.push({
-      ...PLANNED_DELETE,
+      ...PLANNED_ITEM,
       name: "my-resolvers",
     });
-    mocks.plans.idp.changeSet.service.deletes.push({ ...PLANNED_DELETE, name: "my-idp" });
+    mocks.plans.idp.changeSet.service.deletes.push({ ...PLANNED_ITEM, name: "my-idp" });
 
     const result = await runCommand(removeCommand, ["--yes"]);
 

@@ -428,7 +428,7 @@ function pluginSlug(commandPath: readonly string[] | undefined, name: string): s
 }
 
 /**
- * Resolve and execute a plugin, forwarding stdio and propagating its exit code.
+ * Resolve and execute a plugin, forwarding stdio and SIGTERM and propagating its exit code.
  * @param params - Dispatch parameters
  * @returns The plugin's exit code, or undefined when no matching plugin exists
  */
@@ -451,20 +451,32 @@ export async function dispatchPlugin(params: DispatchPluginParams): Promise<numb
   };
   const { command, args, shell } = buildSpawnTarget(plugin.path, params.args);
 
-  return await new Promise<number>((resolve) => {
-    const child = spawn(command, args, { stdio: "inherit", env, shell });
-    child.on("error", (error) => {
-      logger.error(`Failed to run plugin "${params.cliName}-${slug}": ${error.message}`);
-      resolve(1);
+  const child = spawn(command, args, { stdio: "inherit", env, shell });
+  // Ctrl+C already reaches the plugin in the same process group; a second SIGINT would interrupt it.
+  const ignoreInterrupt = () => {};
+  const forwardTerminate = () => {
+    child.kill("SIGTERM");
+  };
+  process.on("SIGINT", ignoreInterrupt);
+  process.on("SIGTERM", forwardTerminate);
+  try {
+    return await new Promise<number>((resolve) => {
+      child.on("error", (error) => {
+        logger.error(`Failed to run plugin "${params.cliName}-${slug}": ${error.message}`);
+        resolve(1);
+      });
+      child.on("close", (code, signal) => {
+        if (signal) {
+          resolve(signalToExitCode(signal));
+        } else {
+          resolve(code ?? 0);
+        }
+      });
     });
-    child.on("close", (code, signal) => {
-      if (signal) {
-        resolve(signalToExitCode(signal));
-      } else {
-        resolve(code ?? 0);
-      }
-    });
-  });
+  } finally {
+    process.off("SIGINT", ignoreInterrupt);
+    process.off("SIGTERM", forwardTerminate);
+  }
 }
 
 /**

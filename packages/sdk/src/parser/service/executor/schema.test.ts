@@ -4,6 +4,7 @@ import {
   ExecutorSchema,
   FunctionOperationSchema,
   GqlOperationSchema,
+  WebhookOperationSchema,
   WorkflowExecutionTriggerSchema,
   WorkflowJobExecutionTriggerSchema,
   WorkflowOperationSchema,
@@ -57,6 +58,27 @@ describe("FunctionOperationSchema", () => {
       }),
       "unknownOption",
     );
+  });
+});
+
+describe("WebhookOperationSchema", () => {
+  test("omits headers whose value is undefined", () => {
+    const operation = expectParseSuccess(
+      WebhookOperationSchema.safeParse({
+        kind: "webhook",
+        url: () => "https://example.com/hook",
+        headers: {
+          "X-Static": "v",
+          "X-Secret": { vault: "api-keys", key: "external" },
+          "X-Optional": undefined,
+        },
+      }),
+    );
+
+    expect(operation.headers).toStrictEqual({
+      "X-Static": "v",
+      "X-Secret": { vault: "api-keys", key: "external" },
+    });
   });
 });
 

@@ -3,7 +3,13 @@
 export type Secrets = {
   vaults: {
     [x: string]: {
-      [x: string]: string | null | undefined;
+      [x: string]:
+        | string
+        | {
+            create?: string | null | undefined;
+          }
+        | null
+        | undefined;
     };
   };
   options: {

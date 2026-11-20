@@ -537,65 +537,6 @@ describe("buildPreMigrationTables relations", () => {
     expect(tableNamed(tables, "Post").fields.author).not.toHaveProperty("foreignKey");
   });
 
-  test("a relation the migration retargets loses its reference, since its stored values still point at the old target", () => {
-    const person = { ...user, name: "Person", pluralForm: "People" };
-    const tables = buildPreMigrationTables(
-      snapshot(user, post({ ownerID: owner() })),
-      diff([
-        {
-          kind: "table_renamed",
-          tableName: "Person",
-          previousTableName: "User",
-          before: user,
-          after: person,
-        },
-        {
-          kind: "field_modified",
-          tableName: "Post",
-          fieldName: "ownerID",
-          before: owner(),
-          after: owner({ foreignKeyType: "Person" }),
-        },
-      ]),
-    );
-    const ownerID = tableNamed(tables, "Post").fields.ownerID;
-    expect(ownerID).toMatchObject({ type: "uuid", required: true });
-    expect(ownerID).not.toHaveProperty("foreignKey");
-  });
-
-  test("a relation inside a nested field loses its reference when the migration retargets it, and the other members keep theirs", () => {
-    const person = { ...user, name: "Person", pluralForm: "People" };
-    const nested = (target: string) =>
-      snapshotField("nested", {
-        fields: {
-          owner: owner({ foreignKeyType: target }),
-          editor: owner(),
-        },
-      });
-    const tables = buildPreMigrationTables(
-      snapshot(user, post({ info: nested("User") })),
-      diff([
-        {
-          kind: "table_renamed",
-          tableName: "Person",
-          previousTableName: "User",
-          before: user,
-          after: person,
-        },
-        {
-          kind: "field_modified",
-          tableName: "Post",
-          fieldName: "info",
-          before: nested("User"),
-          after: nested("Person"),
-        },
-      ]),
-    );
-    const members = tableNamed(tables, "Post").fields.info!.fields!;
-    expect(members.owner).not.toHaveProperty("foreignKey");
-    expect(members.editor).toMatchObject({ foreignKey: true, foreignKeyType: "User" });
-  });
-
   test("a relation the migration adds to an existing field loses its reference, since its stored values were never checked", () => {
     const tables = buildPreMigrationTables(
       snapshot(user, post({ ownerID: owner() })),

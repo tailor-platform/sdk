@@ -7,10 +7,16 @@
 
 import * as fs from "node:fs/promises";
 import { assertDefined } from "#/utils/assert";
-import { COLUMN_TYPE_ALIASES, mapFieldTypeToColumnType } from "#/utils/field-column-type";
+import {
+  COLUMN_TYPE_ALIASES,
+  isFilledOnCreate,
+  mapFieldTypeToColumnType,
+} from "#/utils/field-column-type";
 import { buildPreMigrationSnapshot } from "./pre-migration-schema";
 import {
+  applyDiffToSnapshot,
   getMigrationFilePath,
+  isBreakingIndexChange,
   type SchemaSnapshot,
   type SnapshotFieldConfig,
   type TailorDBSnapshotType,
@@ -40,30 +46,60 @@ interface BreakingChangeFieldInfo {
   enumValueChanges: Map<string, Map<string, EnumValueChange>>;
   /** Map of tableName -> Set of fieldNames a conversion script clears */
   clearedFields: Map<string, Set<string>>;
+  /** Map of tableName -> Set of fieldNames a unique constraint or unique index the migration adds covers */
+  madeUnique: Map<string, Set<string>>;
 }
 
 /**
  * Extract breaking change field information from diff
+ * @param {SchemaSnapshot} preMigration - Schema the migration script runs against
+ * @param {SchemaSnapshot} target - Schema after the migration
  * @param {MigrationDiff} diff - Migration diff
  * @returns {BreakingChangeFieldInfo} Breaking change field information
  */
-function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldInfo {
+function extractBreakingChangeFields(
+  preMigration: SchemaSnapshot,
+  target: SchemaSnapshot,
+  diff: MigrationDiff,
+): BreakingChangeFieldInfo {
   const optionalToRequired = new Map<string, Set<string>>();
   const enumValueChanges = new Map<string, Map<string, EnumValueChange>>();
+  const madeUnique = new Map<string, Set<string>>();
 
-  const markOptionalToRequired = (tableName: string, fieldName: string): void => {
-    const fields = optionalToRequired.get(tableName) ?? new Set<string>();
-    fields.add(fieldName);
-    optionalToRequired.set(tableName, fields);
-  };
+  for (const table of Object.values(target.tables)) {
+    const preMigrationTable = preMigration.tables[table.name];
+    const relaxed = Object.entries(table.fields).filter(([fieldName, field]) => {
+      const preMigrationField = preMigrationTable?.fields[fieldName];
+      return field.required && preMigrationField !== undefined && !preMigrationField.required;
+    });
+    if (relaxed.length > 0) {
+      optionalToRequired.set(table.name, new Set(relaxed.map(([fieldName]) => fieldName)));
+    }
+
+    const unique = new Set(
+      Object.entries(table.fields)
+        .filter(([fieldName, field]) => {
+          const preMigrationField = preMigrationTable?.fields[fieldName];
+          return (
+            (field.unique ?? false) &&
+            preMigrationField !== undefined &&
+            !(preMigrationField.unique ?? false)
+          );
+        })
+        .map(([fieldName]) => fieldName),
+    );
+    for (const [indexName, index] of Object.entries(table.indexes ?? {})) {
+      const preMigrationIndex = preMigrationTable?.indexes?.[indexName];
+      if (isBreakingIndexChange(table.name, indexName, preMigrationIndex, index)) {
+        for (const fieldName of index.fields) unique.add(fieldName);
+      }
+    }
+    if (unique.size > 0) madeUnique.set(table.name, unique);
+  }
 
   for (const change of diff.changes) {
     if (change.kind === "field_modified" || change.kind === "field_type_modified") {
       const { before, after } = change;
-
-      if (!before.required && after.required) {
-        markOptionalToRequired(change.tableName, change.fieldName);
-      }
 
       // Check if this is an enum value change. Snapshots omit allowedValues
       // when an enum has no values left, so a missing list is an empty one.
@@ -90,10 +126,6 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
           });
         }
       }
-    } else if (change.kind === "field_added" || change.kind === "field_renamed") {
-      if (change.after.required) {
-        markOptionalToRequired(change.tableName, change.fieldName);
-      }
     }
   }
 
@@ -101,6 +133,7 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
     optionalToRequired,
     enumValueChanges,
     clearedFields: new Map<string, Set<string>>(),
+    madeUnique,
   };
 }
 
@@ -120,13 +153,14 @@ function generateDbTypesFromSnapshot(
   expandPlans: readonly ExpandContractPlan[] = [],
   temporal = false,
 ): string {
-  // Extract breaking change field information
+  const preMigration = diff ? buildPreMigrationSnapshot(previousSnapshot, diff) : previousSnapshot;
   const breakingChangeFields = diff
-    ? extractBreakingChangeFields(diff)
+    ? extractBreakingChangeFields(preMigration, applyDiffToSnapshot(previousSnapshot, diff), diff)
     : {
         optionalToRequired: new Map(),
         enumValueChanges: new Map(),
         clearedFields: new Map<string, Set<string>>(),
+        madeUnique: new Map<string, Set<string>>(),
       };
 
   for (const plan of expandPlans) {
@@ -135,9 +169,7 @@ function generateDbTypesFromSnapshot(
     breakingChangeFields.clearedFields.set(plan.tableName, cleared);
   }
 
-  const tables = Object.values(
-    (diff ? buildPreMigrationSnapshot(previousSnapshot, diff) : previousSnapshot).tables,
-  );
+  const tables = Object.values(preMigration.tables);
   if (tables.length === 0) {
     return generateEmptyDbTypes(previousSnapshot.namespace);
   }
@@ -308,6 +340,9 @@ function generateTableType(
   const clearedFieldsForType =
     breakingChangeFields.clearedFields.get(type.name) ?? new Set<string>();
 
+  const madeUniqueFieldsForType =
+    breakingChangeFields.madeUnique.get(type.name) ?? new Set<string>();
+
   for (const [fieldName, fieldConfig] of Object.entries(type.fields)) {
     if (fieldName === "id") continue;
 
@@ -320,7 +355,14 @@ function generateTableType(
     const clearableResult = clearable
       ? generateClearableFieldType(fieldConfig, temporal)
       : undefined;
-    fieldLines.push(`    ${fieldName}: ${(clearableResult ?? result).type};`);
+    const rewritesExisting = isOptionalToRequired || madeUniqueFieldsForType.has(fieldName);
+    const column = wrapPlatformFilledColumn(
+      (clearableResult ?? result).type,
+      fieldConfig,
+      rewritesExisting,
+    );
+    fieldLines.push(`    ${fieldName}: ${column.type};`);
+    if (column.usesSerial) usedUtilityTypes.add("Serial");
     if (!clearable && result.usedUtilityType) usedUtilityTypes.add(result.usedUtilityType);
     usedColumnType = usedColumnType || result.usedColumnType || clearable;
     usedArrayColumnType = usedArrayColumnType || (!clearable && result.usedArrayColumnType);
@@ -334,6 +376,27 @@ function generateTableType(
   const typeDef = `  ${type.name}: {\n${fieldLines.join("\n")}\n  }`;
 
   return { typeDef, usedUtilityTypes, usedColumnType, usedArrayColumnType, usesTemporalNamespace };
+}
+
+/**
+ * Wrap a column the platform fills, as the app's Kysely types do: a serial field
+ * in `Serial<>`, and a field filled on create in `Generated<>`.
+ * @param type - Column type before wrapping
+ * @param config - Field configuration in the pre-migration snapshot
+ * @param rewritesExisting - Whether the script writes the field's existing values, which
+ * keeps a serial field writable and only lets inserts omit it
+ * @returns The wrapped column type, and whether it uses `Serial`
+ */
+function wrapPlatformFilledColumn(
+  type: string,
+  config: SnapshotFieldConfig,
+  rewritesExisting: boolean,
+): { type: string; usesSerial: boolean } {
+  const isSerial = config.serial !== undefined;
+  const usesSerial = isSerial && !rewritesExisting;
+  const wrapped = usesSerial ? `Serial<${type}>` : type;
+  const omittable = isFilledOnCreate(config) || (isSerial && rewritesExisting);
+  return { type: omittable ? `Generated<${wrapped}>` : wrapped, usesSerial };
 }
 
 /** A utility type reported as used, so the generated file's imports cover it. */

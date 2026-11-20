@@ -2,10 +2,10 @@ import { type MessageInitShape } from "@bufbuild/protobuf";
 import {
   type CreateExecutorExecutorRequestSchema,
   type DeleteExecutorExecutorRequestSchema,
-  type UpdateExecutorExecutorRequestSchema,
+  UpdateExecutorExecutorRequestSchema,
 } from "@tailor-platform/tailor-proto/executor_pb";
 import {
-  ExecutorExecutorSchema,
+  type ExecutorExecutorSchema,
   type ExecutorTargetConfigSchema,
   ExecutorTargetType,
   type ExecutorTargetWebhookHeaderSchema,
@@ -23,7 +23,7 @@ import { buildExecutorArgsExpr } from "#/cli/shared/runtime-exprs";
 import { stringifyFunction } from "#/parser/service/tailordb/index";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type ChangeSet } from "./change-set";
-import { areNormalizedEqual, normalizeProtoConfig, toComparableProtoJson } from "./compare";
+import { defineRequestComparison, isRequestUnchanged } from "./compare";
 import { executorFunctionName } from "./function-registry";
 import {
   formatChangeEntriesWithFunctionRegistry,
@@ -31,9 +31,9 @@ import {
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
 import { listInvokerMachineUsers, normalizeInvoker } from "./invoker";
+import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   buildMetaRequest,
-  hasMatchingSdkVersion,
   type MetadataLabelWrite,
   resourceTrn,
   type WithLabel,
@@ -106,6 +106,35 @@ type DeleteExecutor = {
   request: MessageInitShape<typeof DeleteExecutorExecutorRequestSchema>;
 };
 
+type DesiredExecutor = {
+  name: string;
+  request: MessageInitShape<typeof CreateExecutorExecutorRequestSchema> &
+    MessageInitShape<typeof UpdateExecutorExecutorRequestSchema>;
+  metaRequest: MetadataLabelWrite;
+};
+
+const executorComparison = defineRequestComparison({
+  schema: UpdateExecutorExecutorRequestSchema,
+  excluded: ["workspaceId"],
+  normalize: ({ executor }) => {
+    const trigger = executor?.triggerConfig?.config;
+    if (trigger?.case === "incomingWebhook") {
+      // The platform manages the webhook secret.
+      trigger.value.secret = "";
+    } else if (trigger?.case === "event") {
+      // oxlint-disable-next-line typescript/no-deprecated -- The platform fills this legacy field in responses although the SDK never sets it.
+      trigger.value.eventType = "";
+    }
+    const target = executor?.targetConfig?.config;
+    if (target?.case === "webhook") {
+      target.value.headers.sort((left, right) => left.key.localeCompare(right.key));
+    } else if (target?.case === "function") {
+      // The SDK sends the function by reference, never as an inline script.
+      target.value.script = "";
+    }
+  },
+});
+
 /**
  * Plan executor-related changes based on current and desired state.
  * @param context - Planning context
@@ -137,10 +166,6 @@ export async function planExecutor(
       getName: (resource) => resource.name,
       getTrn: (name) => resourceTrn(workspaceId, "executor", name),
     }));
-  // Diffing below deletes matched entries to find what's left to remove, so
-  // work on a copy and keep `fetchedExecutors` itself pristine for reuse.
-  const existingExecutors = { ...fetchedExecutors };
-
   const executors = forRemoval ? {} : ((await application.executorService?.loadExecutors()) ?? {});
   const knownMachineUsers = Object.values(executors).some(
     (executor) => "invoker" in executor.operation && typeof executor.operation.invoker === "string",
@@ -156,7 +181,7 @@ export async function planExecutor(
   const existingExecutorDetails = new Map(
     await Promise.all(
       Object.values(executors)
-        .filter((executor) => existingExecutors[executor.name])
+        .filter((executor) => fetchedExecutors[executor.name])
         .map(
           async (executor) =>
             [
@@ -168,60 +193,40 @@ export async function planExecutor(
         ),
     ),
   );
+  const desired: DesiredExecutor[] = [];
   for (const executor of Object.values(executors)) {
-    const existing = existingExecutors[executor.name];
-    const metaRequest = await buildMetaRequest({
-      trn: resourceTrn(workspaceId, "executor", executor.name),
-      appName: application.name,
-      appId: application.id,
+    desired.push({
+      name: executor.name,
+      request: {
+        workspaceId,
+        executor: protoExecutor(context, executor, application.env, knownMachineUsers),
+      },
+      metaRequest: await buildMetaRequest({
+        trn: resourceTrn(workspaceId, "executor", executor.name),
+        appName: application.name,
+        appId: application.id,
+      }),
     });
-    const desiredExecutor = protoExecutor(context, executor, application.env, knownMachineUsers);
-    if (existing) {
-      const owned = ownership.ownsDesired(existing.allLabels, {
-        resourceType: "executor",
-        resourceLabel: "Executor",
-        resourceName: executor.name,
-      });
-
-      const existingDetail = existingExecutorDetails.get(executor.name);
-      const configUnchanged =
-        owned && !!existingDetail && areExecutorsEqual(existingDetail, desiredExecutor);
-      if (configUnchanged && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
-        changeSet.unchanged.push({ name: executor.name });
-      } else {
-        changeSet.updates.push({
-          name: executor.name,
-          request: {
-            workspaceId,
-            executor: desiredExecutor,
-          },
-          metaRequest,
-          ...(configUnchanged && { forcedBySdkVersion: true }),
-        });
-      }
-      delete existingExecutors[executor.name];
-    } else {
-      changeSet.creates.push({
-        name: executor.name,
-        request: {
-          workspaceId,
-          executor: desiredExecutor,
-        },
-        metaRequest,
-      });
-    }
   }
-  Object.entries(existingExecutors).forEach(([name]) => {
-    const entry = existingExecutors[name];
-    if (ownership.ownsRemaining(entry?.allLabels)) {
-      changeSet.deletes.push({
-        name,
-        request: {
-          workspaceId,
-          name,
-        },
-      });
-    }
+  await diffKeyed({
+    changeSet,
+    desired,
+    existing: Object.entries(fetchedExecutors),
+    keyOf: (executor) => executor.name,
+    ...labeledResourceChecks(ownership, (executor: DesiredExecutor) => ({
+      resourceType: "executor",
+      resourceName: executor.name,
+    })),
+    isConfigUnchanged: (executor) => {
+      const detail = existingExecutorDetails.get(executor.name);
+      return (
+        !!detail && isRequestUnchanged(executorComparison, executor.request, { executor: detail })
+      );
+    },
+    create: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),
+    update: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),
+    unchanged: ({ name }) => ({ name }),
+    delete: (name) => ({ name, request: { workspaceId, name } }),
   });
 
   return {
@@ -284,85 +289,6 @@ export function formatExecutorChangeEntries(
         ? [executorFunctionName(item.name)]
         : [];
     },
-  );
-}
-
-function normalizeComparableExecutor(executor: MessageInitShape<typeof ExecutorExecutorSchema>) {
-  const normalized = normalizeProtoConfig(executor);
-  const webhookHeaders =
-    normalized.targetConfig?.config?.case === "webhook"
-      ? (normalized.targetConfig.config.value.headers ?? []).toSorted((left, right) =>
-          (left.key ?? "").localeCompare(right.key ?? ""),
-        )
-      : undefined;
-  const triggerConfig =
-    normalized.triggerConfig?.config?.case === "incomingWebhook"
-      ? {
-          ...normalized.triggerConfig,
-          config: {
-            ...normalized.triggerConfig.config,
-            value: {
-              ...normalized.triggerConfig.config.value,
-              // secret is server-managed, so omit it from comparison
-              secret: undefined,
-            },
-          },
-        }
-      : normalized.triggerConfig?.config?.case === "event"
-        ? {
-            ...normalized.triggerConfig,
-            config: {
-              ...normalized.triggerConfig.config,
-              value: {
-                ...normalized.triggerConfig.config.value,
-                // The platform fills this field in responses even though the SDK never sets it.
-                eventType: undefined,
-              },
-            },
-          }
-        : normalized.triggerConfig;
-  const comparable = normalizeProtoConfig({
-    name: normalized.name,
-    description: normalized.description ?? "",
-    disabled: normalized.disabled ?? false,
-    triggerType: normalized.triggerType,
-    triggerConfig,
-    targetType: normalized.targetType,
-    targetConfig:
-      normalized.targetConfig?.config?.case === "webhook"
-        ? {
-            ...normalized.targetConfig,
-            config: {
-              ...normalized.targetConfig.config,
-              value: {
-                ...normalized.targetConfig.config.value,
-                headers: webhookHeaders,
-              },
-            },
-          }
-        : normalized.targetConfig?.config?.case === "function"
-          ? {
-              ...normalized.targetConfig,
-              config: {
-                ...normalized.targetConfig.config,
-                value: {
-                  ...normalized.targetConfig.config.value,
-                  script: undefined,
-                },
-              },
-            }
-          : normalized.targetConfig,
-  }) as MessageInitShape<typeof ExecutorExecutorSchema>;
-  return toComparableProtoJson(ExecutorExecutorSchema, comparable);
-}
-
-function areExecutorsEqual(
-  existing: MessageInitShape<typeof ExecutorExecutorSchema>,
-  desired: MessageInitShape<typeof ExecutorExecutorSchema>,
-): boolean {
-  return areNormalizedEqual(
-    normalizeComparableExecutor(existing),
-    normalizeComparableExecutor(desired),
   );
 }
 

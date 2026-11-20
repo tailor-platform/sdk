@@ -10,7 +10,6 @@ export default {
     "e2e/fixtures/**",
     "src/cli/**/__test_fixtures__/**",
     "src/cli/ts-hook.d.mts",
-    "src/types/*.ts",
     "src/vitest/integration/vitest.config.ts",
     "src/vitest/integration/fixtures/tailor.config.ts",
     "src/vitest/integration/fixtures/user-setup-probe.ts",

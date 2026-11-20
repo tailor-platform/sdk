@@ -42,19 +42,9 @@ export type SerialConfig<T extends "string" | "integer" = "string" | "integer"> 
     : object)
 >;
 
-export interface DBFieldMetadata extends FieldMetadata {
-  index?: boolean;
-  unique?: boolean;
-  vector?: boolean;
-  foreignKey?: boolean;
-  foreignKeyType?: string;
-  foreignKeyField?: string;
-  /** Lifecycle hooks for the field */
-  hooks?: DBFieldMetadataGenerated["hooks"];
+export interface DBFieldMetadata extends Omit<DBFieldMetadataGenerated, "validate" | "serial"> {
+  validate?: FieldMetadata["validate"];
   serial?: SerialConfig;
-  relation?: boolean;
-  scale?: number;
-  default?: unknown;
 }
 
 export interface DefinedDBFieldMetadata extends DefinedFieldMetadata {
@@ -356,7 +346,7 @@ export type RelationType = "1-1" | "oneToOne" | "n-1" | "manyToOne" | "N-1" | "k
 
 type TailorDBExternalConfig = { external: true };
 
-type TailorDBOwnServiceConfigInput = Omit<TailorDBServiceConfigInput, "ignores"> & {
+export type TailorDBOwnServiceConfigInput = Omit<TailorDBServiceConfigInput, "ignores"> & {
   /**
    * Glob patterns to exclude from table discovery.
    * @deprecated since 2.40.0 — write `!`-prefixed patterns in `files` instead. codemod: v3/files-ignores-to-negation

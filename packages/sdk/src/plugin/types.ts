@@ -22,6 +22,7 @@ import type * as Pathe from "pathe";
  * A single generated file to write to disk.
  */
 interface GeneratedFile {
+  /** Output path; a relative path resolves against the directory of tailor.config.ts. */
   path: string;
   content: string;
   skipIfExists?: boolean;
@@ -408,7 +409,7 @@ export interface Plugin<
     context: ExecutorReadyContext<PluginConfig>,
   ): GeneratorResult | Promise<GeneratorResult>;
 
-  /** Runs after a successful deploy, including deploys with no resource changes. */
+  /** Runs after a deploy applies its resources, including deploys with no resource changes. */
   onDeployed?(
     context: DeployedContext<PluginConfig>,
   ): void | DeployedHookResult | Promise<void | DeployedHookResult>;

@@ -752,6 +752,29 @@ describe("verifyRemoteSchema", () => {
       });
     });
 
+    test("accepts a table whose deletion the checkpoint's migration did not finish, though a later migration adds it again", async () => {
+      const dir = migrationsDirWith({ User: snapshotType("User"), Post: snapshotType("Post") });
+      writeDiff(dir, 1, [
+        { kind: "table_removed", tableName: "Post", before: snapshotType("Post") },
+      ]);
+      writeDiff(dir, 2, [{ kind: "table_added", tableName: "Post", after: snapshotType("Post") }]);
+      const client = remoteClient(
+        { labels: { "sdk-migration": "m0001", "sdk-migration-cleanup": "m0001" } },
+        [remoteType("User", ["id", "name"]), restrictedRemoteType("Post", ["id", "name"])],
+      );
+
+      const [result] = await verifyRemoteSchema(
+        client,
+        "workspace",
+        [{ namespace: "tailordb", migrationsDir: dir }],
+        {} as LoadedConfig,
+        [],
+        { acceptUnfinishedRemovals: true, acceptInterruptedMigration: true },
+      );
+
+      expect(result).toMatchObject({ hasDrift: false, unfinishedRemovals: ["Post"] });
+    });
+
     test("reports drift when no local migration follows the checkpoint", async () => {
       const client = remoteClient({ labels: { "sdk-migration": "m0000" } }, [
         restrictedRemoteType("User", ["id", "name"]),

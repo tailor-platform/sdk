@@ -2,14 +2,19 @@ import {
   EXECUTION_POLICY_KEY_WILDCARD_MESSAGE,
   toPlatformExecutionPolicyKey as toPlatformKey,
 } from "@tailor-platform/shared/workflow-policy";
+import {
+  type CreateWorkflowJobFunctionExecutionPolicyRequestSchema,
+  UpdateWorkflowJobFunctionExecutionPolicyRequestSchema,
+} from "@tailor-platform/tailor-proto/workflow_pb";
+import { ConcurrencyPolicySchema } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { type OperatorClient } from "#/cli/shared/client";
 import { CLIError } from "#/cli/shared/errors";
 import { WorkflowJobFunctionExecutionPolicySchema } from "#/parser/service/workflow/schema";
 import { createChangeSet } from "./change-set";
-import { areNormalizedEqual } from "./compare";
+import { defineRequestComparison, emptyMessageAsUnset, isRequestUnchanged } from "./compare";
+import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   buildMetaRequest,
-  hasMatchingSdkVersion,
   type MetadataLabelWrite,
   resourceTrn,
   writeMetadataLabels,
@@ -18,7 +23,6 @@ import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owne
 import type { ExecutionPolicyInstance } from "#/configure/services/workflow/execution-policy.types";
 import type { ApplyPhase } from "./phase";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { ConcurrencyPolicySchema } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 type CreatePolicy = {
   name: string;
@@ -46,6 +50,11 @@ type ReplacePolicy = {
   metaRequest: MetadataLabelWrite;
 };
 
+type DesiredPolicy = {
+  policy: ExecutionPolicyInstance;
+  metaRequest: MetadataLabelWrite;
+};
+
 function toConcurrencyPolicyInit(
   policy: ExecutionPolicyInstance["concurrencyPolicy"],
 ): MessageInitShape<typeof ConcurrencyPolicySchema> | undefined {
@@ -53,12 +62,51 @@ function toConcurrencyPolicyInit(
   return { maxConcurrentExecutions: policy.maxConcurrentExecutions };
 }
 
-function normalizeComparableConcurrency(
-  policy: { maxConcurrentExecutions?: number } | undefined,
-): { maxConcurrentExecutions: number } | undefined {
-  if (!policy || !policy.maxConcurrentExecutions) return undefined;
-  return { maxConcurrentExecutions: policy.maxConcurrentExecutions };
+/**
+ * Build the request that creates an execution policy.
+ * @param workspaceId - Workspace the policy belongs to
+ * @param policy - Execution policy from the config
+ * @returns The create request
+ */
+export function executionPolicyCreateRequest(
+  workspaceId: string,
+  policy: ExecutionPolicyInstance,
+): MessageInitShape<typeof CreateWorkflowJobFunctionExecutionPolicyRequestSchema> {
+  return {
+    workspaceId,
+    executionPolicyName: policy.name,
+    executionPolicyKey: toPlatformExecutionPolicyKey(policy),
+    concurrencyPolicy: toConcurrencyPolicyInit(policy.concurrencyPolicy),
+  };
 }
+
+/**
+ * Build the request that updates an execution policy.
+ * @param workspaceId - Workspace the policy belongs to
+ * @param policy - Execution policy from the config
+ * @returns The update request
+ */
+export function executionPolicyUpdateRequest(
+  workspaceId: string,
+  policy: ExecutionPolicyInstance,
+): MessageInitShape<typeof UpdateWorkflowJobFunctionExecutionPolicyRequestSchema> {
+  return {
+    workspaceId,
+    executionPolicyName: policy.name,
+    concurrencyPolicy: toConcurrencyPolicyInit(policy.concurrencyPolicy),
+  };
+}
+
+const executionPolicyComparison = defineRequestComparison({
+  schema: UpdateWorkflowJobFunctionExecutionPolicyRequestSchema,
+  excluded: ["workspaceId", "executionPolicyName"],
+  normalize: (request) => {
+    request.concurrencyPolicy = emptyMessageAsUnset(
+      ConcurrencyPolicySchema,
+      request.concurrencyPolicy,
+    );
+  },
+});
 
 /**
  * The declared key prefix, regardless of variant. `ExecutionPolicyWildcardInstance`
@@ -158,6 +206,7 @@ export async function planWorkflowJobFunctionExecutionPolicy(
   });
 
   const seenNames = new Set<string>();
+  const desired: DesiredPolicy[] = [];
   for (const policy of declaredList) {
     if (seenNames.has(policy.name)) {
       throw CLIError({
@@ -166,59 +215,37 @@ export async function planWorkflowJobFunctionExecutionPolicy(
       });
     }
     seenNames.add(policy.name);
-
-    const currentTrn = resourceTrn(
-      workspaceId,
-      "workflow_job_function_execution_policy",
-      policy.name,
-    );
-    const metaRequest = await buildMetaRequest({ trn: currentTrn, appName, appId });
-    const found = existing[policy.name];
-
-    if (found) {
-      const owned = ownership.ownsDesired(found.allLabels, {
-        resourceType: "workflow_job_function_execution_policy",
-        resourceLabel: "Workflow execution policy",
-        resourceName: policy.name,
-      });
-
-      const remoteKey = found.resource.executionPolicyKey;
-      const desiredKey = toPlatformExecutionPolicyKey(policy);
-      const remoteConcurrency = normalizeComparableConcurrency(found.resource.concurrencyPolicy);
-      const desiredConcurrency = normalizeComparableConcurrency(policy.concurrencyPolicy);
-      const configUnchanged =
-        owned &&
-        remoteKey === desiredKey &&
-        areNormalizedEqual(remoteConcurrency, desiredConcurrency);
-
-      if (configUnchanged && hasMatchingSdkVersion(found.allLabels, metaRequest.labels)) {
-        changeSet.unchanged.push({ name: policy.name });
-      } else if (remoteKey !== desiredKey) {
-        // execution_policy_key is immutable after create; the platform requires
-        // a delete-then-create in the same apply pass. Handled as `replaces`
-        // (not delete + create) so the create phase does not race the delete.
-        changeSet.replaces.push({ name: policy.name, workspaceId, policy, metaRequest });
-      } else {
-        changeSet.updates.push({
-          name: policy.name,
-          workspaceId,
-          policy,
-          metaRequest,
-          ...(configUnchanged && { forcedBySdkVersion: true }),
-        });
-      }
-      delete existing[policy.name];
-    } else {
-      changeSet.creates.push({ name: policy.name, workspaceId, policy, metaRequest });
-    }
+    const trn = resourceTrn(workspaceId, "workflow_job_function_execution_policy", policy.name);
+    desired.push({ policy, metaRequest: await buildMetaRequest({ trn, appName, appId }) });
   }
 
-  for (const [name, remaining] of Object.entries(existing)) {
-    if (!remaining) continue;
-    if (ownership.ownsRemaining(remaining.allLabels)) {
-      changeSet.deletes.push({ name, workspaceId });
-    }
-  }
+  await diffKeyed({
+    changeSet,
+    desired,
+    existing: Object.entries(existing),
+    keyOf: ({ policy }) => policy.name,
+    ...labeledResourceChecks(ownership, ({ policy }: DesiredPolicy) => ({
+      resourceType: "workflow_job_function_execution_policy",
+      resourceName: policy.name,
+    })),
+    // execution_policy_key is immutable after create; the platform requires
+    // a delete-then-create in the same apply pass. Handled as `replaces`
+    // (not delete + create) so the create phase does not race the delete.
+    replace: ({ policy, metaRequest }, found) =>
+      found.resource.executionPolicyKey === toPlatformExecutionPolicyKey(policy)
+        ? undefined
+        : { name: policy.name, workspaceId, policy, metaRequest },
+    isConfigUnchanged: ({ policy }, found) =>
+      isRequestUnchanged(
+        executionPolicyComparison,
+        executionPolicyUpdateRequest(workspaceId, policy),
+        found.resource,
+      ),
+    create: ({ policy, metaRequest }) => ({ name: policy.name, workspaceId, policy, metaRequest }),
+    update: ({ policy, metaRequest }) => ({ name: policy.name, workspaceId, policy, metaRequest }),
+    unchanged: ({ policy }) => ({ name: policy.name }),
+    delete: (name) => ({ name, workspaceId }),
+  });
 
   return { changeSet, ...ownership.result };
 }
@@ -246,29 +273,21 @@ export async function applyWorkflowJobFunctionExecutionPolicy(
           workspaceId: replace.workspaceId,
           executionPolicyName: replace.name,
         });
-        await client.createWorkflowJobFunctionExecutionPolicy({
-          workspaceId: replace.workspaceId,
-          executionPolicyName: replace.policy.name,
-          executionPolicyKey: toPlatformExecutionPolicyKey(replace.policy),
-          concurrencyPolicy: toConcurrencyPolicyInit(replace.policy.concurrencyPolicy),
-        });
+        await client.createWorkflowJobFunctionExecutionPolicy(
+          executionPolicyCreateRequest(replace.workspaceId, replace.policy),
+        );
         await writeMetadataLabels(client, replace.metaRequest);
       }),
       ...changeSet.creates.map(async (create) => {
-        await client.createWorkflowJobFunctionExecutionPolicy({
-          workspaceId: create.workspaceId,
-          executionPolicyName: create.policy.name,
-          executionPolicyKey: toPlatformExecutionPolicyKey(create.policy),
-          concurrencyPolicy: toConcurrencyPolicyInit(create.policy.concurrencyPolicy),
-        });
+        await client.createWorkflowJobFunctionExecutionPolicy(
+          executionPolicyCreateRequest(create.workspaceId, create.policy),
+        );
         await writeMetadataLabels(client, create.metaRequest);
       }),
       ...changeSet.updates.map(async (update) => {
-        await client.updateWorkflowJobFunctionExecutionPolicy({
-          workspaceId: update.workspaceId,
-          executionPolicyName: update.policy.name,
-          concurrencyPolicy: toConcurrencyPolicyInit(update.policy.concurrencyPolicy),
-        });
+        await client.updateWorkflowJobFunctionExecutionPolicy(
+          executionPolicyUpdateRequest(update.workspaceId, update.policy),
+        );
         await writeMetadataLabels(client, update.metaRequest);
       }),
     ]);

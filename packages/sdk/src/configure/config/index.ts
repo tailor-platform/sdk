@@ -2,7 +2,10 @@ import type { AppConfig } from "#/configure/config/types";
 import type { IdPConfig } from "#/configure/services/idp/types";
 import type { Plugin } from "#/plugin/types";
 
-type UnknownKeys<Config> = Record<Exclude<keyof Config, keyof AppConfig>, never>;
+export type UnknownKeys<Config, Base = AppConfig> = Record<
+  Exclude<keyof Config, keyof Base>,
+  never
+>;
 
 /**
  * Define a Tailor SDK application configuration with shallow exactness.

@@ -1,12 +1,14 @@
 // oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
+import { runCommand } from "@politty/zod";
 import { aroundEach, describe, expect, test, vi, type Mock } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
-import { show } from "./show";
+import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
+import { show, showCommand } from "./show";
 
 vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
@@ -36,7 +38,7 @@ type ListAuthOAuth2Clients = (args: {
   pageToken: string;
   pageSize: number;
 }) => Promise<{
-  oauth2Clients: { name: string; clientId: string; clientSecret: string }[];
+  oauth2Clients: { name: string; clientId: string }[];
   nextPageToken: string;
 }>;
 
@@ -90,6 +92,24 @@ describe("show", () => {
       listAuthOAuth2Clients: listAuthOAuth2ClientsMock,
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
     await runTest();
+  });
+
+  test.each([
+    { args: [], configPath: undefined },
+    { args: ["--config", "apps/shop/tailor.config.ts"], configPath: "apps/shop/tailor.config.ts" },
+  ])("loads the config the command was given ($args)", async ({ args, configPath }) => {
+    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
+    using _logger = silenceLogger("out");
+    getAIGatewayMock.mockRejectedValue(new ConnectError("not found", Code.NotFound));
+
+    try {
+      const result = await runCommand(showCommand, args);
+      expect(result.error).toBeUndefined();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+
+    expect(loadConfig).toHaveBeenCalledWith(configPath);
   });
 
   test("includes the URL of every configured AI Gateway", async () => {
@@ -269,9 +289,9 @@ describe("show", () => {
       mockConfig({ auth: { name: "local-auth", oauth2Clients } });
       listAuthOAuth2ClientsMock.mockResolvedValue({
         oauth2Clients: [
-          { name: "mobile", clientId: "mobile-id", clientSecret: "mobile-secret" },
-          { name: "unmanaged", clientId: "unmanaged-id", clientSecret: "unmanaged-secret" },
-          { name: "web", clientId: "web-id", clientSecret: "web-secret" },
+          { name: "mobile", clientId: "mobile-id" },
+          { name: "unmanaged", clientId: "unmanaged-id" },
+          { name: "web", clientId: "web-id" },
         ],
         nextPageToken: "",
       });
@@ -287,31 +307,17 @@ describe("show", () => {
       );
     });
 
-    test("never returns client secrets and redacts them from diagnostics", async () => {
-      using registerSecretSpy = vi.spyOn(logger, "registerSecret").mockImplementation(() => {});
-      mockConfig({ auth: { name: "local-auth", oauth2Clients } });
-      listAuthOAuth2ClientsMock.mockResolvedValue({
-        oauth2Clients: [{ name: "web", clientId: "web-id", clientSecret: "web-secret" }],
-        nextPageToken: "",
-      });
-
-      const info = await show();
-
-      expect(JSON.stringify(info)).not.toContain("web-secret");
-      expect(registerSecretSpy).toHaveBeenCalledWith("web-secret");
-    });
-
     test("reads every page of OAuth2 clients", async () => {
       mockConfig({ auth: { name: "local-auth", oauth2Clients } });
       vi.when(listAuthOAuth2ClientsMock)
         .calledWith(expect.objectContaining({ pageToken: "" }))
         .thenResolve({
-          oauth2Clients: [{ name: "web", clientId: "web-id", clientSecret: "web-secret" }],
+          oauth2Clients: [{ name: "web", clientId: "web-id" }],
           nextPageToken: "page-2",
         })
         .calledWith(expect.objectContaining({ pageToken: "page-2" }))
         .thenResolve({
-          oauth2Clients: [{ name: "mobile", clientId: "mobile-id", clientSecret: "mobile-secret" }],
+          oauth2Clients: [{ name: "mobile", clientId: "mobile-id" }],
           nextPageToken: "",
         });
 
@@ -327,7 +333,7 @@ describe("show", () => {
     test("omits OAuth2 clients that have not been deployed yet", async () => {
       mockConfig({ auth: { name: "local-auth", oauth2Clients } });
       listAuthOAuth2ClientsMock.mockResolvedValue({
-        oauth2Clients: [{ name: "web", clientId: "web-id", clientSecret: "web-secret" }],
+        oauth2Clients: [{ name: "web", clientId: "web-id" }],
         nextPageToken: "",
       });
 

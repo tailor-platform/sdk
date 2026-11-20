@@ -3,7 +3,7 @@ import { existsSync, rmSync } from "node:fs";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { applyAuthConnections, type planAuthConnections } from "./auth-connection";
 import { applySecretManager, type planSecretManager } from "./secret-manager";
-import { hashValue, loadSecretsState } from "./secrets-state";
+import { hashValue, loadSecretsState, type SecretsStateScope } from "./secrets-state";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 
@@ -17,7 +17,8 @@ const stateScope = {
   workspaceId: "ws-1",
   applicationId: "app-1",
   applicationName: "test-app",
-};
+  configPath: "/proj/app/tailor.config.ts",
+} satisfies SecretsStateScope;
 
 const application = {
   name: "test-app",
@@ -59,10 +60,10 @@ function secretPlanResult(updates: Array<ReturnType<typeof secretUpdate>>) {
   } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
 }
 
-function connectionReplace(name: string, clientSecret: string) {
+function connectionUpdate(name: string, clientSecret: string) {
   return {
     name,
-    updateRequest: {
+    request: {
       workspaceId: "ws-1",
       connection: {
         name,
@@ -74,10 +75,10 @@ function connectionReplace(name: string, clientSecret: string) {
   };
 }
 
-function connectionPlanResult(replaces: Array<ReturnType<typeof connectionReplace>>) {
+function connectionPlanResult(updates: Array<ReturnType<typeof connectionUpdate>>) {
   return {
     stateScope,
-    changeSet: { creates: [], updates: [], deletes: [], replaces },
+    changeSet: { creates: [], updates, deletes: [], replaces: [] },
   } as unknown as Awaited<ReturnType<typeof planAuthConnections>>;
 }
 
@@ -165,20 +166,22 @@ describe("concurrent deploys to the same target", () => {
     const applyA = applyAuthConnections(
       clientA,
       connectionPlanResult([
-        connectionReplace("shared-conn", "secret-from-a"),
-        connectionReplace("trailing-conn", "trailing-secret"),
+        connectionUpdate("shared-conn", "secret-from-a"),
+        connectionUpdate("trailing-conn", "trailing-secret"),
       ]),
       "create-update",
     );
     const applyB = applyAuthConnections(
       clientB,
-      connectionPlanResult([connectionReplace("shared-conn", "secret-from-b")]),
+      connectionPlanResult([connectionUpdate("shared-conn", "secret-from-b")]),
       "create-update",
     );
     void applyB.catch(() => {}).finally(() => bSettled.resolve());
 
     await Promise.all([applyA, applyB]);
 
+    expect(clientA.updateAuthConnection).toHaveBeenCalledTimes(2);
+    expect(clientB.updateAuthConnection).toHaveBeenCalledTimes(1);
     const state = loadSecretsState(stateScope);
     expect(state.connections?.["shared-conn"]).toBe(hashValue(remote.get("shared-conn")!));
     expect(state.connections?.["trailing-conn"]).toBe(hashValue("trailing-secret"));

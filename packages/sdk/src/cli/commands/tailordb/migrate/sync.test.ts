@@ -167,6 +167,9 @@ describe("tailordb migration sync", () => {
     const result = await runCommand(syncCommand, ["1", "--yes"]);
 
     expect(result.success).toBe(true);
+    expect(initOperatorClient).toHaveBeenCalledWith("mock-token", undefined, {
+      createsPlannedResources: true,
+    });
     // Snapshot at 0001 contains User (existing → update) and Post (new → create);
     // remote-only Stale is deleted.
     expect(state.createTailorDBType).toHaveBeenCalledTimes(1);

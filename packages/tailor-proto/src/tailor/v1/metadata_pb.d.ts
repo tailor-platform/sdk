@@ -6,6 +6,7 @@ import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 import type { Metadata } from "./metadata_resource_pb";
 import type { PageDirection } from "./resource_pb";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
 
 /**
  * Describes the file tailor/v1/metadata.proto.
@@ -243,4 +244,119 @@ export declare type ListMetadataResult = Message<"tailor.v1.ListMetadataResult">
  * Use `create(ListMetadataResultSchema)` to create a new message.
  */
 export declare const ListMetadataResultSchema: GenMessage<ListMetadataResult>;
+
+/**
+ * ListResourcesRequest lists resources in a workspace from the resource
+ * index, with each resource's metadata labels. Filters and pagination match
+ * ListMetadataRequest.
+ *
+ * @generated from message tailor.v1.ListResourcesRequest
+ */
+export declare type ListResourcesRequest = Message<"tailor.v1.ListResourcesRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * Same semantics and validation as ListMetadataRequest.labels: resources
+   * must have every given key-value pair (AND). When empty, every resource
+   * matches, including unlabeled ones.
+   *
+   * @generated from field: map<string, string> labels = 2;
+   */
+  labels: { [key: string]: string };
+
+  /**
+   * Opaque cursor from a previous response's next_page_token. Results are
+   * ordered by TRN (lexicographic), as in ListMetadata.
+   *
+   * @generated from field: string page_token = 3;
+   */
+  pageToken: string;
+
+  /**
+   * @generated from field: uint32 page_size = 4;
+   */
+  pageSize: number;
+
+  /**
+   * @generated from field: tailor.v1.PageDirection page_direction = 5;
+   */
+  pageDirection: PageDirection;
+
+  /**
+   * When set, only resources of these TRN resource types match, e.g.
+   * "application" or "auth_machine_user".
+   *
+   * @generated from field: repeated string resource_types = 6;
+   */
+  resourceTypes: string[];
+};
+
+/**
+ * Describes the message tailor.v1.ListResourcesRequest.
+ * Use `create(ListResourcesRequestSchema)` to create a new message.
+ */
+export declare const ListResourcesRequestSchema: GenMessage<ListResourcesRequest>;
+
+/**
+ * @generated from message tailor.v1.ListResourcesResponse
+ */
+export declare type ListResourcesResponse = Message<"tailor.v1.ListResourcesResponse"> & {
+  /**
+   * @generated from field: repeated tailor.v1.ListResourcesResult resources = 1;
+   */
+  resources: ListResourcesResult[];
+
+  /**
+   * @generated from field: string next_page_token = 2;
+   */
+  nextPageToken: string;
+
+  /**
+   * @generated from field: int64 total_count = 3;
+   */
+  totalCount: bigint;
+};
+
+/**
+ * Describes the message tailor.v1.ListResourcesResponse.
+ * Use `create(ListResourcesResponseSchema)` to create a new message.
+ */
+export declare const ListResourcesResponseSchema: GenMessage<ListResourcesResponse>;
+
+/**
+ * @generated from message tailor.v1.ListResourcesResult
+ */
+export declare type ListResourcesResult = Message<"tailor.v1.ListResourcesResult"> & {
+  /**
+   * @generated from field: string trn = 1;
+   */
+  trn: string;
+
+  /**
+   * @generated from field: string resource_type = 2;
+   */
+  resourceType: string;
+
+  /**
+   * Unset when the creation time is unknown: the resource was indexed by a
+   * backfill, and its service reports no creation time.
+   *
+   * @generated from field: google.protobuf.Timestamp create_time = 3;
+   */
+  createTime?: Timestamp;
+
+  /**
+   * @generated from field: tailor.v1.Metadata metadata = 4;
+   */
+  metadata?: Metadata;
+};
+
+/**
+ * Describes the message tailor.v1.ListResourcesResult.
+ * Use `create(ListResourcesResultSchema)` to create a new message.
+ */
+export declare const ListResourcesResultSchema: GenMessage<ListResourcesResult>;
 

@@ -539,6 +539,58 @@ export declare type MachineUser = Message<"tailor.v1.MachineUser"> & {
 export declare const MachineUserSchema: GenMessage<MachineUser>;
 
 /**
+ * MachineUserSummary is the projection of MachineUser returned by list
+ * endpoints. Field tags are intentionally aligned with MachineUser so clients
+ * generated against either message can decode the other on the wire. The
+ * `client_secret` (tag 4) field is omitted; callers that need it must use
+ * GetAuthMachineUser.
+ *
+ * @generated from message tailor.v1.MachineUserSummary
+ */
+export declare type MachineUserSummary = Message<"tailor.v1.MachineUserSummary"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * @generated from field: string client_id = 3;
+   */
+  clientId: string;
+
+  /**
+   * @generated from field: repeated string attributes = 5;
+   */
+  attributes: string[];
+
+  /**
+   * @generated from field: google.protobuf.Timestamp created_at = 6;
+   */
+  createdAt?: Timestamp;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp updated_at = 7;
+   */
+  updatedAt?: Timestamp;
+
+  /**
+   * @generated from field: map<string, google.protobuf.Value> attribute_map = 8;
+   */
+  attributeMap: { [key: string]: Value };
+};
+
+/**
+ * Describes the message tailor.v1.MachineUserSummary.
+ * Use `create(MachineUserSummarySchema)` to create a new message.
+ */
+export declare const MachineUserSummarySchema: GenMessage<MachineUserSummary>;
+
+/**
  * Auth SCIM ------------------------------------------------
  *
  * @generated from message tailor.v1.AuthSCIMConfig
@@ -1046,8 +1098,10 @@ export declare type AuthOAuth2Client = Message<"tailor.v1.AuthOAuth2Client"> & {
   accessTokenLifetime?: Duration;
 
   /**
-   * Optional refresh token lifetime. If not set, uses the default lifetime.
-   * Minimum allowed value is 60 seconds, maximum is 7 days (604800 seconds).
+   * Optional refresh token lifetime, counted from the first authorization and
+   * not extended by rotation. If not set, uses the default lifetime (7 days).
+   * Minimum allowed value is 60 seconds, maximum is 90 days (7776000 seconds).
+   * A value above 7 days requires refresh_token_idle_lifetime.
    *
    * @generated from field: google.protobuf.Duration refresh_token_lifetime = 10;
    */
@@ -1060,6 +1114,18 @@ export declare type AuthOAuth2Client = Message<"tailor.v1.AuthOAuth2Client"> & {
    * @generated from field: bool require_dpop = 11;
    */
   requireDpop: boolean;
+
+  /**
+   * Optional refresh token idle lifetime. When set, a refresh token also
+   * expires once it has not been used for this long, and each refresh restarts
+   * the count without going past refresh_token_lifetime. If not set, a refresh
+   * token has no idle expiry.
+   * Minimum allowed value is 60 seconds, maximum is 30 days (2592000 seconds).
+   * Must be between access_token_lifetime and refresh_token_lifetime.
+   *
+   * @generated from field: google.protobuf.Duration refresh_token_idle_lifetime = 12;
+   */
+  refreshTokenIdleLifetime?: Duration;
 };
 
 /**
@@ -1124,6 +1190,78 @@ export enum AuthOAuth2Client_ClientType {
 export declare const AuthOAuth2Client_ClientTypeSchema: GenEnum<AuthOAuth2Client_ClientType>;
 
 /**
+ * AuthOAuth2ClientSummary is the projection of AuthOAuth2Client returned by
+ * list endpoints. Field tags are intentionally aligned with AuthOAuth2Client so
+ * clients generated against either message can decode the other on the wire.
+ * The `client_secret` (tag 6) field is omitted; callers that need it must use
+ * GetAuthOAuth2Client.
+ *
+ * @generated from message tailor.v1.AuthOAuth2ClientSummary
+ */
+export declare type AuthOAuth2ClientSummary = Message<"tailor.v1.AuthOAuth2ClientSummary"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * @generated from field: string description = 2;
+   */
+  description: string;
+
+  /**
+   * @generated from field: repeated tailor.v1.AuthOAuth2Client.GrantType grant_types = 3;
+   */
+  grantTypes: AuthOAuth2Client_GrantType[];
+
+  /**
+   * @generated from field: repeated string redirect_uris = 4;
+   */
+  redirectUris: string[];
+
+  /**
+   * @generated from field: string client_id = 5;
+   */
+  clientId: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp created_at = 7;
+   */
+  createdAt?: Timestamp;
+
+  /**
+   * @generated from field: tailor.v1.AuthOAuth2Client.ClientType client_type = 8;
+   */
+  clientType: AuthOAuth2Client_ClientType;
+
+  /**
+   * @generated from field: google.protobuf.Duration access_token_lifetime = 9;
+   */
+  accessTokenLifetime?: Duration;
+
+  /**
+   * @generated from field: google.protobuf.Duration refresh_token_lifetime = 10;
+   */
+  refreshTokenLifetime?: Duration;
+
+  /**
+   * @generated from field: bool require_dpop = 11;
+   */
+  requireDpop: boolean;
+
+  /**
+   * @generated from field: google.protobuf.Duration refresh_token_idle_lifetime = 12;
+   */
+  refreshTokenIdleLifetime?: Duration;
+};
+
+/**
+ * Describes the message tailor.v1.AuthOAuth2ClientSummary.
+ * Use `create(AuthOAuth2ClientSummarySchema)` to create a new message.
+ */
+export declare const AuthOAuth2ClientSummarySchema: GenMessage<AuthOAuth2ClientSummary>;
+
+/**
  * @generated from message tailor.v1.ControlplaneMachineUser
  */
 export declare type ControlplaneMachineUser = Message<"tailor.v1.ControlplaneMachineUser"> & {
@@ -1168,6 +1306,53 @@ export declare type ControlplaneMachineUser = Message<"tailor.v1.ControlplaneMac
  * Use `create(ControlplaneMachineUserSchema)` to create a new message.
  */
 export declare const ControlplaneMachineUserSchema: GenMessage<ControlplaneMachineUser>;
+
+/**
+ * ControlplaneMachineUserSummary is the projection of ControlplaneMachineUser
+ * returned by list endpoints. Field tags are intentionally aligned with
+ * ControlplaneMachineUser so clients generated against either message can
+ * decode the other on the wire. The `client_secret` (tag 7) field is omitted;
+ * callers that need it must use GetControlplaneMachineUser.
+ *
+ * @generated from message tailor.v1.ControlplaneMachineUserSummary
+ */
+export declare type ControlplaneMachineUserSummary = Message<"tailor.v1.ControlplaneMachineUserSummary"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * @generated from field: string description = 3;
+   */
+  description: string;
+
+  /**
+   * @generated from field: string organization_id = 4;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string folder_id = 5;
+   */
+  folderId: string;
+
+  /**
+   * @generated from field: string client_id = 6;
+   */
+  clientId: string;
+};
+
+/**
+ * Describes the message tailor.v1.ControlplaneMachineUserSummary.
+ * Use `create(ControlplaneMachineUserSummarySchema)` to create a new message.
+ */
+export declare const ControlplaneMachineUserSummarySchema: GenMessage<ControlplaneMachineUserSummary>;
 
 /**
  * @generated from enum tailor.v1.PATScope

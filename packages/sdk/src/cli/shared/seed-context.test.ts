@@ -113,11 +113,11 @@ describe("loadSeedContext", () => {
     });
   });
 
-  test("resolves a relative distPath against the working directory", async () => {
+  test("resolves a relative distPath against the config's directory", async () => {
     mockLoadResult({ plugins: [seedPluginInstance({ distPath: "./seed" })] });
 
     const context = await loadSeedContext();
-    expect(context.distPath).toBe(path.resolve("./seed"));
+    expect(context.distPath).toBe(path.resolve("/proj", "seed"));
     expect(context.machineUserName).toBeUndefined();
     expect(context.idpUser).toBeNull();
   });

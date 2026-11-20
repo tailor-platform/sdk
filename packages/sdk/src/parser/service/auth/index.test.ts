@@ -193,6 +193,18 @@ describe("AuthConfigSchema machine user attribute normalization", () => {
     const result = AuthConfigSchema.parse(config);
     expect(result.machineUsers?.admin?.attributes).toBeUndefined();
   });
+
+  test("accepts TailorDB fields as machineUserAttributes", () => {
+    const result = AuthConfigSchema.safeParse({
+      name: "my-auth",
+      machineUserAttributes: {
+        code: db.string().unique(),
+        seq: db.int().serial({ start: 1 }),
+      },
+    });
+
+    expect(result.error?.issues).toBeUndefined();
+  });
 });
 
 describe("OAuth2ClientSchema validation", () => {
@@ -236,7 +248,24 @@ describe("OAuth2ClientSchema validation", () => {
     ["access", "accessTokenLifetimeSeconds", 59, /Minimum access token lifetime is 60 seconds/],
     ["access", "accessTokenLifetimeSeconds", 86401, /Maximum access token lifetime is 1 day/],
     ["refresh", "refreshTokenLifetimeSeconds", 59, /Minimum refresh token lifetime is 60 seconds/],
-    ["refresh", "refreshTokenLifetimeSeconds", 604801, /Maximum refresh token lifetime is 7 days/],
+    [
+      "refresh",
+      "refreshTokenLifetimeSeconds",
+      7776001,
+      /Maximum refresh token lifetime is 90 days/,
+    ],
+    [
+      "refresh idle",
+      "refreshTokenIdleLifetimeSeconds",
+      59,
+      /Minimum refresh token idle lifetime is 60 seconds/,
+    ],
+    [
+      "refresh idle",
+      "refreshTokenIdleLifetimeSeconds",
+      2592001,
+      /Maximum refresh token idle lifetime is 30 days/,
+    ],
   ] as const)("rejects %s token lifetime out of bounds (%s = %d)", (_kind, field, value, error) => {
     const invalidClient = {
       redirectURIs: ["https://example.com/callback"],
@@ -244,6 +273,82 @@ describe("OAuth2ClientSchema validation", () => {
     };
 
     expect(() => OAuth2ClientSchema.parse(invalidClient)).toThrow(error);
+  });
+
+  test.each([
+    [
+      "the idle lifetime",
+      { refreshTokenLifetimeSeconds: 7776000, refreshTokenIdleLifetimeSeconds: 2592001 },
+      "Maximum refresh token idle lifetime is 30 days (2592000 seconds)",
+    ],
+    [
+      "the refresh token lifetime",
+      { refreshTokenLifetimeSeconds: 7776001, refreshTokenIdleLifetimeSeconds: 2592000 },
+      "Maximum refresh token lifetime is 90 days (7776000 seconds)",
+    ],
+  ])("reports only the bound error when %s is out of bounds", (_name, lifetimes, message) => {
+    const result = OAuth2ClientSchema.safeParse({
+      redirectURIs: ["https://example.com/callback"],
+      ...lifetimes,
+    });
+
+    expect(result.error?.issues.map((issue) => issue.message)).toEqual([message]);
+  });
+
+  test.each([
+    ["with the default lifetimes", {}, 86400],
+    ["at the refresh token lifetime", { refreshTokenLifetimeSeconds: 7776000 }, 2592000],
+    [
+      "at the access token lifetime",
+      { accessTokenLifetimeSeconds: 60, refreshTokenLifetimeSeconds: 3600 },
+      60,
+    ],
+  ])(
+    "accepts a refresh token idle lifetime %s and transforms to Duration",
+    (_label, lifetimes, refreshTokenIdleLifetimeSeconds) => {
+      const result = OAuth2ClientSchema.parse({
+        redirectURIs: ["https://example.com/callback"],
+        ...lifetimes,
+        refreshTokenIdleLifetimeSeconds,
+      });
+
+      expect(result.refreshTokenIdleLifetimeSeconds).toEqual({
+        seconds: BigInt(refreshTokenIdleLifetimeSeconds),
+        nanos: 0,
+      });
+    },
+  );
+
+  test.each([
+    [
+      "a refresh token lifetime above 7 days without an idle lifetime",
+      { refreshTokenLifetimeSeconds: 604801 },
+      /refreshTokenLifetimeSeconds above 7 days \(604800 seconds\) requires refreshTokenIdleLifetimeSeconds/,
+    ],
+    [
+      "an idle lifetime above the refresh token lifetime",
+      { refreshTokenLifetimeSeconds: 7200, refreshTokenIdleLifetimeSeconds: 86400 },
+      /must be less than or equal to refreshTokenLifetimeSeconds/,
+    ],
+    [
+      "an idle lifetime above the default refresh token lifetime",
+      { refreshTokenIdleLifetimeSeconds: 604801 },
+      /must be less than or equal to refreshTokenLifetimeSeconds/,
+    ],
+    [
+      "an idle lifetime below the access token lifetime",
+      { accessTokenLifetimeSeconds: 7200, refreshTokenIdleLifetimeSeconds: 3600 },
+      /must be greater than or equal to accessTokenLifetimeSeconds/,
+    ],
+    [
+      "an idle lifetime below the default access token lifetime",
+      { refreshTokenIdleLifetimeSeconds: 3600 },
+      /must be greater than or equal to accessTokenLifetimeSeconds/,
+    ],
+  ])("rejects %s", (_label, lifetimes, error) => {
+    expect(() =>
+      OAuth2ClientSchema.parse({ redirectURIs: ["https://example.com/callback"], ...lifetimes }),
+    ).toThrow(error);
   });
 
   test("rejects non-integer token lifetime values", () => {
@@ -264,6 +369,7 @@ describe("OAuth2ClientSchema validation", () => {
     const result = OAuth2ClientSchema.parse(clientWithoutLifetimes);
     expect(result.accessTokenLifetimeSeconds).toBeUndefined();
     expect(result.refreshTokenLifetimeSeconds).toBeUndefined();
+    expect(result.refreshTokenIdleLifetimeSeconds).toBeUndefined();
   });
 
   test.each([

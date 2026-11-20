@@ -34,7 +34,7 @@ workflows:
         - 'pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1'
     '.github/workflows/docs-consistency-check.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'anthropics/claude-code-action@469588f42e6b1e94cd14ad09dccfeaec772ce0fd'
+        - 'anthropics/claude-code-action@f431adaf77e0fecf918431e75a2b5b45b85af002'
     '.github/workflows/erd-schema.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1'
@@ -82,19 +82,12 @@ workflows:
         - 'pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1'
     '.github/workflows/renovate-auto-review.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'anthropics/claude-code-action@469588f42e6b1e94cd14ad09dccfeaec772ce0fd'
+        - 'anthropics/claude-code-action@f431adaf77e0fecf918431e75a2b5b45b85af002'
     '.github/workflows/renovate-policy-check.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     '.github/workflows/sdk-e2e.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1'
-    '.github/workflows/sdk-metrics.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333'
-        - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
-        - 'k1low/octocov-action@a167dc0dee441b7ffc45e1b862ab55ec0d87f278'
-        - 'moznion/cccc-action@1d5313811f8451953e46a268c61791a01e40b7df'
         - 'pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1'
     '.github/workflows/securefix.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
@@ -111,7 +104,11 @@ workflows:
         - 'pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1'
     '.github/workflows/test.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333'
+        - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
+        - 'k1low/octocov-action@a167dc0dee441b7ffc45e1b862ab55ec0d87f278'
+        - 'moznion/cccc-action@1d5313811f8451953e46a268c61791a01e40b7df'
         - 'pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1'
 dependencies:
     'actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830':
@@ -154,9 +151,9 @@ dependencies:
         commit: 'sha1-cf430e030ddbb5b0abf93d22962f4752f3646cd9'
         owner_id: 44036562
         repo_id: 192625955
-    'anthropics/claude-code-action@469588f42e6b1e94cd14ad09dccfeaec772ce0fd':
-        ref: 'v1.0.280'
-        commit: 'sha1-469588f42e6b1e94cd14ad09dccfeaec772ce0fd'
+    'anthropics/claude-code-action@f431adaf77e0fecf918431e75a2b5b45b85af002':
+        ref: 'v1.0.283'
+        commit: 'sha1-f431adaf77e0fecf918431e75a2b5b45b85af002'
         owner_id: 76263028
         repo_id: 986421638
         uses:

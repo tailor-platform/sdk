@@ -113,7 +113,7 @@ describe("confirmOwnerConflict", () => {
       },
       {
         resourceType: "pipeline.service",
-        resourceLabel: "Pipeline service",
+        resourceLabel: "Resolver namespace",
         resourceName: "renamed",
         currentOwner: "old-app",
       },

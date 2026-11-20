@@ -63,13 +63,11 @@ describe("selectWorkspacesToDelete", () => {
     ]);
   });
 
-  test("matches every suffix a bare run id spawns across the e2e workflows", () => {
-    // sdk-metrics.yml passes the bare run id while its shards suffix theirs with
-    // the shard number; sdk-e2e.yml and deploy-drift-check.yml pass a composite id.
+  test("matches every workspace a run creates under a bare run id", () => {
     const all = [
-      workspace("e2e-ws-123-1-mabc"),
-      workspace("e2e-ws-123-sdk-mdef"),
-      workspace("e2e-ws-1234-1-mghi"),
+      workspace("e2e-ws-123-sdk-mabc"),
+      workspace("template-e2e-123-template"),
+      workspace("e2e-ws-1234-sdk-mghi"),
     ];
 
     expect(selectWorkspacesToDelete(all, { runId: "123" }, NOW)).toEqual(all.slice(0, 2));

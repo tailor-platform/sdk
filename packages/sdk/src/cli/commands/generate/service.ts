@@ -64,7 +64,8 @@ export function createGenerationManager(params: {
   pluginManager?: PluginManager;
 }): GenerationManager {
   const { application, config, pluginManager } = params;
-  const baseDir = path.join(getDistDir(), "generated");
+  const configDir = path.dirname(config.path);
+  const baseDir = path.resolve(getDistDir(), "generated");
   fs.mkdirSync(baseDir, { recursive: true });
 
   const services: {
@@ -233,21 +234,20 @@ export function createGenerationManager(params: {
   async function writeGeneratedFiles(sourceId: string, result: GeneratorResult): Promise<void> {
     await Promise.all(
       result.files.map(async (file) => {
-        fs.mkdirSync(path.dirname(file.path), { recursive: true });
+        const filePath = path.resolve(configDir, file.path);
+        fs.mkdirSync(path.dirname(filePath), { recursive: true });
         return new Promise<void>((resolve, reject) => {
-          if (file.skipIfExists && fs.existsSync(file.path)) {
-            const relativePath = path.relative(process.cwd(), file.path);
+          const relativePath = path.relative(process.cwd(), filePath);
+          if (file.skipIfExists && fs.existsSync(filePath)) {
             logger.debug(`${sourceId} | skip existing: ${relativePath}`);
             return resolve();
           }
 
-          fs.writeFile(file.path, file.content, (err) => {
+          fs.writeFile(filePath, file.content, (err) => {
             if (err) {
-              const relativePath = path.relative(process.cwd(), file.path);
               logger.error(`Error writing file ${styles.bold(relativePath)}`);
               reject(err);
             } else {
-              const relativePath = path.relative(process.cwd(), file.path);
               logger.debug(`${sourceId} | generate: ${styles.success(relativePath)}`);
               resolve();
             }

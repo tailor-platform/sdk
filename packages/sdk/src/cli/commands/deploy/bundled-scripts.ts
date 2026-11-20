@@ -1,16 +1,17 @@
-import { assertNoDuplicateResourceNames, type ResourceNameCheck } from "./duplicate-resource-names";
+import { assertNoDuplicateResourceNames } from "./duplicate-resource-names";
+import { MANAGED_RESOURCE_LABELS, type ManagedResourceType } from "./managed-resource-type";
 import type { HttpAdapterBundleResult } from "#/cli/services/http-adapter/bundler";
 import type { BuiltDeploymentTarget } from "./deployment-target";
 import type { BundledScripts } from "./function-registry-types";
 
-const BUNDLE_RESOURCES = {
-  resolvers: { resourceType: "pipeline.resolver", resourceLabel: "Resolver bundle" },
-  executors: { resourceType: "executor", resourceLabel: "Executor bundle" },
-  workflowJobs: { resourceType: "workflow_job_function", resourceLabel: "Workflow job bundle" },
-  authHooks: { resourceType: "auth.hook", resourceLabel: "Auth hook bundle" },
-} satisfies Record<keyof BundledScripts, Omit<ResourceNameCheck, "namesOf">>;
+const BUNDLE_RESOURCE_TYPES = {
+  resolvers: "pipeline.resolver",
+  executors: "executor",
+  workflowJobs: "workflow_job_function",
+  authHooks: "auth.hook",
+} satisfies Record<keyof BundledScripts, ManagedResourceType>;
 
-const BUNDLE_KINDS = Object.keys(BUNDLE_RESOURCES) as Array<keyof BundledScripts>;
+const BUNDLE_KINDS = Object.keys(BUNDLE_RESOURCE_TYPES) as Array<keyof BundledScripts>;
 
 /**
  * Merge per-config bundled scripts into one build-only result.
@@ -23,7 +24,8 @@ export function mergeBundledScripts(targets: ReadonlyArray<BuiltDeploymentTarget
   assertNoDuplicateResourceNames(
     targets,
     BUNDLE_KINDS.map((kind) => ({
-      ...BUNDLE_RESOURCES[kind],
+      resourceType: BUNDLE_RESOURCE_TYPES[kind],
+      resourceLabel: `${MANAGED_RESOURCE_LABELS[BUNDLE_RESOURCE_TYPES[kind]]} bundle`,
       namesOf: (target) => target.bundledScripts[kind].keys(),
     })),
   );
@@ -50,7 +52,7 @@ export function collectHttpAdapterScripts(
   assertNoDuplicateResourceNames(targets, [
     {
       resourceType: "application",
-      resourceLabel: "Application",
+      resourceLabel: MANAGED_RESOURCE_LABELS.application,
       namesOf: (target) => (target.httpAdapterBuildResult ? [target.application.name] : []),
     },
   ]);

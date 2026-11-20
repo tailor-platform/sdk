@@ -105,6 +105,20 @@ describe("createTailorDBHook", () => {
     });
   });
 
+  describe("field-level create hook and default", () => {
+    test("returns dates from a field hook and a `now` default as ISO strings", () => {
+      const now = new Date("2026-04-15T00:00:00.000Z");
+      const type = db.table("Test", {
+        stampedAt: db.datetime().hooks({ create: ({ now }) => now }),
+        createdAt: db.datetime().default("now"),
+      });
+      expect(createTailorDBHook(type)({}, now)).toMatchObject({
+        stampedAt: "2026-04-15T00:00:00.000Z",
+        createdAt: "2026-04-15T00:00:00.000Z",
+      });
+    });
+  });
+
   describe("single nested object field", () => {
     test("recursively processes the nested object", () => {
       const type = db.table("Test", {

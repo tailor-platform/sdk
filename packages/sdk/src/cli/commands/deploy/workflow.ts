@@ -1,4 +1,14 @@
+import { DurationSchema } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
+import {
+  type CreateWorkflowRequestSchema,
+  UpdateWorkflowRequestSchema,
+} from "@tailor-platform/tailor-proto/workflow_pb";
+import {
+  ConcurrencyPolicySchema,
+  type RetryPolicySchema,
+  type WorkflowJobFunctionSummary,
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { parseDuration } from "#/cli/shared/args";
 import { type OperatorClient, fetchAll } from "#/cli/shared/client";
 import { CLIError, toError } from "#/cli/shared/errors";
@@ -6,24 +16,25 @@ import { logger } from "#/cli/shared/logger";
 import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
-import { areNormalizedEqual } from "./compare";
+import { defineRequestComparison, emptyMessageAsUnset, isRequestUnchanged } from "./compare";
 import { workflowJobFunctionName } from "./function-registry";
 import {
   formatChangeEntriesWithFunctionRegistry,
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
+import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   addDependencyRecords,
   buildMetaRequest,
   type DependentAppsByResource,
   eventSourceKey,
-  hasMatchingSdkVersion,
   type MetadataLabelWrite,
   resourceTrn,
   type WithLabel,
   writeMetadataLabels,
 } from "./label";
+import { MANAGED_RESOURCE_LABELS } from "./managed-resource-type";
 import {
   createOwnershipTracker,
   fetchExistingResourcesWithLabels,
@@ -32,12 +43,6 @@ import {
 import type { ConcurrencyPolicy, Workflow, RetryPolicy } from "#/types/workflow.generated";
 import type { ApplyPhase } from "./phase";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { CreateWorkflowRequestSchema } from "@tailor-platform/tailor-proto/workflow_pb";
-import type {
-  ConcurrencyPolicySchema,
-  RetryPolicySchema,
-  WorkflowJobFunctionSummary,
-} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 /**
  * Apply workflow changes for the given phase.
@@ -71,15 +76,9 @@ export async function applyWorkflow(
           jobFunctionVersions,
           create.usedJobNames,
         );
-        const shape = buildWorkflowValidationShape(create.workspaceId, create.workflow);
         await client.createWorkflow({
-          workspaceId: shape.workspaceId,
-          workflowName: shape.workflowName,
-          mainJobFunctionName: shape.mainJobFunctionName,
-          retryPolicy: shape.retryPolicy,
-          concurrencyPolicy: shape.concurrencyPolicy,
+          ...buildWorkflowValidationShape(create.workspaceId, create.workflow),
           jobFunctions: filteredVersions,
-          publishExecutionEvents: shape.publishExecutionEvents,
         });
         await writeMetadataLabels(client, create.metaRequest);
       }),
@@ -88,15 +87,9 @@ export async function applyWorkflow(
           jobFunctionVersions,
           update.usedJobNames,
         );
-        const shape = buildWorkflowValidationShape(update.workspaceId, update.workflow);
         await client.updateWorkflow({
-          workspaceId: shape.workspaceId,
-          workflowName: shape.workflowName,
-          mainJobFunctionName: shape.mainJobFunctionName,
-          retryPolicy: shape.retryPolicy,
-          concurrencyPolicy: shape.concurrencyPolicy,
+          ...buildWorkflowValidationShape(update.workspaceId, update.workflow),
           jobFunctions: filteredVersions,
-          publishExecutionEvents: shape.publishExecutionEvents,
         });
         await writeMetadataLabels(client, update.metaRequest);
       }),
@@ -109,7 +102,7 @@ export async function applyWorkflow(
   } else {
     await deleteAllSettled(
       changeSet.deletes.map((del) => ({
-        resourceLabel: "workflow",
+        resourceLabel: MANAGED_RESOURCE_LABELS.workflow,
         resourceName: del.name,
         run: () =>
           client.deleteWorkflow({
@@ -121,7 +114,7 @@ export async function applyWorkflow(
 
     await deleteAllSettled(
       result.jobFunctionDeletes.map((del) => ({
-        resourceLabel: "workflow job function",
+        resourceLabel: MANAGED_RESOURCE_LABELS.workflow_job_function,
         resourceName: del.jobFunctionName,
         run: () =>
           client.deleteWorkflowJobFunction({
@@ -329,7 +322,7 @@ function toConcurrencyPolicy(
 /** Plan-time init shape for Create/UpdateWorkflowRequest (jobFunctions excluded). */
 export type WorkflowValidationShape = Omit<
   MessageInitShape<typeof CreateWorkflowRequestSchema>,
-  "jobFunctions"
+  "jobFunctions" | "$typeName"
 >;
 
 /**
@@ -368,6 +361,39 @@ type UnchangedWorkflow = {
   name: string;
   metaRequest?: MetadataLabelWrite;
 };
+
+type DesiredWorkflow = {
+  name: string;
+  /** The workflow with its execution-event publishing resolved. */
+  workflow: Workflow;
+  usedJobNames: string[];
+  metaRequest: MetadataLabelWrite;
+};
+
+const workflowComparison = defineRequestComparison({
+  schema: UpdateWorkflowRequestSchema,
+  excluded: ["workspaceId", "workflowName"],
+  normalize: (request) => {
+    // The function registry plan compares job function versions; only names count here.
+    for (const jobName of Object.keys(request.jobFunctions)) {
+      request.jobFunctions[jobName] = 0n;
+    }
+    if (request.retryPolicy) {
+      request.retryPolicy.initialBackoff = emptyMessageAsUnset(
+        DurationSchema,
+        request.retryPolicy.initialBackoff,
+      );
+      request.retryPolicy.maxBackoff = emptyMessageAsUnset(
+        DurationSchema,
+        request.retryPolicy.maxBackoff,
+      );
+    }
+    request.concurrencyPolicy = emptyMessageAsUnset(
+      ConcurrencyPolicySchema,
+      request.concurrencyPolicy,
+    );
+  },
+});
 
 /** Inputs deciding which workflows and job functions publish execution events. */
 export type WorkflowEventPublishing = {
@@ -574,12 +600,8 @@ export async function planWorkflow(
       getName: (resource) => resource.name,
       getTrn: (name) => resourceTrn(workspaceId, "workflow", name),
     }));
-  // Diffing below deletes matched entries to find what's left to remove, so
-  // work on a copy and keep `fetchedWorkflows` itself pristine for reuse.
-  const existingWorkflows = { ...fetchedWorkflows };
-
+  const desired: DesiredWorkflow[] = [];
   for (const workflow of Object.values(workflows)) {
-    const existing = existingWorkflows[workflow.name];
     const metaRequest = addDependencyRecords(
       await buildMetaRequest({
         trn: resourceTrn(workspaceId, "workflow", workflow.name),
@@ -615,79 +637,79 @@ export async function planWorkflow(
     }
     usedJobNames.forEach((jobName) => retainedWorkflowJobNames.add(jobName));
 
-    const desiredWorkflow: Workflow = {
-      ...workflow,
-      publishEvents: resolvePublishEvents({
-        explicit: workflow.publishEvents,
-        subscribed: isSubscribed(executionSubscribers, workflow.name),
-        conflict: publishEventsConflict.workflow(workflow.name),
-      }),
-    };
-
-    if (existing) {
-      const owned = ownership.ownsDesired(existing.allLabels, {
-        resourceType: "workflow",
-        resourceLabel: "Workflow",
-        resourceName: workflow.name,
-      });
-
-      const configUnchanged =
-        owned &&
-        // Job functions are only re-registered while applying a workflow create/update.
-        !usedJobNames.some((jobName) => staleJobFunctionNames.has(jobName)) &&
-        areWorkflowsEqual(existing.resource, desiredWorkflow, usedJobNames);
-      const sdkVersionMatches = hasMatchingSdkVersion(existing.allLabels, metaRequest.labels);
-      if (
-        configUnchanged &&
-        sdkVersionMatches &&
-        usedJobNames.every((jobName) => unchangedJobFunctions.has(jobName))
-      ) {
-        // The definition matches, but the records may not, so the labels still go.
-        changeSet.unchanged.push({ name: workflow.name, metaRequest });
-        for (const jobName of usedJobNames) {
-          unchangedWorkflowJobNames.add(jobName);
-        }
-      } else {
-        const forcedBySdkVersion =
-          configUnchanged && usedJobNames.every((jobName) => unchangedJobFunctions.has(jobName));
-        changeSet.updates.push({
-          name: workflow.name,
-          workspaceId,
-          workflow: desiredWorkflow,
-          usedJobNames,
-          metaRequest,
-          ...(forcedBySdkVersion && { forcedBySdkVersion: true }),
-        });
-      }
-      delete existingWorkflows[workflow.name];
-    } else {
-      changeSet.creates.push({
-        name: workflow.name,
-        workspaceId,
-        workflow: desiredWorkflow,
-        usedJobNames,
-        metaRequest,
-      });
-    }
+    desired.push({
+      name: workflow.name,
+      workflow: {
+        ...workflow,
+        publishEvents: resolvePublishEvents({
+          explicit: workflow.publishEvents,
+          subscribed: isSubscribed(executionSubscribers, workflow.name),
+          conflict: publishEventsConflict.workflow(workflow.name),
+        }),
+      },
+      usedJobNames,
+      metaRequest,
+    });
   }
 
-  Object.values(existingWorkflows).forEach((existing) => {
-    if (!existing) {
-      return;
-    }
-    const owned = ownership.ownsRemaining(existing.allLabels);
-    const usedJobNames = getExistingWorkflowJobNames(existing.resource);
-    if (owned) {
-      changeSet.deletes.push({
-        name: existing.resource.name,
-        workspaceId,
-        workflowId: existing.resource.id,
-        usedJobNames,
-      });
-    } else {
-      usedJobNames.forEach((jobName) => retainedWorkflowJobNames.add(jobName));
-    }
+  await diffKeyed({
+    changeSet,
+    desired,
+    existing: Object.entries(fetchedWorkflows),
+    keyOf: (workflow) => workflow.name,
+    ...labeledResourceChecks(ownership, (workflow: DesiredWorkflow) => ({
+      resourceType: "workflow",
+      resourceName: workflow.name,
+    })),
+    isConfigUnchanged: ({ workflow, usedJobNames }, existing) =>
+      // Job functions are only re-registered while applying a workflow create/update.
+      !usedJobNames.some((jobName) => staleJobFunctionNames.has(jobName)) &&
+      usedJobNames.every((jobName) => unchangedJobFunctions.has(jobName)) &&
+      isRequestUnchanged(
+        workflowComparison,
+        {
+          ...buildWorkflowValidationShape(workspaceId, workflow),
+          jobFunctions: Object.fromEntries(usedJobNames.map((jobName) => [jobName, 0n])),
+        },
+        existing.resource,
+      ),
+    create: ({ name, workflow, usedJobNames, metaRequest }) => ({
+      name,
+      workspaceId,
+      workflow,
+      usedJobNames,
+      metaRequest,
+    }),
+    update: ({ name, workflow, usedJobNames, metaRequest }) => ({
+      name,
+      workspaceId,
+      workflow,
+      usedJobNames,
+      metaRequest,
+    }),
+    // The definition matches, but the records may not, so the labels still go.
+    unchanged: ({ name, metaRequest }) => ({ name, metaRequest }),
+    delete: (_name, existing) => ({
+      name: existing.resource.name,
+      workspaceId,
+      workflowId: existing.resource.id,
+      usedJobNames: getExistingWorkflowJobNames(existing.resource),
+    }),
   });
+  const usedJobNamesByWorkflow = new Map(
+    desired.map(({ name, usedJobNames }) => [name, usedJobNames]),
+  );
+  for (const { name } of changeSet.unchanged) {
+    usedJobNamesByWorkflow.get(name)?.forEach((jobName) => unchangedWorkflowJobNames.add(jobName));
+  }
+  const deletedWorkflowNames = new Set(changeSet.deletes.map(({ name }) => name));
+  for (const [name, existing] of Object.entries(fetchedWorkflows)) {
+    if (!existing || usedJobNamesByWorkflow.has(name) || deletedWorkflowNames.has(name)) continue;
+    // Another app's workflow keeps using its jobs.
+    getExistingWorkflowJobNames(existing.resource).forEach((jobName) =>
+      retainedWorkflowJobNames.add(jobName),
+    );
+  }
 
   const jobFunctionDeletes = await planWorkflowJobFunctionDeletes({
     client,
@@ -814,102 +836,6 @@ export function formatWorkflowChangeEntries(
   ];
 }
 
-type ExistingWorkflowResource = {
-  mainJobFunctionName?: string;
-  retryPolicy?: {
-    maxRetries?: number;
-    backoffMultiplier?: number;
-    initialBackoff?: { seconds?: bigint; nanos?: number };
-    maxBackoff?: { seconds?: bigint; nanos?: number };
-  };
-  concurrencyPolicy?: {
-    maxConcurrentExecutions?: number;
-  };
-  jobFunctions?: Record<string, string | bigint>;
-  publishExecutionEvents?: boolean;
-};
-
-function areWorkflowsEqual(
-  existing: ExistingWorkflowResource,
-  workflow: Workflow,
-  usedJobNames: readonly string[],
-) {
-  return (
-    existing.mainJobFunctionName === workflow.mainJob.name &&
-    (existing.publishExecutionEvents ?? false) === (workflow.publishEvents ?? false) &&
-    areNormalizedEqual(
-      normalizeComparableExistingWorkflowRetryPolicy(existing.retryPolicy),
-      normalizeComparableWorkflowRetryPolicy(workflow.retryPolicy),
-    ) &&
-    areNormalizedEqual(
-      normalizeComparableConcurrencyPolicy(existing.concurrencyPolicy),
-      normalizeComparableConcurrencyPolicy(workflow.concurrencyPolicy),
-    ) &&
-    areNormalizedEqual(
-      normalizeComparableWorkflowJobNames(existing.jobFunctions),
-      normalizeComparableWorkflowJobNames(usedJobNames),
-    )
-  );
-}
-
-function normalizeComparableExistingWorkflowRetryPolicy(
-  policy:
-    | {
-        maxRetries?: number;
-        backoffMultiplier?: number;
-        initialBackoff?: { seconds?: bigint; nanos?: number };
-        maxBackoff?: { seconds?: bigint; nanos?: number };
-      }
-    | undefined,
-) {
-  if (!policy) {
-    return undefined;
-  }
-
-  return normalizeRetryPolicyForCompare({
-    maxRetries: policy.maxRetries ?? 0,
-    backoffMultiplier: policy.backoffMultiplier ?? 0,
-    initialBackoff: {
-      seconds: policy.initialBackoff?.seconds ?? 0n,
-      nanos: policy.initialBackoff?.nanos ?? 0,
-    },
-    maxBackoff: {
-      seconds: policy.maxBackoff?.seconds ?? 0n,
-      nanos: policy.maxBackoff?.nanos ?? 0,
-    },
-  });
-}
-
-function normalizeComparableWorkflowRetryPolicy(policy: RetryPolicy | undefined) {
-  if (!policy) {
-    return undefined;
-  }
-
-  return normalizeRetryPolicyForCompare({
-    maxRetries: policy.maxRetries,
-    backoffMultiplier: policy.backoffMultiplier,
-    initialBackoff: parseDurationToProto(policy.initialBackoff),
-    maxBackoff: parseDurationToProto(policy.maxBackoff),
-  });
-}
-
-function normalizeComparableConcurrencyPolicy(
-  policy: { maxConcurrentExecutions?: number } | undefined,
-) {
-  if (!policy || !policy.maxConcurrentExecutions) {
-    return undefined;
-  }
-  return { maxConcurrentExecutions: policy.maxConcurrentExecutions };
-}
-
-function normalizeComparableWorkflowJobNames(
-  jobFunctions: Record<string, string | bigint> | readonly string[] | undefined,
-) {
-  return Array.isArray(jobFunctions)
-    ? jobFunctions.toSorted()
-    : Object.keys(jobFunctions ?? {}).toSorted();
-}
-
 function getExistingWorkflowJobNames(existing: {
   mainJobFunctionName?: string;
   jobFunctions?: Record<string, string | bigint>;
@@ -919,24 +845,4 @@ function getExistingWorkflowJobNames(existing: {
     jobNames.add(existing.mainJobFunctionName);
   }
   return [...jobNames].toSorted();
-}
-
-function normalizeRetryPolicyForCompare(policy: {
-  maxRetries: number;
-  backoffMultiplier: number;
-  initialBackoff: { seconds: bigint | number; nanos: number };
-  maxBackoff: { seconds: bigint | number; nanos: number };
-}) {
-  return {
-    maxRetries: policy.maxRetries,
-    backoffMultiplier: policy.backoffMultiplier,
-    initialBackoff: {
-      seconds: String(policy.initialBackoff.seconds),
-      nanos: policy.initialBackoff.nanos,
-    },
-    maxBackoff: {
-      seconds: String(policy.maxBackoff.seconds),
-      nanos: policy.maxBackoff.nanos,
-    },
-  };
 }

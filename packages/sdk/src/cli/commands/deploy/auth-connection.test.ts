@@ -5,6 +5,7 @@ import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import type { AuthService } from "#/cli/services/auth/service";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { AuthConnectionConfig } from "#/types/auth-connection.generated";
+import type { SecretsStateScope } from "./secrets-state";
 
 const { mockLoggerWarn, mockLoggerInfo, mockSaveSecretsState } = vi.hoisted(() => ({
   mockLoggerWarn: vi.fn(),
@@ -63,6 +64,18 @@ vi.mock("./label", async (importOriginal) => {
 
 const workspaceId = "ws-1";
 const appName = "my-app";
+const configPath = "/proj/app/tailor.config.ts";
+
+function connectionStateScope(
+  overrides: Partial<Pick<SecretsStateScope, "workspaceId" | "applicationId">> = {},
+): SecretsStateScope {
+  return {
+    workspaceId: overrides.workspaceId ?? workspaceId,
+    applicationId: overrides.applicationId,
+    applicationName: appName,
+    configPath,
+  };
+}
 
 type ConnectionFixture = {
   name: string;
@@ -155,9 +168,7 @@ describe("planAuthConnections", () => {
 
     const { changeSet, resourceOwners } = await planAuthConnections(
       client,
-      workspaceId,
-      appName,
-      undefined,
+      connectionStateScope(),
       emptyAuths,
     );
 
@@ -170,7 +181,7 @@ describe("planAuthConnections", () => {
       connections: [{ name: "owned-connection", ownerLabel: appName }],
     });
 
-    await planAuthConnections(client, workspaceId, appName, undefined, emptyAuths);
+    await planAuthConnections(client, connectionStateScope(), emptyAuths);
 
     const trns = vi
       .mocked(client.getMetadata)
@@ -189,13 +200,12 @@ describe("planAuthConnections", () => {
       connections: [{ name: "adopted-connection" }],
     });
 
-    const { changeSet, unmanaged } = await planAuthConnections(
+    const result = await planAuthConnections(
       client,
-      workspaceId,
-      appName,
-      undefined,
+      connectionStateScope(),
       authsWith(["adopted-connection"]),
     );
+    const { changeSet, unmanaged } = result;
 
     expect(unmanaged).toEqual([
       {
@@ -206,7 +216,15 @@ describe("planAuthConnections", () => {
     ]);
     expect(changeSet.updates.map((u) => u.name)).toEqual(["adopted-connection"]);
     expect(changeSet.unchanged.map((u) => u.name)).toEqual([]);
-    expect(changeSet.replaces.map((r) => r.name)).toEqual([]);
+
+    await applyAuthConnections(client, result, "create-update");
+
+    expect(client.updateAuthConnection).not.toHaveBeenCalled();
+    expect(client.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trn: `trn:v1:workspace:${workspaceId}:auth_connection:adopted-connection`,
+      }),
+    );
   });
 
   test("re-tags an unchanged connection whose recorded id does not match", async () => {
@@ -223,9 +241,7 @@ describe("planAuthConnections", () => {
 
     const { changeSet, conflicts } = await planAuthConnections(
       client,
-      workspaceId,
-      appName,
-      "id-2",
+      connectionStateScope({ applicationId: "id-2" }),
       authsWith(["owned-connection"]),
     );
 
@@ -245,9 +261,7 @@ describe("planAuthConnections", () => {
 
     const { changeSet, unmanaged } = await planAuthConnections(
       client,
-      workspaceId,
-      appName,
-      undefined,
+      connectionStateScope(),
       authsWith(["owned-connection"]),
     );
 
@@ -266,15 +280,14 @@ describe("planAuthConnections", () => {
       providerUrl: "https://changed.example.com",
     };
 
-    const { changeSet } = await planAuthConnections(client, workspaceId, appName, undefined, [
+    const { changeSet } = await planAuthConnections(client, connectionStateScope(), [
       { name: "auth-a", connections: { conn: ciConfig } } as unknown as AuthService,
     ]);
 
-    expect(changeSet.replaces.map((r) => r.name)).toEqual(["conn"]);
-    const [replace] = changeSet.replaces;
-    expect(replace).toBeDefined();
-    expect(replace!.updateRequest.updateMask?.paths).toContain("oauth2.provider_url");
-    expect(replace!.updateRequest.updateMask?.paths).not.toContain("oauth2.client_secret");
+    expect(changeSet.updates.map((u) => u.name)).toEqual(["conn"]);
+    const [update] = changeSet.updates;
+    expect(update?.request?.updateMask?.paths).toContain("oauth2.provider_url");
+    expect(update?.request?.updateMask?.paths).not.toContain("oauth2.client_secret");
   });
 
   test("updates an existing same-name connection when state belongs to another workspace", async () => {
@@ -289,32 +302,27 @@ describe("planAuthConnections", () => {
 
     const resultA = await planAuthConnections(
       client,
-      "ws-a",
-      appName,
-      "shared-app-id",
+      connectionStateScope({ workspaceId: "ws-a", applicationId: "shared-app-id" }),
       authsWith(["shared-connection"]),
     );
     const resultB = await planAuthConnections(
       client,
-      "ws-b",
-      appName,
-      "shared-app-id",
+      connectionStateScope({ workspaceId: "ws-b", applicationId: "shared-app-id" }),
       authsWith(["shared-connection"]),
     );
 
     expect(resultA.changeSet.unchanged.map((connection) => connection.name)).toEqual([
       "shared-connection",
     ]);
-    expect(resultB.changeSet.replaces.map((replace) => replace.name)).toEqual([
-      "shared-connection",
-    ]);
-    expect(resultB.changeSet.replaces[0]?.updateRequest.updateMask?.paths).toContain(
+    expect(resultB.changeSet.updates.map((update) => update.name)).toEqual(["shared-connection"]);
+    expect(resultB.changeSet.updates[0]?.request?.updateMask?.paths).toContain(
       "oauth2.client_secret",
     );
     expect(mockLoadSecretsState).toHaveBeenCalledWith({
       workspaceId: "ws-b",
       applicationId: "shared-app-id",
       applicationName: appName,
+      configPath,
     });
   });
 });
@@ -331,9 +339,7 @@ describe("applyAuthConnections", () => {
     const client = createMockClient({ connections: [] });
     const result = await planAuthConnections(
       client,
-      workspaceId,
-      appName,
-      undefined,
+      connectionStateScope(),
       authsWith(["new-conn"]),
     );
     expect(result.changeSet.creates.map((c) => c.name)).toEqual(["new-conn"]);
@@ -349,7 +355,7 @@ describe("applyAuthConnections", () => {
     const client = createMockClient({
       connections: [{ name: "owned-connection", ownerLabel: appName }],
     });
-    const result = await planAuthConnections(client, workspaceId, appName, undefined, emptyAuths);
+    const result = await planAuthConnections(client, connectionStateScope(), emptyAuths);
     expect(result.changeSet.deletes.map((d) => d.name)).toEqual(["owned-connection"]);
 
     await applyAuthConnections(client, result, "delete-resources");
@@ -360,18 +366,12 @@ describe("applyAuthConnections", () => {
     });
   });
 
-  test("replace updates the connection in-place without deleting it", async () => {
+  test("updates the connection in-place without deleting it", async () => {
     const client = createMockClient({
       connections: [{ name: "conn", ownerLabel: appName }],
     });
-    const result = await planAuthConnections(
-      client,
-      workspaceId,
-      appName,
-      undefined,
-      authsWith(["conn"]),
-    );
-    expect(result.changeSet.replaces.map((r) => r.name)).toEqual(["conn"]);
+    const result = await planAuthConnections(client, connectionStateScope(), authsWith(["conn"]));
+    expect(result.changeSet.updates.map((u) => u.name)).toEqual(["conn"]);
 
     await applyAuthConnections(client, result, "create-update");
 
@@ -382,6 +382,7 @@ describe("applyAuthConnections", () => {
         updateMask: { paths: ["oauth2.client_secret"] },
       }),
     );
+    expect(client.setMetadata).toHaveBeenCalledTimes(1);
     expect(client.deleteAuthConnection).not.toHaveBeenCalled();
     expect(client.createAuthConnection).not.toHaveBeenCalled();
   });
@@ -396,12 +397,12 @@ describe("applyAuthConnections", () => {
       providerUrl: "https://changed.example.com",
     };
 
-    const result = await planAuthConnections(client, workspaceId, appName, undefined, [
+    const result = await planAuthConnections(client, connectionStateScope(), [
       { name: "auth-a", connections: { conn: ciConfig } } as unknown as AuthService,
     ]);
-    expect(result.changeSet.replaces.map((r) => r.name)).toEqual(["conn"]);
-    const [replace] = result.changeSet.replaces;
-    expect(replace!.updateRequest.updateMask?.paths).not.toContain("oauth2.client_secret");
+    expect(result.changeSet.updates.map((u) => u.name)).toEqual(["conn"]);
+    const [update] = result.changeSet.updates;
+    expect(update?.request?.updateMask?.paths).not.toContain("oauth2.client_secret");
 
     mockLoadSecretsState.mockClear();
     mockSaveSecretsState.mockClear();
@@ -422,13 +423,7 @@ describe("applyAuthConnections", () => {
       connection: { status: AuthConnection_Status.UNAUTHORIZED },
     });
 
-    const result = await planAuthConnections(
-      client,
-      workspaceId,
-      appName,
-      undefined,
-      authsWith(["conn"]),
-    );
+    const result = await planAuthConnections(client, connectionStateScope(), authsWith(["conn"]));
     await applyAuthConnections(client, result, "create-update");
 
     expect(mockLoggerWarn).toHaveBeenCalledWith(

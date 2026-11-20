@@ -99,11 +99,11 @@ jobs:
             template: generators
           - runtime: node
             pm: npm
-            node: 24
+            node: 26
             template: hello-world
           - runtime: node
             pm: yarn
-            node: 22
+            node: 24
             template: hello-world
           - runtime: bun
             pm: bun
@@ -142,7 +142,9 @@ jobs:
         with:
           bun-version: latest
 
+      # Node 26 ships without corepack, so the yarn row must stay on a Node that bundles it.
       - name: Enable corepack
+        if: matrix.pm == 'yarn'
         run: corepack enable
 
       - name: Configure git for create-sdk

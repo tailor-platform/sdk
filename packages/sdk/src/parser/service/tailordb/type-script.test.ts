@@ -1,8 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import { db } from "#/configure/services/tailordb/schema";
-import { toSchemaOutputs } from "#/utils/test/internal";
+import { buildTableScripts, toSchemaOutputs } from "#/utils/test/internal";
 import { parseFieldConfig } from "./field";
-import { parseTypes } from "./type-parser";
 import {
   buildTypeScripts,
   computeSourceScriptHash,
@@ -76,15 +75,7 @@ describe("buildTypeScripts", () => {
         if (!invoker) issues("name", "missing invoker");
       });
 
-    const parsed = parseTypes({ Widget: toSchemaOutputs({ Widget: type }).Widget! }, "ns").Widget!;
-    const fields: Record<string, ScriptFieldConfig> = Object.fromEntries(
-      Object.entries(parsed.fields).map(([name, field]) => [name, field.config]),
-    );
-
-    const { typeHook, typeValidate } = buildTypeScripts(fields, {
-      typeHookExpr: parsed.typeHookExpr,
-      typeValidateExpr: parsed.typeValidateExpr,
-    });
+    const { typeHook, typeValidate } = buildTableScripts(type);
     const createExpr = typeHook?.create?.expr ?? "";
     const validateExpr = typeValidate?.create?.expr ?? "";
 

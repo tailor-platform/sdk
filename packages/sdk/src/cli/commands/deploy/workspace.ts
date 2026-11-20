@@ -554,7 +554,9 @@ export async function resolveDeployWorkspace(
     allowMissingProfile: explicitWorkspaceId !== undefined,
   });
   const platformUrl = getPlatformBaseUrl(platformConfig);
-  const client = await initOperatorClient(accessToken, platformConfig);
+  const client = await initOperatorClient(accessToken, platformConfig, {
+    createsPlannedResources: true,
+  });
 
   if (explicitWorkspaceId) {
     const workspaceNotFoundError = () => {
@@ -760,19 +762,17 @@ export async function resolveDeployWorkspace(
       });
     }
 
-    if (interactive && !options.createWorkspace) {
-      return chooseWorkspace(client, platformUrl, workspaces, options);
+    if (options.createWorkspace) {
+      return useWorkspace(client, platformUrl, workspace, options);
     }
-
-    return useWorkspace(client, platformUrl, workspace, options);
   }
 
-  if (workspaces.length > 1) {
+  if (workspaces.length > 0) {
     if (!interactive) {
       throw CLIError({
         code: "WORKSPACE_SELECTION_REQUIRED",
-        message: "Multiple workspaces are available.",
-        suggestion: "Choose one explicitly for non-interactive deployment.",
+        message: "Non-interactive deployment requires an explicit workspace.",
+        suggestion: "Pass --workspace-id or set TAILOR_PLATFORM_WORKSPACE_ID.",
         next: executableAction(selectDeployArgs(options)),
         context: {
           workspaces: workspaces.map(workspaceIdentity),

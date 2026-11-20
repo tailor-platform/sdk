@@ -525,6 +525,13 @@ export declare type WorkflowExecution = Message<"tailor.v1.WorkflowExecution"> &
    * @generated from field: google.protobuf.Timestamp retry_after = 8;
    */
   retryAfter?: Timestamp;
+
+  /**
+   * When CancelWorkflowExecution was requested, unset if it never was.
+   *
+   * @generated from field: google.protobuf.Timestamp cancel_requested_at = 9;
+   */
+  cancelRequestedAt?: Timestamp;
 };
 
 /**
@@ -586,6 +593,16 @@ export enum WorkflowExecution_Status {
    * @generated from enum value: STATUS_CANCELED = 8;
    */
   CANCELED = 8,
+
+  /**
+   * CancelWorkflowExecution was requested and the jobs that were running
+   * are being stopped. Becomes STATUS_CANCELED once they have stopped.
+   * Nothing new starts meanwhile. Must stay integer-aligned with the
+   * controlplane enum (the operator transform casts directly).
+   *
+   * @generated from enum value: STATUS_CANCELING = 9;
+   */
+  CANCELING = 9,
 }
 
 /**
