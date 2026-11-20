@@ -63,6 +63,7 @@ import { StaticWebsiteSchema } from "#/parser/service/staticwebsite/index";
 import { TailorDBServiceConfigSchema } from "#/parser/service/tailordb/index";
 import { collectWaitPointKeyFailures } from "#/parser/service/workflow/wait-point-key";
 import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
+import { readSecretEntry } from "#/utils/secret-entry";
 import { getScopedWaitPoints } from "#/utils/wait-point-registry";
 import type { BundleCache } from "#/cli/cache/bundle-cache";
 import type { BundledScripts } from "#/cli/commands/deploy/function-registry-types";
@@ -78,7 +79,11 @@ import type { z } from "zod";
 
 type SecretVault = {
   readonly vaultName: string;
-  readonly secrets: ReadonlyArray<{ name: string; value: string | null | undefined }>;
+  readonly secrets: ReadonlyArray<{
+    name: string;
+    value: string | null | undefined;
+    createOnly: boolean;
+  }>;
 };
 
 export type Application = {
@@ -519,7 +524,10 @@ function parseSecretManager(
 
   const secrets = Object.entries(parsed.vaults).map(([vaultName, vaultSecrets]) => ({
     vaultName,
-    secrets: Object.entries(vaultSecrets).map(([name, value]) => ({ name, value })),
+    secrets: Object.entries(vaultSecrets).map(([name, entry]) => ({
+      name,
+      ...readSecretEntry(entry),
+    })),
   }));
 
   // Defensive check: error if nullish values exist without ignoreNullishValues

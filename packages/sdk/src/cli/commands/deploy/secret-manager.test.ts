@@ -1,6 +1,11 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
+import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, test, expect, vi, aroundEach } from "vitest";
+import { alreadyExistsExpected } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
+import {
+  mockOperatorClient,
+  type OperatorClientMocks,
+} from "#/cli/shared/test-helpers/operator-client";
 import { applySecretManager, planSecretManager } from "./secret-manager";
 import { hashValue } from "./secrets-state";
 import type { PlanContext } from "#/cli/commands/deploy/types";
@@ -56,48 +61,61 @@ vi.mock("./label", async (importOriginal) => {
   };
 });
 
-function createMockApplyClient() {
-  return {
-    createSecretManagerVault: vi.fn().mockResolvedValue({}),
-    createSecretManagerSecret: vi.fn().mockResolvedValue({}),
-    updateSecretManagerSecret: vi.fn().mockResolvedValue({}),
-    deleteSecretManagerSecret: vi.fn().mockResolvedValue({}),
-    deleteSecretManagerVault: vi.fn().mockResolvedValue({}),
-    setMetadata: vi.fn().mockResolvedValue({}),
-    getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
-  } as unknown as OperatorClient;
+type ApplyMethod =
+  | "createSecretManagerVault"
+  | "createSecretManagerSecret"
+  | "updateSecretManagerSecret"
+  | "deleteSecretManagerSecret"
+  | "deleteSecretManagerVault"
+  | "setMetadata"
+  | "getMetadata";
+
+function createMockApplyClient(overrides: Partial<OperatorClientMocks<ApplyMethod>> = {}) {
+  return mockOperatorClient<ApplyMethod>({
+    createSecretManagerVault: {},
+    createSecretManagerSecret: {},
+    updateSecretManagerSecret: {},
+    deleteSecretManagerSecret: {},
+    deleteSecretManagerVault: {},
+    setMetadata: {},
+    getMetadata: { metadata: { labels: {} } },
+    ...overrides,
+  });
 }
 
 type ExistingSecretFixture =
   | string
   | { name: string; updateTime?: { seconds: bigint; nanos: number } };
 
+type PlanMethod = "listSecretManagerVaults" | "getMetadata" | "listSecretManagerSecrets";
+
 function createMockPlanClient(
   existingSecrets: ExistingSecretFixture[] = [],
   vaultName = "my-vault",
+  overrides: Partial<OperatorClientMocks<PlanMethod>> = {},
 ) {
-  return {
-    listSecretManagerVaults: vi.fn().mockResolvedValue({
-      vaults: [{ name: vaultName }],
-      nextPageToken: "",
-    }),
-    getMetadata: vi.fn().mockResolvedValue({
-      metadata: { labels: { "sdk-name": "test-app", "sdk-version": sdkVersion } },
-    }),
-    listSecretManagerSecrets: vi.fn().mockResolvedValue({
+  return mockOperatorClient<PlanMethod>({
+    listSecretManagerVaults: { vaults: [{ name: vaultName }], nextPageToken: "" },
+    getMetadata: { metadata: { labels: { "sdk-name": "test-app", "sdk-version": sdkVersion } } },
+    listSecretManagerSecrets: {
       secrets: existingSecrets.map((secret) =>
         typeof secret === "string" ? { name: secret } : secret,
       ),
       nextPageToken: "",
-    }),
-  } as unknown as OperatorClient;
+    },
+    ...overrides,
+  });
 }
+
+type DeclaredSecret = Application["secrets"][number]["secrets"][number];
 
 function createPlanContext(
   client: OperatorClient,
   secrets: Array<{
     vaultName: string;
-    secrets: Array<{ name: string; value: string | null | undefined }>;
+    secrets: Array<
+      Omit<DeclaredSecret, "createOnly"> & Partial<Pick<DeclaredSecret, "createOnly">>
+    >;
   }>,
   overrides: {
     appName?: string;
@@ -113,7 +131,10 @@ function createPlanContext(
     application: {
       name: overrides.appName ?? "test-app",
       id: overrides.appId ?? "app-1",
-      secrets,
+      secrets: secrets.map((vault) => ({
+        ...vault,
+        secrets: vault.secrets.map((secret) => ({ createOnly: false, ...secret })),
+      })),
       idpServices: overrides.idpServices ?? [],
     } as unknown as Application,
     forRemoval: overrides.forRemoval ?? false,
@@ -482,15 +503,14 @@ describe("applySecretManager update-time evidence persistence", () => {
   }
 
   test("stores updateTime evidence from create and update responses", async () => {
-    const client = {
-      ...createMockApplyClient(),
-      createSecretManagerSecret: vi.fn().mockResolvedValue({
+    const client = createMockApplyClient({
+      createSecretManagerSecret: {
         secret: { name: "secret-a", updateTime: { seconds: 10n, nanos: 1 } },
-      }),
-      updateSecretManagerSecret: vi.fn().mockResolvedValue({
+      },
+      updateSecretManagerSecret: {
         secret: { name: "secret-b", updateTime: { seconds: 20n, nanos: 2 } },
-      }),
-    } as unknown as OperatorClient;
+      },
+    });
     const application = { secrets: [] } as unknown as Application;
 
     await applySecretManager(client, evidencePlanResult(), "create-update", application);
@@ -518,6 +538,174 @@ describe("applySecretManager update-time evidence persistence", () => {
   });
 });
 
+describe("planSecretManager create-only secrets", () => {
+  aroundEach(async (runTest) => {
+    mockLoadSecretsState.mockReturnValue({ vaults: {} });
+    await runTest();
+  });
+
+  const createOnlySecret = { name: "key", value: "generated", createOnly: true };
+
+  test.each([
+    {
+      case: "the vault exists without the secret",
+      vaults: [{ name: "my-vault" }],
+      vaultCreates: [],
+    },
+    {
+      case: "the vault does not exist",
+      vaults: [],
+      vaultCreates: [{ name: "my-vault", workspaceId: "ws-1" }],
+    },
+  ])("plans a create-only create when $case", async ({ vaults, vaultCreates }) => {
+    const client = createMockPlanClient([], "my-vault", {
+      listSecretManagerVaults: { vaults, nextPageToken: "" },
+    });
+    const ctx = createPlanContext(client, [{ vaultName: "my-vault", secrets: [createOnlySecret] }]);
+
+    const result = await planSecretManager(ctx);
+
+    expect(result.vaultChangeSet.creates).toEqual(vaultCreates);
+    expect(result.secretChangeSet.creates).toEqual([
+      {
+        name: "my-vault/key",
+        secretName: "key",
+        workspaceId: "ws-1",
+        vaultName: "my-vault",
+        value: "generated",
+        createOnly: true,
+      },
+    ]);
+  });
+
+  test.each([
+    { case: "no stored state", stored: {}, forceApplyAll: false },
+    {
+      case: "a stored hash of another value",
+      stored: { key: { hash: hashValue("other"), updateTime: "100.5" } },
+      forceApplyAll: false,
+    },
+    {
+      case: "forceApplyAll and matching evidence",
+      stored: { key: { hash: hashValue("generated"), updateTime: "100.5" } },
+      forceApplyAll: true,
+    },
+  ])(
+    "leaves an existing create-only secret as is with $case",
+    async ({ stored, forceApplyAll }) => {
+      mockLoadSecretsState.mockReturnValue({ vaults: { "my-vault": stored } });
+      using registerSecret = vi.spyOn(logger, "registerSecret");
+      const client = createMockPlanClient([
+        { name: "key", updateTime: { seconds: 100n, nanos: 5 } },
+      ]);
+      const ctx = {
+        ...createPlanContext(client, [{ vaultName: "my-vault", secrets: [createOnlySecret] }]),
+        forceApplyAll,
+      };
+
+      const result = await planSecretManager(ctx);
+
+      expect(result.secretChangeSet.creates).toEqual([]);
+      expect(result.secretChangeSet.updates).toEqual([]);
+      expect(result.secretChangeSet.deletes).toEqual([]);
+      expect(registerSecret).toHaveBeenCalledWith("generated");
+    },
+  );
+});
+
+describe("applySecretManager create-only secrets", () => {
+  aroundEach(async (runTest) => {
+    mockLoadSecretsState.mockReturnValue({ vaults: {} });
+    await runTest();
+  });
+
+  const createOnlyCreate = {
+    name: "my-vault/key",
+    secretName: "key",
+    workspaceId: "ws-1",
+    vaultName: "my-vault",
+    value: "generated",
+    createOnly: true,
+  };
+  const plainCreate = {
+    name: "my-vault/plain",
+    secretName: "plain",
+    workspaceId: "ws-1",
+    vaultName: "my-vault",
+    value: "plain-value",
+    createOnly: false,
+  };
+
+  function createPlanResult(creates: Array<typeof createOnlyCreate>) {
+    return {
+      stateScope,
+      vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
+      secretChangeSet: { creates, updates: [], deletes: [], replaces: [] },
+    } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
+  }
+
+  function rejectAlreadyExistsFor(secretName: string) {
+    return async (request: Parameters<OperatorClient["createSecretManagerSecret"]>[0]) => {
+      if (request.secretmanagerSecretName === secretName) {
+        throw new ConnectError(`secret with name ${secretName} already exists`, Code.AlreadyExists);
+      }
+      return {};
+    };
+  }
+
+  const application = { secrets: [] } as unknown as Application;
+
+  test("succeeds without recording a hash when a create-only create returns AlreadyExists", async () => {
+    const client = createMockApplyClient({
+      createSecretManagerSecret: rejectAlreadyExistsFor("key"),
+    });
+
+    await applySecretManager(
+      client,
+      createPlanResult([createOnlyCreate, plainCreate]),
+      "create-update",
+      application,
+    );
+
+    const savedState = mockSaveSecretsState.mock.calls[0]![1];
+    expect(savedState.vaults["my-vault"]).toEqual({
+      plain: { hash: hashValue("plain-value") },
+    });
+  });
+
+  test("fails a plain create that returns AlreadyExists", async () => {
+    const client = createMockApplyClient({
+      createSecretManagerSecret: rejectAlreadyExistsFor("plain"),
+    });
+
+    await expect(
+      applySecretManager(
+        client,
+        createPlanResult([createOnlyCreate, plainCreate]),
+        "create-update",
+        application,
+      ),
+    ).rejects.toThrow("secret with name plain already exists");
+  });
+
+  test("tells the client that only a create-only create expects AlreadyExists", async () => {
+    const client = createMockApplyClient();
+
+    await applySecretManager(
+      client,
+      createPlanResult([createOnlyCreate, plainCreate]),
+      "create-update",
+      application,
+    );
+
+    const calls = client.createSecretManagerSecret.mock.calls;
+    const optionsFor = (secretName: string) =>
+      calls.find(([request]) => request.secretmanagerSecretName === secretName)?.[1];
+    expect(optionsFor("key")?.contextValues?.get(alreadyExistsExpected)).toBe(true);
+    expect(optionsFor("plain")).toBeUndefined();
+  });
+});
+
 describe("planSecretManager vault metadata and deletion", () => {
   aroundEach(async (runTest) => {
     mockLoadSecretsState.mockReturnValue({ vaults: {} });
@@ -525,19 +713,19 @@ describe("planSecretManager vault metadata and deletion", () => {
   });
 
   test("plans vault deletion for managed vaults removed from config", async () => {
-    const client = {
-      listSecretManagerVaults: vi.fn().mockResolvedValue({
+    const client = mockOperatorClient({
+      listSecretManagerVaults: {
         vaults: [{ name: "kept-vault" }, { name: "removed-vault" }],
         nextPageToken: "",
-      }),
-      getMetadata: vi.fn().mockResolvedValue({
+      },
+      getMetadata: {
         metadata: { labels: { "sdk-name": "my-app", "sdk-version": sdkVersion } },
-      }),
-      listSecretManagerSecrets: vi.fn().mockResolvedValue({
+      },
+      listSecretManagerSecrets: {
         secrets: [{ name: "secret-in-removed" }],
         nextPageToken: "",
-      }),
-    } as unknown as OperatorClient;
+      },
+    });
 
     const ctx = createPlanContext(
       client,
@@ -560,16 +748,16 @@ describe("planSecretManager vault metadata and deletion", () => {
   });
 
   test("does not delete vaults managed by another application", async () => {
-    const client = {
-      listSecretManagerVaults: vi.fn().mockResolvedValue({
+    const client = mockOperatorClient({
+      listSecretManagerVaults: {
         vaults: [{ name: "other-vault" }],
         nextPageToken: "",
-      }),
-      getMetadata: vi.fn().mockResolvedValue({
+      },
+      getMetadata: {
         metadata: { labels: { "sdk-name": "other-app", "sdk-version": sdkVersion } },
-      }),
-      listSecretManagerSecrets: vi.fn().mockResolvedValue({ secrets: [], nextPageToken: "" }),
-    } as unknown as OperatorClient;
+      },
+      listSecretManagerSecrets: { secrets: [], nextPageToken: "" },
+    });
 
     const ctx = createPlanContext(client, [], { appName: "my-app" });
 
@@ -580,16 +768,16 @@ describe("planSecretManager vault metadata and deletion", () => {
   });
 
   test("treats matching managed vault as unchanged", async () => {
-    const client = {
-      listSecretManagerVaults: vi.fn().mockResolvedValue({
+    const client = mockOperatorClient({
+      listSecretManagerVaults: {
         vaults: [{ name: "my-vault" }],
         nextPageToken: "",
-      }),
-      getMetadata: vi.fn().mockResolvedValue({
+      },
+      getMetadata: {
         metadata: { labels: { "sdk-name": "my-app", "sdk-version": sdkVersion } },
-      }),
-      listSecretManagerSecrets: vi.fn().mockResolvedValue({ secrets: [], nextPageToken: "" }),
-    } as unknown as OperatorClient;
+      },
+      listSecretManagerSecrets: { secrets: [], nextPageToken: "" },
+    });
 
     const ctx = createPlanContext(
       client,
@@ -605,16 +793,16 @@ describe("planSecretManager vault metadata and deletion", () => {
   });
 
   test("updates matching managed vault when forceApplyAll is enabled", async () => {
-    const client = {
-      listSecretManagerVaults: vi.fn().mockResolvedValue({
+    const client = mockOperatorClient({
+      listSecretManagerVaults: {
         vaults: [{ name: "my-vault" }],
         nextPageToken: "",
-      }),
-      getMetadata: vi.fn().mockResolvedValue({
+      },
+      getMetadata: {
         metadata: { labels: { "sdk-name": "my-app", "sdk-version": sdkVersion } },
-      }),
-      listSecretManagerSecrets: vi.fn().mockResolvedValue({ secrets: [], nextPageToken: "" }),
-    } as unknown as OperatorClient;
+      },
+      listSecretManagerSecrets: { secrets: [], nextPageToken: "" },
+    });
 
     const ctx = {
       ...createPlanContext(
@@ -631,20 +819,20 @@ describe("planSecretManager vault metadata and deletion", () => {
     expect(result.vaultChangeSet.unchanged).toHaveLength(1);
   });
 
-  test.each([
+  test.each<{ name: string; labels: Record<string, string>; forced: boolean }>([
     { name: "marks", labels: { "sdk-name": "my-app", "sdk-version": "v0-9-0" }, forced: true },
     { name: "does not mark", labels: { "sdk-name": "other-app" }, forced: false },
   ])(
     "$name a vault update forced by the SDK version (labels $labels)",
     async ({ labels, forced }) => {
-      const client = {
-        listSecretManagerVaults: vi.fn().mockResolvedValue({
+      const client = mockOperatorClient({
+        listSecretManagerVaults: {
           vaults: [{ name: "my-vault" }],
           nextPageToken: "",
-        }),
-        getMetadata: vi.fn().mockResolvedValue({ metadata: { labels } }),
-        listSecretManagerSecrets: vi.fn().mockResolvedValue({ secrets: [], nextPageToken: "" }),
-      } as unknown as OperatorClient;
+        },
+        getMetadata: { metadata: { labels } },
+        listSecretManagerSecrets: { secrets: [], nextPageToken: "" },
+      });
 
       const result = await planSecretManager(
         createPlanContext(
@@ -660,14 +848,14 @@ describe("planSecretManager vault metadata and deletion", () => {
   );
 
   test("detects unmanaged vault without metadata label", async () => {
-    const client = {
-      listSecretManagerVaults: vi.fn().mockResolvedValue({
+    const client = mockOperatorClient({
+      listSecretManagerVaults: {
         vaults: [{ name: "my-vault" }],
         nextPageToken: "",
-      }),
-      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
-      listSecretManagerSecrets: vi.fn().mockResolvedValue({ secrets: [], nextPageToken: "" }),
-    } as unknown as OperatorClient;
+      },
+      getMetadata: { metadata: { labels: {} } },
+      listSecretManagerSecrets: { secrets: [], nextPageToken: "" },
+    });
 
     const ctx = createPlanContext(
       client,
@@ -687,16 +875,16 @@ describe("planSecretManager vault metadata and deletion", () => {
   });
 
   test("detects ownership conflict when vault owned by another app", async () => {
-    const client = {
-      listSecretManagerVaults: vi.fn().mockResolvedValue({
+    const client = mockOperatorClient({
+      listSecretManagerVaults: {
         vaults: [{ name: "my-vault" }],
         nextPageToken: "",
-      }),
-      getMetadata: vi.fn().mockResolvedValue({
+      },
+      getMetadata: {
         metadata: { labels: { "sdk-name": "other-app", "sdk-version": sdkVersion } },
-      }),
-      listSecretManagerSecrets: vi.fn().mockResolvedValue({ secrets: [], nextPageToken: "" }),
-    } as unknown as OperatorClient;
+      },
+      listSecretManagerSecrets: { secrets: [], nextPageToken: "" },
+    });
 
     const ctx = createPlanContext(
       client,
