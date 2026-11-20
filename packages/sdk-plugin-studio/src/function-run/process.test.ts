@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
 import { functionRunArgs, resolveTailorBin, spawnRun } from "./process";
-import type { RunEvent } from "./handler";
+import type { RunEvent } from "./run-types";
 
 async function collect(events: AsyncIterable<RunEvent>): Promise<RunEvent[]> {
   const all: RunEvent[] = [];

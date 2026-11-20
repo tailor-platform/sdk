@@ -1,16 +1,13 @@
 import { randomBytes } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { arg, defineAppCommand, logger, workspaceArgs } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { z } from "zod";
 import { discoverTab, type TabSpec } from "./discover-tab";
-import { formatTypeScript } from "./function-run/format";
-import { createFunctionRunHandler } from "./function-run/handler";
-import { createFunctionRunStarter } from "./function-run/process";
+import { createFunctionRunTab } from "./function-run/tab";
 import { openBrowser } from "./open-browser";
 import { startServer } from "./server";
-import { createShellHandler, type Tab } from "./shell-handler";
+import { createShellHandler } from "./shell-handler";
 import { createWorkspaceContext, listProfiles } from "./workspace-context";
 
 const DEFAULT_PORT = 7777;
@@ -20,20 +17,6 @@ const DEFAULT_TABS: readonly TabSpec[] = [
 ];
 
 const clientDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "client");
-
-function functionRunTab(projectDir: string): Tab {
-  return {
-    id: "function-run",
-    title: "Function run",
-    state: "mounted",
-    handler: createFunctionRunHandler({
-      projectDir,
-      startRun: createFunctionRunStarter(projectDir),
-      formatCode: formatTypeScript,
-      loadPage: () => readFile(path.join(clientDir, "function-run.html"), "utf8"),
-    }),
-  };
-}
 
 export const uiCommand = defineAppCommand({
   name: "studio",
@@ -47,17 +30,20 @@ export const uiCommand = defineAppCommand({
     open: arg(z.boolean().default(false), {
       description: "Open the UI in the default browser",
     }),
+    "function-file": arg(z.string().optional(), {
+      description:
+        "Existing file the Function run tab edits (default: a scratch function at .tailor/studio/function.ts)",
+    }),
+    "function-watch": arg(z.boolean().default(false), {
+      description:
+        "Start the Function run tab's watch as soon as the server is up, against the selected workspace",
+    }),
   }),
   run: async (args) => {
     logger.warn(
       "The 'studio' command is a beta feature and may introduce breaking changes in future releases.",
     );
     const projectDir = process.cwd();
-    const tabs = [
-      ...(await Promise.all(DEFAULT_TABS.map((spec) => discoverTab(spec, projectDir)))),
-      functionRunTab(projectDir),
-    ];
-    const token = randomBytes(32).toString("hex");
     const workspace = createWorkspaceContext({
       initial: {
         ...(args.profile ? { profile: args.profile } : {}),
@@ -65,6 +51,18 @@ export const uiCommand = defineAppCommand({
       },
       listProfiles: listProfiles,
     });
+    const functionRun = await createFunctionRunTab({
+      projectDir,
+      file: args["function-file"],
+      watch: args["function-watch"],
+      getSelection: () => workspace.selection(),
+      pageFile: path.join(clientDir, "function-run.html"),
+    });
+    const tabs = [
+      ...(await Promise.all(DEFAULT_TABS.map((spec) => discoverTab(spec, projectDir)))),
+      functionRun.tab,
+    ];
+    const token = randomBytes(32).toString("hex");
     const server = await startServer({
       port: args.port,
       createHandler: (port) =>
@@ -81,12 +79,16 @@ export const uiCommand = defineAppCommand({
         }),
     });
     logger.success(`Tailor Studio is running at ${server.url}`);
+    logger.info(
+      `Function run edits ${functionRun.paths.file} (argument: ${functionRun.paths.argFile})`,
+    );
     if (args.open) await openBrowser(server.url);
 
     await new Promise<void>((resolve) => {
       process.once("SIGINT", resolve);
       process.once("SIGTERM", resolve);
     });
+    functionRun.close();
     await server.close();
   },
 });

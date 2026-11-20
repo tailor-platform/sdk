@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import { createInterface } from "node:readline";
 import * as path from "pathe";
 import { resolvePackageDir } from "../discover-tab";
-import type { RunEvent, RunHandle, RunInput } from "./handler";
+import type { RunEvent, RunHandle, RunInput } from "./run-types";
 
 const SDK_PACKAGE = "@tailor-platform/sdk";
 

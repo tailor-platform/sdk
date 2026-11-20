@@ -2,405 +2,350 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { createFunctionRunHandler, type RunEvent, type RunHandle, type RunInput } from "./handler";
+import { createSyncedFiles } from "./files";
+import { createFunctionRunHandler } from "./handler";
+import { createRunSession } from "./session";
+import type { RunEvent, RunHandle, RunInput } from "./run-types";
 
-const selected = { profile: "test", workspaceId: "ws-1" };
-const context = {
-  basePath: "/plugins/function-run/",
-  token: "tok-123",
-  getSelection: () => selected,
-};
+const token = "tok-123";
 const root = "http://127.0.0.1:7777";
+const context = { basePath: "/plugins/function-run/", token, getSelection: () => ({}) };
+const pageTemplate = "<html><head><title>Function run</title></head></html>";
 
 let base: string;
-let projectDir: string;
-let scratchRoot: string;
+let dir: string;
 
 beforeAll(() => {
-  base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "studio-run-")));
-  projectDir = path.join(base, "app");
-  fs.mkdirSync(path.join(projectDir, "node_modules"), { recursive: true });
+  base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "studio-handler-")));
 });
 
 beforeEach(() => {
-  scratchRoot = fs.mkdtempSync(path.join(base, "scratch-"));
+  dir = fs.mkdtempSync(path.join(base, "case-"));
 });
 
 afterAll(() => {
   fs.rmSync(base, { recursive: true, force: true });
 });
 
-function fakeRun(events: RunEvent[]) {
-  const stop = vi.fn();
+function controllableRun() {
+  const queue: RunEvent[] = [];
+  let wake: (() => void) | undefined;
+  const push = (event: RunEvent) => {
+    queue.push(event);
+    wake?.();
+  };
+  const stop = vi.fn(() => push({ type: "exit", code: null }));
   const handle: RunHandle = {
     events: (async function* () {
-      yield* events;
-    })(),
-    stop,
-  };
-  return { handle, stop };
-}
-
-function endlessRun() {
-  let finish: () => void = () => undefined;
-  const stop = vi.fn(() => finish());
-  const handle: RunHandle = {
-    events: (async function* () {
-      await new Promise<void>((resolve) => {
-        finish = resolve;
-      });
-      yield { type: "exit", code: null } as const;
-    })(),
-    stop,
-  };
-  return { handle, stop };
-}
-
-const pageTemplate = "<html><head><title>Function run</title></head></html>";
-
-function handlerWith(
-  startRun: (input: RunInput) => RunHandle,
-  loadPage: () => Promise<string> = async () => pageTemplate,
-  formatCode?: (code: string) => Promise<string | undefined>,
-) {
-  return createFunctionRunHandler({ projectDir, scratchRoot, startRun, loadPage, formatCode });
-}
-
-const collapseSpaces = async (code: string) =>
-  code.includes("broken") ? undefined : code.replace(/\s+/g, " ").trim();
-
-function post(body: unknown, signal?: AbortSignal) {
-  return new Request(`${root}/run`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: typeof body === "string" ? body : JSON.stringify(body),
-    signal,
-  });
-}
-
-function save(body: unknown) {
-  return new Request(`${root}/save`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-}
-
-function scratchEntries(): string[] {
-  return fs.readdirSync(scratchRoot);
-}
-
-describe("createFunctionRunHandler", () => {
-  describe("page", () => {
-    test("GET / serves the built page with the token the shell passed in", async () => {
-      const response = await handlerWith(vi.fn())(new Request(`${root}/`), context);
-
-      expect(response.headers.get("content-type")).toBe("text/html; charset=utf-8");
-      expect(await response.text()).toBe(
-        '<html><head><meta name="tailor-studio-token" content="tok-123"><title>Function run</title></head></html>',
-      );
-    });
-
-    test("GET / answers 500 with the reason when the built page cannot be read", async () => {
-      const handler = handlerWith(vi.fn(), async () => {
-        throw new Error("page is missing");
-      });
-
-      const response = await handler(new Request(`${root}/`), context);
-
-      expect([response.status, await response.text()]).toEqual([500, "page is missing\n"]);
-    });
-
-    test("HEAD / answers without a body", async () => {
-      const response = await handlerWith(vi.fn())(
-        new Request(`${root}/`, { method: "HEAD" }),
-        context,
-      );
-
-      expect([response.status, await response.text()]).toEqual([200, ""]);
-    });
-
-    test("returns 404 for an unknown path", async () => {
-      const response = await handlerWith(vi.fn())(new Request(`${root}/other`), context);
-
-      expect(response.status).toBe(404);
-    });
-
-    test("GET /run is 405 so only a POST can start a run", async () => {
-      const response = await handlerWith(vi.fn())(new Request(`${root}/run`), context);
-
-      expect([response.status, response.headers.get("allow")]).toEqual([405, "POST"]);
-    });
-  });
-
-  describe("POST /run", () => {
-    test("streams the run's lines and its exit as server-sent events", async () => {
-      const { handle } = fakeRun([
-        { type: "stdout", line: '{"executionId":"e1","success":true}' },
-        { type: "stderr", line: "warning: slow" },
-        { type: "exit", code: 0 },
-      ]);
-
-      const response = await handlerWith(() => handle)(post({ code: "export default 1" }), context);
-
-      expect(response.headers.get("content-type")).toBe("text/event-stream");
-      expect(await response.text()).toBe(
-        [
-          'event: stdout\ndata: {"executionId":"e1","success":true}\n\n',
-          "event: stderr\ndata: warning: slow\n\n",
-          'event: exit\ndata: {"code":0}\n\n',
-        ].join(""),
-      );
-    });
-
-    test("runs the typed code from a scratch file outside the project that can import the project's packages", async () => {
-      const startRun = vi.fn((_input: RunInput) => endlessRun().handle);
-
-      await handlerWith(startRun)(post({ code: "export const main = () => 1;" }), context);
-
-      const { file } = startRun.mock.calls[0]![0];
-      expect([
-        path.dirname(file).startsWith(scratchRoot),
-        fs.readFileSync(file, "utf8"),
-        fs.realpathSync(path.join(path.dirname(file), "node_modules")),
-      ]).toEqual([true, "export const main = () => 1;", path.join(projectDir, "node_modules")]);
-    });
-
-    test("hands the argument to the run in a file, which holds {} when none is given", async () => {
-      const seen: string[] = [];
-      const handler = handlerWith((input) => {
-        seen.push(fs.readFileSync(input.argFile, "utf8"));
-        return fakeRun([]).handle;
-      });
-
-      await handler(post({ code: "x", arg: '{"a":1}' }), context);
-      await handler(post({ code: "x", arg: "" }), context);
-      await handler(post({ code: "x" }), context);
-
-      expect(seen).toEqual(['{"a":1}', "{}", "{}"]);
-    });
-
-    test("accepts JSON5 for the argument and hands the run plain JSON", async () => {
-      const seen: string[] = [];
-      const handler = handlerWith((input) => {
-        seen.push(fs.readFileSync(input.argFile, "utf8"));
-        return fakeRun([]).handle;
-      });
-
-      await handler(post({ code: "x", arg: "{a: 1, b: 'two',}" }), context);
-
-      expect(seen).toEqual(['{"a":1,"b":"two"}']);
-    });
-
-    test("tells the browser the run's id so it can save the code again", async () => {
-      const response = await handlerWith(() => endlessRun().handle)(post({ code: "x" }), context);
-
-      expect(response.headers.get("x-run-id")).toMatch(/^[0-9a-f-]{36}$/);
-    });
-
-    test.each([
-      ["a body that is not JSON", "not json"],
-      ["no code", {}],
-      ["code that is not a string", { code: 1 }],
-      ["an argument that is not valid JSON", { code: "x", arg: "{oops" }],
-      ["an argument that is not a string", { code: "x", arg: 1 }],
-    ])("rejects %s with 400 and starts nothing", async (_name, body) => {
-      const startRun = vi.fn(() => fakeRun([]).handle);
-
-      const response = await handlerWith(startRun)(post(body), context);
-
-      expect([response.status, startRun.mock.calls.length]).toEqual([400, 0]);
-    });
-
-    test("stops the run when the browser drops the request", async () => {
-      const { handle, stop } = endlessRun();
-      const abort = new AbortController();
-
-      const response = await handlerWith(() => handle)(post({ code: "x" }, abort.signal), context);
-      abort.abort();
-      await response.text();
-
-      expect(stop).toHaveBeenCalledTimes(1);
-    });
-
-    test("stops the run when the response is cancelled", async () => {
-      const { handle, stop } = endlessRun();
-
-      const response = await handlerWith(() => handle)(post({ code: "x" }), context);
-      await response.body!.cancel();
-
-      expect(stop).toHaveBeenCalledTimes(1);
-    });
-
-    test("answers 500 with the reason when the run cannot be started", async () => {
-      const handler = handlerWith(() => {
-        throw new Error("cannot find the tailor CLI");
-      });
-
-      const response = await handler(post({ code: "x" }), context);
-
-      expect([response.status, await response.text()]).toEqual([
-        500,
-        "cannot find the tailor CLI\n",
-      ]);
-    });
-  });
-
-  describe("scratch files", () => {
-    test("removes the scratch files once the last run has ended", async () => {
-      const handler = handlerWith(() => fakeRun([{ type: "exit", code: 0 }]).handle);
-
-      const response = await handler(post({ code: "x" }), context);
-      await response.text();
-
-      expect(scratchEntries()).toEqual([]);
-    });
-
-    test("removes the scratch files when the run cannot be started", async () => {
-      const handler = handlerWith(() => {
-        throw new Error("boom");
-      });
-
-      await handler(post({ code: "x" }), context);
-
-      expect(scratchEntries()).toEqual([]);
-    });
-
-    test("keeps the scratch directory while another run is still going", async () => {
-      const handler = handlerWith(() => endlessRun().handle);
-      const abort = new AbortController();
-      const first = await handler(post({ code: "a" }, abort.signal), context);
-      await handler(post({ code: "b" }), context);
-
-      abort.abort();
-      await first.text();
-
-      expect(scratchEntries().length).toBe(1);
-    });
-  });
-
-  describe("POST /save", () => {
-    test("rewrites the scratch file of a running run so its watch runs the new code", async () => {
-      const startRun = vi.fn((_input: RunInput) => endlessRun().handle);
-      const handler = handlerWith(startRun);
-      const started = await handler(post({ code: "old" }), context);
-
-      const saved = await handler(
-        save({ id: started.headers.get("x-run-id"), code: "new" }),
-        context,
-      );
-
-      expect([saved.status, fs.readFileSync(startRun.mock.calls[0]![0].file, "utf8")]).toEqual([
-        204,
-        "new",
-      ]);
-    });
-
-    test("rewrites the argument file so the watch runs again with the new argument", async () => {
-      const startRun = vi.fn((_input: RunInput) => endlessRun().handle);
-      const handler = handlerWith(startRun);
-      const started = await handler(post({ code: "keep", arg: '{"a":1}' }), context);
-      const id = started.headers.get("x-run-id");
-
-      const saved = await handler(save({ id, arg: '{"a":2}' }), context);
-      const { file, argFile } = startRun.mock.calls[0]![0];
-
-      expect([
-        saved.status,
-        fs.readFileSync(argFile, "utf8"),
-        fs.readFileSync(file, "utf8"),
-      ]).toEqual([204, '{"a":2}', "keep"]);
-    });
-
-    test("saves a JSON5 argument as plain JSON", async () => {
-      const startRun = vi.fn((_input: RunInput) => endlessRun().handle);
-      const handler = handlerWith(startRun);
-      const started = await handler(post({ code: "x" }), context);
-
-      await handler(save({ id: started.headers.get("x-run-id"), arg: "{a: 2}" }), context);
-
-      expect(fs.readFileSync(startRun.mock.calls[0]![0].argFile, "utf8")).toBe('{"a":2}');
-    });
-
-    test("writes {} when the argument is saved empty", async () => {
-      const startRun = vi.fn((_input: RunInput) => endlessRun().handle);
-      const handler = handlerWith(startRun);
-      const started = await handler(post({ code: "x", arg: '{"a":1}' }), context);
-
-      await handler(save({ id: started.headers.get("x-run-id"), arg: "" }), context);
-
-      expect(fs.readFileSync(startRun.mock.calls[0]![0].argFile, "utf8")).toBe("{}");
-    });
-
-    describe("when the saved code formats to what the run already has", () => {
-      async function startedRun(code: string) {
-        const startRun = vi.fn((_input: RunInput) => endlessRun().handle);
-        const handler = handlerWith(startRun, undefined, collapseSpaces);
-        const started = await handler(post({ code }), context);
-        const id = started.headers.get("x-run-id");
-        const saveCode = (next: string) => handler(save({ id, code: next }), context);
-        return { saveCode, file: () => fs.readFileSync(startRun.mock.calls[0]![0].file, "utf8") };
+      for (;;) {
+        const event = queue.shift();
+        if (event === undefined) {
+          await new Promise<void>((resolve) => {
+            wake = resolve;
+          });
+          continue;
+        }
+        yield event;
+        if (event.type === "exit") return;
       }
+    })(),
+    stop,
+  };
+  return { handle, push, stop };
+}
 
-      test("leaves the file alone, so the watch does not run again", async () => {
-        const { saveCode, file } = await startedRun("const a = 1;");
+async function setup(options: { selection?: { profile?: string; workspaceId?: string } } = {}) {
+  const selection = options.selection ?? { profile: "test", workspaceId: "ws-1" };
+  const run = controllableRun();
+  const startRun = vi.fn((_input: RunInput) => run.handle);
+  const files = createSyncedFiles({
+    file: path.join(dir, "studio", "function.ts"),
+    argFile: path.join(dir, "studio", "function.arg.json5"),
+    runArgFile: path.join(dir, "run", "arg.json"),
+    starter: "export default 1;\n",
+    formatCode: async (code) => code.replace(/\s+/g, " ").trim(),
+    pollMs: 0,
+  });
+  await files.init();
+  const session = createRunSession({
+    startRun,
+    file: path.join(dir, "studio", "function.ts"),
+    runArgFile: path.join(dir, "run", "arg.json"),
+    getSelection: () => selection,
+  });
+  const handler = createFunctionRunHandler({
+    loadPage: async () => pageTemplate,
+    files,
+    session,
+    paths: { file: "studio/function.ts", argFile: "studio/function.arg.json5" },
+  });
+  return { handler, files, session, run, startRun };
+}
 
-        const saved = await saveCode("const   a =\n  1;");
+const send = (
+  method: string,
+  pathname: string,
+  body?: unknown,
+  headers: Record<string, string> = {},
+) =>
+  new Request(`${root}${pathname}`, {
+    method,
+    headers: { "content-type": "application/json", ...headers },
+    ...(body === undefined ? {} : { body: typeof body === "string" ? body : JSON.stringify(body) }),
+  });
 
-        expect([saved.status, file()]).toEqual([204, "const a = 1;"]);
-      });
+const events = (abort?: AbortController) =>
+  new Request(`${root}/events`, {
+    headers: { "x-tailor-studio-token": token },
+    signal: abort?.signal,
+  });
 
-      test("still writes a change that formats differently, and then compares against it", async () => {
-        const { saveCode, file } = await startedRun("const a = 1;");
+async function readFrames(
+  response: Response,
+  until: (frames: string[]) => boolean,
+): Promise<string[]> {
+  const reader = response.body!.pipeThrough(new TextDecoderStream()).getReader();
+  const frames: string[] = [];
+  let buffer = "";
+  const give = new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), 1500));
+  while (!until(frames)) {
+    const next = await Promise.race([reader.read(), give]);
+    if (next === "timeout" || next.done) break;
+    buffer += next.value;
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop() ?? "";
+    frames.push(...parts);
+  }
+  await reader.cancel();
+  return frames;
+}
 
-        await saveCode("const a = 2;");
-        const afterChange = file();
-        await saveCode("const  a  =  2;");
+const eventNames = (frames: string[]) => frames.map((frame) => frame.split("\n")[0]);
+const dataOf = (frame: string) => JSON.parse(frame.split("\n")[1]!.slice(6));
 
-        expect([afterChange, file()]).toEqual(["const a = 2;", "const a = 2;"]);
-      });
+describe("GET /", () => {
+  test("serves the page with the token the shell hands over", async () => {
+    const { handler } = await setup();
 
-      test("writes code that cannot be formatted, such as one with a syntax error", async () => {
-        const { saveCode, file } = await startedRun("const a = 1;");
+    const response = await handler(new Request(`${root}/`), context);
 
-        await saveCode("broken(");
-        await saveCode("broken(");
+    expect([
+      response.headers.get("content-type"),
+      response.headers.get("cache-control"),
+      await response.text(),
+    ]).toEqual([
+      "text/html; charset=utf-8",
+      "no-store",
+      '<html><head><meta name="tailor-studio-token" content="tok-123"><title>Function run</title></head></html>',
+    ]);
+  });
 
-        expect(file()).toBe("broken(");
-      });
+  test("answers HEAD without a body", async () => {
+    const { handler } = await setup();
 
-      test("writes the original text once the code formats differently again", async () => {
-        const { saveCode, file } = await startedRun("const a = 1;");
+    const response = await handler(new Request(`${root}/`, { method: "HEAD" }), context);
 
-        await saveCode("broken(");
-        await saveCode("const a = 1;");
+    expect([response.status, await response.text()]).toEqual([200, ""]);
+  });
 
-        expect(file()).toBe("const a = 1;");
-      });
+  test("answers 500 when the page cannot be loaded", async () => {
+    const { files, session } = await setup();
+    const handler = createFunctionRunHandler({
+      loadPage: async () => {
+        throw new Error("page missing");
+      },
+      files,
+      session,
+      paths: { file: "f", argFile: "a" },
     });
 
-    test("answers 404 for a run that is not running", async () => {
-      const saved = await handlerWith(vi.fn())(save({ id: "nope", code: "x" }), context);
+    const response = await handler(new Request(`${root}/`), context);
 
-      expect(saved.status).toBe(404);
+    expect([response.status, await response.text()]).toEqual([500, "page missing\n"]);
+  });
+
+  test("answers 404 for a path it does not serve", async () => {
+    const { handler } = await setup();
+
+    const response = await handler(new Request(`${root}/other`), context);
+
+    expect(response.status).toBe(404);
+  });
+});
+
+describe("GET /events", () => {
+  test("is refused without the token", async () => {
+    const { handler } = await setup();
+
+    const response = await handler(new Request(`${root}/events`), context);
+
+    expect(response.status).toBe(403);
+  });
+
+  test("starts with the state: where the files are, what they hold and whether it is watching", async () => {
+    const { handler } = await setup();
+
+    const response = await handler(events(), context);
+    const [first] = await readFrames(response, (frames) => frames.length >= 1);
+
+    expect([response.headers.get("content-type"), first!.split("\n")[0], dataOf(first!)]).toEqual([
+      "text/event-stream",
+      "event: state",
+      {
+        file: "studio/function.ts",
+        argFile: "studio/function.arg.json5",
+        code: "export default 1;\n",
+        arg: "",
+        status: "idle",
+      },
+    ]);
+  });
+
+  test("replays what the run already printed, then goes on with what it prints next", async () => {
+    const { handler, session, run } = await setup();
+    session.start();
+    run.push({ type: "stderr", line: "Ready! Running f.ts" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const response = await handler(events(), context);
+    const pending = readFrames(response, (frames) => frames.length >= 3);
+    run.push({ type: "stdout", line: '{"success":true,"result":"3"}' });
+    const frames = await pending;
+
+    expect(eventNames(frames)).toEqual(["event: state", "event: entry", "event: entry"]);
+    expect(dataOf(frames[1]!).message).toEqual({ type: "note", text: "Ready! Running f.ts" });
+    expect(dataOf(frames[2]!).message).toEqual({
+      type: "run",
+      record: { success: true, result: "3" },
     });
+  });
 
-    test.each([
-      ["code that is not a string", { id: "i", code: 1 }],
-      ["no id", { code: "x" }],
-      ["neither code nor argument", { id: "i" }],
-      ["an argument that is not valid JSON", { id: "i", arg: "{oops" }],
-      ["an argument that is not a string", { id: "i", arg: 1 }],
-    ])("rejects %s with 400", async (_name, body) => {
-      const saved = await handlerWith(vi.fn())(save(body), context);
+  test("tells a page that the watch started and stopped", async () => {
+    const { handler } = await setup();
+    const response = await handler(events(), context);
+    const pending = readFrames(response, (frames) => frames.length >= 4);
 
-      expect(saved.status).toBe(400);
-    });
+    await handler(send("POST", "/start"), context);
+    await handler(send("POST", "/stop"), context);
+    const frames = await pending;
 
-    test("is 405 unless it is a POST", async () => {
-      const response = await handlerWith(vi.fn())(new Request(`${root}/save`), context);
+    expect(eventNames(frames)).toEqual([
+      "event: state",
+      "event: reset",
+      "event: status",
+      "event: status",
+    ]);
+    expect([dataOf(frames[2]!).status, dataOf(frames[3]!).status]).toEqual(["watching", "stopped"]);
+  });
 
-      expect([response.status, response.headers.get("allow")]).toEqual([405, "POST"]);
-    });
+  test("tells a page what was changed in the files from outside", async () => {
+    const { handler, files } = await setup();
+    const response = await handler(events(), context);
+    const pending = readFrames(response, (frames) => frames.length >= 2);
+
+    fs.writeFileSync(path.join(dir, "studio", "function.ts"), "edited elsewhere");
+    await files.refresh();
+    const frames = await pending;
+
+    expect([frames[1]!.split("\n")[0], dataOf(frames[1]!)]).toEqual([
+      "event: file",
+      { code: "edited elsewhere" },
+    ]);
+  });
+});
+
+describe("PUT /file", () => {
+  test("writes the code and the argument", async () => {
+    const { handler, files } = await setup();
+
+    const response = await handler(send("PUT", "/file", { code: "typed", arg: "{a: 1}" }), context);
+
+    expect([response.status, files.read()]).toEqual([204, { code: "typed", arg: "{a: 1}" }]);
+  });
+
+  test("writes only what it is given", async () => {
+    const { handler, files } = await setup();
+
+    await handler(send("PUT", "/file", { arg: "{a: 1}" }), context);
+
+    expect(files.read()).toEqual({ code: "export default 1;\n", arg: "{a: 1}" });
+  });
+
+  test.each([
+    ["a body that is not JSON", "not json"],
+    ["code that is not a string", { code: 1 }],
+    ["an argument that is not a string", { arg: 1 }],
+    ["an argument that does not parse", { arg: "{oops" }],
+    ["neither code nor argument", {}],
+  ])("rejects %s with 400 and writes nothing", async (_name, body) => {
+    const { handler, files } = await setup();
+
+    const response = await handler(send("PUT", "/file", body), context);
+
+    expect([response.status, files.read()]).toEqual([
+      400,
+      { code: "export default 1;\n", arg: "" },
+    ]);
+  });
+
+  test("is 405 unless it is a PUT", async () => {
+    const { handler } = await setup();
+
+    const response = await handler(send("POST", "/file", {}), context);
+
+    expect([response.status, response.headers.get("allow")]).toEqual([405, "PUT"]);
+  });
+});
+
+describe("POST /start and /stop", () => {
+  test("starts the watch against the workspace selected in the shell", async () => {
+    const { handler, startRun } = await setup();
+
+    const response = await handler(send("POST", "/start"), context);
+
+    expect([response.status, startRun.mock.calls[0]![0].workspaceArgs]).toEqual([
+      204,
+      ["-p", "test", "-w", "ws-1"],
+    ]);
+  });
+
+  test("asks for a workspace with 409 and starts nothing while none is selected", async () => {
+    const { handler, startRun } = await setup({ selection: {} });
+
+    const response = await handler(send("POST", "/start"), context);
+
+    expect([response.status, await response.text(), startRun.mock.calls.length]).toEqual([
+      409,
+      "Select a workspace in the bar at the top of the page.\n",
+      0,
+    ]);
+  });
+
+  test("stops the watch", async () => {
+    const { handler, run } = await setup();
+    await handler(send("POST", "/start"), context);
+
+    const response = await handler(send("POST", "/stop"), context);
+
+    expect([response.status, run.stop.mock.calls.length]).toEqual([204, 1]);
+  });
+
+  test("is 405 unless it is a POST", async () => {
+    const { handler } = await setup();
+
+    const response = await handler(new Request(`${root}/start`), context);
+
+    expect([response.status, response.headers.get("allow")]).toEqual([405, "POST"]);
+  });
+});
+
+describe("close", () => {
+  test("stops the watch", async () => {
+    const { handler, run } = await setup();
+    await handler(send("POST", "/start"), context);
+
+    handler.close();
+
+    expect(run.stop.mock.calls.length).toBe(1);
   });
 });

@@ -7,7 +7,7 @@ import { Alert, Badge, Button, Card } from "@tailor-platform/app-shell";
 import { StrictMode, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { createRoot } from "react-dom/client";
 import { locateArgPath, normalizeArg } from "../../src/function-run/arg";
-import { parseFrame, splitFrames, type RunRecord } from "../../src/function-run/stream";
+import { parseEventFrame, splitFrames, type RunRecord } from "../../src/function-run/stream";
 import { parseTailorErrors, type TailorErrorItem } from "../../src/function-run/tailor-errors";
 import { scopeTheme } from "../../src/function-run/theme";
 import { Editor } from "./Editor";
@@ -18,21 +18,6 @@ type Entry = EntryBody & { id: number };
 
 const token = document.querySelector<HTMLMetaElement>('meta[name="tailor-studio-token"]')?.content;
 const themeCss = `${scopeTheme(light, ":root:not(.dark)")}${scopeTheme(dark, ".dark")}`;
-
-const starterCode = `import { createResolver, t } from "@tailor-platform/sdk";
-
-export default createResolver({
-  name: "add",
-  operation: "query",
-  permission: "allowAnonymous",
-  input: {
-    a: t.int(),
-    b: t.int(),
-  },
-  body: ({ input }) => input.a + input.b,
-  output: t.int(),
-});
-`;
 
 function useDarkTheme(): boolean {
   const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
@@ -183,21 +168,113 @@ function Splitter({
   );
 }
 
+interface ServerState {
+  file: string;
+  argFile: string;
+  code: string;
+  arg: string;
+  status: Status;
+  reason?: string;
+}
+
+type Status = "idle" | "watching" | "stopped";
+
+const authHeaders = { "x-tailor-studio-token": token ?? "" };
+
+async function readEvents(
+  signal: AbortSignal,
+  onEvent: (event: string, data: unknown) => void,
+): Promise<void> {
+  const response = await fetch("events", { headers: authHeaders, signal });
+  if (!response.ok || !response.body) throw new Error(`events: ${response.status}`);
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) return;
+    const { frames, rest } = splitFrames(buffer + value);
+    buffer = rest;
+    for (const frame of frames) {
+      const { event, data } = parseEventFrame(frame);
+      onEvent(event, JSON.parse(data));
+    }
+  }
+}
+
+function put(change: { code: string } | { arg: string }): void {
+  void fetch("file", {
+    method: "PUT",
+    headers: { "content-type": "application/json", ...authHeaders },
+    body: JSON.stringify(change),
+  });
+}
+
 function App() {
-  const [code, setCode] = useState(starterCode);
-  const [argHeight, setArgHeight] = useState(DEFAULT_ARG_HEIGHT);
-  const leftPane = useRef<HTMLDivElement | null>(null);
+  const [code, setCode] = useState("");
   const [arg, setArg] = useState("");
-  const [status, setStatus] = useState<"idle" | "watching" | "stopped">("idle");
+  const [loaded, setLoaded] = useState(false);
+  const [paths, setPaths] = useState({ file: "", argFile: "" });
+  const [status, setStatus] = useState<Status>("idle");
+  const [argHeight, setArgHeight] = useState(DEFAULT_ARG_HEIGHT);
   const [entries, setEntries] = useState<Entry[]>([]);
-  const controller = useRef<AbortController | null>(null);
-  const nextId = useRef(0);
-  const runId = useRef<string | null>(null);
+  const [argErrors, setArgErrors] = useState<TailorErrorItem[]>([]);
+  const leftPane = useRef<HTMLDivElement | null>(null);
+  const serverCode = useRef("");
+  const serverArg = useRef("");
+  const localId = useRef(0);
   const dark = useDarkTheme();
 
   useEffect(followShellTheme, []);
 
-  const [argErrors, setArgErrors] = useState<TailorErrorItem[]>([]);
+  useEffect(() => {
+    const abort = new AbortController();
+    const handle = (event: string, data: unknown) => {
+      if (event === "state") {
+        const state = data as ServerState;
+        serverCode.current = state.code;
+        serverArg.current = state.arg;
+        setCode(state.code);
+        setArg(state.arg);
+        setPaths({ file: state.file, argFile: state.argFile });
+        setStatus(state.status);
+        setEntries([]);
+        setArgErrors([]);
+        setLoaded(true);
+      } else if (event === "reset") {
+        setEntries([]);
+        setArgErrors([]);
+      } else if (event === "status") {
+        setStatus((data as { status: Status }).status);
+      } else if (event === "entry") {
+        const { seq, message } = data as { seq: number; message: EntryBody };
+        setEntries((current) => [{ ...message, id: seq }, ...current]);
+        if (message.type === "run") setArgErrors(parseTailorErrors(message.record.error));
+      } else if (event === "file") {
+        const change = data as { code?: string; arg?: string };
+        if (change.code !== undefined) {
+          serverCode.current = change.code;
+          setCode(change.code);
+        }
+        if (change.arg !== undefined) {
+          serverArg.current = change.arg;
+          setArg(change.arg);
+          setArgErrors([]);
+        }
+      }
+    };
+    void (async () => {
+      while (!abort.signal.aborted) {
+        try {
+          await readEvents(abort.signal, handle);
+        } catch {
+          // reconnect below
+        }
+        if (!abort.signal.aborted) await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    })();
+    return () => abort.abort();
+  }, []);
+
   const argValid = normalizeArg(arg) !== undefined;
   const argDiagnostics = useMemo(
     () =>
@@ -210,74 +287,34 @@ function App() {
     [argErrors, arg],
   );
 
-  const save = (change: { code: string } | { arg: string }) => {
-    const id = runId.current;
-    if (id === null) return;
-    void fetch("save", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-tailor-studio-token": token ?? "" },
-      body: JSON.stringify({ id, ...change }),
-    });
-  };
+  useEffect(() => {
+    if (!loaded || code === serverCode.current) return;
+    const timer = setTimeout(() => {
+      serverCode.current = code;
+      put({ code });
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [code, loaded]);
 
   useEffect(() => {
-    if (runId.current === null) return;
-    const timer = setTimeout(() => save({ code }), 400);
+    if (!loaded || !argValid || arg === serverArg.current) return;
+    const timer = setTimeout(() => {
+      serverArg.current = arg;
+      put({ arg });
+    }, 400);
     return () => clearTimeout(timer);
-  }, [code]);
+  }, [arg, argValid, loaded]);
 
-  useEffect(() => {
-    if (runId.current === null || !argValid) return;
-    const timer = setTimeout(() => save({ arg: arg.trim() }), 400);
-    return () => clearTimeout(timer);
-  }, [arg, argValid]);
-
-  const add = (entry: EntryBody) =>
-    setEntries((current) => [{ ...entry, id: nextId.current++ }, ...current]);
-
-  async function run() {
-    const abort = new AbortController();
-    controller.current = abort;
-    setEntries([]);
-    setArgErrors([]);
-    setStatus("watching");
-    try {
-      const response = await fetch("run", {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-tailor-studio-token": token ?? "" },
-        body: JSON.stringify({ code, arg: arg.trim() }),
-        signal: abort.signal,
-      });
-      if (!response.ok || !response.body) {
-        add({ type: "failure", text: (await response.text()).trim() || "Request failed" });
-        return;
-      }
-      runId.current = response.headers.get("x-run-id");
-      const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-      let buffer = "";
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        const { frames, rest } = splitFrames(buffer + value);
-        buffer = rest;
-        for (const frame of frames) {
-          const message = parseFrame(frame);
-          if (message === undefined || message.type === "exit") continue;
-          if (message.type === "run") {
-            add({ type: "run", record: message.record });
-            setArgErrors(parseTailorErrors(message.record.error));
-          } else add(message);
-        }
-      }
-    } catch (error) {
-      if (!(error instanceof DOMException && error.name === "AbortError")) {
-        add({ type: "failure", text: String(error) });
-      }
-    } finally {
-      controller.current = null;
-      runId.current = null;
-      setStatus("stopped");
+  async function start() {
+    const response = await fetch("start", { method: "POST", headers: authHeaders });
+    if (!response.ok) {
+      const text = (await response.text()).trim() || "Request failed";
+      setEntries((current) => [{ type: "failure", text, id: --localId.current }, ...current]);
     }
+  }
+
+  function stop() {
+    void fetch("stop", { method: "POST", headers: authHeaders });
   }
 
   const watching = status === "watching";
@@ -286,20 +323,15 @@ function App() {
       className="fr-root"
       onSubmit={(event) => {
         event.preventDefault();
-        void run();
+        void start();
       }}
     >
       <style>{themeCss}</style>
       <div className="fr-bar">
-        <Button type="submit" disabled={watching}>
+        <Button type="submit" disabled={watching || !loaded}>
           Run and watch
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={!watching}
-          onClick={() => controller.current?.abort()}
-        >
+        <Button type="button" variant="outline" disabled={!watching} onClick={stop}>
           Stop
         </Button>
         <Badge variant={watching ? "info" : "neutral"} className="astw:ml-auto">
@@ -308,13 +340,15 @@ function App() {
       </div>
       <div className="fr-main">
         <div className="fr-pane" ref={leftPane}>
-          <div className="fr-label">Function</div>
+          <div className="fr-label">
+            Function <code className="fr-path">{paths.file}</code>
+          </div>
           <div className="fr-editor">
             <Editor value={code} onChange={setCode} dark={dark} label="Function" typescript />
           </div>
           <Splitter height={argHeight} onChange={setArgHeight} pane={leftPane} />
           <div className="fr-label" id="argument-label">
-            Argument (JSON or JSON5, optional)
+            Argument (JSON or JSON5, optional) <code className="fr-path">{paths.argFile}</code>
             {argValid ? null : (
               <span className="fr-invalid">
                 {" "}

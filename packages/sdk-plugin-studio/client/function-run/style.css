@@ -95,3 +95,9 @@ html {
     grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   }
 }
+
+.fr-path {
+  font-family: ui-monospace, monospace;
+  font-weight: 400;
+  margin-left: 0.25rem;
+}

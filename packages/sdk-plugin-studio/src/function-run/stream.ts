@@ -37,15 +37,13 @@ function failureText(value: unknown): string | undefined {
     .join("\n");
 }
 
-export function parseFrame(frame: string): StreamMessage | undefined {
-  let event = "message";
-  const data: string[] = [];
-  for (const line of frame.split("\n")) {
-    if (line.startsWith("event: ")) event = line.slice(7);
-    else if (line.startsWith("data: ")) data.push(line.slice(6));
-  }
-  const text = data.join("\n");
-
+/**
+ * Turn one output event of `tailor function run --json` into something to show.
+ * @param event - `stdout`, `stderr` or `exit`
+ * @param text - The line the event carries
+ * @returns The message, or undefined for an event it does not know
+ */
+export function interpret(event: string, text: string): StreamMessage | undefined {
   if (event === "exit") return { type: "exit" };
   const parsed = parseJson(text);
   if (event === "stdout") {
@@ -59,4 +57,19 @@ export function parseFrame(frame: string): StreamMessage | undefined {
     return failure === undefined ? { type: "note", text } : { type: "failure", text: failure };
   }
   return undefined;
+}
+
+/**
+ * Read one server-sent event frame.
+ * @param frame - Text of a frame, without the blank line that ends it
+ * @returns The event name and its data
+ */
+export function parseEventFrame(frame: string): { event: string; data: string } {
+  let event = "message";
+  const data: string[] = [];
+  for (const line of frame.split("\n")) {
+    if (line.startsWith("event: ")) event = line.slice(7);
+    else if (line.startsWith("data: ")) data.push(line.slice(6));
+  }
+  return { event, data: data.join("\n") };
 }

@@ -74,6 +74,12 @@ export function Editor({
 
   useEffect(() => {
     const editor = view.current;
+    if (editor === null || editor.state.doc.toString() === value) return;
+    editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: value } });
+  }, [value]);
+
+  useEffect(() => {
+    const editor = view.current;
     if (editor === null) return;
     const length = editor.state.doc.length;
     editor.dispatch(
