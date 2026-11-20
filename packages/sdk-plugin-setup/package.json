@@ -43,7 +43,7 @@
     "@tailor-platform/shared": "workspace:^",
     "@types/node": "26.6.6",
     "confbox": "0.3.2",
-    "oxlint": "1.93.0",
+    "oxlint": "1.94.0",
     "tsdown": "0.23.7",
     "tsrs": "0.25.0-ts7.1.0-beta",
     "typescript": "6.0.3",
