@@ -14,6 +14,9 @@ import {
   resolverExecutedTrigger,
   idpUserCreatedTrigger,
   idpUserTrigger,
+  authAccessTokenIssuedTrigger,
+  authAccessTokenRefreshedTrigger,
+  authAccessTokenRevokedTrigger,
   authAccessTokenTrigger,
   workflowExecutionTrigger,
   workflowJobExecutionTrigger,
@@ -1162,6 +1165,12 @@ describe("authAccessTokenTrigger (multi-event)", () => {
     const trigger = authAccessTokenTrigger({ events: ["issued", "revoked"] });
     expect(trigger.kind).toBe("authAccessToken");
     expect(trigger.events).toEqual(["auth.access_token.issued", "auth.access_token.revoked"]);
+    expect(trigger).not.toHaveProperty("auth");
+  });
+
+  test("can specify an Auth namespace", () => {
+    const trigger = authAccessTokenTrigger({ events: ["issued"], auth: "my-auth" });
+    expect(trigger.auth).toBe("my-auth");
   });
 
   test("args have kind discriminant", () => {
@@ -1663,5 +1672,16 @@ describe("idpUserCreatedTrigger", () => {
   test("external: true without an idp name is a type error", () => {
     // @ts-expect-error idp is required when external is true
     idpUserCreatedTrigger({ external: true });
+  });
+});
+
+describe("single-event authAccessToken triggers", () => {
+  test.each([
+    authAccessTokenIssuedTrigger,
+    authAccessTokenRefreshedTrigger,
+    authAccessTokenRevokedTrigger,
+  ])("%o carries auth only when given", (factory) => {
+    expect(factory()).not.toHaveProperty("auth");
+    expect(factory({ auth: "my-auth" }).auth).toBe("my-auth");
   });
 });

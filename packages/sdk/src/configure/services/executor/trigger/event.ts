@@ -1,6 +1,7 @@
 import type { ResolverConfig } from "#/configure/services/resolver/resolver";
 import type { TailorDBType } from "#/configure/services/tailordb/schema";
 import type { Workflow } from "#/configure/services/workflow/workflow";
+import type { AuthNamespaceName } from "#/configure/types/auth-namespace-name";
 import type { IdpNameRegistry } from "#/configure/types/idp-name";
 import type { TailorEnv, TailorPrincipal } from "#/runtime/types";
 import type {
@@ -517,59 +518,85 @@ export type AuthAccessTokenTrigger<Args> = ParserAuthAccessTokenTrigger & {
   __args: Args;
 };
 
+type AuthAccessTokenSingleTriggerOptions = {
+  /**
+   * Auth namespace name to subscribe to. Must name the config's Auth service, its own
+   * `defineAuth()` or the external Auth service it references; defaults to it.
+   */
+  auth?: AuthNamespaceName;
+};
+
 /**
  * Create a trigger that fires when an access token is issued.
+ * @param options - Trigger options
+ * @param options.auth - Auth namespace name to subscribe to
  * @returns Auth access token issued trigger
  */
-export function authAccessTokenIssuedTrigger(): AuthAccessTokenTrigger<AuthAccessTokenIssuedArgs> {
+export function authAccessTokenIssuedTrigger(
+  options?: AuthAccessTokenSingleTriggerOptions,
+): AuthAccessTokenTrigger<AuthAccessTokenIssuedArgs> {
   return {
     kind: "authAccessToken",
     events: ["auth.access_token.issued"],
+    ...(options?.auth != null ? { auth: options.auth } : {}),
     __args: {} as AuthAccessTokenIssuedArgs,
   };
 }
 
 /**
  * Create a trigger that fires when an access token is refreshed.
+ * @param options - Trigger options
+ * @param options.auth - Auth namespace name to subscribe to
  * @returns Auth access token refreshed trigger
  */
-export function authAccessTokenRefreshedTrigger(): AuthAccessTokenTrigger<AuthAccessTokenRefreshedArgs> {
+export function authAccessTokenRefreshedTrigger(
+  options?: AuthAccessTokenSingleTriggerOptions,
+): AuthAccessTokenTrigger<AuthAccessTokenRefreshedArgs> {
   return {
     kind: "authAccessToken",
     events: ["auth.access_token.refreshed"],
+    ...(options?.auth != null ? { auth: options.auth } : {}),
     __args: {} as AuthAccessTokenRefreshedArgs,
   };
 }
 
 /**
  * Create a trigger that fires when an access token is revoked.
+ * @param options - Trigger options
+ * @param options.auth - Auth namespace name to subscribe to
  * @returns Auth access token revoked trigger
  */
-export function authAccessTokenRevokedTrigger(): AuthAccessTokenTrigger<AuthAccessTokenRevokedArgs> {
+export function authAccessTokenRevokedTrigger(
+  options?: AuthAccessTokenSingleTriggerOptions,
+): AuthAccessTokenTrigger<AuthAccessTokenRevokedArgs> {
   return {
     kind: "authAccessToken",
     events: ["auth.access_token.revoked"],
+    ...(options?.auth != null ? { auth: options.auth } : {}),
     __args: {} as AuthAccessTokenRevokedArgs,
   };
 }
 
 type AuthAccessTokenTriggerOptions<K extends AuthAccessTokenEventKind[]> = {
   events: K;
-};
+} & AuthAccessTokenSingleTriggerOptions;
 
 /**
  * Create a trigger that fires on multiple auth access token event types.
  * @template K
  * @param options - Trigger options with events array
+ * @param options.events - Auth access token event kinds to subscribe to
+ * @param options.auth - Auth namespace name to subscribe to
  * @returns Auth access token trigger
  */
 export function authAccessTokenTrigger<
   const K extends [AuthAccessTokenEventKind, ...AuthAccessTokenEventKind[]],
 >(options: AuthAccessTokenTriggerOptions<K>): AuthAccessTokenTrigger<AuthAccessTokenMultiArgs<K>> {
-  const { events } = options;
+  const { events, auth } = options;
   return {
     kind: "authAccessToken",
     events: events.map((k) => authAccessTokenEventMap[k]),
+    ...(auth != null ? { auth } : {}),
     __args: {} as AuthAccessTokenMultiArgs<K>,
   };
 }

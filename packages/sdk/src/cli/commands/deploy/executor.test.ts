@@ -1336,6 +1336,64 @@ describe("planExecutor", () => {
       });
     });
 
+    test.for([
+      { label: "its own Auth", appOptions: { authName: "my-auth" } },
+      { label: "the external Auth it references", appOptions: { externalAuthName: "my-auth" } },
+    ])("authAccessToken trigger plans auth naming $label", async ({ appOptions }) => {
+      const executor: Executor = {
+        name: "on-auth-token-issued",
+        description: "test",
+        disabled: false,
+        trigger: { kind: "authAccessToken", events: ["auth.access_token.issued"], auth: "my-auth" },
+        operation: { kind: "function", body: () => {} },
+      };
+      const application = createMockApplication([executor], appOptions);
+
+      const result = await planExecutor({
+        client: createMockClient([]),
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+      });
+
+      expect(getEventConfig(result).value.namespaceName).toBe("my-auth");
+    });
+
+    test.for([
+      { label: "its own Auth", appOptions: { authName: "my-auth" } },
+      { label: "the external Auth it references", appOptions: { externalAuthName: "my-auth" } },
+    ])(
+      "authAccessToken trigger rejects auth naming an Auth other than $label",
+      async ({ appOptions }) => {
+        const executor: Executor = {
+          name: "on-auth-token-issued",
+          description: "test",
+          disabled: false,
+          trigger: {
+            kind: "authAccessToken",
+            events: ["auth.access_token.issued"],
+            auth: "other-auth",
+          },
+          operation: { kind: "function", body: () => {} },
+        };
+        const application = createMockApplication([executor], appOptions);
+
+        await expect(
+          planExecutor({
+            client: createMockClient([]),
+            workspaceId,
+            application,
+            forRemoval: false,
+            config: mockConfig,
+          }),
+        ).rejects.toMatchObject({
+          code: "EXECUTOR_AUTH_NOT_FOUND",
+          context: { executor: "on-auth-token-issued", auth: "other-auth", available: ["my-auth"] },
+        });
+      },
+    );
+
     test("multi-event record trigger emits multiple eventTypes", async () => {
       const client = createMockClient([]);
       const executor: Executor = {

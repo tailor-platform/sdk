@@ -185,6 +185,12 @@ Fire on auth access token lifecycle events:
 authAccessTokenIssuedTrigger();
 ```
 
+The triggers subscribe to the Auth service the executor's config uses: its own `defineAuth()` or the external Auth service it references. Pass `auth` to name it explicitly; the name is type-narrowed via the generated `AuthNamespaceName` type, and `deploy` fails when `auth` names any other Auth service. Unlike `idp`, `auth` cannot name an Auth service that another config in the same `tailor deploy -c` run owns.
+
+```typescript
+authAccessTokenIssuedTrigger({ auth: "my-auth" });
+```
+
 These triggers require the Auth service to publish access token events. Set `publishSessionEvents: true` in the `defineAuth()` of the Auth service that the executor's config uses; when that config references the Auth service as external, set it where the Auth service is defined. `deploy` does not enable it automatically. See [Auth service - Session Events](./auth.md#session-events).
 
 ### Workflow Execution Triggers
@@ -264,6 +270,7 @@ idpUserTrigger({ events: ["created", "deleted"], idp: "my-idp" });
 
 ```typescript
 authAccessTokenTrigger({ events: ["issued", "revoked"] });
+authAccessTokenTrigger({ events: ["issued", "revoked"], auth: "my-auth" });
 ```
 
 #### `workflowExecutionTrigger()` and `workflowJobExecutionTrigger()`
