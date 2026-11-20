@@ -76,6 +76,44 @@ export function mapEnvOverrides<From, To>(
   };
 }
 
+/** A service of a workspace that can override `env` values. */
+export type EnvOverrideService =
+  | { kind: "resolver" | "auth"; name: string }
+  | { kind: "executor" | "workflow" };
+
+/**
+ * Map every `env` override of a workspace to new values asynchronously, as {@link mapEnvOverrides} does.
+ * @param overrides - The workspace's `env` overrides
+ * @param map - Maps one service's override to its new values
+ * @returns The overrides with mapped values
+ */
+export async function mapEnvOverridesAsync<From, To>(
+  overrides: WorkspaceRepresentation<From>["envOverrides"],
+  map: (env: Record<string, From>, service: EnvOverrideService) => Promise<Record<string, To>>,
+): Promise<WorkspaceRepresentation<To>["envOverrides"]> {
+  const mapEach = async (
+    kind: "resolver" | "auth",
+    records: Record<string, Record<string, From>>,
+  ): Promise<Record<string, Record<string, To>>> =>
+    Object.fromEntries(
+      await Promise.all(
+        Object.entries(records).map(async ([name, env]) => [name, await map(env, { kind, name })]),
+      ),
+    );
+  const [resolver, executor, workflow, auth] = await Promise.all([
+    mapEach("resolver", overrides.resolver),
+    overrides.executor && map(overrides.executor, { kind: "executor" }),
+    overrides.workflow && map(overrides.workflow, { kind: "workflow" }),
+    mapEach("auth", overrides.auth),
+  ]);
+  return {
+    resolver,
+    ...(executor ? { executor } : {}),
+    ...(workflow ? { workflow } : {}),
+    auth,
+  };
+}
+
 function withoutEnv<Entry extends object>(entry: Entry): [Omit<Entry, "env">, EnvOverride?] {
   if (!("env" in entry)) return [entry];
   const { env, ...rest } = entry as Entry & { env?: EnvOverride };

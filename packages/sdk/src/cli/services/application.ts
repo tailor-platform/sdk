@@ -20,8 +20,15 @@ import {
   type ResolverService,
 } from "#/cli/services/resolver/service";
 import { createTailorDBService, type TailorDBService } from "#/cli/services/tailordb/service";
-import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
-import { bundleWorkflowJobs, type BundleWorkflowJobsResult } from "#/cli/services/workflow/bundler";
+import {
+  assertUniqueLocalTailorDBTypeNames,
+  type AssertUniqueLocalTailorDBTypeNamesArgs,
+} from "#/cli/services/tailordb/type-name-validation";
+import {
+  bundleWorkflowJobs,
+  type BundleWorkflowJobsOptions,
+  type BundleWorkflowJobsResult,
+} from "#/cli/services/workflow/bundler";
 import { createWorkflowService, type WorkflowService } from "#/cli/services/workflow/service";
 import { buildOptionsOf, projectSourcesOf } from "#/cli/shared/build-options";
 import { resolveBundleLogLevel } from "#/cli/shared/bundle-log-level";
@@ -63,7 +70,11 @@ import {
 } from "#/configure/config/types";
 import { type AuthConfig } from "#/configure/services/auth/types";
 import { type IdPConfig, type IdPOwnConfig } from "#/configure/services/idp/types";
-import { singleServiceKey } from "#/parser/app-config/config-export";
+import {
+  type EnvOverrideService,
+  mapEnvOverridesAsync,
+  singleServiceKey,
+} from "#/parser/app-config/config-export";
 import { AIGatewaySchema } from "#/parser/service/aigateway/index";
 import { AuthConfigSchema } from "#/parser/service/auth/index";
 import { IdPSchema } from "#/parser/service/idp/index";
@@ -76,6 +87,7 @@ import { readSecretEntry } from "#/utils/secret-entry";
 import { getScopedWaitPoints } from "#/utils/wait-point-registry";
 import type { BundleCache } from "#/cli/cache/bundle-cache";
 import type { BundledScripts } from "#/cli/commands/deploy/function-registry-types";
+import type { FunctionBundleSettings } from "#/cli/services/function-bundle";
 import type { SdkBuilderAnnotationCache } from "#/cli/shared/sdk-builder-pure-plugin";
 import type { ProjectSourcesFilter } from "#/cli/shared/sourcemap-sources";
 import type { TailorDBServiceInput } from "#/configure/services/tailordb/types";
@@ -137,7 +149,7 @@ export type Application = ConfigServices & {
 };
 
 /**
- * Intermediate state from a `loadApplication` call that carries no `env`
+ * Intermediate state from loading a config's services that carries no `env`
  * dependency, kept so a later call passing `previous` can rebundle only
  * workflow jobs and auth hooks without redoing this work.
  */
@@ -305,6 +317,7 @@ function defineResolver(
 
 /**
  * Define resolver services for namespaces that plugins generate resolvers into without a `resolver` entry.
+ * A workspace config must declare those namespaces, so for one this reports every undeclared namespace instead.
  * Call after table and namespace plugins have run.
  * @param config - Loaded `defineConfig()` or workspace config the plugins belong to
  * @param pluginManager - Plugin manager holding the generated resolvers
@@ -316,7 +329,7 @@ export function definePluginResolverServices(
 ): ResolverService[] {
   const baseDir = path.dirname(config.path);
   const resolverServices: ResolverService[] = [];
-  const undeclared = new Map<string, string>();
+  const undeclared = new Map<string, string[]>();
   for (const { namespace, pluginId } of pluginManager?.getPluginGeneratedResolvers() ?? []) {
     const serviceConfig = config.resolver?.[namespace];
     if (serviceConfig && "external" in serviceConfig) {
@@ -330,7 +343,9 @@ export function definePluginResolverServices(
       continue;
     }
     if (isLoadedWorkspaceConfig(config)) {
-      if (!undeclared.has(namespace)) undeclared.set(namespace, pluginId);
+      const pluginIds = undeclared.get(namespace) ?? [];
+      if (!pluginIds.includes(pluginId)) pluginIds.push(pluginId);
+      undeclared.set(namespace, pluginIds);
       continue;
     }
     resolverServices.push(
@@ -351,16 +366,21 @@ export function definePluginResolverServices(
 
 function undeclaredPluginResolverNamespacesError(
   workspace: LoadedWorkspaceConfig,
-  pluginIdsByNamespace: ReadonlyMap<string, string>,
+  pluginIdsByNamespace: ReadonlyMap<string, readonly string[]>,
 ) {
-  const namespaces = [...pluginIdsByNamespace.keys()];
-  const example = `resolver: { ${JSON.stringify(namespaces[0])}: { files: [] } }`;
+  const namespaces = [...pluginIdsByNamespace].map(([namespace, pluginIds]) => ({
+    namespace,
+    pluginIds,
+  }));
+  const quoted = (names: readonly string[]) => names.map((name) => `"${name}"`).join(", ");
+  const example = `resolver: { ${JSON.stringify(namespaces[0]?.namespace)}: { files: [] } }`;
   return CLIError({
     code: "PLUGIN_RESOLVER_NAMESPACE_UNDECLARED",
-    message: `Plugins generate resolvers into resolver namespaces this config does not declare: ${[
-      ...pluginIdsByNamespace,
-    ]
-      .map(([namespace, pluginId]) => `"${namespace}" (plugin "${pluginId}")`)
+    message: `Plugins generate resolvers into resolver namespaces this config does not declare: ${namespaces
+      .map(
+        ({ namespace, pluginIds }) =>
+          `"${namespace}" (${pluginIds.length === 1 ? "plugin" : "plugins"} ${quoted(pluginIds)})`,
+      )
       .join(", ")}.`,
     suggestion:
       workspace.definedBy === "defineApp"
@@ -383,9 +403,9 @@ function stripIdpProviderHelper(idpConfig: IdPOwnConfig): IdPOwnConfig {
 }
 
 /** A service configured in a config, with its key under the service's config property, when it has one. */
-interface ServiceEntry<Config> {
+interface ServiceEntry<Config, Key extends string | number = string | number> {
   config: Config;
-  key?: string | number;
+  key?: Key;
 }
 
 function defineIdp(
@@ -650,7 +670,7 @@ interface ServiceSource {
   settings: ServiceSettings;
   pluginResolverOutputKey: string;
   idps: ReadonlyArray<ServiceEntry<IdPConfig>>;
-  auths: ReadonlyArray<ServiceEntry<AuthConfig>>;
+  auths: ReadonlyArray<ServiceEntry<AuthConfig, string>>;
 }
 
 function configServiceSource(config: LoadedConfig): ServiceSource {
@@ -944,7 +964,7 @@ interface LoadSource extends ServiceSource {
   executor: ExecutorServiceInput | undefined;
   env: ApplicationEnv;
   envOverrides: EnvOverrides;
-  typeNameScope: "application" | "workspace";
+  typeNameScope: NonNullable<AssertUniqueLocalTailorDBTypeNamesArgs["scope"]>;
 }
 
 const NO_ENV_OVERRIDES: EnvOverrides = { resolver: {}, auth: {} };
@@ -970,19 +990,6 @@ function loadSourceOf(config: LoadedConfig | LoadedWorkspaceConfig): LoadSource 
   };
 }
 
-/**
- * Get the env a service's functions receive: the root env with the service's overrides.
- * @param env - Root env of the config
- * @param override - The service's `env` overrides, if any
- * @returns The env of the service
- */
-export function serviceEnv(
-  env: ApplicationEnv,
-  override: ApplicationEnv | undefined,
-): ApplicationEnv {
-  return override ? { ...env, ...override } : env;
-}
-
 interface ResolveEnvParams {
   source: LoadSource;
   client: OperatorClient | undefined;
@@ -993,6 +1000,15 @@ interface ResolveEnvParams {
 interface ResolvedEnv {
   env: ApplicationEnv;
   envOverrides: EnvOverrides;
+}
+
+function serviceEnv(resolved: ResolvedEnv, service: EnvOverrideService): ApplicationEnv {
+  const { env, envOverrides } = resolved;
+  const override =
+    service.kind === "resolver" || service.kind === "auth"
+      ? envOverrides[service.kind][service.name]
+      : envOverrides[service.kind];
+  return override ? { ...env, ...override } : env;
 }
 
 async function resolveEnv(params: ResolveEnvParams): Promise<ResolvedEnv> {
@@ -1007,32 +1023,25 @@ async function resolveEnv(params: ResolveEnvParams): Promise<ResolvedEnv> {
       siteLookupCache,
       service,
     });
-  const resolveEach = async (records: Record<string, ApplicationEnv>, label: string) =>
-    Object.fromEntries(
-      await Promise.all(
-        Object.entries(records).map(
-          async ([name, env]) => [name, await resolve(env, `${label} "${name}"`)] as const,
-        ),
-      ),
-    );
-  const { resolver, executor, workflow, auth } = source.envOverrides;
-  const [env, resolvedResolver, resolvedExecutor, resolvedWorkflow, resolvedAuth] =
-    await Promise.all([
-      resolve(source.env),
-      resolveEach(resolver, "resolver namespace"),
-      executor && resolve(executor, "the executors"),
-      workflow && resolve(workflow, "the workflows"),
-      resolveEach(auth, "Auth service"),
-    ]);
-  return {
-    env,
-    envOverrides: {
-      resolver: resolvedResolver,
-      ...(resolvedExecutor ? { executor: resolvedExecutor } : {}),
-      ...(resolvedWorkflow ? { workflow: resolvedWorkflow } : {}),
-      auth: resolvedAuth,
-    },
-  };
+  const [env, envOverrides] = await Promise.all([
+    resolve(source.env),
+    mapEnvOverridesAsync(source.envOverrides, (env, service) =>
+      resolve(env, envOverrideServiceLabel(service)),
+    ),
+  ]);
+  return { env, envOverrides };
+}
+
+function envOverrideServiceLabel(service: EnvOverrideService): string {
+  switch (service.kind) {
+    case "resolver":
+      return `resolver namespace "${service.name}"`;
+    case "auth":
+      return `Auth service "${service.name}"`;
+    case "executor":
+    case "workflow":
+      return service.kind;
+  }
 }
 
 function startContextAuthNamespace(source: LoadSource): string | undefined {
@@ -1040,37 +1049,62 @@ function startContextAuthNamespace(source: LoadSource): string | undefined {
   return auth && others.length === 0 ? auth.config.name : undefined;
 }
 
-type HookBundleSettings = Omit<
-  Parameters<typeof bundleAuthHooks>[0],
-  "configPath" | "authName" | "authKey" | "env"
->;
-
-interface BundleBeforeLoginHooksParams {
-  source: LoadSource;
-  authServices: ReadonlyArray<Readonly<AuthService>>;
-  resolved: ResolvedEnv;
-  settings: HookBundleSettings;
+interface EnvDependentBundleSettings extends FunctionBundleSettings {
+  startContext: StartContext;
+  baseDir: string;
+  allowedRuntimeGlobals: BundleWorkflowJobsOptions["allowedRuntimeGlobals"];
 }
 
-async function bundleBeforeLoginHooks(
-  params: BundleBeforeLoginHooksParams,
-): Promise<Map<string, string>> {
-  const { source, authServices, resolved, settings } = params;
-  const bundles = new Map<string, string>();
-  for (const authService of authServices) {
+interface BundleEnvDependentScriptsParams {
+  source: LoadSource;
+  services: Pick<ConfigServices, "workflowService" | "authServices">;
+  resolved: ResolvedEnv;
+  bundleSettings: EnvDependentBundleSettings;
+  previousUsedJobs?: BundleWorkflowJobsResult;
+}
+
+interface EnvDependentBundles {
+  workflowBuildResult: BundleWorkflowJobsResult | undefined;
+  authHooks: Map<string, string>;
+}
+
+/**
+ * Bundle the functions that embed `env`: the workflow jobs and each Auth service's before-login hook.
+ * @param params - The config's load source, its services, its resolved env, and bundle settings
+ * @returns The workflow build result and the hook bundles
+ */
+async function bundleEnvDependentScripts(
+  params: BundleEnvDependentScriptsParams,
+): Promise<EnvDependentBundles> {
+  const { source, services, resolved, bundleSettings, previousUsedJobs } = params;
+  const { allowedRuntimeGlobals: _allowedRuntimeGlobals, ...hookSettings } = bundleSettings;
+  const { workflowService } = services;
+
+  const workflowBuildResult =
+    workflowService && workflowService.jobs.length > 0
+      ? await bundleWorkflowJobs({
+          ...bundleSettings,
+          allJobs: workflowService.jobs,
+          mainJobNames: workflowService.workflowSources.map((ws) => ws.workflow.mainJob.name),
+          env: serviceEnv(resolved, { kind: "workflow" }),
+          previousUsedJobs,
+        })
+      : undefined;
+
+  const authHooks = new Map<string, string>();
+  for (const authService of services.authServices) {
     if (!authService.config.hooks?.beforeLogin) continue;
     const authName = authService.config.name;
-    const key = source.auths.find((auth) => auth.config.name === authName)?.key;
     const hooks = await bundleAuthHooks({
-      ...settings,
+      ...hookSettings,
       configPath: source.settings.path,
       authName,
-      authKey: typeof key === "string" ? key : undefined,
-      env: serviceEnv(resolved.env, resolved.envOverrides.auth[authName]),
+      authKey: source.auths.find((auth) => auth.config.name === authName)?.key,
+      env: serviceEnv(resolved, { kind: "auth", name: authName }),
     });
-    for (const [name, code] of hooks) bundles.set(name, code);
+    for (const [name, code] of hooks) authHooks.set(name, code);
   }
-  return bundles;
+  return { workflowBuildResult, authHooks };
 }
 
 interface LoadServicesParams extends Omit<LoadApplicationParams, "config" | "previous"> {
@@ -1245,30 +1279,31 @@ async function loadServices(params: LoadServicesParams): Promise<LoadedServices>
     });
   }
 
-  // 12. Bundle workflows
-  let workflowBuildResult: BundleWorkflowJobsResult | undefined;
-  if (workflowService && workflowService.jobs.length > 0) {
-    const mainJobNames = workflowService.workflowSources.map((ws) => ws.workflow.mainJob.name);
-    workflowBuildResult = await bundleWorkflowJobs({
-      allJobs: workflowService.jobs,
-      mainJobNames,
-      env: serviceEnv(resolved.env, resolved.envOverrides.workflow),
+  // 12. Bundle workflow jobs and auth hooks, the functions that embed env
+  const { workflowBuildResult, authHooks } = await bundleEnvDependentScripts({
+    source,
+    services: { workflowService, authServices: authResult.authServices },
+    resolved,
+    bundleSettings: {
       startContext,
-      baseDir,
       cache: bundleCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
       inlineSourcemapProjectSources,
       bundleLogLevel,
       bundleTreeshake: buildOptions.treeshake,
+      baseDir,
       tsconfigCache,
       sdkBuilderAnnotationCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault,
       kyselyTemporal,
-    });
+    },
+  });
+  if (workflowBuildResult) {
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
+  bundledScripts.authHooks = authHooks;
 
   // 13. Bundle HTTP adapters
   let httpAdapterBuildResult: HttpAdapterBundleResult | undefined;
@@ -1288,28 +1323,7 @@ async function loadServices(params: LoadServicesParams): Promise<LoadedServices>
     );
   }
 
-  // 14. Bundle auth hooks
-  bundledScripts.authHooks = await bundleBeforeLoginHooks({
-    source,
-    authServices: authResult.authServices,
-    resolved,
-    settings: {
-      startContext,
-      cache: bundleCache,
-      inlineSourcemap,
-      inlineSourcemapDependencySources,
-      inlineSourcemapProjectSources,
-      bundleLogLevel,
-      bundleTreeshake: buildOptions.treeshake,
-      baseDir,
-      tsconfigCache,
-      sdkBuilderAnnotationCache,
-      dateDefault,
-      kyselyTemporal,
-    },
-  });
-
-  // 15. Load resolver and executor definitions (for validation/logging)
+  // 14. Load resolver and executor definitions (for validation/logging)
   for (const pipeline of resolverResult.resolverServices) {
     await pipeline.loadResolvers();
   }
@@ -1319,7 +1333,7 @@ async function loadServices(params: LoadServicesParams): Promise<LoadedServices>
       await executorService.loadPluginExecutorFiles([...pluginExecutorFiles]);
     }
   }
-  // 16. Check the wait point keys every loaded module declared
+  // 15. Check the wait point keys every loaded module declared
   assertWaitPointKeys();
 
   if (workflowService) {
@@ -1392,20 +1406,8 @@ async function reloadEnvDependentBundles(
   const { source, client, workspaceId, expectedLocalStaticWebsiteNames, bundleCache, previous } =
     params;
   const { services, reusableBuildState } = previous;
-  const {
-    startContext,
-    tsconfigCache,
-    sdkBuilderAnnotationCache,
-    inlineSourcemap,
-    inlineSourcemapDependencySources,
-    inlineSourcemapProjectSources,
-    bundleLogLevel,
-    kyselyTemporal,
-  } = reusableBuildState;
   const { settings } = source;
-  const baseDir = path.dirname(settings.path);
   const buildOptions = buildOptionsOf(settings);
-  const dateDefault = effectiveDateDefault(settings);
 
   const resolved = await resolveEnv({
     source,
@@ -1416,55 +1418,31 @@ async function reloadEnvDependentBundles(
       new Set(services.staticWebsiteServices.map((website) => website.name)),
   });
 
-  const bundledScripts: BundledScripts = { ...previous.bundledScripts };
-
-  const workflowService = services.workflowService;
-  let workflowBuildResult = previous.workflowBuildResult;
-  if (workflowService && workflowService.jobs.length > 0) {
-    const mainJobNames = workflowService.workflowSources.map((ws) => ws.workflow.mainJob.name);
-    workflowBuildResult = await bundleWorkflowJobs({
-      allJobs: workflowService.jobs,
-      mainJobNames,
-      env: serviceEnv(resolved.env, resolved.envOverrides.workflow),
-      startContext,
-      baseDir,
-      cache: bundleCache,
-      inlineSourcemap,
-      inlineSourcemapDependencySources,
-      inlineSourcemapProjectSources,
-      bundleLogLevel,
-      bundleTreeshake: buildOptions.treeshake,
-      tsconfigCache,
-      sdkBuilderAnnotationCache,
-      previousUsedJobs: previous.workflowBuildResult,
-      allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
-      dateDefault,
-      kyselyTemporal,
-    });
-    bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
-  }
-
-  bundledScripts.authHooks = await bundleBeforeLoginHooks({
+  const { workflowBuildResult, authHooks } = await bundleEnvDependentScripts({
     source,
-    authServices: services.authServices,
+    services,
     resolved,
-    settings: {
-      startContext,
+    bundleSettings: {
+      ...reusableBuildState,
       cache: bundleCache,
-      inlineSourcemap,
-      inlineSourcemapDependencySources,
-      inlineSourcemapProjectSources,
-      bundleLogLevel,
       bundleTreeshake: buildOptions.treeshake,
-      baseDir,
-      tsconfigCache,
-      sdkBuilderAnnotationCache,
-      dateDefault,
-      kyselyTemporal,
+      baseDir: path.dirname(settings.path),
+      allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
+      dateDefault: effectiveDateDefault(settings),
     },
+    previousUsedJobs: previous.workflowBuildResult,
   });
+  const bundledScripts: BundledScripts = {
+    ...previous.bundledScripts,
+    ...(workflowBuildResult ? { workflowJobs: workflowBuildResult.bundledCode } : {}),
+    authHooks,
+  };
 
-  return { ...resolved, workflowBuildResult, bundledScripts };
+  return {
+    ...resolved,
+    workflowBuildResult: workflowBuildResult ?? previous.workflowBuildResult,
+    bundledScripts,
+  };
 }
 
 /**
@@ -1527,7 +1505,7 @@ export interface LoadWorkspaceParams extends Omit<LoadApplicationParams, "config
  * Result of loading the services of a workspace config
  */
 export interface LoadWorkspaceResult extends Omit<LoadApplicationResult, "application"> {
-  /** The workspace's services with `env` and its overrides resolved */
+  /** The workspace's services, with the static website URLs in `env` and its overrides resolved when a client is given */
   services: WorkspaceServices;
 }
 

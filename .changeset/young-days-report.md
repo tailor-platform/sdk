@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-Internal: the CLI can load and bundle the services of the upcoming workspace configs, giving each service its `env` overrides. Loading a `defineConfig()` config is unchanged.
+Internal refactoring: the CLI loads and bundles the services of a config through one path, in preparation for workspace configs. No user-facing behavior change.

@@ -327,7 +327,13 @@ describe("plugin-generated resolvers", () => {
           'Plugins generate resolvers into resolver namespaces this config does not declare: "main" (plugin "greeting"), "sales" (plugin "greeting").',
         suggestion:
           'Declare each namespace under "resolver", e.g. resolver: { "main": { files: [] } }, and list it in the "resolver" of the apps that expose it.',
-        context: { resourceType: "pipeline.service", namespaces: ["main", "sales"] },
+        context: {
+          resourceType: "pipeline.service",
+          namespaces: [
+            { namespace: "main", pluginIds: ["greeting"] },
+            { namespace: "sales", pluginIds: ["greeting"] },
+          ],
+        },
       }),
     );
   });

@@ -1515,14 +1515,14 @@ export async function resolveStaticWebsiteUrls(
   return results.flat();
 }
 
-/** Application `env` as declared by `defineConfig({ env })`. */
+/** `env` values as a config declares them. */
 export type ApplicationEnv = Readonly<Record<string, string | number | boolean>>;
 
 export type ResolveEnvStaticWebsiteUrlsOptions = Omit<
   ResolveStaticWebsiteUrlsOptions,
   "keepUnresolved" | "failOnUnexpectedError"
 > & {
-  /** The service whose env this is, as messages name it, e.g. `resolver "shop-api"`. */
+  /** The service whose env this is, as messages name it before `env "<key>"`, e.g. `resolver namespace "shop-api"`. */
   service?: string;
 };
 
@@ -1562,8 +1562,9 @@ export async function resolveStaticWebsiteUrlsInEnv(
   // Shared across every key below, so two keys referencing the same site
   // (e.g. `siteUrl` and `callbackUrl`) issue one getStaticWebsite call, not
   // one per key.
-  const siteLookupCache = options.siteLookupCache ?? new Map();
-  const envLabel = (key: string) => `env "${key}"${service === undefined ? "" : ` of ${service}`}`;
+  const siteLookupCache =
+    options.siteLookupCache ?? new Map<string, ReturnType<OperatorClient["getStaticWebsite"]>>();
+  const envLabel = (key: string) => `${service === undefined ? "" : `${service} `}env "${key}"`;
 
   const entries = await Promise.all(
     Object.entries(env).map(async ([key, value]) => {

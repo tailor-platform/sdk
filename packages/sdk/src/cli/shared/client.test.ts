@@ -2137,12 +2137,12 @@ describe("resolveStaticWebsiteUrlsInEnv", () => {
       client,
       "ws-1",
       { SITE_URL: "unknown:url" },
-      { service: 'resolver "shop-api"' },
+      { service: 'resolver namespace "shop-api"' },
     );
 
     expect(warnSpy.mock.calls.map(([message]) => message)).toEqual([
-      'Static website "unknown" not found for env "SITE_URL" of resolver "shop-api" configuration. Leaving the env "SITE_URL" of resolver "shop-api" value unresolved.',
-      'env "SITE_URL" of resolver "shop-api" keeps the unresolved value "unknown:url". The literal pattern is passed to your code at runtime.',
+      'Static website "unknown" not found for resolver namespace "shop-api" env "SITE_URL" configuration. Leaving the resolver namespace "shop-api" env "SITE_URL" value unresolved.',
+      'resolver namespace "shop-api" env "SITE_URL" keeps the unresolved value "unknown:url". The literal pattern is passed to your code at runtime.',
     ]);
   });
 

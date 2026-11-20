@@ -19,6 +19,7 @@ import { defineStaticWebSite } from "#/configure/services/staticwebsite/index";
 import { db } from "#/configure/services/tailordb/schema";
 import { kyselyTypePlugin } from "#/plugin/builtin/kysely-type/index";
 import { PluginManager } from "#/plugin/manager";
+import { assertDefined } from "#/utils/assert";
 import { getRegisteredWaitPoints, restoreWaitPointRegistry } from "#/utils/wait-point-registry";
 import {
   defineApplication,
@@ -1383,6 +1384,13 @@ export default createWorkflow({ name: "caller-workflow", mainJob: callerJob });
   });
 });
 
+async function runHook(dir: string, code: string | undefined): Promise<unknown> {
+  const bundleFile = path.join(dir, `hook-${Math.random().toString(36).slice(2)}.mjs`);
+  fs.writeFileSync(bundleFile, assertDefined(code, "hook bundle missing"));
+  const { main } = await import(pathToFileURL(bundleFile).href);
+  return main({ claims: {}, idpConfigName: "idp" });
+}
+
 describe("loadApplication before-login hook", () => {
   let tmpDir: string | undefined;
 
@@ -1420,20 +1428,13 @@ export default defineConfig({
     return (await loadConfig(configFile)).config;
   }
 
-  async function runHook(code: string | undefined): Promise<unknown> {
-    const bundleFile = path.join(tmpDir!, `hook-${Math.random().toString(36).slice(2)}.mjs`);
-    fs.writeFileSync(bundleFile, code!);
-    const { main } = await import(pathToFileURL(bundleFile).href);
-    return main({ claims: {}, idpConfigName: "idp" });
-  }
-
   test("bundles the Auth service's hook with the config's env", async () => {
     const config = await writeConfig();
 
     const { bundledScripts } = await loadApplication({ config });
 
     await expect(
-      runHook(bundledScripts.authHooks.get("auth-hook--shop-auth--before-login")),
+      runHook(tmpDir!, bundledScripts.authHooks.get("auth-hook--shop-auth--before-login")),
     ).resolves.toEqual({ hook: "shop-auth", env: { region: "jp", siteUrl: "shop-site:url" } });
   });
 
@@ -1457,7 +1458,7 @@ export default defineConfig({
     });
 
     await expect(
-      runHook(second.bundledScripts.authHooks.get("auth-hook--shop-auth--before-login")),
+      runHook(tmpDir!, second.bundledScripts.authHooks.get("auth-hook--shop-auth--before-login")),
     ).resolves.toEqual({
       hook: "shop-auth",
       env: { region: "jp", siteUrl: "https://shop.example.com" },
@@ -1539,13 +1540,6 @@ ${brandedDefault(kind, workspace)}
     return loaded.workspace;
   }
 
-  async function runHook(code: string | undefined): Promise<unknown> {
-    const bundleFile = path.join(tmpDir!, `hook-${Math.random().toString(36).slice(2)}.mjs`);
-    fs.writeFileSync(bundleFile, code!);
-    const { main } = await import(pathToFileURL(bundleFile).href);
-    return main({ claims: {}, idpConfigName: "idp" });
-  }
-
   function siteClient(found: boolean): OperatorClient {
     return mockOperatorClient({
       getStaticWebsite: (request) =>
@@ -1573,13 +1567,13 @@ ${brandedDefault(kind, workspace)}
     const { bundledScripts } = await loadWorkspace({ workspace });
 
     await expect(
-      runHook(bundledScripts.authHooks.get("auth-hook--shop-auth--before-login")),
+      runHook(tmpDir!, bundledScripts.authHooks.get("auth-hook--shop-auth--before-login")),
     ).resolves.toEqual({
       hook: "shop-auth",
       env: { region: "jp-region", tier: "shop-auth-tier", siteUrl: "shop-site:url" },
     });
     await expect(
-      runHook(bundledScripts.authHooks.get("auth-hook--admin-auth--before-login")),
+      runHook(tmpDir!, bundledScripts.authHooks.get("auth-hook--admin-auth--before-login")),
     ).resolves.toEqual({
       hook: "admin-auth",
       env: { region: "jp-region", tier: "admin-auth-tier", siteUrl: "shop-site:url" },
@@ -1592,7 +1586,7 @@ ${brandedDefault(kind, workspace)}
     const { bundledScripts } = await loadWorkspace({ workspace });
 
     await expect(
-      runHook(bundledScripts.authHooks.get("auth-hook--shop-auth--before-login")),
+      runHook(tmpDir!, bundledScripts.authHooks.get("auth-hook--shop-auth--before-login")),
     ).resolves.toEqual({
       hook: "shop-auth",
       env: { region: "jp-region", tier: "shop-auth-tier", siteUrl: "shop-site:url" },
@@ -1601,7 +1595,10 @@ ${brandedDefault(kind, workspace)}
 
   test("resolves static website URLs in the overrides and keeps them apart", async () => {
     const workspace = await writeWorkspace();
+    workspace.env = { ...workspace.env, api: "none", hook: "none" };
     workspace.envOverrides.resolver["shop-api"] = { tier: "resolver-tier", api: "shop-site:url" };
+    workspace.envOverrides.executor = { hook: "shop-site:url/executor" };
+    workspace.envOverrides.workflow = { tier: "workflow-tier", hook: "shop-site:url/workflow" };
 
     const { services } = await loadWorkspace({
       workspace,
@@ -1613,9 +1610,14 @@ ${brandedDefault(kind, workspace)}
       region: "jp-region",
       tier: "root-tier",
       siteUrl: "https://shop-site.example.com",
+      api: "none",
+      hook: "none",
     });
-    expect(services.envOverrides.resolver).toEqual({
-      "shop-api": { tier: "resolver-tier", api: "https://shop-site.example.com" },
+    expect(services.envOverrides).toEqual({
+      resolver: { "shop-api": { tier: "resolver-tier", api: "https://shop-site.example.com" } },
+      executor: { hook: "https://shop-site.example.com/executor" },
+      workflow: { tier: "workflow-tier", hook: "https://shop-site.example.com/workflow" },
+      auth: { "shop-auth": { tier: "shop-auth-tier" }, "admin-auth": { tier: "admin-auth-tier" } },
     });
   });
 
@@ -1669,8 +1671,41 @@ export default createResolver({
     );
   });
 
+  test("asks for table names unique across the workspace", async () => {
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
+    for (const namespace of ["customer", "ledger"]) {
+      fs.mkdirSync(path.join(tmpDir, namespace));
+      fs.writeFileSync(
+        path.join(tmpDir, namespace, "table.ts"),
+        `import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+export const customer = db
+  .table("Customer", { name: db.string() })
+  .permission(unsafeAllowAllTypePermission)
+  .gqlPermission(unsafeAllowAllGqlPermission);
+`,
+      );
+    }
+    const workspace = loadedWorkspace(
+      defineWorkspace({
+        db: {
+          "customer-db": { files: ["./customer/*.ts"] },
+          "ledger-db": { files: ["./ledger/*.ts"] },
+        },
+        apps: {},
+      }),
+      path.join(tmpDir, "tailor.config.ts"),
+    );
+
+    await expect(loadWorkspace({ workspace })).rejects.toMatchObject({
+      suggestion:
+        "Give each TailorDB type a name that is unique across all TailorDB namespaces in the workspace.",
+    });
+  });
+
   test("rebundles the workflow jobs and every hook with the URLs a reload resolves", async () => {
     const workspace = await writeWorkspace();
+    workspace.env = { region: "jp-region", tier: "root-tier", hook: "none", callback: "none" };
+    workspace.envOverrides.workflow = { tier: "workflow-tier", hook: "shop-site:url/hook" };
     workspace.envOverrides.auth["admin-auth"] = {
       tier: "admin-auth-tier",
       callback: "shop-site:url/callback",
@@ -1688,14 +1723,18 @@ export default createResolver({
       previous: first,
     });
 
+    const workflowCode = (result: typeof first) =>
+      [...(result.workflowBuildResult?.bundledCode.values() ?? [])].join("\n");
+    expect(workflowCode(first)).toContain("shop-site:url/hook");
+    expect(workflowCode(second)).toContain("https://shop-site.example.com/hook");
     await expect(
-      runHook(second.bundledScripts.authHooks.get("auth-hook--admin-auth--before-login")),
+      runHook(tmpDir!, second.bundledScripts.authHooks.get("auth-hook--admin-auth--before-login")),
     ).resolves.toEqual({
       hook: "admin-auth",
       env: {
         region: "jp-region",
         tier: "admin-auth-tier",
-        siteUrl: "https://shop-site.example.com",
+        hook: "none",
         callback: "https://shop-site.example.com/callback",
       },
     });
