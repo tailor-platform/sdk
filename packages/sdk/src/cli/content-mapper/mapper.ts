@@ -13,7 +13,7 @@ import {
 } from "#/cli/shared/type-generator";
 import { beginUserModuleRun } from "#/cli/shared/user-modules";
 import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
-import { generateKyselyTypesSource } from "#/plugin/builtin/kysely-type/type-processor";
+import { generateContentMappedKyselyTypes } from "#/plugin/builtin/kysely-type/type-processor";
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { collectLoadedFiles } from "./loaded-files";
 import { initializeResult, type ContentMapperHandlers, type PositionEncoding } from "./protocol";
@@ -77,7 +77,9 @@ async function kyselyTypesOf(
       loaded.kind === "workspace"
         ? await loadWorkspaceNamespaces(loaded.workspace, plugins, loadOptions)
         : (await loadConfigNamespaces(loaded.config, plugins, undefined, loadOptions)).namespaces;
-    return { kyselyTypes: await generateKyselyTypesSource(namespaces, options.temporal ?? false) };
+    return {
+      kyselyTypes: await generateContentMappedKyselyTypes(namespaces, options.temporal ?? false),
+    };
   } catch (error) {
     return { kyselyError: errorSummary(error) };
   }

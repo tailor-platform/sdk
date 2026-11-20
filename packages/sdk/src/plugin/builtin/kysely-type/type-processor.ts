@@ -420,3 +420,36 @@ export async function generateKyselyTypesSource(
   }
   return generateUnifiedKyselyTypes(namespaceData, temporal);
 }
+
+// The generated module already imports `createGetDB` from `@tailor-platform/sdk/kysely`, so the
+// narrowing function is exported under that name from a local of another name.
+const CREATE_GET_DB_SOURCE = multiline /* ts */ `
+  /**
+   * **Beta:** Get a \`getDB\` that accepts only the given TailorDB namespaces, such as
+   * \`createGetDB<"customer-db" | "order-db">()\`. This is not \`createGetDB\` of
+   * \`@tailor-platform/sdk/kysely\`, whose type argument maps namespaces to their tables: here
+   * it is a union of namespace names, and the returned \`getDB\` is the one this module exports.
+   */
+  function createNamespaceGetDB<N extends keyof Namespace>() {
+    return getDB as <const M extends N>(
+      namespace: M,
+      config?: Parameters<typeof getDB>[1],
+    ) => DB<M>;
+  }
+
+  export { createNamespaceGetDB as createGetDB };
+`;
+
+/**
+ * Generate the Kysely types the content mapper gives `@tailor-platform/sdk/plugin/kysely-type/db`:
+ * the unified types file plus `createGetDB`, which narrows `getDB` to some namespaces.
+ * @param namespaces - Each namespace's loaded tables
+ * @param temporal - Whether `kyselyTypePlugin` was configured with `{ temporal: true }`
+ * @returns Contents of the content-mapped module
+ */
+export async function generateContentMappedKyselyTypes(
+  namespaces: readonly Pick<TailorDBNamespaceData, "namespace" | "tables">[],
+  temporal: boolean,
+): Promise<string> {
+  return `${await generateKyselyTypesSource(namespaces, temporal)}\n${CREATE_GET_DB_SOURCE}\n`;
+}
