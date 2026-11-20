@@ -9,8 +9,10 @@ import {
   loadConfigPath,
   loadPlatformClientConfig,
   loadWorkspaceId,
+  platformConfigFromProfile,
   readEnvironmentToken,
   readPlatformConfig,
+  resolveUserTokenKey,
 } from "./context";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
@@ -250,9 +252,11 @@ async function resolveActiveUser(profile?: string): Promise<string | undefined> 
   if (readEnvironmentToken()) return undefined;
   const config = await readPlatformConfig();
   const selectedProfile = profile || process.env.TAILOR_PLATFORM_PROFILE;
-  const user = selectedProfile ? config.profiles[selectedProfile]?.user : config.current_user;
+  const profileEntry = selectedProfile ? config.profiles[selectedProfile] : undefined;
+  const user = selectedProfile ? profileEntry?.user : config.current_user;
   if (!user) return undefined;
-  return config.users[user]?.email ?? user;
+  const userKey = resolveUserTokenKey(config, user, platformConfigFromProfile(profileEntry));
+  return config.users[userKey]?.email ?? user;
 }
 
 /**
