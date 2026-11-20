@@ -242,7 +242,7 @@ interface PluginContextOptions {
 
 /**
  * Resolve the active user identifier, preferring the stored email over the
- * internal user key. An environment token's identity is not a config user, so
+ * user ID. An environment token's identity is not a config user, so
  * none is resolved while one is set.
  * @param profile - Active profile name; falls back to TAILOR_PLATFORM_PROFILE
  * @returns The resolved user (email when known), or undefined when not logged in or an environment

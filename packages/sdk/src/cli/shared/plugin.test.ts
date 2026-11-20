@@ -266,11 +266,7 @@ describe("dispatchPlugin", () => {
         "https://api.staging.example.com|sub-staging": { email: "staging@example.com" },
       },
       profiles: {
-        staging: {
-          user: "sub-staging",
-          platform_url: "https://api.staging.example.com",
-          oauth2_client_id: "cpoc_staging",
-        },
+        staging: { user: "sub-staging", platform_url: "https://api.staging.example.com" },
       },
       current_user: "u1",
     });
