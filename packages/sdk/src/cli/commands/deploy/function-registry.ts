@@ -407,6 +407,9 @@ export async function planFunctionRegistry(
     executorFunctionChanges,
     authHookFunctionChanges,
     ...ownership.result,
+    // The takeover of the resolver namespace, executor, workflow, or Auth
+    // service a function belongs to covers it.
+    takeovers: [],
     existingMap: fetchedMap,
   };
 }

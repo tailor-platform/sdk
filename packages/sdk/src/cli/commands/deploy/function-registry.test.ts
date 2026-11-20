@@ -90,6 +90,7 @@ describe("planFunctionRegistry", () => {
       contentHash: string;
       label?: string;
       sdkVersion?: string;
+      appId?: string;
     }>,
   ): OperatorClient {
     return mockOperatorClient({
@@ -111,6 +112,7 @@ describe("planFunctionRegistry", () => {
           ? {
               [sdkNameLabelKey]: func.label,
               "sdk-version": func.sdkVersion ?? "v1-0-0",
+              ...(func.appId ? { "sdk-app-id": `app-${func.appId}` } : {}),
             }
           : {};
         return { metadata: { labels } };
@@ -253,10 +255,11 @@ describe("planFunctionRegistry", () => {
       ]);
     });
 
-    test("for a workspace config, relabels a function an application deployed without uploading it", async () => {
+    test("for a workspace config, moves the functions an application deployed without listing each one", async () => {
       const entry = createEntry("resolver/ns/getUser");
       const client = createMockClient([
-        { name: "resolver/ns/getUser", contentHash: entry.contentHash, label: "shop" },
+        { name: "resolver/ns/getUser", contentHash: entry.contentHash, label: "shop", appId: "a" },
+        { name: "resolver/ns/gone", contentHash: "old", label: "shop", appId: "a" },
       ]);
 
       const result = await planFunctionRegistry(client, workspaceId, { kind: "workspace" }, [
@@ -270,13 +273,8 @@ describe("planFunctionRegistry", () => {
           labelRefresh: expect.objectContaining({ trn: expect.any(String) }),
         },
       ]);
-      expect(result.takeovers).toEqual([
-        expect.objectContaining({
-          resourceName: "resolver/ns/getUser",
-          action: "update",
-          currentOwner: "shop",
-        }),
-      ]);
+      expect(result.changeSet.deletes.map(({ name }) => name)).toEqual(["resolver/ns/gone"]);
+      expect(result.takeovers).toEqual([]);
     });
 
     test("labels are left alone when content and sdk version both match", async () => {
