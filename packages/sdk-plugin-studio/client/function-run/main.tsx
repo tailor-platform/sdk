@@ -78,7 +78,7 @@ function Code({ text, language }: { text: string; language: "json" | "plain" }) 
       source={text}
       tokenizer={language === "json" ? json : null}
       className="astw:m-0 astw:overflow-x-auto astw:rounded-md astw:bg-muted astw:p-3"
-      style={{ fontSize: "0.75rem" }}
+      style={{ fontSize: "0.875rem" }}
     />
   );
 }
@@ -86,7 +86,7 @@ function Code({ text, language }: { text: string; language: "json" | "plain" }) 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="astw:grid astw:gap-1">
-      <div className="astw:font-medium astw:text-muted-foreground" style={{ fontSize: "0.75rem" }}>
+      <div className="astw:font-medium astw:text-muted-foreground" style={{ fontSize: "0.875rem" }}>
         {title}
       </div>
       {children}
@@ -103,7 +103,7 @@ function RunCard({ record }: { record: RunRecord }) {
           <Badge variant={ok ? "success" : "error"}>{ok ? "OK" : "FAILED"}</Badge>
           <span className="astw:font-medium">{record.functionName ?? record.scriptName}</span>
           {record.executionId ? (
-            <code className="astw:text-muted-foreground" style={{ fontSize: "0.75rem" }}>
+            <code className="astw:text-muted-foreground" style={{ fontSize: "0.875rem" }}>
               {record.executionId}
             </code>
           ) : null}
