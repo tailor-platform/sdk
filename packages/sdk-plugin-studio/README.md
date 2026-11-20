@@ -21,7 +21,7 @@ tailor studio
 tailor studio --port 8080 --open
 ```
 
-The server listens on `127.0.0.1` only. The default tab is the TailorDB ERD viewer from `@tailor-platform/sdk-plugin-tailordb-erd`; without that plugin the tab shows how to install it.
+The server listens on `127.0.0.1` only. It is meant for a machine you use alone: any other user or process on the same machine can reach the port, and what a tab does runs with your stored login. The checks on each request keep other web pages in your browser out; they do not authenticate a client on the same machine. The default tab is the TailorDB ERD viewer from `@tailor-platform/sdk-plugin-tailordb-erd`; without that plugin the tab shows how to install it.
 
 ## Profile
 
