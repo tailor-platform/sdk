@@ -3,12 +3,12 @@ import { pathToFileURL } from "node:url";
 import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { loadConfig, loadConfigFile } from "#/cli/shared/config-loader";
 import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { errorToJson } from "#/cli/shared/error-json";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
-import { loadedWorkspace } from "#/cli/shared/test-helpers/workspace-config";
+import { brandedDefault, loadedWorkspace } from "#/cli/shared/test-helpers/workspace-config";
 import { defineConfig, definePlugins } from "#/configure/config/index";
 import { defineApp, defineWorkspace } from "#/configure/config/workspace";
 import { defineAIGateway } from "#/configure/services/aigateway/index";
@@ -20,7 +20,12 @@ import { db } from "#/configure/services/tailordb/schema";
 import { kyselyTypePlugin } from "#/plugin/builtin/kysely-type/index";
 import { PluginManager } from "#/plugin/manager";
 import { getRegisteredWaitPoints, restoreWaitPointRegistry } from "#/utils/wait-point-registry";
-import { defineApplication, defineWorkspaceServices, loadApplication } from "./application";
+import {
+  defineApplication,
+  defineWorkspaceServices,
+  loadApplication,
+  loadWorkspace,
+} from "./application";
 import type { OperatorClient } from "#/cli/shared/client";
 
 describe("defineWorkspaceServices", () => {
@@ -1456,6 +1461,247 @@ export default defineConfig({
     ).resolves.toEqual({
       hook: "shop-auth",
       env: { region: "jp", siteUrl: "https://shop.example.com" },
+    });
+    expect(second.bundledScripts.resolvers).toBe(first.bundledScripts.resolvers);
+  });
+});
+
+describe("loadWorkspace", () => {
+  let tmpDir: string | undefined;
+
+  afterEach(() => {
+    if (tmpDir) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      tmpDir = undefined;
+    }
+  });
+
+  async function writeWorkspace(kind: "workspace-config" | "app-config" = "workspace-config") {
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
+    fs.writeFileSync(
+      path.join(tmpDir, "workflow.ts"),
+      `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: (_input: undefined, { env }) => env,
+});
+
+export default createWorkflow({ name: "main-workflow", mainJob });
+`,
+    );
+    const auth = (name: string, tier: string) => `{
+      ...defineAuth(${JSON.stringify(name)}, {
+        machineUserAttributes: { role: db.string() },
+        machineUsers: { admin: { attributes: { role: "ADMIN" } } },
+        hooks: {
+          beforeLogin: {
+            handler: async ({ env }) => ({ hook: ${JSON.stringify(name)}, env }),
+            invoker: "admin",
+          },
+        },
+      }),
+      env: { tier: ${JSON.stringify(tier)} },
+    }`;
+    const workspace =
+      kind === "workspace-config"
+        ? `{
+  env: { region: "jp-region", tier: "root-tier", siteUrl: site.url },
+  staticWebsites: [site],
+  workflow: { files: ["./workflow.ts"], env: { tier: "workflow-tier" } },
+  resolver: { "shop-api": { files: [], env: { tier: "resolver-tier" } } },
+  auth: {
+    "shop-auth": ${auth("shop-auth", "shop-auth-tier")},
+    "admin-auth": ${auth("admin-auth", "admin-auth-tier")},
+  },
+  apps: { shop: { resolver: ["shop-api"], auth: "shop-auth" } },
+}`
+        : `{
+  name: "shop",
+  env: { region: "jp-region", tier: "root-tier", siteUrl: site.url },
+  staticWebsites: [site],
+  auth: ${auth("shop-auth", "shop-auth-tier")},
+}`;
+    const configFile = path.join(tmpDir, "tailor.config.ts");
+    fs.writeFileSync(
+      configFile,
+      `
+import { db, defineAuth, defineStaticWebSite } from "@tailor-platform/sdk";
+
+const site = defineStaticWebSite("shop-site", { description: "shop" });
+
+${brandedDefault(kind, workspace)}
+`,
+    );
+    const loaded = await loadConfigFile(configFile);
+    if (loaded.kind !== "workspace") throw new Error("expected a workspace config");
+    return loaded.workspace;
+  }
+
+  async function runHook(code: string | undefined): Promise<unknown> {
+    const bundleFile = path.join(tmpDir!, `hook-${Math.random().toString(36).slice(2)}.mjs`);
+    fs.writeFileSync(bundleFile, code!);
+    const { main } = await import(pathToFileURL(bundleFile).href);
+    return main({ claims: {}, idpConfigName: "idp" });
+  }
+
+  function siteClient(found: boolean): OperatorClient {
+    return mockOperatorClient({
+      getStaticWebsite: (request) =>
+        found
+          ? Promise.resolve({ staticwebsite: { url: `https://${request.name}.example.com` } })
+          : Promise.reject(new ConnectError("not found", Code.NotFound)),
+    });
+  }
+
+  test("bundles the workflow jobs with the root env and the workflow overrides", async () => {
+    const workspace = await writeWorkspace();
+
+    const { workflowBuildResult } = await loadWorkspace({ workspace });
+
+    const code = [...(workflowBuildResult?.bundledCode.values() ?? [])].join("\n");
+    expect(code).toContain("jp-region");
+    expect(code).toContain("workflow-tier");
+    expect(code).not.toContain("root-tier");
+    expect(code).not.toContain("resolver-tier");
+  });
+
+  test("bundles the hook of every Auth service with its own overrides", async () => {
+    const workspace = await writeWorkspace();
+
+    const { bundledScripts } = await loadWorkspace({ workspace });
+
+    await expect(
+      runHook(bundledScripts.authHooks.get("auth-hook--shop-auth--before-login")),
+    ).resolves.toEqual({
+      hook: "shop-auth",
+      env: { region: "jp-region", tier: "shop-auth-tier", siteUrl: "shop-site:url" },
+    });
+    await expect(
+      runHook(bundledScripts.authHooks.get("auth-hook--admin-auth--before-login")),
+    ).resolves.toEqual({
+      hook: "admin-auth",
+      env: { region: "jp-region", tier: "admin-auth-tier", siteUrl: "shop-site:url" },
+    });
+  });
+
+  test("bundles the hook of a defineApp() config's Auth service", async () => {
+    const workspace = await writeWorkspace("app-config");
+
+    const { bundledScripts } = await loadWorkspace({ workspace });
+
+    await expect(
+      runHook(bundledScripts.authHooks.get("auth-hook--shop-auth--before-login")),
+    ).resolves.toEqual({
+      hook: "shop-auth",
+      env: { region: "jp-region", tier: "shop-auth-tier", siteUrl: "shop-site:url" },
+    });
+  });
+
+  test("resolves static website URLs in the overrides and keeps them apart", async () => {
+    const workspace = await writeWorkspace();
+    workspace.envOverrides.resolver["shop-api"] = { tier: "resolver-tier", api: "shop-site:url" };
+
+    const { services } = await loadWorkspace({
+      workspace,
+      client: siteClient(true),
+      workspaceId: "ws-1",
+    });
+
+    expect(services.env).toEqual({
+      region: "jp-region",
+      tier: "root-tier",
+      siteUrl: "https://shop-site.example.com",
+    });
+    expect(services.envOverrides.resolver).toEqual({
+      "shop-api": { tier: "resolver-tier", api: "https://shop-site.example.com" },
+    });
+  });
+
+  test("names the only Auth service as the invoker of a workflow a resolver starts", async () => {
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
+    fs.writeFileSync(
+      path.join(tmpDir, "workflow.ts"),
+      `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+export const mainJob = createWorkflowJob({ name: "main-job", body: () => undefined });
+
+export default createWorkflow({ name: "main-workflow", mainJob });
+`,
+    );
+    fs.mkdirSync(path.join(tmpDir, "resolvers"));
+    fs.writeFileSync(
+      path.join(tmpDir, "resolvers", "start.ts"),
+      `
+import { createResolver, t } from "@tailor-platform/sdk";
+import workflow from "../workflow";
+
+export default createResolver({
+  name: "start",
+  operation: "mutation",
+  permission: "allowAnonymous",
+  output: t.string(),
+  body: async () => workflow.start(undefined, { invoker: "admin" }),
+});
+`,
+    );
+    const workspace = loadedWorkspace(
+      defineWorkspace({
+        workflow: { files: ["./workflow.ts"] },
+        resolver: { "shop-api": { files: ["./resolvers/*.ts"] } },
+        auth: {
+          "shop-auth": defineAuth("shop-auth", {
+            machineUserAttributes: { role: db.string() },
+            machineUsers: { admin: { attributes: { role: "ADMIN" } } },
+          }),
+        },
+        apps: { shop: { resolver: ["shop-api"], auth: "shop-auth" } },
+      }),
+      path.join(tmpDir, "tailor.config.ts"),
+    );
+
+    const { bundledScripts } = await loadWorkspace({ workspace });
+
+    expect(bundledScripts.resolvers.get("shop-api:start")).toContain(
+      "authInvoker:{namespace:`shop-auth`,machineUserName:",
+    );
+  });
+
+  test("rebundles the workflow jobs and every hook with the URLs a reload resolves", async () => {
+    const workspace = await writeWorkspace();
+    workspace.envOverrides.auth["admin-auth"] = {
+      tier: "admin-auth-tier",
+      callback: "shop-site:url/callback",
+    };
+    const first = await loadWorkspace({
+      workspace,
+      client: siteClient(false),
+      workspaceId: "ws-1",
+    });
+
+    const second = await loadWorkspace({
+      workspace,
+      client: siteClient(true),
+      workspaceId: "ws-1",
+      previous: first,
+    });
+
+    await expect(
+      runHook(second.bundledScripts.authHooks.get("auth-hook--admin-auth--before-login")),
+    ).resolves.toEqual({
+      hook: "admin-auth",
+      env: {
+        region: "jp-region",
+        tier: "admin-auth-tier",
+        siteUrl: "https://shop-site.example.com",
+        callback: "https://shop-site.example.com/callback",
+      },
+    });
+    expect(second.services.envOverrides.auth["admin-auth"]).toEqual({
+      tier: "admin-auth-tier",
+      callback: "https://shop-site.example.com/callback",
     });
     expect(second.bundledScripts.resolvers).toBe(first.bundledScripts.resolvers);
   });

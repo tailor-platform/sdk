@@ -23,10 +23,13 @@ import { createTailorDBService, type TailorDBService } from "#/cli/services/tail
 import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
 import { bundleWorkflowJobs, type BundleWorkflowJobsResult } from "#/cli/services/workflow/bundler";
 import { createWorkflowService, type WorkflowService } from "#/cli/services/workflow/service";
-import { getApplicationAuthNamespace, soleAuthService } from "#/cli/shared/auth-namespace";
 import { buildOptionsOf, projectSourcesOf } from "#/cli/shared/build-options";
 import { resolveBundleLogLevel } from "#/cli/shared/bundle-log-level";
-import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
+import {
+  type ApplicationEnv,
+  resolveStaticWebsiteUrlsInEnv,
+  type OperatorClient,
+} from "#/cli/shared/client";
 import {
   isLoadedWorkspaceConfig,
   type LoadedConfig,
@@ -313,6 +316,7 @@ export function definePluginResolverServices(
 ): ResolverService[] {
   const baseDir = path.dirname(config.path);
   const resolverServices: ResolverService[] = [];
+  const undeclared = new Map<string, string>();
   for (const { namespace, pluginId } of pluginManager?.getPluginGeneratedResolvers() ?? []) {
     const serviceConfig = config.resolver?.[namespace];
     if (serviceConfig && "external" in serviceConfig) {
@@ -325,6 +329,10 @@ export function definePluginResolverServices(
     if (serviceConfig || resolverServices.some((service) => service.namespace === namespace)) {
       continue;
     }
+    if (isLoadedWorkspaceConfig(config)) {
+      if (!undeclared.has(namespace)) undeclared.set(namespace, pluginId);
+      continue;
+    }
     resolverServices.push(
       createResolverService({
         namespace,
@@ -335,7 +343,31 @@ export function definePluginResolverServices(
       }),
     );
   }
+  if (isLoadedWorkspaceConfig(config) && undeclared.size > 0) {
+    throw undeclaredPluginResolverNamespacesError(config, undeclared);
+  }
   return resolverServices;
+}
+
+function undeclaredPluginResolverNamespacesError(
+  workspace: LoadedWorkspaceConfig,
+  pluginIdsByNamespace: ReadonlyMap<string, string>,
+) {
+  const namespaces = [...pluginIdsByNamespace.keys()];
+  const example = `resolver: { ${JSON.stringify(namespaces[0])}: { files: [] } }`;
+  return CLIError({
+    code: "PLUGIN_RESOLVER_NAMESPACE_UNDECLARED",
+    message: `Plugins generate resolvers into resolver namespaces this config does not declare: ${[
+      ...pluginIdsByNamespace,
+    ]
+      .map(([namespace, pluginId]) => `"${namespace}" (plugin "${pluginId}")`)
+      .join(", ")}.`,
+    suggestion:
+      workspace.definedBy === "defineApp"
+        ? `Declare each namespace under "resolver", e.g. ${example}.`
+        : `Declare each namespace under "resolver", e.g. ${example}, and list it in the "resolver" of the apps that expose it.`,
+    context: { resourceType: "pipeline.service", namespaces },
+  });
 }
 
 type DefineIdpResult = {
@@ -906,39 +938,169 @@ function assertWaitPointKeys(): void {
   });
 }
 
+/** What loading reads from a `defineConfig()` or workspace config besides its service declarations. */
+interface LoadSource extends ServiceSource {
+  config: LoadedConfig | LoadedWorkspaceConfig;
+  executor: ExecutorServiceInput | undefined;
+  env: ApplicationEnv;
+  envOverrides: EnvOverrides;
+  typeNameScope: "application" | "workspace";
+}
+
+const NO_ENV_OVERRIDES: EnvOverrides = { resolver: {}, auth: {} };
+
+function loadSourceOf(config: LoadedConfig | LoadedWorkspaceConfig): LoadSource {
+  if (isLoadedWorkspaceConfig(config)) {
+    return {
+      ...workspaceServiceSource(config),
+      config,
+      executor: config.executor,
+      env: config.env,
+      envOverrides: config.envOverrides,
+      typeNameScope: "workspace",
+    };
+  }
+  return {
+    ...configServiceSource(config),
+    config,
+    executor: config.executor,
+    env: config.env ?? {},
+    envOverrides: NO_ENV_OVERRIDES,
+    typeNameScope: "application",
+  };
+}
+
 /**
- * Load and fully initialize a Tailor application.
+ * Get the env a service's functions receive: the root env with the service's overrides.
+ * @param env - Root env of the config
+ * @param override - The service's `env` overrides, if any
+ * @returns The env of the service
+ */
+export function serviceEnv(
+  env: ApplicationEnv,
+  override: ApplicationEnv | undefined,
+): ApplicationEnv {
+  return override ? { ...env, ...override } : env;
+}
+
+interface ResolveEnvParams {
+  source: LoadSource;
+  client: OperatorClient | undefined;
+  workspaceId: string | undefined;
+  expectedLocalNames: ReadonlySet<string>;
+}
+
+interface ResolvedEnv {
+  env: ApplicationEnv;
+  envOverrides: EnvOverrides;
+}
+
+async function resolveEnv(params: ResolveEnvParams): Promise<ResolvedEnv> {
+  const { source, client, workspaceId, expectedLocalNames } = params;
+  if (!client || !workspaceId) {
+    return { env: source.env, envOverrides: source.envOverrides };
+  }
+  const siteLookupCache = new Map<string, ReturnType<OperatorClient["getStaticWebsite"]>>();
+  const resolve = (env: ApplicationEnv, service?: string) =>
+    resolveStaticWebsiteUrlsInEnv(client, workspaceId, env, {
+      expectedLocalNames,
+      siteLookupCache,
+      service,
+    });
+  const resolveEach = async (records: Record<string, ApplicationEnv>, label: string) =>
+    Object.fromEntries(
+      await Promise.all(
+        Object.entries(records).map(
+          async ([name, env]) => [name, await resolve(env, `${label} "${name}"`)] as const,
+        ),
+      ),
+    );
+  const { resolver, executor, workflow, auth } = source.envOverrides;
+  const [env, resolvedResolver, resolvedExecutor, resolvedWorkflow, resolvedAuth] =
+    await Promise.all([
+      resolve(source.env),
+      resolveEach(resolver, "resolver namespace"),
+      executor && resolve(executor, "the executors"),
+      workflow && resolve(workflow, "the workflows"),
+      resolveEach(auth, "Auth service"),
+    ]);
+  return {
+    env,
+    envOverrides: {
+      resolver: resolvedResolver,
+      ...(resolvedExecutor ? { executor: resolvedExecutor } : {}),
+      ...(resolvedWorkflow ? { workflow: resolvedWorkflow } : {}),
+      auth: resolvedAuth,
+    },
+  };
+}
+
+function startContextAuthNamespace(source: LoadSource): string | undefined {
+  const [auth, ...others] = source.auths;
+  return auth && others.length === 0 ? auth.config.name : undefined;
+}
+
+type HookBundleSettings = Omit<
+  Parameters<typeof bundleAuthHooks>[0],
+  "configPath" | "authName" | "authKey" | "env"
+>;
+
+interface BundleBeforeLoginHooksParams {
+  source: LoadSource;
+  authServices: ReadonlyArray<Readonly<AuthService>>;
+  resolved: ResolvedEnv;
+  settings: HookBundleSettings;
+}
+
+async function bundleBeforeLoginHooks(
+  params: BundleBeforeLoginHooksParams,
+): Promise<Map<string, string>> {
+  const { source, authServices, resolved, settings } = params;
+  const bundles = new Map<string, string>();
+  for (const authService of authServices) {
+    if (!authService.config.hooks?.beforeLogin) continue;
+    const authName = authService.config.name;
+    const key = source.auths.find((auth) => auth.config.name === authName)?.key;
+    const hooks = await bundleAuthHooks({
+      ...settings,
+      configPath: source.settings.path,
+      authName,
+      authKey: typeof key === "string" ? key : undefined,
+      env: serviceEnv(resolved.env, resolved.envOverrides.auth[authName]),
+    });
+    for (const [name, code] of hooks) bundles.set(name, code);
+  }
+  return bundles;
+}
+
+interface LoadServicesParams extends Omit<LoadApplicationParams, "config" | "previous"> {
+  source: LoadSource;
+}
+
+interface LoadedServices extends Omit<LoadApplicationResult, "application"> {
+  defined: BuildConfigServicesParams;
+  envOverrides: EnvOverrides;
+}
+
+/**
+ * Load the services of a config and bundle their functions.
  * This performs all I/O-heavy operations: loading tables, processing plugins,
  * generating plugin files, bundling, and loading definitions for validation.
- * @param params - Parameters for defining and loading the application
- * @returns Fully initialized application with workflow results
+ * @param params - The config's load source and the loading options
+ * @returns The loaded services and their bundles
  */
-export async function loadApplication(
-  params: LoadApplicationParams,
-): Promise<LoadApplicationResult> {
+async function loadServices(params: LoadServicesParams): Promise<LoadedServices> {
   const {
-    config,
+    source,
     pluginManager,
     bundleCache,
     client,
     workspaceId,
     expectedLocalStaticWebsiteNames,
-    previous,
     precompileTailorDBScripts,
   } = params;
-  const baseDir = path.dirname(config.path);
-
-  if (previous) {
-    return reloadEnvDependentBundles({
-      config,
-      baseDir,
-      client,
-      workspaceId,
-      expectedLocalStaticWebsiteNames,
-      bundleCache,
-      previous,
-    });
-  }
+  const { config, settings } = source;
+  const baseDir = path.dirname(settings.path);
 
   // 1. Define services (synchronous)
   const {
@@ -950,25 +1112,20 @@ export async function loadApplication(
     aiGatewayServices,
     secrets,
     ignoreNullishValues,
-  } = defineServices(
-    configServiceSource(config),
-    baseDir,
-    pluginManager,
-    precompileTailorDBScripts,
-  );
+  } = defineServices(source, baseDir, pluginManager, precompileTailorDBScripts);
 
-  // 2. Resolve `name:url` static website placeholders in `env` once, before any
-  // bundling or expression generation embeds it into resolver, executor,
-  // workflow, or auth hook code. Skipped without a client (e.g. `--build-only`,
-  // which never reaches the platform), leaving `env` as declared.
-  const env =
-    client && workspaceId
-      ? await resolveStaticWebsiteUrlsInEnv(client, workspaceId, config.env ?? {}, {
-          expectedLocalNames:
-            expectedLocalStaticWebsiteNames ??
-            new Set(staticWebsiteServices.map((website) => website.name)),
-        })
-      : (config.env ?? {});
+  // 2. Resolve `name:url` static website placeholders in `env` and its overrides
+  // once, before any bundling or expression generation embeds them into
+  // resolver, executor, workflow, or auth hook code. Skipped without a client
+  // (e.g. `--build-only`, which never reaches the platform), leaving them as declared.
+  const resolved = await resolveEnv({
+    source,
+    client,
+    workspaceId,
+    expectedLocalNames:
+      expectedLocalStaticWebsiteNames ??
+      new Set(staticWebsiteServices.map((website) => website.name)),
+  });
 
   // 3. Load TailorDB tables, process namespace plugins, and define plugin resolver namespaces
   for (const tailordb of tailordbResult.tailorDBServices) {
@@ -977,6 +1134,7 @@ export async function loadApplication(
   }
   assertUniqueLocalTailorDBTypeNames({
     tailorDBServices: tailordbResult.tailorDBServices,
+    scope: source.typeNameScope,
   });
   const pluginResolverServices = definePluginResolverServices(config, pluginManager);
   const resolverResult: DefineResolverResult = {
@@ -991,20 +1149,20 @@ export async function loadApplication(
   const pluginExecutorFiles = generatePluginFilesIfNeeded(
     pluginManager,
     tailordbResult.tailorDBServices,
-    config.path,
+    settings.path,
   );
 
   // 5. Determine final executorService (const, no reassignment)
-  const executorService = defineExecutor(config.executor, baseDir, pluginExecutorFiles.length > 0);
+  const executorService = defineExecutor(source.executor, baseDir, pluginExecutorFiles.length > 0);
 
   // 6. Load and collect workflows
-  const workflowService = defineWorkflow(config.workflow, baseDir);
+  const workflowService = defineWorkflow(settings.workflow, baseDir);
   if (workflowService) {
     await workflowService.loadWorkflows();
   }
 
   // 7. Load and collect HTTP adapters
-  const httpAdapterService = defineHttpAdapterService(config.httpAdapter, baseDir);
+  const httpAdapterService = defineHttpAdapterService(settings.httpAdapter, baseDir);
   if (httpAdapterService) {
     await httpAdapterService.loadAdapters();
   }
@@ -1016,20 +1174,20 @@ export async function loadApplication(
 
   // 8. Build start context for workflow/job start transformation
   const startContext = await buildStartContext(
-    config.workflow,
-    getApplicationAuthNamespace({ authServices: authResult.authServices, config }),
+    settings.workflow,
+    startContextAuthNamespace(source),
     baseDir,
     workflowService?.workflowSources,
     tsconfigCache,
   );
 
   // 9. Resolve bundle settings
-  const buildOptions = buildOptionsOf(config);
+  const buildOptions = buildOptionsOf(settings);
   const inlineSourcemap = resolveInlineSourcemap(buildOptions.inlineSourcemap);
   const inlineSourcemapDependencySources = buildOptions.inlineSourcemapDependencySources ?? false;
   const inlineSourcemapProjectSources = projectSourcesOf({ buildOptions, baseDir });
   const bundleLogLevel = resolveBundleLogLevel(buildOptions.logLevel);
-  const dateDefault = effectiveDateDefault(config);
+  const dateDefault = effectiveDateDefault(settings);
   const kyselyTemporal = pluginManager?.getPluginConfig(KyselyGeneratorID)?.temporal ?? false;
 
   // Collect in-memory bundled scripts
@@ -1094,7 +1252,7 @@ export async function loadApplication(
     workflowBuildResult = await bundleWorkflowJobs({
       allJobs: workflowService.jobs,
       mainJobNames,
-      env,
+      env: serviceEnv(resolved.env, resolved.envOverrides.workflow),
       startContext,
       baseDir,
       cache: bundleCache,
@@ -1131,13 +1289,11 @@ export async function loadApplication(
   }
 
   // 14. Bundle auth hooks
-  const authService = soleAuthService(authResult);
-  if (authService?.config.hooks?.beforeLogin) {
-    const authName = authService.config.name;
-    bundledScripts.authHooks = await bundleAuthHooks({
-      configPath: config.path,
-      authName,
-      env,
+  bundledScripts.authHooks = await bundleBeforeLoginHooks({
+    source,
+    authServices: authResult.authServices,
+    resolved,
+    settings: {
       startContext,
       cache: bundleCache,
       inlineSourcemap,
@@ -1150,8 +1306,8 @@ export async function loadApplication(
       sdkBuilderAnnotationCache,
       dateDefault,
       kyselyTemporal,
-    });
-  }
+    },
+  });
 
   // 15. Load resolver and executor definitions (for validation/logging)
   for (const pipeline of resolverResult.resolverServices) {
@@ -1174,25 +1330,22 @@ export async function loadApplication(
   }
   logger.newline();
 
-  // 17. Build immutable Application
-  const application = buildApplication({
-    config,
-    tailordbResult,
-    resolverResult,
-    idpResult,
-    authResult,
-    executorService,
-    workflowService,
-    httpAdapterService,
-    staticWebsiteServices,
-    aiGatewayServices,
-    secrets,
-    ignoreNullishValues,
-    env,
-  });
-
   return {
-    application,
+    defined: {
+      tailordbResult,
+      resolverResult,
+      idpResult,
+      authResult,
+      executorService,
+      workflowService,
+      httpAdapterService,
+      staticWebsiteServices,
+      aiGatewayServices,
+      secrets,
+      ignoreNullishValues,
+      env: resolved.env,
+    },
+    envOverrides: resolved.envOverrides,
     workflowBuildResult,
     httpAdapterBuildResult,
     bundledScripts,
@@ -1209,33 +1362,36 @@ export async function loadApplication(
   };
 }
 
+/** A load of a config's services that a reload reuses. */
+interface PreviousLoad extends Omit<LoadApplicationResult, "application"> {
+  services: ConfigServices;
+}
+
+interface ReloadEnvDependentBundlesParams extends Pick<
+  LoadApplicationParams,
+  "client" | "workspaceId" | "expectedLocalStaticWebsiteNames" | "bundleCache"
+> {
+  source: LoadSource;
+  previous: PreviousLoad;
+}
+
+interface ReloadedBundles
+  extends Pick<LoadApplicationResult, "workflowBuildResult" | "bundledScripts">, ResolvedEnv {}
+
 /**
  * Re-resolve `env`'s static website placeholders and rebundle only the
  * workflow-job and auth-hook code that embeds it, reusing everything else
  * from `previous` -- config parsing, TailorDB loading, plugin execution, and
  * the resolver/executor/HTTP-adapter bundles, none of which depend on `env`.
- * @param params - Config, client, and the prior `loadApplication` result to reuse
- * @returns A `LoadApplicationResult` with `env` and its two dependent bundle kinds refreshed
+ * @param params - The config's load source, client, and the prior load to reuse
+ * @returns `env` and its overrides, and the two dependent bundle kinds, refreshed
  */
-async function reloadEnvDependentBundles(params: {
-  config: LoadedConfig;
-  baseDir: string;
-  client: OperatorClient | undefined;
-  workspaceId: string | undefined;
-  expectedLocalStaticWebsiteNames: ReadonlySet<string> | undefined;
-  bundleCache: BundleCache | undefined;
-  previous: LoadApplicationResult;
-}): Promise<LoadApplicationResult> {
-  const {
-    config,
-    baseDir,
-    client,
-    workspaceId,
-    expectedLocalStaticWebsiteNames,
-    bundleCache,
-    previous,
-  } = params;
-  const { application: previousApplication, reusableBuildState } = previous;
+async function reloadEnvDependentBundles(
+  params: ReloadEnvDependentBundlesParams,
+): Promise<ReloadedBundles> {
+  const { source, client, workspaceId, expectedLocalStaticWebsiteNames, bundleCache, previous } =
+    params;
+  const { services, reusableBuildState } = previous;
   const {
     startContext,
     tsconfigCache,
@@ -1246,26 +1402,30 @@ async function reloadEnvDependentBundles(params: {
     bundleLogLevel,
     kyselyTemporal,
   } = reusableBuildState;
+  const { settings } = source;
+  const baseDir = path.dirname(settings.path);
+  const buildOptions = buildOptionsOf(settings);
+  const dateDefault = effectiveDateDefault(settings);
 
-  const env =
-    client && workspaceId
-      ? await resolveStaticWebsiteUrlsInEnv(client, workspaceId, config.env ?? {}, {
-          expectedLocalNames:
-            expectedLocalStaticWebsiteNames ??
-            new Set(previousApplication.staticWebsiteServices.map((website) => website.name)),
-        })
-      : (config.env ?? {});
+  const resolved = await resolveEnv({
+    source,
+    client,
+    workspaceId,
+    expectedLocalNames:
+      expectedLocalStaticWebsiteNames ??
+      new Set(services.staticWebsiteServices.map((website) => website.name)),
+  });
 
   const bundledScripts: BundledScripts = { ...previous.bundledScripts };
 
-  const workflowService = previousApplication.workflowService;
+  const workflowService = services.workflowService;
   let workflowBuildResult = previous.workflowBuildResult;
   if (workflowService && workflowService.jobs.length > 0) {
     const mainJobNames = workflowService.workflowSources.map((ws) => ws.workflow.mainJob.name);
     workflowBuildResult = await bundleWorkflowJobs({
       allJobs: workflowService.jobs,
       mainJobNames,
-      env,
+      env: serviceEnv(resolved.env, resolved.envOverrides.workflow),
       startContext,
       baseDir,
       cache: bundleCache,
@@ -1273,52 +1433,128 @@ async function reloadEnvDependentBundles(params: {
       inlineSourcemapDependencySources,
       inlineSourcemapProjectSources,
       bundleLogLevel,
-      bundleTreeshake: buildOptionsOf(config).treeshake,
+      bundleTreeshake: buildOptions.treeshake,
       tsconfigCache,
       sdkBuilderAnnotationCache,
       previousUsedJobs: previous.workflowBuildResult,
-      allowedRuntimeGlobals: buildOptionsOf(config).allowedRuntimeGlobals,
-      dateDefault: effectiveDateDefault(config),
+      allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
+      dateDefault,
       kyselyTemporal,
     });
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
 
-  const authService = soleAuthService(previousApplication);
-  if (authService?.config.hooks?.beforeLogin) {
-    const authName = authService.config.name;
-    bundledScripts.authHooks = await bundleAuthHooks({
-      configPath: config.path,
-      authName,
-      env,
+  bundledScripts.authHooks = await bundleBeforeLoginHooks({
+    source,
+    authServices: services.authServices,
+    resolved,
+    settings: {
       startContext,
       cache: bundleCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
       inlineSourcemapProjectSources,
       bundleLogLevel,
-      bundleTreeshake: buildOptionsOf(config).treeshake,
+      bundleTreeshake: buildOptions.treeshake,
       baseDir,
       tsconfigCache,
       sdkBuilderAnnotationCache,
-      dateDefault: effectiveDateDefault(config),
+      dateDefault,
       kyselyTemporal,
+    },
+  });
+
+  return { ...resolved, workflowBuildResult, bundledScripts };
+}
+
+/**
+ * Load and fully initialize a Tailor application.
+ * This performs all I/O-heavy operations: loading tables, processing plugins,
+ * generating plugin files, bundling, and loading definitions for validation.
+ * @param params - Parameters for defining and loading the application
+ * @returns Fully initialized application with workflow results
+ */
+export async function loadApplication(
+  params: LoadApplicationParams,
+): Promise<LoadApplicationResult> {
+  const { config, previous } = params;
+  const source = loadSourceOf(config);
+
+  if (previous) {
+    const reloaded = await reloadEnvDependentBundles({
+      ...params,
+      source,
+      previous: { ...previous, services: previous.application },
     });
+    const application: Application = {
+      ...previous.application,
+      env: reloaded.env,
+      get applications() {
+        return [application];
+      },
+    };
+    return {
+      application,
+      workflowBuildResult: reloaded.workflowBuildResult,
+      httpAdapterBuildResult: previous.httpAdapterBuildResult,
+      bundledScripts: reloaded.bundledScripts,
+      reusableBuildState: previous.reusableBuildState,
+    };
   }
 
-  const application: Application = {
-    ...previousApplication,
-    env,
-    get applications() {
-      return [application];
-    },
-  };
+  const {
+    defined,
+    envOverrides: _envOverrides,
+    ...loaded
+  } = await loadServices({
+    ...params,
+    source,
+  });
+  return { application: buildApplication({ config, ...defined }), ...loaded };
+}
 
+/**
+ * Parameters for loading and bundling the services of a workspace config
+ */
+export interface LoadWorkspaceParams extends Omit<LoadApplicationParams, "config" | "previous"> {
+  /** Workspace loaded from a `defineWorkspace()` or `defineApp()` config */
+  workspace: LoadedWorkspaceConfig;
+  /** A prior `loadWorkspace` result for this same config, reused as `loadApplication` reuses its `previous`. */
+  previous?: LoadWorkspaceResult;
+}
+
+/**
+ * Result of loading the services of a workspace config
+ */
+export interface LoadWorkspaceResult extends Omit<LoadApplicationResult, "application"> {
+  /** The workspace's services with `env` and its overrides resolved */
+  services: WorkspaceServices;
+}
+
+/**
+ * Load the services of a `defineWorkspace()` or `defineApp()` config and bundle their functions,
+ * as {@link loadApplication} does for a `defineConfig()` config.
+ * @param params - Parameters for loading the workspace
+ * @returns The loaded services and their bundles
+ */
+export async function loadWorkspace(params: LoadWorkspaceParams): Promise<LoadWorkspaceResult> {
+  const { workspace, previous } = params;
+  const source = loadSourceOf(workspace);
+
+  if (previous) {
+    const reloaded = await reloadEnvDependentBundles({ ...params, source, previous });
+    return {
+      services: { ...previous.services, env: reloaded.env, envOverrides: reloaded.envOverrides },
+      workflowBuildResult: reloaded.workflowBuildResult,
+      httpAdapterBuildResult: previous.httpAdapterBuildResult,
+      bundledScripts: reloaded.bundledScripts,
+      reusableBuildState: previous.reusableBuildState,
+    };
+  }
+
+  const { defined, envOverrides, ...loaded } = await loadServices({ ...params, source });
   return {
-    application,
-    workflowBuildResult,
-    httpAdapterBuildResult: previous.httpAdapterBuildResult,
-    bundledScripts,
-    reusableBuildState,
+    services: { ...buildConfigServices(defined), settings: workspace, envOverrides },
+    ...loaded,
   };
 }
