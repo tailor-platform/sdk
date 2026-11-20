@@ -189,7 +189,7 @@ describe("tailordb migration status --json", () => {
     ]);
   });
 
-  test("tells a deploy removes a maintenance mode record that names another checkpoint", async () => {
+  test("tells a deploy removes a maintenance mode record that names another checkpoint, and sync when the deploy stops on drift", async () => {
     state.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0001", "sdk-maintenance-mode": "m0002" },
@@ -210,6 +210,18 @@ describe("tailordb migration status --json", () => {
           via: "deploy",
           command: "tailor",
           args: ["deploy", workspaceArg],
+          fallback: {
+            command: "tailor",
+            args: [
+              "tailordb",
+              "migration",
+              "sync",
+              "0001",
+              "--namespace",
+              "tailordb",
+              workspaceArg,
+            ],
+          },
         },
       },
     ]);

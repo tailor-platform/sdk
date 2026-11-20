@@ -345,6 +345,11 @@ function printMigrationStatuses(rows: MigrationStatusRow[]): void {
           : `  Maintenance mode: a record names checkpoint ${label}, not the current checkpoint`,
       );
       logger.log(`    Release: ${formatCommandHint(row.maintenanceModeRelease)}`);
+      if (row.maintenanceModeRelease.fallback) {
+        logger.log(
+          `    If the deploy stops with MIGRATION_REMOTE_DRIFT: ${formatCommandHint(row.maintenanceModeRelease.fallback)}`,
+        );
+      }
     }
 
     if (row.pendingMigrations.length > 0) {

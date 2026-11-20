@@ -368,7 +368,11 @@ export function formatInProgressMigrationAction(action: InProgressMigrationActio
 }
 
 /** How a maintenance mode record is removed, and the command that does it. */
-export type MaintenanceModeRelease = CLIErrorNextAction & { via: "resolve" | "deploy" };
+export type MaintenanceModeRelease = CLIErrorNextAction & {
+  via: "resolve" | "deploy";
+  /** For `deploy`: the command to run when the deploy stops because the tables are still restricted. */
+  fallback?: CLIErrorNextAction;
+};
 
 /**
  * The command that removes the maintenance mode record a deploy left in place: `migration resolve
@@ -397,7 +401,19 @@ export function maintenanceModeReleaseAction(
       }),
     };
   }
-  return { via: "deploy", command: "tailor", args: ["deploy", ...migrationContextArgs(context)] };
+  return {
+    via: "deploy",
+    command: "tailor",
+    args: ["deploy", ...migrationContextArgs(context)],
+    fallback: {
+      command: "tailor",
+      args: namespaceMigrationArgs({
+        ...context,
+        subcommand: ["sync", formatMigrationNumber(state.number ?? 0)],
+        namespace,
+      }),
+    },
+  };
 }
 
 /**
@@ -418,7 +434,8 @@ export function assertNoMaintenanceModeRecord(
     release === undefined
       ? "Settle the migration in progress first."
       : release.via === "deploy"
-        ? `The record names a checkpoint other than the current one, which a deploy removes: run ${formatCommandHint(release)}.`
+        ? `The record names a checkpoint other than the current one, which a deploy removes: run ${formatCommandHint(release)}. ` +
+          `If the deploy stops with MIGRATION_REMOTE_DRIFT because the tables are still restricted, run ${formatCommandHint(release.fallback ?? release)} instead, which also removes the record.`
         : `Take the tables out of maintenance mode first with ${formatCommandHint(release)}.`;
   throw CLIError({
     code: "MIGRATION_MAINTENANCE_MODE_RECORDED",

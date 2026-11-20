@@ -243,8 +243,8 @@ read them:
 - `MIGRATION_RESOLVE_DIRECTION_REQUIRED`: `resolve` was not given exactly one of `--rollback`,
   `--complete`, and `--maintenance`.
 - `MIGRATION_MAINTENANCE_MODE_RECORDED`: `rebaseline` found a record of tables a deploy left in
-  maintenance mode; remove it with `resolve --maintenance` first, or with `deploy` when it names a
-  checkpoint other than the current one.
+  maintenance mode; remove it with `resolve --maintenance` first, or with `deploy` (or `sync` when
+  the deploy stops on `MIGRATION_REMOTE_DRIFT`) when it names a checkpoint other than the current one.
 - `MIGRATION_RESOLVE_NO_MAINTENANCE_RECORD`: `resolve --maintenance` found no record of tables left
   in maintenance mode at the namespace's current checkpoint.
 - `MIGRATION_RESOLVE_MAINTENANCE_IN_PROGRESS`: `resolve --maintenance` found a migration in

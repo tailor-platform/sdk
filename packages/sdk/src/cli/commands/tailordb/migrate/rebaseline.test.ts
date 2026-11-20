@@ -336,7 +336,9 @@ describe("tailordb migration rebaseline", () => {
     expect(result.success).toBe(false);
     expect(result.error).toMatchObject({
       code: "MIGRATION_MAINTENANCE_MODE_RECORDED",
-      suggestion: expect.stringContaining("tailor deploy"),
+      suggestion: expect.stringMatching(
+        /tailor deploy.*MIGRATION_REMOTE_DRIFT.*migration sync 0001/s,
+      ),
     });
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
