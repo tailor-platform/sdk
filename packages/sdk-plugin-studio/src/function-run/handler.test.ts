@@ -197,6 +197,7 @@ describe("GET /events", () => {
         code: "export default 1;\n",
         arg: "",
         status: "idle",
+        running: false,
       },
     ]);
   });

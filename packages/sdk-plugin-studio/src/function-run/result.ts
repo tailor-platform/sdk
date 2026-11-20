@@ -13,6 +13,8 @@ type ResultEntry =
 
 export interface RunResult {
   status: SessionSnapshot["status"];
+  /** True from a start or an edit until the run it triggers has reported back. */
+  running: boolean;
   reason?: string;
   workspace?: SessionSnapshot["workspace"];
   file: string;
@@ -58,6 +60,7 @@ export function buildResult(options: BuildOptions): RunResult {
   const latestRun = entries.find((entry) => entry.type === "run") ?? null;
   return {
     status: snapshot.status,
+    running: snapshot.running,
     ...(snapshot.reason === undefined ? {} : { reason: snapshot.reason }),
     ...(snapshot.workspace === undefined ? {} : { workspace: snapshot.workspace }),
     file: paths.file,

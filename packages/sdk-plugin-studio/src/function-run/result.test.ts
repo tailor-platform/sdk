@@ -16,6 +16,7 @@ const entry = (seq: number, message: SessionSnapshot["entries"][number]["message
 
 const snapshot = (overrides: Partial<SessionSnapshot> = {}): SessionSnapshot => ({
   status: "watching",
+  running: false,
   workspace: { profile: "test", workspaceId: "ws-1" },
   entries: [],
   ...overrides,

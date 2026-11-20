@@ -72,16 +72,16 @@ export function createFunctionRunHandler(options: FunctionRunHandlerOptions): Fu
             // the page is gone
           }
         };
-        const { status, reason, entries } = session.snapshot();
+        const { status, running, reason, entries } = session.snapshot();
         const { code, arg } = files.read();
         const { argError } = files.status();
-        send("state", { ...paths, code, arg, status, reason, argError });
+        send("state", { ...paths, code, arg, status, running, reason, argError });
         for (const entry of entries) send("entry", entry);
 
         const stopSession = session.subscribe((event) => {
           if (event.type === "reset") send("reset", {});
           else if (event.type === "status") {
-            send("status", { status: event.status, reason: event.reason });
+            send("status", { status: event.status, running: event.running, reason: event.reason });
           } else send("entry", event.entry);
         });
         const stopFiles = files.subscribe((change) => send("file", change));

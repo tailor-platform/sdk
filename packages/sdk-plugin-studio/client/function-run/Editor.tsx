@@ -1,10 +1,24 @@
 import { javascript, javascriptLanguage } from "@codemirror/lang-javascript";
-import { setDiagnostics, type Diagnostic } from "@codemirror/lint";
+import { linter, setDiagnostics, type Diagnostic } from "@codemirror/lint";
 import { Compartment, EditorState } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { EditorView, placeholder as placeholderExtension } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import { useEffect, useRef } from "react";
+
+const typescriptSupport = javascript({ typescript: true });
+
+function syntaxErrors(source: string): Diagnostic[] {
+  const found: Diagnostic[] = [];
+  typescriptSupport.language.parser.parse(source).iterate({
+    enter: (node) => {
+      if (!node.type.isError) return;
+      const to = Math.min(Math.max(node.to, node.from + 1), source.length);
+      found.push({ from: Math.min(node.from, to), to, severity: "error", message: "Syntax error" });
+    },
+  });
+  return found;
+}
 
 interface EditorProps {
   value: string;
@@ -41,7 +55,7 @@ export function Editor({
         extensions: [
           basicSetup,
           typescript
-            ? javascript({ typescript: true })
+            ? [typescriptSupport, linter((view) => syntaxErrors(view.state.doc.toString()))]
             : javascriptLanguage.configure({ top: "SingleExpression" }).extension,
           EditorView.contentAttributes.of({ "aria-label": label }),
           ...(placeholder === undefined ? [] : [placeholderExtension(placeholder)]),
@@ -56,6 +70,9 @@ export function Editor({
               color: "var(--muted-foreground)",
             },
             ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "var(--muted)" },
+            ".cm-lintRange-error": {
+              backgroundColor: "color-mix(in srgb, var(--destructive, #dc2626) 18%, transparent)",
+            },
           }),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) latest.current.onChange(update.state.doc.toString());
@@ -80,7 +97,7 @@ export function Editor({
 
   useEffect(() => {
     const editor = view.current;
-    if (editor === null) return;
+    if (editor === null || typescript) return;
     const length = editor.state.doc.length;
     editor.dispatch(
       setDiagnostics(
@@ -92,6 +109,7 @@ export function Editor({
         })),
       ),
     );
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- `typescript` never changes after mount
   }, [diagnostics]);
 
   return (

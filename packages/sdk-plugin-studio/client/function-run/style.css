@@ -43,6 +43,37 @@ html {
   white-space: nowrap;
 }
 
+.fr-running {
+  align-items: center;
+  color: var(--primary, inherit);
+  display: inline-flex;
+  flex: none;
+  gap: 0.375rem;
+  margin-left: auto;
+  padding-left: 0.75rem;
+}
+
+.fr-spinner {
+  animation: fr-spin 0.8s linear infinite;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  border-right-color: transparent;
+  height: 0.875rem;
+  width: 0.875rem;
+}
+
+@keyframes fr-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fr-spinner {
+    animation-duration: 2.4s;
+  }
+}
+
 .fr-editor {
   flex: 1;
   min-height: 0;
@@ -59,9 +90,7 @@ html {
 
 .fr-invalid {
   color: var(--destructive, #dc2626);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 0.8125rem;
 }
 
 .fr-splitter {

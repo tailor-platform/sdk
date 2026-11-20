@@ -187,6 +187,7 @@ interface ServerState extends Paths {
   code: string;
   arg: string;
   status: Status;
+  running?: boolean;
   reason?: string;
 }
 
@@ -303,6 +304,7 @@ function App() {
   const [loaded, setLoaded] = useState(false);
   const [paths, setPaths] = useState<Paths>({ file: "", argFile: "" });
   const [status, setStatus] = useState<Status>("idle");
+  const [running, setRunning] = useState(false);
   const [argHeight, setArgHeight] = useState(DEFAULT_ARG_HEIGHT);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [argErrors, setArgErrors] = useState<TailorErrorItem[]>([]);
@@ -330,6 +332,7 @@ function App() {
           absolute: state.absolute,
         });
         setStatus(state.status);
+        setRunning(state.running === true);
         setEntries([]);
         setArgErrors([]);
         setLoaded(true);
@@ -337,7 +340,9 @@ function App() {
         setEntries([]);
         setArgErrors([]);
       } else if (event === "status") {
-        setStatus((data as { status: Status }).status);
+        const next = data as { status: Status; running?: boolean };
+        setStatus(next.status);
+        setRunning(next.running === true);
       } else if (event === "entry") {
         const { seq, message } = data as { seq: number; message: EntryBody };
         setEntries((current) => [{ ...message, id: seq }, ...current]);
@@ -452,12 +457,6 @@ function App() {
               copied={paths.absolute?.argFile ?? paths.argFile}
               label="argument"
             />
-            {argValid ? null : (
-              <span className="fr-invalid">
-                {" "}
-                — not valid JSON or JSON5, the last valid argument stays in use
-              </span>
-            )}
           </div>
           <div className="fr-argument" style={{ height: argHeight }}>
             <Editor
@@ -473,6 +472,11 @@ function App() {
               invalid={!argValid || argErrors.length > 0}
             />
           </div>
+          {argValid ? null : (
+            <div className="fr-invalid" role="alert">
+              Not valid JSON5. The last valid argument stays in use.
+            </div>
+          )}
         </div>
         <div className="fr-pane">
           <div className="fr-label">
@@ -482,8 +486,14 @@ function App() {
               copied={paths.absolute?.resultFile ?? paths.resultFile ?? ""}
               label="result file"
             />
+            {running ? (
+              <span className="fr-running" role="status">
+                <span className="fr-spinner" aria-hidden="true" />
+                Running…
+              </span>
+            ) : null}
           </div>
-          <div className="fr-output">
+          <div className="fr-output" aria-busy={running}>
             {entries.length === 0 ? (
               <div className="fr-empty">Run the function to see its output here.</div>
             ) : null}

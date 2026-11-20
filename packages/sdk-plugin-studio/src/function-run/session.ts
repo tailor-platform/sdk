@@ -15,11 +15,12 @@ interface SessionEntry {
 
 export type SessionEvent =
   | { type: "reset" }
-  | { type: "status"; status: SessionStatus; reason?: string }
+  | { type: "status"; status: SessionStatus; running: boolean; reason?: string }
   | { type: "entry"; entry: SessionEntry };
 
 export interface SessionSnapshot {
   status: SessionStatus;
+  running: boolean;
   reason?: string;
   workspace?: WorkspaceSelection;
   entries: SessionEntry[];
@@ -57,6 +58,7 @@ export function createRunSession(options: SessionOptions) {
   let entries: SessionEntry[] = [];
   let seq = 0;
   let status: SessionStatus = "idle";
+  let running = false;
   let reason: string | undefined;
   let workspace: WorkspaceSelection | undefined;
   let active: ActiveRun | undefined;
@@ -66,10 +68,17 @@ export function createRunSession(options: SessionOptions) {
     for (const listener of listeners) listener(event);
   };
 
-  function setStatus(next: SessionStatus, why?: string) {
+  function setStatus(next: SessionStatus, why?: string, nowRunning = next === "watching") {
     status = next;
+    running = nowRunning;
     reason = why;
-    emit({ type: "status", status, ...(why === undefined ? {} : { reason: why }) });
+    emit({ type: "status", status, running, ...(why === undefined ? {} : { reason: why }) });
+  }
+
+  function setRunning(next: boolean) {
+    if (running === next) return;
+    running = next;
+    emit({ type: "status", status, running, ...(reason === undefined ? {} : { reason }) });
   }
 
   function record(message: SessionMessage) {
@@ -85,6 +94,7 @@ export function createRunSession(options: SessionOptions) {
       if (message === undefined) continue;
       if (message.type !== "exit") {
         record(message);
+        if (message.type === "run" || message.type === "failure") setRunning(false);
         continue;
       }
       const code = event.type === "exit" ? event.code : null;
@@ -138,6 +148,10 @@ export function createRunSession(options: SessionOptions) {
       stopRun("Stopped.");
     },
 
+    markInputsChanged(): void {
+      if (active !== undefined) setRunning(true);
+    },
+
     fail(text: string): void {
       record({ type: "failure", text });
       setStatus("stopped", text);
@@ -162,6 +176,7 @@ export function createRunSession(options: SessionOptions) {
     snapshot(): SessionSnapshot {
       return {
         status,
+        running,
         ...(reason === undefined ? {} : { reason }),
         ...(workspace === undefined ? {} : { workspace }),
         entries,

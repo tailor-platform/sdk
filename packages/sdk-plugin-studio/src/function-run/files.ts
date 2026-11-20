@@ -21,6 +21,7 @@ export interface SyncedFilesOptions {
   formatCode: (code: string) => Promise<string | undefined>;
   /** How often to look for changes made from outside; 0 turns the polling off. */
   pollMs?: number;
+  onInputsChanged?: () => void;
 }
 
 const ARG_NOT_READABLE =
@@ -63,6 +64,11 @@ export function createSyncedFiles(options: SyncedFilesOptions) {
     return result;
   };
 
+  const touch = () => {
+    changedAt = Date.now();
+    options.onInputsChanged?.();
+  };
+
   const emit = (change: FileChange) => {
     for (const listener of listeners) listener(change);
   };
@@ -73,7 +79,7 @@ export function createSyncedFiles(options: SyncedFilesOptions) {
     if (normalized !== runArg) {
       writeAtomic(options.runArgFile, normalized);
       runArg = normalized;
-      changedAt = Date.now();
+      touch();
     }
     return undefined;
   }
@@ -117,7 +123,7 @@ export function createSyncedFiles(options: SyncedFilesOptions) {
             writeAtomic(options.file, change.code);
             code = change.code;
             formatted = next;
-            changedAt = Date.now();
+            touch();
           }
         }
         if (change.arg === undefined) return {};
@@ -137,7 +143,7 @@ export function createSyncedFiles(options: SyncedFilesOptions) {
         if (onDisk !== undefined && onDisk !== code) {
           code = onDisk;
           formatted = await options.formatCode(onDisk);
-          changedAt = Date.now();
+          touch();
           emit({ code: onDisk });
         }
         const argOnDisk = readIfExists(options.argFile);

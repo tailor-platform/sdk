@@ -84,7 +84,10 @@ describe("start", () => {
 
     session.start();
 
-    expect(events).toEqual([{ type: "reset" }, { type: "status", status: "watching" }]);
+    expect(events).toEqual([
+      { type: "reset" },
+      { type: "status", status: "watching", running: true },
+    ]);
   });
 
   test("does nothing when it is already watching", () => {
@@ -166,6 +169,52 @@ describe("what the run prints", () => {
   });
 });
 
+describe("running", () => {
+  const runOf = (n: number) => JSON.stringify({ success: true, result: String(n) });
+
+  test("is true from the start until the first run reports back", async () => {
+    const { session, run } = setup();
+
+    session.start();
+    const before = session.snapshot().running;
+    run.push({ type: "stdout", line: runOf(1) });
+    await settle();
+
+    expect([before, session.snapshot().running]).toEqual([true, false]);
+  });
+
+  test("turns true again when an input changes, until the run it triggers reports back", async () => {
+    const { session, run } = setup();
+    session.start();
+    run.push({ type: "stdout", line: runOf(1) });
+    await settle();
+
+    session.markInputsChanged();
+    const afterEdit = session.snapshot().running;
+    run.push({ type: "stderr", line: JSON.stringify({ error: { message: "boom" } }) });
+    await settle();
+
+    expect([afterEdit, session.snapshot().running]).toEqual([true, false]);
+  });
+
+  test("ignores an input change while nothing is watching", () => {
+    const { session, events } = setup();
+
+    session.markInputsChanged();
+
+    expect([session.snapshot().running, events]).toEqual([false, []]);
+  });
+
+  test("is false once the watch is stopped", () => {
+    const { session } = setup();
+    session.start();
+
+    session.stop();
+
+    expect(session.snapshot().running).toBe(false);
+  });
+});
+
 describe("stop", () => {
   test("stops the process and ignores what it prints afterwards", async () => {
     const { session, run, events } = setup();
@@ -180,7 +229,12 @@ describe("stop", () => {
       session.snapshot().status,
       session.snapshot().entries,
     ]).toEqual([1, "stopped", []]);
-    expect(events.at(-1)).toEqual({ type: "status", status: "stopped", reason: "Stopped." });
+    expect(events.at(-1)).toEqual({
+      type: "status",
+      status: "stopped",
+      running: false,
+      reason: "Stopped.",
+    });
   });
 
   test("lets the watch be started again", () => {
