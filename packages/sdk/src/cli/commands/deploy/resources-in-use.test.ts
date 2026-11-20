@@ -912,6 +912,27 @@ describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", ()
     );
   });
 
+  test("accepts a record trigger on a table the plan deletes and creates again", async () => {
+    const owner = withWorkspaceExecutor(
+      emptyPlanResults(),
+      {
+        name: "notify",
+        triggerConfig: eventTrigger({
+          case: "tailordb",
+          value: { namespaceName: "main", typeName: "Order" },
+        }),
+      },
+      "portal",
+    );
+    deletingOrderTable(owner);
+    owner.tailorDB.changeSet.type.creates.push({
+      name: "Order",
+      request: { workspaceId: "ws", namespaceName: "main", tailordbType: { name: "Order" } },
+    } as never);
+
+    await expect(check([deployment({ name: "core" }, owner)], "deploy")).resolves.toBeUndefined();
+  });
+
   test("accepts uses that the run deletes or rewrites, and a table of another namespace", async () => {
     const owner = withWorkspaceGateway(deletingAdmin(ownerDeleting("core-auth")));
     deletingOrderTable(owner);

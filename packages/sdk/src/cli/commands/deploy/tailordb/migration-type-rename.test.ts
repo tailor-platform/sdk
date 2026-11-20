@@ -147,7 +147,9 @@ describe("applyTailorDB: type rename migration flow", () => {
   });
 
   test("creates the new table before the script and drops the old table after the checkpoint", async () => {
-    const client = checkpoint.createMockClient();
+    const client = checkpoint.createMockClient({
+      listTailorDBTypes: { tailordbTypes: [{ name: "User" }] },
+    });
     const planResult = buildPlanResult();
     planResult.context.pendingMigrations = setPendingMigrations([mkTypeRenameMigration(1)]);
 
