@@ -223,6 +223,7 @@ describe("loadConfig", () => {
     expect(
       await plugins[0]!.onTailorDBReady!({
         tailordb: [],
+        auths: {},
         baseDir: path.dirname(configPath),
         configPath,
         pluginConfig: undefined,

@@ -2123,6 +2123,53 @@ export const allCodemods: CodemodPackage[] = [
     ].join("\n"),
   },
   {
+    id: "v3/plugin-context-auths",
+    name: "Generation hook context auth → auths",
+    description:
+      "The `auth` field of the context that `onTailorDBReady`, `onResolverReady`, and `onExecutorReady` receive is replaced by `auths`, which holds every Auth service of the config keyed by its name. `auth` keeps returning the config's Auth service until it is removed in v3, but reading it fails when the config has several Auth services. Plugins that read `auth` are reported for a manual change.",
+    since: "1.18.0",
+    until: "3.0.0",
+    filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
+    suspiciousPatterns: [
+      "onTailorDBReady",
+      "onResolverReady",
+      "onExecutorReady",
+      "TailorDBReadyContext",
+      "ResolverReadyContext",
+      "ExecutorReadyContext",
+    ],
+    examples: [
+      {
+        before: [
+          "async onTailorDBReady(ctx) {",
+          "  const machineUsers = Object.keys(ctx.auth?.machineUsers ?? {});",
+          "  return { files: [] };",
+          "}",
+        ].join("\n"),
+        after: [
+          "async onTailorDBReady(ctx) {",
+          "  const machineUsers = Object.values(ctx.auths).flatMap((auth) =>",
+          "    Object.keys(auth.machineUsers ?? {}),",
+          "  );",
+          "  return { files: [] };",
+          "}",
+        ].join("\n"),
+      },
+    ],
+    prompt: [
+      "In Tailor SDK v3, the `auth` field of the context passed to the plugin hooks",
+      "`onTailorDBReady`, `onResolverReady`, and `onExecutorReady` (types",
+      "`TailorDBReadyContext`, `ResolverReadyContext`, `ExecutorReadyContext`) is",
+      "removed in favor of `auths`, a record of every Auth service of the config keyed",
+      "by its name. For each flagged plugin that reads `auth` from such a context,",
+      "including through destructuring, read `auths` instead: iterate",
+      "`Object.values(ctx.auths)` when the plugin should handle every Auth service, or",
+      "pick one by name when it needs a specific one. An empty `auths` means the",
+      "config has no Auth service, as an undefined `auth` did. Leave files that only",
+      "define these hooks without reading `auth` unchanged.",
+    ].join("\n"),
+  },
+  {
     id: "v3/idp-array-to-single",
     name: "defineConfig idp array → single IdP",
     description:

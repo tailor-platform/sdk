@@ -3,16 +3,16 @@ import * as path from "pathe";
 import {
   defineApplication,
   definePluginResolverServices,
+  defineWorkspaceServices,
   generatePluginFilesIfNeeded,
   type WorkspaceServices,
 } from "#/cli/services/application";
 import { createExecutorService } from "#/cli/services/executor/service";
 import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
 import { getAuthInput } from "#/cli/shared/auth-input";
-import { soleAuthService } from "#/cli/shared/auth-namespace";
 import {
   isLoadedWorkspaceConfig,
-  loadConfig,
+  loadConfigFile,
   type LoadedConfig,
   type LoadedWorkspaceConfig,
 } from "#/cli/shared/config-loader";
@@ -20,7 +20,8 @@ import { getDistDir } from "#/cli/shared/dist-dir";
 import { errorToJson } from "#/cli/shared/error-json";
 import { CLIError, isCLIError } from "#/cli/shared/errors";
 import { logger, plainRedacted, styles } from "#/cli/shared/logger";
-import { generateUserTypes } from "#/cli/shared/type-generator";
+import { generateUserTypes, generateWorkspaceUserTypes } from "#/cli/shared/type-generator";
+import { defineUnambiguousContextField } from "#/cli/shared/unambiguous-context-field";
 import { withSpan } from "#/cli/telemetry/index";
 import { PluginManager } from "#/plugin/manager";
 import { assertDefined } from "#/utils/assert";
@@ -136,8 +137,19 @@ export function createGenerationManager(params: CreateGenerationManagerParams): 
     if (!hook) return;
 
     const pluginBaseDir = path.join(baseDir, plugin.id);
-    const authService = soleAuthService(workspaceServices);
-    const auth = authService && getAuthInput(authService);
+    const auths = Object.fromEntries(
+      workspaceServices.authServices.map((authService) => [
+        authService.config.name,
+        getAuthInput(authService),
+      ]),
+    );
+    const contextOf = <Context extends object>(context: Context) =>
+      defineUnambiguousContextField(context, {
+        key: "auth",
+        candidates: auths,
+        candidatesLabel: "Auth services",
+        replacement: "auths",
+      });
     const tailordb = buildTailorDBData();
 
     let result: GeneratorResult;
@@ -147,40 +159,46 @@ export function createGenerationManager(params: CreateGenerationManagerParams): 
         result = await assertDefined(
           plugin.onTailorDBReady,
           "plugin.onTailorDBReady hook missing",
-        )({
-          tailordb,
-          auth,
-          baseDir: pluginBaseDir,
-          configPath: config.path,
-          pluginConfig: plugin.pluginConfig,
-        });
+        )(
+          contextOf({
+            tailordb,
+            auths,
+            baseDir: pluginBaseDir,
+            configPath: config.path,
+            pluginConfig: plugin.pluginConfig,
+          }),
+        );
         break;
       case "onResolverReady":
         result = await assertDefined(
           plugin.onResolverReady,
           "plugin.onResolverReady hook missing",
-        )({
-          tailordb,
-          resolvers: buildResolverData(),
-          auth,
-          baseDir: pluginBaseDir,
-          configPath: config.path,
-          pluginConfig: plugin.pluginConfig,
-        });
+        )(
+          contextOf({
+            tailordb,
+            resolvers: buildResolverData(),
+            auths,
+            baseDir: pluginBaseDir,
+            configPath: config.path,
+            pluginConfig: plugin.pluginConfig,
+          }),
+        );
         break;
       case "onExecutorReady":
         result = await assertDefined(
           plugin.onExecutorReady,
           "plugin.onExecutorReady hook missing",
-        )({
-          tailordb,
-          resolvers: buildResolverData(),
-          executors: { ...services.executor },
-          auth,
-          baseDir: pluginBaseDir,
-          configPath: config.path,
-          pluginConfig: plugin.pluginConfig,
-        });
+        )(
+          contextOf({
+            tailordb,
+            resolvers: buildResolverData(),
+            executors: { ...services.executor },
+            auths,
+            baseDir: pluginBaseDir,
+            configPath: config.path,
+            pluginConfig: plugin.pluginConfig,
+          }),
+        );
         break;
     }
 
@@ -435,21 +453,29 @@ export function createGenerationManager(params: CreateGenerationManagerParams): 
  */
 export async function generate(options?: GenerateOptions) {
   return withSpan("generate", async (rootSpan) => {
-    // Load and validate options
-    const { config, plugins } = await withSpan("generate.loadConfig", async () => {
-      return loadConfig(options?.configPath);
+    const loaded = await withSpan("generate.loadConfig", async () => {
+      return loadConfigFile(options?.configPath);
     });
+    const pluginManager = loaded.plugins.length > 0 ? new PluginManager(loaded.plugins) : undefined;
 
-    // Generate user types from loaded config
+    if (loaded.kind === "workspace") {
+      const { workspace } = loaded;
+      await withSpan("generate.generateUserTypes", async () =>
+        generateWorkspaceUserTypes({ workspace }),
+      );
+      const workspaceServices = defineWorkspaceServices({ workspace, pluginManager });
+      await createGenerationManager({
+        workspaceServices,
+        config: workspace,
+        pluginManager,
+      }).generate();
+      return;
+    }
+
+    const { config } = loaded;
     await withSpan("generate.generateUserTypes", async () =>
       generateUserTypes({ config, configPath: config.path }),
     );
-
-    // Initialize plugin manager if plugins are provided
-    let pluginManager: PluginManager | undefined;
-    if (plugins.length > 0) {
-      pluginManager = new PluginManager(plugins);
-    }
 
     // Create a lightweight application (tables not yet loaded)
     const application = defineApplication({ config, pluginManager });

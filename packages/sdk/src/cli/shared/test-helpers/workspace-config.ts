@@ -19,3 +19,14 @@ export function loadedWorkspace(
   }
   return toLoadedWorkspaceConfig(parsed.data, configPath);
 }
+
+/**
+ * Source of a config module whose default export carries the mark `defineWorkspace()` or
+ * `defineApp()` gives it, for config files that cannot import those functions from the build.
+ * @param kind - `"workspace-config"` for `defineWorkspace()`, `"app-config"` for `defineApp()`
+ * @param source - Source of the object to export
+ * @returns Source of the default export
+ */
+export function brandedDefault(kind: "workspace-config" | "app-config", source: string): string {
+  return `export default Object.defineProperty(${source}, Symbol.for("tailor-platform/sdk"), { value: ${JSON.stringify(kind)} });`;
+}
