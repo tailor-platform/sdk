@@ -5,6 +5,7 @@ import { arg, defineAppCommand, logger, workspaceArgs } from "@tailor-platform/s
 import * as path from "pathe";
 import { z } from "zod";
 import { discoverTab, type TabSpec } from "./discover-tab";
+import { formatTypeScript } from "./function-run/format";
 import { createFunctionRunHandler } from "./function-run/handler";
 import { createFunctionRunStarter } from "./function-run/process";
 import { openBrowser } from "./open-browser";
@@ -28,6 +29,7 @@ function functionRunTab(projectDir: string): Tab {
     handler: createFunctionRunHandler({
       projectDir,
       startRun: createFunctionRunStarter(projectDir),
+      formatCode: formatTypeScript,
       loadPage: () => readFile(path.join(clientDir, "function-run.html"), "utf8"),
     }),
   };

@@ -95,9 +95,13 @@ describe("functionRunArgs", () => {
     ]);
   });
 
-  test("passes the argument with --arg", () => {
+  test("reads the argument from the given file with --arg-file", () => {
     expect(
-      functionRunArgs({ tailorBin: "/sdk/bin/tailor.mjs", file: "/app/a.ts", arg: '{"a":1}' }),
+      functionRunArgs({
+        tailorBin: "/sdk/bin/tailor.mjs",
+        file: "/app/a.ts",
+        argFile: "/tmp/a.json",
+      }),
     ).toEqual([
       "/sdk/bin/tailor.mjs",
       "function",
@@ -105,8 +109,8 @@ describe("functionRunArgs", () => {
       "/app/a.ts",
       "--watch",
       "--json",
-      "--arg",
-      '{"a":1}',
+      "--arg-file",
+      "/tmp/a.json",
     ]);
   });
 });

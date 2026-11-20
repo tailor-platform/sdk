@@ -75,14 +75,14 @@ export function spawnRun(command: string, args: string[], options: { cwd: string
  * @param input - Path of the tailor CLI entry, the function file and the optional argument
  * @param input.tailorBin - Path of the tailor CLI entry
  * @param input.file - Function file
- * @param input.arg - JSON argument for the function
+ * @param input.argFile - JSON file holding the argument; the watch runs again when it changes
  * @param input.workspaceArgs - Options that select the workspace (`-p` / `-w`)
  * @returns Arguments for `node`
  */
 export function functionRunArgs(input: {
   tailorBin: string;
   file: string;
-  arg?: string;
+  argFile?: string;
   workspaceArgs?: string[];
 }): string[] {
   return [
@@ -93,7 +93,7 @@ export function functionRunArgs(input: {
     "--watch",
     "--json",
     ...(input.workspaceArgs ?? []),
-    ...(input.arg === undefined ? [] : ["--arg", input.arg]),
+    ...(input.argFile === undefined ? [] : ["--arg-file", input.argFile]),
   ];
 }
 
@@ -121,10 +121,10 @@ export function resolveTailorBin(projectDir: string): string {
  * @returns A function that starts a run for a function file and argument
  */
 export function createFunctionRunStarter(projectDir: string): (input: RunInput) => RunHandle {
-  return ({ file, arg, workspaceArgs }) =>
+  return ({ file, argFile, workspaceArgs }) =>
     spawnRun(
       process.execPath,
-      functionRunArgs({ tailorBin: resolveTailorBin(projectDir), file, arg, workspaceArgs }),
+      functionRunArgs({ tailorBin: resolveTailorBin(projectDir), file, argFile, workspaceArgs }),
       {
         cwd: projectDir,
       },

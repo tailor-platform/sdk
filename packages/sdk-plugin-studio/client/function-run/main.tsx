@@ -130,6 +130,15 @@ function RunCard({ record }: { record: RunRecord }) {
   );
 }
 
+function isJson(text: string): boolean {
+  try {
+    JSON.parse(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const DEFAULT_ARG_HEIGHT = 192;
 const MIN_ARG_HEIGHT = 64;
 const MIN_EDITOR_HEIGHT = 120;
@@ -195,18 +204,29 @@ function App() {
 
   useEffect(followShellTheme, []);
 
-  useEffect(() => {
+  const argValid = arg.trim() === "" || isJson(arg);
+
+  const save = (change: { code: string } | { arg: string }) => {
     const id = runId.current;
     if (id === null) return;
-    const timer = setTimeout(() => {
-      void fetch("save", {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-tailor-studio-token": token ?? "" },
-        body: JSON.stringify({ id, code }),
-      });
-    }, 400);
+    void fetch("save", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-tailor-studio-token": token ?? "" },
+      body: JSON.stringify({ id, ...change }),
+    });
+  };
+
+  useEffect(() => {
+    if (runId.current === null) return;
+    const timer = setTimeout(() => save({ code }), 400);
     return () => clearTimeout(timer);
   }, [code]);
+
+  useEffect(() => {
+    if (runId.current === null || !argValid) return;
+    const timer = setTimeout(() => save({ arg: arg.trim() }), 400);
+    return () => clearTimeout(timer);
+  }, [arg, argValid]);
 
   const add = (entry: EntryBody) =>
     setEntries((current) => [{ ...entry, id: nextId.current++ }, ...current]);
@@ -288,13 +308,19 @@ function App() {
           <Splitter height={argHeight} onChange={setArgHeight} pane={leftPane} />
           <label className="fr-label" htmlFor="argument">
             Argument (JSON, optional)
+            {argValid ? null : (
+              <span className="fr-invalid">
+                {" "}
+                — not valid JSON, the last valid argument stays in use
+              </span>
+            )}
           </label>
           <Textarea
             id="argument"
             value={arg}
             onChange={(event) => setArg(event.target.value)}
             placeholder='{"a": 1, "b": 2}'
-            disabled={watching}
+            aria-invalid={!argValid}
             className="astw:font-mono fr-argument"
             style={{ height: argHeight }}
           />

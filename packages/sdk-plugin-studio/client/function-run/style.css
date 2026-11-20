@@ -44,6 +44,10 @@
   resize: none;
 }
 
+.fr-invalid {
+  color: var(--destructive, #dc2626);
+}
+
 .fr-splitter {
   background: var(--border, currentColor);
   border-radius: 2px;

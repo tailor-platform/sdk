@@ -61,9 +61,13 @@ const pageTemplate = "<html><head><title>Function run</title></head></html>";
 function handlerWith(
   startRun: (input: RunInput) => RunHandle,
   loadPage: () => Promise<string> = async () => pageTemplate,
+  formatCode?: (code: string) => Promise<string | undefined>,
 ) {
-  return createFunctionRunHandler({ projectDir, scratchRoot, startRun, loadPage });
+  return createFunctionRunHandler({ projectDir, scratchRoot, startRun, loadPage, formatCode });
 }
+
+const collapseSpaces = async (code: string) =>
+  code.includes("broken") ? undefined : code.replace(/\s+/g, " ").trim();
 
 function post(body: unknown, signal?: AbortSignal) {
   return new Request(`${root}/run`, {
@@ -162,45 +166,18 @@ describe("createFunctionRunHandler", () => {
       ]).toEqual([true, "export const main = () => 1;", path.join(projectDir, "node_modules")]);
     });
 
-    test("passes the argument and omits it when none is given", async () => {
-      const startRun = vi.fn((_input: RunInput) => fakeRun([]).handle);
-      const handler = handlerWith(startRun);
+    test("hands the argument to the run in a file, which holds {} when none is given", async () => {
+      const seen: string[] = [];
+      const handler = handlerWith((input) => {
+        seen.push(fs.readFileSync(input.argFile, "utf8"));
+        return fakeRun([]).handle;
+      });
 
       await handler(post({ code: "x", arg: '{"a":1}' }), context);
       await handler(post({ code: "x", arg: "" }), context);
+      await handler(post({ code: "x" }), context);
 
-      expect(startRun.mock.calls.map(([input]) => input.arg)).toEqual(['{"a":1}', undefined]);
-    });
-
-    test("runs against the workspace selected in the shell at the time of the request", async () => {
-      const startRun = vi.fn((_input: RunInput) => fakeRun([]).handle);
-      let selection: { profile?: string; workspaceId?: string } = selected;
-      const handler = handlerWith(startRun);
-      const withSelection = { ...context, getSelection: () => selection };
-
-      await handler(post({ code: "x" }), withSelection);
-      selection = { profile: "dev", workspaceId: "ws-2" };
-      await handler(post({ code: "x" }), withSelection);
-
-      expect(startRun.mock.calls.map(([input]) => input.workspaceArgs)).toEqual([
-        ["-p", "test", "-w", "ws-1"],
-        ["-p", "dev", "-w", "ws-2"],
-      ]);
-    });
-
-    test("asks for a workspace with 409 and starts nothing while none is selected", async () => {
-      const startRun = vi.fn(() => fakeRun([]).handle);
-
-      const response = await handlerWith(startRun)(post({ code: "x" }), {
-        ...context,
-        getSelection: () => ({}),
-      });
-
-      expect([response.status, await response.text(), startRun.mock.calls.length]).toEqual([
-        409,
-        "Select a workspace in the bar at the top of the page.\n",
-        0,
-      ]);
+      expect(seen).toEqual(['{"a":1}', "{}", "{}"]);
     });
 
     test("tells the browser the run's id so it can save the code again", async () => {
@@ -307,6 +284,79 @@ describe("createFunctionRunHandler", () => {
       ]);
     });
 
+    test("rewrites the argument file so the watch runs again with the new argument", async () => {
+      const startRun = vi.fn((_input: RunInput) => endlessRun().handle);
+      const handler = handlerWith(startRun);
+      const started = await handler(post({ code: "keep", arg: '{"a":1}' }), context);
+      const id = started.headers.get("x-run-id");
+
+      const saved = await handler(save({ id, arg: '{"a":2}' }), context);
+      const { file, argFile } = startRun.mock.calls[0]![0];
+
+      expect([
+        saved.status,
+        fs.readFileSync(argFile, "utf8"),
+        fs.readFileSync(file, "utf8"),
+      ]).toEqual([204, '{"a":2}', "keep"]);
+    });
+
+    test("writes {} when the argument is saved empty", async () => {
+      const startRun = vi.fn((_input: RunInput) => endlessRun().handle);
+      const handler = handlerWith(startRun);
+      const started = await handler(post({ code: "x", arg: '{"a":1}' }), context);
+
+      await handler(save({ id: started.headers.get("x-run-id"), arg: "" }), context);
+
+      expect(fs.readFileSync(startRun.mock.calls[0]![0].argFile, "utf8")).toBe("{}");
+    });
+
+    describe("when the saved code formats to what the run already has", () => {
+      async function startedRun(code: string) {
+        const startRun = vi.fn((_input: RunInput) => endlessRun().handle);
+        const handler = handlerWith(startRun, undefined, collapseSpaces);
+        const started = await handler(post({ code }), context);
+        const id = started.headers.get("x-run-id");
+        const saveCode = (next: string) => handler(save({ id, code: next }), context);
+        return { saveCode, file: () => fs.readFileSync(startRun.mock.calls[0]![0].file, "utf8") };
+      }
+
+      test("leaves the file alone, so the watch does not run again", async () => {
+        const { saveCode, file } = await startedRun("const a = 1;");
+
+        const saved = await saveCode("const   a =\n  1;");
+
+        expect([saved.status, file()]).toEqual([204, "const a = 1;"]);
+      });
+
+      test("still writes a change that formats differently, and then compares against it", async () => {
+        const { saveCode, file } = await startedRun("const a = 1;");
+
+        await saveCode("const a = 2;");
+        const afterChange = file();
+        await saveCode("const  a  =  2;");
+
+        expect([afterChange, file()]).toEqual(["const a = 2;", "const a = 2;"]);
+      });
+
+      test("writes code that cannot be formatted, such as one with a syntax error", async () => {
+        const { saveCode, file } = await startedRun("const a = 1;");
+
+        await saveCode("broken(");
+        await saveCode("broken(");
+
+        expect(file()).toBe("broken(");
+      });
+
+      test("writes the original text once the code formats differently again", async () => {
+        const { saveCode, file } = await startedRun("const a = 1;");
+
+        await saveCode("broken(");
+        await saveCode("const a = 1;");
+
+        expect(file()).toBe("const a = 1;");
+      });
+    });
+
     test("answers 404 for a run that is not running", async () => {
       const saved = await handlerWith(vi.fn())(save({ id: "nope", code: "x" }), context);
 
@@ -316,6 +366,9 @@ describe("createFunctionRunHandler", () => {
     test.each([
       ["code that is not a string", { id: "i", code: 1 }],
       ["no id", { code: "x" }],
+      ["neither code nor argument", { id: "i" }],
+      ["an argument that is not valid JSON", { id: "i", arg: "{oops" }],
+      ["an argument that is not a string", { id: "i", arg: 1 }],
     ])("rejects %s with 400", async (_name, body) => {
       const saved = await handlerWith(vi.fn())(save(body), context);
 

@@ -17,7 +17,7 @@ export interface RunHandle {
 
 export interface RunInput {
   file: string;
-  arg: string | undefined;
+  argFile: string;
   workspaceArgs: string[];
 }
 
@@ -26,6 +26,8 @@ export interface FunctionRunHandlerOptions {
   scratchRoot?: string;
   startRun: (input: RunInput) => RunHandle;
   loadPage: () => Promise<string>;
+  /** Formats code for comparison; resolves to undefined when it cannot be formatted. */
+  formatCode?: (code: string) => Promise<string | undefined>;
 }
 
 const encoder = new TextEncoder();
@@ -48,29 +50,60 @@ function isValidJson(text: string): boolean {
   }
 }
 
-function parseRunBody(body: unknown): { code: string; arg: string | undefined } | string {
+const EMPTY_ARG = "{}";
+
+function parseArg(arg: unknown): string | undefined | null {
+  if (arg === undefined) return undefined;
+  if (typeof arg !== "string") return null;
+  if (arg === "") return EMPTY_ARG;
+  return isValidJson(arg) ? arg : null;
+}
+
+function parseRunBody(body: unknown): { code: string; arg: string } | string {
   if (typeof body !== "object" || body === null) return "Expected a JSON object.";
   const { code, arg } = body as { code?: unknown; arg?: unknown };
   if (typeof code !== "string") return "`code` must be a string.";
-  if (arg !== undefined && typeof arg !== "string") return "`arg` must be a string.";
-  if (arg !== undefined && arg !== "" && !isValidJson(arg)) return "`arg` must be valid JSON.";
-  return { code, arg: arg === "" ? undefined : arg };
+  const parsed = parseArg(arg);
+  if (parsed === null) return "`arg` must be a string of valid JSON.";
+  return { code, arg: parsed ?? EMPTY_ARG };
 }
 
-function parseSaveBody(body: unknown): { id: string; code: string } | string {
+function parseSaveBody(body: unknown): { id: string; code?: string; arg?: string } | string {
   if (typeof body !== "object" || body === null) return "Expected a JSON object.";
-  const { id, code } = body as { id?: unknown; code?: unknown };
+  const { id, code, arg } = body as { id?: unknown; code?: unknown; arg?: unknown };
   if (typeof id !== "string" || id === "") return "`id` must be a non-empty string.";
-  if (typeof code !== "string") return "`code` must be a string.";
-  return { id, code };
+  if (code !== undefined && typeof code !== "string") return "`code` must be a string.";
+  const parsed = parseArg(arg);
+  if (parsed === null) return "`arg` must be a string of valid JSON.";
+  if (code === undefined && parsed === undefined) return "Send `code` or `arg`.";
+  return {
+    id,
+    ...(code === undefined ? {} : { code }),
+    ...(parsed === undefined ? {} : { arg: parsed }),
+  };
 }
 
-function createScratch(projectDir: string, root: string) {
-  const files = new Map<string, string>();
+interface ScratchEntry {
+  file: string;
+  argFile: string;
+  formatted: string | undefined;
+  queue: Promise<void>;
+}
+
+function createScratch(
+  projectDir: string,
+  root: string,
+  formatCode: (code: string) => Promise<string | undefined>,
+) {
+  const files = new Map<string, ScratchEntry>();
   let directory: string | undefined;
 
   return {
-    create(code: string): { id: string; file: string } {
+    async create(
+      code: string,
+      arg: string,
+    ): Promise<{ id: string; file: string; argFile: string }> {
+      const formatted = await formatCode(code);
       if (directory === undefined) {
         directory = fs.mkdtempSync(path.join(root, "tailor-studio-run-"));
         const modules = path.join(projectDir, "node_modules");
@@ -78,14 +111,26 @@ function createScratch(projectDir: string, root: string) {
       }
       const id = randomUUID();
       const file = path.join(directory, `${id}.ts`);
+      const argFile = path.join(directory, `${id}.json`);
       fs.writeFileSync(file, code);
-      files.set(id, file);
-      return { id, file };
+      fs.writeFileSync(argFile, arg);
+      files.set(id, { file, argFile, formatted, queue: Promise.resolve() });
+      return { id, file, argFile };
     },
-    write(id: string, code: string): boolean {
-      const file = files.get(id);
-      if (file === undefined) return false;
-      fs.writeFileSync(file, code);
+    async write(id: string, change: { code?: string; arg?: string }): Promise<boolean> {
+      const entry = files.get(id);
+      if (entry === undefined) return false;
+      const task = entry.queue.then(async () => {
+        if (change.code !== undefined) {
+          const formatted = await formatCode(change.code);
+          const unchanged = formatted !== undefined && formatted === entry.formatted;
+          entry.formatted = formatted;
+          if (!unchanged && files.has(id)) fs.writeFileSync(entry.file, change.code);
+        }
+        if (change.arg !== undefined && files.has(id)) fs.writeFileSync(entry.argFile, change.arg);
+      });
+      entry.queue = task.catch(() => undefined);
+      await task;
       return true;
     },
     release(id: string): void {
@@ -143,7 +188,11 @@ function streamRun(
  * @returns A Web-standard request handler for the shell
  */
 export function createFunctionRunHandler(options: FunctionRunHandlerOptions): UiHandler {
-  const scratch = createScratch(options.projectDir, options.scratchRoot ?? os.tmpdir());
+  const scratch = createScratch(
+    options.projectDir,
+    options.scratchRoot ?? os.tmpdir(),
+    options.formatCode ?? (async (code) => code),
+  );
 
   return async (request, { token, getSelection }) => {
     const { pathname } = new URL(request.url);
@@ -183,7 +232,7 @@ export function createFunctionRunHandler(options: FunctionRunHandlerOptions): Ui
     if (pathname === "/save") {
       const input = parseSaveBody(body);
       if (typeof input === "string") return badRequest(input);
-      return scratch.write(input.id, input.code)
+      return (await scratch.write(input.id, input))
         ? new Response(null, { status: 204 })
         : new Response("No such run.\n", { status: 404 });
     }
@@ -198,10 +247,10 @@ export function createFunctionRunHandler(options: FunctionRunHandlerOptions): Ui
       });
     }
 
-    const { id, file } = scratch.create(input.code);
+    const { id, file, argFile } = await scratch.create(input.code, input.arg);
     let handle: RunHandle;
     try {
-      handle = options.startRun({ file, arg: input.arg, workspaceArgs });
+      handle = options.startRun({ file, argFile, workspaceArgs });
     } catch (error) {
       scratch.release(id);
       return new Response(`${error instanceof Error ? error.message : String(error)}\n`, {
