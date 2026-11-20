@@ -792,9 +792,9 @@ describe("planWorkflow", () => {
             name: "sample-workflow",
             mainJobFunctionName: "validate-order",
             jobFunctions: {
-              "check-inventory": "5",
-              "process-payment": "5",
-              "validate-order": "5",
+              "check-inventory": 5n,
+              "process-payment": 5n,
+              "validate-order": 5n,
             },
           },
         },

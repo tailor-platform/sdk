@@ -216,7 +216,7 @@ describe("planIdP", () => {
   test("refreshes the labels of an unchanged idp service whose SDK labels differ", async () => {
     const client = createMockClient({
       services: [createMatchingRemoteService()],
-      clients: defaultIdpClientSecret,
+      clients: defaultIdpClients,
     });
     const desiredLabels = { "sdk-name": appName, "sdk-version": sdkVersion, "sdk-app-id": "app-1" };
     vi.mocked(buildMetaRequest).mockImplementationOnce(async ({ trn }) => ({
