@@ -1,5 +1,5 @@
 import "@tailor-platform/app-shell/styles";
-import { AppShell, SidebarLayout, defineModule } from "@tailor-platform/app-shell";
+import { AppShell, GlobalHeaderLayout, defineModule } from "@tailor-platform/app-shell";
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
@@ -15,17 +15,11 @@ type ContextInfo = {
 };
 
 const BAR_COLORS = {
-  selected: {
-    background: "rgba(127, 127, 127, 0.08)",
-    borderBottom: "1px solid rgba(127, 127, 127, 0.25)",
-  },
-  unselected: {
-    background: "rgba(217, 119, 6, 0.12)",
-    borderBottom: "1px solid rgba(217, 119, 6, 0.45)",
-  },
+  selected: { background: "#535ae8", color: "#fff" },
+  unselected: { background: "#475569", color: "#fff" },
 };
 
-function WorkspaceBar() {
+function StudioHeader() {
   const [info, setInfo] = useState<ContextInfo>();
   const [error, setError] = useState<string>();
 
@@ -68,17 +62,17 @@ function WorkspaceBar() {
         flexShrink: 0,
       }}
     >
-      <SidebarLayout.Trigger />
-      <strong>Workspace</strong>
+      <GlobalHeaderLayout.Trigger />
+      <strong>Tailor Studio</strong>
       <select
         aria-label="Profile"
         value={hasProfile ? selected?.profile : ""}
         disabled={!info}
         onChange={(event) => void select(event.target.value)}
         style={{
-          border: "1px solid rgba(127, 127, 127, 0.4)",
-          background: "transparent",
-          color: "inherit",
+          border: 0,
+          background: "#fff",
+          color: "#111",
           borderRadius: 4,
           padding: "0.125rem 0.5rem",
         }}
@@ -143,22 +137,13 @@ async function main() {
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
       <AppShell title="Tailor Studio" modules={modules}>
-        <SidebarLayout
+        <GlobalHeaderLayout
+          header={<StudioHeader />}
+          sidebar={<GlobalHeaderLayout.DefaultSidebar footer={<div />} />}
           body={
-            <div
-              style={{
-                flex: 1,
-                minWidth: 0,
-                height: "100vh",
-                display: "flex",
-                flexDirection: "column",
-              }}
-            >
-              <WorkspaceBar />
-              <main style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-                <SidebarLayout.Outlet />
-              </main>
-            </div>
+            <main style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: "auto" }}>
+              <GlobalHeaderLayout.Outlet />
+            </main>
           }
         />
       </AppShell>
