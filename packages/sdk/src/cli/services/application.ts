@@ -262,12 +262,8 @@ function pluginResolverSource(
   return pluginManager && { pluginManager, outputKey };
 }
 
-// A workspace config is never loaded together with another config, so one fixed key is enough
-// and the generated files stay where they are in every checkout.
-const WORKSPACE_PLUGIN_RESOLVER_OUTPUT_KEY = "workspace";
-
 function pluginResolverOutputKey(config: LoadedConfig | LoadedWorkspaceConfig): string {
-  return isLoadedWorkspaceConfig(config) ? WORKSPACE_PLUGIN_RESOLVER_OUTPUT_KEY : config.name;
+  return isLoadedWorkspaceConfig(config) ? path.relative(getDistDir(), config.path) : config.name;
 }
 
 function defineResolver(
