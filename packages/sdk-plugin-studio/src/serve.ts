@@ -80,7 +80,7 @@ export const uiCommand = defineAppCommand({
     });
     logger.success(`Tailor Studio is running at ${server.url}`);
     logger.info(
-      `Function run edits ${functionRun.paths.file} (argument: ${functionRun.paths.argFile})`,
+      `Function run edits ${functionRun.paths.file} (argument: ${functionRun.paths.argFile}, result: ${functionRun.paths.resultFile})`,
     );
     if (args.open) await openBrowser(server.url);
 

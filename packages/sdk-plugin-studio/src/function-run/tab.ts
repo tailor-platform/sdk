@@ -6,8 +6,9 @@ import { createSyncedFiles } from "./files";
 import { formatTypeScript } from "./format";
 import { createFunctionRunHandler, type FunctionRunHandler } from "./handler";
 import { createFunctionRunStarter } from "./process";
+import { createResultWriter } from "./result";
 import { createRunSession } from "./session";
-import { STARTER_CODE } from "./starter";
+import { STARTER_ARG, STARTER_CODE } from "./starter";
 import type { Tab } from "../shell-handler";
 import type { WorkspaceSelection } from "../workspace-context";
 
@@ -27,7 +28,7 @@ export interface FunctionRunTabOptions {
 export interface FunctionRunTab {
   tab: Extract<Tab, { state: "mounted" }>;
   /** Where the function and its argument are, relative to the project. */
-  paths: { file: string; argFile: string };
+  paths: { file: string; argFile: string; resultFile: string };
   close: () => void;
 }
 
@@ -46,6 +47,7 @@ export async function createFunctionRunTab(
     : path.resolve(options.projectDir, options.file!);
   const name = path.basename(file).replace(/\.[^.]+$/, "");
   const argFile = path.join(studioDir, `${name}.arg.json5`);
+  const resultFile = path.join(studioDir, `${name}.result.json`);
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-studio-run-"));
   const runArgFile = path.join(runDir, "arg.json");
 
@@ -54,6 +56,7 @@ export async function createFunctionRunTab(
     argFile,
     runArgFile,
     starter: editsScratch ? STARTER_CODE : undefined,
+    starterArg: editsScratch ? STARTER_ARG : undefined,
     formatCode: formatTypeScript,
     pollMs: FILE_POLL_MS,
   });
@@ -71,14 +74,21 @@ export async function createFunctionRunTab(
     getSelection: options.getSelection,
   });
   const relative = (target: string) => path.relative(options.projectDir, target);
+  const paths = {
+    file: relative(file),
+    argFile: relative(argFile),
+    resultFile: relative(resultFile),
+  };
   const handler: FunctionRunHandler = createFunctionRunHandler({
     loadPage: () => readFile(options.pageFile, "utf8"),
     files,
     session,
-    paths: { file: relative(file), argFile: relative(argFile) },
+    paths,
   });
+  const result = createResultWriter({ file: resultFile, session, files, paths });
 
   files.start();
+  result.start();
   session.startPolling(SELECTION_POLL_MS);
   if (options.watch) {
     const started = session.start();
@@ -87,8 +97,9 @@ export async function createFunctionRunTab(
 
   return {
     tab: { id: "function-run", title: "Function run", state: "mounted", handler },
-    paths: { file: relative(file), argFile: relative(argFile) },
+    paths,
     close: () => {
+      result.close();
       handler.close();
       fs.rmSync(runDir, { recursive: true, force: true });
     },

@@ -12,3 +12,5 @@ export default createResolver({
   output: t.int(),
 });
 `;
+
+export const STARTER_ARG = "{ a: 1, b: 2 }\n";

@@ -16,6 +16,8 @@ export interface SyncedFilesOptions {
   runArgFile: string;
   /** Code to create `file` with when it is missing; without it a missing file is an error. */
   starter?: string;
+  /** Text to create the argument file with when it is missing; empty by default. */
+  starterArg?: string;
   formatCode: (code: string) => Promise<string | undefined>;
   /** How often to look for changes made from outside; 0 turns the polling off. */
   pollMs?: number;
@@ -90,8 +92,9 @@ export function createSyncedFiles(options: SyncedFilesOptions) {
       code = existing;
       formatted = await options.formatCode(code);
       const existingArg = readIfExists(options.argFile);
-      if (existingArg === undefined) writeAtomic(options.argFile, "");
-      arg = existingArg ?? "";
+      const initialArg = options.starterArg ?? "";
+      if (existingArg === undefined) writeAtomic(options.argFile, initialArg);
+      arg = existingArg ?? initialArg;
       writeAtomic(options.runArgFile, "{}");
       argError = applyArg(arg);
       changedAt = Date.now();

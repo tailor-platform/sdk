@@ -22,7 +22,7 @@ afterAll(() => {
 const collapseSpaces = async (code: string) =>
   code.includes("broken") ? undefined : code.replace(/\s+/g, " ").trim();
 
-function setup(options: { starter?: string; existingCode?: string } = {}) {
+function setup(options: { starter?: string; starterArg?: string; existingCode?: string } = {}) {
   const file = path.join(dir, "studio", "function.ts");
   const argFile = path.join(dir, "studio", "function.arg.json5");
   const runArgFile = path.join(dir, "run", "arg.json");
@@ -35,6 +35,7 @@ function setup(options: { starter?: string; existingCode?: string } = {}) {
     argFile,
     runArgFile,
     starter: options.starter,
+    starterArg: options.starterArg,
     formatCode: collapseSpaces,
     pollMs: 0,
   });
@@ -54,6 +55,17 @@ describe("init", () => {
       fs.readFileSync(argFile, "utf8"),
       fs.readFileSync(runArgFile, "utf8"),
     ]).toEqual(["export default 1;\n", "", "{}"]);
+  });
+
+  test("creates the argument file from the starter argument, and hands the run its plain JSON", async () => {
+    const { files, argFile, runArgFile } = setup({ starter: "x", starterArg: "{a: 1, b: 2}\n" });
+
+    await files.init();
+
+    expect([fs.readFileSync(argFile, "utf8"), fs.readFileSync(runArgFile, "utf8")]).toEqual([
+      "{a: 1, b: 2}\n",
+      '{"a":1,"b":2}',
+    ]);
   });
 
   test("leaves an existing function file as it is", async () => {
