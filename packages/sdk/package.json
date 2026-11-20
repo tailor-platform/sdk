@@ -205,7 +205,7 @@
     "@opentelemetry/sdk-trace": "3.1.1",
     "@opentelemetry/semantic-conventions": "1.45.0",
     "@oxc-project/types": "0.158.0",
-    "@politty/zod": "0.7.4",
+    "@politty/zod": "0.7.5",
     "@secretlint/core": "14.0.0",
     "@standard-schema/spec": "1.1.0",
     "@tailor-platform/function-kysely-tailordb": "0.1.3",

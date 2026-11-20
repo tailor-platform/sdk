@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import * as path from "pathe";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, onTestFinished, test } from "vitest";
 import {
   invalidYAMLPlatformConfig,
   storedTokenMarker,
@@ -30,26 +30,30 @@ interface CliResult {
   stderr: string;
 }
 
+function cliEnv(cwd: string, extraEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return {
+    PATH: process.env.PATH,
+    HOME: cwd,
+    XDG_CONFIG_HOME: cwd,
+    XDG_CACHE_HOME: cwd,
+    XDG_STATE_HOME: cwd,
+    XDG_DATA_HOME: cwd,
+    NODE_COMPILE_CACHE: compileCacheDir,
+    TAILOR_CRASH_REPORTS_LOCAL: "off",
+    TAILOR_CRASH_REPORTS_REMOTE: "off",
+    NO_COLOR: "1",
+    POLITTY_NO_AGENT: "1",
+    ...extraEnv,
+  };
+}
+
 function runCli(args: string[], cwd: string, extraEnv: NodeJS.ProcessEnv = {}): Promise<CliResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [cliEntry, ...args], {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
       timeout: CLI_TIMEOUT_MS,
-      env: {
-        PATH: process.env.PATH,
-        HOME: cwd,
-        XDG_CONFIG_HOME: cwd,
-        XDG_CACHE_HOME: cwd,
-        XDG_STATE_HOME: cwd,
-        XDG_DATA_HOME: cwd,
-        NODE_COMPILE_CACHE: compileCacheDir,
-        TAILOR_CRASH_REPORTS_LOCAL: "off",
-        TAILOR_CRASH_REPORTS_REMOTE: "off",
-        NO_COLOR: "1",
-        POLITTY_NO_AGENT: "1",
-        ...extraEnv,
-      },
+      env: cliEnv(cwd, extraEnv),
     });
     let stdout = "";
     let stderr = "";
@@ -519,22 +523,32 @@ describe.concurrent("parent command shortcuts on success", () => {
   }, 20_000);
 });
 
+/**
+ * Writes an executable Node.js plugin into `dir`. The caller prepends `dir` to PATH so plugin
+ * resolution finds it.
+ * @param dir - Directory to place the plugin in
+ * @param name - Executable name
+ * @param source - JavaScript source of the plugin
+ */
+function writePlugin(dir: string, name: string, source: string): void {
+  const file = path.join(dir, name);
+  writeFileSync(file, `#!/usr/bin/env node\n${source}`);
+  chmodSync(file, 0o755);
+}
+
 describe.concurrent("plugin dispatch argument forwarding", () => {
   /**
    * Writes a `tailor-erd` probe into `dir` that records the argv it receives.
-   * The caller prepends `dir` to PATH so plugin resolution finds it.
    * @param dir - Directory to place the probe in
    * @returns Path of the JSON file the probe writes its argv to
    */
   function writeProbePlugin(dir: string): string {
     const capture = path.join(dir, "argv.json");
-    const probe = path.join(dir, "tailor-erd");
-    writeFileSync(
-      probe,
-      `#!/usr/bin/env node\n` +
-        `require("node:fs").writeFileSync(${JSON.stringify(capture)}, JSON.stringify(process.argv.slice(2)));\n`,
+    writePlugin(
+      dir,
+      "tailor-erd",
+      `require("node:fs").writeFileSync(${JSON.stringify(capture)}, JSON.stringify(process.argv.slice(2)));\n`,
     );
-    chmodSync(probe, 0o755);
     return capture;
   }
 
@@ -583,6 +597,86 @@ describe.concurrent("plugin dispatch argument forwarding", () => {
     expect(result.status).toBe(0);
     expect(existsSync(capture)).toBe(false);
   }, 20_000);
+});
+
+describe("plugin dispatch signals", () => {
+  const PLUGIN_EXIT_CODE = 3;
+
+  /**
+   * Starts `tailor tailordb probe` as the leader of a new process group, with a
+   * `tailor-tailordb-probe` plugin that records the stop signals it receives and exits with
+   * {@link PLUGIN_EXIT_CODE} a moment after the first one.
+   * @param dir - Directory to place the plugin and its record in
+   * @returns The CLI's pid, its exit, and a reader for the signals the plugin received
+   */
+  async function startProbe(dir: string) {
+    const record = path.join(dir, "signals.json");
+    writePlugin(
+      dir,
+      "tailor-tailordb-probe",
+      `const received = [];
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.on(signal, () => {
+    received.push(signal);
+    require("node:fs").writeFileSync(${JSON.stringify(record)}, JSON.stringify(received));
+    if (received.length === 1) setTimeout(() => process.exit(${PLUGIN_EXIT_CODE}), 300);
+  });
+}
+process.stdout.write("ready\\n");
+setInterval(() => {}, 60_000);
+`,
+    );
+    const cli = spawn(process.execPath, [cliEntry, "tailordb", "probe"], {
+      cwd: dir,
+      detached: true,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: cliEnv(dir, { PATH: `${dir}:${process.env.PATH ?? ""}` }),
+    });
+    const cliPid = cli.pid;
+    if (cliPid === undefined) throw new Error("tailor failed to start");
+    onTestFinished(() => {
+      try {
+        process.kill(-cliPid, "SIGKILL");
+      } catch {
+        // Already exited.
+      }
+    });
+    const exited = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) =>
+      cli.on("exit", (code, signal) => resolve({ code, signal })),
+    );
+    let stdout = "";
+    cli.stdout.setEncoding("utf8");
+    await new Promise<void>((resolve, reject) => {
+      cli.stdout.on("data", (chunk: string) => {
+        stdout += chunk;
+        if (stdout.includes("ready")) resolve();
+      });
+      void exited.then(() => reject(new Error("tailor exited before the plugin started")));
+    });
+    const received = (): string[] =>
+      existsSync(record) ? JSON.parse(readFileSync(record, "utf8")) : [];
+    return { cliPid, exited, received };
+  }
+
+  test.each([
+    { name: "passes a SIGTERM sent to tailor on to the plugin", signal: "SIGTERM", toGroup: false },
+    { name: "lets Ctrl+C reach the plugin only once", signal: "SIGINT", toGroup: true },
+  ] as const)(
+    "$name and exits with its code once it stops",
+    async ({ signal, toGroup }) => {
+      expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
+        true,
+      );
+      using tmp = tempDir("cli-plugin-signal-");
+      const { cliPid, exited, received } = await startProbe(tmp.dir);
+
+      process.kill(toGroup ? -cliPid : cliPid, signal);
+
+      expect(await exited).toEqual({ code: PLUGIN_EXIT_CODE, signal: null });
+      expect(received()).toEqual([signal]);
+    },
+    20_000,
+  );
 });
 
 describe("notification banner wiring", () => {
