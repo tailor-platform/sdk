@@ -23,9 +23,9 @@ tailor studio --port 8080 --open
 
 The server listens on `127.0.0.1` only. The default tab is the TailorDB ERD viewer from `@tailor-platform/sdk-plugin-tailordb-erd`; without that plugin the tab shows how to install it.
 
-## Workspace
+## Profile
 
-The bar at the top of the page shows the profile and workspace every tab works against, and switches it. The profiles are the ones of `tailor profile list`. `--profile` / `--workspace-id` (or `TAILOR_PLATFORM_PROFILE` / `TAILOR_PLATFORM_WORKSPACE_ID`) give the first selection. The bar turns amber while nothing is selected.
+The header at the top of the page shows the profile (and the workspace it points to) that every tab works against, and switches it. The profiles are the ones of `tailor profile list`. `--profile` (or `TAILOR_PLATFORM_PROFILE`) gives the first selection; a profile that does not exist stops the start. The "New profile" button next to the selector creates a profile (name, a user logged in with `tailor login`, a workspace that user can see, and read/write permission) and selects it. The platform is the one the environment names when `tailor studio` starts (`TAILOR_PLATFORM_URL`, `TAILOR_PLATFORM_OAUTH2_CLIENT_ID`, `TAILOR_PLATFORM_CONSOLE_URL`): only users logged in on it are offered, their workspaces are read from it, and the new profile stores it. When the environment changes any of them, the header shows a `platform: <URL>` badge (hover for all the values) and the New profile dialog lists them. The choice is remembered per project in `node_modules/.cache/tailor-studio/`, so the next `tailor studio` in the same project starts with it (`--profile` wins when given). The header turns gray while no profile is selected.
 
 ## Mounting a plugin's UI
 
