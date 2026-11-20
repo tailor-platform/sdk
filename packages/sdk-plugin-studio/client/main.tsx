@@ -15,8 +15,14 @@ type ContextInfo = {
 };
 
 const BAR_COLORS = {
-  selected: { background: "linear-gradient(90deg, #1e3a8a, #4338ca)", color: "#fff" },
-  unselected: { background: "linear-gradient(90deg, #b45309, #d97706)", color: "#fff" },
+  selected: {
+    background: "rgba(127, 127, 127, 0.08)",
+    borderBottom: "1px solid rgba(127, 127, 127, 0.25)",
+  },
+  unselected: {
+    background: "rgba(217, 119, 6, 0.12)",
+    borderBottom: "1px solid rgba(217, 119, 6, 0.45)",
+  },
 };
 
 function WorkspaceBar() {
@@ -69,7 +75,13 @@ function WorkspaceBar() {
         value={hasProfile ? selected?.profile : ""}
         disabled={!info}
         onChange={(event) => void select(event.target.value)}
-        style={{ color: "#111", background: "#fff", borderRadius: 4, padding: "0.125rem 0.5rem" }}
+        style={{
+          border: "1px solid rgba(127, 127, 127, 0.4)",
+          background: "transparent",
+          color: "inherit",
+          borderRadius: 4,
+          padding: "0.125rem 0.5rem",
+        }}
       >
         <option value="">
           {selected?.workspaceId && !hasProfile ? "(from options)" : "Select a profile…"}
