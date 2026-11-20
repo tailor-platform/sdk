@@ -289,6 +289,30 @@ describe("dispatchPlugin", () => {
     expect(env.TAILOR_PLATFORM_USER).toBe("staging@example.com");
   });
 
+  test("injects the user ID when the profile's user has only an unscoped entry and its platform differs from TAILOR_PLATFORM_URL or the default", async () => {
+    contextMocks.readPlatformConfig.mockResolvedValue({
+      users: { u1: { email: "me@example.com" } },
+      profiles: {
+        staging: { user: "u1", platform_url: "https://api.staging.example.com" },
+      },
+      current_user: "u1",
+    });
+    const project = path.join(tempDir, "project");
+    writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-hello`, outFile);
+    process.chdir(project);
+    process.env.PATH = "";
+
+    const code = await dispatchPlugin({
+      name: "hello",
+      args: [],
+      cliName: CLI,
+      profile: "staging",
+    });
+
+    expect(code).toBe(0);
+    expect(readCapture().env.TAILOR_PLATFORM_USER).toBe("u1");
+  });
+
   test("injects the email of the current user on the platform TAILOR_PLATFORM_URL selects", async () => {
     process.env.TAILOR_PLATFORM_URL = "https://api.env.example.com";
     contextMocks.readPlatformConfig.mockResolvedValue({
