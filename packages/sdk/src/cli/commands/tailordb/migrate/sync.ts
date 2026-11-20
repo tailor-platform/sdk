@@ -341,7 +341,8 @@ async function sync(options: SyncOptions): Promise<SyncResult> {
     );
   }
 
-  if (currentState.maintenanceModeCheckpoint !== null) {
+  const removesMaintenanceRecord = currentState.maintenanceModeCheckpoint !== null;
+  if (removesMaintenanceRecord) {
     await clearMaintenanceModeRecord(client, workspaceId, target.namespace);
   }
   const labelChanged = await updateMigrationLabel(
@@ -365,7 +366,7 @@ async function sync(options: SyncOptions): Promise<SyncResult> {
     );
   }
   return {
-    changed: totalOps > 0 || labelChanged,
+    changed: totalOps > 0 || labelChanged || removesMaintenanceRecord,
     workspaceId,
     namespace: target.namespace,
     previousMigrationNumber: current,

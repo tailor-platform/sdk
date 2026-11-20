@@ -277,6 +277,16 @@ describe("tailordb migration sync", () => {
       changed: false,
     },
     {
+      name: "only a maintenance mode record is removed",
+      labels: {
+        "sdk-migration": "m0000",
+        "sdk-maintenance-mode": "m0000",
+        "sdk-name": "my-app",
+      },
+      previousMigrationNumber: 0,
+      changed: true,
+    },
+    {
       name: "only the label moves",
       labels: { "sdk-name": "my-app" },
       previousMigrationNumber: null,
