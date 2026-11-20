@@ -93,6 +93,15 @@ getDB("customer-db").selectFrom("Order");
     ).toEqual([expect.stringContaining('"Order"')]);
   });
 
+  test("gives a getDB that accepts no namespace without a type argument", async () => {
+    expect(
+      await diagnosticsFor(`
+const getDB = createGetDB();
+getDB("customer-db");
+`),
+    ).toEqual([expect.stringContaining('"customer-db"')]);
+  });
+
   test("rejects a type argument that names no namespace", async () => {
     expect(
       await diagnosticsFor(`
