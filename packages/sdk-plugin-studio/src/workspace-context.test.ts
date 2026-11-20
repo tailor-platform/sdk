@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { createWorkspaceContext, selectionArgs } from "./workspace-context";
+import { createWorkspaceContext, selectionArgs, selectionEnv } from "./workspace-context";
 
 const PROFILES = [
   { name: "test", workspaceId: "7390c4cc-914f-4791-89ee-f4a4ab4699fc" },
@@ -152,5 +152,22 @@ describe("selectionArgs", () => {
 
   test("is empty when nothing is selected", () => {
     expect(selectionArgs({})).toEqual([]);
+  });
+});
+
+describe("selectionEnv", () => {
+  const env = { TAILOR_PLATFORM_TOKEN: "startup-user-token", PATH: "/bin" };
+
+  test("leaves out the inherited token while a profile is selected", () => {
+    expect(selectionEnv({ profile: "test", workspaceId: "w" }, env)).toEqual({ PATH: "/bin" });
+  });
+
+  test("keeps the token when no profile is selected, so a token-only setup still works", () => {
+    expect(selectionEnv({}, env)).toEqual(env);
+  });
+
+  test("does not change the environment it was given", () => {
+    selectionEnv({ profile: "test" }, env);
+    expect(env.TAILOR_PLATFORM_TOKEN).toBe("startup-user-token");
   });
 });

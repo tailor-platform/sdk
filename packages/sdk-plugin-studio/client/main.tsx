@@ -151,6 +151,7 @@ function NewProfileDialog({
       </button>
       <dialog
         ref={ref}
+        aria-labelledby="new-profile-title"
         style={{
           position: "fixed",
           inset: 0,
@@ -174,7 +175,7 @@ function NewProfileDialog({
           }}
           style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "0.75rem" }}
         >
-          <strong>New profile</strong>
+          <strong id="new-profile-title">New profile</strong>
           {platform ? <PlatformDetails platform={platform} /> : null}
           <label style={field}>
             Name

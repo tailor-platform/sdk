@@ -267,6 +267,11 @@ describe("createShellHandler", () => {
     expect(res.headers.get("location")).toBe("/plugins/erd/");
   });
 
+  test("keeps the query string when it redirects to the trailing slash", async () => {
+    const res = await get(shell([mounted("erd", () => new Response("ok"))]), "/plugins/erd?x=1");
+    expect(res.headers.get("location")).toBe("/plugins/erd/?x=1");
+  });
+
   test("passes the plugin the path below its prefix, and the base path", async () => {
     const plugin = vi.fn(
       (

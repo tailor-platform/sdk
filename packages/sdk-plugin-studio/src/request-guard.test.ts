@@ -16,6 +16,29 @@ function guard(req: Request) {
 }
 
 describe("guardRequest", () => {
+  describe("port 80, where a browser leaves the port out of Host and Origin", () => {
+    const onPort80 = (method: string, headers: Record<string, string>) =>
+      guardRequest(new Request("http://127.0.0.1/", { method, headers }), { port: 80 });
+
+    test.each(["127.0.0.1", "localhost", "127.0.0.1:80"])("allows Host %s", (host) => {
+      expect(onPort80("GET", { host })).toBeUndefined();
+    });
+
+    test("allows a write from the portless Origin", () => {
+      expect(
+        onPort80("POST", {
+          host: "127.0.0.1",
+          "sec-fetch-site": "same-origin",
+          origin: "http://127.0.0.1",
+        }),
+      ).toBeUndefined();
+    });
+
+    test("still rejects the portless Host when the server is on another port", () => {
+      expect(guard(request("GET", { host: "127.0.0.1" }))?.status).toBe(403);
+    });
+  });
+
   describe("Host header", () => {
     test.each([`127.0.0.1:${PORT}`, `localhost:${PORT}`])("allows %s", (host) => {
       expect(guard(request("GET", { host }))).toBeUndefined();

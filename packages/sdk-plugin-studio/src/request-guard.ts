@@ -17,7 +17,10 @@ function forbidden(reason: string): Response {
  * @returns A 403 response to send, or undefined when the request may proceed
  */
 export function guardRequest(request: Request, options: GuardOptions): Response | undefined {
-  const allowedHosts = [`127.0.0.1:${options.port}`, `localhost:${options.port}`];
+  const names = ["127.0.0.1", "localhost"];
+  const allowedHosts = names.flatMap((name) =>
+    options.port === 80 ? [name, `${name}:80`] : [`${name}:${options.port}`],
+  );
   if (!allowedHosts.includes(request.headers.get("host") ?? "")) {
     return forbidden("unexpected Host header");
   }

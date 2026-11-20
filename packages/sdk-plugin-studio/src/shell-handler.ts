@@ -216,7 +216,10 @@ export function createShellHandler(options: ShellHandlerOptions) {
     const tab = byId.get(id!);
     if (tab?.state !== "mounted") return new Response("Not Found\n", { status: 404 });
     if (rest === undefined) {
-      return new Response(null, { status: 308, headers: { location: `/plugins/${id}/` } });
+      return new Response(null, {
+        status: 308,
+        headers: { location: `/plugins/${id}/${url.search}` },
+      });
     }
 
     const forwardedUrl = new URL(url.origin);
