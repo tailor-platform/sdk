@@ -6,7 +6,7 @@
 // Usage: node changeset-publish.mjs [--timeout <seconds>] [--interval <seconds>]
 
 import { execFile, spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import { parseArgs, promisify, stripVTControlCharacters } from "node:util";
 
@@ -100,9 +100,9 @@ async function isListed(spec) {
   return JSON.parse(stdout).versions.includes(spec.slice(at + 1));
 }
 
-async function waitUntilListed(specs) {
+async function waitUntilListed(specs, { required = true } = {}) {
   const deadline = Date.now() + timeoutSeconds * 1000;
-  for (const spec of specs) {
+  for (const [index, spec] of specs.entries()) {
     for (;;) {
       let error;
       try {
@@ -112,7 +112,15 @@ async function waitUntilListed(specs) {
       }
       if (Date.now() >= deadline) {
         if (error) console.error(error.stdout || error.stderr || error.message);
-        console.log(`::error::${spec} is not visible on npm after ${timeoutSeconds}s`);
+        console.log(
+          `::${required ? "error" : "warning"}::${spec} is not visible on npm after ${timeoutSeconds}s`,
+        );
+        if (!required && process.env.GITHUB_ENV) {
+          appendFileSync(
+            process.env.GITHUB_ENV,
+            `NPM_UNCONFIRMED_PACKAGES=${JSON.stringify(specs.slice(index))}\n`,
+          );
+        }
         return false;
       }
       await sleep(intervalSeconds * 1000);
@@ -138,7 +146,7 @@ async function main() {
     }
     attempt = await publish();
   }
-  if (!(await waitUntilListed(attempt.published))) return 1;
+  await waitUntilListed(attempt.published, { required: false });
   for (const spec of untagged) {
     console.log(
       `::error::${spec} is on npm but has no git tag; create its tag and GitHub release by hand`,
