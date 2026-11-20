@@ -435,13 +435,19 @@ export function assertNoMaintenanceModeRecord(
 ): void {
   if (state.maintenanceModeCheckpoint === null) return;
   const release = maintenanceModeReleaseAction(state, namespace, context);
-  const suggestion =
-    release === undefined
-      ? "Settle the migration in progress first."
-      : release.via === "deploy"
-        ? `The record names a checkpoint other than the current one, which a deploy removes: run ${formatCommandHint(release)}. ` +
-          `If the deploy stops with MIGRATION_REMOTE_DRIFT because the tables are still restricted, run ${formatCommandHint(release.fallback ?? release)} instead, which also removes the record.`
-        : `Take the tables out of maintenance mode first with ${formatCommandHint(release)}.`;
+  const suggestion = (() => {
+    if (release === undefined) return "Settle the migration in progress first.";
+    if (release.via === "resolve") {
+      return `Take the tables out of maintenance mode first with ${formatCommandHint(release)}.`;
+    }
+    if (release.fallback === undefined) {
+      return `A table that the committed migration removes is not deleted yet, which a deploy finishes: run ${formatCommandHint(release)}.`;
+    }
+    return (
+      `The record names a checkpoint other than the current one, which a deploy removes: run ${formatCommandHint(release)}. ` +
+      `If the deploy stops with MIGRATION_REMOTE_DRIFT because the tables are still restricted, run ${formatCommandHint(release.fallback)} instead, which also removes the record.`
+    );
+  })();
   throw CLIError({
     code: "MIGRATION_MAINTENANCE_MODE_RECORDED",
     message: `Namespace "${namespace}" records tables a deploy left in maintenance mode at checkpoint ${describeMigrationCheckpoint(state.maintenanceModeCheckpoint)}.`,

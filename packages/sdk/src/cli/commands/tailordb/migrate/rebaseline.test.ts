@@ -326,6 +326,28 @@ describe("tailordb migration rebaseline", () => {
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
 
+  test("says a deploy finishes the table deletion while a removed table of the committed migration is not deleted yet", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: {
+          "sdk-migration": "m0001",
+          "sdk-maintenance-mode": "m0001",
+          "sdk-migration-cleanup": "m0001",
+        },
+      },
+    });
+
+    const result = await runCommand(rebaselineCommand, ["--yes"]);
+
+    expect(result.success).toBe(false);
+    const suggestion = (result.error as { suggestion?: string }).suggestion ?? "";
+    expect(suggestion).toContain("not deleted yet");
+    expect(suggestion).toContain("tailor deploy");
+    expect(suggestion).not.toContain("another checkpoint");
+    expect(suggestion).not.toContain("MIGRATION_REMOTE_DRIFT");
+    expect(state.setMetadata).not.toHaveBeenCalled();
+  });
+
   test("points to deploy when the maintenance mode record names another checkpoint", async () => {
     state.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0001", "sdk-maintenance-mode": "m0002" } },
