@@ -399,7 +399,7 @@ function App() {
           </div>
           <Splitter height={argHeight} onChange={setArgHeight} pane={leftPane} />
           <div className="fr-label" id="argument-label">
-            Argument (JSON or JSON5, optional){" "}
+            Argument (JSON5){" "}
             <PathWithCopy
               shown={paths.argFile}
               copied={paths.absolute?.argFile ?? paths.argFile}
