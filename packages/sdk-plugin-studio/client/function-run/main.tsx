@@ -4,7 +4,15 @@ import light from "@enlumine/html/themes/light";
 import json from "@enlumine/json";
 import { Highlight } from "@enlumine/react";
 import { Alert, Badge, Button, Card } from "@tailor-platform/app-shell";
-import { StrictMode, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import {
+  StrictMode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { createRoot } from "react-dom/client";
 import { locateArgPath, normalizeArg } from "../../src/function-run/arg";
 import { parseEventFrame, splitFrames, type RunRecord } from "../../src/function-run/stream";
@@ -206,30 +214,54 @@ async function readEvents(
   }
 }
 
+function Icon({ children }: { children: ReactNode }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {children}
+    </svg>
+  );
+}
+
 function PathWithCopy({
+  title,
   shown,
   copied: text,
   label,
 }: {
+  title: string;
   shown: string;
   copied: string;
   label: string;
 }) {
   const [result, setResult] = useState<"copied" | "failed" | null>(null);
-  if (shown === "") return null;
+  if (shown === "") return <span className="fr-title">{title}</span>;
   const finish = (outcome: "copied" | "failed") => {
     setResult(outcome);
     setTimeout(() => setResult(null), 1500);
   };
   return (
     <>
-      <code className="fr-path" title={text}>
-        {shown}
-      </code>
+      <span className="fr-title">
+        {title}{" "}
+        <code className="fr-path" title={text}>
+          {shown}
+        </code>
+      </span>
       <button
         type="button"
         className="fr-copy"
-        title={text}
+        data-result={result ?? undefined}
+        title={result === "copied" ? "Copied" : result === "failed" ? "Copy failed" : text}
         aria-label={`Copy the path of the ${label}`}
         onClick={() => {
           navigator.clipboard.writeText(text).then(
@@ -238,7 +270,20 @@ function PathWithCopy({
           );
         }}
       >
-        {result === "copied" ? "Copied" : result === "failed" ? "Copy failed" : "Copy"}
+        {result === "copied" ? (
+          <Icon>
+            <path d="M5 12l5 5L20 7" />
+          </Icon>
+        ) : result === "failed" ? (
+          <Icon>
+            <path d="M6 6l12 12M18 6L6 18" />
+          </Icon>
+        ) : (
+          <Icon>
+            <rect x="9" y="9" width="11" height="11" rx="2" />
+            <path d="M5 15V6a2 2 0 0 1 2-2h9" />
+          </Icon>
+        )}
       </button>
     </>
   );
@@ -389,8 +434,8 @@ function App() {
       <div className="fr-main">
         <div className="fr-pane" ref={leftPane}>
           <div className="fr-label">
-            Function{" "}
             <PathWithCopy
+              title="Function"
               shown={paths.file}
               copied={paths.absolute?.file ?? paths.file}
               label="function"
@@ -401,8 +446,8 @@ function App() {
           </div>
           <Splitter height={argHeight} onChange={setArgHeight} pane={leftPane} />
           <div className="fr-label" id="argument-label">
-            Argument (JSON5){" "}
             <PathWithCopy
+              title="Argument (JSON5)"
               shown={paths.argFile}
               copied={paths.absolute?.argFile ?? paths.argFile}
               label="argument"
@@ -431,8 +476,8 @@ function App() {
         </div>
         <div className="fr-pane">
           <div className="fr-label">
-            Output{" "}
             <PathWithCopy
+              title="Output"
               shown={paths.resultFile ?? ""}
               copied={paths.absolute?.resultFile ?? paths.resultFile ?? ""}
               label="result file"
