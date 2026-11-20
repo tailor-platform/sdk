@@ -1,4 +1,4 @@
-import { javascript } from "@codemirror/lang-javascript";
+import { javascript, javascriptLanguage } from "@codemirror/lang-javascript";
 import { setDiagnostics, type Diagnostic } from "@codemirror/lint";
 import { Compartment, EditorState } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
@@ -40,7 +40,9 @@ export function Editor({
         doc: value,
         extensions: [
           basicSetup,
-          javascript({ typescript }),
+          typescript
+            ? javascript({ typescript: true })
+            : javascriptLanguage.configure({ top: "SingleExpression" }).extension,
           EditorView.contentAttributes.of({ "aria-label": label }),
           ...(placeholder === undefined ? [] : [placeholderExtension(placeholder)]),
           theme.current.of(latest.current.dark ? oneDark : []),
