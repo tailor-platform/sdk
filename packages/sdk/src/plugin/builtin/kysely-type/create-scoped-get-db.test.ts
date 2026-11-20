@@ -25,7 +25,7 @@ function tablesOf(namespace: string, type: TailorAnyDBType) {
 }
 
 async function diagnosticsFor(usage: string): Promise<string[]> {
-  const dir = mkdtempSync(join(tmpdir(), "tailor-create-get-db-"));
+  const dir = mkdtempSync(join(tmpdir(), "tailor-create-scoped-get-db-"));
   tempDirs.push(dir);
   writeFileSync(
     join(dir, "db.ts"),
@@ -44,7 +44,7 @@ async function diagnosticsFor(usage: string): Promise<string[]> {
     ),
   );
   const fileName = join(dir, "case.ts");
-  writeFileSync(fileName, `import { createGetDB } from "./db";\n${usage}`);
+  writeFileSync(fileName, `import { createScopedGetDB } from "./db";\n${usage}`);
 
   const program = ts.createProgram({
     rootNames: [fileName],
@@ -65,11 +65,11 @@ async function diagnosticsFor(usage: string): Promise<string[]> {
     .map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, " "));
 }
 
-describe("createGetDB of the content-mapped Kysely types", () => {
+describe("createScopedGetDB of the content-mapped Kysely types", () => {
   test("gives a getDB that reads the tables of the namespaces it names", async () => {
     expect(
       await diagnosticsFor(`
-const getDB = createGetDB<"customer-db">();
+const getDB = createScopedGetDB<"customer-db">();
 getDB("customer-db").selectFrom("Customer").select("name");
 `),
     ).toEqual([]);
@@ -78,7 +78,7 @@ getDB("customer-db").selectFrom("Customer").select("name");
   test("rejects a namespace the type argument leaves out", async () => {
     expect(
       await diagnosticsFor(`
-const getDB = createGetDB<"customer-db">();
+const getDB = createScopedGetDB<"customer-db">();
 getDB("order-db");
 `),
     ).toEqual([expect.stringContaining('"order-db"')]);
@@ -87,7 +87,7 @@ getDB("order-db");
   test("rejects a table of a namespace the type argument leaves out", async () => {
     expect(
       await diagnosticsFor(`
-const getDB = createGetDB<"customer-db">();
+const getDB = createScopedGetDB<"customer-db">();
 getDB("customer-db").selectFrom("Order");
 `),
     ).toEqual([expect.stringContaining('"Order"')]);
@@ -96,7 +96,7 @@ getDB("customer-db").selectFrom("Order");
   test("gives a getDB that accepts no namespace without a type argument", async () => {
     expect(
       await diagnosticsFor(`
-const getDB = createGetDB();
+const getDB = createScopedGetDB();
 getDB("customer-db");
 `),
     ).toEqual([expect.stringContaining('"customer-db"')]);
@@ -105,7 +105,7 @@ getDB("customer-db");
   test("rejects a type argument that names no namespace", async () => {
     expect(
       await diagnosticsFor(`
-createGetDB<"missing-db">();
+createScopedGetDB<"missing-db">();
 `),
     ).toEqual([expect.stringContaining('"missing-db"')]);
   });

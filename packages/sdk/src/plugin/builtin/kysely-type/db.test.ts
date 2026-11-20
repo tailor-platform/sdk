@@ -29,11 +29,11 @@ describe("getDB", () => {
   });
 });
 
-describe("createGetDB", () => {
+describe("createScopedGetDB", () => {
   test("returns getDB itself, which the type argument only narrows", async () => {
     vi.resetModules();
-    const { createGetDB, getDB } = await import("./db");
+    const { createScopedGetDB, getDB } = await import("./db");
 
-    expect(createGetDB()).toBe(getDB);
+    expect(createScopedGetDB()).toBe(getDB);
   });
 });
