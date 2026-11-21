@@ -1,5 +1,4 @@
 import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
-import { internalError } from "#/cli/shared/errors";
 import type { Application, ConfigServices } from "#/cli/services/application";
 import type { ApplicationSettings } from "#/configure/config/types";
 import type { WorkspaceApplication } from "#/parser/app-config/types";
@@ -58,20 +57,16 @@ type AuthNamespaceContext = {
 };
 
 /**
- * Get the Auth namespace that a config's executors, resolvers, and invokers use.
+ * Get the Auth namespaces that a config's executors, resolvers, and invokers can name: those the
+ * config defines, and the external one a `defineConfig()` config references.
  * @param context - Services and applications of the config
- * @returns The Auth namespace, or undefined when the config uses none
+ * @returns The Auth namespaces, in config order
  */
-export function configAuthNamespace(context: AuthNamespaceContext): string | undefined {
-  const names = new Set([
-    ...context.application.authServices.map((service) => service.config.name),
-    ...context.applications.flatMap((app) => (app.authNamespace ? [app.authNamespace] : [])),
-  ]);
-  const [name, ...others] = names;
-  if (others.length > 0) {
-    throw internalError(
-      `A config uses one Auth namespace at most, but found ${[...names].join(", ")}`,
-    );
-  }
-  return name;
+export function configAuthNamespaces(context: AuthNamespaceContext): string[] {
+  return [
+    ...new Set([
+      ...context.application.authServices.map((service) => service.config.name),
+      ...context.applications.flatMap((app) => (app.authNamespace ? [app.authNamespace] : [])),
+    ]),
+  ];
 }

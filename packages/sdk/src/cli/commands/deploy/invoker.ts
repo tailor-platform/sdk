@@ -13,40 +13,68 @@ export type InvokerMachineUsers = ReadonlyMap<string, ReadonlySet<string> | null
  *
  * Accepts either:
  * - `undefined` — returns undefined
- * - a plain string (machine user name) — expands to `{ namespace, machineUserName }` using `authNamespace`
+ * - a plain string (machine user name) — expands to `{ namespace, machineUserName }` with the
+ *   config's Auth namespace, or with the one of several that defines the machine user
  * - an object `{ namespace, machineUserName }` — returned as-is
  * @param invoker - String machine user name or object form
- * @param authNamespace - Auth service namespace (required when invoker is a string)
+ * @param authNamespaces - Auth namespaces of the config (at least one when invoker is a string)
  * @param context - Contextual label used in error messages (e.g. `resolver "foo"`)
  * @param machineUsers - Machine users of each Auth namespace the invokers name; an invoker whose namespace lacks the machine user, or whose namespace does not exist (`null`), is rejected. Pass undefined to skip the check
  * @returns Object form of the invoker, or undefined
  */
 export function normalizeInvoker(
   invoker: string | AuthInvoker | undefined,
-  authNamespace: string | undefined,
+  authNamespaces: ReadonlyArray<string>,
   context: string,
   machineUsers: InvokerMachineUsers | undefined,
 ): AuthInvoker | undefined {
   if (invoker === undefined) return undefined;
-  const resolved = resolveInvoker(invoker, authNamespace, context);
+  const resolved = resolveInvoker({ invoker, authNamespaces, context, machineUsers });
   if (machineUsers) assertInvokerMachineUser(resolved, context, machineUsers);
   return resolved;
 }
 
-function resolveInvoker(
-  invoker: string | AuthInvoker,
-  authNamespace: string | undefined,
-  context: string,
-): AuthInvoker {
+type ResolveInvokerParams = {
+  invoker: string | AuthInvoker;
+  authNamespaces: ReadonlyArray<string>;
+  context: string;
+  machineUsers: InvokerMachineUsers | undefined;
+};
+
+function resolveInvoker(params: ResolveInvokerParams): AuthInvoker {
+  const { invoker, authNamespaces, context, machineUsers } = params;
   if (typeof invoker !== "string") return invoker;
-  if (!authNamespace) {
+  const [only, ...others] = authNamespaces;
+  if (only === undefined) {
     throw CLIError({
       code: "INVOKER_AUTH_REQUIRED",
       message: `${context} uses a string invoker ("${invoker}"), but no Auth service is configured.`,
       suggestion: "Configure an Auth service before using invoker.",
     });
   }
-  return { namespace: authNamespace, machineUserName: invoker };
+  if (others.length === 0) return { namespace: only, machineUserName: invoker };
+  if (!machineUsers) {
+    throw internalError(`Machine users are needed to resolve invoker "${invoker}"`);
+  }
+  const defining = authNamespaces.filter((namespace) => machineUsers.get(namespace)?.has(invoker));
+  const [namespace, ...alsoDefining] = defining;
+  if (namespace === undefined) {
+    throw CLIError({
+      code: "INVOKER_MACHINE_USER_NOT_FOUND",
+      message: `${context} uses invoker "${invoker}", but none of the Auth services ${authNamespaces.join(", ")} has a machine user with that name.`,
+      suggestion: "Define the machine user in one of these Auth services, or name an existing one.",
+      context: { invoker, authNamespaces: [...authNamespaces] },
+    });
+  }
+  if (alsoDefining.length > 0) {
+    throw CLIError({
+      code: "INVOKER_MACHINE_USER_AMBIGUOUS",
+      message: `${context} uses invoker "${invoker}", which the Auth services ${defining.join(", ")} all define.`,
+      suggestion: `Name the Auth service, for example invoker: { namespace: "${namespace}", machineUserName: "${invoker}" }.`,
+      context: { invoker, authNamespaces: defining },
+    });
+  }
+  return { namespace, machineUserName: invoker };
 }
 
 function assertInvokerMachineUser(
@@ -84,8 +112,8 @@ type ListInvokerMachineUsersParams = {
   workspaceId: string;
   /** Invokers whose Auth namespaces to list. */
   invokers: Iterable<string | AuthInvoker | undefined>;
-  /** Auth namespace that string invokers refer to. */
-  authNamespace: string | undefined;
+  /** Auth namespaces of the config, which string invokers refer to. */
+  authNamespaces: ReadonlyArray<string>;
   /** Machine users that each Auth namespace has after this deploy run, for the namespaces a config in the run defines. */
   plannedMachineUsers?: ReadonlyMap<string, ReadonlySet<string>>;
 };
@@ -94,18 +122,18 @@ type ListInvokerMachineUsersParams = {
  * List the machine users of each Auth namespace that the invokers name.
  * When a config in the deploy run defines the Auth namespace, the machine users it lists are the final set,
  * because the deploy deletes the ones it no longer lists. Otherwise the workspace's machine users are used.
- * @param params - Client, workspace, invokers, Auth namespace of string invokers, and machine users the deploy run defines
+ * @param params - Client, workspace, invokers, Auth namespaces of string invokers, and machine users the deploy run defines
  * @returns Machine users by Auth namespace, or undefined when no invoker names an Auth namespace
  */
 export async function listInvokerMachineUsers(
   params: ListInvokerMachineUsersParams,
 ): Promise<InvokerMachineUsers | undefined> {
-  const { client, workspaceId, invokers, authNamespace, plannedMachineUsers } = params;
+  const { client, workspaceId, invokers, authNamespaces, plannedMachineUsers } = params;
   const namespaces = new Set<string>();
   for (const invoker of invokers) {
     if (invoker === undefined) continue;
     if (typeof invoker !== "string") namespaces.add(invoker.namespace);
-    else if (authNamespace) namespaces.add(authNamespace);
+    else for (const namespace of authNamespaces) namespaces.add(namespace);
   }
   if (namespaces.size === 0) return undefined;
   return new Map(

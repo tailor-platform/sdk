@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
-  configAuthNamespace,
+  configAuthNamespaces,
   deployApplicationOf,
   workspaceDeployApplications,
 } from "./deploy-application";
@@ -78,8 +78,9 @@ describe("deployApplicationOf", () => {
   });
 });
 
-describe("configAuthNamespace", () => {
-  const authService = { config: { name: "shop-auth" } } as Application["authServices"][number];
+describe("configAuthNamespaces", () => {
+  const authService = (name: string) =>
+    ({ config: { name } }) as Application["authServices"][number];
   const app = (authNamespace: string | undefined): DeployApplication => ({
     name: "shop",
     subgraphs: [],
@@ -87,22 +88,31 @@ describe("configAuthNamespace", () => {
     settings: {},
   });
 
-  test("returns the Auth service the config defines, or the external Auth its application uses", () => {
+  test("lists the Auth services the config defines and the external Auth its application uses", () => {
     expect(
-      configAuthNamespace({
-        application: { authServices: [authService] },
+      configAuthNamespaces({
+        application: { authServices: [authService("shop-auth")] },
         applications: [app("shop-auth")],
       }),
-    ).toBe("shop-auth");
+    ).toEqual(["shop-auth"]);
     expect(
-      configAuthNamespace({
+      configAuthNamespaces({
         application: { authServices: [] },
         applications: [app("shared-auth")],
       }),
-    ).toBe("shared-auth");
+    ).toEqual(["shared-auth"]);
     expect(
-      configAuthNamespace({ application: { authServices: [] }, applications: [app(undefined)] }),
-    ).toBeUndefined();
+      configAuthNamespaces({ application: { authServices: [] }, applications: [app(undefined)] }),
+    ).toEqual([]);
+  });
+
+  test("lists every Auth service of a workspace config, including ones no application uses", () => {
+    expect(
+      configAuthNamespaces({
+        application: { authServices: [authService("shop-auth"), authService("admin-auth")] },
+        applications: [app("shop-auth"), app(undefined)],
+      }),
+    ).toEqual(["shop-auth", "admin-auth"]);
   });
 });
 
