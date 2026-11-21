@@ -265,10 +265,9 @@ describe("migration", () => {
 
     test("resolves only the namespaces with a script to run", () => {
       expect(resolve({ migrator: {} })).toEqual({
-        authNamespace: "auth",
         byNamespace: new Map([
-          ["namespace-a", "migrator"],
-          ["namespace-b", "migrator"],
+          ["namespace-a", { namespace: "auth", machineUserName: "migrator" }],
+          ["namespace-b", { namespace: "auth", machineUserName: "migrator" }],
         ]),
       });
     });
@@ -323,6 +322,57 @@ describe("migration", () => {
           suggestion: "Add 'admin' to auth.machineUsers.",
         }),
       );
+    });
+
+    describe("with several Auth services", () => {
+      function resolveAcross(db: Record<string, { migration: { machineUser?: string } }> = {}) {
+        return resolveMigrationMachineUsers(
+          {
+            application: {
+              authServices: [
+                { config: { name: "shop-auth", machineUsers: { migrator: {}, seeder: {} } } },
+                { config: { name: "admin-auth", machineUsers: { batch: {}, seeder: {} } } },
+              ],
+              env: {},
+            } as unknown as Pick<Application, "authServices" | "env">,
+            config: { path: "/project/tailor.config.ts", db } as unknown as LoadedConfig,
+          },
+          [createMockMigration({ namespace: "namespace-a" })],
+        );
+      }
+
+      test("runs as the configured machine user of the Auth service that defines it", () => {
+        expect(resolveAcross({ "namespace-a": { migration: { machineUser: "batch" } } })).toEqual({
+          byNamespace: new Map([
+            ["namespace-a", { namespace: "admin-auth", machineUserName: "batch" }],
+          ]),
+        });
+      });
+
+      test("asks for migration.machineUser instead of picking one", () => {
+        expect(() => resolveAcross()).toThrow(
+          expect.objectContaining({ code: "MACHINE_USER_REQUIRED" }),
+        );
+      });
+
+      test("rejects a configured machine user that two Auth services define", () => {
+        expect(() =>
+          resolveAcross({ "namespace-a": { migration: { machineUser: "seeder" } } }),
+        ).toThrow(
+          expect.objectContaining({
+            code: "MACHINE_USER_AMBIGUOUS",
+            context: {
+              machineUsers: [
+                {
+                  namespace: "namespace-a",
+                  machineUser: "seeder",
+                  authNamespaces: ["shop-auth", "admin-auth"],
+                },
+              ],
+            },
+          }),
+        );
+      });
     });
   });
 
@@ -892,8 +942,9 @@ describe("migration", () => {
       return {
         client: mockOperatorClient({}),
         workspaceId,
-        authNamespace: "auth",
-        machineUserByNamespace: new Map([["tailordb", "test-machine-user"]]),
+        invokerByNamespace: new Map([
+          ["tailordb", { namespace: "auth", machineUserName: "test-machine-user" }],
+        ]),
         env: {},
         configPath: path.join(process.cwd(), "tailor.config.ts"),
         owner: { kind: "application", name: "test-app", id: "test-app-id" },
@@ -924,7 +975,9 @@ describe("migration", () => {
       await executeMigrations(
         createMockContext({
           client: createMetadataClient({ labels: {} }),
-          machineUserByNamespace: new Map([["tailordb", "migrator"]]),
+          invokerByNamespace: new Map([
+            ["tailordb", { namespace: "auth", machineUserName: "migrator" }],
+          ]),
         }),
         [createMockMigration()],
         checkpoints,

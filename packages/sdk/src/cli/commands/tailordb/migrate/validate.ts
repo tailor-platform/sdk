@@ -468,7 +468,7 @@ async function reportPendingScripts(check: NamespaceScriptsCheck): Promise<Names
   const machineUser = assertDefined(
     machineUsers?.byNamespace.get(namespace),
     "a namespace whose pending scripts can run has a machine user to run them",
-  );
+  ).machineUserName;
   return { report: { valid: true, migrationNumbers, machineUser } };
 }
 
