@@ -64,6 +64,22 @@ describe("assertSeedDataDirectory", () => {
     expect(() => assertSeedDataDirectory(dir)).toThrow(`Seed data directory not found: ${dir}`);
   });
 
+  test("points at `tailor generate` for a missing data directory by default", () => {
+    const dir = makeDataDir({});
+    rmSync(dir, { recursive: true });
+
+    expect(() => assertSeedDataDirectory(dir)).toThrow("Run `tailor generate` to create it.");
+  });
+
+  test("leaves `tailor generate` out of the error when told not to suggest it", () => {
+    const dir = makeDataDir({});
+    rmSync(dir, { recursive: true });
+
+    expect(() => assertSeedDataDirectory(dir, { suggestGenerate: false })).toThrow(
+      new RegExp(`^Seed data directory not found: ${dir}\\.$`),
+    );
+  });
+
   test("rejects a data directory below a file path with an actionable error", () => {
     const root = makeDataDir({ dist: "not a directory" });
     const dir = path.join(root, "dist", "data");

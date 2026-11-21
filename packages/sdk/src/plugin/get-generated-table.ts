@@ -7,6 +7,7 @@ import {
   definesBothTailorDBNamespaceHooks,
   hasDefinitionTimeHooks,
 } from "#/parser/plugin-config/definition-hooks";
+import { isSdkBranded } from "#/utils/brand";
 import { loadFilesWithIgnores, type FileLoadConfig } from "#/utils/file-loader";
 import { tailorDBNamespaceHookOf } from "./guards";
 import { PluginManager } from "./manager";
@@ -131,9 +132,21 @@ interface DbNamespaceConfig extends Partial<FileLoadConfig> {
   external?: boolean;
 }
 
+function isTableNamed(value: unknown, name: string): boolean {
+  return isSdkBranded(value, "tailordb-type") && (value as { name?: unknown }).name === name;
+}
+
+async function importCurrentContents(file: string): Promise<Record<string, unknown>> {
+  const url = pathToFileURL(file);
+  url.searchParams.set("v", String(fs.statSync(file).mtimeMs));
+  return import(url.href);
+}
+
 /**
  * Resolve the namespace for a table-attached source table by checking config.db file patterns.
- * Uses ESM module cache identity: same file path yields same object references.
+ * Uses ESM module cache identity: same file path yields same object references. A table imported
+ * under a different URL (such as a version query) is another instance, so it is matched by name
+ * when exactly one namespace holds a table of that name.
  * @param config - App config with db namespace definitions
  * @param config.db - DB namespace definitions
  * @param configDir - Directory containing the config file
@@ -149,24 +162,41 @@ async function resolveNamespaceForTable(
     throw new Error(`No db configuration found in config`);
   }
 
+  const filesByNamespace: [string, string[]][] = [];
   for (const [namespace, nsConfig] of Object.entries(config.db)) {
     const dbConfig = nsConfig as DbNamespaceConfig;
     // Skip external namespaces (no files to resolve)
     if (dbConfig.external || !dbConfig.files) continue;
+    filesByNamespace.push([
+      namespace,
+      loadFilesWithIgnores(
+        { files: dbConfig.files, ignores: dbConfig.ignores },
+        configDir,
+        console.warn,
+      ),
+    ]);
+  }
 
-    const files = loadFilesWithIgnores(
-      { files: dbConfig.files, ignores: dbConfig.ignores },
-      configDir,
-      console.warn,
-    );
+  for (const [namespace, files] of filesByNamespace) {
     for (const file of files) {
       const mod = await import(pathToFileURL(file).href);
-      for (const exported of Object.values(mod)) {
-        if (exported === sourceTable) {
-          return namespace;
-        }
+      if (Object.values(mod).includes(sourceTable)) return namespace;
+    }
+  }
+
+  const namespacesOfSameName = new Set<string>();
+  for (const [namespace, files] of filesByNamespace) {
+    for (const file of files) {
+      const mod = await importCurrentContents(file);
+      if (Object.values(mod).some((exported) => isTableNamed(exported, sourceTable.name))) {
+        namespacesOfSameName.add(namespace);
       }
     }
+  }
+
+  const [onlyNamespace] = namespacesOfSameName;
+  if (namespacesOfSameName.size === 1 && onlyNamespace !== undefined) {
+    return onlyNamespace;
   }
 
   throw new Error(
@@ -224,8 +254,11 @@ async function resolveNamespaceForNamespacePlugin(
 // Process caching
 // ========================================
 
-// Cache: plugin -> cacheKey -> TablePluginOutput
-const processCache = new WeakMap<Plugin, Map<string, TablePluginOutput>>();
+// Cache: plugin -> source table instance -> cacheKey -> TablePluginOutput
+const processCache = new WeakMap<
+  Plugin,
+  WeakMap<TailorAnyDBType, Map<string, TablePluginOutput>>
+>();
 
 // Cache for namespace plugins: plugin -> cacheKey -> PluginOutput
 const namespaceProcessCache = new WeakMap<Plugin, Map<string, PluginOutput>>();
@@ -327,10 +360,15 @@ async function getGeneratedTableForTableAttachedPlugin(
   }
 
   // Check cache first
-  let pluginCache = processCache.get(plugin);
+  let tablesCache = processCache.get(plugin);
+  if (!tablesCache) {
+    tablesCache = new WeakMap();
+    processCache.set(plugin, tablesCache);
+  }
+  let pluginCache = tablesCache.get(sourceTable);
   if (!pluginCache) {
     pluginCache = new Map();
-    processCache.set(plugin, pluginCache);
+    tablesCache.set(sourceTable, pluginCache);
   }
 
   const cacheKey = getCacheKey(`${sourceTable.name}:ns=${namespace}`, pluginConfig);
