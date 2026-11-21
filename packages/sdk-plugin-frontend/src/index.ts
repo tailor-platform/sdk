@@ -1,7 +1,7 @@
 import { PluginValidationError } from "@tailor-platform/sdk";
 import * as path from "pathe";
-import type { FrontendDefinition } from "./types";
-import type { Plugin } from "@tailor-platform/sdk";
+import type { FrontendBuildContext, FrontendDefinition, FrontendEnvContext } from "./types";
+import type { DeployedApplication, DeployedContext, Plugin } from "@tailor-platform/sdk";
 
 export type {
   FrontendBuildContext,
@@ -14,6 +14,22 @@ export type {
 export const FrontendPluginID = "@tailor-platform/frontend";
 
 type FrontendOutput = { site: string; url: string; skippedFiles: string[] };
+
+function withApplication<Context extends object>(
+  ctx: Pick<DeployedContext, "application">,
+  context: Context,
+): Context & { application: DeployedApplication } {
+  return Object.defineProperty(context, "application", {
+    enumerable: true,
+    // oxlint-disable-next-line typescript/no-deprecated -- Read lazily, so a callback that leaves it unread works when reading it throws.
+    get: () => ctx.application,
+  }) as Context & { application: DeployedApplication };
+}
+
+function registrantOf(applications: readonly DeployedApplication[], configPath: string): string {
+  const own = applications.filter((app) => app.configPath === configPath);
+  return own.length === 1 ? `app "${own[0]?.name}"` : `the config ${configPath}`;
+}
 
 /**
  * Build and upload frontend assets after a successful deployment.
@@ -59,49 +75,59 @@ export function frontendPlugin(
     pluginConfig: frontends,
     async onDeployed(ctx) {
       const frontends: FrontendOutput[] = [];
+      const sites = ctx.staticWebsites;
+      const staticWebsites = Object.fromEntries(
+        Object.entries(sites).flatMap(([name, site]) =>
+          site ? [[name, { name: site.name, url: site.url }]] : [],
+        ),
+      );
+      const registrant = registrantOf(ctx.applications, ctx.configPath);
       for (const def of ctx.pluginConfig) {
         const name = typeof def.site === "string" ? def.site : def.site.name;
-        const sites = ctx.application.staticWebsites;
         const site = Object.hasOwn(sites, name) ? sites[name] : undefined;
         if (!site) {
           const owner = ctx.applications.find((app) => Object.hasOwn(app.staticWebsites, name));
           throw new Error(
             owner
-              ? `Static website "${name}" is defined in app "${owner.name}", but frontendPlugin is registered in app "${ctx.application.name}"; register it in the config that defines the site`
-              : `Static website "${name}" is not declared in the config that registers frontendPlugin (app "${ctx.application.name}"). Available sites: ${Object.keys(sites).join(", ")}`,
+              ? `Static website "${name}" is defined in app "${owner.name}", but frontendPlugin is registered in ${registrant}; register it in the config that defines the site`
+              : `Static website "${name}" is not declared in the config that registers frontendPlugin (${registrant}). Available sites: ${Object.keys(sites).join(", ")}`,
           );
         }
         const workingDir = path.resolve(path.dirname(ctx.configPath), def.workingDir ?? ".");
         const distDir = path.resolve(workingDir, def.distDir);
         const env =
-          (await def.env?.({
-            site,
-            application: ctx.application,
-            applications: ctx.applications,
-            workspaceId: ctx.workspaceId,
-          })) ?? {};
+          (await def.env?.(
+            withApplication<Omit<FrontendEnvContext, "application">>(ctx, {
+              site,
+              applications: ctx.applications,
+              staticWebsites,
+              workspaceId: ctx.workspaceId,
+            }),
+          )) ?? {};
         if (typeof def.build === "function") {
           ctx.logger.info(
             `Building frontend for site "${name}" (working directory: ${workingDir})`,
           );
-          await def.build({
-            site,
-            application: ctx.application,
-            applications: ctx.applications,
-            workspaceId: ctx.workspaceId,
-            ...(ctx.profile !== undefined && { profile: ctx.profile }),
-            env,
-            workingDir,
-            distDir,
-            logger: ctx.logger,
-            node: ctx.node,
-            exec: (command, options) =>
-              ctx.exec(command, {
-                ...options,
-                workingDir: path.resolve(workingDir, options?.workingDir ?? "."),
-                env: { ...env, ...options?.env },
-              }),
-          });
+          await def.build(
+            withApplication<Omit<FrontendBuildContext, "application">>(ctx, {
+              site,
+              applications: ctx.applications,
+              staticWebsites,
+              workspaceId: ctx.workspaceId,
+              ...(ctx.profile !== undefined && { profile: ctx.profile }),
+              env,
+              workingDir,
+              distDir,
+              logger: ctx.logger,
+              node: ctx.node,
+              exec: (command, options) =>
+                ctx.exec(command, {
+                  ...options,
+                  workingDir: path.resolve(workingDir, options?.workingDir ?? "."),
+                  env: { ...env, ...options?.env },
+                }),
+            }),
+          );
         } else if (def.build) {
           ctx.logger.info(
             `Building frontend for site "${name}": ${def.build} (working directory: ${workingDir})`,

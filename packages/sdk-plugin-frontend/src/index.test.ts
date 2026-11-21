@@ -55,8 +55,10 @@ function context(frontends: FrontendDefinition[]) {
   const ctx: DeployedContext<FrontendDefinition[]> = {
     workspaceId: "ws",
     profile: "ci",
+    // oxlint-disable-next-line typescript/no-deprecated -- The plugin still passes it on to callbacks.
     application,
     applications: [application, otherApplication],
+    staticWebsites: application.staticWebsites,
     configPath: application.configPath,
     pluginConfig: frontends,
     logger,
@@ -128,15 +130,15 @@ describe("frontendPlugin", () => {
         site: { name: "web" } as StaticWebsiteConfig,
         workingDir: "../web",
         distDir: "dist",
-        env: async ({ site, application, workspaceId, applications }) => {
+        env: async ({ site, workspaceId, applications, staticWebsites }) => {
           await Promise.resolve();
           return {
             FRONTEND_TEST_VALUE: [
               site.url,
-              application.url,
+              applications[0]?.url,
               workspaceId,
               applications.length,
-              application.staticWebsites.admin?.url,
+              staticWebsites.admin?.url,
               applications[1]?.staticWebsites.other?.url,
             ].join("|"),
           };
@@ -175,6 +177,43 @@ describe("frontendPlugin", () => {
     expect(env).not.toHaveBeenCalled();
     expect(exec).not.toHaveBeenCalled();
     expect(publish).not.toHaveBeenCalled();
+  });
+  test("publishes a site of its config that the registering application does not list", async () => {
+    const { ctx, publish, run } = setup([{ site: "web", distDir: "dist" }]);
+    // oxlint-disable-next-line typescript/no-deprecated -- The site must come from staticWebsites, not from this field.
+    ctx.application = {
+      name: "app",
+      configPath: ctx.configPath,
+      aiGateways: [],
+      staticWebsites: {},
+    };
+    await run();
+    expect(publish).toHaveBeenCalledExactlyOnceWith("web", join(root, "apps/backend/dist"));
+  });
+  test("builds a site of a config with several applications when nothing reads application", async () => {
+    const build = vi.fn<(context: FrontendBuildContext) => Promise<void>>();
+    const env = vi.fn(({ staticWebsites }: { staticWebsites: object }) => ({
+      SITES: Object.keys(staticWebsites).join(","),
+    }));
+    const { ctx, publish, run } = setup([{ site: "web", distDir: "dist", env, build }]);
+    Object.defineProperty(ctx, "application", {
+      get(): never {
+        throw new Error('"application" cannot be read because the config has 2 applications');
+      },
+    });
+    await run();
+    expect(env).toHaveBeenCalledWith(
+      expect.objectContaining({
+        staticWebsites: {
+          web: { name: "web", url: "https://web" },
+          admin: { name: "admin", url: "https://admin" },
+        },
+      }),
+    );
+    expect(build).toHaveBeenCalledWith(expect.objectContaining({ env: { SITES: "web,admin" } }));
+    // oxlint-disable-next-line typescript/no-deprecated -- Reading the deprecated field is what this test covers.
+    expect(() => build.mock.calls[0]?.[0].application).toThrow("2 applications");
+    expect(publish).toHaveBeenCalledOnce();
   });
   test("uploads existing assets without requiring a build command", async () => {
     const { logger, publish, exec, run } = setup([{ site: "web", distDir: "dist" }]);
@@ -248,8 +287,13 @@ describe("frontendPlugin", () => {
       await run();
       expect(build).toHaveBeenCalledExactlyOnceWith({
         site: expect.objectContaining({ name: "web", url: "https://web" }),
+        // oxlint-disable-next-line typescript/no-deprecated -- The plugin still passes it on to callbacks.
         application: ctx.application,
         applications: ctx.applications,
+        staticWebsites: {
+          web: { name: "web", url: "https://web" },
+          admin: { name: "admin", url: "https://admin" },
+        },
         workspaceId: "ws",
         profile: "ci",
         env: { FRONTEND_TEST_VALUE: "value" },
