@@ -422,9 +422,27 @@ describe("confirmWorkspaceTakeover", () => {
     expect(prompt.confirm).toHaveBeenCalledTimes(1);
   });
 
-  test.each(["yes", "dry-run"] as const)("does not ask with %s", async (mode) => {
-    await confirmWorkspaceTakeover(takeovers, mode);
+  test("does not ask with dry-run", async () => {
+    await confirmWorkspaceTakeover(takeovers, "dry-run");
     expect(prompt.confirm).not.toHaveBeenCalled();
+  });
+
+  test.for([
+    {
+      label: "deletes too",
+      takeovers,
+      message:
+        "Taking over these resources and deleting the ones listed as deleted (--yes flag specified)...",
+    },
+    {
+      label: "only takes over",
+      takeovers: takeovers.slice(0, 1),
+      message: "Moving these resources under this workspace config (--yes flag specified)...",
+    },
+  ])("does not ask with --yes and says that the deploy $label", async ({ takeovers, message }) => {
+    await confirmWorkspaceTakeover(takeovers, "yes");
+    expect(prompt.confirm).not.toHaveBeenCalled();
+    expect(logger.success).toHaveBeenCalledWith(message, { mode: "plain" });
   });
 
   test("cancels the deploy when the answer is no", async () => {

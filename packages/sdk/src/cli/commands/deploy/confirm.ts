@@ -267,9 +267,12 @@ export async function confirmWorkspaceTakeover(
 
   if (mode === "dry-run") return;
   if (mode === "yes") {
-    logger.success("Moving these resources under this workspace config (--yes flag specified)...", {
-      mode: "plain",
-    });
+    logger.success(
+      deletes.length > 0
+        ? "Taking over these resources and deleting the ones listed as deleted (--yes flag specified)..."
+        : "Moving these resources under this workspace config (--yes flag specified)...",
+      { mode: "plain" },
+    );
     return;
   }
 
