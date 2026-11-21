@@ -27,7 +27,7 @@ import { buildResolverOperationHookExpr } from "#/cli/shared/runtime-exprs";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { defineRequestComparison, isRequestUnchanged } from "./compare";
-import { configAuthNamespace } from "./deploy-application";
+import { configAuthNamespaces } from "./deploy-application";
 import { resolverFunctionName } from "./function-registry";
 import {
   formatChangeEntriesWithFunctionRegistry,
@@ -183,14 +183,14 @@ export async function planPipeline(
     existingServices,
   } = await planServices(client, workspaceId, context.owner, pipelines, previous?.existingServices);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
-  const authNamespace = configAuthNamespace(context);
+  const authNamespaces = configAuthNamespaces(context);
   const invokerMachineUsers = await listInvokerMachineUsers({
     client,
     workspaceId,
     invokers: pipelines.flatMap((pipeline) =>
       Object.values(pipeline.resolvers).map((resolver) => resolver.invoker),
     ),
-    authNamespace,
+    authNamespaces,
     plannedMachineUsers: context.plannedMachineUsers,
   });
   const { changeSet: resolverChangeSet, existingResolversByNamespace } = await planResolvers(
@@ -201,7 +201,7 @@ export async function planPipeline(
     context.executorUsedResolvers ?? new Set<string>(),
     deletedServices,
     application.env,
-    authNamespace,
+    authNamespaces,
     invokerMachineUsers,
     forceApplyAll,
     {
@@ -365,7 +365,7 @@ async function planResolvers(
   initialExecutorUsedResolvers: ReadonlySet<string>,
   deletedServices: ReadonlyArray<string>,
   env: ApplicationEnv,
-  authNamespace: string | undefined,
+  authNamespaces: ReadonlyArray<string>,
   invokerMachineUsers: InvokerMachineUsers | undefined,
   forceApplyAll = false,
   records: ResolverRecordInputs,
@@ -479,7 +479,7 @@ async function planResolvers(
             resolver,
             executorUsedResolvers,
             env,
-            authNamespace,
+            authNamespaces,
             invokerMachineUsers,
           ),
         },
@@ -555,7 +555,7 @@ function processResolver(
   resolver: Resolver,
   executorUsedResolvers: ReadonlySet<string>,
   env: ApplicationEnv,
-  authNamespace: string | undefined,
+  authNamespaces: ReadonlyArray<string>,
   invokerMachineUsers: InvokerMachineUsers | undefined,
 ): MessageInitShape<typeof PipelineResolverSchema> {
   const pipelines: MessageInitShape<typeof PipelineResolver_PipelineSchema>[] = [
@@ -571,7 +571,7 @@ function processResolver(
       postScript: `args.body`,
       invoker: normalizeInvoker(
         resolver.invoker,
-        authNamespace,
+        authNamespaces,
         `Resolver "${resolver.name}"`,
         invokerMachineUsers,
       ),

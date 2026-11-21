@@ -801,6 +801,98 @@ describe("planExecutor", () => {
     });
   });
 
+  describe("a workspace config with two applications and two Auth services", () => {
+    function workspaceContext(executor: Executor) {
+      const application = {
+        ...createMockApplication([executor]),
+        authServices: [
+          { config: { name: "shop-auth" } },
+          { config: { name: "admin-auth" } },
+        ] as unknown as Application["authServices"],
+      };
+      return {
+        client: createMockClient([]),
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+        owner: { kind: "workspace" },
+        applications: [
+          { name: "shop", subgraphs: [], authNamespace: "shop-auth", settings: {} },
+          { name: "admin", subgraphs: [], authNamespace: "admin-auth", settings: {} },
+        ],
+        plannedMachineUsers: new Map([
+          ["shop-auth", new Set(["kiosk"])],
+          ["admin-auth", new Set(["batch"])],
+        ]),
+      } satisfies PlanContext;
+    }
+
+    function executorWith(
+      trigger: Executor["trigger"],
+      operation: Executor["operation"] = { kind: "function", body: () => {} },
+    ): Executor {
+      return { name: "on-event", description: "test", disabled: false, trigger, operation };
+    }
+
+    test("asks for the Auth service of an authAccessToken trigger that names none", async () => {
+      const executor = executorWith({
+        kind: "authAccessToken",
+        events: ["auth.access_token.issued"],
+      });
+
+      await expect(planExecutor(workspaceContext(executor))).rejects.toMatchObject({
+        code: "EXECUTOR_AUTH_AMBIGUOUS",
+        context: { executor: "on-event", available: ["shop-auth", "admin-auth"] },
+      });
+    });
+
+    test("subscribes an authAccessToken trigger to the Auth service it names", async () => {
+      const executor = executorWith({
+        kind: "authAccessToken",
+        events: ["auth.access_token.issued"],
+        auth: "admin-auth",
+      });
+
+      const result = await planExecutor(workspaceContext(executor));
+
+      const triggerConfig = result.changeSet.creates[0]!.request.executor?.triggerConfig
+        ?.config as {
+        value: { typedConfig: { value: { namespaceName: string } } };
+      };
+      expect(triggerConfig.value.typedConfig.value.namespaceName).toBe("admin-auth");
+    });
+
+    test("runs as the machine user of the Auth service that defines a string invoker", async () => {
+      const executor = executorWith(
+        { kind: "schedule", timezone: "UTC", cron: "0 * * * *" },
+        { kind: "function", body: () => {}, invoker: "batch" },
+      );
+
+      const result = await planExecutor(workspaceContext(executor));
+
+      const targetConfig = result.changeSet.creates[0]!.request.executor?.targetConfig?.config as {
+        value: { invoker: unknown };
+      };
+      expect(targetConfig.value.invoker).toEqual({
+        namespace: "admin-auth",
+        machineUserName: "batch",
+      });
+    });
+
+    test("asks for the application of a GraphQL operation that names none", async () => {
+      const executor = executorWith(
+        { kind: "schedule", timezone: "UTC", cron: "0 * * * *" },
+        { kind: "graphql", query: "query { ok }" },
+      );
+
+      await expect(planExecutor(workspaceContext(executor))).rejects.toMatchObject({
+        code: "EXECUTOR_APP_NAME_REQUIRED",
+        context: { executor: "on-event", available: ["shop", "admin"] },
+      });
+    });
+  });
+
   describe("typed event config", () => {
     function getEventConfig(result: Awaited<ReturnType<typeof planExecutor>>): EventConfig {
       const create = result.changeSet.creates[0]!;

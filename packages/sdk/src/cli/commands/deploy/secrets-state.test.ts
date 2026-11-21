@@ -48,6 +48,20 @@ describe("secrets-state", () => {
     removeStateFiles();
   });
 
+  test("keeps the state of a workspace config apart from an application's in the same workspace", () => {
+    const workspaceScope = {
+      workspaceId: scopeA.workspaceId,
+      configPath: scopeA.configPath,
+      workspace: true,
+    } satisfies SecretsStateScope;
+    const state = { vaults: { app: { token: { hash: hashValue("v1") } } } };
+
+    saveSecretsState(workspaceScope, state);
+
+    expect(loadSecretsState(workspaceScope)).toEqual(state);
+    expect(loadSecretsState(scopeA)).toEqual({ vaults: {} });
+  });
+
   test.each([
     {
       name: "under the config's directory when the output directory is relative",
