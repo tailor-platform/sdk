@@ -97,6 +97,7 @@ import {
 import type { MigrationScriptForm } from "#/cli/commands/tailordb/migrate/script-form";
 import type { Application, ServiceSettings } from "#/cli/services/application";
 import type { Spinner } from "#/cli/shared/spinner";
+import type { AuthInvokerObject } from "#/types/auth.generated";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
 
 // ============================================================================
@@ -128,7 +129,7 @@ export interface MigrationContext {
   client: OperatorClient;
   workspaceId: string;
   /** Machine user, with its Auth namespace, that runs the scripts of each namespace. */
-  invokerByNamespace: ReadonlyMap<string, ScriptInvoker>;
+  invokerByNamespace: ReadonlyMap<string, AuthInvokerObject>;
   env: Record<string, string | number | boolean>;
   /** Config file the deploy loaded. */
   configPath: string;
@@ -1352,7 +1353,7 @@ export async function executeMigrations(
     };
 
     logger.info(
-      `Using machine user: ${styles.bold(invoker.machineUserName)} for namespace '${namespace}'`,
+      `Using machine user: ${styles.bold(invoker.machineUserName)} of auth '${invoker.namespace}' for namespace '${namespace}'`,
     );
 
     for (const migration of namespaceMigrations) {
@@ -1428,33 +1429,6 @@ export async function executeMigrations(
   }
 }
 
-/**
- * Get the machine user name for migration execution
- *
- * Priority:
- * 1. machineUser from migration config (if set)
- * 2. First machine user from auth config
- * @param {object | undefined} migrationConfig - Migration config for namespace
- * @param {string[] | undefined} machineUsers - Machine users from auth config
- * @returns {string | undefined} Machine user name or undefined if none available
- */
-export function getMigrationMachineUser(
-  migrationConfig: { machineUser?: string } | undefined,
-  machineUsers: string[] | undefined,
-): string | undefined {
-  // Priority 1: Explicit config
-  if (migrationConfig?.machineUser) {
-    return migrationConfig.machineUser;
-  }
-
-  // Priority 2: First machine user from auth
-  if (machineUsers && machineUsers.length > 0) {
-    return machineUsers[0];
-  }
-
-  return undefined;
-}
-
 /** The auth, config, and environment variables a deploy runs its migration scripts with. */
 interface MigrationRunSource {
   application: Pick<Application, "authServices" | "env">;
@@ -1463,15 +1437,9 @@ interface MigrationRunSource {
   migrationMachineUserOverride?: string;
 }
 
-/** A machine user, with the Auth namespace that defines it. */
-export interface ScriptInvoker {
-  readonly namespace: string;
-  readonly machineUserName: string;
-}
-
 /** Machine user, with its Auth namespace, that runs the migration scripts of each namespace. */
 export interface MigrationMachineUsers {
-  byNamespace: ReadonlyMap<string, ScriptInvoker>;
+  byNamespace: ReadonlyMap<string, AuthInvokerObject>;
 }
 
 /**
@@ -1518,14 +1486,15 @@ export function resolveScriptMachineUsers(
   }
   const machineUsersOf = (auth: (typeof authServices)[number]) =>
     Object.keys(auth.config.machineUsers ?? {});
-  const byNamespace = new Map<string, ScriptInvoker>();
+  const byNamespace = new Map<string, AuthInvokerObject>();
   const missing: string[] = [];
   const undefinedMachineUsers: NamespaceMachineUser[] = [];
   const ambiguous: Array<NamespaceMachineUser & { authNamespaces: string[] }> = [];
   for (const namespace of namespaces) {
     const migrationConfig = (source.config.db?.[namespace] as TailorDBServiceConfig | undefined)
       ?.migration;
-    const configured = source.migrationMachineUserOverride ?? migrationConfig?.machineUser;
+    const configured =
+      source.migrationMachineUserOverride ?? (migrationConfig?.machineUser || undefined);
     if (configured === undefined) {
       const machineUser = otherAuths.length === 0 ? machineUsersOf(onlyAuth)[0] : undefined;
       if (machineUser === undefined) missing.push(namespace);
@@ -1570,7 +1539,7 @@ export function resolveScriptMachineUsers(
           ? `Machine user for migration execution is not defined in auth '${onlyAuth.config.name}': ${described}.`
           : `Machine user for migration execution is not defined in any of the Auth services ${authNamespaces.join(", ")}: ${described}.`,
       suggestion: undefinedMachineUserSuggestion(
-        authServices.flatMap(machineUsersOf),
+        [...new Set(authServices.flatMap(machineUsersOf))],
         source.migrationMachineUserOverride,
       ),
       context:
