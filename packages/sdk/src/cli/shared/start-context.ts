@@ -27,6 +27,11 @@ export interface StartContext {
   authNamespace?: string;
   /** Name of the job function a job is started under (default: the job's own name) */
   jobFunctionName?: (jobName: string) => string;
+  /**
+   * Auth namespaces that define each machine user, for a config with several Auth services, whose
+   * string-literal invokers are resolved by name.
+   */
+  machineUserAuthNamespaces?: ReadonlyMap<string, readonly string[]>;
   tsconfigCache?: TsconfigLookupCache;
 }
 
@@ -167,5 +172,8 @@ export function serializeStartContext(context: StartContext | undefined): string
       sortedTargets(bindings.localBindings),
       sortedTargets(bindings.exports),
     ]);
-  return JSON.stringify(modules) + (context.authNamespace ?? "");
+  const machineUsers = context.machineUserAuthNamespaces
+    ? JSON.stringify([...context.machineUserAuthNamespaces].toSorted())
+    : "";
+  return JSON.stringify(modules) + (context.authNamespace ?? "") + machineUsers;
 }
