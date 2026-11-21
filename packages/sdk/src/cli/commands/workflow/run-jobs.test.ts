@@ -86,7 +86,7 @@ describe("bundleWorkflowRunJobs", () => {
     await expect(
       bundleWorkflowRunJobs({ target, runId: "r1", jobName: "missing" }),
     ).rejects.toMatchObject({
-      code: "WORKFLOW_RUN_JOB_NOT_FOUND",
+      code: "WORKFLOW_JOB_NOT_FOUND",
       details: expect.stringContaining("validate-order"),
     });
   });
@@ -155,6 +155,28 @@ export const aJob = createWorkflowJob({
 
     const bundled = await bundleWorkflowRunJobs({ target, runId: "r1", jobName: "a-job" });
     expect(bundled.jobs.map((j) => j.jobName).toSorted()).toEqual(["a-job", "b-job"]);
+  });
+
+  test("accepts a job the selected file defines when a configured workflow file re-exports it", async () => {
+    using tmp = tempDir("workflow-run-jobs-");
+    const { target } = setup(tmp.dir, {
+      "b.ts": `import { createWorkflowJob } from "@tailor-platform/sdk";
+export const bJob = createWorkflowJob({ name: "b-job", body: () => "b" });
+`,
+      "x.ts": `import { createWorkflowJob } from "@tailor-platform/sdk";
+import { bJob } from "./b";
+export { bJob };
+export const aJob = createWorkflowJob({
+  name: "a-job",
+  body: async () => ({ saw: await bJob.start() }),
+});
+`,
+    });
+    (target as { filePath: string }).filePath = path.join(tmp.dir, "b.ts");
+    (target.config as { workflow?: unknown }).workflow = { files: ["x.ts"] };
+
+    const bundled = await bundleWorkflowRunJobs({ target, runId: "r1", jobName: "b-job" });
+    expect(bundled.jobs.map((j) => j.jobName)).toEqual(["b-job"]);
   });
 
   test("reads the file it was given, not another one its name matches as a pattern", async () => {

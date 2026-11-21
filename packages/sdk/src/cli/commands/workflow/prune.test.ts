@@ -1,9 +1,9 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { runCommand as invoke } from "@politty/zod";
 import { describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { reclaimWorkflowRuns } from "#/cli/shared/workflow-run";
 import { pruneCommand } from "./prune";
 
@@ -27,9 +27,7 @@ const WORKSPACE_ID = "12345678-1234-4abc-8def-123456789012";
 const leftover = { kind: "job function", name: "tmp-run-r1-orphan" } as const;
 
 function prepare(result: Partial<Awaited<ReturnType<typeof reclaimWorkflowRuns>>> = {}) {
-  vi.mocked(initOperatorClient).mockResolvedValue(
-    {} as Awaited<ReturnType<typeof initOperatorClient>>,
-  );
+  vi.mocked(initOperatorClient).mockResolvedValue(mockOperatorClient({}));
   vi.mocked(reclaimWorkflowRuns)
     .mockReset()
     .mockResolvedValue({ removed: [], keptUnlabeled: [], removedUnlabeled: [], ...result });

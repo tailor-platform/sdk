@@ -1,8 +1,8 @@
 /**
  * Lifecycle of the temporary resources behind `tailor workflow run`
  *
- * A run registers a script as a function, a job function and a workflow, starts
- * it, and waits. The resources carry the run labels and no owner label, so a
+ * A run registers a workflow job and the jobs it starts as functions, job functions and a
+ * workflow, starts it, and waits. The resources carry the run labels and no owner label, so a
  * deploy never claims them while a run is going.
  */
 
@@ -63,6 +63,9 @@ const OUTCOME_READ_TIMEOUT_MS = 60_000;
 /** Longest poll interval a waiter may use: it must poll again well within {@link FINISHED_GRACE_MS}. */
 const MAX_POLL_INTERVAL_MS = 60_000;
 
+/** Longest wait a timer can count: a longer one ends at once. */
+const MAX_WAIT_TIMEOUT_MS = 2_147_483_647;
+
 interface StartWorkflowRunBaseParams {
   client: OperatorClient;
   workspaceId: string;
@@ -73,23 +76,13 @@ interface StartWorkflowRunBaseParams {
   arg: Jsonifiable | undefined;
 }
 
-/** A script that exports `main`, run whole. */
-interface ScriptRunParams extends StartWorkflowRunBaseParams {
-  kind: "script";
-  /** Bundled script code exporting `main` */
-  code: string;
-}
-
 /** A workflow job together with the jobs it starts. */
-interface JobRunParams extends StartWorkflowRunBaseParams {
-  kind: "job";
+export interface StartWorkflowRunParams extends StartWorkflowRunBaseParams {
   /** Job the workflow starts with */
   mainJobName: string;
   /** Every job the run needs, the main one included, each bundled to start the others by their run names */
   jobs: readonly { jobName: string; code: string }[];
 }
-
-export type StartWorkflowRunParams = ScriptRunParams | JobRunParams;
 
 /** A run the platform has accepted. */
 export interface StartedWorkflowRun {
@@ -98,8 +91,8 @@ export interface StartedWorkflowRun {
   name: string;
   /** Names of the run's functions; each function has a job function of the same name */
   functionNames: string[];
-  /** Workflow job each function runs, by function name; empty for a whole-file run */
-  jobNames?: Record<string, string>;
+  /** Workflow job each function runs, by function name */
+  jobNames: Record<string, string>;
   workflowId: string;
   executionId: string;
 }
@@ -113,10 +106,6 @@ function runFunctions(params: StartWorkflowRunParams): {
   functions: RunFunction[];
   mainFunctionName: string;
 } {
-  if (params.kind === "script") {
-    const name = workflowRunResourceName(params.runId);
-    return { functions: [{ name, code: params.code }], mainFunctionName: name };
-  }
   return {
     functions: params.jobs.map(({ jobName, code }) => ({
       name: workflowRunJobFunctionName(params.runId, jobName),
@@ -127,22 +116,44 @@ function runFunctions(params: StartWorkflowRunParams): {
 }
 
 /**
- * Register the script, or the job and the jobs it starts, as a temporary
- * workflow and start it once.
- * @param params - Script or jobs, run id and argument
+ * Refuse a run in which two jobs would be registered under one name, which the Platform rejects
+ * once the first of them is registered.
+ * @param params - Jobs and run id
+ */
+function assertDistinctFunctionNames(params: StartWorkflowRunParams): void {
+  const jobByName = new Map<string, string>();
+  for (const { jobName } of params.jobs) {
+    const name = workflowRunJobFunctionName(params.runId, jobName);
+    const other = jobByName.get(name);
+    if (other !== undefined) {
+      throw CLIError({
+        code: "WORKFLOW_RUN_JOB_NAME_COLLISION",
+        message: `The jobs "${other}" and "${jobName}" would both be registered as "${name}".`,
+        suggestion: "Rename one of the jobs so that their names differ.",
+        command: "workflow run",
+      });
+    }
+    jobByName.set(name, jobName);
+  }
+}
+
+/**
+ * Register the job and the jobs it starts as a temporary workflow and start it once.
+ * @param params - Jobs, run id and argument
  * @returns The started run
  */
 export async function startWorkflowRun(
   params: StartWorkflowRunParams,
 ): Promise<StartedWorkflowRun> {
-  const { client, workspaceId, runId, kind } = params;
+  const { client, workspaceId, runId } = params;
   await assertMachineUserExists({ client, workspaceId, invoker: params.invoker });
   const name = workflowRunResourceName(runId);
   const { functions, mainFunctionName } = runFunctions(params);
+  assertDistinctFunctionNames(params);
   const functionNames = functions.map((item) => item.name);
   const owner = {
     owner: undefined,
-    labels: workflowRunLabels({ kind, runId }),
+    labels: workflowRunLabels({ runId }),
   };
   const created: CreatedTemporaryWorkflow = {};
   const uploaded: string[] = [];
@@ -187,12 +198,9 @@ export async function startWorkflowRun(
       authInvoker: params.invoker,
       arg: params.arg === undefined ? undefined : JSON.stringify(params.arg),
     });
-    const jobNames =
-      params.kind === "job"
-        ? Object.fromEntries(
-            params.jobs.map(({ jobName }) => [workflowRunJobFunctionName(runId, jobName), jobName]),
-          )
-        : {};
+    const jobNames = Object.fromEntries(
+      params.jobs.map(({ jobName }) => [workflowRunJobFunctionName(runId, jobName), jobName]),
+    );
     return { runId, name, functionNames, jobNames, workflowId, executionId };
   } catch (error) {
     if (startSent && !isStartRefused(error)) {
@@ -293,7 +301,7 @@ export async function awaitWorkflowRun(
       execution,
       pollInterval,
       jobLabel: (name) =>
-        started.jobNames?.[name] ??
+        started.jobNames[name] ??
         (name.startsWith(jobPrefix) ? name.slice(jobPrefix.length) : name),
       deadline: Date.now() + (params.outcomeTimeoutMs ?? OUTCOME_READ_TIMEOUT_MS),
     });
@@ -509,8 +517,7 @@ async function listRunResources(client: OperatorClient, workspaceId: string) {
     const response = await getOrNull(() =>
       client.getMetadata({ trn: resourceTrn(workspaceId, METADATA_KIND[item.kind], item.name) }),
     );
-    if (!response) continue;
-    resources.push({ ...item, labels: response.metadata?.labels ?? {} });
+    resources.push({ ...item, labels: response?.metadata?.labels ?? {} });
   }
   return resources;
 }
@@ -703,6 +710,20 @@ export function assertPollInterval(intervalMs: number): void {
     suggestion:
       "Use a shorter --interval: a finished run is only kept for a few minutes, " +
       "so a waiter polling less often could lose its result.",
+    command: "workflow run",
+  });
+}
+
+/**
+ * Refuse a wait longer than a timer can count, which would end the wait as soon as the run starts.
+ * @param timeoutMs - Longest time to wait in milliseconds, or infinity to wait without a limit
+ */
+export function assertWaitTimeout(timeoutMs: number): void {
+  if (timeoutMs <= MAX_WAIT_TIMEOUT_MS || timeoutMs === Number.POSITIVE_INFINITY) return;
+  throw CLIError({
+    code: "WORKFLOW_RUN_TIMEOUT_TOO_LONG",
+    message: `--timeout must not exceed ${MAX_WAIT_TIMEOUT_MS} ms (about 24 days).`,
+    suggestion: "Use a shorter --timeout, or omit it to wait without a limit.",
     command: "workflow run",
   });
 }

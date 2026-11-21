@@ -14,12 +14,13 @@ import {
 } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, isCLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import {
   assertPollInterval,
+  assertWaitTimeout,
   assertWorkflowArg,
   awaitWorkflowRun,
   pruneHint,
@@ -91,7 +92,7 @@ export const runCommand = defineAppCommand({
 
 A single job is ended by the Platform after 5 minutes, and the run is reported as failed with a timeout error. The command waits until the run ends; \`--timeout\` limits how long it waits, not how long the jobs may run.
 
-The file must export workflow jobs created with \`createWorkflowJob\`; a file that defines no workflow job is refused. Without \`--job\`, the run starts from the main job of the workflow the file exports as default, or from the only job when the file defines just one; \`--job\` selects another job to start from. The jobs it starts run from your files, not the ones already deployed under the same names, and the jobs of files in the config's \`workflow.files\` can be started too. The input must be a JSON object (\`null\` is accepted too): unlike \`function run\`, a number, string, boolean, or array is refused before anything is created. \`tailor workflow scaffold\` scaffolds a workflow to start from.
+The file must export workflow jobs created with \`createWorkflowJob\`; a file that defines no workflow job is refused. Without \`--job\`, the run starts from the main job of the workflow the file exports as default, or from the only job when the file defines just one; \`--job\` selects another job to start from. A workflow whose main job is defined in another file is refused: pass the file that defines the job. The jobs it starts run from your files, not the ones already deployed under the same names, and the jobs of files in the config's \`workflow.files\` can be started too. The input must be a JSON object (\`null\` is accepted too): unlike \`function run\`, a number, string, boolean, or array is refused before anything is created. \`tailor workflow scaffold\` scaffolds a workflow to start from.
 
 When the wait stops (\`--timeout\` elapsed), the run keeps going and its temporary resources stay in place. The command prints the run ID; read the outcome with \`tailor workflow executions\`. \`${PRUNE_COMMAND}\` removes the resources of runs that have finished, and the next \`workflow run\` does the same before it starts. A run that finished within the last few minutes is left alone by that automatic sweep (and by \`tailor deploy\`), so the command still waiting for it can read its result; \`${PRUNE_COMMAND}\` removes it at once.`,
   examples: [
@@ -108,6 +109,9 @@ When the wait stops (\`--timeout\` elapsed), the run keeps going and its tempora
     await assertWritable({ profile: args.profile });
     const pollInterval = parseDuration(args.interval);
     assertPollInterval(pollInterval);
+    const timeoutMs =
+      args.timeout === undefined ? Number.POSITIVE_INFINITY : parseDuration(args.timeout);
+    assertWaitTimeout(timeoutMs);
     const { client, workspaceId } = await loadOperatorWorkspaceContext({
       profile: args.profile,
       workspaceId: args["workspace-id"],
@@ -141,25 +145,28 @@ When the wait stops (\`--timeout\` elapsed), the run keeps going and its tempora
       authConfig: config.auth,
     });
     assertJobSource({ filePath, job: args.job });
+    const workflowRequired = (found?: string) =>
+      CLIError({
+        code: "WORKFLOW_RUN_WORKFLOW_REQUIRED",
+        message: `${filePath} defines no workflow job${found === undefined ? "" : ` (found: ${found})`}.`,
+        suggestion:
+          "Export a workflow job created with createWorkflowJob; `tailor workflow scaffold` scaffolds one.",
+        command: "workflow run",
+      });
     const detected = await detectFunctionType({
       filePath,
       jobName: args.job,
       jobFlag: "--job",
       useWorkflowMainJob: true,
+    }).catch((error: unknown) => {
+      throw isCLIError(error) && error.code === "FUNCTION_TYPE_UNDETECTED"
+        ? workflowRequired()
+        : error;
     });
-    if (detected.type !== "workflow-job") {
-      throw CLIError({
-        code: "WORKFLOW_RUN_WORKFLOW_REQUIRED",
-        message: `${filePath} defines no workflow job (found: ${detected.type}).`,
-        suggestion:
-          "Export a workflow job created with createWorkflowJob; `tailor workflow scaffold` scaffolds one.",
-        command: "workflow run",
-      });
-    }
+    if (detected.type !== "workflow-job") throw workflowRequired(detected.type);
     const target: FunctionRunTarget = {
       filePath,
       jobName: detected.name,
-      jobFlag: "--job",
       config,
       kyselyTemporal: resolvePluginConfig(plugins, KyselyGeneratorID)?.temporal ?? false,
       client,
@@ -184,7 +191,6 @@ When the wait stops (\`--timeout\` elapsed), the run keeps going and its tempora
       sourceFiles: [filePath],
     };
     const source: RunSource = {
-      kind: "job",
       mainJobName: bundled.mainJobName,
       jobs: bundled.jobs,
     };
@@ -228,8 +234,7 @@ When the wait stops (\`--timeout\` elapsed), the run keeps going and its tempora
       workspaceId,
       started,
       pollInterval,
-      timeoutMs:
-        args.timeout === undefined ? Number.POSITIVE_INFINITY : parseDuration(args.timeout),
+      timeoutMs,
     }).finally(() => process.off("SIGINT", onInterrupt));
 
     if (outcome.state === "timedOut") {
@@ -289,7 +294,6 @@ When the wait stops (\`--timeout\` elapsed), the run keeps going and its tempora
 });
 
 type RunSource = {
-  kind: "job";
   mainJobName: string;
   jobs: Array<{ jobName: string; code: string }>;
 };
@@ -325,14 +329,14 @@ interface JobSourceParams {
 }
 
 /**
- * Refuse `--job` for a pre-bundled file, which holds no workflow job to choose from.
+ * Refuse a pre-bundled file, which holds no workflow job source to run.
  * @param params - File and `--job`
  */
 export function assertJobSource(params: JobSourceParams): void {
   if (!params.filePath.endsWith(".js")) return;
   throw CLIError({
-    code: "WORKFLOW_RUN_JOB_NOT_FOUND",
-    message: `A workflow job cannot be selected in a pre-bundled file${params.job === undefined ? "" : ` ("${params.job}")`}.`,
+    code: "WORKFLOW_RUN_BUNDLED_FILE",
+    message: `${params.filePath} is a pre-bundled file, which holds no workflow job source to run${params.job === undefined ? "" : ` ("${params.job}")`}.`,
     suggestion: "Pass the TypeScript source (.ts) that exports the workflow job.",
     command: "workflow run",
   });

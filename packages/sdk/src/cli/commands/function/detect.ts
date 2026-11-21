@@ -108,11 +108,10 @@ export async function detectFunctionType(
   }
 
   // 3. Check workflow jobs (scan all named exports)
-  const workflowJobResult = detectWorkflowJob(
-    module,
-    jobName ?? (useWorkflowMainJob ? workflowMainJobName(module.default) : undefined),
-    jobFlag,
-  );
+  const mainJobName =
+    jobName === undefined && useWorkflowMainJob ? workflowMainJobName(module.default) : undefined;
+  if (mainJobName !== undefined) assertMainJobExported(module, mainJobName, jobFlag);
+  const workflowJobResult = detectWorkflowJob(module, jobName ?? mainJobName, jobFlag);
   if (workflowJobResult) {
     return workflowJobResult;
   }
@@ -147,6 +146,31 @@ function workflowMainJobName(workflow: unknown): string | undefined {
   }
   const mainJob = WorkflowJobSchema.safeParse(workflow.mainJob);
   return mainJob.success ? mainJob.data.name : undefined;
+}
+
+/**
+ * Refuse a workflow whose main job the file does not export, because it is defined in another
+ * file and a run takes its jobs from the file that defines them.
+ * @param module - The imported module
+ * @param mainJobName - Name of the main job of the workflow the module exports as default
+ * @param jobFlag - Flag the asking command selects a job with, named in the hint
+ */
+function assertMainJobExported(
+  module: Record<string, unknown>,
+  mainJobName: string,
+  jobFlag: string,
+): void {
+  const exported = Object.entries(module).some(
+    ([exportName, exportValue]) =>
+      exportName !== "default" &&
+      WorkflowJobSchema.safeParse(exportValue).data?.name === mainJobName,
+  );
+  if (exported) return;
+  throw CLIError({
+    code: "WORKFLOW_RUN_MAIN_JOB_IMPORTED",
+    message: `The main job "${mainJobName}" of the workflow this file exports is defined in another file.`,
+    suggestion: `Run the file that defines the job, or select a job this file defines with ${jobFlag}.`,
+  });
 }
 
 /**

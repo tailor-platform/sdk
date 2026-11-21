@@ -1,7 +1,9 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
+import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { bundleWorkflowJobs } from "#/cli/services/workflow/bundler";
+import { findAllJobs } from "#/cli/services/workflow/job-detector";
 import { createWorkflowService, type CollectedJob } from "#/cli/services/workflow/service";
 import { buildOptionsOf, projectSourcesOf } from "#/cli/shared/build-options";
 import { resolveBundleLogLevel } from "#/cli/shared/bundle-log-level";
@@ -45,9 +47,19 @@ function realPath(filePath: string): string {
   }
 }
 
+async function declaresJob(job: CollectedJob): Promise<boolean> {
+  const source = await fs.promises.readFile(job.sourceFile, "utf-8");
+  const { program } = parseSync(job.sourceFile, source);
+  return findAllJobs(program, source).some(
+    (found) => found.name === job.name && found.exportName === job.exportName,
+  );
+}
+
 /**
- * Drop a job that another entry of the list declares again as the very same definition, as a
- * file does when it re-exports a job of another file. The later entry stays.
+ * Drop a job that another entry of the list holds as the very same definition, as a file does
+ * when it re-exports a job of another file. The entry whose file declares the job stays, so the
+ * bundler finds the declaration where it looks for it; when no file declares it under its export
+ * name, the later entry stays.
  * @param jobs - Jobs of the file and of the application's workflow files
  * @returns The jobs without the repeated definitions
  */
@@ -60,16 +72,17 @@ async function withoutReExports(jobs: CollectedJob[]): Promise<CollectedJob[]> {
       return module[job.exportName];
     }),
   );
-  return jobs.filter(
-    (job, index) =>
-      !jobs.some(
-        (other, later) =>
-          later > index &&
-          other.name === job.name &&
-          definitions[later] !== undefined &&
-          definitions[later] === definitions[index],
-      ),
-  );
+  const declared = await Promise.all(jobs.map(declaresJob));
+  const sameDefinition = (job: CollectedJob, index: number, other: CollectedJob, at: number) =>
+    at === index ||
+    (other.name === job.name &&
+      definitions[at] !== undefined &&
+      definitions[at] === definitions[index]);
+  return jobs.filter((job, index) => {
+    const group = jobs.flatMap((other, at) => (sameDefinition(job, index, other, at) ? [at] : []));
+    const keeper = group.find((at) => declared[at]) ?? group.at(-1);
+    return keeper === index;
+  });
 }
 
 /**
@@ -119,7 +132,7 @@ export async function bundleWorkflowRunJobs(
   if (!inFile.some((job) => job.name === jobName)) {
     const available = inFile.map((job) => `  - "${job.name}" (export: ${job.exportName})`);
     throw CLIError({
-      code: "WORKFLOW_RUN_JOB_NOT_FOUND",
+      code: "WORKFLOW_JOB_NOT_FOUND",
       message: `Workflow job "${jobName}" not found in ${path.basename(ownFile)}.`,
       details: available.length > 0 ? `Available jobs:\n${available.join("\n")}` : undefined,
       suggestion: "Export a createWorkflowJob with that name from the file, or run without --job.",

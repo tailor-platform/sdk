@@ -30,39 +30,21 @@ describe("createRunId", () => {
 });
 
 describe("workflowRunLabels", () => {
-  test("marks a whole-file run with the run key", () => {
-    expect(workflowRunLabels({ kind: "script", runId: "r1" })).toEqual({
-      "sdk-workflow-run": "r1",
-    });
-  });
-
-  test("marks a single-job run with the job key only", () => {
-    expect(workflowRunLabels({ kind: "job", runId: "r1" })).toEqual({
+  test("marks a run with the job key", () => {
+    expect(workflowRunLabels({ runId: "r1" })).toEqual({
       "sdk-workflow-run-job": "r1",
     });
   });
 
   test("never carries an owner label, so a deploy does not treat the resource as an orphan of its app", () => {
-    for (const kind of ["script", "job"] as const) {
-      const keys = Object.keys(workflowRunLabels({ kind, runId: "r1" }));
-      expect(keys.filter((key) => key === "sdk-name" || key === "sdk-app-id")).toEqual([]);
-    }
+    const keys = Object.keys(workflowRunLabels({ runId: "r1" }));
+    expect(keys.filter((key) => key === "sdk-name" || key === "sdk-app-id")).toEqual([]);
   });
 });
 
 describe("readWorkflowRunMarker", () => {
-  test("reads the kind and run id back from the labels it wrote", () => {
-    for (const kind of ["script", "job"] as const) {
-      const labels = workflowRunLabels({ kind, runId: "r42" });
-      expect(readWorkflowRunMarker(labels)).toEqual({ kind, runId: "r42" });
-    }
-  });
-
-  test("matches keys exactly: the job key starts with the run key but is not a run", () => {
-    expect(readWorkflowRunMarker({ "sdk-workflow-run-job": "r1" })).toEqual({
-      kind: "job",
-      runId: "r1",
-    });
+  test("reads the run id back from the labels it wrote", () => {
+    expect(readWorkflowRunMarker(workflowRunLabels({ runId: "r42" }))).toEqual({ runId: "r42" });
   });
 
   test("ignores a key that only starts with the run key", () => {

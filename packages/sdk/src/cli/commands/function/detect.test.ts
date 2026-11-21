@@ -268,6 +268,32 @@ export default {
         );
       });
 
+      const importedMain = `export default {
+  name: "my-workflow",
+  mainJob: { name: "job-b", start: () => {}, body: () => {} },
+  start: () => {},
+};
+`;
+
+      test("is refused with a code of its own when the file only imports it", async () => {
+        const filePath = writeFile("workflow-main-imported.mjs", importedMain);
+
+        await expect(detectFunctionType({ filePath, useWorkflowMainJob: true })).rejects.toThrow(
+          expect.objectContaining({ code: "WORKFLOW_RUN_MAIN_JOB_IMPORTED" }),
+        );
+      });
+
+      test("is refused the same way when the file exports another job but not the main one", async () => {
+        const filePath = writeFile(
+          "workflow-main-imported-other.mjs",
+          `export const job_a = { name: "job-a", start: () => {}, body: () => {} };\n${importedMain}`,
+        );
+
+        await expect(detectFunctionType({ filePath, useWorkflowMainJob: true })).rejects.toThrow(
+          expect.objectContaining({ code: "WORKFLOW_RUN_MAIN_JOB_IMPORTED" }),
+        );
+      });
+
       test("yields to a job name that was given", async () => {
         const filePath = writeFile("workflow-main-named.mjs", workflowSource);
 

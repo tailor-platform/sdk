@@ -9,20 +9,11 @@ import * as crypto from "node:crypto";
  * from under a run that is still going.
  */
 
-const workflowRunLabelKey = "sdk-workflow-run";
-const workflowRunJobLabelKey = "sdk-workflow-run-job";
-
-type WorkflowRunKind = "script" | "job";
+const workflowRunLabelKey = "sdk-workflow-run-job";
 
 export interface WorkflowRunMarker {
-  kind: WorkflowRunKind;
   runId: string;
 }
-
-const KEY_BY_KIND: Record<WorkflowRunKind, string> = {
-  script: workflowRunLabelKey,
-  job: workflowRunJobLabelKey,
-};
 
 /**
  * Create the id that ties one run to its temporary resources.
@@ -39,28 +30,23 @@ export function createRunId(now: Date, random: string): string {
 
 /**
  * Build the labels that mark a run's resources.
- * @param marker - Kind and id of the run
+ * @param marker - Id of the run
  * @returns Labels to write
  */
 export function workflowRunLabels(marker: WorkflowRunMarker): Record<string, string> {
-  return { [KEY_BY_KIND[marker.kind]]: marker.runId };
+  return { [workflowRunLabelKey]: marker.runId };
 }
 
 /**
- * Read which run a resource belongs to. Keys are compared whole because the
- * job key begins with the run key.
+ * Read which run a resource belongs to.
  * @param labels - Labels of the resource
  * @returns The run, or undefined for a resource that is not a `workflow run` one
  */
 export function readWorkflowRunMarker(
   labels: Record<string, string> | undefined,
 ): WorkflowRunMarker | undefined {
-  if (!labels) return undefined;
-  for (const kind of ["script", "job"] as const) {
-    const runId = labels[KEY_BY_KIND[kind]];
-    if (runId) return { kind, runId };
-  }
-  return undefined;
+  const runId = labels?.[workflowRunLabelKey];
+  return runId ? { runId } : undefined;
 }
 
 const RESOURCE_PREFIX = "tmp-run-";
@@ -70,8 +56,7 @@ const MAX_NAME_LENGTH = 63;
 const SUFFIX_LENGTH = 8;
 
 /**
- * Name of the workflow of one run, and of the function and job function of a
- * whole-file run.
+ * Name of the workflow of one run.
  * @param runId - Id of the run
  * @returns Resource name
  */

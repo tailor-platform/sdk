@@ -33,6 +33,7 @@ import {
   argumentToSend,
   executeFunction,
   executionRecord,
+  type ArgCommandName,
   type FunctionArg,
   type FunctionRunTarget,
   parseArgOption,
@@ -281,7 +282,7 @@ interface ArgOptions {
   /** Whether `--watch` is set, which reads the argument file on every run instead */
   watch: boolean;
   /** Command the options belong to, named in the conflict error */
-  command: "function run" | "workflow run";
+  command: ArgCommandName;
 }
 
 interface ResolvedArgOptions {

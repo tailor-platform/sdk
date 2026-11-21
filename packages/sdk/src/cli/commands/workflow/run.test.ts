@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { extractFields, runCommand as invoke } from "@politty/zod";
@@ -12,6 +11,7 @@ import { loadMachineUserName } from "#/cli/shared/context";
 import { CLIError } from "#/cli/shared/errors";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import {
   awaitWorkflowRun,
   reclaimFinishedWorkflowRuns,
@@ -57,6 +57,7 @@ const started = {
   runId: "r00abc-xyz",
   name: "tmp-run-r00abc-xyz",
   functionNames: ["tmp-run-r00abc-xyz"],
+  jobNames: {},
   workflowId: "wf-1",
   executionId: "exec-1",
 };
@@ -66,8 +67,12 @@ describe("assertJobSource", () => {
     expect(() => assertJobSource({ filePath: "/p/jobs.ts", job: "greet" })).not.toThrow();
   });
 
-  test("rejects --job for a pre-bundled file, which has no jobs to choose from", () => {
-    expect(() => assertJobSource({ filePath: "/p/slow.js", job: "greet" })).toThrow(/pre-bundled/);
+  test("rejects a pre-bundled file with a code of its own, whether or not --job is given", () => {
+    for (const job of [undefined, "greet"]) {
+      expect(() => assertJobSource({ filePath: "/p/slow.js", job })).toThrow(
+        expect.objectContaining({ code: "WORKFLOW_RUN_BUNDLED_FILE" }),
+      );
+    }
   });
 });
 
@@ -99,9 +104,9 @@ describe("workflow run", () => {
       plugins: [],
     } as unknown as Awaited<ReturnType<typeof loadConfig>>);
     vi.mocked(loadMachineUserName).mockResolvedValue(undefined);
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      getAuthMachineUser: vi.fn().mockResolvedValue({ machineUser: { id: "mu-1" } }),
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    vi.mocked(initOperatorClient).mockResolvedValue(
+      mockOperatorClient({ getAuthMachineUser: { machineUser: { id: "mu-1" } } }),
+    );
     vi.mocked(detectFunctionType).mockResolvedValue({
       type: "workflow-job",
       name: "greet",
@@ -168,7 +173,6 @@ describe("workflow run", () => {
     expect(startWorkflowRun).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceId: WORKSPACE_ID,
-        kind: "job",
         mainJobName: "greet",
         arg: { from: "2026-01-01" },
       }),
@@ -201,7 +205,6 @@ describe("workflow run", () => {
     );
     expect(startWorkflowRun).toHaveBeenCalledWith(
       expect.objectContaining({
-        kind: "job",
         mainJobName: "greet",
         jobs: [
           { jobName: "greet", code: "// greet" },
@@ -383,7 +386,7 @@ describe("workflow run", () => {
 
   test("refuses --job when the file has no such job, before creating anything", async () => {
     vi.mocked(bundleWorkflowRunJobs).mockRejectedValue(
-      CLIError({ code: "WORKFLOW_RUN_JOB_NOT_FOUND", message: "Workflow job not found." }),
+      CLIError({ code: "WORKFLOW_JOB_NOT_FOUND", message: "Workflow job not found." }),
     );
     using _stdout = captureStdout();
     using _stderr = captureStderr();
@@ -391,7 +394,32 @@ describe("workflow run", () => {
 
     const result = await invoke(runCommand, [scriptPath, "--job", "missing", "-m", "admin"]);
 
-    expect(result.error).toMatchObject({ code: "WORKFLOW_RUN_JOB_NOT_FOUND" });
+    expect(result.error).toMatchObject({ code: "WORKFLOW_JOB_NOT_FOUND" });
+    expect(startWorkflowRun).not.toHaveBeenCalled();
+  });
+
+  test("refuses a --timeout a timer cannot count, before creating anything", async () => {
+    using _stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    const result = await invoke(runCommand, [scriptPath, "--timeout", "50000m", "-m", "admin"]);
+
+    expect(result.error).toMatchObject({ code: "WORKFLOW_RUN_TIMEOUT_TOO_LONG" });
+    expect(startWorkflowRun).not.toHaveBeenCalled();
+  });
+
+  test("refuses a file whose function type cannot be detected as one that defines no workflow job", async () => {
+    vi.mocked(detectFunctionType).mockRejectedValue(
+      CLIError({ code: "FUNCTION_TYPE_UNDETECTED", message: "Could not detect function type." }),
+    );
+    using _stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    const result = await invoke(runCommand, [scriptPath, "-m", "admin"]);
+
+    expect(result.error).toMatchObject({ code: "WORKFLOW_RUN_WORKFLOW_REQUIRED" });
     expect(startWorkflowRun).not.toHaveBeenCalled();
   });
 
