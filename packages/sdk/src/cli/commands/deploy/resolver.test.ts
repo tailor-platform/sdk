@@ -362,6 +362,30 @@ describe("planPipeline (resolver service level)", () => {
           ?.operationHook?.expr;
       expect(hookExpr).toContain('"SITE_URL":"my-site:url"');
     });
+
+    test("embeds the root env with the override of the resolver's namespace", async () => {
+      const application = createMockApplication([createPipelineWithResolver()], {
+        env: { region: "jp", tier: "root" },
+      });
+
+      const result = await planPipeline(
+        buildCtx({
+          application,
+          envOverrides: {
+            resolver: { "my-resolver": { tier: "resolver" }, other: { tier: "other" } },
+            executor: { tier: "jobs" },
+            auth: {},
+          },
+        }),
+      );
+
+      const hookExpr =
+        result.changeSet.resolver.creates[0]!.request.pipelineResolver?.pipelines?.[0]
+          ?.operationHook?.expr;
+      expect(hookExpr).toContain('"region":"jp"');
+      expect(hookExpr).toContain('"tier":"resolver"');
+      expect(hookExpr).not.toMatch(/"tier":"(root|other|jobs)"/);
+    });
   });
 
   describe("invoker", () => {

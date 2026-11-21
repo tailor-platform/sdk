@@ -628,6 +628,29 @@ describe("planExecutor", () => {
       expect(variablesExpr).toContain('"SITE_URL":"my-site:url"');
       expect(variablesExpr).toContain('"RETRIES":3');
     });
+
+    test("embeds the root env with the executor override of a workspace config", async () => {
+      const application: Application = {
+        ...createMockApplication([createMockExecutor("executor-a")]),
+        env: { region: "jp", tier: "root" },
+      };
+
+      const result = await planExecutor(
+        buildPlanContext(application, {
+          envOverrides: {
+            resolver: { api: { tier: "api" } },
+            executor: { tier: "jobs" },
+            auth: {},
+          },
+        }),
+      );
+
+      const variablesExpr = variablesExprOf(result.changeSet.creates[0]!);
+      expect(variablesExpr).toContain('"region":"jp"');
+      expect(variablesExpr).toContain('"tier":"jobs"');
+      expect(variablesExpr).not.toContain('"tier":"root"');
+      expect(variablesExpr).not.toContain('"tier":"api"');
+    });
   });
 
   describe("resolverExecutedTrigger success field", () => {

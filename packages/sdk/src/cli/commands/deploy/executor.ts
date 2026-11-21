@@ -199,7 +199,12 @@ export async function planExecutor(
       name: executor.name,
       request: {
         workspaceId,
-        executor: protoExecutor(context, executor, application.env, invokerMachineUsers),
+        executor: protoExecutor(
+          context,
+          executor,
+          { ...application.env, ...context.envOverrides?.executor },
+          invokerMachineUsers,
+        ),
       },
       metaRequest: await buildMetaRequest({
         trn: resourceTrn(workspaceId, "executor", executor.name),
