@@ -468,7 +468,7 @@ function defaultGraphQLAppName(context: PlanContext, executorName: string): stri
   const [only, ...others] = available;
   if (only !== undefined && others.length === 0) return only;
   throw CLIError({
-    code: "EXECUTOR_APP_NAME_REQUIRED",
+    code: available.length === 0 ? "EXECUTOR_APP_NAME_REQUIRED" : "EXECUTOR_APP_NAME_AMBIGUOUS",
     message: `Executor "${executorName}" runs a GraphQL operation without appName, but its config deploys ${available.length === 0 ? "no applications" : `the applications ${available.join(", ")}`}.`,
     suggestion:
       available.length === 0

@@ -1062,25 +1062,22 @@ describe("confirmDeploymentPlans", () => {
   });
 
   test.for([
-    { owner: { kind: "workspace" } as const, asked: true },
-    { owner: undefined, asked: false },
-  ])(
-    "asks before deleting an application while keeping another for owner $owner.kind",
-    async ({ owner, asked }) => {
-      using _logger = silenceLogger("warn", "log", "success", "newline");
-      using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(true);
-      const results = emptyPlanResults();
-      results.app.updates.push({ name: "shop" } as never);
-      results.app.deletes.push({ name: "landing", request: {} });
+    { label: "a workspace config asks", owner: { kind: "workspace" } as const, asked: true },
+    { label: "a renamed application config does not ask", owner: undefined, asked: false },
+  ])("deleting an application while keeping another: $label", async ({ owner, asked }) => {
+    using _logger = silenceLogger("warn", "log", "success", "newline");
+    using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(true);
+    const results = emptyPlanResults();
+    results.app.updates.push({ name: "shop" } as never);
+    results.app.deletes.push({ name: "landing", request: {} });
 
-      await confirmDeploymentPlans({
-        deployments: [plannedDeployment("my-config", results, owner)],
-        yes: false,
-      });
+    await confirmDeploymentPlans({
+      deployments: [plannedDeployment("my-config", results, owner)],
+      yes: false,
+    });
 
-      expect(confirm).toHaveBeenCalledTimes(asked ? 1 : 0);
-    },
-  );
+    expect(confirm).toHaveBeenCalledTimes(asked ? 1 : 0);
+  });
 
   test("still asks before deleting a table in a namespace the workspace config takes over", async () => {
     using _logger = silenceLogger("warn", "log", "success", "newline");

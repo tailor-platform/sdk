@@ -322,6 +322,22 @@ describe("migration", () => {
         });
       });
 
+      test("names every Auth service when none defines the configured machine user", () => {
+        expect(() =>
+          resolveAcross({ "namespace-a": { migration: { machineUser: "ghost" } } }),
+        ).toThrow(
+          expect.objectContaining({
+            code: "MACHINE_USER_NOT_FOUND",
+            message:
+              "Machine user for migration execution is not defined in any of the Auth services shop-auth, admin-auth: 'ghost' (namespace 'namespace-a').",
+            context: {
+              authNamespaces: ["shop-auth", "admin-auth"],
+              machineUsers: [{ namespace: "namespace-a", machineUser: "ghost" }],
+            },
+          }),
+        );
+      });
+
       test("asks for migration.machineUser instead of picking one", () => {
         expect(() => resolveAcross()).toThrow(
           expect.objectContaining({ code: "MACHINE_USER_REQUIRED" }),

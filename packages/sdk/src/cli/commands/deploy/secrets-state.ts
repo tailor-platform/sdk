@@ -49,9 +49,10 @@ export type SecretsStateScope = {
 );
 
 /**
- * Build the secrets state scope of the application a plan deploys.
+ * Build the secrets state scope of the config a plan deploys: its application, or the workspace
+ * config itself.
  * @param context - Planning context
- * @returns Secrets state scope for the plan's workspace, application, and config
+ * @returns Secrets state scope for the plan's workspace, owner, and config
  */
 export function secretsStateScope(context: PlanContext): SecretsStateScope {
   const { owner, workspaceId } = context;

@@ -854,6 +854,23 @@ describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", ()
     );
   });
 
+  test("names the workspace config as the owner of an executor it plans", async () => {
+    const results = deletingAdmin();
+    results.executor.changeSet.creates.push({
+      name: "notify",
+      request: { workspaceId: "ws", executor: { name: "notify", targetConfig: FUNCTION_TARGET } },
+      metaRequest: { trn: "trn" },
+    });
+
+    await expect(
+      check([{ ...deployment({ name: "core" }, results), owner: { kind: "workspace" } }], "deploy"),
+    ).rejects.toThrow(
+      expect.objectContaining({
+        message: `${ADMIN} cannot be deleted: executor "notify" of the workspace config still uses it.`,
+      }),
+    );
+  });
+
   test("rejects an executor and an AI gateway of the run whose planned versions use deleted resources", async () => {
     const portal = emptyPlanResults();
     portal.executor.changeSet.creates.push({

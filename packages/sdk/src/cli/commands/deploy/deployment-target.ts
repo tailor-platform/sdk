@@ -99,6 +99,15 @@ export function sourcePath(source: DeploymentSource): string {
   return source.kind === "config" ? source.config.path : source.workspace.path;
 }
 
+/**
+ * Settings a loaded config file's services share.
+ * @param entry - A loaded config file of either kind
+ * @returns Its settings
+ */
+export function loadedSettings(entry: LoadedConfigFile): ServiceSettings {
+  return entry.kind === "config" ? entry.config : entry.workspace;
+}
+
 export type BuiltDeploymentTarget = {
   plugins: readonly Plugin[];
   /** The config file this target builds, with the application a `defineConfig()` config deploys. */
@@ -173,7 +182,7 @@ async function buildDeploymentTarget(
       "loaded config missing",
     );
   const { plugins } = loaded;
-  const settings = loaded.kind === "config" ? loaded.config : loaded.workspace;
+  const settings = loadedSettings(loaded);
 
   const configDir = path.dirname(settings.path);
   const lockfilePath =
@@ -274,13 +283,13 @@ export function assertHttpAdaptersHaveOneApplication(
   services: Pick<ConfigServices, "httpAdapterService">,
   applications: ReadonlyArray<DeployApplication>,
 ): void {
-  if ((services.httpAdapterService?.adapters.length ?? 0) === 0 || applications.length <= 1) {
+  if ((services.httpAdapterService?.adapters.length ?? 0) === 0 || applications.length === 1) {
     return;
   }
   const names = applications.map(({ name }) => name);
   throw CLIError({
     code: "HTTP_ADAPTER_MULTIPLE_APPLICATIONS",
-    message: `HTTP adapters run on the application of a workspace config, but its apps lists ${names.length}: ${names.join(", ")}.`,
+    message: `HTTP adapters run on the application of a workspace config, but its apps lists ${names.length === 0 ? "none" : `${names.length}: ${names.join(", ")}`}.`,
     suggestion: "Keep one application in apps, or remove httpAdapter from the workspace config.",
     context: { applications: names },
   });

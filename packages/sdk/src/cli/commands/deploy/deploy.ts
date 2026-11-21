@@ -52,12 +52,14 @@ import { fetchMissingDependentApps } from "./dependency-records";
 import {
   assertNoWorkspaceDeployedHooks,
   deployedHookLoadFailure,
+  hookApplicationName,
   loadDeployedApplications,
   runDeployedHooks,
 } from "./deployed-hooks";
 import {
   buildDeploymentTargets,
   loadDeployConfigs,
+  loadedSettings,
   parseDeployConfigPaths,
   sourceApplicationName,
   sourcePath,
@@ -202,8 +204,7 @@ export function collectExpectedLocalStaticWebsiteNamesFromConfigs(
 ): ReadonlySet<string> {
   const websiteNames = new Set<string>();
   for (const entry of configs) {
-    const settings = entry.kind === "config" ? entry.config : entry.workspace;
-    for (const website of settings.staticWebsites ?? []) {
+    for (const website of loadedSettings(entry).staticWebsites ?? []) {
       websiteNames.add(website.name);
     }
   }
@@ -362,7 +363,7 @@ type PlanDeploymentTargetsParams = {
   planTarget?: (params: PlanDeploymentTargetParams) => Promise<PlannedDeployment>;
   /** Resource kinds to reuse from `previousDeployments` instead of re-planning. */
   skip?: ReadonlySet<ReusablePlanKind>;
-  /** Prior plan results, matched to targets by application name, source for `skip` reuse. */
+  /** Prior plan results, matched to targets by config path, source for `skip` reuse. */
   previousDeployments?: ReadonlyArray<PlannedDeployment>;
 };
 
@@ -898,10 +899,10 @@ export function assertEnvResolvedAfterRebuild(
  * @param internalContext - Internal deployment behavior used by composed CLI workflows
  * @returns The application as the migration test deploy manages it
  */
-export function adjustApplicationForMigrationTest<Services extends ConfigServices>(
-  application: Services,
+export function adjustApplicationForMigrationTest(
+  application: ConfigServices,
   internalContext: DeployInternalContext | undefined,
-): Services {
+): ConfigServices {
   if (!internalContext?.migrationTestSnapshots) {
     return application;
   }
@@ -950,9 +951,8 @@ async function deployInternal(
       : await withSpan("config.preflight", () =>
           loadDeployConfigs({ configPaths, dryRun, buildOnly }),
         );
-    const resolvedConfigPaths = preflightConfigs.map((entry) =>
-      entry.kind === "config" ? entry.config.path : entry.workspace.path,
-    );
+    if (!internalContext?.skipDeployedHooks) assertNoWorkspaceDeployedHooks(preflightConfigs);
+    const resolvedConfigPaths = preflightConfigs.map((entry) => loadedSettings(entry).path);
     const workspaceContextTargets = preflightConfigs.map((entry) =>
       entry.kind === "config"
         ? {
@@ -1019,7 +1019,6 @@ async function deployInternal(
     }
 
     assertUniqueGlobalResourceNames(targets);
-    if (!internalContext?.skipDeployedHooks) assertNoWorkspaceDeployedHooks(targets);
 
     // Note: the normal apply path intentionally skips writing bundle files to
     // .tailor/. Bundles are kept in memory and uploaded directly to the
@@ -1130,12 +1129,7 @@ async function deployInternal(
       : targets.flatMap((target) =>
           target.plugins
             .filter((plugin) => plugin.onDeployed)
-            .map((plugin) => {
-              const application = sourceApplicationName(target.source);
-              return application === undefined
-                ? { pluginId: plugin.id }
-                : { application, pluginId: plugin.id };
-            }),
+            .map((plugin) => ({ application: hookApplicationName(target), pluginId: plugin.id })),
         );
     const reviewOptions = { yes: options?.yes ?? false, noValidate: options?.noValidate };
     let planSummary = await reviewDeploymentPlans({

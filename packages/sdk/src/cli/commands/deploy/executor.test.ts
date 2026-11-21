@@ -903,6 +903,20 @@ describe("planExecutor", () => {
       });
     });
 
+    test("needs an application for a GraphQL operation of a workspace config that deploys none", async () => {
+      const executor = executorWith(
+        { kind: "schedule", timezone: "UTC", cron: "0 * * * *" },
+        { kind: "graphql", query: "query { ok }" },
+      );
+
+      await expect(
+        planExecutor({ ...workspaceContext(executor), applications: [] }),
+      ).rejects.toMatchObject({
+        code: "EXECUTOR_APP_NAME_REQUIRED",
+        context: { executor: "on-event", available: [] },
+      });
+    });
+
     test("asks for the application of a GraphQL operation that names none", async () => {
       const executor = executorWith(
         { kind: "schedule", timezone: "UTC", cron: "0 * * * *" },
@@ -910,7 +924,7 @@ describe("planExecutor", () => {
       );
 
       await expect(planExecutor(workspaceContext(executor))).rejects.toMatchObject({
-        code: "EXECUTOR_APP_NAME_REQUIRED",
+        code: "EXECUTOR_APP_NAME_AMBIGUOUS",
         context: { executor: "on-event", available: ["shop", "admin"] },
       });
     });
