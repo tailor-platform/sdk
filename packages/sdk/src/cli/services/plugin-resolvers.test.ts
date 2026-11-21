@@ -7,6 +7,7 @@ import {
   collectFunctionEntries,
   planFunctionRegistry,
 } from "#/cli/commands/deploy/function-registry";
+import { applicationOwner } from "#/cli/commands/deploy/label";
 import { planPipeline } from "#/cli/commands/deploy/resolver";
 import { createGenerationManager } from "#/cli/commands/generate/service";
 import { logger } from "#/cli/shared/logger";
@@ -105,6 +106,7 @@ describe("plugin-generated resolvers", () => {
         workspaceId: "ws",
         application,
         config,
+        owner: applicationOwner(application),
         forRemoval: false,
       });
       expect(pipelinePlan.changeSet.service.creates).toMatchObject([{ name: "main" }]);
@@ -115,8 +117,7 @@ describe("plugin-generated resolvers", () => {
       const functionPlan = await planFunctionRegistry(
         client,
         "ws",
-        application.name,
-        undefined,
+        { kind: "application", name: application.name, id: undefined },
         entries,
       );
       expect(functionPlan.changeSet.creates).toMatchObject([{ name: "resolver--main--greet" }]);

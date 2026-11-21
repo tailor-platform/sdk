@@ -12,7 +12,7 @@ import { applyAuth, type planAuth } from "./auth";
 import { applyExecutor, type planExecutor } from "./executor";
 import { applyFunctionRegistry, type planFunctionRegistry } from "./function-registry";
 import { applyIdP, type planIdP } from "./idp";
-import { withMetadataWriteBatch } from "./label";
+import { type DeployOwner, withMetadataWriteBatch } from "./label";
 import { applyPipeline, type planPipeline } from "./resolver";
 import { applySecretManager, type planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, type planStaticWebsite } from "./staticwebsite";
@@ -38,6 +38,8 @@ export interface TailorDBMaintenance extends MaintenanceReport {
 
 export type PlannedDeployment = {
   readonly application: Readonly<Application>;
+  /** Owner of the resources the deployment manages. */
+  readonly owner: DeployOwner;
   /**
    * Whether every resource is force-reapplied because an owned resource's
    * `sdk-version` label mismatches the running SDK. Computed once per deploy
@@ -64,7 +66,7 @@ export type PlannedDeployment = {
   readonly secretManager: Awaited<ReturnType<typeof planSecretManager>>;
 };
 
-export type PlanResults = Omit<PlannedDeployment, "application" | "forceApplyAll">;
+export type PlanResults = Omit<PlannedDeployment, "application" | "owner" | "forceApplyAll">;
 
 /**
  * Resource kinds whose plan cannot change between a deploy's first plan and
@@ -83,7 +85,12 @@ export type ReusablePlanKind =
   | "auth";
 
 export function deploymentPlanResults(deployment: PlannedDeployment): PlanResults {
-  const { application: _application, forceApplyAll: _forceApplyAll, ...results } = deployment;
+  const {
+    application: _application,
+    owner: _owner,
+    forceApplyAll: _forceApplyAll,
+    ...results
+  } = deployment;
   return results;
 }
 

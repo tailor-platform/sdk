@@ -36,6 +36,7 @@ import {
   addDependencyRecords,
   buildMetaRequest,
   type DependentAppsByResource,
+  type DeployOwner,
   eventSourceKey,
   type MetadataLabelWrite,
   resourceTrn,
@@ -196,8 +197,9 @@ export async function planTailorDB(context: PlanContext) {
     changeSet: serviceChangeSet,
     conflicts,
     unmanaged,
+    takeovers,
     resourceOwners,
-  } = await planServices(client, workspaceId, application.name, application.id, tailordbs);
+  } = await planServices(client, workspaceId, context.owner, tailordbs);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const [typeChangeSet, gqlPermissionChangeSet] = await Promise.all([
     planTypes(
@@ -209,8 +211,7 @@ export async function planTailorDB(context: PlanContext) {
       undefined,
       forceApplyAll,
       {
-        appName: application.name,
-        appId: application.id,
+        owner: context.owner,
         dependentApps: context.dependentApps,
         runAppIds: context.runAppIds,
       },
@@ -240,10 +241,12 @@ export async function planTailorDB(context: PlanContext) {
     },
     conflicts,
     unmanaged,
+    takeovers,
     resourceOwners,
     context: {
       workspaceId,
       application,
+      owner: context.owner,
       tailorDBInputs: tailordbs,
       executorUsedTables,
       config,
@@ -286,14 +289,13 @@ type DesiredService = {
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
-  appName: string,
-  appId: string | undefined,
+  owner: DeployOwner,
   tailordbs: ReadonlyArray<TailorDBDeployInput>,
 ) {
   const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>(
     "TailorDB services",
   );
-  const ownership = createOwnershipTracker(appName, appId);
+  const ownership = createOwnershipTracker(owner);
 
   const existingServices = await fetchExistingResourcesWithLabels({
     client,
@@ -315,8 +317,7 @@ async function planServices(
       name: tailordb.namespace,
       metaRequest: await buildMetaRequest({
         trn: resourceTrn(workspaceId, "tailordb", tailordb.namespace),
-        appName,
-        appId,
+        owner,
       }),
     });
   }
@@ -326,10 +327,7 @@ async function planServices(
     desired,
     existing: Object.entries(existingServices),
     keyOf: (service) => service.name,
-    ...labeledResourceChecks(ownership, (service: DesiredService) => ({
-      resourceType: "tailordb.service",
-      resourceName: service.name,
-    })),
+    ...labeledResourceChecks(ownership, "tailordb.service"),
     // An update writes only the labels, so no setting of the service can differ from it.
     isConfigUnchanged: () => true,
     create: ({ name, metaRequest }) => ({
@@ -373,8 +371,7 @@ type UnchangedType = {
 
 /** What planTypes needs to record dependencies on each table. */
 type TypeRecordInputs = {
-  appName?: string;
-  appId?: string;
+  owner: DeployOwner;
   dependentApps?: DependentAppsByResource;
   runAppIds?: ReadonlySet<string>;
 };
@@ -397,15 +394,15 @@ async function planTypes(
   tailordbs: ReadonlyArray<TailorDBDeployInput>,
   executorUsedTables: ReadonlySet<string>,
   deletedServices: ReadonlyArray<string>,
-  filteredTypesByNamespace?: Map<string, Record<string, TailorDBSnapshotType>>,
-  forceApplyAll = false,
-  records: TypeRecordInputs = {},
+  filteredTypesByNamespace: Map<string, Record<string, TailorDBSnapshotType>> | undefined,
+  forceApplyAll: boolean,
+  records: TypeRecordInputs,
   recreatedTables: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
 ) {
   const changeSet = createChangeSet<CreateType, UpdateType, DeleteType, never, UnchangedType>(
     "TailorDB tables",
   );
-  const { appName, appId, dependentApps, runAppIds } = records;
+  const { owner, dependentApps, runAppIds } = records;
 
   /**
    * Build one table's metadata write, carrying the dependency records that belong
@@ -421,7 +418,8 @@ async function planTypes(
     explicitPublishEvents: boolean | undefined,
   ) => {
     const trn = tailorDBTypeTrn(workspaceId, namespace, tableName);
-    return addDependencyRecords(await buildMetaRequest({ trn, appName: appName ?? "", appId }), {
+    return addDependencyRecords(await buildMetaRequest({ trn, owner }), {
+      owner,
       key: eventSourceKey.tailorDBType(namespace, tableName),
       dependentApps,
       runAppIds,

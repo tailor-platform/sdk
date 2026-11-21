@@ -6,6 +6,7 @@ import {
 import { describe, expect, test, vi } from "vitest";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { createChangeSet } from "./change-set";
+import { applicationOwner } from "./label";
 import {
   applyStaticWebsite,
   assertStaticWebsiteDeletesNotOffered,
@@ -174,6 +175,7 @@ function createContext(
     client,
     workspaceId,
     application: application ?? createMockApplication(),
+    owner: applicationOwner(application ?? createMockApplication()),
     forRemoval,
     config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
   };
@@ -371,6 +373,51 @@ describe("planStaticWebsite", () => {
     expect(result.changeSet.unchanged).toEqual([{ name: "site-a", labelRefresh }]);
     expect(result.customDomainChangeSet.updates).toEqual([]);
     expect(result.customDomainChangeSet.unchanged).toEqual([{ name: "example.com", labelRefresh }]);
+  });
+
+  test("for a workspace config, takes over a website's custom domains and deletes the ones it dropped", async () => {
+    const client = createMockClient([
+      {
+        name: "site-a",
+        label: "shop",
+        customDomains: [
+          { domain: "keep.example.com", sdkManaged: true },
+          { domain: "old.example.com", sdkManaged: true },
+        ],
+      },
+    ]);
+    const app = createMockApplication({ customDomains: ["keep.example.com"] });
+
+    const result = await planStaticWebsite({
+      ...createContext(client, app),
+      owner: { kind: "workspace" },
+    });
+
+    expect(result.customDomainChangeSet.updates.map(({ name }) => name)).toEqual([
+      "keep.example.com",
+    ]);
+    expect(result.customDomainChangeSet.deletes.map(({ name }) => name)).toEqual([
+      "old.example.com",
+    ]);
+    expect(
+      result.takeovers.map(({ resourceType, resourceName, action }) => ({
+        resourceType,
+        resourceName,
+        action,
+      })),
+    ).toEqual([
+      { resourceType: "staticwebsite", resourceName: "site-a", action: "update" },
+      {
+        resourceType: "staticwebsite.custom_domain",
+        resourceName: "keep.example.com",
+        action: "update",
+      },
+      {
+        resourceType: "staticwebsite.custom_domain",
+        resourceName: "old.example.com",
+        action: "delete",
+      },
+    ]);
   });
 
   test("does not manage custom domains for unowned websites", async () => {

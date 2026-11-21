@@ -1,52 +1,52 @@
 import { create } from "@bufbuild/protobuf";
 import { GetMetadataResponseSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
-import { sdkAppIdLabelKey, sdkAppIdLabelValue, sdkNameLabelKey } from "./label";
+import {
+  type DeployOwner,
+  sdkAppIdLabelKey,
+  sdkAppIdLabelValue,
+  sdkManagedLabelKey,
+  sdkManagedLabelValue,
+  sdkNameLabelKey,
+} from "./label";
 import type { Metadata } from "@tailor-platform/tailor-proto/metadata_resource_pb";
-
-interface MetadataLookupApplication {
-  name: string;
-  id?: string;
-}
 
 interface CreateMetadataLookupClientParams {
   client: OperatorClient;
   workspaceId: string;
-  applications: ReadonlyArray<MetadataLookupApplication>;
+  owners: ReadonlyArray<DeployOwner>;
 }
 
-function ownershipFilters(
-  applications: ReadonlyArray<MetadataLookupApplication>,
-): Record<string, string>[] {
+function ownershipFilters(owners: ReadonlyArray<DeployOwner>): Record<string, string>[] {
   const filters = new Map<string, Record<string, string>>();
-  for (const application of applications) {
-    filters.set(`${sdkNameLabelKey}\0${application.name}`, {
-      [sdkNameLabelKey]: application.name,
-    });
-    if (application.id) {
-      const value = sdkAppIdLabelValue(application.id);
-      filters.set(`${sdkAppIdLabelKey}\0${value}`, { [sdkAppIdLabelKey]: value });
+  const add = (key: string, value: string) => filters.set(`${key}\0${value}`, { [key]: value });
+  for (const owner of owners) {
+    if (owner.kind === "workspace") {
+      add(sdkManagedLabelKey, sdkManagedLabelValue);
+      continue;
     }
+    add(sdkNameLabelKey, owner.name);
+    if (owner.id) add(sdkAppIdLabelKey, sdkAppIdLabelValue(owner.id));
   }
   return [...filters.values()];
 }
 
 /**
- * Create a client that resolves metadata from app-scoped list queries first.
+ * Create a client that resolves metadata from list queries scoped to the deploy's owners first.
  * List misses still delegate to `GetMetadata` because an exact label filter
  * cannot distinguish another owner from a resource with no SDK labels.
  * @param params - Metadata lookup inputs
  * @param params.client - Operator client instance
  * @param params.workspaceId - Target workspace ID
- * @param params.applications - Applications taking part in the deploy
+ * @param params.owners - Owners of the resources the deploy manages
  * @returns Operator client with cached metadata reads
  */
 export async function createMetadataLookupClient(
   params: CreateMetadataLookupClientParams,
 ): Promise<OperatorClient> {
-  const { client, workspaceId, applications } = params;
+  const { client, workspaceId, owners } = params;
   const pages = await Promise.all(
-    ownershipFilters(applications).map((labels) =>
+    ownershipFilters(owners).map((labels) =>
       fetchAllTolerant(async (pageToken, maxPageSize) => {
         const { results, nextPageToken } = await client.listMetadata({
           workspaceId,

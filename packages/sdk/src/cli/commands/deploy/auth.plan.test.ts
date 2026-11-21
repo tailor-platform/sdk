@@ -23,7 +23,7 @@ import { defineConfig } from "#/configure/config/index";
 import { defineAuth } from "#/configure/services/auth/index";
 import { t } from "#/configure/types/type";
 import { applyAuth, formatAuthHookChangeEntries, planAuth } from "./auth";
-import { buildMetaRequest } from "./label";
+import { applicationOwner, buildMetaRequest } from "./label";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { SCIMAuthorization } from "#/types/auth.generated";
@@ -484,6 +484,7 @@ function createContext(
     client,
     workspaceId,
     application,
+    owner: applicationOwner(application),
     forRemoval: false,
     config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
   };
@@ -958,6 +959,7 @@ describe("planAuth", () => {
       client,
       workspaceId,
       application,
+      owner: applicationOwner(application),
       forRemoval: false,
       config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
     });
@@ -1017,6 +1019,7 @@ describe("planAuth", () => {
         client,
         workspaceId,
         application,
+        owner: applicationOwner(application),
         forRemoval: false,
         config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
       });

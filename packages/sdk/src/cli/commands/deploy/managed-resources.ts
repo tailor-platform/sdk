@@ -3,7 +3,12 @@ import { deploymentPlanResults, type PlannedDeployment, type PlanResults } from 
 import { createChangeSet, type HasName } from "./change-set";
 import { assertNoDuplicateResourceNames, type ResourceNameCheck } from "./duplicate-resource-names";
 import { MANAGED_RESOURCE_LABELS, type ManagedResourceType } from "./managed-resource-type";
-import type { ImportantResourceDeletion, OwnerConflict, UnmanagedResource } from "./confirm";
+import type {
+  ImportantResourceDeletion,
+  OwnerConflict,
+  UnmanagedResource,
+  WorkspaceTakeover,
+} from "./confirm";
 import type { BuiltDeploymentTarget } from "./deployment-target";
 import type { UnchangedAnnotation } from "./label";
 import type { OwnershipResult } from "./owned-resource";
@@ -67,6 +72,10 @@ export function collectOwnerConflicts(results: PlanResults): OwnerConflict[] {
 
 export function collectUnmanagedResources(results: PlanResults): UnmanagedResource[] {
   return ownershipTrackedPlans(results).flatMap((plan) => plan.unmanaged);
+}
+
+export function collectTakeovers(results: PlanResults): WorkspaceTakeover[] {
+  return ownershipTrackedPlans(results).flatMap((plan) => plan.takeovers);
 }
 
 function collectResourceOwners(results: PlanResults): Set<string> {
@@ -295,11 +304,19 @@ function deletesNeedingConfirmation(
   results: PlanResults,
   resourceType: ManagedResourceType,
 ): ImportantResourceDeletion[] {
-  const resource = MANAGED_RESOURCES[resourceType];
-  return resource.changeSetOf(results).deletes.map((item) => ({
-    resourceLabel: MANAGED_RESOURCE_LABELS[resourceType],
-    resourceName: managedResourceName(resource, item),
-  }));
+  const resource: ManagedResource = MANAGED_RESOURCES[resourceType];
+  return resource.changeSetOf(results).deletes.map((item) => {
+    const parentName = resource.namespace?.of(item);
+    return {
+      resourceType,
+      resourceLabel: MANAGED_RESOURCE_LABELS[resourceType],
+      resourceName: managedResourceName(resource, item),
+      ...(resource.namespace &&
+        parentName !== undefined && {
+          parent: { resourceType: resource.namespace.owner, resourceName: parentName },
+        }),
+    };
+  });
 }
 
 export function collectImportantResourceDeletions(
@@ -313,6 +330,7 @@ export function collectImportantResourceDeletions(
     ...deletesNeedingConfirmation(results, "aigateway"),
     ...deletesNeedingConfirmation(results, "auth.oauth2_client"),
     ...results.auth.changeSet.oauth2Client.replaces.map((replace) => ({
+      resourceType: "auth.oauth2_client" as const,
       resourceLabel: `${MANAGED_RESOURCE_LABELS["auth.oauth2_client"]} (client type change)`,
       resourceName: replace.name,
     })),

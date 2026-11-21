@@ -78,7 +78,7 @@ import { logger, styles } from "#/cli/shared/logger";
 import { protoEnumName } from "#/cli/shared/proto-enum";
 import { spinner } from "#/cli/shared/spinner";
 import { assertDefined } from "#/utils/assert";
-import { resourceTrn, writeMetadataLabelsDirect } from "../label";
+import { type DeployOwner, resourceTrn, writeMetadataLabelsDirect } from "../label";
 import {
   assertMigrationSkipSteps,
   formatMigrationSkipSteps,
@@ -111,8 +111,8 @@ interface MigrationExecutionOptions {
   invoker: AuthInvoker;
   env: Record<string, string | number | boolean>;
   configDir: string;
-  appName: string;
-  appId: string | undefined;
+  /** Owner whose labels a migration's temporary resources carry. */
+  owner: DeployOwner;
   maintenanceMode: boolean;
   skipSteps?: ReadonlyMap<string, readonly string[]>;
   /** Checkpoint each namespace must still have when one of its migrations starts running. */
@@ -137,10 +137,8 @@ export interface MigrationContext {
   configPath: string;
   /** Profile and env-file arguments of the deploy, kept in the migration commands it suggests. */
   migrationRecoveryArgs?: readonly string[];
-  /** Application name, used to label a migration's temporary resources. */
-  appName: string;
-  /** Application id, used to label a migration's temporary resources. */
-  appId: string | undefined;
+  /** Owner whose labels a migration's temporary resources carry. */
+  owner: DeployOwner;
   /** Whether the migrating namespaces are in maintenance mode. */
   maintenanceMode: boolean;
   /** Steps of an in-progress multi-step migration to skip, keyed by namespace. */
@@ -541,7 +539,7 @@ async function executeSingleMigration(
   sp: Spinner,
   display: MigrationRunDisplay,
 ): Promise<ExecutionResult> {
-  const { client, workspaceId, invoker, env, configDir, appName, appId } = options;
+  const { client, workspaceId, invoker, env, configDir, owner } = options;
   const form = migration.scriptForm;
   if (form?.kind === "steps" && usesStepRunner(form, inProgress !== undefined)) {
     return executeStepsMigration(options, migration, form, inProgress, sp, display);
@@ -564,8 +562,7 @@ async function executeSingleMigration(
       namespace: migration.namespace,
       migrationNumber: migration.number,
       invoker,
-      appName,
-      appId,
+      owner,
       maintenanceMode: options.maintenanceMode,
       commandContext: options.commandContext,
       onBeforeStart: async () => {
@@ -1198,7 +1195,7 @@ async function executeStepsMigration(
   sp: Spinner,
   display: MigrationRunDisplay,
 ): Promise<ExecutionResult> {
-  const { client, workspaceId, invoker, env, configDir, appName, appId } = options;
+  const { client, workspaceId, invoker, env, configDir, owner } = options;
   const skipSteps = (inProgress && options.skipSteps?.get(migration.namespace)) || [];
   const bundleResult = await bundlePendingMigration(migration, {
     env,
@@ -1219,8 +1216,7 @@ async function executeStepsMigration(
       namespace: migration.namespace,
       migrationNumber: migration.number,
       invoker,
-      appName,
-      appId,
+      owner,
       maintenanceMode: options.maintenanceMode,
       order: form.order,
       skipSteps,
@@ -1348,8 +1344,7 @@ export async function executeMigrations(
       invoker,
       env: context.env,
       configDir: path.dirname(context.configPath),
-      appName: context.appName,
-      appId: context.appId,
+      owner: context.owner,
       maintenanceMode: context.maintenanceMode,
       skipSteps: context.skipSteps,
       checkpoints,
