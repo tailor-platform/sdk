@@ -14,7 +14,7 @@ OAuth client IDs as build environment variables.
 pnpm add -D @tailor-platform/sdk-plugin-frontend
 ```
 
-Use an SDK version that supports `onDeployed` hooks. When testing a PR before
+Use an SDK version whose `onDeployed` hooks receive `staticWebsites`. When testing a PR before
 that SDK release, install both the SDK and frontend plugin from the same
 `pkg.pr.new` commit.
 

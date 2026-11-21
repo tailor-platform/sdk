@@ -731,6 +731,15 @@ class MetadataWriteBatch {
     this.#writesByTrn.set(write.trn, writes);
   }
 
+  /**
+   * Queue a write that runs before the writes already queued for its resource, so they win.
+   * @param write - Write to run first; ignored once the flush has started
+   */
+  enqueueFirst(write: MetadataLabelWrite): void {
+    if (this.#flushPromise) return;
+    this.#writesByTrn.set(write.trn, [write, ...(this.#writesByTrn.get(write.trn) ?? [])]);
+  }
+
   flush(): Promise<void> {
     this.#flushPromise ??= this.#flushQueued();
     return this.#flushPromise;
@@ -954,10 +963,12 @@ export function writeMetadataLabelsDirect(
 /**
  * Write one metadata change immediately like {@link writeMetadataLabelsDirect}, except that when
  * the Platform rejects the labels for their count and they include `sdk-on-app-*` labels, it
- * writes every other label and as many of those as fit.
+ * writes every other label and as many of those as fit. Under a deploy's write batch, the ones
+ * left off are queued to be put back when the batch flushes, which reports those that still do
+ * not fit; otherwise `onDropped` receives them.
  * @param client - Operator client instance
  * @param write - TRN, labels to set, and label keys to delete
- * @param onDropped - Receives the `sdk-on-app-*` labels the resource could not hold
+ * @param onDropped - Receives the `sdk-on-app-*` labels the resource could not hold, outside a batch
  * @returns Whether the labels changed
  */
 export function writeMetadataLabelsDroppingOnAppLabels(
@@ -967,7 +978,16 @@ export function writeMetadataLabelsDroppingOnAppLabels(
 ): Promise<boolean> {
   return writeMergedLabels(client, write, async (trn, labels) => {
     const applications = await setLabelsDroppingOnAppLabels(client, trn, labels);
-    onDropped?.({ trn, applications });
+    const batch = (client as MetadataWriteBatchClient)[metadataWriteBatch];
+    if (batch) {
+      // Queued first, so the deploy's own write for the resource still drops a stale one.
+      batch.enqueueFirst({
+        trn,
+        labels: Object.fromEntries(applications.map((app) => [`${onAppLabelPrefix}${app}`, ""])),
+      });
+    } else {
+      onDropped?.({ trn, applications });
+    }
   });
 }
 
