@@ -5,7 +5,7 @@ import { logger } from "#/cli/shared/logger";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { tempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { brandedDefault } from "#/cli/shared/test-helpers/workspace-config";
-import { loadDeployConfigs } from "./deployment-target";
+import { assertHttpAdaptersHaveOneApplication, loadDeployConfigs } from "./deployment-target";
 
 const WORKSPACE_CONFIG = brandedDefault(
   "workspace-config",
@@ -56,5 +56,34 @@ describe("loadDeployConfigs", () => {
       code: "DEPLOY_WORKSPACE_CONFIG_WITH_OTHERS",
       context: { configPath: workspacePath },
     });
+  });
+});
+
+describe("assertHttpAdaptersHaveOneApplication", () => {
+  const app = (name: string) => ({ name, subgraphs: [], authNamespace: undefined, settings: {} });
+  const services = (adapterCount: number) => ({
+    httpAdapterService: {
+      adapters: Array.from({ length: adapterCount }, (_, index) => ({ name: `a${index}` })),
+    },
+  });
+
+  test("rejects HTTP adapters in a workspace config that deploys several applications", () => {
+    expect(() =>
+      assertHttpAdaptersHaveOneApplication(services(1) as never, [app("shop"), app("admin")]),
+    ).toThrow(
+      expect.objectContaining({
+        code: "HTTP_ADAPTER_MULTIPLE_APPLICATIONS",
+        context: { applications: ["shop", "admin"] },
+      }),
+    );
+  });
+
+  test.for([
+    { label: "HTTP adapters with one application", adapters: 1, apps: ["shop"] },
+    { label: "several applications without HTTP adapters", adapters: 0, apps: ["shop", "admin"] },
+  ])("accepts $label", ({ adapters, apps }) => {
+    expect(() =>
+      assertHttpAdaptersHaveOneApplication(services(adapters) as never, apps.map(app)),
+    ).not.toThrow();
   });
 });
