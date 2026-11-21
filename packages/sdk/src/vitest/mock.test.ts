@@ -870,6 +870,27 @@ describe("mock", () => {
       expect(wf.startWorkflow.mock.calls).toEqual([["arity-workflow-3arg", undefined, undefined]]);
     });
 
+    test("createWorkflow().start() passes an invoker naming its Auth service as authInvoker", async () => {
+      using wf = mockWorkflow();
+      const job = createWorkflowJob({
+        name: "invoker-workflow-main",
+        body: (_input: undefined) => ({ ok: true }),
+      });
+      const workflow = createWorkflow({ name: "invoker-workflow", mainJob: job });
+
+      await workflow.start(undefined, {
+        invoker: { namespace: "other-auth", machineUserName: "kiosk" },
+      });
+
+      expect(wf.startWorkflow.mock.calls).toEqual([
+        [
+          "invoker-workflow",
+          undefined,
+          { authInvoker: { namespace: "other-auth", machineUserName: "kiosk" } },
+        ],
+      ]);
+    });
+
     test("setStartHandler with string controls startWorkflow response", async () => {
       using wf = mockWorkflow();
       wf.setStartHandler("exec-123");

@@ -8,8 +8,8 @@ import type { ValueOperand } from "#/configure/services/auth/types";
 import type { TailorDBInstance } from "#/configure/services/tailordb/types";
 
 export const AuthInvokerObjectSchema = z.strictObject({
-  namespace: z.string().describe("Auth namespace"),
-  machineUserName: z.string().describe("Machine user name for authentication"),
+  namespace: resourceNameSchema.describe("Auth namespace"),
+  machineUserName: z.string().min(1).describe("Machine user name for authentication"),
 });
 
 export const AuthInvokerSchema = z.union([

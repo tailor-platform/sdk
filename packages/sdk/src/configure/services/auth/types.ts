@@ -1,4 +1,5 @@
 import type { TailorDBInstance } from "#/configure/services/tailordb/types";
+import type { AuthNamespaceName } from "#/configure/types/auth-namespace-name";
 import type {
   DefinedFieldMetadata,
   FieldMetadata,
@@ -41,6 +42,20 @@ export interface MachineUserNameRegistry {}
 export type MachineUserName = keyof MachineUserNameRegistry extends never
   ? string
   : keyof MachineUserNameRegistry & string;
+
+/** A machine user named together with the Auth service it belongs to. */
+export type AuthMachineUser = {
+  /** Name of the Auth service (`defineAuth()`) that defines the machine user. */
+  namespace: AuthNamespaceName;
+  /** Name of the machine user in that Auth service. */
+  machineUserName: MachineUserName;
+};
+
+/**
+ * Machine user to run as: its name in the config's Auth service, or an {@link AuthMachineUser}
+ * that names the Auth service too.
+ */
+export type MachineUserInvoker = MachineUserName | AuthMachineUser;
 
 /** Result of retrieving a connection token at runtime. */
 export type AuthConnectionTokenResult = {

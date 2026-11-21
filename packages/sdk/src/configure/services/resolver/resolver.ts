@@ -1,7 +1,7 @@
 import { t, type TailorAnyField, type TailorField } from "#/configure/types/type";
 import { brandValue } from "#/utils/brand";
 import type { ResolverPermission } from "#/configure/services/resolver/permission";
-import type { MachineUserName } from "#/configure/types/machine-user";
+import type { MachineUserInvoker } from "#/configure/types/machine-user";
 import type { InferredAttributes, TailorEnv, TailorPrincipal } from "#/runtime/types";
 import type { InferFieldsOutput, output } from "#/types/helpers";
 import type { ResolverInput } from "#/types/resolver.generated";
@@ -40,7 +40,7 @@ type ResolverReturn<
     input?: Input;
     output: NormalizedOutput<Output>;
     body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
-    invoker?: MachineUserName;
+    invoker?: MachineUserInvoker;
     permission?: ResolverPermission<InferredAttributes, Input>;
   }>;
 
@@ -101,7 +101,7 @@ export function createResolver<
       input?: Input;
       output: Output;
       body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
-      invoker?: MachineUserName;
+      invoker?: MachineUserInvoker;
       permission?: ResolverPermission<InferredAttributes, NoInfer<Input>>;
     }>,
 ): ResolverReturn<Input, Output> {

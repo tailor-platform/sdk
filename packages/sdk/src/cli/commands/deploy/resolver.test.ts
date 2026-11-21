@@ -353,8 +353,10 @@ describe("planPipeline (resolver service level)", () => {
     });
   });
 
-  describe("string invoker", () => {
-    function createPipelineWithInvoker(invoker: string): ResolverService {
+  describe("invoker", () => {
+    function createPipelineWithInvoker(
+      invoker: string | { namespace: string; machineUserName: string },
+    ): ResolverService {
       return {
         namespace: "my-resolver",
         config: {},
@@ -400,6 +402,22 @@ describe("planPipeline (resolver service level)", () => {
       ).rejects.toMatchObject({
         code: "INVOKER_MACHINE_USER_NOT_FOUND",
         message: expect.stringContaining('Resolver "test-resolver"'),
+      });
+    });
+
+    test("rejects an object invoker whose Auth namespace lacks the machine user", async () => {
+      await expect(
+        planPipeline(
+          buildCtx({
+            client: createMockClient([], {}, {}, ["portal"]),
+            application: createMockApplication([
+              createPipelineWithInvoker({ namespace: "other-auth", machineUserName: "portl" }),
+            ]),
+          }),
+        ),
+      ).rejects.toMatchObject({
+        code: "INVOKER_MACHINE_USER_NOT_FOUND",
+        context: { invoker: "portl", authNamespace: "other-auth", machineUsers: ["portal"] },
       });
     });
 
@@ -535,7 +553,10 @@ describe("planPipeline (resolver service level)", () => {
     // so tests can feed it back in as the "existing remote state".
     async function getDesiredResolver(pipeline: ResolverService) {
       const createResult = await planPipeline(
-        buildCtx({ client: createMockClient([]), application: createMockApplication([pipeline]) }),
+        buildCtx({
+          client: createMockClient([], {}, {}, ["batch-user"]),
+          application: createMockApplication([pipeline]),
+        }),
       );
       return createResult.changeSet.resolver.creates[0]!.request.pipelineResolver!;
     }
@@ -676,9 +697,12 @@ describe("planPipeline (resolver service level)", () => {
       expect(desiredResolver).toBeDefined();
       delete desiredResolver.pipelines?.[0]?.invoker;
 
-      const client = createMockClient([{ name: "my-resolver", label: appName }], {
-        "my-resolver": [desiredResolver],
-      });
+      const client = createMockClient(
+        [{ name: "my-resolver", label: appName }],
+        { "my-resolver": [desiredResolver] },
+        {},
+        ["batch-user"],
+      );
       const result = await planPipeline(
         buildCtx({ client, application: createMockApplication([pipeline]) }),
       );
@@ -791,7 +815,7 @@ describe("processResolver invoker mapping", () => {
     extraApplicationFields: Record<string, unknown> = {},
     plannedMachineUsers?: ReadonlyMap<string, ReadonlySet<string>>,
   ) {
-    const client = createMockClient([{ name: "test-ns", label: appName }]);
+    const client = createMockClient([{ name: "test-ns", label: appName }], {}, {}, ["batch-user"]);
     const application = createMockApplication([resolverService], extraApplicationFields);
     return planPipeline(buildCtx({ client, application, plannedMachineUsers }));
   }

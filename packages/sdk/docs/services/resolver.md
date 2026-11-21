@@ -567,6 +567,6 @@ export default createResolver({
 });
 ```
 
-The machine user name is looked up in the auth service configured on your app (`machineUsers` in `defineAuth`). The namespace is resolved automatically — no need to import `auth` from `tailor.config.ts` in resolver files.
+The machine user name is looked up in the auth service configured on your app (`machineUsers` in `defineAuth`). The namespace is resolved automatically — no need to import `auth` from `tailor.config.ts` in resolver files. To name the Auth service as well, pass `{ namespace, machineUserName }`; see [Specifying a machine user invoker](./auth.md#specifying-a-machine-user-invoker).
 
 **Note:** The `invoker` option controls the permissions for database operations and other platform actions. The `caller` object passed to `body` still reflects the original caller, while the `invoker` body field reflects the principal actually running the body.
