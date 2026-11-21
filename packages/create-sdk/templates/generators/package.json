@@ -8,6 +8,7 @@
     "seed": "tailor seed apply",
     "seed:fill": "tailor seed fill",
     "seed:validate": "tailor seed validate",
+    "seed:studio": "tailor seed studio",
     "test": "vitest --project unit",
     "test:unit": "vitest --project unit",
     "format": "oxfmt --write .",
