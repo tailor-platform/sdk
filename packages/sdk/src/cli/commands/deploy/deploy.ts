@@ -1082,13 +1082,13 @@ async function deployInternal(
       });
       dropCrossDeploymentManagedDeletes(deployments);
       scheduleRenamedAppDeletes(deployments);
-      await assertResourcesNotInUse({ deployments, command: "deploy", client, workspaceId });
       for (const deployment of deployments) {
         assertTakeoversFromOwnConfig(
           deployment.source,
           collectTakeovers(deploymentPlanResults(deployment)),
         );
       }
+      await assertResourcesNotInUse({ deployments, command: "deploy", client, workspaceId });
       assertNoSingleRunTransferHandoff(deployments);
       return { planTargets, metadataClient, runInputs, deployments };
     };

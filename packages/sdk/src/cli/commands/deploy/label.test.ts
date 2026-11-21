@@ -27,6 +27,7 @@ import {
   withExtraLabels,
   withMetadataWriteBatch,
   writeMetadataLabels,
+  writeMetadataLabelsDirect,
   writeMetadataLabelsDroppingOnAppLabels,
 } from "./label";
 import { bulkLabelCountRejection, labelCountRejection } from "./test-helpers/label-count-rejection";
@@ -130,6 +131,26 @@ describe("isOwnedBy", () => {
 
 describe("labelRefreshOf", () => {
   const stored = { "sdk-name": "my-app", "sdk-version": "v1-0-0", owner: "team-a" };
+
+  describe("for the applications that list a workspace resource", () => {
+    const workspaceWrite = (onApps: string[]) =>
+      buildMetaRequest({ trn: "trn:a", owner: { kind: "workspace" }, onApps });
+    const storedFor = async (onApps: string[]) => ({ ...(await workspaceWrite(onApps)).labels });
+
+    test("plans no refresh when the stored sdk-on-app labels name the same applications", async () => {
+      expect(
+        labelRefreshOf(await storedFor(["shop", "admin"]), await workspaceWrite(["admin", "shop"])),
+      ).toEqual({});
+    });
+
+    test.each([
+      { case: "an application starts listing it", stored: ["shop"], listing: ["shop", "admin"] },
+      { case: "an application stops listing it", stored: ["shop", "admin"], listing: ["shop"] },
+    ])("plans a refresh with the new labels when $case", async ({ stored: before, listing }) => {
+      const write = await workspaceWrite(listing);
+      expect(labelRefreshOf(await storedFor(before), write)).toEqual({ labelRefresh: write });
+    });
+  });
 
   test("plans no refresh when every label to set is stored and no label to remove is", () => {
     expect(
@@ -1016,8 +1037,60 @@ describe("labels the Platform allows no more of", () => {
       labelsByTrn.set(trn ?? "", { ...labels });
       return {};
     });
+    client.bulkSetMetadata.mockImplementation(async ({ requests }) => {
+      if (requests?.some(({ labels }) => Object.keys(labels ?? {}).length > limit)) {
+        throw new Error("bulk over the limit");
+      }
+      for (const { trn, labels } of requests ?? []) labelsByTrn.set(trn ?? "", { ...labels });
+      return { results: [] };
+    });
     return client;
   }
+
+  describe("dropped while a deploy batches label writes", () => {
+    const migrating = async (batchClient: MetadataLabelClient) => {
+      await writeMetadataLabelsDroppingOnAppLabels(batchClient, {
+        trn: "trn:db",
+        labels: { "sdk-migration-in-progress": "m0002" },
+      });
+      await writeMetadataLabelsDirect(batchClient, {
+        trn: "trn:db",
+        remove: ["sdk-migration-in-progress"],
+      });
+    };
+
+    test("puts the sdk-on-app labels a migration write dropped back once there is room", async () => {
+      const labelsByTrn = new Map([
+        ["trn:db", { "sdk-managed": "workspace", ...onApp("a", "b", "c") }],
+      ]);
+      const client = limitedClient(labelsByTrn);
+
+      await withMetadataWriteBatch(client, migrating);
+
+      expect(labelsByTrn.get("trn:db")).toEqual({
+        "sdk-managed": "workspace",
+        ...onApp("a", "b", "c"),
+      });
+    });
+
+    test("leaves out a dropped label that the deploy's own write for the resource removes", async () => {
+      const labelsByTrn = new Map([
+        ["trn:db", { "sdk-managed": "workspace", ...onApp("a", "b", "c") }],
+      ]);
+      const client = limitedClient(labelsByTrn);
+
+      await withMetadataWriteBatch(client, async (batchClient) => {
+        await writeMetadataLabels(batchClient, {
+          trn: "trn:db",
+          labels: { "sdk-managed": "workspace", ...onApp("a", "b") },
+          removePrefixes: ["sdk-on-app-"],
+        });
+        await migrating(batchClient);
+      });
+
+      expect(labelsByTrn.get("trn:db")).toEqual({ "sdk-managed": "workspace", ...onApp("a", "b") });
+    });
+  });
 
   test("writes the rest of a rejected bulk and as many sdk-on-app labels as fit on each rejected resource", async () => {
     const labelsByTrn = new Map<string, Record<string, string>>();

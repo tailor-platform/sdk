@@ -28,8 +28,7 @@ export interface FrontendEnvContext {
   /** Upload destination for this frontend. */
   site: DeployedStaticWebsite;
   /**
-   * Application whose config registers this frontend. Reading it throws when that config deploys
-   * more than one application.
+   * Application whose config registers this frontend.
    * @deprecated Read `applications`, or the config's sites from `staticWebsites`, instead.
    */
   application: DeployedApplication;

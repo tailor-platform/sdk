@@ -778,7 +778,7 @@ test("reports every application of a workspace config in JSON", async () => {
   ]);
 });
 
-test("stops a defineApp() config before confirming when it would take over two configs' resources", async () => {
+test("stops a defineApp() config before checking resources in use when it would take over two configs' resources", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
   useWorkspaceTarget();
   Object.assign(mocks.target.source, {
@@ -799,6 +799,7 @@ test("stops a defineApp() config before confirming when it would take over two c
   await expect(deploy({ dryRun: true, noValidate: true })).rejects.toMatchObject({
     code: "DEPLOY_OTHER_CONFIG_RESOURCES",
   });
+  expect(mocks.assertResourcesNotInUse).not.toHaveBeenCalled();
 });
 
 test("reports the sdk-on-app labels the Platform had no room for in the JSON result", async () => {

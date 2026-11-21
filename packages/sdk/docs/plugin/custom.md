@@ -327,8 +327,7 @@ websites, and public OAuth client IDs. An application's `id` is the `id` from
 are never included. `ctx.staticWebsites` holds the static websites of the
 registering config. `ctx.application`, the registering application, is deprecated
 and will be removed in v3: find the application in `ctx.applications` by name, and
-read the config's sites from `ctx.staticWebsites`. Reading `ctx.application` fails
-when the registering config deploys more than one application.
+read the config's sites from `ctx.staticWebsites`.
 
 `ctx.configPath` is the absolute path of the registering config. `ctx.workspaceId`
 and `ctx.pluginConfig` identify the deployment workspace and the plugin's options.
