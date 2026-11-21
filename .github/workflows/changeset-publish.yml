@@ -10,11 +10,13 @@ on:
       - .github/scripts/changeset-publish.mjs
       - .github/scripts/changeset-publish.test.mjs
       - .github/workflows/changeset-publish.yml
+      - .github/workflows/release.yml
   pull_request:
     paths:
       - .github/scripts/changeset-publish.mjs
       - .github/scripts/changeset-publish.test.mjs
       - .github/workflows/changeset-publish.yml
+      - .github/workflows/release.yml
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
