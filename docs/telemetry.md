@@ -92,6 +92,8 @@ deploy
 └── deploy.onDeployed
 ```
 
+Each config emits one of `build.loadApplication` (a `defineConfig()` config)
+and `build.loadWorkspace` (a `defineWorkspace()` or `defineApp()` config).
 With `--build-only`, `config.preflight` is omitted and the config preparation
 and loading spans run under `build` instead.
 
