@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect } from "vitest";
@@ -14,7 +14,7 @@ type LintWithLocalRuleParams = {
   /** Rule name without the `local/` prefix. */
   rule: string;
   level: "error" | "off";
-  /** Name of the linted file, which decides how oxlint parses it. */
+  /** Path of the linted file relative to a temporary directory; its extension decides how oxlint parses it. */
   fileName: string;
   source: string;
 };
@@ -36,6 +36,7 @@ export function lintWithLocalRule(
       JSON.stringify({ plugins: [], jsPlugins: [pluginPath], rules: { [`local/${rule}`]: level } }),
     );
     const file = path.join(dir, fileName);
+    mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, source);
     const result = spawnSync(oxlintBin, ["--config", config, "-f", "json", file], {
       encoding: "utf8",

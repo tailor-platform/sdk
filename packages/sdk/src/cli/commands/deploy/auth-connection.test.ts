@@ -15,7 +15,8 @@ const { mockLoggerWarn, mockLoggerInfo, mockSaveSecretsState } = vi.hoisted(() =
   mockSaveSecretsState: vi.fn(),
 }));
 
-vi.mock("#/cli/shared/logger", () => ({
+vi.mock("#/cli/shared/logger", async (importOriginal) => ({
+  ...(await importOriginal()),
   logger: {
     warn: (...args: unknown[]) => mockLoggerWarn(...args),
     info: (...args: unknown[]) => mockLoggerInfo(...args),

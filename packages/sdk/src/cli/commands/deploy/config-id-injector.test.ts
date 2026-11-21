@@ -4,7 +4,8 @@ import * as path from "node:path";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { ensureConfigId, removeConfigId, warnMissingAppId } from "./config-id-injector";
 
-vi.mock("#/cli/shared/logger", () => ({
+vi.mock("#/cli/shared/logger", async (importOriginal) => ({
+  ...(await importOriginal()),
   logger: { info: vi.fn(), warn: vi.fn(), log: vi.fn() },
   styles: { dim: (s: string) => s },
 }));

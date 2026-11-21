@@ -7,7 +7,8 @@ import {
   resetKeyringState,
 } from "./token-store";
 
-vi.mock("./logger", () => ({
+vi.mock("./logger", async (importOriginal) => ({
+  ...(await importOriginal()),
   logger: {
     warn: vi.fn(),
   },
