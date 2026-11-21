@@ -54,8 +54,8 @@ import type {
   MigrationInProgress,
   PendingMigration,
 } from "#/cli/commands/tailordb/migrate/types";
+import type { ServiceSettings } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
-import type { LoadedConfig } from "#/cli/shared/config-loader";
 
 export type ValidateAndDetectResult = {
   pendingMigrations: PendingMigration[];
@@ -352,7 +352,7 @@ function assertCheckpointsInLocalHistory(
  * @param {OperatorClient} client - Operator client instance
  * @param {string} workspaceId - Workspace ID
  * @param {ReadonlyMap<string, Record<string, TailorDBSnapshotType>>} typesByNamespace - Tables by namespace
- * @param {LoadedConfig} config - Loaded application config (includes path)
+ * @param {ServiceSettings} config - Settings of the config the namespaces belong to
  * @param {boolean} noSchemaCheck - Whether to skip schema diff check
  * @param {ReadonlyArray<TailorDBDeployInput>} tailorDBInputs - Deploy inputs for namespace defaults
  * @param {readonly string[] | undefined} migrationRecoveryArgs - Profile and env-file arguments of the deploy, kept in the suggested commands
@@ -362,7 +362,7 @@ export async function validateAndDetectMigrations(
   client: OperatorClient,
   workspaceId: string,
   typesByNamespace: ReadonlyMap<string, Record<string, TailorDBSnapshotType>>,
-  config: LoadedConfig,
+  config: ServiceSettings,
   noSchemaCheck: boolean,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   migrationRecoveryArgs: readonly string[] | undefined,

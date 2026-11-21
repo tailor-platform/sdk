@@ -143,7 +143,6 @@ export type Application = ConfigServices & {
   readonly id: string | undefined;
   readonly config: AppConfig;
   readonly subgraphs: ReadonlyArray<{ Type: string; Name: string }>;
-  readonly applications: ReadonlyArray<Application>;
 };
 
 /**
@@ -775,7 +774,7 @@ interface BuildApplicationParams extends BuildConfigServicesParams {
 }
 
 function buildApplication(params: BuildApplicationParams): Application {
-  const application: Application = {
+  return {
     ...buildConfigServices(params),
     name: params.config.name,
     id: params.config.id,
@@ -786,11 +785,7 @@ function buildApplication(params: BuildApplicationParams): Application {
       ...params.idpResult.subgraphs,
       ...params.authResult.subgraphs,
     ],
-    get applications() {
-      return [application];
-    },
   };
-  return application;
 }
 
 /**
@@ -1459,13 +1454,7 @@ export async function loadApplication(
       source,
       previous: { ...previous, services: previous.application },
     });
-    const application: Application = {
-      ...previous.application,
-      env: reloaded.env,
-      get applications() {
-        return [application];
-      },
-    };
+    const application: Application = { ...previous.application, env: reloaded.env };
     return {
       application,
       workflowBuildResult: reloaded.workflowBuildResult,

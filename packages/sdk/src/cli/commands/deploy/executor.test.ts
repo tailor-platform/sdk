@@ -3,6 +3,7 @@ import { ExecutorExecutorSchema } from "@tailor-platform/tailor-proto/executor_r
 import { describe, test, expect, vi } from "vitest";
 import { symbols } from "#/cli/shared/logger";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { deployApplicationOf } from "./deploy-application";
 import { formatExecutorChangeEntries, planExecutor } from "./executor";
 import { applicationOwner, buildMetaRequest, sdkNameLabelKey } from "./label";
 import type { Application } from "#/cli/services/application";
@@ -214,6 +215,7 @@ describe("planExecutor", () => {
       client: createMockClient([]),
       workspaceId,
       application,
+      applications: [deployApplicationOf(application)],
       owner: applicationOwner(application),
       forRemoval: false,
       config: mockConfig,
@@ -584,8 +586,10 @@ describe("planExecutor", () => {
       const loadExecutors = vi.fn();
       const application = {
         name: appName,
-        env: {},
+        config: {},
+        subgraphs: [],
         authServices: [],
+        env: {},
         executorService: { loadExecutors },
       } as unknown as Application;
 
@@ -1050,6 +1054,7 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        applications: [deployApplicationOf(application)],
         owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
@@ -1082,6 +1087,7 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        applications: [deployApplicationOf(application)],
         owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
@@ -1113,6 +1119,7 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        applications: [deployApplicationOf(application)],
         owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
@@ -1142,6 +1149,7 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        applications: [deployApplicationOf(application)],
         owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
@@ -1168,6 +1176,7 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        applications: [deployApplicationOf(application)],
         owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
@@ -1196,6 +1205,7 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        applications: [deployApplicationOf(application)],
         owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
@@ -1229,6 +1239,7 @@ describe("planExecutor", () => {
           client,
           workspaceId,
           application,
+          applications: [deployApplicationOf(application)],
           owner: applicationOwner(application),
           forRemoval: false,
           config: mockConfig,
@@ -1254,6 +1265,7 @@ describe("planExecutor", () => {
           client,
           workspaceId,
           application,
+          applications: [deployApplicationOf(application)],
           owner: applicationOwner(application),
           forRemoval: false,
           config: mockConfig,
@@ -1277,6 +1289,7 @@ describe("planExecutor", () => {
           client,
           workspaceId,
           application,
+          applications: [deployApplicationOf(application)],
           owner: applicationOwner(application),
           forRemoval: false,
           config: mockConfig,
@@ -1302,6 +1315,7 @@ describe("planExecutor", () => {
           client,
           workspaceId,
           application,
+          applications: [deployApplicationOf(application)],
           owner: applicationOwner(application),
           forRemoval: false,
           config: mockConfig,
@@ -1327,6 +1341,7 @@ describe("planExecutor", () => {
           client,
           workspaceId,
           application,
+          applications: [deployApplicationOf(application)],
           owner: applicationOwner(application),
           forRemoval: false,
           config: mockConfig,
@@ -1418,6 +1433,7 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        applications: [deployApplicationOf(application)],
         owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
@@ -1454,6 +1470,7 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        applications: [deployApplicationOf(application)],
         owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
@@ -1485,6 +1502,7 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        applications: [deployApplicationOf(application)],
         owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,

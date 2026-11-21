@@ -13,10 +13,7 @@ import {
   type ExecutorTriggerEventConfigSchema,
   ExecutorTriggerType,
 } from "@tailor-platform/tailor-proto/executor_resource_pb";
-import {
-  getApplicationAuthNamespace,
-  requireApplicationAuthNamespace,
-} from "#/cli/shared/auth-namespace";
+import { requireAuthNamespace } from "#/cli/shared/auth-namespace";
 import { type ApplicationEnv, type OperatorClient } from "#/cli/shared/client";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { buildExecutorArgsExpr } from "#/cli/shared/runtime-exprs";
@@ -24,6 +21,7 @@ import { stringifyFunction } from "#/parser/service/tailordb/index";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { defineRequestComparison, isRequestUnchanged } from "./compare";
+import { configAuthNamespace } from "./deploy-application";
 import { executorFunctionName } from "./function-registry";
 import {
   formatChangeEntriesWithFunctionRegistry,
@@ -42,8 +40,9 @@ import {
 } from "./label";
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
-import type { Application } from "#/cli/services/application";
+import type { ConfigServices } from "#/cli/services/application";
 import type { Executor } from "#/types/executor.generated";
+import type { DeployApplication } from "./deploy-application";
 
 type ExistingExecutors = WithLabel<
   Awaited<ReturnType<OperatorClient["listExecutorExecutors"]>>["executors"][number]
@@ -175,7 +174,7 @@ export async function planExecutor(
     invokers: Object.values(executors).map((executor) =>
       "invoker" in executor.operation ? executor.operation.invoker : undefined,
     ),
-    authNamespace: getApplicationAuthNamespace(application),
+    authNamespace: configAuthNamespace(context),
     plannedMachineUsers: context.plannedMachineUsers,
   });
   const cachedDetails = previousExisting?.existingExecutorDetails;
@@ -319,12 +318,12 @@ function resolveSameRunNamespace(
 
 /**
  * Find the local TailorDB namespace that declares the given table.
- * @param application - Loaded application
+ * @param application - Services the config defines
  * @param tableName - TailorDB table name to look up
  * @returns The declaring namespace, or undefined when no local service has it
  */
 function findTailorDBNamespace(
-  application: Readonly<Application>,
+  application: Readonly<ConfigServices>,
   tableName: string,
 ): string | undefined {
   return application.tailorDBServices.find((service) => Object.hasOwn(service.types, tableName))
@@ -333,12 +332,12 @@ function findTailorDBNamespace(
 
 /**
  * Find the local resolver namespace that declares the given resolver.
- * @param application - Loaded application
+ * @param application - Services the config defines
  * @param resolverName - Resolver name to look up
  * @returns The declaring namespace, or undefined when no local service has it
  */
 export function findResolverNamespace(
-  application: Readonly<Application>,
+  application: Readonly<ConfigServices>,
   resolverName: string,
 ): string | undefined {
   return application.resolverServices.find((service) =>
@@ -374,7 +373,7 @@ function resolveNamespace(params: {
 }
 
 function resolveTailorDBNamespace(
-  application: Readonly<Application>,
+  application: Readonly<ConfigServices>,
   typeName: string,
   sameRunNamespaces?: ReadonlyMap<string, string | undefined>,
 ): string {
@@ -388,7 +387,7 @@ function resolveTailorDBNamespace(
 }
 
 function resolveResolverNamespace(
-  application: Readonly<Application>,
+  application: Readonly<ConfigServices>,
   resolverName: string,
   sameRunNamespaces?: ReadonlyMap<string, string | undefined>,
 ): string {
@@ -401,17 +400,19 @@ function resolveResolverNamespace(
   });
 }
 
+type IdpNamesSource = {
+  application: Pick<ConfigServices, "idpServices">;
+  applications: ReadonlyArray<Pick<DeployApplication, "subgraphs">>;
+};
+
 /**
- * Collect IdP names declared by the application, including external IdP
- * subgraphs.
- * @param application - Loaded application
- * @returns IdP names visible from the application config
+ * Collect IdP names declared by a config, including external IdP subgraphs of its applications.
+ * @param config - Services and applications of the config
+ * @returns IdP names visible from the config
  */
-export function collectApplicationIdpNames(
-  application: Readonly<Application>,
-): ReadonlySet<string> {
-  const names = new Set(application.idpServices.map((idp) => idp.name));
-  for (const subgraph of application.subgraphs) {
+export function collectConfigIdpNames(config: IdpNamesSource): ReadonlySet<string> {
+  const names = new Set(config.application.idpServices.map((idp) => idp.name));
+  for (const subgraph of config.applications.flatMap((application) => application.subgraphs)) {
     if (subgraph.Type === "idp") {
       names.add(subgraph.Name);
     }
@@ -420,12 +421,12 @@ export function collectApplicationIdpNames(
 }
 
 function resolveIdpNamespace(
-  application: Readonly<Application>,
+  config: IdpNamesSource,
   executorName: string,
   idpName: string | undefined,
   sameRunIdpNames?: ReadonlySet<string>,
 ): string {
-  const localIdpNames = collectApplicationIdpNames(application);
+  const localIdpNames = collectConfigIdpNames(config);
   if (idpName !== undefined) {
     const candidateNames = sameRunIdpNames ?? localIdpNames;
     if (!candidateNames.has(idpName)) {
@@ -457,12 +458,22 @@ function resolveIdpNamespace(
   return assertDefined([...localIdpNames][0], "idp service missing");
 }
 
+function soleApplicationName(context: PlanContext): string {
+  const [application, ...others] = context.applications;
+  if (!application || others.length > 0) {
+    throw internalError(
+      `A config deploys one application, but ${context.applications.length} were planned`,
+    );
+  }
+  return application.name;
+}
+
 function resolveAuthAccessTokenNamespace(
-  application: Readonly<Application>,
+  context: PlanContext,
   executorName: string,
   auth: string | undefined,
 ): string {
-  const configAuth = requireApplicationAuthNamespace(application);
+  const configAuth = requireAuthNamespace(configAuthNamespace(context));
   if (auth !== undefined && auth !== configAuth) {
     throw CLIError({
       code: "EXECUTOR_AUTH_NOT_FOUND",
@@ -481,7 +492,6 @@ function protoExecutor(
   invokerMachineUsers: InvokerMachineUsers | undefined,
 ): MessageInitShape<typeof ExecutorExecutorSchema> {
   const { application } = context;
-  const appName = application.name;
   const trigger = executor.trigger;
   let triggerType: ExecutorTriggerType;
   let triggerConfig: MessageInitShape<typeof ExecutorTriggerConfigSchema>;
@@ -573,12 +583,7 @@ function protoExecutor(
         case: "idp",
         value: {
           eventTypes: trigger.events,
-          namespaceName: resolveIdpNamespace(
-            application,
-            executor.name,
-            trigger.idp,
-            context.idpNames,
-          ),
+          namespaceName: resolveIdpNamespace(context, executor.name, trigger.idp, context.idpNames),
         },
       });
       break;
@@ -588,7 +593,7 @@ function protoExecutor(
         case: "auth",
         value: {
           eventTypes: trigger.events,
-          namespaceName: resolveAuthAccessTokenNamespace(application, executor.name, trigger.auth),
+          namespaceName: resolveAuthAccessTokenNamespace(context, executor.name, trigger.auth),
         },
       });
       break;
@@ -614,7 +619,7 @@ function protoExecutor(
   let targetType: ExecutorTargetType;
   let targetConfig: MessageInitShape<typeof ExecutorTargetConfigSchema>;
 
-  const authNamespace = getApplicationAuthNamespace(application);
+  const authNamespace = configAuthNamespace(context);
   const invokerContext = `Executor "${executor.name}"`;
 
   switch (target.kind) {
@@ -663,7 +668,7 @@ function protoExecutor(
         config: {
           case: "tailorGraphql",
           value: {
-            appName: target.appName ?? appName,
+            appName: target.appName ?? soleApplicationName(context),
             query: target.query,
             variables: target.variables
               ? {

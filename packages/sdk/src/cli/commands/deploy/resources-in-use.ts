@@ -1,6 +1,5 @@
 import { Subgraph_ServiceType } from "@tailor-platform/tailor-proto/application_resource_pb";
 import { PipelineResolverView } from "@tailor-platform/tailor-proto/pipeline_pb";
-import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
 import {
   fetchAll,
   fetchAllTolerant,
@@ -40,6 +39,7 @@ import type { SecretValueSchema } from "@tailor-platform/tailor-proto/secret_man
 type ResourceDeletePlan = Pick<
   PlannedDeployment,
   | "application"
+  | "applications"
   | "app"
   | "auth"
   | "tailorDB"
@@ -283,17 +283,16 @@ function applicationUses(deployments: ReadonlyArray<ResourceDeletePlan>): Resour
   const deletedNames = new Set(
     deployments.flatMap(({ app }) => app.deletes.map((entry) => entry.name)),
   );
-  const writtenUses = deployments.flatMap(({ application }) => {
-    const request = writtenRequests.get(application.name);
-    if (!request) return [];
-    return [
-      ...servicesOf(
-        getApplicationAuthNamespace(application),
-        application.subgraphs.map(protoSubgraph),
-      ),
-      ...idpConfigRefs(request),
-    ].map((ref) => ({ ...ref, application: application.name }));
-  });
+  const writtenUses = deployments.flatMap(({ applications }) =>
+    applications.flatMap((application) => {
+      const request = writtenRequests.get(application.name);
+      if (!request) return [];
+      return [
+        ...servicesOf(application.authNamespace, application.subgraphs.map(protoSubgraph)),
+        ...idpConfigRefs(request),
+      ].map((ref) => ({ ...ref, application: application.name }));
+    }),
+  );
   const recorded = new Map(
     deployments
       .flatMap(({ app }) => app.existingApplications)

@@ -16,7 +16,6 @@ import {
 } from "@tailor-platform/tailor-proto/pipeline_resource_pb";
 import * as inflection from "inflection";
 import { type ResolverService } from "#/cli/services/resolver/service";
-import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
 import { type ApplicationEnv, fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import {
   assertNoPublishEventsConflict,
@@ -28,6 +27,7 @@ import { buildResolverOperationHookExpr } from "#/cli/shared/runtime-exprs";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { defineRequestComparison, isRequestUnchanged } from "./compare";
+import { configAuthNamespace } from "./deploy-application";
 import { resolverFunctionName } from "./function-registry";
 import {
   formatChangeEntriesWithFunctionRegistry,
@@ -183,7 +183,7 @@ export async function planPipeline(
     existingServices,
   } = await planServices(client, workspaceId, context.owner, pipelines, previous?.existingServices);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
-  const authNamespace = getApplicationAuthNamespace(application);
+  const authNamespace = configAuthNamespace(context);
   const invokerMachineUsers = await listInvokerMachineUsers({
     client,
     workspaceId,

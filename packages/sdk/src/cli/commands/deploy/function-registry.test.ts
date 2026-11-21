@@ -763,10 +763,7 @@ describe("collectFunctionEntries", () => {
       staticWebsiteServices: [],
       secrets: [],
       env: {},
-      applications: [] as Application[],
     } as unknown as Application;
-    // Self-reference for applications array
-    (app as unknown as { applications: Application[] }).applications = [app];
     return app;
   }
 
