@@ -68,7 +68,7 @@ const isValidIdentifier = (s: string): boolean => /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.t
  * @param idpNames - Registered IdP names (used to narrow `idpUser*Trigger({ idp })` strings)
  * @param connectionNames - Registered auth connection names (used to narrow `getConnectionToken()` strings)
  * @param aiGatewayNames - Registered AI Gateway names (used to narrow `aigateway.get()` strings)
- * @param authNamespaceNames - Registered auth namespace names (used to narrow `authNamespace` strings)
+ * @param authNamespaceNames - Registered auth namespace names (used to narrow AI Gateway `authNamespace` and `authAccessToken*Trigger({ auth })` strings)
  * @param secretVaultNames - Registered Secret Manager vault names mapped to their secret names (used to narrow `secretmanager.getSecret()`/`getSecrets()` strings)
  * @param dateRepresentation - The app's `defaultDateRepresentation` and name, recorded as one registry key (used to type `t.date()`/`t.datetime()`/`t.time()` fields that omit `as`)
  * @returns Generated type definition source

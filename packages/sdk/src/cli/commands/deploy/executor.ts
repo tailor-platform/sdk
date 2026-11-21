@@ -457,6 +457,23 @@ function resolveIdpNamespace(
   return assertDefined([...localIdpNames][0], "idp service missing");
 }
 
+function resolveAuthAccessTokenNamespace(
+  application: Readonly<Application>,
+  executorName: string,
+  auth: string | undefined,
+): string {
+  const configAuth = requireApplicationAuthNamespace(application);
+  if (auth !== undefined && auth !== configAuth) {
+    throw CLIError({
+      code: "EXECUTOR_AUTH_NOT_FOUND",
+      message: `Executor "${executorName}" names Auth "${auth}" in its authAccessToken trigger, but its config uses Auth "${configAuth}".`,
+      suggestion: `Set the trigger's "auth" to "${configAuth}", or omit it.`,
+      context: { executor: executorName, auth, available: [configAuth] },
+    });
+  }
+  return configAuth;
+}
+
 function protoExecutor(
   context: PlanContext,
   executor: Executor,
@@ -571,7 +588,7 @@ function protoExecutor(
         case: "auth",
         value: {
           eventTypes: trigger.events,
-          namespaceName: requireApplicationAuthNamespace(application),
+          namespaceName: resolveAuthAccessTokenNamespace(application, executor.name, trigger.auth),
         },
       });
       break;

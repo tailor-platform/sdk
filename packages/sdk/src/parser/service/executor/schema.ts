@@ -1,7 +1,7 @@
 import { print, type DocumentNode } from "@0no-co/graphql.web";
 import { z } from "zod";
 import { AuthInvokerSchema } from "../auth";
-import { functionSchema, omitNullishValues } from "../common";
+import { functionSchema, omitNullishValues, resourceNameSchema } from "../common";
 import type { JsonValue } from "#/types/helpers";
 
 export const TailorDBTriggerSchema = z.strictObject({
@@ -75,6 +75,11 @@ export const AuthAccessTokenTriggerSchema = z.strictObject({
     .min(1)
     .transform((arr) => [...new Set(arr)])
     .describe("Auth access token event types to trigger on"),
+  auth: resourceNameSchema
+    .optional()
+    .describe(
+      "Auth namespace name to subscribe to. Must be the config's Auth service; defaults to it.",
+    ),
 });
 
 const workflowNameSchema = z
