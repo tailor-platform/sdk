@@ -714,15 +714,33 @@ function useWorkspaceTarget() {
   } as unknown as BuiltDeploymentTarget;
 }
 
-test("stops a workspace config whose plugins have onDeployed hooks before planning", async () => {
+test("runs the onDeployed hooks of a workspace config and reports their outputs without an application", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  using _json = jsonMode();
+  useWorkspaceTarget();
+  register(() => ({ outputs: { published: true } }));
+  await deploy({ yes: true, noValidate: true });
+  expect(logger.out).toHaveBeenCalledWith(
+    expect.objectContaining({
+      deployedHooks: [{ pluginId: "hook", outputs: { published: true } }],
+    }),
+  );
+});
+
+test("lists the pending hooks of a workspace config without an application", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
   useWorkspaceTarget();
   register(vi.fn());
-  await expect(deploy({ yes: true, noValidate: true })).rejects.toMatchObject({
-    code: "DEPLOYED_HOOKS_UNSUPPORTED",
-    context: { pluginIds: ["hook"] },
-  });
-  expect(mocks.planTailorDB).not.toHaveBeenCalled();
+  await deploy({ dryRun: true, noValidate: true });
+  expect(logger.info).toHaveBeenCalledWith('Hook to run after apply: "hook"');
+  vi.mocked(logger.info).mockClear();
+  {
+    using _json = jsonMode();
+    await deploy({ dryRun: true, noValidate: true });
+  }
+  expect(logger.out).toHaveBeenLastCalledWith(
+    expect.objectContaining({ pendingDeployedHooks: [{ pluginId: "hook" }] }),
+  );
 });
 
 test("deploys a workspace config without looking up applications it depends on", async () => {

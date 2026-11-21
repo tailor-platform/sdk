@@ -320,11 +320,15 @@ Runs once after every application in the deploy has been applied, including when
 there are no resource changes. Hooks run sequentially in config order, then in
 `definePlugins()` registration order. No `importPath` or table attachment is required.
 
-Use `ctx.application` for the registering application's ID, URL, domain, AI
-Gateway URLs, static websites, and public OAuth client IDs. `ctx.application.id`
-is the `id` from `defineConfig()` and is `undefined` when the config has none.
-`ctx.applications` contains all applications in a multi-config deploy with the
-same fields. OAuth client secrets are never included.
+`ctx.applications` lists every application in the deploy, including those of other
+configs in a multi-config deploy, with its ID, URL, domain, AI Gateway URLs, static
+websites, and public OAuth client IDs. An application's `id` is the `id` from
+`defineConfig()` and is `undefined` when the config has none. OAuth client secrets
+are never included. `ctx.staticWebsites` holds the static websites of the
+registering config. `ctx.application`, the registering application, is deprecated
+and will be removed in v3: find the application in `ctx.applications` by name, and
+read the config's sites from `ctx.staticWebsites`. Reading `ctx.application` fails
+when the registering config deploys more than one application.
 
 `ctx.configPath` is the absolute path of the registering config. `ctx.workspaceId`
 and `ctx.pluginConfig` identify the deployment workspace and the plugin's options.
@@ -341,7 +345,7 @@ const deployedInfo: Plugin = {
   id: "@example/deployed-info",
   description: "Reports the deployed application URL",
   onDeployed(ctx) {
-    const url = ctx.application.url;
+    const url = ctx.applications.find(({ name }) => name === "my-app")?.url;
     if (!url) return;
     ctx.logger.success(`Application ready: ${url}`);
     return { outputs: { url } };
@@ -351,7 +355,7 @@ const deployedInfo: Plugin = {
 export const plugins = definePlugins(deployedInfo);
 ```
 
-To publish assets, look up the site with `ctx.application.staticWebsites[name]`
+To publish assets, look up the site with `ctx.staticWebsites[name]`
 and await its `publish(dir)` with an absolute directory path. Only websites
 declared in the registering config appear there; any other name is `undefined`,
 so check the site before publishing. Websites of other configs are listed under

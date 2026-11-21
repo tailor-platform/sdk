@@ -50,10 +50,10 @@ import {
 import { assertNoSingleRunTransferHandoff } from "./custom-domain-transfer-guard";
 import { fetchMissingDependentApps } from "./dependency-records";
 import {
-  assertNoWorkspaceDeployedHooks,
+  deployedHookLabel,
   deployedHookLoadFailure,
-  hookApplicationName,
-  loadDeployedApplications,
+  deployedHookRef,
+  loadDeployedTargets,
   runDeployedHooks,
 } from "./deployed-hooks";
 import {
@@ -951,7 +951,6 @@ async function deployInternal(
       : await withSpan("config.preflight", () =>
           loadDeployConfigs({ configPaths, dryRun, buildOnly }),
         );
-    if (!internalContext?.skipDeployedHooks) assertNoWorkspaceDeployedHooks(preflightConfigs);
     const resolvedConfigPaths = preflightConfigs.map((entry) => loadedSettings(entry).path);
     const workspaceContextTargets = preflightConfigs.map((entry) =>
       entry.kind === "config"
@@ -1129,7 +1128,7 @@ async function deployInternal(
       : targets.flatMap((target) =>
           target.plugins
             .filter((plugin) => plugin.onDeployed)
-            .map((plugin) => ({ application: hookApplicationName(target), pluginId: plugin.id })),
+            .map((plugin) => deployedHookRef(target, plugin)),
         );
     const reviewOptions = { yes: options?.yes ?? false, noValidate: options?.noValidate };
     let planSummary = await reviewDeploymentPlans({
@@ -1142,7 +1141,9 @@ async function deployInternal(
 
     if (dryRun) {
       for (const { application, pluginId } of pendingDeployedHooks) {
-        logger.info(`Hook to run after apply: "${pluginId}" (app "${application}")`);
+        logger.info(
+          `Hook to run after apply: "${pluginId}"${application === undefined ? "" : ` (app "${application}")`}`,
+        );
       }
       logger.info("Dry run enabled. No changes applied.");
       return undefined;
@@ -1190,28 +1191,21 @@ async function deployInternal(
     }
     const { maintenance: tailordbMaintenance, labelRejections } = applied;
 
-    const applications =
+    const deployed =
       logger.jsonMode && !internalContext?.suppressResultOutput && labelRejections.length === 0
-        ? await loadDeployedApplications({ client, workspaceId, targets }).catch(
-            (error: unknown) => {
-              if (pendingDeployedHooks.length)
-                throw deployedHookLoadFailure(
-                  error,
-                  pendingDeployedHooks.map(
-                    ({ application, pluginId }) => `${pluginId} (app: ${application})`,
-                  ),
-                );
-              throw CLIError({
-                code: "DEPLOY_RESULT_LOAD_FAILED",
-                message:
-                  "Platform resources were applied successfully, but loading the deployed application information failed.",
-                details: error instanceof Error ? error.message : String(error),
-                suggestion:
-                  "Fix the error and run tailor deploy again. Unchanged resources are not re-applied.",
-                cause: error,
-              });
-            },
-          )
+        ? await loadDeployedTargets({ client, workspaceId, targets }).catch((error: unknown) => {
+            if (pendingDeployedHooks.length)
+              throw deployedHookLoadFailure(error, pendingDeployedHooks.map(deployedHookLabel));
+            throw CLIError({
+              code: "DEPLOY_RESULT_LOAD_FAILED",
+              message:
+                "Platform resources were applied successfully, but loading the deployed application information failed.",
+              details: error instanceof Error ? error.message : String(error),
+              suggestion:
+                "Fix the error and run tailor deploy again. Unchanged resources are not re-applied.",
+              cause: error,
+            });
+          })
         : undefined;
     const deployedHooks = internalContext?.skipDeployedHooks
       ? []
@@ -1219,7 +1213,7 @@ async function deployInternal(
           client,
           workspaceId,
           targets,
-          applications,
+          deployed,
           profile: options?.profile,
         });
     if (labelRejections.length > 0) throw applicationLabelLimitError(labelRejections);
@@ -1237,7 +1231,7 @@ async function deployInternal(
           summary: planSummary,
           status: "applied",
           workspaceId,
-          applications,
+          applications: deployed?.flatMap((entry) => entry.applications),
           ...(tailordbMaintenance.length ? { tailordbMaintenance } : {}),
           ...(deployedHooks.length ? { deployedHooks } : {}),
         });
