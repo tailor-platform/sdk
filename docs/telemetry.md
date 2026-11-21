@@ -45,7 +45,8 @@ deploy
 │   └── build.loadConfig
 ├── build
 │   ├── build.generateUserTypes
-│   └── build.loadApplication
+│   ├── build.loadApplication
+│   └── build.loadWorkspace
 ├── plan.metadataLookup
 ├── plan.validateTailorDBTypeNames
 ├── plan.detectSdkVersionChange
@@ -113,7 +114,8 @@ The rebuild itself is similarly scoped: it re-resolves `env` and rebundles
 only workflow jobs and auth hooks, the two kinds of bundled code that embed
 `env` directly. `build.generateUserTypes` is skipped entirely (nothing it
 generates depends on `env`), and resolver, executor, and HTTP adapter bundles
-are reused from the first `build.loadApplication` rather than rebundled.
+are reused from the first `build.loadApplication` (`build.loadWorkspace` for a
+`defineWorkspace()` or `defineApp()` config) rather than rebundled.
 
 The pre/post migration spans repeat once per pending migration; the script span
 appears only for migrations that carry a `migrate.ts`.

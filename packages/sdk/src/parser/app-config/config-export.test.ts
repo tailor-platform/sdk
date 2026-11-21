@@ -48,7 +48,7 @@ describe("parseConfigExport", () => {
             idp: ["corp-idp"],
             cors: ["https://shop.example.com"],
           },
-          backoffice: { allowedIpAddresses: ["10.0.0.0/8"] },
+          backoffice: { db: ["customer-db"], allowedIpAddresses: ["10.0.0.0/8"] },
         },
       }),
     );
@@ -82,7 +82,7 @@ describe("parseConfigExport", () => {
               idp: "corp-idp",
               cors: ["https://shop.example.com"],
             },
-            backoffice: { db: [], resolver: [], allowedIpAddresses: ["10.0.0.0/8"] },
+            backoffice: { db: ["customer-db"], resolver: [], allowedIpAddresses: ["10.0.0.0/8"] },
           },
         },
       },
@@ -165,6 +165,20 @@ describe("parseConfigExport", () => {
       ],
     },
     {
+      name: "an app that lists no service",
+      value: workspace({
+        db: { "customer-db": { files: [] } },
+        apps: { shop: { db: ["customer-db"] }, landing: { cors: ["https://example.com"] } },
+      }),
+      issues: [
+        {
+          path: ["apps", "landing"],
+          message:
+            "'apps.landing' lists no db, resolver, idp, or auth, so it has no GraphQL API to deploy.",
+        },
+      ],
+    },
+    {
       name: "more than one IdP in an app",
       value: workspace({
         idp: { "corp-idp": corpIdp, "partner-idp": partnerIdp },
@@ -241,8 +255,14 @@ describe("parseConfigExport", () => {
     {
       name: "settings that belong to the workspace root in an app",
       value: workspace({
+        db: { "customer-db": { files: [] } },
         apps: {
-          shop: { env: {}, maintenanceMode: "deploy", defaultDateRepresentation: "date" },
+          shop: {
+            db: ["customer-db"],
+            env: {},
+            maintenanceMode: "deploy",
+            defaultDateRepresentation: "date",
+          },
         },
       }),
       issues: [
