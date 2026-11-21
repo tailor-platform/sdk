@@ -1,5 +1,13 @@
 # @tailor-platform/sdk-plugin-setup
 
+## 0.19.4
+
+### Patch Changes
+
+- [#3214](https://github.com/tailor-platform/sdk/pull/3214) [`7200150`](https://github.com/tailor-platform/sdk/commit/72001502856f09dbd631165551630a856a576c56) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency anthropics/claude-code-action to v1.0.284
+- Updated dependencies [[`ce477c3`](https://github.com/tailor-platform/sdk/commit/ce477c361168e3125be17d92bcaced43b9222218), [`2d302e2`](https://github.com/tailor-platform/sdk/commit/2d302e2f9b5f0d96e8ddce26a218abd4e824af93), [`5a3415f`](https://github.com/tailor-platform/sdk/commit/5a3415f4c6f3e6658351cb7064f98136c08bafe3), [`6e24ed0`](https://github.com/tailor-platform/sdk/commit/6e24ed0903f5206650a2b288cddde7e37f4a86ed), [`a24ae12`](https://github.com/tailor-platform/sdk/commit/a24ae128fa1050eac17606b2d3f4fcb3af5831fb), [`6fdc372`](https://github.com/tailor-platform/sdk/commit/6fdc372c00afaaa0732175b3d042efcb851bb8a7), [`861b57e`](https://github.com/tailor-platform/sdk/commit/861b57ebb469f06d22a7bce384b10f76633ed973), [`a0411a7`](https://github.com/tailor-platform/sdk/commit/a0411a7238cca8e12f0aa9cf60488be5bfa3ece9), [`bdfae2c`](https://github.com/tailor-platform/sdk/commit/bdfae2c71cb4ed756a8405c2544468372d878e39), [`15f56c9`](https://github.com/tailor-platform/sdk/commit/15f56c9b32a8e5a80ea7a4842cfcb56ee933bc7c), [`58ba791`](https://github.com/tailor-platform/sdk/commit/58ba79112a31a99d72eba192330753a0b5f20727), [`fab9f44`](https://github.com/tailor-platform/sdk/commit/fab9f4489d4d1924ec0f76630a863bb6947bc904), [`ac62449`](https://github.com/tailor-platform/sdk/commit/ac62449ceecc314aa9494e762b2486464c670a39)]:
+  - @tailor-platform/sdk@2.47.0
+
 ## 0.19.3
 
 ### Patch Changes
