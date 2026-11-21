@@ -20,10 +20,7 @@ import {
   type ResolverService,
 } from "#/cli/services/resolver/service";
 import { createTailorDBService, type TailorDBService } from "#/cli/services/tailordb/service";
-import {
-  assertUniqueLocalTailorDBTypeNames,
-  type AssertUniqueLocalTailorDBTypeNamesArgs,
-} from "#/cli/services/tailordb/type-name-validation";
+import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
 import {
   bundleWorkflowJobs,
   type BundleWorkflowJobsOptions,
@@ -39,6 +36,7 @@ import {
 } from "#/cli/shared/client";
 import {
   isLoadedWorkspaceConfig,
+  tailorDBTypeNameScopeOf,
   type LoadedConfig,
   type LoadedWorkspaceConfig,
 } from "#/cli/shared/config-loader";
@@ -964,7 +962,6 @@ interface LoadSource extends ServiceSource {
   executor: ExecutorServiceInput | undefined;
   env: ApplicationEnv;
   envOverrides: EnvOverrides;
-  typeNameScope: NonNullable<AssertUniqueLocalTailorDBTypeNamesArgs["scope"]>;
 }
 
 const NO_ENV_OVERRIDES: EnvOverrides = { resolver: {}, auth: {} };
@@ -977,7 +974,6 @@ function loadSourceOf(config: LoadedConfig | LoadedWorkspaceConfig): LoadSource 
       executor: config.executor,
       env: config.env,
       envOverrides: config.envOverrides,
-      typeNameScope: "workspace",
     };
   }
   return {
@@ -986,7 +982,6 @@ function loadSourceOf(config: LoadedConfig | LoadedWorkspaceConfig): LoadSource 
     executor: config.executor,
     env: config.env ?? {},
     envOverrides: NO_ENV_OVERRIDES,
-    typeNameScope: "application",
   };
 }
 
@@ -1168,7 +1163,7 @@ async function loadServices(params: LoadServicesParams): Promise<LoadedServices>
   }
   assertUniqueLocalTailorDBTypeNames({
     tailorDBServices: tailordbResult.tailorDBServices,
-    scope: source.typeNameScope,
+    scope: tailorDBTypeNameScopeOf(config),
   });
   const pluginResolverServices = definePluginResolverServices(config, pluginManager);
   const resolverResult: DefineResolverResult = {
